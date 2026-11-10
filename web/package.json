@@ -1,0 +1,15 @@
+{
+  "name": "@insite/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "inSite Assurance Role-Segregated Web Portal — Vite + React + TypeScript + Tailwind + TanStack Query",
+  "scripts": {
+    "build": "echo \"Web build placeholder (Phase 4)\"",
+    "dev": "echo \"Web dev placeholder (Phase 4)\"",
+    "typecheck": "echo \"Web typecheck placeholder (Phase 4)\""
+  },
+  "dependencies": {
+    "@insite/shared": "*"
+  }
+}
+

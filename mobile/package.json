@@ -1,0 +1,13 @@
+{
+  "name": "@insite/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "inSite Assurance Offline-First Field Evidence App — Expo React Native + TypeScript",
+  "scripts": {
+    "start": "echo \"Mobile start placeholder (Phase 5)\"",
+    "typecheck": "echo \"Mobile typecheck placeholder (Phase 5)\""
+  },
+  "dependencies": {
+    "@insite/shared": "*"
+  }
+}

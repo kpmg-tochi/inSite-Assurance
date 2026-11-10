@@ -1,0 +1,29 @@
+{
+  "name": "insite-assurance-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "inSite Assurance — Field Evidence & Disbursement Reconciliation Platform",
+  "workspaces": [
+    "shared",
+    "server",
+    "web",
+    "mobile"
+  ],
+  "scripts": {
+    "build:shared": "npm --workspace=@insite/shared run build",
+    "build:server": "npm run build:shared && npm --workspace=@insite/server run build",
+    "build:web": "npm run build:shared && npm --workspace=@insite/web run build",
+    "dev:shared": "npm --workspace=@insite/shared run dev",
+    "dev:server": "npm --workspace=@insite/server run dev",
+    "dev:web": "npm --workspace=@insite/web run dev",
+    "dev:mobile": "npm --workspace=@insite/mobile run start",
+    "typecheck": "npm run build:shared && npm --workspace=@insite/server run typecheck && npm --workspace=@insite/web run typecheck && npm --workspace=@insite/mobile run typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
+
