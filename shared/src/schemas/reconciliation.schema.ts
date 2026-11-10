@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 import {
   AuditActionTypeEnum,
   AuditActorTypeEnum,
@@ -6,7 +6,8 @@ import {
   IndependenceTierEnum,
   LenderDecisionTypeEnum,
   MonitorRecommendationEnum,
-} from '../enums';
+  ProfessionalLicenseTypeEnum,
+} from "../enums";
 
 /**
  * 1. Azure OpenAI GPT-4o Structured Output Schema for BOQ Line-Item Reconciliation
@@ -55,7 +56,8 @@ export const CertifyIpcValuationRequestSchema = z.object({
   recommendedHoldbackAmountNgn: z.number().nonnegative(),
   executiveCertificationSummary: z.string().min(10).max(3000),
   certifierFullName: z.string().min(2).max(120),
-  certifierLicenseNumber: z.string().min(2).max(64), // e.g., "QSRBN Reg. No. 3842" or "COREN R.49201"
+  certifierLicenseType: ProfessionalLicenseTypeEnum.default("QSRBN"),
+  certifierLicenseNumber: z.string().min(2).max(64), // e.g., "3842" or "R.49201"
   certifierDigitalSignatureAck: z.literal(true),
 });
 export type CertifyIpcValuationRequest = z.infer<
@@ -94,4 +96,3 @@ export const AuditLogEntryDtoSchema = z.object({
   createdAt: z.string().datetime(),
 });
 export type AuditLogEntryDto = z.infer<typeof AuditLogEntryDtoSchema>;
-

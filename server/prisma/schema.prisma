@@ -1,0 +1,539 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum UserRole {
+  MONITOR
+  LENDER
+  CONTRACTOR
+}
+
+enum ProfessionalLicenseType {
+  QSRBN // Quantity Surveyors Registration Board of Nigeria
+  COREN // Council for the Regulation of Engineering in Nigeria
+  ARCON // Architects Registration Council of Nigeria
+  CORBON // Council of Registered Builders of Nigeria
+  ICAN // Institute of Chartered Accountants of Nigeria
+  OTHER
+}
+
+enum IndependenceTier {
+  MONITOR_INSPECTOR
+  INDEPENDENT_RESIDENT
+  CONTRACTOR_ENGINEER
+}
+
+enum GeofenceMode {
+  RADIAL
+  LINEAR_CORRIDOR
+}
+
+enum ReportingCadence {
+  DAILY
+  WEEKLY
+  BI_WEEKLY
+  INSPECTION_ONLY
+}
+
+enum PortfolioHealth {
+  EVIDENCE_SUPPORTED
+  EVIDENCE_PARTIAL
+  EVIDENCE_CONFLICT
+}
+
+enum EvidenceStrengthRating {
+  SUPPORTED
+  PARTIALLY_SUPPORTED
+  UNSUPPORTED
+  CONTRADICTED
+}
+
+enum EvidenceLogStatus {
+  LOCAL_CAPTURED
+  QUEUED_OFFLINE
+  UPLOADING_SYNC
+  AWAITING_CONFIRMATION
+  CONFIRMED
+  FLAGGED_INTEGRITY
+}
+
+enum MediaType {
+  SITE_PHOTO
+  VOICE_NOTE
+  WAYBILL_DOCUMENT
+  LAB_CUBE_TEST_CERT
+  MILL_CERTIFICATE
+  BOQ_SPREADSHEET
+  VALUATION_REPORT_PDF
+}
+
+enum ConditionPrecedentStatus {
+  PENDING
+  SATISFIED
+  WAIVED
+  BREACHED
+}
+
+enum IpcClaimStatus {
+  SUBMITTED
+  AI_RECONCILED
+  QUERIED_BY_MONITOR
+  MONITOR_CERTIFIED
+  LENDER_DECIDED
+}
+
+enum MonitorRecommendation {
+  SUPPORT_FULL_RELEASE
+  SUPPORT_WITH_HOLDBACK
+  HOLD
+}
+
+enum LenderDecisionType {
+  APPROVE_FULL
+  APPROVE_WITH_HOLDBACK
+  HOLD
+}
+
+enum QueryStatus {
+  OPEN
+  RESPONDED
+  RESOLVED
+}
+
+enum AuditActorType {
+  WEB_USER
+  FIELD_AGENT
+  AI_SYSTEM
+}
+
+enum AuditActionType {
+  PROJECT_CREATED
+  BASELINE_UPDATED
+  BOQ_UPLOADED
+  JOIN_CODE_ISSUED
+  FIELD_AGENT_JOINED
+  EVIDENCE_EXTRACTED
+  EVIDENCE_CONFIRMED
+  EVIDENCE_FLAGGED_INTEGRITY
+  IPC_SUBMITTED
+  AI_RECONCILIATION_COMPLETED
+  MONITOR_QUERY_RAISED
+  CONTRACTOR_QUERY_RESPONDED
+  VALUATION_REPORT_CERTIFIED
+  LENDER_TRANCHE_DECIDED
+}
+
+// ============================================================================
+// MODELS
+// ============================================================================
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  roleType  UserRole
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users              User[]
+  monitoredProjects  Project[] @relation("MonitorOrganization")
+  lenderProjects     Project[] @relation("LenderOrganization")
+  contractedProjects Project[] @relation("ContractorOrganization")
+
+  @@index([roleType])
+}
+
+model User {
+  id                        String                   @id @default(uuid()) @db.Uuid
+  email                     String                   @unique
+  passwordHash              String
+  fullName                  String
+  role                      UserRole
+  organizationId            String                   @db.Uuid
+  professionalLicenseType   ProfessionalLicenseType?
+  professionalLicenseNumber String?
+  isActive                  Boolean                  @default(true)
+  createdAt                 DateTime                 @default(now())
+  updatedAt                 DateTime                 @updatedAt
+
+  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  certifiedReports ValuationReport[] @relation("CertifiedByMonitor")
+  trancheDecisions TrancheDecision[] @relation("DecidedByLender")
+
+  @@index([organizationId])
+  @@index([role])
+}
+
+model Project {
+  id                   String           @id @default(uuid()) @db.Uuid
+  name                 String
+  codePrefix           String           @unique // e.g., "LKK-402"
+  stateLocation        String // e.g., "Lagos State"
+  lgaLocation          String?
+  description          String?
+  totalBudgetNgn       Decimal          @db.Decimal(18, 2)
+  disbursedToDateNgn   Decimal          @default(0) @db.Decimal(18, 2)
+  certifiedProgressPct Decimal          @default(0) @db.Decimal(5, 2)
+  reportingCadence     ReportingCadence @default(WEEKLY)
+  geofenceMode         GeofenceMode
+  geofenceGeoJson      Json // Typed RadialGeofence or LinearCorridorGeofence
+  portfolioHealth      PortfolioHealth  @default(EVIDENCE_PARTIAL)
+
+  monitorOrganizationId    String @db.Uuid
+  lenderOrganizationId     String @db.Uuid
+  contractorOrganizationId String @db.Uuid
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  monitorOrganization    Organization @relation("MonitorOrganization", fields: [monitorOrganizationId], references: [id])
+  lenderOrganization     Organization @relation("LenderOrganization", fields: [lenderOrganizationId], references: [id])
+  contractorOrganization Organization @relation("ContractorOrganization", fields: [contractorOrganizationId], references: [id])
+
+  joinCodes     ProjectJoinCode[]
+  fieldSessions FieldAgentSession[]
+  tranches      FacilityTranche[]
+  boqItems      BoqItem[]
+  evidenceLogs  FieldEvidenceLog[]
+  ipcClaims     IpcClaim[]
+  auditLogs     AuditLog[]
+
+  @@index([portfolioHealth])
+  @@index([monitorOrganizationId])
+  @@index([lenderOrganizationId])
+  @@index([contractorOrganizationId])
+}
+
+model ProjectJoinCode {
+  id               String           @id @default(uuid()) @db.Uuid
+  projectId        String           @db.Uuid
+  code             String           @unique // e.g., "LKK-402-INS", "LKK-402-COW", "LKK-402-CON"
+  independenceTier IndependenceTier
+  isActive         Boolean          @default(true)
+  expiresAt        DateTime?
+  createdAt        DateTime         @default(now())
+
+  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fieldSessions FieldAgentSession[]
+
+  @@index([projectId])
+}
+
+model FieldAgentSession {
+  id               String           @id @default(uuid()) @db.Uuid
+  projectId        String           @db.Uuid
+  joinCodeId       String           @db.Uuid
+  independenceTier IndependenceTier
+  agentFullName    String
+  agentPhoneNumber String
+  agentPinHash     String?
+  deviceId         String
+  deviceModel      String?
+  deviceOs         String?
+  deviceSecretHash String?
+  isActive         Boolean          @default(true)
+  lastSyncAt       DateTime?
+  createdAt        DateTime         @default(now())
+
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  joinCode     ProjectJoinCode    @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
+  evidenceLogs FieldEvidenceLog[]
+
+  @@index([projectId, independenceTier])
+  @@index([deviceId])
+}
+
+model FacilityTranche {
+  id                  String   @id @default(uuid()) @db.Uuid
+  projectId           String   @db.Uuid
+  trancheNumber       Int
+  name                String // e.g., "Tranche 2 — Substructure & Box Culverts"
+  allocatedAmountNgn  Decimal  @db.Decimal(18, 2)
+  releasedAmountNgn   Decimal  @default(0) @db.Decimal(18, 2)
+  targetCompletionPct Decimal  @db.Decimal(5, 2)
+  isReleased          Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  conditionsPrecedent ConditionPrecedent[]
+  boqItems            BoqItem[]
+  ipcClaims           IpcClaim[]
+
+  @@unique([projectId, trancheNumber])
+}
+
+model ConditionPrecedent {
+  id                    String                   @id @default(uuid()) @db.Uuid
+  trancheId             String                   @db.Uuid
+  referenceCode         String // e.g., "CP-01"
+  description           String
+  isMandatoryForRelease Boolean                  @default(true)
+  status                ConditionPrecedentStatus @default(PENDING)
+  evidenceDocumentUrl   String?
+  verifiedAt            DateTime?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+
+  tranche FacilityTranche @relation(fields: [trancheId], references: [id], onDelete: Cascade)
+
+  @@index([trancheId])
+}
+
+model BoqItem {
+  id                               String  @id @default(uuid()) @db.Uuid
+  projectId                        String  @db.Uuid
+  trancheId                        String? @db.Uuid
+  aiSuggestedTrancheId             String? @db.Uuid
+  trancheMappingConfirmedByMonitor Boolean @default(false)
+
+  wbsCode         String // e.g., "02.03.1"
+  section         String // e.g., "BILL NO. 2 — DRAINAGE & CULVERTS"
+  description     String
+  unit            String // e.g., "m3", "m", "tons", "bags", "item"
+  totalQuantity   Decimal @db.Decimal(14, 3)
+  rateNgn         Decimal @db.Decimal(18, 2)
+  budgetedCostNgn Decimal @db.Decimal(18, 2)
+
+  isHoldPoint            Boolean @default(false)
+  holdPointInstruction   String?
+  isOpaqueLumpSum        Boolean @default(false)
+  opacityWarningReason   String?
+  cumulativeCertifiedPct Decimal @default(0) @db.Decimal(5, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tranche      FacilityTranche?   @relation(fields: [trancheId], references: [id], onDelete: SetNull)
+  evidenceLogs FieldEvidenceLog[]
+  ipcLineItems IpcLineItem[]
+
+  @@unique([projectId, wbsCode])
+  @@index([projectId, trancheId])
+}
+
+model FieldEvidenceLog {
+  id               String            @id @default(uuid()) @db.Uuid
+  projectId        String            @db.Uuid
+  boqItemId        String?           @db.Uuid
+  fieldSessionId   String            @db.Uuid
+  clientCaptureId  String            @unique @db.Uuid
+  independenceTier IndependenceTier
+  status           EvidenceLogStatus @default(AWAITING_CONFIRMATION)
+
+  // Hardware GPS & Corridor Verification
+  latitude              Float
+  longitude             Float
+  altitudeMeters        Float?
+  gpsAccuracyMeters     Float
+  isMockLocation        Boolean @default(false)
+  isWithinGeofence      Boolean
+  chainageKm            Float?
+  chainageLabel         String? // e.g., "KM 14+200"
+  corridorOffsetMeters  Float?
+  verificationBadgeText String
+
+  // Device Orientation & Cryptographic Provenance
+  devicePitchDeg      Float?
+  deviceRollDeg       Float?
+  deviceAzimuthDeg    Float?
+  deviceSignatureHash String
+  integrityPassed     Boolean @default(true)
+  integrityFlags      Json    @default("[]") // Array of flag strings
+
+  // Speech / Text & Mandatory Human Confirmation
+  rawTextNote               String?
+  rawWhisperTranscript      String?
+  confirmedSummary          String?
+  confirmedQuantities       Json    @default("[]") // Array of ExtractedQuantityItem
+  siteBlockers              Json    @default("[]") // Array of strings
+  visionObservationSummary  String?
+  wasEditedByAgent          Boolean @default(false)
+  confirmationSignatureHash String?
+
+  capturedAtDevice DateTime
+  syncedAtServer   DateTime  @default(now())
+  confirmedAt      DateTime?
+
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  boqItem          BoqItem?          @relation(fields: [boqItemId], references: [id], onDelete: SetNull)
+  fieldSession     FieldAgentSession @relation(fields: [fieldSessionId], references: [id], onDelete: Restrict)
+  mediaAttachments EvidenceMedia[]
+
+  @@index([projectId, status])
+  @@index([projectId, boqItemId])
+  @@index([projectId, independenceTier])
+}
+
+model EvidenceMedia {
+  id              String    @id @default(uuid()) @db.Uuid
+  evidenceLogId   String    @db.Uuid
+  mediaType       MediaType
+  objectKey       String
+  fileUrl         String?
+  mimeType        String
+  byteSize        Int
+  sha256FileHash  String
+  perceptualHash  String? // 64-bit pHash hex/binary string for duplicate site photo screening
+  durationSeconds Float?
+  createdAt       DateTime  @default(now())
+
+  evidenceLog FieldEvidenceLog @relation(fields: [evidenceLogId], references: [id], onDelete: Cascade)
+
+  @@index([evidenceLogId])
+  @@index([perceptualHash])
+  @@index([sha256FileHash])
+}
+
+model IpcClaim {
+  id                    String         @id @default(uuid()) @db.Uuid
+  projectId             String         @db.Uuid
+  trancheId             String         @db.Uuid
+  ipcNumber             Int
+  periodStart           DateTime
+  periodEnd             DateTime
+  contractorCoverNote   String?
+  totalClaimedAmountNgn Decimal        @db.Decimal(18, 2)
+  totalCertifiedNgn     Decimal?       @db.Decimal(18, 2)
+  status                IpcClaimStatus @default(SUBMITTED)
+  aiExecutiveSummary    String?
+  submittedAt           DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  project             Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tranche             FacilityTranche         @relation(fields: [trancheId], references: [id], onDelete: Restrict)
+  lineItems           IpcLineItem[]
+  supportingDocuments IpcSupportingDocument[]
+  valuationReport     ValuationReport?
+
+  @@unique([projectId, ipcNumber])
+  @@index([projectId, status])
+}
+
+model IpcLineItem {
+  id         String @id @default(uuid()) @db.Uuid
+  ipcClaimId String @db.Uuid
+  boqItemId  String @db.Uuid
+
+  previousCertifiedPct Decimal @default(0) @db.Decimal(5, 2)
+  contractorClaimedPct Decimal @db.Decimal(5, 2)
+  contractorClaimedNgn Decimal @db.Decimal(18, 2)
+  contractorRemarks    String?
+
+  // AI Auditor Co-Pilot Output (Never legally certifies completion %)
+  aiEvidenceRating            EvidenceStrengthRating @default(UNSUPPORTED)
+  aiRationale                 String?
+  visitPlannerFlag            Boolean                @default(false)
+  visitPlannerReason          String?
+  missingHoldPointFlag        Boolean                @default(false)
+  highestCorroboratingTier    IndependenceTier?
+  corroboratingEvidenceLogIds Json                   @default("[]")
+
+  // Human Monitor (QS / COREN) Certified Valuation
+  monitorCertifiedPct Decimal? @db.Decimal(5, 2)
+  monitorCertifiedNgn Decimal? @db.Decimal(18, 2)
+  monitorRemarks      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ipcClaim IpcClaim       @relation(fields: [ipcClaimId], references: [id], onDelete: Cascade)
+  boqItem  BoqItem        @relation(fields: [boqItemId], references: [id], onDelete: Restrict)
+  queries  MonitorQuery[]
+
+  @@unique([ipcClaimId, boqItemId])
+}
+
+model IpcSupportingDocument {
+  id         String    @id @default(uuid()) @db.Uuid
+  ipcClaimId String    @db.Uuid
+  boqItemId  String?   @db.Uuid
+  title      String
+  mediaType  MediaType
+  objectKey  String
+  fileUrl    String?
+  uploadedAt DateTime  @default(now())
+
+  ipcClaim IpcClaim @relation(fields: [ipcClaimId], references: [id], onDelete: Cascade)
+
+  @@index([ipcClaimId])
+}
+
+model MonitorQuery {
+  id                          String      @id @default(uuid()) @db.Uuid
+  ipcLineItemId               String      @db.Uuid
+  status                      QueryStatus @default(OPEN)
+  queryReason                 String
+  requestedProofTypes         Json        @default("[]")
+  contractorResponseText      String?
+  revisedClaimedCumulativePct Decimal?    @db.Decimal(5, 2)
+  attachedDocumentsJson       Json        @default("[]")
+  createdAt                   DateTime    @default(now())
+  respondedAt                 DateTime?
+  resolvedAt                  DateTime?
+
+  ipcLineItem IpcLineItem @relation(fields: [ipcLineItemId], references: [id], onDelete: Cascade)
+
+  @@index([ipcLineItemId, status])
+}
+
+model ValuationReport {
+  id                            String                  @id @default(uuid()) @db.Uuid
+  ipcClaimId                    String                  @unique @db.Uuid
+  certifiedByUserId             String                  @db.Uuid
+  trancheRecommendation         MonitorRecommendation
+  recommendedReleaseAmountNgn   Decimal                 @db.Decimal(18, 2)
+  recommendedHoldbackAmountNgn  Decimal                 @db.Decimal(18, 2)
+  executiveCertificationSummary String
+  certifierFullName             String
+  certifierLicenseType          ProfessionalLicenseType @default(QSRBN)
+  certifierLicenseNumber        String
+  reportPdfObjectKey            String?
+  reportPdfUrl                  String?
+  certifiedAt                   DateTime                @default(now())
+
+  ipcClaim        IpcClaim         @relation(fields: [ipcClaimId], references: [id], onDelete: Cascade)
+  certifiedByUser User             @relation("CertifiedByMonitor", fields: [certifiedByUserId], references: [id])
+  trancheDecision TrancheDecision?
+}
+
+model TrancheDecision {
+  id                            String             @id @default(uuid()) @db.Uuid
+  valuationReportId             String             @unique @db.Uuid
+  decidedByUserId               String             @db.Uuid
+  decision                      LenderDecisionType
+  approvedDisbursementAmountNgn Decimal            @db.Decimal(18, 2)
+  heldBackAmountNgn             Decimal            @db.Decimal(18, 2)
+  creditCommitteeReference      String?
+  approverNotes                 String?
+  decidedAt                     DateTime           @default(now())
+
+  valuationReport ValuationReport @relation(fields: [valuationReportId], references: [id], onDelete: Cascade)
+  decidedByUser   User            @relation("DecidedByLender", fields: [decidedByUserId], references: [id])
+}
+
+model AuditLog {
+  id               String          @id @default(uuid()) @db.Uuid
+  projectId        String          @db.Uuid
+  actorType        AuditActorType
+  actorId          String
+  actorDisplayName String
+  action           AuditActionType
+  summaryText      String
+  payload          Json
+  previousHash     String
+  entryHash        String          @unique
+  createdAt        DateTime        @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+}

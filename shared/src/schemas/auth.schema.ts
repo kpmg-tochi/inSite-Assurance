@@ -1,12 +1,16 @@
-import { z } from 'zod';
-import { IndependenceTierEnum, UserRoleEnum } from '../enums';
+import { z } from "zod";
+import {
+  IndependenceTierEnum,
+  ProfessionalLicenseTypeEnum,
+  UserRoleEnum,
+} from "../enums";
 
 /**
  * Web Portal Authentication (Monitor, Lender, Contractor)
  */
 export const WebLoginRequestSchema = z.object({
-  email: z.string().email('Please provide a valid corporate email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  email: z.string().email("Please provide a valid corporate email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
 });
 export type WebLoginRequest = z.infer<typeof WebLoginRequestSchema>;
 
@@ -16,7 +20,8 @@ export const WebRegisterRequestSchema = z.object({
   password: z.string().min(8),
   role: UserRoleEnum,
   organizationName: z.string().min(2).max(160),
-  professionalLicenseNumber: z.string().max(64).optional(), // e.g., QSRBN / COREN reg number for MONITOR
+  professionalLicenseType: ProfessionalLicenseTypeEnum.nullable().optional(), // e.g., 'QSRBN' or 'COREN'
+  professionalLicenseNumber: z.string().max(64).optional(), // e.g., '3842' or 'R.49201'
 });
 export type WebRegisterRequest = z.infer<typeof WebRegisterRequestSchema>;
 
@@ -27,6 +32,7 @@ export const WebUserProfileSchema = z.object({
   role: UserRoleEnum,
   organizationId: z.string().uuid(),
   organizationName: z.string(),
+  professionalLicenseType: ProfessionalLicenseTypeEnum.nullable(),
   professionalLicenseNumber: z.string().nullable(),
 });
 export type WebUserProfile = z.infer<typeof WebUserProfileSchema>;
@@ -47,23 +53,25 @@ export const JoinProjectMobileRequestSchema = z.object({
     .string()
     .trim()
     .toUpperCase()
-    .min(6, 'Project Join Code must be at least 6 characters')
+    .min(6, "Project Join Code must be at least 6 characters")
     .max(16),
-  agentFullName: z.string().min(2, 'Full name is required').max(120),
+  agentFullName: z.string().min(2, "Full name is required").max(120),
   agentPhoneNumber: z
     .string()
-    .min(10, 'Enter a valid Nigerian or international phone number')
+    .min(10, "Enter a valid Nigerian or international phone number")
     .max(20),
   agentPin: z
     .string()
-    .regex(/^\d{4,6}$/, 'PIN must be 4 to 6 digits')
+    .regex(/^\d{4,6}$/, "PIN must be 4 to 6 digits")
     .optional(),
   deviceId: z.string().min(4).max(128),
   deviceModel: z.string().max(128).optional(),
   deviceOs: z.string().max(64).optional(),
   devicePublicKeyOrSecretHash: z.string().max(256).optional(),
 });
-export type JoinProjectMobileRequest = z.infer<typeof JoinProjectMobileRequestSchema>;
+export type JoinProjectMobileRequest = z.infer<
+  typeof JoinProjectMobileRequestSchema
+>;
 
 export const FieldAgentSessionProfileSchema = z.object({
   sessionId: z.string().uuid(),
@@ -76,5 +84,6 @@ export const FieldAgentSessionProfileSchema = z.object({
   agentPhoneNumber: z.string(),
   deviceId: z.string(),
 });
-export type FieldAgentSessionProfile = z.infer<typeof FieldAgentSessionProfileSchema>;
-
+export type FieldAgentSessionProfile = z.infer<
+  typeof FieldAgentSessionProfileSchema
+>;

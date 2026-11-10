@@ -12,6 +12,62 @@ export const UserRoleEnum = z.enum([
 export type UserRole = z.infer<typeof UserRoleEnum>;
 
 /**
+ * 1b. Nigerian Professional Regulatory License Types
+ * Used on User and ValuationReport to validate and format certifier credentials.
+ */
+export const ProfessionalLicenseTypeEnum = z.enum([
+  'QSRBN',  // Quantity Surveyors Registration Board of Nigeria
+  'COREN',  // Council for the Regulation of Engineering in Nigeria
+  'ARCON',  // Architects Registration Council of Nigeria
+  'CORBON', // Council of Registered Builders of Nigeria
+  'ICAN',   // Institute of Chartered Accountants of Nigeria
+  'OTHER',  // Other accredited professional body
+]);
+export type ProfessionalLicenseType = z.infer<typeof ProfessionalLicenseTypeEnum>;
+
+export const PROFESSIONAL_LICENSE_META: Record<
+  ProfessionalLicenseType,
+  { code: ProfessionalLicenseType; fullName: string; displayPrefix: string; exampleNumber: string }
+> = {
+  QSRBN: {
+    code: 'QSRBN',
+    fullName: 'Quantity Surveyors Registration Board of Nigeria',
+    displayPrefix: 'QSRBN Reg. No.',
+    exampleNumber: '3842',
+  },
+  COREN: {
+    code: 'COREN',
+    fullName: 'Council for the Regulation of Engineering in Nigeria',
+    displayPrefix: 'COREN Reg. No.',
+    exampleNumber: 'R.49201',
+  },
+  ARCON: {
+    code: 'ARCON',
+    fullName: 'Architects Registration Council of Nigeria',
+    displayPrefix: 'ARCON Reg. No.',
+    exampleNumber: 'F/2914',
+  },
+  CORBON: {
+    code: 'CORBON',
+    fullName: 'Council of Registered Builders of Nigeria',
+    displayPrefix: 'CORBON Reg. No.',
+    exampleNumber: 'B.1840',
+  },
+  ICAN: {
+    code: 'ICAN',
+    fullName: 'Institute of Chartered Accountants of Nigeria',
+    displayPrefix: 'ICAN Membership No.',
+    exampleNumber: 'MB/049120',
+  },
+  OTHER: {
+    code: 'OTHER',
+    fullName: 'Other Accredited Regulatory Body',
+    displayPrefix: 'License No.',
+    exampleNumber: 'REG-1001',
+  },
+};
+
+/**
  * 2. Field Reporter Independence Tiers
  * Bound via the role-specific Project Join Code (Section 4.B).
  */
