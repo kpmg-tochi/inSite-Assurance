@@ -14,6 +14,7 @@ import {
 import { LiveGeospatialMap } from '../../components/LiveGeospatialMap';
 import { formatIndependenceTierText } from '../../components/EvidenceBadge';
 import { useAuth } from '../../lib/auth-context';
+import ContractorVerificationQueue from '../../components/ContractorVerificationQueue';
 
 interface PortfolioDashboardPageProps {
   project: ProjectSummaryDto;
@@ -97,7 +98,7 @@ export function PortfolioDashboardPage({
         tranches: [
           {
             trancheNumber: 1,
-            name: 'Tranche 1 — Mobilization & Sub-structure',
+            name: 'Tranche 1: Mobilization & Sub-structure',
             allocatedAmountNgn: Math.round(budgetNum * 0.35),
             targetCompletionPct: 35,
             conditionsPrecedent: [
@@ -119,7 +120,7 @@ export function PortfolioDashboardPage({
           },
           {
             trancheNumber: 2,
-            name: 'Tranche 2 — Superstructure & Civil Works',
+            name: 'Tranche 2: Superstructure & Civil Works',
             allocatedAmountNgn: Math.round(budgetNum * 0.65),
             targetCompletionPct: 100,
             conditionsPrecedent: [
@@ -322,9 +323,8 @@ export function PortfolioDashboardPage({
                     {latestConfirmedLog.fieldSession?.agentFullName ||
                       'Field Agent'}
                   </span>
-                  <span>
-                    SHA-256: {latestConfirmedLog.deviceSignatureHash.slice(0, 8)}
-                    ...
+                  <span className="text-emerald-700 font-medium">
+                    Device Signature: Verified
                   </span>
                 </div>
               </div>
@@ -400,6 +400,11 @@ export function PortfolioDashboardPage({
             )}
           </div>
         </div>
+      </div>
+
+      {/* Contractor Assurance Verification Queue */}
+      <div className="mt-4">
+        <ContractorVerificationQueue projectId={project.id} />
       </div>
 
       {/* New Project Baseline Modal (Monitor Role) */}

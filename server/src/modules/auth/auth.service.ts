@@ -159,6 +159,12 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
     ? await bcrypt.hash(input.agentPin, 8)
     : null;
 
+  const isContractorTier =
+    joinCodeRecord.independenceTier === 'CONTRACTOR_ENGINEER';
+  const initialAssuranceStatus = isContractorTier
+    ? 'PENDING_APPROVAL'
+    : 'APPROVED';
+
   const session = await prisma.$transaction(async (tx) => {
     const createdSession = await tx.fieldAgentSession.create({
       data: {
@@ -173,6 +179,14 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
         deviceOs: input.deviceOs ?? null,
         deviceSecretHash: input.devicePublicKeyOrSecretHash ?? null,
         lastSyncAt: new Date(),
+        assuranceStatus: initialAssuranceStatus,
+        idDocumentType: input.idDocumentType ?? (isContractorTier ? 'National Identity (NIN)' : null),
+        idDocumentUrl: input.idDocumentUrl ?? null,
+        selfieImageUrl: input.selfieImageUrl ?? null,
+        livenessPassed: input.livenessPassed ?? false,
+        livenessScore: input.livenessPassed ? 0.985 : null,
+        corenLicenseNumber: input.corenLicenseNumber ?? null,
+        experienceSummary: input.experienceSummary ?? null,
       },
     });
 
@@ -181,14 +195,21 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
       actorType: 'FIELD_AGENT',
       actorId: createdSession.id,
       actorDisplayName: `${input.agentFullName} (${joinCodeRecord.independenceTier})`,
-      action: 'FIELD_AGENT_JOINED',
-      summaryText: `Field reporter ${input.agentFullName} joined project ${joinCodeRecord.project.codePrefix} using code ${normalizedCode} under tier ${joinCodeRecord.independenceTier}.`,
+      action: isContractorTier
+        ? 'CONTRACTOR_ASSURANCE_SUBMITTED'
+        : 'FIELD_AGENT_JOINED',
+      summaryText: isContractorTier
+        ? `Contractor Site Engineer ${input.agentFullName} submitted identity & COREN (${input.corenLicenseNumber || 'License'}) credentials for project ${joinCodeRecord.project.codePrefix} — Awaiting Monitor verification.`
+        : `Field reporter ${input.agentFullName} joined project ${joinCodeRecord.project.codePrefix} using code ${normalizedCode} under tier ${joinCodeRecord.independenceTier}.`,
       payload: {
         joinCode: normalizedCode,
         independenceTier: joinCodeRecord.independenceTier,
         agentPhoneNumber: input.agentPhoneNumber,
         deviceId: input.deviceId,
         deviceModel: input.deviceModel ?? null,
+        assuranceStatus: initialAssuranceStatus,
+        corenLicenseNumber: input.corenLicenseNumber ?? null,
+        livenessPassed: input.livenessPassed ?? false,
       },
     });
 
@@ -229,6 +250,9 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
       agentFullName: session.agentFullName,
       agentPhoneNumber: session.agentPhoneNumber,
       deviceId: session.deviceId,
+      assuranceStatus: session.assuranceStatus,
+      corenLicenseNumber: session.corenLicenseNumber ?? undefined,
+      livenessPassed: session.livenessPassed,
     },
     baselinePack: {
       projectId: project.id,

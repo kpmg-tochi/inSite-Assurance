@@ -115,6 +115,16 @@ export const INDEPENDENCE_TIER_META: Record<IndependenceTier, IndependenceTierMe
 };
 
 /**
+ * 2b. Contractor Identity & Competence Assurance Statuses
+ */
+export const ContractorAssuranceStatusEnum = z.enum([
+  'PENDING_APPROVAL',
+  'APPROVED',
+  'REJECTED',
+]);
+export type ContractorAssuranceStatus = z.infer<typeof ContractorAssuranceStatusEnum>;
+
+/**
  * 3. Geofence Modes (Section 3.3 & 4.A)
  */
 export const GeofenceModeEnum = z.enum([
@@ -266,6 +276,9 @@ export const AuditActionTypeEnum = z.enum([
   'BOQ_UPLOADED',
   'JOIN_CODE_ISSUED',
   'FIELD_AGENT_JOINED',
+  'CONTRACTOR_ASSURANCE_SUBMITTED',
+  'CONTRACTOR_ASSURANCE_APPROVED',
+  'CONTRACTOR_ASSURANCE_REJECTED',
   'EVIDENCE_EXTRACTED',
   'EVIDENCE_CONFIRMED',
   'EVIDENCE_FLAGGED_INTEGRITY',

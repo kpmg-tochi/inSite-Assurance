@@ -380,3 +380,249 @@ export async function verifyCoordinateForProject(
   return verifyPointAgainstGeofence(coord, parsedGeofence);
 }
 
+/**
+ * List all Contractor Assurance Verification Requests for a project
+ */
+export async function listContractorVerifications(projectId?: string) {
+  const whereClause: any = {
+    independenceTier: 'CONTRACTOR_ENGINEER',
+  };
+  if (projectId && projectId !== 'all') {
+    whereClause.projectId = projectId;
+  }
+
+  const sessions = await prisma.fieldAgentSession.findMany({
+    where: whereClause,
+    orderBy: { createdAt: 'desc' },
+    include: {
+      project: {
+        select: {
+          id: true,
+          name: true,
+          codePrefix: true,
+          contractorOrganization: { select: { name: true } },
+        },
+      },
+      joinCode: { select: { code: true } },
+    },
+  });
+
+  // Get reviewer user names if reviewed
+  const reviewerIds = sessions
+    .map((s) => s.reviewedByUserId)
+    .filter((id): id is string => Boolean(id));
+
+  const reviewers = reviewerIds.length > 0
+    ? await prisma.user.findMany({
+        where: { id: { in: reviewerIds } },
+        select: { id: true, fullName: true },
+      })
+    : [];
+
+  const reviewerMap = new Map(reviewers.map((r) => [r.id, r.fullName]));
+
+  return sessions.map((s) => ({
+    id: s.id,
+    projectId: s.projectId,
+    projectCodePrefix: s.project.codePrefix,
+    projectName: s.project.name,
+    organizationName: s.project.contractorOrganization.name,
+    agentFullName: s.agentFullName,
+    agentPhoneNumber: s.agentPhoneNumber,
+    joinCodeUsed: s.joinCode.code,
+    corenLicenseNumber: s.corenLicenseNumber,
+    idDocumentType: s.idDocumentType,
+    idDocumentUrl: s.idDocumentUrl,
+    selfieImageUrl: s.selfieImageUrl,
+    livenessPassed: s.livenessPassed,
+    livenessScore: s.livenessScore,
+    experienceSummary: s.experienceSummary,
+    assuranceStatus: s.assuranceStatus,
+    deviceId: s.deviceId,
+    deviceModel: s.deviceModel,
+    createdAt: s.createdAt.toISOString(),
+    submittedAt: s.createdAt.toISOString(),
+    reviewedAt: s.reviewedAt?.toISOString() || null,
+    reviewedByUserName: s.reviewedByUserId
+      ? reviewerMap.get(s.reviewedByUserId) || 'Independent Monitor'
+      : null,
+    rejectionReason: s.rejectionReason,
+  }));
+}
+
+/**
+ * Review (Approve or Reject) a Contractor Assurance Verification Request
+ */
+export async function reviewContractorVerification(
+  projectId: string,
+  sessionId: string,
+  webUser: WebJwtPayload,
+  decision: 'APPROVE' | 'REJECT',
+  remarks?: string
+) {
+  const session = await prisma.fieldAgentSession.findFirst({
+    where: { id: sessionId, projectId },
+    include: { project: true, joinCode: true },
+  });
+
+  if (!session) {
+    throw new AppError(
+      'Contractor verification request not found',
+      404,
+      'VERIFICATION_NOT_FOUND'
+    );
+  }
+
+  const nextStatus = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+  const isActive = decision === 'APPROVE';
+
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.fieldAgentSession.update({
+      where: { id: sessionId },
+      data: {
+        assuranceStatus: nextStatus,
+        isActive,
+        reviewedByUserId: webUser.userId,
+        reviewedAt: new Date(),
+        rejectionReason: decision === 'REJECT' ? remarks || 'Verification rejected by Independent Monitor.' : null,
+      },
+    });
+
+    await recordAuditEvent(tx, {
+      projectId,
+      actorType: 'WEB_USER',
+      actorId: webUser.userId,
+      actorDisplayName: `${webUser.fullName} (${webUser.role})`,
+      action: decision === 'APPROVE' ? 'CONTRACTOR_ASSURANCE_APPROVED' : 'CONTRACTOR_ASSURANCE_REJECTED',
+      summaryText: decision === 'APPROVE'
+        ? `Independent Monitor ${webUser.fullName} verified and approved on-site contractor credentials for ${session.agentFullName} (${session.corenLicenseNumber || 'COREN'}). Mobile field access activated.`
+        : `Independent Monitor ${webUser.fullName} rejected contractor verification for ${session.agentFullName}. Reason: ${remarks || 'Incomplete credentials'}.`,
+      payload: {
+        sessionId,
+        agentFullName: session.agentFullName,
+        corenLicenseNumber: session.corenLicenseNumber,
+        decision,
+        remarks: remarks || null,
+      },
+    });
+
+    return updated;
+  });
+}
+
+/**
+ * Aggregated Portfolio Executive Summary for Financiers & Lead Monitors
+ */
+export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
+  const projects = await prisma.project.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: {
+      contractorOrganization: { select: { name: true } },
+      lenderOrganization: { select: { name: true } },
+      tranches: {
+        orderBy: { trancheNumber: 'asc' },
+        select: { trancheNumber: true, isReleased: true },
+      },
+      boqItems: {
+        select: { id: true, isHoldPoint: true, cumulativeCertifiedPct: true },
+      },
+      ipcClaims: {
+        orderBy: { ipcNumber: 'desc' },
+        take: 1,
+        include: {
+          lineItems: {
+            select: {
+              aiEvidenceRating: true,
+              missingHoldPointFlag: true,
+              contractorClaimedNgn: true,
+              monitorCertifiedNgn: true,
+            },
+          },
+        },
+      },
+      fieldSessions: {
+        where: {
+          independenceTier: 'CONTRACTOR_ENGINEER',
+          assuranceStatus: 'PENDING_APPROVAL',
+        },
+        select: { id: true },
+      },
+    },
+  });
+
+  let totalPortfolioCommitmentNgn = 0;
+  let totalDisbursedToDateNgn = 0;
+  let totalRecommendedHoldbackNgn = 0;
+  let supportedCount = 0;
+  let partialCount = 0;
+  let conflictCount = 0;
+  let pendingContractorVerificationsCount = 0;
+
+  const projectItems = projects.map((p) => {
+    const budget = Number(p.totalBudgetNgn);
+    const disbursed = Number(p.disbursedToDateNgn);
+    totalPortfolioCommitmentNgn += budget;
+    totalDisbursedToDateNgn += disbursed;
+
+    const latestIpc = p.ipcClaims[0] || null;
+    let openConflicts = 0;
+    let unfulfilledHoldPoints = 0;
+    let holdbackNgn = 0;
+
+    if (latestIpc) {
+      for (const li of latestIpc.lineItems) {
+        if (li.aiEvidenceRating === 'CONTRADICTED' || li.missingHoldPointFlag) {
+          openConflicts += 1;
+        }
+        if (li.missingHoldPointFlag) {
+          unfulfilledHoldPoints += 1;
+        }
+        const claimed = Number(li.contractorClaimedNgn);
+        const certified = li.monitorCertifiedNgn !== null ? Number(li.monitorCertifiedNgn) : claimed;
+        if (claimed > certified) {
+          holdbackNgn += (claimed - certified);
+        }
+      }
+    }
+    totalRecommendedHoldbackNgn += holdbackNgn;
+
+    if (p.portfolioHealth === 'EVIDENCE_SUPPORTED') supportedCount += 1;
+    else if (p.portfolioHealth === 'EVIDENCE_PARTIAL') partialCount += 1;
+    else conflictCount += 1;
+
+    const pendingContractors = p.fieldSessions.length;
+    pendingContractorVerificationsCount += pendingContractors;
+
+    const activeTranche = p.tranches.find((t) => !t.isReleased) || p.tranches[0] || null;
+
+    return {
+      projectId: p.id,
+      codePrefix: p.codePrefix,
+      name: p.name,
+      stateLocation: p.stateLocation,
+      contractorName: p.contractorOrganization.name,
+      lenderName: p.lenderOrganization.name,
+      totalBudgetNgn: budget,
+      disbursedToDateNgn: disbursed,
+      certifiedProgressPct: Number(p.certifiedProgressPct),
+      activeTrancheNumber: activeTranche?.trancheNumber || null,
+      portfolioHealth: p.portfolioHealth,
+      openConflictCount: openConflicts,
+      unfulfilledHoldPointCount: unfulfilledHoldPoints,
+      pendingContractorCount: pendingContractors,
+    };
+  });
+
+  return {
+    totalPortfolioCommitmentNgn,
+    totalDisbursedToDateNgn,
+    totalRecommendedHoldbackNgn,
+    activeProjectsCount: projects.length,
+    supportedCount,
+    partialCount,
+    conflictCount,
+    pendingContractorVerificationsCount,
+    projects: projectItems,
+  };
+}
+

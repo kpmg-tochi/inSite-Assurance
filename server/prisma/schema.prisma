@@ -114,12 +114,21 @@ enum AuditActorType {
   AI_SYSTEM
 }
 
+enum ContractorAssuranceStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
 enum AuditActionType {
   PROJECT_CREATED
   BASELINE_UPDATED
   BOQ_UPLOADED
   JOIN_CODE_ISSUED
   FIELD_AGENT_JOINED
+  CONTRACTOR_ASSURANCE_SUBMITTED
+  CONTRACTOR_ASSURANCE_APPROVED
+  CONTRACTOR_ASSURANCE_REJECTED
   EVIDENCE_EXTRACTED
   EVIDENCE_CONFIRMED
   EVIDENCE_FLAGGED_INTEGRITY
@@ -227,9 +236,9 @@ model ProjectJoinCode {
 }
 
 model FieldAgentSession {
-  id               String           @id @default(uuid()) @db.Uuid
-  projectId        String           @db.Uuid
-  joinCodeId       String           @db.Uuid
+  id               String                    @id @default(uuid()) @db.Uuid
+  projectId        String                    @db.Uuid
+  joinCodeId       String                    @db.Uuid
   independenceTier IndependenceTier
   agentFullName    String
   agentPhoneNumber String
@@ -238,15 +247,29 @@ model FieldAgentSession {
   deviceModel      String?
   deviceOs         String?
   deviceSecretHash String?
-  isActive         Boolean          @default(true)
+  isActive         Boolean                   @default(true)
   lastSyncAt       DateTime?
-  createdAt        DateTime         @default(now())
+  createdAt        DateTime                  @default(now())
+
+  // Contractor Identity & Competence Assurance
+  assuranceStatus    ContractorAssuranceStatus @default(APPROVED)
+  idDocumentType     String?
+  idDocumentUrl      String?
+  selfieImageUrl     String?
+  livenessScore      Float?
+  livenessPassed     Boolean                   @default(false)
+  corenLicenseNumber String?
+  experienceSummary  String?
+  reviewedByUserId   String?                   @db.Uuid
+  reviewedAt         DateTime?
+  rejectionReason    String?
 
   project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   joinCode     ProjectJoinCode    @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
   evidenceLogs FieldEvidenceLog[]
 
   @@index([projectId, independenceTier])
+  @@index([projectId, assuranceStatus])
   @@index([deviceId])
 }
 

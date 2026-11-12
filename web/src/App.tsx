@@ -15,9 +15,12 @@ import { HomePage } from "./pages/public/HomePage";
 import { AboutPage } from "./pages/public/AboutPage";
 import { MobileAppPage } from "./pages/public/MobileAppPage";
 import { PortfolioDashboardPage } from "./pages/dashboard/PortfolioDashboardPage";
+import { PortfolioExecutivePage } from "./pages/dashboard/PortfolioExecutivePage";
 import { ReconciliationWorkbenchPage } from "./pages/reconciliation/ReconciliationWorkbenchPage";
 import { BoqAndHoldPointsPage } from "./pages/boq/BoqAndHoldPointsPage";
 import { AuditLedgerPage } from "./pages/audit/AuditLedgerPage";
+import { SettingsPage } from "./pages/settings/SettingsPage";
+import { Toaster } from "sonner";
 import { useProjectsQuery } from "./queries/projects/useProjectsQueries";
 import { useProjectBoqQuery } from "./queries/boq/useBoqQueries";
 import { useProjectEvidenceQuery } from "./queries/evidence/useEvidenceQueries";
@@ -173,6 +176,21 @@ function AuthenticatedWorkspace() {
             }
           />
           <Route
+            path="executive"
+            element={
+              user.role === "CONTRACTOR" ? (
+                <Navigate to="/app/dashboard" replace />
+              ) : (
+                <PortfolioExecutivePage
+                  onSelectProject={(projectId) => {
+                    setSelectedProjectId(projectId);
+                    navigate("/app/dashboard");
+                  }}
+                />
+              )
+            }
+          />
+          <Route
             path="reconciliation"
             element={
               <ReconciliationWorkbenchPage
@@ -203,6 +221,10 @@ function AuthenticatedWorkspace() {
                 <AuditLedgerPage project={activeProject} />
               )
             }
+          />
+          <Route
+            path="settings"
+            element={<SettingsPage project={activeProject} />}
           />
           <Route path="*" element={<Navigate to="dashboard" replace />} />
         </Routes>
@@ -241,11 +263,19 @@ export function App() {
           element={<Navigate to="/app/dashboard" replace />}
         />
         <Route
+          path="/executive"
+          element={<Navigate to="/app/executive" replace />}
+        />
+        <Route
           path="/reconciliation"
           element={<Navigate to="/app/reconciliation" replace />}
         />
         <Route path="/boq" element={<Navigate to="/app/boq" replace />} />
         <Route path="/audit" element={<Navigate to="/app/audit" replace />} />
+        <Route
+          path="/settings"
+          element={<Navigate to="/app/settings" replace />}
+        />
 
         {/* Authenticated Portal Workspace */}
         <Route path="/app/*" element={<AuthenticatedWorkspace />} />
@@ -253,6 +283,7 @@ export function App() {
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <Toaster position="top-right" richColors closeButton theme="light" />
     </>
   );
 }

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { toast } from "sonner";
 import type { WebUserProfile } from "@insite/shared";
 import {
   getStoredToken,
@@ -59,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     updateToken(null);
     setUser(null);
+    toast.info("Signed out of InSite Assurance.");
   };
 
   useEffect(() => {
@@ -90,6 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await loginMutation.mutateAsync({ email, password });
     updateToken(res.accessToken);
     setUser(res.user);
+    toast.success(`Signed in as ${res.user.fullName} (${res.user.role})`);
   };
 
   const quickSwitchDemoAccount = async (email: string) => {

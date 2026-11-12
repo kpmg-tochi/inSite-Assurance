@@ -200,7 +200,7 @@ export function LiveGeospatialMap({
         </div>
       </div>
 
-      {/* Interactive React-Leaflet Map (Standard OpenStreetMap — Free Out-of-the-Box, Zero API Key) */}
+      {/* Interactive React-Leaflet Map (Standard OpenStreetMap: Free Out-of-the-Box, Zero API Key) */}
       <MapContainer
         center={mapCenter}
         zoom={mapZoom}
@@ -361,7 +361,7 @@ export function LiveGeospatialMap({
             </div>
             <div className="my-1">
               <div className="text-xs font-semibold text-white truncate">
-                WBS {selectedLog.boqItem?.wbsCode || 'Site'} —{' '}
+                WBS {selectedLog.boqItem?.wbsCode || 'Site'}:{' '}
                 {selectedLog.boqItem?.description || 'Field Observation'}
               </div>
               <p className="text-[11px] text-blue-100/80 line-clamp-2 mt-0.5">

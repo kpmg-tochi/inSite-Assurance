@@ -87,3 +87,41 @@ export const PortfolioProjectPinSchema = z.object({
 });
 export type PortfolioProjectPin = z.infer<typeof PortfolioProjectPinSchema>;
 
+/**
+ * Portfolio Executive Summary for Lenders & Senior Risk Monitors
+ */
+export const PortfolioProjectHealthItemSchema = z.object({
+  projectId: z.string().uuid(),
+  codePrefix: z.string(),
+  name: z.string(),
+  stateLocation: z.string(),
+  contractorName: z.string(),
+  lenderName: z.string(),
+  totalBudgetNgn: z.number(),
+  disbursedToDateNgn: z.number(),
+  certifiedProgressPct: z.number(),
+  activeTrancheNumber: z.number().nullable().optional(),
+  portfolioHealth: PortfolioHealthEnum,
+  openConflictCount: z.number(),
+  unfulfilledHoldPointCount: z.number(),
+  pendingContractorCount: z.number(),
+});
+export type PortfolioProjectHealthItem = z.infer<
+  typeof PortfolioProjectHealthItemSchema
+>;
+
+export const PortfolioExecutiveSummaryDtoSchema = z.object({
+  totalPortfolioCommitmentNgn: z.number(),
+  totalDisbursedToDateNgn: z.number(),
+  totalRecommendedHoldbackNgn: z.number(),
+  activeProjectsCount: z.number(),
+  supportedCount: z.number(),
+  partialCount: z.number(),
+  conflictCount: z.number(),
+  pendingContractorVerificationsCount: z.number(),
+  projects: z.array(PortfolioProjectHealthItemSchema),
+});
+export type PortfolioExecutiveSummaryDto = z.infer<
+  typeof PortfolioExecutiveSummaryDtoSchema
+>;
+

@@ -123,7 +123,7 @@ export function EvidenceOverlayDrawer({
             <EvidenceRatingBadge rating={lineItem.aiEvidenceRating} />
           </div>
           <h3 className="text-sm font-bold text-slate-900 mt-1">
-            WBS {lineItem.boqItem.wbsCode} — {lineItem.boqItem.description}
+            WBS {lineItem.boqItem.wbsCode}: {lineItem.boqItem.description}
           </h3>
           {primaryLog && (
             <p className="text-xs text-slate-500 mt-0.5">
@@ -168,7 +168,7 @@ export function EvidenceOverlayDrawer({
           <div className="bg-brand-navy text-white rounded-xl p-3.5 shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-200">
-                Site Voice Note (Pidgin / English ASR)
+                Submitted Field Audio Note
               </span>
               <span className="text-[11px] text-blue-200">
                 0:{String(progressStep * 2).padStart(2, "0")} / 0:44

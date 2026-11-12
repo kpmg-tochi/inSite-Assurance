@@ -41,11 +41,11 @@ export function formatIndependenceTierText(
   if (!tier) return "No Evidence";
   switch (tier) {
     case "MONITOR_INSPECTOR":
-      return "Tier 1 — Independent";
+      return "Tier 1: Independent";
     case "INDEPENDENT_RESIDENT":
-      return "Tier 2 — Delegated";
+      return "Tier 2: Delegated";
     case "CONTRACTOR_ENGINEER":
-      return "Tier 3 — Self-Reported";
+      return "Tier 3: Self-Reported";
     default:
       return tier;
   }

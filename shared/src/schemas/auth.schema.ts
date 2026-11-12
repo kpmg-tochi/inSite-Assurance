@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  ContractorAssuranceStatusEnum,
   IndependenceTierEnum,
   ProfessionalLicenseTypeEnum,
   UserRoleEnum,
@@ -68,6 +69,14 @@ export const JoinProjectMobileRequestSchema = z.object({
   deviceModel: z.string().max(128).optional(),
   deviceOs: z.string().max(64).optional(),
   devicePublicKeyOrSecretHash: z.string().max(256).optional(),
+
+  // Contractor Assurance Onboarding Fields (Optional for Monitor/Clerk, Required for Contractor)
+  corenLicenseNumber: z.string().max(50).optional(),
+  idDocumentType: z.string().max(120).optional(),
+  idDocumentUrl: z.string().max(500).optional(),
+  selfieImageUrl: z.string().max(500).optional(),
+  livenessPassed: z.boolean().optional(),
+  experienceSummary: z.string().max(1000).optional(),
 });
 export type JoinProjectMobileRequest = z.infer<
   typeof JoinProjectMobileRequestSchema
@@ -83,7 +92,50 @@ export const FieldAgentSessionProfileSchema = z.object({
   agentFullName: z.string(),
   agentPhoneNumber: z.string(),
   deviceId: z.string(),
+  assuranceStatus: ContractorAssuranceStatusEnum.optional(),
+  corenLicenseNumber: z.string().optional(),
+  livenessPassed: z.boolean().optional(),
 });
 export type FieldAgentSessionProfile = z.infer<
   typeof FieldAgentSessionProfileSchema
+>;
+
+/**
+ * Contractor Assurance Review Request Schema
+ */
+export const ReviewContractorVerificationRequestSchema = z.object({
+  decision: z.enum(['APPROVE', 'REJECT']),
+  remarks: z.string().max(500).optional(),
+});
+export type ReviewContractorVerificationRequest = z.infer<
+  typeof ReviewContractorVerificationRequestSchema
+>;
+
+export const ContractorVerificationRecordDtoSchema = z.object({
+  id: z.string().uuid(),
+  projectId: z.string().uuid(),
+  projectCodePrefix: z.string(),
+  projectName: z.string(),
+  organizationName: z.string(),
+  agentFullName: z.string(),
+  agentPhoneNumber: z.string(),
+  joinCodeUsed: z.string(),
+  corenLicenseNumber: z.string().nullable().optional(),
+  idDocumentType: z.string().nullable().optional(),
+  idDocumentUrl: z.string().nullable().optional(),
+  selfieImageUrl: z.string().nullable().optional(),
+  livenessPassed: z.boolean(),
+  livenessScore: z.number().nullable().optional(),
+  experienceSummary: z.string().nullable().optional(),
+  assuranceStatus: ContractorAssuranceStatusEnum,
+  deviceId: z.string().optional(),
+  deviceModel: z.string().nullable().optional(),
+  createdAt: z.string().optional(),
+  submittedAt: z.string(),
+  reviewedAt: z.string().nullable().optional(),
+  reviewedByUserName: z.string().nullable().optional(),
+  rejectionReason: z.string().nullable().optional(),
+});
+export type ContractorVerificationRecordDto = z.infer<
+  typeof ContractorVerificationRecordDtoSchema
 >;

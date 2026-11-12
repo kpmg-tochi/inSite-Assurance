@@ -242,3 +242,11 @@ export interface AuditTrailResponseDto {
   }>;
 }
 
+export type {
+  ContractorVerificationRecordDto,
+  ReviewContractorVerificationRequest,
+  PortfolioExecutiveSummaryDto,
+  PortfolioProjectHealthItem,
+} from '@insite/shared';
+
+

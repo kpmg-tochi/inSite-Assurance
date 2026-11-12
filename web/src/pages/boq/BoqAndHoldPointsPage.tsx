@@ -1,5 +1,5 @@
-import React, { useRef, useState, MouseEvent } from "react";
-import { ClipboardList, ShieldCheck, AlertTriangle, X } from "lucide-react";
+import React, { useRef, useState, useMemo, MouseEvent } from "react";
+import { ClipboardList, ShieldCheck, AlertTriangle, X, Upload, CheckCheck } from "lucide-react";
 import type { BoqItemRecordDto, ProjectSummaryDto } from "../../api/types";
 import { formatCompactNaira, formatNaira } from "../../lib/formatters";
 import { formatIndependenceTierText } from "../../components/EvidenceBadge";
@@ -9,6 +9,13 @@ import {
   useUploadBoqMutation,
 } from "../../mutations/boq/useBoqMutations";
 import Drawer from "../../components/Drawer";
+import {
+  StandardTable,
+  TableBadge,
+  TableActionButton,
+  TableActionMenu,
+  TableColumnDef,
+} from "../../components/table";
 
 interface BoqAndHoldPointsPageProps {
   project: ProjectSummaryDto;
@@ -132,6 +139,160 @@ export function BoqAndHoldPointsPage({
             (jc) => jc.independenceTier === "CONTRACTOR_ENGINEER",
           )
         : [];
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [boqFilter, setBoqFilter] = useState<
+    "ALL" | "HOLD_POINTS" | "OPAQUE" | "MAPPED"
+  >("ALL");
+
+  const filteredBoqItems = useMemo(() => {
+    return boqItems.filter((item) => {
+      const matchesSearch =
+        item.wbsCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.section.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesFilter =
+        boqFilter === "ALL" ||
+        (boqFilter === "HOLD_POINTS" && item.isHoldPoint) ||
+        (boqFilter === "OPAQUE" && item.isOpaqueLumpSum) ||
+        (boqFilter === "MAPPED" && item.trancheMappingConfirmedByMonitor);
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [boqItems, searchTerm, boqFilter]);
+
+  const boqColumns: TableColumnDef<BoqItemRecordDto>[] = [
+    {
+      id: "wbsCode",
+      header: "WBS ID",
+      tooltip:
+        "Work Breakdown Structure (WBS) reference code from baseline Bill of Quantities",
+      width: "w-28",
+      cell: (item) => (
+        <span className="font-bold text-slate-900 text-xs">
+          {item.wbsCode}
+        </span>
+      ),
+    },
+    {
+      id: "description",
+      header: "Work Item",
+      tooltip:
+        "Engineering work item description (click row to inspect bill section and rates in drawer)",
+      width: "w-80",
+      cell: (item) => (
+        <div className="max-w-xs">
+          <div className="font-medium text-slate-800 truncate">
+            {item.description}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+            {item.section}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "quantityUnit",
+      header: "Quantity & Unit",
+      tooltip: "Total measured quantity and unit of measurement (BESMM4)",
+      align: "right",
+      cell: (item) => (
+        <span className="text-slate-700 font-medium">
+          {item.totalQuantity.toLocaleString()} {item.unit}
+        </span>
+      ),
+    },
+    {
+      id: "rate",
+      header: "Rate (₦)",
+      tooltip: "Contract unit rate in Nigerian Naira",
+      align: "right",
+      cell: (item) => (
+        <span className="text-slate-600">
+          {formatCompactNaira(item.rateNgn)}
+        </span>
+      ),
+    },
+    {
+      id: "budget",
+      header: "Budgeted Cost (₦)",
+      tooltip: "Total budgeted cost (Quantity × Unit Rate) in Nigerian Naira",
+      align: "right",
+      cell: (item) => (
+        <span className="font-bold text-slate-900">
+          {formatNaira(item.budgetedCostNgn)}
+        </span>
+      ),
+    },
+    {
+      id: "tranche",
+      header: "Mapped Tranche",
+      tooltip: "Facility disbursement tranche fed by this BOQ work item",
+      cell: (item) => (
+        <TableBadge variant="info">
+          {item.tranche
+            ? `Tranche #${item.tranche.trancheNumber}`
+            : "Tranche #1"}
+        </TableBadge>
+      ),
+    },
+    {
+      id: "governance",
+      header: "Governance",
+      tooltip:
+        "Mandatory visual Hold-Point status and QSRBN unitemized lump-sum warnings",
+      cell: (item) => (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {item.isHoldPoint && (
+            <TableBadge variant="warning">Mandatory Hold-Point</TableBadge>
+          )}
+          {item.isOpaqueLumpSum && (
+            <TableBadge variant="danger">Opaque Lump Sum</TableBadge>
+          )}
+          {!item.isHoldPoint && !item.isOpaqueLumpSum && (
+            <TableBadge variant="neutral">Standard Item</TableBadge>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Details",
+      tooltip:
+        "Open full engineering specification, bill section, and Hold-Point rules",
+      align: "right",
+      width: "w-28",
+      cell: (item) => (
+        <div className="flex items-center justify-end gap-1.5">
+          <TableActionButton
+            onClick={() => setSelectedBoqItem(item)}
+            variant="default"
+          >
+            View
+          </TableActionButton>
+          <TableActionMenu
+            actions={[
+              {
+                label: "View Specifications Drawer",
+                onClick: () => setSelectedBoqItem(item),
+              },
+              ...(user?.role === "MONITOR"
+                ? [
+                    {
+                      label: item.isHoldPoint
+                        ? "Remove Hold-Point"
+                        : "Set as Mandatory Hold-Point",
+                      onClick: () => handleToggleHoldPoint(item),
+                    },
+                  ]
+                : []),
+            ]}
+          />
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div className="space-y-3">
@@ -259,8 +420,8 @@ export function BoqAndHoldPointsPage({
             <div>
               <h2 className="text-xs font-bold text-slate-900">
                 {user?.role === "CONTRACTOR"
-                  ? "Contractor Site Engineer — Mobile Field App Join Code"
-                  : "Mobile Field App — Role-Segregated Join Codes"}
+                  ? "Contractor Site Engineer: Mobile Field App Join Code"
+                  : "Mobile Field App: Role-Segregated Join Codes"}
               </h2>
               <p className="text-[11px] text-slate-500">
                 {user?.role === "CONTRACTOR"
@@ -301,170 +462,105 @@ export function BoqAndHoldPointsPage({
         </div>
       )}
 
-      {/* 4. Clean Baseline BOQ Schedule Table (Minimal Work Item Cell + Details Drawer Trigger) */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="px-5 py-3.5 bg-brand-navy text-white flex items-center justify-between">
-          <h2 className="text-sm font-bold">
-            Baseline Bill of Quantities (BOQ) Schedule
-          </h2>
-          <span className="text-xs text-blue-200/80">
-            {project.codePrefix} — {boqItems.length} Scheduled Work Item
-            {boqItems.length === 1 ? "" : "s"}
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                <th
-                  className="py-3 px-4 w-28"
-                  title="Work Breakdown Structure (WBS) reference code"
-                >
-                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">
-                    WBS ID
-                  </span>
-                </th>
-                <th
-                  className="py-3 px-4 w-80"
-                  title="Engineering work item description (click any row to view full bill section and Hold-Point instructions)"
-                >
-                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">
-                    Work Item
-                  </span>
-                </th>
-                <th
-                  className="py-3 px-4 text-right whitespace-nowrap"
-                  title="Total measured quantity and unit of measurement (BESMM4)"
-                >
-                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">
-                    Quantity &amp; Unit
-                  </span>
-                </th>
-                <th
-                  className="py-3 px-4 text-right whitespace-nowrap"
-                  title="Contract unit rate in Nigerian Naira"
-                >
-                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">
-                    Rate (₦)
-                  </span>
-                </th>
-                <th
-                  className="py-3 px-4 text-right whitespace-nowrap"
-                  title="Total budgeted cost (Quantity × Unit Rate) in Nigerian Naira"
-                >
-                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">
-                    Budgeted Cost (₦)
-                  </span>
-                </th>
-                <th
-                  className="py-3 px-4 whitespace-nowrap"
-                  title="Facility disbursement tranche fed by this BOQ work item"
-                >
-                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">
-                    Mapped Tranche
-                  </span>
-                </th>
-                <th
-                  className="py-3 px-4 whitespace-nowrap"
-                  title="Mandatory Visual Hold-Point status and QSRBN unitemized lump-sum warnings"
-                >
-                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">
-                    Governance
-                  </span>
-                </th>
-                <th
-                  className="py-3 px-4 text-right whitespace-nowrap w-24"
-                  title="Open full engineering specification, bill section, and Hold-Point rules"
-                >
-                  Details
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200/60 text-xs">
-              {boqItems.map((item) => {
-                const isSelected = activeDrawerItem?.id === item.id;
-                return (
-                  <tr
-                    key={item.id}
-                    onClick={() => setSelectedBoqItem(item)}
-                    className={`cursor-pointer transition ${
-                      isSelected
-                        ? "bg-blue-50/50 border-l-4 border-l-brand-primary"
-                        : "hover:bg-slate-50/80"
-                    }`}
-                  >
-                    <td className="py-3.5 px-4 align-middle whitespace-nowrap">
-                      <span className="font-bold text-slate-900">
-                        {item.wbsCode}
-                      </span>
-                    </td>
-
-                    <td className="py-3.5 px-4 align-middle max-w-xs">
-                      <div className="font-medium text-slate-800 truncate">
-                        {item.description}
-                      </div>
-                    </td>
-
-                    <td className="py-3.5 px-4 align-middle text-right text-slate-700 whitespace-nowrap">
-                      {item.totalQuantity.toLocaleString()} {item.unit}
-                    </td>
-
-                    <td className="py-3.5 px-4 align-middle text-right text-slate-600 whitespace-nowrap">
-                      {formatCompactNaira(item.rateNgn)}
-                    </td>
-
-                    <td className="py-3.5 px-4 align-middle text-right font-bold text-slate-900 whitespace-nowrap">
-                      {formatNaira(item.budgetedCostNgn)}
-                    </td>
-
-                    <td className="py-3.5 px-4 align-middle whitespace-nowrap">
-                      <span className="font-medium text-slate-800">
-                        {item.tranche
-                          ? `Tranche #${item.tranche.trancheNumber}`
-                          : "Tranche #1"}
-                      </span>
-                    </td>
-
-                    <td className="py-3.5 px-4 align-middle whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        {item.isHoldPoint ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-brand-primary border border-blue-200">
-                            Mandatory Hold-Point
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-slate-500">
-                            Standard Item
-                          </span>
-                        )}
-
-                        {item.isOpaqueLumpSum && (
-                          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
-                            Opaque Lump Sum
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    <td className="py-3.5 px-4 align-middle text-right whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedBoqItem(item);
-                        }}
-                        className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-brand-primary transition shadow-2xs"
-                      >
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* 4. Standard Baseline BOQ Schedule Table (Minimal Work Item Cell + Details Drawer Trigger) */}
+      <StandardTable<BoqItemRecordDto>
+        title={
+          <div className="flex items-center gap-2.5">
+            <span>Baseline Bill of Quantities (BOQ) &amp; Hold-Point Schedule</span>
+            <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-blue-100 border border-white/15">
+              {boqItems.length} Items · {holdPointCount} Hold-Points · {opaqueCount} Opaque Lump Sums
+            </span>
+          </div>
+        }
+        subtitle={
+          project ? `${project.codePrefix}: ${project.name}` : undefined
+        }
+        headerActions={
+          user?.role === "MONITOR" ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={isUpdating}
+                onClick={() => fileInputRef.current?.click()}
+                className="px-3 py-1.5 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition disabled:opacity-50"
+              >
+                Import BOQ (.xlsx / .csv)
+              </button>
+              <button
+                type="button"
+                disabled={isUpdating}
+                onClick={handleConfirmAllTrancheMappings}
+                className="px-3.5 py-1.5 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-2xs transition disabled:opacity-50"
+              >
+                Confirm All Tranche Mappings
+              </button>
+            </div>
+          ) : undefined
+        }
+        search={{
+          value: searchTerm,
+          onChange: setSearchTerm,
+          placeholder: "Search by WBS ID, work item, or bill section...",
+        }}
+        filters={
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setBoqFilter("ALL")}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
+                boqFilter === "ALL"
+                  ? "bg-brand-navy text-white shadow-2xs"
+                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              All ({boqItems.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setBoqFilter("HOLD_POINTS")}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
+                boqFilter === "HOLD_POINTS"
+                  ? "bg-amber-600 text-white shadow-2xs"
+                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              Hold-Points ({holdPointCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setBoqFilter("OPAQUE")}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
+                boqFilter === "OPAQUE"
+                  ? "bg-rose-600 text-white shadow-2xs"
+                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              Opaque Lump Sums ({opaqueCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setBoqFilter("MAPPED")}
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
+                boqFilter === "MAPPED"
+                  ? "bg-emerald-600 text-white shadow-2xs"
+                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+              }`}
+            >
+              Confirmed Mappings
+            </button>
+          </div>
+        }
+        columns={boqColumns}
+        data={filteredBoqItems}
+        keyExtractor={(item) => item.id}
+        selectedId={activeDrawerItem?.id}
+        onRowClick={(item) => setSelectedBoqItem(item)}
+        emptyState={{
+          title: "No BOQ items match your query",
+          description:
+            "Try adjusting the search query or active filter to view scheduled work items.",
+        }}
+      />
 
       {/* 5. Slide-Over BOQ Item & Hold-Point Inspector Drawer */}
       {activeDrawerItem && (
@@ -564,8 +660,8 @@ export function BoqAndHoldPointsPage({
               </div>
               <div className="font-semibold text-slate-900">
                 {activeDrawerItem.tranche
-                  ? `Tranche #${activeDrawerItem.tranche.trancheNumber} — ${activeDrawerItem.tranche.name}`
-                  : "Tranche #1 — Initial Facility Drawdown"}
+                  ? `Tranche #${activeDrawerItem.tranche.trancheNumber}: ${activeDrawerItem.tranche.name}`
+                  : "Tranche #1: Initial Facility Drawdown"}
               </div>
             </div>
 
@@ -592,7 +688,7 @@ export function BoqAndHoldPointsPage({
             {activeDrawerItem.isOpaqueLumpSum && (
               <div className="rounded-xl p-3.5 bg-amber-50 border border-amber-200 space-y-1">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-amber-800">
-                  QSRBN BOQ Hygiene Alert — Opaque Lump Sum
+                  QSRBN BOQ Hygiene Alert: Opaque Lump Sum
                 </div>
                 <p className="text-amber-800 leading-relaxed">
                   {activeDrawerItem.opacityWarningReason ||

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Link, NavLink, useNavigate } from "react-router-dom";
+import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import {
   Map,
   FileSpreadsheet,
@@ -7,10 +7,13 @@ import {
   ShieldCheck,
   PanelLeftClose,
   PanelLeftOpen,
+  Settings,
+  BarChart3,
 } from "lucide-react";
 import type { ProjectSummaryDto } from "../api/types";
 import { SEEDED_DEMO_ACCOUNTS, useAuth } from "../lib/auth-context";
 import { formatLicenseCredential, getInitials } from "../lib/formatters";
+import Notifications from "./Notifications";
 
 interface AppShellProps {
   projects: ProjectSummaryDto[];
@@ -31,6 +34,8 @@ export function AppShell({
 }: AppShellProps) {
   const { user, quickSwitchDemoAccount, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isExecutive = location.pathname.includes('/executive');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [userPopoverOpen, setUserPopoverOpen] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
@@ -103,7 +108,7 @@ export function AppShell({
       {/* Floating Collapsible KPMG Sidebar */}
       <aside
         className={`${
-          sidebarCollapsed ? "w-[68px]" : "w-60"
+          sidebarCollapsed ? "w-[68px]" : "w-64"
         } transition-all duration-200 kpmg-sidebar-gradient text-slate-200 rounded-2xl p-3 my-3 flex flex-col justify-between shadow-xl shrink-0 relative select-none`}
       >
         <div>
@@ -171,6 +176,26 @@ export function AppShell({
               )}
             </NavLink>
 
+            {/* Executive Risk Matrix (Multi-Project Cross-Facility View) for Monitors & Lenders */}
+            {user?.role !== "CONTRACTOR" && (
+              <NavLink
+                to="/app/executive"
+                title="Executive Risk Matrix"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                    isActive
+                      ? "bg-white/15 text-white shadow-sm"
+                      : "text-blue-100/80 hover:text-white hover:bg-white/10"
+                  }`
+                }
+              >
+                <BarChart3 className="w-4 h-4 shrink-0 text-sky-300" />
+                {!sidebarCollapsed && (
+                  <span className="truncate">Executive Risk Matrix</span>
+                )}
+              </NavLink>
+            )}
+
             <NavLink
               to="/app/reconciliation"
               title={navLabels.reconciliation}
@@ -231,6 +256,22 @@ export function AppShell({
                 )}
               </NavLink>
             )}
+
+            {/* General Settings: Access Management, Notifications, & Profile */}
+            <NavLink
+              to="/app/settings"
+              title="Governance & App Settings"
+              className={({ isActive }) =>
+                `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                  isActive
+                    ? "bg-white/15 text-white shadow-sm"
+                    : "text-blue-100/80 hover:text-white hover:bg-white/10"
+                }`
+              }
+            >
+              <Settings className="w-4 h-4 shrink-0" />
+              {!sidebarCollapsed && <span className="truncate">Settings</span>}
+            </NavLink>
           </div>
 
           {/* Active Capital Projects Tree (Hidden when collapsed) */}
@@ -334,8 +375,15 @@ export function AppShell({
 
               <div className="pt-1 mt-1 border-t border-slate-100 space-y-0.5">
                 <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Platform Information
+                  Settings &amp; Info
                 </div>
+                <Link
+                  to="/app/settings"
+                  onClick={() => setUserPopoverOpen(false)}
+                  className="block w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-brand-primary hover:bg-blue-50 transition"
+                >
+                  Governance &amp; App Settings
+                </Link>
                 <Link
                   to="/"
                   onClick={() => setUserPopoverOpen(false)}
@@ -385,11 +433,13 @@ export function AppShell({
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-sky-400">
-                  {selectedProject?.codePrefix || "PORTFOLIO"}
+                  {isExecutive ? "PORTFOLIO" : selectedProject?.codePrefix || "PORTFOLIO"}
                 </span>
                 <span className="text-white/30">/</span>
                 <h1 className="text-base font-bold text-white tracking-tight">
-                  {selectedProject?.name || "Capital Project Assurance"}
+                  {isExecutive
+                    ? "Multi-Project Cross-Facility Surveillance Matrix"
+                    : selectedProject?.name || "Capital Project Assurance"}
                 </h1>
                 <span
                   className={`hidden sm:inline-block ml-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
@@ -400,11 +450,15 @@ export function AppShell({
                         : "bg-amber-500/20 text-amber-200 border-amber-400/30"
                   }`}
                 >
-                  {workspaceTitleByRole}
+                  {isExecutive ? "Executive Surveillance" : workspaceTitleByRole}
                 </span>
               </div>
               <p className="text-xs text-slate-300">
-                {selectedProject ? (
+                {isExecutive ? (
+                  <span>
+                    Consolidated cross-facility risk, disbursement holdbacks, and governance telemetry
+                  </span>
+                ) : selectedProject ? (
                   <>
                     <span className="text-slate-300 font-medium">
                       {selectedProject.geofenceMode === "LINEAR_CORRIDOR"
@@ -431,7 +485,10 @@ export function AppShell({
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">{headerActions}</div>
+          <div className="flex items-center gap-2.5">
+            <Notifications />
+            {headerActions}
+          </div>
         </header>
 
         {/* Scrollable Workspace Canvas */}

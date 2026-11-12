@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import {
   CreateProjectRequestSchema,
   GeoCoordinateSchema,
+  ReviewContractorVerificationRequestSchema,
   UpdateProjectBaselineSchema,
 } from '@insite/shared';
 import {
@@ -12,13 +13,33 @@ import {
 import { validateBody } from '../../middleware/validate.middleware';
 import {
   createProjectBaseline,
+  getPortfolioExecutiveSummary,
   getProjectBaselineDetails,
+  listContractorVerifications,
   listProjectsForUser,
+  reviewContractorVerification,
   updateProjectBaseline,
   verifyCoordinateForProject,
 } from './projects.service';
 
 const router = Router();
+
+/**
+ * GET /api/v1/projects/portfolio/executive-summary
+ * Multi-project portfolio executive metrics for Lenders & Lead Monitors.
+ */
+router.get(
+  '/portfolio/executive-summary',
+  requireWebAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const summary = await getPortfolioExecutiveSummary(req.webUser!);
+      res.json({ success: true, data: summary });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 /**
  * GET /api/v1/projects
@@ -112,6 +133,49 @@ router.post(
         req.body
       );
       res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/v1/projects/:projectId/contractor-verifications
+ * Lists all contractor assurance verification submissions for Independent Monitor / Lender review.
+ */
+router.get(
+  '/:projectId/contractor-verifications',
+  requireWebAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const verifications = await listContractorVerifications(
+        String(req.params.projectId)
+      );
+      res.json({ success: true, data: verifications });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/v1/projects/:projectId/contractor-verifications/:sessionId/review
+ * Monitor or Lender approves or rejects a contractor assurance onboarding dossier.
+ */
+router.post(
+  '/:projectId/contractor-verifications/:sessionId/review',
+  requireRole('MONITOR', 'LENDER'),
+  validateBody(ReviewContractorVerificationRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const updated = await reviewContractorVerification(
+        String(req.params.projectId),
+        String(req.params.sessionId),
+        req.webUser!,
+        req.body.decision,
+        req.body.remarks
+      );
+      res.json({ success: true, data: updated });
     } catch (error) {
       next(error);
     }

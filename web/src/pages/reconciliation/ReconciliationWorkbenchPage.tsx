@@ -5,6 +5,14 @@ import {
   ShieldAlert,
   X,
   ChevronDown,
+  Printer,
+  Calendar,
+  MapPin,
+  UserCheck,
+  FileText,
+  Check,
+  AlertTriangle,
+  ExternalLink,
 } from "lucide-react";
 import type { LenderDecisionType, MonitorRecommendation } from "@insite/shared";
 import type {
@@ -27,6 +35,13 @@ import {
 } from "../../components/EvidenceBadge";
 import { EvidenceOverlayDrawer } from "../../components/EvidenceOverlayDrawer";
 import { useAuth } from "../../lib/auth-context";
+import {
+  StandardTable,
+  TableBadge,
+  TableActionButton,
+  TableActionMenu,
+  TableColumnDef,
+} from "../../components/table";
 import {
   useCertifyValuationMutation,
   useCreateMonitorQueryMutation,
@@ -56,6 +71,7 @@ export function ReconciliationWorkbenchPage({
   const { user } = useAuth();
   const [selectedLineItem, setSelectedLineItem] =
     useState<IpcLineItemRecordDto | null>(null);
+  const [showItineraryModal, setShowItineraryModal] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   // Mutations
@@ -345,6 +361,198 @@ export function ReconciliationWorkbenchPage({
     li.queries.some((q) => q.status === "OPEN"),
   );
 
+  const reconciliationColumns: TableColumnDef<IpcLineItemRecordDto>[] = [
+    {
+      id: "wbsCode",
+      header: "WBS ID",
+      tooltip:
+        "Work Breakdown Structure (WBS) reference code from the baseline Bill of Quantities",
+      width: "w-32",
+      cell: (li) => (
+        <div className="space-y-1">
+          <span className="font-bold text-slate-900 text-xs">
+            {li.boqItem.wbsCode}
+          </span>
+          <div className="flex flex-col gap-1 items-start">
+            {li.boqItem.isHoldPoint && (
+              <TableBadge
+                variant={li.missingHoldPointFlag ? "danger" : "warning"}
+              >
+                {li.missingHoldPointFlag ? "Hold-Point Missing" : "Hold-Point"}
+              </TableBadge>
+            )}
+            {li.queries.some((q) => q.status === "OPEN") && (
+              <TableBadge variant="info">Open Query</TableBadge>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "description",
+      header: "Work Item",
+      tooltip: "Baseline engineering work item description and bill section",
+      width: "w-80",
+      cell: (li) => (
+        <div className="max-w-xs">
+          <div className="text-slate-800 font-medium leading-snug line-clamp-2">
+            {li.boqItem.description}
+          </div>
+          <div className="text-[11px] text-slate-400 mt-0.5 truncate">
+            {li.boqItem.section} · {li.boqItem.totalQuantity.toLocaleString()}{" "}
+            {li.boqItem.unit}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "budget",
+      header: "Budget (₦)",
+      tooltip: "Total baseline budgeted cost allocated to this BOQ line item",
+      align: "right",
+      cell: (li) => (
+        <span className="text-slate-600 font-medium">
+          {formatCompactNaira(li.boqItem.budgetedCostNgn)}
+        </span>
+      ),
+    },
+    {
+      id: "claim",
+      header: "Contractor Claim",
+      tooltip:
+        "Cumulative completion percentage and drawdown amount claimed by the Main Contractor",
+      align: "right",
+      cell: (li) => (
+        <div>
+          <div className="font-bold text-slate-900">
+            {li.contractorClaimedPct}%
+          </div>
+          <div className="text-[11px] text-slate-500">
+            {formatCompactNaira(li.contractorClaimedNgn)}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "evidenceRating",
+      header: "Evidence Rating",
+      tooltip:
+        "AI Evidence Strength Rating comparing claim against geotagged site photos and Hold-Point logs",
+      cell: (li) => {
+        const ratingVariantMap: Record<
+          string,
+          "success" | "warning" | "danger"
+        > = {
+          SUPPORTED: "success",
+          PARTIALLY_SUPPORTED: "warning",
+          UNSUPPORTED: "warning",
+          CONTRADICTED: "danger",
+        };
+        const ratingLabelMap: Record<string, string> = {
+          SUPPORTED: "Supported",
+          PARTIALLY_SUPPORTED: "Partially Supported",
+          UNSUPPORTED: "Unsupported",
+          CONTRADICTED: "Contradicted",
+        };
+        return (
+          <TableBadge
+            variant={ratingVariantMap[li.aiEvidenceRating] || "neutral"}
+          >
+            {ratingLabelMap[li.aiEvidenceRating] || li.aiEvidenceRating}
+          </TableBadge>
+        );
+      },
+    },
+    {
+      id: "corroborationTier",
+      header: "Corroboration Tier",
+      tooltip:
+        "Highest Independence Tier among field reporters who submitted corroborating site logs",
+      cell: (li) => {
+        const tierVariant =
+          li.highestCorroboratingTier === "MONITOR_INSPECTOR"
+            ? "info"
+            : li.highestCorroboratingTier === "INDEPENDENT_RESIDENT"
+              ? "success"
+              : "neutral";
+        return (
+          <div>
+            <TableBadge variant={tierVariant}>
+              {formatIndependenceTierText(li.highestCorroboratingTier)}
+            </TableBadge>
+            <div className="text-[10px] text-slate-400 mt-0.5">
+              {li.corroboratingEvidenceLogIds.length} Verified Log
+              {li.corroboratingEvidenceLogIds.length === 1 ? "" : "s"}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      id: "monitorValuation",
+      header: "Monitor Valuation",
+      tooltip:
+        "Cumulative percentage and Naira valuation certified by the licensed Independent Monitor",
+      align: "right",
+      cell: (li) => (
+        <div>
+          <div
+            className={`font-bold ${
+              (li.monitorCertifiedPct ?? 0) < li.contractorClaimedPct
+                ? "text-amber-700"
+                : "text-emerald-700"
+            }`}
+          >
+            {li.monitorCertifiedPct ?? li.previousCertifiedPct}%
+          </div>
+          <div className="text-[11px] text-slate-500">
+            {formatCompactNaira(li.monitorCertifiedNgn ?? 0)}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Evidence",
+      tooltip:
+        "Inspect geotagged voice notes, Whisper transcripts, and dispute queries",
+      align: "right",
+      width: "w-28",
+      cell: (li) => {
+        const hasOpenQuery = li.queries.some((q) => q.status === "OPEN");
+        const actionLabel =
+          user?.role === "CONTRACTOR" && hasOpenQuery ? "Respond" : "Inspect";
+
+        return (
+          <div className="flex items-center justify-end gap-1.5">
+            <TableActionButton
+              onClick={() => setSelectedLineItem(li)}
+              variant={hasOpenQuery ? "primary" : "default"}
+            >
+              {actionLabel}
+            </TableActionButton>
+            <TableActionMenu
+              actions={[
+                {
+                  label: "Open Evidence Drawer",
+                  onClick: () => setSelectedLineItem(li),
+                },
+                {
+                  label: "Inspect Hold-Point Directives",
+                  onClick: () => setSelectedLineItem(li),
+                },
+                {
+                  label: "Dispute / Query Thread",
+                  onClick: () => setSelectedLineItem(li),
+                },
+              ]}
+            />
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <div className="space-y-3">
       {/* Status Toast Banner */}
@@ -376,7 +584,7 @@ export function ReconciliationWorkbenchPage({
             >
               {ipcs.map((ipc) => (
                 <option key={ipc.id} value={ipc.id}>
-                  IPC #{String(ipc.ipcNumber).padStart(2, "0")} —{" "}
+                  IPC #{String(ipc.ipcNumber).padStart(2, "0")}:{" "}
                   {ipc.tranche.name}
                 </option>
               ))}
@@ -497,241 +705,53 @@ export function ReconciliationWorkbenchPage({
         </div>
       </div>
 
-      {/* 3. Clean Horizontally-Scrollable Reconciliation Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col">
-        {/* Minimal Dark Navy Table Header */}
-        <div className="px-5 py-3.5 bg-brand-navy text-white flex items-center justify-between">
-          <h2 className="text-sm font-bold">
-            IPC #{String(selectedIpc.ipcNumber).padStart(2, "0")} — Claim vs.
-            Field Evidence Schedule
-          </h2>
-          <span className="text-xs text-blue-200/80">
-            {formatDateShort(selectedIpc.periodStart)} –{" "}
-            {formatDateShort(selectedIpc.periodEnd)}
-          </span>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left border-collapse">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
-                <th
-                  className="py-3 px-4 w-28"
-                  title="Work Breakdown Structure (WBS) reference code from the baseline Bill of Quantities"
-                >
-                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">
-                    WBS ID
-                  </span>
-                </th>
-                <th
-                  className="py-3 px-4 w-80"
-                  title="Baseline engineering work item description, bill section, total quantity, and mandatory Hold-Point governance flags"
-                >
-                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">
-                    Work Item
-                  </span>
-                </th>
-                <th
-                  className="py-3 px-4 text-right whitespace-nowrap"
-                  title="Total baseline budgeted cost (in Nigerian Naira) allocated to this BOQ line item"
-                >
-                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">
-                    Budget (₦)
-                  </span>
-                </th>
-                <th
-                  className="py-3 px-4 text-right whitespace-nowrap"
-                  title="Cumulative completion percentage and drawdown amount claimed by the Main Contractor in this IPC"
-                >
-                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">
-                    Contractor Claim
-                  </span>
-                </th>
-                <th
-                  className="py-3 px-4 whitespace-nowrap"
-                  title="AI Evidence Strength Rating comparing the Contractor's claim against geotagged site photos, Whisper voice logs, and Hold-Point requirements"
-                >
-                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">
-                    Evidence Rating
-                  </span>
-                </th>
-                <th
-                  className="py-3 px-4 whitespace-nowrap"
-                  title="Highest Independence Tier among field reporters who submitted corroborating site logs (Tier 1 Monitor Inspector > Tier 2 Resident CoW > Tier 3 Contractor)"
-                >
-                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">
-                    Corroboration Tier
-                  </span>
-                </th>
-                <th
-                  className="py-3 px-4 text-right whitespace-nowrap"
-                  title="Cumulative percentage and Naira valuation certified by the licensed Independent Monitor (QSRBN / COREN)"
-                >
-                  <span className="underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">
-                    Monitor Valuation
-                  </span>
-                </th>
-                <th
-                  className="py-3 px-4 text-right whitespace-nowrap w-24"
-                  title="Inspect geotagged voice notes, Whisper ASR transcripts, and dispute queries for this line item"
-                >
-                  Evidence
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-200/60 text-xs">
-              {selectedIpc.lineItems.map((li) => {
-                const isSelected = activeLineItemInDrawer?.id === li.id;
-                const isFlagged =
-                  li.aiEvidenceRating === "CONTRADICTED" ||
-                  li.missingHoldPointFlag;
-                const isWarning =
-                  li.aiEvidenceRating === "PARTIALLY_SUPPORTED" ||
-                  li.aiEvidenceRating === "UNSUPPORTED";
-
-                return (
-                  <tr
-                    key={li.id}
-                    onClick={() => setSelectedLineItem(li)}
-                    className={`cursor-pointer transition ${
-                      isSelected
-                        ? "bg-blue-50/50 border-l-4 border-l-brand-primary"
-                        : isFlagged
-                          ? "bg-red-50/30 hover:bg-red-50/55 border-l-4 border-l-red-600"
-                          : isWarning
-                            ? "bg-amber-50/20 hover:bg-amber-50/45"
-                            : "hover:bg-slate-50/90"
-                    }`}
-                  >
-                    {/* Dedicated WBS ID Column */}
-                    <td className="py-3.5 px-4 align-top whitespace-nowrap">
-                      <span className="font-bold text-slate-900 text-xs">
-                        {li.boqItem.wbsCode}
-                      </span>
-                      <div className="mt-1 flex flex-col gap-1 items-start">
-                        {li.boqItem.isHoldPoint && (
-                          <span
-                            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${
-                              li.missingHoldPointFlag
-                                ? "bg-red-50 text-red-700 border-red-200"
-                                : "bg-slate-100 text-slate-700 border-slate-200"
-                            }`}
-                          >
-                            {li.missingHoldPointFlag
-                              ? "Hold-Point Missing"
-                              : "Hold-Point"}
-                          </span>
-                        )}
-                        {li.queries.some((q) => q.status === "OPEN") && (
-                          <span className="text-[10px] font-semibold bg-blue-50 text-brand-primary px-1.5 py-0.5 rounded border border-blue-200 whitespace-nowrap">
-                            Open Query
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* Constrained Work Item Column */}
-                    <td className="py-3.5 px-4 align-top max-w-xs">
-                      <div className="text-slate-800 font-medium leading-snug line-clamp-2">
-                        {li.boqItem.description}
-                      </div>
-                      <div className="text-[11px] text-slate-400 mt-1 truncate">
-                        {li.boqItem.section} ·{" "}
-                        {li.boqItem.totalQuantity.toLocaleString()}{" "}
-                        {li.boqItem.unit}
-                      </div>
-                    </td>
-
-                    {/* Budget Column */}
-                    <td className="py-3.5 px-4 align-top text-right text-slate-600 whitespace-nowrap">
-                      {formatCompactNaira(li.boqItem.budgetedCostNgn)}
-                    </td>
-
-                    {/* Contractor Claim Column */}
-                    <td className="py-3.5 px-4 align-top text-right whitespace-nowrap">
-                      <div className="font-bold text-slate-900">
-                        {li.contractorClaimedPct}%
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        {formatCompactNaira(li.contractorClaimedNgn)}
-                      </div>
-                    </td>
-
-                    {/* Evidence Rating Column */}
-                    <td className="py-3.5 px-4 align-top whitespace-nowrap">
-                      <EvidenceRatingBadge rating={li.aiEvidenceRating} />
-                    </td>
-
-                    {/* Corroboration Tier Column */}
-                    <td className="py-3.5 px-4 align-top whitespace-nowrap">
-                      <div className="text-slate-800 font-medium">
-                        {formatIndependenceTierText(
-                          li.highestCorroboratingTier,
-                        )}
-                      </div>
-                      <div className="text-[11px] text-slate-400">
-                        {formatIndependenceTierCode(
-                          li.highestCorroboratingTier,
-                        )}{" "}
-                        ({li.corroboratingEvidenceLogIds.length} Log
-                        {li.corroboratingEvidenceLogIds.length === 1 ? "" : "s"}
-                        )
-                      </div>
-                    </td>
-
-                    {/* Monitor Valuation Column */}
-                    <td className="py-3.5 px-4 align-top text-right whitespace-nowrap">
-                      <div
-                        className={`font-bold ${
-                          (li.monitorCertifiedPct ?? 0) <
-                          li.contractorClaimedPct
-                            ? "text-amber-700"
-                            : "text-emerald-700"
-                        }`}
-                      >
-                        {li.monitorCertifiedPct ?? li.previousCertifiedPct}%
-                      </div>
-                      <div className="text-[11px] text-slate-500">
-                        {formatCompactNaira(li.monitorCertifiedNgn ?? 0)}
-                      </div>
-                    </td>
-
-                    {/* Dedicated View Button Column */}
-                    <td className="py-3.5 px-4 align-top text-right whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedLineItem(li);
-                        }}
-                        className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 text-xs font-semibold text-brand-primary transition shadow-2xs"
-                      >
-                        {user?.role === "CONTRACTOR" &&
-                        li.queries.some((q) => q.status === "OPEN")
-                          ? "Respond"
-                          : "View"}
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* 3. Standardized Horizontally-Scrollable Reconciliation Table */}
+      <StandardTable<IpcLineItemRecordDto>
+        title={`IPC #${String(selectedIpc.ipcNumber).padStart(2, "0")}: Claim vs. Field Evidence Schedule`}
+        subtitle={`${formatDateShort(selectedIpc.periodStart)} to ${formatDateShort(selectedIpc.periodEnd)}`}
+        minWidth="min-w-[980px]"
+        columns={reconciliationColumns}
+        data={selectedIpc.lineItems}
+        keyExtractor={(li) => li.id}
+        selectedId={activeLineItemInDrawer?.id}
+        onRowClick={(li) => setSelectedLineItem(li)}
+        rowClassName={(li) => {
+          const isFlagged =
+            li.aiEvidenceRating === "CONTRADICTED" || li.missingHoldPointFlag;
+          const isWarning =
+            li.aiEvidenceRating === "PARTIALLY_SUPPORTED" ||
+            li.aiEvidenceRating === "UNSUPPORTED";
+          if (isFlagged)
+            return "bg-red-50/25 hover:bg-red-50/50 border-l-4 border-l-red-600";
+          if (isWarning) return "bg-amber-50/15 hover:bg-amber-50/35";
+          return "";
+        }}
+      />
 
       {/* 4. Role-Tailored Bottom Governance Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Left Card: Tailored to Active User Role (Monitor vs Lender vs Contractor) */}
         {user?.role === "MONITOR" ? (
           <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
-            <div className="text-xs font-bold text-slate-900">
-              Smart Visit Planner — Priority Verification Queue
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <div className="text-xs font-bold text-slate-900">
+                  Smart Visit Planner: Priority Verification Queue
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  High-value claimed items lacking Tier 1 Independent Monitor
+                  evidence or mandatory Hold-Point sign-off
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowItineraryModal(true)}
+                className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition shadow-2xs shrink-0 self-start sm:self-auto"
+              >
+                <Printer className="w-3.5 h-3.5 text-brand-primary" />
+                Generate Itinerary
+              </button>
             </div>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              High-value claimed items lacking Tier 1 Independent Monitor
-              evidence or mandatory Hold-Point sign-off
-            </p>
             <div className="mt-3 space-y-2">
               {selectedIpc.lineItems
                 .filter((li) => li.visitPlannerFlag)
@@ -767,13 +787,25 @@ export function ReconciliationWorkbenchPage({
           </div>
         ) : user?.role === "LENDER" ? (
           <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
-            <div className="text-xs font-bold text-slate-900">
-              Lender Credit Committee — Facility Conditions Precedent (CPs)
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <div className="text-xs font-bold text-slate-900">
+                  Lender Credit Committee: Facility Conditions Precedent (CPs)
+                </div>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Mandatory covenant and Hold-Point checks required prior to
+                  releasing {selectedIpc.tranche.name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowItineraryModal(true)}
+                className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-[11px] font-semibold flex items-center gap-1 transition shrink-0 self-start sm:self-auto"
+              >
+                <Printer className="w-3 h-3 text-brand-primary" />
+                View Inspection Plan
+              </button>
             </div>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Mandatory covenant and Hold-Point checks required prior to
-              releasing {selectedIpc.tranche.name}
-            </p>
             <div className="mt-3 space-y-2">
               {(activeTrancheDetails?.conditionsPrecedent || []).map((cp) => (
                 <div
@@ -1260,6 +1292,221 @@ export function ReconciliationWorkbenchPage({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Smart Visit Planner: Formal Site Inspection Itinerary Modal */}
+      {showItineraryModal && (
+        <div className="fixed inset-0 bg-slate-950/45 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-brand-navy text-white flex items-center justify-between shrink-0">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400 bg-sky-400/10 px-2 py-0.5 rounded border border-sky-400/20">
+                    Smart Visit Planner
+                  </span>
+                  <span className="text-xs text-white/50">·</span>
+                  <span className="text-xs text-blue-200">
+                    Inspection Priority Protocol
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-white mt-0.5">
+                  Technical Site Visit Itinerary: {project.codePrefix}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowItineraryModal(false)}
+                className="w-8 h-8 rounded-lg text-white/70 hover:text-white hover:bg-white/10 flex items-center justify-center transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Printable Document Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs text-slate-700">
+              {/* Inspection Mission Card */}
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200/80 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                    Infrastructure Facility
+                  </div>
+                  <div className="font-bold text-slate-900 mt-0.5 text-xs">
+                    {project.name}
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    Location: {project.stateLocation} ({project.lgaLocation || "Corridor Zone"})
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                    Certifying Independent Monitor
+                  </div>
+                  <div className="font-bold text-slate-900 mt-0.5 text-xs">
+                    {user?.fullName || "Lead Independent Monitor"}
+                  </div>
+                  <div className="text-[11px] text-brand-primary font-medium">
+                    {formatLicenseCredential(user?.professionalLicenseType, user?.professionalLicenseNumber)}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200/60">
+                  <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                    Drawdown Certificate Under Review
+                  </div>
+                  <div className="font-semibold text-slate-800 mt-0.5">
+                    IPC #{selectedIpc.ipcNumber} ({selectedIpc.tranche.name})
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200/60">
+                  <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+                    Scheduled Inspection Window
+                  </div>
+                  <div className="font-semibold text-slate-800 mt-0.5">
+                    Immediate Priority (Pre-Pour &amp; Claim Corroboration)
+                  </div>
+                </div>
+              </div>
+
+              {/* Ranked Inspection Checkpoints */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-bold text-slate-900 text-xs">
+                    Ranked Field Checkpoints &amp; Physical Verification Directives
+                  </h4>
+                  <span className="text-[10px] font-semibold text-slate-500">
+                    {selectedIpc.lineItems.filter((li) => li.visitPlannerFlag).length} Targets Flagged
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {selectedIpc.lineItems
+                    .filter((li) => li.visitPlannerFlag)
+                    .map((li, idx) => (
+                      <div
+                        key={li.id}
+                        className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-2xs space-y-2"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-2.5">
+                            <span className="w-5 h-5 rounded-full bg-brand-primary text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                              {idx + 1}
+                            </span>
+                            <div>
+                              <div className="font-bold text-slate-900 text-xs">
+                                WBS {li.boqItem.wbsCode}: {li.boqItem.description}
+                              </div>
+                              <div className="text-[11px] text-slate-500 mt-0.5">
+                                {li.boqItem.section}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <div className="font-bold text-slate-900">
+                              {formatCompactNaira(li.contractorClaimedNgn)}
+                            </div>
+                            <div className="text-[10px] text-amber-700 font-semibold">
+                              Claimed
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Reason & Action Required */}
+                        <div className="bg-amber-50/70 rounded-lg p-2.5 border border-amber-200/60 text-xs space-y-1">
+                          <div className="font-semibold text-amber-900 flex items-center gap-1.5">
+                            <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                            {li.visitPlannerReason || "Physical inspection required prior to milestone release"}
+                          </div>
+                          <div className="text-[11px] text-slate-600">
+                            {li.boqItem.holdPointInstruction || "Perform independent physical survey, slump and strength verification, and record geotagged camera captures."}
+                          </div>
+                        </div>
+
+                        {/* Physical Test Checklist */}
+                        <div className="pt-1 flex flex-wrap gap-2 text-[10px] text-slate-600">
+                          <span className="inline-flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded font-medium">
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            Dimensional &amp; Level Check
+                          </span>
+                          <span className="inline-flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded font-medium">
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            Material Quality &amp; Mill Certificate
+                          </span>
+                          <span className="inline-flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded font-medium">
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            Geotagged Shutter Angle Verification
+                          </span>
+                          <span className="inline-flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded font-medium">
+                            <Check className="w-3 h-3 text-emerald-600" />
+                            Independent Slump Test Sample
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              {/* Protocol Directives */}
+              <div className="bg-blue-50/60 rounded-xl p-3.5 border border-blue-100 text-[11px] text-slate-700 leading-relaxed">
+                <strong>Field Protocol Directive:</strong> Independent monitors must authenticate evidence logs within the project corridor boundary geofence. GPS coordinates with mock provider flags or timestamp anomalies are automatically rejected by the cryptographic engine.
+              </div>
+
+              {/* Tripartite Sign-off Block */}
+              <div className="pt-4 border-t border-slate-200 grid grid-cols-3 gap-4 text-center">
+                <div className="border-t border-slate-300 pt-2">
+                  <div className="font-bold text-slate-800 text-[11px]">
+                    Lead Independent Monitor
+                  </div>
+                  <div className="text-[10px] text-slate-500">
+                    QSRBN Registered Quantity Surveyor
+                  </div>
+                </div>
+                <div className="border-t border-slate-300 pt-2">
+                  <div className="font-bold text-slate-800 text-[11px]">
+                    Resident Clerk of Works
+                  </div>
+                  <div className="text-[10px] text-slate-500">
+                    Civil Infrastructure Resident Inspector
+                  </div>
+                </div>
+                <div className="border-t border-slate-300 pt-2">
+                  <div className="font-bold text-slate-800 text-[11px]">
+                    Contractor Project Manager
+                  </div>
+                  <div className="text-[10px] text-slate-500">
+                    COREN Registered Civil Engineer
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+              <span className="text-[11px] text-slate-500">
+                InSite Assurance · Automated Visit Optimization
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowItineraryModal(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Close
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-bold transition flex items-center gap-1.5 shadow-xs"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  Print / Export Itinerary
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
