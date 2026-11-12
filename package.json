@@ -2,7 +2,7 @@
   "name": "insite-assurance-monorepo",
   "version": "0.1.0",
   "private": true,
-  "description": "inSite Assurance — Field Evidence & Disbursement Reconciliation Platform",
+  "description": "InSite Assurance — Field Evidence & Disbursement Reconciliation Platform",
   "workspaces": [
     "shared",
     "server",
@@ -26,4 +26,3 @@
     "node": ">=20.0.0"
   }
 }
-

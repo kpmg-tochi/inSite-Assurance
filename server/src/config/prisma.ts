@@ -1,6 +1,6 @@
-import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '@prisma/client';
-import { env } from './env';
+import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaClient } from "@prisma/client";
+import { env } from "./env";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -13,12 +13,12 @@ function createPrismaClient(): PrismaClient {
 
   return new PrismaClient({
     adapter,
-    log: env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
+    log: env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 }
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
-if (env.NODE_ENV !== 'production') {
+if (env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
 }

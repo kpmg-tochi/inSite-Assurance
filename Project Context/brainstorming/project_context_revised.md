@@ -1,6 +1,6 @@
-# inSite Assurance: Field Evidence & Disbursement Reconciliation Platform (MVP, v2)
+# InSite Assurance: Field Evidence & Disbursement Reconciliation Platform (MVP, v2)
 
-> **Status:** Revised 29 October 2026 after problem validation and competitor research. This is a brainstorm-level spec, not a final plan. Figures marked *(assumption)* need validation through customer interviews. Source references like [S1] point to the list at the end.
+> **Status:** Revised 29 October 2026 after problem validation and competitor research. This is a brainstorm-level spec, not a final plan. Figures marked _(assumption)_ need validation through customer interviews. Source references like [S1] point to the list at the end.
 
 ---
 
@@ -8,22 +8,22 @@
 
 ### Value statement (one-sentence pitch)
 
-**inSite Assurance gives Nigerian lenders and their licensed project monitors a faster, auditable way to check every contractor payment claim against tamper-resistant field evidence before funds are released.**
+**InSite Assurance gives Nigerian lenders and their licensed project monitors a faster, auditable way to check every contractor payment claim against tamper-resistant field evidence before funds are released.**
 
 ### Summary
 
-**inSite Assurance** is an evidence and reconciliation layer for capital project financing in Nigeria. A field agent captures live, geotagged photos and voice or text updates through a chat-style mobile app. The platform ties that evidence to individual Bill of Quantities (BOQ) items, compares it with the contractor's Interim Payment Certificate (IPC) claim, and rates how well each claimed item is supported. The licensed monitor (a quantity surveyor or engineer) reviews the flags, makes the decision and signs off. The lender sees a portfolio view and an audit trail.
+**InSite Assurance** is an evidence and reconciliation layer for capital project financing in Nigeria. A field agent captures live, geotagged photos and voice or text updates through a chat-style mobile app. The platform ties that evidence to individual Bill of Quantities (BOQ) items, compares it with the contractor's Interim Payment Certificate (IPC) claim, and rates how well each claimed item is supported. The licensed monitor (a quantity surveyor or engineer) reviews the flags, makes the decision and signs off. The lender sees a portfolio view and an audit trail.
 
 ### What changed from v1
 
-| v1 | v2 | Why |
-|---|---|---|
-| AI produces an "AI-verified %" of completion | AI produces an **evidence-strength rating** per BOQ item; a human certifies | Phone photos cannot reliably verify quantities, buried works or quality. Certifying drawdowns is also a regulated professional role with liability attached [S8][S22]. |
-| Aimed at banks, DFIs, state governments and corporates at once | **Monitors first, then lenders and guarantors**; DFIs and BOI deprioritised | AfDB and the World Bank already run free monitoring tools, and BOI is building its own [S10][S17]. |
-| Tranches auto-generated from the BOQ | Tranches and conditions precedent are **entered from the facility agreement**; AI proposes the BOQ-to-tranche mapping for the monitor to confirm | Tranches are defined in loan terms, not in BOQs [S8]. |
-| Contractor and approver in one product | Contractor and monitor surfaces are **separated** | Protects independence of the monitor [S22]. |
-| Geofence radius around a point | Site **corridor or chainage** option for linear projects | Roads, pipelines and transmission lines do not fit a radius. |
-| "Disbursement Assurance Certificate" | **Disbursement Evidence Report** | Avoids implying that the software itself certifies. |
+| v1                                                             | v2                                                                                                                                               | Why                                                                                                                                                                    |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AI produces an "AI-verified %" of completion                   | AI produces an **evidence-strength rating** per BOQ item; a human certifies                                                                      | Phone photos cannot reliably verify quantities, buried works or quality. Certifying drawdowns is also a regulated professional role with liability attached [S8][S22]. |
+| Aimed at banks, DFIs, state governments and corporates at once | **Monitors first, then lenders and guarantors**; DFIs and BOI deprioritised                                                                      | AfDB and the World Bank already run free monitoring tools, and BOI is building its own [S10][S17].                                                                     |
+| Tranches auto-generated from the BOQ                           | Tranches and conditions precedent are **entered from the facility agreement**; AI proposes the BOQ-to-tranche mapping for the monitor to confirm | Tranches are defined in loan terms, not in BOQs [S8].                                                                                                                  |
+| Contractor and approver in one product                         | Contractor and monitor surfaces are **separated**                                                                                                | Protects independence of the monitor [S22].                                                                                                                            |
+| Geofence radius around a point                                 | Site **corridor or chainage** option for linear projects                                                                                         | Roads, pipelines and transmission lines do not fit a radius.                                                                                                           |
+| "Disbursement Assurance Certificate"                           | **Disbursement Evidence Report**                                                                                                                 | Avoids implying that the software itself certifies.                                                                                                                    |
 
 ---
 
@@ -31,12 +31,12 @@
 
 Capital projects in Nigeria are financed in stages against progress claims that are slow and hard to verify independently. The research supports the problem for public projects strongly and for private lending only partly.
 
-| Problem | Verdict | Evidence |
-|---|---|---|
-| **Payment without visible work** | Strongly validated (public sector) | Tracka's 2024/25 report found 92 federal projects worth ₦15.07bn fraudulently delivered, through fund diversion, relocated projects, payment for work already done, partial completion or substandard work [S1]. Its Q2 2026 scorecard flagged ₦13.86bn released with no visible work [S2]. |
-| **Slow, manual verification** | Partly validated | Banks employ in-house monitoring managers who verify milestones and certify drawdowns, and independent cost monitors work on drawdown reports [S8][S9]. The gap is speed and depth, not the absence of monitoring. The claim that reports lag site visits by weeks is **unverified**. |
-| **Unstructured field reporting (WhatsApp, paper)** | Unverified | Local owner-side apps exist [S19], but I found no survey or data on how field reporting is actually done. |
-| **Weak, hard-to-audit evidence** | Plausible | Nigerian project documents often carry large lump sums with limited breakdowns, which complicates verification [S8]. |
+| Problem                                            | Verdict                            | Evidence                                                                                                                                                                                                                                                                                    |
+| -------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Payment without visible work**                   | Strongly validated (public sector) | Tracka's 2024/25 report found 92 federal projects worth ₦15.07bn fraudulently delivered, through fund diversion, relocated projects, payment for work already done, partial completion or substandard work [S1]. Its Q2 2026 scorecard flagged ₦13.86bn released with no visible work [S2]. |
+| **Slow, manual verification**                      | Partly validated                   | Banks employ in-house monitoring managers who verify milestones and certify drawdowns, and independent cost monitors work on drawdown reports [S8][S9]. The gap is speed and depth, not the absence of monitoring. The claim that reports lag site visits by weeks is **unverified**.       |
+| **Unstructured field reporting (WhatsApp, paper)** | Unverified                         | Local owner-side apps exist [S19], but I found no survey or data on how field reporting is actually done.                                                                                                                                                                                   |
+| **Weak, hard-to-audit evidence**                   | Plausible                          | Nigerian project documents often carry large lump sums with limited breakdowns, which complicates verification [S8].                                                                                                                                                                        |
 
 ### Reality checks
 
@@ -69,7 +69,7 @@ A three-part system that supports, but does not replace, the licensed monitor:
 
 #### Role 1: Independent Monitor (QS or engineering firm, or the lender's in-house monitoring manager)
 
-*Primary user and the person who signs off.*
+_Primary user and the person who signs off._
 
 - **Views**
   - **Project baseline:** facility terms, tranche schedule and conditions precedent (entered by the monitor), BOQ, programme.
@@ -99,7 +99,7 @@ A three-part system that supports, but does not replace, the licensed monitor:
 
 - **Views:** project baseline (read-only), IPC submission by BOQ item, flags raised on their claim and a place to respond or add supporting documents.
 - **Key action:** submit an IPC claim and answer queries.
-- *Kept separate from monitor views to preserve independence.*
+- _Kept separate from monitor views to preserve independence._
 
 ### B. Field Evidence Mobile App
 
@@ -136,58 +136,63 @@ Designed for speed and little training on site.
 
 **Route 1: per project (paid by a monitoring firm, or by the borrower if the lender approves)**
 
-| Tier | Project value | Monthly fee | Approx. USD |
-|---|---|---|---|
-| S | under ₦2bn | ₦150,000 | $111 |
-| M | ₦2bn-₦10bn | ₦350,000 | $259 |
-| L | over ₦10bn or linear infrastructure | ₦750,000-₦1,200,000 | $556-$889 |
-| Setup | per project | ₦250,000 one-time | $185 |
+| Tier  | Project value                       | Monthly fee         | Approx. USD |
+| ----- | ----------------------------------- | ------------------- | ----------- |
+| S     | under ₦2bn                          | ₦150,000            | $111        |
+| M     | ₦2bn-₦10bn                          | ₦350,000            | $259        |
+| L     | over ₦10bn or linear infrastructure | ₦750,000-₦1,200,000 | $556-$889   |
+| Setup | per project                         | ₦250,000 one-time   | $185        |
 
-*Worked example:* a ₦5bn project over 24 months costs ₦350,000 × 24 + ₦250,000 = **₦8.65m**, about 0.17% of project value. Against a 1-3% QS fee range (₦50m-₦150m), that is roughly 6-17% of the monitoring fee.
+_Worked example:_ a ₦5bn project over 24 months costs ₦350,000 × 24 + ₦250,000 = **₦8.65m**, about 0.17% of project value. Against a 1-3% QS fee range (₦50m-₦150m), that is roughly 6-17% of the monitoring fee.
 
 **Route 2: portfolio licence (paid by a lender or guarantor, unlimited monitor and viewer seats)**
 
-| Package | Scope | Annual fee | Approx. USD |
-|---|---|---|---|
-| Pilot | up to 3 projects, 90 days, credited against year one if converted | ₦3,000,000 | $2,222 |
-| Bank Starter | up to 10 active projects, audit export | ₦18,000,000 | $13,333 |
-| Bank Growth | up to 30 active projects, integrations, custom report template | ₦45,000,000 | $33,333 |
-| Guarantor / Enterprise | programme-wide, local hosting option, SLA | ₦60,000,000-₦90,000,000 | $44,444-$66,667 |
+| Package                | Scope                                                             | Annual fee              | Approx. USD     |
+| ---------------------- | ----------------------------------------------------------------- | ----------------------- | --------------- |
+| Pilot                  | up to 3 projects, 90 days, credited against year one if converted | ₦3,000,000              | $2,222          |
+| Bank Starter           | up to 10 active projects, audit export                            | ₦18,000,000             | $13,333         |
+| Bank Growth            | up to 30 active projects, integrations, custom report template    | ₦45,000,000             | $33,333         |
+| Guarantor / Enterprise | programme-wide, local hosting option, SLA                         | ₦60,000,000-₦90,000,000 | $44,444-$66,667 |
 
-*Sense check:* for a guarantor expecting around ₦400bn in new guarantees in 2026 [S11], a ₦60-90m licence is about 0.015-0.0225% of that volume.
+_Sense check:_ for a guarantor expecting around ₦400bn in new guarantees in 2026 [S11], a ₦60-90m licence is about 0.015-0.0225% of that volume.
 
 **Rule:** a project is never billed twice. If a lender holds a portfolio licence, monitors appointed on those projects use it at no extra charge.
 
 ### Customer segments, in priority order
 
 #### 1. Independent monitoring firms and QS practices (beachhead user and channel)
+
 - **Why:** they hold the sign-off role and the liability. The QS regulator's own presentation frames independent cost monitoring as QS-led and calls for digital monitoring tools [S8]. A tool that makes them faster and more defensible is a help, not a threat. They are also the route into banks, DFIs and TPM engagements [S18].
 - **Buyer:** managing partner or head of project monitoring.
 - **Price:** Route 1 per-project tiers.
 - **Risks:** thin margins, fear of being replaced, price sensitivity.
 
 #### 2. Infrastructure guarantors and project-finance lenders (InfraCredit-type)
+
 - **Why:** a small number of high-value buyers with structured construction-phase risk. InfraCredit plans up to ₦400bn of new guarantees in 2026, is growing its Construction Finance Warehouse, and its construction-phase staff sign off milestone certificates before disbursement [S11].
 - **Buyer:** head of credit risk and portfolio management; technical lead.
 - **Price:** Guarantor / Enterprise licence (₦60-90m per year), after a ₦3m pilot.
 - **Risks:** few buyers, long cycles, strict vendor and data-hosting due diligence.
 
 #### 3. Commercial banks with construction and real estate books
+
 - **Why:** banks employ in-house project monitoring managers who certify drawdowns [S9]. Bank lending is recovering after recapitalisation, with Fitch expecting more lending in 2026 [S12]. Construction credit stood at ₦2.29tn in 2025 and real estate credit at ₦10.5tn [S12].
 - **Buyer:** head of real estate or project finance and the risk or credit monitoring unit.
 - **Price:** Bank Starter or Growth, after a ₦3m pilot on 2-3 live projects.
 - **Risks:** in-house build, procurement cycles, vendor due diligence and data localisation rules [S21], modest construction credit per bank.
 
 #### 4. Developers and corporate CapEx teams with lender-funded projects
+
 - **Why:** faster, better-documented drawdown approvals. Nedbank said remote monitoring let it pay clients faster [S13].
 - **Buyer:** developer CFO or project director, with lender approval of the tool.
 - **Price:** Route 1 per project.
 - **Risks:** borrower-paid evidence undermines independence unless the lender appoints or approves the tool and the field agent.
 
 #### 5. State governments and public oversight bodies (later stage)
+
 - **Why:** strongest evidence of the problem [S1][S2]. Some states already run independent monitoring offices, such as Ekiti's IPMO, and the ICPC tracks federal projects at scale [S25]. The proposed NIPMA agency signals demand [S7].
 - **Buyer:** state project monitoring office or commission.
-- **Price:** ₦30-60m per state programme per year (about $22,000-$44,000) *(assumption)*.
+- **Price:** ₦30-60m per state programme per year (about $22,000-$44,000) _(assumption)_.
 - **Risks:** capital budget performance was 17% over nine months [S4], so payment delays are likely. Procurement is slow and political, and the approver may be complicit [S7]. A donor or monitoring-firm channel may work better than selling directly.
 
 ### Not targeting now
@@ -202,13 +207,13 @@ Designed for speed and little training on site.
 
 ### International
 
-| Player | Approach | Traction | Threat to inSite |
-|---|---|---|---|
-| **Built Technologies** (US) | Construction loan and draw management software. AI Draw Agent reconciles documents to budgets and inspections; inspector network [S14]. | Serves commercial and consumer construction lending in the US. | Low near-term. Document-centric and US-focused; no Nigerian presence found. Validates the category. |
-| **OpenSpace** | 360° site capture and AI analytics. | Thousands of sites in 91+ countries. Nedbank uses it on 25 active sites across Africa, starting with clients in Kenya, Morocco and Mauritius [S13]. | **Closest precedent:** a lender using remote visual monitoring in Africa. Hardware and per-site cost are the weak points. |
-| **Buildots** | AI progress tracking against BIM models. | Reported $130M raise, $297M total funding, 100+ large organisations [S16] (secondary source). | Low. Mega-project and BIM focus. |
-| **AI Clearing** | Drone analytics for infrastructure progress. | $14M Series A; clients include contractors, owners and financial investors; NEOM contract [S15]. | Low to medium. Large infrastructure only, but explicitly serves lenders. |
-| **CenterPoint Solutions** (US) | Geotagged photo documentation for loan monitoring. | Unclear. | Low. Shows the concept is productised abroad. |
+| Player                         | Approach                                                                                                                                | Traction                                                                                                                                            | Threat to inSite                                                                                                          |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Built Technologies** (US)    | Construction loan and draw management software. AI Draw Agent reconciles documents to budgets and inspections; inspector network [S14]. | Serves commercial and consumer construction lending in the US.                                                                                      | Low near-term. Document-centric and US-focused; no Nigerian presence found. Validates the category.                       |
+| **OpenSpace**                  | 360° site capture and AI analytics.                                                                                                     | Thousands of sites in 91+ countries. Nedbank uses it on 25 active sites across Africa, starting with clients in Kenya, Morocco and Mauritius [S13]. | **Closest precedent:** a lender using remote visual monitoring in Africa. Hardware and per-site cost are the weak points. |
+| **Buildots**                   | AI progress tracking against BIM models.                                                                                                | Reported $130M raise, $297M total funding, 100+ large organisations [S16] (secondary source).                                                       | Low. Mega-project and BIM focus.                                                                                          |
+| **AI Clearing**                | Drone analytics for infrastructure progress.                                                                                            | $14M Series A; clients include contractors, owners and financial investors; NEOM contract [S15].                                                    | Low to medium. Large infrastructure only, but explicitly serves lenders.                                                  |
+| **CenterPoint Solutions** (US) | Geotagged photo documentation for loan monitoring.                                                                                      | Unclear.                                                                                                                                            | Low. Shows the concept is productised abroad.                                                                             |
 
 ### Development-finance substitutes
 
@@ -217,12 +222,12 @@ Designed for speed and little training on site.
 
 ### Local (Nigeria)
 
-| Player | What they do | Overlap |
-|---|---|---|
-| **BuildTrust (SaarahBuildTech)** | Project management for owners, contractors and suppliers with milestones, budgets, GPS-validated site photos, chat and AI cost estimates [S19]. | Field capture overlaps; targets owners and contractors, not lenders. Traction unknown. |
-| **Buildove** | Project management software plus a human concierge monitoring service for owners and diaspora clients [S19]. | A manual version of the thesis for a different buyer. |
-| **Cutstruct** | Materials marketplace with project tracking. Funding figures conflict between sources ($620K vs $2.4M) [S19]. | Low. |
-| **Other local construction startups** | One tracker lists 8 Nigerian construction startups; none found targeting lender disbursement assurance with meaningful funding. | Gap, but may also signal a hard sale. |
+| Player                                | What they do                                                                                                                                    | Overlap                                                                                |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **BuildTrust (SaarahBuildTech)**      | Project management for owners, contractors and suppliers with milestones, budgets, GPS-validated site photos, chat and AI cost estimates [S19]. | Field capture overlaps; targets owners and contractors, not lenders. Traction unknown. |
+| **Buildove**                          | Project management software plus a human concierge monitoring service for owners and diaspora clients [S19].                                    | A manual version of the thesis for a different buyer.                                  |
+| **Cutstruct**                         | Materials marketplace with project tracking. Funding figures conflict between sources ($620K vs $2.4M) [S19].                                   | Low.                                                                                   |
+| **Other local construction startups** | One tracker lists 8 Nigerian construction startups; none found targeting lender disbursement assurance with meaningful funding.                 | Gap, but may also signal a hard sale.                                                  |
 
 ### Human and institutional incumbents
 
@@ -230,7 +235,7 @@ Designed for speed and little training on site.
 - **Bank in-house monitoring teams** [S9].
 - **Civil society and government:** Tracka (17,811+ projects tracked in eight years), ICPC tracking, state monitoring offices, and the proposed NIPMA agency [S7][S25].
 
-*Caveat: this reflects public sources only. Stealth players may exist. I did not research Procore or Autodesk's Nigerian presence.*
+_Caveat: this reflects public sources only. Stealth players may exist. I did not research Procore or Autodesk's Nigerian presence._
 
 ---
 
@@ -255,18 +260,18 @@ Designed for speed and little training on site.
 
 ## 8. Key Risks and Design Mitigations
 
-| Risk | Mitigation |
-|---|---|
-| Photos cannot verify quantities, buried works or quality | Evidence-strength rating, human certification, visit planner for weak evidence |
-| Liability: software output treated as certification [S22] | Decision support only; monitor signs; "Evidence Report" wording; legal review of terms |
-| Field agent is the party being monitored | Prefer monitor- or lender-appointed agents; extra cross-checks and random visit targeting when the contractor supplies the agent |
-| Spoofed GPS, staged scenes, AI-generated images [S26] | Device integrity checks, signed bundles, server timestamps, duplicate and AI-image screening |
-| Pidgin speech errors on quantities and item names [S20] | Mandatory confirmation step, fine-tuned local model, editable transcripts |
-| Lump-sum or scanned BOQs [S8] | Flag unverifiable items; ask the monitor to confirm the mapping |
-| Linear projects do not fit a geofence radius | Chainage or corridor geofences |
-| Data residency and vendor due diligence [S21] | Nigerian-hosted option; avoid sending personal data offshore by default; seek legal advice |
-| Contractor and monitor conflict of interest [S22] | Separate surfaces and permissions |
-| Dollar-linked costs against naira pricing [S24] | NGN pricing with annual review; cost controls on AI inference |
+| Risk                                                      | Mitigation                                                                                                                       |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Photos cannot verify quantities, buried works or quality  | Evidence-strength rating, human certification, visit planner for weak evidence                                                   |
+| Liability: software output treated as certification [S22] | Decision support only; monitor signs; "Evidence Report" wording; legal review of terms                                           |
+| Field agent is the party being monitored                  | Prefer monitor- or lender-appointed agents; extra cross-checks and random visit targeting when the contractor supplies the agent |
+| Spoofed GPS, staged scenes, AI-generated images [S26]     | Device integrity checks, signed bundles, server timestamps, duplicate and AI-image screening                                     |
+| Pidgin speech errors on quantities and item names [S20]   | Mandatory confirmation step, fine-tuned local model, editable transcripts                                                        |
+| Lump-sum or scanned BOQs [S8]                             | Flag unverifiable items; ask the monitor to confirm the mapping                                                                  |
+| Linear projects do not fit a geofence radius              | Chainage or corridor geofences                                                                                                   |
+| Data residency and vendor due diligence [S21]             | Nigerian-hosted option; avoid sending personal data offshore by default; seek legal advice                                       |
+| Contractor and monitor conflict of interest [S22]         | Separate surfaces and permissions                                                                                                |
+| Dollar-linked costs against naira pricing [S24]           | NGN pricing with annual review; cost controls on AI inference                                                                    |
 
 ---
 
@@ -275,6 +280,7 @@ Designed for speed and little training on site.
 **MVP slice:** one lender or guarantor, two or three live projects, and a ₦3m pilot covering capture, reconciliation and the draft Evidence Report.
 
 **Pilot success measures**
+
 - How closely the tool's flags match the monitor's own valuation.
 - Time saved per drawdown cycle.
 - Monitor and lender willingness to continue and pay.
@@ -282,6 +288,7 @@ Designed for speed and little training on site.
 **Before building, interview roughly 15-20 people:** bank project monitoring managers, QS and monitoring firms, infrastructure guarantors, state monitoring offices and contractors' site engineers.
 
 **Questions to answer**
+
 1. Does faster drawdown review matter more to lenders, monitors or borrowers?
 2. Will monitors adopt it if it makes them faster, or resist it?
 3. Who pays, and at what price?

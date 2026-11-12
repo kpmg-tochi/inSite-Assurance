@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "InSite Assurance Field",
+    "slug": "insite-assurance-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "primaryColor": "#00338D",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kpmg.insiteassurance.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "InSite Assurance requires live camera access to capture geotagged construction site evidence.",
+        "NSMicrophoneUsageDescription": "InSite Assurance requires microphone access to record English and Nigerian Pidgin site voice logs.",
+        "NSLocationWhenInUseUsageDescription": "InSite Assurance requires high-accuracy GPS to verify corridor chainage and site geofence compliance."
+      }
+    },
+    "android": {
+      "package": "com.kpmg.insiteassurance.mobile",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    }
+  }
+}

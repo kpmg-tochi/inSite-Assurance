@@ -26,9 +26,11 @@ services:
       - key: AZURE_OPENAI_API_VERSION
         value: "2024-10-21"
       - key: AZURE_OPENAI_GPT_DEPLOYMENT
-        value: "gpt-4o"
-      - key: AZURE_OPENAI_WHISPER_DEPLOYMENT
-        value: "whisper"
+        value: "gpt-4.1"
+      - key: WHISPER_API_KEY
+        sync: false
+      - key: WHISPER_MODEL
+        value: "whisper-1"
       - key: S3_ENDPOINT
         sync: false
       - key: S3_REGION

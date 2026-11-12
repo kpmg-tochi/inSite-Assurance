@@ -2,7 +2,7 @@
   "name": "@insite/server",
   "version": "0.1.0",
   "private": true,
-  "description": "inSite Assurance Backend API — Node.js + Express + Prisma + TypeScript",
+  "description": "InSite Assurance Backend API — Node.js + Express + Prisma + TypeScript",
   "main": "./dist/index.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

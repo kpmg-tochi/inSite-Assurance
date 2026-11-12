@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Core KPMG & Platform Brand Palette (RGB channels for Tailwind opacity support) */
+    --color-brand-primary: 0 51 141;      /* #00338D — Primary KPMG Blue */
+    --color-brand-hover: 0 38 107;        /* #00266B — Primary Hover Blue */
+    --color-brand-medium: 0 94 184;       /* #005EB8 — Medium Accent Blue */
+    --color-brand-pacific: 0 145 218;     /* #0091DA — Pacific Cyan */
+    --color-brand-sky: 56 189 248;        /* #38BDF8 — Corridor Sky Blue */
+    --color-brand-navy: 12 35 60;         /* #0C233C — Dark Navy Surface */
+    --color-brand-dark: 7 21 38;          /* #071526 — Deep Canvas Dark */
+    --color-brand-subcard: 8 24 43;       /* #08182B — Dark Subcard Surface */
+    --color-surface-canvas: 248 250 252;  /* #F8FAFC — Light Slate Canvas */
+
+    /* Hex equivalents for SVG & Leaflet vector paths */
+    --hex-brand-primary: #00338d;
+    --hex-brand-hover: #00266b;
+    --hex-brand-medium: #005eb8;
+    --hex-brand-pacific: #0091da;
+    --hex-brand-sky: #38bdf8;
+    --hex-brand-navy: #0c233c;
+    --hex-status-verified: #16a34a;
+    --hex-status-warning: #d97706;
+    --hex-status-danger: #dc2626;
+  }
+
+  body {
+    font-family:
+      "Inter",
+      system-ui,
+      -apple-system,
+      sans-serif;
+    background-color: rgb(var(--color-surface-canvas));
+    color: #0f172a;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+.kpmg-sidebar-gradient {
+  background: linear-gradient(
+    180deg,
+    rgb(var(--color-brand-primary)) 0%,
+    rgb(var(--color-brand-navy)) 100%
+  );
+}
+
+.kpmg-ribbed-showcase,
+.kpmg-ribbed-panel {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.03) 0px,
+      rgba(255, 255, 255, 0.07) 28px,
+      rgba(0, 0, 0, 0.14) 56px
+    ),
+    radial-gradient(
+      circle at 20% 20%,
+      rgb(var(--color-brand-medium)) 0%,
+      rgb(var(--color-brand-primary)) 48%,
+      rgb(var(--color-brand-navy)) 100%
+    );
+}
+
+.map-canvas-bg {
+  background-color: #eef2f6;
+  background-image:
+    radial-gradient(#cbd5e1 1px, transparent 1px),
+    linear-gradient(to right, rgba(203, 213, 225, 0.35) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(203, 213, 225, 0.35) 1px, transparent 1px);
+  background-size:
+    24px 24px,
+    96px 96px,
+    96px 96px;
+}
+
+@keyframes pulseRing {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.75;
+  }
+  70% {
+    transform: scale(1.85);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.85);
+    opacity: 0;
+  }
+}
+
+.pin-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  background: inherit;
+  animation: pulseRing 2s infinite;
+  z-index: 0;
+}
+
+/* Ensure Leaflet map tiles stay below floating HUD controls and have a clean, soft palette */
+.leaflet-container {
+  z-index: 1 !important;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+.leaflet-tile {
+  filter: saturate(0.78) contrast(0.96) brightness(1.02);
+}
+
+@keyframes logoLoaderPulse {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: scaleY(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+.logo-loader {
+  animation: logoLoaderPulse 1s ease-in-out infinite;
+}

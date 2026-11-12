@@ -10,7 +10,7 @@ import { prisma } from "../src/config/prisma";
 import { recordAuditEvent } from "../src/modules/audit/audit.service";
 
 async function main() {
-  console.log("🌱 Starting inSite Assurance database seed...");
+  console.log("🌱 Starting InSite Assurance database seed...");
 
   // Clean existing records in reverse dependency order
   await prisma.trancheDecision.deleteMany();

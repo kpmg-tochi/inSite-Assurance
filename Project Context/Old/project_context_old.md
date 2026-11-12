@@ -1,10 +1,10 @@
-# inSite Assurance: Capital Project Intelligence & Disbursement Assurance Platform (MVP)
+# InSite Assurance: Capital Project Intelligence & Disbursement Assurance Platform (MVP)
 
 ## 1. Executive Summary
 
-**inSite Assurance** is an AI-powered **Capital Project Governance, Site Monitoring, and Disbursement Assurance** system built for the Nigerian market. The system targets Commercial Banks, Development Finance Institutions like Bank of Industry (BOI) / African Development Bank (AfDB), State Governments, and Corporate CapEx teams.
+**InSite Assurance** is an AI-powered **Capital Project Governance, Site Monitoring, and Disbursement Assurance** system built for the Nigerian market. The system targets Commercial Banks, Development Finance Institutions like Bank of Industry (BOI) / African Development Bank (AfDB), State Governments, and Corporate CapEx teams.
 
-inSite Assurance bridges the gap between **physical site progress** and **financial tranche disbursements**. It ingests project baselines (Bills of Quantities [BOQs] and schedules), captures tamper-proof daily field updates (voice notes, text, and geotagged photos) via a lightweight chat-style mobile app, and uses AI analysis to reconcile actual on-site progress against contractor payment claims (Interim Payment Certificates [IPCs]). Financiers and monitoring teams use the web dashboard to track active/ongoing projects within their portfolios in real time, detect fraud or schedule slippage, and generate audit-ready Disbursement Assurance Reports before releasing funds.
+InSite Assurance bridges the gap between **physical site progress** and **financial tranche disbursements**. It ingests project baselines (Bills of Quantities [BOQs] and schedules), captures tamper-proof daily field updates (voice notes, text, and geotagged photos) via a lightweight chat-style mobile app, and uses AI analysis to reconcile actual on-site progress against contractor payment claims (Interim Payment Certificates [IPCs]). Financiers and monitoring teams use the web dashboard to track active/ongoing projects within their portfolios in real time, detect fraud or schedule slippage, and generate audit-ready Disbursement Assurance Reports before releasing funds.
 
 ---
 

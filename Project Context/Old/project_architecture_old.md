@@ -1,4 +1,4 @@
-# inSite Assurance: Architecture and Approach
+# InSite Assurance: Architecture and Approach
 
 ## 1. Technical Architecture & Monorepo Structure
 
