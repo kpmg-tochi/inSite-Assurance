@@ -87,6 +87,92 @@ export async function submitEvidenceForAiExtraction(params: {
     mediaAttachments: params.input.mediaAttachments,
   });
 
+  // 2b. Check Contractor Identity Assurance Gate
+  const liveSession = await prisma.fieldAgentSession.findUnique({
+    where: { id: params.fieldAgent.sessionId },
+  });
+
+  if (liveSession && liveSession.assuranceStatus !== 'APPROVED') {
+    // Stage report locally without incurring Whisper/Vision/GPT-4o API costs
+    const stagedLog = await prisma.$transaction(async (tx) => {
+      const created = await tx.fieldEvidenceLog.create({
+        data: {
+          projectId: params.projectId,
+          boqItemId: params.input.boqItemId ?? null,
+          fieldSessionId: params.fieldAgent.sessionId,
+          clientCaptureId: params.input.hardwareMetadata.clientCaptureId,
+          independenceTier: params.fieldAgent.independenceTier,
+          status: 'QUEUED_OFFLINE',
+          latitude: params.input.hardwareMetadata.latitude,
+          longitude: params.input.hardwareMetadata.longitude,
+          altitudeMeters: params.input.hardwareMetadata.altitudeMeters ?? null,
+          gpsAccuracyMeters: params.input.hardwareMetadata.gpsAccuracyMeters,
+          isMockLocation: params.input.hardwareMetadata.isMockLocation,
+          isWithinGeofence: geofenceResult.isWithinGeofence,
+          chainageKm: geofenceResult.chainageKm,
+          chainageLabel: geofenceResult.chainageFormatted,
+          corridorOffsetMeters: geofenceResult.corridorOffsetMeters,
+          verificationBadgeText: geofenceResult.verificationBadgeText,
+          devicePitchDeg: params.input.hardwareMetadata.devicePitchDeg ?? null,
+          deviceRollDeg: params.input.hardwareMetadata.deviceRollDeg ?? null,
+          deviceAzimuthDeg: params.input.hardwareMetadata.deviceAzimuthDeg ?? null,
+          deviceSignatureHash: params.input.hardwareMetadata.deviceSignatureHash,
+          integrityPassed: integrityResult.integrityPassed,
+          integrityFlags:
+            integrityResult.integrityFlags as unknown as Prisma.InputJsonValue,
+          rawTextNote: params.input.rawTextNote ?? null,
+          rawWhisperTranscript: null,
+          confirmedSummary:
+            params.input.rawTextNote ??
+            'Queued unverified contractor report (Awaiting verification approval)',
+          confirmedQuantities:
+            (params.input.offlineManualQuantities ??
+              []) as unknown as Prisma.InputJsonValue,
+          siteBlockers: [] as unknown as Prisma.InputJsonValue,
+          visionObservationSummary: null,
+          capturedAtDevice: new Date(
+            params.input.hardwareMetadata.capturedAtDevice
+          ),
+        },
+      });
+
+      for (const media of params.input.mediaAttachments) {
+        await tx.evidenceMedia.create({
+          data: {
+            evidenceLogId: created.id,
+            mediaType: media.mediaType,
+            objectKey: media.objectKey,
+            fileUrl: media.publicOrSignedUrl ?? null,
+            mimeType: media.mimeType,
+            byteSize: media.byteSize,
+            sha256FileHash: media.sha256FileHash,
+            perceptualHash:
+              integrityResult.computedPerceptualHashes[media.objectKey] ?? null,
+            durationSeconds: media.durationSeconds ?? null,
+          },
+        });
+      }
+
+      return created;
+    });
+
+    return {
+      ...stagedLog,
+      isUnverifiedContractorQueued: true,
+      proposedExtraction: {
+        normalizedSummary:
+          params.input.rawTextNote ??
+          'Submission queued pending contractor verification approval.',
+        extractedQuantities: params.input.offlineManualQuantities ?? [],
+        siteBlockers: [],
+        matchedBoqWbsCodes: [],
+        visionObservationSummary: null,
+      },
+      geofenceResult,
+      integrityResult,
+    };
+  }
+
   // 3. Standalone Whisper Transcription (if VOICE_NOTE attachment is present)
   const voiceAttachment = params.input.mediaAttachments.find(
     (m) => m.mediaType === 'VOICE_NOTE'

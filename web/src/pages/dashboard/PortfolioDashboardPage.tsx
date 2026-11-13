@@ -1,20 +1,20 @@
-import React, { useState } from 'react';
-import { Wallet, CheckCircle2, AlertTriangle, X } from 'lucide-react';
-import type { CreateProjectRequest } from '@insite/shared';
+import React, { useState } from "react";
+import { Wallet, CheckCircle2, AlertTriangle, X } from "lucide-react";
+import type { CreateProjectRequest } from "@insite/shared";
 import type {
   FieldEvidenceLogRecordDto,
   IpcDetailsDto,
   ProjectSummaryDto,
-} from '../../api/types';
+} from "../../api/types";
 import {
   formatCompactNaira,
   formatDateTimeShort,
   formatNaira,
-} from '../../lib/formatters';
-import { LiveGeospatialMap } from '../../components/LiveGeospatialMap';
-import { formatIndependenceTierText } from '../../components/EvidenceBadge';
-import { useAuth } from '../../lib/auth-context';
-import ContractorVerificationQueue from '../../components/ContractorVerificationQueue';
+} from "../../lib/formatters";
+import { LiveGeospatialMap } from "../../components/LiveGeospatialMap";
+import { formatIndependenceTierText } from "../../components/EvidenceBadge";
+import { useAuth } from "../../lib/auth-context";
+import ContractorVerificationQueue from "../../components/ContractorVerificationQueue";
 
 interface PortfolioDashboardPageProps {
   project: ProjectSummaryDto;
@@ -36,13 +36,13 @@ export function PortfolioDashboardPage({
   onCloseNewProjectModal,
 }: PortfolioDashboardPageProps) {
   const { user } = useAuth();
-  const [newProjectName, setNewProjectName] = useState('');
-  const [newCodePrefix, setNewCodePrefix] = useState('KAD-205');
-  const [newStateLocation, setNewStateLocation] = useState('Kaduna State');
-  const [newTotalBudget, setNewTotalBudget] = useState('8500000000');
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newCodePrefix, setNewCodePrefix] = useState("KAD-205");
+  const [newStateLocation, setNewStateLocation] = useState("Kaduna State");
+  const [newTotalBudget, setNewTotalBudget] = useState("8500000000");
   const [newGeofenceMode, setNewGeofenceMode] = useState<
-    'LINEAR_CORRIDOR' | 'RADIAL'
-  >('LINEAR_CORRIDOR');
+    "LINEAR_CORRIDOR" | "RADIAL"
+  >("LINEAR_CORRIDOR");
   const [creatingProject, setCreatingProject] = useState(false);
 
   const activeTranche =
@@ -50,7 +50,7 @@ export function PortfolioDashboardPage({
 
   const satisfiedCpCount = activeTranche
     ? activeTranche.conditionsPrecedent.filter(
-        (cp) => cp.status === 'SATISFIED' || cp.status === 'WAIVED'
+        (cp) => cp.status === "SATISFIED" || cp.status === "WAIVED",
       ).length
     : 0;
   const totalCpCount = activeTranche
@@ -70,15 +70,17 @@ export function PortfolioDashboardPage({
         codePrefix: newCodePrefix.trim().toUpperCase(),
         description: `${newProjectName.trim()} capital infrastructure monitoring baseline.`,
         stateLocation: newStateLocation.trim(),
-        lgaLocation: 'Municipal Corridor',
+        lgaLocation: "Municipal Corridor",
         totalBudgetNgn: budgetNum,
-        reportingCadence: 'WEEKLY',
-        lenderOrganizationName: 'InfraCredit',
-        contractorOrganizationName: 'J&S Civil Eng.',
+        reportingCadence: "WEEKLY",
+        workdayStartTime: "08:00",
+        workdayEndTime: "17:00",
+        lenderOrganizationName: "InfraCredit",
+        contractorOrganizationName: "J&S Civil Eng.",
         geofence:
-          newGeofenceMode === 'LINEAR_CORRIDOR'
+          newGeofenceMode === "LINEAR_CORRIDOR"
             ? {
-                mode: 'LINEAR_CORRIDOR',
+                mode: "LINEAR_CORRIDOR",
                 corridorHalfWidthMeters: 150,
                 startChainageKm: 0,
                 centerlineCoordinates: [
@@ -88,7 +90,7 @@ export function PortfolioDashboardPage({
                 ],
               }
             : {
-                mode: 'RADIAL',
+                mode: "RADIAL",
                 center: {
                   latitude: 9.0579,
                   longitude: 7.4951,
@@ -98,56 +100,56 @@ export function PortfolioDashboardPage({
         tranches: [
           {
             trancheNumber: 1,
-            name: 'Tranche 1: Mobilization & Sub-structure',
+            name: "Tranche 1: Mobilization & Sub-structure",
             allocatedAmountNgn: Math.round(budgetNum * 0.35),
             targetCompletionPct: 35,
             conditionsPrecedent: [
               {
-                referenceCode: 'CP-01',
+                referenceCode: "CP-01",
                 description:
-                  'Execution of Performance Bond and Advance Payment Guarantee',
+                  "Execution of Performance Bond and Advance Payment Guarantee",
                 isMandatoryForRelease: true,
-                status: 'SATISFIED',
+                status: "SATISFIED",
               },
               {
-                referenceCode: 'CP-02',
+                referenceCode: "CP-02",
                 description:
-                  'Independent Monitor verification of right-of-way handover',
+                  "Independent Monitor verification of right-of-way handover",
                 isMandatoryForRelease: true,
-                status: 'SATISFIED',
+                status: "SATISFIED",
               },
             ],
           },
           {
             trancheNumber: 2,
-            name: 'Tranche 2: Superstructure & Civil Works',
+            name: "Tranche 2: Superstructure & Civil Works",
             allocatedAmountNgn: Math.round(budgetNum * 0.65),
             targetCompletionPct: 100,
             conditionsPrecedent: [
               {
-                referenceCode: 'CP-03',
+                referenceCode: "CP-03",
                 description:
-                  'Zero unresolved Hold-Point non-conformances on Tranche 1 works',
+                  "Zero unresolved Hold-Point non-conformances on Tranche 1 works",
                 isMandatoryForRelease: true,
-                status: 'PENDING',
+                status: "PENDING",
               },
             ],
           },
         ],
       });
       onCloseNewProjectModal();
-      setNewProjectName('');
+      setNewProjectName("");
     } finally {
       setCreatingProject(false);
     }
   };
 
   const actionButtonLabel =
-    user?.role === 'LENDER'
-      ? 'Review Tranche Release'
-      : user?.role === 'CONTRACTOR'
-        ? 'Manage IPC Claims'
-        : 'Review IPC';
+    user?.role === "LENDER"
+      ? "Review Tranche Release"
+      : user?.role === "CONTRACTOR"
+        ? "Manage IPC Claims"
+        : "Review IPC";
 
   return (
     <div className="space-y-3">
@@ -162,9 +164,9 @@ export function PortfolioDashboardPage({
               <Wallet className="w-4 h-4" />
             </div>
             <span className="text-[11px] font-medium text-slate-400">
-              {user?.role === 'CONTRACTOR'
-                ? 'Contract Value & Drawdowns'
-                : 'Facility Commitment'}
+              {user?.role === "CONTRACTOR"
+                ? "Contract Value & Drawdowns"
+                : "Facility Commitment"}
             </span>
           </div>
           <div className="mt-3">
@@ -178,7 +180,7 @@ export function PortfolioDashboardPage({
                     (project.disbursedToDateNgn / project.totalBudgetNgn) *
                     100
                   ).toFixed(1)
-                : '0.0'}
+                : "0.0"}
               %)
             </div>
           </div>
@@ -201,9 +203,9 @@ export function PortfolioDashboardPage({
               {latestIpc
                 ? `Latest Claim: IPC #${String(latestIpc.ipcNumber).padStart(
                     2,
-                    '0'
+                    "0",
                   )} (${formatCompactNaira(latestIpc.totalClaimedAmountNgn)})`
-                : 'Baseline established'}
+                : "Baseline established"}
             </div>
           </div>
         </div>
@@ -214,21 +216,21 @@ export function PortfolioDashboardPage({
               <AlertTriangle className="w-4 h-4" />
             </div>
             <span className="text-[11px] font-medium text-slate-400">
-              {user?.role === 'CONTRACTOR'
-                ? 'Open Monitor Queries'
-                : 'Reconciliation Alerts'}
+              {user?.role === "CONTRACTOR"
+                ? "Open Monitor Queries"
+                : "Reconciliation Alerts"}
             </span>
           </div>
           <div className="mt-3 flex items-end justify-between">
             <div>
               <div className="text-2xl font-bold text-slate-900">
-                {project.openConflictCount}{' '}
-                {user?.role === 'CONTRACTOR' ? 'Open Query' : 'Conflict'}
-                {project.openConflictCount === 1 ? '' : 's'}
+                {project.openConflictCount}{" "}
+                {user?.role === "CONTRACTOR" ? "Open Query" : "Conflict"}
+                {project.openConflictCount === 1 ? "" : "s"}
               </div>
               <div className="text-xs text-amber-700 font-medium mt-0.5">
                 {project.unfulfilledHoldPointCount} Unfulfilled Hold-Point
-                {project.unfulfilledHoldPointCount === 1 ? '' : 's'}
+                {project.unfulfilledHoldPointCount === 1 ? "" : "s"}
               </div>
             </div>
             <button
@@ -257,15 +259,15 @@ export function PortfolioDashboardPage({
               <div className="flex justify-between py-1 border-b border-slate-100">
                 <span className="text-slate-500">Geofence Mode</span>
                 <span className="font-semibold text-slate-800">
-                  {project.geofenceMode === 'LINEAR_CORRIDOR'
-                    ? 'Linear Highway Corridor'
-                    : 'Radial Site Boundary'}
+                  {project.geofenceMode === "LINEAR_CORRIDOR"
+                    ? "Linear Highway Corridor"
+                    : "Radial Site Boundary"}
                 </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100">
                 <span className="text-slate-500">Verified Field Logs</span>
                 <span className="font-semibold text-emerald-700">
-                  {evidenceLogs.filter((l) => l.integrityPassed).length} /{' '}
+                  {evidenceLogs.filter((l) => l.integrityPassed).length} /{" "}
                   {evidenceLogs.length} Passed
                 </span>
               </div>
@@ -273,7 +275,7 @@ export function PortfolioDashboardPage({
                 <span className="text-slate-500">BOQ Opacity Screening</span>
                 <span className="font-semibold text-slate-800">
                   {project.opaqueLumpSumCount} Opaque Item
-                  {project.opaqueLumpSumCount === 1 ? '' : 's'}
+                  {project.opaqueLumpSumCount === 1 ? "" : "s"}
                 </span>
               </div>
               <div className="flex justify-between py-1">
@@ -303,12 +305,12 @@ export function PortfolioDashboardPage({
               <div className="mt-2.5 space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-brand-primary">
-                    {latestConfirmedLog.chainageLabel || 'Site Pin'} · WBS{' '}
-                    {latestConfirmedLog.boqItem?.wbsCode || 'General'}
+                    {latestConfirmedLog.chainageLabel || "Site Pin"} · WBS{" "}
+                    {latestConfirmedLog.boqItem?.wbsCode || "General"}
                   </span>
                   <span className="text-[11px] text-slate-500">
                     {formatIndependenceTierText(
-                      latestConfirmedLog.independenceTier
+                      latestConfirmedLog.independenceTier,
                     )}
                   </span>
                 </div>
@@ -319,9 +321,9 @@ export function PortfolioDashboardPage({
                 </p>
                 <div className="flex items-center justify-between text-[11px] text-slate-500">
                   <span>
-                    Reporter:{' '}
+                    Reporter:{" "}
                     {latestConfirmedLog.fieldSession?.agentFullName ||
-                      'Field Agent'}
+                      "Field Agent"}
                   </span>
                   <span className="text-emerald-700 font-medium">
                     Device Signature: Verified
@@ -356,8 +358,8 @@ export function PortfolioDashboardPage({
                     {activeTranche.name}
                   </div>
                   <div className="text-[11px] text-slate-500 mt-0.5">
-                    Allocation: {formatNaira(activeTranche.allocatedAmountNgn)} ·
-                    Target: {activeTranche.targetCompletionPct}%
+                    Allocation: {formatNaira(activeTranche.allocatedAmountNgn)}{" "}
+                    · Target: {activeTranche.targetCompletionPct}%
                   </div>
                 </div>
                 <div className="space-y-1.5">
@@ -374,7 +376,9 @@ export function PortfolioDashboardPage({
                       style={{
                         width: `${
                           totalCpCount > 0
-                            ? Math.round((satisfiedCpCount / totalCpCount) * 100)
+                            ? Math.round(
+                                (satisfiedCpCount / totalCpCount) * 100,
+                              )
                             : 100
                         }%`,
                       }}
@@ -383,13 +387,16 @@ export function PortfolioDashboardPage({
                   </div>
                 </div>
                 <div className="pt-1 flex items-center justify-between text-[11px]">
-                  <span className="text-slate-500">Holdback Recommendation</span>
+                  <span className="text-slate-500">
+                    Holdback Recommendation
+                  </span>
                   <span className="font-semibold text-amber-700">
                     {latestIpc?.valuationReport
                       ? formatCompactNaira(
-                          latestIpc.valuationReport.recommendedHoldbackAmountNgn
+                          latestIpc.valuationReport
+                            .recommendedHoldbackAmountNgn,
                         )
-                      : 'Pending Valuation'}
+                      : "Pending Valuation"}
                   </span>
                 </div>
               </div>
@@ -430,7 +437,10 @@ export function PortfolioDashboardPage({
               </button>
             </div>
 
-            <form onSubmit={handleCreateProjectSubmit} className="p-5 space-y-4">
+            <form
+              onSubmit={handleCreateProjectSubmit}
+              className="p-5 space-y-4"
+            >
               <div className="grid grid-cols-3 gap-3">
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -494,11 +504,11 @@ export function PortfolioDashboardPage({
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
-                    onClick={() => setNewGeofenceMode('LINEAR_CORRIDOR')}
+                    onClick={() => setNewGeofenceMode("LINEAR_CORRIDOR")}
                     className={`p-3 rounded-xl border text-left text-xs transition ${
-                      newGeofenceMode === 'LINEAR_CORRIDOR'
-                        ? 'border-brand-primary bg-blue-50/40 font-semibold text-brand-primary'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      newGeofenceMode === "LINEAR_CORRIDOR"
+                        ? "border-brand-primary bg-blue-50/40 font-semibold text-brand-primary"
+                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
                     }`}
                   >
                     <div>Linear Corridor (KM X+YYY)</div>
@@ -508,11 +518,11 @@ export function PortfolioDashboardPage({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setNewGeofenceMode('RADIAL')}
+                    onClick={() => setNewGeofenceMode("RADIAL")}
                     className={`p-3 rounded-xl border text-left text-xs transition ${
-                      newGeofenceMode === 'RADIAL'
-                        ? 'border-brand-primary bg-blue-50/40 font-semibold text-brand-primary'
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                      newGeofenceMode === "RADIAL"
+                        ? "border-brand-primary bg-blue-50/40 font-semibold text-brand-primary"
+                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
                     }`}
                   >
                     <div>Radial Site Boundary</div>
@@ -537,8 +547,8 @@ export function PortfolioDashboardPage({
                   className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm disabled:opacity-50"
                 >
                   {creatingProject
-                    ? 'Initializing...'
-                    : 'Create Baseline & Join Codes'}
+                    ? "Initializing..."
+                    : "Create Baseline & Join Codes"}
                 </button>
               </div>
             </form>

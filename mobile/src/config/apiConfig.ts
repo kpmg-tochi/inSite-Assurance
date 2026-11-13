@@ -5,6 +5,7 @@ import type {
 } from '@insite/shared';
 
 export const MOBILE_API_BASE_URL = 'http://localhost:4000/api/v1';
+export const API_BASE_URL = MOBILE_API_BASE_URL;
 
 export interface MobileBaselinePack {
   projectId: string;

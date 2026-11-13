@@ -45,6 +45,8 @@ export const CreateProjectRequestSchema = z.object({
   description: z.string().max(1000).optional(),
   totalBudgetNgn: z.number().positive(),
   reportingCadence: ReportingCadenceEnum.default('WEEKLY'),
+  workdayStartTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/).default('08:00').optional(),
+  workdayEndTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/).default('17:00').optional(),
   geofence: ProjectGeofenceSchema,
   lenderOrganizationName: z.string().min(2).max(160),
   contractorOrganizationName: z.string().min(2).max(160),

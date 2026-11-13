@@ -1,107 +1,260 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   SafeAreaView,
   View,
-  Text,
-  StyleSheet,
   StatusBar,
-  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  Modal,
 } from 'react-native';
-import type { FieldAgentSessionProfile } from '@insite/shared';
-import type { MobileBaselinePack } from './src/config/apiConfig';
 import {
-  getCachedBaselinePack,
-  getPendingSyncCount,
-  LocalCapturedItem,
-} from './src/storage/offline-outbox';
-import { JoinProjectScreen } from './src/screens/JoinProjectScreen';
-import { FieldCaptureScreen } from './src/screens/FieldCaptureScreen';
-import { ConfirmExtractionScreen } from './src/screens/ConfirmExtractionScreen';
-import { OutboxQueueScreen } from './src/screens/OutboxQueueScreen';
+  loadLocalProfile,
+  updateLocalProfile,
+  LocalUserProfile,
+  clearActiveProjectSession,
+} from './src/storage/secureProfileStore';
+import { registerForPushNotifications } from './src/services/pushNotificationService';
+import { WbsItemRecord } from './src/storage/wbsRepository';
 
-type MobileScreen = 'JOIN' | 'CAPTURE' | 'CONFIRM' | 'OUTBOX';
+// Screens
+import { OnboardingProfileScreen } from './src/screens/OnboardingProfileScreen';
+import { EnterProjectCodeScreen } from './src/screens/EnterProjectCodeScreen';
+import { AssuranceVerificationWizard } from './src/screens/AssuranceVerificationWizard';
+import { VerificationUnderReviewScreen } from './src/screens/VerificationUnderReviewScreen';
+import { WbsInboxScreen } from './src/screens/WbsInboxScreen';
+import { WbsChatThreadScreen } from './src/screens/WbsChatThreadScreen';
+
+// Modals
+import { ConfirmAiSummarySheet } from './src/screens/ConfirmAiSummarySheet';
+import { ProfileAndProjectsScreen } from './src/screens/ProfileAndProjectsScreen';
+import { BacklogReviewModal } from './src/screens/BacklogReviewModal';
+import { SpecialIncidentModal } from './src/screens/SpecialIncidentModal';
+import { NotificationCenterModal } from './src/screens/NotificationCenterModal';
+
+type ActiveView =
+  | 'ONBOARDING'
+  | 'ENTER_CODE'
+  | 'ASSURANCE_WIZARD'
+  | 'UNDER_REVIEW'
+  | 'WBS_INBOX'
+  | 'WBS_THREAD';
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<MobileScreen>('JOIN');
-  const [session, setSession] = useState<FieldAgentSessionProfile | null>(null);
-  const [baseline, setBaseline] = useState<MobileBaselinePack | null>(null);
-  const [activeCaptureItem, setActiveCaptureItem] =
-    useState<LocalCapturedItem | null>(null);
+  const [profile, setProfile] = useState<LocalUserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [currentView, setCurrentView] = useState<ActiveView>('ENTER_CODE');
+  const [selectedWbsItem, setSelectedWbsItem] = useState<WbsItemRecord | null>(null);
 
-  const handleJoined = (
-    newSession: FieldAgentSessionProfile,
-    newBaseline: MobileBaselinePack
-  ) => {
-    setSession(newSession);
-    setBaseline(newBaseline);
-    setCurrentScreen('CAPTURE');
-  };
+  // Modal states
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showIncidentModal, setShowIncidentModal] = useState(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+  const [showBacklogModal, setShowBacklogModal] = useState(false);
+  const [showEodConfirmModal, setShowEodConfirmModal] = useState(false);
 
-  const handleLogout = () => {
-    setSession(null);
-    setBaseline(null);
-    setActiveCaptureItem(null);
-    setCurrentScreen('JOIN');
-  };
+  // Initialize profile & push notifications
+  useEffect(() => {
+    async function init() {
+      const savedProfile = await loadLocalProfile();
+      if (savedProfile) {
+        setProfile(savedProfile);
+        if (!savedProfile.onboardingCompleted) {
+          setCurrentView('ONBOARDING');
+        } else if (!savedProfile.activeProjectCode) {
+          setCurrentView('ENTER_CODE');
+        } else if (
+          savedProfile.activeIndependenceTier === 'CONTRACTOR_ENGINEER' &&
+          savedProfile.assuranceStatus === 'NOT_SUBMITTED'
+        ) {
+          setCurrentView('ASSURANCE_WIZARD');
+        } else {
+          setCurrentView('WBS_INBOX');
+        }
+      } else {
+        setCurrentView('ONBOARDING');
+      }
 
-  const pendingSync = getPendingSyncCount();
+      // Initialize push notifications
+      await registerForPushNotifications(savedProfile?.activeSessionToken || undefined);
+      setLoading(false);
+    }
+    init();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#00338D" />
+      </View>
+    );
+  }
+
+  const isVerified = profile?.assuranceStatus === 'APPROVED';
+  const projectCode = profile?.activeProjectCode || 'LKK-402-CON';
+  const userInitials = profile?.fullName
+    ? profile.fullName
+        .split(' ')
+        .map((p) => p[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+    : 'CO';
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor="#0C233C" />
 
-      {/* Top KPMG Navy App Bar */}
-      <View style={styles.appBar}>
-        <View style={styles.appBarBrand}>
-          <Text style={styles.appBarTitle}>InSite Assurance</Text>
-          <Text style={styles.appBarSubtitle}>
-            {session ? session.projectCodePrefix : 'Field Client'}
-          </Text>
-        </View>
+      {/* 1. Onboarding Screen */}
+      {currentView === 'ONBOARDING' && (
+        <OnboardingProfileScreen
+          onCompleted={async () => {
+            const updated = await loadLocalProfile();
+            setProfile(updated);
+            setCurrentView('ENTER_CODE');
+          }}
+        />
+      )}
 
-        <View style={styles.appBarActions}>
-          <View style={styles.statusPill}>
-            <View style={styles.statusDot} />
-            <Text style={styles.statusText}>SQLite Offline-Ready</Text>
-          </View>
+      {/* 2. Enter Project Code Screen */}
+      {currentView === 'ENTER_CODE' && (
+        <EnterProjectCodeScreen
+          userInitials={userInitials}
+          onOpenProfile={() => setShowProfileModal(true)}
+          onCodeSubmitted={(code, isContractor) => {
+            if (isContractor) {
+              setCurrentView('ASSURANCE_WIZARD');
+            } else {
+              setCurrentView('WBS_INBOX');
+            }
+          }}
+        />
+      )}
 
-          {session && (
-            <TouchableOpacity style={styles.exitButton} onPress={handleLogout}>
-              <Text style={styles.exitButtonText}>Exit</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
+      {/* 3. Assurance Verification Wizard (3 Steps) */}
+      {currentView === 'ASSURANCE_WIZARD' && (
+        <AssuranceVerificationWizard
+          onCancel={() => setCurrentView('ENTER_CODE')}
+          onVerificationSubmitted={async () => {
+            const updated = await updateLocalProfile({
+              assuranceStatus: 'PENDING_APPROVAL',
+            });
+            setProfile(updated);
+            setCurrentView('UNDER_REVIEW');
+          }}
+        />
+      )}
 
-      {/* Active Screen View */}
-      <View style={styles.screenContainer}>
-        {currentScreen === 'JOIN' && <JoinProjectScreen onJoined={handleJoined} />}
+      {/* 4. Verification Under Review (Non-blocking) */}
+      {currentView === 'UNDER_REVIEW' && (
+        <VerificationUnderReviewScreen
+          onDismiss={() => setCurrentView('WBS_INBOX')}
+        />
+      )}
 
-        {currentScreen === 'CAPTURE' && session && baseline && (
-          <FieldCaptureScreen
-            session={session}
-            baseline={baseline}
-            pendingSyncCount={pendingSync}
-            onOpenOutbox={() => setCurrentScreen('OUTBOX')}
-            onProceedToConfirmation={(item) => {
-              setActiveCaptureItem(item);
-              setCurrentScreen('CONFIRM');
+      {/* 5. Main WBS Chat Inbox */}
+      {currentView === 'WBS_INBOX' && (
+        <WbsInboxScreen
+          projectCode={projectCode}
+          userInitials={userInitials}
+          isVerified={isVerified}
+          onSelectWbsThread={(wbs) => {
+            setSelectedWbsItem(wbs);
+            setCurrentView('WBS_THREAD');
+          }}
+          onOpenProfile={() => setShowProfileModal(true)}
+          onOpenNotifications={() => setShowNotificationsModal(true)}
+          onOpenIncidentModal={() => setShowIncidentModal(true)}
+          onOpenBacklogModal={() => setShowBacklogModal(true)}
+        />
+      )}
+
+      {/* 6. Dedicated WBS Chat Thread */}
+      {currentView === 'WBS_THREAD' && selectedWbsItem && (
+        <WbsChatThreadScreen
+          wbsItem={selectedWbsItem}
+          userName={profile?.fullName || 'Engr. Chukwuma Okeke'}
+          onBack={() => setCurrentView('WBS_INBOX')}
+          onOpenEodConfirmation={() => setShowEodConfirmModal(true)}
+        />
+      )}
+
+      {/* MODAL: Profile, Active Projects & Demo Persona Switcher */}
+      <Modal visible={showProfileModal} animationType="slide">
+        <ProfileAndProjectsScreen
+          fullName={profile?.fullName || 'Engr. Chukwuma Okeke'}
+          roleTitle={profile?.roleTitle || 'Senior Site Civil Engineer'}
+          phoneNumber={profile?.phoneNumber || '+234 803 555 0192'}
+          hardwareDeviceId={profile?.hardwareDeviceId || 'DEV-HW-IN-SITU-001'}
+          activeProjectCode={projectCode}
+          assuranceStatus={profile?.assuranceStatus || 'PENDING_APPROVAL'}
+          onClose={() => setShowProfileModal(false)}
+          onSwitchProject={async (code) => {
+            const updated = await updateLocalProfile({ activeProjectCode: code });
+            setProfile(updated);
+            setShowProfileModal(false);
+          }}
+          onJoinNewProject={async () => {
+            await clearActiveProjectSession();
+            setShowProfileModal(false);
+            setCurrentView('ENTER_CODE');
+          }}
+          onApplyPersona={async (persona) => {
+            const updated = await updateLocalProfile({
+              roleTitle: persona.roleTitle,
+              activeIndependenceTier: persona.tier,
+              assuranceStatus: persona.assuranceStatus,
+            });
+            setProfile(updated);
+            setShowProfileModal(false);
+          }}
+        />
+      </Modal>
+
+      {/* MODAL: Special Incident & Emergency / Whistleblowing ("!" Button) */}
+      <Modal visible={showIncidentModal} animationType="slide">
+        <SpecialIncidentModal
+          projectId={profile?.activeProjectId || 'proj-lkk-402'}
+          sessionToken={profile?.activeSessionToken || 'mock-token'}
+          onClose={() => setShowIncidentModal(false)}
+          onSubmitted={() => setShowIncidentModal(false)}
+        />
+      </Modal>
+
+      {/* MODAL: Notification Center */}
+      <Modal visible={showNotificationsModal} animationType="slide">
+        <NotificationCenterModal
+          onClose={() => setShowNotificationsModal(false)}
+          onOpenBacklogModal={() => {
+            setShowNotificationsModal(false);
+            setShowBacklogModal(true);
+          }}
+          onSelectWbsItem={(id) => {
+            setShowNotificationsModal(false);
+            setCurrentView('WBS_THREAD');
+          }}
+        />
+      </Modal>
+
+      {/* MODAL: Backlog Review & Confirmation */}
+      <Modal visible={showBacklogModal} animationType="slide">
+        <BacklogReviewModal
+          onClose={() => setShowBacklogModal(false)}
+          onBatchConfirmed={() => setShowBacklogModal(false)}
+        />
+      </Modal>
+
+      {/* MODAL: End of Day AI Summary & Human Sign-off */}
+      {selectedWbsItem && (
+        <Modal visible={showEodConfirmModal} animationType="slide">
+          <ConfirmAiSummarySheet
+            wbsItem={selectedWbsItem}
+            onCancel={() => setShowEodConfirmModal(false)}
+            onConfirmed={async () => {
+              setShowEodConfirmModal(false);
             }}
           />
-        )}
-
-        {currentScreen === 'CONFIRM' && activeCaptureItem && (
-          <ConfirmExtractionScreen
-            captureItem={activeCaptureItem}
-            onConfirmed={() => setCurrentScreen('CAPTURE')}
-            onCancel={() => setCurrentScreen('CAPTURE')}
-          />
-        )}
-
-        {currentScreen === 'OUTBOX' && (
-          <OutboxQueueScreen onBackToCapture={() => setCurrentScreen('CAPTURE')} />
-        )}
-      </View>
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
@@ -111,68 +264,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0C233C',
   },
-  appBar: {
+  loadingContainer: {
+    flex: 1,
     backgroundColor: '#0C233C',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
-  },
-  appBarBrand: {
-    flex: 1,
-  },
-  appBarTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  appBarSubtitle: {
-    color: '#93C5FD',
-    fontSize: 11,
-    marginTop: 1,
-  },
-  appBarActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-    marginRight: 5,
-  },
-  statusText: {
-    color: '#A7F3D0',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  exitButton: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  exitButtonText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  screenContainer: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
   },
 });
-

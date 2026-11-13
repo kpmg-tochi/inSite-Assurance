@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InSite Assurance — Mobile UI Interactive Design Guide (Expo SDK 58)</title>
+  <!-- Allowlisted Antigravity Tailwind CSS dependency -->
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+
+  <style>
+    /* Standalone Core CSS Fallback (Guarantees perfect rendering even if scripts are blocked) */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --color-brand-primary: #00338D;
+      --color-brand-hover: #00266B;
+      --color-brand-medium: #005EB8;
+      --color-brand-pacific: #0091DA;
+      --color-brand-sky: #38BDF8;
+      --color-brand-navy: #0C233C;
+      --color-brand-dark: #071526;
+      --color-surface-canvas: #F8FAFC;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #F1F5F9;
+      color: #0F172A;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Phone Device Mockup Container */
+    .phone-frame {
+      width: 375px;
+      height: 780px;
+      border-radius: 44px;
+      border: 11px solid #0F172A;
+      background: #F8FAFC;
+      box-shadow: 0 25px 50px -12px rgba(12, 35, 60, 0.25), 0 0 0 1px rgba(15, 23, 42, 0.12);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      flex-shrink: 0;
+      margin: 0 auto;
+      color-scheme: light;
+      color: #0F172A;
+    }
+
+    input, textarea, select, button {
+      font-family: inherit;
+      color-scheme: light;
+    }
+
+    .phone-notch {
+      width: 120px;
+      height: 20px;
+      background: #0F172A;
+      border-bottom-left-radius: 14px;
+      border-bottom-right-radius: 14px;
+      margin: 0 auto 6px auto;
+      position: relative;
+      z-index: 40;
+    }
+
+    .screen-header-navy {
+      background-color: #0C233C;
+      color: #FFFFFF;
+      padding: 6px 16px 14px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      flex-shrink: 0;
+    }
+
+    .screen-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      background-color: #F8FAFC;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .screen-body::-webkit-scrollbar {
+      width: 4px;
+    }
+    .screen-body::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+
+    /* Standardized Badges */
+    .std-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 10px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 600;
+      border-width: 1px;
+      border-style: solid;
+      white-space: nowrap;
+      line-height: 1.25;
+      text-decoration: none;
+    }
+    .std-badge-success { background: #ECFDF5; color: #065F46; border-color: #A7F3D0; }
+    .std-badge-warning { background: #FFFBEB; color: #92400E; border-color: #FDE68A; }
+    .std-badge-danger  { background: #FFF1F2; color: #BE123C; border-color: #FECDD3; }
+    .std-badge-info    { background: #EFF6FF; color: #00338D; border-color: #BFDBFE; }
+    .std-badge-neutral { background: #F1F5F9; color: #334155; border-color: #E2E8F0; }
+
+    /* Cards & Components */
+    .ui-card {
+      background: #FFFFFF;
+      border-radius: 16px;
+      border: 1px solid #E2E8F0;
+      padding: 14px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+
+    .ui-btn-primary {
+      width: 100%;
+      background-color: #00338D;
+      color: #FFFFFF;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s ease;
+      box-shadow: 0 1px 2px rgba(0, 51, 141, 0.2);
+    }
+    .ui-btn-primary:hover {
+      background-color: #00266B;
+    }
+
+    .ui-btn-danger {
+      width: 100%;
+      background-color: #E11D48;
+      color: #FFFFFF;
+      border: none;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ui-input {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid #CBD5E1;
+      background-color: #FFFFFF !important;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #0F172A !important;
+      outline: none;
+      box-sizing: border-box;
+    }
+    .ui-input:focus {
+      border-color: #00338D;
+    }
+
+    .avatar-circle {
+      width: 32px;
+      height: 32px;
+      border-radius: 9999px;
+      background-color: #00338D;
+      border: 1.5px solid rgba(255, 255, 255, 0.4);
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .icon-btn-incident {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background-color: #E11D48;
+      color: #FFFFFF;
+      border: 1px solid #F43F5E;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .icon-btn-header {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      background-color: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      cursor: pointer;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    /* Viewfinder Overlays */
+    .id-frame-overlay {
+      width: 100%;
+      height: 195px;
+      border-radius: 16px;
+      border: 2px dashed #38BDF8;
+      background-color: rgba(15, 23, 42, 0.6);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px;
+    }
+
+    .corner-bracket-tl { position: absolute; top: -2px; left: -2px; width: 22px; height: 22px; border-top: 4px solid #10B981; border-left: 4px solid #10B981; border-top-left-radius: 8px; }
+    .corner-bracket-tr { position: absolute; top: -2px; right: -2px; width: 22px; height: 22px; border-top: 4px solid #10B981; border-right: 4px solid #10B981; border-top-right-radius: 8px; }
+    .corner-bracket-bl { position: absolute; bottom: -2px; left: -2px; width: 22px; height: 22px; border-bottom: 4px solid #10B981; border-left: 4px solid #10B981; border-bottom-left-radius: 8px; }
+    .corner-bracket-br { position: absolute; bottom: -2px; right: -2px; width: 22px; height: 22px; border-bottom: 4px solid #10B981; border-right: 4px solid #10B981; border-bottom-right-radius: 8px; }
+
+    .oval-selfie-mask {
+      width: 220px;
+      height: 290px;
+      border-radius: 9999px;
+      border: 4px solid #10B981;
+      background-color: #1E293B;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      box-shadow: 0 0 0 999px rgba(15, 23, 42, 0.75);
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-16">
+
+  <!-- Top Sticky Navigation & Control Bar -->
+  <header style="background-color: #0C233C; color: #FFFFFF; position: sticky; top: 0; z-index: 50; border-bottom: 1px solid rgba(255,255,255,0.15); box-shadow: 0 4px 12px rgba(0,0,0,0.15);">
+    <div style="max-width: 1600px; margin: 0 auto; padding: 14px 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 36px; height: 36px; border-radius: 10px; background-color: #00338D; border: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px;">
+          KPMG
+        </div>
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-weight: 800; font-size: 15px; letter-spacing: -0.3px;">InSite Assurance — Mobile UI Interactive Design Guide</span>
+            <span style="background-color: rgba(255,255,255,0.12); padding: 2px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; color: #93C5FD; border: 1px solid rgba(255,255,255,0.15);">
+              Expo SDK 58
+            </span>
+          </div>
+          <div style="font-size: 11px; color: #93C5FD; margin-top: 2px;">
+            Standalone CSS Fallback Active · Dark Navy (#0C233C), Primary (#00338D), WBS Chat Inbox &amp; Dedicated Threads
+          </div>
+        </div>
+      </div>
+
+      <!-- Category Filter Tabs -->
+      <div style="display: flex; align-items: center; gap: 6px; background-color: rgba(255,255,255,0.08); padding: 4px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); font-size: 11px; font-weight: 600;">
+        <button onclick="filterGroup('ALL')" id="btn-ALL" style="background-color: #00338D; color: #FFFFFF; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer;">
+          All 10 Screens
+        </button>
+        <button onclick="filterGroup('ONBOARDING')" id="btn-ONBOARDING" style="background: transparent; color: #BFDBFE; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer;">
+          1. Onboarding &amp; Code
+        </button>
+        <button onclick="filterGroup('ASSURANCE')" id="btn-ASSURANCE" style="background: transparent; color: #BFDBFE; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer;">
+          2. 3-Step Verification
+        </button>
+        <button onclick="filterGroup('WORKSPACE')" id="btn-WORKSPACE" style="background: transparent; color: #BFDBFE; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer;">
+          3. WBS Inbox &amp; Chat
+        </button>
+        <button onclick="filterGroup('MODALS')" id="btn-MODALS" style="background: transparent; color: #BFDBFE; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer;">
+          4. Avatar, Backlog &amp; Incident
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main style="max-width: 1600px; margin: 0 auto; padding: 24px;">
+
+    <!-- Summary Architecture Pill Bar -->
+    <section style="background-color: #FFFFFF; border-radius: 16px; border: 1px solid #E2E8F0; padding: 18px 24px; margin-bottom: 28px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; font-size: 12px;">
+      <div>
+        <strong style="color: #0C233C; display: block; margin-bottom: 4px;">1. Stored Profile &amp; Avatar Switcher</strong>
+        <p style="color: #64748B; line-height: 1.4;">Saved once in <code>expo-secure-store</code>. Tapping the user's Avatar opens active project and demo persona switching.</p>
+      </div>
+      <div>
+        <strong style="color: #0C233C; display: block; margin-bottom: 4px;">2. Frictionless 3-Step Verification</strong>
+        <p style="color: #64748B; line-height: 1.4;">Offline-first. ID card overlay &rarr; Oval selfie liveness &rarr; License number text only (no certificate photo required).</p>
+      </div>
+      <div>
+        <strong style="color: #0C233C; display: block; margin-bottom: 4px;">3. WBS-Dedicated Chat Inbox</strong>
+        <p style="color: #64748B; line-height: 1.4;">Each WBS item has its own chat thread. Eliminates tagging confusion and groups daily photos, notes, and EOD updates.</p>
+      </div>
+      <div>
+        <strong style="color: #0C233C; display: block; margin-bottom: 4px;">4. Cost-Saving Backlog &amp; Push Alerts</strong>
+        <p style="color: #64748B; line-height: 1.4;">Unverified reports queue locally without AI spend. Push notifications trigger when approved to review and confirm backlog.</p>
+      </div>
+    </section>
+
+    <!-- SCREENS GRID -->
+    <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 36px;" id="screens-grid">
+
+      <!-- ================================================================== -->
+      <!-- SCREEN 1: FIRST-TIME GENERAL ONBOARDING                            -->
+      <!-- ================================================================== -->
+      <div class="screen-card" data-group="ONBOARDING" style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <div style="text-align: center;">
+          <span class="std-badge std-badge-info">Screen 1 · First Launch</span>
+          <div style="font-weight: 800; font-size: 13px; color: #0F172A; margin-top: 4px;">General Onboarding (SecureStore)</div>
+          <div style="font-size: 11px; color: #64748B;">Optional Avatar + Name + Phone</div>
+        </div>
+
+        <div class="phone-frame">
+          <div class="screen-header-navy">
+            <div class="phone-notch"></div>
+            <div style="display: flex; justify-content: space-between; font-size: 10px; color: #93C5FD; margin-bottom: 8px;">
+              <span>08:00 WAT</span>
+              <span>Offline-First · SecureStore</span>
+            </div>
+            <div style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 10px; font-weight: 600; background: rgba(255,255,255,0.12); color: #93C5FD; margin-bottom: 6px;">
+              KPMG Capital Advisory
+            </div>
+            <div style="font-size: 16px; font-weight: 800; letter-spacing: -0.3px;">Welcome to InSite Assurance</div>
+            <div style="font-size: 11px; color: #BFDBFE; margin-top: 2px;">
+              Set up your field profile once. Saved securely on this device.
+            </div>
+          </div>
+
+          <div class="screen-body" style="justify-content: space-between;">
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <!-- Avatar Picker Card -->
+              <div class="ui-card" style="display: flex; align-items: center; gap: 14px;">
+                <div style="width: 58px; height: 58px; border-radius: 9999px; background-color: #0C233C; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; border: 2px solid #00338D; position: relative; flex-shrink: 0;">
+                  CO
+                  <div style="position: absolute; bottom: -2px; right: -2px; width: 20px; height: 20px; border-radius: 9999px; background-color: #00338D; color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 12px; border: 2px solid #FFF;">+</div>
+                </div>
+                <div>
+                  <strong style="font-size: 12px; color: #0F172A; display: block;">Profile Avatar (Optional)</strong>
+                  <p style="font-size: 11px; color: #64748B; margin-top: 2px;">Snap a photo or keep your initials badge.</p>
+                  <button style="background: none; border: none; color: #00338D; font-size: 11px; font-weight: 700; cursor: pointer; padding: 0; margin-top: 4px;">Upload / Snap Avatar</button>
+                </div>
+              </div>
+
+              <!-- Form Inputs -->
+              <div class="ui-card" style="display: flex; flex-direction: column; gap: 12px;">
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">Full Name *</label>
+                  <input class="ui-input" value="Engr. Chukwuma Okeke" readonly style="font-weight: 700;" />
+                </div>
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">Mobile Phone Number *</label>
+                  <input class="ui-input" value="+234 803 555 0192" readonly style="font-weight: 700;" />
+                </div>
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">Role / Site Title (Optional)</label>
+                  <input class="ui-input" value="Senior Site Civil Engineer" readonly />
+                </div>
+              </div>
+
+              <div style="background-color: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 12px; padding: 10px 12px; font-size: 11px; color: #1E3A8A;">
+                <strong style="display: block; color: #0C233C; margin-bottom: 2px;">Hardware Identity Binding</strong>
+                Stored locally in <code>expo-secure-store</code> and cryptographically bound to all project join codes.
+              </div>
+            </div>
+
+            <button class="ui-btn-primary">Save Profile &amp; Continue</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SCREEN 2: CLEAN ENTER PROJECT CODE SCREEN                          -->
+      <!-- ================================================================== -->
+      <div class="screen-card" data-group="ONBOARDING" style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <div style="text-align: center;">
+          <span class="std-badge std-badge-info">Screen 2 · Project Entry</span>
+          <div style="font-weight: 800; font-size: 13px; color: #0F172A; margin-top: 4px;">Enter Project Join Code</div>
+          <div style="font-size: 11px; color: #64748B;">Clean input; Avatar opens Project &amp; Demo Switcher</div>
+        </div>
+
+        <div class="phone-frame">
+          <div class="screen-header-navy">
+            <div class="phone-notch"></div>
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="avatar-circle" title="Tap to open Profile, Projects & Demos">CO</div>
+                <div>
+                  <div style="font-size: 12px; font-weight: 800;">InSite Assurance</div>
+                  <div style="font-size: 10px; color: #93C5FD;">Engr. Chukwuma Okeke</div>
+                </div>
+              </div>
+              <span class="std-badge std-badge-success">Offline Ready</span>
+            </div>
+          </div>
+
+          <div class="screen-body" style="justify-content: center;">
+            <div class="ui-card" style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+              <div>
+                <span class="std-badge std-badge-info">Project Onboarding</span>
+                <h3 style="font-size: 15px; font-weight: 800; color: #0F172A; margin-top: 8px;">Enter Project Join Code</h3>
+                <p style="font-size: 11px; color: #64748B; margin-top: 4px;">
+                  Enter the project code provided by the Independent Monitor or Bank Monitoring Desk.
+                </p>
+              </div>
+
+              <div>
+                <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 6px;">Project Join Code</label>
+                <input class="ui-input" value="LKK-402-CON" readonly style="font-size: 18px; font-weight: 900; letter-spacing: 2px; text-align: center; color: #0C233C; border: 2px solid #00338D; background-color: #EFF6FF; padding: 12px;" />
+                <span style="display: block; text-align: center; font-size: 11px; color: #64748B; margin-top: 6px;">
+                  Detected: <strong style="color: #0F172A;">Tier 3 Contractor Site Engineer</strong>
+                </span>
+              </div>
+
+              <button class="ui-btn-primary">Submit Project Code</button>
+            </div>
+
+            <div style="text-align: center; margin-top: 20px; font-size: 11px; color: #94A3B8;">
+              Tap your <strong style="color: #475569;">CO</strong> avatar in the top-left bar at any time to switch active projects or demo personas.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SCREEN 3A: ASSURANCE STEP 1 (ID TEMPLATE OVERLAY)                  -->
+      <!-- ================================================================== -->
+      <div class="screen-card" data-group="ASSURANCE" style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <div style="text-align: center;">
+          <span class="std-badge std-badge-warning">Screen 3A · Step 1 of 3</span>
+          <div style="font-weight: 800; font-size: 13px; color: #0F172A; margin-top: 4px;">ID Photo with Template Overlay</div>
+          <div style="font-size: 11px; color: #64748B;">Offline-first · Glare check · No GPS required</div>
+        </div>
+
+        <div class="phone-frame" style="background-color: #0F172A;">
+          <div class="screen-header-navy">
+            <div class="phone-notch"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 10px; color: #93C5FD; font-weight: 700; text-transform: uppercase;">Contractor Assurance · Step 1 of 3</div>
+                <div style="font-size: 12px; font-weight: 800;">Valid Government ID</div>
+              </div>
+              <button style="background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); color: #FFF; font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 6px;">Torch: OFF</button>
+            </div>
+            <!-- Progress Bar -->
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px;">
+              <div style="height: 5px; border-radius: 9999px; background-color: #38BDF8;"></div>
+              <div style="height: 5px; border-radius: 9999px; background-color: rgba(255,255,255,0.2);"></div>
+              <div style="height: 5px; border-radius: 9999px; background-color: rgba(255,255,255,0.2);"></div>
+            </div>
+          </div>
+
+          <!-- ID Selection Strip -->
+          <div style="background-color: #1E293B; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; gap: 6px; overflow-x: auto;">
+            <span style="background: #00338D; color: #FFF; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 8px; white-space: nowrap;">NIN Slip / Card</span>
+            <span style="background: rgba(255,255,255,0.1); color: #CBD5E1; font-size: 11px; padding: 4px 10px; border-radius: 8px; white-space: nowrap;">Driver's License</span>
+            <span style="background: rgba(255,255,255,0.1); color: #CBD5E1; font-size: 11px; padding: 4px 10px; border-radius: 8px; white-space: nowrap;">Voter's Card</span>
+          </div>
+
+          <!-- Live Camera Viewfinder -->
+          <div style="flex: 1; padding: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
+            <div style="background-color: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.2); color: #FFFFFF; font-size: 11px; font-weight: 600; padding: 6px 14px; border-radius: 9999px; text-align: center; margin-bottom: 16px;">
+              Fit all 4 corners of your NIN inside the frame
+            </div>
+
+            <!-- Rectangular ID Card Viewfinder with corner brackets -->
+            <div class="id-frame-overlay">
+              <div class="corner-bracket-tl"></div>
+              <div class="corner-bracket-tr"></div>
+              <div class="corner-bracket-bl"></div>
+              <div class="corner-bracket-br"></div>
+
+              <div style="width: 76px; height: 100px; border: 1px dashed rgba(255,255,255,0.4); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: rgba(255,255,255,0.7); text-align: center; padding: 4px;">
+                Photo Zone
+              </div>
+              <div style="flex: 1; padding-left: 14px; display: flex; flex-direction: column; gap: 6px;">
+                <span style="font-size: 10px; font-weight: 800; color: #6EE7B7; text-transform: uppercase;">Federal Republic of Nigeria</span>
+                <div style="height: 10px; width: 80%; background: rgba(255,255,255,0.25); border-radius: 4px;"></div>
+                <div style="height: 10px; width: 60%; background: rgba(255,255,255,0.25); border-radius: 4px;"></div>
+                <span style="font-size: 9px; color: #7DD3FC; margin-top: 4px;">Auto-Focus Locked · Glare Check OK</span>
+              </div>
+            </div>
+
+            <div style="margin-top: 18px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 10px 14px; font-size: 11px; color: #E2E8F0;">
+              <strong style="color: #FFF; display: block;">Clarity Assist Active</strong>
+              Flat surface recommended. Text sharpness is checked at shutter press to avoid retakes.
+            </div>
+          </div>
+
+          <!-- Shutter Bar -->
+          <div style="background-color: #0F172A; padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 11px; color: #94A3B8;">Step 1 of 3</span>
+            <div style="width: 60px; height: 60px; border-radius: 9999px; border: 4px solid #FFF; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+              <div style="width: 46px; height: 46px; border-radius: 9999px; background-color: #FFF;"></div>
+            </div>
+            <span style="font-size: 11px; font-weight: 700; color: #38BDF8;">Next &rarr;</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SCREEN 3B: ASSURANCE STEP 2 (OVAL LIVE SELFIE)                     -->
+      <!-- ================================================================== -->
+      <div class="screen-card" data-group="ASSURANCE" style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <div style="text-align: center;">
+          <span class="std-badge std-badge-warning">Screen 3B · Step 2 of 3</span>
+          <div style="font-weight: 800; font-size: 13px; color: #0F172A; margin-top: 4px;">Live Selfie with Oval Viewfinder</div>
+          <div style="font-size: 11px; color: #64748B;">Head-turn liveness · Face centering guidance</div>
+        </div>
+
+        <div class="phone-frame" style="background-color: #0F172A;">
+          <div class="screen-header-navy">
+            <div class="phone-notch"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 10px; color: #93C5FD; font-weight: 700; text-transform: uppercase;">Contractor Assurance · Step 2 of 3</div>
+                <div style="font-size: 12px; font-weight: 800;">Facial Liveness Check</div>
+              </div>
+              <span class="std-badge std-badge-info">Front Camera</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px;">
+              <div style="height: 5px; border-radius: 9999px; background-color: #10B981;"></div>
+              <div style="height: 5px; border-radius: 9999px; background-color: #38BDF8;"></div>
+              <div style="height: 5px; border-radius: 9999px; background-color: rgba(255,255,255,0.2);"></div>
+            </div>
+          </div>
+
+          <div style="flex: 1; padding: 18px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; position: relative;">
+            <div style="width: 100%; background: #00338D; border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 14px; padding: 10px 14px; text-align: center;">
+              <div style="font-size: 10px; color: #BAE6FD; font-weight: 800; text-transform: uppercase;">Liveness Challenge</div>
+              <div style="font-size: 13px; font-weight: 800; color: #FFF; margin-top: 2px;">
+                &larr; Slowly turn head LEFT, then RIGHT &rarr;
+              </div>
+            </div>
+
+            <!-- Oval Face Frame -->
+            <div class="oval-selfie-mask">
+              <div style="width: 90px; height: 110px; border: 2px dashed rgba(255,255,255,0.4); border-radius: 9999px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: rgba(255,255,255,0.7); margin-bottom: 6px;">
+                Face Centered
+              </div>
+              <div style="background-color: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.5); padding: 2px 10px; border-radius: 9999px; font-size: 10px; font-weight: 700; color: #6EE7B7;">
+                Lighting &amp; Distance OK
+              </div>
+            </div>
+
+            <div style="width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: center; font-size: 10px; font-weight: 700; z-index: 10;">
+              <div style="background: rgba(6, 95, 70, 0.9); border: 1px solid #10B981; color: #6EE7B7; padding: 6px; border-radius: 8px;">1. Centered &#10003;</div>
+              <div style="background: rgba(6, 95, 70, 0.9); border: 1px solid #10B981; color: #6EE7B7; padding: 6px; border-radius: 8px;">2. Left Turn &#10003;</div>
+              <div style="background: rgba(0, 51, 141, 0.9); border: 1px solid #38BDF8; color: #BAE6FD; padding: 6px; border-radius: 8px;">3. Right Turn...</div>
+            </div>
+          </div>
+
+          <div style="background-color: #0F172A; padding: 14px 20px; border-top: 1px solid rgba(255,255,255,0.12); z-index: 10;">
+            <button style="width: 100%; background: #059669; color: #FFF; border: none; border-radius: 12px; padding: 12px; font-size: 12px; font-weight: 800; cursor: pointer;">
+              Liveness Confirmed · Continue to Step 3
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SCREEN 3C: ASSURANCE STEP 3 (CREDENTIALS — NUMBER ONLY)            -->
+      <!-- ================================================================== -->
+      <div class="screen-card" data-group="ASSURANCE" style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <div style="text-align: center;">
+          <span class="std-badge std-badge-warning">Screen 3C · Step 3 of 3</span>
+          <div style="font-weight: 800; font-size: 13px; color: #0F172A; margin-top: 4px;">Credentials (License Number Only)</div>
+          <div style="font-size: 11px; color: #64748B;">No certificate photo upload required</div>
+        </div>
+
+        <div class="phone-frame">
+          <div class="screen-header-navy">
+            <div class="phone-notch"></div>
+            <div>
+              <div style="font-size: 10px; color: #93C5FD; font-weight: 700; text-transform: uppercase;">Contractor Assurance · Step 3 of 3</div>
+              <div style="font-size: 12px; font-weight: 800;">Competence &amp; Credentials</div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px;">
+              <div style="height: 5px; border-radius: 9999px; background-color: #10B981;"></div>
+              <div style="height: 5px; border-radius: 9999px; background-color: #10B981;"></div>
+              <div style="height: 5px; border-radius: 9999px; background-color: #38BDF8;"></div>
+            </div>
+          </div>
+
+          <div class="screen-body" style="justify-content: space-between;">
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <div style="background-color: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 12px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+                <span style="font-weight: 700; color: #065F46;">NIN ID &amp; Live Selfie Sealed</span>
+                <span class="std-badge std-badge-success">Step 1 &amp; 2 Done</span>
+              </div>
+
+              <div class="ui-card" style="display: flex; flex-direction: column; gap: 14px;">
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 6px;">Professional Body</label>
+                  <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+                    <button style="background: #00338D; color: #FFF; border: none; padding: 8px; border-radius: 10px; font-size: 11px; font-weight: 700;">COREN</button>
+                    <button style="background: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; padding: 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">QSRBN</button>
+                    <button style="background: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; padding: 8px; border-radius: 10px; font-size: 11px; font-weight: 600;">CORBON</button>
+                  </div>
+                </div>
+
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">License / Registration Number *</label>
+                  <input class="ui-input" value="COREN R.49201" readonly style="font-weight: 800; color: #0C233C;" />
+                  <span style="display: block; font-size: 10.5px; color: #64748B; margin-top: 4px;">
+                    Enter your license number only. No physical certificate photo needed.
+                  </span>
+                </div>
+
+                <div>
+                  <label style="display: block; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 4px;">Years Experience &amp; Scope Summary *</label>
+                  <textarea class="ui-input" rows="3" readonly style="line-height: 1.4;">8 years supervising reinforced concrete box culverts, highway drainage, and laterite earthworks compaction.</textarea>
+                </div>
+              </div>
+            </div>
+
+            <button class="ui-btn-primary">Submit Verification Package</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SCREEN 4: SUBMISSION UNDER REVIEW                                  -->
+      <!-- ================================================================== -->
+      <div class="screen-card" data-group="ASSURANCE" style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <div style="text-align: center;">
+          <span class="std-badge std-badge-info">Screen 4 · Non-Blocking</span>
+          <div style="font-weight: 800; font-size: 13px; color: #0F172A; margin-top: 4px;">Submission Under Review</div>
+          <div style="font-size: 11px; color: #64748B;">Dismissible to proceed immediately to workspace</div>
+        </div>
+
+        <div class="phone-frame">
+          <div class="screen-header-navy">
+            <div class="phone-notch"></div>
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="avatar-circle">CO</div>
+                <span style="font-size: 12px; font-weight: 800;">LKK-402 · Lekki-Epe</span>
+              </div>
+              <span class="std-badge std-badge-warning">Pending Review</span>
+            </div>
+          </div>
+
+          <div class="screen-body" style="justify-content: space-between;">
+            <div class="ui-card" style="padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+              <div style="width: 44px; height: 44px; border-radius: 12px; background: #FFFBEB; border: 1px solid #FDE68A; color: #B45309; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800;">
+                &#8987;
+              </div>
+
+              <div>
+                <span class="std-badge std-badge-warning">Under Review</span>
+                <h3 style="font-size: 15px; font-weight: 800; color: #0F172A; margin-top: 8px;">Sent to Independent Monitor</h3>
+                <p style="font-size: 11px; color: #475569; margin-top: 4px; line-height: 1.4;">
+                  Your NIN ID, live selfie liveness check, and COREN credentials (<strong style="color: #0F172A;">R.49201</strong>) are awaiting approval.
+                </p>
+              </div>
+
+              <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 12px; font-size: 11px; color: #475569; display: flex; flex-direction: column; gap: 6px;">
+                <strong style="color: #0F172A;">Unverified Queue Mode Active:</strong>
+                <div>&bull; You can enter the WBS Chat Inbox right now and start snapping photos and adding notes.</div>
+                <div>&bull; Daily reports are queued safely on device without AI charges.</div>
+                <div>&bull; When approved, a <strong style="color: #0F172A;">Push Notification</strong> alerts you to confirm and submit your backlog.</div>
+              </div>
+            </div>
+
+            <button class="ui-btn-primary">Dismiss &amp; Proceed to WBS Inbox</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SCREEN 5: WBS CHAT INBOX                                           -->
+      <!-- ================================================================== -->
+      <div class="screen-card" data-group="WORKSPACE" style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <div style="text-align: center;">
+          <span class="std-badge std-badge-success">Screen 5 · Main Inbox</span>
+          <div style="font-weight: 800; font-size: 13px; color: #0F172A; margin-top: 4px;">WBS Chat Inbox</div>
+          <div style="font-size: 11px; color: #64748B;">Dedicated thread per WBS + Unverified banner + "!" button</div>
+        </div>
+
+        <div class="phone-frame">
+          <div class="screen-header-navy">
+            <div class="phone-notch"></div>
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="avatar-circle" title="Tap to open Profile & Projects">CO</div>
+                <div>
+                  <div style="font-size: 12px; font-weight: 800;">LKK-402 · WBS Inbox</div>
+                  <div style="font-size: 10px; color: #93C5FD;">Workday: 08:00 - 17:00 WAT</div>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="icon-btn-header" title="Notifications">
+                  &#128276;
+                  <span style="position: absolute; top: -3px; right: -3px; width: 14px; height: 14px; border-radius: 9999px; background: #38BDF8; color: #0C233C; font-size: 9px; font-weight: 900; display: flex; align-items: center; justify-content: center;">2</span>
+                </div>
+                <div class="icon-btn-incident" title="Report Emergency, Delay or Whistleblowing">!</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="background-color: #FFFBEB; border-bottom: 1px solid #FDE68A; padding: 8px 14px; display: flex; align-items: center; justify-content: space-between; font-size: 11px;">
+            <div style="color: #92400E; line-height: 1.3;">
+              <strong>Unverified Mode:</strong> Reports queue locally (<span style="font-weight: 800;">1 queued</span>) until approved.
+            </div>
+            <span class="std-badge std-badge-warning">Pending</span>
+          </div>
+
+          <div style="padding: 10px 14px 4px 14px; display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #64748B;">
+            <span>ACTIONABLE WBS CHANNELS (3)</span>
+            <span style="color: #00338D;">Tranche #2</span>
+          </div>
+
+          <div class="screen-body" style="padding: 10px 12px; gap: 10px;">
+            <div class="ui-card" style="border: 2px solid #00338D; cursor: pointer;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <strong style="color: #00338D; font-size: 12px;">WBS 02.03.1</strong>
+                  <span class="std-badge std-badge-warning">Mandatory Hold-Point</span>
+                </div>
+                <span style="font-size: 10px; color: #00338D; font-weight: 700;">14:20 WAT</span>
+              </div>
+              <div style="font-size: 12px; font-weight: 800; color: #0F172A;">Reinforced Box Culvert (2.5m x 2.0m)</div>
+              <p style="font-size: 11px; color: #475569; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <strong style="color: #0F172A;">You:</strong> [Photo] Rebar &amp; earthing grid tied prior to pour...
+              </p>
+              <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #F1F5F9; display: flex; justify-content: space-between; font-size: 10px;">
+                <span style="color: #64748B;">Target Today: 15 m3 · KM 14+200</span>
+                <span style="background: #00338D; color: #FFF; padding: 2px 6px; border-radius: 9999px; font-weight: 700;">Active Today</span>
+              </div>
+            </div>
+
+            <div class="ui-card" style="cursor: pointer;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <strong style="color: #1E293B; font-size: 12px;">WBS 01.02.4</strong>
+                  <span class="std-badge std-badge-info">Scheduled Today</span>
+                </div>
+                <span style="font-size: 10px; color: #94A3B8;">08:00 WAT</span>
+              </div>
+              <div style="font-size: 12px; font-weight: 800; color: #0F172A;">Lateritic Sub-base Compaction</div>
+              <p style="font-size: 11px; color: #64748B; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                <strong style="color: #00338D;">Brief:</strong> Expected deliverable 250 m3 compaction...
+              </p>
+              <div style="margin-top: 8px; padding-top: 6px; border-top: 1px solid #F1F5F9; display: flex; justify-content: space-between; font-size: 10px;">
+                <span style="color: #94A3B8;">1 Unread Brief</span>
+                <span style="width: 18px; height: 18px; border-radius: 9999px; background: #00338D; color: #FFF; font-weight: 700; display: flex; align-items: center; justify-content: center;">1</span>
+              </div>
+            </div>
+
+            <div class="ui-card" style="cursor: pointer;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <strong style="color: #1E293B; font-size: 12px;">WBS 03.01.2</strong>
+                  <span class="std-badge std-badge-danger">Open Query</span>
+                </div>
+                <span style="font-size: 10px; color: #94A3B8;">Yesterday</span>
+              </div>
+              <div style="font-size: 12px; font-weight: 800; color: #0F172A;">Precast Kerbs &amp; Lined Chutes</div>
+              <p style="font-size: 11px; color: #BE123C; margin-top: 4px; font-weight: 600;">
+                Monitor Query: Provide chainage KM 12+800 photo
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SCREEN 6: DEDICATED WBS CHAT THREAD                                -->
+      <!-- ================================================================== -->
+      <div class="screen-card" data-group="WORKSPACE" style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <div style="text-align: center;">
+          <span class="std-badge std-badge-success">Screen 6 · WBS Thread</span>
+          <div style="font-weight: 800; font-size: 13px; color: #0F172A; margin-top: 4px;">WBS 02.03.1 Chat Stream</div>
+          <div style="font-size: 11px; color: #64748B;">Morning brief + live camera photo + EOD wrap-up</div>
+        </div>
+
+        <div class="phone-frame">
+          <div class="screen-header-navy">
+            <div class="phone-notch"></div>
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 16px; font-weight: 800; color: #93C5FD; cursor: pointer;">&larr;</span>
+                <div>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 12px; font-weight: 800;">WBS 02.03.1</span>
+                    <span class="std-badge std-badge-warning">Hold-Point</span>
+                  </div>
+                  <div style="font-size: 10px; color: #93C5FD; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    Reinforced Box Culvert (2.5m x 2.0m)
+                  </div>
+                </div>
+              </div>
+              <div class="icon-btn-incident" title="Report Incident">!</div>
+            </div>
+          </div>
+
+          <div class="screen-body" style="background-color: #F1F5F9; gap: 12px;">
+            <div class="ui-card" style="border: 1px solid #BFDBFE; display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="std-badge std-badge-info">Workday Start · 08:00 WAT</span>
+                <span style="font-size: 10px; color: #64748B;">System Brief</span>
+              </div>
+              <strong style="font-size: 12px; color: #0C233C;">Today's Deliverable: WBS 02.03.1</strong>
+              <p style="font-size: 11px; color: #475569; line-height: 1.4;">
+                Cast in-situ reinforced box culvert wingwalls. Expected target: <strong>15 m3</strong>.
+              </p>
+              <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 6px 8px; font-size: 10.5px; color: #92400E; line-height: 1.3;">
+                <strong>Hold-Point Rule:</strong> Capture clear photo of Y16 rebar spacing before pouring concrete.
+              </div>
+            </div>
+
+            <div style="margin-left: 24px; background: #0C233C; color: #FFF; border-radius: 16px 16px 4px 16px; padding: 10px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="height: 100px; background: #1E293B; border-radius: 10px; border: 1px solid rgba(255,255,255,0.15); display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
+                <span style="font-size: 11px; font-weight: 700; color: #38BDF8;">[In-App Camera Photo]</span>
+                <span style="font-size: 9px; color: #94A3B8;">IMG_20261112_1124.jpg</span>
+                <span style="position: absolute; bottom: 6px; left: 6px; background: rgba(0,0,0,0.7); padding: 2px 6px; border-radius: 4px; font-size: 9px; color: #6EE7B7; font-weight: 700;">
+                  KM 14+200 · In Corridor
+                </span>
+              </div>
+              <p style="font-size: 11px; color: #F8FAFC;">
+                Y16 reinforcement cage tied and inspected at Cell 2 prior to concrete pour.
+              </p>
+              <div style="display: flex; justify-content: space-between; font-size: 9px; color: #93C5FD;">
+                <span>Live Shutter</span>
+                <span>11:24 WAT</span>
+              </div>
+            </div>
+
+            <div style="margin-left: 36px; background: #00338D; color: #FFF; border-radius: 16px 16px 4px 16px; padding: 8px 12px; font-size: 11px;">
+              <div>Ready-mix delivery truck delayed 45 mins at Eleko junction. Pour started at 12:10.</div>
+              <div style="text-align: right; font-size: 9px; color: #93C5FD; margin-top: 4px;">12:15 WAT</div>
+            </div>
+
+            <div class="ui-card" style="border: 2px solid #00338D; display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="std-badge std-badge-info">Workday End · 17:00 WAT</span>
+                <span style="font-size: 10px; color: #00338D; font-weight: 700;">Wrap-Up</span>
+              </div>
+              <strong style="font-size: 12px; color: #0C233C;">Complete Daily Update for WBS 02.03.1</strong>
+              <p style="font-size: 11px; color: #475569; line-height: 1.3;">
+                Record final voice/text summary of completed volume to bundle with today's photos.
+              </p>
+              <button class="ui-btn-primary" style="padding: 8px 12px;">Record EOD Summary &amp; Submit</button>
+            </div>
+          </div>
+
+          <div style="background-color: #FFFFFF; padding: 8px 12px; border-top: 1px solid #E2E8F0; display: flex; align-items: center; gap: 8px;">
+            <div style="width: 34px; height: 34px; border-radius: 10px; background-color: #0C233C; color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer;">
+              &#128247;
+            </div>
+            <input class="ui-input" placeholder="Message or delay note for WBS 02.03.1..." readonly style="background-color: #F1F5F9; border-color: #E2E8F0;" />
+            <div style="width: 34px; height: 34px; border-radius: 10px; background-color: #EFF6FF; border: 1px solid #BFDBFE; color: #00338D; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer;">
+              &#127908;
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SCREEN 7: AI SUMMARY CONFIRMATION                                  -->
+      <!-- ================================================================== -->
+      <div class="screen-card" data-group="WORKSPACE" style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <div style="text-align: center;">
+          <span class="std-badge std-badge-success">Screen 7 · AI Confirmation</span>
+          <div style="font-weight: 800; font-size: 13px; color: #0F172A; margin-top: 4px;">Confirm AI Workday Report</div>
+          <div style="font-size: 11px; color: #64748B;">Mandatory human sign-off on extracted quantities</div>
+        </div>
+
+        <div class="phone-frame">
+          <div class="screen-header-navy">
+            <div class="phone-notch"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 10px; color: #93C5FD; font-weight: 700; text-transform: uppercase;">WBS 02.03.1 · End-of-Day Review</div>
+                <div style="font-size: 12px; font-weight: 800;">Confirm AI-Parsed Report</div>
+              </div>
+              <span class="std-badge std-badge-success">Verified</span>
+            </div>
+          </div>
+
+          <div class="screen-body" style="justify-content: space-between;">
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div style="background-color: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 12px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+                <div>
+                  <strong style="color: #065F46; display: block;">Corridor Verified · KM 14+200</strong>
+                  <span style="color: #047857; font-size: 10.5px;">2 Photos · 1 Delay Note · 1 Voice Log</span>
+                </div>
+                <span class="std-badge std-badge-success">In-Zone</span>
+              </div>
+
+              <div class="ui-card" style="display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; justify-content: space-between;">
+                  <span style="font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase;">AI Workday Summary</span>
+                  <span class="std-badge std-badge-info">Editable</span>
+                </div>
+                <textarea class="ui-input" rows="3" readonly style="line-height: 1.4; background-color: #F8FAFC;">Completed Y16 rebar inspection and cast 12 m3 of box culvert wingwall at KM 14+200. Used 42 bags of cement.</textarea>
+              </div>
+
+              <div class="ui-card" style="display: flex; flex-direction: column; gap: 8px;">
+                <span style="font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase;">Extracted Quantities (WBS 02.03.1)</span>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                  <div>
+                    <label style="display: block; font-size: 10px; font-weight: 700; color: #64748B; margin-bottom: 2px;">Completed Today</label>
+                    <input class="ui-input" value="12.0" readonly style="font-size: 14px; font-weight: 800; color: #0C233C; border-color: #00338D;" />
+                  </div>
+                  <div>
+                    <label style="display: block; font-size: 10px; font-weight: 700; color: #64748B; margin-bottom: 2px;">Unit</label>
+                    <input class="ui-input" value="m3 (Cubic Meters)" readonly style="font-weight: 600;" />
+                  </div>
+                </div>
+              </div>
+
+              <div class="ui-card" style="display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-size: 10px; font-weight: 700; color: #64748B; text-transform: uppercase;">Logged Site Blockers</span>
+                <div style="background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 8px; padding: 8px; font-size: 11px; color: #92400E;">
+                  Delivery truck delayed 45 mins in traffic at Eleko junction.
+                </div>
+              </div>
+            </div>
+
+            <button class="ui-btn-primary">Confirm &amp; Send to Web Portal</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SCREEN 8: AVATAR TAP PAGE (PROFILE, PROJECTS & DEMOS)              -->
+      <!-- ================================================================== -->
+      <div class="screen-card" data-group="MODALS" style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <div style="text-align: center;">
+          <span class="std-badge std-badge-info">Screen 8 · Avatar Tap Page</span>
+          <div style="font-weight: 800; font-size: 13px; color: #0F172A; margin-top: 4px;">Profile &amp; Project Switcher</div>
+          <div style="font-size: 11px; color: #64748B;">Opened by tapping the Avatar in the header</div>
+        </div>
+
+        <div class="phone-frame">
+          <div class="screen-header-navy">
+            <div class="phone-notch"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 13px; font-weight: 800;">Account &amp; Project Switcher</span>
+              <span style="font-size: 12px; color: #93C5FD; cursor: pointer;">Done</span>
+            </div>
+          </div>
+
+          <div class="screen-body">
+            <div class="ui-card" style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="avatar-circle" style="width: 44px; height: 44px; font-size: 15px;">CO</div>
+                <div>
+                  <strong style="font-size: 12px; color: #0F172A; display: block;">Engr. Chukwuma Okeke</strong>
+                  <span style="font-size: 11px; color: #64748B;">+234 803 555 0192 · COREN R.49201</span>
+                </div>
+              </div>
+              <button style="border: 1px solid #CBD5E1; background: #FFF; padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer;">Edit</button>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; color: #64748B;">
+                <span>YOUR JOINED PROJECTS (2)</span>
+                <span style="color: #00338D; cursor: pointer;">+ Join New Code</span>
+              </div>
+
+              <div class="ui-card" style="border: 2px solid #00338D;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <strong style="color: #00338D; font-size: 12px;">LKK-402 · Active</strong>
+                  <span class="std-badge std-badge-success">Verified</span>
+                </div>
+                <div style="font-size: 12px; font-weight: 700; color: #0F172A; margin-top: 2px;">Lekki-Epe Expressway Dualization</div>
+                <div style="font-size: 10.5px; color: #64748B; margin-top: 2px;">Code: LKK-402-CON · 3 Actionable WBS Threads</div>
+              </div>
+
+              <div class="ui-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <strong style="color: #1E293B; font-size: 12px;">ABJ-108</strong>
+                  <span class="std-badge std-badge-warning">Pending Approval</span>
+                </div>
+                <div style="font-size: 12px; font-weight: 700; color: #0F172A; margin-top: 2px;">Idu 15MW Captive Solar &amp; 33kV Substation</div>
+                <div style="font-size: 10.5px; color: #64748B; margin-top: 2px;">Code: ABJ-108-CON · 1 Queued Backlog Report</div>
+              </div>
+            </div>
+
+            <div class="ui-card" style="display: flex; flex-direction: column; gap: 8px;">
+              <strong style="font-size: 12px; color: #0F172A;">Demo Scenario Switcher</strong>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <div style="background: #FFFBEB; border: 1px solid #FDE68A; padding: 8px 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+                  <span style="font-weight: 700; color: #92400E;">1. Unverified Contractor (Backlog Mode)</span>
+                  <span class="std-badge std-badge-warning">Pending</span>
+                </div>
+                <div style="background: #ECFDF5; border: 1px solid #A7F3D0; padding: 8px 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+                  <span style="font-weight: 700; color: #065F46;">2. Simulate Monitor Approval + Push</span>
+                  <span class="std-badge std-badge-success">Unlock</span>
+                </div>
+                <div style="background: #F1F5F9; border: 1px solid #CBD5E1; padding: 8px 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+                  <span style="font-weight: 700; color: #334155;">3. Tier 1 Independent Monitor (-INS)</span>
+                  <span class="std-badge std-badge-info">Tier 1</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SCREEN 9: PUSH NOTIFICATION & BACKLOG UNLOCK                       -->
+      <!-- ================================================================== -->
+      <div class="screen-card" data-group="MODALS" style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <div style="text-align: center;">
+          <span class="std-badge std-badge-success">Screen 9 · Push Notification</span>
+          <div style="font-weight: 800; font-size: 13px; color: #0F172A; margin-top: 4px;">Approval Push &amp; Backlog Unlock</div>
+          <div style="font-size: 11px; color: #64748B;">Push alert unlocks staged reports for AI extraction</div>
+        </div>
+
+        <div class="phone-frame">
+          <div class="screen-header-navy" style="padding-bottom: 8px;">
+            <div class="phone-notch"></div>
+            <div style="background-color: #0F172A; border: 1px solid #34D399; border-radius: 14px; padding: 10px 12px; margin-bottom: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+              <div style="display: flex; justify-content: space-between; font-size: 10px; color: #6EE7B7; font-weight: 800;">
+                <span>InSite Assurance · Push Alert</span>
+                <span>Just now</span>
+              </div>
+              <div style="font-size: 12px; font-weight: 800; color: #FFF; margin-top: 2px;">
+                Verification Approved by Independent Monitor!
+              </div>
+              <div style="font-size: 10.5px; color: #CBD5E1; margin-top: 2px;">
+                Tap to parse and confirm your 2 queued workday reports.
+              </div>
+            </div>
+          </div>
+
+          <div class="screen-body" style="justify-content: space-between;">
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div>
+                <span class="std-badge std-badge-success">Account Now Verified</span>
+                <h3 style="font-size: 14px; font-weight: 800; color: #0F172A; margin-top: 6px;">
+                  Unverified Report Backlog (2 Ready)
+                </h3>
+                <p style="font-size: 11px; color: #64748B; margin-top: 2px;">
+                  These reports were captured while your verification was under review. Confirm them now to submit to the Web Portal.
+                </p>
+              </div>
+
+              <div class="ui-card" style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <strong style="color: #00338D; font-size: 12px;">WBS 02.03.1 · Box Culvert</strong>
+                  <span class="std-badge std-badge-warning">Needs AI Confirm</span>
+                </div>
+                <div style="font-size: 11px; color: #475569;">Captured: Nov 11 · 2 Photos, 1 Voice Log (KM 14+180)</div>
+                <button class="ui-btn-primary" style="padding: 8px 12px;">Run AI Parse &amp; Confirm Summary</button>
+              </div>
+
+              <div class="ui-card" style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <strong style="color: #00338D; font-size: 12px;">WBS 01.02.4 · Sub-base Filling</strong>
+                  <span class="std-badge std-badge-warning">Needs AI Confirm</span>
+                </div>
+                <div style="font-size: 11px; color: #475569;">Captured: Nov 12 · 1 Photo, 2 Delay Notes (KM 13+950)</div>
+                <button style="border: 1px solid #CBD5E1; background: #F8FAFC; color: #0F172A; font-weight: 700; padding: 8px 12px; border-radius: 10px; font-size: 11px; cursor: pointer;">Run AI Parse &amp; Confirm Summary</button>
+              </div>
+            </div>
+
+            <button class="ui-btn-primary" style="background-color: #0C233C;">Parse &amp; Review All Backlog Items (2)</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================== -->
+      <!-- SCREEN 10: SPECIAL INCIDENT & WHISTLEBLOWING ("!" BUTTON)          -->
+      <!-- ================================================================== -->
+      <div class="screen-card" data-group="MODALS" style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <div style="text-align: center;">
+          <span class="std-badge std-badge-danger">Screen 10 · "!" Incident Form</span>
+          <div style="font-weight: 800; font-size: 13px; color: #0F172A; margin-top: 4px;">Emergency &amp; Whistleblowing</div>
+          <div style="font-size: 11px; color: #64748B;">Opened via the "!" button in the top-right header</div>
+        </div>
+
+        <div class="phone-frame">
+          <div class="screen-header-navy">
+            <div class="phone-notch"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div class="icon-btn-incident" style="width: 26px; height: 26px; font-size: 12px;">!</div>
+                <div>
+                  <div style="font-size: 12px; font-weight: 800;">Special Incident &amp; Escalation</div>
+                  <div style="font-size: 10px; color: #93C5FD;">Direct Alert to Monitor &amp; Lender</div>
+                </div>
+              </div>
+              <span style="font-size: 12px; color: #93C5FD; cursor: pointer;">Close</span>
+            </div>
+          </div>
+
+          <div class="screen-body" style="justify-content: space-between;">
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div class="ui-card" style="display: flex; flex-direction: column; gap: 8px;">
+                <label style="font-size: 11px; font-weight: 700; color: #475569;">Select Escalation Category *</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 11px; font-weight: 700;">
+                  <button style="background: #E11D48; color: #FFF; border: none; padding: 8px; border-radius: 8px; text-align: left;">Whistleblowing / Fraud</button>
+                  <button style="background: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; padding: 8px; border-radius: 8px; text-align: left;">Site Emergency</button>
+                  <button style="background: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; padding: 8px; border-radius: 8px; text-align: left;">Critical Delay Blocker</button>
+                  <button style="background: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; padding: 8px; border-radius: 8px; text-align: left;">Material Failure</button>
+                </div>
+              </div>
+
+              <div style="background-color: #FFF1F2; border: 1px solid #FECDD3; border-radius: 12px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+                <div style="color: #9F1239; line-height: 1.3;">
+                  <strong>Confidential Shield ON:</strong> Hidden from Contractor portal; routed strictly to Independent Monitor &amp; Lender.
+                </div>
+                <span class="std-badge std-badge-danger">Protected</span>
+              </div>
+
+              <div class="ui-card" style="display: flex; flex-direction: column; gap: 6px;">
+                <label style="font-size: 11px; font-weight: 700; color: #475569;">Incident Description *</label>
+                <textarea class="ui-input" rows="3" readonly style="line-height: 1.4; background-color: #F8FAFC;">Sub-contractor attempting to substitute specified Y16 high-yield reinforcement bars with uncertified 12mm mild steel bars at Culvert Cell 3.</textarea>
+              </div>
+
+              <div class="ui-card" style="display: flex; flex-direction: column; gap: 6px;">
+                <div style="display: flex; justify-content: space-between; font-size: 11px;">
+                  <span style="font-weight: 700; color: #475569;">Attach Pictures (Optional)</span>
+                  <span style="color: #00338D; font-weight: 700; cursor: pointer;">+ Snap Photo</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  <div style="width: 58px; height: 58px; border-radius: 10px; background: #0F172A; color: #FFF; font-size: 9px; font-weight: 700; display: flex; align-items: center; justify-content: center; text-align: center; padding: 4px;">
+                    Steel_Tag_1.jpg
+                  </div>
+                  <div style="width: 58px; height: 58px; border-radius: 10px; border: 2px dashed #CBD5E1; color: #94A3B8; font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                    +
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button class="ui-btn-danger">Submit Confidential Escalation Report</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    function filterGroup(group) {
+      const cards = document.querySelectorAll('.screen-card');
+      const groups = ['ALL', 'ONBOARDING', 'ASSURANCE', 'WORKSPACE', 'MODALS'];
+
+      groups.forEach(function(g) {
+        const btn = document.getElementById('btn-' + g);
+        if (btn) {
+          if (g === group) {
+            btn.style.backgroundColor = '#00338D';
+            btn.style.color = '#FFFFFF';
+          } else {
+            btn.style.backgroundColor = 'transparent';
+            btn.style.color = '#BFDBFE';
+          }
+        }
+      });
+
+      cards.forEach(function(card) {
+        if (group === 'ALL' || card.getAttribute('data-group') === group) {
+          card.style.display = 'flex';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    }
+  </script>
+</body>
+</html>

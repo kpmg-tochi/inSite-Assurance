@@ -10,6 +10,7 @@ import { boqRoutes } from "./modules/boq/boq.routes";
 import { evidenceRoutes } from "./modules/evidence/evidence.routes";
 import { reconciliationRoutes } from "./modules/reconciliation/reconciliation.routes";
 import { auditRoutes } from "./modules/audit/audit.routes";
+import { incidentRoutes } from "./modules/incidents/incident.routes";
 import { storageService } from "./integrations/storage.service";
 import { azureOpenAiService } from "./integrations/azure-openai.service";
 import { whisperService } from "./integrations/whisper.service";
@@ -59,6 +60,7 @@ export function createApp() {
   app.use("/api/v1/projects", evidenceRoutes);
   app.use("/api/v1/projects", reconciliationRoutes);
   app.use("/api/v1/projects", auditRoutes);
+  app.use("/api/v1/projects", incidentRoutes);
 
   // Centralized Error Handler
   app.use(errorHandler);

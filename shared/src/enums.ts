@@ -288,6 +288,48 @@ export const AuditActionTypeEnum = z.enum([
   'CONTRACTOR_QUERY_RESPONDED',
   'VALUATION_REPORT_CERTIFIED',
   'LENDER_TRANCHE_DECIDED',
+  'INCIDENT_REPORT_SUBMITTED',
+  'PUSH_TOKEN_REGISTERED',
+  'WORKDAY_REPORT_SUBMITTED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
+
+/**
+ * 11. Special Incident & Whistleblowing Enums ("!" Button Escalation)
+ */
+export const IncidentCategoryEnum = z.enum([
+  'WHISTLEBLOWING',      // Direct shielded report to Monitor & Lender
+  'SITE_EMERGENCY',       // Safety hazard, collapse, or injury on site
+  'CRITICAL_DELAY',       // Major supply/weather blocker preventing work
+  'MATERIAL_FAILURE',     // Defective batch (e.g. failing cube tests or sub-standard steel)
+]);
+export type IncidentCategory = z.infer<typeof IncidentCategoryEnum>;
+
+export const IncidentSeverityEnum = z.enum([
+  'CRITICAL', // Immediate push notification to Lender & Monitor lead
+  'HIGH',     // Highlighted on daily briefing dashboard
+  'MEDIUM',   // Standard escalation flag
+  'LOW',      // Informational incident log
+]);
+export type IncidentSeverity = z.infer<typeof IncidentSeverityEnum>;
+
+export const IncidentStatusEnum = z.enum([
+  'OPEN',
+  'UNDER_REVIEW',
+  'ACTION_TAKEN',
+  'DISMISSED',
+]);
+export type IncidentStatus = z.infer<typeof IncidentStatusEnum>;
+
+/**
+ * 12. Workday Report Status (Offline Queue & AI Gate)
+ */
+export const WorkdayReportStatusEnum = z.enum([
+  'STAGED_UNVERIFIED', // Queued offline while contractor verification is PENDING
+  'READY_FOR_AI',      // Contractor verified; queued for Whisper/Vision parsing
+  'EXTRACTED',         // AI parsed; awaiting human engineer quantity confirmation
+  'CONFIRMED',         // Verified and signed off by engineer; synced to ledger
+  'SYNCED',            // Integrated into active BOQ baseline
+]);
+export type WorkdayReportStatus = z.infer<typeof WorkdayReportStatusEnum>;
 

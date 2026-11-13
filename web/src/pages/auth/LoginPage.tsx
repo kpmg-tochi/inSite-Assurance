@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Play } from "lucide-react";
 import { SEEDED_DEMO_ACCOUNTS, useAuth } from "../../lib/auth-context";
+import { InSiteLogo } from "../../components/InSiteLogo";
 
 const VOICE_WAVE_BARS = [
   10, 18, 12, 22, 14, 24, 16, 12, 20, 10, 16, 22, 12, 18, 14, 10, 16, 12,
@@ -53,11 +54,12 @@ export function LoginPage() {
               className="flex items-center gap-3 hover:opacity-90 transition"
             >
               <div className="bg-white rounded-xl px-2.5 py-1.5 flex items-center justify-center shadow-sm">
-                <img
+                {/* <img
                   src="/KPMG-logo.svg"
                   alt="KPMG"
                   className="h-5 w-auto object-contain"
-                />
+                /> */}
+                <InSiteLogo />
               </div>
               <div className="h-4 w-px bg-white/25" />
               <span className="font-semibold text-base tracking-tight text-white">
@@ -251,34 +253,6 @@ export function LoginPage() {
 
       {/* Right Full-Viewport Sign-In Panel */}
       <div className="col-span-1 lg:col-span-5 h-full flex flex-col justify-between p-8 sm:p-10 xl:p-12 overflow-y-auto bg-white">
-        {/* Top Navigation Strip for Public Pages */}
-        <div className="flex items-center justify-between max-w-md w-full mx-auto pb-4">
-          <Link to="/" className="flex items-center gap-2.5">
-            <img
-              src="/KPMG-logo.svg"
-              alt="KPMG"
-              className="h-5 w-auto object-contain"
-            />
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              InSite Assurance
-            </span>
-          </Link>
-          <div className="flex items-center gap-3 text-xs font-medium text-slate-500">
-            <Link to="/" className="hover:text-brand-primary transition">
-              Home
-            </Link>
-            <Link to="/about" className="hover:text-brand-primary transition">
-              Specification
-            </Link>
-            <Link
-              to="/mobile-app"
-              className="hover:text-brand-primary transition"
-            >
-              Mobile App
-            </Link>
-          </div>
-        </div>
-
         <div className="my-auto max-w-md w-full mx-auto">
           <div>
             <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
