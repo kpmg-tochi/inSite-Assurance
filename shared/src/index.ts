@@ -12,6 +12,8 @@ export * from './schemas/reconciliation.schema';
 export * from './schemas/incident.schema';
 export * from './schemas/workday.schema';
 export * from './schemas/pushToken.schema';
+export * from './schemas/telemetry.schema';
+export * from './schemas/morningBrief.schema';
 
 // Shared Turf.js Radial & Linear Corridor Chainage Geospatial Utilities
 export * from './geo/geofence';

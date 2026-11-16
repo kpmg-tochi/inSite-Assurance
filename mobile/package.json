@@ -2,7 +2,7 @@
   "name": "@insite/mobile",
   "version": "0.1.0",
   "private": true,
-  "main": "App.tsx",
+  "main": "index.js",
   "scripts": {
     "android": "expo start --android",
     "ios": "expo start --ios",
@@ -10,23 +10,39 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.0.2",
     "@insite/shared": "^0.1.0",
-    "expo": "~52.0.0",
-    "expo-av": "~15.0.0",
+    "@react-navigation/native": "^7.5.2",
+    "@react-navigation/native-stack": "^7.21.1",
+    "@react-navigation/stack": "^7.12.2",
+    "@tanstack/react-query": "^5.107.1",
+    "expo": "~58.0.25",
+    "expo-audio": "~58.0.12",
     "expo-camera": "^58.0.14",
-    "expo-crypto": "~14.0.0",
-    "expo-image-picker": "~16.0.0",
-    "expo-location": "~18.0.0",
+    "expo-crypto": "~58.0.8",
+    "expo-image-picker": "~58.0.10",
+    "expo-linear-gradient": "~58.0.4",
+    "expo-location": "~58.0.22",
+    "expo-network": "~58.0.5",
     "expo-notifications": "^58.1.9",
     "expo-secure-store": "^58.0.3",
-    "expo-sqlite": "~15.0.0",
-    "expo-status-bar": "~2.0.0",
-    "react": "^18.3.1",
-    "react-native": "0.76.5"
+    "expo-sqlite": "~58.0.17",
+    "expo-status-bar": "~58.0.5",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-safe-area-context": "~5.11.1",
+    "react-native-screens": "~4.30.1",
+    "react-native-svg": "15.16.0",
+    "react-native-toast-message": "^2.5.2",
+    "react-native-vision-camera": "^5.2.4",
+    "react-native-vision-camera-face-detector": "^2.1.0",
+    "react-native-worklets-core": "^1.6.3"
   },
   "devDependencies": {
-    "@types/react": "^18.3.12",
+    "@babel/plugin-transform-shorthand-properties": "^8.0.1",
+    "@types/react": "~19.3.0",
     "@types/react-native": "^0.72.8",
-    "typescript": "^5.6.3"
+    "react-native-svg-transformer": "^1.5.3",
+    "typescript": "~6.0.3"
   }
 }

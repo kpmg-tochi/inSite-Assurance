@@ -43,6 +43,7 @@ export interface MobileBaselinePack {
 
 let fieldAgentToken: string | null = null;
 let activeSessionProfile: FieldAgentSessionProfile | null = null;
+let cachedBaselinePack: MobileBaselinePack | null = null;
 
 export const setFieldAgentAuth = (
   token: string | null,
@@ -55,6 +56,13 @@ export const setFieldAgentAuth = (
 export const getFieldAgentToken = (): string | null => fieldAgentToken;
 export const getActiveSessionProfile = (): FieldAgentSessionProfile | null =>
   activeSessionProfile;
+
+export const saveBaselinePack = (pack: MobileBaselinePack) => {
+  cachedBaselinePack = pack;
+};
+
+export const getCachedBaselinePack = (): MobileBaselinePack | null =>
+  cachedBaselinePack;
 
 export async function mobileRequest<T>(
   path: string,

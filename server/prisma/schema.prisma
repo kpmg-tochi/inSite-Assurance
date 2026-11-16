@@ -221,6 +221,8 @@ model Project {
   auditLogs       AuditLog[]
   incidentReports IncidentReport[]
   workdayReports  WorkdayReport[]
+  telemetryPings  SiteTelemetryPing[]
+  morningBriefs   MorningDeliverableBrief[]
 
   @@index([portfolioHealth])
   @@index([monitorOrganizationId])
@@ -264,20 +266,24 @@ model FieldAgentSession {
   idDocumentType     String?
   idDocumentUrl      String?
   selfieImageUrl     String?
+  selfieLeftUrl      String?
+  selfieRightUrl     String?
   livenessScore      Float?
   livenessPassed     Boolean                   @default(false)
+  livenessMetadata   Json?
   corenLicenseNumber String?
   experienceSummary  String?
   reviewedByUserId   String?                   @db.Uuid
   reviewedAt         DateTime?
   rejectionReason    String?
 
-  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  joinCode        ProjectJoinCode    @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
+  project         Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  joinCode        ProjectJoinCode     @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
   evidenceLogs    FieldEvidenceLog[]
   incidentReports IncidentReport[]
   workdayReports  WorkdayReport[]
   pushTokens      PushToken[]
+  telemetryPings  SiteTelemetryPing[]
 
   @@index([projectId, independenceTier])
   @@index([projectId, assuranceStatus])
@@ -336,22 +342,26 @@ model BoqItem {
   rateNgn         Decimal @db.Decimal(18, 2)
   budgetedCostNgn Decimal @db.Decimal(18, 2)
 
-  isHoldPoint            Boolean @default(false)
-  isScheduledToday       Boolean @default(false)
+  isHoldPoint            Boolean  @default(false)
+  isScheduledToday       Boolean  @default(false)
+  planningTier           String   @default("UNBLOCKED_POOL") // PLAN_A | FALLBACK_BACKLOG | UNBLOCKED_POOL
+  dailyTargetQuantity    Decimal? @db.Decimal(14, 3)
+  expectedDeliverable    String?
   holdPointInstruction   String?
-  isOpaqueLumpSum        Boolean @default(false)
+  isOpaqueLumpSum        Boolean  @default(false)
   opacityWarningReason   String?
-  cumulativeCertifiedPct Decimal @default(0) @db.Decimal(5, 2)
+  cumulativeCertifiedPct Decimal  @default(0) @db.Decimal(5, 2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tranche         FacilityTranche?   @relation(fields: [trancheId], references: [id], onDelete: SetNull)
+  project         Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tranche         FacilityTranche?          @relation(fields: [trancheId], references: [id], onDelete: SetNull)
   evidenceLogs    FieldEvidenceLog[]
   ipcLineItems    IpcLineItem[]
   incidentReports IncidentReport[]
   workdayReports  WorkdayReport[]
+  morningBriefs   MorningDeliverableBrief[]
 
   @@unique([projectId, wbsCode])
   @@index([projectId, trancheId])
@@ -631,6 +641,8 @@ model WorkdayReport {
   unitOfMeasure      String
   isHoldPointClaimed Boolean   @default(false)
   evidenceItems      Json // Array of captured photos, voice notes, captions
+  voiceNoteUrl       String?
+  submissionGeotag   Json?
   aiParsedConfidence Float?
   aiReasoning        String?   @db.Text
   humanConfirmedAt   DateTime?
@@ -644,4 +656,51 @@ model WorkdayReport {
   @@index([projectId, wbsItemId, workdayDate])
   @@index([projectId, status])
   @@map("workday_reports")
+}
+
+model SiteTelemetryPing {
+  id                  String   @id @default(uuid()) @db.Uuid
+  projectId           String   @db.Uuid
+  fieldSessionId      String   @db.Uuid
+  wbsItemId           String?  @db.Uuid
+  latitude            Float
+  longitude           Float
+  accuracyMeters      Float?
+  altitudeMeters      Float?
+  isMocked            Boolean  @default(false)
+  isWithinGeofence    Boolean?
+  chainageLabel       String?
+  distanceMeters      Float?
+  pingSource          String   @default("HOURLY_TELEMETRY") // HOURLY_TELEMETRY | REPORT_SUBMISSION | MANUAL_CHECKIN
+  deviceSignatureHash String
+  capturedAtDevice    DateTime
+  syncedAtServer      DateTime @default(now())
+
+  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fieldSession FieldAgentSession @relation(fields: [fieldSessionId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, capturedAtDevice])
+  @@index([fieldSessionId, capturedAtDevice])
+  @@map("site_telemetry_pings")
+}
+
+model MorningDeliverableBrief {
+  id                  String   @id @default(uuid()) @db.Uuid
+  projectId           String   @db.Uuid
+  boqItemId           String   @db.Uuid
+  workdayDate         String // YYYY-MM-DD
+  planningTier        String   @default("PLAN_A")
+  headline            String
+  expectedDeliverable String   @db.Text
+  reportingChecklist  Json     @default("[]")
+  dailyTargetQuantity Decimal? @db.Decimal(14, 3)
+  generatedByAi       Boolean  @default(false)
+  createdAt           DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  boqItem BoqItem @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, boqItemId, workdayDate])
+  @@index([projectId, workdayDate])
+  @@map("morning_deliverable_briefs")
 }

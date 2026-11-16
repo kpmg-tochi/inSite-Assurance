@@ -5,126 +5,175 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Alert,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
+import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import {
+  EmptyStateCard,
+  InfoCallout,
+  InSiteLoader,
+  Pill,
+} from '../components/common';
+import { PrimaryButton } from '../components/inputs/Buttons';
+import { useProfile } from '../context/ProfileContext';
+import {
+  usePromoteBacklogMutation,
+  useStagedBacklogQuery,
+} from '../queries/wbs/useWbsQueries';
+import type { RootStackParamList } from '../navigation/types';
 
-interface Props {
-  onClose: () => void;
-  onBatchConfirmed: () => void;
-}
+export const BacklogReviewModal: React.FC = () => {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { activeProjectId: projectId } = useProfile();
+  const onClose = () => navigation.goBack();
+  const onBatchConfirmed = () => navigation.goBack();
+  const insets = useSafeAreaInsets();
+  const [deselectedIds, setDeselectedIds] = useState<Record<string, boolean>>({});
 
-export const BacklogReviewModal: React.FC<Props> = ({ onClose, onBatchConfirmed }) => {
-  const [backlogItems, setBacklogItems] = useState([
-    {
-      id: 'backlog-01',
-      wbsCode: '02.03.1',
-      title: 'Box Culvert Rebar Tying & Formwork',
-      date: 'Today · 11:45 WAT',
-      quantity: '12.0 m3 C25',
-      photosCount: 2,
-      selected: true,
-    },
-    {
-      id: 'backlog-02',
-      wbsCode: '01.02.4',
-      title: 'Sub-base Compaction Layer 2 Density Test',
-      date: 'Yesterday · 16:30 WAT',
-      quantity: '450 m2',
-      photosCount: 1,
-      selected: true,
-    },
-    {
-      id: 'backlog-03',
-      wbsCode: '02.03.1',
-      title: 'Blinding Concrete Pour & Excavation Clearance',
-      date: '2 days ago',
-      quantity: '8.5 m3',
-      photosCount: 3,
-      selected: true,
-    },
-  ]);
+  const { data: rawItems = [], isLoading: loading } = useStagedBacklogQuery();
+  const promoteMutation = usePromoteBacklogMutation(projectId);
+  const isProcessing = promoteMutation.isPending;
 
-  const [isProcessing, setIsProcessing] = useState(false);
+  const backlogItems = rawItems.map((r) => ({
+    ...r,
+    selected: !deselectedIds[r.id],
+  }));
 
   const toggleItem = (id: string) => {
-    setBacklogItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, selected: !item.selected } : item))
-    );
+    setDeselectedIds((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
   };
 
-  const handleProcessBatch = () => {
-    setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
-      Alert.alert(
-        'Backlog Synced',
-        '3 field reports parsed with AI and confirmed. Added to the project ledger with Supported evidence rating.',
-        [{ text: 'OK', onPress: onBatchConfirmed }]
-      );
-    }, 1200);
+  const handleProcessBatch = async () => {
+    const selectedIds = backlogItems.filter((i) => i.selected).map((i) => i.id);
+    if (selectedIds.length === 0) {
+      Toast.show({
+        type: 'error',
+        props: {
+          title: 'No Items Selected',
+          message: 'Select at least one queued report to sync.',
+        },
+      });
+      return;
+    }
+
+    try {
+      const result = await promoteMutation.mutateAsync(selectedIds);
+      Toast.show({
+        type: 'success',
+        props: {
+          title: 'Backlog Processed',
+          message: `${result.syncedCount} report(s) synced to the project ledger.${
+            result.queuedCount > 0
+              ? ` ${result.queuedCount} remaining queued for connectivity.`
+              : ''
+          }`,
+        },
+      });
+      onBatchConfirmed();
+    } catch (err: any) {
+      Toast.show({
+        type: 'error',
+        props: {
+          title: 'Sync Error',
+          message: err?.message || 'Unable to process queued backlog.',
+        },
+      });
+    }
   };
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <StatusBar style="light" />
+      <LinearGradient
+        colors={['#0891B2', '#1E3A8A', '#312E81', '#1E1B4B']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}
+      >
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
             <Text style={styles.closeText}>Close ✕</Text>
           </TouchableOpacity>
-          <View style={styles.badgeSuccess}>
-            <Text style={styles.badgeSuccessText}>Account Verified</Text>
-          </View>
+          <Pill variant="positive" text="Account Verified" />
         </View>
         <Text style={styles.title}>Queued Report Backlog</Text>
         <Text style={styles.subtitle}>
           Your contractor credentials have been approved! Review and confirm your queued field
           submissions before sending them to the Independent Monitor.
         </Text>
-      </View>
+      </LinearGradient>
 
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        {backlogItems.map((item) => (
-          <TouchableOpacity
-            key={item.id}
-            style={[styles.itemCard, item.selected && styles.itemCardSelected]}
-            onPress={() => toggleItem(item.id)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.itemTop}>
-              <View style={styles.wbsPill}>
-                <Text style={styles.wbsPillText}>WBS {item.wbsCode}</Text>
-              </View>
-              <Text style={styles.itemDate}>{item.date}</Text>
-            </View>
-
-            <Text style={styles.itemTitle}>{item.title}</Text>
-
-            <View style={styles.itemMeta}>
-              <Text style={styles.itemMetaText}>Reported: {item.quantity}</Text>
-              <Text style={styles.itemMetaText}>📷 {item.photosCount} photos attached</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
-
-        <View style={styles.infoBox}>
-          <Text style={styles.infoTitle}>Batch AI Verification</Text>
-          <Text style={styles.infoText}>
-            Submitting this backlog will execute Whisper transcription and Azure Vision on your
-            captured site evidence and map each quantity to the facility BOQ baseline.
-          </Text>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.primaryButton, isProcessing && { opacity: 0.7 }]}
-          onPress={handleProcessBatch}
-          disabled={isProcessing}
-          activeOpacity={0.8}
+      <View style={styles.curvedContainer}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.body,
+            { paddingBottom: Math.max(insets.bottom + 20, 24) },
+          ]}
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.primaryButtonText}>
-            {isProcessing ? 'Processing Backlog AI...' : 'Parse & Confirm All Backlog Items'}
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
+          {loading ? (
+            <InSiteLoader size="md" label="Loading queued field reports..." />
+          ) : backlogItems.length === 0 ? (
+            <EmptyStateCard
+              title="No Queued Reports in Backlog"
+              description="All signed End-of-Day reports have already been synced to the server."
+            />
+          ) : (
+            <>
+              {backlogItems.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.itemCard, item.selected && styles.itemCardSelected]}
+                  onPress={() => toggleItem(item.id)}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.itemTop}>
+                    <Pill
+                      variant="info"
+                      text={`WBS ${item.wbsCode || 'ITEM'}`}
+                    />
+                    <Text style={styles.itemDate}>{item.workdayDate}</Text>
+                  </View>
+
+                  <Text style={styles.itemTitle}>{item.summaryText}</Text>
+
+                  <View style={styles.itemMeta}>
+                    <Text style={styles.itemMetaText}>
+                      Reported: {item.reportedQuantity} {item.unit}
+                    </Text>
+                    <Text style={styles.itemMetaText}>Status: {item.status}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+
+              <InfoCallout
+                variant="info"
+                title="Batch AI Verification"
+                description="Confirming this backlog submits your queued reports and GPS provenance to the project BOQ reconciliation ledger."
+              />
+
+              <PrimaryButton
+                onPress={handleProcessBatch}
+                text={
+                  isProcessing
+                    ? 'Syncing Backlog...'
+                    : 'Confirm & Sync Selected Reports'
+                }
+                isWorking={isProcessing}
+                disabled={isProcessing}
+              />
+            </>
+          )}
+        </ScrollView>
+      </View>
     </View>
   );
 };
@@ -135,10 +184,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
   },
   header: {
-    backgroundColor: '#0C233C',
-    paddingTop: 50,
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 28,
+  },
+  curvedContainer: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    marginTop: -16,
+    overflow: 'hidden',
   },
   headerRow: {
     flexDirection: 'row',

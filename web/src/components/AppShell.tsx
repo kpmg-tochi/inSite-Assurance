@@ -9,6 +9,8 @@ import {
   PanelLeftOpen,
   Settings,
   BarChart3,
+  FolderKanban,
+  ArrowRight,
 } from "lucide-react";
 import type { ProjectSummaryDto } from "../api/types";
 import { SEEDED_DEMO_ACCOUNTS, useAuth } from "../lib/auth-context";
@@ -35,7 +37,7 @@ export function AppShell({
   const { user, quickSwitchDemoAccount, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const isExecutive = location.pathname.includes('/executive');
+  const isExecutive = location.pathname.includes("/executive");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [userPopoverOpen, setUserPopoverOpen] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
@@ -92,6 +94,23 @@ export function AppShell({
         ? "BOQ & Hold-Point Rules"
         : "BOQ & Hold-Points",
   };
+
+  const projectBasePath = selectedProject
+    ? `/app/projects/${selectedProject.id}`
+    : "/app/projects";
+
+  const recentActiveProjects = React.useMemo(() => {
+    const active = projects.filter((p) => p.certifiedProgressPct < 100);
+    const sliced = active.slice(0, 4);
+    if (
+      selectedProject &&
+      selectedProject.certifiedProgressPct < 100 &&
+      !sliced.some((p) => p.id === selectedProject.id)
+    ) {
+      return [selectedProject, ...sliced.slice(0, 3)];
+    }
+    return sliced;
+  }, [projects, selectedProject]);
 
   const handleRoleSwitch = async (email: string) => {
     try {
@@ -160,7 +179,25 @@ export function AppShell({
             )}
 
             <NavLink
-              to="/app/dashboard"
+              to="/app/projects"
+              end
+              title="All Projects"
+              className={({ isActive }) =>
+                `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                  isActive
+                    ? "bg-white/15 text-white shadow-sm"
+                    : "text-blue-100/80 hover:text-white hover:bg-white/10"
+                }`
+              }
+            >
+              <FolderKanban className="w-4 h-4 shrink-0" />
+              {!sidebarCollapsed && (
+                <span className="truncate">All Projects</span>
+              )}
+            </NavLink>
+
+            <NavLink
+              to={selectedProject ? `${projectBasePath}/dashboard` : "/app/projects"}
               title={navLabels.dashboard}
               className={({ isActive }) =>
                 `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
@@ -189,7 +226,7 @@ export function AppShell({
                   }`
                 }
               >
-                <BarChart3 className="w-4 h-4 shrink-0 text-sky-300" />
+                <BarChart3 className="w-4 h-4 shrink-0" />
                 {!sidebarCollapsed && (
                   <span className="truncate">Executive Risk Matrix</span>
                 )}
@@ -197,7 +234,7 @@ export function AppShell({
             )}
 
             <NavLink
-              to="/app/reconciliation"
+              to={selectedProject ? `${projectBasePath}/reconciliation` : "/app/projects"}
               title={navLabels.reconciliation}
               className={({ isActive }) =>
                 `w-full flex items-center justify-between px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
@@ -221,7 +258,7 @@ export function AppShell({
             </NavLink>
 
             <NavLink
-              to="/app/boq"
+              to={selectedProject ? `${projectBasePath}/boq` : "/app/projects"}
               title={navLabels.boq}
               className={({ isActive }) =>
                 `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
@@ -240,7 +277,7 @@ export function AppShell({
             {/* Audit Ledger is restricted to Monitor & Lender governance roles (hidden from Contractor segregated surface) */}
             {user?.role !== "CONTRACTOR" && (
               <NavLink
-                to="/app/audit"
+                to={selectedProject ? `${projectBasePath}/audit` : "/app/projects"}
                 title="Audit Ledger"
                 className={({ isActive }) =>
                   `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
@@ -274,14 +311,14 @@ export function AppShell({
             </NavLink>
           </div>
 
-          {/* Active Capital Projects Tree (Hidden when collapsed) */}
-          {!sidebarCollapsed && projects.length > 0 && (
+          {/* Recent Active Projects Tree (Hidden when collapsed) */}
+          {!sidebarCollapsed && recentActiveProjects.length > 0 && (
             <div className="mt-6 space-y-1">
               <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-blue-200/60">
-                Capital Projects
+                Recent Active Projects
               </div>
               <div className="pl-3 ml-2 border-l border-white/15 space-y-1">
-                {projects.map((project) => {
+                {recentActiveProjects.map((project) => {
                   const isSelected = selectedProject?.id === project.id;
                   return (
                     <button
@@ -301,6 +338,13 @@ export function AppShell({
                     </button>
                   );
                 })}
+                <Link
+                  to="/app/projects"
+                  className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-blue-200/80 hover:text-white hover:bg-white/10 transition"
+                >
+                  <span>View All Projects</span>
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
               </div>
             </div>
           )}
@@ -433,7 +477,9 @@ export function AppShell({
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-sky-400">
-                  {isExecutive ? "PORTFOLIO" : selectedProject?.codePrefix || "PORTFOLIO"}
+                  {isExecutive
+                    ? "PORTFOLIO"
+                    : selectedProject?.codePrefix || "PORTFOLIO"}
                 </span>
                 <span className="text-white/30">/</span>
                 <h1 className="text-base font-bold text-white tracking-tight">
@@ -450,13 +496,16 @@ export function AppShell({
                         : "bg-amber-500/20 text-amber-200 border-amber-400/30"
                   }`}
                 >
-                  {isExecutive ? "Executive Surveillance" : workspaceTitleByRole}
+                  {isExecutive
+                    ? "Executive Surveillance"
+                    : workspaceTitleByRole}
                 </span>
               </div>
               <p className="text-xs text-slate-300">
                 {isExecutive ? (
                   <span>
-                    Consolidated cross-facility risk, disbursement holdbacks, and governance telemetry
+                    Consolidated cross-facility risk, disbursement holdbacks,
+                    and governance telemetry
                   </span>
                 ) : selectedProject ? (
                   <>

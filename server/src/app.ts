@@ -11,6 +11,9 @@ import { evidenceRoutes } from "./modules/evidence/evidence.routes";
 import { reconciliationRoutes } from "./modules/reconciliation/reconciliation.routes";
 import { auditRoutes } from "./modules/audit/audit.routes";
 import { incidentRoutes } from "./modules/incidents/incident.routes";
+import { telemetryRoutes } from "./modules/telemetry/telemetry.routes";
+import { workdayReportsRoutes } from "./modules/workday-reports/workdayReports.routes";
+import { morningBriefRoutes } from "./modules/morning-briefs/morningBrief.routes";
 import { storageService } from "./integrations/storage.service";
 import { azureOpenAiService } from "./integrations/azure-openai.service";
 import { whisperService } from "./integrations/whisper.service";
@@ -61,6 +64,9 @@ export function createApp() {
   app.use("/api/v1/projects", reconciliationRoutes);
   app.use("/api/v1/projects", auditRoutes);
   app.use("/api/v1/projects", incidentRoutes);
+  app.use("/api/v1/projects", telemetryRoutes);
+  app.use("/api/v1/projects", workdayReportsRoutes);
+  app.use("/api/v1/projects", morningBriefRoutes);
 
   // Centralized Error Handler
   app.use(errorHandler);

@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import {
+  DemoSkipVerificationRequest,
   JoinProjectMobileRequest,
   WebLoginRequest,
   WebRegisterRequest,
@@ -117,6 +118,92 @@ export async function loginWebUser(input: WebLoginRequest) {
   };
 }
 
+function buildMobileSessionResponse(
+  project: {
+    id: string;
+    name: string;
+    codePrefix: string;
+    stateLocation: string;
+    reportingCadence: string;
+    geofenceMode: string;
+    geofenceGeoJson: unknown;
+    boqItems: Array<{
+      id: string;
+      wbsCode: string;
+      section: string;
+      description: string;
+      unit: string;
+      totalQuantity: unknown;
+      budgetedCostNgn: unknown;
+      isHoldPoint: boolean;
+      holdPointInstruction: string | null;
+      cumulativeCertifiedPct: unknown;
+    }>;
+  },
+  session: {
+    id: string;
+    projectId: string;
+    independenceTier: any;
+    agentFullName: string;
+    agentPhoneNumber: string;
+    deviceId: string;
+    assuranceStatus: string;
+    corenLicenseNumber: string | null;
+    livenessPassed: boolean;
+  },
+  normalizedCode: string
+) {
+  const accessToken = signFieldAgentToken({
+    sessionId: session.id,
+    projectId: session.projectId,
+    independenceTier: session.independenceTier,
+    agentFullName: session.agentFullName,
+    deviceId: session.deviceId,
+  });
+
+  const boqItems = project.boqItems.map((item) => ({
+    id: item.id,
+    wbsCode: item.wbsCode,
+    section: item.section,
+    description: item.description,
+    unit: item.unit,
+    totalQuantity: Number(item.totalQuantity),
+    budgetedCostNgn: Number(item.budgetedCostNgn),
+    isHoldPoint: item.isHoldPoint,
+    holdPointInstruction: item.holdPointInstruction,
+    cumulativeCertifiedPct: Number(item.cumulativeCertifiedPct),
+  }));
+
+  return {
+    accessToken,
+    sessionProfile: {
+      sessionId: session.id,
+      projectId: project.id,
+      projectName: project.name,
+      projectCodePrefix: project.codePrefix,
+      joinCodeUsed: normalizedCode,
+      independenceTier: session.independenceTier,
+      agentFullName: session.agentFullName,
+      agentPhoneNumber: session.agentPhoneNumber,
+      deviceId: session.deviceId,
+      assuranceStatus: session.assuranceStatus,
+      corenLicenseNumber: session.corenLicenseNumber ?? undefined,
+      livenessPassed: session.livenessPassed,
+    },
+    baselinePack: {
+      projectId: project.id,
+      name: project.name,
+      codePrefix: project.codePrefix,
+      stateLocation: project.stateLocation,
+      reportingCadence: project.reportingCadence,
+      geofenceMode: project.geofenceMode,
+      geofence: project.geofenceGeoJson,
+      boqItems,
+      holdPoints: boqItems.filter((b) => b.isHoldPoint),
+    },
+  };
+}
+
 export async function joinProjectMobile(input: JoinProjectMobileRequest) {
   const normalizedCode = input.joinCode.trim().toUpperCase();
 
@@ -216,55 +303,119 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
     return createdSession;
   });
 
-  const accessToken = signFieldAgentToken({
-    sessionId: session.id,
-    projectId: session.projectId,
-    independenceTier: session.independenceTier,
-    agentFullName: session.agentFullName,
-    deviceId: session.deviceId,
+  return buildMobileSessionResponse(
+    joinCodeRecord.project,
+    session,
+    normalizedCode
+  );
+}
+
+/**
+ * Demo-only onboarding bypass:
+ * Links a mobile field user to the project matching the provided join code and
+ * marks their session as APPROVED without requiring ID/liveness/credential review.
+ */
+export async function demoSkipVerificationMobile(
+  input: DemoSkipVerificationRequest,
+  authenticatedSessionId?: string
+) {
+  const normalizedCode = input.joinCode.trim().toUpperCase();
+
+  const joinCodeRecord = await prisma.projectJoinCode.findUnique({
+    where: { code: normalizedCode },
+    include: {
+      project: {
+        include: {
+          boqItems: {
+            orderBy: { wbsCode: 'asc' },
+          },
+          tranches: {
+            orderBy: { trancheNumber: 'asc' },
+          },
+        },
+      },
+    },
   });
 
-  const project = joinCodeRecord.project;
-  const boqItems = project.boqItems.map((item) => ({
-    id: item.id,
-    wbsCode: item.wbsCode,
-    section: item.section,
-    description: item.description,
-    unit: item.unit,
-    totalQuantity: Number(item.totalQuantity),
-    budgetedCostNgn: Number(item.budgetedCostNgn),
-    isHoldPoint: item.isHoldPoint,
-    holdPointInstruction: item.holdPointInstruction,
-    cumulativeCertifiedPct: Number(item.cumulativeCertifiedPct),
-  }));
+  if (!joinCodeRecord || !joinCodeRecord.isActive) {
+    throw new AppError(
+      `Project Join Code "${normalizedCode}" is invalid or inactive.`,
+      404,
+      'INVALID_JOIN_CODE'
+    );
+  }
 
-  return {
-    accessToken,
-    sessionProfile: {
-      sessionId: session.id,
-      projectId: project.id,
-      projectName: project.name,
-      projectCodePrefix: project.codePrefix,
-      joinCodeUsed: normalizedCode,
-      independenceTier: session.independenceTier,
-      agentFullName: session.agentFullName,
-      agentPhoneNumber: session.agentPhoneNumber,
-      deviceId: session.deviceId,
-      assuranceStatus: session.assuranceStatus,
-      corenLicenseNumber: session.corenLicenseNumber ?? undefined,
-      livenessPassed: session.livenessPassed,
-    },
-    baselinePack: {
-      projectId: project.id,
-      name: project.name,
-      codePrefix: project.codePrefix,
-      stateLocation: project.stateLocation,
-      reportingCadence: project.reportingCadence,
-      geofenceMode: project.geofenceMode,
-      geofence: project.geofenceGeoJson,
-      boqItems,
-      holdPoints: boqItems.filter((b) => b.isHoldPoint),
-    },
-  };
+  const targetSessionId = input.sessionId || authenticatedSessionId;
+
+  const session = await prisma.$transaction(async (tx) => {
+    let existingSession = null;
+    if (targetSessionId) {
+      existingSession = await tx.fieldAgentSession.findFirst({
+        where: {
+          id: targetSessionId,
+          projectId: joinCodeRecord.projectId,
+        },
+      });
+    }
+
+    const updatedOrCreated = existingSession
+      ? await tx.fieldAgentSession.update({
+          where: { id: existingSession.id },
+          data: {
+            assuranceStatus: 'APPROVED',
+            livenessPassed: true,
+            livenessScore: existingSession.livenessScore ?? 1.0,
+            corenLicenseNumber:
+              existingSession.corenLicenseNumber ?? 'DEMO-BYPASS',
+            experienceSummary:
+              existingSession.experienceSummary ??
+              'Demo-only verification bypass session.',
+            reviewedAt: new Date(),
+            lastSyncAt: new Date(),
+          },
+        })
+      : await tx.fieldAgentSession.create({
+          data: {
+            projectId: joinCodeRecord.projectId,
+            joinCodeId: joinCodeRecord.id,
+            independenceTier: joinCodeRecord.independenceTier,
+            agentFullName: input.agentFullName || 'Demo Field Engineer',
+            agentPhoneNumber: input.agentPhoneNumber || '+2348000000000',
+            deviceId: input.deviceId || `DEMO-${Date.now()}`,
+            deviceModel: input.deviceModel ?? null,
+            deviceOs: input.deviceOs ?? null,
+            assuranceStatus: 'APPROVED',
+            livenessPassed: true,
+            livenessScore: 1.0,
+            corenLicenseNumber: 'DEMO-BYPASS',
+            experienceSummary: 'Demo-only verification bypass session.',
+            reviewedAt: new Date(),
+            lastSyncAt: new Date(),
+          },
+        });
+
+    await recordAuditEvent(tx, {
+      projectId: joinCodeRecord.projectId,
+      actorType: 'FIELD_AGENT',
+      actorId: updatedOrCreated.id,
+      actorDisplayName: `${updatedOrCreated.agentFullName} (${joinCodeRecord.independenceTier})`,
+      action: 'CONTRACTOR_ASSURANCE_APPROVED',
+      summaryText: `[DEMO ONLY] Verification skipped — linked ${updatedOrCreated.agentFullName} directly to project ${joinCodeRecord.project.codePrefix} (${normalizedCode}).`,
+      payload: {
+        demoBypass: true,
+        joinCode: normalizedCode,
+        sessionId: updatedOrCreated.id,
+        independenceTier: joinCodeRecord.independenceTier,
+      },
+    });
+
+    return updatedOrCreated;
+  });
+
+  return buildMobileSessionResponse(
+    joinCodeRecord.project,
+    session,
+    normalizedCode
+  );
 }
 

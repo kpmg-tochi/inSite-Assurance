@@ -51,3 +51,20 @@ export const confirmEvidenceLog = async (payload: {
   );
 };
 
+export const uploadBinaryToPresignedUrl = async (
+  uploadUrl: string,
+  localUri: string,
+  mimeType: string
+): Promise<void> => {
+  const fileRes = await fetch(localUri);
+  const blob = await fileRes.blob();
+  const putRes = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: { 'Content-Type': mimeType },
+    body: blob,
+  });
+  if (!putRes.ok) {
+    throw new Error(`Presigned upload failed (${putRes.status})`);
+  }
+};
+

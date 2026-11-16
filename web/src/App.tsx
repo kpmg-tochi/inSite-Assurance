@@ -4,7 +4,9 @@ import {
   Route,
   Routes,
   useLocation,
+  useMatch,
   useNavigate,
+  useSearchParams,
 } from "react-router-dom";
 import type { CreateProjectRequest } from "@insite/shared";
 import { useAuth } from "./lib/auth-context";
@@ -16,6 +18,7 @@ import { AboutPage } from "./pages/public/AboutPage";
 import { MobileAppPage } from "./pages/public/MobileAppPage";
 import { PortfolioDashboardPage } from "./pages/dashboard/PortfolioDashboardPage";
 import { PortfolioExecutivePage } from "./pages/dashboard/PortfolioExecutivePage";
+import { ProjectsDirectoryPage } from "./pages/projects/ProjectsDirectoryPage";
 import { ReconciliationWorkbenchPage } from "./pages/reconciliation/ReconciliationWorkbenchPage";
 import { BoqAndHoldPointsPage } from "./pages/boq/BoqAndHoldPointsPage";
 import { AuditLedgerPage } from "./pages/audit/AuditLedgerPage";
@@ -39,6 +42,13 @@ function ScrollToTopOnNavigate() {
 function AuthenticatedWorkspace() {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const projectMatch = useMatch("/app/projects/:projectId/*");
+  const urlProjectId =
+    projectMatch?.params.projectId && projectMatch.params.projectId !== "new"
+      ? projectMatch.params.projectId
+      : null;
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     null,
@@ -50,13 +60,22 @@ function AuthenticatedWorkspace() {
   const projects = projectsQuery.data || [];
 
   useEffect(() => {
+    if (urlProjectId && projects.some((p) => p.id === urlProjectId)) {
+      if (selectedProjectId !== urlProjectId) {
+        setSelectedProjectId(urlProjectId);
+      }
+      return;
+    }
     if (projects.length > 0 && !selectedProjectId) {
       setSelectedProjectId(projects[0].id);
     }
-  }, [projects, selectedProjectId]);
+  }, [projects, selectedProjectId, urlProjectId]);
 
   const activeProject =
-    projects.find((p) => p.id === selectedProjectId) || projects[0] || null;
+    (urlProjectId ? projects.find((p) => p.id === urlProjectId) : null) ||
+    projects.find((p) => p.id === selectedProjectId) ||
+    projects[0] ||
+    null;
 
   const boqQuery = useProjectBoqQuery(
     activeProject?.id,
@@ -74,9 +93,16 @@ function AuthenticatedWorkspace() {
   const createProjectMutation = useCreateProjectMutation();
 
   const ipcs = ipcsQuery.data || [];
+  const urlIpcId = searchParams.get("ipc");
 
   useEffect(() => {
     if (ipcs.length > 0) {
+      if (urlIpcId && ipcs.some((i) => i.id === urlIpcId)) {
+        if (selectedIpcId !== urlIpcId) {
+          setSelectedIpcId(urlIpcId);
+        }
+        return;
+      }
       const stillValid = ipcs.some((i) => i.id === selectedIpcId);
       if (!stillValid) {
         setSelectedIpcId(ipcs[0].id);
@@ -84,14 +110,37 @@ function AuthenticatedWorkspace() {
     } else {
       setSelectedIpcId(null);
     }
-  }, [ipcs, selectedIpcId]);
+  }, [ipcs, selectedIpcId, urlIpcId]);
 
   const selectedIpc =
     ipcs.find((i) => i.id === selectedIpcId) || ipcs[0] || null;
 
+  const handleSelectIpc = (ipcId: string) => {
+    setSelectedIpcId(ipcId);
+    if (location.pathname.includes("/reconciliation")) {
+      const next = new URLSearchParams(searchParams);
+      next.set("ipc", ipcId);
+      setSearchParams(next, { replace: true });
+    }
+  };
+
+  const handleSelectProject = (projectId: string) => {
+    setSelectedProjectId(projectId);
+    const subRouteMatch = location.pathname.match(
+      /\/app\/projects\/[^/]+\/(dashboard|reconciliation|boq|audit)/,
+    );
+    const subRoute = subRouteMatch?.[1] || "dashboard";
+    const safeSubRoute =
+      user?.role === "CONTRACTOR" && subRoute === "audit"
+        ? "dashboard"
+        : subRoute;
+    navigate(`/app/projects/${projectId}/${safeSubRoute}`);
+  };
+
   const handleCreateProject = async (payload: CreateProjectRequest) => {
     const created = await createProjectMutation.mutateAsync(payload);
     setSelectedProjectId(created.id);
+    navigate(`/app/projects/${created.id}/dashboard`);
   };
 
   if (authLoading) {
@@ -126,7 +175,9 @@ function AuthenticatedWorkspace() {
         <button
           type="button"
           onClick={() => {
-            navigate("/app/dashboard");
+            if (activeProject) {
+              navigate(`/app/projects/${activeProject.id}/dashboard`);
+            }
             setShowNewProjectModal(true);
           }}
           className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-brand-navy text-xs font-bold transition shadow-sm"
@@ -141,7 +192,7 @@ function AuthenticatedWorkspace() {
     <AppShell
       projects={projects}
       selectedProject={activeProject}
-      onSelectProject={(projectId) => setSelectedProjectId(projectId)}
+      onSelectProject={handleSelectProject}
       openConflictBadgeCount={activeProject?.openConflictCount ?? 0}
       headerActions={headerActions}
     >
@@ -158,16 +209,38 @@ function AuthenticatedWorkspace() {
         </div>
       ) : (
         <Routes>
-          <Route index element={<Navigate to="dashboard" replace />} />
           <Route
-            path="dashboard"
+            index
+            element={
+              <Navigate
+                to={`/app/projects/${activeProject.id}/dashboard`}
+                replace
+              />
+            }
+          />
+          <Route
+            path="projects"
+            element={
+              <ProjectsDirectoryPage
+                projects={projects}
+                selectedProjectId={activeProject.id}
+                onSelectProject={setSelectedProjectId}
+                onNewProject={() => {
+                  navigate(`/app/projects/${activeProject.id}/dashboard`);
+                  setShowNewProjectModal(true);
+                }}
+              />
+            }
+          />
+          <Route
+            path="projects/:projectId/dashboard"
             element={
               <PortfolioDashboardPage
                 project={activeProject}
                 evidenceLogs={evidenceQuery.data || []}
                 latestIpc={selectedIpc}
                 onNavigateToReconciliation={() =>
-                  navigate("/app/reconciliation")
+                  navigate(`/app/projects/${activeProject.id}/reconciliation`)
                 }
                 onCreateProject={handleCreateProject}
                 showNewProjectModal={showNewProjectModal}
@@ -176,35 +249,20 @@ function AuthenticatedWorkspace() {
             }
           />
           <Route
-            path="executive"
-            element={
-              user.role === "CONTRACTOR" ? (
-                <Navigate to="/app/dashboard" replace />
-              ) : (
-                <PortfolioExecutivePage
-                  onSelectProject={(projectId) => {
-                    setSelectedProjectId(projectId);
-                    navigate("/app/dashboard");
-                  }}
-                />
-              )
-            }
-          />
-          <Route
-            path="reconciliation"
+            path="projects/:projectId/reconciliation"
             element={
               <ReconciliationWorkbenchPage
                 project={activeProject}
                 ipcs={ipcs}
                 selectedIpc={selectedIpc}
-                onSelectIpc={setSelectedIpcId}
+                onSelectIpc={handleSelectIpc}
                 boqItems={boqQuery.data || []}
                 evidenceLogs={evidenceQuery.data || []}
               />
             }
           />
           <Route
-            path="boq"
+            path="projects/:projectId/boq"
             element={
               <BoqAndHoldPointsPage
                 project={activeProject}
@@ -213,12 +271,33 @@ function AuthenticatedWorkspace() {
             }
           />
           <Route
-            path="audit"
+            path="projects/:projectId/audit"
             element={
               user.role === "CONTRACTOR" ? (
-                <Navigate to="/app/dashboard" replace />
+                <Navigate
+                  to={`/app/projects/${activeProject.id}/dashboard`}
+                  replace
+                />
               ) : (
                 <AuditLedgerPage project={activeProject} />
+              )
+            }
+          />
+          <Route
+            path="executive"
+            element={
+              user.role === "CONTRACTOR" ? (
+                <Navigate
+                  to={`/app/projects/${activeProject.id}/dashboard`}
+                  replace
+                />
+              ) : (
+                <PortfolioExecutivePage
+                  onSelectProject={(projectId) => {
+                    setSelectedProjectId(projectId);
+                    navigate(`/app/projects/${projectId}/dashboard`);
+                  }}
+                />
               )
             }
           />
@@ -226,7 +305,50 @@ function AuthenticatedWorkspace() {
             path="settings"
             element={<SettingsPage project={activeProject} />}
           />
-          <Route path="*" element={<Navigate to="dashboard" replace />} />
+
+          {/* Legacy non-scoped route redirects */}
+          <Route
+            path="dashboard"
+            element={
+              <Navigate
+                to={`/app/projects/${activeProject.id}/dashboard`}
+                replace
+              />
+            }
+          />
+          <Route
+            path="reconciliation"
+            element={
+              <Navigate
+                to={`/app/projects/${activeProject.id}/reconciliation${location.search}`}
+                replace
+              />
+            }
+          />
+          <Route
+            path="boq"
+            element={
+              <Navigate to={`/app/projects/${activeProject.id}/boq`} replace />
+            }
+          />
+          <Route
+            path="audit"
+            element={
+              <Navigate
+                to={`/app/projects/${activeProject.id}/audit`}
+                replace
+              />
+            }
+          />
+          <Route
+            path="*"
+            element={
+              <Navigate
+                to={`/app/projects/${activeProject.id}/dashboard`}
+                replace
+              />
+            }
+          />
         </Routes>
       )}
     </AppShell>

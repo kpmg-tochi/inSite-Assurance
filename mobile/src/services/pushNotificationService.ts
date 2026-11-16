@@ -1,16 +1,20 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
-import { API_BASE_URL } from "../config/apiConfig";
+import { registerPushToken } from "../api/auth/authApi";
 
-// Configure foreground notification behavior
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Configure foreground notification behavior safely (surviving Expo Go push limitations)
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+} catch (err) {
+  console.warn("Notifications.setNotificationHandler warning:", err);
+}
 
 export interface InAppNotificationItem {
   id: string;
@@ -83,18 +87,20 @@ export async function registerForPushNotifications(
     // Transmit push token to backend API if session is authenticated
     if (sessionToken && pushToken) {
       try {
-        await fetch(`${API_BASE_URL}/auth/push-token`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${sessionToken}`,
-          },
-          body: JSON.stringify({
+        const devicePlatform =
+          Platform.OS === "ios"
+            ? "IOS"
+            : Platform.OS === "android"
+            ? "ANDROID"
+            : "WEB";
+        await registerPushToken(
+          {
             deviceToken: pushToken,
-            devicePlatform: Platform.OS.toUpperCase(),
+            devicePlatform,
             appVersion: "2.0.0-expo58",
-          }),
-        });
+          },
+          sessionToken,
+        );
       } catch (err) {
         console.warn("Failed to sync push token with backend:", err);
       }

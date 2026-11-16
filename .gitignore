@@ -10,6 +10,7 @@ build/
 
 # References
 design_reference/
+components_reference/
 
 # Environment variables
 .env

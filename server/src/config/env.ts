@@ -11,6 +11,7 @@ const EnvSchema = z.object({
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .default('development'),
+  ENABLE_DEMO_ENDPOINTS: z.coerce.boolean().default(true),
   CORS_ORIGIN: z.string().default('*'),
 
   DATABASE_URL: z

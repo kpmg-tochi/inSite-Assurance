@@ -78,6 +78,39 @@ export const JoinProjectMobileRequestSchema = z.object({
   livenessPassed: z.boolean().optional(),
   experienceSummary: z.string().max(1000).optional(),
 });
+
+export const LivenessPoseFrameSchema = z.object({
+  yawDeg: z.number(),
+  eyeOpenProb: z.number().min(0).max(1).optional(),
+  capturedAt: z.string().datetime(),
+});
+
+export const LivenessVerificationSchema = z.object({
+  isLive: z.boolean(),
+  detectorEngine: z.enum(['MLKIT_ON_DEVICE', 'GUIDED_CAPTURE']).default('MLKIT_ON_DEVICE'),
+  poses: z.object({
+    front: LivenessPoseFrameSchema,
+    left: LivenessPoseFrameSchema,
+    right: LivenessPoseFrameSchema,
+  }),
+  sha256BundleHash: z.string().min(16).max(256),
+});
+export type LivenessVerification = z.infer<typeof LivenessVerificationSchema>;
+
+export const SubmitAssuranceVerificationRequestSchema = z.object({
+  projectId: z.string().uuid(),
+  idDocumentType: z.string().min(2).max(120),
+  idDocumentUrl: z.string().min(3).max(500),
+  selfieFrontUrl: z.string().min(3).max(500),
+  selfieLeftUrl: z.string().min(3).max(500),
+  selfieRightUrl: z.string().min(3).max(500),
+  livenessVerification: LivenessVerificationSchema,
+  corenLicenseNumber: z.string().min(2).max(50),
+  experienceSummary: z.string().min(5).max(1000),
+});
+export type SubmitAssuranceVerificationRequest = z.infer<
+  typeof SubmitAssuranceVerificationRequestSchema
+>;
 export type JoinProjectMobileRequest = z.infer<
   typeof JoinProjectMobileRequestSchema
 >;
@@ -138,4 +171,42 @@ export const ContractorVerificationRecordDtoSchema = z.object({
 });
 export type ContractorVerificationRecordDto = z.infer<
   typeof ContractorVerificationRecordDtoSchema
+>;
+
+/**
+ * Demo-only Project Catalog & Verification Bypass Schemas
+ */
+export const DemoProjectJoinCodeSchema = z.object({
+  code: z.string(),
+  independenceTier: IndependenceTierEnum,
+});
+
+export const DemoProjectWorkspaceSchema = z.object({
+  id: z.string().uuid(),
+  codePrefix: z.string(),
+  name: z.string(),
+  stateLocation: z.string(),
+  lgaLocation: z.string().nullable().optional(),
+  geofenceMode: z.enum(['RADIAL', 'LINEAR_CORRIDOR']),
+  portfolioHealth: z.string(),
+  joinCodes: z.array(DemoProjectJoinCodeSchema),
+});
+export type DemoProjectWorkspaceDto = z.infer<typeof DemoProjectWorkspaceSchema>;
+
+export const DemoSkipVerificationRequestSchema = z.object({
+  joinCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .min(6, "Project Join Code must be at least 6 characters")
+    .max(16),
+  sessionId: z.string().uuid().optional(),
+  agentFullName: z.string().min(2).max(120).optional(),
+  agentPhoneNumber: z.string().min(6).max(24).optional(),
+  deviceId: z.string().min(4).max(128).optional(),
+  deviceModel: z.string().max(128).optional(),
+  deviceOs: z.string().max(64).optional(),
+});
+export type DemoSkipVerificationRequest = z.infer<
+  typeof DemoSkipVerificationRequestSchema
 >;

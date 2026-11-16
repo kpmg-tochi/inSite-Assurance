@@ -6,23 +6,27 @@ import {
   TouchableOpacity,
   ScrollView,
   StyleSheet,
-  Alert,
+  Modal,
+  Linking,
 } from 'react-native';
-import { submitIncidentReport } from '../services/incidentService';
+import Toast from 'react-native-toast-message';
+import { StatusBar } from 'expo-status-bar';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { InSiteCamera, type CameraCaptureResult } from '../components/camera';
+import { useProfile } from '../context/ProfileContext';
+import { useSubmitIncidentMutation } from '../queries/incidents/useIncidentMutations';
+import type { RootStackParamList } from '../navigation/types';
 
-interface Props {
-  projectId: string;
-  sessionToken: string;
-  onClose: () => void;
-  onSubmitted: () => void;
-}
-
-export const SpecialIncidentModal: React.FC<Props> = ({
-  projectId,
-  sessionToken,
-  onClose,
-  onSubmitted,
-}) => {
+export const SpecialIncidentModal: React.FC = () => {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { activeProjectId: projectId, profile } = useProfile();
+  const sessionToken = profile?.activeSessionToken || '';
+  const onClose = () => navigation.goBack();
+  const onSubmitted = () => navigation.goBack();
   const [category, setCategory] = useState<'WHISTLEBLOWING' | 'SITE_EMERGENCY' | 'CRITICAL_DELAY' | 'MATERIAL_FAILURE'>(
     'WHISTLEBLOWING'
   );
@@ -30,53 +34,85 @@ export const SpecialIncidentModal: React.FC<Props> = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isConfidential, setIsConfidential] = useState(true);
-  const [hasPhoto, setHasPhoto] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [capturedPhoto, setCapturedPhoto] = useState<CameraCaptureResult | null>(null);
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const submitIncidentMutation = useSubmitIncidentMutation();
+  const isSubmitting = submitIncidentMutation.isPending;
 
   const handleSubmit = async () => {
     if (!description.trim()) {
-      Alert.alert('Required', 'Please describe the incident or escalation reason.');
+      Toast.show({
+        type: 'error',
+        props: {
+          title: 'Required',
+          message: 'Please describe the incident or escalation reason.',
+        },
+      });
       return;
     }
 
-    setIsSubmitting(true);
     try {
-      const result = await submitIncidentReport(projectId, sessionToken, {
+      const result = await submitIncidentMutation.mutateAsync({
         projectId,
-        category,
-        severity,
-        title: title.trim() || `${category.replace('_', ' ')} Report`,
-        description: description.trim(),
-        isConfidentialWhistleblower: isConfidential,
-        photoEvidenceUrls: hasPhoto
-          ? ['https://images.unsplash.com/photo-1541888946425-d0fbb1861564?auto=format&fit=crop&w=600&q=80']
-          : [],
-        deviceGpsCoordinates: {
-          latitude: 6.4698,
-          longitude: 3.5852,
-          accuracyMeters: 4.2,
+        sessionToken,
+        payload: {
+          projectId,
+          category,
+          severity,
+          title: title.trim() || `${category.replace('_', ' ')} Report`,
+          description: description.trim(),
+          isConfidentialWhistleblower: isConfidential,
+          photoEvidenceUrls: capturedPhoto ? [capturedPhoto.dataUri] : [],
+          deviceGpsCoordinates: capturedPhoto?.gps
+            ? {
+                latitude: capturedPhoto.gps.latitude,
+                longitude: capturedPhoto.gps.longitude,
+                accuracyMeters: capturedPhoto.gps.accuracyMeters ?? undefined,
+              }
+            : {
+                latitude: 6.4698,
+                longitude: 3.5852,
+                accuracyMeters: 4.2,
+              },
         },
       });
 
       if (result.success) {
-        Alert.alert(
-          'Incident Transmitted',
-          isConfidential
-            ? 'Protected disclosure submitted with Confidential Shield. Routed strictly to Independent Monitor and Lender.'
-            : 'Escalation alert submitted to facility governance log.',
-          [{ text: 'OK', onPress: onSubmitted }]
-        );
+        Toast.show({
+          type: 'success',
+          props: {
+            title: 'Incident Transmitted',
+            message: isConfidential
+              ? 'Protected disclosure submitted with Confidential Shield. Routed strictly to Independent Monitor and Lender.'
+              : 'Escalation alert submitted to facility governance log.',
+          },
+        });
+        onSubmitted();
       }
     } catch (e: any) {
-      Alert.alert('Submission Error', e.message || 'Failed to submit incident report.');
-    } finally {
-      setIsSubmitting(false);
+      Toast.show({
+        type: 'error',
+        props: {
+          title: 'Submission Error',
+          message: e.message || 'Failed to submit incident report.',
+        },
+      });
     }
   };
 
+  const insets = useSafeAreaInsets();
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <StatusBar style="light" />
+
+      <LinearGradient
+        colors={['#881337', '#9F1239', '#1E1B4B']}
+        locations={[0, 0.45, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0.9 }}
+        style={[styles.headerGradient, { paddingTop: Math.max(insets.top + 8, 20) }]}
+      >
         <View style={styles.headerRow}>
           <View style={styles.iconTag}>
             <Text style={styles.iconTagText}>!</Text>
@@ -85,13 +121,54 @@ export const SpecialIncidentModal: React.FC<Props> = ({
             <Text style={styles.title}>Special Incident &amp; Escalation</Text>
             <Text style={styles.subtitle}>Direct Alert to Monitor &amp; Lender</Text>
           </View>
-          <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+          <TouchableOpacity onPress={onClose} activeOpacity={0.7} style={styles.closeBtn}>
             <Text style={styles.closeText}>Close ✕</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </LinearGradient>
 
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+      <View style={[styles.curvedContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        {/* Emergency Services Disclaimer & Direct Dial Links */}
+        <View style={styles.emergencyDisclaimerCard}>
+          <Text style={styles.emergencyDisclaimerTitle}>
+            Emergency Services Disclaimer
+          </Text>
+          <Text style={styles.emergencyDisclaimerBody}>
+            To report a life-threatening medical emergency, active fire, or immediate criminal
+            activity, call the relevant emergency services first before submitting an incident
+            report here. Tap a number below to open your phone dialpad:
+          </Text>
+          <View style={styles.dialLinksRow}>
+            {[
+              { number: '112', label: '112 · National (Police / Fire / Medical)' },
+              { number: '767', label: '767 · Lagos Emergency (LASEMA)' },
+              { number: '122', label: '122 · FRSC Road Rescue' },
+            ].map((item) => (
+              <TouchableOpacity
+                key={item.number}
+                style={styles.dialLinkChip}
+                onPress={() => {
+                  Linking.openURL(`tel:${item.number}`).catch(() => {
+                    Toast.show({
+                      type: 'warning',
+                      props: {
+                        title: 'Dialer Unavailable',
+                        message: `Please dial ${item.number} manually.`,
+                      },
+                    });
+                  });
+                }}
+                activeOpacity={0.75}
+                accessibilityRole="link"
+                accessibilityLabel={`Call ${item.label}`}
+              >
+                <Text style={styles.dialLinkText}>📞 {item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
         {/* Category Picker */}
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Select Escalation Category *</Text>
@@ -173,12 +250,14 @@ export const SpecialIncidentModal: React.FC<Props> = ({
         <View style={styles.card}>
           <Text style={styles.fieldLabel}>Photo Evidence Attachment</Text>
           <TouchableOpacity
-            style={[styles.photoButton, hasPhoto && styles.photoButtonAttached]}
-            onPress={() => setHasPhoto(!hasPhoto)}
+            style={[styles.photoButton, capturedPhoto && styles.photoButtonAttached]}
+            onPress={() => setShowCameraModal(true)}
             activeOpacity={0.8}
           >
             <Text style={styles.photoButtonText}>
-              {hasPhoto ? '✓ Photo Evidence Attached (Ch 14+200)' : '📷 Snap Supporting Photo'}
+              {capturedPhoto
+                ? `✓ Live Photo Attached (${capturedPhoto.width}x${capturedPhoto.height})`
+                : '📷 Snap Supporting Photo'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -195,19 +274,47 @@ export const SpecialIncidentModal: React.FC<Props> = ({
         </TouchableOpacity>
       </ScrollView>
     </View>
+
+      <Modal visible={showCameraModal} animationType="slide">
+        <InSiteCamera
+          captureType="shutter"
+          geoTag={true}
+          initialFacing="back"
+          title="Incident Evidence Capture"
+          subtitle="Live geotagged photo only"
+          onCapture={(result) => {
+            setCapturedPhoto(result);
+            setShowCameraModal(false);
+          }}
+          onCancel={() => setShowCameraModal(false)}
+        />
+      </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#1E1B4B',
   },
-  header: {
-    backgroundColor: '#0C233C',
-    paddingTop: 50,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+  headerGradient: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+  },
+  curvedContainer: {
+    flex: 1,
+    marginTop: -16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: '#F8FAFC',
+    overflow: 'hidden',
+  },
+  closeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   headerRow: {
     flexDirection: 'row',
@@ -369,6 +476,43 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  emergencyDisclaimerCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    gap: 8,
+  },
+  emergencyDisclaimerTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  emergencyDisclaimerBody: {
+    fontSize: 11,
+    color: '#78350F',
+    lineHeight: 16,
+  },
+  dialLinksRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  dialLinkChip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 9999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  dialLinkText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400E',
+    textDecorationLine: 'underline',
   },
 });
 

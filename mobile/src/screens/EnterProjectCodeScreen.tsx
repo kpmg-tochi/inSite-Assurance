@@ -1,308 +1,375 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
-} from 'react-native';
-import { updateLocalProfile } from '../storage/secureProfileStore';
-import { API_BASE_URL } from '../config/apiConfig';
+  ActivityIndicator,
+  Platform,
+} from "react-native";
+import Toast from "react-native-toast-message";
+import { Feather } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import {
+  Avatar,
+  Container,
+  GradientHeaderLayout,
+  InfoCallout,
+  Pill,
+} from "../components/common";
+import { PrimaryButton } from "../components/inputs/Buttons";
+import { useDemoProjectsQuery } from "../queries/projects/useProjectsQueries";
+import { useJoinProjectMutation } from "../queries/auth/useAuthMutations";
+import { useProfile } from "../context/ProfileContext";
+import type { RootStackParamList } from "../navigation/types";
 
-interface Props {
-  onCodeSubmitted: (joinCode: string, isContractorTier: boolean) => void;
-  onOpenProfile: () => void;
-  userInitials?: string;
+/**
+ * Formats facility join codes with automatic hyphen delimiters (e.g. LKK-402-CON)
+ * and uppercase enforcement while allowing smooth backspacing over hyphens.
+ */
+function formatJoinCodeInput(raw: string, prevValue: string): string {
+  const cleaned = raw
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 9);
+
+  if (
+    raw.length < prevValue.length &&
+    prevValue.endsWith("-") &&
+    cleaned === prevValue.replace(/[^A-Z0-9]/g, "")
+  ) {
+    const trimmed = cleaned.slice(0, -1);
+    return trimmed.length > 3
+      ? `${trimmed.slice(0, 3)}-${trimmed.slice(3)}`
+      : trimmed;
+  }
+
+  const parts: string[] = [];
+  if (cleaned.length > 0) parts.push(cleaned.slice(0, 3));
+  if (cleaned.length > 3) parts.push(cleaned.slice(3, 6));
+  if (cleaned.length > 6) parts.push(cleaned.slice(6, 9));
+  return parts.join("-");
 }
 
-export const EnterProjectCodeScreen: React.FC<Props> = ({
-  onCodeSubmitted,
-  onOpenProfile,
-  userInitials = 'CO',
-}) => {
-  const [projectCode, setProjectCode] = useState('LKK-402-CON');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+export const EnterProjectCodeScreen: React.FC = () => {
+  // Navigation
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const handleSubmit = async () => {
-    const normalized = projectCode.trim().toUpperCase();
-    if (!normalized) {
-      Alert.alert('Required', 'Please enter your project join code.');
+  // Profile context
+  const { profile, userInitials, updateProfile } = useProfile();
+
+  // State
+  const [projectCode, setProjectCode] = useState("");
+  const [autofillIndex, setAutofillIndex] = useState(0);
+
+  // Data fetching
+  const {
+    data: demoProjects = [],
+    isFetching: loadingDemoCodes,
+    refetch: refetchDemoProjects,
+  } = useDemoProjectsQuery();
+
+  // Mutations
+  const joinProjectMutation = useJoinProjectMutation();
+
+  // Get seeded project codes
+  const seededAutofillOptions = useMemo(() => {
+    const options: Array<{
+      code: string;
+      projectName: string;
+      codePrefix: string;
+    }> = [];
+    for (const p of demoProjects) {
+      const contractorCode =
+        p.joinCodes.find(
+          (jc) => jc.independenceTier === "CONTRACTOR_ENGINEER",
+        ) || p.joinCodes[0];
+      if (contractorCode) {
+        options.push({
+          code: contractorCode.code,
+          projectName: p.name,
+          codePrefix: p.codePrefix,
+        });
+      }
+    }
+    return options;
+  }, [demoProjects]);
+
+  // Autofill demo code
+  const handleAutofillDemoCode = async () => {
+    let options = seededAutofillOptions;
+
+    if (options.length === 0) {
+      const res = await refetchDemoProjects();
+      if (res.error) {
+        Toast.show({
+          type: "error",
+          props: {
+            title: "Autofill Unavailable",
+            message:
+              (res.error as Error)?.message ||
+              "Could not fetch seeded projects from the database server.",
+          },
+        });
+        return;
+      }
+
+      const list = res.data ?? [];
+      options = list
+        .map((p) => {
+          const code =
+            p.joinCodes.find(
+              (jc) => jc.independenceTier === "CONTRACTOR_ENGINEER",
+            ) || p.joinCodes[0];
+          return code
+            ? { code: code.code, projectName: p.name, codePrefix: p.codePrefix }
+            : null;
+        })
+        .filter(
+          (x): x is { code: string; projectName: string; codePrefix: string } =>
+            x !== null,
+        );
+    }
+
+    if (options.length === 0) {
+      Toast.show({
+        type: "warning",
+        props: {
+          title: "No Seeded Projects",
+          message: "No active project join codes were found in the database.",
+        },
+      });
       return;
     }
 
-    setIsSubmitting(true);
-    const isContractor = normalized.endsWith('-CON') || normalized.includes('CON');
+    const idx = autofillIndex % options.length;
+    const selected = options[idx];
+    setProjectCode(formatJoinCodeInput(selected.code, projectCode));
+    setAutofillIndex((prev) => prev + 1);
+
+    Toast.show({
+      type: "info",
+      props: {
+        title: `Filled ${selected.code}`,
+        message: `${selected.projectName}${
+          options.length > 1 ? " (tap Autofill again to switch project)" : ""
+        }`,
+      },
+    });
+  };
+
+  // Validation
+  const canSubmit = useMemo(() => {
+    return projectCode.trim().length >= 6 && projectCode.trim().length <= 10;
+  }, [projectCode]);
+
+  // Submit project code
+  const handleSubmit = async () => {
+    const normalized = projectCode.trim().toUpperCase();
+    if (!canSubmit) {
+      Toast.show({
+        type: "error",
+        props: {
+          title: "Valid Code Required",
+          message:
+            "Please enter a valid project facility join code (e.g. LKK-402-CON).",
+        },
+      });
+      return;
+    }
 
     try {
-      // Attempt real server registration if reachable
-      const response = await fetch(`${API_BASE_URL}/auth/join-project`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          joinCode: normalized,
-          agentFullName: 'Engr. Chukwuma Okeke',
-          agentPhoneNumber: '+234 803 555 0192',
-          deviceId: 'DEV-HW-IN-SITU-001',
-          deviceModel: 'Samsung Galaxy A14 (WAT Field Device)',
-          deviceOs: 'Android 14',
-          livenessPassed: true,
-          corenLicenseNumber: 'COREN R.49201',
-          experienceSummary: '8 years supervising highway reinforced concrete structures.',
-        }),
-      }).catch(() => null);
-
-      let sessionToken = 'offline-mock-session-token';
-      let projectId = 'proj-lkk-402';
-
-      if (response && response.ok) {
-        const json = await response.json();
-        sessionToken = json.data?.accessToken || sessionToken;
-        projectId = json.data?.fieldSession?.projectId || projectId;
-      }
-
-      await updateLocalProfile({
-        activeProjectCode: normalized,
-        activeProjectId: projectId,
-        activeSessionToken: sessionToken,
-        activeIndependenceTier: isContractor ? 'CONTRACTOR_ENGINEER' : 'MONITOR_INSPECTOR',
-        assuranceStatus: isContractor ? 'PENDING_APPROVAL' : 'APPROVED',
+      const result = await joinProjectMutation.mutateAsync({
+        joinCode: normalized,
+        agentFullName: profile?.fullName?.trim() || "Field Engineer",
+        agentPhoneNumber: profile?.phoneNumber?.trim() || "+2348000000000",
+        deviceId: profile?.hardwareDeviceId || "DEV-MOBILE-FIELD",
+        deviceModel: `${Platform.OS === "ios" ? "iOS" : "Android"} Field Device`,
+        deviceOs: `${Platform.OS} ${Platform.Version}`,
       });
 
-      onCodeSubmitted(normalized, isContractor);
-    } catch (e) {
-      console.warn('Error during join-project, proceeding offline:', e);
-      onCodeSubmitted(normalized, isContractor);
-    } finally {
-      setIsSubmitting(false);
+      const isContractor =
+        result.sessionProfile.independenceTier === "CONTRACTOR_ENGINEER";
+
+      await updateProfile({
+        activeProjectCode: result.sessionProfile.joinCodeUsed,
+        activeProjectId: result.sessionProfile.projectId,
+        activeSessionId: result.sessionProfile.sessionId,
+        activeSessionToken: result.accessToken,
+        activeIndependenceTier: result.sessionProfile.independenceTier,
+        assuranceStatus: isContractor ? "NOT_SUBMITTED" : "APPROVED",
+      });
+
+      if (isContractor) {
+        navigation.navigate("AssuranceWizard");
+      } else {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "WbsInbox" }],
+        });
+      }
+    } catch (err: any) {
+      Toast.show({
+        type: "error",
+        props: {
+          title: "Join Failed",
+          message:
+            err?.message ||
+            "Unable to verify project join code. Ensure the server is running and code is valid.",
+        },
+      });
     }
   };
 
+  const isSubmitting = joinProjectMutation.isPending;
+
   return (
-    <View style={styles.container}>
-      {/* Header with Avatar and Offline Ready Badge */}
+    <Container style={styles.body}>
+      <View style={{ alignSelf: "flex-end" }}>
+        <Avatar
+          size="xs"
+          forceInitials={userInitials}
+          showOnlineDot
+          onPress={() => navigation.navigate("ProfileModal")}
+          accessibilityLabel="Open Profile and Projects"
+        />
+      </View>
+
       <View style={styles.header}>
-        <View style={styles.headerTopRow}>
-          <TouchableOpacity
-            style={styles.avatarButton}
-            onPress={onOpenProfile}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.avatarText}>{userInitials}</Text>
-          </TouchableOpacity>
-          <View>
-            <Text style={styles.headerTitle}>InSite Assurance</Text>
-            <Text style={styles.headerSubtitle}>Field Evidence &amp; Verification</Text>
-          </View>
-          <View style={styles.offlineBadge}>
-            <Text style={styles.offlineBadgeText}>Offline Ready</Text>
-          </View>
-        </View>
+        <Text style={styles.headerTitle}>Join Project</Text>
+        <Text style={styles.headerSubtitle}>
+          Connect this field device to an authorized site
+        </Text>
       </View>
 
-      <View style={styles.body}>
-        <View style={styles.card}>
-          <View style={styles.cardTag}>
-            <Text style={styles.cardTagText}>Project Onboarding</Text>
-          </View>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Enter Project Join Code</Text>
+        <Text style={styles.cardDescription}>
+          Enter the project authorization code provided by your Independent
+          Project Monitor or Managing Contractor.
+        </Text>
 
-          <Text style={styles.cardTitle}>Enter Project Join Code</Text>
-          <Text style={styles.cardDescription}>
-            Enter the facility authorization code provided by your Independent Project Monitor or
-            Managing Contractor.
-          </Text>
-
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.codeInput}
-              value={projectCode}
-              onChangeText={(t) => setProjectCode(t.toUpperCase())}
-              placeholder="e.g. LKK-402-CON"
-              placeholderTextColor="#94A3B8"
-              autoCapitalize="characters"
-              autoCorrect={false}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={[styles.primaryButton, isSubmitting && { opacity: 0.7 }]}
-            onPress={handleSubmit}
-            disabled={isSubmitting}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.primaryButtonText}>
-              {isSubmitting ? 'Joining Facility...' : 'Submit Project Code'}
-            </Text>
-          </TouchableOpacity>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.codeInput}
+            value={projectCode}
+            onChangeText={(text) =>
+              setProjectCode((prev) => formatJoinCodeInput(text, prev))
+            }
+            placeholder="LKK-402-CON"
+            placeholderTextColor="#94A3B8"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={11}
+          />
         </View>
 
-        {/* Informational Guidance */}
-        <View style={styles.infoBox}>
-          <Text style={styles.infoTitle}>Verification Notice</Text>
-          <Text style={styles.infoBody}>
-            Contractor codes (-CON) will initiate a 3-step offline assurance check: ID photo,
-            live selfie with head-turn liveness, and COREN/regulatory license number.
-          </Text>
-        </View>
+        <PrimaryButton
+          onPress={handleSubmit}
+          text="Join project"
+          isWorking={isSubmitting}
+          disabled={isSubmitting || !canSubmit}
+        />
       </View>
-    </View>
+
+      {/* Auto fill */}
+      <TouchableOpacity
+        style={styles.autofillButton}
+        onPress={handleAutofillDemoCode}
+        disabled={loadingDemoCodes || isSubmitting}
+        activeOpacity={0.75}
+      >
+        {loadingDemoCodes ? (
+          <ActivityIndicator size="small" color="#00338D" />
+        ) : (
+          <Feather name="zap" size={14} color="#00338D" />
+        )}
+        <Text style={styles.autofillButtonText}>
+          {loadingDemoCodes ? "Loading Join Codes..." : "Autofill Demo Code"}
+        </Text>
+      </TouchableOpacity>
+    </Container>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
+  body: {
+    gap: 20,
+    justifyContent: "center",
+  },
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    gap: 14,
   },
   header: {
-    backgroundColor: '#0C233C',
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.12)',
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  avatarButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#00338D',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
+    gap: 8,
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: "auto",
   },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#FFFFFF",
     letterSpacing: -0.3,
   },
   headerSubtitle: {
-    fontSize: 11,
-    color: '#93C5FD',
-  },
-  offlineBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 9999,
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1,
-    borderColor: '#A7F3D0',
-  },
-  offlineBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#065F46',
-  },
-  body: {
-    flex: 1,
-    padding: 20,
-    justifyContent: 'center',
-    gap: 16,
-  },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-    alignItems: 'center',
-  },
-  cardTag: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 9999,
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    marginBottom: 12,
-  },
-  cardTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#00338D',
+    fontSize: 16,
+    color: "rgba(255, 255, 255, 0.75)",
   },
   cardTitle: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 6,
-    textAlign: 'center',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   cardDescription: {
-    fontSize: 12,
-    color: '#64748B',
-    textAlign: 'center',
+    fontSize: 13,
+    color: "#64748B",
     lineHeight: 18,
-    marginBottom: 20,
   },
   inputContainer: {
-    width: '100%',
-    marginBottom: 20,
+    marginTop: 4,
   },
   codeInput: {
-    backgroundColor: '#EFF6FF',
-    borderWidth: 2,
-    borderColor: '#00338D',
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.5,
+    borderColor: "#CBD5E1",
     borderRadius: 14,
+    paddingHorizontal: 16,
     paddingVertical: 14,
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 16,
+    fontFamily: "monospace",
+    color: "#0F172A",
+    fontWeight: "700",
     letterSpacing: 2,
-    textAlign: 'center',
-    color: '#0C233C',
+    textAlign: "center",
   },
-  primaryButton: {
-    width: '100%',
-    backgroundColor: '#00338D',
+  autofillButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
     paddingVertical: 14,
+    paddingHorizontal: 14,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#00338D',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: "#EFF6FF",
+    marginBottom: "60%",
   },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  infoBox: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  infoTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#334155',
-    marginBottom: 3,
-  },
-  infoBody: {
-    fontSize: 11,
-    color: '#64748B',
-    lineHeight: 16,
+  autofillButtonText: {
+    color: "#00338D",
+    fontSize: 12,
+    fontWeight: "700",
   },
 });
-

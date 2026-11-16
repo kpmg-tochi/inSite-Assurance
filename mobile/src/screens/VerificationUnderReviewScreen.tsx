@@ -1,86 +1,63 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import {
+  GradientHeaderLayout,
+  InfoCallout,
+  Pill,
+} from '../components/common';
+import { PrimaryButton } from '../components/inputs/Buttons';
+import type { RootStackParamList } from '../navigation/types';
 
-interface Props {
-  onDismiss: () => void;
-}
-
-export const VerificationUnderReviewScreen: React.FC<Props> = ({ onDismiss }) => {
+export const VerificationUnderReviewScreen: React.FC = () => {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const onDismiss = () =>
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'WbsInbox' }],
+    });
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>InSite Assurance</Text>
-        <Text style={styles.headerSubtitle}>Contractor Identity &amp; Competence</Text>
+    <GradientHeaderLayout
+      title="InSite Assurance"
+      subtitle="Contractor Identity & Competence"
+      contentContainerStyle={styles.body}
+    >
+      <View style={styles.card}>
+        <Pill variant="warning" text="Under Review" style={{ alignSelf: 'center' }} />
+
+        <Text style={styles.title}>Submission Under Review</Text>
+        <Text style={styles.subtitle}>
+          Your government ID photo, facial liveness signature, and COREN credentials have been
+          submitted to the Independent Project Monitor for facility verification.
+        </Text>
+
+        <InfoCallout
+          variant="info"
+          title="Non-Blocking Field Access"
+          description="You do not need to wait for approval to begin your site day! You can proceed directly to the WBS chat inbox, snap photos, and record notes."
+        />
+
+        <InfoCallout
+          variant="neutral"
+          title="Local Backlog Protection"
+          description="To prevent unauthorized baseline updates and preserve AI compute, your daily logs will queue safely on this device. When approved, a push notification will alert you to review and confirm your submission backlog."
+        />
+
+        <PrimaryButton
+          onPress={onDismiss}
+          text="Dismiss & Proceed to WBS Inbox"
+          style={styles.dismissButton}
+        />
       </View>
-
-      <View style={styles.body}>
-        <View style={styles.card}>
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusBadgeText}>Under Review</Text>
-          </View>
-
-          <Text style={styles.title}>Submission Under Review</Text>
-          <Text style={styles.subtitle}>
-            Your government ID photo, facial liveness signature, and COREN credentials have been
-            submitted to the Independent Project Monitor for facility verification.
-          </Text>
-
-          <View style={styles.benefitBox}>
-            <Text style={styles.benefitTitle}>Non-Blocking Field Access</Text>
-            <Text style={styles.benefitText}>
-              You do not need to wait for approval to begin your site day! You can proceed directly to
-              the WBS chat inbox, snap photos, and record notes.
-            </Text>
-          </View>
-
-          <View style={styles.costBox}>
-            <Text style={styles.costTitle}>Local Backlog Protection</Text>
-            <Text style={styles.costText}>
-              To prevent unauthorized baseline updates and preserve AI compute, your daily logs will
-              queue safely on this device. When approved, a push notification will alert you to review
-              and confirm your submission backlog.
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={onDismiss}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.primaryButtonText}>Dismiss &amp; Proceed to WBS Inbox</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </View>
+    </GradientHeaderLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    backgroundColor: '#0C233C',
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
-  },
-  headerSubtitle: {
-    fontSize: 11,
-    color: '#93C5FD',
-    marginTop: 2,
-  },
   body: {
-    flex: 1,
-    padding: 20,
+    padding: 16,
     justifyContent: 'center',
   },
   card: {
@@ -97,19 +74,6 @@ const styles = StyleSheet.create({
     elevation: 2,
     gap: 14,
   },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 9999,
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-  },
-  statusBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#92400E',
-  },
   title: {
     fontSize: 18,
     fontWeight: '800',
@@ -122,57 +86,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
-  benefitBox: {
+  dismissButton: {
     width: '100%',
-    backgroundColor: '#EFF6FF',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  benefitTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#00338D',
-    marginBottom: 3,
-  },
-  benefitText: {
-    fontSize: 11,
-    color: '#1E3A8A',
-    lineHeight: 16,
-  },
-  costBox: {
-    width: '100%',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  costTitle: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#334155',
-    marginBottom: 3,
-  },
-  costText: {
-    fontSize: 11,
-    color: '#64748B',
-    lineHeight: 16,
-  },
-  primaryButton: {
-    width: '100%',
-    backgroundColor: '#00338D',
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginTop: 6,
   },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
-  },
 });
-

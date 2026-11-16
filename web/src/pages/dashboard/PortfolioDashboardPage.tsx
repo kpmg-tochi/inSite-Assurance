@@ -416,7 +416,7 @@ export function PortfolioDashboardPage({
 
       {/* New Project Baseline Modal (Monitor Role) */}
       {showNewProjectModal && (
-        <div className="fixed inset-0 bg-slate-950/35 backdrop-blur-[1px] z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 -top-3 bg-slate-950/35 backdrop-blur-[1px] z-[500] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden">
             <div className="px-5 py-4 bg-brand-navy text-white flex items-center justify-between">
               <div>

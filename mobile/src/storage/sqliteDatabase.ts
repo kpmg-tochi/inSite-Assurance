@@ -37,6 +37,8 @@ async function initDatabaseSchema(db: SQLite.SQLiteDatabase): Promise<void> {
       cumulative_certified_pct REAL DEFAULT 0,
       is_hold_point INTEGER DEFAULT 0,
       is_scheduled_today INTEGER DEFAULT 0,
+      planning_tier TEXT DEFAULT 'UNBLOCKED_POOL',
+      is_reported_today INTEGER DEFAULT 0,
       unread_count INTEGER DEFAULT 0,
       last_message_text TEXT,
       last_message_timestamp TEXT
@@ -50,7 +52,10 @@ async function initDatabaseSchema(db: SQLite.SQLiteDatabase): Promise<void> {
       message_type TEXT NOT NULL,
       text_content TEXT,
       media_uri TEXT,
+      media_uris_json TEXT,
       caption TEXT,
+      duration_ms INTEGER,
+      waveform_json TEXT,
       latitude REAL,
       longitude REAL,
       chainage_label TEXT,
@@ -67,7 +72,27 @@ async function initDatabaseSchema(db: SQLite.SQLiteDatabase): Promise<void> {
       unit TEXT NOT NULL,
       status TEXT NOT NULL,
       evidence_json TEXT,
+      voice_note_uri TEXT,
+      submission_geotag_json TEXT,
       created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS site_telemetry_pings (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      wbs_item_id TEXT,
+      latitude REAL NOT NULL,
+      longitude REAL NOT NULL,
+      accuracy_meters REAL,
+      altitude_meters REAL,
+      is_mocked INTEGER DEFAULT 0,
+      is_within_geofence INTEGER,
+      chainage_label TEXT,
+      distance_meters REAL,
+      ping_source TEXT NOT NULL,
+      device_signature_hash TEXT NOT NULL,
+      captured_at TEXT NOT NULL,
+      synced_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS incident_reports (
@@ -92,6 +117,53 @@ async function initDatabaseSchema(db: SQLite.SQLiteDatabase): Promise<void> {
       is_read INTEGER DEFAULT 0,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS assurance_submissions (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL,
+      id_type TEXT NOT NULL,
+      id_photo_uri TEXT NOT NULL,
+      selfie_front_uri TEXT NOT NULL,
+      selfie_left_uri TEXT NOT NULL,
+      selfie_right_uri TEXT NOT NULL,
+      liveness_json TEXT NOT NULL,
+      regulatory_body TEXT NOT NULL,
+      license_number TEXT NOT NULL,
+      experience_summary TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'QUEUED_OFFLINE',
+      created_at TEXT NOT NULL,
+      synced_at TEXT
+    );
   `);
+
+  // Safe migrations for existing on-device SQLite databases
+  await ensureColumnExists(db, 'wbs_items', 'planning_tier', "TEXT DEFAULT 'UNBLOCKED_POOL'");
+  await ensureColumnExists(db, 'wbs_items', 'is_reported_today', 'INTEGER DEFAULT 0');
+  await ensureColumnExists(db, 'wbs_chat_messages', 'media_uris_json', 'TEXT');
+  await ensureColumnExists(db, 'wbs_chat_messages', 'duration_ms', 'INTEGER');
+  await ensureColumnExists(db, 'wbs_chat_messages', 'waveform_json', 'TEXT');
+  await ensureColumnExists(db, 'staged_workday_reports', 'voice_note_uri', 'TEXT');
+  await ensureColumnExists(db, 'staged_workday_reports', 'submission_geotag_json', 'TEXT');
+}
+
+async function ensureColumnExists(
+  db: SQLite.SQLiteDatabase,
+  tableName: string,
+  columnName: string,
+  columnDef: string
+): Promise<void> {
+  try {
+    const columns = await db.getAllAsync<{ name: string }>(
+      `PRAGMA table_info(${tableName})`
+    );
+    const exists = columns.some((c) => c.name === columnName);
+    if (!exists) {
+      await db.execAsync(
+        `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef};`
+      );
+    }
+  } catch (err) {
+    console.warn(`SQLite column migration skipped for ${tableName}.${columnName}:`, err);
+  }
 }
 

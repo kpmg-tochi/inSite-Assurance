@@ -1,158 +1,143 @@
 import React from 'react';
 import {
-  View,
   Text,
   TouchableOpacity,
-  ScrollView,
+  View,
   StyleSheet,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   getInAppNotifications,
   markNotificationAsRead,
   InAppNotificationItem,
 } from '../services/pushNotificationService';
+import { EmptyStateCard, Pill } from '../components/common';
+import { GradientHeaderLayout } from '../components/common/GradientHeaderLayout';
+import { useProfile } from '../context/ProfileContext';
+import { getWbsThreads } from '../storage/wbsRepository';
+import type { RootStackParamList } from '../navigation/types';
 
-interface Props {
-  onClose: () => void;
-  onOpenBacklogModal: () => void;
-  onSelectWbsItem: (wbsItemId: string) => void;
-}
-
-export const NotificationCenterModal: React.FC<Props> = ({
-  onClose,
-  onOpenBacklogModal,
-  onSelectWbsItem,
-}) => {
+export const NotificationCenterModal: React.FC = () => {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { activeProjectId } = useProfile();
   const notifications = getInAppNotifications();
 
-  const handlePress = (notif: InAppNotificationItem) => {
+  const onClose = () => navigation.goBack();
+
+  const handlePress = async (notif: InAppNotificationItem) => {
     markNotificationAsRead(notif.id);
     if (notif.actionPayload?.openBacklogModal) {
-      onClose();
-      onOpenBacklogModal();
+      navigation.replace('BacklogModal');
     } else if (notif.actionPayload?.targetWbsItemId) {
-      onClose();
-      onSelectWbsItem(notif.actionPayload.targetWbsItemId);
+      const threads = await getWbsThreads(activeProjectId);
+      const target = threads.find(
+        (t) => t.id === notif.actionPayload?.targetWbsItemId
+      );
+      navigation.goBack();
+      if (target) {
+        navigation.navigate('WbsThread', { wbsItem: target });
+      }
     }
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>Notification Center</Text>
-          <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-            <Text style={styles.closeText}>Close ✕</Text>
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.subtitle}>
-          Critical updates on assurance verifications, monitor queries, and hold-points.
-        </Text>
-      </View>
+    <GradientHeaderLayout
+      title="Notification Center"
+      subtitle="Critical updates on assurance verifications &amp; queries."
+      rightAction={
+        <TouchableOpacity
+          onPress={onClose}
+          activeOpacity={0.7}
+          style={styles.closeBtn}
+          accessibilityLabel="Close notification modal"
+        >
+          <Text style={styles.closeText}>Close ✕</Text>
+        </TouchableOpacity>
+      }
+      contentContainerStyle={styles.body}
+    >
+      {notifications.length === 0 ? (
+        <EmptyStateCard
+          title="All Caught Up"
+          description="Verification approvals, monitor queries, and daily brief alerts will appear here."
+        />
+      ) : null}
 
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-        {notifications.map((n) => {
-          const isApproval = n.type === 'ASSURANCE_APPROVED';
-          const isQuery = n.type === 'MONITOR_QUERY';
+      {notifications.map((n) => {
+        const isApproval = n.type === 'ASSURANCE_APPROVED';
+        const isQuery = n.type === 'MONITOR_QUERY';
 
-          return (
-            <TouchableOpacity
-              key={n.id}
-              style={[styles.card, !n.isRead && styles.cardUnread]}
-              onPress={() => handlePress(n)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.topRow}>
-                <View
-                  style={[
-                    styles.tag,
-                    isApproval ? styles.tagSuccess : isQuery ? styles.tagDanger : styles.tagInfo,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.tagText,
-                      isApproval
-                        ? styles.tagSuccessText
-                        : isQuery
-                        ? styles.tagDangerText
-                        : styles.tagInfoText,
-                    ]}
-                  >
-                    {isApproval
-                      ? 'Assurance Approved'
-                      : isQuery
-                      ? 'Monitor Query'
-                      : 'Facility Update'}
-                  </Text>
-                </View>
-                <Text style={styles.timeText}>{n.createdAt}</Text>
+        return (
+          <TouchableOpacity
+            key={n.id}
+            style={[styles.card, !n.isRead && styles.cardUnread]}
+            onPress={() => handlePress(n)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.topRow}>
+              <Pill
+                variant={isApproval ? 'positive' : isQuery ? 'negative' : 'info'}
+                text={
+                  isApproval
+                    ? 'Assurance Approved'
+                    : isQuery
+                    ? 'Monitor Query'
+                    : 'Facility Update'
+                }
+              />
+              <Text style={styles.timeText}>{n.createdAt}</Text>
+            </View>
+
+            <Text style={styles.notifTitle}>{n.title}</Text>
+            <Text style={styles.notifMessage}>{n.message}</Text>
+
+            {isApproval && (
+              <View style={styles.actionPill}>
+                <Text style={styles.actionPillText}>Tap to Review &amp; Confirm Backlog →</Text>
               </View>
-
-              <Text style={styles.notifTitle}>{n.title}</Text>
-              <Text style={styles.notifMessage}>{n.message}</Text>
-
-              {isApproval && (
-                <View style={styles.actionPill}>
-                  <Text style={styles.actionPillText}>Tap to Review &amp; Confirm Backlog →</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-    </View>
+            )}
+          </TouchableOpacity>
+        );
+      })}
+    </GradientHeaderLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    backgroundColor: '#0C233C',
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
+  closeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
   },
   closeText: {
-    fontSize: 13,
-    color: '#93C5FD',
+    fontSize: 12,
     fontWeight: '700',
-  },
-  subtitle: {
-    fontSize: 11,
-    color: '#BFDBFE',
-    lineHeight: 16,
+    color: '#FFFFFF',
   },
   body: {
-    padding: 16,
     gap: 12,
+    paddingBottom: 24,
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 16,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    gap: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+    gap: 8,
   },
   cardUnread: {
     borderColor: '#00338D',
-    borderWidth: 1.5,
+    borderLeftWidth: 4,
+    backgroundColor: '#FAFCFF',
   },
   topRow: {
     flexDirection: 'row',
@@ -161,42 +146,56 @@ const styles = StyleSheet.create({
   },
   tag: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 9999,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  tagSuccess: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0', borderWidth: 1 },
-  tagDanger: { backgroundColor: '#FFF1F2', borderColor: '#FECDD3', borderWidth: 1 },
-  tagInfo: { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', borderWidth: 1 },
-  tagText: { fontSize: 10, fontWeight: '700' },
-  tagSuccessText: { color: '#065F46' },
-  tagDangerText: { color: '#BE123C' },
-  tagInfoText: { color: '#00338D' },
-  timeText: {
+  tagSuccess: {
+    backgroundColor: '#ECFDF5',
+  },
+  tagDanger: {
+    backgroundColor: '#FFF1F2',
+  },
+  tagInfo: {
+    backgroundColor: '#EFF6FF',
+  },
+  tagText: {
     fontSize: 10,
+    fontWeight: '700',
+  },
+  tagSuccessText: {
+    color: '#065F46',
+  },
+  tagDangerText: {
+    color: '#BE123C',
+  },
+  tagInfoText: {
+    color: '#00338D',
+  },
+  timeText: {
+    fontSize: 11,
     color: '#94A3B8',
   },
   notifTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
   },
   notifMessage: {
-    fontSize: 11,
+    fontSize: 12,
     color: '#475569',
-    lineHeight: 16,
+    lineHeight: 18,
   },
   actionPill: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#0C233C',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    backgroundColor: '#EFF6FF',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 8,
+    alignSelf: 'flex-start',
     marginTop: 4,
   },
   actionPillText: {
-    color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
+    color: '#00338D',
   },
 });
-

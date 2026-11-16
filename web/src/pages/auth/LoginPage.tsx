@@ -97,10 +97,9 @@ export function LoginPage() {
               Closing the Physical-to-Financial Assurance Gap.
             </h1>
             <p className="text-xs xl:text-sm text-blue-100/85 mt-2 leading-relaxed">
-              Independent geospatial corridor verification, Nigerian Pidgin
-              &amp; English voice-to-BOQ extraction, and automated Interim
-              Payment Certificate reconciliation for infrastructure lenders and
-              monitors.
+              Independent geospatial corridor verification, voice-to-BOQ
+              extraction, and automated Interim Payment Certificate
+              reconciliation for infrastructure lenders and monitors.
             </p>
           </div>
 
@@ -229,9 +228,7 @@ export function LoginPage() {
                 </p>
                 <div className="border-t border-slate-200/90 my-2" />
                 <p className="text-[10.5px] text-slate-600 leading-relaxed">
-                  <strong className="text-slate-700">
-                    Whisper Transcript:
-                  </strong>{" "}
+                  <strong className="text-slate-700">Transcript:</strong>{" "}
                   &ldquo;We dey for chainage fourteen plus two hundred this
                   afternoon. Contractor don cast twelve meters of the box
                   culvert wall and use forty bags of Dangote cement...&rdquo;

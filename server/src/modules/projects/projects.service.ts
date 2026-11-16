@@ -626,3 +626,32 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
   };
 }
 
+/**
+ * Demo-only catalog endpoint: lists seeded/active projects and their active join codes
+ * for mobile demo project switching and join-code autofill without hardcoded fixtures.
+ */
+export async function listDemoProjects() {
+  const projects = await prisma.project.findMany({
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      codePrefix: true,
+      name: true,
+      stateLocation: true,
+      lgaLocation: true,
+      geofenceMode: true,
+      portfolioHealth: true,
+      joinCodes: {
+        where: { isActive: true },
+        orderBy: { code: 'asc' },
+        select: {
+          code: true,
+          independenceTier: true,
+        },
+      },
+    },
+  });
+
+  return projects;
+}
+

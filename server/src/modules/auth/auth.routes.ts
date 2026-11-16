@@ -1,18 +1,29 @@
 import { Router, Request, Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
 import {
+  DemoSkipVerificationRequestSchema,
   JoinProjectMobileRequestSchema,
   RegisterPushTokenSchema,
+  SubmitAssuranceVerificationRequestSchema,
   WebLoginRequestSchema,
   WebRegisterRequestSchema,
 } from "@insite/shared";
 import { validateBody } from "../../middleware/validate.middleware";
-import { requireAnyAuth } from "../../middleware/auth.middleware";
-import { prisma } from "../../config/prisma";
 import {
+  FieldAgentJwtPayload,
+  requireAnyAuth,
+  requireFieldSession,
+} from "../../middleware/auth.middleware";
+import { prisma } from "../../config/prisma";
+import { env } from "../../config/env";
+import { AppError } from "../../middleware/error.middleware";
+import {
+  demoSkipVerificationMobile,
   joinProjectMobile,
   loginWebUser,
   registerWebUser,
 } from "./auth.service";
+import { recordAuditEvent } from "../audit/audit.service";
 
 const router = Router();
 
@@ -163,6 +174,110 @@ router.post(
       });
 
       res.status(200).json({ success: true, data: pushToken });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/**
+ * POST /api/v1/auth/assurance-verification
+ * Persists ID photo, 3-pose liveness selfies + CV metadata, and regulatory credentials
+ * onto the contractor's FieldAgentSession for Independent Monitor / Lender review.
+ */
+router.post(
+  "/assurance-verification",
+  requireFieldSession,
+  validateBody(SubmitAssuranceVerificationRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const sessionId = req.fieldAgent!.sessionId;
+      const body = req.body;
+
+      const updated = await prisma.fieldAgentSession.update({
+        where: { id: sessionId },
+        data: {
+          idDocumentType: body.idDocumentType,
+          idDocumentUrl: body.idDocumentUrl,
+          selfieImageUrl: body.selfieFrontUrl,
+          selfieLeftUrl: body.selfieLeftUrl,
+          selfieRightUrl: body.selfieRightUrl,
+          livenessPassed: Boolean(body.livenessVerification?.isLive),
+          livenessMetadata: body.livenessVerification as any,
+          corenLicenseNumber: body.corenLicenseNumber,
+          experienceSummary: body.experienceSummary,
+          assuranceStatus: "PENDING_APPROVAL",
+          lastSyncAt: new Date(),
+        },
+        select: {
+          id: true,
+          projectId: true,
+          assuranceStatus: true,
+          livenessPassed: true,
+          corenLicenseNumber: true,
+        },
+      });
+
+      await recordAuditEvent(prisma, {
+        projectId: updated.projectId,
+        actorType: "FIELD_AGENT",
+        actorId: sessionId,
+        actorDisplayName: req.fieldAgent!.agentFullName,
+        action: "CONTRACTOR_ASSURANCE_SUBMITTED",
+        summaryText: `Contractor submitted 3-pose liveness (${body.livenessVerification?.detectorEngine}) and ${body.idDocumentType} credentials.`,
+        payload: {
+          idDocumentType: body.idDocumentType,
+          livenessPassed: updated.livenessPassed,
+          detectorEngine: body.livenessVerification?.detectorEngine,
+        },
+      });
+
+      res.status(200).json({ success: true, data: updated });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/**
+ * POST /api/v1/auth/demo/skip-verification
+ * DEMO-ONLY ENDPOINT: Links the mobile field agent directly to the project
+ * matching their joinCode as APPROVED without completing ID/liveness verification.
+ */
+router.post(
+  "/demo/skip-verification",
+  validateBody(DemoSkipVerificationRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!env.ENABLE_DEMO_ENDPOINTS) {
+        throw new AppError(
+          "Demo verification bypass is disabled in this environment",
+          403,
+          "DEMO_DISABLED",
+        );
+      }
+
+      let authenticatedSessionId: string | undefined;
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith("Bearer ")) {
+        try {
+          const decoded = jwt.verify(
+            authHeader.slice(7).trim(),
+            env.JWT_SECRET,
+          ) as Partial<FieldAgentJwtPayload> & { tokenType?: string };
+          if (decoded?.tokenType === "FIELD_AGENT" && decoded.sessionId) {
+            authenticatedSessionId = decoded.sessionId;
+          }
+        } catch {
+          // Ignore stale/invalid optional bearer token on demo bypass
+        }
+      }
+
+      const result = await demoSkipVerificationMobile(
+        req.body,
+        authenticatedSessionId,
+      );
+      res.status(200).json({ success: true, data: result });
     } catch (error) {
       next(error);
     }

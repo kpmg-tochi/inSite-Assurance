@@ -1,5 +1,6 @@
 import { AzureOpenAI } from 'openai';
 import { zodResponseFormat } from 'openai/helpers/zod';
+import { z } from 'zod';
 import {
   AiBoqBatchAnalysisResponse,
   AiBoqBatchAnalysisResponseSchema,
@@ -394,6 +395,170 @@ class AzureOpenAiService {
     return {
       lineEvaluations,
       executiveSummaryNote: `Evaluated ${lineEvaluations.length} BOQ line items for IPC #${params.ipcNumber}: ${conflictCount} item(s) flagged as Contradicted or Unsupported for Monitor review.`,
+    };
+  }
+
+  /**
+   * 4. Generates a structured Morning Deliverable Brief for a specific WBS/BOQ item,
+   * highlighting today's expected deliverable and concrete evidence reporting pointers.
+   */
+  public async generateMorningDeliverableBrief(params: {
+    projectName: string;
+    wbsCode: string;
+    description: string;
+    unit: string;
+    totalQuantity: number;
+    cumulativeCertifiedPct: number;
+    dailyTargetQuantity: number | null;
+    expectedDeliverableOverride?: string | null;
+    isHoldPoint: boolean;
+    holdPointInstruction?: string | null;
+    previousReportSummary?: string | null;
+    planningTier: string;
+  }): Promise<{
+    headline: string;
+    expectedDeliverable: string;
+    reportingChecklist: string[];
+    generatedByAi: boolean;
+  }> {
+    const MorningBriefSchema = z.object({
+      headline: z.string(),
+      expectedDeliverable: z.string(),
+      reportingChecklist: z.array(z.string()).min(2).max(5),
+    });
+
+    if (!this.client) {
+      return {
+        ...this.fallbackMorningBrief(params),
+        generatedByAi: false,
+      };
+    }
+
+    try {
+      const response = await this.client.chat.completions.create({
+        model: env.AZURE_OPENAI_GPT_DEPLOYMENT,
+        temperature: 0.2,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are a Senior Civil Engineering Resident Monitor on Nigerian infrastructure projects. Generate a concise, practical Morning Deliverable Brief for a site engineer. Specify what must be completed today and give concrete pointers on what photos, quantities, and material counts (e.g., bags of cement used/remaining, cube tests, rebar spacing) to include in their daily report.',
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              projectName: params.projectName,
+              wbsCode: params.wbsCode,
+              description: params.description,
+              unit: params.unit,
+              totalQuantity: params.totalQuantity,
+              cumulativeCertifiedPct: params.cumulativeCertifiedPct,
+              dailyTargetQuantity: params.dailyTargetQuantity,
+              expectedDeliverableOverride: params.expectedDeliverableOverride,
+              isHoldPoint: params.isHoldPoint,
+              holdPointInstruction: params.holdPointInstruction,
+              previousReportSummary: params.previousReportSummary,
+              planningTier: params.planningTier,
+            }),
+          },
+        ],
+        response_format: zodResponseFormat(
+          MorningBriefSchema,
+          'morning_deliverable_brief'
+        ),
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('Empty Morning Brief response from Azure OpenAI');
+      }
+      const parsed = MorningBriefSchema.parse(JSON.parse(content));
+      return { ...parsed, generatedByAi: true };
+    } catch (err) {
+      console.warn('Azure OpenAI Morning Brief failed, using fallback:', err);
+      return {
+        ...this.fallbackMorningBrief(params),
+        generatedByAi: false,
+      };
+    }
+  }
+
+  private fallbackMorningBrief(params: {
+    wbsCode: string;
+    description: string;
+    unit: string;
+    cumulativeCertifiedPct: number;
+    dailyTargetQuantity: number | null;
+    expectedDeliverableOverride?: string | null;
+    isHoldPoint: boolean;
+    holdPointInstruction?: string | null;
+    planningTier: string;
+  }) {
+    const targetText =
+      params.dailyTargetQuantity && params.dailyTargetQuantity > 0
+        ? `Target: ${params.dailyTargetQuantity} ${params.unit}`
+        : `Current Certified: ${params.cumulativeCertifiedPct}%`;
+
+    const tierPrefix =
+      params.planningTier === 'FALLBACK_BACKLOG' ? 'Fallback Ready · ' : '';
+
+    const headline = `${tierPrefix}WBS ${params.wbsCode} — ${targetText}`;
+    const expectedDeliverable =
+      params.expectedDeliverableOverride?.trim() ||
+      `Execute today's scheduled scope for ${params.description} (${targetText}).`;
+
+    const descLower = params.description.toLowerCase();
+    const checklist: string[] = [];
+
+    if (
+      descLower.includes('concrete') ||
+      descLower.includes('culvert') ||
+      descLower.includes('slab') ||
+      descLower.includes('cement')
+    ) {
+      checklist.push(
+        'Submit wide and close-up photos of the completed pour/formwork with GPS stamp.'
+      );
+      checklist.push(
+        'State how many bags of cement (or m3 ready-mix) were used today and how many remain on site.'
+      );
+    } else if (
+      descLower.includes('compaction') ||
+      descLower.includes('sub-base') ||
+      descLower.includes('earthworks')
+    ) {
+      checklist.push(
+        'Submit photos of field density / compaction testing and graded surface levels.'
+      );
+      checklist.push(
+        `Record total area/volume compacted today (${params.unit}) and chainage limits covered.`
+      );
+    } else {
+      checklist.push(
+        `Capture before, during, and after progress photos for WBS ${params.wbsCode}.`
+      );
+      checklist.push(
+        `Report exact installed quantity (${params.unit}) and materials consumed vs remaining.`
+      );
+    }
+
+    if (params.isHoldPoint) {
+      checklist.push(
+        `MANDATORY HOLD-POINT: ${
+          params.holdPointInstruction ||
+          'Do not cover or proceed past this stage until inspection photos are logged.'
+        }`
+      );
+    }
+
+    checklist.push(
+      'Log any weather, delivery, or equipment delays in the WBS thread as they happen.'
+    );
+
+    return {
+      headline,
+      expectedDeliverable,
+      reportingChecklist: checklist,
     };
   }
 }

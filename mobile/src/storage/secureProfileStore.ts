@@ -10,6 +10,7 @@ export interface LocalUserProfile {
   deviceKeyFingerprint: string;
   activeProjectId?: string | null;
   activeProjectCode?: string | null;
+  activeSessionId?: string | null;
   activeSessionToken?: string | null;
   activeIndependenceTier?: string | null;
   assuranceStatus?: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'NOT_SUBMITTED';
@@ -84,6 +85,7 @@ export async function updateLocalProfile(
       `KEY-${Crypto.randomUUID().slice(0, 12).toUpperCase()}`,
     activeProjectId: updates.activeProjectId ?? existing?.activeProjectId ?? null,
     activeProjectCode: updates.activeProjectCode ?? existing?.activeProjectCode ?? null,
+    activeSessionId: updates.activeSessionId ?? existing?.activeSessionId ?? null,
     activeSessionToken: updates.activeSessionToken ?? existing?.activeSessionToken ?? null,
     activeIndependenceTier:
       updates.activeIndependenceTier ?? existing?.activeIndependenceTier ?? null,
@@ -107,6 +109,7 @@ export async function clearActiveProjectSession(): Promise<void> {
       ...existing,
       activeProjectId: null,
       activeProjectCode: null,
+      activeSessionId: null,
       activeSessionToken: null,
       activeIndependenceTier: null,
       assuranceStatus: 'NOT_SUBMITTED',

@@ -1,105 +1,124 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  Alert,
-} from 'react-native';
-import { updateLocalProfile } from '../storage/secureProfileStore';
+import React, { useMemo, useState } from "react";
+import { View, Text, TextInput, StyleSheet } from "react-native";
+import Toast from "react-native-toast-message";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useProfile } from "../context/ProfileContext";
+import { GradientHeaderLayout } from "../components/common/GradientHeaderLayout";
+import KpmgLogo from "../../assets/KPMG-logo.svg";
+import { PrimaryButton } from "../components/inputs/Buttons";
+import { cardShadow, defaultColors } from "../styles/commonStyles";
+import { getInitials } from "../utils/userUtils";
+import Avatar from "../components/common/Avatar";
+import type { RootStackParamList } from "../navigation/types";
 
-interface Props {
-  onCompleted: () => void;
-}
-
-export const OnboardingProfileScreen: React.FC<Props> = ({ onCompleted }) => {
-  const [fullName, setFullName] = useState('Engr. Chukwuma Okeke');
-  const [phoneNumber, setPhoneNumber] = useState('+234 803 555 0192');
-  const [roleTitle, setRoleTitle] = useState('Senior Site Civil Engineer');
-  const [avatarInitials] = useState('CO');
+export const OnboardingProfileScreen: React.FC = () => {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { updateProfile } = useProfile();
+  // Input fields start blank as requested
+  const [fullName, setFullName] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [roleTitle, setRoleTitle] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  // Derive initials dynamically from user entry
+  const avatarInitials = useMemo(
+    () => getInitials(fullName, "ID"),
+    [fullName],
+  );
+
+  // Validation
+  const canSubmit = useMemo(() => {
+    return fullName.trim().length > 0 && phoneNumber.trim().length > 0;
+  }, [fullName, phoneNumber]);
+
   const handleSave = async () => {
-    if (!fullName.trim() || !phoneNumber.trim()) {
-      Alert.alert('Required Fields', 'Please provide your full name and mobile number.');
+    if (!canSubmit) {
+      Toast.show({
+        type: "error",
+        props: {
+          title: "Required Fields",
+          message:
+            "Please provide your full name and mobile phone number to activate your field profile.",
+        },
+      });
       return;
     }
+
     setIsSaving(true);
     try {
-      await updateLocalProfile({
+      await updateProfile({
         fullName: fullName.trim(),
         phoneNumber: phoneNumber.trim(),
-        roleTitle: roleTitle.trim(),
+        roleTitle: roleTitle.trim() || "Field Site Personnel",
         onboardingCompleted: true,
       });
-      onCompleted();
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "EnterCode" }],
+      });
     } catch (e) {
-      Alert.alert('Error', 'Failed to save local profile to secure device storage.');
+      Toast.show({
+        type: "error",
+        props: {
+          title: "Storage Error",
+          message: "Failed to save local profile to secure device storage.",
+        },
+      });
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.badgeRow}>
-          <Text style={styles.metaBadge}>08:00 WAT</Text>
-          <Text style={styles.metaBadge}>Offline-First · SecureStore</Text>
-        </View>
-        <Text style={styles.brandTitle}>Welcome to InSite Assurance</Text>
-        <Text style={styles.brandSubtitle}>
-          Set up your field profile once. Stored securely on this physical device.
-        </Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+    <GradientHeaderLayout
+      title="Field Profile Setup"
+      subtitle="Register your details for on-site assurance."
+      rightAction={<KpmgLogo height={64} width={64} color="#fff" />}
+      contentContainerStyle={styles.body}
+    >
+      <View style={{ gap: 16 }}>
         {/* Avatar Card */}
         <View style={styles.card}>
           <View style={styles.avatarRow}>
-            <View style={styles.avatarCircle}>
-              <Text style={styles.avatarInitials}>{avatarInitials}</Text>
-              <View style={styles.avatarPlusBadge}>
-                <Text style={styles.avatarPlusText}>+</Text>
-              </View>
-            </View>
+            <Avatar forceInitials={avatarInitials} editable />
             <View style={styles.avatarTextContainer}>
-              <Text style={styles.cardLabel}>Profile Avatar (Optional)</Text>
-              <Text style={styles.helperText}>Snap a profile photo or keep your initials badge.</Text>
-              <TouchableOpacity
-                onPress={() => Alert.alert('Avatar Selected', 'Profile initials badge active.')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.linkText}>Upload / Snap Photo</Text>
-              </TouchableOpacity>
+              <Text style={styles.cardLabel}>Identity Badge</Text>
+              <Text style={styles.helperText}>
+                Your Field Profile is attached to site evidence logs.
+              </Text>
             </View>
           </View>
         </View>
 
-        {/* Inputs Card */}
+        {/* Profile Form */}
         <View style={styles.card}>
           <View style={styles.inputGroup}>
-            <Text style={styles.fieldLabel}>Full Name *</Text>
+            <Text style={styles.fieldLabel}>
+              Full Name <Text style={{ color: "red" }}>*</Text>
+            </Text>
             <TextInput
               style={styles.input}
               value={fullName}
               onChangeText={setFullName}
               placeholder="e.g. Engr. Chukwuma Okeke"
               placeholderTextColor="#94A3B8"
+              autoCapitalize="words"
+              autoCorrect={false}
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.fieldLabel}>Mobile Phone Number *</Text>
+            <Text style={styles.fieldLabel}>
+              Mobile Phone Number <Text style={{ color: "red" }}>*</Text>
+            </Text>
             <TextInput
               style={styles.input}
               value={phoneNumber}
               onChangeText={setPhoneNumber}
               keyboardType="phone-pad"
-              placeholder="+234 800 000 0000"
+              placeholder="e.g. +234 803 555 0192"
               placeholderTextColor="#94A3B8"
             />
           </View>
@@ -112,207 +131,80 @@ export const OnboardingProfileScreen: React.FC<Props> = ({ onCompleted }) => {
               onChangeText={setRoleTitle}
               placeholder="e.g. Senior Site Civil Engineer"
               placeholderTextColor="#94A3B8"
+              autoCapitalize="words"
             />
           </View>
         </View>
-
-        {/* Hardware Security Card */}
-        <View style={styles.securityBox}>
-          <Text style={styles.securityTitle}>Hardware Identity Binding</Text>
-          <Text style={styles.securityBody}>
-            Your profile and cryptographic hardware key are stored strictly in device secure storage
-            (expo-secure-store). They are automatically attached when you join projects.
-          </Text>
-        </View>
-      </ScrollView>
-
-      {/* Footer Submit Button */}
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={[styles.primaryButton, isSaving && { opacity: 0.6 }]}
-          onPress={handleSave}
-          disabled={isSaving}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.primaryButtonText}>
-            {isSaving ? 'Saving Profile...' : 'Save Profile & Continue'}
-          </Text>
-        </TouchableOpacity>
       </View>
-    </View>
+
+      {/* Continue */}
+      <View style={styles.actionWrap}>
+        <PrimaryButton
+          onPress={handleSave}
+          text="Save Profile & Continue"
+          isWorking={isSaving}
+          disabled={isSaving || !canSubmit}
+          accessibilityLabel="Save Profile & Continue"
+        />
+      </View>
+    </GradientHeaderLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F8FAFC',
-  },
-  header: {
-    backgroundColor: '#0C233C',
-    paddingTop: 50,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.12)',
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  metaBadge: {
-    fontSize: 11,
-    color: '#93C5FD',
-    fontWeight: '600',
-  },
-  brandTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: -0.3,
-  },
-  brandSubtitle: {
-    fontSize: 12,
-    color: '#BFDBFE',
-    marginTop: 4,
-    lineHeight: 18,
-  },
   body: {
-    padding: 16,
-    gap: 14,
+    paddingBottom: 24,
+    justifyContent: "space-between",
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+    borderColor: defaultColors.border,
+    ...cardShadow,
   },
   avatarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
   },
-  avatarCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#0C233C',
-    borderWidth: 2,
-    borderColor: '#00338D',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  avatarInitials: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  avatarPlusBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#00338D',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarPlusText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
-    marginTop: -2,
-  },
+
   avatarTextContainer: {
     flex: 1,
   },
   cardLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
   },
   helperText: {
-    fontSize: 11,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  linkText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#00338D',
-    marginTop: 4,
-  },
-  inputGroup: {
-    marginBottom: 12,
-  },
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 5,
-  },
-  input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-    color: '#0F172A',
-    fontWeight: '600',
-  },
-  securityBox: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  securityTitle: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#00338D',
-    marginBottom: 4,
-  },
-  securityBody: {
-    fontSize: 11,
-    color: '#1E3A8A',
+    color: defaultColors.secondaryText,
+    marginTop: 3,
     lineHeight: 16,
   },
-  footer: {
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+  inputGroup: {
+    marginBottom: 14,
   },
-  primaryButton: {
-    backgroundColor: '#00338D',
-    paddingVertical: 14,
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#334155",
+    marginBottom: 6,
+  },
+  input: {
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1.5,
+    borderColor: defaultColors.border,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#00338D',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 14,
-    fontWeight: '700',
+    color: defaultColors.primaryText,
+    fontWeight: "600",
+  },
+  actionWrap: {
+    marginTop: 8,
   },
 });
-

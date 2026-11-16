@@ -9,6 +9,8 @@ import {
   TableColumnDef,
 } from "../../components/table";
 import Drawer from "../../components/Drawer";
+import Loader from "../../components/Loader";
+import { SitePresencePanel } from "../../components/SitePresencePanel";
 import { ShieldCheck, X, FileText, User, Calendar, Tag } from "lucide-react";
 
 type AuditLedgerEntry = AuditTrailResponseDto["entries"][number];
@@ -143,18 +145,49 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
     },
   ];
 
-  if (isLoading) {
-    return (
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center text-xs text-slate-500">
-        Verifying immutable audit chain...
-      </div>
-    );
-  }
+  const [activeTab, setActiveTab] = useState<"ledger" | "presence">("ledger");
 
   return (
-    <div className="space-y-3">
-      {/* Top Header Bar */}
-      <div className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-4">
+      {/* Sub-navigation Tabs */}
+      <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+        <button
+          type="button"
+          onClick={() => setActiveTab("ledger")}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            activeTab === "ledger"
+              ? "bg-white text-slate-900 shadow-2xs"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          Immutable Audit Ledger
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("presence")}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            activeTab === "presence"
+              ? "bg-white text-slate-900 shadow-2xs"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          Daily Reports &amp; Site Telemetry
+        </button>
+      </div>
+
+      {activeTab === "presence" ? (
+        <SitePresencePanel projectId={project.id} />
+      ) : isLoading ? (
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-10 flex flex-col items-center justify-center gap-3">
+          <Loader size="sm" />
+          <span className="text-xs text-slate-500 font-medium">
+            Verifying immutable audit chain...
+          </span>
+        </div>
+      ) : (
+        <>
+          {/* Top Header Bar */}
+          <div className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
             Compliance &amp; Verification Trail
@@ -264,6 +297,8 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
             "No ledger records match your current search or role filter criteria.",
         }}
       />
+        </>
+      )}
 
       {/* Slide-over Drawer for Event Details */}
       {selectedEntry && (

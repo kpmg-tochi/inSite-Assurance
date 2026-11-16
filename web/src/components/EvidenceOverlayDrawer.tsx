@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Play, Pause, X } from "lucide-react";
+import { Play, Pause, X, MapPin } from "lucide-react";
+import { useProjectWorkdayReportsQuery } from "../queries/telemetry/useTelemetryQueries";
 import type {
   FieldEvidenceLogRecordDto,
   IpcLineItemRecordDto,
@@ -43,6 +44,10 @@ export function EvidenceOverlayDrawer({
   const [revisedPctInput, setRevisedPctInput] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [showQueryInput, setShowQueryInput] = useState(false);
+  const workdayReportsQuery = useProjectWorkdayReportsQuery(
+    lineItem?.boqItem.projectId,
+    Boolean(lineItem),
+  );
 
   useEffect(() => {
     setIsPlaying(false);
@@ -78,6 +83,11 @@ export function EvidenceOverlayDrawer({
   const primaryLog = matchingLogs[0] || projectEvidenceLogs[0] || null;
 
   const openQuery = lineItem.queries.find((q) => q.status === "OPEN");
+  const latestWorkdayReport = (workdayReportsQuery.data ?? []).find(
+    (r) =>
+      r.wbsItemId === lineItem.boqItemId ||
+      r.wbsCode === lineItem.boqItem.wbsCode,
+  );
 
   const handleCreateQuery = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -415,6 +425,48 @@ export function EvidenceOverlayDrawer({
               </button>
             </div>
           </form>
+        )}
+
+        {/* 5b. Latest Workday Report Submission Geotag */}
+        {latestWorkdayReport && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-1.5 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-brand-primary" />
+                Workday Report Submission Geotag ({latestWorkdayReport.workdayDate})
+              </span>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                  !latestWorkdayReport.submissionGeotag
+                    ? "bg-amber-50 text-amber-800 border-amber-200"
+                    : latestWorkdayReport.submissionGeotag.isMocked ||
+                        latestWorkdayReport.submissionGeotag.isWithinGeofence === false
+                      ? "bg-rose-50 text-rose-700 border-rose-200"
+                      : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                }`}
+              >
+                {!latestWorkdayReport.submissionGeotag
+                  ? "No GPS"
+                  : latestWorkdayReport.submissionGeotag.isMocked
+                    ? "Mock GPS"
+                    : latestWorkdayReport.submissionGeotag.isWithinGeofence === false
+                      ? "Off-Site"
+                      : "On-Site"}
+              </span>
+            </div>
+            {latestWorkdayReport.submissionGeotag ? (
+              <p className="text-[11px] font-mono text-slate-600">
+                {latestWorkdayReport.submissionGeotag.chainageLabel ||
+                  `${latestWorkdayReport.submissionGeotag.latitude.toFixed(5)}, ${latestWorkdayReport.submissionGeotag.longitude.toFixed(5)}`}
+                {" · "}
+                {formatDateTimeShort(latestWorkdayReport.submissionGeotag.capturedAt)}
+              </p>
+            ) : (
+              <p className="text-[11px] text-amber-700">
+                Submitted without GPS coordinates.
+              </p>
+            )}
+          </div>
         )}
 
         {/* 6. Cryptographic Telemetry Footer */}

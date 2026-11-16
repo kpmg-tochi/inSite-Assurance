@@ -1,4 +1,10 @@
+import type { MorningDeliverableBriefDto, PlanningTier } from '@insite/shared';
 import { getDatabase } from './sqliteDatabase';
+import { fetchMorningBriefs, fetchProjectBoqItems } from '../api/boq/boqApi';
+import { submitWorkdayReport } from '../api/workday/workdayApi';
+import type { SiteGeotag } from '../services/locationService';
+import { recordTelemetryPing } from './telemetryRepository';
+import { flushTelemetryQueue } from '../services/telemetryService';
 
 export interface WbsItemRecord {
   id: string;
@@ -11,6 +17,8 @@ export interface WbsItemRecord {
   cumulativeCertifiedPct: number;
   isHoldPoint: boolean;
   isScheduledToday: boolean;
+  planningTier: PlanningTier;
+  isReportedToday: boolean;
   unreadCount: number;
   lastMessageText: string;
   lastMessageTimestamp: string;
@@ -21,10 +29,19 @@ export interface WbsChatMessageRecord {
   wbsItemId: string;
   senderName: string;
   senderRole: string; // 'SYSTEM_BRIEF' | 'ENGINEER' | 'INSPECTOR' | 'MONITOR'
-  messageType: 'MORNING_BRIEF' | 'PHOTO' | 'TEXT_COMMENT' | 'VOICE_NOTE' | 'EOD_PROMPT' | 'AI_CONFIRMATION';
+  messageType:
+    | 'MORNING_BRIEF'
+    | 'PHOTO'
+    | 'TEXT_COMMENT'
+    | 'VOICE_NOTE'
+    | 'EOD_PROMPT'
+    | 'AI_CONFIRMATION';
   textContent?: string;
   mediaUri?: string;
+  mediaUris?: string[];
   caption?: string;
+  durationMs?: number;
+  waveform?: number[];
   latitude?: number;
   longitude?: number;
   chainageLabel?: string;
@@ -32,109 +49,26 @@ export interface WbsChatMessageRecord {
   isDelivered: boolean;
 }
 
-// In-memory fallback dataset for seamless multi-platform execution
-let memWbsItems: WbsItemRecord[] = [
-  {
-    id: 'wbs-01',
-    projectId: 'proj-lkk-402',
-    wbsCode: '02.03.1',
-    description: 'Box Culvert 2.0m x 1.5m at Chainage 14+200',
-    unit: 'm3',
-    rateNgn: 185000,
-    totalQuantity: 42.5,
-    cumulativeCertifiedPct: 40,
-    isHoldPoint: true,
-    isScheduledToday: true,
-    unreadCount: 1,
-    lastMessageText: 'Site photo captured · Rebar placement inspected at Ch 14+200',
-    lastMessageTimestamp: '14:22 WAT',
-  },
-  {
-    id: 'wbs-02',
-    projectId: 'proj-lkk-402',
-    wbsCode: '01.02.4',
-    description: 'Sub-base Compaction & Field Dry Density Test',
-    unit: 'm2',
-    rateNgn: 4200,
-    totalQuantity: 12500,
-    cumulativeCertifiedPct: 65,
-    isHoldPoint: false,
-    isScheduledToday: true,
-    unreadCount: 0,
-    lastMessageText: 'Morning brief acknowledged · Nuclear density gauge calibrated',
-    lastMessageTimestamp: '08:15 WAT',
-  },
-  {
-    id: 'wbs-03',
-    projectId: 'proj-lkk-402',
-    wbsCode: '03.01.2',
-    description: 'Precast Concrete Lined Trapezoidal Drainage Channel',
-    unit: 'm',
-    rateNgn: 34500,
-    totalQuantity: 3400,
-    cumulativeCertifiedPct: 20,
-    isHoldPoint: true,
-    isScheduledToday: false,
-    unreadCount: 2,
-    lastMessageText: 'Monitor Query: Clarify invert level alignment at Ch 12+800',
-    lastMessageTimestamp: 'Yesterday',
-  },
-];
+export interface StagedWorkdayReportRecord {
+  id: string;
+  wbsItemId: string;
+  wbsCode?: string;
+  wbsDescription?: string;
+  workdayDate: string;
+  summaryText: string;
+  reportedQuantity: number;
+  unit: string;
+  status: string;
+  createdAt: string;
+}
 
-let memChatMessages: Record<string, WbsChatMessageRecord[]> = {
-  'wbs-01': [
-    {
-      id: 'msg-01',
-      wbsItemId: 'wbs-01',
-      senderName: 'InSite Morning Brief',
-      senderRole: 'SYSTEM_BRIEF',
-      messageType: 'MORNING_BRIEF',
-      textContent:
-        'Deliverable: Complete rebar tying and invert slab formwork for Box Culvert at Ch 14+200. Target volume: 12.0 m3 C25/30 ready-mix pour.',
-      timestamp: '08:00 WAT',
-      isDelivered: true,
-    },
-    {
-      id: 'msg-02',
-      wbsItemId: 'wbs-01',
-      senderName: 'Engr. Chukwuma Okeke',
-      senderRole: 'ENGINEER',
-      messageType: 'PHOTO',
-      mediaUri: 'https://images.unsplash.com/photo-1541888946425-d0fbb1861564?auto=format&fit=crop&w=600&q=80',
-      caption: 'Invert slab rebar tied according to approved structural bar schedule. 16mm main bars @ 150mm c/c.',
-      latitude: 6.4698,
-      longitude: 3.5852,
-      chainageLabel: 'Ch 14+200',
-      timestamp: '11:45 WAT',
-      isDelivered: true,
-    },
-    {
-      id: 'msg-03',
-      wbsItemId: 'wbs-01',
-      senderName: 'Engr. Chukwuma Okeke',
-      senderRole: 'ENGINEER',
-      messageType: 'TEXT_COMMENT',
-      textContent:
-        'Ready-mix concrete transit mixer delayed by 45 mins due to expressway checkpoint traffic. Pour now scheduled for 13:30 WAT.',
-      timestamp: '12:15 WAT',
-      isDelivered: true,
-    },
-    {
-      id: 'msg-04',
-      wbsItemId: 'wbs-01',
-      senderName: 'InSite Workday End',
-      senderRole: 'SYSTEM_BRIEF',
-      messageType: 'EOD_PROMPT',
-      textContent:
-        'Workday complete! Record your daily summary and total placed volume for Box Culvert (WBS 02.03.1).',
-      timestamp: '17:00 WAT',
-      isDelivered: true,
-    },
-  ],
-};
+// Local memory cache (populated from SQLite / API; zero hardcoded demo fixtures)
+let memWbsItems: WbsItemRecord[] = [];
+let memChatMessages: Record<string, WbsChatMessageRecord[]> = {};
+let memStagedReports: StagedWorkdayReportRecord[] = [];
 
 /**
- * Retrieve all actionable WBS threads for the current project.
+ * Retrieve all actionable WBS threads for the current project from SQLite cache.
  */
 export async function getWbsThreads(projectId: string): Promise<WbsItemRecord[]> {
   const db = await getDatabase();
@@ -156,16 +90,139 @@ export async function getWbsThreads(projectId: string): Promise<WbsItemRecord[]>
           cumulativeCertifiedPct: r.cumulative_certified_pct,
           isHoldPoint: Boolean(r.is_hold_point),
           isScheduledToday: Boolean(r.is_scheduled_today),
+          planningTier: (r.planning_tier ||
+            (r.is_scheduled_today ? 'PLAN_A' : 'UNBLOCKED_POOL')) as PlanningTier,
+          isReportedToday: Boolean(r.is_reported_today),
           unreadCount: r.unread_count,
           lastMessageText: r.last_message_text || '',
           lastMessageTimestamp: r.last_message_timestamp || '',
         }));
       }
     } catch (e) {
-      console.warn('SQLite error loading WBS threads, using memory store:', e);
+      console.warn('SQLite error loading WBS threads:', e);
     }
   }
-  return [...memWbsItems];
+  return memWbsItems.filter((w) => w.projectId === projectId);
+}
+
+/**
+ * Hydrates WBS threads and today's Morning Deliverable Briefs from the backend API
+ * into local SQLite storage.
+ */
+export async function syncWbsInboxFromServer(projectId: string): Promise<{
+  items: WbsItemRecord[];
+  syncError: string | null;
+}> {
+  let syncError: string | null = null;
+
+  try {
+    const [boqItems, morningBriefs] = await Promise.all([
+      fetchProjectBoqItems(projectId),
+      fetchMorningBriefs(projectId).catch(
+        () => [] as MorningDeliverableBriefDto[]
+      ),
+    ]);
+
+    const briefByBoqId = new Map<string, MorningDeliverableBriefDto>();
+    for (const brief of morningBriefs) {
+      briefByBoqId.set(brief.boqItemId, brief);
+    }
+
+    const mapped: WbsItemRecord[] = (boqItems || []).map((b) => {
+      const brief = briefByBoqId.get(b.id);
+      const isScheduled = Boolean(b.isScheduledToday);
+      const tier: PlanningTier =
+        brief?.planningTier ||
+        (b.planningTier as PlanningTier) ||
+        (isScheduled ? 'PLAN_A' : 'UNBLOCKED_POOL');
+
+      return {
+        id: b.id,
+        projectId,
+        wbsCode: b.wbsCode,
+        description: b.description,
+        unit: b.unit,
+        rateNgn: Number(b.rateNgn ?? 0),
+        totalQuantity: Number(b.totalQuantity ?? 0),
+        cumulativeCertifiedPct: Number(b.cumulativeCertifiedPct ?? 0),
+        isHoldPoint: Boolean(b.isHoldPoint),
+        isScheduledToday: isScheduled,
+        planningTier: tier,
+        isReportedToday: Number(b.cumulativeCertifiedPct ?? 0) >= 100,
+        unreadCount: brief ? 1 : 0,
+        lastMessageText: brief
+          ? `${brief.headline} · ${brief.expectedDeliverable}`
+          : b.holdPointInstruction || 'Tap to log site progress or photos',
+        lastMessageTimestamp: brief ? '08:00 WAT' : '',
+      };
+    });
+
+    memWbsItems = mapped;
+
+    const db = await getDatabase();
+    if (db) {
+      for (const item of mapped) {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO wbs_items
+           (id, project_id, wbs_code, description, unit, rate_ngn, total_quantity,
+            cumulative_certified_pct, is_hold_point, is_scheduled_today, planning_tier,
+            is_reported_today, unread_count, last_message_text, last_message_timestamp)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            item.id,
+            item.projectId,
+            item.wbsCode,
+            item.description,
+            item.unit,
+            item.rateNgn,
+            item.totalQuantity,
+            item.cumulativeCertifiedPct,
+            item.isHoldPoint ? 1 : 0,
+            item.isScheduledToday ? 1 : 0,
+            item.planningTier,
+            item.isReportedToday ? 1 : 0,
+            item.unreadCount,
+            item.lastMessageText,
+            item.lastMessageTimestamp,
+          ]
+        );
+
+        const brief = briefByBoqId.get(item.id);
+        if (brief) {
+          const briefMsgId = `brief-${brief.id}`;
+          const checklistText =
+            brief.reportingChecklist.length > 0
+              ? `\n\nReport Pointers:\n${brief.reportingChecklist
+                  .map((p) => `• ${p}`)
+                  .join('\n')}`
+              : '';
+          const fullText = `${brief.headline}\n${brief.expectedDeliverable}${checklistText}`;
+
+          await db.runAsync(
+            `INSERT OR IGNORE INTO wbs_chat_messages
+             (id, wbs_item_id, sender_name, sender_role, message_type, text_content, timestamp, is_delivered)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              briefMsgId,
+              item.id,
+              'InSite Morning Brief',
+              'SYSTEM_BRIEF',
+              'MORNING_BRIEF',
+              fullText,
+              '08:00 WAT',
+              1,
+            ]
+          );
+        }
+      }
+    }
+  } catch (err: any) {
+    syncError =
+      err?.message || 'Offline or server unreachable — showing cached WBS items.';
+  }
+
+  const items = await getWbsThreads(projectId);
+  return { items, syncError };
 }
 
 /**
@@ -178,7 +235,7 @@ export async function getWbsChatMessages(
   if (db) {
     try {
       const rows = await db.getAllAsync<any>(
-        'SELECT * FROM wbs_chat_messages WHERE wbs_item_id = ? ORDER BY timestamp ASC',
+        'SELECT * FROM wbs_chat_messages WHERE wbs_item_id = ? ORDER BY rowid ASC',
         [wbsItemId]
       );
       if (rows && rows.length > 0) {
@@ -190,7 +247,10 @@ export async function getWbsChatMessages(
           messageType: r.message_type,
           textContent: r.text_content,
           mediaUri: r.media_uri,
+          mediaUris: r.media_uris_json ? JSON.parse(r.media_uris_json) : undefined,
           caption: r.caption,
+          durationMs: r.duration_ms ?? undefined,
+          waveform: r.waveform_json ? JSON.parse(r.waveform_json) : undefined,
           latitude: r.latitude,
           longitude: r.longitude,
           chainageLabel: r.chainage_label,
@@ -199,7 +259,7 @@ export async function getWbsChatMessages(
         }));
       }
     } catch (e) {
-      console.warn('SQLite error loading messages, using memory store:', e);
+      console.warn('SQLite error loading messages:', e);
     }
   }
   return memChatMessages[wbsItemId] ? [...memChatMessages[wbsItemId]] : [];
@@ -217,28 +277,26 @@ export async function sendWbsChatMessage(
     isDelivered: true,
   };
 
-  // 1. Update memory
   if (!memChatMessages[message.wbsItemId]) {
     memChatMessages[message.wbsItemId] = [];
   }
   memChatMessages[message.wbsItemId].push(newMsg);
 
-  // Update last message preview on parent WBS
+  const previewText =
+    message.caption || message.textContent || 'New attachment captured';
   const parent = memWbsItems.find((w) => w.id === message.wbsItemId);
   if (parent) {
-    parent.lastMessageText =
-      message.caption || message.textContent || 'New attachment captured';
+    parent.lastMessageText = previewText;
     parent.lastMessageTimestamp = message.timestamp;
   }
 
-  // 2. Persist to SQLite if available
   const db = await getDatabase();
   if (db) {
     try {
       await db.runAsync(
         `INSERT INTO wbs_chat_messages 
-         (id, wbs_item_id, sender_name, sender_role, message_type, text_content, media_uri, caption, latitude, longitude, chainage_label, timestamp, is_delivered)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, wbs_item_id, sender_name, sender_role, message_type, text_content, media_uri, media_uris_json, caption, duration_ms, waveform_json, latitude, longitude, chainage_label, timestamp, is_delivered)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           newMsg.id,
           newMsg.wbsItemId,
@@ -247,13 +305,21 @@ export async function sendWbsChatMessage(
           newMsg.messageType,
           newMsg.textContent ?? null,
           newMsg.mediaUri ?? null,
+          newMsg.mediaUris ? JSON.stringify(newMsg.mediaUris) : null,
           newMsg.caption ?? null,
+          newMsg.durationMs ?? null,
+          newMsg.waveform ? JSON.stringify(newMsg.waveform) : null,
           newMsg.latitude ?? null,
           newMsg.longitude ?? null,
           newMsg.chainageLabel ?? null,
           newMsg.timestamp,
           1,
         ]
+      );
+
+      await db.runAsync(
+        `UPDATE wbs_items SET last_message_text = ?, last_message_timestamp = ? WHERE id = ?`,
+        [previewText, message.timestamp, message.wbsItemId]
       );
     } catch (e) {
       console.warn('SQLite error inserting chat message:', e);
@@ -263,3 +329,251 @@ export async function sendWbsChatMessage(
   return newMsg;
 }
 
+export interface SubmitConfirmedWorkdayInput {
+  projectId: string;
+  wbsItem: WbsItemRecord;
+  senderName: string;
+  reportedQuantity: number;
+  unitOfMeasure: string;
+  summaryText: string;
+  delaysOrBlockers?: string;
+  isHoldPointClaimed: boolean;
+  voiceNoteUri?: string | null;
+  submissionGeotag: SiteGeotag | null;
+  isVerifiedAccount?: boolean;
+}
+
+export interface SubmitConfirmedWorkdayResult {
+  localReportId: string;
+  syncStatus: 'SYNCED' | 'QUEUED_OFFLINE' | 'STAGED_UNVERIFIED';
+}
+
+/**
+ * Persists a confirmed End-of-Day workday report with its submission geotag
+ * offline-first into SQLite, logs a REPORT_SUBMISSION telemetry ping, posts a
+ * confirmation bubble in the WBS chat thread, and attempts backend sync (when verified).
+ */
+export async function submitConfirmedWorkdayReport(
+  input: SubmitConfirmedWorkdayInput
+): Promise<SubmitConfirmedWorkdayResult> {
+  const localReportId = `eod-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const createdAt = new Date().toISOString();
+  const workdayDate = createdAt.slice(0, 10);
+
+  if (input.submissionGeotag) {
+    await recordTelemetryPing({
+      projectId: input.projectId,
+      wbsItemId: input.wbsItem.id,
+      geotag: input.submissionGeotag,
+      pingSource: 'REPORT_SUBMISSION',
+    });
+  }
+
+  const threadMessages = await getWbsChatMessages(input.wbsItem.id);
+  const evidenceItems = threadMessages
+    .filter(
+      (m) =>
+        m.messageType === 'PHOTO' ||
+        m.messageType === 'VOICE_NOTE' ||
+        m.messageType === 'TEXT_COMMENT'
+    )
+    .map((m) => ({
+      id: m.id,
+      type:
+        m.messageType === 'PHOTO'
+          ? ('PHOTO' as const)
+          : m.messageType === 'VOICE_NOTE'
+          ? ('VOICE_NOTE' as const)
+          : ('TEXT_NOTE' as const),
+      mediaUrl: m.mediaUri,
+      caption: m.caption || m.textContent,
+      gpsCoordinates:
+        typeof m.latitude === 'number' && typeof m.longitude === 'number'
+          ? { latitude: m.latitude, longitude: m.longitude }
+          : undefined,
+      capturedAt: createdAt,
+    }));
+
+  const payload = {
+    localReportId,
+    projectId: input.projectId,
+    wbsItemId: input.wbsItem.id,
+    workdayDate,
+    summaryText: input.summaryText,
+    voiceNoteUrl: input.voiceNoteUri ?? null,
+    evidenceItems,
+    reportedQuantity: input.reportedQuantity,
+    unitOfMeasure: input.unitOfMeasure,
+    delaysOrBlockers: input.delaysOrBlockers || undefined,
+    isHoldPointClaimed: input.isHoldPointClaimed,
+    submissionGeotag: input.submissionGeotag ?? undefined,
+  };
+
+  let syncStatus: 'SYNCED' | 'QUEUED_OFFLINE' | 'STAGED_UNVERIFIED' =
+    input.isVerifiedAccount === false ? 'STAGED_UNVERIFIED' : 'QUEUED_OFFLINE';
+
+  if (syncStatus !== 'STAGED_UNVERIFIED') {
+    try {
+      await submitWorkdayReport(input.projectId, payload);
+      syncStatus = 'SYNCED';
+      await flushTelemetryQueue(input.projectId);
+    } catch {
+      syncStatus = 'QUEUED_OFFLINE';
+    }
+  }
+
+  const stagedRecord: StagedWorkdayReportRecord = {
+    id: localReportId,
+    wbsItemId: input.wbsItem.id,
+    wbsCode: input.wbsItem.wbsCode,
+    wbsDescription: input.wbsItem.description,
+    workdayDate,
+    summaryText: input.summaryText,
+    reportedQuantity: input.reportedQuantity,
+    unit: input.unitOfMeasure,
+    status: syncStatus,
+    createdAt,
+  };
+  memStagedReports = [stagedRecord, ...memStagedReports];
+
+  const db = await getDatabase();
+  if (db) {
+    try {
+      await db.runAsync(
+        `INSERT INTO staged_workday_reports
+         (id, wbs_item_id, workday_date, summary_text, reported_quantity, unit, status, evidence_json, voice_note_uri, submission_geotag_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          localReportId,
+          input.wbsItem.id,
+          workdayDate,
+          input.summaryText,
+          input.reportedQuantity,
+          input.unitOfMeasure,
+          syncStatus,
+          JSON.stringify(evidenceItems),
+          input.voiceNoteUri ?? null,
+          input.submissionGeotag ? JSON.stringify(input.submissionGeotag) : null,
+          createdAt,
+        ]
+      );
+
+      await db.runAsync(
+        `UPDATE wbs_items SET is_reported_today = 1 WHERE id = ?`,
+        [input.wbsItem.id]
+      );
+    } catch (err) {
+      console.warn('SQLite error saving workday report:', err);
+    }
+  }
+
+  const gpsLabel = input.submissionGeotag
+    ? `GPS ${input.submissionGeotag.latitude.toFixed(4)}, ${input.submissionGeotag.longitude.toFixed(4)}`
+    : 'GPS pending';
+
+  await sendWbsChatMessage({
+    wbsItemId: input.wbsItem.id,
+    senderName: input.senderName,
+    senderRole: 'ENGINEER',
+    messageType: 'AI_CONFIRMATION',
+    textContent: `Daily Report Signed Off: ${input.reportedQuantity} ${input.unitOfMeasure} · ${input.summaryText}`,
+    latitude: input.submissionGeotag?.latitude,
+    longitude: input.submissionGeotag?.longitude,
+    chainageLabel: input.submissionGeotag?.chainageLabel || gpsLabel,
+    timestamp: 'Just now',
+  });
+
+  return { localReportId, syncStatus };
+}
+
+/**
+ * Queries real staged/queued workday reports from SQLite for BacklogReviewModal.
+ */
+export async function getStagedBacklogReports(): Promise<
+  StagedWorkdayReportRecord[]
+> {
+  const db = await getDatabase();
+  if (db) {
+    try {
+      const rows = await db.getAllAsync<any>(
+        `SELECT r.*, w.wbs_code, w.description as wbs_description
+         FROM staged_workday_reports r
+         LEFT JOIN wbs_items w ON w.id = r.wbs_item_id
+         WHERE r.status IN ('STAGED_UNVERIFIED', 'QUEUED_OFFLINE')
+         ORDER BY r.created_at DESC`
+      );
+      return rows.map((r) => ({
+        id: r.id,
+        wbsItemId: r.wbs_item_id,
+        wbsCode: r.wbs_code ?? undefined,
+        wbsDescription: r.wbs_description ?? undefined,
+        workdayDate: r.workday_date,
+        summaryText: r.summary_text,
+        reportedQuantity: r.reported_quantity,
+        unit: r.unit,
+        status: r.status,
+        createdAt: r.created_at,
+      }));
+    } catch (err) {
+      console.warn('SQLite error loading staged backlog:', err);
+    }
+  }
+
+  return memStagedReports.filter(
+    (r) => r.status === 'STAGED_UNVERIFIED' || r.status === 'QUEUED_OFFLINE'
+  );
+}
+
+/**
+ * Promotes selected STAGED_UNVERIFIED reports to QUEUED_OFFLINE and attempts immediate sync.
+ */
+export async function promoteAndSyncBacklogReports(
+  reportIds: string[],
+  projectId: string
+): Promise<{ syncedCount: number; queuedCount: number }> {
+  if (reportIds.length === 0) return { syncedCount: 0, queuedCount: 0 };
+
+  let syncedCount = 0;
+  let queuedCount = 0;
+  const db = await getDatabase();
+
+  if (db) {
+    for (const id of reportIds) {
+      const row = await db.getFirstAsync<any>(
+        `SELECT * FROM staged_workday_reports WHERE id = ?`,
+        [id]
+      );
+      if (!row) continue;
+
+      try {
+        await submitWorkdayReport(projectId, {
+          localReportId: row.id,
+          projectId,
+          wbsItemId: row.wbs_item_id,
+          workdayDate: row.workday_date,
+          summaryText: row.summary_text,
+          voiceNoteUrl: row.voice_note_uri ?? null,
+          evidenceItems: row.evidence_json ? JSON.parse(row.evidence_json) : [],
+          reportedQuantity: row.reported_quantity,
+          unitOfMeasure: row.unit,
+          submissionGeotag: row.submission_geotag_json
+            ? JSON.parse(row.submission_geotag_json)
+            : undefined,
+        });
+        await db.runAsync(
+          `UPDATE staged_workday_reports SET status = 'SYNCED' WHERE id = ?`,
+          [id]
+        );
+        syncedCount += 1;
+      } catch {
+        await db.runAsync(
+          `UPDATE staged_workday_reports SET status = 'QUEUED_OFFLINE' WHERE id = ?`,
+          [id]
+        );
+        queuedCount += 1;
+      }
+    }
+  }
+
+  return { syncedCount, queuedCount };
+}

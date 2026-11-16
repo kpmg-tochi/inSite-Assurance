@@ -6,6 +6,15 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "primaryColor": "#00338D",
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "InSite Assurance requires high-accuracy GPS to verify site presence, corridor chainage, and report submission location."
+        }
+      ],
+      "expo-audio"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.kpmg.insiteassurance.mobile",

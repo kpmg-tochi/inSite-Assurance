@@ -1,5 +1,6 @@
-import { API_BASE_URL } from '../config/apiConfig';
 import { CreateIncidentReportRequest } from '@insite/shared';
+import { createIncidentReport } from '../api/incidents/incidentsApi';
+import { getDatabase } from '../storage/sqliteDatabase';
 
 export interface IncidentSubmissionResult {
   success: boolean;
@@ -15,27 +16,38 @@ export async function submitIncidentReport(
   input: CreateIncidentReportRequest
 ): Promise<IncidentSubmissionResult> {
   try {
-    const res = await fetch(`${API_BASE_URL}/projects/${projectId}/incidents`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${sessionToken}`,
-      },
-      body: JSON.stringify(input),
-    });
-
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson.message || `Server responded with ${res.status}`);
-    }
-
-    const data = await res.json();
-    return { success: true, incidentId: data.data?.id };
+    const data = await createIncidentReport(projectId, input, sessionToken);
+    return { success: true, incidentId: data?.id };
   } catch (error: any) {
     console.warn('Network offline or error submitting incident, queueing locally:', error);
-    // Queue locally in memory
     const localId = `inc-${Date.now()}`;
+    const createdAt = new Date().toISOString();
     memIncidents.push({ ...input, id: localId, status: 'QUEUED_OFFLINE' });
+
+    const db = await getDatabase();
+    if (db) {
+      try {
+        await db.runAsync(
+          `INSERT OR REPLACE INTO incident_reports
+           (id, category, severity, title, description, is_confidential_whistleblower, photos_json, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            localId,
+            input.category,
+            input.severity,
+            input.title,
+            input.description,
+            input.isConfidentialWhistleblower ? 1 : 0,
+            JSON.stringify(input.photoEvidenceUrls ?? []),
+            'QUEUED_OFFLINE',
+            createdAt,
+          ]
+        );
+      } catch (dbErr) {
+        console.warn('SQLite error queueing offline incident:', dbErr);
+      }
+    }
+
     return {
       success: true,
       incidentId: localId,

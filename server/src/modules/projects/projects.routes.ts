@@ -16,13 +16,39 @@ import {
   getPortfolioExecutiveSummary,
   getProjectBaselineDetails,
   listContractorVerifications,
+  listDemoProjects,
   listProjectsForUser,
   reviewContractorVerification,
   updateProjectBaseline,
   verifyCoordinateForProject,
 } from './projects.service';
+import { env } from '../../config/env';
+import { AppError } from '../../middleware/error.middleware';
 
 const router = Router();
+
+/**
+ * GET /api/v1/projects/demo
+ * Demo-only endpoint returning real database projects & active join codes for mobile workspace switching & autofill.
+ */
+router.get(
+  '/demo',
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!env.ENABLE_DEMO_ENDPOINTS) {
+        throw new AppError(
+          'Demo project catalog endpoint is disabled in this environment',
+          403,
+          'DEMO_DISABLED'
+        );
+      }
+      const projects = await listDemoProjects();
+      res.json({ success: true, data: projects });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
 /**
  * GET /api/v1/projects/portfolio/executive-summary
