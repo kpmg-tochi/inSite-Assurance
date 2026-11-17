@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getStagedBacklogReports,
-  getWbsChatMessages,
   promoteAndSyncBacklogReports,
   sendWbsChatMessage,
   submitConfirmedWorkdayReport,
+  syncWbsChatMessagesFromServer,
   syncWbsInboxFromServer,
   type SubmitConfirmedWorkdayInput,
 } from '../../storage/wbsRepository';
+import { notificationQueryKeys } from '../notifications/useNotificationQueries';
 
 export const wbsQueryKeys = {
   inbox: (projectId?: string | null) => ['wbs-inbox', projectId] as const,
@@ -23,10 +24,13 @@ export function useWbsInboxQuery(projectId?: string | null) {
   });
 }
 
-export function useWbsChatMessagesQuery(wbsItemId?: string | null) {
+export function useWbsChatMessagesQuery(
+  wbsItemId?: string | null,
+  projectId?: string | null
+) {
   return useQuery({
     queryKey: wbsQueryKeys.messages(wbsItemId),
-    queryFn: () => getWbsChatMessages(wbsItemId!),
+    queryFn: () => syncWbsChatMessagesFromServer(projectId, wbsItemId!),
     enabled: Boolean(wbsItemId),
   });
 }
@@ -59,6 +63,9 @@ export function usePromoteBacklogMutation(projectId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: wbsQueryKeys.stagedBacklog });
       queryClient.invalidateQueries({ queryKey: wbsQueryKeys.inbox(projectId) });
+      queryClient.invalidateQueries({
+        queryKey: notificationQueryKeys.list(projectId),
+      });
     },
   });
 }
@@ -68,9 +75,15 @@ export function useSubmitWorkdayReportMutation(projectId: string) {
   return useMutation({
     mutationFn: (input: SubmitConfirmedWorkdayInput) =>
       submitConfirmedWorkdayReport(input),
-    onSuccess: () => {
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: wbsQueryKeys.stagedBacklog });
       queryClient.invalidateQueries({ queryKey: wbsQueryKeys.inbox(projectId) });
+      queryClient.invalidateQueries({
+        queryKey: wbsQueryKeys.messages(variables.wbsItem.id),
+      });
+      queryClient.invalidateQueries({
+        queryKey: notificationQueryKeys.list(projectId),
+      });
     },
   });
 }

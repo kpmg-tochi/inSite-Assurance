@@ -5,15 +5,15 @@
 @layer base {
   :root {
     /* Core KPMG & Platform Brand Palette (RGB channels for Tailwind opacity support) */
-    --color-brand-primary: 0 51 141;      /* #00338D — Primary KPMG Blue */
-    --color-brand-hover: 0 38 107;        /* #00266B — Primary Hover Blue */
-    --color-brand-medium: 0 94 184;       /* #005EB8 — Medium Accent Blue */
-    --color-brand-pacific: 0 145 218;     /* #0091DA — Pacific Cyan */
-    --color-brand-sky: 56 189 248;        /* #38BDF8 — Corridor Sky Blue */
-    --color-brand-navy: 12 35 60;         /* #0C233C — Dark Navy Surface */
-    --color-brand-dark: 7 21 38;          /* #071526 — Deep Canvas Dark */
-    --color-brand-subcard: 8 24 43;       /* #08182B — Dark Subcard Surface */
-    --color-surface-canvas: 248 250 252;  /* #F8FAFC — Light Slate Canvas */
+    --color-brand-primary: 0 51 141; /* #00338D — Primary KPMG Blue */
+    --color-brand-hover: 0 38 107; /* #00266B — Primary Hover Blue */
+    --color-brand-medium: 0 94 184; /* #005EB8 — Medium Accent Blue */
+    --color-brand-pacific: 0 145 218; /* #0091DA — Pacific Cyan */
+    --color-brand-sky: 56 189 248; /* #38BDF8 — Corridor Sky Blue */
+    --color-brand-navy: 12 35 60; /* #0C233C — Dark Navy Surface */
+    --color-brand-dark: 7 21 38; /* #071526 — Deep Canvas Dark */
+    --color-brand-subcard: 8 24 43; /* #08182B — Dark Subcard Surface */
+    --color-surface-canvas: 248 250 252; /* #F8FAFC — Light Slate Canvas */
 
     /* Hex equivalents for SVG & Leaflet vector paths */
     --hex-brand-primary: #00338d;
@@ -128,11 +128,9 @@
   0%,
   100% {
     opacity: 0.25;
-    transform: scaleY(0.85);
   }
   50% {
     opacity: 1;
-    transform: scaleY(1);
   }
 }
 

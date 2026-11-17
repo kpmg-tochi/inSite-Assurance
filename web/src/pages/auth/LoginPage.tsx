@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Play } from "lucide-react";
 import { SEEDED_DEMO_ACCOUNTS, useAuth } from "../../lib/auth-context";
 import { InSiteLogo } from "../../components/InSiteLogo";
+import { IS_DEMO_MODE } from "../../config/demoMode";
 
 const VOICE_WAVE_BARS = [
   10, 18, 12, 22, 14, 24, 16, 12, 20, 10, 16, 22, 12, 18, 14, 10, 16, 12,
@@ -12,8 +13,12 @@ export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const [selectedRoleIdx, setSelectedRoleIdx] = useState(0);
-  const [email, setEmail] = useState(SEEDED_DEMO_ACCOUNTS[0].email);
-  const [password, setPassword] = useState(SEEDED_DEMO_ACCOUNTS[0].password);
+  const [email, setEmail] = useState(
+    IS_DEMO_MODE ? SEEDED_DEMO_ACCOUNTS[0].email : "",
+  );
+  const [password, setPassword] = useState(
+    IS_DEMO_MODE ? SEEDED_DEMO_ACCOUNTS[0].password : "",
+  );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -302,51 +307,53 @@ export function LoginPage() {
           </div>
 
           {/* 1-Click Seeded Demo Account Selector */}
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2.5">
-              Quick-Select Seeded Demo Account (1-Click Fill)
-            </div>
-            <div className="space-y-2">
-              {SEEDED_DEMO_ACCOUNTS.map((acct, idx) => {
-                const isSelected = selectedRoleIdx === idx;
-                return (
-                  <button
-                    key={acct.email}
-                    type="button"
-                    onClick={() => handleSelectSeededAccount(idx)}
-                    className={`w-full text-left p-2.5 rounded-xl border transition flex items-center justify-between ${
-                      isSelected
-                        ? "border-brand-primary bg-blue-50/40 shadow-sm"
-                        : "border-slate-200 hover:border-brand-primary hover:bg-slate-50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className={`w-7 h-7 rounded-full font-bold text-xs flex items-center justify-center shrink-0 ${
-                          isSelected
-                            ? "bg-brand-primary text-white"
-                            : "bg-slate-200 text-slate-700"
-                        }`}
-                      >
-                        {acct.initials}
-                      </div>
-                      <div>
-                        <div className="text-xs font-semibold text-slate-900">
-                          {acct.roleTitle}
+          {IS_DEMO_MODE && (
+            <div className="mt-8 pt-6 border-t border-slate-100">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2.5">
+                Quick-Select Seeded Demo Account (1-Click Fill)
+              </div>
+              <div className="space-y-2">
+                {SEEDED_DEMO_ACCOUNTS.map((acct, idx) => {
+                  const isSelected = selectedRoleIdx === idx;
+                  return (
+                    <button
+                      key={acct.email}
+                      type="button"
+                      onClick={() => handleSelectSeededAccount(idx)}
+                      className={`w-full text-left p-2.5 rounded-xl border transition flex items-center justify-between ${
+                        isSelected
+                          ? "border-brand-primary bg-blue-50/40 shadow-sm"
+                          : "border-slate-200 hover:border-brand-primary hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className={`w-7 h-7 rounded-full font-bold text-xs flex items-center justify-center shrink-0 ${
+                            isSelected
+                              ? "bg-brand-primary text-white"
+                              : "bg-slate-200 text-slate-700"
+                          }`}
+                        >
+                          {acct.initials}
                         </div>
-                        <div className="text-[11px] text-slate-500">
-                          {acct.name} — {acct.organization} · {acct.email}
+                        <div>
+                          <div className="text-xs font-semibold text-slate-900">
+                            {acct.roleTitle}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {acct.name} — {acct.organization} · {acct.email}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <span className="text-[10px] font-semibold text-brand-primary bg-white px-2 py-0.5 rounded border border-blue-200 shrink-0">
-                      {acct.credential}
-                    </span>
-                  </button>
-                );
-              })}
+                      <span className="text-[10px] font-semibold text-brand-primary bg-white px-2 py-0.5 rounded border border-blue-200 shrink-0">
+                        {acct.credential}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Bottom Copyright Footer */}

@@ -1,3 +1,4 @@
+import type { RevalidateWorkdayReportRequest } from '@insite/shared';
 import { mobileRequest } from '../../config/apiConfig';
 
 export interface WorkdayReportUploadPayload {
@@ -25,3 +26,16 @@ export const submitWorkdayReport = async (
   });
 };
 
+export const revalidateWorkdayReport = async (
+  projectId: string,
+  reportId: string,
+  payload: RevalidateWorkdayReportRequest
+): Promise<unknown> => {
+  return mobileRequest(
+    `/projects/${projectId}/workday-reports/${reportId}/revalidate`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }
+  );
+};

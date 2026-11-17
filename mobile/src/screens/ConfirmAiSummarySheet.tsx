@@ -17,6 +17,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Pill } from '../components/common';
 import { PrimaryButton } from '../components/inputs/Buttons';
 import { useProfile } from '../context/ProfileContext';
+import { useResolveNotificationMutation } from '../queries/notifications/useNotificationQueries';
 import { useSubmitWorkdayReportMutation } from '../queries/wbs/useWbsQueries';
 import {
   captureCurrentGeotag,
@@ -33,7 +34,16 @@ export const ConfirmAiSummarySheet: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'EodConfirmModal'>>();
-  const { wbsItem } = route.params;
+  const {
+    wbsItem,
+    resolveNotificationId,
+    workdayReportId,
+    reportQueryId,
+    initialSummary,
+    initialQuantity,
+    initialUnit,
+  } = route.params;
+  const isRevalidating = Boolean(workdayReportId);
   const {
     activeProjectId: projectId,
     profile,
@@ -44,15 +54,20 @@ export const ConfirmAiSummarySheet: React.FC = () => {
   const onCancel = () => navigation.goBack();
   const onConfirmed = (_quantity: number, _summary: string) => navigation.goBack();
   const insets = useSafeAreaInsets();
-  const [quantity, setQuantity] = useState('');
-  const [unit, setUnit] = useState(wbsItem.unit || 'm3');
-  const [summary, setSummary] = useState('');
+  const [quantity, setQuantity] = useState(
+    initialQuantity !== undefined && !isNaN(initialQuantity)
+      ? String(initialQuantity)
+      : ''
+  );
+  const [unit, setUnit] = useState(initialUnit || wbsItem.unit || 'm3');
+  const [summary, setSummary] = useState(initialSummary || '');
   const [blockers, setBlockers] = useState('');
   const [holdPointSigned, setHoldPointSigned] = useState(!wbsItem.isHoldPoint);
 
   const [geotag, setGeotag] = useState<SiteGeotag | null>(null);
   const [loadingGps, setLoadingGps] = useState(true);
   const submitReportMutation = useSubmitWorkdayReportMutation(projectId);
+  const resolveNotificationMutation = useResolveNotificationMutation(projectId);
   const isSubmitting = submitReportMutation.isPending;
 
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
@@ -116,6 +131,9 @@ export const ConfirmAiSummarySheet: React.FC = () => {
         voiceNoteUri: eodVoiceNote?.uri ?? null,
         submissionGeotag: activeGeotag,
         isVerifiedAccount,
+        revalidateContext: workdayReportId
+          ? { targetReportId: workdayReportId, reportQueryId }
+          : undefined,
       });
 
       if (result.syncStatus === 'STAGED_UNVERIFIED') {
@@ -140,10 +158,18 @@ export const ConfirmAiSummarySheet: React.FC = () => {
         Toast.show({
           type: 'success',
           props: {
-            title: 'Report Synced',
-            message: 'Your signed workday report has been synced to the project ledger.',
+            title: isRevalidating ? 'Report Re-submitted' : 'Report Synced',
+            message: isRevalidating
+              ? 'Updated chat evidence was re-parsed by AI and sent to the Monitor.'
+              : 'Your signed workday report has been synced to the project ledger.',
           },
         });
+      }
+
+      if (resolveNotificationId) {
+        await resolveNotificationMutation
+          .mutateAsync(resolveNotificationId)
+          .catch(() => {});
       }
 
       onConfirmed(qNum, summary.trim());
@@ -173,9 +199,15 @@ export const ConfirmAiSummarySheet: React.FC = () => {
           </TouchableOpacity>
           <Pill variant="positive" text="Human Sign-Off Required" />
         </View>
-        <Text style={styles.title}>Confirm AI Daily Summary</Text>
+        <Text style={styles.title}>
+          {isRevalidating
+            ? 'Re-submit & Re-parse Report'
+            : 'Confirm AI Daily Summary'}
+        </Text>
         <Text style={styles.subtitle}>
-          Review and edit the extracted quantities before syncing to the reconciliation ledger.
+          {isRevalidating
+            ? 'AI will re-parse your updated WBS chat evidence against the open query before notifying the Monitor.'
+            : 'Review and edit the extracted quantities before syncing to the reconciliation ledger.'}
         </Text>
       </LinearGradient>
 
@@ -343,7 +375,11 @@ export const ConfirmAiSummarySheet: React.FC = () => {
 
         <PrimaryButton
           onPress={handleConfirm}
-          text="Sign Off & Sync Report"
+          text={
+            isRevalidating
+              ? 'Re-submit for AI Revalidation'
+              : 'Sign Off & Sync Report'
+          }
           isWorking={isSubmitting}
           disabled={isSubmitting}
         />

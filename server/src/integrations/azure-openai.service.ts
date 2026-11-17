@@ -8,6 +8,8 @@ import {
   AiFieldNoteExtractionSchema,
   AiIpcBatchReconciliationOutput,
   AiIpcBatchReconciliationOutputSchema,
+  AiOmissionPayload,
+  AiOmissionPayloadSchema,
   BoqItemInput,
   ExtractedQuantityItem,
   IndependenceTier,
@@ -559,6 +561,301 @@ class AzureOpenAiService {
       headline,
       expectedDeliverable,
       reportingChecklist: checklist,
+    };
+  }
+
+  /**
+   * 5. Evaluates a submitted Workday Report against BOQ Hold-Point rules and Morning Brief
+   * checklist requirements. Flags an omission ONLY when required proof was omitted AND no
+   * explanation/blocker reason was supplied by the engineer.
+   */
+  public async evaluateWorkdayReportOmissions(params: {
+    wbsCode: string;
+    wbsDescription: string;
+    unit: string;
+    summaryText: string;
+    reportedQuantity: number;
+    isHoldPoint: boolean;
+    holdPointInstruction?: string | null;
+    isHoldPointClaimed: boolean;
+    morningChecklist: string[];
+    evidenceItems: Array<{ type: string; caption?: string; mediaUrl?: string }>;
+    voiceNoteUrl?: string | null;
+    delaysOrBlockers?: string;
+  }): Promise<{
+    hasUnexplainedOmission: boolean;
+    omissionPayload: AiOmissionPayload | null;
+    aiConfidence: number;
+    aiReasoning: string;
+  }> {
+    const fallback = this.fallbackEvaluateOmissions(params);
+
+    if (!this.client) {
+      return fallback;
+    }
+
+    const OmissionEvalSchema = z.object({
+      hasUnexplainedOmission: z.boolean(),
+      omittedItems: z.array(z.string()),
+      expectedRequirement: z.string(),
+      reasonProvidedInReport: z.boolean(),
+      clarificationQuestion: z.string(),
+      aiConfidence: z.number().min(0).max(1),
+      aiReasoning: z.string(),
+    });
+
+    try {
+      const checklistText =
+        params.morningChecklist.length > 0
+          ? params.morningChecklist.map((c) => `- ${c}`).join('\n')
+          : '- Standard daily photo & quantity log';
+
+      const completion = await this.client.beta.chat.completions.parse({
+        model: env.AZURE_OPENAI_GPT_DEPLOYMENT,
+        temperature: 0.1,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'You are an infrastructure assurance AI auditor. Determine whether specifically required ' +
+              'evidence (Hold-Point proofs, photos, test certificates, or morning checklist deliverables) ' +
+              'was omitted in a daily report AND whether the engineer provided any explanation or blocker ' +
+              'justifying the omission. Set hasUnexplainedOmission = true ONLY when required evidence was ' +
+              'omitted AND reasonProvidedInReport = false.',
+          },
+          {
+            role: 'user',
+            content:
+              `WBS [${params.wbsCode}]: ${params.wbsDescription}\n` +
+              `Mandatory Hold Point: ${params.isHoldPoint ? `YES (${params.holdPointInstruction || 'Inspect prior to cover-up'})` : 'NO'}\n` +
+              `Morning Checklist:\n${checklistText}\n\n` +
+              `Submitted Summary: "${params.summaryText}"\n` +
+              `Reported Quantity: ${params.reportedQuantity} ${params.unit}\n` +
+              `Blockers/Delays Note: "${params.delaysOrBlockers || 'None'}"\n` +
+              `Evidence Items Attached (${params.evidenceItems.length}): ${JSON.stringify(params.evidenceItems)}\n` +
+              `Voice Note Attached: ${Boolean(params.voiceNoteUrl)}`,
+          },
+        ],
+        response_format: zodResponseFormat(OmissionEvalSchema, 'workday_omission_eval'),
+      });
+
+      const parsed = completion.choices[0]?.message?.parsed;
+      if (parsed) {
+        const shouldRaise =
+          parsed.hasUnexplainedOmission && !parsed.reasonProvidedInReport;
+        return {
+          hasUnexplainedOmission: shouldRaise,
+          omissionPayload: shouldRaise
+            ? AiOmissionPayloadSchema.parse({
+                omittedItems: parsed.omittedItems,
+                expectedRequirement: parsed.expectedRequirement,
+                reasonProvidedInReport: parsed.reasonProvidedInReport,
+                clarificationQuestion: parsed.clarificationQuestion,
+              })
+            : null,
+          aiConfidence: parsed.aiConfidence,
+          aiReasoning: parsed.aiReasoning,
+        };
+      }
+    } catch (error) {
+      console.warn('[AzureOpenAiService.evaluateWorkdayReportOmissions] Fallback:', error);
+    }
+
+    return fallback;
+  }
+
+  private fallbackEvaluateOmissions(params: {
+    wbsCode: string;
+    wbsDescription: string;
+    unit: string;
+    summaryText: string;
+    reportedQuantity: number;
+    isHoldPoint: boolean;
+    holdPointInstruction?: string | null;
+    isHoldPointClaimed: boolean;
+    morningChecklist: string[];
+    evidenceItems: Array<{ type: string; caption?: string; mediaUrl?: string }>;
+    delaysOrBlockers?: string;
+  }) {
+    const photoCount = params.evidenceItems.filter((e) => e.type === 'PHOTO').length;
+    const combinedText = `${params.summaryText} ${params.delaysOrBlockers || ''}`.toLowerCase();
+
+    const checklistNeedsPhotoOrCert = params.morningChecklist.some((item) =>
+      /photo|certificate|test|slump|rebar|grid/i.test(item)
+    );
+
+    const requiresVisualProof =
+      (params.isHoldPoint && (params.reportedQuantity > 0 || params.isHoldPointClaimed)) ||
+      (checklistNeedsPhotoOrCert && params.reportedQuantity > 0);
+
+    const hasJustification =
+      Boolean(params.delaysOrBlockers && params.delaysOrBlockers.trim().length > 5) ||
+      /(rain|delay|halted|postponed|pending|cancelled|camera|no pour|omitted|not poured|waiting)/i.test(
+        combinedText
+      );
+
+    if (requiresVisualProof && photoCount === 0 && !hasJustification) {
+      const requirement = params.isHoldPoint
+        ? params.holdPointInstruction ||
+          `Hold-Point photo/proof verification required for WBS ${params.wbsCode}.`
+        : params.morningChecklist.find((c) => /photo|certificate|test/i.test(c)) ||
+          `Visual/test evidence required by morning deliverable checklist for WBS ${params.wbsCode}.`;
+
+      const omittedItems = params.isHoldPoint
+        ? ['Geotagged Hold-Point inspection photo', 'Mandatory test/mill certificate or omission note']
+        : ['Geotagged site progress photo required by daily deliverable checklist'];
+
+      return {
+        hasUnexplainedOmission: true,
+        omissionPayload: {
+          omittedItems,
+          expectedRequirement: requirement,
+          reasonProvidedInReport: false,
+          clarificationQuestion: `Required evidence for WBS ${params.wbsCode} was omitted without an explanation: ${requirement} Please attach the missing site photo/proof or state why it could not be captured today, then re-submit.`,
+        },
+        aiConfidence: 0.62,
+        aiReasoning: `AI Omission Check flagged missing visual/Hold-Point evidence (${photoCount} photos attached) with no omission reason documented in report.`,
+      };
+    }
+
+    return {
+      hasUnexplainedOmission: false,
+      omissionPayload: null,
+      aiConfidence: photoCount > 0 ? 0.92 : 0.84,
+      aiReasoning:
+        photoCount > 0
+          ? `Report backed by ${photoCount} photo evidence item(s) and aligned with WBS ${params.wbsCode}.`
+          : hasJustification
+            ? `Supporting visual proof omitted, but valid operational reason/blocker was documented in report.`
+            : `Report aligns with WBS ${params.wbsCode} deliverable parameters.`,
+    };
+  }
+
+  /**
+   * 6. Re-parses the full updated WBS chat thread + newly provided evidence/justification
+   * against the original Monitor or AI query context when resubmitting a report.
+   */
+  public async reparseWorkdayChatAfterQuery(params: {
+    wbsCode: string;
+    wbsDescription: string;
+    unit: string;
+    previousSummary: string;
+    previousQuantity: number;
+    originalQuery: {
+      source: string;
+      monitorComment?: string | null;
+      aiOmissionPayload?: AiOmissionPayload | null;
+    };
+    chatMessages: Array<{
+      senderName: string;
+      senderRole: string;
+      messageType: string;
+      textContent?: string | null;
+      caption?: string | null;
+    }>;
+    newEvidenceCount: number;
+    overrideSummary?: string;
+    overrideQuantity?: number;
+  }): Promise<{
+    updatedSummary: string;
+    updatedQuantity: number;
+    aiConfidence: number;
+    aiReasoning: string;
+    omissionAddressed: boolean;
+  }> {
+    const queryPromptText =
+      params.originalQuery.monitorComment ||
+      params.originalQuery.aiOmissionPayload?.clarificationQuestion ||
+      'Clarification requested';
+
+    const chatLines = params.chatMessages
+      .map(
+        (m) =>
+          `[${m.senderRole} - ${m.senderName}] (${m.messageType}): ${m.textContent || m.caption || ''}`
+      )
+      .filter((line) => line.trim().length > 0)
+      .join('\n');
+
+    if (this.client) {
+      const RevalidationSchema = z.object({
+        updatedSummary: z.string(),
+        updatedQuantity: z.number().nonnegative(),
+        aiConfidence: z.number().min(0).max(1),
+        aiReasoning: z.string(),
+        omissionAddressed: z.boolean(),
+      });
+
+      try {
+        const completion = await this.client.beta.chat.completions.parse({
+          model: env.AZURE_OPENAI_GPT_DEPLOYMENT,
+          temperature: 0.1,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are an infrastructure assurance AI co-pilot re-evaluating a queried daily WBS report. ' +
+                'Synthesize the prior report, the original query (Monitor comment or AI omission details), ' +
+                'and the engineer’s newly added evidence/clarifications from the WBS chat into an updated summary.',
+            },
+            {
+              role: 'user',
+              content:
+                `WBS [${params.wbsCode}] ${params.wbsDescription}\n` +
+                `Previous Summary: "${params.previousSummary}" (${params.previousQuantity} ${params.unit})\n` +
+                `Original Query (${params.originalQuery.source}): ${queryPromptText}\n` +
+                `AI Omission Context: ${JSON.stringify(params.originalQuery.aiOmissionPayload ?? null)}\n` +
+                `Updated Chat Thread:\n${chatLines || 'No extra messages'}\n` +
+                `New Evidence Items Attached: ${params.newEvidenceCount}\n` +
+                `User Edited Summary Override: "${params.overrideSummary || ''}"`,
+            },
+          ],
+          response_format: zodResponseFormat(RevalidationSchema, 'workday_chat_revalidation'),
+        });
+
+        const parsed = completion.choices[0]?.message?.parsed;
+        if (parsed) {
+          return {
+            updatedSummary: params.overrideSummary?.trim() || parsed.updatedSummary,
+            updatedQuantity:
+              params.overrideQuantity !== undefined ? params.overrideQuantity : parsed.updatedQuantity,
+            aiConfidence: parsed.aiConfidence,
+            aiReasoning: parsed.aiReasoning,
+            omissionAddressed: parsed.omissionAddressed,
+          };
+        }
+      } catch (err) {
+        console.warn('[AzureOpenAiService.reparseWorkdayChatAfterQuery] Fallback:', err);
+      }
+    }
+
+    const engineerFollowUps = params.chatMessages
+      .filter((m) => m.senderRole === 'ENGINEER' || m.senderRole === 'INSPECTOR')
+      .map((m) => m.textContent || m.caption)
+      .filter((txt): txt is string => Boolean(txt && txt.trim()))
+      .slice(-4);
+
+    const updatedSummary =
+      params.overrideSummary?.trim() ||
+      [
+        params.previousSummary.trim(),
+        engineerFollowUps.length > 0
+          ? `Query Clarification: ${engineerFollowUps.join(' · ')}`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' | ');
+
+    const hasEvidenceOrNote = params.newEvidenceCount > 0 || engineerFollowUps.length > 0;
+
+    return {
+      updatedSummary,
+      updatedQuantity:
+        params.overrideQuantity !== undefined ? params.overrideQuantity : params.previousQuantity,
+      aiConfidence: hasEvidenceOrNote ? 0.91 : 0.72,
+      aiReasoning: hasEvidenceOrNote
+        ? `Re-parsed WBS ${params.wbsCode} chat after ${params.originalQuery.source} query ("${queryPromptText.slice(0, 90)}"). Incorporates ${params.newEvidenceCount} newly attached evidence item(s) and ${engineerFollowUps.length} field clarification note(s).`
+        : `Resubmission logged against ${params.originalQuery.source} query; awaiting additional photo/note proof if still unclear.`,
+      omissionAddressed: hasEvidenceOrNote,
     };
   }
 }

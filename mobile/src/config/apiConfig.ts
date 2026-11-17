@@ -1,10 +1,62 @@
+import Constants from 'expo-constants';
+import { NativeModules, Platform } from 'react-native';
 import type {
   FieldAgentSessionProfile,
   ProjectGeofence,
   ReportingCadence,
 } from '@insite/shared';
+import { formatMobileErrorMessage } from '../utils/errorFormatter';
 
-export const MOBILE_API_BASE_URL = 'http://localhost:4000/api/v1';
+function extractLanHost(uriOrUrl?: string | null): string | null {
+  if (!uriOrUrl) return null;
+  const cleaned = uriOrUrl.replace(/^https?:\/\//i, '').split('/')[0];
+  const host = cleaned.split(':')[0]?.trim();
+  if (!host) return null;
+  // Remote Expo tunnel hosts only forward port 8081, not port 4000
+  if (
+    host.endsWith('.exp.direct') ||
+    host.endsWith('.ngrok.io') ||
+    host.endsWith('.ngrok-free.app')
+  ) {
+    return null;
+  }
+  return host;
+}
+
+function resolveMobileApiBaseUrl(): string {
+  const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+  if (envUrl) {
+    return envUrl.replace(/\/+$/, '');
+  }
+
+  // In Expo Go / Dev Client, hostUri contains the dev machine's LAN IP (e.g. "192.168.1.15:8081")
+  const expoHostUri =
+    Constants.expoConfig?.hostUri ??
+    (Constants as any).manifest2?.extra?.expoGo?.debuggerHost ??
+    (Constants as any).manifest?.debuggerHost ??
+    null;
+
+  const hostFromExpo = extractLanHost(expoHostUri);
+  const hostFromScript = extractLanHost(NativeModules?.SourceCode?.scriptURL);
+  const resolvedHost = hostFromExpo || hostFromScript;
+
+  if (
+    resolvedHost &&
+    resolvedHost !== 'localhost' &&
+    resolvedHost !== '127.0.0.1'
+  ) {
+    return `http://${resolvedHost}:4000/api/v1`;
+  }
+
+  if (Platform.OS === 'android') {
+    // Android Emulator alias for the host machine's localhost
+    return 'http://10.0.2.2:4000/api/v1';
+  }
+
+  return 'http://localhost:4000/api/v1';
+}
+
+export const MOBILE_API_BASE_URL = resolveMobileApiBaseUrl();
 export const API_BASE_URL = MOBILE_API_BASE_URL;
 
 export interface MobileBaselinePack {
@@ -77,19 +129,29 @@ export async function mobileRequest<T>(
     headers.Authorization = `Bearer ${fieldAgentToken}`;
   }
 
-  const response = await fetch(`${MOBILE_API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12_000);
+
+  let response: Response;
+  try {
+    response = await fetch(`${MOBILE_API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+      signal: options.signal ?? controller.signal,
+    });
+  } catch (err) {
+    throw new Error(formatMobileErrorMessage(err));
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   const payload = await response.json().catch(() => null);
 
   if (!response.ok || !payload?.success) {
     throw new Error(
-      payload?.error?.message || `Mobile API error (${response.status})`
+      formatMobileErrorMessage(payload?.error?.message, response.status)
     );
   }
 
   return payload.data as T;
 }
-

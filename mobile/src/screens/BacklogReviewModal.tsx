@@ -10,7 +10,11 @@ import Toast from 'react-native-toast-message';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import {
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   EmptyStateCard,
@@ -20,6 +24,7 @@ import {
 } from '../components/common';
 import { PrimaryButton } from '../components/inputs/Buttons';
 import { useProfile } from '../context/ProfileContext';
+import { useResolveNotificationMutation } from '../queries/notifications/useNotificationQueries';
 import {
   usePromoteBacklogMutation,
   useStagedBacklogQuery,
@@ -29,6 +34,8 @@ import type { RootStackParamList } from '../navigation/types';
 export const BacklogReviewModal: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'BacklogModal'>>();
+  const resolveNotificationId = route.params?.resolveNotificationId;
   const { activeProjectId: projectId } = useProfile();
   const onClose = () => navigation.goBack();
   const onBatchConfirmed = () => navigation.goBack();
@@ -37,6 +44,7 @@ export const BacklogReviewModal: React.FC = () => {
 
   const { data: rawItems = [], isLoading: loading } = useStagedBacklogQuery();
   const promoteMutation = usePromoteBacklogMutation(projectId);
+  const resolveNotificationMutation = useResolveNotificationMutation(projectId);
   const isProcessing = promoteMutation.isPending;
 
   const backlogItems = rawItems.map((r) => ({
@@ -77,6 +85,11 @@ export const BacklogReviewModal: React.FC = () => {
           }`,
         },
       });
+      if (resolveNotificationId) {
+        await resolveNotificationMutation
+          .mutateAsync(resolveNotificationId)
+          .catch(() => {});
+      }
       onBatchConfirmed();
     } catch (err: any) {
       Toast.show({

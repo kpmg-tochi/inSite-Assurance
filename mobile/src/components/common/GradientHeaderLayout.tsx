@@ -75,7 +75,6 @@ export const GradientHeaderLayout: React.FC<GradientHeaderLayoutProps> = ({
           styles.curvedContentContainer,
           {
             backgroundColor: contentBackgroundColor,
-            paddingBottom: Math.max(insets.bottom, 16),
           },
         ]}
       >
@@ -156,5 +155,6 @@ const styles = StyleSheet.create({
   staticContent: {
     flex: 1,
     padding: 20,
+    paddingBottom: 0,
   },
 });

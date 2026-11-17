@@ -8,6 +8,7 @@ import {
 } from "../config/apiConfig";
 import { getCurrentUser } from "../api/auth/authApi";
 import { useLoginMutation } from "../mutations/auth/useAuthMutations";
+import { IS_DEMO_MODE } from "../config/demoMode";
 
 interface AuthContextValue {
   user: WebUserProfile | null;
@@ -96,6 +97,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const quickSwitchDemoAccount = async (email: string) => {
+    if (!IS_DEMO_MODE) {
+      toast.error("Demo account switching is disabled in live mode.");
+      return;
+    }
     await login(email, "Password123!");
   };
 

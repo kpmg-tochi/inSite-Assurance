@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  envPrefix: ["VITE_", "DEMO_"],
   resolve: {
     alias: {
       "@insite/shared": path.resolve(__dirname, "../shared/src/index.ts"),

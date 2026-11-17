@@ -8,7 +8,6 @@ import {
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
-import type { CreateProjectRequest } from "@insite/shared";
 import { useAuth } from "./lib/auth-context";
 import { AppShell } from "./components/AppShell";
 import Loader from "./components/Loader";
@@ -19,6 +18,7 @@ import { MobileAppPage } from "./pages/public/MobileAppPage";
 import { PortfolioDashboardPage } from "./pages/dashboard/PortfolioDashboardPage";
 import { PortfolioExecutivePage } from "./pages/dashboard/PortfolioExecutivePage";
 import { ProjectsDirectoryPage } from "./pages/projects/ProjectsDirectoryPage";
+import { CreateProjectPage } from "./pages/projects/CreateProjectPage";
 import { ReconciliationWorkbenchPage } from "./pages/reconciliation/ReconciliationWorkbenchPage";
 import { BoqAndHoldPointsPage } from "./pages/boq/BoqAndHoldPointsPage";
 import { AuditLedgerPage } from "./pages/audit/AuditLedgerPage";
@@ -28,7 +28,6 @@ import { useProjectsQuery } from "./queries/projects/useProjectsQueries";
 import { useProjectBoqQuery } from "./queries/boq/useBoqQueries";
 import { useProjectEvidenceQuery } from "./queries/evidence/useEvidenceQueries";
 import { useProjectIpcsQuery } from "./queries/reconciliation/useReconciliationQueries";
-import { useCreateProjectMutation } from "./mutations/projects/useProjectsMutations";
 import { downloadValuationReportPdf } from "./api/reconciliation/reconciliationApi";
 
 function ScrollToTopOnNavigate() {
@@ -54,7 +53,6 @@ function AuthenticatedWorkspace() {
     null,
   );
   const [selectedIpcId, setSelectedIpcId] = useState<string | null>(null);
-  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
 
   const projectsQuery = useProjectsQuery(Boolean(user));
   const projects = projectsQuery.data || [];
@@ -89,8 +87,6 @@ function AuthenticatedWorkspace() {
     activeProject?.id,
     Boolean(user && activeProject?.id),
   );
-
-  const createProjectMutation = useCreateProjectMutation();
 
   const ipcs = ipcsQuery.data || [];
   const urlIpcId = searchParams.get("ipc");
@@ -137,12 +133,6 @@ function AuthenticatedWorkspace() {
     navigate(`/app/projects/${projectId}/${safeSubRoute}`);
   };
 
-  const handleCreateProject = async (payload: CreateProjectRequest) => {
-    const created = await createProjectMutation.mutateAsync(payload);
-    setSelectedProjectId(created.id);
-    navigate(`/app/projects/${created.id}/dashboard`);
-  };
-
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
@@ -174,12 +164,7 @@ function AuthenticatedWorkspace() {
       {user.role === "MONITOR" && (
         <button
           type="button"
-          onClick={() => {
-            if (activeProject) {
-              navigate(`/app/projects/${activeProject.id}/dashboard`);
-            }
-            setShowNewProjectModal(true);
-          }}
+          onClick={() => navigate("/app/projects/new")}
           className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-brand-navy text-xs font-bold transition shadow-sm"
         >
           + New Project
@@ -187,6 +172,10 @@ function AuthenticatedWorkspace() {
       )}
     </>
   );
+
+  const isCreatingNewProject =
+    projectMatch?.params.projectId === "new" ||
+    location.pathname.endsWith("/projects/new");
 
   return (
     <AppShell
@@ -196,7 +185,30 @@ function AuthenticatedWorkspace() {
       openConflictBadgeCount={activeProject?.openConflictCount ?? 0}
       headerActions={headerActions}
     >
-      {!activeProject ? (
+      {isCreatingNewProject ? (
+        user.role === "MONITOR" ? (
+          <CreateProjectPage
+            cancelFallbackPath={
+              activeProject
+                ? `/app/projects/${activeProject.id}/projects`
+                : "/app/projects"
+            }
+            onProjectCreated={(created) => {
+              setSelectedProjectId(created.id);
+              navigate(`/app/projects/${created.id}/boq`);
+            }}
+          />
+        ) : (
+          <Navigate
+            to={
+              activeProject
+                ? `/app/projects/${activeProject.id}/dashboard`
+                : "/app/projects"
+            }
+            replace
+          />
+        )
+      ) : !activeProject ? (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-8 flex flex-col items-center justify-center gap-3 text-xs text-slate-500">
           {projectsQuery.isLoading ? (
             <>
@@ -225,10 +237,7 @@ function AuthenticatedWorkspace() {
                 projects={projects}
                 selectedProjectId={activeProject.id}
                 onSelectProject={setSelectedProjectId}
-                onNewProject={() => {
-                  navigate(`/app/projects/${activeProject.id}/dashboard`);
-                  setShowNewProjectModal(true);
-                }}
+                onNewProject={() => navigate("/app/projects/new")}
               />
             }
           />
@@ -242,9 +251,6 @@ function AuthenticatedWorkspace() {
                 onNavigateToReconciliation={() =>
                   navigate(`/app/projects/${activeProject.id}/reconciliation`)
                 }
-                onCreateProject={handleCreateProject}
-                showNewProjectModal={showNewProjectModal}
-                onCloseNewProjectModal={() => setShowNewProjectModal(false)}
               />
             }
           />

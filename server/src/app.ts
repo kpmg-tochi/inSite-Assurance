@@ -14,6 +14,8 @@ import { incidentRoutes } from "./modules/incidents/incident.routes";
 import { telemetryRoutes } from "./modules/telemetry/telemetry.routes";
 import { workdayReportsRoutes } from "./modules/workday-reports/workdayReports.routes";
 import { morningBriefRoutes } from "./modules/morning-briefs/morningBrief.routes";
+import { notificationsRoutes } from "./modules/notifications/notifications.routes";
+import { wbsChatRoutes } from "./modules/wbs-chat/wbsChat.routes";
 import { storageService } from "./integrations/storage.service";
 import { azureOpenAiService } from "./integrations/azure-openai.service";
 import { whisperService } from "./integrations/whisper.service";
@@ -41,6 +43,7 @@ export function createApp() {
       success: true,
       service: "InSite Assurance API",
       version: "0.3.0",
+      demoMode: env.DEMO_MODE,
       integrations: {
         azureOpenAiGpt4o: azureOpenAiService.isConfigured()
           ? "LIVE_AZURE_OPENAI"
@@ -67,6 +70,8 @@ export function createApp() {
   app.use("/api/v1/projects", telemetryRoutes);
   app.use("/api/v1/projects", workdayReportsRoutes);
   app.use("/api/v1/projects", morningBriefRoutes);
+  app.use("/api/v1/projects", notificationsRoutes);
+  app.use("/api/v1/projects", wbsChatRoutes);
 
   // Centralized Error Handler
   app.use(errorHandler);

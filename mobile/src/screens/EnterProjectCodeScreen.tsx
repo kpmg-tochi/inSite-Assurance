@@ -23,6 +23,7 @@ import { PrimaryButton } from "../components/inputs/Buttons";
 import { useDemoProjectsQuery } from "../queries/projects/useProjectsQueries";
 import { useJoinProjectMutation } from "../queries/auth/useAuthMutations";
 import { useProfile } from "../context/ProfileContext";
+import { IS_DEMO_MODE } from "../config/demoMode";
 import type { RootStackParamList } from "../navigation/types";
 
 /**
@@ -65,12 +66,12 @@ export const EnterProjectCodeScreen: React.FC = () => {
   const [projectCode, setProjectCode] = useState("");
   const [autofillIndex, setAutofillIndex] = useState(0);
 
-  // Data fetching
+  // Data fetching (demo-only autofill catalog)
   const {
     data: demoProjects = [],
     isFetching: loadingDemoCodes,
     refetch: refetchDemoProjects,
-  } = useDemoProjectsQuery();
+  } = useDemoProjectsQuery(IS_DEMO_MODE);
 
   // Mutations
   const joinProjectMutation = useJoinProjectMutation();
@@ -163,7 +164,7 @@ export const EnterProjectCodeScreen: React.FC = () => {
 
   // Validation
   const canSubmit = useMemo(() => {
-    return projectCode.trim().length >= 6 && projectCode.trim().length <= 10;
+    return projectCode.trim().length >= 6 && projectCode.trim().length <= 11;
   }, [projectCode]);
 
   // Submit project code
@@ -275,22 +276,24 @@ export const EnterProjectCodeScreen: React.FC = () => {
         />
       </View>
 
-      {/* Auto fill */}
-      <TouchableOpacity
-        style={styles.autofillButton}
-        onPress={handleAutofillDemoCode}
-        disabled={loadingDemoCodes || isSubmitting}
-        activeOpacity={0.75}
-      >
-        {loadingDemoCodes ? (
-          <ActivityIndicator size="small" color="#00338D" />
-        ) : (
-          <Feather name="zap" size={14} color="#00338D" />
-        )}
-        <Text style={styles.autofillButtonText}>
-          {loadingDemoCodes ? "Loading Join Codes..." : "Autofill Demo Code"}
-        </Text>
-      </TouchableOpacity>
+      {/* Auto fill (Demo Mode only) */}
+      {IS_DEMO_MODE && (
+        <TouchableOpacity
+          style={styles.autofillButton}
+          onPress={handleAutofillDemoCode}
+          disabled={loadingDemoCodes || isSubmitting}
+          activeOpacity={0.75}
+        >
+          {loadingDemoCodes ? (
+            <ActivityIndicator size="small" color="#00338D" />
+          ) : (
+            <Feather name="zap" size={14} color="#00338D" />
+          )}
+          <Text style={styles.autofillButtonText}>
+            {loadingDemoCodes ? "Loading Join Codes..." : "Autofill Demo Code"}
+          </Text>
+        </TouchableOpacity>
+      )}
     </Container>
   );
 };

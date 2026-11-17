@@ -117,3 +117,14 @@ export async function clearActiveProjectSession(): Promise<void> {
   }
 }
 
+/**
+ * Completely removes persisted profile and session credentials from device SecureStore.
+ */
+export async function wipeAllLocalProfileData(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(PROFILE_KEY);
+  } catch (error) {
+    console.warn('Failed to clear profile from SecureStore:', error);
+  }
+}
+

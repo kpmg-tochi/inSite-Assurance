@@ -1,11 +1,24 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import type { SiteTelemetryPingDto } from "@insite/shared";
-import { MapPin, Clock, ShieldAlert, CheckCircle2, X } from "lucide-react";
+import {
+  MapPin,
+  Clock,
+  ShieldAlert,
+  CheckCircle2,
+  X,
+  MessageSquarePlus,
+  Sparkles,
+  FileWarning,
+  Layers,
+} from "lucide-react";
+import { toast } from "sonner";
 import type { WorkdayReportRecordDto } from "../api/telemetry/telemetryApi";
 import {
   useProjectTelemetryQuery,
   useProjectWorkdayReportsQuery,
 } from "../queries/telemetry/useTelemetryQueries";
+import { useCreateWorkdayReportQueryMutation } from "../mutations/telemetry/useTelemetryMutations";
+import { useAuth } from "../lib/auth-context";
 import {
   StandardTable,
   TableBadge,
@@ -18,6 +31,8 @@ import { formatDateTimeShort } from "../lib/formatters";
 
 interface SitePresencePanelProps {
   projectId: string;
+  initialReportId?: string | null;
+  initialWbsItemId?: string | null;
 }
 
 function getGeotagBadge(
@@ -41,29 +56,90 @@ function getGeotagBadge(
   return { label: "GPS Locked", variant: "warning" };
 }
 
-export function SitePresencePanel({ projectId }: SitePresencePanelProps) {
+export function SitePresencePanel({
+  projectId,
+  initialReportId,
+  initialWbsItemId,
+}: SitePresencePanelProps) {
+  const { user } = useAuth();
   const reportsQuery = useProjectWorkdayReportsQuery(projectId);
   const telemetryQuery = useProjectTelemetryQuery(projectId);
+  const createQueryMutation = useCreateWorkdayReportQueryMutation(projectId);
 
   const [reportSearch, setReportSearch] = useState("");
   const [pingSearch, setPingSearch] = useState("");
-  const [selectedReport, setSelectedReport] =
-    useState<WorkdayReportRecordDto | null>(null);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
+  const [showQueryForm, setShowQueryForm] = useState(false);
+  const [queryText, setQueryText] = useState("");
 
   const reports = useMemo(() => reportsQuery.data || [], [reportsQuery.data]);
   const pings = useMemo(() => telemetryQuery.data || [], [telemetryQuery.data]);
 
+  // Auto-open drawer when deep-linked from a Monitor Web Notification
+  useEffect(() => {
+    if (reports.length === 0) return;
+    if (initialReportId) {
+      const target = reports.find((r) => r.id === initialReportId);
+      if (target) {
+        setSelectedReportId(target.id);
+        return;
+      }
+    }
+    if (initialWbsItemId) {
+      const target = reports.find((r) => r.wbsItemId === initialWbsItemId);
+      if (target) {
+        setSelectedReportId(target.id);
+      }
+    }
+  }, [reports, initialReportId, initialWbsItemId]);
+
+  const selectedReport = useMemo(
+    () => reports.find((r) => r.id === selectedReportId) || null,
+    [reports, selectedReportId],
+  );
+
+  // Reset bottom query composer when switching reports
+  useEffect(() => {
+    setShowQueryForm(false);
+    setQueryText("");
+  }, [selectedReportId]);
+
+  // Group reports by (wbsItemId, workdayDate) so the table displays the latest submission cleanly
+  const groupedLatestReports = useMemo(() => {
+    const map = new Map<string, WorkdayReportRecordDto>();
+    for (const r of reports) {
+      const key = `${r.wbsItemId}::${r.workdayDate}`;
+      const existing = map.get(key);
+      if (!existing || r.revisionNumber > existing.revisionNumber) {
+        map.set(key, r);
+      }
+    }
+    return Array.from(map.values());
+  }, [reports]);
+
+  // Timeline revisions for the currently inspected WBS item + workdayDate
+  const selectedThreadRevisions = useMemo(() => {
+    if (!selectedReport) return [];
+    return reports
+      .filter(
+        (r) =>
+          r.wbsItemId === selectedReport.wbsItemId &&
+          r.workdayDate === selectedReport.workdayDate,
+      )
+      .sort((a, b) => a.revisionNumber - b.revisionNumber);
+  }, [reports, selectedReport]);
+
   const filteredReports = useMemo(() => {
     const q = reportSearch.trim().toLowerCase();
-    if (!q) return reports;
-    return reports.filter(
+    if (!q) return groupedLatestReports;
+    return groupedLatestReports.filter(
       (r) =>
         r.wbsCode.toLowerCase().includes(q) ||
         r.reporterName.toLowerCase().includes(q) ||
         r.summaryText.toLowerCase().includes(q) ||
         r.workdayDate.includes(q),
     );
-  }, [reports, reportSearch]);
+  }, [groupedLatestReports, reportSearch]);
 
   const filteredPings = useMemo(() => {
     const q = pingSearch.trim().toLowerCase();
@@ -75,6 +151,22 @@ export function SitePresencePanel({ projectId }: SitePresencePanelProps) {
         (p.chainageLabel || "").toLowerCase().includes(q),
     );
   }, [pings, pingSearch]);
+
+  const handleSubmitQuery = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedReport || queryText.trim().length < 5) return;
+    try {
+      await createQueryMutation.mutateAsync({
+        reportId: selectedReport.id,
+        queryText: queryText.trim(),
+      });
+      toast.success(`Query dispatched to WBS ${selectedReport.wbsCode} mobile chat.`);
+      setQueryText("");
+      setShowQueryForm(false);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to dispatch query.");
+    }
+  };
 
   const reportColumns: TableColumnDef<WorkdayReportRecordDto>[] = [
     {
@@ -92,11 +184,16 @@ export function SitePresencePanel({ projectId }: SitePresencePanelProps) {
       id: "wbs",
       header: "WBS Item",
       tooltip: "BOQ / WBS item covered by this daily report",
-      width: "w-32",
+      width: "w-36",
       cell: (r) => (
-        <span className="text-xs font-bold text-brand-navy whitespace-nowrap">
-          WBS {r.wbsCode}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-bold text-brand-navy whitespace-nowrap">
+            WBS {r.wbsCode}
+          </span>
+          {r.revisionNumber > 1 && (
+            <TableBadge variant="info">Rev #{r.revisionNumber}</TableBadge>
+          )}
+        </div>
       ),
     },
     {
@@ -122,14 +219,31 @@ export function SitePresencePanel({ projectId }: SitePresencePanelProps) {
       ),
     },
     {
-      id: "geotag",
-      header: "Submission GPS",
+      id: "status",
+      header: "Query / GPS",
       tooltip:
-        "Server-verified geofence status at the moment the daily report was submitted",
-      width: "w-36",
+        "Open query/omission status alongside submission GPS geofence check",
+      width: "w-44",
       cell: (r) => {
         const badge = getGeotagBadge(r.submissionGeotag);
-        return <TableBadge variant={badge.variant}>{badge.label}</TableBadge>;
+        const threadReports = reports.filter(
+          (item) =>
+            item.wbsItemId === r.wbsItemId && item.workdayDate === r.workdayDate,
+        );
+        const allQueries = threadReports.flatMap((tr) => tr.queries || []);
+        const hasOpen = allQueries.some((q) => q.status === "OPEN");
+        const hasResubmitted =
+          !hasOpen && allQueries.some((q) => q.status === "RESUBMITTED");
+
+        return (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <TableBadge variant={badge.variant}>{badge.label}</TableBadge>
+            {hasOpen && <TableBadge variant="warning">Query Open</TableBadge>}
+            {hasResubmitted && (
+              <TableBadge variant="success">Resubmitted</TableBadge>
+            )}
+          </div>
+        );
       },
     },
     {
@@ -142,7 +256,7 @@ export function SitePresencePanel({ projectId }: SitePresencePanelProps) {
           variant="primary"
           onClick={(e) => {
             e.stopPropagation();
-            setSelectedReport(r);
+            setSelectedReportId(r.id);
           }}
         >
           Inspect
@@ -240,11 +354,11 @@ export function SitePresencePanel({ projectId }: SitePresencePanelProps) {
       {/* Daily Workday Reports & Submission Geotags */}
       <StandardTable
         title="Daily Workday Reports & Submission Geotags"
-        subtitle="Verify that contractors submitted End-of-Day reports from within the project geofence."
+        subtitle="Verify End-of-Day geotags, review resubmitted report timelines, or raise Monitor queries to field WBS chats."
         columns={reportColumns}
         data={filteredReports}
         keyExtractor={(r) => r.id}
-        onRowClick={(r) => setSelectedReport(r)}
+        onRowClick={(r) => setSelectedReportId(r.id)}
         search={{
           value: reportSearch,
           onChange: setReportSearch,
@@ -272,14 +386,15 @@ export function SitePresencePanel({ projectId }: SitePresencePanelProps) {
         }}
       />
 
-      {/* Inspection Drawer */}
+      {/* Workday Report Summary Drawer */}
       {selectedReport && (
         <Drawer
           onClick={(e) => {
-            if (e.target === e.currentTarget) setSelectedReport(null);
+            if (e.target === e.currentTarget) setSelectedReportId(null);
           }}
         >
           <div className="p-6 space-y-5 overflow-y-auto flex-1">
+            {/* Drawer Header */}
             <div className="flex items-start justify-between border-b border-slate-200 pb-4">
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-brand-primary">
@@ -294,12 +409,56 @@ export function SitePresencePanel({ projectId }: SitePresencePanelProps) {
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedReport(null)}
+                onClick={() => setSelectedReportId(null)}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Submission Timeline Tabs (when >= 1 revision exists) */}
+            {selectedThreadRevisions.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  <Layers className="w-3.5 h-3.5 text-brand-primary" />
+                  <span>
+                    Submission Timeline ({selectedThreadRevisions.length})
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                  {selectedThreadRevisions.map((rev) => {
+                    const isActive = rev.id === selectedReport.id;
+                    const hasOpenQuery = rev.queries?.some(
+                      (q) => q.status === "OPEN",
+                    );
+                    return (
+                      <button
+                        key={rev.id}
+                        type="button"
+                        onClick={() => setSelectedReportId(rev.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition flex items-center gap-1.5 whitespace-nowrap ${
+                          isActive
+                            ? "bg-brand-primary text-white border-brand-primary shadow-xs"
+                            : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        <span>
+                          Rev #{rev.revisionNumber}{" "}
+                          {rev.revisionNumber === 1 ? "· Initial" : "· Resubmitted"}
+                        </span>
+                        {hasOpenQuery && (
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              isActive ? "bg-amber-300" : "bg-amber-500"
+                            }`}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Submission Geotag Provenance */}
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
@@ -339,16 +498,108 @@ export function SitePresencePanel({ projectId }: SitePresencePanelProps) {
               )}
             </div>
 
-            {/* Signed Report Summary */}
-            <div className="rounded-xl border border-slate-200 p-4 space-y-2">
-              <p className="text-xs font-bold text-slate-800">
-                Signed Workday Summary ({selectedReport.reportedQuantity}{" "}
-                {selectedReport.unitOfMeasure})
-              </p>
+            {/* Signed Report Summary + AI Evaluation */}
+            <div className="rounded-xl border border-slate-200 p-4 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-bold text-slate-800">
+                  Signed Workday Summary ({selectedReport.reportedQuantity}{" "}
+                  {selectedReport.unitOfMeasure})
+                </p>
+                {selectedReport.resolvedQueryId && (
+                  <TableBadge variant="success">Query Response</TableBadge>
+                )}
+              </div>
               <p className="text-xs text-slate-600 leading-relaxed">
                 {selectedReport.summaryText}
               </p>
+
+              {selectedReport.aiReasoning && (
+                <div className="mt-2 pt-2.5 border-t border-slate-100 flex items-start gap-2 text-[11px] text-slate-600">
+                  <Sparkles className="w-3.5 h-3.5 text-brand-primary shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold text-slate-800">
+                      AI Review
+                      {selectedReport.aiParsedConfidence != null
+                        ? ` (${Math.round(selectedReport.aiParsedConfidence * 100)}% confidence)`
+                        : ""}
+                      :{" "}
+                    </span>
+                    {selectedReport.aiReasoning}
+                  </div>
+                </div>
+              )}
             </div>
+
+            {/* Queries Attached to This Revision */}
+            {selectedReport.queries && selectedReport.queries.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <FileWarning className="w-3.5 h-3.5 text-amber-600" />
+                  Queries Raised on Rev #{selectedReport.revisionNumber} (
+                  {selectedReport.queries.length})
+                </h4>
+                {selectedReport.queries.map((q) => (
+                  <div
+                    key={q.id}
+                    className={`rounded-xl border p-3 text-xs space-y-1.5 ${
+                      q.status === "OPEN"
+                        ? "bg-amber-50/70 border-amber-200"
+                        : "bg-emerald-50/60 border-emerald-200"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-800">
+                        {q.source === "AI_OMISSION_CHECK"
+                          ? "AI Omission Check"
+                          : `Monitor Query (${q.raisedByName || "Monitor"})`}
+                      </span>
+                      <TableBadge
+                        variant={q.status === "OPEN" ? "warning" : "success"}
+                      >
+                        {q.status}
+                      </TableBadge>
+                    </div>
+                    <p className="text-slate-700 leading-relaxed">
+                      {q.monitorComment ||
+                        q.aiOmissionPayload?.clarificationQuestion}
+                    </p>
+                    {q.aiOmissionPayload?.omittedItems &&
+                      q.aiOmissionPayload.omittedItems.length > 0 && (
+                        <ul className="list-disc list-inside text-[11px] text-amber-900 space-y-0.5 pt-1">
+                          {q.aiOmissionPayload.omittedItems.map((item, idx) => (
+                            <li key={idx}>{item}</li>
+                          ))}
+                        </ul>
+                      )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Attached Photo / Media Evidence Count */}
+            {selectedReport.evidenceItems &&
+              selectedReport.evidenceItems.length > 0 && (
+                <div className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-2">
+                  <p className="text-xs font-bold text-slate-800">
+                    Attached Evidence Items ({selectedReport.evidenceItems.length})
+                  </p>
+                  <div className="space-y-1.5">
+                    {selectedReport.evidenceItems.map((ev) => (
+                      <div
+                        key={ev.id}
+                        className="text-[11px] text-slate-600 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100 flex items-center justify-between gap-2"
+                      >
+                        <span className="font-medium text-slate-800 truncate">
+                          [{ev.type}] {ev.caption || "Field capture"}
+                        </span>
+                        <span className="text-slate-400 shrink-0">
+                          {formatDateTimeShort(ev.capturedAt)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
             {/* Same-Day Hourly Telemetry Timeline */}
             <div className="space-y-2.5">
@@ -403,6 +654,63 @@ export function SitePresencePanel({ projectId }: SitePresencePanelProps) {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Sticky Bottom Action Bar + Inline Monitor Query Comment Box */}
+          <div className="p-3.5 bg-slate-50 border-t border-slate-200/80 space-y-2.5">
+            {showQueryForm && user?.role === "MONITOR" ? (
+              <form onSubmit={handleSubmitQuery} className="space-y-2">
+                <label className="block text-xs font-bold text-slate-800">
+                  Raise Query to WBS {selectedReport.wbsCode} Mobile Chat
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  value={queryText}
+                  onChange={(e) => setQueryText(e.target.value)}
+                  placeholder="Request clarifying photos, measurements, or explanation for missing evidence..."
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-brand-primary"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowQueryForm(false)}
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={
+                      createQueryMutation.isPending || queryText.trim().length < 5
+                    }
+                    className="px-4 py-1.5 rounded-xl bg-brand-primary text-white text-xs font-semibold hover:bg-brand-hover transition disabled:opacity-50"
+                  >
+                    {createQueryMutation.isPending ? "Sending..." : "Send Query"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="flex items-center justify-between gap-2">
+                {user?.role === "MONITOR" && (
+                  <button
+                    type="button"
+                    onClick={() => setShowQueryForm(true)}
+                    className="flex-1 py-2 px-3 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100 transition flex items-center justify-center gap-1.5"
+                  >
+                    <MessageSquarePlus className="w-3.5 h-3.5 text-brand-primary" />
+                    <span>Raise Query</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSelectedReportId(null)}
+                  className="flex-1 py-2 px-3 rounded-xl bg-brand-primary text-white text-xs font-semibold hover:bg-brand-hover transition shadow-sm"
+                >
+                  Done Reviewing
+                </button>
+              </div>
+            )}
           </div>
         </Drawer>
       )}

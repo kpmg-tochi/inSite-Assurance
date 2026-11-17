@@ -2,104 +2,38 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Bell,
-  Check,
   AlertTriangle,
   UserCheck,
   Coins,
   FileQuestion,
+  FileCheck2,
+  Sparkles,
   CheckCheck,
   X,
   ExternalLink,
 } from "lucide-react";
-import { formatDateTimeShort } from "../lib/formatters";
+import { formatElapsedTime, type WebNotificationCategory, type WebNotificationDto } from "@insite/shared";
+import {
+  useMarkAllWebNotificationsReadMutation,
+  useMarkWebNotificationReadMutation,
+  useWebNotificationsQuery,
+} from "../queries/notifications/useWebNotificationsQueries";
 
-export type NotificationCategory =
-  | "CONFLICT_FLAG"
-  | "CONTRACTOR_ONBOARDING"
-  | "TRANCHE_DISBURSEMENT"
-  | "MONITOR_QUERY";
-
-export interface InSiteNotification {
-  id: string;
-  category: NotificationCategory;
-  title: string;
-  description: string;
-  timestamp: string;
-  isRead: boolean;
-  actionUrl?: string;
-  metadata?: {
-    wbsCode?: string;
-    ipcNumber?: number;
-    agentName?: string;
-    amountNgn?: number;
-  };
+interface NotificationsProps {
+  projectId?: string;
 }
 
-const INITIAL_NOTIFICATIONS: InSiteNotification[] = [
-  {
-    id: "notif-1",
-    category: "CONTRACTOR_ONBOARDING",
-    title: "Contractor Assurance Verification",
-    description:
-      "Engr. Musa Danladi (J&S Civil) submitted photo ID and selfie liveness check for Lekki-Epe corridor.",
-    timestamp: new Date(Date.now() - 1000 * 60 * 18).toISOString(), // 18 mins ago
-    isRead: false,
-    actionUrl: "/app/settings",
-    metadata: {
-      agentName: "Engr. Musa Danladi",
-    },
-  },
-  {
-    id: "notif-2",
-    category: "CONFLICT_FLAG",
-    title: "Pre-Pour Hold-Point Bypassed",
-    description:
-      "WBS 02.01.2 Box Culvert Concrete claim of 85% contradicts field log; pre-pour rebar inspection missing.",
-    timestamp: new Date(Date.now() - 1000 * 60 * 42).toISOString(), // 42 mins ago
-    isRead: false,
-    actionUrl: "/app/reconciliation",
-    metadata: {
-      wbsCode: "02.01.2",
-      ipcNumber: 2,
-    },
-  },
-  {
-    id: "notif-3",
-    category: "MONITOR_QUERY",
-    title: "Dispute Query Issued",
-    description:
-      "Formal query raised on WBS 02.01.1 regarding steel reinforcement batch test certificates.",
-    timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(), // 2 hours ago
-    isRead: false,
-    actionUrl: "/app/reconciliation",
-    metadata: {
-      wbsCode: "02.01.1",
-    },
-  },
-  {
-    id: "notif-4",
-    category: "TRANCHE_DISBURSEMENT",
-    title: "Tranche #01 Release Certified",
-    description:
-      "Lender (InfraCredit) approved ₦2.108B drawdown release following 100% CPs satisfaction.",
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
-    isRead: true,
-    actionUrl: "/app/dashboard",
-    metadata: {
-      amountNgn: 2_108_000_000,
-    },
-  },
-];
-
-export default function Notifications() {
+export default function Notifications({ projectId }: NotificationsProps) {
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState<InSiteNotification[]>(
-    INITIAL_NOTIFICATIONS,
-  );
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<"ALL" | "UNREAD">("ALL");
   const navigate = useNavigate();
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const notificationsQuery = useWebNotificationsQuery(projectId, Boolean(projectId));
+  const markReadMutation = useMarkWebNotificationReadMutation(projectId);
+  const markAllReadMutation = useMarkAllWebNotificationsReadMutation(projectId);
+
+  const notifications = notificationsQuery.data || [];
 
   // Close on outside click
   useEffect(() => {
@@ -124,33 +58,15 @@ export default function Notifications() {
     return true;
   });
 
-  const handleToggleSelect = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
-    );
-  };
-
-  const handleMarkSelectedAsRead = () => {
-    if (selectedIds.length === 0) return;
-    setNotifications((prev) =>
-      prev.map((n) =>
-        selectedIds.includes(n.id) ? { ...n, isRead: true } : n,
-      ),
-    );
-    setSelectedIds([]);
-  };
-
   const handleMarkAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    setSelectedIds([]);
+    if (!projectId || unreadCount === 0) return;
+    markAllReadMutation.mutate();
   };
 
-  const handleNotificationClick = (item: InSiteNotification) => {
-    // Mark as read
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)),
-    );
+  const handleNotificationClick = (item: WebNotificationDto) => {
+    if (projectId && !item.isRead) {
+      markReadMutation.mutate(item.id);
+    }
     setOpen(false);
 
     if (item.actionUrl) {
@@ -158,10 +74,14 @@ export default function Notifications() {
     }
   };
 
-  const getCategoryIcon = (category: NotificationCategory) => {
+  const getCategoryIcon = (category: WebNotificationCategory) => {
     switch (category) {
+      case "REPORT_RESUBMITTED":
+        return <FileCheck2 className="w-4 h-4 text-emerald-600" />;
+      case "AI_OMISSION_FLAG":
+        return <Sparkles className="w-4 h-4 text-amber-600" />;
       case "CONFLICT_FLAG":
-        return <AlertTriangle className="w-4 h-4 text-amber-600" />;
+        return <AlertTriangle className="w-4 h-4 text-rose-600" />;
       case "CONTRACTOR_ONBOARDING":
         return <UserCheck className="w-4 h-4 text-brand-primary" />;
       case "TRANCHE_DISBURSEMENT":
@@ -173,10 +93,14 @@ export default function Notifications() {
     }
   };
 
-  const getCategoryBadgeClass = (category: NotificationCategory) => {
+  const getCategoryBadgeClass = (category: WebNotificationCategory) => {
     switch (category) {
-      case "CONFLICT_FLAG":
+      case "REPORT_RESUBMITTED":
+        return "bg-emerald-50 text-emerald-800 border-emerald-200";
+      case "AI_OMISSION_FLAG":
         return "bg-amber-50 text-amber-800 border-amber-200";
+      case "CONFLICT_FLAG":
+        return "bg-rose-50 text-rose-800 border-rose-200";
       case "CONTRACTOR_ONBOARDING":
         return "bg-blue-50 text-brand-primary border-blue-200";
       case "TRANCHE_DISBURSEMENT":
@@ -195,7 +119,7 @@ export default function Notifications() {
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-label="Open governance notifications"
-        title="Governance Notifications & Critical Flags"
+        title="Governance Notifications & Report Resubmissions"
         className="relative p-2 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white transition flex items-center justify-center focus:outline-hidden"
       >
         <Bell className="w-4 h-4 text-slate-200 hover:text-white" />
@@ -271,16 +195,6 @@ export default function Notifications() {
                 Unread ({unreadCount})
               </button>
             </div>
-
-            {selectedIds.length > 0 && (
-              <button
-                type="button"
-                onClick={handleMarkSelectedAsRead}
-                className="text-[11px] font-semibold text-brand-primary hover:underline"
-              >
-                Mark selected read ({selectedIds.length})
-              </button>
-            )}
           </div>
 
           {/* Notifications Scroll Area */}
@@ -291,79 +205,61 @@ export default function Notifications() {
                 <p className="text-xs font-semibold text-slate-600">
                   {filter === "UNREAD"
                     ? "All caught up! No unread notifications."
-                    : "No notifications present."}
+                    : "No notifications present for this project."}
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Critical project and evidence events will appear here.
+                  Resubmitted field reports, AI omissions, and IPC flags appear here.
                 </p>
               </div>
             ) : (
-              displayedNotifications.map((item) => {
-                const isSelected = selectedIds.includes(item.id);
-                return (
-                  <div
-                    key={item.id}
-                    onClick={() => handleNotificationClick(item)}
-                    className={`group px-3.5 py-3 cursor-pointer transition flex items-start gap-3 ${
-                      !item.isRead
-                        ? "bg-blue-50/40 hover:bg-blue-50/80"
-                        : "hover:bg-slate-50/80"
-                    }`}
-                  >
-                    {/* Select Checkbox / Category Icon */}
-                    <div className="pt-0.5 shrink-0 flex items-center">
-                      <button
-                        type="button"
-                        onClick={(e) => handleToggleSelect(item.id, e)}
-                        title={isSelected ? "Deselect" : "Select"}
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center border transition ${
-                          isSelected
-                            ? "bg-brand-primary text-white border-brand-primary"
-                            : "bg-white text-slate-600 border-slate-200 group-hover:border-slate-300"
-                        }`}
-                      >
-                        {isSelected ? (
-                          <Check className="w-3.5 h-3.5" />
-                        ) : (
-                          getCategoryIcon(item.category)
-                        )}
-                      </button>
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <span
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${getCategoryBadgeClass(
-                            item.category,
-                          )}`}
-                        >
-                          {item.title}
-                        </span>
-                        <span className="text-[10px] text-slate-400 whitespace-nowrap">
-                          {formatDateTimeShort(item.timestamp)}
-                        </span>
-                      </div>
-
-                      <p className="text-xs text-slate-700 leading-snug font-normal line-clamp-2 mt-1">
-                        {item.description}
-                      </p>
-
-                      <div className="mt-1.5 flex items-center justify-between">
-                        {item.actionUrl && (
-                          <span className="text-[11px] font-semibold text-brand-primary group-hover:underline flex items-center gap-1">
-                            <span>Open details</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </span>
-                        )}
-                        {!item.isRead && (
-                          <span className="w-2 h-2 rounded-full bg-brand-primary shrink-0" />
-                        )}
-                      </div>
+              displayedNotifications.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => handleNotificationClick(item)}
+                  className={`group px-3.5 py-3 cursor-pointer transition flex items-start gap-3 ${
+                    !item.isRead
+                      ? "bg-blue-50/40 hover:bg-blue-50/80"
+                      : "hover:bg-slate-50/80"
+                  }`}
+                >
+                  <div className="pt-0.5 shrink-0 flex items-center">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center border bg-white text-slate-600 border-slate-200">
+                      {getCategoryIcon(item.category)}
                     </div>
                   </div>
-                );
-              })
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <span
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border truncate ${getCategoryBadgeClass(
+                          item.category,
+                        )}`}
+                      >
+                        {item.title}
+                      </span>
+                      <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                        {formatElapsedTime(item.createdAt)}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-700 leading-snug font-normal line-clamp-2 mt-1">
+                      {item.description}
+                    </p>
+
+                    <div className="mt-1.5 flex items-center justify-between">
+                      {item.actionUrl && (
+                        <span className="text-[11px] font-semibold text-brand-primary group-hover:underline flex items-center gap-1">
+                          <span>Inspect report</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </span>
+                      )}
+                      {!item.isRead && (
+                        <span className="w-2 h-2 rounded-full bg-brand-primary shrink-0" />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </div>

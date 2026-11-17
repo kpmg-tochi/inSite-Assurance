@@ -20,6 +20,10 @@ export interface QueuedAssuranceSubmission {
 
 let memSubmissions: QueuedAssuranceSubmission[] = [];
 
+export function resetInMemoryAssuranceState(): void {
+  memSubmissions = [];
+}
+
 export async function saveQueuedAssuranceSubmission(
   input: Omit<QueuedAssuranceSubmission, 'id' | 'status' | 'createdAt' | 'syncedAt'>
 ): Promise<QueuedAssuranceSubmission> {

@@ -23,6 +23,7 @@ import { WbsChatThreadScreen } from "../screens/WbsChatThreadScreen";
 
 // Modals
 import { ProfileAndProjectsScreen } from "../screens/ProfileAndProjectsScreen";
+import { SettingsScreen } from "../screens/SettingsScreen";
 import { SpecialIncidentModal } from "../screens/SpecialIncidentModal";
 import { NotificationCenterModal } from "../screens/NotificationCenterModal";
 import { BacklogReviewModal } from "../screens/BacklogReviewModal";
@@ -69,7 +70,6 @@ export const RootNavigator: React.FC = () => {
         initialRouteName={getInitialRouteName()}
         screenOptions={{
           headerShown: false,
-          animation: "slide_from_right",
         }}
       >
         <Stack.Screen name="Landing" component={LandingScreen} />
@@ -97,6 +97,7 @@ export const RootNavigator: React.FC = () => {
             name="ProfileModal"
             component={ProfileAndProjectsScreen}
           />
+          <Stack.Screen name="SettingsModal" component={SettingsScreen} />
           <Stack.Screen name="IncidentModal" component={SpecialIncidentModal} />
           <Stack.Screen
             name="NotificationsModal"

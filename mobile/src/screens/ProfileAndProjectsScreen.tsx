@@ -25,6 +25,8 @@ import Pill from "../components/common/Pill";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDemoProjectsQuery } from "../queries/projects/useProjectsQueries";
 import { useDemoSkipVerificationMutation } from "../queries/auth/useAuthMutations";
+import { formatMobileErrorMessage } from "../utils/errorFormatter";
+import { IS_DEMO_MODE } from "../config/demoMode";
 
 export type Persona = {
   roleTitle: string;
@@ -52,16 +54,15 @@ export const ProfileAndProjectsScreen = () => {
     isLoading: loadingProjects,
     error: projectsErrorObj,
     refetch: loadProjects,
-  } = useDemoProjectsQuery();
+  } = useDemoProjectsQuery(IS_DEMO_MODE);
   const switchWorkspaceMutation = useDemoSkipVerificationMutation();
 
   const projectsError = projectsErrorObj
-    ? (projectsErrorObj as Error).message ||
-      "Unable to fetch active demo workspaces from server."
+    ? formatMobileErrorMessage(projectsErrorObj)
     : null;
 
   // Settings
-  const handleOpenSettings = () => {};
+  const handleOpenSettings = () => navigation.navigate("SettingsModal");
 
   // Functions
   const onClose = () => navigation.goBack();
@@ -151,6 +152,7 @@ export const ProfileAndProjectsScreen = () => {
           <IconButton icon="cog-outline" onPress={handleOpenSettings} />
         }
         contentContainerStyle={styles.body}
+        scrollable={false}
       >
         <StatusBar style="light" />
 
@@ -169,7 +171,10 @@ export const ProfileAndProjectsScreen = () => {
 
         <View style={styles.container}>
           <ScrollView
-            contentContainerStyle={styles.body}
+            contentContainerStyle={{
+              ...styles.body,
+              paddingBottom: insets.bottom,
+            }}
             showsVerticalScrollIndicator={false}
           >
             {/* Active Project Switcher */}
@@ -177,12 +182,28 @@ export const ProfileAndProjectsScreen = () => {
               <View>
                 <Text style={styles.sectionTitle}>Workspaces</Text>
                 <Text style={styles.sectionSubtitle}>
-                  Switch active project or enter a join code for an additional
-                  workspace.
+                  {IS_DEMO_MODE
+                    ? "Switch active project or enter a join code for an additional workspace."
+                    : "Active project workspace connected to this device."}
                 </Text>
               </View>
 
-              {loadingProjects ? (
+              {!IS_DEMO_MODE ? (
+                profile?.activeProjectCode ? (
+                  <View style={[styles.projectCard, styles.projectCardActive]}>
+                    <View style={styles.projectTop}>
+                      <Text style={styles.projectCode}>
+                        {profile.activeProjectCode}
+                      </Text>
+                      <Pill variant="positive" text="Active" />
+                    </View>
+                    <Text style={styles.projectName}>Connected Site Session</Text>
+                    <Text style={styles.projectMeta}>
+                      Tier: {profile.activeIndependenceTier || "Field Agent"}
+                    </Text>
+                  </View>
+                ) : null
+              ) : loadingProjects ? (
                 <InSiteLoader
                   size="sm"
                   label="Loading workspaces from server..."
@@ -271,8 +292,9 @@ export const ProfileAndProjectsScreen = () => {
               </TouchableOpacity>
             </View>
 
-            {/* Demo Persona Switcher */}
-            <View style={styles.section}>
+            {/* Demo Persona Switcher (Demo Mode only) */}
+            {IS_DEMO_MODE && (
+              <View style={styles.section}>
               <View>
                 <Text style={styles.sectionTitle}>Demo Scenario Switcher</Text>
                 <Text style={styles.sectionSubtitle}>
@@ -358,7 +380,8 @@ export const ProfileAndProjectsScreen = () => {
                   <Text style={styles.personaArrow}>→</Text>
                 </View>
               </TouchableOpacity>
-            </View>
+              </View>
+            )}
           </ScrollView>
         </View>
       </GradientHeaderLayout>
@@ -369,6 +392,7 @@ export const ProfileAndProjectsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    height: "100%",
   },
   user: {
     alignItems: "center",

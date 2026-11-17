@@ -24,6 +24,7 @@ import {
   registerWebUser,
 } from "./auth.service";
 import { recordAuditEvent } from "../audit/audit.service";
+import { createMobileNotification } from "../notifications/notifications.service";
 
 const router = Router();
 
@@ -232,6 +233,19 @@ router.post(
         },
       });
 
+      await createMobileNotification(prisma, {
+        projectId: updated.projectId,
+        fieldSessionId: sessionId,
+        type: "ASSURANCE_PENDING",
+        actionType: "NONE",
+        requiresAction: false,
+        title: "Verification Under Review",
+        message: `Your ${body.idDocumentType} dossier and ${body.corenLicenseNumber} credentials are queued for Independent Monitor review. You can continue capturing field logs offline.`,
+        metadata: {
+          corenLicenseNumber: body.corenLicenseNumber,
+        },
+      });
+
       res.status(200).json({ success: true, data: updated });
     } catch (error) {
       next(error);
@@ -249,7 +263,7 @@ router.post(
   validateBody(DemoSkipVerificationRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (!env.ENABLE_DEMO_ENDPOINTS) {
+      if (!env.DEMO_MODE) {
         throw new AppError(
           "Demo verification bypass is disabled in this environment",
           403,

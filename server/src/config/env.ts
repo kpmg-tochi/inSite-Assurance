@@ -6,12 +6,23 @@ import { z } from 'zod';
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 dotenv.config();
 
+const booleanEnvSchema = (defaultVal: boolean) =>
+  z
+    .union([z.boolean(), z.string()])
+    .optional()
+    .transform((val) => {
+      if (val === undefined || val === '') return defaultVal;
+      if (typeof val === 'boolean') return val;
+      return ['true', '1', 'yes', 'on'].includes(val.trim().toLowerCase());
+    });
+
 const EnvSchema = z.object({
   PORT: z.coerce.number().default(4000),
   NODE_ENV: z
     .enum(['development', 'test', 'production'])
     .default('development'),
-  ENABLE_DEMO_ENDPOINTS: z.coerce.boolean().default(true),
+  DEMO_MODE: booleanEnvSchema(false),
+  ENABLE_DEMO_ENDPOINTS: booleanEnvSchema(false),
   CORS_ORIGIN: z.string().default('*'),
 
   DATABASE_URL: z
@@ -50,4 +61,9 @@ const EnvSchema = z.object({
   S3_PUBLIC_BASE_URL: z.string().optional().default(''),
 });
 
-export const env = EnvSchema.parse(process.env);
+const parsedEnv = EnvSchema.parse(process.env);
+
+export const env = {
+  ...parsedEnv,
+  DEMO_MODE: parsedEnv.DEMO_MODE || parsedEnv.ENABLE_DEMO_ENDPOINTS,
+};

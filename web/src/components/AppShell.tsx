@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { ProjectSummaryDto } from "../api/types";
 import { SEEDED_DEMO_ACCOUNTS, useAuth } from "../lib/auth-context";
+import { IS_DEMO_MODE } from "../config/demoMode";
 import { formatLicenseCredential, getInitials } from "../lib/formatters";
 import Notifications from "./Notifications";
 
@@ -378,46 +379,50 @@ export function AppShell({
           {/* Popover Menu for Demo Role Switching, Public Docs & Logout */}
           {userPopoverOpen && (
             <div className="absolute bottom-14 left-2 w-64 bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-200 p-2 z-50">
-              <div className="px-2.5 py-1.5 border-b border-slate-100">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Demo Account Switcher
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  Switch active role for live demonstration
-                </div>
-              </div>
-              <div className="py-1 space-y-0.5">
-                {SEEDED_DEMO_ACCOUNTS.map((acct) => {
-                  const isCurrent = user?.email === acct.email;
-                  return (
-                    <button
-                      key={acct.email}
-                      type="button"
-                      disabled={switchingAccount}
-                      onClick={() => handleRoleSwitch(acct.email)}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs hover:bg-slate-100 flex items-center justify-between transition ${
-                        isCurrent
-                          ? "font-semibold text-brand-primary bg-blue-50/50"
-                          : "text-slate-700"
-                      }`}
-                    >
-                      <div>
-                        <div>{acct.roleTitle.split(" (")[0]}</div>
-                        <div className="text-[10px] text-slate-400 font-normal">
-                          {acct.name} · {acct.organization}
-                        </div>
-                      </div>
-                      {isCurrent && (
-                        <span className="text-[10px] bg-blue-50 text-brand-primary px-1.5 py-0.5 rounded font-semibold">
-                          Active
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+              {IS_DEMO_MODE && (
+                <>
+                  <div className="px-2.5 py-1.5 border-b border-slate-100">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      Demo Account Switcher
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Switch active role for live demonstration
+                    </div>
+                  </div>
+                  <div className="py-1 space-y-0.5">
+                    {SEEDED_DEMO_ACCOUNTS.map((acct) => {
+                      const isCurrent = user?.email === acct.email;
+                      return (
+                        <button
+                          key={acct.email}
+                          type="button"
+                          disabled={switchingAccount}
+                          onClick={() => handleRoleSwitch(acct.email)}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs hover:bg-slate-100 flex items-center justify-between transition ${
+                            isCurrent
+                              ? "font-semibold text-brand-primary bg-blue-50/50"
+                              : "text-slate-700"
+                          }`}
+                        >
+                          <div>
+                            <div>{acct.roleTitle.split(" (")[0]}</div>
+                            <div className="text-[10px] text-slate-400 font-normal">
+                              {acct.name} · {acct.organization}
+                            </div>
+                          </div>
+                          {isCurrent && (
+                            <span className="text-[10px] bg-blue-50 text-brand-primary px-1.5 py-0.5 rounded font-semibold">
+                              Active
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
 
-              <div className="pt-1 mt-1 border-t border-slate-100 space-y-0.5">
+              <div className={`${IS_DEMO_MODE ? "pt-1 mt-1 border-t border-slate-100" : ""} space-y-0.5`}>
                 <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                   Settings &amp; Info
                 </div>
@@ -535,7 +540,7 @@ export function AppShell({
           </div>
 
           <div className="flex items-center gap-2.5">
-            <Notifications />
+            <Notifications projectId={selectedProject?.id} />
             {headerActions}
           </div>
         </header>

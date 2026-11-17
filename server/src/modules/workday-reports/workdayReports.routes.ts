@@ -1,5 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { SubmitWorkdayReportBundleSchema } from '@insite/shared';
+import {
+  RevalidateWorkdayReportRequestSchema,
+  SubmitWorkdayReportBundleSchema,
+} from '@insite/shared';
 import {
   requireAnyAuth,
   requireFieldSession,
@@ -7,6 +10,7 @@ import {
 import { validateBody } from '../../middleware/validate.middleware';
 import {
   listProjectWorkdayReports,
+  revalidateWorkdayReport,
   submitWorkdayReportBundle,
 } from './workdayReports.service';
 
@@ -24,6 +28,29 @@ router.post(
     try {
       const report = await submitWorkdayReportBundle({
         projectId: String(req.params.projectId),
+        reporterSessionId: req.fieldAgent!.sessionId,
+        input: req.body,
+      });
+      res.status(201).json({ success: true, data: report });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/v1/projects/:projectId/workday-reports/:reportId/revalidate
+ * Re-submits a queried WBS daily report for AI chat re-parsing and notifies the Monitor.
+ */
+router.post(
+  '/:projectId/workday-reports/:reportId/revalidate',
+  requireFieldSession,
+  validateBody(RevalidateWorkdayReportRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const report = await revalidateWorkdayReport({
+        projectId: String(req.params.projectId),
+        reportId: String(req.params.reportId),
         reporterSessionId: req.fieldAgent!.sessionId,
         input: req.body,
       });

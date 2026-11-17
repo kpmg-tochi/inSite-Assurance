@@ -1,4 +1,5 @@
-import React, { useState, useMemo, MouseEvent } from "react";
+import React, { useState, useMemo, useEffect, MouseEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { ProjectSummaryDto, AuditTrailResponseDto } from "../../api/types";
 import { formatDateTimeShort } from "../../lib/formatters";
 import { useProjectAuditTrailQuery } from "../../queries/audit/useAuditQueries";
@@ -145,7 +146,18 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
     },
   ];
 
-  const [activeTab, setActiveTab] = useState<"ledger" | "presence">("ledger");
+  const [searchParams] = useSearchParams();
+  const initialTab =
+    searchParams.get("tab") === "presence" ? "presence" : "ledger";
+  const initialReportId = searchParams.get("reportId");
+  const initialWbsItemId = searchParams.get("wbsItemId");
+  const [activeTab, setActiveTab] = useState<"ledger" | "presence">(initialTab);
+
+  useEffect(() => {
+    if (searchParams.get("tab") === "presence") {
+      setActiveTab("presence");
+    }
+  }, [searchParams]);
 
   return (
     <div className="space-y-4">
@@ -176,7 +188,11 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
       </div>
 
       {activeTab === "presence" ? (
-        <SitePresencePanel projectId={project.id} />
+        <SitePresencePanel
+          projectId={project.id}
+          initialReportId={initialReportId}
+          initialWbsItemId={initialWbsItemId}
+        />
       ) : isLoading ? (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-10 flex flex-col items-center justify-center gap-3">
           <Loader size="sm" />

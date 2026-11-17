@@ -1,201 +1,321 @@
-import React from 'react';
+import React, { useCallback, useMemo } from "react";
 import {
-  Text,
-  TouchableOpacity,
-  View,
+  FlatList,
+  RefreshControl,
   StyleSheet,
-} from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+  Text,
+  View,
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
+import type { MobileNotificationDto } from "@insite/shared";
 import {
-  getInAppNotifications,
-  markNotificationAsRead,
-  InAppNotificationItem,
-} from '../services/pushNotificationService';
-import { EmptyStateCard, Pill } from '../components/common';
-import { GradientHeaderLayout } from '../components/common/GradientHeaderLayout';
-import { useProfile } from '../context/ProfileContext';
-import { getWbsThreads } from '../storage/wbsRepository';
-import type { RootStackParamList } from '../navigation/types';
+  EmptyStateCard,
+  InSiteLoader,
+} from "../components/common";
+import { GradientHeaderLayout } from "../components/common/GradientHeaderLayout";
+import { IconButton } from "../components/inputs/Buttons";
+import { NotificationCard } from "../components/notifications";
+import { useProfile } from "../context/ProfileContext";
+import type { RootStackParamList } from "../navigation/types";
+import {
+  useMarkNotificationReadMutation,
+  useNotificationsQuery,
+} from "../queries/notifications/useNotificationQueries";
+import {
+  getWbsThreads,
+  syncWbsInboxFromServer,
+  type WbsItemRecord,
+} from "../storage/wbsRepository";
+import { formatMobileErrorMessage } from "../utils/errorFormatter";
+
+type NotificationListEntry =
+  | {
+      kind: "notification";
+      id: string;
+      notification: MobileNotificationDto;
+    }
+  | {
+      kind: "divider";
+      id: "older-notifications-divider";
+    };
 
 export const NotificationCenterModal: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { activeProjectId } = useProfile();
-  const notifications = getInAppNotifications();
+  const insets = useSafeAreaInsets();
+  const { activeProjectId, profile } = useProfile();
+
+  const {
+    data: notifications = [],
+    isLoading,
+    isRefetching,
+    error,
+    refetch,
+  } = useNotificationsQuery(
+    activeProjectId,
+    Boolean(profile?.activeSessionToken),
+  );
+  const markReadMutation = useMarkNotificationReadMutation(activeProjectId);
 
   const onClose = () => navigation.goBack();
 
-  const handlePress = async (notif: InAppNotificationItem) => {
-    markNotificationAsRead(notif.id);
-    if (notif.actionPayload?.openBacklogModal) {
-      navigation.replace('BacklogModal');
-    } else if (notif.actionPayload?.targetWbsItemId) {
-      const threads = await getWbsThreads(activeProjectId);
-      const target = threads.find(
-        (t) => t.id === notif.actionPayload?.targetWbsItemId
-      );
-      navigation.goBack();
-      if (target) {
-        navigation.navigate('WbsThread', { wbsItem: target });
+  const findWbsItem = useCallback(
+    async (
+      wbsItemId?: string,
+      wbsCode?: string,
+    ): Promise<WbsItemRecord | undefined> => {
+      if (!activeProjectId) return undefined;
+      let threads = await getWbsThreads(activeProjectId);
+      const matchFn = (t: WbsItemRecord) =>
+        (wbsItemId && t.id === wbsItemId) ||
+        (wbsCode && t.wbsCode === wbsCode);
+
+      let target = threads.find(matchFn);
+      if (!target) {
+        const synced = await syncWbsInboxFromServer(activeProjectId).catch(
+          () => null,
+        );
+        if (synced?.items) {
+          threads = synced.items;
+          target = threads.find(matchFn);
+        }
       }
+      return target;
+    },
+    [activeProjectId],
+  );
+
+  const handlePress = useCallback(
+    async (notif: MobileNotificationDto) => {
+      // Passive notifications mark read immediately on tap;
+      // Action-required notifications remain unread until the required flow completes.
+      if (!notif.requiresAction && !notif.isRead) {
+        markReadMutation.mutate(notif.id);
+      }
+
+      if (notif.actionType === "OPEN_REPORT_SUMMARY") {
+        const target = await findWbsItem(
+          notif.metadata?.wbsItemId,
+          notif.metadata?.wbsCode,
+        );
+        if (target) {
+          navigation.replace("EodConfirmModal", {
+            wbsItem: target,
+            resolveNotificationId: notif.requiresAction ? notif.id : undefined,
+            initialSummary:
+              typeof notif.metadata?.draftSummary === "string"
+                ? notif.metadata.draftSummary
+                : undefined,
+            initialQuantity:
+              typeof notif.metadata?.draftQuantity === "number"
+                ? notif.metadata.draftQuantity
+                : undefined,
+            initialUnit:
+              typeof notif.metadata?.unit === "string"
+                ? notif.metadata.unit
+                : undefined,
+          });
+          return;
+        }
+        navigation.replace("BacklogModal", {
+          resolveNotificationId: notif.requiresAction ? notif.id : undefined,
+        });
+        return;
+      }
+
+      if (notif.actionType === "OPEN_BACKLOG_REVIEW") {
+        navigation.replace("BacklogModal", {
+          resolveNotificationId: notif.requiresAction ? notif.id : undefined,
+        });
+        return;
+      }
+
+      if (notif.actionType === "OPEN_WBS_CHAT") {
+        const target = await findWbsItem(
+          notif.metadata?.wbsItemId,
+          notif.metadata?.wbsCode,
+        );
+        if (!target) {
+          Toast.show({
+            type: "info",
+            props: {
+              title: "WBS Item Not Found",
+              message:
+                "Pull to refresh the Deliverables inbox, then try opening this query again.",
+            },
+          });
+          return;
+        }
+        navigation.goBack();
+        navigation.navigate("WbsThread", {
+          wbsItem: target,
+          activeQueryNotificationId: notif.requiresAction
+            ? notif.id
+            : undefined,
+          queryPrompt: notif.requiresAction ? notif.message : undefined,
+          workdayReportId:
+            typeof notif.metadata?.workdayReportId === "string"
+              ? notif.metadata.workdayReportId
+              : undefined,
+          reportQueryId:
+            typeof notif.metadata?.reportQueryId === "string"
+              ? notif.metadata.reportQueryId
+              : undefined,
+        });
+        return;
+      }
+
+      if (notif.actionType === "OPEN_ASSURANCE_WIZARD") {
+        navigation.replace("AssuranceWizard", {
+          resolveNotificationId: notif.requiresAction ? notif.id : undefined,
+        });
+      }
+    },
+    [findWbsItem, markReadMutation, navigation],
+  );
+
+  // Build ordered list items (unread newest first -> divider -> read newest first)
+  const listData = useMemo<NotificationListEntry[]>(() => {
+    const unread = notifications.filter((n) => !n.isRead);
+    const read = notifications.filter((n) => n.isRead);
+
+    const entries: NotificationListEntry[] = unread.map((notification) => ({
+      kind: "notification",
+      id: notification.id,
+      notification,
+    }));
+
+    if (unread.length > 0 && read.length > 0) {
+      entries.push({
+        kind: "divider",
+        id: "older-notifications-divider",
+      });
     }
-  };
+
+    for (const notification of read) {
+      entries.push({
+        kind: "notification",
+        id: notification.id,
+        notification,
+      });
+    }
+
+    return entries;
+  }, [notifications]);
+
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.isRead).length,
+    [notifications],
+  );
 
   return (
     <GradientHeaderLayout
+      scrollable={false}
       title="Notification Center"
-      subtitle="Critical updates on assurance verifications &amp; queries."
-      rightAction={
-        <TouchableOpacity
-          onPress={onClose}
-          activeOpacity={0.7}
-          style={styles.closeBtn}
-          accessibilityLabel="Close notification modal"
-        >
-          <Text style={styles.closeText}>Close ✕</Text>
-        </TouchableOpacity>
+      subtitle={
+        unreadCount > 0
+          ? `${unreadCount} unread update${unreadCount === 1 ? "" : "s"} · Assurance, backlog & queries`
+          : "Critical updates on assurance verifications & queries."
       }
-      contentContainerStyle={styles.body}
+      rightAction={<IconButton icon="close" onPress={onClose} />}
+      contentContainerStyle={styles.layoutContent}
     >
-      {notifications.length === 0 ? (
-        <EmptyStateCard
-          title="All Caught Up"
-          description="Verification approvals, monitor queries, and daily brief alerts will appear here."
-        />
-      ) : null}
+      {isLoading ? (
+        <View style={styles.loaderWrap}>
+          <InSiteLoader size="md" label="Loading project notifications..." />
+        </View>
+      ) : (
+        <FlatList
+          data={listData}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom + 24, 32) },
+          ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching}
+              onRefresh={() => {
+                refetch();
+              }}
+              tintColor="#00338D"
+            />
+          }
+          renderItem={({ item }) => {
+            if (item.kind === "divider") {
+              return (
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>Older Notifications</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+              );
+            }
 
-      {notifications.map((n) => {
-        const isApproval = n.type === 'ASSURANCE_APPROVED';
-        const isQuery = n.type === 'MONITOR_QUERY';
-
-        return (
-          <TouchableOpacity
-            key={n.id}
-            style={[styles.card, !n.isRead && styles.cardUnread]}
-            onPress={() => handlePress(n)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.topRow}>
-              <Pill
-                variant={isApproval ? 'positive' : isQuery ? 'negative' : 'info'}
-                text={
-                  isApproval
-                    ? 'Assurance Approved'
-                    : isQuery
-                    ? 'Monitor Query'
-                    : 'Facility Update'
-                }
+            return (
+              <NotificationCard
+                notification={item.notification}
+                onPress={handlePress}
               />
-              <Text style={styles.timeText}>{n.createdAt}</Text>
-            </View>
-
-            <Text style={styles.notifTitle}>{n.title}</Text>
-            <Text style={styles.notifMessage}>{n.message}</Text>
-
-            {isApproval && (
-              <View style={styles.actionPill}>
-                <Text style={styles.actionPillText}>Tap to Review &amp; Confirm Backlog →</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        );
-      })}
+            );
+          }}
+          ListEmptyComponent={
+            error ? (
+              <EmptyStateCard
+                title="Unable to Load Notifications"
+                description={formatMobileErrorMessage(error)}
+              />
+            ) : (
+              <EmptyStateCard
+                title="All Caught Up"
+                description="Assurance decisions, queued report summaries, hold points, and monitor queries will appear here."
+              />
+            )
+          }
+        />
+      )}
     </GradientHeaderLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  closeBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  layoutContent: {
+    flex: 1,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
-  closeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
+  loaderWrap: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
   },
-  body: {
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 18,
     gap: 12,
-    paddingBottom: 24,
   },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-    gap: 8,
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginVertical: 6,
+    paddingHorizontal: 4,
   },
-  cardUnread: {
-    borderColor: '#00338D',
-    borderLeftWidth: 4,
-    backgroundColor: '#FAFCFF',
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#CBD5E1",
   },
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  tag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  tagSuccess: {
-    backgroundColor: '#ECFDF5',
-  },
-  tagDanger: {
-    backgroundColor: '#FFF1F2',
-  },
-  tagInfo: {
-    backgroundColor: '#EFF6FF',
-  },
-  tagText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  tagSuccessText: {
-    color: '#065F46',
-  },
-  tagDangerText: {
-    color: '#BE123C',
-  },
-  tagInfoText: {
-    color: '#00338D',
-  },
-  timeText: {
+  dividerText: {
     fontSize: 11,
-    color: '#94A3B8',
-  },
-  notifTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  notifMessage: {
-    fontSize: 12,
-    color: '#475569',
-    lineHeight: 18,
-  },
-  actionPill: {
-    backgroundColor: '#EFF6FF',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-  },
-  actionPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#00338D',
+    fontWeight: "700",
+    color: "#64748B",
+    letterSpacing: 0.3,
   },
 });

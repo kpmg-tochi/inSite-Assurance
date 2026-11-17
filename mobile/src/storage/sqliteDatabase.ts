@@ -167,3 +167,29 @@ async function ensureColumnExists(
   }
 }
 
+/**
+ * Removes all user-entered, cached, and unsynced records from the local SQLite database.
+ */
+export async function clearLocalDatabaseTables(): Promise<void> {
+  const db = await getDatabase();
+  if (!db) return;
+
+  const tables = [
+    'wbs_items',
+    'wbs_chat_messages',
+    'staged_workday_reports',
+    'site_telemetry_pings',
+    'incident_reports',
+    'in_app_notifications',
+    'assurance_submissions',
+  ];
+
+  for (const table of tables) {
+    try {
+      await db.runAsync(`DELETE FROM ${table};`);
+    } catch (err) {
+      console.warn(`Failed clearing local SQLite table ${table}:`, err);
+    }
+  }
+}
+

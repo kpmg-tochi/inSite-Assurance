@@ -12,6 +12,7 @@ import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
+import { createMobileNotification } from '../notifications/notifications.service';
 
 const TIERS: IndependenceTier[] = [
   'MONITOR_INSPECTOR',
@@ -505,6 +506,55 @@ export async function reviewContractorVerification(
         remarks: remarks || null,
       },
     });
+
+    await createMobileNotification(tx, {
+      projectId,
+      fieldSessionId: sessionId,
+      type: decision === 'APPROVE' ? 'ASSURANCE_APPROVED' : 'ASSURANCE_REJECTED',
+      actionType: decision === 'APPROVE' ? 'NONE' : 'OPEN_ASSURANCE_WIZARD',
+      requiresAction: decision === 'REJECT',
+      title:
+        decision === 'APPROVE'
+          ? 'Identity Assurance Approved'
+          : 'Verification Resubmission Needed',
+      message:
+        decision === 'APPROVE'
+          ? `${webUser.fullName} approved your contractor identity and ${session.corenLicenseNumber || 'regulatory'} credentials.`
+          : `Verification was returned: ${remarks || 'Please re-capture clear ID and liveness selfies.'}`,
+    });
+
+    if (decision === 'APPROVE') {
+      const stagedReports = await tx.workdayReport.findMany({
+        where: {
+          projectId,
+          reporterSessionId: sessionId,
+          status: 'STAGED_UNVERIFIED',
+        },
+        include: { boqItem: { select: { wbsCode: true, unit: true } } },
+        take: 10,
+      });
+
+      for (const report of stagedReports) {
+        await createMobileNotification(tx, {
+          projectId,
+          fieldSessionId: sessionId,
+          type: 'BACKLOG_REVIEW_REQUIRED',
+          actionType: 'OPEN_REPORT_SUMMARY',
+          requiresAction: true,
+          title: `Review Queued Report · WBS ${report.boqItem.wbsCode}`,
+          message:
+            'Your staged report is ready for AI summary confirmation before final submission.',
+          metadata: {
+            workdayReportId: report.id,
+            wbsItemId: report.wbsItemId,
+            wbsCode: report.boqItem.wbsCode,
+            draftSummary: report.summaryText,
+            draftQuantity: Number(report.reportedQuantity),
+            unit: report.unitOfMeasure || report.boqItem.unit,
+          },
+        });
+      }
+    }
 
     return updated;
   });

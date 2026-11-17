@@ -11,6 +11,7 @@ import {
   clearActiveProjectSession,
   loadLocalProfile,
   updateLocalProfile,
+  wipeAllLocalProfileData,
   type LocalUserProfile,
 } from '../storage/secureProfileStore';
 import { setFieldAgentAuth } from '../config/apiConfig';
@@ -26,6 +27,7 @@ interface ProfileContextValue {
   refreshProfile: () => Promise<LocalUserProfile | null>;
   updateProfile: (updates: Partial<LocalUserProfile>) => Promise<LocalUserProfile>;
   clearSession: () => Promise<void>;
+  resetAllProfileState: () => Promise<void>;
 }
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
@@ -80,6 +82,12 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
     setProfile(updated);
   }, [syncAuthToken]);
 
+  const resetAllProfileState = useCallback(async () => {
+    await wipeAllLocalProfileData();
+    syncAuthToken(null);
+    setProfile(null);
+  }, [syncAuthToken]);
+
   const value = useMemo<ProfileContextValue>(() => {
     const isVerified = profile?.assuranceStatus === 'APPROVED';
     const projectCode = profile?.activeProjectCode || 'LKK-402-CON';
@@ -96,8 +104,9 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
       refreshProfile,
       updateProfile,
       clearSession,
+      resetAllProfileState,
     };
-  }, [profile, loading, refreshProfile, updateProfile, clearSession]);
+  }, [profile, loading, refreshProfile, updateProfile, clearSession, resetAllProfileState]);
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 };

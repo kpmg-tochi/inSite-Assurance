@@ -1,7 +1,19 @@
-import type { MorningDeliverableBriefDto, PlanningTier } from '@insite/shared';
+import type {
+  MorningDeliverableBriefDto,
+  PlanningTier,
+  ReportQueryDto,
+} from '@insite/shared';
+import { formatElapsedTime } from '@insite/shared';
 import { getDatabase } from './sqliteDatabase';
 import { fetchMorningBriefs, fetchProjectBoqItems } from '../api/boq/boqApi';
-import { submitWorkdayReport } from '../api/workday/workdayApi';
+import {
+  fetchBoqChatMessages,
+  postBoqChatMessage,
+} from '../api/wbs/wbsChatApi';
+import {
+  revalidateWorkdayReport,
+  submitWorkdayReport,
+} from '../api/workday/workdayApi';
 import type { SiteGeotag } from '../services/locationService';
 import { recordTelemetryPing } from './telemetryRepository';
 import { flushTelemetryQueue } from '../services/telemetryService';
@@ -28,14 +40,17 @@ export interface WbsChatMessageRecord {
   id: string;
   wbsItemId: string;
   senderName: string;
-  senderRole: string; // 'SYSTEM_BRIEF' | 'ENGINEER' | 'INSPECTOR' | 'MONITOR'
+  senderRole: string; // 'SYSTEM_BRIEF' | 'AI_CO_PILOT' | 'MONITOR' | 'ENGINEER' | 'INSPECTOR'
   messageType:
     | 'MORNING_BRIEF'
     | 'PHOTO'
     | 'TEXT_COMMENT'
     | 'VOICE_NOTE'
     | 'EOD_PROMPT'
-    | 'AI_CONFIRMATION';
+    | 'AI_CONFIRMATION'
+    | 'AI_QUERY'
+    | 'MONITOR_QUERY'
+    | 'QUERY_RESPONSE';
   textContent?: string;
   mediaUri?: string;
   mediaUris?: string[];
@@ -45,6 +60,9 @@ export interface WbsChatMessageRecord {
   latitude?: number;
   longitude?: number;
   chainageLabel?: string;
+  workdayReportId?: string | null;
+  reportQueryId?: string | null;
+  queryDetails?: ReportQueryDto | null;
   timestamp: string;
   isDelivered: boolean;
 }
@@ -66,6 +84,12 @@ export interface StagedWorkdayReportRecord {
 let memWbsItems: WbsItemRecord[] = [];
 let memChatMessages: Record<string, WbsChatMessageRecord[]> = {};
 let memStagedReports: StagedWorkdayReportRecord[] = [];
+
+export function resetInMemoryWbsState(): void {
+  memWbsItems = [];
+  memChatMessages = {};
+  memStagedReports = [];
+}
 
 /**
  * Retrieve all actionable WBS threads for the current project from SQLite cache.
@@ -266,13 +290,106 @@ export async function getWbsChatMessages(
 }
 
 /**
+ * Pulls server-persisted WBS chat messages (e.g. Monitor & AI Omission queries)
+ * and merges them cleanly with local SQLite messages.
+ */
+export async function syncWbsChatMessagesFromServer(
+  projectId: string | null | undefined,
+  wbsItemId: string
+): Promise<WbsChatMessageRecord[]> {
+  const localMessages = await getWbsChatMessages(wbsItemId);
+  if (!projectId) {
+    return localMessages;
+  }
+
+  try {
+    const serverMessages = await fetchBoqChatMessages(projectId, wbsItemId);
+    const localIds = new Set(localMessages.map((m) => m.id));
+    const db = await getDatabase();
+
+    const mappedServer: WbsChatMessageRecord[] = [];
+    for (const s of serverMessages) {
+      const rec: WbsChatMessageRecord = {
+        id: s.id,
+        wbsItemId: s.boqItemId,
+        senderName: s.senderName,
+        senderRole: s.senderRole,
+        messageType: s.messageType as WbsChatMessageRecord['messageType'],
+        textContent: s.textContent ?? undefined,
+        mediaUri: s.mediaUrls?.[0],
+        mediaUris: s.mediaUrls && s.mediaUrls.length > 0 ? s.mediaUrls : undefined,
+        latitude: s.latitude ?? undefined,
+        longitude: s.longitude ?? undefined,
+        chainageLabel: s.chainageLabel ?? undefined,
+        workdayReportId: s.workdayReportId ?? null,
+        reportQueryId: s.reportQueryId ?? null,
+        queryDetails: s.queryDetails ?? null,
+        timestamp: formatElapsedTime(s.createdAt) || 'Just now',
+        isDelivered: true,
+      };
+      mappedServer.push(rec);
+
+      if (db && !localIds.has(s.id)) {
+        try {
+          await db.runAsync(
+            `INSERT OR IGNORE INTO wbs_chat_messages
+             (id, wbs_item_id, sender_name, sender_role, message_type, text_content, media_uri, media_uris_json, latitude, longitude, chainage_label, timestamp, is_delivered)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+            [
+              rec.id,
+              rec.wbsItemId,
+              rec.senderName,
+              rec.senderRole,
+              rec.messageType,
+              rec.textContent ?? null,
+              rec.mediaUri ?? null,
+              rec.mediaUris ? JSON.stringify(rec.mediaUris) : null,
+              rec.latitude ?? null,
+              rec.longitude ?? null,
+              rec.chainageLabel ?? null,
+              rec.timestamp,
+            ]
+          );
+        } catch {
+          // Ignore duplicate SQLite insert race
+        }
+      }
+    }
+
+    // Keep local messages that haven't originated from server + attach live server metadata
+    const serverById = new Map(mappedServer.map((m) => [m.id, m]));
+    const merged: WbsChatMessageRecord[] = [];
+    for (const local of localMessages) {
+      const serverMatch = serverById.get(local.id);
+      if (serverMatch) {
+        merged.push({ ...local, ...serverMatch });
+        serverById.delete(local.id);
+      } else {
+        merged.push(local);
+      }
+    }
+    for (const remaining of serverById.values()) {
+      merged.push(remaining);
+    }
+
+    return merged;
+  } catch {
+    return localMessages;
+  }
+}
+
+/**
  * Append a new message (photo, comment, or voice note) to a WBS chat thread.
  */
 export async function sendWbsChatMessage(
-  message: Omit<WbsChatMessageRecord, 'id' | 'isDelivered'>
+  message: Omit<WbsChatMessageRecord, 'id' | 'isDelivered'> & {
+    projectId?: string;
+    skipServerMirror?: boolean;
+  }
 ): Promise<WbsChatMessageRecord> {
+  const { projectId, skipServerMirror, ...recordFields } = message;
   const newMsg: WbsChatMessageRecord = {
-    ...message,
+    ...recordFields,
     id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     isDelivered: true,
   };
@@ -326,6 +443,30 @@ export async function sendWbsChatMessage(
     }
   }
 
+  if (projectId && !skipServerMirror) {
+    if (
+      recordFields.messageType === 'PHOTO' ||
+      recordFields.messageType === 'VOICE_NOTE' ||
+      recordFields.messageType === 'TEXT_COMMENT'
+    ) {
+      postBoqChatMessage(projectId, recordFields.wbsItemId, {
+        workdayReportId: recordFields.workdayReportId ?? undefined,
+        reportQueryId: recordFields.reportQueryId ?? undefined,
+        messageType: recordFields.messageType,
+        textContent: recordFields.textContent || recordFields.caption,
+        mediaUrls:
+          recordFields.mediaUris && recordFields.mediaUris.length > 0
+            ? recordFields.mediaUris
+            : recordFields.mediaUri
+              ? [recordFields.mediaUri]
+              : [],
+        latitude: recordFields.latitude,
+        longitude: recordFields.longitude,
+        chainageLabel: recordFields.chainageLabel,
+      }).catch(() => {});
+    }
+  }
+
   return newMsg;
 }
 
@@ -341,6 +482,10 @@ export interface SubmitConfirmedWorkdayInput {
   voiceNoteUri?: string | null;
   submissionGeotag: SiteGeotag | null;
   isVerifiedAccount?: boolean;
+  revalidateContext?: {
+    targetReportId: string;
+    reportQueryId?: string;
+  };
 }
 
 export interface SubmitConfirmedWorkdayResult {
@@ -369,7 +514,10 @@ export async function submitConfirmedWorkdayReport(
     });
   }
 
-  const threadMessages = await getWbsChatMessages(input.wbsItem.id);
+  const threadMessages = await syncWbsChatMessagesFromServer(
+    input.projectId,
+    input.wbsItem.id
+  );
   const evidenceItems = threadMessages
     .filter(
       (m) =>
@@ -414,7 +562,34 @@ export async function submitConfirmedWorkdayReport(
 
   if (syncStatus !== 'STAGED_UNVERIFIED') {
     try {
-      await submitWorkdayReport(input.projectId, payload);
+      if (input.revalidateContext?.targetReportId) {
+        await revalidateWorkdayReport(
+          input.projectId,
+          input.revalidateContext.targetReportId,
+          {
+            reportQueryId: input.revalidateContext.reportQueryId,
+            summaryText: input.summaryText || undefined,
+            reportedQuantity: input.reportedQuantity,
+            unitOfMeasure: input.unitOfMeasure,
+            delaysOrBlockers: input.delaysOrBlockers || undefined,
+            isHoldPointClaimed: input.isHoldPointClaimed,
+            voiceNoteUrl: input.voiceNoteUri ?? null,
+            evidenceItems,
+            chatMessages: threadMessages.map((m) => ({
+              senderName: m.senderName,
+              senderRole: m.senderRole,
+              messageType: m.messageType,
+              textContent: m.textContent,
+              caption: m.caption,
+              chainageLabel: m.chainageLabel,
+              timestamp: m.timestamp,
+            })),
+            submissionGeotag: input.submissionGeotag ?? undefined,
+          }
+        );
+      } else {
+        await submitWorkdayReport(input.projectId, payload);
+      }
       syncStatus = 'SYNCED';
       await flushTelemetryQueue(input.projectId);
     } catch {
@@ -472,11 +647,15 @@ export async function submitConfirmedWorkdayReport(
     : 'GPS pending';
 
   await sendWbsChatMessage({
+    projectId: input.projectId,
+    skipServerMirror: true,
     wbsItemId: input.wbsItem.id,
     senderName: input.senderName,
     senderRole: 'ENGINEER',
     messageType: 'AI_CONFIRMATION',
-    textContent: `Daily Report Signed Off: ${input.reportedQuantity} ${input.unitOfMeasure} · ${input.summaryText}`,
+    textContent: input.revalidateContext?.targetReportId
+      ? `Report Re-submitted for AI Re-parse: ${input.reportedQuantity} ${input.unitOfMeasure} · ${input.summaryText}`
+      : `Daily Report Signed Off: ${input.reportedQuantity} ${input.unitOfMeasure} · ${input.summaryText}`,
     latitude: input.submissionGeotag?.latitude,
     longitude: input.submissionGeotag?.longitude,
     chainageLabel: input.submissionGeotag?.chainageLabel || gpsLabel,

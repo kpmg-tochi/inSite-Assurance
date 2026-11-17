@@ -23,6 +23,7 @@ import {
   verifyCoordinateForProject,
 } from './projects.service';
 import { env } from '../../config/env';
+import { seedDatabase } from '../../db/seedDatabase';
 import { AppError } from '../../middleware/error.middleware';
 
 const router = Router();
@@ -35,7 +36,7 @@ router.get(
   '/demo',
   async (_req: Request, res: Response, next: NextFunction) => {
     try {
-      if (!env.ENABLE_DEMO_ENDPOINTS) {
+      if (!env.DEMO_MODE) {
         throw new AppError(
           'Demo project catalog endpoint is disabled in this environment',
           403,
@@ -44,6 +45,33 @@ router.get(
       }
       const projects = await listDemoProjects();
       res.json({ success: true, data: projects });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/v1/projects/demo/reset
+ * DEMO-ONLY ENDPOINT: Wipes all user-submitted and runtime data across PostgreSQL
+ * and restores the database cleanly back to the original demo seed state.
+ */
+router.post(
+  '/demo/reset',
+  async (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!env.DEMO_MODE) {
+        throw new AppError(
+          'Demo reset endpoint is disabled in live mode',
+          403,
+          'DEMO_DISABLED'
+        );
+      }
+      await seedDatabase();
+      res.json({
+        success: true,
+        data: { resetAt: new Date().toISOString() },
+      });
     } catch (error) {
       next(error);
     }

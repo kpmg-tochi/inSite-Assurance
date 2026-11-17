@@ -143,6 +143,25 @@ enum AuditActionType {
   WORKDAY_REPORT_SUBMITTED
 }
 
+enum MobileNotificationType {
+  ASSURANCE_PENDING
+  ASSURANCE_APPROVED
+  ASSURANCE_REJECTED
+  BACKLOG_REVIEW_REQUIRED
+  REPORT_QUERY
+  HOLD_POINT_ALERT
+  MORNING_DELIVERABLE_READY
+  SITE_GEOFENCE_WARNING
+}
+
+enum NotificationActionType {
+  NONE
+  OPEN_REPORT_SUMMARY
+  OPEN_WBS_CHAT
+  OPEN_BACKLOG_REVIEW
+  OPEN_ASSURANCE_WIZARD
+}
+
 // ============================================================================
 // MODELS
 // ============================================================================
@@ -179,6 +198,7 @@ model User {
   certifiedReports ValuationReport[] @relation("CertifiedByMonitor")
   trancheDecisions TrancheDecision[] @relation("DecidedByLender")
   pushTokens       PushToken[]
+  raisedReportQueries ReportQuery[]  @relation("RaisedReportQueries")
 
   @@index([organizationId])
   @@index([role])
@@ -223,6 +243,10 @@ model Project {
   workdayReports  WorkdayReport[]
   telemetryPings  SiteTelemetryPing[]
   morningBriefs   MorningDeliverableBrief[]
+  notifications   MobileNotification[]
+  reportQueries   ReportQuery[]
+  wbsChatMessages WbsChatMessage[]
+  webNotifications WebNotification[]
 
   @@index([portfolioHealth])
   @@index([monitorOrganizationId])
@@ -284,6 +308,8 @@ model FieldAgentSession {
   workdayReports  WorkdayReport[]
   pushTokens      PushToken[]
   telemetryPings  SiteTelemetryPing[]
+  notifications   MobileNotification[]
+  wbsChatMessages WbsChatMessage[]
 
   @@index([projectId, independenceTier])
   @@index([projectId, assuranceStatus])
@@ -362,6 +388,8 @@ model BoqItem {
   incidentReports IncidentReport[]
   workdayReports  WorkdayReport[]
   morningBriefs   MorningDeliverableBrief[]
+  reportQueries   ReportQuery[]
+  wbsChatMessages WbsChatMessage[]
 
   @@unique([projectId, wbsCode])
   @@index([projectId, trancheId])
@@ -636,6 +664,9 @@ model WorkdayReport {
   wbsItemId          String    @db.Uuid
   workdayDate        String // YYYY-MM-DD
   status             String    @default("STAGED_UNVERIFIED") // STAGED_UNVERIFIED, READY_FOR_AI, EXTRACTED, CONFIRMED, SYNCED
+  revisionNumber     Int       @default(1)
+  parentReportId     String?   @db.Uuid
+  resolvedQueryId    String?   @db.Uuid
   summaryText        String    @db.Text
   reportedQuantity   Decimal   @default(0) @db.Decimal(14, 3)
   unitOfMeasure      String
@@ -652,9 +683,14 @@ model WorkdayReport {
   project         Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   reporterSession FieldAgentSession @relation(fields: [reporterSessionId], references: [id], onDelete: Cascade)
   boqItem         BoqItem           @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
+  parentReport    WorkdayReport?    @relation("WorkdayReportRevisions", fields: [parentReportId], references: [id], onDelete: SetNull)
+  revisions       WorkdayReport[]   @relation("WorkdayReportRevisions")
+  queries         ReportQuery[]
+  chatMessages    WbsChatMessage[]
 
   @@index([projectId, wbsItemId, workdayDate])
   @@index([projectId, status])
+  @@index([parentReportId])
   @@map("workday_reports")
 }
 
@@ -703,4 +739,99 @@ model MorningDeliverableBrief {
   @@unique([projectId, boqItemId, workdayDate])
   @@index([projectId, workdayDate])
   @@map("morning_deliverable_briefs")
+}
+
+model MobileNotification {
+  id             String                 @id @default(uuid()) @db.Uuid
+  projectId      String                 @db.Uuid
+  fieldSessionId String?                @db.Uuid
+  type           MobileNotificationType
+  actionType     NotificationActionType @default(NONE)
+  requiresAction Boolean                @default(false)
+  title          String
+  message        String                 @db.Text
+  metadata       Json                   @default("{}")
+  isRead         Boolean                @default(false)
+  readAt         DateTime?
+  createdAt      DateTime               @default(now())
+
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fieldSession FieldAgentSession? @relation(fields: [fieldSessionId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, isRead, createdAt])
+  @@index([fieldSessionId, isRead, createdAt])
+  @@map("mobile_notifications")
+}
+
+model ReportQuery {
+  id                String    @id @default(uuid()) @db.Uuid
+  projectId         String    @db.Uuid
+  boqItemId         String    @db.Uuid
+  workdayReportId   String?   @db.Uuid
+  ipcLineItemId     String?   @db.Uuid
+  raisedByUserId    String?   @db.Uuid
+  source            String    @default("MONITOR") // MONITOR | AI_OMISSION_CHECK
+  status            String    @default("OPEN") // OPEN | RESUBMITTED | RESOLVED
+  monitorComment    String?   @db.Text
+  aiOmissionPayload Json?
+  createdAt         DateTime  @default(now())
+  respondedAt       DateTime?
+  resolvedAt        DateTime?
+
+  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  boqItem       BoqItem          @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
+  workdayReport WorkdayReport?   @relation(fields: [workdayReportId], references: [id], onDelete: SetNull)
+  raisedByUser  User?            @relation("RaisedReportQueries", fields: [raisedByUserId], references: [id], onDelete: SetNull)
+  chatMessages  WbsChatMessage[]
+
+  @@index([projectId, boqItemId, status])
+  @@index([workdayReportId])
+  @@map("report_queries")
+}
+
+model WbsChatMessage {
+  id              String   @id @default(uuid()) @db.Uuid
+  projectId       String   @db.Uuid
+  boqItemId       String   @db.Uuid
+  workdayReportId String?  @db.Uuid
+  reportQueryId   String?  @db.Uuid
+  fieldSessionId  String?  @db.Uuid
+  senderName      String
+  senderRole      String   // AI_CO_PILOT | MONITOR | ENGINEER | INSPECTOR
+  messageType     String   // AI_QUERY | MONITOR_QUERY | QUERY_RESPONSE | TEXT_COMMENT | PHOTO | VOICE_NOTE
+  textContent     String?  @db.Text
+  mediaUrls       Json     @default("[]")
+  latitude        Float?
+  longitude       Float?
+  chainageLabel   String?
+  createdAt       DateTime @default(now())
+
+  project       Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  boqItem       BoqItem            @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
+  workdayReport WorkdayReport?     @relation(fields: [workdayReportId], references: [id], onDelete: SetNull)
+  reportQuery   ReportQuery?       @relation(fields: [reportQueryId], references: [id], onDelete: SetNull)
+  fieldSession  FieldAgentSession? @relation(fields: [fieldSessionId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, boqItemId, createdAt])
+  @@index([reportQueryId])
+  @@map("wbs_chat_messages")
+}
+
+model WebNotification {
+  id          String    @id @default(uuid()) @db.Uuid
+  projectId   String    @db.Uuid
+  targetRole  String    @default("MONITOR") // MONITOR | LENDER | CONTRACTOR
+  category    String    // REPORT_RESUBMITTED | CONFLICT_FLAG | CONTRACTOR_ONBOARDING | TRANCHE_DISBURSEMENT | MONITOR_QUERY | AI_OMISSION_FLAG
+  title       String
+  description String    @db.Text
+  actionUrl   String?
+  metadata    Json      @default("{}")
+  isRead      Boolean   @default(false)
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, targetRole, isRead, createdAt])
+  @@map("web_notifications")
 }

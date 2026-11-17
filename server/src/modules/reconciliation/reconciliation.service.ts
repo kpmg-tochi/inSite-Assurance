@@ -14,6 +14,7 @@ import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { azureOpenAiService } from '../../integrations/azure-openai.service';
 import { generateValuationReportPdfBuffer } from '../../integrations/pdf-report.service';
 import { recordAuditEvent } from '../audit/audit.service';
+import { createMobileNotification } from '../notifications/notifications.service';
 
 export async function listProjectIpcClaims(projectId: string) {
   const ipcs = await prisma.ipcClaim.findMany({
@@ -443,6 +444,32 @@ export async function createMonitorLineQuery(params: {
       payload: {
         queryId: query.id,
         ipcLineItemId: params.input.ipcLineItemId,
+      },
+    });
+
+    await createMobileNotification(tx, {
+      projectId: params.projectId,
+      type: 'REPORT_QUERY',
+      actionType: 'OPEN_WBS_CHAT',
+      requiresAction: true,
+      title: `Clarification Requested · WBS ${query.ipcLineItem.boqItem.wbsCode}`,
+      message: `${params.webUser.fullName}: ${params.input.queryReason}`,
+      metadata: {
+        monitorQueryId: query.id,
+        wbsItemId: query.ipcLineItem.boqItemId,
+        wbsCode: query.ipcLineItem.boqItem.wbsCode,
+        requestedProofTypes: params.input.requestedProofTypes,
+      },
+    });
+
+    await tx.wbsChatMessage.create({
+      data: {
+        projectId: params.projectId,
+        boqItemId: query.ipcLineItem.boqItemId,
+        senderName: params.webUser.fullName,
+        senderRole: 'MONITOR',
+        messageType: 'MONITOR_QUERY',
+        textContent: params.input.queryReason,
       },
     });
 

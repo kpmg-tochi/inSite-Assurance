@@ -6,9 +6,9 @@ import { startMorningBriefCron } from "./jobs/morningBriefCron";
 const app = createApp();
 const stopMorningBriefCron = startMorningBriefCron();
 
-const server = app.listen(env.PORT, () => {
+const server = app.listen(env.PORT, "0.0.0.0", () => {
   console.log(
-    `[InSite Assurance API] Server listening on http://localhost:${env.PORT}/api/v1/health (${env.NODE_ENV})`,
+    `[InSite Assurance API] Server listening on http://0.0.0.0:${env.PORT}/api/v1/health (${env.NODE_ENV})`,
   );
 });
 

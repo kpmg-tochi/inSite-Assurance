@@ -26,6 +26,10 @@ export interface SiteTelemetryPingRecord {
 
 let memTelemetryPings: SiteTelemetryPingRecord[] = [];
 
+export function resetInMemoryTelemetryState(): void {
+  memTelemetryPings = [];
+}
+
 export async function recordTelemetryPing(params: {
   projectId: string;
   wbsItemId?: string | null;

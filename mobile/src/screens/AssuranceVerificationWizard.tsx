@@ -7,7 +7,11 @@ import {
   View,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { useNavigation } from '@react-navigation/native';
+import {
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -22,7 +26,9 @@ import {
   type CredentialsSubmissionPayload,
 } from '../components/assurance/AssuranceCredentialsStep';
 import { useProfile } from '../context/ProfileContext';
+import { IS_DEMO_MODE } from '../config/demoMode';
 import { useDemoSkipVerificationMutation } from '../queries/auth/useAuthMutations';
+import { useResolveNotificationMutation } from '../queries/notifications/useNotificationQueries';
 import { saveQueuedAssuranceSubmission } from '../storage/assuranceRepository';
 import { triggerOfflineSync } from '../storage/syncEngine';
 import type { RootStackParamList } from '../navigation/types';
@@ -38,7 +44,11 @@ type WizardStep = 'STEP_1_ID' | 'STEP_2_SELFIE' | 'STEP_3_CREDENTIALS';
 export const AssuranceVerificationWizard: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'AssuranceWizard'>>();
+  const resolveNotificationId = route.params?.resolveNotificationId;
+  const isPreviewDemo = Boolean(route.params?.isPreviewDemo);
   const { profile, projectCode, activeProjectId, updateProfile } = useProfile();
+  const resolveNotificationMutation = useResolveNotificationMutation(activeProjectId);
   const insets = useSafeAreaInsets();
 
   const [currentStep, setCurrentStep] = useState<WizardStep>('STEP_1_ID');
@@ -50,6 +60,19 @@ export const AssuranceVerificationWizard: React.FC = () => {
   const handleVerificationSubmitted = async (
     pkg?: AssuranceVerificationPackage
   ) => {
+    // Preview-only demo mode shows the full capture flow without altering profile or backend state
+    if (isPreviewDemo) {
+      Toast.show({
+        type: 'info',
+        props: {
+          title: 'Verification Demo Complete',
+          message: 'Preview finished cleanly — no verification data was submitted or altered.',
+        },
+      });
+      navigation.goBack();
+      return;
+    }
+
     if (pkg) {
       await saveQueuedAssuranceSubmission({
         projectId: activeProjectId,
@@ -64,6 +87,11 @@ export const AssuranceVerificationWizard: React.FC = () => {
         experienceSummary: pkg.credentials.experienceSummary,
       });
       triggerOfflineSync('assurance_submitted').catch(() => {});
+    }
+    if (resolveNotificationId) {
+      await resolveNotificationMutation
+        .mutateAsync(resolveNotificationId)
+        .catch(() => {});
     }
     await updateProfile({ assuranceStatus: 'PENDING_APPROVAL' });
     navigation.reset({
@@ -165,30 +193,32 @@ export const AssuranceVerificationWizard: React.FC = () => {
     <View style={styles.root}>
       <View style={styles.stepContainer}>{renderCurrentStep()}</View>
 
-      <View
-        style={[
-          styles.demoBar,
-          { paddingBottom: Math.max(insets.bottom + 8, 14) },
-        ]}
-      >
-        <TouchableOpacity
-          style={[styles.demoSkipButton, isSkippingDemo && { opacity: 0.7 }]}
-          onPress={handleSkipDemoVerification}
-          disabled={isSkippingDemo}
-          activeOpacity={0.85}
+      {IS_DEMO_MODE && !isPreviewDemo && (
+        <View
+          style={[
+            styles.demoBar,
+            { paddingBottom: Math.max(insets.bottom + 8, 14) },
+          ]}
         >
-          {isSkippingDemo ? (
-            <ActivityIndicator size="small" color="#FDE68A" />
-          ) : (
-            <Feather name="fast-forward" size={14} color="#FDE68A" />
-          )}
-          <Text style={styles.demoSkipText}>
-            {isSkippingDemo
-              ? 'Linking to Project (Demo Mode)...'
-              : 'Skip Verification & Enter Inbox (Demo Only)'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={[styles.demoSkipButton, isSkippingDemo && { opacity: 0.7 }]}
+            onPress={handleSkipDemoVerification}
+            disabled={isSkippingDemo}
+            activeOpacity={0.85}
+          >
+            {isSkippingDemo ? (
+              <ActivityIndicator size="small" color="#FDE68A" />
+            ) : (
+              <Feather name="fast-forward" size={14} color="#FDE68A" />
+            )}
+            <Text style={styles.demoSkipText}>
+              {isSkippingDemo
+                ? 'Linking to Project (Demo Mode)...'
+                : 'Skip Verification & Enter Inbox (Demo Only)'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };

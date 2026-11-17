@@ -1,6 +1,5 @@
-import React, { useState } from "react";
-import { Wallet, CheckCircle2, AlertTriangle, X } from "lucide-react";
-import type { CreateProjectRequest } from "@insite/shared";
+import React from "react";
+import { Wallet, CheckCircle2, AlertTriangle } from "lucide-react";
 import type {
   FieldEvidenceLogRecordDto,
   IpcDetailsDto,
@@ -21,9 +20,6 @@ interface PortfolioDashboardPageProps {
   evidenceLogs: FieldEvidenceLogRecordDto[];
   latestIpc: IpcDetailsDto | null;
   onNavigateToReconciliation: () => void;
-  onCreateProject?: (payload: CreateProjectRequest) => Promise<void>;
-  showNewProjectModal: boolean;
-  onCloseNewProjectModal: () => void;
 }
 
 export function PortfolioDashboardPage({
@@ -31,19 +27,8 @@ export function PortfolioDashboardPage({
   evidenceLogs,
   latestIpc,
   onNavigateToReconciliation,
-  onCreateProject,
-  showNewProjectModal,
-  onCloseNewProjectModal,
 }: PortfolioDashboardPageProps) {
   const { user } = useAuth();
-  const [newProjectName, setNewProjectName] = useState("");
-  const [newCodePrefix, setNewCodePrefix] = useState("KAD-205");
-  const [newStateLocation, setNewStateLocation] = useState("Kaduna State");
-  const [newTotalBudget, setNewTotalBudget] = useState("8500000000");
-  const [newGeofenceMode, setNewGeofenceMode] = useState<
-    "LINEAR_CORRIDOR" | "RADIAL"
-  >("LINEAR_CORRIDOR");
-  const [creatingProject, setCreatingProject] = useState(false);
 
   const activeTranche =
     project.tranches.find((t) => !t.isReleased) || project.tranches[0] || null;
@@ -58,91 +43,6 @@ export function PortfolioDashboardPage({
     : 0;
 
   const latestConfirmedLog = evidenceLogs[0] || null;
-
-  const handleCreateProjectSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!onCreateProject || !newProjectName.trim()) return;
-    try {
-      setCreatingProject(true);
-      const budgetNum = Number(newTotalBudget) || 5_000_000_000;
-      await onCreateProject({
-        name: newProjectName.trim(),
-        codePrefix: newCodePrefix.trim().toUpperCase(),
-        description: `${newProjectName.trim()} capital infrastructure monitoring baseline.`,
-        stateLocation: newStateLocation.trim(),
-        lgaLocation: "Municipal Corridor",
-        totalBudgetNgn: budgetNum,
-        reportingCadence: "WEEKLY",
-        workdayStartTime: "08:00",
-        workdayEndTime: "17:00",
-        lenderOrganizationName: "InfraCredit",
-        contractorOrganizationName: "J&S Civil Eng.",
-        geofence:
-          newGeofenceMode === "LINEAR_CORRIDOR"
-            ? {
-                mode: "LINEAR_CORRIDOR",
-                corridorHalfWidthMeters: 150,
-                startChainageKm: 0,
-                centerlineCoordinates: [
-                  [7.4295, 10.5105],
-                  [7.445, 10.525],
-                  [7.462, 10.541],
-                ],
-              }
-            : {
-                mode: "RADIAL",
-                center: {
-                  latitude: 9.0579,
-                  longitude: 7.4951,
-                },
-                radiusMeters: 600,
-              },
-        tranches: [
-          {
-            trancheNumber: 1,
-            name: "Tranche 1: Mobilization & Sub-structure",
-            allocatedAmountNgn: Math.round(budgetNum * 0.35),
-            targetCompletionPct: 35,
-            conditionsPrecedent: [
-              {
-                referenceCode: "CP-01",
-                description:
-                  "Execution of Performance Bond and Advance Payment Guarantee",
-                isMandatoryForRelease: true,
-                status: "SATISFIED",
-              },
-              {
-                referenceCode: "CP-02",
-                description:
-                  "Independent Monitor verification of right-of-way handover",
-                isMandatoryForRelease: true,
-                status: "SATISFIED",
-              },
-            ],
-          },
-          {
-            trancheNumber: 2,
-            name: "Tranche 2: Superstructure & Civil Works",
-            allocatedAmountNgn: Math.round(budgetNum * 0.65),
-            targetCompletionPct: 100,
-            conditionsPrecedent: [
-              {
-                referenceCode: "CP-03",
-                description:
-                  "Zero unresolved Hold-Point non-conformances on Tranche 1 works",
-                isMandatoryForRelease: true,
-                status: "PENDING",
-              },
-            ],
-          },
-        ],
-      });
-      onCloseNewProjectModal();
-      setNewProjectName("");
-    } finally {
-      setCreatingProject(false);
-    }
-  };
 
   const actionButtonLabel =
     user?.role === "LENDER"
@@ -413,148 +313,6 @@ export function PortfolioDashboardPage({
       <div className="mt-4">
         <ContractorVerificationQueue projectId={project.id} />
       </div>
-
-      {/* New Project Baseline Modal (Monitor Role) */}
-      {showNewProjectModal && (
-        <div className="fixed inset-0 -top-3 bg-slate-950/35 backdrop-blur-[1px] z-[500] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="px-5 py-4 bg-brand-navy text-white flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold">
-                  Initialize New Capital Project Baseline
-                </h3>
-                <p className="text-[11px] text-blue-200/80">
-                  Generates role-segregated mobile join codes (-INS, -COW, -CON)
-                  and geofence boundary
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={onCloseNewProjectModal}
-                className="p-1 rounded-lg text-blue-200 hover:text-white hover:bg-white/10"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form
-              onSubmit={handleCreateProjectSubmit}
-              className="p-5 space-y-4"
-            >
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Project Name
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newProjectName}
-                    onChange={(e) => setNewProjectName(e.target.value)}
-                    placeholder="e.g., Kaduna Eastern Bypass Phase II"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs focus:outline-none focus:border-brand-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Code Prefix
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newCodePrefix}
-                    onChange={(e) => setNewCodePrefix(e.target.value)}
-                    placeholder="KAD-205"
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs uppercase focus:outline-none focus:border-brand-primary"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    State / Corridor Location
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newStateLocation}
-                    onChange={(e) => setNewStateLocation(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs focus:outline-none focus:border-brand-primary"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
-                    Total Facility Budget (₦ NGN)
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    value={newTotalBudget}
-                    onChange={(e) => setNewTotalBudget(e.target.value)}
-                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs focus:outline-none focus:border-brand-primary"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Geofence Verification Mode
-                </label>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setNewGeofenceMode("LINEAR_CORRIDOR")}
-                    className={`p-3 rounded-xl border text-left text-xs transition ${
-                      newGeofenceMode === "LINEAR_CORRIDOR"
-                        ? "border-brand-primary bg-blue-50/40 font-semibold text-brand-primary"
-                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    <div>Linear Corridor (KM X+YYY)</div>
-                    <div className="text-[11px] font-normal text-slate-500 mt-0.5">
-                      Roads, rail, transmission lines
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewGeofenceMode("RADIAL")}
-                    className={`p-3 rounded-xl border text-left text-xs transition ${
-                      newGeofenceMode === "RADIAL"
-                        ? "border-brand-primary bg-blue-50/40 font-semibold text-brand-primary"
-                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    <div>Radial Site Boundary</div>
-                    <div className="text-[11px] font-normal text-slate-500 mt-0.5">
-                      Buildings, plants, mini-grids
-                    </div>
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={onCloseNewProjectModal}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creatingProject}
-                  className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm disabled:opacity-50"
-                >
-                  {creatingProject
-                    ? "Initializing..."
-                    : "Create Baseline & Join Codes"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
