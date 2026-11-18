@@ -1,12 +1,13 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { guardProjectRoutes } from '../../utils/accessControl';
 import { z } from 'zod';
 import {
   BoqItemInputSchema,
   UpdateBoqMappingsRequestSchema,
 } from '@insite/shared';
 import {
-  requireAnyAuth,
-  requireRole,
+  requireAnyAuthWithWebPermission,
+  requirePermission,
 } from '../../middleware/auth.middleware';
 import { validateBody } from '../../middleware/validate.middleware';
 import {
@@ -15,7 +16,7 @@ import {
   uploadAndAnalyzeProjectBoq,
 } from './boq.service';
 
-const router = Router();
+const router = guardProjectRoutes(Router());
 
 const UploadBoqBodySchema = z.object({
   items: z.array(BoqItemInputSchema).optional(),
@@ -28,10 +29,11 @@ const UploadBoqBodySchema = z.object({
  */
 router.get(
   '/:projectId/boq',
-  requireAnyAuth,
+  requireAnyAuthWithWebPermission('boq:view'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const items = await listProjectBoqItems(String(req.params.projectId));
+      const projectId = String(req.params.projectId);
+      const items = await listProjectBoqItems(projectId);
       res.json({ success: true, data: items });
     } catch (error) {
       next(error);
@@ -45,7 +47,7 @@ router.get(
  */
 router.post(
   '/:projectId/boq/upload',
-  requireRole('MONITOR'),
+  requirePermission('boq:upload_edit'),
   validateBody(UploadBoqBodySchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -64,11 +66,11 @@ router.post(
 
 /**
  * PATCH /api/v1/projects/:projectId/boq/mappings
- * Monitor confirms or edits BOQ-to-Tranche mappings and Hold Point flags.
+ * Confirms or edits BOQ-to-Tranche mappings and Hold Point flags.
  */
 router.patch(
   '/:projectId/boq/mappings',
-  requireRole('MONITOR'),
+  requirePermission('boq:upload_edit', 'boq:configure_hold_points'),
   validateBody(UpdateBoqMappingsRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {

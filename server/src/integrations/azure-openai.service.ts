@@ -12,7 +12,7 @@ import {
   AiOmissionPayloadSchema,
   BoqItemInput,
   ExtractedQuantityItem,
-  IndependenceTier,
+  FieldPersonaType,
 } from '@insite/shared';
 import { env } from '../config/env';
 
@@ -268,7 +268,9 @@ class AzureOpenAiService {
       contractorClaimedNgn: number;
       confirmedLogs: Array<{
         id: string;
-        independenceTier: IndependenceTier;
+        reporterRoleName: string;
+        fieldPersonaType: FieldPersonaType;
+        assuranceWeight: number;
         isWithinGeofence: boolean;
         chainageLabel: string | null;
         confirmedSummary: string | null;
@@ -286,13 +288,13 @@ class AzureOpenAiService {
             {
               role: 'system',
               content:
-                'You are an Auditor Co-Pilot for QSRBN/COREN Independent Project Monitors in Nigeria. ' +
+                'You are an Auditor Co-Pilot for Independent Project Monitors. ' +
                 'Cross-examine each Contractor IPC line-item claim against confirmed field evidence logs. ' +
                 'Assign an EvidenceStrengthRating (SUPPORTED, PARTIALLY_SUPPORTED, UNSUPPORTED, or CONTRADICTED). ' +
                 'Rules:\n' +
                 '1. Never certify a legal completion percentage.\n' +
-                '2. If an item is a Hold Point and lacks MONITOR_INSPECTOR or INDEPENDENT_RESIDENT logs, set missingHoldPointFlag=true and cap at PARTIALLY_SUPPORTED or UNSUPPORTED.\n' +
-                '3. If a claim relies ONLY on CONTRACTOR_ENGINEER self-reports, cap at PARTIALLY_SUPPORTED and set visitPlannerFlag=true.\n' +
+                '2. If an item is a Hold Point and lacks INDEPENDENT_VERIFIER logs (assuranceWeight >= 0.7), set missingHoldPointFlag=true and cap at PARTIALLY_SUPPORTED or UNSUPPORTED.\n' +
+                '3. If a claim relies ONLY on CONTRACTOR_EXECUTOR self-reports, cap at PARTIALLY_SUPPORTED and set visitPlannerFlag=true.\n' +
                 '4. If field logs report blockers or significantly lower progress than claimed, rate as CONTRADICTED and set visitPlannerFlag=true.',
             },
             {
@@ -315,27 +317,20 @@ class AzureOpenAiService {
       }
     }
 
-    // Deterministic engineering reconciliation rules
+    // Deterministic engineering reconciliation rules driven by FieldPersonaType & AssuranceWeight
     const lineEvaluations = params.lineClaims.map((line) => {
       const validLogs = line.confirmedLogs.filter((l) => l.isWithinGeofence);
       const independentLogs = validLogs.filter(
-        (l) =>
-          l.independenceTier === 'MONITOR_INSPECTOR' ||
-          l.independenceTier === 'INDEPENDENT_RESIDENT'
+        (l) => l.fieldPersonaType === 'INDEPENDENT_VERIFIER'
       );
       const hasBlockers = validLogs.some(
         (l) => Array.isArray(l.siteBlockers) && l.siteBlockers.length > 0
       );
 
-      const highestTier: IndependenceTier | null = validLogs.some(
-        (l) => l.independenceTier === 'MONITOR_INSPECTOR'
-      )
-        ? 'MONITOR_INSPECTOR'
-        : validLogs.some((l) => l.independenceTier === 'INDEPENDENT_RESIDENT')
-        ? 'INDEPENDENT_RESIDENT'
-        : validLogs.length > 0
-        ? 'CONTRACTOR_ENGINEER'
-        : null;
+      const sortedByWeight = [...validLogs].sort(
+        (a, b) => b.assuranceWeight - a.assuranceWeight
+      );
+      const topLog = sortedByWeight[0] ?? null;
 
       if (validLogs.length === 0) {
         return {
@@ -345,7 +340,8 @@ class AzureOpenAiService {
           visitPlannerFlag: true,
           visitPlannerReason: `Unverified claim of ₦${line.contractorClaimedNgn.toLocaleString()} with zero field logs.`,
           missingHoldPointFlag: line.isHoldPoint,
-          highestCorroboratingTier: null,
+          highestCorroboratingRoleName: null,
+          highestCorroboratingWeight: null,
           corroboratingEvidenceLogIds: [],
         };
       }
@@ -358,7 +354,8 @@ class AzureOpenAiService {
           visitPlannerFlag: true,
           visitPlannerReason: `Active site blocker conflicts with ${line.contractorClaimedPct}% IPC progress claim.`,
           missingHoldPointFlag: line.isHoldPoint && independentLogs.length === 0,
-          highestCorroboratingTier: highestTier,
+          highestCorroboratingRoleName: topLog?.reporterRoleName ?? null,
+          highestCorroboratingWeight: topLog?.assuranceWeight ?? null,
           corroboratingEvidenceLogIds: validLogs.map((l) => l.id),
         };
       }
@@ -367,11 +364,12 @@ class AzureOpenAiService {
         return {
           boqItemId: line.boqItemId,
           evidenceStrengthRating: 'PARTIALLY_SUPPORTED' as const,
-          aiRationale: `Claimed ${line.contractorClaimedPct}% relies solely on CONTRACTOR_ENGINEER self-reports without independent Resident CoW or Monitor Inspector corroboration.`,
+          aiRationale: `Claimed ${line.contractorClaimedPct}% relies solely on ${topLog?.reporterRoleName || 'Contractor'} self-reports without independent verifier corroboration.`,
           visitPlannerFlag: true,
           visitPlannerReason: `Contractor self-reported claim (₦${line.contractorClaimedNgn.toLocaleString()}) requires independent Monitor site verification.`,
           missingHoldPointFlag: line.isHoldPoint,
-          highestCorroboratingTier: 'CONTRACTOR_ENGINEER' as const,
+          highestCorroboratingRoleName: topLog?.reporterRoleName ?? null,
+          highestCorroboratingWeight: topLog?.assuranceWeight ?? null,
           corroboratingEvidenceLogIds: validLogs.map((l) => l.id),
         };
       }
@@ -379,11 +377,12 @@ class AzureOpenAiService {
       return {
         boqItemId: line.boqItemId,
         evidenceStrengthRating: 'SUPPORTED' as const,
-        aiRationale: `Claimed ${line.contractorClaimedPct}% is corroborated by ${independentLogs.length} geofence-verified independent field log(s) (${highestTier}).`,
+        aiRationale: `Claimed ${line.contractorClaimedPct}% is corroborated by ${independentLogs.length} geofence-verified independent field log(s) (${topLog?.reporterRoleName || 'Independent Verifier'}).`,
         visitPlannerFlag: false,
         visitPlannerReason: null,
         missingHoldPointFlag: false,
-        highestCorroboratingTier: highestTier,
+        highestCorroboratingRoleName: topLog?.reporterRoleName ?? null,
+        highestCorroboratingWeight: topLog?.assuranceWeight ?? null,
         corroboratingEvidenceLogIds: validLogs.map((l) => l.id),
       };
     });

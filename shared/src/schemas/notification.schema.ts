@@ -69,7 +69,8 @@ export type WebNotificationCategory = z.infer<typeof WebNotificationCategoryEnum
 export const WebNotificationDtoSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().uuid(),
-  targetRole: z.enum(['MONITOR', 'LENDER', 'CONTRACTOR']),
+  targetPermissionKey: z.string(),
+  targetRoleId: z.string().uuid().nullable().optional(),
   category: WebNotificationCategoryEnum,
   title: z.string(),
   description: z.string(),

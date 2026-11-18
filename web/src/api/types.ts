@@ -1,6 +1,6 @@
 import type {
   EvidenceStrengthRating,
-  IndependenceTier,
+  FieldPersonaType,
   PortfolioHealth,
   ProjectGeofence,
   ReportingCadence,
@@ -13,6 +13,7 @@ export interface ApiEnvelope<T> {
 
 export interface ProjectSummaryDto {
   id: string;
+  tenantId: string;
   name: string;
   codePrefix: string;
   stateLocation: string;
@@ -36,7 +37,12 @@ export interface ProjectSummaryDto {
   joinCodes: Array<{
     id: string;
     code: string;
-    independenceTier: IndependenceTier;
+    roleId: string;
+    roleCode: string;
+    roleName: string;
+    fieldPersonaType: FieldPersonaType;
+    assuranceWeight: number;
+    requiresIdentityAssurance: boolean;
     isActive: boolean;
   }>;
   tranches: Array<{
@@ -86,7 +92,10 @@ export interface FieldEvidenceLogRecordDto {
   id: string;
   projectId: string;
   boqItemId: string | null;
-  independenceTier: IndependenceTier;
+  reporterRoleId: string | null;
+  reporterRoleName: string;
+  fieldPersonaType: FieldPersonaType;
+  assuranceWeight: number;
   status: string;
   latitude: number;
   longitude: number;
@@ -124,7 +133,10 @@ export interface FieldEvidenceLogRecordDto {
     id: string;
     agentFullName: string;
     agentPhoneNumber: string;
-    independenceTier: IndependenceTier;
+    roleId: string;
+    roleNameSnapshot: string;
+    fieldPersonaType: FieldPersonaType;
+    assuranceWeight: number;
     deviceModel: string | null;
   };
 }
@@ -142,7 +154,8 @@ export interface IpcLineItemRecordDto {
   visitPlannerFlag: boolean;
   visitPlannerReason: string | null;
   missingHoldPointFlag: boolean;
-  highestCorroboratingTier: IndependenceTier | null;
+  highestCorroboratingRoleName: string | null;
+  highestCorroboratingWeight: number | null;
   corroboratingEvidenceLogIds: string[];
   monitorCertifiedPct: number | null;
   monitorCertifiedNgn: number | null;
@@ -223,13 +236,17 @@ export interface IpcDetailsDto {
 }
 
 export interface AuditTrailResponseDto {
-  projectId: string;
+  tenantId?: string;
+  projectId: string | null;
   chainIntegrityVerified: boolean;
   totalEntries: number;
   brokenAtEntryId: string | null;
   latestHash: string | null;
   entries: Array<{
     id: string;
+    tenantId: string;
+    projectId: string | null;
+    seq: number;
     actorType: string;
     actorId: string;
     actorDisplayName: string;
@@ -247,6 +264,9 @@ export type {
   ReviewContractorVerificationRequest,
   PortfolioExecutiveSummaryDto,
   PortfolioProjectHealthItem,
+  PermissionDto,
+  RoleDto,
+  TenantDto,
+  TenantUserDto,
+  FieldSessionRosterDto,
 } from '@insite/shared';
-
-

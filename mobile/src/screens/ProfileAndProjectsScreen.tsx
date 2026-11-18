@@ -8,7 +8,10 @@ import {
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { StatusBar } from "expo-status-bar";
-import type { DemoProjectWorkspaceDto } from "@insite/shared";
+import type {
+  DemoProjectWorkspaceDto,
+  FieldPersonaType,
+} from "@insite/shared";
 import {
   EmptyStateCard,
   GradientHeaderLayout,
@@ -26,11 +29,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDemoProjectsQuery } from "../queries/projects/useProjectsQueries";
 import { useDemoSkipVerificationMutation } from "../queries/auth/useAuthMutations";
 import { formatMobileErrorMessage } from "../utils/errorFormatter";
-import { IS_DEMO_MODE } from "../config/demoMode";
 
 export type Persona = {
   roleTitle: string;
-  tier: string;
+  roleName: string;
+  fieldPersonaType: FieldPersonaType;
+  assuranceWeight: number;
   assuranceStatus:
     | "PENDING_APPROVAL"
     | "APPROVED"
@@ -54,7 +58,7 @@ export const ProfileAndProjectsScreen = () => {
     isLoading: loadingProjects,
     error: projectsErrorObj,
     refetch: loadProjects,
-  } = useDemoProjectsQuery(IS_DEMO_MODE);
+  } = useDemoProjectsQuery((process.env.EXPO_PUBLIC_DEMO_MODE === "true"));
   const switchWorkspaceMutation = useDemoSkipVerificationMutation();
 
   const projectsError = projectsErrorObj
@@ -68,12 +72,16 @@ export const ProfileAndProjectsScreen = () => {
   const onClose = () => navigation.goBack();
 
   const onSwitchProject = async (project: DemoProjectWorkspaceDto) => {
-    const preferredTier =
-      profile?.activeIndependenceTier || "CONTRACTOR_ENGINEER";
+    const preferredRoleCode = profile?.activeRoleCode;
+    const preferredPersona =
+      profile?.activeFieldPersonaType || "CONTRACTOR_EXECUTOR";
     const targetCode =
-      project.joinCodes.find((jc) => jc.independenceTier === preferredTier) ||
+      (preferredRoleCode
+        ? project.joinCodes.find((jc) => jc.roleCode === preferredRoleCode)
+        : undefined) ||
+      project.joinCodes.find((jc) => jc.fieldPersonaType === preferredPersona) ||
       project.joinCodes.find(
-        (jc) => jc.independenceTier === "CONTRACTOR_ENGINEER",
+        (jc) => jc.fieldPersonaType === "CONTRACTOR_EXECUTOR",
       ) ||
       project.joinCodes[0];
 
@@ -101,7 +109,14 @@ export const ProfileAndProjectsScreen = () => {
         activeProjectCode: result.sessionProfile.joinCodeUsed,
         activeSessionId: result.sessionProfile.sessionId,
         activeSessionToken: result.accessToken,
-        activeIndependenceTier: result.sessionProfile.independenceTier,
+        activeRoleId: result.sessionProfile.roleId,
+        activeRoleCode: result.sessionProfile.roleCode,
+        activeRoleName: result.sessionProfile.roleName,
+        activeFieldPersonaType: result.sessionProfile.fieldPersonaType,
+        activeAssuranceWeight: result.sessionProfile.assuranceWeight,
+        activeRequiresIdentityAssurance:
+          result.sessionProfile.requiresIdentityAssurance,
+        activePermissions: result.sessionProfile.permissions || [],
         assuranceStatus: result.sessionProfile.assuranceStatus || "APPROVED",
       });
 
@@ -135,7 +150,9 @@ export const ProfileAndProjectsScreen = () => {
   const onApplyPersona = async (persona: Persona) => {
     await updateProfile({
       roleTitle: persona.roleTitle,
-      activeIndependenceTier: persona.tier,
+      activeRoleName: persona.roleName,
+      activeFieldPersonaType: persona.fieldPersonaType,
+      activeAssuranceWeight: persona.assuranceWeight,
       assuranceStatus: persona.assuranceStatus,
     });
   };
@@ -182,13 +199,13 @@ export const ProfileAndProjectsScreen = () => {
               <View>
                 <Text style={styles.sectionTitle}>Workspaces</Text>
                 <Text style={styles.sectionSubtitle}>
-                  {IS_DEMO_MODE
+                  {(process.env.EXPO_PUBLIC_DEMO_MODE === "true")
                     ? "Switch active project or enter a join code for an additional workspace."
                     : "Active project workspace connected to this device."}
                 </Text>
               </View>
 
-              {!IS_DEMO_MODE ? (
+              {!(process.env.EXPO_PUBLIC_DEMO_MODE === "true") ? (
                 profile?.activeProjectCode ? (
                   <View style={[styles.projectCard, styles.projectCardActive]}>
                     <View style={styles.projectTop}>
@@ -199,7 +216,7 @@ export const ProfileAndProjectsScreen = () => {
                     </View>
                     <Text style={styles.projectName}>Connected Site Session</Text>
                     <Text style={styles.projectMeta}>
-                      Tier: {profile.activeIndependenceTier || "Field Agent"}
+                      Role: {profile.activeRoleName || "Field Agent"}
                     </Text>
                   </View>
                 ) : null
@@ -293,7 +310,7 @@ export const ProfileAndProjectsScreen = () => {
             </View>
 
             {/* Demo Persona Switcher (Demo Mode only) */}
-            {IS_DEMO_MODE && (
+            {(process.env.EXPO_PUBLIC_DEMO_MODE === "true") && (
               <View style={styles.section}>
               <View>
                 <Text style={styles.sectionTitle}>Demo Scenario Switcher</Text>
@@ -309,7 +326,9 @@ export const ProfileAndProjectsScreen = () => {
                 onPress={() =>
                   onApplyPersona({
                     roleTitle: "Contractor Site Engineer (Unverified)",
-                    tier: "CONTRACTOR_ENGINEER",
+                    roleName: "Contractor Engineer",
+                    fieldPersonaType: "CONTRACTOR_EXECUTOR",
+                    assuranceWeight: 0.4,
                     assuranceStatus: "PENDING_APPROVAL",
                   })
                 }
@@ -335,7 +354,9 @@ export const ProfileAndProjectsScreen = () => {
                 onPress={() =>
                   onApplyPersona({
                     roleTitle: "Senior Site Civil Engineer (COREN Verified)",
-                    tier: "CONTRACTOR_ENGINEER",
+                    roleName: "Contractor Engineer",
+                    fieldPersonaType: "CONTRACTOR_EXECUTOR",
+                    assuranceWeight: 0.4,
                     assuranceStatus: "APPROVED",
                   })
                 }
@@ -360,8 +381,10 @@ export const ProfileAndProjectsScreen = () => {
                 style={styles.personaCard}
                 onPress={() =>
                   onApplyPersona({
-                    roleTitle: "Independent Resident Clerk of Works (Tier 2)",
-                    tier: "INDEPENDENT_RESIDENT",
+                    roleTitle: "Independent Resident Clerk of Works",
+                    roleName: "Independent Resident (Clerk of Works)",
+                    fieldPersonaType: "INDEPENDENT_VERIFIER",
+                    assuranceWeight: 0.9,
                     assuranceStatus: "APPROVED",
                   })
                 }

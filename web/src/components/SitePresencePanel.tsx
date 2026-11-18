@@ -61,7 +61,7 @@ export function SitePresencePanel({
   initialReportId,
   initialWbsItemId,
 }: SitePresencePanelProps) {
-  const { user } = useAuth();
+  const { hasPermission } = useAuth();
   const reportsQuery = useProjectWorkdayReportsQuery(projectId);
   const telemetryQuery = useProjectTelemetryQuery(projectId);
   const createQueryMutation = useCreateWorkdayReportQueryMutation(projectId);
@@ -658,7 +658,7 @@ export function SitePresencePanel({
 
           {/* Sticky Bottom Action Bar + Inline Monitor Query Comment Box */}
           <div className="p-3.5 bg-slate-50 border-t border-slate-200/80 space-y-2.5">
-            {showQueryForm && user?.role === "MONITOR" ? (
+            {showQueryForm && hasPermission("reports:raise_query") ? (
               <form onSubmit={handleSubmitQuery} className="space-y-2">
                 <label className="block text-xs font-bold text-slate-800">
                   Raise Query to WBS {selectedReport.wbsCode} Mobile Chat
@@ -692,7 +692,7 @@ export function SitePresencePanel({
               </form>
             ) : (
               <div className="flex items-center justify-between gap-2">
-                {user?.role === "MONITOR" && (
+                {hasPermission("reports:raise_query") && (
                   <button
                     type="button"
                     onClick={() => setShowQueryForm(true)}

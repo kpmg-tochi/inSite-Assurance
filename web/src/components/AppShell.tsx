@@ -13,7 +13,8 @@ import {
   ArrowRight,
 } from "lucide-react";
 import type { ProjectSummaryDto } from "../api/types";
-import { SEEDED_DEMO_ACCOUNTS, useAuth } from "../lib/auth-context";
+import { useAuth } from "../lib/auth-context";
+import { useDemoAccounts } from "../config/useDemoAccounts";
 import { IS_DEMO_MODE } from "../config/demoMode";
 import { formatLicenseCredential, getInitials } from "../lib/formatters";
 import Notifications from "./Notifications";
@@ -35,7 +36,8 @@ export function AppShell({
   headerActions,
   children,
 }: AppShellProps) {
-  const { user, quickSwitchDemoAccount, logout } = useAuth();
+  const { user, quickSwitchDemoAccount, logout, hasPermission } = useAuth();
+  const demoAccounts = useDemoAccounts()?.accounts ?? [];
   const navigate = useNavigate();
   const location = useLocation();
   const isExecutive = location.pathname.includes("/executive");
@@ -63,37 +65,32 @@ export function AppShell({
     user?.professionalLicenseNumber,
   );
 
-  const roleDisplayLabel =
-    user?.role === "MONITOR"
-      ? "Independent Monitor"
-      : user?.role === "LENDER"
-        ? "Lender / Guarantor"
-        : "Main Contractor";
+  const roleDisplayLabel = user?.roleName || user?.roleCode || "Team Member";
 
-  const workspaceTitleByRole =
-    user?.role === "MONITOR"
-      ? "Monitor Certifier Workspace"
-      : user?.role === "LENDER"
-        ? "Lender Approver Console"
-        : "Contractor Claimant Portal";
+  const workspaceTitleByRole = user?.isPlatformSuperAdmin
+    ? "Platform Super Admin Console"
+    : `${user?.roleName || "Assurance"} Workspace`;
+
+  const isContractorOnly =
+    hasPermission("ipc:submit_claim") && !hasPermission("ipc:certify_valuation");
+  const isLenderApprover =
+    hasPermission("tranche:approve_disbursement") &&
+    !hasPermission("ipc:certify_valuation");
 
   const navLabels = {
-    dashboard:
-      user?.role === "LENDER"
-        ? "Portfolio & Risk Map"
-        : user?.role === "CONTRACTOR"
-          ? "Site Map & Overview"
-          : "Geospatial & Portfolio",
-    reconciliation:
-      user?.role === "LENDER"
-        ? "Tranche & IPC Review"
-        : user?.role === "CONTRACTOR"
-          ? "IPC Claims & Queries"
-          : "IPC Reconciliation",
-    boq:
-      user?.role === "CONTRACTOR"
-        ? "BOQ & Hold-Point Rules"
-        : "BOQ & Hold-Points",
+    dashboard: isLenderApprover
+      ? "Portfolio & Risk Map"
+      : isContractorOnly
+        ? "Site Map & Overview"
+        : "Geospatial & Portfolio",
+    reconciliation: isLenderApprover
+      ? "Tranche & IPC Review"
+      : isContractorOnly
+        ? "IPC Claims & Queries"
+        : "IPC Reconciliation",
+    boq: hasPermission("boq:upload_edit")
+      ? "BOQ & Hold-Points"
+      : "BOQ & Hold-Point Rules",
   };
 
   const projectBasePath = selectedProject
@@ -141,18 +138,18 @@ export function AppShell({
             >
               <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-1 shrink-0 shadow-sm">
                 <img
-                  src="/KPMG-logo.svg"
-                  alt="KPMG"
+                  src={user?.tenant?.brandingConfig?.logoUrl || "/KPMG-logo.svg"}
+                  alt={user?.tenant?.name || "InSite Assurance"}
                   className="w-full h-full object-contain"
                 />
               </div>
               {!sidebarCollapsed && (
                 <div className="truncate">
-                  <div className="text-white font-semibold text-sm leading-tight">
-                    InSite Assurance
+                  <div className="text-white font-semibold text-sm leading-tight truncate">
+                    {user?.tenant?.name || "InSite Assurance"}
                   </div>
-                  <div className="text-[11px] text-blue-200/80">
-                    Capital Advisory
+                  <div className="text-[11px] text-blue-200/80 truncate">
+                    {user?.tenant?.brandingConfig?.tagline || "Capital Advisory"}
                   </div>
                 </div>
               )}
@@ -214,8 +211,8 @@ export function AppShell({
               )}
             </NavLink>
 
-            {/* Executive Risk Matrix (Multi-Project Cross-Facility View) for Monitors & Lenders */}
-            {user?.role !== "CONTRACTOR" && (
+            {/* Executive Risk Matrix (Multi-Project Cross-Project View) */}
+            {hasPermission("projects:view_executive_matrix") && (
               <NavLink
                 to="/app/executive"
                 title="Executive Risk Matrix"
@@ -234,6 +231,7 @@ export function AppShell({
               </NavLink>
             )}
 
+            {hasPermission("ipc:view") && (
             <NavLink
               to={selectedProject ? `${projectBasePath}/reconciliation` : "/app/projects"}
               title={navLabels.reconciliation}
@@ -257,7 +255,9 @@ export function AppShell({
                 </span>
               )}
             </NavLink>
+            )}
 
+            {hasPermission("boq:view") && (
             <NavLink
               to={selectedProject ? `${projectBasePath}/boq` : "/app/projects"}
               title={navLabels.boq}
@@ -274,9 +274,10 @@ export function AppShell({
                 <span className="truncate">{navLabels.boq}</span>
               )}
             </NavLink>
+            )}
 
-            {/* Audit Ledger is restricted to Monitor & Lender governance roles (hidden from Contractor segregated surface) */}
-            {user?.role !== "CONTRACTOR" && (
+            {/* Audit Ledger gated by audit:view_ledger permission */}
+            {hasPermission("audit:view_ledger") && (
               <NavLink
                 to={selectedProject ? `${projectBasePath}/audit` : "/app/projects"}
                 title="Audit Ledger"
@@ -390,7 +391,7 @@ export function AppShell({
                     </div>
                   </div>
                   <div className="py-1 space-y-0.5">
-                    {SEEDED_DEMO_ACCOUNTS.map((acct) => {
+                    {demoAccounts.map((acct) => {
                       const isCurrent = user?.email === acct.email;
                       return (
                         <button
@@ -489,16 +490,18 @@ export function AppShell({
                 <span className="text-white/30">/</span>
                 <h1 className="text-base font-bold text-white tracking-tight">
                   {isExecutive
-                    ? "Multi-Project Cross-Facility Surveillance Matrix"
+                    ? "Multi-Project Capital Risk & Governance Matrix"
                     : selectedProject?.name || "Capital Project Assurance"}
                 </h1>
                 <span
                   className={`hidden sm:inline-block ml-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-                    user?.role === "MONITOR"
-                      ? "bg-blue-500/20 text-blue-200 border-blue-400/30"
-                      : user?.role === "LENDER"
+                    user?.isPlatformSuperAdmin
+                      ? "bg-indigo-500/20 text-indigo-200 border-indigo-400/30"
+                      : hasPermission("tranche:approve_disbursement")
                         ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/30"
-                        : "bg-amber-500/20 text-amber-200 border-amber-400/30"
+                        : hasPermission("ipc:certify_valuation")
+                          ? "bg-blue-500/20 text-blue-200 border-blue-400/30"
+                          : "bg-amber-500/20 text-amber-200 border-amber-400/30"
                   }`}
                 >
                   {isExecutive
@@ -509,7 +512,7 @@ export function AppShell({
               <p className="text-xs text-slate-300">
                 {isExecutive ? (
                   <span>
-                    Consolidated cross-facility risk, disbursement holdbacks,
+                    Consolidated cross-project risk, disbursement holdbacks,
                     and governance telemetry
                   </span>
                 ) : selectedProject ? (

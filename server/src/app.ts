@@ -5,6 +5,7 @@ import morgan from "morgan";
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/error.middleware";
 import { authRoutes } from "./modules/auth/auth.routes";
+import { rbacRoutes } from "./modules/rbac/rbac.routes";
 import { projectsRoutes } from "./modules/projects/projects.routes";
 import { boqRoutes } from "./modules/boq/boq.routes";
 import { evidenceRoutes } from "./modules/evidence/evidence.routes";
@@ -37,12 +38,17 @@ export function createApp() {
     app.use(morgan("dev"));
   }
 
-  // Health & Integration Readiness Check
+  // Health check. Integration and demo details are only reported outside production.
   app.get("/api/v1/health", (_req: Request, res: Response) => {
+    if (env.NODE_ENV === "production") {
+      res.json({ success: true, status: "ok", timestamp: new Date().toISOString() });
+      return;
+    }
     res.json({
       success: true,
+      status: "ok",
       service: "InSite Assurance API",
-      version: "0.3.0",
+      version: "0.4.0",
       demoMode: env.DEMO_MODE,
       integrations: {
         azureOpenAiGpt4o: azureOpenAiService.isConfigured()
@@ -61,6 +67,7 @@ export function createApp() {
 
   // API v1 Routes
   app.use("/api/v1/auth", authRoutes);
+  app.use("/api/v1/rbac", rbacRoutes);
   app.use("/api/v1/projects", projectsRoutes);
   app.use("/api/v1/projects", boqRoutes);
   app.use("/api/v1/projects", evidenceRoutes);
@@ -72,6 +79,10 @@ export function createApp() {
   app.use("/api/v1/projects", morningBriefRoutes);
   app.use("/api/v1/projects", notificationsRoutes);
   app.use("/api/v1/projects", wbsChatRoutes);
+
+  app.use("/api", (_req: Request, res: Response) => {
+    res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "Route not found" } });
+  });
 
   // Centralized Error Handler
   app.use(errorHandler);

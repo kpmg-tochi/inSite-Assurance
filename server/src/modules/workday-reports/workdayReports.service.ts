@@ -17,6 +17,7 @@ import {
   dispatchReportQueryBundle,
   serializeReportQuery,
 } from '../wbs-chat/wbsChat.service';
+import { loadReportQueryInProject } from '../../utils/ownership';
 
 async function verifySubmissionGeotag(
   rawGeotag: SubmissionGeotag | null | undefined,
@@ -132,7 +133,7 @@ function serializeWorkdayReport(r: {
   humanConfirmedAt: Date | null;
   createdAt: Date;
   boqItem: { wbsCode: string; description: string };
-  reporterSession: { agentFullName: string; independenceTier: string };
+  reporterSession: { agentFullName: string; roleNameSnapshot: string };
   queries?: Array<Parameters<typeof serializeReportQuery>[0]>;
 }) {
   return {
@@ -140,7 +141,7 @@ function serializeWorkdayReport(r: {
     projectId: r.projectId,
     reporterSessionId: r.reporterSessionId,
     reporterName: r.reporterSession.agentFullName,
-    reporterTier: r.reporterSession.independenceTier,
+    reporterTier: r.reporterSession.roleNameSnapshot,
     wbsItemId: r.wbsItemId,
     wbsCode: r.boqItem.wbsCode,
     wbsDescription: r.boqItem.description,
@@ -257,7 +258,7 @@ export async function submitWorkdayReportBundle(params: {
       },
       include: {
         boqItem: { select: { wbsCode: true, description: true } },
-        reporterSession: { select: { agentFullName: true, independenceTier: true } },
+        reporterSession: { select: { agentFullName: true, roleNameSnapshot: true } },
       },
     });
 
@@ -327,12 +328,19 @@ export async function revalidateWorkdayReport(params: {
     include: {
       boqItem: { select: { id: true, wbsCode: true, description: true, unit: true } },
       project: { select: { id: true, geofenceGeoJson: true } },
-      reporterSession: { select: { agentFullName: true, independenceTier: true } },
+      reporterSession: { select: { agentFullName: true, roleNameSnapshot: true } },
     },
   });
 
-  if (!prevReport) {
-    throw new AppError('Original workday report not found for this project', 404);
+  // The reporter may only revalidate their own report.
+  if (!prevReport || prevReport.reporterSessionId !== params.reporterSessionId) {
+    throw new AppError('Original workday report not found for this project', 404, 'WORKDAY_REPORT_NOT_FOUND');
+  }
+  if (params.input.reportQueryId) {
+    const query = await loadReportQueryInProject(prisma, params.projectId, params.input.reportQueryId);
+    if (query.boqItemId !== prevReport.wbsItemId) {
+      throw new AppError('Report query not found', 404, 'REPORT_QUERY_NOT_FOUND');
+    }
   }
 
   // Locate the open query being addressed (either explicitly by reportQueryId or latest OPEN on this WBS/report)
@@ -438,7 +446,7 @@ export async function revalidateWorkdayReport(params: {
       },
       include: {
         boqItem: { select: { wbsCode: true, description: true } },
-        reporterSession: { select: { agentFullName: true, independenceTier: true } },
+        reporterSession: { select: { agentFullName: true, roleNameSnapshot: true } },
       },
     });
 
@@ -499,10 +507,10 @@ export async function revalidateWorkdayReport(params: {
       },
     });
 
-    // Trigger a live Web Monitor notification pointing directly to the Site Presence Drawer revision
+    // Trigger a live Web Notification pointing directly to the Site Presence Drawer revision
     await createWebNotification(tx, {
       projectId: params.projectId,
-      targetRole: 'MONITOR',
+      targetPermissionKey: 'reports:view_all',
       category: 'REPORT_RESUBMITTED',
       title: `Report Resubmitted · WBS ${prevReport.boqItem.wbsCode} (Rev #${nextRevisionNumber})`,
       description: `${newReport.reporterSession.agentFullName} resubmitted clarified evidence for WBS ${prevReport.boqItem.wbsCode} (${aiReval.updatedQuantity} ${newReport.unitOfMeasure}). AI re-evaluated updated thread.`,
@@ -539,8 +547,12 @@ export async function revalidateWorkdayReport(params: {
 export async function listProjectWorkdayReports(params: {
   projectId: string;
   workdayDate?: string;
+  reporterSessionId?: string;
 }) {
   const where: Prisma.WorkdayReportWhereInput = { projectId: params.projectId };
+  if (params.reporterSessionId) {
+    where.reporterSessionId = params.reporterSessionId;
+  }
   if (params.workdayDate) {
     where.workdayDate = params.workdayDate;
   }
@@ -549,7 +561,7 @@ export async function listProjectWorkdayReports(params: {
     where,
     include: {
       boqItem: { select: { wbsCode: true, description: true } },
-      reporterSession: { select: { agentFullName: true, independenceTier: true } },
+      reporterSession: { select: { agentFullName: true, roleNameSnapshot: true } },
       queries: {
         include: { raisedByUser: { select: { fullName: true } } },
         orderBy: { createdAt: 'desc' },

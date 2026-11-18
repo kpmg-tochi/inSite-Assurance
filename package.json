@@ -17,10 +17,17 @@
     "dev:server": "npm --workspace=@insite/server run dev",
     "dev:web": "npm --workspace=@insite/web run dev",
     "dev:mobile": "npm --workspace=@insite/mobile run start",
-    "typecheck": "npm run build:shared && npm --workspace=@insite/server run typecheck && npm --workspace=@insite/web run typecheck && npm --workspace=@insite/mobile run typecheck"
+    "typecheck": "npm run build:shared && npm --workspace=@insite/server run typecheck && npm --workspace=@insite/web run typecheck && npm --workspace=@insite/mobile run typecheck",
+    "lint": "eslint shared/src server/src web/src mobile/src",
+    "test": "npm --workspace=@insite/server run test"
   },
   "devDependencies": {
-    "typescript": "^5.7.2"
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^15.15.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.73.0"
   },
   "engines": {
     "node": ">=20.0.0"

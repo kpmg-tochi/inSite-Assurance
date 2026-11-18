@@ -75,7 +75,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 to="/app/dashboard"
                 className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm transition"
               >
-                Open Workspace ({user.role})
+                Open Workspace ({user.roleName})
               </Link>
             ) : (
               <Link

@@ -1,17 +1,17 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { requireRole } from '../../middleware/auth.middleware';
+import { guardProjectRoutes } from '../../utils/accessControl';
+import { requirePermission } from '../../middleware/auth.middleware';
 import { getAndVerifyProjectAuditTrail } from './audit.service';
 
-const router = Router();
+const router = guardProjectRoutes(Router());
 
 /**
  * GET /api/v1/projects/:projectId/audit-trail
- * Accessible by MONITOR and LENDER roles.
- * Returns the full immutable hash-chained audit ledger + cryptographic chain verification status.
+ * Accessible by roles holding `audit:view_ledger`.
  */
 router.get(
   '/:projectId/audit-trail',
-  requireRole('MONITOR', 'LENDER'),
+  requirePermission('audit:view_ledger'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const projectId = String(req.params.projectId);

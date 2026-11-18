@@ -9,6 +9,7 @@ import {
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
+import { WebJwtPayload } from '../../middleware/auth.middleware';
 
 type PrismaTransactionOrClient = Prisma.TransactionClient | typeof prisma;
 
@@ -86,14 +87,12 @@ export async function createMobileNotification(
  */
 export async function listProjectNotifications(
   projectId: string,
-  fieldSessionId?: string
+  fieldSessionId: string
 ): Promise<MobileNotificationDto[]> {
   const rows = await prisma.mobileNotification.findMany({
     where: {
       projectId,
-      OR: fieldSessionId
-        ? [{ fieldSessionId: null }, { fieldSessionId }]
-        : undefined,
+      OR: [{ fieldSessionId: null }, { fieldSessionId }],
     },
     orderBy: [{ isRead: 'asc' }, { createdAt: 'desc' }],
     take: 100,
@@ -108,13 +107,17 @@ export async function listProjectNotifications(
  */
 export async function markNotificationRead(params: {
   projectId: string;
+  fieldSessionId: string;
   notificationId: string;
   resolvedByAction?: boolean;
 }): Promise<MobileNotificationDto> {
+  // A field agent may only touch notifications addressed to their session or broadcast to
+  // their project.
   const existing = await prisma.mobileNotification.findFirst({
     where: {
       id: params.notificationId,
       projectId: params.projectId,
+      OR: [{ fieldSessionId: null }, { fieldSessionId: params.fieldSessionId }],
     },
   });
 
@@ -149,30 +152,24 @@ export async function markNotificationRead(params: {
   return serializeNotification(updated);
 }
 
-function serializeWebNotification(row: {
-  id: string;
-  projectId: string;
-  targetRole: string;
-  category: string;
-  title: string;
-  description: string;
-  actionUrl: string | null;
-  metadata: unknown;
-  isRead: boolean;
-  readAt: Date | null;
-  createdAt: Date;
-}): WebNotificationDto {
+type WebNotificationRow = Prisma.WebNotificationGetPayload<object> & {
+  reads?: Array<{ readAt: Date }>;
+};
+
+function serializeWebNotification(row: WebNotificationRow): WebNotificationDto {
+  const readAt = row.reads && row.reads.length > 0 ? row.reads[0].readAt : null;
   return {
     id: row.id,
     projectId: row.projectId,
-    targetRole: row.targetRole as 'MONITOR' | 'LENDER' | 'CONTRACTOR',
+    targetPermissionKey: row.targetPermissionKey,
+    targetRoleId: row.targetRoleId,
     category: row.category as WebNotificationCategory,
     title: row.title,
     description: row.description,
     actionUrl: row.actionUrl,
     metadata: (row.metadata as Record<string, unknown>) ?? {},
-    isRead: row.isRead,
-    readAt: row.readAt ? row.readAt.toISOString() : null,
+    isRead: readAt !== null,
+    readAt: readAt ? readAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -181,78 +178,117 @@ export async function createWebNotification(
   db: PrismaTransactionOrClient,
   input: {
     projectId: string;
-    targetRole?: 'MONITOR' | 'LENDER' | 'CONTRACTOR';
+    targetPermissionKey?: string;
+    targetRoleId?: string | null;
     category: WebNotificationCategory;
     title: string;
     description: string;
     actionUrl?: string | null;
     metadata?: Record<string, unknown>;
-    isRead?: boolean;
     createdAt?: Date;
   }
 ): Promise<WebNotificationDto> {
   const created = await db.webNotification.create({
     data: {
       projectId: input.projectId,
-      targetRole: input.targetRole ?? 'MONITOR',
+      targetPermissionKey: input.targetPermissionKey ?? 'reports:view_all',
+      targetRoleId: input.targetRoleId ?? null,
       category: input.category,
       title: input.title,
       description: input.description,
       actionUrl: input.actionUrl ?? null,
       metadata: (input.metadata ?? {}) as unknown as Prisma.InputJsonValue,
-      isRead: input.isRead ?? false,
       ...(input.createdAt ? { createdAt: input.createdAt } : {}),
     },
   });
   return serializeWebNotification(created);
 }
 
+function buildWebNotificationFilter(webUser: WebJwtPayload): Prisma.WebNotificationWhereInput {
+  if (webUser.isPlatformSuperAdmin) {
+    return {};
+  }
+  return {
+    OR: [
+      { targetRoleId: webUser.roleId },
+      {
+        targetRoleId: null,
+        targetPermissionKey: { in: webUser.permissions },
+      },
+    ],
+  };
+}
+
+function readsForUser(userId: string) {
+  return { where: { userId }, select: { readAt: true }, take: 1 } as const;
+}
+
 export async function listWebNotifications(params: {
   projectId: string;
-  targetRole?: string;
+  webUser: WebJwtPayload;
 }): Promise<WebNotificationDto[]> {
   const rows = await prisma.webNotification.findMany({
     where: {
       projectId: params.projectId,
-      ...(params.targetRole ? { targetRole: params.targetRole } : {}),
+      ...buildWebNotificationFilter(params.webUser),
     },
-    orderBy: [{ isRead: 'asc' }, { createdAt: 'desc' }],
+    include: { reads: readsForUser(params.webUser.userId) },
+    orderBy: { createdAt: 'desc' },
     take: 50,
   });
-  return rows.map(serializeWebNotification);
+  // Unread first, newest first within each group.
+  return rows
+    .map(serializeWebNotification)
+    .sort((a, b) => Number(a.isRead) - Number(b.isRead));
 }
 
 export async function markWebNotificationRead(params: {
   projectId: string;
   notificationId: string;
+  webUser: WebJwtPayload;
 }): Promise<WebNotificationDto> {
   const existing = await prisma.webNotification.findFirst({
-    where: { id: params.notificationId, projectId: params.projectId },
+    where: {
+      id: params.notificationId,
+      projectId: params.projectId,
+      ...buildWebNotificationFilter(params.webUser),
+    },
   });
   if (!existing) {
     throw new AppError('Web notification not found', 404, 'NOTIFICATION_NOT_FOUND');
   }
-  if (existing.isRead) {
-    return serializeWebNotification(existing);
-  }
-  const updated = await prisma.webNotification.update({
-    where: { id: existing.id },
-    data: { isRead: true, readAt: new Date() },
+  await prisma.webNotificationRead.upsert({
+    where: {
+      notificationId_userId: { notificationId: existing.id, userId: params.webUser.userId },
+    },
+    create: { notificationId: existing.id, userId: params.webUser.userId },
+    update: {},
   });
-  return serializeWebNotification(updated);
+  const refreshed = await prisma.webNotification.findUniqueOrThrow({
+    where: { id: existing.id },
+    include: { reads: readsForUser(params.webUser.userId) },
+  });
+  return serializeWebNotification(refreshed);
 }
 
 export async function markAllWebNotificationsRead(params: {
   projectId: string;
-  targetRole?: string;
+  webUser: WebJwtPayload;
 }): Promise<{ count: number }> {
-  const result = await prisma.webNotification.updateMany({
+  const unread = await prisma.webNotification.findMany({
     where: {
       projectId: params.projectId,
-      ...(params.targetRole ? { targetRole: params.targetRole } : {}),
-      isRead: false,
+      ...buildWebNotificationFilter(params.webUser),
+      reads: { none: { userId: params.webUser.userId } },
     },
-    data: { isRead: true, readAt: new Date() },
+    select: { id: true },
+  });
+  if (unread.length === 0) {
+    return { count: 0 };
+  }
+  const result = await prisma.webNotificationRead.createMany({
+    data: unread.map((n) => ({ notificationId: n.id, userId: params.webUser.userId })),
+    skipDuplicates: true,
   });
   return { count: result.count };
 }

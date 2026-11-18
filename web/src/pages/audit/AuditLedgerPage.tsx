@@ -2,7 +2,11 @@ import React, { useState, useMemo, useEffect, MouseEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { ProjectSummaryDto, AuditTrailResponseDto } from "../../api/types";
 import { formatDateTimeShort } from "../../lib/formatters";
-import { useProjectAuditTrailQuery } from "../../queries/audit/useAuditQueries";
+import {
+  useProjectAuditTrailQuery,
+  useTenantAuditTrailQuery,
+} from "../../queries/audit/useAuditQueries";
+import { useAuth } from "../../lib/auth-context";
 import {
   StandardTable,
   TableBadge,
@@ -21,17 +25,38 @@ interface AuditLedgerPageProps {
 }
 
 export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
-  const { data: auditData, isLoading } = useProjectAuditTrailQuery(project.id);
+  const { hasAnyPermission } = useAuth();
+  const canSeePresence = hasAnyPermission("reports:view_all", "presence:view_telemetry");
+  const [searchParams] = useSearchParams();
+  const initialTab =
+    searchParams.get("tab") === "presence" && canSeePresence ? "presence" : "ledger";
+  const initialReportId = searchParams.get("reportId");
+  const initialWbsItemId = searchParams.get("wbsItemId");
+  const [activeTab, setActiveTab] = useState<"ledger" | "tenant" | "presence">(initialTab);
+
+  useEffect(() => {
+    if (searchParams.get("tab") === "presence" && canSeePresence) {
+      setActiveTab("presence");
+    }
+  }, [searchParams, canSeePresence]);
+
+  const projectLedger = useProjectAuditTrailQuery(project.id, activeTab === "ledger");
+  const tenantLedger = useTenantAuditTrailQuery(activeTab === "tenant");
+  const { data: auditData, isLoading } = activeTab === "tenant" ? tenantLedger : projectLedger;
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState<
-    "ALL" | "MONITOR" | "CONTRACTOR" | "LENDER" | "SYSTEM"
+    "ALL" | "WEB_USER" | "FIELD_AGENT" | "SYSTEM"
   >("ALL");
   const [selectedEntry, setSelectedEntry] = useState<AuditLedgerEntry | null>(
     null
   );
 
   const entries = useMemo(() => auditData?.entries || [], [auditData]);
-  const isVerified = auditData?.chainIntegrityVerified ?? true;
+  // Not verified until the server has recomputed the chain and said so.
+  const isVerified = auditData?.chainIntegrityVerified === true;
+  const brokenEntry = auditData?.brokenAtEntryId
+    ? entries.find((e) => e.id === auditData.brokenAtEntryId) ?? null
+    : null;
 
   const filteredEntries = useMemo(() => {
     return entries.filter((entry) => {
@@ -42,16 +67,17 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
         entry.summaryText.toLowerCase().includes(term) ||
         entry.actorType.toLowerCase().includes(term);
 
+      const upperActor = entry.actorType.toUpperCase();
       const matchesRole =
         roleFilter === "ALL" ||
-        (roleFilter === "MONITOR" && entry.actorType.includes("MONITOR")) ||
-        (roleFilter === "CONTRACTOR" &&
-          entry.actorType.includes("CONTRACTOR")) ||
-        (roleFilter === "LENDER" && entry.actorType.includes("LENDER")) ||
+        (roleFilter === "WEB_USER" &&
+          (upperActor.includes("WEB_USER") ||
+            upperActor.includes("MONITOR") ||
+            upperActor.includes("LENDER") ||
+            upperActor.includes("CONTRACTOR"))) ||
+        (roleFilter === "FIELD_AGENT" && upperActor.includes("FIELD_AGENT")) ||
         (roleFilter === "SYSTEM" &&
-          !entry.actorType.includes("MONITOR") &&
-          !entry.actorType.includes("CONTRACTOR") &&
-          !entry.actorType.includes("LENDER"));
+          (upperActor.includes("SYSTEM") || upperActor.includes("AI")));
 
       return matchesSearch && matchesRole;
     });
@@ -76,11 +102,19 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
       tooltip:
         "Authenticated portal user, mobile field reporter, or AI reconciliation service that committed the event",
       width: "w-56",
-      cell: (entry) => {
+        cell: (entry) => {
+        const upperActor = entry.actorType.toUpperCase();
         let badgeVariant: "info" | "warning" | "success" | "neutral" = "neutral";
-        if (entry.actorType.includes("MONITOR")) badgeVariant = "info";
-        else if (entry.actorType.includes("CONTRACTOR")) badgeVariant = "warning";
-        else if (entry.actorType.includes("LENDER")) badgeVariant = "success";
+        if (upperActor.includes("WEB_USER") || upperActor.includes("MONITOR")) {
+          badgeVariant = "info";
+        } else if (
+          upperActor.includes("FIELD_AGENT") ||
+          upperActor.includes("CONTRACTOR")
+        ) {
+          badgeVariant = "warning";
+        } else if (upperActor.includes("LENDER")) {
+          badgeVariant = "success";
+        }
 
         return (
           <div className="space-y-1">
@@ -146,19 +180,6 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
     },
   ];
 
-  const [searchParams] = useSearchParams();
-  const initialTab =
-    searchParams.get("tab") === "presence" ? "presence" : "ledger";
-  const initialReportId = searchParams.get("reportId");
-  const initialWbsItemId = searchParams.get("wbsItemId");
-  const [activeTab, setActiveTab] = useState<"ledger" | "presence">(initialTab);
-
-  useEffect(() => {
-    if (searchParams.get("tab") === "presence") {
-      setActiveTab("presence");
-    }
-  }, [searchParams]);
-
   return (
     <div className="space-y-4">
       {/* Sub-navigation Tabs */}
@@ -172,8 +193,20 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
               : "text-slate-600 hover:text-slate-900"
           }`}
         >
-          Immutable Audit Ledger
+          Project Audit Ledger
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("tenant")}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            activeTab === "tenant"
+              ? "bg-white text-slate-900 shadow-2xs"
+              : "text-slate-600 hover:text-slate-900"
+          }`}
+        >
+          Tenant Governance Ledger
+        </button>
+        {canSeePresence && (
         <button
           type="button"
           onClick={() => setActiveTab("presence")}
@@ -185,6 +218,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
         >
           Daily Reports &amp; Site Telemetry
         </button>
+        )}
       </div>
 
       {activeTab === "presence" ? (
@@ -214,14 +248,26 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          {isVerified ? (
+          {!auditData ? (
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-600">
+              <span>Not verified</span>
+            </div>
+          ) : isVerified ? (
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-semibold text-emerald-800">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
               <span>Chain Integrity Verified</span>
             </div>
           ) : (
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-800">
-              <span>Integrity Flag Detected</span>
+              <span>
+                Chain broken
+                {brokenEntry
+                  ? ` at entry #${brokenEntry.seq} (${formatDateTimeShort(brokenEntry.createdAt)})`
+                  : auditData.brokenAtEntryId
+                    ? ` at entry ${auditData.brokenAtEntryId}`
+                    : ""}
+                . Entries from that point cannot be trusted.
+              </span>
             </div>
           )}
         </div>
@@ -237,7 +283,11 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
             </span>
           </div>
         }
-        subtitle={project ? `${project.codePrefix}: ${project.name}` : undefined}
+        subtitle={
+          activeTab === "tenant"
+            ? "Roles, users, branding and sign-in lockouts across the tenant"
+            : `${project.codePrefix}: ${project.name}`
+        }
         search={{
           value: searchTerm,
           onChange: setSearchTerm,
@@ -258,36 +308,25 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
             </button>
             <button
               type="button"
-              onClick={() => setRoleFilter("MONITOR")}
+              onClick={() => setRoleFilter("WEB_USER")}
               className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
-                roleFilter === "MONITOR"
+                roleFilter === "WEB_USER"
                   ? "bg-brand-primary text-white shadow-2xs"
                   : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
               }`}
             >
-              Monitor
+              Portal Users
             </button>
             <button
               type="button"
-              onClick={() => setRoleFilter("CONTRACTOR")}
+              onClick={() => setRoleFilter("FIELD_AGENT")}
               className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
-                roleFilter === "CONTRACTOR"
+                roleFilter === "FIELD_AGENT"
                   ? "bg-amber-600 text-white shadow-2xs"
                   : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
               }`}
             >
-              Contractor
-            </button>
-            <button
-              type="button"
-              onClick={() => setRoleFilter("LENDER")}
-              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
-                roleFilter === "LENDER"
-                  ? "bg-emerald-600 text-white shadow-2xs"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
-              }`}
-            >
-              Lender
+              Field Agents
             </button>
             <button
               type="button"

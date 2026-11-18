@@ -325,7 +325,7 @@ export function AboutPage() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-700 leading-relaxed">
-                  The project is registered with facility parameters: total
+                  The project is registered with project parameters: total
                   budget, allocated loan tranches, location, and the
                   participating institutions (Financier, Monitoring Firm, Main
                   Contractor). Physical project boundaries are defined using
@@ -502,7 +502,7 @@ export function AboutPage() {
                 </h3>
                 <ul className="list-disc list-inside text-xs text-slate-600 space-y-1.5 leading-relaxed">
                   <li>
-                    <strong>Project &amp; Facility Baseline Setup:</strong>{" "}
+                    <strong>Project Baseline Setup:</strong>{" "}
                     Configures Point Radius or Linear Corridor geofences,
                     expected reporting cadences, and flags critical BOQ items as
                     Mandatory Visual Hold Points <CitationRef id={27} />.
@@ -656,7 +656,7 @@ export function AboutPage() {
                     <td className="py-3.5 px-4 text-slate-700 align-top">
                       <strong>Owner Focus vs. Institutional Finance:</strong>{" "}
                       Not architected for institutional lender drawdown
-                      governance, facility Condition Precedent tracking, or
+                      governance, project Condition Precedent tracking, or
                       licensed IPM workflows.
                     </td>
                   </tr>

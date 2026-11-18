@@ -23,35 +23,53 @@ import { PrimaryButton } from "../components/inputs/Buttons";
 import { useDemoProjectsQuery } from "../queries/projects/useProjectsQueries";
 import { useJoinProjectMutation } from "../queries/auth/useAuthMutations";
 import { useProfile } from "../context/ProfileContext";
-import { IS_DEMO_MODE } from "../config/demoMode";
+import {
+  isValidJoinCode,
+  JOIN_CODE_EXAMPLE,
+  JOIN_CODE_MAX_LENGTH,
+} from "@insite/shared";
 import type { RootStackParamList } from "../navigation/types";
 
 /**
- * Formats facility join codes with automatic hyphen delimiters (e.g. LKK-402-CON)
- * and uppercase enforcement while allowing smooth backspacing over hyphens.
+ * Formats join codes as `AAA-999-SUF-XXXXXX` (e.g. LKK-402-CON-7K2QXM).
+ * The first two hyphens are inserted automatically. The role suffix is 2-4 characters, so a
+ * hyphen the user types after it is respected; without one, the last 6 characters are treated
+ * as the random segment. Recomputed from scratch on every keystroke, so backspacing just works.
  */
-function formatJoinCodeInput(raw: string, prevValue: string): string {
-  const cleaned = raw
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "")
-    .slice(0, 9);
+export function formatJoinCodeInput(raw: string): string {
+  const upper = raw.toUpperCase().replace(/[^A-Z0-9-]/g, "");
+  const alnum = upper.replace(/-/g, "");
+  const head = alnum.slice(0, 3);
+  const mid = alnum.slice(3, 6);
 
-  if (
-    raw.length < prevValue.length &&
-    prevValue.endsWith("-") &&
-    cleaned === prevValue.replace(/[^A-Z0-9]/g, "")
-  ) {
-    const trimmed = cleaned.slice(0, -1);
-    return trimmed.length > 3
-      ? `${trimmed.slice(0, 3)}-${trimmed.slice(3)}`
-      : trimmed;
+  // Everything after the first 6 alphanumerics, keeping any hyphen the user typed.
+  let seen = 0;
+  let cut = upper.length;
+  for (let i = 0; i < upper.length; i++) {
+    if (upper[i] !== "-") seen++;
+    if (seen === 6) {
+      cut = i + 1;
+      break;
+    }
+  }
+  const tail = seen >= 6 ? upper.slice(cut).replace(/^-+/, "").replace(/-+/g, "-") : "";
+
+  let suffix = "";
+  let random = "";
+  if (tail.includes("-")) {
+    const [s, ...rest] = tail.split("-");
+    suffix = s.slice(0, 4);
+    random = rest.join("").slice(0, 6);
+  } else if (tail.length > 4) {
+    const t = tail.slice(0, 10);
+    const suffixLen = Math.min(4, Math.max(2, t.length - 6));
+    suffix = t.slice(0, suffixLen);
+    random = t.slice(suffixLen, suffixLen + 6);
+  } else {
+    suffix = tail;
   }
 
-  const parts: string[] = [];
-  if (cleaned.length > 0) parts.push(cleaned.slice(0, 3));
-  if (cleaned.length > 3) parts.push(cleaned.slice(3, 6));
-  if (cleaned.length > 6) parts.push(cleaned.slice(6, 9));
-  return parts.join("-");
+  return [head, mid, suffix, random].filter((part) => part.length > 0).join("-");
 }
 
 export const EnterProjectCodeScreen: React.FC = () => {
@@ -71,7 +89,7 @@ export const EnterProjectCodeScreen: React.FC = () => {
     data: demoProjects = [],
     isFetching: loadingDemoCodes,
     refetch: refetchDemoProjects,
-  } = useDemoProjectsQuery(IS_DEMO_MODE);
+  } = useDemoProjectsQuery((process.env.EXPO_PUBLIC_DEMO_MODE === "true"));
 
   // Mutations
   const joinProjectMutation = useJoinProjectMutation();
@@ -86,7 +104,7 @@ export const EnterProjectCodeScreen: React.FC = () => {
     for (const p of demoProjects) {
       const contractorCode =
         p.joinCodes.find(
-          (jc) => jc.independenceTier === "CONTRACTOR_ENGINEER",
+          (jc) => jc.fieldPersonaType === "CONTRACTOR_EXECUTOR",
         ) || p.joinCodes[0];
       if (contractorCode) {
         options.push({
@@ -123,7 +141,7 @@ export const EnterProjectCodeScreen: React.FC = () => {
         .map((p) => {
           const code =
             p.joinCodes.find(
-              (jc) => jc.independenceTier === "CONTRACTOR_ENGINEER",
+              (jc) => jc.fieldPersonaType === "CONTRACTOR_EXECUTOR",
             ) || p.joinCodes[0];
           return code
             ? { code: code.code, projectName: p.name, codePrefix: p.codePrefix }
@@ -148,7 +166,7 @@ export const EnterProjectCodeScreen: React.FC = () => {
 
     const idx = autofillIndex % options.length;
     const selected = options[idx];
-    setProjectCode(formatJoinCodeInput(selected.code, projectCode));
+    setProjectCode(formatJoinCodeInput(selected.code));
     setAutofillIndex((prev) => prev + 1);
 
     Toast.show({
@@ -164,7 +182,7 @@ export const EnterProjectCodeScreen: React.FC = () => {
 
   // Validation
   const canSubmit = useMemo(() => {
-    return projectCode.trim().length >= 6 && projectCode.trim().length <= 11;
+    return isValidJoinCode(projectCode);
   }, [projectCode]);
 
   // Submit project code
@@ -176,7 +194,7 @@ export const EnterProjectCodeScreen: React.FC = () => {
         props: {
           title: "Valid Code Required",
           message:
-            "Please enter a valid project facility join code (e.g. LKK-402-CON).",
+            `Please enter a valid project join code (e.g. ${JOIN_CODE_EXAMPLE}).`,
         },
       });
       return;
@@ -192,19 +210,27 @@ export const EnterProjectCodeScreen: React.FC = () => {
         deviceOs: `${Platform.OS} ${Platform.Version}`,
       });
 
-      const isContractor =
-        result.sessionProfile.independenceTier === "CONTRACTOR_ENGINEER";
+      const requiresAssurance =
+        result.sessionProfile.requiresIdentityAssurance ||
+        result.sessionProfile.fieldPersonaType === "CONTRACTOR_EXECUTOR";
 
       await updateProfile({
         activeProjectCode: result.sessionProfile.joinCodeUsed,
         activeProjectId: result.sessionProfile.projectId,
         activeSessionId: result.sessionProfile.sessionId,
         activeSessionToken: result.accessToken,
-        activeIndependenceTier: result.sessionProfile.independenceTier,
-        assuranceStatus: isContractor ? "NOT_SUBMITTED" : "APPROVED",
+        activeRoleId: result.sessionProfile.roleId,
+        activeRoleCode: result.sessionProfile.roleCode,
+        activeRoleName: result.sessionProfile.roleName,
+        activeFieldPersonaType: result.sessionProfile.fieldPersonaType,
+        activeAssuranceWeight: result.sessionProfile.assuranceWeight,
+        activeRequiresIdentityAssurance:
+          result.sessionProfile.requiresIdentityAssurance,
+        activePermissions: result.sessionProfile.permissions || [],
+        assuranceStatus: requiresAssurance ? "NOT_SUBMITTED" : "APPROVED",
       });
 
-      if (isContractor) {
+      if (requiresAssurance) {
         navigation.navigate("AssuranceWizard");
       } else {
         navigation.reset({
@@ -258,13 +284,13 @@ export const EnterProjectCodeScreen: React.FC = () => {
             style={styles.codeInput}
             value={projectCode}
             onChangeText={(text) =>
-              setProjectCode((prev) => formatJoinCodeInput(text, prev))
+              setProjectCode(formatJoinCodeInput(text))
             }
-            placeholder="LKK-402-CON"
+            placeholder={JOIN_CODE_EXAMPLE}
             placeholderTextColor="#94A3B8"
             autoCapitalize="characters"
             autoCorrect={false}
-            maxLength={11}
+            maxLength={JOIN_CODE_MAX_LENGTH}
           />
         </View>
 
@@ -277,7 +303,7 @@ export const EnterProjectCodeScreen: React.FC = () => {
       </View>
 
       {/* Auto fill (Demo Mode only) */}
-      {IS_DEMO_MODE && (
+      {(process.env.EXPO_PUBLIC_DEMO_MODE === "true") && (
         <TouchableOpacity
           style={styles.autofillButton}
           onPress={handleAutofillDemoCode}

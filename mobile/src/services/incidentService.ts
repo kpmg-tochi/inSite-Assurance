@@ -8,7 +8,7 @@ export interface IncidentSubmissionResult {
   error?: string;
 }
 
-let memIncidents: any[] = [];
+const memIncidents: any[] = [];
 
 export async function submitIncidentReport(
   projectId: string,

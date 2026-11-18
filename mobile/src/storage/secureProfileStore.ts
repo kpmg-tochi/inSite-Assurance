@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
+import type { FieldPersonaType } from '@insite/shared';
 
 export interface LocalUserProfile {
   fullName: string;
@@ -12,7 +13,13 @@ export interface LocalUserProfile {
   activeProjectCode?: string | null;
   activeSessionId?: string | null;
   activeSessionToken?: string | null;
-  activeIndependenceTier?: string | null;
+  activeRoleId?: string | null;
+  activeRoleCode?: string | null;
+  activeRoleName?: string | null;
+  activeFieldPersonaType?: FieldPersonaType | null;
+  activeAssuranceWeight?: number | null;
+  activeRequiresIdentityAssurance?: boolean;
+  activePermissions?: string[];
   assuranceStatus?: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'NOT_SUBMITTED';
   onboardingCompleted: boolean;
 }
@@ -87,8 +94,19 @@ export async function updateLocalProfile(
     activeProjectCode: updates.activeProjectCode ?? existing?.activeProjectCode ?? null,
     activeSessionId: updates.activeSessionId ?? existing?.activeSessionId ?? null,
     activeSessionToken: updates.activeSessionToken ?? existing?.activeSessionToken ?? null,
-    activeIndependenceTier:
-      updates.activeIndependenceTier ?? existing?.activeIndependenceTier ?? null,
+    activeRoleId: updates.activeRoleId ?? existing?.activeRoleId ?? null,
+    activeRoleCode: updates.activeRoleCode ?? existing?.activeRoleCode ?? null,
+    activeRoleName: updates.activeRoleName ?? existing?.activeRoleName ?? null,
+    activeFieldPersonaType:
+      updates.activeFieldPersonaType ?? existing?.activeFieldPersonaType ?? null,
+    activeAssuranceWeight:
+      updates.activeAssuranceWeight ?? existing?.activeAssuranceWeight ?? null,
+    activeRequiresIdentityAssurance:
+      updates.activeRequiresIdentityAssurance ??
+      existing?.activeRequiresIdentityAssurance ??
+      false,
+    activePermissions:
+      updates.activePermissions ?? existing?.activePermissions ?? [],
     assuranceStatus:
       updates.assuranceStatus ?? existing?.assuranceStatus ?? 'NOT_SUBMITTED',
     onboardingCompleted:
@@ -111,7 +129,13 @@ export async function clearActiveProjectSession(): Promise<void> {
       activeProjectCode: null,
       activeSessionId: null,
       activeSessionToken: null,
-      activeIndependenceTier: null,
+      activeRoleId: null,
+      activeRoleCode: null,
+      activeRoleName: null,
+      activeFieldPersonaType: null,
+      activeAssuranceWeight: null,
+      activeRequiresIdentityAssurance: false,
+      activePermissions: [],
       assuranceStatus: 'NOT_SUBMITTED',
     });
   }

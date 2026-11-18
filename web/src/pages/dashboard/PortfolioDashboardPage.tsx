@@ -11,9 +11,10 @@ import {
   formatNaira,
 } from "../../lib/formatters";
 import { LiveGeospatialMap } from "../../components/LiveGeospatialMap";
-import { formatIndependenceTierText } from "../../components/EvidenceBadge";
+import { formatReporterRoleBadge } from "../../components/EvidenceBadge";
 import { useAuth } from "../../lib/auth-context";
 import ContractorVerificationQueue from "../../components/ContractorVerificationQueue";
+import { KpiCard } from "../../components/common";
 
 interface PortfolioDashboardPageProps {
   project: ProjectSummaryDto;
@@ -28,7 +29,7 @@ export function PortfolioDashboardPage({
   latestIpc,
   onNavigateToReconciliation,
 }: PortfolioDashboardPageProps) {
-  const { user } = useAuth();
+  const { hasPermission } = useAuth();
 
   const activeTranche =
     project.tranches.find((t) => !t.isReleased) || project.tranches[0] || null;
@@ -44,95 +45,77 @@ export function PortfolioDashboardPage({
 
   const latestConfirmedLog = evidenceLogs[0] || null;
 
-  const actionButtonLabel =
-    user?.role === "LENDER"
-      ? "Review Tranche Release"
-      : user?.role === "CONTRACTOR"
-        ? "Manage IPC Claims"
-        : "Review IPC";
+  const isContractorOnly =
+    hasPermission("ipc:submit_claim") && !hasPermission("ipc:certify_valuation");
+  const isLenderApprover =
+    hasPermission("tranche:approve_disbursement") &&
+    !hasPermission("ipc:certify_valuation");
+
+  const actionButtonLabel = isLenderApprover
+    ? "Review Tranche Release"
+    : isContractorOnly
+      ? "Manage IPC Claims"
+      : "Review IPC";
 
   return (
     <div className="space-y-3">
       {/* 1. Top ~50% Viewport Live Geospatial Map */}
       <LiveGeospatialMap project={project} evidenceLogs={evidenceLogs} />
 
-      {/* 2. Minimal 3-Column KPI Strip (Sparse Lucide Icons only in top-left icon squares) */}
+      {/* 2. Minimal 3-Column Standard KPI Card Strip */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-brand-primary flex items-center justify-center">
-              <Wallet className="w-4 h-4" />
-            </div>
-            <span className="text-[11px] font-medium text-slate-400">
-              {user?.role === "CONTRACTOR"
-                ? "Contract Value & Drawdowns"
-                : "Facility Commitment"}
-            </span>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">
-              {formatCompactNaira(project.totalBudgetNgn)}
-            </div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              {formatCompactNaira(project.disbursedToDateNgn)} Disbursed (
-              {project.totalBudgetNgn > 0
-                ? (
-                    (project.disbursedToDateNgn / project.totalBudgetNgn) *
-                    100
-                  ).toFixed(1)
-                : "0.0"}
-              %)
-            </div>
-          </div>
-        </div>
+        <KpiCard
+          icon={<Wallet className="w-4 h-4" />}
+          iconVariant="blue"
+          title={
+            isContractorOnly
+              ? "Contract Value & Drawdowns"
+              : "Project Commitment"
+          }
+          value={formatCompactNaira(project.totalBudgetNgn)}
+          subtitle={`${formatCompactNaira(project.disbursedToDateNgn)} Disbursed (${
+            project.totalBudgetNgn > 0
+              ? (
+                  (project.disbursedToDateNgn / project.totalBudgetNgn) *
+                  100
+                ).toFixed(1)
+              : "0.0"
+          }%)`}
+        />
 
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4" />
-            </div>
-            <span className="text-[11px] font-medium text-slate-400">
-              Verified Progress
-            </span>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">
-              {project.certifiedProgressPct.toFixed(1)}%
-            </div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              {latestIpc
-                ? `Latest Claim: IPC #${String(latestIpc.ipcNumber).padStart(
-                    2,
-                    "0",
-                  )} (${formatCompactNaira(latestIpc.totalClaimedAmountNgn)})`
-                : "Baseline established"}
-            </div>
-          </div>
-        </div>
+        <KpiCard
+          icon={<CheckCircle2 className="w-4 h-4" />}
+          iconVariant="emerald"
+          title="Verified Progress"
+          value={`${project.certifiedProgressPct.toFixed(1)}%`}
+          subtitle={
+            latestIpc
+              ? `Latest Claim: IPC #${String(latestIpc.ipcNumber).padStart(
+                  2,
+                  "0",
+                )} (${formatCompactNaira(latestIpc.totalClaimedAmountNgn)})`
+              : "Baseline established"
+          }
+        />
 
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
-              <AlertTriangle className="w-4 h-4" />
-            </div>
-            <span className="text-[11px] font-medium text-slate-400">
-              {user?.role === "CONTRACTOR"
-                ? "Open Monitor Queries"
-                : "Reconciliation Alerts"}
+        <KpiCard
+          icon={<AlertTriangle className="w-4 h-4" />}
+          iconVariant="amber"
+          title={
+            isContractorOnly
+              ? "Open Monitor Queries"
+              : "Reconciliation Alerts"
+          }
+          value={`${project.openConflictCount} ${
+            isContractorOnly ? "Open Query" : "Conflict"
+          }${project.openConflictCount === 1 ? "" : "s"}`}
+          subtitle={
+            <span className="text-amber-700 font-medium">
+              {project.unfulfilledHoldPointCount} Unfulfilled Hold-Point
+              {project.unfulfilledHoldPointCount === 1 ? "" : "s"}
             </span>
-          </div>
-          <div className="mt-3 flex items-end justify-between">
-            <div>
-              <div className="text-2xl font-bold text-slate-900">
-                {project.openConflictCount}{" "}
-                {user?.role === "CONTRACTOR" ? "Open Query" : "Conflict"}
-                {project.openConflictCount === 1 ? "" : "s"}
-              </div>
-              <div className="text-xs text-amber-700 font-medium mt-0.5">
-                {project.unfulfilledHoldPointCount} Unfulfilled Hold-Point
-                {project.unfulfilledHoldPointCount === 1 ? "" : "s"}
-              </div>
-            </div>
+          }
+          action={
             <button
               type="button"
               onClick={onNavigateToReconciliation}
@@ -140,8 +123,8 @@ export function PortfolioDashboardPage({
             >
               {actionButtonLabel}
             </button>
-          </div>
-        </div>
+          }
+        />
       </div>
 
       {/* 3. Bottom 3-Card Telemetry, Field Log & Tranche Readiness Grid */}
@@ -209,8 +192,9 @@ export function PortfolioDashboardPage({
                     {latestConfirmedLog.boqItem?.wbsCode || "General"}
                   </span>
                   <span className="text-[11px] text-slate-500">
-                    {formatIndependenceTierText(
-                      latestConfirmedLog.independenceTier,
+                    {formatReporterRoleBadge(
+                      latestConfirmedLog.reporterRoleName,
+                      latestConfirmedLog.fieldPersonaType,
                     )}
                   </span>
                 </div>
@@ -243,7 +227,7 @@ export function PortfolioDashboardPage({
           <div>
             <div className="flex items-center justify-between">
               <div className="text-xs font-bold text-slate-900">
-                Active Facility Tranche Readiness
+                Active Project Tranche Readiness
               </div>
               {activeTranche && (
                 <span className="text-[10px] font-bold text-brand-primary bg-blue-50 px-2 py-0.5 rounded">
@@ -302,7 +286,7 @@ export function PortfolioDashboardPage({
               </div>
             ) : (
               <p className="text-xs text-slate-400 mt-4">
-                No facility tranches configured.
+                No project tranches configured.
               </p>
             )}
           </div>

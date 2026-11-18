@@ -10,10 +10,42 @@ datasource db {
 // ENUMS
 // ============================================================================
 
-enum UserRole {
-  MONITOR
-  LENDER
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  TRIAL
+}
+
+enum RoleSurface {
+  WEB
+  MOBILE
+  BOTH
+}
+
+enum FieldPersonaType {
+  INDEPENDENT_VERIFIER
+  CONTRACTOR_EXECUTOR
+  NONE
+}
+
+enum OrganizationCategory {
+  ADVISORY_MONITOR
+  FINANCIER_LENDER
   CONTRACTOR
+  CLIENT_OWNER
+  GOVERNMENT_MDA
+  OTHER
+}
+
+enum PermissionCategory {
+  TENANT_ADMIN
+  PORTFOLIO_PROJECTS
+  BOQ_SCHEDULE
+  MOBILIZATION_ASSURANCE
+  FIELD_PRESENCE
+  REPORT_APPROVALS
+  FINANCIAL_IPC
+  AUDIT_CLOSEOUT
 }
 
 enum ProfessionalLicenseType {
@@ -25,11 +57,7 @@ enum ProfessionalLicenseType {
   OTHER
 }
 
-enum IndependenceTier {
-  MONITOR_INSPECTOR
-  INDEPENDENT_RESIDENT
-  CONTRACTOR_ENGINEER
-}
+// FieldPersonaType replaces static IndependenceTier enum on Role & FieldAgentSession
 
 enum GeofenceMode {
   RADIAL
@@ -121,11 +149,18 @@ enum ContractorAssuranceStatus {
 }
 
 enum AuditActionType {
+  TENANT_CREATED
+  TENANT_BRANDING_UPDATED
+  ROLE_CREATED
+  ROLE_UPDATED
+  ROLE_DELETED
+  USER_PROJECT_ASSIGNED
   PROJECT_CREATED
   BASELINE_UPDATED
   BOQ_UPLOADED
   JOIN_CODE_ISSUED
   FIELD_AGENT_JOINED
+  FIELD_SESSION_STATUS_UPDATED
   CONTRACTOR_ASSURANCE_SUBMITTED
   CONTRACTOR_ASSURANCE_APPROVED
   CONTRACTOR_ASSURANCE_REJECTED
@@ -139,8 +174,14 @@ enum AuditActionType {
   VALUATION_REPORT_CERTIFIED
   LENDER_TRANCHE_DECIDED
   INCIDENT_REPORT_SUBMITTED
+  INCIDENT_STATUS_UPDATED
   PUSH_TOKEN_REGISTERED
   WORKDAY_REPORT_SUBMITTED
+  USER_CREATED
+  USER_UPDATED
+  USER_DEACTIVATED
+  JOIN_CODE_ROTATED
+  LOGIN_FAILED_LOCKOUT
 }
 
 enum MobileNotificationType {
@@ -166,48 +207,163 @@ enum NotificationActionType {
 // MODELS
 // ============================================================================
 
-model Organization {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  roleType  UserRole
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// ============================================================================
+// MULTI-TENANCY & RELATIONAL RBAC MODELS
+// ============================================================================
 
+model Tenant {
+  id              String       @id @default(uuid()) @db.Uuid
+  name            String
+  slug            String       @unique
+  status          TenantStatus @default(ACTIVE)
+  defaultCurrency String       @default("NGN")
+  timezone        String       @default("Africa/Lagos")
+  brandingConfig  Json         @default("{}")
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  organizations Organization[]
+  roles         Role[]
+  users         User[]
+  projects      Project[]
+  auditLogs     AuditLog[]
+
+  @@map("tenants")
+}
+
+model Permission {
+  id          String             @id @default(uuid()) @db.Uuid
+  key         String             @unique
+  name        String
+  description String
+  category    PermissionCategory
+  surface     RoleSurface        @default(WEB)
+  createdAt   DateTime           @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@index([category])
+  @@map("permissions")
+}
+
+model Role {
+  id                        String           @id @default(uuid()) @db.Uuid
+  tenantId                  String           @db.Uuid
+  name                      String
+  code                      String
+  codeSuffix                String?
+  description               String?
+  surface                   RoleSurface      @default(WEB)
+  fieldPersonaType          FieldPersonaType @default(NONE)
+  assuranceWeight           Float            @default(1.0)
+  requiresIdentityAssurance Boolean          @default(false)
+  isSystemDefault           Boolean          @default(false)
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+
+  tenant             Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rolePermissions    RolePermission[]
+  users              User[]
+  projectAssignments UserProjectAssignment[]
+  joinCodes          ProjectJoinCode[]
+  fieldSessions      FieldAgentSession[]
+
+  @@unique([tenantId, code])
+  @@unique([tenantId, codeSuffix])
+  @@index([tenantId, surface])
+  @@map("roles")
+}
+
+model RolePermission {
+  id           String   @id @default(uuid()) @db.Uuid
+  roleId       String   @db.Uuid
+  permissionId String   @db.Uuid
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model Organization {
+  id        String               @id @default(uuid()) @db.Uuid
+  tenantId  String               @db.Uuid
+  name      String
+  category  OrganizationCategory @default(OTHER)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   users              User[]
   monitoredProjects  Project[] @relation("MonitorOrganization")
   lenderProjects     Project[] @relation("LenderOrganization")
   contractedProjects Project[] @relation("ContractorOrganization")
 
-  @@index([roleType])
+  @@index([tenantId])
+  @@index([category])
 }
 
 model User {
   id                        String                   @id @default(uuid()) @db.Uuid
+  tenantId                  String                   @db.Uuid
   email                     String                   @unique
   passwordHash              String
   fullName                  String
-  role                      UserRole
+  isPlatformSuperAdmin      Boolean                  @default(false)
+  roleId                    String                   @db.Uuid
   organizationId            String                   @db.Uuid
   professionalLicenseType   ProfessionalLicenseType?
   professionalLicenseNumber String?
   isActive                  Boolean                  @default(true)
+  mustChangePassword        Boolean                  @default(false)
+  tokenVersion              Int                      @default(0)
+  failedLoginCount          Int                      @default(0)
+  lockedUntil               DateTime?
+  lastLoginAt               DateTime?
   createdAt                 DateTime                 @default(now())
   updatedAt                 DateTime                 @updatedAt
 
-  organization     Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  certifiedReports ValuationReport[] @relation("CertifiedByMonitor")
-  trancheDecisions TrancheDecision[] @relation("DecidedByLender")
-  pushTokens       PushToken[]
-  raisedReportQueries ReportQuery[]  @relation("RaisedReportQueries")
+  tenant              Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  notificationReads   WebNotificationRead[]
+  role                Role                    @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  organization        Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  projectAssignments  UserProjectAssignment[]
+  certifiedReports    ValuationReport[]       @relation("CertifiedByMonitor")
+  trancheDecisions    TrancheDecision[]       @relation("DecidedByLender")
+  pushTokens          PushToken[]
+  raisedReportQueries ReportQuery[]           @relation("RaisedReportQueries")
 
+  @@index([tenantId])
   @@index([organizationId])
-  @@index([role])
+  @@index([roleId])
+}
+
+model UserProjectAssignment {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  projectId String   @db.Uuid
+  roleId    String?  @db.Uuid
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  role    Role?   @relation(fields: [roleId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, projectId])
+  @@index([userId])
+  @@index([projectId])
+  @@map("user_project_assignments")
 }
 
 model Project {
   id                   String           @id @default(uuid()) @db.Uuid
+  tenantId             String           @db.Uuid
   name                 String
-  codePrefix           String           @unique // e.g., "LKK-402"
+  codePrefix           String // e.g., "LKK-402", unique per tenant
   stateLocation        String // e.g., "Lagos State"
   lgaLocation          String?
   description          String?
@@ -228,26 +384,30 @@ model Project {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  tenant                 Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   monitorOrganization    Organization @relation("MonitorOrganization", fields: [monitorOrganizationId], references: [id])
   lenderOrganization     Organization @relation("LenderOrganization", fields: [lenderOrganizationId], references: [id])
   contractorOrganization Organization @relation("ContractorOrganization", fields: [contractorOrganizationId], references: [id])
 
-  joinCodes       ProjectJoinCode[]
-  fieldSessions   FieldAgentSession[]
-  tranches        FacilityTranche[]
-  boqItems        BoqItem[]
-  evidenceLogs    FieldEvidenceLog[]
-  ipcClaims       IpcClaim[]
-  auditLogs       AuditLog[]
-  incidentReports IncidentReport[]
-  workdayReports  WorkdayReport[]
-  telemetryPings  SiteTelemetryPing[]
-  morningBriefs   MorningDeliverableBrief[]
-  notifications   MobileNotification[]
-  reportQueries   ReportQuery[]
-  wbsChatMessages WbsChatMessage[]
+  userAssignments  UserProjectAssignment[]
+  joinCodes        ProjectJoinCode[]
+  fieldSessions    FieldAgentSession[]
+  tranches         FacilityTranche[]
+  boqItems         BoqItem[]
+  evidenceLogs     FieldEvidenceLog[]
+  ipcClaims        IpcClaim[]
+  auditLogs        AuditLog[]
+  incidentReports  IncidentReport[]
+  workdayReports   WorkdayReport[]
+  telemetryPings   SiteTelemetryPing[]
+  morningBriefs    MorningDeliverableBrief[]
+  notifications    MobileNotification[]
+  reportQueries    ReportQuery[]
+  wbsChatMessages  WbsChatMessage[]
   webNotifications WebNotification[]
 
+  @@unique([tenantId, codePrefix])
+  @@index([tenantId])
   @@index([portfolioHealth])
   @@index([monitorOrganizationId])
   @@index([lenderOrganizationId])
@@ -255,25 +415,33 @@ model Project {
 }
 
 model ProjectJoinCode {
-  id               String           @id @default(uuid()) @db.Uuid
-  projectId        String           @db.Uuid
-  code             String           @unique // e.g., "LKK-402-INS", "LKK-402-COW", "LKK-402-CON"
-  independenceTier IndependenceTier
-  isActive         Boolean          @default(true)
-  expiresAt        DateTime?
-  createdAt        DateTime         @default(now())
+  id            String    @id @default(uuid()) @db.Uuid
+  projectId     String    @db.Uuid
+  roleId        String    @db.Uuid
+  code          String    @unique // e.g., "LKK-402-INS-7K2QXM"
+  isActive      Boolean   @default(true)
+  expiresAt     DateTime?
+  maxUses       Int?
+  useCount      Int       @default(0)
+  rotatedFromId String?   @db.Uuid
+  createdAt     DateTime  @default(now())
 
   project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  role          Role                @relation(fields: [roleId], references: [id], onDelete: Restrict)
   fieldSessions FieldAgentSession[]
 
   @@index([projectId])
+  @@index([roleId])
 }
 
 model FieldAgentSession {
   id               String           @id @default(uuid()) @db.Uuid
   projectId        String           @db.Uuid
   joinCodeId       String           @db.Uuid
-  independenceTier IndependenceTier
+  roleId           String           @db.Uuid
+  roleNameSnapshot String
+  fieldPersonaType FieldPersonaType @default(INDEPENDENT_VERIFIER)
+  assuranceWeight  Float            @default(1.0)
   agentFullName    String
   agentPhoneNumber String
   agentPinHash     String?
@@ -282,10 +450,13 @@ model FieldAgentSession {
   deviceOs         String?
   deviceSecretHash String?
   isActive         Boolean          @default(true)
+  revokedAt        DateTime?
+  revokedByUserId  String?          @db.Uuid
+  revokeReason     String?
   lastSyncAt       DateTime?
   createdAt        DateTime         @default(now())
 
-  // Contractor Identity & Competence Assurance
+  // Identity & Competence Assurance
   assuranceStatus    ContractorAssuranceStatus @default(APPROVED)
   idDocumentType     String?
   idDocumentUrl      String?
@@ -301,8 +472,9 @@ model FieldAgentSession {
   reviewedAt         DateTime?
   rejectionReason    String?
 
-  project         Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  joinCode        ProjectJoinCode     @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
+  project         Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  joinCode        ProjectJoinCode      @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
+  role            Role                 @relation(fields: [roleId], references: [id], onDelete: Restrict)
   evidenceLogs    FieldEvidenceLog[]
   incidentReports IncidentReport[]
   workdayReports  WorkdayReport[]
@@ -311,7 +483,7 @@ model FieldAgentSession {
   notifications   MobileNotification[]
   wbsChatMessages WbsChatMessage[]
 
-  @@index([projectId, independenceTier])
+  @@index([projectId, roleId])
   @@index([projectId, assuranceStatus])
   @@index([deviceId])
 }
@@ -401,7 +573,10 @@ model FieldEvidenceLog {
   boqItemId        String?           @db.Uuid
   fieldSessionId   String            @db.Uuid
   clientCaptureId  String            @unique @db.Uuid
-  independenceTier IndependenceTier
+  reporterRoleId   String?           @db.Uuid
+  reporterRoleName String            @default("Field Reporter")
+  fieldPersonaType FieldPersonaType  @default(INDEPENDENT_VERIFIER)
+  assuranceWeight  Float             @default(1.0)
   status           EvidenceLogStatus @default(AWAITING_CONFIRMATION)
 
   // Hardware GPS & Corridor Verification
@@ -445,7 +620,7 @@ model FieldEvidenceLog {
 
   @@index([projectId, status])
   @@index([projectId, boqItemId])
-  @@index([projectId, independenceTier])
+  @@index([projectId, reporterRoleId])
 }
 
 model EvidenceMedia {
@@ -504,13 +679,14 @@ model IpcLineItem {
   contractorRemarks    String?
 
   // AI Auditor Co-Pilot Output (Never legally certifies completion %)
-  aiEvidenceRating            EvidenceStrengthRating @default(UNSUPPORTED)
-  aiRationale                 String?
-  visitPlannerFlag            Boolean                @default(false)
-  visitPlannerReason          String?
-  missingHoldPointFlag        Boolean                @default(false)
-  highestCorroboratingTier    IndependenceTier?
-  corroboratingEvidenceLogIds Json                   @default("[]")
+  aiEvidenceRating             EvidenceStrengthRating @default(UNSUPPORTED)
+  aiRationale                  String?
+  visitPlannerFlag             Boolean                @default(false)
+  visitPlannerReason           String?
+  missingHoldPointFlag         Boolean                @default(false)
+  highestCorroboratingRoleName String?
+  highestCorroboratingWeight   Float?
+  corroboratingEvidenceLogIds  Json                   @default("[]")
 
   // Human Monitor (QS / COREN) Certified Valuation
   monitorCertifiedPct Decimal? @db.Decimal(5, 2)
@@ -597,7 +773,9 @@ model TrancheDecision {
 
 model AuditLog {
   id               String          @id @default(uuid()) @db.Uuid
-  projectId        String          @db.Uuid
+  tenantId         String          @db.Uuid
+  projectId        String?         @db.Uuid
+  seq              BigInt
   actorType        AuditActorType
   actorId          String
   actorDisplayName String
@@ -608,9 +786,12 @@ model AuditLog {
   entryHash        String          @unique
   createdAt        DateTime        @default(now())
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@index([projectId, createdAt])
+  @@unique([tenantId, projectId, seq])
+  @@index([projectId, seq])
+  @@index([tenantId, seq])
 }
 
 model PushToken {
@@ -797,8 +978,8 @@ model WbsChatMessage {
   reportQueryId   String?  @db.Uuid
   fieldSessionId  String?  @db.Uuid
   senderName      String
-  senderRole      String   // AI_CO_PILOT | MONITOR | ENGINEER | INSPECTOR
-  messageType     String   // AI_QUERY | MONITOR_QUERY | QUERY_RESPONSE | TEXT_COMMENT | PHOTO | VOICE_NOTE
+  senderRole      String // AI_CO_PILOT | MONITOR | ENGINEER | INSPECTOR
+  messageType     String // AI_QUERY | MONITOR_QUERY | QUERY_RESPONSE | TEXT_COMMENT | PHOTO | VOICE_NOTE
   textContent     String?  @db.Text
   mediaUrls       Json     @default("[]")
   latitude        Float?
@@ -818,20 +999,33 @@ model WbsChatMessage {
 }
 
 model WebNotification {
-  id          String    @id @default(uuid()) @db.Uuid
-  projectId   String    @db.Uuid
-  targetRole  String    @default("MONITOR") // MONITOR | LENDER | CONTRACTOR
-  category    String    // REPORT_RESUBMITTED | CONFLICT_FLAG | CONTRACTOR_ONBOARDING | TRANCHE_DISBURSEMENT | MONITOR_QUERY | AI_OMISSION_FLAG
-  title       String
-  description String    @db.Text
-  actionUrl   String?
-  metadata    Json      @default("{}")
-  isRead      Boolean   @default(false)
-  readAt      DateTime?
-  createdAt   DateTime  @default(now())
+  id                  String   @id @default(uuid()) @db.Uuid
+  projectId           String   @db.Uuid
+  targetPermissionKey String   @default("reports:view_all")
+  targetRoleId        String?  @db.Uuid
+  category            String // REPORT_RESUBMITTED | CONFLICT_FLAG | CONTRACTOR_ONBOARDING | TRANCHE_DISBURSEMENT | MONITOR_QUERY | AI_OMISSION_FLAG
+  title               String
+  description         String   @db.Text
+  actionUrl           String?
+  metadata            Json     @default("{}")
+  createdAt           DateTime @default(now())
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reads   WebNotificationRead[]
 
-  @@index([projectId, targetRole, isRead, createdAt])
+  @@index([projectId, targetPermissionKey, createdAt])
   @@map("web_notifications")
+}
+
+model WebNotificationRead {
+  notificationId String   @db.Uuid
+  userId         String   @db.Uuid
+  readAt         DateTime @default(now())
+
+  notification WebNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([notificationId, userId])
+  @@index([userId])
+  @@map("web_notification_reads")
 }

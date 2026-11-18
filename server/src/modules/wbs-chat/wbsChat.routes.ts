@@ -1,11 +1,12 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { guardProjectRoutes } from '../../utils/accessControl';
 import {
   CreateWbsChatMessageRequestSchema,
   CreateWorkdayReportQueryRequestSchema,
 } from '@insite/shared';
 import {
-  requireAnyAuth,
-  requireRole,
+  requireAnyAuthWithWebPermission,
+  requirePermission,
 } from '../../middleware/auth.middleware';
 import { validateBody } from '../../middleware/validate.middleware';
 import {
@@ -14,7 +15,7 @@ import {
   postWbsChatMessage,
 } from './wbsChat.service';
 
-const router = Router();
+const router = guardProjectRoutes(Router());
 
 /**
  * POST /api/v1/projects/:projectId/workday-reports/:reportId/queries
@@ -22,12 +23,13 @@ const router = Router();
  */
 router.post(
   '/:projectId/workday-reports/:reportId/queries',
-  requireRole('MONITOR'),
+  requirePermission('reports:raise_query'),
   validateBody(CreateWorkdayReportQueryRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const projectId = String(req.params.projectId);
       const created = await createWorkdayReportQuery({
-        projectId: String(req.params.projectId),
+        projectId,
         reportId: String(req.params.reportId),
         webUser: req.webUser!,
         queryText: req.body.queryText,
@@ -45,7 +47,7 @@ router.post(
  */
 router.get(
   '/:projectId/boq/:boqItemId/messages',
-  requireAnyAuth,
+  requireAnyAuthWithWebPermission('reports:view_all'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const messages = await listBoqChatMessages({
@@ -65,17 +67,17 @@ router.get(
  */
 router.post(
   '/:projectId/boq/:boqItemId/messages',
-  requireAnyAuth,
+  requireAnyAuthWithWebPermission('reports:raise_query', 'reports:respond_query'),
   validateBody(CreateWbsChatMessageRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       let senderName = req.webUser?.fullName || 'Field Engineer';
-      let senderRole = req.webUser?.role || 'ENGINEER';
+      let senderRole = req.webUser?.roleName || 'ENGINEER';
 
       if (req.fieldAgent) {
         senderName = req.fieldAgent.agentFullName || 'Field Engineer';
         senderRole =
-          req.fieldAgent.independenceTier === 'CONTRACTOR_ENGINEER'
+          req.fieldAgent.fieldPersonaType === 'CONTRACTOR_EXECUTOR'
             ? 'ENGINEER'
             : 'INSPECTOR';
       }

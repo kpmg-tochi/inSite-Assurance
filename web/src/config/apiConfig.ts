@@ -79,7 +79,12 @@ api.interceptors.response.use(
     const serverMessage =
       error.response?.data?.error?.message || error.response?.data?.message;
 
-    if (status === 401) {
+    // A 401 from the credential endpoints means "wrong password", not "session ended":
+    // let the form show the error instead of signing the user out.
+    const url: string = error.config?.url ?? '';
+    const isCredentialRequest = /\/auth\/(login|change-password)$/.test(url);
+
+    if (status === 401 && !isCredentialRequest) {
       updateToken(null);
       if (onUnauthorizedCallback) {
         onUnauthorizedCallback();

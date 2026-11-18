@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   ConditionPrecedentStatusEnum,
-  IndependenceTierEnum,
+  FieldPersonaTypeEnum,
   PortfolioHealthEnum,
   ReportingCadenceEnum,
 } from '../enums';
@@ -58,17 +58,37 @@ export const UpdateProjectBaselineSchema = CreateProjectRequestSchema.partial();
 export type UpdateProjectBaseline = z.infer<typeof UpdateProjectBaselineSchema>;
 
 /**
- * Project Join Code DTO
+ * Project Join Code DTO (Dynamic Mobile Role Binding)
  */
 export const ProjectJoinCodeDtoSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().uuid(),
-  code: z.string(), // e.g., "LKK-402-INS", "LKK-402-COW", "LKK-402-CON"
-  independenceTier: IndependenceTierEnum,
+  code: z.string(), // e.g., "LKK-402-CON-7K2QXM"
+  roleId: z.string().uuid(),
+  roleCode: z.string(),
+  roleName: z.string(),
+  fieldPersonaType: FieldPersonaTypeEnum,
+  assuranceWeight: z.number(),
+  requiresIdentityAssurance: z.boolean(),
   isActive: z.boolean(),
   expiresAt: z.string().datetime().nullable(),
+  maxUses: z.number().int().positive().nullable().optional(),
+  useCount: z.number().int().nonnegative().optional(),
 });
 export type ProjectJoinCodeDto = z.infer<typeof ProjectJoinCodeDtoSchema>;
+
+export const IssueJoinCodeRequestSchema = z.object({
+  roleId: z.string().uuid(),
+  expiresAt: z.string().datetime().nullable().optional(),
+  maxUses: z.number().int().positive().max(10000).nullable().optional(),
+});
+export type IssueJoinCodeRequest = z.infer<typeof IssueJoinCodeRequestSchema>;
+
+export const RotateJoinCodeRequestSchema = z.object({
+  expiresAt: z.string().datetime().nullable().optional(),
+  maxUses: z.number().int().positive().max(10000).nullable().optional(),
+});
+export type RotateJoinCodeRequest = z.infer<typeof RotateJoinCodeRequestSchema>;
 
 /**
  * Portfolio Map Summary Item (Used by Lender National Geospatial Portfolio Map)

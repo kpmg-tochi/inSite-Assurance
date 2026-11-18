@@ -7,13 +7,16 @@ import {
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
-import { FieldAgentJwtPayload } from '../../middleware/auth.middleware';
+import { FieldAgentJwtPayload, WebJwtPayload } from '../../middleware/auth.middleware';
 import { whisperService } from '../../integrations/whisper.service';
+import { assertProjectObjectKey, storageService } from '../../integrations/storage.service';
 import { azureOpenAiService } from '../../integrations/azure-openai.service';
 import { screenCaptureIntegrity } from '../../utils/integrity';
 import { recordAuditEvent } from '../audit/audit.service';
+import { loadBoqItemInProject } from '../../utils/ownership';
+import { canSeeFieldSessionDetail, serializeEvidenceLog } from '../../utils/serializers';
 
-export async function listProjectEvidenceTimeline(projectId: string) {
+export async function listProjectEvidenceTimeline(projectId: string, webUser?: WebJwtPayload) {
   const logs = await prisma.fieldEvidenceLog.findMany({
     where: { projectId },
     orderBy: { capturedAtDevice: 'desc' },
@@ -32,7 +35,10 @@ export async function listProjectEvidenceTimeline(projectId: string) {
           id: true,
           agentFullName: true,
           agentPhoneNumber: true,
-          independenceTier: true,
+          roleId: true,
+          roleNameSnapshot: true,
+          fieldPersonaType: true,
+          assuranceWeight: true,
           deviceModel: true,
         },
       },
@@ -40,7 +46,8 @@ export async function listProjectEvidenceTimeline(projectId: string) {
     },
   });
 
-  return logs;
+  const detailedSessions = canSeeFieldSessionDetail(webUser);
+  return logs.map((log) => serializeEvidenceLog(log, { detailedSessions }));
 }
 
 export async function submitEvidenceForAiExtraction(params: {
@@ -67,6 +74,12 @@ export async function submitEvidenceForAiExtraction(params: {
 
   if (!project) {
     throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
+  }
+  for (const media of params.input.mediaAttachments) {
+    assertProjectObjectKey(media.objectKey, project.tenantId, project.id);
+  }
+  if (params.input.boqItemId) {
+    await loadBoqItemInProject(prisma, project.id, params.input.boqItemId);
   }
 
   // 1. Run Turf.js Radial or Linear Corridor Chainage Verification
@@ -101,7 +114,10 @@ export async function submitEvidenceForAiExtraction(params: {
           boqItemId: params.input.boqItemId ?? null,
           fieldSessionId: params.fieldAgent.sessionId,
           clientCaptureId: params.input.hardwareMetadata.clientCaptureId,
-          independenceTier: params.fieldAgent.independenceTier,
+          reporterRoleId: params.fieldAgent.roleId,
+          reporterRoleName: params.fieldAgent.roleName,
+          fieldPersonaType: params.fieldAgent.fieldPersonaType,
+          assuranceWeight: params.fieldAgent.assuranceWeight,
           status: 'QUEUED_OFFLINE',
           latitude: params.input.hardwareMetadata.latitude,
           longitude: params.input.hardwareMetadata.longitude,
@@ -142,7 +158,7 @@ export async function submitEvidenceForAiExtraction(params: {
             evidenceLogId: created.id,
             mediaType: media.mediaType,
             objectKey: media.objectKey,
-            fileUrl: media.publicOrSignedUrl ?? null,
+            fileUrl: null,
             mimeType: media.mimeType,
             byteSize: media.byteSize,
             sha256FileHash: media.sha256FileHash,
@@ -157,7 +173,16 @@ export async function submitEvidenceForAiExtraction(params: {
     });
 
     return {
-      ...stagedLog,
+      evidenceLogId: stagedLog.id,
+      clientCaptureId: stagedLog.clientCaptureId,
+      status: stagedLog.status,
+      reporterRoleId: stagedLog.reporterRoleId ?? params.fieldAgent.roleId,
+      reporterRoleName: stagedLog.reporterRoleName,
+      fieldPersonaType: stagedLog.fieldPersonaType,
+      assuranceWeight: stagedLog.assuranceWeight,
+      integrityPassed: integrityResult.integrityPassed,
+      integrityFlags: integrityResult.integrityFlags,
+      capturedAtDevice: stagedLog.capturedAtDevice.toISOString(),
       isUnverifiedContractorQueued: true,
       proposedExtraction: {
         normalizedSummary:
@@ -180,8 +205,12 @@ export async function submitEvidenceForAiExtraction(params: {
   let rawWhisperTranscript: string | null = null;
 
   if (voiceAttachment) {
+    const audioBuffer = await storageService
+      .getObjectBuffer(voiceAttachment.objectKey)
+      .catch(() => null);
     const whisperRes = await whisperService.transcribeAudio({
-      audioUrl: voiceAttachment.publicOrSignedUrl,
+      audioBuffer: audioBuffer ?? undefined,
+      mimeType: voiceAttachment.mimeType,
       fallbackContextHint: params.input.rawTextNote ?? undefined,
     });
     rawWhisperTranscript = whisperRes.transcript;
@@ -203,7 +232,11 @@ export async function submitEvidenceForAiExtraction(params: {
     await azureOpenAiService.extractFieldNoteFromTranscript({
       rawTranscriptOrNote: combinedTextForExtraction,
       offlineManualQuantities: params.input.offlineManualQuantities,
-      photoUrl: photoAttachment?.publicOrSignedUrl,
+      // A short-lived URL we sign ourselves; never a client-supplied URL.
+      photoUrl:
+        photoAttachment && storageService.isCloudConfigured()
+          ? await storageService.getPresignedReadUrl(photoAttachment.objectKey, 300)
+          : undefined,
       projectBoqItems: project.boqItems,
     });
 
@@ -230,7 +263,10 @@ export async function submitEvidenceForAiExtraction(params: {
         boqItemId: resolvedBoqItemId,
         fieldSessionId: params.fieldAgent.sessionId,
         clientCaptureId: params.input.hardwareMetadata.clientCaptureId,
-        independenceTier: params.fieldAgent.independenceTier,
+        reporterRoleId: params.fieldAgent.roleId,
+        reporterRoleName: params.fieldAgent.roleName,
+        fieldPersonaType: params.fieldAgent.fieldPersonaType,
+        assuranceWeight: params.fieldAgent.assuranceWeight,
         status: initialStatus,
         latitude: params.input.hardwareMetadata.latitude,
         longitude: params.input.hardwareMetadata.longitude,
@@ -270,7 +306,7 @@ export async function submitEvidenceForAiExtraction(params: {
           evidenceLogId: log.id,
           mediaType: media.mediaType,
           objectKey: media.objectKey,
-          fileUrl: media.publicOrSignedUrl ?? null,
+          fileUrl: null,
           mimeType: media.mimeType,
           byteSize: media.byteSize,
           sha256FileHash: media.sha256FileHash,
@@ -285,7 +321,7 @@ export async function submitEvidenceForAiExtraction(params: {
       projectId: params.projectId,
       actorType: 'FIELD_AGENT',
       actorId: params.fieldAgent.sessionId,
-      actorDisplayName: `${params.fieldAgent.agentFullName} (${params.fieldAgent.independenceTier})`,
+      actorDisplayName: `${params.fieldAgent.agentFullName} (${params.fieldAgent.roleName})`,
       action: integrityResult.integrityPassed
         ? 'EVIDENCE_EXTRACTED'
         : 'EVIDENCE_FLAGGED_INTEGRITY',
@@ -307,7 +343,10 @@ export async function submitEvidenceForAiExtraction(params: {
     evidenceLogId: savedLog.id,
     clientCaptureId: savedLog.clientCaptureId,
     status: savedLog.status,
-    independenceTier: savedLog.independenceTier,
+    reporterRoleId: savedLog.reporterRoleId ?? params.fieldAgent.roleId,
+    reporterRoleName: savedLog.reporterRoleName,
+    fieldPersonaType: savedLog.fieldPersonaType,
+    assuranceWeight: savedLog.assuranceWeight,
     geofenceVerification: geofenceResult,
     integrityPassed: integrityResult.integrityPassed,
     integrityFlags: integrityResult.integrityFlags,
@@ -333,6 +372,9 @@ export async function confirmEvidenceLogByAgent(params: {
 
   if (!existing) {
     throw new AppError('Evidence log not found', 404, 'EVIDENCE_LOG_NOT_FOUND');
+  }
+  if (params.input.confirmedBoqItemId) {
+    await loadBoqItemInProject(prisma, params.projectId, params.input.confirmedBoqItemId);
   }
 
   return prisma.$transaction(async (tx) => {
@@ -366,7 +408,7 @@ export async function confirmEvidenceLogByAgent(params: {
       projectId: params.projectId,
       actorType: 'FIELD_AGENT',
       actorId: params.fieldAgent.sessionId,
-      actorDisplayName: `${params.fieldAgent.agentFullName} (${params.fieldAgent.independenceTier})`,
+      actorDisplayName: `${params.fieldAgent.agentFullName} (${params.fieldAgent.roleName})`,
       action: 'EVIDENCE_CONFIRMED',
       summaryText: `Field reporter confirmed & signed log (${updated.verificationBadgeText}): "${params.input.confirmedSummary}"`,
       payload: {
@@ -377,7 +419,7 @@ export async function confirmEvidenceLogByAgent(params: {
       },
     });
 
-    return updated;
+    return serializeEvidenceLog(updated, { detailedSessions: false });
   });
 }
 

@@ -29,11 +29,10 @@ class StandaloneWhisperService {
   }
 
   /**
-   * Transcribes an audio voice note (from a public/presigned URL or raw Buffer)
-   * using the standalone Whisper API endpoint.
+   * Transcribes an audio voice note from raw bytes using the standalone Whisper API endpoint.
+   * Callers read the bytes from the configured bucket by object key; no URL is ever fetched.
    */
   public async transcribeAudio(params: {
-    audioUrl?: string;
     audioBuffer?: Buffer;
     fileName?: string;
     mimeType?: string;
@@ -50,18 +49,9 @@ class StandaloneWhisperService {
     }
 
     try {
-      let audioBytes = params.audioBuffer;
-      if (!audioBytes && params.audioUrl) {
-        const response = await fetch(params.audioUrl);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch audio from ${params.audioUrl}`);
-        }
-        const arrayBuf = await response.arrayBuffer();
-        audioBytes = Buffer.from(arrayBuf);
-      }
-
+      const audioBytes = params.audioBuffer;
       if (!audioBytes) {
-        throw new Error('No audioBuffer or reachable audioUrl provided for transcription');
+        throw new Error('No audio bytes provided for transcription');
       }
 
       const fileObj = await toFile(

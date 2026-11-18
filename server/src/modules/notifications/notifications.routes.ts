@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { guardProjectRoutes } from '../../utils/accessControl';
 import {
-  requireAnyAuth,
+  requireFieldSession,
   requireWebAuth,
 } from '../../middleware/auth.middleware';
 import {
@@ -11,7 +12,7 @@ import {
   markWebNotificationRead,
 } from './notifications.service';
 
-const router = Router();
+const router = guardProjectRoutes(Router());
 
 /**
  * GET /api/v1/projects/:projectId/notifications
@@ -19,12 +20,12 @@ const router = Router();
  */
 router.get(
   '/:projectId/notifications',
-  requireAnyAuth,
+  requireFieldSession,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const notifications = await listProjectNotifications(
-        String(req.params.projectId),
-        req.fieldAgent?.sessionId
+        req.fieldAgent!.projectId,
+        req.fieldAgent!.sessionId
       );
       res.json({ success: true, data: notifications });
     } catch (error) {
@@ -39,11 +40,12 @@ router.get(
  */
 router.patch(
   '/:projectId/notifications/:notificationId/read',
-  requireAnyAuth,
+  requireFieldSession,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const updated = await markNotificationRead({
-        projectId: String(req.params.projectId),
+        projectId: req.fieldAgent!.projectId,
+        fieldSessionId: req.fieldAgent!.sessionId,
         notificationId: String(req.params.notificationId),
         resolvedByAction: false,
       });
@@ -60,11 +62,12 @@ router.patch(
  */
 router.post(
   '/:projectId/notifications/:notificationId/resolve',
-  requireAnyAuth,
+  requireFieldSession,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const updated = await markNotificationRead({
-        projectId: String(req.params.projectId),
+        projectId: req.fieldAgent!.projectId,
+        fieldSessionId: req.fieldAgent!.sessionId,
         notificationId: String(req.params.notificationId),
         resolvedByAction: true,
       });
@@ -77,16 +80,17 @@ router.post(
 
 /**
  * GET /api/v1/projects/:projectId/web-notifications
- * Lists persisted notifications for the authenticated Web portal user's role.
+ * Lists persisted notifications matching the authenticated user's granted permissions.
  */
 router.get(
   '/:projectId/web-notifications',
   requireWebAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const projectId = String(req.params.projectId);
       const notifications = await listWebNotifications({
-        projectId: String(req.params.projectId),
-        targetRole: req.webUser?.role,
+        projectId,
+        webUser: req.webUser!,
       });
       res.json({ success: true, data: notifications });
     } catch (error) {
@@ -106,6 +110,7 @@ router.patch(
       const updated = await markWebNotificationRead({
         projectId: String(req.params.projectId),
         notificationId: String(req.params.notificationId),
+        webUser: req.webUser!,
       });
       res.json({ success: true, data: updated });
     } catch (error) {
@@ -122,9 +127,10 @@ router.post(
   requireWebAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const projectId = String(req.params.projectId);
       const result = await markAllWebNotificationsRead({
-        projectId: String(req.params.projectId),
-        targetRole: req.webUser?.role,
+        projectId,
+        webUser: req.webUser!,
       });
       res.json({ success: true, data: result });
     } catch (error) {

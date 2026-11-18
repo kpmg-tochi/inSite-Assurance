@@ -1,48 +1,31 @@
 import { Router, Request, Response, NextFunction } from "express";
-import { CreateIncidentReportRequestSchema } from "@insite/shared";
+import { guardProjectRoutes, projectIdForFieldWrite } from '../../utils/accessControl';
+import {
+  CreateIncidentReportRequestSchema,
+  UpdateIncidentStatusRequestSchema,
+} from "@insite/shared";
 import { validateBody } from "../../middleware/validate.middleware";
-import { requireAnyAuth, requireRole } from "../../middleware/auth.middleware";
-import { AppError } from "../../middleware/error.middleware";
+import {
+  requireAnyAuth,
+  requireFieldSession,
+  requirePermission,
+} from "../../middleware/auth.middleware";
 import {
   createIncidentReport,
   listProjectIncidents,
   resolveIncidentReport,
 } from "./incident.service";
 
-const router = Router({ mergeParams: true });
+const router = guardProjectRoutes(Router({ mergeParams: true }));
 
 router.post(
   "/:projectId/incidents",
-  requireAnyAuth,
+  requireFieldSession,
   validateBody(CreateIncidentReportRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const projectId = Array.isArray(req.params.projectId)
-        ? req.params.projectId[0]
-        : req.params.projectId;
-      const reporterSessionId = req.fieldAgent?.sessionId;
-      const reporterName =
-        req.fieldAgent?.agentFullName ||
-        req.webUser?.fullName ||
-        "Field Reporter";
-      const reporterTier = req.fieldAgent?.independenceTier || "WEB_USER";
-
-      if (!reporterSessionId) {
-        throw new AppError(
-          "Incidents must be submitted from an active mobile field session",
-          403,
-          "FIELD_SESSION_REQUIRED",
-        );
-      }
-
-      const result = await createIncidentReport(
-        projectId,
-        reporterSessionId,
-        reporterName,
-        reporterTier,
-        req.body,
-      );
-
+      projectIdForFieldWrite(req);
+      const result = await createIncidentReport(req.fieldAgent!, req.body);
       res.status(201).json({ success: true, data: result });
     } catch (error) {
       next(error);
@@ -55,11 +38,11 @@ router.get(
   requireAnyAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const projectId = Array.isArray(req.params.projectId)
-        ? req.params.projectId[0]
-        : req.params.projectId;
-      const callerRole = req.webUser?.role;
-      const result = await listProjectIncidents(projectId, callerRole);
+      const result = await listProjectIncidents({
+        projectId: String(req.params.projectId),
+        webUser: req.webUser,
+        fieldAgent: req.fieldAgent,
+      });
       res.json({ success: true, data: result });
     } catch (error) {
       next(error);
@@ -69,20 +52,23 @@ router.get(
 
 router.patch(
   "/:projectId/incidents/:incidentId/status",
-  requireRole("MONITOR", "LENDER"),
+  requirePermission("audit:view_ledger", "reports:raise_query"),
+  validateBody(UpdateIncidentStatusRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const projectId = Array.isArray(req.params.projectId)
+        ? req.params.projectId[0]
+        : req.params.projectId;
       const incidentId = Array.isArray(req.params.incidentId)
         ? req.params.incidentId[0]
         : req.params.incidentId;
-      const { status } = req.body;
-      const resolverName = req.webUser?.fullName || "Monitor";
 
-      const result = await resolveIncidentReport(
+      const result = await resolveIncidentReport({
+        projectId,
         incidentId,
-        status,
-        resolverName,
-      );
+        status: req.body.status,
+        webUser: req.webUser!,
+      });
 
       res.json({ success: true, data: result });
     } catch (error) {

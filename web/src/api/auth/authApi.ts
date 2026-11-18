@@ -1,7 +1,7 @@
 import type {
+  ChangePasswordRequest,
   WebAuthResponse,
   WebLoginRequest,
-  WebRegisterRequest,
 } from '@insite/shared';
 import { api } from '../../config/apiConfig';
 import type { ApiEnvelope } from '../types';
@@ -14,9 +14,9 @@ export const loginUser = async (payload: WebLoginRequest) => {
   return data.data;
 };
 
-export const registerUser = async (payload: WebRegisterRequest) => {
+export const changePassword = async (payload: ChangePasswordRequest) => {
   const { data } = await api.post<ApiEnvelope<WebAuthResponse>>(
-    '/auth/register',
+    '/auth/change-password',
     payload
   );
   return data.data;

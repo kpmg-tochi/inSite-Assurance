@@ -1,33 +1,135 @@
 import { Prisma } from '@prisma/client';
 import {
   CreateProjectRequest,
+  FieldPersonaType,
   GeoCoordinate,
-  INDEPENDENCE_TIER_META,
-  IndependenceTier,
   ProjectGeofenceSchema,
   UpdateProjectBaseline,
   verifyPointAgainstGeofence,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
-import { WebJwtPayload } from '../../middleware/auth.middleware';
+import {
+  FieldAgentJwtPayload,
+  hasWebPermission,
+  invalidateSessionAuthCache,
+  WebJwtPayload,
+} from '../../middleware/auth.middleware';
+import {
+  assertCallerProjectAccess,
+  buildProjectVisibilityWhere,
+} from '../../utils/accessControl';
 import { recordAuditEvent } from '../audit/audit.service';
+import { serializeBoqItem, serializeTranche } from '../../utils/serializers';
+import { createJoinCode } from './joinCodes.service';
+import { isProjectObjectKey, storageService } from '../../integrations/storage.service';
 import { createMobileNotification } from '../notifications/notifications.service';
 
-const TIERS: IndependenceTier[] = [
-  'MONITOR_INSPECTOR',
-  'INDEPENDENT_RESIDENT',
-  'CONTRACTOR_ENGINEER',
-];
+type JoinCodeWithRole = {
+  id: string;
+  projectId: string;
+  code: string;
+  isActive: boolean;
+  expiresAt: Date | null;
+  maxUses?: number | null;
+  useCount?: number;
+  role: {
+    id: string;
+    code: string;
+    name: string;
+    fieldPersonaType: string;
+    assuranceWeight: number;
+    requiresIdentityAssurance: boolean;
+  };
+};
+
+/**
+ * Join-code visibility (Phase 2 Step 7): only holders of `mobilization:manage_roster` see codes.
+ * Of those, users who cannot edit the baseline (e.g. the main contractor) only see codes for
+ * contractor-executor roles, so they cannot hand out independent-verifier codes.
+ */
+export function visibleJoinCodesFor(joinCodes: JoinCodeWithRole[], webUser?: WebJwtPayload) {
+  if (!webUser || !hasWebPermission(webUser, 'mobilization:manage_roster')) {
+    return [];
+  }
+  const seeAll = hasWebPermission(webUser, 'projects:edit_baseline');
+  return joinCodes
+    .filter((jc) => seeAll || jc.role.fieldPersonaType === 'CONTRACTOR_EXECUTOR')
+    .map((jc) => ({
+      id: jc.id,
+      projectId: jc.projectId,
+      code: jc.code,
+      roleId: jc.role.id,
+      roleCode: jc.role.code,
+      roleName: jc.role.name,
+      fieldPersonaType: jc.role.fieldPersonaType as FieldPersonaType,
+      assuranceWeight: jc.role.assuranceWeight,
+      requiresIdentityAssurance: jc.role.requiresIdentityAssurance,
+      isActive: jc.isActive,
+      expiresAt: jc.expiresAt ? jc.expiresAt.toISOString() : null,
+      maxUses: jc.maxUses ?? null,
+      useCount: jc.useCount ?? 0,
+    }));
+}
+
+type ProjectCoreRow = Prisma.ProjectGetPayload<{
+  include: {
+    monitorOrganization: true;
+    lenderOrganization: true;
+    contractorOrganization: true;
+  };
+}>;
+
+function serializeProjectCore(project: ProjectCoreRow) {
+  return {
+    id: project.id,
+    tenantId: project.tenantId,
+    name: project.name,
+    codePrefix: project.codePrefix,
+    stateLocation: project.stateLocation,
+    lgaLocation: project.lgaLocation,
+    description: project.description,
+    totalBudgetNgn: Number(project.totalBudgetNgn),
+    disbursedToDateNgn: Number(project.disbursedToDateNgn),
+    certifiedProgressPct: Number(project.certifiedProgressPct),
+    reportingCadence: project.reportingCadence,
+    workdayStartTime: project.workdayStartTime,
+    workdayEndTime: project.workdayEndTime,
+    geofenceMode: project.geofenceMode,
+    geofence: project.geofenceGeoJson,
+    portfolioHealth: project.portfolioHealth,
+    monitorOrganizationName: project.monitorOrganization.name,
+    lenderOrganizationName: project.lenderOrganization.name,
+    contractorOrganizationName: project.contractorOrganization.name,
+    createdAt: project.createdAt.toISOString(),
+    updatedAt: project.updatedAt.toISOString(),
+  };
+}
 
 export async function listProjectsForUser(webUser: WebJwtPayload) {
+  const visibilityWhere = buildProjectVisibilityWhere(webUser);
+
   const projects = await prisma.project.findMany({
+    where: visibilityWhere,
     orderBy: { createdAt: 'desc' },
     include: {
       monitorOrganization: true,
       lenderOrganization: true,
       contractorOrganization: true,
-      joinCodes: true,
+      joinCodes: {
+        include: {
+          role: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              fieldPersonaType: true,
+              assuranceWeight: true,
+              requiresIdentityAssurance: true,
+            },
+          },
+        },
+      },
       tranches: {
         orderBy: { trancheNumber: 'asc' },
         include: { conditionsPrecedent: true },
@@ -46,7 +148,7 @@ export async function listProjectsForUser(webUser: WebJwtPayload) {
           id: true,
           capturedAtDevice: true,
           boqItemId: true,
-          independenceTier: true,
+          fieldPersonaType: true,
         },
       },
       ipcClaims: {
@@ -63,6 +165,7 @@ export async function listProjectsForUser(webUser: WebJwtPayload) {
       },
     },
   });
+
 
   return projects.map((project) => {
     const latestIpc = project.ipcClaims[0];
@@ -83,51 +186,23 @@ export async function listProjectsForUser(webUser: WebJwtPayload) {
           (log) =>
             log.boqItemId &&
             holdPointIds.has(log.boqItemId) &&
-            log.independenceTier !== 'CONTRACTOR_ENGINEER'
+            log.fieldPersonaType === 'INDEPENDENT_VERIFIER'
         )
         .map((log) => log.boqItemId as string)
     );
     const unfulfilledHoldPointCount =
       holdPointIds.size - evidencedHoldPointIds.size;
 
-    // Segregate Join Codes for CONTRACTOR role (only show CONTRACTOR_ENGINEER join code)
-    const visibleJoinCodes =
-      webUser.role === 'CONTRACTOR'
-        ? project.joinCodes.filter(
-            (jc) => jc.independenceTier === 'CONTRACTOR_ENGINEER'
-          )
-        : project.joinCodes;
-
     return {
-      id: project.id,
-      name: project.name,
-      codePrefix: project.codePrefix,
-      stateLocation: project.stateLocation,
-      lgaLocation: project.lgaLocation,
-      description: project.description,
-      totalBudgetNgn: Number(project.totalBudgetNgn),
-      disbursedToDateNgn: Number(project.disbursedToDateNgn),
-      certifiedProgressPct: Number(project.certifiedProgressPct),
-      reportingCadence: project.reportingCadence,
-      geofenceMode: project.geofenceMode,
-      geofence: project.geofenceGeoJson,
-      portfolioHealth: project.portfolioHealth,
-      monitorOrganizationName: project.monitorOrganization.name,
-      lenderOrganizationName: project.lenderOrganization.name,
-      contractorOrganizationName: project.contractorOrganization.name,
+      ...serializeProjectCore(project),
       openConflictCount,
       unfulfilledHoldPointCount,
       totalBoqItems: project.boqItems.length,
       opaqueLumpSumCount: project.boqItems.filter((b) => b.isOpaqueLumpSum).length,
       lastFieldCaptureAt:
         project.evidenceLogs[0]?.capturedAtDevice.toISOString() ?? null,
-      joinCodes: visibleJoinCodes,
-      tranches: project.tranches.map((t) => ({
-        ...t,
-        allocatedAmountNgn: Number(t.allocatedAmountNgn),
-        releasedAmountNgn: Number(t.releasedAmountNgn),
-        targetCompletionPct: Number(t.targetCompletionPct),
-      })),
+      joinCodes: visibleJoinCodesFor(project.joinCodes, webUser),
+      tranches: project.tranches.map(serializeTranche),
     };
   });
 }
@@ -137,7 +212,9 @@ export async function createProjectBaseline(
   input: CreateProjectRequest
 ) {
   const existing = await prisma.project.findUnique({
-    where: { codePrefix: input.codePrefix },
+    where: {
+      tenantId_codePrefix: { tenantId: webUser.tenantId, codePrefix: input.codePrefix },
+    },
   });
 
   if (existing) {
@@ -148,35 +225,44 @@ export async function createProjectBaseline(
     );
   }
 
-  return prisma.$transaction(async (tx) => {
-    // Find or create Lender Organization
+  const createdProjectId = await prisma.$transaction(async (tx) => {
+    // Find or create Lender Organization within tenant
     let lenderOrg = await tx.organization.findFirst({
       where: {
+        tenantId: webUser.tenantId,
         name: { equals: input.lenderOrganizationName, mode: 'insensitive' },
-        roleType: 'LENDER',
       },
     });
     if (!lenderOrg) {
       lenderOrg = await tx.organization.create({
-        data: { name: input.lenderOrganizationName, roleType: 'LENDER' },
+        data: {
+          tenantId: webUser.tenantId,
+          name: input.lenderOrganizationName,
+          category: 'FINANCIER_LENDER',
+        },
       });
     }
 
-    // Find or create Contractor Organization
+    // Find or create Contractor Organization within tenant
     let contractorOrg = await tx.organization.findFirst({
       where: {
+        tenantId: webUser.tenantId,
         name: { equals: input.contractorOrganizationName, mode: 'insensitive' },
-        roleType: 'CONTRACTOR',
       },
     });
     if (!contractorOrg) {
       contractorOrg = await tx.organization.create({
-        data: { name: input.contractorOrganizationName, roleType: 'CONTRACTOR' },
+        data: {
+          tenantId: webUser.tenantId,
+          name: input.contractorOrganizationName,
+          category: 'CONTRACTOR',
+        },
       });
     }
 
     const project = await tx.project.create({
       data: {
+        tenantId: webUser.tenantId,
         name: input.name,
         codePrefix: input.codePrefix,
         stateLocation: input.stateLocation,
@@ -184,6 +270,8 @@ export async function createProjectBaseline(
         description: input.description ?? null,
         totalBudgetNgn: input.totalBudgetNgn,
         reportingCadence: input.reportingCadence,
+        workdayStartTime: input.workdayStartTime ?? '08:00',
+        workdayEndTime: input.workdayEndTime ?? '17:00',
         geofenceMode: input.geofence.mode,
         geofenceGeoJson: input.geofence as unknown as Prisma.InputJsonValue,
         monitorOrganizationId: webUser.organizationId,
@@ -192,15 +280,30 @@ export async function createProjectBaseline(
       },
     });
 
-    // Generate the 3 role-specific Join Codes (e.g. LKK-402-INS, LKK-402-COW, LKK-402-CON)
-    const joinCodesData = TIERS.map((tier) => ({
-      projectId: project.id,
-      code: `${input.codePrefix}-${INDEPENDENCE_TIER_META[tier].codeSuffix}`,
-      independenceTier: tier,
-      isActive: true,
-    }));
+    // Assign creator to the project automatically so non-global creators still retain visibility
+    await tx.userProjectAssignment.create({
+      data: {
+        userId: webUser.userId,
+        projectId: project.id,
+        roleId: webUser.roleId,
+      },
+    });
 
-    await tx.projectJoinCode.createMany({ data: joinCodesData });
+    // Generate Join Codes from tenant's active MOBILE / BOTH roles
+    const mobileRoles = await tx.role.findMany({
+      where: {
+        tenantId: webUser.tenantId,
+        surface: { in: ['MOBILE', 'BOTH'] },
+      },
+      orderBy: { assuranceWeight: 'desc' },
+    });
+
+    const joinCodesData = [];
+    for (const role of mobileRoles) {
+      joinCodesData.push(
+        await createJoinCode(tx, { projectId: project.id, codePrefix: project.codePrefix, role })
+      );
+    }
 
     // Create Facility Tranches and Conditions Precedent
     for (const trancheInput of input.tranches) {
@@ -228,7 +331,7 @@ export async function createProjectBaseline(
       projectId: project.id,
       actorType: 'WEB_USER',
       actorId: webUser.userId,
-      actorDisplayName: `${webUser.fullName} (${webUser.role})`,
+      actorDisplayName: `${webUser.fullName} (${webUser.roleName})`,
       action: 'PROJECT_CREATED',
       summaryText: `Configured project baseline "${project.name}" (${project.codePrefix}) with ${input.geofence.mode} geofence and ${input.tranches.length} facility tranches.`,
       payload: {
@@ -240,22 +343,16 @@ export async function createProjectBaseline(
       },
     });
 
-    return tx.project.findUniqueOrThrow({
-      where: { id: project.id },
-      include: {
-        joinCodes: true,
-        tranches: {
-          orderBy: { trancheNumber: 'asc' },
-          include: { conditionsPrecedent: true },
-        },
-      },
-    });
+    return project.id;
   });
+
+  return getProjectBaselineDetails(createdProjectId, webUser);
 }
 
 export async function getProjectBaselineDetails(
   projectId: string,
-  webUser?: WebJwtPayload
+  webUser?: WebJwtPayload,
+  fieldAgent?: FieldAgentJwtPayload
 ) {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -263,16 +360,26 @@ export async function getProjectBaselineDetails(
       monitorOrganization: true,
       lenderOrganization: true,
       contractorOrganization: true,
-      joinCodes: true,
+      joinCodes: {
+        include: {
+          role: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              fieldPersonaType: true,
+              assuranceWeight: true,
+              requiresIdentityAssurance: true,
+            },
+          },
+        },
+      },
       tranches: {
         orderBy: { trancheNumber: 'asc' },
         include: { conditionsPrecedent: true },
       },
       boqItems: {
         orderBy: { wbsCode: 'asc' },
-      },
-      fieldSessions: {
-        orderBy: { createdAt: 'desc' },
       },
     },
   });
@@ -281,32 +388,12 @@ export async function getProjectBaselineDetails(
     throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   }
 
-  const isContractor = webUser?.role === 'CONTRACTOR';
-
+  // Field agents get the baseline they need to report against; no join codes.
   return {
-    ...project,
-    totalBudgetNgn: Number(project.totalBudgetNgn),
-    disbursedToDateNgn: Number(project.disbursedToDateNgn),
-    certifiedProgressPct: Number(project.certifiedProgressPct),
-    geofence: project.geofenceGeoJson,
-    joinCodes: isContractor
-      ? project.joinCodes.filter(
-          (jc) => jc.independenceTier === 'CONTRACTOR_ENGINEER'
-        )
-      : project.joinCodes,
-    tranches: project.tranches.map((t) => ({
-      ...t,
-      allocatedAmountNgn: Number(t.allocatedAmountNgn),
-      releasedAmountNgn: Number(t.releasedAmountNgn),
-      targetCompletionPct: Number(t.targetCompletionPct),
-    })),
-    boqItems: project.boqItems.map((b) => ({
-      ...b,
-      totalQuantity: Number(b.totalQuantity),
-      rateNgn: Number(b.rateNgn),
-      budgetedCostNgn: Number(b.budgetedCostNgn),
-      cumulativeCertifiedPct: Number(b.cumulativeCertifiedPct),
-    })),
+    ...serializeProjectCore(project),
+    joinCodes: fieldAgent ? [] : visibleJoinCodesFor(project.joinCodes, webUser),
+    tranches: project.tranches.map(serializeTranche),
+    boqItems: project.boqItems.map((b) => serializeBoqItem(b)),
   };
 }
 
@@ -315,14 +402,7 @@ export async function updateProjectBaseline(
   webUser: WebJwtPayload,
   input: UpdateProjectBaseline
 ) {
-  const existing = await prisma.project.findUnique({
-    where: { id: projectId },
-  });
-  if (!existing) {
-    throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
-  }
-
-  return prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     const updated = await tx.project.update({
       where: { id: projectId },
       data: {
@@ -354,19 +434,21 @@ export async function updateProjectBaseline(
       projectId,
       actorType: 'WEB_USER',
       actorId: webUser.userId,
-      actorDisplayName: `${webUser.fullName} (${webUser.role})`,
+      actorDisplayName: `${webUser.fullName} (${webUser.roleName})`,
       action: 'BASELINE_UPDATED',
       summaryText: `Updated baseline configuration for project ${updated.codePrefix}.`,
       payload: input as Record<string, unknown>,
     });
-
-    return updated;
   });
+
+  return getProjectBaselineDetails(projectId, webUser);
 }
 
 export async function verifyCoordinateForProject(
   projectId: string,
-  coord: GeoCoordinate
+  coord: GeoCoordinate,
+  webUser?: WebJwtPayload,
+  fieldAgent?: FieldAgentJwtPayload
 ) {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
@@ -382,23 +464,144 @@ export async function verifyCoordinateForProject(
 }
 
 /**
- * List all Contractor Assurance Verification Requests for a project
+ * List real mobile FieldAgentSession records for Settings -> Active Mobile Field Personnel.
  */
-export async function listContractorVerifications(projectId?: string) {
-  const whereClause: any = {
-    independenceTier: 'CONTRACTOR_ENGINEER',
-  };
+export async function listProjectFieldSessions(
+  projectId: string,
+  webUser: WebJwtPayload
+) {
+  let projectFilter: Prisma.FieldAgentSessionWhereInput = {};
   if (projectId && projectId !== 'all') {
+    await assertCallerProjectAccess({ projectId, webUser });
+    projectFilter = { projectId };
+  } else {
+    projectFilter = { project: buildProjectVisibilityWhere(webUser) };
+  }
+
+  const sessions = await prisma.fieldAgentSession.findMany({
+    where: projectFilter,
+    orderBy: { createdAt: 'desc' },
+    include: {
+      role: {
+        select: { id: true, code: true, name: true },
+      },
+      joinCode: {
+        select: { code: true },
+      },
+    },
+  });
+
+  return sessions.map((s) => ({
+    id: s.id,
+    projectId: s.projectId,
+    roleId: s.roleId,
+    roleCode: s.role.code,
+    roleName: s.role.name || s.roleNameSnapshot,
+    fieldPersonaType: s.fieldPersonaType as FieldPersonaType,
+    assuranceWeight: s.assuranceWeight,
+    agentFullName: s.agentFullName,
+    agentPhoneNumber: s.agentPhoneNumber,
+    joinCodeUsed: s.joinCode.code,
+    deviceId: s.deviceId,
+    deviceModel: s.deviceModel,
+    isActive: s.isActive,
+    assuranceStatus: s.assuranceStatus,
+    lastSyncAt: s.lastSyncAt?.toISOString() ?? null,
+    createdAt: s.createdAt.toISOString(),
+  }));
+}
+
+/**
+ * Revoke or restore a mobile field agent device session in PostgreSQL + AuditLog.
+ */
+export async function updateFieldSessionStatus(params: {
+  projectId: string;
+  sessionId: string;
+  webUser: WebJwtPayload;
+  isActive: boolean;
+  reason?: string;
+}) {
+  const existing = await prisma.fieldAgentSession.findFirst({
+    where: { id: params.sessionId, projectId: params.projectId },
+    include: { role: { select: { name: true } } },
+  });
+
+  if (!existing) {
+    throw new AppError('Field agent session not found', 404, 'SESSION_NOT_FOUND');
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    const updated = await tx.fieldAgentSession.update({
+      where: { id: existing.id },
+      data: params.isActive
+        ? { isActive: true, revokedAt: null, revokedByUserId: null, revokeReason: null }
+        : {
+            isActive: false,
+            revokedAt: new Date(),
+            revokedByUserId: params.webUser.userId,
+            revokeReason: params.reason ?? null,
+          },
+    });
+
+    await recordAuditEvent(tx, {
+      projectId: params.projectId,
+      actorType: 'WEB_USER',
+      actorId: params.webUser.userId,
+      actorDisplayName: `${params.webUser.fullName} (${params.webUser.roleName})`,
+      action: 'FIELD_SESSION_STATUS_UPDATED',
+      summaryText: params.isActive
+        ? `Restored mobile session access for ${existing.agentFullName} (${existing.role.name}).`
+        : `Revoked mobile session access for ${existing.agentFullName} (${existing.role.name}).${params.reason ? ` Reason: ${params.reason}` : ''}`,
+      payload: {
+        sessionId: existing.id,
+        isActive: params.isActive,
+        reason: params.reason ?? null,
+      },
+    });
+
+    return updated;
+  });
+
+  invalidateSessionAuthCache(existing.id);
+  return {
+    id: result.id,
+    projectId: result.projectId,
+    agentFullName: result.agentFullName,
+    isActive: result.isActive,
+    revokedAt: result.revokedAt?.toISOString() ?? null,
+    revokeReason: result.revokeReason,
+  };
+}
+
+/**
+ * List all Assurance Verification Requests scoped to tenant & user project visibility.
+ */
+export async function listContractorVerifications(
+  projectId: string | undefined,
+  webUser: WebJwtPayload
+) {
+  const whereClause: Prisma.FieldAgentSessionWhereInput = {
+    role: { requiresIdentityAssurance: true },
+  };
+
+  if (projectId && projectId !== 'all') {
+    await assertCallerProjectAccess({ projectId, webUser });
     whereClause.projectId = projectId;
+  } else {
+    whereClause.project = buildProjectVisibilityWhere(webUser);
   }
 
   const sessions = await prisma.fieldAgentSession.findMany({
     where: whereClause,
     orderBy: { createdAt: 'desc' },
     include: {
+      role: {
+        select: { id: true, name: true, fieldPersonaType: true },
+      },
       project: {
         select: {
           id: true,
+          tenantId: true,
           name: true,
           codePrefix: true,
           contractorOrganization: { select: { name: true } },
@@ -408,33 +611,45 @@ export async function listContractorVerifications(projectId?: string) {
     },
   });
 
-  // Get reviewer user names if reviewed
   const reviewerIds = sessions
     .map((s) => s.reviewedByUserId)
     .filter((id): id is string => Boolean(id));
 
-  const reviewers = reviewerIds.length > 0
-    ? await prisma.user.findMany({
-        where: { id: { in: reviewerIds } },
-        select: { id: true, fullName: true },
-      })
-    : [];
+  const reviewers =
+    reviewerIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: reviewerIds } },
+          select: { id: true, fullName: true },
+        })
+      : [];
 
   const reviewerMap = new Map(reviewers.map((r) => [r.id, r.fullName]));
 
-  return sessions.map((s) => ({
+  // Stored values are object keys; hand out 5-minute signed URLs, and nothing for legacy values
+  // that are not keys in the session's project namespace.
+  const signed = async (key: string | null, tenantId: string, projectId: string) =>
+    isProjectObjectKey(key, tenantId, projectId)
+      ? storageService.getPresignedReadUrl(key!, 300)
+      : null;
+
+  return Promise.all(sessions.map(async (s) => ({
     id: s.id,
     projectId: s.projectId,
     projectCodePrefix: s.project.codePrefix,
     projectName: s.project.name,
     organizationName: s.project.contractorOrganization.name,
+    roleId: s.roleId,
+    roleName: s.role.name || s.roleNameSnapshot,
+    fieldPersonaType: s.fieldPersonaType as FieldPersonaType,
     agentFullName: s.agentFullName,
     agentPhoneNumber: s.agentPhoneNumber,
     joinCodeUsed: s.joinCode.code,
     corenLicenseNumber: s.corenLicenseNumber,
     idDocumentType: s.idDocumentType,
-    idDocumentUrl: s.idDocumentUrl,
-    selfieImageUrl: s.selfieImageUrl,
+    idDocumentUrl: await signed(s.idDocumentUrl, s.project.tenantId, s.projectId),
+    selfieImageUrl: await signed(s.selfieImageUrl, s.project.tenantId, s.projectId),
+    selfieLeftUrl: await signed(s.selfieLeftUrl, s.project.tenantId, s.projectId),
+    selfieRightUrl: await signed(s.selfieRightUrl, s.project.tenantId, s.projectId),
     livenessPassed: s.livenessPassed,
     livenessScore: s.livenessScore,
     experienceSummary: s.experienceSummary,
@@ -445,14 +660,14 @@ export async function listContractorVerifications(projectId?: string) {
     submittedAt: s.createdAt.toISOString(),
     reviewedAt: s.reviewedAt?.toISOString() || null,
     reviewedByUserName: s.reviewedByUserId
-      ? reviewerMap.get(s.reviewedByUserId) || 'Independent Monitor'
+      ? reviewerMap.get(s.reviewedByUserId) || 'Reviewer'
       : null,
     rejectionReason: s.rejectionReason,
-  }));
+  })));
 }
 
 /**
- * Review (Approve or Reject) a Contractor Assurance Verification Request
+ * Review (Approve or Reject) an Assurance Verification Request
  */
 export async function reviewContractorVerification(
   projectId: string,
@@ -477,7 +692,7 @@ export async function reviewContractorVerification(
   const nextStatus = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
   const isActive = decision === 'APPROVE';
 
-  return prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx) => {
     const updated = await tx.fieldAgentSession.update({
       where: { id: sessionId },
       data: {
@@ -485,7 +700,10 @@ export async function reviewContractorVerification(
         isActive,
         reviewedByUserId: webUser.userId,
         reviewedAt: new Date(),
-        rejectionReason: decision === 'REJECT' ? remarks || 'Verification rejected by Independent Monitor.' : null,
+        rejectionReason:
+          decision === 'REJECT'
+            ? remarks || 'Verification rejected by reviewer.'
+            : null,
       },
     });
 
@@ -493,11 +711,15 @@ export async function reviewContractorVerification(
       projectId,
       actorType: 'WEB_USER',
       actorId: webUser.userId,
-      actorDisplayName: `${webUser.fullName} (${webUser.role})`,
-      action: decision === 'APPROVE' ? 'CONTRACTOR_ASSURANCE_APPROVED' : 'CONTRACTOR_ASSURANCE_REJECTED',
-      summaryText: decision === 'APPROVE'
-        ? `Independent Monitor ${webUser.fullName} verified and approved on-site contractor credentials for ${session.agentFullName} (${session.corenLicenseNumber || 'COREN'}). Mobile field access activated.`
-        : `Independent Monitor ${webUser.fullName} rejected contractor verification for ${session.agentFullName}. Reason: ${remarks || 'Incomplete credentials'}.`,
+      actorDisplayName: `${webUser.fullName} (${webUser.roleName})`,
+      action:
+        decision === 'APPROVE'
+          ? 'CONTRACTOR_ASSURANCE_APPROVED'
+          : 'CONTRACTOR_ASSURANCE_REJECTED',
+      summaryText:
+        decision === 'APPROVE'
+          ? `${webUser.fullName} (${webUser.roleName}) verified and approved credentials for ${session.agentFullName} (${session.corenLicenseNumber || 'License'}). Mobile field access activated.`
+          : `${webUser.fullName} (${webUser.roleName}) rejected verification for ${session.agentFullName}. Reason: ${remarks || 'Incomplete credentials'}.`,
       payload: {
         sessionId,
         agentFullName: session.agentFullName,
@@ -519,7 +741,7 @@ export async function reviewContractorVerification(
           : 'Verification Resubmission Needed',
       message:
         decision === 'APPROVE'
-          ? `${webUser.fullName} approved your contractor identity and ${session.corenLicenseNumber || 'regulatory'} credentials.`
+          ? `${webUser.fullName} approved your identity and ${session.corenLicenseNumber || 'regulatory'} credentials.`
           : `Verification was returned: ${remarks || 'Please re-capture clear ID and liveness selfies.'}`,
     });
 
@@ -558,13 +780,25 @@ export async function reviewContractorVerification(
 
     return updated;
   });
+
+  invalidateSessionAuthCache(sessionId);
+  return {
+    id: updated.id,
+    projectId: updated.projectId,
+    agentFullName: updated.agentFullName,
+    assuranceStatus: updated.assuranceStatus,
+    isActive: updated.isActive,
+    reviewedAt: updated.reviewedAt?.toISOString() ?? null,
+    rejectionReason: updated.rejectionReason,
+  };
 }
 
 /**
- * Aggregated Portfolio Executive Summary for Financiers & Lead Monitors
+ * Aggregated Portfolio Executive Summary scoped to tenant & user visibility.
  */
 export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
   const projects = await prisma.project.findMany({
+    where: buildProjectVisibilityWhere(webUser),
     orderBy: { createdAt: 'desc' },
     include: {
       contractorOrganization: { select: { name: true } },
@@ -592,7 +826,6 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
       },
       fieldSessions: {
         where: {
-          independenceTier: 'CONTRACTOR_ENGINEER',
           assuranceStatus: 'PENDING_APPROVAL',
         },
         select: { id: true },
@@ -628,9 +861,12 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
           unfulfilledHoldPoints += 1;
         }
         const claimed = Number(li.contractorClaimedNgn);
-        const certified = li.monitorCertifiedNgn !== null ? Number(li.monitorCertifiedNgn) : claimed;
+        const certified =
+          li.monitorCertifiedNgn !== null
+            ? Number(li.monitorCertifiedNgn)
+            : claimed;
         if (claimed > certified) {
-          holdbackNgn += (claimed - certified);
+          holdbackNgn += claimed - certified;
         }
       }
     }
@@ -643,7 +879,8 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
     const pendingContractors = p.fieldSessions.length;
     pendingContractorVerificationsCount += pendingContractors;
 
-    const activeTranche = p.tranches.find((t) => !t.isReleased) || p.tranches[0] || null;
+    const activeTranche =
+      p.tranches.find((t) => !t.isReleased) || p.tranches[0] || null;
 
     return {
       projectId: p.id,
@@ -677,8 +914,7 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
 }
 
 /**
- * Demo-only catalog endpoint: lists seeded/active projects and their active join codes
- * for mobile demo project switching and join-code autofill without hardcoded fixtures.
+ * Demo-only catalog endpoint: lists seeded/active projects and their active join codes.
  */
 export async function listDemoProjects() {
   const projects = await prisma.project.findMany({
@@ -696,12 +932,37 @@ export async function listDemoProjects() {
         orderBy: { code: 'asc' },
         select: {
           code: true,
-          independenceTier: true,
+          role: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              fieldPersonaType: true,
+              assuranceWeight: true,
+              requiresIdentityAssurance: true,
+            },
+          },
         },
       },
     },
   });
 
-  return projects;
+  return projects.map((p) => ({
+    id: p.id,
+    codePrefix: p.codePrefix,
+    name: p.name,
+    stateLocation: p.stateLocation,
+    lgaLocation: p.lgaLocation,
+    geofenceMode: p.geofenceMode,
+    portfolioHealth: p.portfolioHealth,
+    joinCodes: p.joinCodes.map((jc) => ({
+      code: jc.code,
+      roleId: jc.role.id,
+      roleCode: jc.role.code,
+      roleName: jc.role.name,
+      fieldPersonaType: jc.role.fieldPersonaType as FieldPersonaType,
+      assuranceWeight: jc.role.assuranceWeight,
+      requiresIdentityAssurance: jc.role.requiresIdentityAssurance,
+    })),
+  }));
 }
-

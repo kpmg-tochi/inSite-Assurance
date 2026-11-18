@@ -16,6 +16,8 @@ const booleanEnvSchema = (defaultVal: boolean) =>
       return ['true', '1', 'yes', 'on'].includes(val.trim().toLowerCase());
     });
 
+const DEFAULT_DEV_JWT_SECRET = 'insite-assurance-dev-jwt-secret-change-in-production-2026';
+
 const EnvSchema = z.object({
   PORT: z.coerce.number().default(4000),
   NODE_ENV: z
@@ -34,7 +36,7 @@ const EnvSchema = z.object({
   JWT_SECRET: z
     .string()
     .min(16)
-    .default('insite-assurance-dev-jwt-secret-change-in-production-2026'),
+    .default(DEFAULT_DEV_JWT_SECRET),
   JWT_EXPIRES_IN: z.string().default('7d'),
 
   // Company Azure OpenAI Sandbox (gpt-4.1 for Reasoning, Vision, Extraction & Reconciliation)
@@ -67,3 +69,29 @@ export const env = {
   ...parsedEnv,
   DEMO_MODE: parsedEnv.DEMO_MODE || parsedEnv.ENABLE_DEMO_ENDPOINTS,
 };
+
+/**
+ * Production safety checks. Returns the list of problems; the server refuses to start if any.
+ * Exported for tests.
+ */
+export function findUnsafeProductionConfig(config: typeof env): string[] {
+  if (config.NODE_ENV !== 'production') return [];
+  const problems: string[] = [];
+  if (config.JWT_SECRET === DEFAULT_DEV_JWT_SECRET || config.JWT_SECRET.length < 32) {
+    problems.push('JWT_SECRET must be set to a unique value of at least 32 characters');
+  }
+  if (config.CORS_ORIGIN.trim() === '*' || config.CORS_ORIGIN.trim() === '') {
+    problems.push('CORS_ORIGIN must list the allowed web origins explicitly');
+  }
+  if (config.DEMO_MODE) {
+    problems.push('DEMO_MODE / ENABLE_DEMO_ENDPOINTS must be off in production');
+  }
+  return problems;
+}
+
+const unsafeConfig = findUnsafeProductionConfig(env);
+if (unsafeConfig.length > 0) {
+  throw new Error(
+    `Refusing to start with unsafe production configuration:\n- ${unsafeConfig.join('\n- ')}`
+  );
+}

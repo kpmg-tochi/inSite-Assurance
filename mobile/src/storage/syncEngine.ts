@@ -3,12 +3,14 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { submitAssuranceVerification } from '../api/auth/authApi';
 import {
   presignEvidenceUpload,
+  readLocalFileBlob,
   uploadBinaryToPresignedUrl,
 } from '../api/evidence/evidenceApi';
 import { createIncidentReport } from '../api/incidents/incidentsApi';
 import { submitWorkdayReport } from '../api/workday/workdayApi';
 import { getDatabase } from './sqliteDatabase';
 import { loadLocalProfile } from './secureProfileStore';
+import { getSessionEnded } from '../config/sessionState';
 import { flushTelemetryQueue } from '../services/telemetryService';
 import { getUnsyncedTelemetryPings } from './telemetryRepository';
 import {
@@ -70,25 +72,27 @@ export function getSyncStatusSnapshot(): SyncStatusSnapshot {
  */
 export async function refreshPendingCounts(projectId?: string): Promise<void> {
   const activeProjectId =
-    projectId || (await loadLocalProfile())?.activeProjectId || 'proj-lkk-402';
+    projectId || (await loadLocalProfile())?.activeProjectId || '';
 
   let pendingTelemetryCount = 0;
   let pendingReportCount = 0;
   let pendingIncidentCount = 0;
   let pendingAssuranceCount = 0;
 
-  try {
-    const unsyncedPings = await getUnsyncedTelemetryPings(activeProjectId);
-    pendingTelemetryCount = unsyncedPings.length;
-  } catch {
-    pendingTelemetryCount = 0;
-  }
+  if (activeProjectId) {
+    try {
+      const unsyncedPings = await getUnsyncedTelemetryPings(activeProjectId);
+      pendingTelemetryCount = unsyncedPings.length;
+    } catch {
+      pendingTelemetryCount = 0;
+    }
 
-  try {
-    const pendingAssurance = await getPendingAssuranceSubmissions(activeProjectId);
-    pendingAssuranceCount = pendingAssurance.length;
-  } catch {
-    pendingAssuranceCount = 0;
+    try {
+      const pendingAssurance = await getPendingAssuranceSubmissions(activeProjectId);
+      pendingAssuranceCount = pendingAssurance.length;
+    } catch {
+      pendingAssuranceCount = 0;
+    }
   }
 
   const db = await getDatabase();
@@ -123,24 +127,25 @@ export async function refreshPendingCounts(projectId?: string): Promise<void> {
   notifyListeners();
 }
 
-async function uploadAssuranceImageOrFallback(
+/**
+ * Uploads one assurance image and returns its object key. Throws on failure so the submission
+ * stays queued and is retried; the server only accepts object keys for identity evidence.
+ */
+async function uploadAssuranceImage(
   projectId: string,
   localUri: string,
   fileName: string
 ): Promise<string> {
-  try {
-    const presigned = await presignEvidenceUpload({
-      projectId,
-      mediaType: 'SITE_PHOTO',
-      fileName,
-      mimeType: 'image/jpeg',
-    });
-
-    await uploadBinaryToPresignedUrl(presigned.uploadUrl, localUri, 'image/jpeg');
-    return presigned.publicUrl || presigned.objectKey;
-  } catch {
-    return localUri;
-  }
+  const blob = await readLocalFileBlob(localUri);
+  const presigned = await presignEvidenceUpload({
+    projectId,
+    mediaType: 'SITE_PHOTO',
+    fileName,
+    mimeType: 'image/jpeg',
+    byteSize: blob.size,
+  });
+  await uploadBinaryToPresignedUrl(presigned.uploadUrl, blob, 'image/jpeg');
+  return presigned.objectKey;
 }
 
 /**
@@ -157,22 +162,22 @@ async function flushQueuedAssuranceVerifications(
     try {
       const [idDocumentUrl, selfieFrontUrl, selfieLeftUrl, selfieRightUrl] =
         await Promise.all([
-          uploadAssuranceImageOrFallback(
+          uploadAssuranceImage(
             item.projectId,
             item.idPhotoUri,
             `id-${item.id}.jpg`
           ),
-          uploadAssuranceImageOrFallback(
+          uploadAssuranceImage(
             item.projectId,
             item.selfieFrontUri,
             `selfie-front-${item.id}.jpg`
           ),
-          uploadAssuranceImageOrFallback(
+          uploadAssuranceImage(
             item.projectId,
             item.selfieLeftUri,
             `selfie-left-${item.id}.jpg`
           ),
-          uploadAssuranceImageOrFallback(
+          uploadAssuranceImage(
             item.projectId,
             item.selfieRightUri,
             `selfie-right-${item.id}.jpg`
@@ -298,6 +303,15 @@ export async function triggerOfflineSync(
     return getSyncStatusSnapshot();
   }
 
+  // A revoked or suspended session is not "offline": stop syncing and keep the queue until the
+  // user re-joins. Retrying would only repeat the refusal.
+  const ended = getSessionEnded();
+  if (ended) {
+    currentSnapshot = { ...currentSnapshot, isSyncing: false, lastError: ended.message };
+    notifyListeners();
+    return getSyncStatusSnapshot();
+  }
+
   const netState = await Network.getNetworkStateAsync();
   const isOnline = Boolean(
     netState.isConnected && netState.isInternetReachable !== false
@@ -314,7 +328,11 @@ export async function triggerOfflineSync(
   }
 
   const profile = await loadLocalProfile();
-  const projectId = profile?.activeProjectId || 'proj-lkk-402';
+  const projectId = profile?.activeProjectId || '';
+  if (!projectId) {
+    await refreshPendingCounts();
+    return getSyncStatusSnapshot();
+  }
   const isApproved = profile?.assuranceStatus === 'APPROVED';
 
   isSyncInProgress = true;

@@ -5,6 +5,10 @@ import {
 } from "@insite/shared";
 
 export interface ValuationReportPdfInput {
+  tenantName?: string;
+  pdfHeaderTitle?: string;
+  pdfFooterDisclaimer?: string;
+  primaryColorHex?: string;
   projectName: string;
   projectCodePrefix: string;
   stateLocation: string;
@@ -55,21 +59,27 @@ export async function generateValuationReportPdfBuffer(
       PROFESSIONAL_LICENSE_META[data.certifierLicenseType] ??
       PROFESSIONAL_LICENSE_META.QSRBN;
 
-    // Header Banner
+    // Header Banner (Tenant-Branded)
     doc
       .fontSize(16)
-      .fillColor("#0f172a")
-      .text("InSite Assurance — Disbursement Evidence & Valuation Report", {
-        align: "left",
-      });
+      .fillColor(data.primaryColorHex || "#0f172a")
+      .text(
+        data.pdfHeaderTitle ||
+          "InSite Assurance — Disbursement Evidence & Valuation Report",
+        {
+          align: "left",
+        },
+      );
     doc
       .moveDown(0.3)
       .fontSize(9)
       .fillColor("#475569")
       .text(
-        `Independent Project Monitoring Certification | Generated: ${new Date(
-          data.certifiedAtIso,
-        ).toUTCString()}`,
+        `${
+          data.pdfFooterDisclaimer ||
+          data.tenantName ||
+          "Independent Project Monitoring Certification"
+        } | Generated: ${new Date(data.certifiedAtIso).toUTCString()}`,
       );
 
     doc.moveDown(0.8);

@@ -1,112 +1,203 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { toast } from "sonner";
-import type { WebUserProfile } from "@insite/shared";
+import { useQueryClient } from "@tanstack/react-query";
+import type {
+  ChangePasswordRequest,
+  TenantBrandingConfig,
+  WebUserProfile,
+} from "@insite/shared";
 import {
   getStoredToken,
   registerUnauthorizedHandler,
   updateToken,
 } from "../config/apiConfig";
-import { getCurrentUser } from "../api/auth/authApi";
+import { changePassword as changePasswordRequest, getCurrentUser } from "../api/auth/authApi";
 import { useLoginMutation } from "../mutations/auth/useAuthMutations";
-import { IS_DEMO_MODE } from "../config/demoMode";
+import { loadDemoAccounts } from "../config/useDemoAccounts";
+
+const DEFAULT_BRANDING: TenantBrandingConfig = {
+  primaryColorHex: "#00338D",
+  navyColorHex: "#0C233C",
+  tagline: "Capital Projects Assurance Platform",
+};
+
+function hexToRgbChannels(hex: string): string | null {
+  const clean = hex.replace("#", "").trim();
+  if (!/^[0-9A-Fa-f]{6}$/.test(clean)) return null;
+  const r = parseInt(clean.slice(0, 2), 16);
+  const g = parseInt(clean.slice(2, 4), 16);
+  const b = parseInt(clean.slice(4, 6), 16);
+  return `${r} ${g} ${b}`;
+}
+
+function darkenHex(hex: string, factor = 0.78): string {
+  const clean = hex.replace("#", "").trim();
+  if (!/^[0-9A-Fa-f]{6}$/.test(clean)) return "#00266B";
+  const r = Math.max(0, Math.round(parseInt(clean.slice(0, 2), 16) * factor));
+  const g = Math.max(0, Math.round(parseInt(clean.slice(2, 4), 16) * factor));
+  const b = Math.max(0, Math.round(parseInt(clean.slice(4, 6), 16) * factor));
+  return `#${r.toString(16).padStart(2, "0")}${g
+    .toString(16)
+    .padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
+export function applyTenantBranding(branding?: Partial<TenantBrandingConfig> | null) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  const primaryHex = branding?.primaryColorHex || DEFAULT_BRANDING.primaryColorHex;
+  const navyHex = branding?.navyColorHex || DEFAULT_BRANDING.navyColorHex;
+  const hoverHex = darkenHex(primaryHex);
+
+  const primaryChannels = hexToRgbChannels(primaryHex);
+  const hoverChannels = hexToRgbChannels(hoverHex);
+  const navyChannels = hexToRgbChannels(navyHex);
+
+  if (primaryChannels) root.style.setProperty("--color-brand-primary", primaryChannels);
+  if (hoverChannels) root.style.setProperty("--color-brand-hover", hoverChannels);
+  if (navyChannels) root.style.setProperty("--color-brand-navy", navyChannels);
+
+  root.style.setProperty("--hex-brand-primary", primaryHex);
+  root.style.setProperty("--hex-brand-hover", hoverHex);
+  root.style.setProperty("--hex-brand-navy", navyHex);
+}
 
 interface AuthContextValue {
   user: WebUserProfile | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   quickSwitchDemoAccount: (email: string) => Promise<void>;
+  changePassword: (payload: ChangePasswordRequest) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
+  hasPermission: (permissionKey: string) => boolean;
+  hasAnyPermission: (...permissionKeys: string[]) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-export const SEEDED_DEMO_ACCOUNTS = [
-  {
-    role: "MONITOR" as const,
-    roleTitle: "Independent Monitor (Certifier)",
-    name: "QS Tunde Adebayo",
-    organization: "KPMG Advisory",
-    email: "monitor@insite.ng",
-    password: "Password123!",
-    credential: "QSRBN #3842",
-    initials: "TA",
-  },
-  {
-    role: "LENDER" as const,
-    roleTitle: "Lender / Guarantor (Approver)",
-    name: "Chidinma Okafor, CFA",
-    organization: "InfraCredit",
-    email: "lender@insite.ng",
-    password: "Password123!",
-    credential: "ICAN #MB/049120",
-    initials: "CO",
-  },
-  {
-    role: "CONTRACTOR" as const,
-    roleTitle: "Main Contractor (Claimant)",
-    name: "Engr. Musa Danladi",
-    organization: "J&S Civil Eng.",
-    email: "contractor@insite.ng",
-    password: "Password123!",
-    credential: "COREN #R.49201",
-    initials: "MD",
-  },
-];
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<WebUserProfile | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const loginMutation = useLoginMutation();
+  const queryClient = useQueryClient();
 
-  const logout = () => {
+  // Cached data belongs to one identity. Drop all of it whenever the identity changes so the
+  // next user never sees the previous user's projects, reports or notifications.
+  const resetCache = useCallback(() => {
+    queryClient.cancelQueries();
+    queryClient.clear();
+  }, [queryClient]);
+
+  const logout = useCallback(() => {
     updateToken(null);
     setUser(null);
+    resetCache();
+    applyTenantBranding(DEFAULT_BRANDING);
     toast.info("Signed out of InSite Assurance.");
-  };
+  }, [resetCache]);
+
+  const refreshUser = useCallback(async () => {
+    const token = getStoredToken();
+    if (!token) {
+      setUser(null);
+      applyTenantBranding(DEFAULT_BRANDING);
+      return;
+    }
+    const res = await getCurrentUser();
+    if (res.user) {
+      setUser(res.user);
+      applyTenantBranding(res.user.tenant?.brandingConfig);
+    } else {
+      updateToken(null);
+      setUser(null);
+      applyTenantBranding(DEFAULT_BRANDING);
+    }
+  }, []);
 
   useEffect(() => {
     registerUnauthorizedHandler(logout);
 
     const token = getStoredToken();
     if (!token) {
+      applyTenantBranding(DEFAULT_BRANDING);
       setIsLoading(false);
       return;
     }
 
-    getCurrentUser()
-      .then((res) => {
-        if (res.user) {
-          setUser(res.user);
-        } else {
-          updateToken(null);
-        }
-      })
+    refreshUser()
       .catch(() => {
         updateToken(null);
+        setUser(null);
+        applyTenantBranding(DEFAULT_BRANDING);
       })
       .finally(() => {
         setIsLoading(false);
       });
-  }, []);
+  }, [logout, refreshUser]);
 
   const login = async (email: string, password: string) => {
     const res = await loginMutation.mutateAsync({ email, password });
+    resetCache();
     updateToken(res.accessToken);
     setUser(res.user);
-    toast.success(`Signed in as ${res.user.fullName} (${res.user.role})`);
+    applyTenantBranding(res.user.tenant?.brandingConfig);
+    toast.success(`Signed in as ${res.user.fullName} (${res.user.roleName})`);
   };
 
   const quickSwitchDemoAccount = async (email: string) => {
-    if (!IS_DEMO_MODE) {
+    const demo = await loadDemoAccounts();
+    if (!demo) {
       toast.error("Demo account switching is disabled in live mode.");
       return;
     }
-    await login(email, "Password123!");
+    await login(email, demo.password);
   };
+
+  /** Changes the password; the server revokes other sessions and returns a fresh token. */
+  const changePassword = async (payload: ChangePasswordRequest) => {
+    const res = await changePasswordRequest(payload);
+    updateToken(res.accessToken);
+    setUser(res.user);
+    toast.success("Password updated. Other sessions for this account have been signed out.");
+  };
+
+  const hasPermission = useCallback(
+    (permissionKey: string): boolean => {
+      if (!user) return false;
+      if (user.isPlatformSuperAdmin) return true;
+      return user.permissions.includes(permissionKey);
+    },
+    [user]
+  );
+
+  const hasAnyPermission = useCallback(
+    (...permissionKeys: string[]): boolean => {
+      if (!user) return false;
+      if (user.isPlatformSuperAdmin) return true;
+      return permissionKeys.some((key) => user.permissions.includes(key));
+    },
+    [user]
+  );
 
   return (
     <AuthContext.Provider
-      value={{ user, isLoading, login, quickSwitchDemoAccount, logout }}
+      value={{
+        user,
+        isLoading,
+        login,
+        quickSwitchDemoAccount,
+        changePassword,
+        logout,
+        refreshUser,
+        hasPermission,
+        hasAnyPermission,
+      }}
     >
       {children}
     </AuthContext.Provider>

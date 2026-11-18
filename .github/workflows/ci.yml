@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main, saas]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: insite_assurance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/insite_assurance?schema=public
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/insite_assurance_test?schema=public
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build shared
+        run: npm run build:shared
+
+      - name: Generate Prisma client
+        run: npm --workspace=@insite/server run prisma:generate
+
+      - name: Migrations apply to an empty database
+        run: npm --workspace=@insite/server run prisma:migrate:deploy
+
+      - name: Typecheck
+        run: |
+          npm --workspace=@insite/server run typecheck
+          npm --workspace=@insite/web run typecheck
+          npm --workspace=@insite/mobile run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Server tests (unit + route-level)
+        run: npm --workspace=@insite/server run test
+
+      - name: Non-demo web bundle contains no demo credentials
+        env:
+          VITE_DEMO_MODE: "false"
+        run: |
+          npm exec --workspace=@insite/web -- vite build --outDir dist-ci
+          if grep -rqE "Password123|@insite\.ng" web/dist-ci; then
+            echo "Demo credentials found in non-demo bundle" && exit 1
+          fi

@@ -1,7 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { guardProjectRoutes, projectIdForFieldWrite } from '../../utils/accessControl';
 import { CreateTelemetryBatchSchema } from '@insite/shared';
 import {
-  requireAnyAuth,
+  requireAnyAuthWithWebPermission,
   requireFieldSession,
 } from '../../middleware/auth.middleware';
 import { validateBody } from '../../middleware/validate.middleware';
@@ -10,7 +11,7 @@ import {
   recordTelemetryBatch,
 } from './telemetry.service';
 
-const router = Router();
+const router = guardProjectRoutes(Router());
 
 /**
  * POST /api/v1/projects/:projectId/telemetry
@@ -23,7 +24,7 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await recordTelemetryBatch({
-        projectId: String(req.params.projectId),
+        projectId: projectIdForFieldWrite(req),
         fieldSessionId: req.fieldAgent!.sessionId,
         input: req.body,
       });
@@ -40,15 +41,18 @@ router.post(
  */
 router.get(
   '/:projectId/telemetry',
-  requireAnyAuth,
+  requireAnyAuthWithWebPermission('presence:view_telemetry'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const pings = await listProjectTelemetryPings({
         projectId: String(req.params.projectId),
         date: req.query.date ? String(req.query.date) : undefined,
-        fieldSessionId: req.query.fieldSessionId
-          ? String(req.query.fieldSessionId)
-          : undefined,
+        // Field agents only ever see their own pings.
+        fieldSessionId: req.fieldAgent
+          ? req.fieldAgent.sessionId
+          : req.query.fieldSessionId
+            ? String(req.query.fieldSessionId)
+            : undefined,
         limit: req.query.limit ? Number(req.query.limit) : undefined,
       });
       res.json({ success: true, data: pings });

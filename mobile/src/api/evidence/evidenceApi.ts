@@ -11,12 +11,12 @@ export const presignEvidenceUpload = async (payload: {
   mediaType: MediaType;
   fileName: string;
   mimeType: string;
+  byteSize: number;
 }) => {
   const { projectId, ...body } = payload;
   return mobileRequest<{
     uploadUrl: string;
     objectKey: string;
-    publicUrl: string;
     expiresInSeconds: number;
   }>(`/projects/${projectId}/evidence/presign`, {
     method: 'POST',
@@ -51,13 +51,17 @@ export const confirmEvidenceLog = async (payload: {
   );
 };
 
+export const readLocalFileBlob = async (localUri: string): Promise<Blob> => {
+  const fileRes = await fetch(localUri);
+  return fileRes.blob();
+};
+
+/** PUTs bytes to a presigned URL. Type and size must match what was presigned. */
 export const uploadBinaryToPresignedUrl = async (
   uploadUrl: string,
-  localUri: string,
+  blob: Blob,
   mimeType: string
 ): Promise<void> => {
-  const fileRes = await fetch(localUri);
-  const blob = await fileRes.blob();
   const putRes = await fetch(uploadUrl, {
     method: 'PUT',
     headers: { 'Content-Type': mimeType },

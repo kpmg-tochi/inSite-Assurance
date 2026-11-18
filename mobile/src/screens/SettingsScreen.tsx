@@ -19,7 +19,6 @@ import { Pill } from "../components/common";
 import Avatar from "../components/common/Avatar";
 import { GradientHeaderLayout } from "../components/common/GradientHeaderLayout";
 import { BackButton, PrimaryButton } from "../components/inputs/Buttons";
-import { IS_DEMO_MODE } from "../config/demoMode";
 import { useProfile } from "../context/ProfileContext";
 import type { RootStackParamList } from "../navigation/types";
 import { useResetDemoMutation } from "../queries/projects/useProjectsQueries";
@@ -101,7 +100,13 @@ export const SettingsScreen: React.FC = () => {
       activeProjectCode: null,
       activeSessionId: null,
       activeSessionToken: null,
-      activeIndependenceTier: null,
+      activeRoleId: null,
+      activeRoleCode: null,
+      activeRoleName: null,
+      activeFieldPersonaType: null,
+      activeAssuranceWeight: null,
+      activeRequiresIdentityAssurance: false,
+      activePermissions: [],
       assuranceStatus: "NOT_SUBMITTED",
     });
     navigation.reset({
@@ -241,7 +246,7 @@ export const SettingsScreen: React.FC = () => {
         </View>
 
         {/* Demo Controls Section (rendered only when DEMO_MODE is true) */}
-        {IS_DEMO_MODE && (
+        {(process.env.EXPO_PUBLIC_DEMO_MODE === "true") && (
           <View style={[styles.card, styles.demoCard]}>
             <View style={styles.demoHeaderRow}>
               <View style={{ flex: 1 }}>

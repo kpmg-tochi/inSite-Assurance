@@ -42,6 +42,9 @@ export const joinProjectByCode = async (
 export const demoSkipVerification = async (
   payload: DemoSkipVerificationRequest
 ): Promise<JoinProjectMobileResponse> => {
+  if (process.env.EXPO_PUBLIC_DEMO_MODE !== 'true') {
+    throw new Error('Demo features are not available in this build.');
+  }
   const result = await mobileRequest<JoinProjectMobileResponse>(
     '/auth/demo/skip-verification',
     {

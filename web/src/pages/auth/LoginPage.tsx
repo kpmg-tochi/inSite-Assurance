@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Play } from "lucide-react";
-import { SEEDED_DEMO_ACCOUNTS, useAuth } from "../../lib/auth-context";
+import { ChevronDown, Play } from "lucide-react";
+import { useAuth } from "../../lib/auth-context";
+import { useDemoAccounts } from "../../config/useDemoAccounts";
 import { InSiteLogo } from "../../components/InSiteLogo";
 import { IS_DEMO_MODE } from "../../config/demoMode";
+import { CustomSelect, type CustomSelectOption } from "../../components/common";
 
 const VOICE_WAVE_BARS = [
   10, 18, 12, 22, 14, 24, 16, 12, 20, 10, 16, 22, 12, 18, 14, 10, 16, 12,
@@ -12,21 +14,39 @@ const VOICE_WAVE_BARS = [
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const demo = useDemoAccounts();
+  const demoAccounts = demo?.accounts ?? [];
   const [selectedRoleIdx, setSelectedRoleIdx] = useState(0);
-  const [email, setEmail] = useState(
-    IS_DEMO_MODE ? SEEDED_DEMO_ACCOUNTS[0].email : "",
-  );
-  const [password, setPassword] = useState(
-    IS_DEMO_MODE ? SEEDED_DEMO_ACCOUNTS[0].password : "",
-  );
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const demoAccountOptions: CustomSelectOption<number>[] = useMemo(
+    () =>
+      demoAccounts.map((acct, idx) => ({
+        value: idx,
+        label: `${acct.roleTitle} — ${acct.name}`,
+        description: `${acct.organization} · ${acct.email}`,
+        badge: acct.credential,
+      })),
+    [demoAccounts],
+  );
+
+  // Demo builds prefill the first seeded account once the demo module has loaded.
+  useEffect(() => {
+    if (demo && demo.accounts[0]) {
+      setEmail((prev) => prev || demo.accounts[0].email);
+      setPassword((prev) => prev || demo.password);
+    }
+  }, [demo]);
+
   const handleSelectSeededAccount = (idx: number) => {
-    const acct = SEEDED_DEMO_ACCOUNTS[idx];
+    const acct = demoAccounts[idx];
+    if (!acct || !demo) return;
     setSelectedRoleIdx(idx);
     setEmail(acct.email);
-    setPassword(acct.password);
+    setPassword(demo.password);
     setErrorMsg(null);
   };
 
@@ -306,52 +326,49 @@ export function LoginPage() {
             </form>
           </div>
 
-          {/* 1-Click Seeded Demo Account Selector */}
-          {IS_DEMO_MODE && (
-            <div className="mt-8 pt-6 border-t border-slate-100">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2.5">
-                Quick-Select Seeded Demo Account (1-Click Fill)
+          {/* Quick-Select Demo Role Dropdown */}
+          {IS_DEMO_MODE && demoAccounts.length > 0 && (
+            <div className="mt-7 pt-5 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-2">
+                <label
+                  htmlFor="demo-role-select"
+                  className="text-[11px] font-semibold uppercase tracking-wider text-slate-500"
+                >
+                  Quick-Fill Demo Role
+                </label>
+                <span className="text-[10px] font-medium text-slate-400">
+                  Select a role to autofill
+                </span>
               </div>
-              <div className="space-y-2">
-                {SEEDED_DEMO_ACCOUNTS.map((acct, idx) => {
-                  const isSelected = selectedRoleIdx === idx;
-                  return (
-                    <button
-                      key={acct.email}
-                      type="button"
-                      onClick={() => handleSelectSeededAccount(idx)}
-                      className={`w-full text-left p-2.5 rounded-xl border transition flex items-center justify-between ${
-                        isSelected
-                          ? "border-brand-primary bg-blue-50/40 shadow-sm"
-                          : "border-slate-200 hover:border-brand-primary hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`w-7 h-7 rounded-full font-bold text-xs flex items-center justify-center shrink-0 ${
-                            isSelected
-                              ? "bg-brand-primary text-white"
-                              : "bg-slate-200 text-slate-700"
-                          }`}
-                        >
-                          {acct.initials}
-                        </div>
-                        <div>
-                          <div className="text-xs font-semibold text-slate-900">
-                            {acct.roleTitle}
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            {acct.name} — {acct.organization} · {acct.email}
-                          </div>
-                        </div>
+
+              <CustomSelect
+                value={selectedRoleIdx}
+                onChange={(idx) => handleSelectSeededAccount(idx)}
+                options={demoAccountOptions}
+                size="md"
+              />
+
+              {/* Selected account summary card */}
+              {demoAccounts[selectedRoleIdx] && (
+                <div className="mt-2.5 p-2.5 rounded-xl bg-blue-50/40 border border-blue-100/80 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-full bg-brand-primary text-white text-xs font-bold flex items-center justify-center shrink-0 shadow-sm">
+                      {demoAccounts[selectedRoleIdx].initials}
+                    </div>
+                    <div>
+                      <div className="font-semibold text-slate-900">
+                        {demoAccounts[selectedRoleIdx].name}
                       </div>
-                      <span className="text-[10px] font-semibold text-brand-primary bg-white px-2 py-0.5 rounded border border-blue-200 shrink-0">
-                        {acct.credential}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
+                      <div className="text-[11px] text-slate-500">
+                        {demoAccounts[selectedRoleIdx].email} · {demoAccounts[selectedRoleIdx].organization}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-semibold text-brand-primary bg-white px-2 py-0.5 rounded border border-blue-200 shrink-0">
+                    {demoAccounts[selectedRoleIdx].credential}
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -1,19 +1,473 @@
 import { z } from 'zod';
 
 /**
- * 1. Web Portal User Roles
- * Segregated workspaces as defined in Section 4.A of the specification.
+ * 1. Dynamic RBAC Surface & Field Persona Enums (Multi-Tenant SaaS)
  */
-export const UserRoleEnum = z.enum([
-  'MONITOR',    // Independent Monitor / QS / Lender Monitoring Manager (The Certifier)
-  'LENDER',     // Lender / Guarantor / Credit Risk Officer (The Approver)
-  'CONTRACTOR', // Contractor / Project Sponsor (The Claimant — Segregated Surface)
-]);
-export type UserRole = z.infer<typeof UserRoleEnum>;
+export const RoleSurfaceEnum = z.enum(['WEB', 'MOBILE', 'BOTH']);
+export type RoleSurface = z.infer<typeof RoleSurfaceEnum>;
 
 /**
- * 1b. Nigerian Professional Regulatory License Types
- * Used on User and ValuationReport to validate and format certifier credentials.
+ * Determines how a mobile field role interacts with workflows & AI briefs:
+ * - INDEPENDENT_VERIFIER: Independent M&E / Monitor / Clerk of Works (AI brief tells them what to inspect/verify)
+ * - CONTRACTOR_EXECUTOR: Contractor / Trade Engineer (AI brief tells them what to execute & submit)
+ * - NONE: Web-only governance role
+ */
+export const FieldPersonaTypeEnum = z.enum([
+  'INDEPENDENT_VERIFIER',
+  'CONTRACTOR_EXECUTOR',
+  'NONE',
+]);
+export type FieldPersonaType = z.infer<typeof FieldPersonaTypeEnum>;
+
+export const OrganizationCategoryEnum = z.enum([
+  'ADVISORY_MONITOR',
+  'FINANCIER_LENDER',
+  'CONTRACTOR',
+  'CLIENT_OWNER',
+  'GOVERNMENT_MDA',
+  'OTHER',
+]);
+export type OrganizationCategory = z.infer<typeof OrganizationCategoryEnum>;
+
+export const PermissionCategoryEnum = z.enum([
+  'TENANT_ADMIN',
+  'PORTFOLIO_PROJECTS',
+  'BOQ_SCHEDULE',
+  'MOBILIZATION_ASSURANCE',
+  'FIELD_PRESENCE',
+  'REPORT_APPROVALS',
+  'FINANCIAL_IPC',
+  'AUDIT_CLOSEOUT',
+]);
+export type PermissionCategory = z.infer<typeof PermissionCategoryEnum>;
+
+export const PERMISSION_CATEGORY_META: Record<
+  PermissionCategory,
+  { label: string; description: string }
+> = {
+  TENANT_ADMIN: {
+    label: 'Tenant, Roles & Branding',
+    description: 'Manage client white-label branding, custom roles, user invitations, and workflow templates.',
+  },
+  PORTFOLIO_PROJECTS: {
+    label: 'Portfolio & Project Visibility',
+    description: 'Control project creation, baseline editing, cross-tenant visibility, and executive risk views.',
+  },
+  BOQ_SCHEDULE: {
+    label: 'BOQ, Schedule & Contractors',
+    description: 'Upload BOQs, configure hold-points, assign trade contractors, and analyze/refactor schedules.',
+  },
+  MOBILIZATION_ASSURANCE: {
+    label: 'Mobilization & Access Assurance',
+    description: 'Pre-register site personnel, configure reminders, review ID/liveness, and revoke device sessions.',
+  },
+  FIELD_PRESENCE: {
+    label: 'Field Capture & Site Presence',
+    description: 'Join projects on mobile, submit field reports, perform GPS check-ins, and manage no-show alerts.',
+  },
+  REPORT_APPROVALS: {
+    label: 'Report Review & Approvals',
+    description: 'Inspect submitted workday/period reports, raise verification queries, and approve completion.',
+  },
+  FINANCIAL_IPC: {
+    label: 'IPC, Milestones & Drawdowns',
+    description: 'Submit IPC claims, run AI reconciliation, certify valuations, and approve tranche/milestone releases.',
+  },
+  AUDIT_CLOSEOUT: {
+    label: 'Audit, Handover & Retention',
+    description: 'Inspect cryptographic audit logs, issue stakeholder handover links, and manage retention defects.',
+  },
+};
+
+export interface SystemPermissionCatalogItem {
+  key: string;
+  name: string;
+  description: string;
+  category: PermissionCategory;
+  surface: RoleSurface;
+  unlocksViews: string[];
+}
+
+export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
+  // 1. TENANT_ADMIN
+  {
+    key: 'tenant:manage_branding',
+    name: 'Manage Tenant White-Label Branding',
+    description: 'Customize organization logo, primary palette, and PDF valuation report headers.',
+    category: 'TENANT_ADMIN',
+    surface: 'WEB',
+    unlocksViews: ['Settings -> Tenant Branding'],
+  },
+  {
+    key: 'roles:create_edit',
+    name: 'Create & Customize Roles & Permissions',
+    description: 'Create custom client roles, rename role labels, and assign categorized permissions.',
+    category: 'TENANT_ADMIN',
+    surface: 'WEB',
+    unlocksViews: ['Settings -> Roles & Permissions'],
+  },
+  {
+    key: 'users:invite_manage',
+    name: 'Manage Users & Project Assignments',
+    description: 'Create tenant users, assign custom roles, and scope user visibility to specific projects.',
+    category: 'TENANT_ADMIN',
+    surface: 'WEB',
+    unlocksViews: ['Settings -> Users & Visibility'],
+  },
+  {
+    key: 'tenant:manage_settings',
+    name: 'Manage Tenant Settings',
+    description: 'Change tenant-wide settings such as currency, timezone and security policy.',
+    category: 'TENANT_ADMIN',
+    surface: 'WEB',
+    unlocksViews: ['Settings -> Tenant Settings'],
+  },
+  {
+    key: 'templates:manage_workflows',
+    name: 'Configure Project Workflow Templates',
+    description: 'Define reusable client workflow templates, required steps, and approval chains.',
+    category: 'TENANT_ADMIN',
+    surface: 'WEB',
+    unlocksViews: ['Workflow Templates'],
+  },
+
+  // 2. PORTFOLIO_PROJECTS
+  {
+    key: 'projects:view_assigned',
+    name: 'View Assigned Projects',
+    description: 'View dashboard, map, and baseline details for projects explicitly assigned to the user.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['All Projects (Assigned)', 'Project Dashboard'],
+  },
+  {
+    key: 'projects:view_all_tenant',
+    name: 'View All Projects Across Tenant',
+    description: 'Global visibility across every project belonging to the client tenant.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['All Projects (Tenant-Wide)'],
+  },
+  {
+    key: 'projects:view_executive_matrix',
+    name: 'Access Executive Risk Matrix',
+    description: 'View cross-facility financial commitments, holdbacks, and risk standing.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Executive Risk Matrix'],
+  },
+  {
+    key: 'projects:create',
+    name: 'Create & Initialize New Projects',
+    description: 'Create new project baselines, geofences, tranches, and initial BOQ schedules.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['+ New Project Wizard'],
+  },
+  {
+    key: 'projects:edit_baseline',
+    name: 'Edit Project Baseline, Geofence & Cadence',
+    description: 'Update project parameters, geofence boundaries, and reporting cadence rules.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Project Baseline Settings'],
+  },
+  {
+    key: 'projects:manage_standards_docs',
+    name: 'Manage Standards & Needs Assessments',
+    description: 'Upload needs assessment documents and manage engineering standards specs.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Standards & Needs Docs'],
+  },
+
+  // 3. BOQ_SCHEDULE
+  {
+    key: 'boq:view',
+    name: 'View Bill of Quantities (BOQ) & WBS',
+    description: 'Read-only access to baseline BOQ items, quantities, and Hold-Point rules.',
+    category: 'BOQ_SCHEDULE',
+    surface: 'BOTH',
+    unlocksViews: ['BOQ & Hold-Points', 'Mobile WBS Inbox'],
+  },
+  {
+    key: 'boq:upload_edit',
+    name: 'Upload BOQ & Edit WBS Mappings',
+    description: 'Import BOQ spreadsheets and confirm AI-suggested tranche mappings.',
+    category: 'BOQ_SCHEDULE',
+    surface: 'WEB',
+    unlocksViews: ['BOQ Import & Mapping'],
+  },
+  {
+    key: 'boq:configure_hold_points',
+    name: 'Configure Mandatory Visual Hold-Points',
+    description: 'Flag or unflag critical WBS items as Mandatory Visual Hold-Points.',
+    category: 'BOQ_SCHEDULE',
+    surface: 'WEB',
+    unlocksViews: ['BOQ Hold-Point Controls'],
+  },
+  {
+    key: 'contractors:manage_packages',
+    name: 'Manage Contractors & Trade Packages',
+    description: 'Create/assign multiple trade contractors and review AI BOQ contractor suggestions.',
+    category: 'BOQ_SCHEDULE',
+    surface: 'WEB',
+    unlocksViews: ['Project Contractors'],
+  },
+  {
+    key: 'schedule:view_variance',
+    name: 'View Project Schedule Variance',
+    description: 'Monitor planned vs. actual schedule progress (ahead, on time, behind).',
+    category: 'BOQ_SCHEDULE',
+    surface: 'WEB',
+    unlocksViews: ['Schedule Variance Analytics'],
+  },
+  {
+    key: 'schedule:catch_up_refactor',
+    name: 'Refactor Schedule ("Catch Project Up")',
+    description: 'Re-baseline downstream WBS dates to absorb delays while preserving daily rates.',
+    category: 'BOQ_SCHEDULE',
+    surface: 'WEB',
+    unlocksViews: ['Catch Project Up Wizard'],
+  },
+  {
+    key: 'schedule:approve_refactor',
+    name: 'Approve Schedule Refactoring',
+    description: 'Approve or reject proposed baseline schedule shifts when approval is required.',
+    category: 'BOQ_SCHEDULE',
+    surface: 'WEB',
+    unlocksViews: ['Schedule Change Approvals'],
+  },
+
+  // 4. MOBILIZATION_ASSURANCE
+  {
+    key: 'mobilization:manage_roster',
+    name: 'Manage Expected Mobilization Roster',
+    description: 'Pre-register expected contractors/monitors with planned mobilization dates.',
+    category: 'MOBILIZATION_ASSURANCE',
+    surface: 'WEB',
+    unlocksViews: ['Settings -> Access & Mobilization', 'Project Join Codes'],
+  },
+  {
+    key: 'mobilization:configure_reminders',
+    name: 'Configure Onboarding Reminders',
+    description: 'Set automated countdown reminders before planned site mobilization dates.',
+    category: 'MOBILIZATION_ASSURANCE',
+    surface: 'WEB',
+    unlocksViews: ['Onboarding Reminder Settings'],
+  },
+  {
+    key: 'assurance:review_credentials',
+    name: 'Approve/Reject Identity & Credentials',
+    description: 'Review mobile ID cards, 3D liveness selfies, and regulatory licenses.',
+    category: 'MOBILIZATION_ASSURANCE',
+    surface: 'WEB',
+    unlocksViews: ['Contractor Verification Queue'],
+  },
+  {
+    key: 'sessions:revoke_device',
+    name: 'Revoke or Restore Mobile Device Sessions',
+    description: 'Manage active mobile field agent sessions and revoke compromised devices.',
+    category: 'MOBILIZATION_ASSURANCE',
+    surface: 'WEB',
+    unlocksViews: ['Settings -> Active Field Personnel'],
+  },
+
+  // 5. FIELD_PRESENCE
+  {
+    key: 'field:join_project',
+    name: 'Join Project via Mobile Join Code',
+    description: 'Authenticate a mobile field device onto a project via join code.',
+    category: 'FIELD_PRESENCE',
+    surface: 'MOBILE',
+    unlocksViews: ['Mobile Project Onboarding'],
+  },
+  {
+    key: 'field:submit_report',
+    name: 'Capture Field Evidence & Submit Reports',
+    description: 'Capture live geotagged photos, voice notes, and submit period/workday reports.',
+    category: 'FIELD_PRESENCE',
+    surface: 'MOBILE',
+    unlocksViews: ['Mobile WBS Chat & Camera'],
+  },
+  {
+    key: 'field:manual_checkin',
+    name: 'Perform On-Site GPS Check-In',
+    description: 'Submit explicit on-site presence check-ins within project geofence.',
+    category: 'FIELD_PRESENCE',
+    surface: 'MOBILE',
+    unlocksViews: ['Mobile Site Check-In'],
+  },
+  {
+    key: 'field:raise_incident',
+    name: 'Submit Special Incident / Whistleblower Alert',
+    description: 'Escalate safety emergencies, material failures, or confidential disclosures.',
+    category: 'FIELD_PRESENCE',
+    surface: 'MOBILE',
+    unlocksViews: ['Mobile Incident Escalation'],
+  },
+  {
+    key: 'presence:view_telemetry',
+    name: 'View Site Presence & Geotag Telemetry',
+    description: 'Inspect hourly GPS telemetry, check-in timestamps, and submission geotags.',
+    category: 'FIELD_PRESENCE',
+    surface: 'WEB',
+    unlocksViews: ['Site Presence Telemetry Panel'],
+  },
+  {
+    key: 'presence:manage_noshow_alerts',
+    name: 'Manage No-Show & Late Check-In Alerts',
+    description: 'Acknowledge or resolve missed check-in and mobilization no-show alerts.',
+    category: 'FIELD_PRESENCE',
+    surface: 'WEB',
+    unlocksViews: ['Site Attendance Alerts'],
+  },
+
+  // 6. REPORT_APPROVALS
+  {
+    key: 'reports:view_all',
+    name: 'View Submitted Field Reports',
+    description: 'Inspect submitted workday/period reports, AI assessments, and evidence.',
+    category: 'REPORT_APPROVALS',
+    surface: 'WEB',
+    unlocksViews: ['Daily Reports & Site Telemetry'],
+  },
+  {
+    key: 'reports:raise_query',
+    name: 'Raise Verification Queries on Reports/IPCs',
+    description: 'Dispatch clarification queries to field WBS chats or IPC line items.',
+    category: 'REPORT_APPROVALS',
+    surface: 'WEB',
+    unlocksViews: ['Raise Query Composer'],
+  },
+  {
+    key: 'reports:respond_query',
+    name: 'Respond to Queries & Resubmit Evidence',
+    description: 'Reply to monitor queries on IPC claims or mobile WBS threads.',
+    category: 'REPORT_APPROVALS',
+    surface: 'BOTH',
+    unlocksViews: ['IPC Query Reply', 'Mobile Revalidation'],
+  },
+  {
+    key: 'reports:approve_completion',
+    name: 'Approve Field Reports as Completed',
+    description: 'Sign off submitted field reports when report approval gating is enabled.',
+    category: 'REPORT_APPROVALS',
+    surface: 'WEB',
+    unlocksViews: ['Report Approval Queue'],
+  },
+
+  // 7. FINANCIAL_IPC
+  {
+    key: 'ipc:view',
+    name: 'View IPC Claims & Reconciliation Queue',
+    description: 'View submitted IPCs, evidence strength ratings, and reconciliation tables.',
+    category: 'FINANCIAL_IPC',
+    surface: 'WEB',
+    unlocksViews: ['IPC Reconciliation Workbench'],
+  },
+  {
+    key: 'ipc:submit_claim',
+    name: 'Submit Contractor IPC Drawdown Claims',
+    description: 'Create and submit Interim Payment Certificate claims for tranches.',
+    category: 'FINANCIAL_IPC',
+    surface: 'WEB',
+    unlocksViews: ['+ Submit New IPC Claim'],
+  },
+  {
+    key: 'ipc:trigger_ai_reconcile',
+    name: 'Run AI Evidence-to-Claim Reconciliation',
+    description: 'Trigger or re-run AI cross-examination of claims against field evidence.',
+    category: 'FINANCIAL_IPC',
+    surface: 'WEB',
+    unlocksViews: ['Re-Run Reconciliation', 'Smart Visit Planner'],
+  },
+  {
+    key: 'ipc:certify_valuation',
+    name: 'Certify Valuation Report',
+    description: 'Formally certify line-item completion % and recommend tranche release/holdback.',
+    category: 'FINANCIAL_IPC',
+    surface: 'WEB',
+    unlocksViews: ['Certify Valuation Modal'],
+  },
+  {
+    key: 'tranche:approve_disbursement',
+    name: 'Approve Tranche / Milestone Disbursement',
+    description: 'Record formal financier/approver release, holdback, or hold decisions.',
+    category: 'FINANCIAL_IPC',
+    surface: 'WEB',
+    unlocksViews: ['Tranche Disbursement Modal'],
+  },
+  {
+    key: 'milestone:verify_direct_release',
+    name: 'Verify Direct Milestone Release (No-IPC Mode)',
+    description: 'Verify milestone completion directly from evidence when IPCs are disabled.',
+    category: 'FINANCIAL_IPC',
+    surface: 'WEB',
+    unlocksViews: ['Direct Milestone Release'],
+  },
+  {
+    key: 'valuation:export_pdf',
+    name: 'Export Valuation Report PDF',
+    description: 'Generate and download branded Disbursement Evidence & Valuation Report PDFs.',
+    category: 'FINANCIAL_IPC',
+    surface: 'WEB',
+    unlocksViews: ['Export Valuation PDF'],
+  },
+
+  // 8. AUDIT_CLOSEOUT
+  {
+    key: 'incidents:view_confidential',
+    name: 'View Confidential Whistleblower Identity',
+    description: 'See the reporter identity on confidential whistleblower disclosures. Grant sparingly.',
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'WEB',
+    unlocksViews: ['Incidents -> Reporter identity'],
+  },
+  {
+    key: 'audit:view_ledger',
+    name: 'Inspect Cryptographic Audit Ledger',
+    description: 'View immutable SHA-256 hash-chained governance events and resolve incidents.',
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'WEB',
+    unlocksViews: ['Audit Ledger'],
+  },
+  {
+    key: 'handover:manage_links',
+    name: 'Generate Stakeholder Handover Links',
+    description: 'Create tokenized external stakeholder feedback links for project handover.',
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'WEB',
+    unlocksViews: ['Project Handover Console'],
+  },
+  {
+    key: 'handover:review_feedback',
+    name: 'Review Stakeholder Handover Feedback',
+    description: 'Inspect stakeholder sign-offs, uploaded handover reports, and recordings.',
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'WEB',
+    unlocksViews: ['Handover Feedback Viewer'],
+  },
+  {
+    key: 'retention:manage_defects',
+    name: 'Manage Retention Period Defect Tickets',
+    description: 'Log, assign, and verify maintenance/defect tickets during the retention period.',
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'BOTH',
+    unlocksViews: ['Retention & Defects Console'],
+  },
+  {
+    key: 'retention:release_escrow',
+    name: 'Approve Final Retention Release',
+    description: 'Release held-back retention funds once retention period & defects clear.',
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'WEB',
+    unlocksViews: ['Retention Release Gate'],
+  },
+];
+
+/**
+ * 1b. Nigerian & Configurable Professional Regulatory License Types
  */
 export const ProfessionalLicenseTypeEnum = z.enum([
   'QSRBN',  // Quantity Surveyors Registration Board of Nigeria
@@ -68,54 +522,7 @@ export const PROFESSIONAL_LICENSE_META: Record<
 };
 
 /**
- * 2. Field Reporter Independence Tiers
- * Bound via the role-specific Project Join Code (Section 4.B).
- */
-export const IndependenceTierEnum = z.enum([
-  'MONITOR_INSPECTOR',    // Visiting QS/Engineer from Independent Monitoring firm or Bank unit
-  'INDEPENDENT_RESIDENT', // Full-time on-site Clerk of Works / Resident Engineer
-  'CONTRACTOR_ENGINEER',  // Main Contractor's Site Engineer submitting periodic/hold-point logs
-]);
-export type IndependenceTier = z.infer<typeof IndependenceTierEnum>;
-
-export interface IndependenceTierMetadata {
-  tier: IndependenceTier;
-  codeSuffix: 'INS' | 'COW' | 'CON';
-  label: string;
-  shortBadge: string;
-  assuranceWeight: number; // 1.0 (Highest) -> 0.4 (Self-report, requires corroboration)
-  requiresCorroborationForHighValue: boolean;
-}
-
-export const INDEPENDENCE_TIER_META: Record<IndependenceTier, IndependenceTierMetadata> = {
-  MONITOR_INSPECTOR: {
-    tier: 'MONITOR_INSPECTOR',
-    codeSuffix: 'INS',
-    label: 'Monitor Inspector (Visiting QS / COREN)',
-    shortBadge: 'Monitor Inspector',
-    assuranceWeight: 1.0,
-    requiresCorroborationForHighValue: false,
-  },
-  INDEPENDENT_RESIDENT: {
-    tier: 'INDEPENDENT_RESIDENT',
-    codeSuffix: 'COW',
-    label: 'Independent Resident Clerk of Works',
-    shortBadge: 'Independent CoW',
-    assuranceWeight: 0.85,
-    requiresCorroborationForHighValue: false,
-  },
-  CONTRACTOR_ENGINEER: {
-    tier: 'CONTRACTOR_ENGINEER',
-    codeSuffix: 'CON',
-    label: 'Contractor Site Engineer (Self-Report)',
-    shortBadge: 'Contractor Engineer',
-    assuranceWeight: 0.4,
-    requiresCorroborationForHighValue: true,
-  },
-};
-
-/**
- * 2b. Contractor Identity & Competence Assurance Statuses
+ * 2b. Field Assurance Verification Statuses
  */
 export const ContractorAssuranceStatusEnum = z.enum([
   'PENDING_APPROVAL',
@@ -125,28 +532,27 @@ export const ContractorAssuranceStatusEnum = z.enum([
 export type ContractorAssuranceStatus = z.infer<typeof ContractorAssuranceStatusEnum>;
 
 /**
- * 3. Geofence Modes (Section 3.3 & 4.A)
+ * 3. Geofence Modes
  */
 export const GeofenceModeEnum = z.enum([
-  'RADIAL',          // Point Radius (e.g., 300m around a building, factory, or substation)
-  'LINEAR_CORRIDOR', // Linear Corridor / Chainage polyline buffer (roads, pipelines, transmission lines)
+  'RADIAL',
+  'LINEAR_CORRIDOR',
 ]);
 export type GeofenceMode = z.infer<typeof GeofenceModeEnum>;
 
 /**
- * 4. Configurable Field Reporting Cadences (Section 3.2 & 4.A)
+ * 4. Configurable Field Reporting Cadences
  */
 export const ReportingCadenceEnum = z.enum([
   'DAILY',
   'WEEKLY',
   'BI_WEEKLY',
-  'INSPECTION_ONLY', // Hold-Point / Milestone Triggered
+  'INSPECTION_ONLY',
 ]);
 export type ReportingCadence = z.infer<typeof ReportingCadenceEnum>;
 
 /**
- * 5. AI Evidence Strength Ratings (Section 1 & 7.1)
- * Software assigns an Evidence Strength Rating, NEVER a legally certified completion %.
+ * 5. AI Evidence Strength Ratings
  */
 export const EvidenceStrengthRatingEnum = z.enum([
   'SUPPORTED',
@@ -183,25 +589,25 @@ export const EVIDENCE_RATING_META: Record<
 };
 
 /**
- * 6. Portfolio Geospatial Health Pins (Section 4.A Role 2)
+ * 6. Portfolio Geospatial Health Pins
  */
 export const PortfolioHealthEnum = z.enum([
-  'EVIDENCE_SUPPORTED', // Green pin
-  'EVIDENCE_PARTIAL',   // Amber pin
-  'EVIDENCE_CONFLICT',  // Red pin
+  'EVIDENCE_SUPPORTED',
+  'EVIDENCE_PARTIAL',
+  'EVIDENCE_CONFLICT',
 ]);
 export type PortfolioHealth = z.infer<typeof PortfolioHealthEnum>;
 
 /**
- * 7. Field Evidence Log Lifecycle States (Hybrid Offline-First + Mandatory Human Confirmation)
+ * 7. Field Evidence Log Lifecycle States
  */
 export const EvidenceLogStatusEnum = z.enum([
-  'LOCAL_CAPTURED',        // Captured on device (live camera/audio)
-  'QUEUED_OFFLINE',        // Turf.js geofence checked & signed locally in Expo SQLite outbox
-  'UPLOADING_SYNC',        // Media uploading to S3/R2
-  'AWAITING_CONFIRMATION', // Azure Whisper + GPT-4o extracted quantities; waiting for Field Agent sign-off
-  'CONFIRMED',             // Human confirmed & signed; visible in Monitor's Reconciliation Workbench
-  'FLAGGED_INTEGRITY',     // Failed mock-location, pHash duplicate check, or clock-drift validation
+  'LOCAL_CAPTURED',
+  'QUEUED_OFFLINE',
+  'UPLOADING_SYNC',
+  'AWAITING_CONFIRMATION',
+  'CONFIRMED',
+  'FLAGGED_INTEGRITY',
 ]);
 export type EvidenceLogStatus = z.infer<typeof EvidenceLogStatusEnum>;
 
@@ -271,11 +677,18 @@ export const AuditActorTypeEnum = z.enum([
 export type AuditActorType = z.infer<typeof AuditActorTypeEnum>;
 
 export const AuditActionTypeEnum = z.enum([
+  'TENANT_CREATED',
+  'TENANT_BRANDING_UPDATED',
+  'ROLE_CREATED',
+  'ROLE_UPDATED',
+  'ROLE_DELETED',
+  'USER_PROJECT_ASSIGNED',
   'PROJECT_CREATED',
   'BASELINE_UPDATED',
   'BOQ_UPLOADED',
   'JOIN_CODE_ISSUED',
   'FIELD_AGENT_JOINED',
+  'FIELD_SESSION_STATUS_UPDATED',
   'CONTRACTOR_ASSURANCE_SUBMITTED',
   'CONTRACTOR_ASSURANCE_APPROVED',
   'CONTRACTOR_ASSURANCE_REJECTED',
@@ -289,27 +702,33 @@ export const AuditActionTypeEnum = z.enum([
   'VALUATION_REPORT_CERTIFIED',
   'LENDER_TRANCHE_DECIDED',
   'INCIDENT_REPORT_SUBMITTED',
+  'INCIDENT_STATUS_UPDATED',
   'PUSH_TOKEN_REGISTERED',
   'WORKDAY_REPORT_SUBMITTED',
+  'USER_CREATED',
+  'USER_UPDATED',
+  'USER_DEACTIVATED',
+  'JOIN_CODE_ROTATED',
+  'LOGIN_FAILED_LOCKOUT',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 
 /**
- * 11. Special Incident & Whistleblowing Enums ("!" Button Escalation)
+ * 11. Special Incident & Whistleblowing Enums
  */
 export const IncidentCategoryEnum = z.enum([
-  'WHISTLEBLOWING',      // Direct shielded report to Monitor & Lender
-  'SITE_EMERGENCY',       // Safety hazard, collapse, or injury on site
-  'CRITICAL_DELAY',       // Major supply/weather blocker preventing work
-  'MATERIAL_FAILURE',     // Defective batch (e.g. failing cube tests or sub-standard steel)
+  'WHISTLEBLOWING',
+  'SITE_EMERGENCY',
+  'CRITICAL_DELAY',
+  'MATERIAL_FAILURE',
 ]);
 export type IncidentCategory = z.infer<typeof IncidentCategoryEnum>;
 
 export const IncidentSeverityEnum = z.enum([
-  'CRITICAL', // Immediate push notification to Lender & Monitor lead
-  'HIGH',     // Highlighted on daily briefing dashboard
-  'MEDIUM',   // Standard escalation flag
-  'LOW',      // Informational incident log
+  'CRITICAL',
+  'HIGH',
+  'MEDIUM',
+  'LOW',
 ]);
 export type IncidentSeverity = z.infer<typeof IncidentSeverityEnum>;
 
@@ -322,14 +741,13 @@ export const IncidentStatusEnum = z.enum([
 export type IncidentStatus = z.infer<typeof IncidentStatusEnum>;
 
 /**
- * 12. Workday Report Status (Offline Queue & AI Gate)
+ * 12. Workday Report Status
  */
 export const WorkdayReportStatusEnum = z.enum([
-  'STAGED_UNVERIFIED', // Queued offline while contractor verification is PENDING
-  'READY_FOR_AI',      // Contractor verified; queued for Whisper/Vision parsing
-  'EXTRACTED',         // AI parsed; awaiting human engineer quantity confirmation
-  'CONFIRMED',         // Verified and signed off by engineer; synced to ledger
-  'SYNCED',            // Integrated into active BOQ baseline
+  'STAGED_UNVERIFIED',
+  'READY_FOR_AI',
+  'EXTRACTED',
+  'CONFIRMED',
+  'SYNCED',
 ]);
 export type WorkdayReportStatus = z.infer<typeof WorkdayReportStatusEnum>;
-

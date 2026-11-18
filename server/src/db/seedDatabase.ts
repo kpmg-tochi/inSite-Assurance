@@ -4,10 +4,13 @@ import { Prisma } from "@prisma/client";
 import {
   LinearCorridorGeofence,
   RadialGeofence,
+  SYSTEM_PERMISSIONS_CATALOG,
   verifyPointAgainstGeofence,
 } from "@insite/shared";
 import { prisma } from "../config/prisma";
 import { recordAuditEvent } from "../modules/audit/audit.service";
+import { provisionDefaultRoles } from "../modules/rbac/rbac.service";
+import { randomJoinCodeSegment } from "../modules/projects/joinCodes.service";
 
 let activeSeedPromise: Promise<void> | null = null;
 
@@ -29,6 +32,7 @@ async function runSeed(): Promise<void> {
   // Clean existing records in reverse dependency order
   await prisma.pushToken.deleteMany();
   await prisma.incidentReport.deleteMany();
+  await prisma.webNotificationRead.deleteMany();
   await prisma.webNotification.deleteMany();
   await prisma.wbsChatMessage.deleteMany();
   await prisma.reportQuery.deleteMany();
@@ -50,53 +54,127 @@ async function runSeed(): Promise<void> {
   await prisma.fieldAgentSession.deleteMany();
   await prisma.projectJoinCode.deleteMany();
   await prisma.auditLog.deleteMany();
+  await prisma.userProjectAssignment.deleteMany();
   await prisma.project.deleteMany();
   await prisma.user.deleteMany();
   await prisma.organization.deleteMany();
+  await prisma.rolePermission.deleteMany();
+  await prisma.role.deleteMany();
+  await prisma.permission.deleteMany();
+  await prisma.tenant.deleteMany();
 
   const defaultPasswordHash = await bcrypt.hash("Password123!", 10);
+
+  // 0. Seed Canonical System Permissions Catalog
+  const permissionByKey = new Map<string, string>();
+  for (const p of SYSTEM_PERMISSIONS_CATALOG) {
+    const createdPerm = await prisma.permission.create({
+      data: {
+        key: p.key,
+        name: p.name,
+        description: p.description,
+        category: p.category,
+        surface: p.surface,
+      },
+    });
+    permissionByKey.set(p.key, createdPerm.id);
+  }
+
+  // 0b. Create Default Multi-Tenant Workspace
+  const defaultTenant = await prisma.tenant.create({
+    data: {
+      name: "KPMG Nigeria Infrastructure & Capital Advisory",
+      slug: "kpmg-nigeria",
+      status: "ACTIVE",
+      defaultCurrency: "NGN",
+      timezone: "Africa/Lagos",
+      brandingConfig: {
+        logoUrl: "/KPMG-logo.svg",
+        primaryColorHex: "#00338D",
+        navyColorHex: "#0C233C",
+        tagline: "Capital Advisory",
+        pdfHeaderTitle: "InSite Assurance — Disbursement Evidence & Valuation Report",
+        pdfFooterDisclaimer:
+          "Independent Project Monitoring Certification | Powered by InSite Assurance",
+      } as unknown as Prisma.InputJsonValue,
+    },
+  });
+
+  // Default roles come from the single shared definition (DEFAULT_TENANT_ROLES).
+  const rolesByCode = await provisionDefaultRoles(prisma, defaultTenant.id);
+  const roleByCode = (code: string) => {
+    const role = rolesByCode.get(code);
+    if (!role) throw new Error(`Default role ${code} missing from DEFAULT_TENANT_ROLES`);
+    return role;
+  };
+  const superAdminRole = roleByCode("TENANT_SUPER_ADMIN");
+  const monitorRole = roleByCode("MONITOR");
+  const lenderRole = roleByCode("LENDER");
+  const contractorRole = roleByCode("CONTRACTOR");
+  const monitorInspectorMobileRole = roleByCode("MONITOR_INSPECTOR");
+  const residentCowMobileRole = roleByCode("INDEPENDENT_RESIDENT");
+  const contractorEngineerMobileRole = roleByCode("CONTRACTOR_ENGINEER");
 
   // 1. Create Organizations
   const monitorOrg = await prisma.organization.create({
     data: {
+      tenantId: defaultTenant.id,
       name: "KPMG Infrastructure & Project Monitoring Advisory",
-      roleType: "MONITOR",
+      category: "ADVISORY_MONITOR",
     },
   });
 
   const lenderOrg = await prisma.organization.create({
     data: {
+      tenantId: defaultTenant.id,
       name: "InfraCredit Guarantee & Project Finance Desk",
-      roleType: "LENDER",
+      category: "FINANCIER_LENDER",
     },
   });
 
   const contractorOrg = await prisma.organization.create({
     data: {
+      tenantId: defaultTenant.id,
       name: "Julius & Sons Civil Engineering Nigeria Ltd",
-      roleType: "CONTRACTOR",
+      category: "CONTRACTOR",
     },
   });
 
   // 2. Create Demo Web Users (All passwords: Password123!)
+  await prisma.user.create({
+    data: {
+      tenantId: defaultTenant.id,
+      email: "admin@insite.ng",
+      passwordHash: defaultPasswordHash,
+      fullName: "Adaeze Nwosu, FCA",
+      isPlatformSuperAdmin: true,
+      roleId: superAdminRole.id,
+      organizationId: monitorOrg.id,
+      professionalLicenseType: "ICAN",
+      professionalLicenseNumber: "FCA/019284",
+    },
+  });
+
   const monitorUser = await prisma.user.create({
     data: {
+      tenantId: defaultTenant.id,
       email: "monitor@insite.ng",
       passwordHash: defaultPasswordHash,
       fullName: "QS Tunde Adebayo, FNIQS",
-      role: "MONITOR",
+      roleId: monitorRole.id,
       organizationId: monitorOrg.id,
       professionalLicenseType: "QSRBN",
       professionalLicenseNumber: "3842",
     },
   });
 
-  const lenderUser = await prisma.user.create({
+  await prisma.user.create({
     data: {
+      tenantId: defaultTenant.id,
       email: "lender@insite.ng",
       passwordHash: defaultPasswordHash,
       fullName: "Chidinma Okafor, CFA",
-      role: "LENDER",
+      roleId: lenderRole.id,
       organizationId: lenderOrg.id,
       professionalLicenseType: "ICAN",
       professionalLicenseNumber: "MB/049120",
@@ -105,10 +183,11 @@ async function runSeed(): Promise<void> {
 
   const contractorUser = await prisma.user.create({
     data: {
+      tenantId: defaultTenant.id,
       email: "contractor@insite.ng",
       passwordHash: defaultPasswordHash,
       fullName: "Engr. Musa Danladi, MNSE",
-      role: "CONTRACTOR",
+      roleId: contractorRole.id,
       organizationId: contractorOrg.id,
       professionalLicenseType: "COREN",
       professionalLicenseNumber: "R.49201",
@@ -134,6 +213,7 @@ async function runSeed(): Promise<void> {
 
   const lkkProject = await prisma.project.create({
     data: {
+      tenantId: defaultTenant.id,
       name: "Lekki–Epe Industrial Access Dual-Carriageway & Drainage Upgrade",
       codePrefix: "LKK-402",
       stateLocation: "Lagos State",
@@ -153,27 +233,27 @@ async function runSeed(): Promise<void> {
     },
   });
 
-  const lkkJoinIns = await prisma.projectJoinCode.create({
+  await prisma.projectJoinCode.create({
     data: {
       projectId: lkkProject.id,
-      code: "LKK-402-INS",
-      independenceTier: "MONITOR_INSPECTOR",
+      roleId: monitorInspectorMobileRole.id,
+      code: `LKK-402-INS-${randomJoinCodeSegment()}`,
     },
   });
 
   const lkkJoinCow = await prisma.projectJoinCode.create({
     data: {
       projectId: lkkProject.id,
-      code: "LKK-402-COW",
-      independenceTier: "INDEPENDENT_RESIDENT",
+      roleId: residentCowMobileRole.id,
+      code: `LKK-402-COW-${randomJoinCodeSegment()}`,
     },
   });
 
   const lkkJoinCon = await prisma.projectJoinCode.create({
     data: {
       projectId: lkkProject.id,
-      code: "LKK-402-CON",
-      independenceTier: "CONTRACTOR_ENGINEER",
+      roleId: contractorEngineerMobileRole.id,
+      code: `LKK-402-CON-${randomJoinCodeSegment()}`,
     },
   });
 
@@ -358,7 +438,10 @@ async function runSeed(): Promise<void> {
     data: {
       projectId: lkkProject.id,
       joinCodeId: lkkJoinCow.id,
-      independenceTier: "INDEPENDENT_RESIDENT",
+      roleId: residentCowMobileRole.id,
+      roleNameSnapshot: residentCowMobileRole.name,
+      fieldPersonaType: residentCowMobileRole.fieldPersonaType,
+      assuranceWeight: residentCowMobileRole.assuranceWeight,
       agentFullName: "Engr. Segun Oladipo (Resident CoW)",
       agentPhoneNumber: "+2348034129801",
       deviceId: "ANDROID-COW-88412",
@@ -372,7 +455,10 @@ async function runSeed(): Promise<void> {
     data: {
       projectId: lkkProject.id,
       joinCodeId: lkkJoinCon.id,
-      independenceTier: "CONTRACTOR_ENGINEER",
+      roleId: contractorEngineerMobileRole.id,
+      roleNameSnapshot: contractorEngineerMobileRole.name,
+      fieldPersonaType: contractorEngineerMobileRole.fieldPersonaType,
+      assuranceWeight: contractorEngineerMobileRole.assuranceWeight,
       agentFullName: "Chukwudi Nnamdi (Contractor Site Engr)",
       agentPhoneNumber: "+2348091124500",
       deviceId: "ANDROID-CON-33109",
@@ -392,11 +478,14 @@ async function runSeed(): Promise<void> {
     },
   });
 
-  const pendingConSession = await prisma.fieldAgentSession.create({
+  await prisma.fieldAgentSession.create({
     data: {
       projectId: lkkProject.id,
       joinCodeId: lkkJoinCon.id,
-      independenceTier: "CONTRACTOR_ENGINEER",
+      roleId: contractorEngineerMobileRole.id,
+      roleNameSnapshot: contractorEngineerMobileRole.name,
+      fieldPersonaType: contractorEngineerMobileRole.fieldPersonaType,
+      assuranceWeight: contractorEngineerMobileRole.assuranceWeight,
       agentFullName: "Engr. Babatunde Fashanu",
       agentPhoneNumber: "+2348023456789",
       deviceId: "TECNO-CAMON-20-PRO",
@@ -426,7 +515,10 @@ async function runSeed(): Promise<void> {
       boqItemId: boqCulvertConcrete.id,
       fieldSessionId: cowSession.id,
       clientCaptureId: crypto.randomUUID(),
-      independenceTier: "INDEPENDENT_RESIDENT",
+      reporterRoleId: residentCowMobileRole.id,
+      reporterRoleName: residentCowMobileRole.name,
+      fieldPersonaType: residentCowMobileRole.fieldPersonaType,
+      assuranceWeight: residentCowMobileRole.assuranceWeight,
       status: "CONFIRMED",
       latitude: 6.4502,
       longitude: 3.57,
@@ -487,7 +579,10 @@ async function runSeed(): Promise<void> {
       boqItemId: boqStoneBase.id,
       fieldSessionId: conSession.id,
       clientCaptureId: crypto.randomUUID(),
-      independenceTier: "CONTRACTOR_ENGINEER",
+      reporterRoleId: contractorEngineerMobileRole.id,
+      reporterRoleName: contractorEngineerMobileRole.name,
+      fieldPersonaType: contractorEngineerMobileRole.fieldPersonaType,
+      assuranceWeight: contractorEngineerMobileRole.assuranceWeight,
       status: "CONFIRMED",
       latitude: 6.4518,
       longitude: 3.588,
@@ -546,7 +641,8 @@ async function runSeed(): Promise<void> {
         "Final 10% earthworks sub-grade compaction (4,500 m3) is corroborated by Independent Resident CoW logs and field density test records within corridor.",
       visitPlannerFlag: false,
       missingHoldPointFlag: false,
-      highestCorroboratingTier: "INDEPENDENT_RESIDENT",
+      highestCorroboratingRoleName: residentCowMobileRole.name,
+      highestCorroboratingWeight: residentCowMobileRole.assuranceWeight,
       corroboratingEvidenceLogIds: [
         cowEvidenceLog.id,
       ] as unknown as Prisma.InputJsonValue,
@@ -570,7 +666,8 @@ async function runSeed(): Promise<void> {
       visitPlannerReason:
         "Mandatory Hold-Point pre-pour reinforcement inspection required at KM 15+400 before concrete placement.",
       missingHoldPointFlag: true,
-      highestCorroboratingTier: "INDEPENDENT_RESIDENT",
+      highestCorroboratingRoleName: residentCowMobileRole.name,
+      highestCorroboratingWeight: residentCowMobileRole.assuranceWeight,
       corroboratingEvidenceLogIds: [
         cowEvidenceLog.id,
       ] as unknown as Prisma.InputJsonValue,
@@ -592,7 +689,8 @@ async function runSeed(): Promise<void> {
       visitPlannerReason:
         "₦196.5M variance between Contractor IPC claim (85%) and Independent Resident CoW field log (~52%) at KM 14+210.",
       missingHoldPointFlag: true,
-      highestCorroboratingTier: "INDEPENDENT_RESIDENT",
+      highestCorroboratingRoleName: residentCowMobileRole.name,
+      highestCorroboratingWeight: residentCowMobileRole.assuranceWeight,
       corroboratingEvidenceLogIds: [
         cowEvidenceLog.id,
       ] as unknown as Prisma.InputJsonValue,
@@ -609,12 +707,13 @@ async function runSeed(): Promise<void> {
       contractorClaimedNgn: 351500000,
       aiEvidenceRating: "PARTIALLY_SUPPORTED",
       aiRationale:
-        "Claim of 35% (₦351.5M drawdown) relies exclusively on CONTRACTOR_ENGINEER self-reported logs at KM 16+210 without independent Monitor or Resident CoW corroboration.",
+        "Claim of 35% (₦351.5M drawdown) relies exclusively on Contractor Site Engineer self-reported logs at KM 16+210 without independent Monitor or Resident CoW corroboration.",
       visitPlannerFlag: true,
       visitPlannerReason:
         "High-value claim (₦351.5M) backed solely by Contractor Site Engineer self-report; requires Monitor physical verification at KM 15+800–KM 16+400.",
       missingHoldPointFlag: false,
-      highestCorroboratingTier: "CONTRACTOR_ENGINEER",
+      highestCorroboratingRoleName: contractorEngineerMobileRole.name,
+      highestCorroboratingWeight: contractorEngineerMobileRole.assuranceWeight,
       corroboratingEvidenceLogIds: [
         conEvidenceLog.id,
       ] as unknown as Prisma.InputJsonValue,
@@ -636,7 +735,8 @@ async function runSeed(): Promise<void> {
       visitPlannerReason:
         "Unbundled ₦340M Lump Sum claim with zero supporting field logs or third-party utility clearance certificates.",
       missingHoldPointFlag: false,
-      highestCorroboratingTier: null,
+      highestCorroboratingRoleName: null,
+      highestCorroboratingWeight: null,
     },
   });
 
@@ -895,7 +995,7 @@ async function runSeed(): Promise<void> {
     data: [
       {
         projectId: lkkProject.id,
-        targetRole: "MONITOR",
+        targetPermissionKey: "reports:view_all",
         category: "REPORT_RESUBMITTED",
         title: "Report Resubmitted · WBS 02.01.2 (Rev #2)",
         description:
@@ -907,12 +1007,11 @@ async function runSeed(): Promise<void> {
           workdayReportId: culvertRev2.id,
           revisionNumber: 2,
         } as unknown as Prisma.InputJsonValue,
-        isRead: false,
         createdAt: new Date(nowMs - 1000 * 60 * 45),
       },
       {
         projectId: lkkProject.id,
-        targetRole: "MONITOR",
+        targetPermissionKey: "reports:view_all",
         category: "AI_OMISSION_FLAG",
         title: "AI Omission Query · WBS 02.01.1",
         description:
@@ -923,20 +1022,17 @@ async function runSeed(): Promise<void> {
           wbsCode: boqCulvertReinforcement.wbsCode,
           workdayReportId: rebarReportRev1.id,
         } as unknown as Prisma.InputJsonValue,
-        isRead: false,
         createdAt: new Date(nowMs - 1000 * 60 * 14),
       },
       {
         projectId: lkkProject.id,
-        targetRole: "MONITOR",
+        targetPermissionKey: "ipc:trigger_ai_reconcile",
         category: "CONFLICT_FLAG",
         title: "Pre-Pour Hold-Point Contradiction",
         description:
           "WBS 02.01.2 IPC #2 claim of 85% contradicts Resident CoW field log at KM 14+210.",
         actionUrl: `/app/projects/${lkkProject.id}/reconciliation`,
         metadata: { wbsCode: "02.01.2", ipcNumber: 2 } as unknown as Prisma.InputJsonValue,
-        isRead: true,
-        readAt: new Date(nowMs - 1000 * 60 * 60 * 6),
         createdAt: new Date(nowMs - 1000 * 60 * 60 * 10),
       },
     ],
@@ -1058,6 +1154,7 @@ async function runSeed(): Promise<void> {
 
   const abjProject = await prisma.project.create({
     data: {
+      tenantId: defaultTenant.id,
       name: "Idu Industrial Park 15MW Captive Solar & 33kV Substation Facility",
       codePrefix: "ABJ-108",
       stateLocation: "FCT Abuja",
@@ -1081,18 +1178,32 @@ async function runSeed(): Promise<void> {
     data: [
       {
         projectId: abjProject.id,
-        code: "ABJ-108-INS",
-        independenceTier: "MONITOR_INSPECTOR",
+        roleId: monitorInspectorMobileRole.id,
+        code: `ABJ-108-INS-${randomJoinCodeSegment()}`,
       },
       {
         projectId: abjProject.id,
-        code: "ABJ-108-COW",
-        independenceTier: "INDEPENDENT_RESIDENT",
+        roleId: residentCowMobileRole.id,
+        code: `ABJ-108-COW-${randomJoinCodeSegment()}`,
       },
       {
         projectId: abjProject.id,
-        code: "ABJ-108-CON",
-        independenceTier: "CONTRACTOR_ENGINEER",
+        roleId: contractorEngineerMobileRole.id,
+        code: `ABJ-108-CON-${randomJoinCodeSegment()}`,
+      },
+    ],
+  });
+
+  // Assign Contractor User explicitly to LKK-402 & ABJ-108 (since Contractor lacks projects:view_all_tenant)
+  await prisma.userProjectAssignment.createMany({
+    data: [
+      {
+        userId: contractorUser.id,
+        projectId: lkkProject.id,
+      },
+      {
+        userId: contractorUser.id,
+        projectId: abjProject.id,
       },
     ],
   });
@@ -1143,15 +1254,23 @@ async function runSeed(): Promise<void> {
 
   console.log("✅ Seed complete!");
   console.log(
-    "   • Monitor Login:    monitor@insite.ng    / Password123! (QSRBN #3842)",
+    "   • Super Admin Login: admin@insite.ng      / Password123! (Platform & Tenant Super Admin)",
   );
   console.log(
-    "   • Lender Login:     lender@insite.ng     / Password123! (ICAN #MB/049120)",
+    "   • Monitor Login:     monitor@insite.ng    / Password123! (QSRBN #3842)",
   );
   console.log(
-    "   • Contractor Login: contractor@insite.ng / Password123! (COREN #R.49201)",
+    "   • Lender Login:      lender@insite.ng     / Password123! (ICAN #MB/049120)",
   );
   console.log(
-    "   • Mobile Join Codes: LKK-402-INS, LKK-402-COW, LKK-402-CON | ABJ-108-INS, ABJ-108-COW, ABJ-108-CON",
+    "   • Contractor Login:  contractor@insite.ng / Password123! (COREN #R.49201)",
+  );
+  const seededCodes = await prisma.projectJoinCode.findMany({
+    where: { isActive: true },
+    orderBy: { code: "asc" },
+    select: { code: true },
+  });
+  console.log(
+    `   • Mobile Join Codes: ${seededCodes.map((c) => c.code).join(", ")}`,
   );
 }

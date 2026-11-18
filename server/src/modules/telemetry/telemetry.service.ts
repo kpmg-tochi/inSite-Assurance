@@ -117,7 +117,7 @@ export async function listProjectTelemetryPings(params: {
     where,
     include: {
       fieldSession: {
-        select: { agentFullName: true, independenceTier: true },
+        select: { agentFullName: true, roleNameSnapshot: true },
       },
     },
     orderBy: { capturedAtDevice: 'desc' },
@@ -129,7 +129,7 @@ export async function listProjectTelemetryPings(params: {
     projectId: r.projectId,
     fieldSessionId: r.fieldSessionId,
     agentName: r.fieldSession.agentFullName,
-    agentTier: r.fieldSession.independenceTier,
+    agentTier: r.fieldSession.roleNameSnapshot,
     wbsItemId: r.wbsItemId,
     latitude: r.latitude,
     longitude: r.longitude,

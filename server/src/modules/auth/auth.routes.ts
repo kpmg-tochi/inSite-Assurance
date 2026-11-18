@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
 import {
+  ChangePasswordRequestSchema,
   DemoSkipVerificationRequestSchema,
   JoinProjectMobileRequestSchema,
   RegisterPushTokenSchema,
@@ -10,39 +10,54 @@ import {
 } from "@insite/shared";
 import { validateBody } from "../../middleware/validate.middleware";
 import {
-  FieldAgentJwtPayload,
+  optionalAuth,
   requireAnyAuth,
   requireFieldSession,
+  requireWebAuth,
 } from "../../middleware/auth.middleware";
+import {
+  demoRateLimit,
+  joinProjectRateLimit,
+  loginRateLimit,
+} from "../../middleware/rateLimit.middleware";
 import { prisma } from "../../config/prisma";
 import { env } from "../../config/env";
 import { AppError } from "../../middleware/error.middleware";
 import {
+  changeWebUserPassword,
   demoSkipVerificationMobile,
+  getWebUserProfileById,
   joinProjectMobile,
   loginWebUser,
   registerWebUser,
 } from "./auth.service";
 import { recordAuditEvent } from "../audit/audit.service";
 import { createMobileNotification } from "../notifications/notifications.service";
+import { assertProjectObjectKey } from "../../integrations/storage.service";
 
 const router = Router();
 
-router.post(
-  "/register",
-  validateBody(WebRegisterRequestSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const result = await registerWebUser(req.body);
-      res.status(201).json({ success: true, data: result });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
+// D-2.1: public self-registration exists only in demo mode. Otherwise users are created by a
+// tenant admin (users:invite_manage) or at tenant provisioning, and this route is not mounted.
+if (env.DEMO_MODE) {
+  router.post(
+    "/register",
+    demoRateLimit,
+    validateBody(WebRegisterRequestSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const result = await registerWebUser(req.body);
+        res.status(201).json({ success: true, data: result });
+      } catch (error) {
+        next(error);
+      }
+    },
+  );
+}
 
 router.post(
   "/login",
+  loginRateLimit,
   validateBody(WebLoginRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -54,8 +69,28 @@ router.post(
   },
 );
 
+/**
+ * POST /api/v1/auth/change-password
+ * Allowed while `mustChangePassword` is set. Revokes other sessions and returns a fresh token.
+ */
+router.post(
+  "/change-password",
+  loginRateLimit,
+  requireWebAuth,
+  validateBody(ChangePasswordRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await changeWebUserPassword(req.webUser!.userId, req.body);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 router.post(
   "/join-project",
+  joinProjectRateLimit,
   validateBody(JoinProjectMobileRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -73,26 +108,15 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (req.webUser) {
-        const user = await prisma.user.findUnique({
-          where: { id: req.webUser.userId },
-          include: { organization: true },
-        });
+        const userProfile = await getWebUserProfileById(req.webUser.userId);
+        if (!userProfile) {
+          throw new AppError("Account is inactive or no longer exists", 401, "ACCOUNT_INACTIVE");
+        }
         res.json({
           success: true,
           data: {
             actorType: "WEB_USER",
-            user: user
-              ? {
-                  id: user.id,
-                  fullName: user.fullName,
-                  email: user.email,
-                  role: user.role,
-                  organizationId: user.organizationId,
-                  organizationName: user.organization.name,
-                  professionalLicenseType: user.professionalLicenseType,
-                  professionalLicenseNumber: user.professionalLicenseNumber,
-                }
-              : null,
+            user: userProfile,
           },
         });
         return;
@@ -102,9 +126,17 @@ router.get(
         const liveSession = await prisma.fieldAgentSession.findUnique({
           where: { id: req.fieldAgent.sessionId },
           include: {
+            role: {
+              include: {
+                rolePermissions: {
+                  include: { permission: { select: { key: true } } },
+                },
+              },
+            },
             project: {
               select: {
                 id: true,
+                tenantId: true,
                 name: true,
                 codePrefix: true,
                 stateLocation: true,
@@ -118,15 +150,28 @@ router.get(
           },
         });
 
+        if (!liveSession) {
+          throw new AppError("Field session no longer exists", 401, "UNAUTHORIZED");
+        }
+
         res.json({
           success: true,
           data: {
             actorType: "FIELD_AGENT",
-            fieldSession: liveSession
-              ? {
+            fieldSession: {
                   sessionId: liveSession.id,
+                  tenantId: liveSession.project.tenantId,
                   projectId: liveSession.projectId,
-                  independenceTier: liveSession.independenceTier,
+                  roleId: liveSession.roleId,
+                  roleCode: liveSession.role.code,
+                  roleName: liveSession.role.name,
+                  fieldPersonaType: liveSession.fieldPersonaType,
+                  assuranceWeight: liveSession.assuranceWeight,
+                  requiresIdentityAssurance:
+                    liveSession.role.requiresIdentityAssurance,
+                  permissions: liveSession.role.rolePermissions.map(
+                    (rp) => rp.permission.key,
+                  ),
                   agentFullName: liveSession.agentFullName,
                   agentPhoneNumber: liveSession.agentPhoneNumber,
                   deviceId: liveSession.deviceId,
@@ -134,8 +179,7 @@ router.get(
                   rejectionReason: liveSession.rejectionReason,
                   reviewedAt: liveSession.reviewedAt,
                   project: liveSession.project,
-                }
-              : req.fieldAgent,
+                },
           },
         });
         return;
@@ -174,7 +218,15 @@ router.post(
         },
       });
 
-      res.status(200).json({ success: true, data: pushToken });
+      res.status(200).json({
+        success: true,
+        data: {
+          id: pushToken.id,
+          devicePlatform: pushToken.devicePlatform,
+          appVersion: pushToken.appVersion,
+          updatedAt: pushToken.updatedAt.toISOString(),
+        },
+      });
     } catch (error) {
       next(error);
     }
@@ -194,6 +246,10 @@ router.post(
     try {
       const sessionId = req.fieldAgent!.sessionId;
       const body = req.body;
+      const { tenantId, projectId } = req.fieldAgent!;
+      for (const key of [body.idDocumentUrl, body.selfieFrontUrl, body.selfieLeftUrl, body.selfieRightUrl]) {
+        assertProjectObjectKey(key, tenantId, projectId);
+      }
 
       const updated = await prisma.fieldAgentSession.update({
         where: { id: sessionId },
@@ -255,47 +311,27 @@ router.post(
 
 /**
  * POST /api/v1/auth/demo/skip-verification
- * DEMO-ONLY ENDPOINT: Links the mobile field agent directly to the project
- * matching their joinCode as APPROVED without completing ID/liveness verification.
+ * DEMO-ONLY ENDPOINT, mounted only when DEMO_MODE is on: links the mobile field agent directly
+ * to the project matching their joinCode as APPROVED without ID/liveness verification.
  */
-router.post(
-  "/demo/skip-verification",
-  validateBody(DemoSkipVerificationRequestSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      if (!env.DEMO_MODE) {
-        throw new AppError(
-          "Demo verification bypass is disabled in this environment",
-          403,
-          "DEMO_DISABLED",
+if (env.DEMO_MODE) {
+  router.post(
+    "/demo/skip-verification",
+    demoRateLimit,
+    optionalAuth,
+    validateBody(DemoSkipVerificationRequestSchema),
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const result = await demoSkipVerificationMobile(
+          req.body,
+          req.fieldAgent?.sessionId,
         );
+        res.status(200).json({ success: true, data: result });
+      } catch (error) {
+        next(error);
       }
-
-      let authenticatedSessionId: string | undefined;
-      const authHeader = req.headers.authorization;
-      if (authHeader?.startsWith("Bearer ")) {
-        try {
-          const decoded = jwt.verify(
-            authHeader.slice(7).trim(),
-            env.JWT_SECRET,
-          ) as Partial<FieldAgentJwtPayload> & { tokenType?: string };
-          if (decoded?.tokenType === "FIELD_AGENT" && decoded.sessionId) {
-            authenticatedSessionId = decoded.sessionId;
-          }
-        } catch {
-          // Ignore stale/invalid optional bearer token on demo bypass
-        }
-      }
-
-      const result = await demoSkipVerificationMobile(
-        req.body,
-        authenticatedSessionId,
-      );
-      res.status(200).json({ success: true, data: result });
-    } catch (error) {
-      next(error);
-    }
-  },
-);
+    },
+  );
+}
 
 export const authRoutes = router;

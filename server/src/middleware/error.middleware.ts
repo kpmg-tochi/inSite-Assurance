@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { Prisma } from '@prisma/client';
 import { ZodError } from 'zod';
 
 export class AppError extends Error {
@@ -13,48 +14,64 @@ export class AppError extends Error {
   }
 }
 
+function send(res: Response, status: number, code: string, message: string, extra?: object) {
+  res.status(status).json({ success: false, error: { code, message, ...extra } });
+}
+
+/**
+ * Maps known error types to safe responses. Unhandled errors are logged in full but only a
+ * generic message is returned in production, so stack details and SQL never reach clients.
+ */
 export function errorHandler(
   err: unknown,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction
 ): void {
   if (err instanceof AppError) {
-    res.status(err.statusCode).json({
-      success: false,
-      error: {
-        code: err.code,
-        message: err.message,
-      },
-    });
+    send(res, err.statusCode, err.code, err.message);
     return;
   }
 
   if (err instanceof ZodError) {
-    res.status(400).json({
-      success: false,
-      error: {
-        code: 'VALIDATION_ERROR',
-        message: 'Invalid request payload',
-        issues: err.issues.map((issue) => ({
-          path: issue.path.join('.'),
-          message: issue.message,
-        })),
-      },
+    send(res, 400, 'VALIDATION_ERROR', 'Invalid request payload', {
+      issues: err.issues.map((issue) => ({
+        path: issue.path.join('.'),
+        message: issue.message,
+      })),
     });
     return;
   }
 
-  console.error('[Unhandled API Error]:', err);
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === 'P2002') {
+      send(res, 409, 'CONFLICT', 'A record with these details already exists');
+      return;
+    }
+    if (err.code === 'P2025' || err.code === 'P2023') {
+      send(res, 404, 'NOT_FOUND', 'Record not found');
+      return;
+    }
+  }
+
+  // body-parser errors (malformed JSON, payload too large)
+  const httpErr = err as { type?: string; status?: number };
+  if (httpErr?.type === 'entity.parse.failed') {
+    send(res, 400, 'MALFORMED_JSON', 'Request body is not valid JSON');
+    return;
+  }
+  if (httpErr?.type === 'entity.too.large') {
+    send(res, 413, 'PAYLOAD_TOO_LARGE', 'Request body is too large');
+    return;
+  }
+
+  console.error(`[Unhandled API Error] ${req.method} ${req.originalUrl}:`, err);
   const message =
-    err instanceof Error ? err.message : 'An unexpected server error occurred';
+    process.env.NODE_ENV === 'production'
+      ? 'An unexpected server error occurred'
+      : err instanceof Error
+        ? err.message
+        : 'An unexpected server error occurred';
 
-  res.status(500).json({
-    success: false,
-    error: {
-      code: 'INTERNAL_SERVER_ERROR',
-      message,
-    },
-  });
+  send(res, 500, 'INTERNAL_SERVER_ERROR', message);
 }
-

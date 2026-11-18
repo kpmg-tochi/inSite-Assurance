@@ -13,6 +13,7 @@ import { AppError } from '../../middleware/error.middleware';
 import type { WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { createMobileNotification } from '../notifications/notifications.service';
+import { loadReportQueryInProject, loadWorkdayReportInProject } from '../../utils/ownership';
 
 type PrismaTransactionOrClient = Prisma.TransactionClient | typeof prisma;
 
@@ -223,9 +224,9 @@ export async function createWorkdayReportQuery(params: {
       projectId: params.projectId,
       actorType: 'WEB_USER',
       actorId: params.webUser.userId,
-      actorDisplayName: `${params.webUser.fullName} (MONITOR)`,
+      actorDisplayName: `${params.webUser.fullName} (${params.webUser.roleName})`,
       action: 'MONITOR_QUERY_RAISED',
-      summaryText: `Monitor queried daily report WBS ${report.boqItem.wbsCode} (Rev #${report.revisionNumber}): "${params.queryText}"`,
+      summaryText: `${params.webUser.roleName} queried daily report WBS ${report.boqItem.wbsCode} (Rev #${report.revisionNumber}): "${params.queryText}"`,
       payload: {
         workdayReportId: report.id,
         reportQueryId: createdQuery.id,
@@ -274,7 +275,31 @@ export async function postWbsChatMessage(params: {
   });
 
   if (!boq) {
-    throw new AppError('BOQ item not found in project', 404);
+    throw new AppError('BOQ item not found in project', 404, 'BOQ_ITEM_NOT_FOUND');
+  }
+  // Linked report and query must belong to this project and this WBS item.
+  if (params.input.workdayReportId) {
+    const report = await loadWorkdayReportInProject(
+      prisma,
+      params.projectId,
+      params.input.workdayReportId
+    );
+    if (report.wbsItemId !== params.boqItemId) {
+      throw new AppError('Workday report not found', 404, 'WORKDAY_REPORT_NOT_FOUND');
+    }
+    if (params.fieldSessionId && report.reporterSessionId !== params.fieldSessionId) {
+      throw new AppError('Workday report not found', 404, 'WORKDAY_REPORT_NOT_FOUND');
+    }
+  }
+  if (params.input.reportQueryId) {
+    const query = await loadReportQueryInProject(
+      prisma,
+      params.projectId,
+      params.input.reportQueryId
+    );
+    if (query.boqItemId !== params.boqItemId) {
+      throw new AppError('Report query not found', 404, 'REPORT_QUERY_NOT_FOUND');
+    }
   }
 
   const created = await prisma.wbsChatMessage.create({

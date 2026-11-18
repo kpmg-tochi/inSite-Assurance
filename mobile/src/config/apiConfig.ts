@@ -6,6 +6,7 @@ import type {
   ReportingCadence,
 } from '@insite/shared';
 import { formatMobileErrorMessage } from '../utils/errorFormatter';
+import { markSessionEnded, type SessionEndReason } from './sessionState';
 
 function extractLanHost(uriOrUrl?: string | null): string | null {
   if (!uriOrUrl) return null;
@@ -25,6 +26,18 @@ function extractLanHost(uriOrUrl?: string | null): string | null {
 
 function resolveMobileApiBaseUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+
+  // Release builds must be pointed at an explicit HTTPS API. LAN auto-discovery below is for
+  // development only.
+  if (!__DEV__) {
+    if (!envUrl || !/^https:\/\//i.test(envUrl)) {
+      throw new Error(
+        'EXPO_PUBLIC_API_BASE_URL must be set to an https:// URL for release builds.'
+      );
+    }
+    return envUrl.replace(/\/+$/, '');
+  }
+
   if (envUrl) {
     return envUrl.replace(/\/+$/, '');
   }
@@ -116,6 +129,24 @@ export const saveBaselinePack = (pack: MobileBaselinePack) => {
 export const getCachedBaselinePack = (): MobileBaselinePack | null =>
   cachedBaselinePack;
 
+/**
+ * Error from the API layer. `kind` lets callers tell "offline / server unreachable" apart from
+ * "this session is no longer allowed", which must never be retried as if it were offline.
+ */
+export class MobileApiError extends Error {
+  constructor(
+    message: string,
+    public readonly kind: 'network' | 'auth' | 'http',
+    public readonly status?: number,
+    public readonly code?: string
+  ) {
+    super(message);
+    this.name = 'MobileApiError';
+  }
+}
+
+const SESSION_ENDING_403_CODES = new Set(['SESSION_REVOKED', 'TENANT_SUSPENDED']);
+
 export async function mobileRequest<T>(
   path: string,
   options: RequestInit = {}
@@ -140,7 +171,7 @@ export async function mobileRequest<T>(
       signal: options.signal ?? controller.signal,
     });
   } catch (err) {
-    throw new Error(formatMobileErrorMessage(err));
+    throw new MobileApiError(formatMobileErrorMessage(err), 'network');
   } finally {
     clearTimeout(timeoutId);
   }
@@ -148,9 +179,19 @@ export async function mobileRequest<T>(
   const payload = await response.json().catch(() => null);
 
   if (!response.ok || !payload?.success) {
-    throw new Error(
-      formatMobileErrorMessage(payload?.error?.message, response.status)
-    );
+    const code: string | undefined = payload?.error?.code;
+    const message = formatMobileErrorMessage(payload?.error?.message, response.status);
+    const sessionEnded =
+      Boolean(fieldAgentToken) &&
+      (response.status === 401 ||
+        (response.status === 403 && code !== undefined && SESSION_ENDING_403_CODES.has(code)));
+    if (sessionEnded) {
+      const reason: SessionEndReason =
+        code === 'SESSION_REVOKED' || code === 'TENANT_SUSPENDED' ? code : 'UNAUTHORIZED';
+      markSessionEnded(reason, payload?.error?.message ?? message);
+      throw new MobileApiError(message, 'auth', response.status, code);
+    }
+    throw new MobileApiError(message, 'http', response.status, code);
   }
 
   return payload.data as T;

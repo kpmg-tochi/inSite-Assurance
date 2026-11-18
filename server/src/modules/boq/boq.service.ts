@@ -1,4 +1,5 @@
-import * as XLSX from 'xlsx';
+import { Readable } from 'stream';
+import ExcelJS from 'exceljs';
 import {
   BoqItemInput,
   BoqItemInputSchema,
@@ -9,22 +10,77 @@ import { AppError } from '../../middleware/error.middleware';
 import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { azureOpenAiService } from '../../integrations/azure-openai.service';
 import { recordAuditEvent } from '../audit/audit.service';
+import { loadBoqItemInProject, loadTrancheInProject } from '../../utils/ownership';
+import { serializeBoqItem } from '../../utils/serializers';
+
+const MAX_BOQ_FILE_BYTES = 10 * 1024 * 1024;
+
+/** Plain value of an ExcelJS cell (formula results, rich text and hyperlinks unwrapped). */
+function cellValue(value: ExcelJS.CellValue): unknown {
+  if (value === null || value === undefined) return '';
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === 'object') {
+    if ('result' in value) return cellValue(value.result as ExcelJS.CellValue);
+    if ('richText' in value) return value.richText.map((r) => r.text).join('');
+    if ('text' in value) return value.text;
+    return '';
+  }
+  return value;
+}
+
+/** Reads the first worksheet of an .xlsx or .csv buffer into header-keyed row objects. */
+async function readSpreadsheetRows(buffer: Buffer): Promise<Record<string, unknown>[]> {
+  const workbook = new ExcelJS.Workbook();
+  const isZip = buffer.length > 2 && buffer[0] === 0x50 && buffer[1] === 0x4b; // "PK": .xlsx
+  try {
+    if (isZip) {
+      await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+    } else {
+      await workbook.csv.read(Readable.from(buffer));
+    }
+  } catch {
+    throw new AppError(
+      'Could not read the BOQ file. Upload an .xlsx or .csv file.',
+      400,
+      'INVALID_BOQ_FILE'
+    );
+  }
+
+  const sheet = workbook.worksheets[0];
+  if (!sheet || sheet.rowCount < 2) {
+    throw new AppError('Uploaded BOQ file contains no rows', 400, 'EMPTY_BOQ_FILE');
+  }
+
+  const headers: string[] = [];
+  sheet.getRow(1).eachCell({ includeEmpty: true }, (cell, col) => {
+    headers[col] = String(cellValue(cell.value)).trim();
+  });
+
+  const rows: Record<string, unknown>[] = [];
+  for (let r = 2; r <= sheet.rowCount; r++) {
+    const row = sheet.getRow(r);
+    const record: Record<string, unknown> = {};
+    let hasValue = false;
+    headers.forEach((header, col) => {
+      if (!header) return;
+      const v = cellValue(row.getCell(col).value);
+      if (v !== '') hasValue = true;
+      record[header] = v;
+    });
+    if (hasValue) rows.push(record);
+  }
+  return rows;
+}
 
 /**
  * Parses a base64-encoded .xlsx or .csv spreadsheet into BoqItemInput rows.
  */
-export function parseBoqSpreadsheetBase64(base64Content: string): BoqItemInput[] {
+export async function parseBoqSpreadsheetBase64(base64Content: string): Promise<BoqItemInput[]> {
   const buffer = Buffer.from(base64Content, 'base64');
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) {
-    throw new AppError('Uploaded BOQ file contains no sheets', 400, 'EMPTY_BOQ_FILE');
+  if (buffer.length > MAX_BOQ_FILE_BYTES) {
+    throw new AppError('BOQ file is larger than 10 MB', 413, 'FILE_TOO_LARGE');
   }
-
-  const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(
-    workbook.Sheets[sheetName],
-    { defval: '' }
-  );
+  const rawRows = await readSpreadsheetRows(buffer);
 
   const items: BoqItemInput[] = [];
   for (let idx = 0; idx < rawRows.length; idx++) {
@@ -77,13 +133,7 @@ export async function listProjectBoqItems(projectId: string) {
     },
   });
 
-  return items.map((item) => ({
-    ...item,
-    totalQuantity: Number(item.totalQuantity),
-    rateNgn: Number(item.rateNgn),
-    budgetedCostNgn: Number(item.budgetedCostNgn),
-    cumulativeCertifiedPct: Number(item.cumulativeCertifiedPct),
-  }));
+  return items.map((item) => serializeBoqItem(item));
 }
 
 export async function uploadAndAnalyzeProjectBoq(params: {
@@ -109,7 +159,7 @@ export async function uploadAndAnalyzeProjectBoq(params: {
     params.items && params.items.length > 0
       ? params.items.map((i) => BoqItemInputSchema.parse(i))
       : params.spreadsheetBase64
-      ? parseBoqSpreadsheetBase64(params.spreadsheetBase64)
+      ? await parseBoqSpreadsheetBase64(params.spreadsheetBase64)
       : [];
 
   if (parsedItems.length === 0) {
@@ -203,7 +253,7 @@ export async function uploadAndAnalyzeProjectBoq(params: {
       projectId: params.projectId,
       actorType: 'WEB_USER',
       actorId: params.webUser.userId,
-      actorDisplayName: `${params.webUser.fullName} (${params.webUser.role})`,
+      actorDisplayName: `${params.webUser.fullName} (${params.webUser.roleName})`,
       action: 'BOQ_UPLOADED',
       summaryText: `Uploaded and analyzed ${upsertedItems.length} BOQ line items (${holdPointCount} Hold Points, ${opaqueCount} Opaque Lump Sums flagged).`,
       payload: {
@@ -217,13 +267,7 @@ export async function uploadAndAnalyzeProjectBoq(params: {
       totalUploaded: upsertedItems.length,
       opaqueLumpSumCount: opaqueCount,
       holdPointCount,
-      items: upsertedItems.map((item) => ({
-        ...item,
-        totalQuantity: Number(item.totalQuantity),
-        rateNgn: Number(item.rateNgn),
-        budgetedCostNgn: Number(item.budgetedCostNgn),
-        cumulativeCertifiedPct: Number(item.cumulativeCertifiedPct),
-      })),
+      items: upsertedItems.map((item) => serializeBoqItem(item)),
     };
   });
 }
@@ -236,6 +280,10 @@ export async function confirmBoqTrancheMappings(params: {
   return prisma.$transaction(async (tx) => {
     const updated = [];
     for (const u of params.input.updates) {
+      await loadBoqItemInProject(tx, params.projectId, u.boqItemId);
+      if (u.trancheId) {
+        await loadTrancheInProject(tx, params.projectId, u.trancheId);
+      }
       const item = await tx.boqItem.update({
         where: { id: u.boqItemId, projectId: params.projectId },
         data: {
@@ -254,13 +302,13 @@ export async function confirmBoqTrancheMappings(params: {
       projectId: params.projectId,
       actorType: 'WEB_USER',
       actorId: params.webUser.userId,
-      actorDisplayName: `${params.webUser.fullName} (${params.webUser.role})`,
+      actorDisplayName: `${params.webUser.fullName} (${params.webUser.roleName})`,
       action: 'BASELINE_UPDATED',
       summaryText: `Monitor confirmed BOQ-to-Tranche mappings and Hold Point settings for ${updated.length} line item(s).`,
       payload: { updatedBoqItemIds: updated.map((i) => i.id) },
     });
 
-    return updated;
+    return updated.map((item) => serializeBoqItem(item));
   });
 }
 

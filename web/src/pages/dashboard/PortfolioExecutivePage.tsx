@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   TrendingUp,
   AlertTriangle,
@@ -29,6 +30,7 @@ import {
   TableActionButton,
   TableColumnDef,
 } from '../../components/table';
+import { KpiCard } from '../../components/common';
 
 interface PortfolioExecutivePageProps {
   onSelectProject: (projectId: string) => void;
@@ -37,53 +39,17 @@ interface PortfolioExecutivePageProps {
 export function PortfolioExecutivePage({
   onSelectProject,
 }: PortfolioExecutivePageProps) {
-  const { user } = useAuth();
+  useAuth();
   const { data: summary, isLoading, refetch } = usePortfolioExecutiveQuery();
   const [searchTerm, setSearchTerm] = useState('');
   const [healthFilter, setHealthFilter] = useState<'ALL' | 'EVIDENCE_SUPPORTED' | 'EVIDENCE_PARTIAL' | 'EVIDENCE_CONFLICT'>('ALL');
 
-  if (isLoading) {
-    return (
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-12 flex flex-col items-center justify-center gap-3">
-        <Loader size="md" />
-        <span className="text-xs text-slate-500 font-medium">
-          Loading Multi-Project Executive Surveillance Matrix...
-        </span>
-      </div>
-    );
-  }
-
-  if (!summary) {
-    return (
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center text-xs text-slate-500">
-        Unable to load portfolio executive data. Please check connection.
-      </div>
-    );
-  }
-
-  const disbursedPct = summary.totalPortfolioCommitmentNgn > 0
-    ? Math.round((summary.totalDisbursedToDateNgn / summary.totalPortfolioCommitmentNgn) * 100)
-    : 0;
-
-  const filteredProjects = summary.projects.filter((p) => {
-    const matchesSearch =
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.codePrefix.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.contractorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.stateLocation.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesHealth =
-      healthFilter === 'ALL' || p.portfolioHealth === healthFilter;
-
-    return matchesSearch && matchesHealth;
-  });
-
   const portfolioColumns: TableColumnDef<PortfolioProjectHealthItem>[] = useMemo(
     () => [
       {
-        id: 'facility',
-        header: 'Facility & Location',
-        tooltip: 'Project identifier prefix, state location, and official facility name',
+        id: 'project',
+        header: 'Project & Location',
+        tooltip: 'Project identifier prefix, state location, and official project name',
         width: 'w-72',
         cell: (item) => (
           <div>
@@ -130,7 +96,7 @@ export function PortfolioExecutivePage({
         id: 'commitmentDrawn',
         header: 'Commitment & Drawn',
         tooltip:
-          'Approved total facility commitment and cumulative disbursements drawn',
+          'Approved total project commitment and cumulative disbursements drawn',
         align: 'right',
         width: 'w-44',
         cell: (item) => (
@@ -173,7 +139,7 @@ export function PortfolioExecutivePage({
         id: 'governance',
         header: 'Governance Status',
         tooltip:
-          'Cross-facility assurance standing based on field corroboration and Hold-Point adherence',
+          'Cross-project assurance standing based on field corroboration and Hold-Point adherence',
         width: 'w-44',
         cell: (item) => {
           if (item.portfolioHealth === 'EVIDENCE_SUPPORTED') {
@@ -236,6 +202,42 @@ export function PortfolioExecutivePage({
     [onSelectProject]
   );
 
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-12 flex flex-col items-center justify-center gap-3">
+        <Loader size="md" />
+        <span className="text-xs text-slate-500 font-medium">
+          Loading Multi-Project Executive Surveillance Matrix...
+        </span>
+      </div>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center text-xs text-slate-500">
+        Unable to load portfolio executive data. Please check connection.
+      </div>
+    );
+  }
+
+  const disbursedPct = summary.totalPortfolioCommitmentNgn > 0
+    ? Math.round((summary.totalDisbursedToDateNgn / summary.totalPortfolioCommitmentNgn) * 100)
+    : 0;
+
+  const filteredProjects = summary.projects.filter((p) => {
+    const matchesSearch =
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.codePrefix.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.contractorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.stateLocation.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesHealth =
+      healthFilter === 'ALL' || p.portfolioHealth === healthFilter;
+
+    return matchesSearch && matchesHealth;
+  });
+
   const handlePrint = () => {
     window.print();
   };
@@ -247,7 +249,7 @@ export function PortfolioExecutivePage({
         <div>
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-brand-primary border border-blue-200">
-              Executive Cross-Facility Surveillance
+              Executive Cross-Project Surveillance
             </span>
             <span className="text-xs text-slate-400">·</span>
             <span className="text-xs font-semibold text-slate-500">
@@ -258,7 +260,7 @@ export function PortfolioExecutivePage({
             Multi-Project Capital Risk &amp; Governance Matrix
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Consolidated physical-to-financial reconciliation across all infrastructure facilities
+            Consolidated physical-to-financial reconciliation across all infrastructure projects
           </p>
         </div>
 
@@ -284,113 +286,104 @@ export function PortfolioExecutivePage({
       {/* 2. Top-Level Executive KPI Scorecards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* Card 1: Total Commitments */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-brand-primary flex items-center justify-center font-bold">
-              <Landmark className="w-4 h-4" />
-            </div>
-            <span className="text-[11px] font-medium text-slate-400">
-              Total Commitments
-            </span>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-slate-900">
-              {formatCompactNaira(summary.totalPortfolioCommitmentNgn)}
-            </div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              Across {summary.activeProjectsCount} active facilities
-            </div>
-          </div>
-        </div>
+        <KpiCard
+          icon={<Landmark className="w-4 h-4" />}
+          iconVariant="blue"
+          title="Total Commitments"
+          value={formatCompactNaira(summary.totalPortfolioCommitmentNgn)}
+          subtitle={`Across ${summary.activeProjectsCount} active projects`}
+        />
 
         {/* Card 2: Total Disbursed */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
-              <TrendingUp className="w-4 h-4" />
-            </div>
-            <span className="text-[11px] font-medium text-slate-400">
-              Total Disbursed
-            </span>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-emerald-700">
-              {formatCompactNaira(summary.totalDisbursedToDateNgn)}
-            </div>
-            <div className="text-xs text-slate-500 mt-0.5 flex items-center justify-between">
+        <KpiCard
+          icon={<TrendingUp className="w-4 h-4" />}
+          iconVariant="emerald"
+          title="Total Disbursed"
+          value={formatCompactNaira(summary.totalDisbursedToDateNgn)}
+          valueColorClass="text-emerald-700"
+          subtitle={
+            <div className="flex items-center justify-between text-xs text-slate-500">
               <span>{disbursedPct}% drawn down</span>
               <span className="font-semibold text-slate-700">
                 {formatNaira(summary.totalDisbursedToDateNgn)}
               </span>
             </div>
-          </div>
-        </div>
+          }
+        />
 
         {/* Card 3: Protected Holdbacks */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
-              <ShieldAlert className="w-4 h-4" />
-            </div>
-            <span className="text-[11px] font-medium text-slate-400">
-              Protected Holdbacks
-            </span>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-amber-800">
-              {formatCompactNaira(summary.totalRecommendedHoldbackNgn)}
-            </div>
-            <div className="text-xs text-amber-700 font-medium mt-0.5">
+        <KpiCard
+          icon={<ShieldAlert className="w-4 h-4" />}
+          iconVariant="amber"
+          title="Protected Holdbacks"
+          value={formatCompactNaira(summary.totalRecommendedHoldbackNgn)}
+          valueColorClass="text-amber-800"
+          subtitle={
+            <span className="text-amber-700 font-medium">
               Shielded from uncorroborated claims
-            </div>
-          </div>
-        </div>
+            </span>
+          }
+        />
 
         {/* Card 4: Governance Health Distribution */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
-              <Layers className="w-4 h-4" />
-            </div>
-            <span className="text-[11px] font-medium text-slate-400">
-              Portfolio Governance
-            </span>
-          </div>
-          <div className="mt-2.5">
-            <div className="flex items-center justify-between text-xs mb-1.5 font-semibold">
+        <KpiCard
+          icon={<Layers className="w-4 h-4" />}
+          iconVariant="indigo"
+          title="Portfolio Governance"
+          value={
+            <div className="flex items-center justify-between text-xs font-semibold">
               <span className="text-emerald-700">{summary.supportedCount} Supported</span>
               <span className="text-amber-700">{summary.partialCount} Observation</span>
               <span className="text-rose-700">{summary.conflictCount} Breached</span>
             </div>
-            {/* Visual ratio bar */}
-            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden flex">
-              <div
-                style={{
-                  width: `${(summary.supportedCount / summary.activeProjectsCount) * 100}%`,
-                }}
-                className="bg-emerald-500 h-full"
-                title={`${summary.supportedCount} Evidence Supported`}
-              />
-              <div
-                style={{
-                  width: `${(summary.partialCount / summary.activeProjectsCount) * 100}%`,
-                }}
-                className="bg-amber-400 h-full"
-                title={`${summary.partialCount} Under Observation`}
-              />
-              <div
-                style={{
-                  width: `${(summary.conflictCount / summary.activeProjectsCount) * 100}%`,
-                }}
-                className="bg-rose-500 h-full"
-                title={`${summary.conflictCount} Contradicted / Breached`}
-              />
-            </div>
-            <div className="text-[10px] text-slate-400 mt-1.5">
-              {summary.activeProjectsCount} total surveyed projects
-            </div>
+          }
+        >
+          {/* Visual ratio bar */}
+          <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden flex">
+            <div
+              style={{
+                width: `${
+                  summary.activeProjectsCount > 0
+                    ? (summary.supportedCount / summary.activeProjectsCount) * 100
+                    : 0
+                }%`,
+              }}
+              className="bg-emerald-500 h-full"
+              title={`${summary.supportedCount} Evidence Supported`}
+            />
+            <div
+              style={{
+                width: `${
+                  summary.activeProjectsCount > 0
+                    ? (summary.partialCount / summary.activeProjectsCount) * 100
+                    : 0
+                }%`,
+              }}
+              className="bg-amber-400 h-full"
+              title={`${summary.partialCount} Under Observation`}
+            />
+            <div
+              style={{
+                width: `${
+                  summary.activeProjectsCount > 0
+                    ? (summary.conflictCount / summary.activeProjectsCount) * 100
+                    : 0
+                }%`,
+              }}
+              className="bg-rose-500 h-full"
+              title={`${summary.conflictCount} Disputed / Breached`}
+            />
           </div>
-        </div>
+          <div className="text-[11px] text-slate-500 mt-1.5 flex justify-between">
+            <span>Hold-Point Alignment</span>
+            <span className="font-semibold text-slate-700">
+              {summary.activeProjectsCount > 0
+                ? Math.round((summary.supportedCount / summary.activeProjectsCount) * 100)
+                : 0}
+              % Clean
+            </span>
+          </div>
+        </KpiCard>
       </div>
 
       {/* 3. Contractor Assurance Alert Banner (If pending) */}
@@ -411,39 +404,39 @@ export function PortfolioExecutivePage({
             </div>
           </div>
 
-          <a
-            href="/app/settings"
+          <Link
+            to="/app/settings"
             className="px-3.5 py-1.5 rounded-xl bg-amber-800 hover:bg-amber-900 text-white text-xs font-semibold shrink-0 transition self-start sm:self-auto shadow-2xs"
           >
             Review in Access Queue
-          </a>
+          </Link>
         </div>
       )}
 
-      {/* 4. Comparative Facility Matrix Standard Table */}
+      {/* 4. Comparative Project Matrix Standard Table */}
       <StandardTable<PortfolioProjectHealthItem>
         title={
           <div className="flex items-center gap-2.5">
-            <span>Capital Facility Risk &amp; Assurance Matrix</span>
+            <span>Capital Project Risk &amp; Assurance Matrix</span>
             <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-blue-100 border border-white/15">
-              {summary.projects.length} Facilities Monitored
+              {summary.projects.length} Projects Monitored
             </span>
           </div>
         }
-        subtitle="Consolidated physical-to-financial reconciliation across all infrastructure facilities"
+        subtitle="Consolidated physical-to-financial reconciliation across all infrastructure projects"
         headerActions={
           <div className="flex items-center gap-2">
             <span className="text-xs text-blue-200/80">
               {summary.conflictCount === 0
                 ? 'All Covenants Satisfied'
-                : `${summary.conflictCount} Facilities Flagged`}
+                : `${summary.conflictCount} Projects Flagged`}
             </span>
           </div>
         }
         search={{
           value: searchTerm,
           onChange: setSearchTerm,
-          placeholder: 'Search facility name, code, contractor, or state...',
+          placeholder: 'Search project name, code, contractor, or state...',
         }}
         filters={
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -498,7 +491,7 @@ export function PortfolioExecutivePage({
         keyExtractor={(item) => item.projectId}
         onRowClick={(item) => onSelectProject(item.projectId)}
         emptyState={{
-          title: 'No facilities match your search criteria',
+          title: 'No projects match your search criteria',
           description:
             'Try adjusting your search keyword or health status filter.',
         }}

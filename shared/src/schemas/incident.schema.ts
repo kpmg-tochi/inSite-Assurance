@@ -2,7 +2,8 @@ import { z } from 'zod';
 import { IncidentCategoryEnum, IncidentSeverityEnum, IncidentStatusEnum } from '../enums';
 
 export const CreateIncidentReportRequestSchema = z.object({
-  projectId: z.string().uuid(),
+  // Ignored by the server: the project comes from the field session. Kept for client compatibility.
+  projectId: z.string().uuid().optional(),
   wbsItemId: z.string().uuid().nullable().optional(),
   category: IncidentCategoryEnum,
   severity: IncidentSeverityEnum.default('HIGH'),
@@ -22,9 +23,10 @@ export type CreateIncidentReportRequest = z.infer<typeof CreateIncidentReportReq
 export const IncidentReportDtoSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().uuid(),
-  reporterSessionId: z.string().uuid(),
+  // Null on confidential disclosures unless the viewer holds incidents:view_confidential.
+  reporterSessionId: z.string().uuid().nullable(),
   reporterName: z.string(),
-  reporterTier: z.string(),
+  reporterRoleName: z.string().nullable(),
   wbsItemId: z.string().uuid().nullable(),
   category: IncidentCategoryEnum,
   severity: IncidentSeverityEnum,
@@ -39,4 +41,11 @@ export const IncidentReportDtoSchema = z.object({
   resolvedAt: z.string().datetime().nullable(),
 });
 export type IncidentReportDto = z.infer<typeof IncidentReportDtoSchema>;
+
+export const UpdateIncidentStatusRequestSchema = z.object({
+  status: IncidentStatusEnum,
+});
+export type UpdateIncidentStatusRequest = z.infer<
+  typeof UpdateIncidentStatusRequestSchema
+>;
 

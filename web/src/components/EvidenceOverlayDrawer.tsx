@@ -8,7 +8,7 @@ import type {
 import { formatDateTimeShort, formatNaira } from "../lib/formatters";
 import {
   EvidenceRatingBadge,
-  formatIndependenceTierText,
+  formatReporterRoleBadge,
 } from "./EvidenceBadge";
 import { useAuth } from "../lib/auth-context";
 import Drawer from "./Drawer";
@@ -36,7 +36,7 @@ export function EvidenceOverlayDrawer({
   onRaiseQuery,
   onRespondQuery,
 }: EvidenceOverlayDrawerProps) {
-  const { user } = useAuth();
+  const { hasPermission } = useAuth();
   const [isPlaying, setIsPlaying] = useState(false);
   const [progressStep, setProgressStep] = useState(8);
   const [queryText, setQueryText] = useState("");
@@ -138,8 +138,11 @@ export function EvidenceOverlayDrawer({
           {primaryLog && (
             <p className="text-xs text-slate-500 mt-0.5">
               {primaryLog.chainageLabel || "Geotagged Capture"} ·{" "}
-              {formatIndependenceTierText(primaryLog.independenceTier)} (
-              {primaryLog.fieldSession?.agentFullName || "Field Reporter"})
+              {formatReporterRoleBadge(
+                primaryLog.reporterRoleName,
+                primaryLog.fieldPersonaType,
+              )}{" "}
+              ({primaryLog.fieldSession?.agentFullName || "Field Reporter"})
             </p>
           )}
         </div>
@@ -351,8 +354,8 @@ export function EvidenceOverlayDrawer({
                   </div>
                 )}
 
-                {/* Contractor Reply Form if Query is OPEN */}
-                {q.status === "OPEN" && user?.role === "CONTRACTOR" && (
+                {/* Respondent Reply Form if Query is OPEN */}
+                {q.status === "OPEN" && hasPermission("reports:respond_query") && (
                   <form
                     onSubmit={(e) => handleRespondToQuery(e, q.id)}
                     className="pt-2 mt-2 border-t border-slate-200 space-y-2"
@@ -391,8 +394,8 @@ export function EvidenceOverlayDrawer({
           </div>
         )}
 
-        {/* Monitor Raise Query Form */}
-        {showQueryInput && user?.role === "MONITOR" && (
+        {/* Raise Query Form */}
+        {showQueryInput && hasPermission("reports:raise_query") && (
           <form
             onSubmit={handleCreateQuery}
             className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2"
@@ -500,7 +503,7 @@ export function EvidenceOverlayDrawer({
 
       {/* Drawer Actions */}
       <div className="p-3.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between gap-2">
-        {user?.role === "MONITOR" && !openQuery && (
+        {hasPermission("reports:raise_query") && !openQuery && (
           <button
             type="button"
             onClick={() => setShowQueryInput(true)}

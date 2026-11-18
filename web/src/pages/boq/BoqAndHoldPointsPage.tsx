@@ -1,8 +1,9 @@
 import React, { useRef, useState, useMemo, MouseEvent } from "react";
-import { ClipboardList, ShieldCheck, AlertTriangle, X, Upload, CheckCheck } from "lucide-react";
+import { ClipboardList, ShieldCheck, AlertTriangle, X } from "lucide-react";
+import { toast } from "sonner";
 import type { BoqItemRecordDto, ProjectSummaryDto } from "../../api/types";
 import { formatCompactNaira, formatNaira } from "../../lib/formatters";
-import { formatIndependenceTierText } from "../../components/EvidenceBadge";
+import { formatReporterRoleBadge } from "../../components/EvidenceBadge";
 import { useAuth } from "../../lib/auth-context";
 import {
   useUpdateBoqMappingsMutation,
@@ -26,9 +27,16 @@ export function BoqAndHoldPointsPage({
   project,
   boqItems,
 }: BoqAndHoldPointsPageProps) {
-  const { user } = useAuth();
+  const { hasPermission } = useAuth();
+  const canUploadBoq = hasPermission("boq:upload_edit");
+  const canConfigureHoldPoints = hasPermission("boq:configure_hold_points");
+  const canViewAllJoinCodes =
+    hasPermission("mobilization:manage_roster") ||
+    hasPermission("projects:edit_baseline");
+  const isContractorView =
+    hasPermission("ipc:submit_claim") && !hasPermission("ipc:certify_valuation");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [selectedBoqItem, setSelectedBoqItem] =
     useState<BoqItemRecordDto | null>(null);
@@ -50,7 +58,7 @@ export function BoqAndHoldPointsPage({
   };
 
   const handleToggleHoldPoint = async (item: BoqItemRecordDto) => {
-    if (user?.role !== "MONITOR") return;
+    if (!canConfigureHoldPoints) return;
     try {
       await updateMappingsMutation.mutateAsync({
         updates: [
@@ -63,21 +71,19 @@ export function BoqAndHoldPointsPage({
               null,
             isHoldPoint: !item.isHoldPoint,
             holdPointInstruction: !item.isHoldPoint
-              ? "Requires Tier 1 Independent Monitor geotagged verification prior to concrete pour / cover-up."
+              ? "Requires Independent Monitor geotagged verification prior to concrete pour / cover-up."
               : null,
           },
         ],
       });
-      setStatusMessage(
-        `Updated Hold-Point requirement for WBS ${item.wbsCode}.`,
-      );
+      toast.success(`Updated Hold-Point requirement for WBS ${item.wbsCode}.`);
     } catch (err: any) {
-      setStatusMessage(err?.message || "Failed to update BOQ mapping.");
+      toast.error(err?.message || "Failed to update BOQ mapping.");
     }
   };
 
   const handleConfirmAllTrancheMappings = async () => {
-    if (user?.role !== "MONITOR" || boqItems.length === 0) return;
+    if (!canUploadBoq || boqItems.length === 0) return;
     try {
       const fallbackTrancheId = project.tranches[0]?.id || null;
       await updateMappingsMutation.mutateAsync({
@@ -89,11 +95,11 @@ export function BoqAndHoldPointsPage({
           holdPointInstruction: item.holdPointInstruction || null,
         })),
       });
-      setStatusMessage(
-        "All AI-suggested Tranche & Hold-Point mappings confirmed by Independent Monitor.",
+      toast.success(
+        "All AI-suggested Tranche & Hold-Point mappings confirmed.",
       );
     } catch (err: any) {
-      setStatusMessage(err?.message || "Failed to confirm mappings.");
+      toast.error(err?.message || "Failed to confirm mappings.");
     }
   };
 
@@ -110,11 +116,11 @@ export function BoqAndHoldPointsPage({
         const res = await uploadBoqMutation.mutateAsync({
           spreadsheetBase64: base64,
         });
-        setStatusMessage(
+        toast.success(
           `Ingested ${res.totalUploaded} BOQ items (${res.holdPointCount} Hold-Points, ${res.opaqueLumpSumCount} Opaque Lump Sums screened).`,
         );
       } catch (err: any) {
-        setStatusMessage(err?.message || "Spreadsheet upload failed.");
+        toast.error(err?.message || "Spreadsheet upload failed.");
       }
     };
     reader.readAsDataURL(file);
@@ -127,18 +133,14 @@ export function BoqAndHoldPointsPage({
     0,
   );
 
-  // Filter visible join codes based on role segregation:
-  // - MONITOR sees all 3 codes (-INS, -COW, -CON) to distribute to field personnel
-  // - CONTRACTOR only sees their own -CON code
-  // - LENDER does not need mobile capture codes
-  const visibleJoinCodes =
-    user?.role === "MONITOR"
-      ? project.joinCodes
-      : user?.role === "CONTRACTOR"
-        ? project.joinCodes.filter(
-            (jc) => jc.independenceTier === "CONTRACTOR_ENGINEER",
-          )
-        : [];
+  // Filter visible join codes based on permissions & persona:
+  const visibleJoinCodes = canViewAllJoinCodes
+    ? project.joinCodes
+    : isContractorView
+      ? project.joinCodes.filter(
+          (jc) => jc.fieldPersonaType === "CONTRACTOR_EXECUTOR",
+        )
+      : [];
 
   const [searchTerm, setSearchTerm] = useState("");
   const [boqFilter, setBoqFilter] = useState<
@@ -228,14 +230,15 @@ export function BoqAndHoldPointsPage({
     {
       id: "tranche",
       header: "Mapped Tranche",
-      tooltip: "Facility disbursement tranche fed by this BOQ work item",
-      cell: (item) => (
-        <TableBadge variant="info">
-          {item.tranche
-            ? `Tranche #${item.tranche.trancheNumber}`
-            : "Tranche #1"}
-        </TableBadge>
-      ),
+      tooltip: "Project disbursement tranche fed by this BOQ work item",
+      cell: (item) =>
+        item.tranche ? (
+          <TableBadge variant="info">
+            {`Tranche #${item.tranche.trancheNumber}`}
+          </TableBadge>
+        ) : (
+          <TableBadge variant="neutral">Unmapped</TableBadge>
+        ),
     },
     {
       id: "governance",
@@ -277,7 +280,7 @@ export function BoqAndHoldPointsPage({
                 label: "View Specifications Drawer",
                 onClick: () => setSelectedBoqItem(item),
               },
-              ...(user?.role === "MONITOR"
+              ...(canConfigureHoldPoints
                 ? [
                     {
                       label: item.isHoldPoint
@@ -296,33 +299,20 @@ export function BoqAndHoldPointsPage({
 
   return (
     <div className="space-y-3">
-      {statusMessage && (
-        <div className="bg-blue-50 border border-blue-200 text-brand-primary rounded-xl px-4 py-2.5 text-xs font-medium flex items-center justify-between">
-          <span>{statusMessage}</span>
-          <button
-            type="button"
-            onClick={() => setStatusMessage(null)}
-            className="text-xs font-bold hover:underline"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      {/* 1. Top Bar: Baseline Governance Summary & Monitor Actions */}
+      {/* 1. Top Bar: Baseline Governance Summary & Actions */}
       <div className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
             Baseline Engineering Schedule
           </div>
           <div className="text-sm sm:text-base font-bold text-slate-900 mt-0.5">
-            {user?.role === "CONTRACTOR"
+            {isContractorView
               ? "Approved Bill of Quantities & Pre-Pour Hold-Point Checklist"
               : "Bill of Quantities (BOQ), Tranche Mappings & Hold-Point Rules"}
           </div>
         </div>
 
-        {user?.role === "MONITOR" && (
+        {canUploadBoq && (
           <div className="flex items-center gap-2.5 shrink-0">
             <input
               ref={fileInputRef}
@@ -419,14 +409,14 @@ export function BoqAndHoldPointsPage({
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
             <div>
               <h2 className="text-xs font-bold text-slate-900">
-                {user?.role === "CONTRACTOR"
+                {isContractorView
                   ? "Contractor Site Engineer: Mobile Field App Join Code"
                   : "Mobile Field App: Role-Segregated Join Codes"}
               </h2>
               <p className="text-[11px] text-slate-500">
-                {user?.role === "CONTRACTOR"
-                  ? "Share this code with your Site Engineers to submit Tier 3 self-reported progress photos and voice logs"
-                  : "Zero-friction onboarding for field engineers and clerks of works; binds each mobile capture to its cryptographic Independence Tier"}
+                {isContractorView
+                  ? "Share this code with your Site Engineers to submit self-reported progress photos and voice logs"
+                  : "Zero-friction onboarding for field engineers and clerks of works; binds each mobile capture to its configured role & assurance weight"}
               </p>
             </div>
           </div>
@@ -443,7 +433,7 @@ export function BoqAndHoldPointsPage({
               >
                 <div>
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                    {formatIndependenceTierText(jc.independenceTier)}
+                    {formatReporterRoleBadge(jc.roleName, jc.fieldPersonaType)}
                   </div>
                   <div className="text-sm font-bold text-brand-primary mt-0.5">
                     {jc.code}
@@ -476,7 +466,7 @@ export function BoqAndHoldPointsPage({
           project ? `${project.codePrefix}: ${project.name}` : undefined
         }
         headerActions={
-          user?.role === "MONITOR" ? (
+          canUploadBoq ? (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -650,7 +640,7 @@ export function BoqAndHoldPointsPage({
             <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/80 space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Mapped Facility Tranche
+                  Mapped Project Tranche
                 </span>
                 <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                   {activeDrawerItem.trancheMappingConfirmedByMonitor
@@ -661,7 +651,7 @@ export function BoqAndHoldPointsPage({
               <div className="font-semibold text-slate-900">
                 {activeDrawerItem.tranche
                   ? `Tranche #${activeDrawerItem.tranche.trancheNumber}: ${activeDrawerItem.tranche.name}`
-                  : "Tranche #1: Initial Facility Drawdown"}
+                  : "Unmapped — Pending Tranche Assignment"}
               </div>
             </div>
 
@@ -700,7 +690,7 @@ export function BoqAndHoldPointsPage({
 
           {/* Drawer Footer Actions */}
           <div className="p-3.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between gap-2">
-            {user?.role === "MONITOR" && (
+            {canConfigureHoldPoints && (
               <button
                 type="button"
                 disabled={isUpdating}

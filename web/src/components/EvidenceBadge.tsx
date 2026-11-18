@@ -1,4 +1,4 @@
-import type { EvidenceStrengthRating, IndependenceTier } from "@insite/shared";
+import type { EvidenceStrengthRating, FieldPersonaType } from "@insite/shared";
 
 export function EvidenceRatingBadge({
   rating,
@@ -35,34 +35,30 @@ export function EvidenceRatingBadge({
   }
 }
 
-export function formatIndependenceTierText(
-  tier?: IndependenceTier | null,
+export function formatReporterRoleBadge(
+  roleName?: string | null,
+  fieldPersonaType?: FieldPersonaType | null,
 ): string {
-  if (!tier) return "No Evidence";
-  switch (tier) {
-    case "MONITOR_INSPECTOR":
-      return "Tier 1: Independent";
-    case "INDEPENDENT_RESIDENT":
-      return "Tier 2: Delegated";
-    case "CONTRACTOR_ENGINEER":
-      return "Tier 3: Self-Reported";
-    default:
-      return tier;
+  if (!roleName && !fieldPersonaType) return "No Evidence";
+  const prefix =
+    fieldPersonaType === "INDEPENDENT_VERIFIER"
+      ? "Independent"
+      : fieldPersonaType === "CONTRACTOR_EXECUTOR"
+        ? "Contractor"
+        : "Field";
+  if (roleName) {
+    return `${prefix} · ${roleName}`;
   }
+  return prefix;
 }
 
-export function formatIndependenceTierCode(
-  tier?: IndependenceTier | null,
+export function formatReporterRoleShort(
+  roleName?: string | null,
+  fieldPersonaType?: FieldPersonaType | null,
 ): string {
-  if (!tier) return "None";
-  switch (tier) {
-    case "MONITOR_INSPECTOR":
-      return "INS";
-    case "INDEPENDENT_RESIDENT":
-      return "COW";
-    case "CONTRACTOR_ENGINEER":
-      return "CON";
-    default:
-      return tier;
-  }
+  if (!roleName && !fieldPersonaType) return "None";
+  if (roleName) return roleName;
+  return fieldPersonaType === "INDEPENDENT_VERIFIER"
+    ? "Independent"
+    : "Contractor";
 }

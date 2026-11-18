@@ -1,13 +1,15 @@
 import { z } from "zod";
+import { JOIN_CODE_EXAMPLE, JOIN_CODE_REGEX } from "../joinCodes";
 import {
   ContractorAssuranceStatusEnum,
-  IndependenceTierEnum,
+  FieldPersonaTypeEnum,
+  OrganizationCategoryEnum,
   ProfessionalLicenseTypeEnum,
-  UserRoleEnum,
 } from "../enums";
+import { TenantDtoSchema } from "./rbac.schema";
 
 /**
- * Web Portal Authentication (Monitor, Lender, Contractor)
+ * Web Portal Authentication (Dynamic Multi-Tenant RBAC)
  */
 export const WebLoginRequestSchema = z.object({
   email: z.string().email("Please provide a valid corporate email address"),
@@ -19,22 +21,49 @@ export const WebRegisterRequestSchema = z.object({
   fullName: z.string().min(2).max(120),
   email: z.string().email(),
   password: z.string().min(8),
-  role: UserRoleEnum,
+  tenantSlug: z.string().min(2).max(80),
+  roleId: z.string().uuid().optional(),
+  roleCode: z.string().min(2).max(40).default("MONITOR").optional(),
   organizationName: z.string().min(2).max(160),
-  professionalLicenseType: ProfessionalLicenseTypeEnum.nullable().optional(), // e.g., 'QSRBN' or 'COREN'
-  professionalLicenseNumber: z.string().max(64).optional(), // e.g., '3842' or 'R.49201'
+  organizationCategory: OrganizationCategoryEnum.default("OTHER").optional(),
+  professionalLicenseType: ProfessionalLicenseTypeEnum.nullable().optional(),
+  professionalLicenseNumber: z.string().max(64).optional(),
 });
 export type WebRegisterRequest = z.infer<typeof WebRegisterRequestSchema>;
+
+export const ChangePasswordRequestSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Enter your current password"),
+    newPassword: z
+      .string()
+      .min(10, "Password must be at least 10 characters")
+      .max(128)
+      .regex(/[A-Za-z]/, "Password must contain a letter")
+      .regex(/[0-9]/, "Password must contain a number"),
+  })
+  .refine((v) => v.currentPassword !== v.newPassword, {
+    message: "New password must differ from the current one",
+    path: ["newPassword"],
+  });
+export type ChangePasswordRequest = z.infer<typeof ChangePasswordRequestSchema>;
 
 export const WebUserProfileSchema = z.object({
   id: z.string().uuid(),
   fullName: z.string(),
   email: z.string().email(),
-  role: UserRoleEnum,
+  isPlatformSuperAdmin: z.boolean().default(false),
+  tenantId: z.string().uuid(),
+  tenant: TenantDtoSchema,
+  roleId: z.string().uuid(),
+  roleCode: z.string(),
+  roleName: z.string(),
+  permissions: z.array(z.string()),
   organizationId: z.string().uuid(),
   organizationName: z.string(),
+  organizationCategory: OrganizationCategoryEnum.default("OTHER"),
   professionalLicenseType: ProfessionalLicenseTypeEnum.nullable(),
   professionalLicenseNumber: z.string().nullable(),
+  mustChangePassword: z.boolean().default(false),
 });
 export type WebUserProfile = z.infer<typeof WebUserProfileSchema>;
 
@@ -46,16 +75,13 @@ export type WebAuthResponse = z.infer<typeof WebAuthResponseSchema>;
 
 /**
  * Mobile Field Agent Onboarding via Role-Specific Project Join Code
- * Example codes: "LKK-402-INS" (Monitor Inspector), "LKK-402-COW" (Clerk of Works), "LKK-402-CON" (Contractor Engineer)
- * Also supports compact 6-char codes (e.g., "LKK402") when bound in the database.
  */
 export const JoinProjectMobileRequestSchema = z.object({
   joinCode: z
     .string()
     .trim()
     .toUpperCase()
-    .min(6, "Project Join Code must be at least 6 characters")
-    .max(16),
+    .regex(JOIN_CODE_REGEX, `Join code must look like ${JOIN_CODE_EXAMPLE}`),
   agentFullName: z.string().min(2, "Full name is required").max(120),
   agentPhoneNumber: z
     .string()
@@ -70,7 +96,9 @@ export const JoinProjectMobileRequestSchema = z.object({
   deviceOs: z.string().max(64).optional(),
   devicePublicKeyOrSecretHash: z.string().max(256).optional(),
 
-  // Contractor Assurance Onboarding Fields (Optional for Monitor/Clerk, Required for Contractor)
+  // Assurance Onboarding Fields (Driven by Role.requiresIdentityAssurance).
+  // idDocumentUrl, selfieImageUrl and livenessPassed are ignored by the server: identity
+  // evidence arrives only through POST /auth/assurance-verification.
   corenLicenseNumber: z.string().max(50).optional(),
   idDocumentType: z.string().max(120).optional(),
   idDocumentUrl: z.string().max(500).optional(),
@@ -87,7 +115,9 @@ export const LivenessPoseFrameSchema = z.object({
 
 export const LivenessVerificationSchema = z.object({
   isLive: z.boolean(),
-  detectorEngine: z.enum(['MLKIT_ON_DEVICE', 'GUIDED_CAPTURE']).default('MLKIT_ON_DEVICE'),
+  detectorEngine: z
+    .enum(["MLKIT_ON_DEVICE", "GUIDED_CAPTURE"])
+    .default("MLKIT_ON_DEVICE"),
   poses: z.object({
     front: LivenessPoseFrameSchema,
     left: LivenessPoseFrameSchema,
@@ -117,11 +147,18 @@ export type JoinProjectMobileRequest = z.infer<
 
 export const FieldAgentSessionProfileSchema = z.object({
   sessionId: z.string().uuid(),
+  tenantId: z.string().uuid(),
   projectId: z.string().uuid(),
   projectName: z.string(),
   projectCodePrefix: z.string(),
   joinCodeUsed: z.string(),
-  independenceTier: IndependenceTierEnum,
+  roleId: z.string().uuid(),
+  roleCode: z.string(),
+  roleName: z.string(),
+  fieldPersonaType: FieldPersonaTypeEnum,
+  assuranceWeight: z.number(),
+  requiresIdentityAssurance: z.boolean(),
+  permissions: z.array(z.string()).default([]),
   agentFullName: z.string(),
   agentPhoneNumber: z.string(),
   deviceId: z.string(),
@@ -134,10 +171,10 @@ export type FieldAgentSessionProfile = z.infer<
 >;
 
 /**
- * Contractor Assurance Review Request Schema
+ * Assurance Verification Review Request Schema
  */
 export const ReviewContractorVerificationRequestSchema = z.object({
-  decision: z.enum(['APPROVE', 'REJECT']),
+  decision: z.enum(["APPROVE", "REJECT"]),
   remarks: z.string().max(500).optional(),
 });
 export type ReviewContractorVerificationRequest = z.infer<
@@ -150,6 +187,9 @@ export const ContractorVerificationRecordDtoSchema = z.object({
   projectCodePrefix: z.string(),
   projectName: z.string(),
   organizationName: z.string(),
+  roleId: z.string().uuid(),
+  roleName: z.string(),
+  fieldPersonaType: FieldPersonaTypeEnum,
   agentFullName: z.string(),
   agentPhoneNumber: z.string(),
   joinCodeUsed: z.string(),
@@ -178,7 +218,12 @@ export type ContractorVerificationRecordDto = z.infer<
  */
 export const DemoProjectJoinCodeSchema = z.object({
   code: z.string(),
-  independenceTier: IndependenceTierEnum,
+  roleId: z.string().uuid(),
+  roleCode: z.string(),
+  roleName: z.string(),
+  fieldPersonaType: FieldPersonaTypeEnum,
+  assuranceWeight: z.number(),
+  requiresIdentityAssurance: z.boolean(),
 });
 
 export const DemoProjectWorkspaceSchema = z.object({
@@ -187,7 +232,7 @@ export const DemoProjectWorkspaceSchema = z.object({
   name: z.string(),
   stateLocation: z.string(),
   lgaLocation: z.string().nullable().optional(),
-  geofenceMode: z.enum(['RADIAL', 'LINEAR_CORRIDOR']),
+  geofenceMode: z.enum(["RADIAL", "LINEAR_CORRIDOR"]),
   portfolioHealth: z.string(),
   joinCodes: z.array(DemoProjectJoinCodeSchema),
 });
@@ -198,8 +243,7 @@ export const DemoSkipVerificationRequestSchema = z.object({
     .string()
     .trim()
     .toUpperCase()
-    .min(6, "Project Join Code must be at least 6 characters")
-    .max(16),
+    .regex(JOIN_CODE_REGEX, `Join code must look like ${JOIN_CODE_EXAMPLE}`),
   sessionId: z.string().uuid().optional(),
   agentFullName: z.string().min(2).max(120).optional(),
   agentPhoneNumber: z.string().min(6).max(24).optional(),

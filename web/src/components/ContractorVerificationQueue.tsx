@@ -35,7 +35,7 @@ export default function ContractorVerificationQueue({
   compact = false,
   onVerificationReviewed,
 }: ContractorVerificationQueueProps) {
-  const { user } = useAuth();
+  const { hasPermission } = useAuth();
   const [filter, setFilter] = useState<'PENDING' | 'ALL'>('PENDING');
   const [selectedVerification, setSelectedVerification] =
     useState<ContractorVerificationRecordDto | null>(null);
@@ -107,7 +107,7 @@ export default function ContractorVerificationQueue({
     );
   };
 
-  const canReview = user?.role === 'MONITOR' || user?.role === 'LENDER';
+  const canReview = hasPermission('assurance:review_credentials');
 
   return (
     <div className="space-y-4">

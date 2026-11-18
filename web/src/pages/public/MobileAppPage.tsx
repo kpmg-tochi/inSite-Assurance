@@ -47,7 +47,7 @@ export function MobileAppPage() {
                 {/* Mobile Top Status Bar */}
                 <div className="bg-brand-navy text-white px-4 py-3.5">
                   <div className="flex items-center justify-between text-[10px] font-semibold text-blue-200">
-                    <span>LKK-402-COW</span>
+                    <span>LKK-402-COW-7K2QXM</span>
                     <span className="text-emerald-400">
                       SQLite Outbox Ready
                     </span>
@@ -138,13 +138,13 @@ export function MobileAppPage() {
             </p>
             <ul className="space-y-1.5 text-xs text-slate-700 font-medium bg-slate-50 p-3 rounded-xl border border-slate-200/80">
               <li>
-                <strong>LKK-402-INS</strong> &rarr; Tier 1 Monitor Inspector
+                <strong>LKK-402-INS-…</strong> &rarr; Tier 1 Monitor Inspector
               </li>
               <li>
-                <strong>LKK-402-COW</strong> &rarr; Tier 2 Resident CoW
+                <strong>LKK-402-COW-…</strong> &rarr; Tier 2 Resident CoW
               </li>
               <li>
-                <strong>LKK-402-CON</strong> &rarr; Tier 3 Contractor Eng.
+                <strong>LKK-402-CON-…</strong> &rarr; Tier 3 Contractor Eng.
               </li>
             </ul>
           </div>

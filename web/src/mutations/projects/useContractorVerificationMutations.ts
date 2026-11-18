@@ -39,11 +39,13 @@ export const useReviewContractorVerificationMutation = () => {
         );
       }
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
+      // The API interceptor copies the server's error.message onto err.message; the raw
+      // response body's `error` is an object and must not be passed to toast.
       const msg =
-        err?.response?.data?.error ||
-        err?.message ||
-        'Failed to record contractor verification decision.';
+        err instanceof Error && err.message
+          ? err.message
+          : 'Failed to record contractor verification decision.';
       toast.error(msg);
     },
   });

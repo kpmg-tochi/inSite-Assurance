@@ -3,7 +3,6 @@ import {
   AuditActionTypeEnum,
   AuditActorTypeEnum,
   EvidenceStrengthRatingEnum,
-  IndependenceTierEnum,
   LenderDecisionTypeEnum,
   MonitorRecommendationEnum,
   ProfessionalLicenseTypeEnum,
@@ -11,16 +10,17 @@ import {
 
 /**
  * 1. Azure OpenAI GPT-4o Structured Output Schema for BOQ Line-Item Reconciliation
- * Evaluates field evidence logs + independence tiers + hold-point compliance against IPC claim.
+ * Evaluates field evidence logs + reporter assurance weights + hold-point compliance against IPC claim.
  */
 export const AiLineItemReconciliationResultSchema = z.object({
   boqItemId: z.string(),
   evidenceStrengthRating: EvidenceStrengthRatingEnum,
   aiRationale: z.string(), // Concise audit-ready explanation of how field proof compares to IPC claim
   visitPlannerFlag: z.boolean(),
-  visitPlannerReason: z.string().nullable(), // e.g., "High-value claim (₦48M) backed exclusively by CONTRACTOR_ENGINEER self-report"
+  visitPlannerReason: z.string().nullable(), // e.g., "High-value claim (₦48M) backed exclusively by Contractor self-report"
   missingHoldPointFlag: z.boolean(),
-  highestCorroboratingTier: IndependenceTierEnum.nullable(),
+  highestCorroboratingRoleName: z.string().nullable(),
+  highestCorroboratingWeight: z.number().nullable(),
   corroboratingEvidenceLogIds: z.array(z.string()),
 });
 export type AiLineItemReconciliationResult = z.infer<
@@ -84,7 +84,9 @@ export type LenderTrancheDecisionRequest = z.infer<
  */
 export const AuditLogEntryDtoSchema = z.object({
   id: z.string().uuid(),
-  projectId: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  projectId: z.string().uuid().nullable(),
+  seq: z.number().int().positive(),
   actorType: AuditActorTypeEnum,
   actorId: z.string(),
   actorDisplayName: z.string(),

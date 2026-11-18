@@ -25,6 +25,7 @@ import { uploadProjectBoq } from "../../api/boq/boqApi";
 import { useCreateProjectMutation } from "../../mutations/projects/useProjectsMutations";
 import { formatCompactNaira } from "../../lib/formatters";
 import { IS_DEMO_MODE } from "../../config/demoMode";
+import { CustomSelect, type CustomSelectOption } from "../../components/common";
 
 interface CreateProjectPageProps {
   onProjectCreated: (project: ProjectSummaryDto) => void;
@@ -174,6 +175,34 @@ function parseCsvTextToBoqRows(csvText: string): DraftBoqRow[] {
   return parsed;
 }
 
+const REPORTING_CADENCE_OPTIONS: CustomSelectOption<ReportingCadence>[] = [
+  {
+    value: "DAILY",
+    label: "Daily Field Wrap-Up",
+    description: "Daily morning briefing and end-of-shift reporting",
+  },
+  {
+    value: "WEEKLY",
+    label: "Weekly Progress Pack",
+    description: "Weekly consolidated site progress and milestone report",
+  },
+  {
+    value: "BI_WEEKLY",
+    label: "Bi-Weekly Milestone",
+    description: "Every two weeks aligned with valuation periods",
+  },
+  {
+    value: "INSPECTION_ONLY",
+    label: "Inspection Only",
+    description: "On-demand reporting triggered by physical milestone inspections",
+  },
+];
+
+const CP_STATUS_OPTIONS: CustomSelectOption<"PENDING" | "SATISFIED">[] = [
+  { value: "PENDING", label: "Pending", badge: "Required" },
+  { value: "SATISFIED", label: "Satisfied" },
+];
+
 export function CreateProjectPage({
   onProjectCreated,
   cancelFallbackPath,
@@ -219,7 +248,7 @@ export function CreateProjectPage({
   const [radialLng, setRadialLng] = useState("7.4951");
   const [radialRadiusMeters, setRadialRadiusMeters] = useState("600");
 
-  // Section 3: Facility Tranches & Conditions Precedent
+  // Section 3: Project Tranches & Conditions Precedent
   const [tranches, setTranches] = useState<DraftTranche[]>([
     {
       trancheNumber: 1,
@@ -460,7 +489,7 @@ export function CreateProjectPage({
       return;
     }
     if (budgetNumeric <= 0) {
-      toast.error("Total facility budget must be greater than zero.");
+      toast.error("Total project budget must be greater than zero.");
       return;
     }
 
@@ -598,7 +627,7 @@ export function CreateProjectPage({
             Initialize New Capital Project Baseline &amp; BOQ
           </h1>
           <p className="text-xs text-slate-500 max-w-2xl">
-            Configure counterparties, site geofence boundaries, facility tranches,
+            Configure counterparties, site geofence boundaries, project tranches,
             and ingest the Bill of Quantities (BOQ / WBS) with automated AI
             Hold-Point and Lump-Sum screening in one step.
           </p>
@@ -704,7 +733,7 @@ export function CreateProjectPage({
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Total Facility Budget (₦ NGN) <span className="text-red-500">*</span>
+              Total Project Budget (₦ NGN) <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
@@ -744,21 +773,12 @@ export function CreateProjectPage({
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Reporting Cadence
-            </label>
-            <select
+            <CustomSelect
+              label="Reporting Cadence"
               value={reportingCadence}
-              onChange={(e) =>
-                setReportingCadence(e.target.value as ReportingCadence)
-              }
-              className="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-xs bg-white focus:outline-none focus:border-brand-primary"
-            >
-              <option value="DAILY">Daily Field Wrap-Up</option>
-              <option value="WEEKLY">Weekly Progress Pack</option>
-              <option value="BI_WEEKLY">Bi-Weekly Milestone</option>
-              <option value="INSPECTION_ONLY">Inspection Only</option>
-            </select>
+              onChange={(newCadence) => setReportingCadence(newCadence)}
+              options={REPORTING_CADENCE_OPTIONS}
+            />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
@@ -1031,7 +1051,7 @@ export function CreateProjectPage({
         )}
       </section>
 
-      {/* Section 3: Facility Tranches & Conditions Precedent */}
+      {/* Section 3: Project Tranches & Conditions Precedent */}
       <section className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div className="flex items-center gap-2">
@@ -1040,7 +1060,7 @@ export function CreateProjectPage({
             </span>
             <div>
               <h2 className="text-sm font-bold text-slate-900">
-                Facility Tranches &amp; Conditions Precedent (CPs)
+                Project Tranches &amp; Conditions Precedent (CPs)
               </h2>
               <p className="text-[11px] text-slate-500">
                 Defines disbursement milestones mapped to uploaded BOQ work
@@ -1207,9 +1227,9 @@ export function CreateProjectPage({
                       className="md:col-span-7 rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
                       placeholder="Condition precedent description..."
                     />
-                    <select
+                    <CustomSelect
                       value={cp.status}
-                      onChange={(e) =>
+                      onChange={(newStatus) =>
                         setTranches((prev) =>
                           prev.map((t, ti) =>
                             ti !== tIdx
@@ -1221,7 +1241,7 @@ export function CreateProjectPage({
                                       ci === cpIdx
                                         ? {
                                             ...c,
-                                            status: e.target.value as
+                                            status: newStatus as
                                               | "PENDING"
                                               | "SATISFIED",
                                           }
@@ -1231,11 +1251,10 @@ export function CreateProjectPage({
                           ),
                         )
                       }
-                      className="md:col-span-2 rounded-lg border border-slate-200 px-2 py-1 text-[11px] bg-white"
-                    >
-                      <option value="PENDING">PENDING</option>
-                      <option value="SATISFIED">SATISFIED</option>
-                    </select>
+                      options={CP_STATUS_OPTIONS}
+                      size="sm"
+                      className="md:col-span-2"
+                    />
                     <div className="md:col-span-1 flex justify-end">
                       <button
                         type="button"

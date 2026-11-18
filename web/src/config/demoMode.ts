@@ -1,9 +1,5 @@
-const rawDemoMode =
-  import.meta.env.VITE_DEMO_MODE ?? import.meta.env.DEMO_MODE;
-
-export const IS_DEMO_MODE =
-  typeof rawDemoMode === "boolean"
-    ? rawDemoMode
-    : typeof rawDemoMode === "string"
-      ? ["true", "1", "yes", "on"].includes(rawDemoMode.trim().toLowerCase())
-      : false;
+/**
+ * Build-time demo flag. Kept as a direct comparison on `import.meta.env` so Vite folds it to a
+ * literal and drops demo-only code (and the demo account module) from non-demo bundles.
+ */
+export const IS_DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";

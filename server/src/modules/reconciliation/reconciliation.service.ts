@@ -3,6 +3,7 @@ import {
   CertifyIpcValuationRequest,
   CreateMonitorQueryRequest,
   EvidenceStrengthRating,
+  FieldPersonaType,
   LenderTrancheDecisionRequest,
   PortfolioHealth,
   RespondMonitorQueryRequest,
@@ -10,143 +11,120 @@ import {
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
-import { WebJwtPayload } from '../../middleware/auth.middleware';
+import { hasWebPermission, WebJwtPayload } from '../../middleware/auth.middleware';
 import { azureOpenAiService } from '../../integrations/azure-openai.service';
 import { generateValuationReportPdfBuffer } from '../../integrations/pdf-report.service';
+import { assertProjectObjectKey } from '../../integrations/storage.service';
+import { parseTenantBranding } from '../rbac/rbac.service';
 import { recordAuditEvent } from '../audit/audit.service';
 import { createMobileNotification } from '../notifications/notifications.service';
+import {
+  loadBoqItemInProject,
+  loadIpcInProject,
+  loadLineItemInIpc,
+  loadQueryInIpc,
+  loadTrancheInProject,
+  loadValuationReportInProject,
+} from '../../utils/ownership';
+import {
+  canSeeFieldSessionDetail,
+  serializeBoqItem,
+  serializeEvidenceLog,
+  serializeMonitorQuery,
+  serializeSupportingDocument,
+  serializeTranche,
+  serializeTrancheDecision,
+  serializeValuationReport,
+} from '../../utils/serializers';
 
-export async function listProjectIpcClaims(projectId: string) {
-  const ipcs = await prisma.ipcClaim.findMany({
-    where: { projectId },
-    orderBy: { ipcNumber: 'desc' },
-    include: {
-      tranche: true,
-      valuationReport: {
-        include: { trancheDecision: true },
+/**
+ * Oversight roles see AI rationale, the visit-planner queue and the corroborating field evidence.
+ * Everyone else (for example a contractor answering a query) sees their claim, the rating and
+ * the queries, but not other parties' evidence detail.
+ */
+function canSeeOversightDetail(webUser: WebJwtPayload) {
+  return hasWebPermission(
+    webUser,
+    'ipc:trigger_ai_reconcile',
+    'ipc:certify_valuation',
+    'tranche:approve_disbursement',
+    'audit:view_ledger'
+  );
+}
+
+const IPC_BASE_INCLUDE = {
+  tranche: { include: { conditionsPrecedent: true } },
+  supportingDocuments: true,
+  valuationReport: { include: { trancheDecision: true } },
+} satisfies Prisma.IpcClaimInclude;
+
+function ipcDetailInclude(withEvidence: boolean) {
+  return {
+    ...IPC_BASE_INCLUDE,
+    lineItems: {
+      orderBy: { boqItem: { wbsCode: 'asc' } },
+      include: {
+        queries: { orderBy: { createdAt: 'desc' } },
+        boqItem: withEvidence
+          ? {
+              include: {
+                evidenceLogs: {
+                  where: { status: 'CONFIRMED' },
+                  orderBy: { capturedAtDevice: 'desc' },
+                  include: { mediaAttachments: true, fieldSession: true },
+                },
+              },
+            }
+          : true,
       },
-      lineItems: {
-        include: {
-          boqItem: true,
-          queries: true,
-        },
-      },
-      supportingDocuments: true,
     },
-  });
+  } satisfies Prisma.IpcClaimInclude;
+}
 
-  return ipcs.map((ipc) => ({
-    ...ipc,
-    totalClaimedAmountNgn: Number(ipc.totalClaimedAmountNgn),
-    totalCertifiedNgn: ipc.totalCertifiedNgn
-      ? Number(ipc.totalCertifiedNgn)
-      : null,
-    lineItems: ipc.lineItems.map((li) => ({
-      ...li,
+type IpcWithDetail = Prisma.IpcClaimGetPayload<{ include: ReturnType<typeof ipcDetailInclude> }>;
+
+function serializeIpc(ipc: IpcWithDetail, webUser: WebJwtPayload) {
+  const oversight = canSeeOversightDetail(webUser);
+  const detailedSessions = canSeeFieldSessionDetail(webUser);
+
+  const lineItems = ipc.lineItems.map((li) => {
+    const boq = li.boqItem as typeof li.boqItem & {
+      evidenceLogs?: Parameters<typeof serializeEvidenceLog>[0][];
+    };
+    return {
+      id: li.id,
+      ipcClaimId: li.ipcClaimId,
+      boqItemId: li.boqItemId,
       previousCertifiedPct: Number(li.previousCertifiedPct),
       contractorClaimedPct: Number(li.contractorClaimedPct),
       contractorClaimedNgn: Number(li.contractorClaimedNgn),
-      monitorCertifiedPct: li.monitorCertifiedPct
-        ? Number(li.monitorCertifiedPct)
-        : null,
-      monitorCertifiedNgn: li.monitorCertifiedNgn
-        ? Number(li.monitorCertifiedNgn)
-        : null,
+      contractorRemarks: li.contractorRemarks,
+      aiEvidenceRating: li.aiEvidenceRating,
+      aiRationale: oversight ? li.aiRationale : null,
+      visitPlannerFlag: oversight ? li.visitPlannerFlag : false,
+      visitPlannerReason: oversight ? li.visitPlannerReason : null,
+      missingHoldPointFlag: li.missingHoldPointFlag,
+      highestCorroboratingRoleName: li.highestCorroboratingRoleName,
+      highestCorroboratingWeight: li.highestCorroboratingWeight,
+      corroboratingEvidenceLogIds: oversight
+        ? ((li.corroboratingEvidenceLogIds as string[]) ?? [])
+        : [],
+      monitorCertifiedPct: li.monitorCertifiedPct ? Number(li.monitorCertifiedPct) : null,
+      monitorCertifiedNgn: li.monitorCertifiedNgn ? Number(li.monitorCertifiedNgn) : null,
+      monitorRemarks: li.monitorRemarks,
       boqItem: {
-        ...li.boqItem,
-        totalQuantity: Number(li.boqItem.totalQuantity),
-        rateNgn: Number(li.boqItem.rateNgn),
-        budgetedCostNgn: Number(li.boqItem.budgetedCostNgn),
-        cumulativeCertifiedPct: Number(li.boqItem.cumulativeCertifiedPct),
+        ...serializeBoqItem(boq),
+        ...(oversight && boq.evidenceLogs
+          ? { evidenceLogs: boq.evidenceLogs.map((log) => serializeEvidenceLog(log, { detailedSessions })) }
+          : {}),
       },
-    })),
-  }));
-}
-
-export async function getIpcReconciliationDetails(
-  projectId: string,
-  ipcId: string,
-  webUser: WebJwtPayload
-) {
-  const ipc = await prisma.ipcClaim.findFirst({
-    where: { id: ipcId, projectId },
-    include: {
-      project: {
-        include: {
-          monitorOrganization: true,
-          lenderOrganization: true,
-          contractorOrganization: true,
-        },
-      },
-      tranche: {
-        include: { conditionsPrecedent: true },
-      },
-      supportingDocuments: true,
-      valuationReport: {
-        include: { trancheDecision: true },
-      },
-      lineItems: {
-        orderBy: { boqItem: { wbsCode: 'asc' } },
-        include: {
-          boqItem: {
-            include: {
-              evidenceLogs: {
-                where: { status: 'CONFIRMED' },
-                orderBy: { capturedAtDevice: 'desc' },
-                include: { mediaAttachments: true, fieldSession: true },
-              },
-            },
-          },
-          queries: {
-            orderBy: { createdAt: 'desc' },
-          },
-        },
-      },
-    },
+      queries: li.queries.map(serializeMonitorQuery),
+    };
   });
 
-  if (!ipc) {
-    throw new AppError('IPC Claim not found', 404, 'IPC_NOT_FOUND');
-  }
-
-  const isContractor = webUser.role === 'CONTRACTOR';
-
-  const formattedLineItems = ipc.lineItems.map((li) => ({
-    id: li.id,
-    ipcClaimId: li.ipcClaimId,
-    boqItemId: li.boqItemId,
-    previousCertifiedPct: Number(li.previousCertifiedPct),
-    contractorClaimedPct: Number(li.contractorClaimedPct),
-    contractorClaimedNgn: Number(li.contractorClaimedNgn),
-    contractorRemarks: li.contractorRemarks,
-    aiEvidenceRating: li.aiEvidenceRating,
-    aiRationale: isContractor ? null : li.aiRationale,
-    visitPlannerFlag: isContractor ? false : li.visitPlannerFlag,
-    visitPlannerReason: isContractor ? null : li.visitPlannerReason,
-    missingHoldPointFlag: li.missingHoldPointFlag,
-    highestCorroboratingTier: li.highestCorroboratingTier,
-    corroboratingEvidenceLogIds: li.corroboratingEvidenceLogIds,
-    monitorCertifiedPct: li.monitorCertifiedPct
-      ? Number(li.monitorCertifiedPct)
-      : null,
-    monitorCertifiedNgn: li.monitorCertifiedNgn
-      ? Number(li.monitorCertifiedNgn)
-      : null,
-    monitorRemarks: li.monitorRemarks,
-    boqItem: {
-      ...li.boqItem,
-      totalQuantity: Number(li.boqItem.totalQuantity),
-      rateNgn: Number(li.boqItem.rateNgn),
-      budgetedCostNgn: Number(li.boqItem.budgetedCostNgn),
-      cumulativeCertifiedPct: Number(li.boqItem.cumulativeCertifiedPct),
-    },
-    queries: li.queries,
-  }));
-
-  // Smart Visit Planner Queue (only for MONITOR & LENDER)
-  const smartVisitPlannerQueue = isContractor
+  const smartVisitPlannerQueue = !oversight
     ? []
-    : formattedLineItems
+    : lineItems
         .filter((li) => li.visitPlannerFlag || li.missingHoldPointFlag)
         .map((li) => ({
           ipcLineItemId: li.id,
@@ -156,8 +134,7 @@ export async function getIpcReconciliationDetails(
           aiEvidenceRating: li.aiEvidenceRating,
           missingHoldPointFlag: li.missingHoldPointFlag,
           visitPlannerReason:
-            li.visitPlannerReason ||
-            'Requires physical verification by Independent Monitor.',
+            li.visitPlannerReason || 'Requires physical verification by Independent Monitor.',
         }));
 
   return {
@@ -165,37 +142,43 @@ export async function getIpcReconciliationDetails(
     projectId: ipc.projectId,
     trancheId: ipc.trancheId,
     ipcNumber: ipc.ipcNumber,
-    periodStart: ipc.periodStart,
-    periodEnd: ipc.periodEnd,
+    periodStart: ipc.periodStart.toISOString(),
+    periodEnd: ipc.periodEnd.toISOString(),
     contractorCoverNote: ipc.contractorCoverNote,
     totalClaimedAmountNgn: Number(ipc.totalClaimedAmountNgn),
-    totalCertifiedNgn: ipc.totalCertifiedNgn
-      ? Number(ipc.totalCertifiedNgn)
-      : null,
+    totalCertifiedNgn: ipc.totalCertifiedNgn ? Number(ipc.totalCertifiedNgn) : null,
     status: ipc.status,
-    aiExecutiveSummary: isContractor ? null : ipc.aiExecutiveSummary,
-    submittedAt: ipc.submittedAt,
-    tranche: {
-      ...ipc.tranche,
-      allocatedAmountNgn: Number(ipc.tranche.allocatedAmountNgn),
-      releasedAmountNgn: Number(ipc.tranche.releasedAmountNgn),
-      targetCompletionPct: Number(ipc.tranche.targetCompletionPct),
-    },
-    supportingDocuments: ipc.supportingDocuments,
-    valuationReport: ipc.valuationReport
-      ? {
-          ...ipc.valuationReport,
-          recommendedReleaseAmountNgn: Number(
-            ipc.valuationReport.recommendedReleaseAmountNgn
-          ),
-          recommendedHoldbackAmountNgn: Number(
-            ipc.valuationReport.recommendedHoldbackAmountNgn
-          ),
-        }
-      : null,
-    lineItems: formattedLineItems,
+    aiExecutiveSummary: oversight ? ipc.aiExecutiveSummary : null,
+    submittedAt: ipc.submittedAt.toISOString(),
+    updatedAt: ipc.updatedAt.toISOString(),
+    tranche: serializeTranche(ipc.tranche),
+    supportingDocuments: ipc.supportingDocuments.map(serializeSupportingDocument),
+    valuationReport: ipc.valuationReport ? serializeValuationReport(ipc.valuationReport) : null,
+    lineItems,
     smartVisitPlannerQueue,
   };
+}
+
+export async function listProjectIpcClaims(projectId: string, webUser: WebJwtPayload) {
+  const ipcs = await prisma.ipcClaim.findMany({
+    where: { projectId },
+    orderBy: { ipcNumber: 'desc' },
+    include: ipcDetailInclude(false),
+  });
+  return ipcs.map((ipc) => serializeIpc(ipc, webUser));
+}
+
+export async function getIpcReconciliationDetails(
+  projectId: string,
+  ipcId: string,
+  webUser: WebJwtPayload
+) {
+  await loadIpcInProject(prisma, projectId, ipcId);
+  const ipc = await prisma.ipcClaim.findUniqueOrThrow({
+    where: { id: ipcId },
+    include: ipcDetailInclude(canSeeOversightDetail(webUser)),
+  });
+  return serializeIpc(ipc, webUser);
 }
 
 export async function runAiReconciliationForIpc(
@@ -241,7 +224,9 @@ export async function runAiReconciliationForIpc(
       contractorClaimedNgn: Number(li.contractorClaimedNgn),
       confirmedLogs: li.boqItem.evidenceLogs.map((log) => ({
         id: log.id,
-        independenceTier: log.independenceTier,
+        reporterRoleName: log.reporterRoleName,
+        fieldPersonaType: log.fieldPersonaType as FieldPersonaType,
+        assuranceWeight: log.assuranceWeight,
         isWithinGeofence: log.isWithinGeofence,
         chainageLabel: log.chainageLabel,
         confirmedSummary: log.confirmedSummary,
@@ -272,7 +257,8 @@ export async function runAiReconciliationForIpc(
           visitPlannerFlag: ev.visitPlannerFlag,
           visitPlannerReason: ev.visitPlannerReason,
           missingHoldPointFlag: ev.missingHoldPointFlag,
-          highestCorroboratingTier: ev.highestCorroboratingTier,
+          highestCorroboratingRoleName: ev.highestCorroboratingRoleName,
+          highestCorroboratingWeight: ev.highestCorroboratingWeight,
           corroboratingEvidenceLogIds:
             ev.corroboratingEvidenceLogIds as unknown as Prisma.InputJsonValue,
         },
@@ -326,6 +312,14 @@ export async function submitContractorIpcClaim(params: {
   webUser: WebJwtPayload;
   input: SubmitIpcClaimRequest;
 }) {
+  await loadTrancheInProject(prisma, params.projectId, params.input.trancheId);
+  for (const doc of params.input.supportingDocuments) {
+    assertProjectObjectKey(doc.objectKey, params.webUser.tenantId, params.projectId);
+    if (doc.boqItemId) {
+      await loadBoqItemInProject(prisma, params.projectId, doc.boqItemId);
+    }
+  }
+
   const boqItems = await prisma.boqItem.findMany({
     where: { projectId: params.projectId },
   });
@@ -375,7 +369,6 @@ export async function submitContractorIpcClaim(params: {
             title: doc.title,
             mediaType: doc.mediaType,
             objectKey: doc.objectKey,
-            fileUrl: doc.fileUrl ?? null,
             boqItemId: doc.boqItemId ?? null,
           })),
         },
@@ -386,7 +379,7 @@ export async function submitContractorIpcClaim(params: {
       projectId: params.projectId,
       actorType: 'WEB_USER',
       actorId: params.webUser.userId,
-      actorDisplayName: `${params.webUser.fullName} (${params.webUser.role})`,
+      actorDisplayName: `${params.webUser.fullName} (${params.webUser.roleName})`,
       action: 'IPC_SUBMITTED',
       summaryText: `Contractor submitted IPC #${params.input.ipcNumber} claiming NGN ${totalClaimedAmountNgn.toLocaleString()} across ${preparedLines.length} BOQ line items.`,
       payload: {
@@ -416,6 +409,9 @@ export async function createMonitorLineQuery(params: {
   input: CreateMonitorQueryRequest;
 }) {
   return prisma.$transaction(async (tx) => {
+    await loadIpcInProject(tx, params.projectId, params.ipcId);
+    await loadLineItemInIpc(tx, params.ipcId, params.input.ipcLineItemId);
+
     const query = await tx.monitorQuery.create({
       data: {
         ipcLineItemId: params.input.ipcLineItemId,
@@ -438,7 +434,7 @@ export async function createMonitorLineQuery(params: {
       projectId: params.projectId,
       actorType: 'WEB_USER',
       actorId: params.webUser.userId,
-      actorDisplayName: `${params.webUser.fullName} (MONITOR)`,
+      actorDisplayName: `${params.webUser.fullName} (${params.webUser.roleName})`,
       action: 'MONITOR_QUERY_RAISED',
       summaryText: `Monitor raised query on [${query.ipcLineItem.boqItem.wbsCode}]: "${params.input.queryReason}"`,
       payload: {
@@ -473,7 +469,7 @@ export async function createMonitorLineQuery(params: {
       },
     });
 
-    return query;
+    return serializeMonitorQuery(query);
   });
 }
 
@@ -485,6 +481,9 @@ export async function respondToMonitorLineQuery(params: {
   input: RespondMonitorQueryRequest;
 }) {
   return prisma.$transaction(async (tx) => {
+    await loadIpcInProject(tx, params.projectId, params.ipcId);
+    await loadQueryInIpc(tx, params.ipcId, params.queryId);
+
     const updatedQuery = await tx.monitorQuery.update({
       where: { id: params.queryId },
       data: {
@@ -523,7 +522,7 @@ export async function respondToMonitorLineQuery(params: {
       projectId: params.projectId,
       actorType: 'WEB_USER',
       actorId: params.webUser.userId,
-      actorDisplayName: `${params.webUser.fullName} (CONTRACTOR)`,
+      actorDisplayName: `${params.webUser.fullName} (${params.webUser.roleName})`,
       action: 'CONTRACTOR_QUERY_RESPONDED',
       summaryText: `Contractor responded to Monitor query on [${updatedQuery.ipcLineItem.boqItem.wbsCode}].`,
       payload: {
@@ -532,7 +531,7 @@ export async function respondToMonitorLineQuery(params: {
       },
     });
 
-    return updatedQuery;
+    return serializeMonitorQuery(updatedQuery);
   });
 }
 
@@ -543,6 +542,11 @@ export async function certifyIpcValuationByMonitor(params: {
   input: CertifyIpcValuationRequest;
 }) {
   return prisma.$transaction(async (tx) => {
+    await loadIpcInProject(tx, params.projectId, params.ipcId);
+    for (const val of params.input.lineValuations) {
+      await loadLineItemInIpc(tx, params.ipcId, val.ipcLineItemId);
+    }
+
     let totalCertifiedNgn = 0;
 
     for (const val of params.input.lineValuations) {
@@ -618,7 +622,7 @@ export async function certifyIpcValuationByMonitor(params: {
       },
     });
 
-    return report;
+    return serializeValuationReport(report);
   });
 }
 
@@ -631,6 +635,7 @@ export async function generateIpcValuationPdf(
     include: {
       project: {
         include: {
+          tenant: true,
           monitorOrganization: true,
           lenderOrganization: true,
           contractorOrganization: true,
@@ -650,8 +655,13 @@ export async function generateIpcValuationPdf(
   }
 
   const report = ipc.valuationReport;
+  const branding = parseTenantBranding(ipc.project.tenant.brandingConfig);
 
   return generateValuationReportPdfBuffer({
+    tenantName: ipc.project.tenant.name,
+    pdfHeaderTitle: branding.pdfHeaderTitle,
+    pdfFooterDisclaimer: branding.pdfFooterDisclaimer,
+    primaryColorHex: branding.primaryColorHex,
     projectName: ipc.project.name,
     projectCodePrefix: ipc.project.codePrefix,
     stateLocation: ipc.project.stateLocation,
@@ -698,16 +708,17 @@ export async function recordLenderTrancheDecision(params: {
   input: LenderTrancheDecisionRequest;
 }) {
   return prisma.$transaction(async (tx) => {
-    const report = await tx.valuationReport.findUnique({
-      where: { id: params.input.valuationReportId },
-      include: { ipcClaim: true },
-    });
-
-    if (!report) {
+    await loadTrancheInProject(tx, params.projectId, params.trancheId);
+    const report = await loadValuationReportInProject(
+      tx,
+      params.projectId,
+      params.input.valuationReportId
+    );
+    if (report.ipcClaim.trancheId !== params.trancheId) {
       throw new AppError(
-        'Certified Valuation Report not found',
-        404,
-        'VALUATION_REPORT_NOT_FOUND'
+        'The valuation report belongs to a different tranche',
+        409,
+        'TRANCHE_MISMATCH'
       );
     }
 
@@ -771,7 +782,7 @@ export async function recordLenderTrancheDecision(params: {
       projectId: params.projectId,
       actorType: 'WEB_USER',
       actorId: params.webUser.userId,
-      actorDisplayName: `${params.webUser.fullName} (LENDER)`,
+      actorDisplayName: `${params.webUser.fullName} (${params.webUser.roleName})`,
       action: 'LENDER_TRANCHE_DECIDED',
       summaryText: `Lender recorded tranche decision "${params.input.decision}": Approved Disbursement NGN ${params.input.approvedDisbursementAmountNgn.toLocaleString()}, Holdback NGN ${params.input.heldBackAmountNgn.toLocaleString()}.`,
       payload: {
@@ -783,7 +794,7 @@ export async function recordLenderTrancheDecision(params: {
       },
     });
 
-    return decision;
+    return serializeTrancheDecision(decision);
   });
 }
 

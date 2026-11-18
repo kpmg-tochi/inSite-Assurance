@@ -90,8 +90,8 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const value = useMemo<ProfileContextValue>(() => {
     const isVerified = profile?.assuranceStatus === 'APPROVED';
-    const projectCode = profile?.activeProjectCode || 'LKK-402-CON';
-    const activeProjectId = profile?.activeProjectId || 'proj-lkk-402';
+    const projectCode = profile?.activeProjectCode || '';
+    const activeProjectId = profile?.activeProjectId || '';
     const userInitials = getInitials(profile?.fullName, 'CO');
 
     return {

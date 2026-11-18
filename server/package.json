@@ -13,7 +13,10 @@
     "prisma:validate": "prisma validate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "test": "npm run test:unit && npm run test:routes",
+    "test:unit": "tsx --test src/tests/rbac.phase1.test.ts src/tests/boq.parser.test.ts",
+    "test:routes": "tsx --test --test-concurrency=1 src/tests/routes.phase2.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.726.0",
@@ -24,14 +27,15 @@
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
     "express": "^4.21.2",
+    "express-rate-limit": "^7.5.1",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "openai": "^4.104.0",
     "pdfkit": "^0.15.2",
     "pg": "^8.23.1",
-    "xlsx": "^0.18.5",
     "zod": "^3.24.1"
   },
   "devDependencies": {
@@ -43,7 +47,9 @@
     "@types/node": "^22.10.5",
     "@types/pdfkit": "^0.13.9",
     "@types/pg": "^8.23.1",
+    "@types/supertest": "^6.0.3",
     "prisma": "^7.10.1",
+    "supertest": "^7.3.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

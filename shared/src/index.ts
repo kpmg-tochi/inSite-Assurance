@@ -1,7 +1,10 @@
 // Enums & Domain Metadata
 export * from './enums';
+export * from './defaultRoles';
+export * from './joinCodes';
 
 // Zod Schemas & DTO Types
+export * from './schemas/rbac.schema';
 export * from './schemas/geofence.schema';
 export * from './schemas/auth.schema';
 export * from './schemas/project.schema';

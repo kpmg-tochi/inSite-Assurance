@@ -7,3 +7,11 @@ export const getProjectAuditTrail = async (projectId: string) => {
   );
   return data.data;
 };
+
+/** Tenant-scope chain: role, user, branding and sign-in lockout events. */
+export const getTenantAuditTrail = async () => {
+  const { data } = await api.get<ApiEnvelope<AuditTrailResponseDto>>(
+    `/rbac/audit-trail`,
+  );
+  return data.data;
+};

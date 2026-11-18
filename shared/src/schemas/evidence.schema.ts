@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   EvidenceLogStatusEnum,
-  IndependenceTierEnum,
+  FieldPersonaTypeEnum,
   MediaTypeEnum,
 } from '../enums';
 import { GeofenceVerificationResultSchema } from './geofence.schema';
@@ -55,6 +55,7 @@ export type CaptureHardwareMetadata = z.infer<typeof CaptureHardwareMetadataSche
 export const EvidenceMediaAttachmentInputSchema = z.object({
   mediaType: MediaTypeEnum,
   objectKey: z.string().min(3),
+  /** Ignored by the server: media is read by objectKey from the bucket. */
   publicOrSignedUrl: z.string().url().optional(),
   mimeType: z.string().min(3),
   byteSize: z.number().int().positive(),
@@ -86,7 +87,10 @@ export const EvidenceConfirmationDraftResponseSchema = z.object({
   evidenceLogId: z.string().uuid(),
   clientCaptureId: z.string().uuid(),
   status: EvidenceLogStatusEnum,
-  independenceTier: IndependenceTierEnum,
+  reporterRoleId: z.string().uuid(),
+  reporterRoleName: z.string(),
+  fieldPersonaType: FieldPersonaTypeEnum,
+  assuranceWeight: z.number(),
   geofenceVerification: GeofenceVerificationResultSchema,
   integrityPassed: z.boolean(),
   integrityFlags: z.array(z.string()), // e.g., ["DUPLICATE_PHOTO_PHASH", "MOCK_GPS_DETECTED"]

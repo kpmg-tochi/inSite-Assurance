@@ -13,7 +13,7 @@ import type {
   ProjectSummaryDto,
 } from '../api/types';
 import { formatDateTimeShort } from '../lib/formatters';
-import { formatIndependenceTierText } from './EvidenceBadge';
+import { formatReporterRoleBadge } from './EvidenceBadge';
 
 interface LiveGeospatialMapProps {
   project: ProjectSummaryDto;
@@ -41,7 +41,7 @@ export function LiveGeospatialMap({
   onSelectEvidenceLog,
 }: LiveGeospatialMapProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [tierFilter, setTierFilter] = useState<'ALL' | 'TIER_1' | 'HOLD_POINT'>(
+  const [tierFilter, setTierFilter] = useState<'ALL' | 'INDEPENDENT' | 'HOLD_POINT'>(
     'ALL'
   );
   const [activeLogId, setActiveLogId] = useState<string | null>(
@@ -57,8 +57,8 @@ export function LiveGeospatialMap({
   const filteredLogs = useMemo(() => {
     return evidenceLogs.filter((log) => {
       if (
-        tierFilter === 'TIER_1' &&
-        log.independenceTier !== 'MONITOR_INSPECTOR'
+        tierFilter === 'INDEPENDENT' &&
+        log.fieldPersonaType !== 'INDEPENDENT_VERIFIER'
       ) {
         return false;
       }
@@ -176,14 +176,14 @@ export function LiveGeospatialMap({
             </button>
             <button
               type="button"
-              onClick={() => setTierFilter('TIER_1')}
+              onClick={() => setTierFilter('INDEPENDENT')}
               className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                tierFilter === 'TIER_1'
+                tierFilter === 'INDEPENDENT'
                   ? 'bg-brand-primary text-white'
                   : 'text-slate-600 hover:bg-slate-100'
               }`}
             >
-              Tier 1 Monitor
+              Independent Monitors
             </button>
             <button
               type="button"
@@ -257,11 +257,11 @@ export function LiveGeospatialMap({
           const isSelected = selectedLog?.id === log.id;
           const pinColor = !log.integrityPassed
             ? 'var(--hex-status-danger)'
-            : log.independenceTier === 'MONITOR_INSPECTOR'
-              ? 'var(--hex-brand-primary)'
-              : log.independenceTier === 'INDEPENDENT_RESIDENT'
-                ? 'var(--hex-brand-pacific)'
-                : 'var(--hex-status-warning)';
+            : log.fieldPersonaType === 'INDEPENDENT_VERIFIER'
+              ? log.assuranceWeight >= 0.9
+                ? 'var(--hex-brand-primary)'
+                : 'var(--hex-brand-pacific)'
+              : 'var(--hex-status-warning)';
 
           return (
             <CircleMarker
@@ -290,7 +290,7 @@ export function LiveGeospatialMap({
                     {log.boqItem?.wbsCode || 'General'}
                   </div>
                   <div className="text-slate-600">
-                    {formatIndependenceTierText(log.independenceTier)}
+                    {formatReporterRoleBadge(log.reporterRoleName, log.fieldPersonaType)}
                   </div>
                 </div>
               </Tooltip>
@@ -349,11 +349,10 @@ export function LiveGeospatialMap({
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-wider text-blue-200/80 font-semibold">
                 {selectedLog.chainageLabel || 'Site Pin'} ·{' '}
-                {selectedLog.independenceTier === 'MONITOR_INSPECTOR'
-                  ? 'Tier 1'
-                  : selectedLog.independenceTier === 'INDEPENDENT_RESIDENT'
-                    ? 'Tier 2'
-                    : 'Tier 3'}
+                {selectedLog.reporterRoleName ||
+                  (selectedLog.fieldPersonaType === 'INDEPENDENT_VERIFIER'
+                    ? 'Independent'
+                    : 'Contractor')}
               </span>
               <span className="text-[10px] text-blue-200/60">
                 {formatDateTimeShort(selectedLog.capturedAtDevice)}

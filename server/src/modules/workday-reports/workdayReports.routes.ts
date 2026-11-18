@@ -1,10 +1,11 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { guardProjectRoutes, projectIdForFieldWrite } from '../../utils/accessControl';
 import {
   RevalidateWorkdayReportRequestSchema,
   SubmitWorkdayReportBundleSchema,
 } from '@insite/shared';
 import {
-  requireAnyAuth,
+  requireAnyAuthWithWebPermission,
   requireFieldSession,
 } from '../../middleware/auth.middleware';
 import { validateBody } from '../../middleware/validate.middleware';
@@ -14,7 +15,7 @@ import {
   submitWorkdayReportBundle,
 } from './workdayReports.service';
 
-const router = Router();
+const router = guardProjectRoutes(Router());
 
 /**
  * POST /api/v1/projects/:projectId/workday-reports
@@ -27,7 +28,7 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const report = await submitWorkdayReportBundle({
-        projectId: String(req.params.projectId),
+        projectId: projectIdForFieldWrite(req),
         reporterSessionId: req.fieldAgent!.sessionId,
         input: req.body,
       });
@@ -49,7 +50,7 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const report = await revalidateWorkdayReport({
-        projectId: String(req.params.projectId),
+        projectId: projectIdForFieldWrite(req),
         reportId: String(req.params.reportId),
         reporterSessionId: req.fieldAgent!.sessionId,
         input: req.body,
@@ -67,7 +68,7 @@ router.post(
  */
 router.get(
   '/:projectId/workday-reports',
-  requireAnyAuth,
+  requireAnyAuthWithWebPermission('reports:view_all'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const reports = await listProjectWorkdayReports({
@@ -75,6 +76,8 @@ router.get(
         workdayDate: req.query.workdayDate
           ? String(req.query.workdayDate)
           : undefined,
+        // Field agents only ever see their own reports.
+        reporterSessionId: req.fieldAgent?.sessionId,
       });
       res.json({ success: true, data: reports });
     } catch (error) {

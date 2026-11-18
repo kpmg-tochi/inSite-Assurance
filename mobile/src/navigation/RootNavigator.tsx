@@ -4,6 +4,10 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { useProfile } from "../context/ProfileContext";
 import {
+  rootNavigationRef,
+  SessionEndedOverlay,
+} from "../components/common/SessionEndedOverlay";
+import {
   useHourlyTelemetry,
   useNetworkSync,
   usePushNotifications,
@@ -56,7 +60,8 @@ export const RootNavigator: React.FC = () => {
     if (!profile || !profile.onboardingCompleted) return "Landing";
     if (!profile.activeProjectCode) return "EnterCode";
     if (
-      profile.activeIndependenceTier === "CONTRACTOR_ENGINEER" &&
+      (profile.activeRequiresIdentityAssurance ||
+        profile.activeFieldPersonaType === "CONTRACTOR_EXECUTOR") &&
       profile.assuranceStatus === "NOT_SUBMITTED"
     ) {
       return "AssuranceWizard";
@@ -65,7 +70,7 @@ export const RootNavigator: React.FC = () => {
   };
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={rootNavigationRef}>
       <Stack.Navigator
         initialRouteName={getInitialRouteName()}
         screenOptions={{
@@ -110,6 +115,7 @@ export const RootNavigator: React.FC = () => {
           />
         </Stack.Group>
       </Stack.Navigator>
+      <SessionEndedOverlay />
     </NavigationContainer>
   );
 };

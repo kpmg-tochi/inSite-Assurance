@@ -23,6 +23,8 @@ import { ReconciliationWorkbenchPage } from "./pages/reconciliation/Reconciliati
 import { BoqAndHoldPointsPage } from "./pages/boq/BoqAndHoldPointsPage";
 import { AuditLedgerPage } from "./pages/audit/AuditLedgerPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
+import { ChangePasswordPage } from "./pages/auth/ChangePasswordPage";
+import { RequirePermission } from "./components/PermissionGate";
 import { Toaster } from "sonner";
 import { useProjectsQuery } from "./queries/projects/useProjectsQueries";
 import { useProjectBoqQuery } from "./queries/boq/useBoqQueries";
@@ -39,7 +41,10 @@ function ScrollToTopOnNavigate() {
 }
 
 function AuthenticatedWorkspace() {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, hasPermission } = useAuth();
+  const canViewBoq = hasPermission("boq:view");
+  const canViewReports = hasPermission("reports:view_all");
+  const canViewIpcs = hasPermission("ipc:view");
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -75,17 +80,18 @@ function AuthenticatedWorkspace() {
     projects[0] ||
     null;
 
+  // Only fetch what the role can see; the API would refuse the rest.
   const boqQuery = useProjectBoqQuery(
     activeProject?.id,
-    Boolean(user && activeProject?.id),
+    Boolean(user && activeProject?.id && canViewBoq),
   );
   const evidenceQuery = useProjectEvidenceQuery(
     activeProject?.id,
-    Boolean(user && activeProject?.id),
+    Boolean(user && activeProject?.id && canViewReports),
   );
   const ipcsQuery = useProjectIpcsQuery(
     activeProject?.id,
-    Boolean(user && activeProject?.id),
+    Boolean(user && activeProject?.id && canViewIpcs),
   );
 
   const ipcs = ipcsQuery.data || [];
@@ -127,7 +133,7 @@ function AuthenticatedWorkspace() {
     );
     const subRoute = subRouteMatch?.[1] || "dashboard";
     const safeSubRoute =
-      user?.role === "CONTRACTOR" && subRoute === "audit"
+      !hasPermission("audit:view_ledger") && subRoute === "audit"
         ? "dashboard"
         : subRoute;
     navigate(`/app/projects/${projectId}/${safeSubRoute}`);
@@ -148,9 +154,13 @@ function AuthenticatedWorkspace() {
     return <Navigate to="/login" replace />;
   }
 
+  if (user.mustChangePassword) {
+    return <ChangePasswordPage />;
+  }
+
   const headerActions = (
     <>
-      {selectedIpc && activeProject && user.role !== "CONTRACTOR" && (
+      {selectedIpc && activeProject && hasPermission("valuation:export_pdf") && (
         <button
           type="button"
           onClick={() =>
@@ -161,7 +171,7 @@ function AuthenticatedWorkspace() {
           Export Valuation PDF
         </button>
       )}
-      {user.role === "MONITOR" && (
+      {hasPermission("projects:create") && (
         <button
           type="button"
           onClick={() => navigate("/app/projects/new")}
@@ -173,9 +183,9 @@ function AuthenticatedWorkspace() {
     </>
   );
 
-  const isCreatingNewProject =
-    projectMatch?.params.projectId === "new" ||
-    location.pathname.endsWith("/projects/new");
+  const projectHome = activeProject
+    ? `/app/projects/${activeProject.id}/dashboard`
+    : "/app";
 
   return (
     <AppShell
@@ -185,178 +195,167 @@ function AuthenticatedWorkspace() {
       openConflictBadgeCount={activeProject?.openConflictCount ?? 0}
       headerActions={headerActions}
     >
-      {isCreatingNewProject ? (
-        user.role === "MONITOR" ? (
-          <CreateProjectPage
-            cancelFallbackPath={
-              activeProject
-                ? `/app/projects/${activeProject.id}/projects`
-                : "/app/projects"
-            }
-            onProjectCreated={(created) => {
-              setSelectedProjectId(created.id);
-              navigate(`/app/projects/${created.id}/boq`);
-            }}
-          />
-        ) : (
-          <Navigate
-            to={
-              activeProject
-                ? `/app/projects/${activeProject.id}/dashboard`
-                : "/app/projects"
-            }
-            replace
-          />
-        )
-      ) : !activeProject ? (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-8 flex flex-col items-center justify-center gap-3 text-xs text-slate-500">
-          {projectsQuery.isLoading ? (
-            <>
-              <Loader size="sm" />
-              <span>Loading capital projects...</span>
-            </>
-          ) : (
-            "No capital projects found."
-          )}
-        </div>
-      ) : (
-        <Routes>
-          <Route
-            index
-            element={
-              <Navigate
-                to={`/app/projects/${activeProject.id}/dashboard`}
-                replace
-              />
-            }
-          />
-          <Route
-            path="projects"
-            element={
-              <ProjectsDirectoryPage
-                projects={projects}
-                selectedProjectId={activeProject.id}
-                onSelectProject={setSelectedProjectId}
-                onNewProject={() => navigate("/app/projects/new")}
-              />
-            }
-          />
-          <Route
-            path="projects/:projectId/dashboard"
-            element={
-              <PortfolioDashboardPage
-                project={activeProject}
-                evidenceLogs={evidenceQuery.data || []}
-                latestIpc={selectedIpc}
-                onNavigateToReconciliation={() =>
-                  navigate(`/app/projects/${activeProject.id}/reconciliation`)
+      <Routes>
+        {/* Routes that work with or without a selected project */}
+        <Route path="settings" element={<SettingsPage project={activeProject} />} />
+        <Route
+          path="projects/new"
+          element={
+            <RequirePermission anyOf={["projects:create"]} backTo={projectHome}>
+              <CreateProjectPage
+                cancelFallbackPath={
+                  activeProject
+                    ? `/app/projects/${activeProject.id}/projects`
+                    : "/app/projects"
                 }
+                onProjectCreated={(created) => {
+                  setSelectedProjectId(created.id);
+                  navigate(`/app/projects/${created.id}/boq`);
+                }}
               />
-            }
-          />
-          <Route
-            path="projects/:projectId/reconciliation"
-            element={
-              <ReconciliationWorkbenchPage
-                project={activeProject}
-                ipcs={ipcs}
-                selectedIpc={selectedIpc}
-                onSelectIpc={handleSelectIpc}
-                boqItems={boqQuery.data || []}
-                evidenceLogs={evidenceQuery.data || []}
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="executive"
+          element={
+            <RequirePermission anyOf={["projects:view_executive_matrix"]} backTo={projectHome}>
+              <PortfolioExecutivePage
+                onSelectProject={(projectId) => {
+                  setSelectedProjectId(projectId);
+                  navigate(`/app/projects/${projectId}/dashboard`);
+                }}
               />
-            }
-          />
-          <Route
-            path="projects/:projectId/boq"
-            element={
-              <BoqAndHoldPointsPage
-                project={activeProject}
-                boqItems={boqQuery.data || []}
-              />
-            }
-          />
-          <Route
-            path="projects/:projectId/audit"
-            element={
-              user.role === "CONTRACTOR" ? (
-                <Navigate
-                  to={`/app/projects/${activeProject.id}/dashboard`}
-                  replace
-                />
-              ) : (
-                <AuditLedgerPage project={activeProject} />
-              )
-            }
-          />
-          <Route
-            path="executive"
-            element={
-              user.role === "CONTRACTOR" ? (
-                <Navigate
-                  to={`/app/projects/${activeProject.id}/dashboard`}
-                  replace
-                />
-              ) : (
-                <PortfolioExecutivePage
-                  onSelectProject={(projectId) => {
-                    setSelectedProjectId(projectId);
-                    navigate(`/app/projects/${projectId}/dashboard`);
-                  }}
-                />
-              )
-            }
-          />
-          <Route
-            path="settings"
-            element={<SettingsPage project={activeProject} />}
-          />
+            </RequirePermission>
+          }
+        />
 
-          {/* Legacy non-scoped route redirects */}
-          <Route
-            path="dashboard"
-            element={
-              <Navigate
-                to={`/app/projects/${activeProject.id}/dashboard`}
-                replace
-              />
-            }
-          />
-          <Route
-            path="reconciliation"
-            element={
-              <Navigate
-                to={`/app/projects/${activeProject.id}/reconciliation${location.search}`}
-                replace
-              />
-            }
-          />
-          <Route
-            path="boq"
-            element={
-              <Navigate to={`/app/projects/${activeProject.id}/boq`} replace />
-            }
-          />
-          <Route
-            path="audit"
-            element={
-              <Navigate
-                to={`/app/projects/${activeProject.id}/audit`}
-                replace
-              />
-            }
-          />
+        {activeProject ? (
+          <>
+            <Route index element={<Navigate to={projectHome} replace />} />
+            <Route
+              path="projects"
+              element={
+                <ProjectsDirectoryPage
+                  projects={projects}
+                  selectedProjectId={activeProject.id}
+                  onSelectProject={setSelectedProjectId}
+                  onNewProject={() => navigate("/app/projects/new")}
+                />
+              }
+            />
+            <Route
+              path="projects/:projectId/dashboard"
+              element={
+                <PortfolioDashboardPage
+                  project={activeProject}
+                  evidenceLogs={evidenceQuery.data || []}
+                  latestIpc={selectedIpc}
+                  onNavigateToReconciliation={() =>
+                    navigate(`/app/projects/${activeProject.id}/reconciliation`)
+                  }
+                />
+              }
+            />
+            <Route
+              path="projects/:projectId/reconciliation"
+              element={
+                <RequirePermission anyOf={["ipc:view"]} backTo={projectHome}>
+                  <ReconciliationWorkbenchPage
+                    project={activeProject}
+                    ipcs={ipcs}
+                    selectedIpc={selectedIpc}
+                    onSelectIpc={handleSelectIpc}
+                    boqItems={boqQuery.data || []}
+                    evidenceLogs={evidenceQuery.data || []}
+                  />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="projects/:projectId/boq"
+              element={
+                <RequirePermission anyOf={["boq:view"]} backTo={projectHome}>
+                  <BoqAndHoldPointsPage
+                    project={activeProject}
+                    boqItems={boqQuery.data || []}
+                  />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="projects/:projectId/audit"
+              element={
+                <RequirePermission anyOf={["audit:view_ledger"]} backTo={projectHome}>
+                  <AuditLedgerPage project={activeProject} />
+                </RequirePermission>
+              }
+            />
+
+            {/* Legacy non-scoped route redirects */}
+            <Route path="dashboard" element={<Navigate to={projectHome} replace />} />
+            <Route
+              path="reconciliation"
+              element={
+                <Navigate
+                  to={`/app/projects/${activeProject.id}/reconciliation${location.search}`}
+                  replace
+                />
+              }
+            />
+            <Route
+              path="boq"
+              element={<Navigate to={`/app/projects/${activeProject.id}/boq`} replace />}
+            />
+            <Route
+              path="audit"
+              element={<Navigate to={`/app/projects/${activeProject.id}/audit`} replace />}
+            />
+            <Route path="*" element={<Navigate to={projectHome} replace />} />
+          </>
+        ) : (
           <Route
             path="*"
             element={
-              <Navigate
-                to={`/app/projects/${activeProject.id}/dashboard`}
-                replace
-              />
+              <div className="bg-white rounded-2xl border border-slate-200/80 p-8 flex flex-col items-center justify-center gap-3 text-xs text-slate-500">
+                {projectsQuery.isLoading ? (
+                  <>
+                    <Loader size="sm" />
+                    <span>Loading capital projects...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-sm font-bold text-slate-900">No projects yet</span>
+                    <span className="max-w-sm text-center">
+                      {hasPermission("projects:create")
+                        ? "Create the first project, or set up roles, users and branding in Settings."
+                        : "You have not been given access to any project. You can still manage your account in Settings."}
+                    </span>
+                    <div className="flex items-center gap-2 pt-1">
+                      {hasPermission("projects:create") && (
+                        <button
+                          type="button"
+                          onClick={() => navigate("/app/projects/new")}
+                          className="px-3.5 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-bold"
+                        >
+                          + New Project
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => navigate("/app/settings")}
+                        className="px-3.5 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-semibold hover:bg-slate-50"
+                      >
+                        Open Settings
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             }
           />
-        </Routes>
-      )}
+        )}
+      </Routes>
     </AppShell>
   );
 }

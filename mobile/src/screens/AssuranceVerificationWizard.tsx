@@ -26,7 +26,6 @@ import {
   type CredentialsSubmissionPayload,
 } from '../components/assurance/AssuranceCredentialsStep';
 import { useProfile } from '../context/ProfileContext';
-import { IS_DEMO_MODE } from '../config/demoMode';
 import { useDemoSkipVerificationMutation } from '../queries/auth/useAuthMutations';
 import { useResolveNotificationMutation } from '../queries/notifications/useNotificationQueries';
 import { saveQueuedAssuranceSubmission } from '../storage/assuranceRepository';
@@ -116,7 +115,14 @@ export const AssuranceVerificationWizard: React.FC = () => {
         activeProjectCode: result.sessionProfile.joinCodeUsed,
         activeSessionId: result.sessionProfile.sessionId,
         activeSessionToken: result.accessToken,
-        activeIndependenceTier: result.sessionProfile.independenceTier,
+        activeRoleId: result.sessionProfile.roleId,
+        activeRoleCode: result.sessionProfile.roleCode,
+        activeRoleName: result.sessionProfile.roleName,
+        activeFieldPersonaType: result.sessionProfile.fieldPersonaType,
+        activeAssuranceWeight: result.sessionProfile.assuranceWeight,
+        activeRequiresIdentityAssurance:
+          result.sessionProfile.requiresIdentityAssurance,
+        activePermissions: result.sessionProfile.permissions || [],
         assuranceStatus: 'APPROVED',
       });
 
@@ -193,7 +199,7 @@ export const AssuranceVerificationWizard: React.FC = () => {
     <View style={styles.root}>
       <View style={styles.stepContainer}>{renderCurrentStep()}</View>
 
-      {IS_DEMO_MODE && !isPreviewDemo && (
+      {(process.env.EXPO_PUBLIC_DEMO_MODE === "true") && !isPreviewDemo && (
         <View
           style={[
             styles.demoBar,

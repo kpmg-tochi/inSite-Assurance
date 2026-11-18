@@ -68,7 +68,7 @@ export function ProjectsDirectoryPage({
   onSelectProject,
   onNewProject,
 }: ProjectsDirectoryPageProps) {
-  const { user } = useAuth();
+  const { hasPermission } = useAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<ProjectStatusTab>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
@@ -130,22 +130,17 @@ export function ProjectsDirectoryPage({
     <div className="space-y-4">
       {/* Header Banner */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-brand-primary/10 text-brand-primary flex items-center justify-center shrink-0">
-            <FolderKanban className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-base font-bold text-slate-900">
-              Capital Projects Directory
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Browse all active, pending approval, draft, and completed
-              infrastructure projects across your workspace.
-            </p>
-          </div>
+        <div>
+          <h1 className="text-base font-bold text-slate-900">
+            Capital Projects Directory
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Browse all active, pending approval, draft, and completed
+            infrastructure projects across your workspace.
+          </p>
         </div>
 
-        {user?.role === "MONITOR" && onNewProject && (
+        {/* {hasPermission("projects:create") && onNewProject && (
           <button
             type="button"
             onClick={onNewProject}
@@ -154,11 +149,22 @@ export function ProjectsDirectoryPage({
             <Plus className="w-4 h-4" />
             New Project
           </button>
-        )}
+        )} */}
       </div>
 
       {/* Filter Tabs & Search */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div className="relative w-full lg:w-72">
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by name, code, state, contractor..."
+            className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brand-primary"
+          />
+        </div>
+
         <div className="flex flex-wrap items-center gap-1.5">
           {tabs.map((tab) => {
             const isSelected = activeTab === tab.id;
@@ -186,17 +192,6 @@ export function ProjectsDirectoryPage({
               </button>
             );
           })}
-        </div>
-
-        <div className="relative w-full lg:w-72">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by name, code, state, contractor..."
-            className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brand-primary"
-          />
         </div>
       </div>
 
@@ -254,17 +249,19 @@ export function ProjectsDirectoryPage({
                         <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span className="truncate">
                           {project.stateLocation}
-                          {project.lgaLocation ? ` · ${project.lgaLocation}` : ""}
+                          {project.lgaLocation
+                            ? ` · ${project.lgaLocation}`
+                            : ""}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Facility Budget & Certified Progress */}
+                  {/* Project Budget & Certified Progress */}
                   <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
                     <div>
                       <div className="text-[11px] text-slate-500">
-                        Facility Budget
+                        Project Budget
                       </div>
                       <div className="text-sm font-bold text-slate-900 mt-0.5">
                         {formatCompactNaira(project.totalBudgetNgn)}
@@ -289,7 +286,7 @@ export function ProjectsDirectoryPage({
                   </div>
 
                   {/* Counterparties & Counters */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+                  <div className="flex flex-col gap-2 text-[11px] text-slate-500">
                     <div className="flex items-center gap-1.5 truncate">
                       <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span className="truncate">
