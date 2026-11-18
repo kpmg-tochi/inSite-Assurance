@@ -30,7 +30,7 @@ import { useProjectsQuery } from "./queries/projects/useProjectsQueries";
 import { useProjectBoqQuery } from "./queries/boq/useBoqQueries";
 import { useProjectEvidenceQuery } from "./queries/evidence/useEvidenceQueries";
 import { useProjectIpcsQuery } from "./queries/reconciliation/useReconciliationQueries";
-import { downloadValuationReportPdf } from "./api/reconciliation/reconciliationApi";
+import { useDownloadValuationPdfMutation } from "./mutations/reconciliation/useReconciliationMutations";
 
 function ScrollToTopOnNavigate() {
   const { pathname } = useLocation();
@@ -116,6 +116,7 @@ function AuthenticatedWorkspace() {
 
   const selectedIpc =
     ipcs.find((i) => i.id === selectedIpcId) || ipcs[0] || null;
+  const pdfMutation = useDownloadValuationPdfMutation(activeProject?.id);
 
   const handleSelectIpc = (ipcId: string) => {
     setSelectedIpcId(ipcId);
@@ -163,12 +164,11 @@ function AuthenticatedWorkspace() {
       {selectedIpc && activeProject && hasPermission("valuation:export_pdf") && (
         <button
           type="button"
-          onClick={() =>
-            downloadValuationReportPdf(activeProject.id, selectedIpc.id)
-          }
+          disabled={pdfMutation.isPending}
+          onClick={() => pdfMutation.mutate(selectedIpc.id)}
           className="px-3.5 py-2 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition shadow-sm backdrop-blur-sm"
         >
-          Export Valuation PDF
+          {pdfMutation.isPending ? "Exporting..." : "Export Valuation PDF"}
         </button>
       )}
       {hasPermission("projects:create") && (
@@ -267,7 +267,6 @@ function AuthenticatedWorkspace() {
                     selectedIpc={selectedIpc}
                     onSelectIpc={handleSelectIpc}
                     boqItems={boqQuery.data || []}
-                    evidenceLogs={evidenceQuery.data || []}
                   />
                 </RequirePermission>
               }

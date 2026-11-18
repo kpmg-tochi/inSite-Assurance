@@ -163,6 +163,20 @@ export function serializeEvidenceLog(log: EvidenceLogRow, opts: { detailedSessio
   };
 }
 
+export function serializeConditionPrecedent(cp: Prisma.ConditionPrecedentGetPayload<object>) {
+  return {
+    id: cp.id,
+    referenceCode: cp.referenceCode,
+    description: cp.description,
+    isMandatoryForRelease: cp.isMandatoryForRelease,
+    status: cp.status,
+    verifiedAt: iso(cp.verifiedAt),
+    statusChangedAt: iso(cp.statusChangedAt),
+    waivedByUserId: cp.waivedByUserId,
+    waiverReason: cp.waiverReason,
+  };
+}
+
 export function serializeTranche(
   t: Prisma.FacilityTrancheGetPayload<object> & {
     conditionsPrecedent?: Prisma.ConditionPrecedentGetPayload<object>[];
@@ -179,14 +193,9 @@ export function serializeTranche(
     isReleased: t.isReleased,
     ...(t.conditionsPrecedent
       ? {
-          conditionsPrecedent: t.conditionsPrecedent.map((cp) => ({
-            id: cp.id,
-            referenceCode: cp.referenceCode,
-            description: cp.description,
-            isMandatoryForRelease: cp.isMandatoryForRelease,
-            status: cp.status,
-            verifiedAt: iso(cp.verifiedAt),
-          })),
+          conditionsPrecedent: [...t.conditionsPrecedent]
+            .sort((a, b) => a.referenceCode.localeCompare(b.referenceCode))
+            .map(serializeConditionPrecedent),
         }
       : {}),
   };
@@ -202,35 +211,20 @@ export function serializeMonitorQuery(q: Prisma.MonitorQueryGetPayload<object>) 
     contractorResponseText: q.contractorResponseText,
     revisedClaimedCumulativePct: num(q.revisedClaimedCumulativePct),
     attachedDocuments: (q.attachedDocumentsJson as unknown[]) ?? [],
+    resolutionNote: q.resolutionNote,
+    raisedByUserId: q.raisedByUserId,
+    respondedByUserId: q.respondedByUserId,
+    resolvedByUserId: q.resolvedByUserId,
     createdAt: q.createdAt.toISOString(),
     respondedAt: iso(q.respondedAt),
     resolvedAt: iso(q.resolvedAt),
   };
 }
 
-export function serializeValuationReport(
-  r: Prisma.ValuationReportGetPayload<object> & {
-    trancheDecision?: Prisma.TrancheDecisionGetPayload<object> | null;
-  }
-) {
-  return {
-    id: r.id,
-    ipcClaimId: r.ipcClaimId,
-    trancheRecommendation: r.trancheRecommendation,
-    recommendedReleaseAmountNgn: Number(r.recommendedReleaseAmountNgn),
-    recommendedHoldbackAmountNgn: Number(r.recommendedHoldbackAmountNgn),
-    executiveCertificationSummary: r.executiveCertificationSummary,
-    certifierFullName: r.certifierFullName,
-    certifierLicenseType: r.certifierLicenseType,
-    certifierLicenseNumber: r.certifierLicenseNumber,
-    certifiedAt: r.certifiedAt.toISOString(),
-    ...(r.trancheDecision !== undefined
-      ? { trancheDecision: r.trancheDecision ? serializeTrancheDecision(r.trancheDecision) : null }
-      : {}),
-  };
-}
+type DecisionRow = Prisma.TrancheDecisionGetPayload<object>;
 
-export function serializeTrancheDecision(d: Prisma.TrancheDecisionGetPayload<object>) {
+/** `allDecisions` lets the serializer tell whether a later reversal cancels this decision. */
+export function serializeTrancheDecision(d: DecisionRow, allDecisions: DecisionRow[] = []) {
   return {
     id: d.id,
     valuationReportId: d.valuationReportId,
@@ -239,7 +233,44 @@ export function serializeTrancheDecision(d: Prisma.TrancheDecisionGetPayload<obj
     heldBackAmountNgn: Number(d.heldBackAmountNgn),
     creditCommitteeReference: d.creditCommitteeReference,
     approverNotes: d.approverNotes,
+    decidedByUserId: d.decidedByUserId,
+    reversesDecisionId: d.reversesDecisionId,
+    isReversed: allDecisions.some((o) => o.reversesDecisionId === d.id),
+    cpSnapshot: Array.isArray(d.cpSnapshotJson)
+      ? (d.cpSnapshotJson as Array<{
+          id: string;
+          referenceCode: string;
+          isMandatoryForRelease: boolean;
+          status: 'PENDING' | 'SATISFIED' | 'WAIVED' | 'BREACHED';
+        }>)
+      : [],
     decidedAt: d.decidedAt.toISOString(),
+  };
+}
+
+export function serializeValuationReport(
+  r: Prisma.ValuationReportGetPayload<object> & { trancheDecisions?: DecisionRow[] }
+) {
+  const decisions = [...(r.trancheDecisions ?? [])].sort(
+    (a, b) => a.decidedAt.getTime() - b.decidedAt.getTime()
+  );
+  return {
+    id: r.id,
+    ipcClaimId: r.ipcClaimId,
+    revisionNumber: r.revisionNumber,
+    trancheRecommendation: r.trancheRecommendation,
+    totalClaimedNgn: Number(r.totalClaimedNgn),
+    totalCertifiedNgn: Number(r.totalCertifiedNgn),
+    recommendedReleaseAmountNgn: Number(r.recommendedReleaseAmountNgn),
+    recommendedHoldbackAmountNgn: Number(r.recommendedHoldbackAmountNgn),
+    executiveCertificationSummary: r.executiveCertificationSummary,
+    certifiedByUserId: r.certifiedByUserId,
+    certifierFullName: r.certifierFullName,
+    certifierLicenseType: r.certifierLicenseType,
+    certifierLicenseNumber: r.certifierLicenseNumber,
+    certifiedAt: r.certifiedAt.toISOString(),
+    supersededAt: iso(r.supersededAt),
+    decisions: decisions.map((d) => serializeTrancheDecision(d, decisions)),
   };
 }
 

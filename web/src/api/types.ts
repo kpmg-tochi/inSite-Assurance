@@ -1,5 +1,4 @@
 import type {
-  EvidenceStrengthRating,
   FieldPersonaType,
   PortfolioHealth,
   ProjectGeofence,
@@ -141,100 +140,6 @@ export interface FieldEvidenceLogRecordDto {
   };
 }
 
-export interface IpcLineItemRecordDto {
-  id: string;
-  ipcClaimId: string;
-  boqItemId: string;
-  previousCertifiedPct: number;
-  contractorClaimedPct: number;
-  contractorClaimedNgn: number;
-  contractorRemarks: string | null;
-  aiEvidenceRating: EvidenceStrengthRating;
-  aiRationale: string | null;
-  visitPlannerFlag: boolean;
-  visitPlannerReason: string | null;
-  missingHoldPointFlag: boolean;
-  highestCorroboratingRoleName: string | null;
-  highestCorroboratingWeight: number | null;
-  corroboratingEvidenceLogIds: string[];
-  monitorCertifiedPct: number | null;
-  monitorCertifiedNgn: number | null;
-  monitorRemarks: string | null;
-  boqItem: BoqItemRecordDto & {
-    evidenceLogs?: FieldEvidenceLogRecordDto[];
-  };
-  queries: Array<{
-    id: string;
-    status: 'OPEN' | 'RESPONDED' | 'RESOLVED';
-    queryReason: string;
-    contractorResponseText: string | null;
-    revisedClaimedCumulativePct: number | null;
-    createdAt: string;
-    respondedAt: string | null;
-  }>;
-}
-
-export interface IpcDetailsDto {
-  id: string;
-  projectId: string;
-  trancheId: string;
-  ipcNumber: number;
-  periodStart: string;
-  periodEnd: string;
-  contractorCoverNote: string | null;
-  totalClaimedAmountNgn: number;
-  totalCertifiedNgn: number | null;
-  status: string;
-  aiExecutiveSummary: string | null;
-  submittedAt: string;
-  tranche: {
-    id: string;
-    trancheNumber: number;
-    name: string;
-    allocatedAmountNgn: number;
-    releasedAmountNgn: number;
-    targetCompletionPct: number;
-    isReleased: boolean;
-    conditionsPrecedent?: Array<{
-      id: string;
-      referenceCode: string;
-      description: string;
-      isMandatoryForRelease: boolean;
-      status: 'PENDING' | 'SATISFIED' | 'WAIVED' | 'BREACHED';
-    }>;
-  };
-  valuationReport: {
-    id: string;
-    trancheRecommendation: string;
-    recommendedReleaseAmountNgn: number;
-    recommendedHoldbackAmountNgn: number;
-    executiveCertificationSummary: string;
-    certifierFullName: string;
-    certifierLicenseType: string;
-    certifierLicenseNumber: string;
-    certifiedAt: string;
-    trancheDecision?: {
-      id: string;
-      decision: string;
-      approvedDisbursementAmountNgn: number;
-      heldBackAmountNgn: number;
-      creditCommitteeReference: string | null;
-      approverNotes: string | null;
-      decidedAt: string;
-    } | null;
-  } | null;
-  lineItems: IpcLineItemRecordDto[];
-  smartVisitPlannerQueue?: Array<{
-    ipcLineItemId: string;
-    wbsCode: string;
-    description: string;
-    claimedAmountNgn: number;
-    aiEvidenceRating: EvidenceStrengthRating;
-    missingHoldPointFlag: boolean;
-    visitPlannerReason: string;
-  }>;
-}
-
 export interface AuditTrailResponseDto {
   tenantId?: string;
   projectId: string | null;
@@ -259,7 +164,17 @@ export interface AuditTrailResponseDto {
   }>;
 }
 
+// IPC, query, valuation and decision contracts come from @insite/shared (Phase 3).
 export type {
+  IpcClaimDto,
+  IpcLineItemDto,
+  MonitorQueryDto,
+  ValuationReportDto,
+  TrancheDecisionDto,
+  ConditionPrecedentDto,
+  ProvidedEvidenceItem,
+  CertificationComputation,
+  ResolvedRatingLabels,
   ContractorVerificationRecordDto,
   ReviewContractorVerificationRequest,
   PortfolioExecutiveSummaryDto,

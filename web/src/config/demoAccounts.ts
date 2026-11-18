@@ -33,6 +33,15 @@ export const SEEDED_DEMO_ACCOUNTS = [
     initials: "CO",
   },
   {
+    roleCode: "LENDER_TECHNICAL_OFFICER",
+    roleTitle: "Lender Technical Officer (Certify + Approve)",
+    name: "Engr. Ifeoma Eze",
+    organization: "InfraCredit",
+    email: "lto@insite.ng",
+    credential: "COREN #R.33017",
+    initials: "IE",
+  },
+  {
     roleCode: "CONTRACTOR",
     roleTitle: "Main Contractor (Claimant)",
     name: "Engr. Musa Danladi",

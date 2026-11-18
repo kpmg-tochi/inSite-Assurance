@@ -2,7 +2,7 @@
 
 | | |
 | :--- | :--- |
-| **Status** | Not started |
+| **Status** | Implemented, with carry-overs (section 7). Server verified by tests; web built and typechecked, not clicked through in a browser. |
 | **Depends on** | Phase 2 |
 | **Unblocks** | Phases 6, 7, 10 |
 | **Read first** | [Master plan](saas_implementation_plan.md) sections 2, 3 and 6 |
@@ -90,97 +90,116 @@
 ## 5. Implementation checklist
 
 ### Step 1: State machine
-- [ ] Define the allowed IPC transitions once in `shared` and export a guard `assertIpcTransition(from, action)`:
+- [x] Define the allowed IPC transitions once in `shared` and export a guard `assertIpcTransition(from, action)`:
   - `SUBMITTED` to `AI_RECONCILED` (reconcile)
   - `AI_RECONCILED` to `QUERIED_BY_MONITOR` (raise query) or `MONITOR_CERTIFIED` (certify)
   - `QUERIED_BY_MONITOR` to `AI_RECONCILED` (all queries resolved, reconciliation re-run) or `MONITOR_CERTIFIED` (certify with no open queries)
   - `MONITOR_CERTIFIED` to `LENDER_DECIDED` (decide), or back to `QUERIED_BY_MONITOR` if the monitor reopens before a decision
   - `SUBMITTED`, `AI_RECONCILED`, `QUERIED_BY_MONITOR` to `REJECTED_WITHDRAWN` (contractor withdraws)
   - `LENDER_DECIDED` is terminal
-- [ ] Enforce the guard at the top of every service function, inside the transaction, with a row lock on the IPC (`SELECT ... FOR UPDATE`).
+- [x] Enforce the guard at the top of every service function, inside the transaction, with a row lock on the IPC (`SELECT ... FOR UPDATE`).
 
 ### Step 2: Claim submission
-- [ ] Server assigns `ipcNumber` (max + 1 per project, in the transaction). Remove it from the request schema.
-- [ ] Reject a new claim if the tranche already has an IPC that is not `LENDER_DECIDED` or `REJECTED_WITHDRAWN`.
-- [ ] Each line: claimed cumulative percentage must be greater than the item's certified percentage and at most 100; the BOQ item must be mapped to the claim's tranche; no duplicates.
-- [ ] `periodEnd` after `periodStart` and not in the future.
-- [ ] Reconciliation runs after the create transaction; if it throws, the claim stays `SUBMITTED`, the response is 201 with a "reconciliation pending" flag, and the monitor can retry. Never return 500 for a saved claim.
+- [x] Server assigns `ipcNumber` (max + 1 per project, in the transaction). Remove it from the request schema.
+- [x] Reject a new claim if the tranche already has an IPC that is not `LENDER_DECIDED` or `REJECTED_WITHDRAWN`.
+- [x] Each line: claimed cumulative percentage must be greater than the item's certified percentage and at most 100; the BOQ item must be mapped to the claim's tranche; no duplicates.
+- [x] `periodEnd` after `periodStart` and not in the future.
+- [x] Reconciliation runs after the create transaction; if it throws, the claim stays `SUBMITTED`, the response is 201 with a "reconciliation pending" flag, and the monitor can retry. Never return 500 for a saved claim.
 
 ### Step 3: Queries
-- [ ] Respond: only when the query is `OPEN`, only while the IPC is `QUERIED_BY_MONITOR`, only by a user with `reports:respond_query`. A revised percentage follows the Step 2 bounds.
-- [ ] New endpoint `POST .../queries/:queryId/resolve` (`reports:raise_query`) with a note. When the last open query on an IPC is resolved, re-run reconciliation and move to `AI_RECONCILED`.
-- [ ] Certification is refused while any query is `OPEN` or `RESPONDED`.
+- [x] Respond: only when the query is `OPEN`, only while the IPC is `QUERIED_BY_MONITOR`, only by a user with `reports:respond_query`. A revised percentage follows the Step 2 bounds.
+- [x] New endpoint `POST .../queries/:queryId/resolve` (`reports:raise_query`) with a note. When the last open query on an IPC is resolved, re-run reconciliation and move to `AI_RECONCILED`.
+- [x] Certification is refused while any query is `OPEN` or `RESPONDED`.
 
 ### Step 4: Certification
-- [ ] Request body shrinks to: per-line `monitorCertifiedCumulativePct` and remarks, `trancheRecommendation`, `executiveCertificationSummary`, `certifierDigitalSignatureAck`. Remove amounts and certifier identity from `CertifyIpcValuationRequestSchema`.
-- [ ] The user must have `professionalLicenseType` and `professionalLicenseNumber` on their profile, else 422. Snapshot them onto the report.
-- [ ] Every line of the IPC must be valued. Certified percentage must be between the previous certified percentage and the claimed percentage.
-- [ ] Server computes: line certified amount = (certified minus previous) x budgeted cost; total certified; recommended release = total certified for `SUPPORT_FULL_RELEASE`, a stated lower figure for `SUPPORT_WITH_HOLDBACK` (the one amount the monitor may enter, bounded by total certified), zero for `HOLD`; holdback = total claimed minus recommended release.
-- [ ] Re-certification before a lender decision creates a new revision and marks the previous one superseded. After a decision it is refused.
-- [ ] `BoqItem.cumulativeCertifiedPct` is updated only here. Recompute `Project.certifiedProgressPct` as the budget-weighted mean of BOQ certified percentages in the same transaction.
+- [x] Request body shrinks to: per-line `monitorCertifiedCumulativePct` and remarks, `trancheRecommendation`, `executiveCertificationSummary`, `certifierDigitalSignatureAck`. Remove amounts and certifier identity from `CertifyIpcValuationRequestSchema`.
+- [x] The user must have `professionalLicenseType` and `professionalLicenseNumber` on their profile, else 422. Snapshot them onto the report.
+- [x] Every line of the IPC must be valued. Certified percentage must be between the previous certified percentage and the claimed percentage.
+- [x] Server computes: line certified amount = (certified minus previous) x budgeted cost; total certified; recommended release = total certified for `SUPPORT_FULL_RELEASE`, a stated lower figure for `SUPPORT_WITH_HOLDBACK` (the one amount the monitor may enter, bounded by total certified), zero for `HOLD`; holdback = total claimed minus recommended release.
+- [x] Re-certification before a lender decision creates a new revision and marks the previous one superseded. After a decision it is refused.
+- [x] `BoqItem.cumulativeCertifiedPct` is updated only here. Recompute `Project.certifiedProgressPct` as the budget-weighted mean of BOQ certified percentages in the same transaction.
 
 ### Step 5: Lender decision
-- [ ] D-3.1: refuse if the caller is the certifier of the current revision. Check the two permissions explicitly from role permissions, without the platform super admin bypass.
-- [ ] D-3.2: refuse `APPROVE_*` while a mandatory CP is `PENDING` or `BREACHED`. Add CP status and waiver endpoints with audit events.
-- [ ] Bounds: approved amount at most the recommended release and at most the tranche's allocated minus released. `HOLD` means zero. `APPROVE_FULL` means exactly the recommended release; the request carries no amount for it.
-- [ ] Plain create; a second decision on the same revision is refused. Reversal endpoint creates a linked record with negative effect on `releasedAmountNgn` and `disbursedToDateNgn`.
-- [ ] `isReleased` is true when released equals allocated. Remove the forced `portfolioHealth` write.
-- [ ] Snapshot CP statuses into `cpSnapshotJson`.
+- [x] D-3.1: refuse if the caller is the certifier of the current revision. Check the two permissions explicitly from role permissions, without the platform super admin bypass.
+- [x] D-3.2: refuse `APPROVE_*` while a mandatory CP is `PENDING` or `BREACHED`. Add CP status and waiver endpoints with audit events.
+- [x] Bounds: approved amount at most the recommended release and at most the tranche's allocated minus released. `HOLD` means zero. `APPROVE_FULL` means exactly the recommended release; the request carries no amount for it.
+- [x] Plain create; a second decision on the same revision is refused. Reversal endpoint creates a linked record with negative effect on `releasedAmountNgn` and `disbursedToDateNgn`.
+- [x] `isReleased` is true when released equals allocated. Remove the forced `portfolioHealth` write.
+- [x] Snapshot CP statuses into `cpSnapshotJson`.
 
 ### Step 6: Reconciliation engine
-- [ ] Create `evidenceProvider.ts` as described in section 2 and use it exclusively. Bound evidence to `capturedAt <= periodEnd`.
-- [ ] Compute per line, in code, before any model call: total evidenced quantity in the BOQ unit (ignore mismatched units and list them), coverage = evidenced quantity over claimed quantity for the period, whether any in-geofence independent evidence exists, whether integrity-flagged evidence exists, whether blockers were reported.
-- [ ] Enforce rule caps in code after the engine returns, and record which fired in `ruleCapsApplied`:
+- [x] Create `evidenceProvider.ts` as described in section 2 and use it exclusively. Bound evidence to `capturedAt <= periodEnd`.
+- [x] Compute per line, in code, before any model call: total evidenced quantity in the BOQ unit (ignore mismatched units and list them), coverage = evidenced quantity over claimed quantity for the period, whether any in-geofence independent evidence exists, whether integrity-flagged evidence exists, whether blockers were reported.
+- [x] Enforce rule caps in code after the engine returns, and record which fired in `ruleCapsApplied`:
   - no evidence: `UNSUPPORTED`
   - contractor-only evidence: at most `PARTIALLY_SUPPORTED`, visit-planner flag on
   - hold point without independent evidence: at most `PARTIALLY_SUPPORTED`, missing-hold-point flag on
   - coverage below 50 percent: at most `PARTIALLY_SUPPORTED`
   - integrity-flagged evidence is excluded from support
-- [ ] Rules engine (used when the provider is unavailable or errors): `SUPPORTED` requires independent in-geofence evidence and coverage of at least 90 percent; `CONTRADICTED` when independent evidence shows materially less than claimed or reports an active blocker on the item; otherwise as capped above.
-- [ ] Prompt hygiene: pass computed facts as structured fields; pass free text in a clearly delimited data block with an instruction that it is untrusted content; never include instructions-like text from field notes in the system message.
-- [ ] Record `ratingEngine` (`AZURE_OPENAI` or `RULES_ENGINE`) and deployment name on the IPC and each line; the audit actor reflects the engine that ran. Show it in the workbench and the PDF.
-- [ ] One shared helper `derivePortfolioHealth(lines)` and one for conflict and hold-point counts. Use them in reconciliation, `listProjectsForUser` and `getPortfolioExecutiveSummary`.
+- [x] Rules engine (used when the provider is unavailable or errors): `SUPPORTED` requires independent in-geofence evidence and coverage of at least 90 percent; `CONTRADICTED` when independent evidence shows materially less than claimed or reports an active blocker on the item; otherwise as capped above.
+- [x] Prompt hygiene: pass computed facts as structured fields; pass free text in a clearly delimited data block with an instruction that it is untrusted content; never include instructions-like text from field notes in the system message.
+- [x] Record `ratingEngine` (`AZURE_OPENAI` or `RULES_ENGINE`) and deployment name on the IPC and each line; the audit actor reflects the engine that ran. Show it in the workbench and the PDF. *Server and ledger verified by tests; workbench and PDF display built, not checked by eye.*
+- [x] One shared helper `derivePortfolioHealth(lines)` and one for conflict and hold-point counts. Use them in reconciliation, `listProjectsForUser` and `getPortfolioExecutiveSummary`.
 
 ### Step 7: Roles and seed
-- [ ] In the default-role definition (created in Phase 2), remove `ipc:certify_valuation` and `tranche:approve_disbursement` from Tenant Super Admin, matching the Phase 1 catalog.
-- [ ] Seed: demo monitor has a licence; add a second lender-side user so the demo can show the same-user block.
+- [x] In the default-role definition (created in Phase 2), remove `ipc:certify_valuation` and `tranche:approve_disbursement` from Tenant Super Admin, matching the Phase 1 catalog.
+- [x] Seed: demo monitor has a licence; add a second lender-side user so the demo can show the same-user block.
 
 ### Step 8: Rating labels
-- [ ] Shared: `EvidenceRatingLabelsSchema`, `resolveRatingLabels(tenantLabels)` returning label, description and the fixed colour token for each canonical value. Make `EVIDENCE_RATING_META` the only source of defaults and colours.
-- [ ] Server: `GET` and `PUT /rbac/tenant/settings/rating-labels` (`tenant:manage_settings`); include resolved labels in the web user profile and the mobile session profile; audit `TENANT_SETTINGS_UPDATED`.
-- [ ] Web: a "Evidence ratings" card in tenant settings with label and description per canonical value, the fixed meaning shown read-only beside each, and reset to default.
-- [ ] Web: one `EvidenceBadge` that takes a canonical value and renders the tenant label, with the description as a tooltip. Replace every local map, switch, count label and row tint with it or with `resolveRatingLabels`.
-- [ ] PDF and audit summaries print the tenant label; payloads keep the canonical value.
-- [ ] AI prompts and stored data use canonical values only.
+- [x] Shared: `EvidenceRatingLabelsSchema`, `resolveRatingLabels(tenantLabels)` returning label, description and the fixed colour token for each canonical value. Make `EVIDENCE_RATING_META` the only source of defaults and colours.
+- [x] Server: `GET` and `PUT /rbac/tenant/settings/rating-labels` (`tenant:manage_settings`); include resolved labels in the web user profile and the mobile session profile; audit `TENANT_SETTINGS_UPDATED`.
+- [ ] Web: a "Evidence ratings" card in tenant settings with label and description per canonical value, the fixed meaning shown read-only beside each, and reset to default. *Built and typechecked; not verified in a browser.*
+- [ ] Web: one `EvidenceBadge` that takes a canonical value and renders the tenant label, with the description as a tooltip. Replace every local map, switch, count label and row tint with it or with `resolveRatingLabels`. *Built and typechecked; not verified in a browser.*
+- [x] PDF and audit summaries print the tenant label; payloads keep the canonical value. *Audit summary verified by test; PDF text not inspected (the test only checks a PDF is produced).*
+- [x] AI prompts and stored data use canonical values only.
 
 ### Step 9: Web workbench
-- [ ] Split [ReconciliationWorkbenchPage.tsx](../web/src/pages/reconciliation/ReconciliationWorkbenchPage.tsx) (about 1,500 lines) into the page plus `SubmitIpcModal`, `CertifyValuationModal`, `LenderDecisionModal`, `RaiseQueryModal`, `LineItemsTable`.
-- [ ] Render the submit modal in the empty state too.
-- [ ] Real claim form: tranche select (only tranches with no open IPC), BOQ items of that tranche with previous percentage and an input for claimed percentage, remarks, period dates, supporting document upload through presign, live total computed for display only.
-- [ ] Certification modal: licence shown read-only from the profile with a link to fix it if missing; an explicit acknowledgement checkbox; server-computed totals shown after a dry-run call or on response.
-- [ ] Lender modal: CP checklist with waive action; amount field only for holdback; clear message when blocked by D-3.1 or D-3.2.
-- [ ] Query resolve action; query status chips.
-- [ ] Evidence drawer: no fallback log; an explicit "no evidence linked" state; real audio playback from the media endpoint or no player; remove unconditional "Verified" and "Human-Confirmed" text.
-- [ ] Remove demo strings as defaults outside demo mode. Remove page-level toasts that duplicate hook toasts. Fix the audit invalidation key. Handle PDF export errors.
-- [ ] Replace hand-written IPC and query types in `web/src/api/types.ts` with shared types.
+- [ ] Split [ReconciliationWorkbenchPage.tsx](../web/src/pages/reconciliation/ReconciliationWorkbenchPage.tsx) (about 1,500 lines) into the page plus `SubmitIpcModal`, `CertifyValuationModal`, `LenderDecisionModal`, `RaiseQueryModal`, `LineItemsTable`. *Built and typechecked; not verified in a browser.*
+- [ ] Render the submit modal in the empty state too. *Built and typechecked; not verified in a browser.*
+- [ ] Real claim form: tranche select (only tranches with no open IPC), BOQ items of that tranche with previous percentage and an input for claimed percentage, remarks, period dates, supporting document upload through presign, live total computed for display only. *Built and typechecked; not verified in a browser.*
+- [ ] Certification modal: licence shown read-only from the profile with a link to fix it if missing; an explicit acknowledgement checkbox; server-computed totals shown after a dry-run call or on response. *Built and typechecked; not verified in a browser.*
+- [ ] Lender modal: CP checklist with waive action; amount field only for holdback; clear message when blocked by D-3.1 or D-3.2. *Built and typechecked; not verified in a browser.*
+- [ ] Query resolve action; query status chips. *Built and typechecked; not verified in a browser.*
+- [ ] Evidence drawer: no fallback log; an explicit "no evidence linked" state; real audio playback from the media endpoint or no player; remove unconditional "Verified" and "Human-Confirmed" text. *Built and typechecked; not verified in a browser.*
+- [ ] Remove demo strings as defaults outside demo mode. Remove page-level toasts that duplicate hook toasts. Fix the audit invalidation key. Handle PDF export errors. *Built and typechecked; not verified in a browser.*
+- [ ] Replace hand-written IPC and query types in `web/src/api/types.ts` with shared types. *Built and typechecked; not verified in a browser.*
 
 ### Step 10: Tests
-- [ ] Every illegal transition is refused.
-- [ ] Certification without a licence is refused; amounts are server-derived for a known fixture.
-- [ ] Decision bounds, CP block, waiver, same-user block, reversal arithmetic, no double counting.
-- [ ] Rule caps: each cap with a fixture, with a stubbed model that returns `SUPPORTED` for everything.
-- [ ] Provider failure yields `RULES_ENGINE` in line items and the ledger.
-- [ ] Rating labels: update, resolve, fall back, and canonical values unchanged in storage.
+- [x] Every illegal transition is refused.
+- [x] Certification without a licence is refused; amounts are server-derived for a known fixture.
+- [x] Decision bounds, CP block, waiver, same-user block, reversal arithmetic, no double counting.
+- [x] Rule caps: each cap with a fixture, with a stubbed model that returns `SUPPORTED` for everything.
+- [x] Provider failure yields `RULES_ENGINE` in line items and the ledger.
+- [x] Rating labels: update, resolve, fall back, and canonical values unchanged in storage.
 
 ---
 
 ## 6. Definition of done
 
-- A full claim-to-release cycle works from the web on a project that starts with no IPC.
-- No amount that affects a release is accepted from a client without a server bound.
-- Changing a rating label changes every place the rating is shown, and nothing in the database rows.
-- Master plan status updated.
+| Criterion | Status (2026-11-18) |
+| :--- | :--- |
+| A full claim-to-release cycle works from the web on a project that starts with no IPC | **API verified; web not clicked through.** `routes.phase3.test.ts` runs submit, query, respond, resolve, certify (dry run and revision), CP waiver, decision, reversal and corrected decision on ABJ-108. The seed now gives ABJ-108 an open Tranche 2 with no IPC. The web flow uses the same endpoints and typechecks, but has not been used in a browser. |
+| No amount that affects a release is accepted from a client without a server bound | Met. Claim amounts, certified amounts and the APPROVE_FULL amount are computed by the server. The two amounts a client can enter (holdback recommendation, holdback approval) are bounded and tested. |
+| Changing a rating label changes every place the rating is shown, and nothing in the database rows | Met on the server: profile, audit summaries, PDF input; stored values unchanged (tested). The web reads labels from the profile through one `EvidenceBadge`; not checked by eye. The public Home and About pages still name the default labels and were left alone. |
+| Master plan status updated | Met. |
+
+**Checks run:** 141 server tests pass (81 unit, of which 72 new; 60 route-level, of which 30 new). Root `npm run typecheck`, `npm run lint` (0 errors, 120 warnings) and the web production build pass.
 
 ## 7. Found during implementation
 
-_Add items here rather than expanding scope._
+| # | Finding | Recommendation / owner phase |
+| :--- | :--- | :--- |
+| 1 | **Deviation:** `LENDER_DECIDED` is terminal except for the reversal action, which returns the IPC to `MONITOR_CERTIFIED` so a corrected decision can be recorded on the same revision. Otherwise a reversal would leave no way to record the correct decision. | Confirm with owner. Defined once in `shared/src/ipcStateMachine.ts`. |
+| 2 | D-3.1 collided with the Phase 2 escalation guard: without certify/approve, Tenant Super Admin could no longer assign the Monitor or Lender roles. The two segregated permissions are now exempt from "the caller must hold it", **except** when the change would give them to the caller (own role or own account). The exception applies to platform admins too. | Confirm with owner. Tested. |
+| 3 | The rules engine rates `CONTRADICTED` when independent evidence with a measured quantity covers less than 50% of the period claim, or when the latest independent log reports a blocker. A single sparse inspection can therefore contradict a claim that contractor logs cover. | Review the threshold with monitors (`CONTRADICTION_MAX_INDEPENDENT_COVERAGE_PCT`). |
+| 4 | Coverage counts only evidence captured inside the claim period, inside the geofence and integrity-clean, against the quantity claimed for the period. Independent hold-point evidence may predate the period. Older evidence is shown but not counted. | Confirm with owner. Phase 4 may refine this once captures are per item. |
+| 5 | Definitions chosen: lender `heldBackAmountNgn` = total claimed minus approved; valuation holdback = total claimed minus recommended release. A HOLD recommendation gives a recommended release of 0, so the lender can only record HOLD. | Confirm with owner. |
+| 6 | The default Monitor role holds `ipc:submit_claim`, so a monitor can submit claims that they later certify. Not changed here. | Owner decision; probably remove. |
+| 7 | `ReportQuery` (workday-report queries) is still never set to `RESOLVED`. Step 3 covered `MonitorQuery` only. | Phase 4 (evidence pipeline). |
+| 8 | Without S3 configured, presign returns a key but stores nothing, because no local-dev upload route exists. Supporting documents and the media endpoint therefore do not work in local dev. Pre-existing. | Add a local-dev storage route or use MinIO in dev. |
+| 9 | The dev database was **not** migrated. The Phase 3 migration adds NOT NULL columns, and Prisma refuses `migrate reset` from an AI agent without the owner's explicit consent. The disposable `_test` database is rebuilt from migrations on every test run. | Run `npx prisma migrate reset` in `server/` (decision A). |
+| 10 | Seed changes: IPC #2 is now `QUERIED_BY_MONITOR` because it has an open query. The tranche-1 earthworks line was removed from the tranche-2 claim, so the total is now 1,263.4M. Seeded ratings are attributed to `SEED_FIXTURE` rather than Azure. ABJ-108 gains an open Tranche 2 with evidence and a pending CP. `lto@insite.ng` (a custom role holding certify and approve) demonstrates the same-user block. | None. |
+| 11 | The evidence drawer's workday-report geotag panel calls an endpoint that roles without `reports:view_all` (the default Lender) cannot read, so the panel stays hidden for them. Pre-existing. | None unless lenders need it. |
+| 12 | Seeded `Project.certifiedProgressPct` values are hand-written and disagree with the BOQ percentages until the first certification recomputes them. | Compute them in the seed when it is next touched. |
+| 13 | The executive summary's holdback total still sums line-level claimed minus certified amounts, not the holdback on the live valuation revision. | Phase 6 or 7, with the portfolio views. |
+| 14 | The web bundle is a single 989 kB chunk. Pre-existing. | Code-split by route. |

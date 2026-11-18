@@ -17,6 +17,15 @@ export interface DefaultRoleDefinition {
   permissionKeys: string[];
 }
 
+/**
+ * D-3.1: permissions that must be held explicitly. The Tenant Super Admin default role does not
+ * receive them, and the platform super admin bypass does not apply to them.
+ */
+export const SEGREGATED_DISBURSEMENT_PERMISSIONS: string[] = [
+  'ipc:certify_valuation',
+  'tranche:approve_disbursement',
+];
+
 const FIELD_BASE_PERMISSIONS = [
   'boq:view',
   'field:join_project',
@@ -36,8 +45,10 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
     fieldPersonaType: 'NONE',
     assuranceWeight: 1.0,
     requiresIdentityAssurance: false,
-    // Separation-of-duties narrowing is a Phase 3 decision; until then the admin holds every key.
-    permissionKeys: SYSTEM_PERMISSIONS_CATALOG.map((p) => p.key),
+    // D-3.1 segregation of duties: governance does not include certifying or approving.
+    permissionKeys: SYSTEM_PERMISSIONS_CATALOG.map((p) => p.key).filter(
+      (key) => !SEGREGATED_DISBURSEMENT_PERMISSIONS.includes(key)
+    ),
   },
   {
     name: 'Independent Monitor',

@@ -84,3 +84,10 @@ export async function loadReportQueryInProject(db: Db, projectId: string, queryI
   if (!query) throw notFound('Report query', 'REPORT_QUERY_NOT_FOUND');
   return query;
 }
+
+export async function loadConditionInTranche(db: Db, trancheId: string, conditionId: string) {
+  assertUuid(conditionId, 'Condition precedent', 'CONDITION_NOT_FOUND');
+  const cp = await db.conditionPrecedent.findFirst({ where: { id: conditionId, trancheId } });
+  if (!cp) throw notFound('Condition precedent', 'CONDITION_NOT_FOUND');
+  return cp;
+}

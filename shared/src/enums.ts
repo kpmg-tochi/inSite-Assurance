@@ -562,9 +562,16 @@ export const EvidenceStrengthRatingEnum = z.enum([
 ]);
 export type EvidenceStrengthRating = z.infer<typeof EvidenceStrengthRatingEnum>;
 
+export type EvidenceRatingColorToken = 'emerald' | 'amber' | 'slate' | 'rose';
+
+/**
+ * The only source of default labels, descriptions and colours for evidence ratings (decision B).
+ * Tenants may override `label` and `description` (see `resolveRatingLabels`); the colour and the
+ * canonical meaning are fixed.
+ */
 export const EVIDENCE_RATING_META: Record<
   EvidenceStrengthRating,
-  { label: string; colorToken: 'emerald' | 'amber' | 'slate' | 'rose'; description: string }
+  { label: string; colorToken: EvidenceRatingColorToken; description: string }
 > = {
   SUPPORTED: {
     label: 'Supported',
@@ -634,6 +641,7 @@ export const IpcClaimStatusEnum = z.enum([
   'QUERIED_BY_MONITOR',
   'MONITOR_CERTIFIED',
   'LENDER_DECIDED',
+  'REJECTED_WITHDRAWN',
 ]);
 export type IpcClaimStatus = z.infer<typeof IpcClaimStatusEnum>;
 
@@ -710,6 +718,12 @@ export const AuditActionTypeEnum = z.enum([
   'USER_DEACTIVATED',
   'JOIN_CODE_ROTATED',
   'LOGIN_FAILED_LOCKOUT',
+  'CP_STATUS_CHANGED',
+  'CP_WAIVED',
+  'MONITOR_QUERY_RESOLVED',
+  'IPC_WITHDRAWN',
+  'TRANCHE_DECISION_REVERSED',
+  'TENANT_SETTINGS_UPDATED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 

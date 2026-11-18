@@ -7,6 +7,7 @@ import {
   ProfessionalLicenseTypeEnum,
 } from "../enums";
 import { TenantDtoSchema } from "./rbac.schema";
+import { ResolvedRatingLabelsSchema } from "../ratingLabels";
 
 /**
  * Web Portal Authentication (Dynamic Multi-Tenant RBAC)
@@ -64,6 +65,8 @@ export const WebUserProfileSchema = z.object({
   professionalLicenseType: ProfessionalLicenseTypeEnum.nullable(),
   professionalLicenseNumber: z.string().nullable(),
   mustChangePassword: z.boolean().default(false),
+  /** Tenant display labels for evidence ratings, resolved against the defaults. */
+  ratingLabels: ResolvedRatingLabelsSchema,
 });
 export type WebUserProfile = z.infer<typeof WebUserProfileSchema>;
 
@@ -165,6 +168,7 @@ export const FieldAgentSessionProfileSchema = z.object({
   assuranceStatus: ContractorAssuranceStatusEnum.optional(),
   corenLicenseNumber: z.string().optional(),
   livenessPassed: z.boolean().optional(),
+  ratingLabels: ResolvedRatingLabelsSchema.optional(),
 });
 export type FieldAgentSessionProfile = z.infer<
   typeof FieldAgentSessionProfileSchema

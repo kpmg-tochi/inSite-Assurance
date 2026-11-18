@@ -3,14 +3,18 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useState,
 } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import type {
-  ChangePasswordRequest,
-  TenantBrandingConfig,
-  WebUserProfile,
+import {
+  resolveRatingLabels,
+  SEGREGATED_DISBURSEMENT_PERMISSIONS,
+  type ChangePasswordRequest,
+  type ResolvedRatingLabels,
+  type TenantBrandingConfig,
+  type WebUserProfile,
 } from "@insite/shared";
 import {
   getStoredToken,
@@ -77,6 +81,8 @@ interface AuthContextValue {
   refreshUser: () => Promise<void>;
   hasPermission: (permissionKey: string) => boolean;
   hasAnyPermission: (...permissionKeys: string[]) => boolean;
+  /** Tenant display labels for evidence ratings (defaults until the profile loads). */
+  ratingLabels: ResolvedRatingLabels;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -167,21 +173,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     toast.success("Password updated. Other sessions for this account have been signed out.");
   };
 
+  // Mirrors the server: the platform super admin passes every check except the segregated
+  // disbursement permissions (D-3.1), which must be held through a role.
   const hasPermission = useCallback(
     (permissionKey: string): boolean => {
       if (!user) return false;
-      if (user.isPlatformSuperAdmin) return true;
-      return user.permissions.includes(permissionKey);
+      if (user.permissions.includes(permissionKey)) return true;
+      return user.isPlatformSuperAdmin && !SEGREGATED_DISBURSEMENT_PERMISSIONS.includes(permissionKey);
     },
     [user]
   );
 
   const hasAnyPermission = useCallback(
-    (...permissionKeys: string[]): boolean => {
-      if (!user) return false;
-      if (user.isPlatformSuperAdmin) return true;
-      return permissionKeys.some((key) => user.permissions.includes(key));
-    },
+    (...permissionKeys: string[]): boolean => permissionKeys.some((key) => hasPermission(key)),
+    [hasPermission]
+  );
+
+  const ratingLabels = useMemo(
+    () => user?.ratingLabels ?? resolveRatingLabels({}),
     [user]
   );
 
@@ -197,6 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshUser,
         hasPermission,
         hasAnyPermission,
+        ratingLabels,
       }}
     >
       {children}

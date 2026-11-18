@@ -17,7 +17,7 @@ export function useCreateWorkdayReportQueryMutation(
         queryKey: ["project-workday-reports", projectId],
       });
       queryClient.invalidateQueries({
-        queryKey: ["project-audit", projectId],
+        queryKey: ["audit-trail", projectId],
       });
     },
   });

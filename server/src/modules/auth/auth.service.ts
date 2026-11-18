@@ -5,6 +5,7 @@ import {
   FieldPersonaType,
   JoinProjectMobileRequest,
   OrganizationCategory,
+  resolveRatingLabels,
   WebLoginRequest,
   WebRegisterRequest,
   WebUserProfile,
@@ -83,6 +84,7 @@ export function serializeWebUserProfile(user: LoadedWebUser): WebUserProfile {
     professionalLicenseType: user.professionalLicenseType,
     professionalLicenseNumber: user.professionalLicenseNumber,
     mustChangePassword: user.mustChangePassword,
+    ratingLabels: resolveRatingLabels(user.tenant.evidenceRatingLabels),
   };
 }
 
@@ -292,6 +294,7 @@ function buildMobileSessionResponse(
   project: {
     id: string;
     tenantId: string;
+    tenant: { evidenceRatingLabels: unknown };
     name: string;
     codePrefix: string;
     stateLocation: string;
@@ -372,6 +375,7 @@ function buildMobileSessionResponse(
       assuranceStatus: session.assuranceStatus,
       corenLicenseNumber: session.corenLicenseNumber ?? undefined,
       livenessPassed: session.livenessPassed,
+      ratingLabels: resolveRatingLabels(project.tenant.evidenceRatingLabels),
     },
     baselinePack: {
       projectId: project.id,
@@ -439,7 +443,7 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
       },
       project: {
         include: {
-          tenant: { select: { status: true } },
+          tenant: { select: { status: true, evidenceRatingLabels: true } },
           boqItems: {
             orderBy: { wbsCode: 'asc' },
           },
@@ -570,7 +574,7 @@ export async function demoSkipVerificationMobile(
       },
       project: {
         include: {
-          tenant: { select: { status: true } },
+          tenant: { select: { status: true, evidenceRatingLabels: true } },
           boqItems: {
             orderBy: { wbsCode: 'asc' },
           },

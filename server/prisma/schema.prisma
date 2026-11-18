@@ -116,6 +116,7 @@ enum IpcClaimStatus {
   QUERIED_BY_MONITOR
   MONITOR_CERTIFIED
   LENDER_DECIDED
+  REJECTED_WITHDRAWN
 }
 
 enum MonitorRecommendation {
@@ -182,6 +183,12 @@ enum AuditActionType {
   USER_DEACTIVATED
   JOIN_CODE_ROTATED
   LOGIN_FAILED_LOCKOUT
+  CP_STATUS_CHANGED
+  CP_WAIVED
+  MONITOR_QUERY_RESOLVED
+  IPC_WITHDRAWN
+  TRANCHE_DECISION_REVERSED
+  TENANT_SETTINGS_UPDATED
 }
 
 enum MobileNotificationType {
@@ -212,15 +219,17 @@ enum NotificationActionType {
 // ============================================================================
 
 model Tenant {
-  id              String       @id @default(uuid()) @db.Uuid
-  name            String
-  slug            String       @unique
-  status          TenantStatus @default(ACTIVE)
-  defaultCurrency String       @default("NGN")
-  timezone        String       @default("Africa/Lagos")
-  brandingConfig  Json         @default("{}")
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  id                   String       @id @default(uuid()) @db.Uuid
+  name                 String
+  slug                 String       @unique
+  status               TenantStatus @default(ACTIVE)
+  defaultCurrency      String       @default("NGN")
+  timezone             String       @default("Africa/Lagos")
+  brandingConfig       Json         @default("{}")
+  // Display label and description per canonical EvidenceStrengthRating (decision B).
+  evidenceRatingLabels Json         @default("{}")
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
 
   organizations Organization[]
   roles         Role[]
@@ -327,15 +336,20 @@ model User {
   createdAt                 DateTime                 @default(now())
   updatedAt                 DateTime                 @updatedAt
 
-  tenant              Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  notificationReads   WebNotificationRead[]
-  role                Role                    @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  organization        Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  projectAssignments  UserProjectAssignment[]
-  certifiedReports    ValuationReport[]       @relation("CertifiedByMonitor")
-  trancheDecisions    TrancheDecision[]       @relation("DecidedByLender")
-  pushTokens          PushToken[]
-  raisedReportQueries ReportQuery[]           @relation("RaisedReportQueries")
+  tenant                  Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  notificationReads       WebNotificationRead[]
+  role                    Role                    @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  organization            Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  projectAssignments      UserProjectAssignment[]
+  certifiedReports        ValuationReport[]       @relation("CertifiedByMonitor")
+  trancheDecisions        TrancheDecision[]       @relation("DecidedByLender")
+  submittedIpcClaims      IpcClaim[]              @relation("SubmittedIpcClaims")
+  waivedConditions        ConditionPrecedent[]    @relation("WaivedConditions")
+  raisedMonitorQueries    MonitorQuery[]          @relation("RaisedMonitorQueries")
+  respondedMonitorQueries MonitorQuery[]          @relation("RespondedMonitorQueries")
+  resolvedMonitorQueries  MonitorQuery[]          @relation("ResolvedMonitorQueries")
+  pushTokens              PushToken[]
+  raisedReportQueries     ReportQuery[]           @relation("RaisedReportQueries")
 
   @@index([tenantId])
   @@index([organizationId])
@@ -517,10 +531,14 @@ model ConditionPrecedent {
   status                ConditionPrecedentStatus @default(PENDING)
   evidenceDocumentUrl   String?
   verifiedAt            DateTime?
+  waivedByUserId        String?                  @db.Uuid
+  waiverReason          String?
+  statusChangedAt       DateTime?
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
 
-  tranche FacilityTranche @relation(fields: [trancheId], references: [id], onDelete: Cascade)
+  tranche      FacilityTranche @relation(fields: [trancheId], references: [id], onDelete: Cascade)
+  waivedByUser User?           @relation("WaivedConditions", fields: [waivedByUserId], references: [id], onDelete: SetNull)
 
   @@index([trancheId])
 }
@@ -655,17 +673,24 @@ model IpcClaim {
   totalCertifiedNgn     Decimal?       @db.Decimal(18, 2)
   status                IpcClaimStatus @default(SUBMITTED)
   aiExecutiveSummary    String?
+  submittedByUserId     String         @db.Uuid
+  // AZURE_OPENAI or RULES_ENGINE; null until reconciliation has run.
+  ratingEngine          String?
+  ratingEngineDetail    String?
+  reconciledAt          DateTime?
   submittedAt           DateTime       @default(now())
   updatedAt             DateTime       @updatedAt
 
   project             Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
   tranche             FacilityTranche         @relation(fields: [trancheId], references: [id], onDelete: Restrict)
+  submittedByUser     User                    @relation("SubmittedIpcClaims", fields: [submittedByUserId], references: [id])
   lineItems           IpcLineItem[]
   supportingDocuments IpcSupportingDocument[]
-  valuationReport     ValuationReport?
+  valuationReports    ValuationReport[]
 
   @@unique([projectId, ipcNumber])
   @@index([projectId, status])
+  @@index([trancheId, status])
 }
 
 model IpcLineItem {
@@ -687,6 +712,10 @@ model IpcLineItem {
   highestCorroboratingRoleName String?
   highestCorroboratingWeight   Float?
   corroboratingEvidenceLogIds  Json                   @default("[]")
+  evidenceQuantityTotal        Decimal?               @db.Decimal(18, 3)
+  evidenceCoveragePct          Decimal?               @db.Decimal(9, 2)
+  ratingEngine                 String?
+  ruleCapsApplied              Json                   @default("[]")
 
   // Human Monitor (QS / COREN) Certified Valuation
   monitorCertifiedPct Decimal? @db.Decimal(5, 2)
@@ -727,48 +756,69 @@ model MonitorQuery {
   contractorResponseText      String?
   revisedClaimedCumulativePct Decimal?    @db.Decimal(5, 2)
   attachedDocumentsJson       Json        @default("[]")
+  raisedByUserId              String?     @db.Uuid
+  respondedByUserId           String?     @db.Uuid
+  resolvedByUserId            String?     @db.Uuid
+  resolutionNote              String?
   createdAt                   DateTime    @default(now())
   respondedAt                 DateTime?
   resolvedAt                  DateTime?
 
-  ipcLineItem IpcLineItem @relation(fields: [ipcLineItemId], references: [id], onDelete: Cascade)
+  ipcLineItem     IpcLineItem @relation(fields: [ipcLineItemId], references: [id], onDelete: Cascade)
+  raisedByUser    User?       @relation("RaisedMonitorQueries", fields: [raisedByUserId], references: [id], onDelete: SetNull)
+  respondedByUser User?       @relation("RespondedMonitorQueries", fields: [respondedByUserId], references: [id], onDelete: SetNull)
+  resolvedByUser  User?       @relation("ResolvedMonitorQueries", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
 
   @@index([ipcLineItemId, status])
 }
 
 model ValuationReport {
   id                            String                  @id @default(uuid()) @db.Uuid
-  ipcClaimId                    String                  @unique @db.Uuid
+  ipcClaimId                    String                  @db.Uuid
+  revisionNumber                Int                     @default(1)
   certifiedByUserId             String                  @db.Uuid
   trancheRecommendation         MonitorRecommendation
   recommendedReleaseAmountNgn   Decimal                 @db.Decimal(18, 2)
   recommendedHoldbackAmountNgn  Decimal                 @db.Decimal(18, 2)
   executiveCertificationSummary String
+  // Snapshots copied from the certifying User at certification time, never from the request.
   certifierFullName             String
-  certifierLicenseType          ProfessionalLicenseType @default(QSRBN)
+  certifierLicenseType          ProfessionalLicenseType
   certifierLicenseNumber        String
+  totalClaimedNgn               Decimal                 @db.Decimal(18, 2)
+  totalCertifiedNgn             Decimal                 @db.Decimal(18, 2)
   reportPdfObjectKey            String?
   reportPdfUrl                  String?
   certifiedAt                   DateTime                @default(now())
+  supersededAt                  DateTime?
 
-  ipcClaim        IpcClaim         @relation(fields: [ipcClaimId], references: [id], onDelete: Cascade)
-  certifiedByUser User             @relation("CertifiedByMonitor", fields: [certifiedByUserId], references: [id])
-  trancheDecision TrancheDecision?
+  ipcClaim         IpcClaim          @relation(fields: [ipcClaimId], references: [id], onDelete: Cascade)
+  certifiedByUser  User              @relation("CertifiedByMonitor", fields: [certifiedByUserId], references: [id])
+  trancheDecisions TrancheDecision[]
+
+  @@unique([ipcClaimId, revisionNumber])
 }
 
 model TrancheDecision {
   id                            String             @id @default(uuid()) @db.Uuid
-  valuationReportId             String             @unique @db.Uuid
+  valuationReportId             String             @db.Uuid
   decidedByUserId               String             @db.Uuid
   decision                      LenderDecisionType
   approvedDisbursementAmountNgn Decimal            @db.Decimal(18, 2)
   heldBackAmountNgn             Decimal            @db.Decimal(18, 2)
   creditCommitteeReference      String?
   approverNotes                 String?
+  // Set on a reversal record: the decision it cancels. Reversal amounts are negative.
+  reversesDecisionId            String?            @unique @db.Uuid
+  cpSnapshotJson                Json               @default("[]")
   decidedAt                     DateTime           @default(now())
 
-  valuationReport ValuationReport @relation(fields: [valuationReportId], references: [id], onDelete: Cascade)
-  decidedByUser   User            @relation("DecidedByLender", fields: [decidedByUserId], references: [id])
+  valuationReport  ValuationReport  @relation(fields: [valuationReportId], references: [id], onDelete: Cascade)
+  decidedByUser    User             @relation("DecidedByLender", fields: [decidedByUserId], references: [id])
+  reversesDecision TrancheDecision? @relation("DecisionReversal", fields: [reversesDecisionId], references: [id], onDelete: Restrict)
+  reversedBy       TrancheDecision? @relation("DecisionReversal")
+
+  @@index([valuationReportId])
 }
 
 model AuditLog {

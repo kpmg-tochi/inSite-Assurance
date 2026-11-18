@@ -2,7 +2,7 @@ import React from "react";
 import { Wallet, CheckCircle2, AlertTriangle } from "lucide-react";
 import type {
   FieldEvidenceLogRecordDto,
-  IpcDetailsDto,
+  IpcClaimDto,
   ProjectSummaryDto,
 } from "../../api/types";
 import {
@@ -19,7 +19,7 @@ import { KpiCard } from "../../components/common";
 interface PortfolioDashboardPageProps {
   project: ProjectSummaryDto;
   evidenceLogs: FieldEvidenceLogRecordDto[];
-  latestIpc: IpcDetailsDto | null;
+  latestIpc: IpcClaimDto | null;
   onNavigateToReconciliation: () => void;
 }
 

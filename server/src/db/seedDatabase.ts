@@ -2,6 +2,7 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import {
+  DEFAULT_TENANT_ROLES,
   LinearCorridorGeofence,
   RadialGeofence,
   SYSTEM_PERMISSIONS_CATALOG,
@@ -165,6 +166,49 @@ async function runSeed(): Promise<void> {
       organizationId: monitorOrg.id,
       professionalLicenseType: "QSRBN",
       professionalLicenseNumber: "3842",
+    },
+  });
+
+  // Second lender-side user (D-3.1 demo). A custom role holding both certify and approve, so the
+  // demo can show that whoever certifies a valuation cannot record the decision on it.
+  const dualPermissionKeys = [
+    ...new Set([
+      ...DEFAULT_TENANT_ROLES.find((r) => r.code === "LENDER")!.permissionKeys,
+      "ipc:certify_valuation",
+      "reports:raise_query",
+    ]),
+  ];
+  const dualPermissions = await prisma.permission.findMany({
+    where: { key: { in: dualPermissionKeys } },
+    select: { id: true },
+  });
+  const lenderTechnicalRole = await prisma.role.create({
+    data: {
+      tenantId: defaultTenant.id,
+      name: "Lender Technical Officer",
+      code: "LENDER_TECHNICAL_OFFICER",
+      description:
+        "Lender-side engineer who may certify valuations and approve releases, but never both on the same IPC.",
+      surface: "WEB",
+      fieldPersonaType: "NONE",
+      assuranceWeight: 1.0,
+      isSystemDefault: false,
+      rolePermissions: {
+        create: dualPermissions.map((perm) => ({ permissionId: perm.id })),
+      },
+    },
+  });
+
+  await prisma.user.create({
+    data: {
+      tenantId: defaultTenant.id,
+      email: "lto@insite.ng",
+      passwordHash: defaultPasswordHash,
+      fullName: "Engr. Ifeoma Eze, FNSE",
+      roleId: lenderTechnicalRole.id,
+      organizationId: lenderOrg.id,
+      professionalLicenseType: "COREN",
+      professionalLicenseNumber: "R.33017",
     },
   });
 
@@ -621,33 +665,13 @@ async function runSeed(): Promise<void> {
       periodEnd: new Date(),
       contractorCoverNote:
         "Interim Payment Certificate #2 covering completed earthworks balance, box culvert reinforcement and concrete works up to KM 16+000, stone base course, and utility relocation.",
-      totalClaimedAmountNgn: 1284500000,
-      status: "AI_RECONCILED",
+      // Sum of the four line amounts below. Server-assigned numbering starts after this.
+      totalClaimedAmountNgn: 1263400000,
+      // An open monitor query exists on this IPC, so the consistent state is QUERIED_BY_MONITOR.
+      status: "QUERIED_BY_MONITOR",
+      submittedByUserId: contractorUser.id,
       aiExecutiveSummary:
         "Reconciliation flagged 2 critical discrepancies: (1) Contractor claims 85% completion on Culvert Concrete (02.01.2), but Independent Resident CoW logs confirm only 52% poured and Cell 2 at KM 14+210 is delayed by flooding (CONTRADICTED); (2) Contractor claims 50% (₦340M) on Opaque Lump Sum (04.09.1) with zero field logs or itemized breakdown (UNSUPPORTED).",
-    },
-  });
-
-  // Line Item 1: Earthworks (SUPPORTED)
-  await prisma.ipcLineItem.create({
-    data: {
-      ipcClaimId: lkkIpc2.id,
-      boqItemId: boqEarthworks.id,
-      previousCertifiedPct: 90,
-      contractorClaimedPct: 100,
-      contractorClaimedNgn: 83250000,
-      aiEvidenceRating: "SUPPORTED",
-      aiRationale:
-        "Final 10% earthworks sub-grade compaction (4,500 m3) is corroborated by Independent Resident CoW logs and field density test records within corridor.",
-      visitPlannerFlag: false,
-      missingHoldPointFlag: false,
-      highestCorroboratingRoleName: residentCowMobileRole.name,
-      highestCorroboratingWeight: residentCowMobileRole.assuranceWeight,
-      corroboratingEvidenceLogIds: [
-        cowEvidenceLog.id,
-      ] as unknown as Prisma.InputJsonValue,
-      monitorCertifiedPct: 100,
-      monitorCertifiedNgn: 83250000,
     },
   });
 
@@ -744,6 +768,7 @@ async function runSeed(): Promise<void> {
   await prisma.monitorQuery.create({
     data: {
       ipcLineItemId: contradictedLineItem.id,
+      raisedByUserId: monitorUser.id,
       status: "OPEN",
       queryReason:
         "IPC #2 claims 85% completion on Box Culvert Concrete (02.01.2), whereas Resident Clerk of Works geotagged evidence at KM 14+210 confirms Cell 2 has not been poured and cumulative progress is 52%. Please submit revised measurement sheets and 28-day cube test certificates.",
@@ -788,19 +813,20 @@ async function runSeed(): Promise<void> {
     actorDisplayName: `${contractorUser.fullName} (Contractor)`,
     action: "IPC_SUBMITTED",
     summaryText:
-      "Submitted Interim Payment Certificate (IPC) #2 requesting ₦1,284,500,000 across 5 BOQ items.",
-    payload: { ipcNumber: 2, totalClaimedAmountNgn: 1284500000 },
+      "Submitted Interim Payment Certificate (IPC) #2 requesting ₦1,263,400,000 across 4 BOQ items.",
+    payload: { ipcNumber: 2, totalClaimedAmountNgn: 1263400000 },
   });
 
   await recordAuditEvent(prisma, {
     projectId: lkkProject.id,
     actorType: "AI_SYSTEM",
-    actorId: "AZURE-GPT4O-RECONCILER",
-    actorDisplayName: "inSite AI Reconciliation Co-Pilot",
+    // Seeded ratings are demo fixtures; no rating engine ran, so none is named.
+    actorId: "SEED_FIXTURE",
+    actorDisplayName: "Demo seed data (no rating engine ran)",
     action: "AI_RECONCILIATION_COMPLETED",
     summaryText:
-      "Evaluated IPC #2 against field evidence: 1 Supported, 2 Partially Supported, 1 Unsupported, 1 Contradicted.",
-    payload: { ipcId: lkkIpc2.id, conflictCount: 2 },
+      "Demo fixture ratings for IPC #2: 0 Supported, 2 Partially Supported, 1 Unsupported, 1 Contradicted.",
+    payload: { ipcId: lkkIpc2.id, conflictCount: 2, ratingEngine: null },
   });
 
   // Mobile Notifications on LKK-402 (mix of recent unread actionable/passive + older read items)
@@ -1183,15 +1209,18 @@ async function runSeed(): Promise<void> {
       },
       {
         projectId: abjProject.id,
-        roleId: residentCowMobileRole.id,
-        code: `ABJ-108-COW-${randomJoinCodeSegment()}`,
-      },
-      {
-        projectId: abjProject.id,
         roleId: contractorEngineerMobileRole.id,
         code: `ABJ-108-CON-${randomJoinCodeSegment()}`,
       },
     ],
+  });
+
+  const abjJoinCow = await prisma.projectJoinCode.create({
+    data: {
+      projectId: abjProject.id,
+      roleId: residentCowMobileRole.id,
+      code: `ABJ-108-COW-${randomJoinCodeSegment()}`,
+    },
   });
 
   // Assign Contractor User explicitly to LKK-402 & ABJ-108 (since Contractor lacks projects:view_all_tenant)
@@ -1241,6 +1270,145 @@ async function runSeed(): Promise<void> {
     },
   });
 
+  // Tranche 2 is open with no IPC yet: the demo path for a full claim-to-release cycle.
+  // CP-A2 is pending, so a release is blocked until it is satisfied or waived (D-3.2).
+  const abjTranche2 = await prisma.facilityTranche.create({
+    data: {
+      projectId: abjProject.id,
+      trancheNumber: 2,
+      name: "Tranche 2 — PV Modules, Inverters & Step-Up Transformer",
+      allocatedAmountNgn: 2100000000,
+      releasedAmountNgn: 0,
+      targetCompletionPct: 100,
+      isReleased: false,
+      conditionsPrecedent: {
+        create: [
+          {
+            referenceCode: "CP-A1",
+            description: "Insurance certificate (Contractor's All Risks) for PV plant works",
+            isMandatoryForRelease: true,
+            status: "SATISFIED",
+            verifiedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 20),
+            statusChangedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 20),
+          },
+          {
+            referenceCode: "CP-A2",
+            description: "Executed grid interconnection agreement with the distribution company",
+            isMandatoryForRelease: true,
+            status: "PENDING",
+          },
+        ],
+      },
+    },
+  });
+
+  const abjPvModules = await prisma.boqItem.create({
+    data: {
+      projectId: abjProject.id,
+      trancheId: abjTranche2.id,
+      aiSuggestedTrancheId: abjTranche2.id,
+      trancheMappingConfirmedByMonitor: true,
+      wbsCode: "02.01.1",
+      section: "BILL NO. 2 — PV GENERATION",
+      description: "Supply and install monocrystalline PV modules on fixed-tilt mounting structures",
+      unit: "kWp",
+      totalQuantity: 15000,
+      rateNgn: 90000,
+      budgetedCostNgn: 1350000000,
+      isHoldPoint: false,
+      cumulativeCertifiedPct: 0,
+    },
+  });
+
+  const abjTransformer = await prisma.boqItem.create({
+    data: {
+      projectId: abjProject.id,
+      trancheId: abjTranche2.id,
+      aiSuggestedTrancheId: abjTranche2.id,
+      trancheMappingConfirmedByMonitor: true,
+      wbsCode: "02.02.1",
+      section: "BILL NO. 2 — SUBSTATION EQUIPMENT",
+      description: "Supply, install and test 33/11kV 20MVA step-up transformer",
+      unit: "nr",
+      totalQuantity: 2,
+      rateNgn: 260000000,
+      budgetedCostNgn: 520000000,
+      isHoldPoint: true,
+      holdPointInstruction: "Photograph nameplate and earthing connections before energisation.",
+      cumulativeCertifiedPct: 0,
+    },
+  });
+
+  const abjCowSession = await prisma.fieldAgentSession.create({
+    data: {
+      projectId: abjProject.id,
+      joinCodeId: abjJoinCow.id,
+      roleId: residentCowMobileRole.id,
+      roleNameSnapshot: residentCowMobileRole.name,
+      fieldPersonaType: residentCowMobileRole.fieldPersonaType,
+      assuranceWeight: residentCowMobileRole.assuranceWeight,
+      agentFullName: "Engr. Hauwa Bello (Resident CoW)",
+      agentPhoneNumber: "+2348031177420",
+      deviceId: "ANDROID-COW-ABJ-2201",
+      deviceModel: "Samsung Galaxy A35",
+      deviceOs: "Android 14",
+      lastSyncAt: new Date(),
+    },
+  });
+
+  const abjGeo = verifyPointAgainstGeofence(
+    { latitude: 9.0489, longitude: 7.3497 },
+    abjRadialGeofence,
+  );
+  const abjEvidence = [
+    {
+      boqItemId: abjPvModules.id,
+      summary: "Installed and torqued 3,200 kWp of PV modules on rows A1–A16.",
+      quantities: [{ materialOrWork: "PV modules installed", quantity: 3200, unit: "kWp" }],
+      hoursAgo: 72,
+    },
+    {
+      boqItemId: abjPvModules.id,
+      summary: "Installed 2,900 kWp of PV modules on rows B1–B14; string cabling in progress.",
+      quantities: [{ materialOrWork: "PV modules installed", quantity: 2900, unit: "kWp" }],
+      hoursAgo: 30,
+    },
+    {
+      boqItemId: abjTransformer.id,
+      summary: "Transformer T1 set on plinth; nameplate and earthing connections photographed.",
+      quantities: [{ materialOrWork: "Transformer installed", quantity: 1, unit: "nr" }],
+      hoursAgo: 26,
+    },
+  ];
+  for (const e of abjEvidence) {
+    await prisma.fieldEvidenceLog.create({
+      data: {
+        projectId: abjProject.id,
+        boqItemId: e.boqItemId,
+        fieldSessionId: abjCowSession.id,
+        clientCaptureId: crypto.randomUUID(),
+        reporterRoleId: residentCowMobileRole.id,
+        reporterRoleName: residentCowMobileRole.name,
+        fieldPersonaType: residentCowMobileRole.fieldPersonaType,
+        assuranceWeight: residentCowMobileRole.assuranceWeight,
+        status: "CONFIRMED",
+        latitude: 9.0489,
+        longitude: 7.3497,
+        gpsAccuracyMeters: 4.0,
+        isMockLocation: false,
+        isWithinGeofence: abjGeo.isWithinGeofence,
+        verificationBadgeText: abjGeo.verificationBadgeText,
+        deviceSignatureHash: crypto.randomBytes(32).toString("hex"),
+        confirmedSummary: e.summary,
+        confirmedQuantities: e.quantities as unknown as Prisma.InputJsonValue,
+        siteBlockers: [] as unknown as Prisma.InputJsonValue,
+        confirmationSignatureHash: crypto.randomBytes(16).toString("hex"),
+        capturedAtDevice: new Date(Date.now() - 1000 * 60 * 60 * e.hoursAgo),
+        confirmedAt: new Date(Date.now() - 1000 * 60 * 60 * (e.hoursAgo - 1)),
+      },
+    });
+  }
+
   await recordAuditEvent(prisma, {
     projectId: abjProject.id,
     actorType: "WEB_USER",
@@ -1261,6 +1429,9 @@ async function runSeed(): Promise<void> {
   );
   console.log(
     "   • Lender Login:      lender@insite.ng     / Password123! (ICAN #MB/049120)",
+  );
+  console.log(
+    "   • Lender Tech:       lto@insite.ng        / Password123! (certify + approve; D-3.1 demo)",
   );
   console.log(
     "   • Contractor Login:  contractor@insite.ng / Password123! (COREN #R.49201)",

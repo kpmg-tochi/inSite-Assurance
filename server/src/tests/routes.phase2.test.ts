@@ -350,8 +350,7 @@ describe('Phase 2 route security', { concurrency: false }, () => {
         .set(bearer(contractor))
         .send({
           trancheId: ids.abjTranche,
-          ipcNumber: 99,
-          periodStart: new Date().toISOString(),
+          periodStart: new Date(Date.now() - 86_400_000).toISOString(),
           periodEnd: new Date().toISOString(),
           lineItems: [{ boqItemId: ids.lkkBoq, claimedCumulativePct: 10 }],
         });
@@ -376,8 +375,6 @@ describe('Phase 2 route security', { concurrency: false }, () => {
         .send({
           valuationReportId: crypto.randomUUID(),
           decision: 'HOLD',
-          approvedDisbursementAmountNgn: 0,
-          heldBackAmountNgn: 0,
         });
       assert.equal(res.status, 404);
     });

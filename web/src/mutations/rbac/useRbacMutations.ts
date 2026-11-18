@@ -5,6 +5,7 @@ import type {
   CreateRoleRequest,
   CreateTenantRequest,
   CreateTenantUserRequest,
+  UpdateEvidenceRatingLabelsRequest,
   UpdateFieldSessionStatusRequest,
   UpdateRoleRequest,
   UpdateTenantBrandingRequest,
@@ -15,6 +16,7 @@ import {
   createTenantRole,
   createTenantUser,
   deleteTenantRole,
+  updateEvidenceRatingLabels,
   updateProjectFieldSessionStatus,
   updateTenantBranding,
   updateTenantRole,
@@ -125,6 +127,23 @@ export const useUpdateTenantBrandingMutation = () => {
     },
     onError: (err: any) => {
       toast.error(err?.message || 'Failed to update tenant branding.');
+    },
+  });
+};
+
+export const useUpdateEvidenceRatingLabelsMutation = () => {
+  const queryClient = useQueryClient();
+  const { refreshUser } = useAuth();
+  return useMutation({
+    mutationFn: (payload: UpdateEvidenceRatingLabelsRequest) => updateEvidenceRatingLabels(payload),
+    onSuccess: () => {
+      // Labels are part of the signed-in profile; reload it so every badge updates.
+      void refreshUser();
+      queryClient.invalidateQueries({ queryKey: ['rbac', 'rating-labels'] });
+      toast.success('Evidence rating labels saved.');
+    },
+    onError: (err: unknown) => {
+      toast.error((err as { message?: string })?.message || 'Failed to save rating labels.');
     },
   });
 };

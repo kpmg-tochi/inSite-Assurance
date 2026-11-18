@@ -15,6 +15,7 @@ import { useUpdateFieldSessionStatusMutation } from "../../mutations/rbac/useRba
 import { RolesPermissionsTab } from "../../components/rbac/RolesPermissionsTab";
 import { UsersVisibilityTab } from "../../components/rbac/UsersVisibilityTab";
 import { TenantBrandingTab } from "../../components/rbac/TenantBrandingTab";
+import { EvidenceRatingsCard } from "../../components/rbac/EvidenceRatingsCard";
 import { JoinCodesPanel } from "../../components/JoinCodesPanel";
 import {
   StandardTable,
@@ -33,6 +34,8 @@ export function SettingsPage({ project }: SettingsPageProps) {
   const canManageRoles = hasPermission("roles:create_edit");
   const canManageUsers = hasPermission("users:invite_manage");
   const canManageBranding = hasPermission("tenant:manage_branding");
+  const canManageSettings = hasPermission("tenant:manage_settings");
+  const canSeeTenantTab = canManageBranding || canManageSettings;
   const canRevokeDevices = hasPermission("sessions:revoke_device");
   const canReviewCredentials = hasPermission("assurance:review_credentials");
   const canManageRoster = hasPermission("mobilization:manage_roster");
@@ -47,7 +50,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
         ? "ROLES"
         : canManageUsers
           ? "USERS"
-          : canManageBranding
+          : canSeeTenantTab
             ? "BRANDING"
             : "ACCOUNT",
   );
@@ -330,7 +333,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
             </button>
           )}
 
-          {canManageBranding && (
+          {canSeeTenantTab && (
             <button
               type="button"
               onClick={() => setActiveTab("BRANDING")}
@@ -341,7 +344,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
               }`}
             >
               <Palette className="w-4 h-4" />
-              <span>Tenant Branding</span>
+              <span>Tenant Settings</span>
             </button>
           )}
 
@@ -362,7 +365,12 @@ export function SettingsPage({ project }: SettingsPageProps) {
 
       {activeTab === "ROLES" && canManageRoles && <RolesPermissionsTab />}
       {activeTab === "USERS" && canManageUsers && <UsersVisibilityTab />}
-      {activeTab === "BRANDING" && canManageBranding && <TenantBrandingTab />}
+      {activeTab === "BRANDING" && canSeeTenantTab && (
+        <div className="space-y-4">
+          {canManageBranding && <TenantBrandingTab />}
+          {canManageSettings && <EvidenceRatingsCard />}
+        </div>
+      )}
 
       {/* 2. TAB A: Access Management & Contractor Assurance */}
       {activeTab === "ACCESS" && canSeeAccessTab && (

@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import {
+  countReconciliationIssues,
   CreateProjectRequest,
   FieldPersonaType,
   GeoCoordinate,
@@ -106,6 +107,19 @@ function serializeProjectCore(project: ProjectCoreRow) {
   };
 }
 
+/**
+ * The IPC that project-level conflict and hold-point counts are taken from: the latest one that
+ * has not been withdrawn. Counting itself is `countReconciliationIssues` in @insite/shared.
+ */
+const LATEST_RATED_IPC_QUERY = {
+  where: { status: { not: 'REJECTED_WITHDRAWN' as const } },
+  orderBy: { ipcNumber: 'desc' as const },
+  take: 1,
+  include: {
+    lineItems: { select: { aiEvidenceRating: true, missingHoldPointFlag: true } },
+  },
+};
+
 export async function listProjectsForUser(webUser: WebJwtPayload) {
   const visibilityWhere = buildProjectVisibilityWhere(webUser);
 
@@ -151,47 +165,14 @@ export async function listProjectsForUser(webUser: WebJwtPayload) {
           fieldPersonaType: true,
         },
       },
-      ipcClaims: {
-        orderBy: { ipcNumber: 'desc' },
-        take: 1,
-        include: {
-          lineItems: {
-            select: {
-              aiEvidenceRating: true,
-              missingHoldPointFlag: true,
-            },
-          },
-        },
-      },
+      ipcClaims: LATEST_RATED_IPC_QUERY,
     },
   });
 
-
   return projects.map((project) => {
-    const latestIpc = project.ipcClaims[0];
-    const openConflictCount = latestIpc
-      ? latestIpc.lineItems.filter(
-          (li) =>
-            li.aiEvidenceRating === 'CONTRADICTED' ||
-            li.aiEvidenceRating === 'UNSUPPORTED'
-        ).length
-      : 0;
-
-    const holdPointIds = new Set(
-      project.boqItems.filter((b) => b.isHoldPoint).map((b) => b.id)
+    const { openConflictCount, unfulfilledHoldPointCount } = countReconciliationIssues(
+      project.ipcClaims[0]?.lineItems ?? []
     );
-    const evidencedHoldPointIds = new Set(
-      project.evidenceLogs
-        .filter(
-          (log) =>
-            log.boqItemId &&
-            holdPointIds.has(log.boqItemId) &&
-            log.fieldPersonaType === 'INDEPENDENT_VERIFIER'
-        )
-        .map((log) => log.boqItemId as string)
-    );
-    const unfulfilledHoldPointCount =
-      holdPointIds.size - evidencedHoldPointIds.size;
 
     return {
       ...serializeProjectCore(project),
@@ -811,8 +792,7 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
         select: { id: true, isHoldPoint: true, cumulativeCertifiedPct: true },
       },
       ipcClaims: {
-        orderBy: { ipcNumber: 'desc' },
-        take: 1,
+        ...LATEST_RATED_IPC_QUERY,
         include: {
           lineItems: {
             select: {
@@ -848,18 +828,12 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
     totalDisbursedToDateNgn += disbursed;
 
     const latestIpc = p.ipcClaims[0] || null;
-    let openConflicts = 0;
-    let unfulfilledHoldPoints = 0;
+    const { openConflictCount: openConflicts, unfulfilledHoldPointCount: unfulfilledHoldPoints } =
+      countReconciliationIssues(latestIpc?.lineItems ?? []);
     let holdbackNgn = 0;
 
     if (latestIpc) {
       for (const li of latestIpc.lineItems) {
-        if (li.aiEvidenceRating === 'CONTRADICTED' || li.missingHoldPointFlag) {
-          openConflicts += 1;
-        }
-        if (li.missingHoldPointFlag) {
-          unfulfilledHoldPoints += 1;
-        }
         const claimed = Number(li.contractorClaimedNgn);
         const certified =
           li.monitorCertifiedNgn !== null

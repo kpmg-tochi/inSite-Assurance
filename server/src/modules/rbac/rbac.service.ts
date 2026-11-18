@@ -6,6 +6,10 @@ import {
   CreateTenantRequest,
   CreateTenantUserRequest,
   DEFAULT_TENANT_ROLES,
+  parseEvidenceRatingLabels,
+  resolveRatingLabels,
+  UpdateEvidenceRatingLabelsRequest,
+  SEGREGATED_DISBURSEMENT_PERMISSIONS,
   FieldPersonaType,
   OrganizationCategory,
   PermissionCategory,
@@ -123,10 +127,30 @@ async function permissionKeysForRole(db: Tx | typeof prisma, roleId: string) {
   return rows.map((r) => r.permission.key);
 }
 
-/** Throws if `keys` contains a permission the caller does not hold. */
-function assertCallerHoldsAll(webUser: WebJwtPayload, keys: string[], context: string) {
-  if (webUser.isPlatformSuperAdmin) return;
-  const missing = keys.filter((k) => !webUser.permissions.includes(k));
+/**
+ * Throws if `keys` contains a permission the caller does not hold.
+ *
+ * D-3.1: the segregated disbursement permissions (certify, approve) are deliberately not held by
+ * tenant administrators, who must still be able to assign the Monitor and Lender roles. They are
+ * exempt here unless the change would give them to the caller (`affectsSelf`): the caller's own
+ * role or the caller's own account. The platform super admin is subject to the same self rule.
+ */
+function assertCallerHoldsAll(
+  webUser: WebJwtPayload,
+  keys: string[],
+  context: string,
+  opts: { affectsSelf?: boolean } = {}
+) {
+  const checked = keys.filter(
+    (k) => opts.affectsSelf || !SEGREGATED_DISBURSEMENT_PERMISSIONS.includes(k)
+  );
+  const missing = webUser.isPlatformSuperAdmin
+    ? opts.affectsSelf
+      ? checked.filter(
+          (k) => SEGREGATED_DISBURSEMENT_PERMISSIONS.includes(k) && !webUser.permissions.includes(k)
+        )
+      : []
+    : checked.filter((k) => !webUser.permissions.includes(k));
   if (missing.length > 0) {
     throw new AppError(
       `${context}: you cannot grant permissions you do not hold (${missing.join(', ')})`,
@@ -328,7 +352,9 @@ export async function updateRoleForTenant(
   let afterKeys = beforeKeys;
   if (input.permissionIds) {
     afterKeys = await permissionKeysForIds(prisma, input.permissionIds);
-    assertCallerHoldsAll(webUser, afterKeys, 'Edit role');
+    assertCallerHoldsAll(webUser, afterKeys, 'Edit role', {
+      affectsSelf: roleId === webUser.roleId,
+    });
   }
 
   const codeSuffix =
@@ -639,7 +665,9 @@ export async function assignUserProjectsAndRole(
     if (!newRole) {
       throw new AppError('Role not found in user tenant', 404, 'ROLE_NOT_FOUND');
     }
-    assertCallerHoldsAll(webUser, await permissionKeysForRole(prisma, newRole.id), 'Assign role');
+    assertCallerHoldsAll(webUser, await permissionKeysForRole(prisma, newRole.id), 'Assign role', {
+      affectsSelf: targetUser.id === webUser.userId,
+    });
   }
 
   const validProjects =
@@ -792,6 +820,57 @@ export async function updateTenantBranding(
     return row;
   });
   return serializeTenant(updated);
+}
+
+// ---------------------------------------------------------------------------
+// Tenant settings: evidence rating labels (decision B)
+// ---------------------------------------------------------------------------
+
+export async function getEvidenceRatingLabels(tenantId: string) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { evidenceRatingLabels: true },
+  });
+  if (!tenant) throw new AppError('Tenant not found', 404, 'TENANT_NOT_FOUND');
+  return {
+    labels: parseEvidenceRatingLabels(tenant.evidenceRatingLabels),
+    resolved: resolveRatingLabels(tenant.evidenceRatingLabels),
+  };
+}
+
+/** Replaces the tenant's overrides. Omitted ratings fall back to the defaults. */
+export async function updateEvidenceRatingLabels(
+  webUser: WebJwtPayload,
+  input: UpdateEvidenceRatingLabelsRequest
+) {
+  const tenantId = webUser.tenantId;
+  const next = parseEvidenceRatingLabels(input.labels);
+  await prisma.$transaction(async (tx) => {
+    const before = await tx.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { evidenceRatingLabels: true },
+    });
+    await tx.tenant.update({
+      where: { id: tenantId },
+      data: { evidenceRatingLabels: next as unknown as Prisma.InputJsonValue },
+    });
+    const changed = Object.keys({ ...parseEvidenceRatingLabels(before.evidenceRatingLabels), ...next });
+    await recordAuditEvent(tx, {
+      tenantId,
+      projectId: null,
+      actorType: 'WEB_USER',
+      actorId: webUser.userId,
+      actorDisplayName: actorName(webUser),
+      action: 'TENANT_SETTINGS_UPDATED',
+      summaryText: `Updated evidence rating labels${changed.length ? ` (${changed.join(', ')})` : ''}.`,
+      payload: {
+        setting: 'evidenceRatingLabels',
+        previous: parseEvidenceRatingLabels(before.evidenceRatingLabels),
+        next,
+      },
+    });
+  });
+  return getEvidenceRatingLabels(tenantId);
 }
 
 export async function listAllTenants() {

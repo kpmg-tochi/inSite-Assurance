@@ -16,37 +16,58 @@ export interface ValuationReportPdfInput {
   contractorName: string;
   monitorOrganizationName: string;
   ipcNumber: number;
+  ipcStatus: string;
   trancheName: string;
   totalClaimedNgn: number;
-  recommendedReleaseNgn: number;
-  recommendedHoldbackNgn: number;
-  trancheRecommendation: string;
-  executiveSummary: string;
-  certifierFullName: string;
-  certifierLicenseType: ProfessionalLicenseType;
-  certifierLicenseNumber: string;
-  certifiedAtIso: string;
+  /** AZURE_OPENAI, RULES_ENGINE, or null if reconciliation has not run. */
+  ratingEngine: string | null;
+  ratingEngineDetail: string | null;
+  aiExecutiveSummary: string | null;
+  /** Null until the IPC has been certified; the PDF then says so instead of printing placeholders. */
+  certification: {
+    revisionNumber: number;
+    totalCertifiedNgn: number;
+    recommendedReleaseNgn: number;
+    recommendedHoldbackNgn: number;
+    trancheRecommendation: string;
+    executiveSummary: string;
+    certifierFullName: string;
+    certifierLicenseType: ProfessionalLicenseType;
+    certifierLicenseNumber: string;
+    certifiedAtIso: string;
+  } | null;
   lineItems: Array<{
     wbsCode: string;
     description: string;
     budgetedCostNgn: number;
     contractorClaimedPct: number;
-    aiEvidenceRating: string;
-    monitorCertifiedPct: number;
-    monitorCertifiedNgn: number;
+    /** Tenant display label for the canonical rating. */
+    ratingLabel: string;
+    monitorCertifiedPct: number | null;
+    monitorCertifiedNgn: number | null;
   }>;
+}
+
+const ngn = (n: number) =>
+  `NGN ${n.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+function engineText(engine: string | null, detail: string | null): string {
+  if (engine === "AZURE_OPENAI") return `Azure OpenAI (${detail ?? "deployment not recorded"})`;
+  if (engine === "RULES_ENGINE") return `Rules engine${detail ? ` (${detail})` : ""}`;
+  return "Not recorded";
 }
 
 export async function generateValuationReportPdfBuffer(
   data: ValuationReportPdfInput,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
+    const cert = data.certification;
     const doc = new PDFDocument({
       size: "A4",
       margin: 45,
       info: {
         Title: `Disbursement Evidence & Valuation Report — ${data.projectCodePrefix} IPC #${data.ipcNumber}`,
-        Author: data.certifierFullName,
+        Author: cert?.certifierFullName ?? data.tenantName ?? "InSite Assurance",
       },
     });
 
@@ -55,10 +76,6 @@ export async function generateValuationReportPdfBuffer(
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
-    const licenseMeta =
-      PROFESSIONAL_LICENSE_META[data.certifierLicenseType] ??
-      PROFESSIONAL_LICENSE_META.QSRBN;
-
     // Header Banner (Tenant-Branded)
     doc
       .fontSize(16)
@@ -66,9 +83,7 @@ export async function generateValuationReportPdfBuffer(
       .text(
         data.pdfHeaderTitle ||
           "InSite Assurance — Disbursement Evidence & Valuation Report",
-        {
-          align: "left",
-        },
+        { align: "left" },
       );
     doc
       .moveDown(0.3)
@@ -79,8 +94,18 @@ export async function generateValuationReportPdfBuffer(
           data.pdfFooterDisclaimer ||
           data.tenantName ||
           "Independent Project Monitoring Certification"
-        } | Generated: ${new Date(data.certifiedAtIso).toUTCString()}`,
+        } | Generated: ${new Date().toUTCString()}`,
       );
+
+    if (!cert) {
+      doc
+        .moveDown(0.4)
+        .fontSize(10)
+        .fillColor("#b91c1c")
+        .text(
+          `DRAFT: IPC #${data.ipcNumber} has not been certified (status ${data.ipcStatus}). No certified or recommended amounts exist yet.`,
+        );
+    }
 
     doc.moveDown(0.8);
     doc.moveTo(45, doc.y).lineTo(550, doc.y).strokeColor("#cbd5e1").stroke();
@@ -95,30 +120,28 @@ export async function generateValuationReportPdfBuffer(
     doc.text(`Location: ${data.stateLocation}`);
     doc.text(`Lender / Guarantor: ${data.lenderName}`);
     doc.text(`Main Contractor: ${data.contractorName}`);
-    doc.text(
-      `Independent Monitoring Practice: ${data.monitorOrganizationName}`,
-    );
+    doc.text(`Independent Monitoring Practice: ${data.monitorOrganizationName}`);
     doc.text(`Facility Tranche: ${data.trancheName} (IPC #${data.ipcNumber})`);
+    doc.text(`Evidence rating engine: ${engineText(data.ratingEngine, data.ratingEngineDetail)}`);
 
     doc.moveDown(0.8);
 
-    // Financial Reconciliation Summary Box
+    // Financial Summary
     doc
       .fontSize(11)
       .fillColor("#0f172a")
       .text("1. Tranche Disbursement & Holdback Summary", { underline: true });
     doc.moveDown(0.4);
     doc.fontSize(10).fillColor("#1e293b");
-    doc.text(
-      `• Contractor Requested Amount (IPC #${data.ipcNumber}): NGN ${data.totalClaimedNgn.toLocaleString()}`,
-    );
-    doc.text(
-      `• Monitor Certified & Recommended Release: NGN ${data.recommendedReleaseNgn.toLocaleString()}`,
-    );
-    doc.text(
-      `• Recommended Risk Holdback Amount: NGN ${data.recommendedHoldbackNgn.toLocaleString()}`,
-    );
-    doc.text(`• Formal Recommendation: ${data.trancheRecommendation}`);
+    doc.text(`• Contractor Requested Amount (IPC #${data.ipcNumber}): ${ngn(data.totalClaimedNgn)}`);
+    if (cert) {
+      doc.text(`• Monitor Certified Value (revision ${cert.revisionNumber}): ${ngn(cert.totalCertifiedNgn)}`);
+      doc.text(`• Recommended Release: ${ngn(cert.recommendedReleaseNgn)}`);
+      doc.text(`• Recommended Holdback: ${ngn(cert.recommendedHoldbackNgn)}`);
+      doc.text(`• Formal Recommendation: ${cert.trancheRecommendation}`);
+    } else {
+      doc.text("• Certified value, recommended release and holdback: not yet certified");
+    }
 
     doc.moveDown(0.8);
 
@@ -126,13 +149,22 @@ export async function generateValuationReportPdfBuffer(
     doc
       .fontSize(11)
       .fillColor("#0f172a")
-      .text("2. Executive Certification & Field Evidence Summary", {
-        underline: true,
-      });
+      .text(
+        cert
+          ? "2. Executive Certification Summary"
+          : "2. Reconciliation Summary (not a certification)",
+        { underline: true },
+      );
     doc.moveDown(0.4);
-    doc.fontSize(9.5).fillColor("#334155").text(data.executiveSummary, {
-      align: "justify",
-    });
+    doc
+      .fontSize(9.5)
+      .fillColor("#334155")
+      .text(
+        cert?.executiveSummary ??
+          data.aiExecutiveSummary ??
+          "Reconciliation has not run for this IPC.",
+        { align: "justify" },
+      );
 
     doc.moveDown(0.8);
 
@@ -140,12 +172,14 @@ export async function generateValuationReportPdfBuffer(
     doc
       .fontSize(11)
       .fillColor("#0f172a")
-      .text("3. Line-by-Line BOQ Claim vs. Field Evidence Schedule", {
-        underline: true,
-      });
+      .text("3. Line-by-Line BOQ Claim vs. Field Evidence Schedule", { underline: true });
     doc.moveDown(0.4);
 
     for (const item of data.lineItems) {
+      const certified =
+        item.monitorCertifiedPct === null
+          ? "Monitor Certified: pending"
+          : `Monitor Certified: ${item.monitorCertifiedPct}% (${ngn(item.monitorCertifiedNgn ?? 0)})`;
       doc
         .fontSize(9.5)
         .fillColor("#0f172a")
@@ -154,37 +188,40 @@ export async function generateValuationReportPdfBuffer(
         .fontSize(8.5)
         .fillColor("#475569")
         .text(
-          `   Budget: NGN ${item.budgetedCostNgn.toLocaleString()} | Claimed: ${item.contractorClaimedPct}% | AI Evidence Rating: ${item.aiEvidenceRating} | Monitor Certified: ${item.monitorCertifiedPct}% (NGN ${item.monitorCertifiedNgn.toLocaleString()})`,
+          `   Budget: ${ngn(item.budgetedCostNgn)} | Claimed: ${item.contractorClaimedPct}% | Evidence Rating: ${item.ratingLabel} | ${certified}`,
         );
       doc.moveDown(0.35);
     }
 
     doc.moveDown(1.2);
 
-    // Regulatory Sign-Off Block (QSRBN / COREN)
+    // Sign-Off Block
     doc.moveTo(45, doc.y).lineTo(550, doc.y).strokeColor("#94a3b8").stroke();
     doc.moveDown(0.6);
-
     doc
       .fontSize(10.5)
       .fillColor("#0f172a")
       .text("4. Licensed Independent Monitor Certification Sign-Off");
     doc.moveDown(0.3);
-    doc
-      .fontSize(9)
-      .fillColor("#334155")
-      .text(
-        "I hereby certify that the physical progress and valuation figures stated above have been independently reviewed against geotagged field evidence, hold-point records, and contract Bill of Quantities in accordance with Nigerian professional regulatory standards.",
+
+    if (cert) {
+      const licenseMeta =
+        PROFESSIONAL_LICENSE_META[cert.certifierLicenseType] ?? PROFESSIONAL_LICENSE_META.QSRBN;
+      doc
+        .fontSize(9)
+        .fillColor("#334155")
+        .text(
+          "I hereby certify that the physical progress and valuation figures stated above have been independently reviewed against geotagged field evidence, hold-point records, and contract Bill of Quantities in accordance with Nigerian professional regulatory standards.",
+        );
+      doc.moveDown(0.5);
+      doc.fontSize(10).fillColor("#0f172a").text(`Certified By: ${cert.certifierFullName}`);
+      doc.text(
+        `Regulatory Credential: ${licenseMeta.displayPrefix} ${cert.certifierLicenseNumber} (${licenseMeta.fullName})`,
       );
-    doc.moveDown(0.5);
-    doc
-      .fontSize(10)
-      .fillColor("#0f172a")
-      .text(`Certified By: ${data.certifierFullName}`);
-    doc.text(
-      `Regulatory Credential: ${licenseMeta.displayPrefix} ${data.certifierLicenseNumber} (${licenseMeta.fullName})`,
-    );
-    doc.text(`Timestamp: ${data.certifiedAtIso}`);
+      doc.text(`Timestamp: ${cert.certifiedAtIso}`);
+    } else {
+      doc.fontSize(9).fillColor("#334155").text("Not signed: this IPC has not been certified.");
+    }
 
     doc.end();
   });

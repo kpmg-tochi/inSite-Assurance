@@ -2,6 +2,8 @@
 export * from './enums';
 export * from './defaultRoles';
 export * from './joinCodes';
+export * from './ipcStateMachine';
+export * from './ratingLabels';
 
 // Zod Schemas & DTO Types
 export * from './schemas/rbac.schema';
