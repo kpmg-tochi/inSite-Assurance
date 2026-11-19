@@ -206,6 +206,11 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
           >
             {notification.message}
           </Text>
+          {notification.actionedAt ? (
+            <Text style={styles.passiveHint}>
+              Answered{notification.actionedByName ? ` by ${notification.actionedByName}` : ""}
+            </Text>
+          ) : null}
 
           {/* Footer Action Row */}
           {showActionButton ? (

@@ -101,10 +101,8 @@ router.post(
 
       if (req.fieldAgent) {
         senderName = req.fieldAgent.agentFullName || 'Field Engineer';
-        senderRole =
-          req.fieldAgent.fieldPersonaType === 'CONTRACTOR_EXECUTOR'
-            ? 'ENGINEER'
-            : 'INSPECTOR';
+        // Phase 5: the sender label is the role name from the server, not a persona bucket.
+        senderRole = req.fieldAgent.roleName;
       }
 
       const result = await postWbsChatMessage({

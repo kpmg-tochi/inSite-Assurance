@@ -599,13 +599,13 @@ describe('Phase 2 route security', { concurrency: false }, () => {
   describe('join codes', () => {
     it('enforces maxUses and rotation', async () => {
       const monitor = await login('monitor@insite.ng');
-      const role = await prisma.role.findFirstOrThrow({ where: { tenantId: ids.tenantA, code: 'MONITOR_INSPECTOR' } });
+      const role = await prisma.role.findFirstOrThrow({ where: { tenantId: ids.tenantA, code: 'INDEPENDENT_RESIDENT' } });
       const issued = await request(app)
         .post(`/api/v1/projects/${ids.lkk}/join-codes`)
         .set(bearer(monitor))
         .send({ roleId: role.id, maxUses: 1 });
       assert.equal(issued.status, 201, JSON.stringify(issued.body));
-      assert.match(issued.body.data.code, /^LKK-402-INS-[0-9A-HJKMNP-TV-Z]{6}$/);
+      assert.match(issued.body.data.code, /^LKK-402-COW-[0-9A-HJKMNP-TV-Z]{6}$/);
 
       const join = (code: string, deviceId: string) =>
         request(app).post('/api/v1/auth/join-project').send({
@@ -639,7 +639,7 @@ describe('Phase 2 route security', { concurrency: false }, () => {
 
     it('stops a contractor from issuing independent-verifier codes', async () => {
       const contractor = await login('contractor@insite.ng');
-      const role = await prisma.role.findFirstOrThrow({ where: { tenantId: ids.tenantA, code: 'MONITOR_INSPECTOR' } });
+      const role = await prisma.role.findFirstOrThrow({ where: { tenantId: ids.tenantA, code: 'INDEPENDENT_RESIDENT' } });
       const res = await request(app)
         .post(`/api/v1/projects/${ids.lkk}/join-codes`)
         .set(bearer(contractor))

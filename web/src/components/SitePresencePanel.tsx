@@ -716,6 +716,11 @@ export function SitePresencePanel({
                         {!c.integrityPassed && (
                           <TableBadge variant="danger">Failed integrity: not counted</TableBadge>
                         )}
+                        {c.resubmittedFromClientCaptureId && (
+                          <span title={`Original capture ID ${c.resubmittedFromClientCaptureId}`}>
+                            <TableBadge variant="warning">Re-submitted after session ended</TableBadge>
+                          </span>
+                        )}
                       </div>
                       {c.integrityFlags.length > 0 && (
                         <p className="text-[10px] text-slate-500">

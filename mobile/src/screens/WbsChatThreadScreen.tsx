@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   View,
   Text,
@@ -7,12 +8,13 @@ import {
   ScrollView,
   Image,
   StyleSheet,
+  Alert,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { formatElapsedTime } from "@insite/shared";
 import { SiteEvidenceCameraModal, type SiteEvidenceBatchSubmission } from "../components/camera";
@@ -21,7 +23,16 @@ import { EmptyStateCard, InfoCallout, InSiteLoader, Pill, type PillVariant } fro
 import { BackButton } from "../components/inputs/Buttons";
 import { acquireFix, previewGeofence, type GeofencePreview } from "../services/locationService";
 import { useProfile } from "../context/ProfileContext";
-import { useSendWbsMessageMutation, useWbsChatMessagesQuery } from "../queries/wbs/useWbsQueries";
+import { useSendWbsMessageMutation, useWbsChatMessagesQuery, wbsQueryKeys } from "../queries/wbs/useWbsQueries";
+import {
+  HELD_EXPLANATION,
+  listHeldReports,
+  prepareHeldReportForReconfirm,
+  removeHeldMessage,
+  removeHeldReport,
+  updateHeldMessage,
+  type HeldReport,
+} from "../storage/heldItems";
 import { saveCapture } from "../storage/captureStore";
 import type { ChatCaptureView, WbsChatMessageRecord } from "../storage/wbsRepository";
 import { getMediaUrl } from "../api/evidence/evidenceApi";
@@ -75,9 +86,10 @@ export const WbsChatThreadScreen: React.FC = () => {
     workdayReportId: routeWorkdayReportId,
     reportQueryId: routeReportQueryId,
   } = route.params;
-  const { activeProjectId, profile } = useProfile();
-  const userName = profile?.fullName || "Field Engineer";
-  const mySessionId = profile?.activeSessionId ?? null;
+  const { activeProjectId, activeContext, activeSessionId, displayName } = useProfile();
+  const userName = displayName || "Field Engineer";
+  // Known once the device has synced with this project (provisioned sessions start on first use).
+  const mySessionId = activeSessionId;
   const [inputText, setInputText] = useState("");
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
@@ -86,12 +98,34 @@ export const WbsChatThreadScreen: React.FC = () => {
 
   const { data: messages = [], isLoading: loadingMessages } = useWbsChatMessagesQuery(wbsItem.id, activeProjectId);
   const sendMessage = useSendWbsMessageMutation(wbsItem.id);
+  const queryClient = useQueryClient();
+  const [heldReports, setHeldReports] = useState<HeldReport[]>([]);
+  const loadHeldReports = useCallback(() => {
+    if (!activeProjectId) return;
+    listHeldReports(activeProjectId, wbsItem.id).then(setHeldReports).catch(() => setHeldReports([]));
+  }, [activeProjectId, wbsItem.id]);
+  useFocusEffect(loadHeldReports);
+
+  const runHeldAction = async (action: () => Promise<unknown>, done: string) => {
+    try {
+      await action();
+      Toast.show({ type: "success", props: { title: "Done", message: done } });
+    } catch (err) {
+      Toast.show({
+        type: "error",
+        props: { title: "Could not complete", message: (err as Error)?.message || "Try again." },
+      });
+    } finally {
+      loadHeldReports();
+      void queryClient.invalidateQueries({ queryKey: wbsQueryKeys.messages(wbsItem.id) });
+    }
+  };
 
   // Header shows where the phone is now, computed locally (the server checks every capture again).
   useEffect(() => {
     let alive = true;
     acquireFix().then((fix) => {
-      if (alive) setHere(fix ? previewGeofence(fix) : "NO_FIX");
+      if (alive) setHere(fix ? previewGeofence(fix, activeProjectId) : "NO_FIX");
     });
     return () => {
       alive = false;
@@ -147,7 +181,8 @@ export const WbsChatThreadScreen: React.FC = () => {
     wbsItemId: wbsItem.id,
     senderName: userName,
     senderSessionId: mySessionId,
-    senderRole: "ENGINEER",
+    // The role name comes from the server; the server sets it again when the message arrives.
+    senderRole: activeContext?.roleName ?? "Field reporter",
     workdayReportId: hasOpenQuery ? (effectiveReportId ?? null) : null,
     reportQueryId: hasOpenQuery ? (effectiveQueryId ?? null) : null,
   };
@@ -214,6 +249,149 @@ export const WbsChatThreadScreen: React.FC = () => {
     }
   };
 
+  const renderMessageBody = (msg: WbsChatMessageRecord): React.ReactNode => {
+      if (msg.messageType === "MORNING_BRIEF") {
+        return (
+          <View key={msg.id} style={styles.briefCard}>
+            <View style={styles.briefBadgeRow}>
+              <Text style={styles.briefBadgeText}>
+                Morning brief{msg.briefDate ? ` · ${msg.briefDate}` : ""}
+              </Text>
+            </View>
+            <Text style={styles.briefTitle}>Today's deliverable</Text>
+            <Text style={styles.briefBody}>{msg.textContent}</Text>
+          </View>
+        );
+      }
+
+      if (msg.messageType === "AI_QUERY" || msg.messageType === "MONITOR_QUERY") {
+        const isAiQuery = msg.messageType === "AI_QUERY";
+        const queryStatus = msg.queryDetails?.status || "OPEN";
+        const isOpen = queryStatus === "OPEN";
+        const omitted = msg.queryDetails?.aiOmissionPayload?.omittedItems || [];
+        return (
+          <View key={msg.id} style={[styles.queryCard, !isOpen && styles.queryCardResolved]}>
+            <View style={styles.queryHeaderRow}>
+              <Pill
+                variant={!isOpen ? "positive" : isAiQuery ? "warning" : "info"}
+                text={isAiQuery ? "Missing evidence check" : "Monitor query"}
+              />
+              <Text style={styles.queryTimeText}>
+                {queryStatus} · {timeLabel(msg.createdAt)}
+              </Text>
+            </View>
+            <Text style={styles.querySenderText}>{msg.senderName}</Text>
+            <Text style={styles.queryBodyText}>{msg.textContent}</Text>
+            {omitted.length > 0 && (
+              <View style={styles.omittedListBox}>
+                {omitted.map((item, idx) => (
+                  <Text key={idx} style={styles.omittedListItem}>
+                    • {item}
+                  </Text>
+                ))}
+              </View>
+            )}
+          </View>
+        );
+      }
+
+      if (msg.messageType === "QUERY_RESPONSE") {
+        return (
+          <View key={msg.id} style={styles.queryResponseCard}>
+            <Text style={styles.queryResponseBadge}>Revision submitted · {timeLabel(msg.createdAt)}</Text>
+            <Text style={styles.queryResponseText}>{msg.textContent}</Text>
+          </View>
+        );
+      }
+
+      if (msg.messageType === "PHOTO" && msg.capture) {
+        const badge = captureBadge(msg.capture);
+        return (
+          <View key={msg.id} style={styles.photoMessageContainer}>
+            <CaptureImage projectId={activeProjectId} capture={msg.capture} style={styles.photoImage} />
+            <View style={styles.photoCaptionBox}>
+              {Boolean(msg.textContent) && <Text style={styles.photoCaptionText}>{msg.textContent}</Text>}
+              <View style={styles.photoMetaRow}>
+                {badge && <Pill variant={badge.variant} text={badge.text} />}
+                <Text style={styles.photoMetaText}>{timeLabel(msg.createdAt)}</Text>
+              </View>
+            </View>
+          </View>
+        );
+      }
+
+      if (msg.messageType === "VOICE_NOTE") {
+        const badge = captureBadge(msg.capture);
+        return (
+          <VoiceNoteBubble
+            key={msg.id}
+            senderName={msg.senderName}
+            audioUri={msg.capture?.localUri ?? undefined}
+            durationMs={msg.capture?.durationSeconds != null ? msg.capture.durationSeconds * 1000 : undefined}
+            timestamp={timeLabel(msg.createdAt)}
+            chainageLabel={badge?.text}
+            isMe={isMine(msg)}
+          />
+        );
+      }
+
+      const isMe = isMine(msg);
+      return (
+        <View key={msg.id} style={[styles.chatBubble, isMe ? styles.chatBubbleMe : styles.chatBubbleOther]}>
+          <Text style={[styles.bubbleSender, isMe && styles.bubbleSenderMe]}>
+            {msg.senderName}
+            {/* Older messages carry a code such as ENGINEER instead of a role name. */}
+            {msg.senderRole && !/^[A-Z_]+$/.test(msg.senderRole) ? ` · ${msg.senderRole}` : ""}
+          </Text>
+          <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{msg.textContent}</Text>
+          <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>
+            {msg.syncStatus === "QUEUED" ? "Waiting to send · " : ""}
+            {timeLabel(msg.createdAt)}
+          </Text>
+        </View>
+      );
+  };
+
+  /** Phase 5 Step 8: an item queued under a session that has ended waits for the person. */
+  const onHeldPress = (msg: WbsChatMessageRecord) => {
+    Alert.alert('Captured under an ended session', HELD_EXPLANATION, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => void runHeldAction(() => removeHeldMessage(msg.id), 'Removed from this device.'),
+      },
+      {
+        text: 'Update',
+        onPress: () =>
+          void runHeldAction(() => updateHeldMessage(msg.id), 'Re-validated and queued under your current session.'),
+      },
+    ]);
+  };
+
+  const onHeldReportPress = (report: HeldReport) => {
+    Alert.alert(
+      'Report from an ended session',
+      `Your ${report.workdayDate} report was confirmed under a project session that has since ended, so it will not be sent as it is. Remove it, or re-confirm it under your current session.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => void runHeldAction(() => removeHeldReport(report.id), 'Report removed from this device.'),
+        },
+        {
+          text: 'Re-confirm',
+          onPress: () =>
+            void runHeldAction(async () => {
+              await prepareHeldReportForReconfirm(report.id);
+              navigation.navigate('EodConfirmModal', { wbsItem, initialSummary: report.summaryText });
+            }, 'Check the report and confirm it again.'),
+        },
+      ]
+    );
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
@@ -256,101 +434,30 @@ export const WbsChatThreadScreen: React.FC = () => {
               description="Add photos, voice notes and notes here during the day. Submit your full report at the end of the day."
             />
           ) : null}
+          {heldReports.map((report) => (
+            <TouchableOpacity key={report.id} onPress={() => onHeldReportPress(report)} activeOpacity={0.8}>
+              <InfoCallout
+                variant="warning"
+                title="Report from an ended session"
+                description={`${report.workdayDate}: not sent. Tap to remove it or re-confirm it under your current session.`}
+              />
+            </TouchableOpacity>
+          ))}
           {messages.map((msg) => {
-            if (msg.messageType === "MORNING_BRIEF") {
-              return (
-                <View key={msg.id} style={styles.briefCard}>
-                  <View style={styles.briefBadgeRow}>
-                    <Text style={styles.briefBadgeText}>
-                      Morning brief{msg.briefDate ? ` · ${msg.briefDate}` : ""}
-                    </Text>
-                  </View>
-                  <Text style={styles.briefTitle}>Today's deliverable</Text>
-                  <Text style={styles.briefBody}>{msg.textContent}</Text>
-                </View>
-              );
-            }
-
-            if (msg.messageType === "AI_QUERY" || msg.messageType === "MONITOR_QUERY") {
-              const isAiQuery = msg.messageType === "AI_QUERY";
-              const queryStatus = msg.queryDetails?.status || "OPEN";
-              const isOpen = queryStatus === "OPEN";
-              const omitted = msg.queryDetails?.aiOmissionPayload?.omittedItems || [];
-              return (
-                <View key={msg.id} style={[styles.queryCard, !isOpen && styles.queryCardResolved]}>
-                  <View style={styles.queryHeaderRow}>
-                    <Pill
-                      variant={!isOpen ? "positive" : isAiQuery ? "warning" : "info"}
-                      text={isAiQuery ? "Missing evidence check" : "Monitor query"}
-                    />
-                    <Text style={styles.queryTimeText}>
-                      {queryStatus} · {timeLabel(msg.createdAt)}
-                    </Text>
-                  </View>
-                  <Text style={styles.querySenderText}>{msg.senderName}</Text>
-                  <Text style={styles.queryBodyText}>{msg.textContent}</Text>
-                  {omitted.length > 0 && (
-                    <View style={styles.omittedListBox}>
-                      {omitted.map((item, idx) => (
-                        <Text key={idx} style={styles.omittedListItem}>
-                          • {item}
-                        </Text>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              );
-            }
-
-            if (msg.messageType === "QUERY_RESPONSE") {
-              return (
-                <View key={msg.id} style={styles.queryResponseCard}>
-                  <Text style={styles.queryResponseBadge}>Revision submitted · {timeLabel(msg.createdAt)}</Text>
-                  <Text style={styles.queryResponseText}>{msg.textContent}</Text>
-                </View>
-              );
-            }
-
-            if (msg.messageType === "PHOTO" && msg.capture) {
-              const badge = captureBadge(msg.capture);
-              return (
-                <View key={msg.id} style={styles.photoMessageContainer}>
-                  <CaptureImage projectId={activeProjectId} capture={msg.capture} style={styles.photoImage} />
-                  <View style={styles.photoCaptionBox}>
-                    {Boolean(msg.textContent) && <Text style={styles.photoCaptionText}>{msg.textContent}</Text>}
-                    <View style={styles.photoMetaRow}>
-                      {badge && <Pill variant={badge.variant} text={badge.text} />}
-                      <Text style={styles.photoMetaText}>{timeLabel(msg.createdAt)}</Text>
-                    </View>
-                  </View>
-                </View>
-              );
-            }
-
-            if (msg.messageType === "VOICE_NOTE") {
-              const badge = captureBadge(msg.capture);
-              return (
-                <VoiceNoteBubble
-                  key={msg.id}
-                  senderName={msg.senderName}
-                  audioUri={msg.capture?.localUri ?? undefined}
-                  durationMs={msg.capture?.durationSeconds != null ? msg.capture.durationSeconds * 1000 : undefined}
-                  timestamp={timeLabel(msg.createdAt)}
-                  chainageLabel={badge?.text}
-                  isMe={isMine(msg)}
-                />
-              );
-            }
-
-            const isMe = isMine(msg);
+            const content = renderMessageBody(msg);
+            if (!msg.heldAfterSessionEnd) return content;
             return (
-              <View key={msg.id} style={[styles.chatBubble, isMe ? styles.chatBubbleMe : styles.chatBubbleOther]}>
-                <Text style={[styles.bubbleSender, isMe && styles.bubbleSenderMe]}>{msg.senderName}</Text>
-                <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{msg.textContent}</Text>
-                <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>
-                  {msg.syncStatus === "QUEUED" ? "Waiting to send · " : ""}
-                  {timeLabel(msg.createdAt)}
-                </Text>
+              <View key={msg.id}>
+                {content}
+                <TouchableOpacity
+                  style={styles.heldRow}
+                  onPress={() => onHeldPress(msg)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Captured under an ended session. Tap to remove or update."
+                >
+                  <MaterialCommunityIcons name="alert-circle" size={16} color="#B45309" />
+                  <Text style={styles.heldText}>Not sent: captured under an ended session. Tap to decide.</Text>
+                </TouchableOpacity>
               </View>
             );
           })}
@@ -430,6 +537,18 @@ export const WbsChatThreadScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  heldRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: "#FEF3C7",
+    alignSelf: "flex-start",
+  },
+  heldText: { fontSize: 11, fontWeight: "700", color: "#92400E" },
   container: {
     flex: 1,
     backgroundColor: "#1E1B4B",

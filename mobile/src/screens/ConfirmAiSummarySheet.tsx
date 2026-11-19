@@ -72,7 +72,7 @@ export const ConfirmAiSummarySheet: React.FC = () => {
     try {
       const next = await acquireFix();
       setFix(next);
-      setPreview(next ? previewGeofence(next) : null);
+      setPreview(next ? previewGeofence(next, projectId) : null);
       return next;
     } finally {
       setLoadingGps(false);

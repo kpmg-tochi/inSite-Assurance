@@ -24,6 +24,7 @@ import { PrimaryButton } from "../components/inputs/Buttons";
 import { useDemoProjectsQuery } from "../queries/projects/useProjectsQueries";
 import { useJoinProjectMutation } from "../queries/auth/useAuthMutations";
 import { useProfile } from "../context/ProfileContext";
+import { getOrCreateHardwareDeviceId } from "../storage/secureProfileStore";
 import {
   isValidJoinCode,
   JOIN_CODE_EXAMPLE,
@@ -79,7 +80,8 @@ export const EnterProjectCodeScreen: React.FC = () => {
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   // Profile context
-  const { profile, userInitials, updateProfile } = useProfile();
+  const { displayName, phoneNumber, userInitials, addJoinSession, updateActiveContext, pushIdentities } =
+    useProfile();
 
   // State
   const [projectCode, setProjectCode] = useState("");
@@ -204,9 +206,9 @@ export const EnterProjectCodeScreen: React.FC = () => {
     try {
       const result = await joinProjectMutation.mutateAsync({
         joinCode: normalized,
-        agentFullName: profile?.fullName?.trim() || "Field Engineer",
-        agentPhoneNumber: profile?.phoneNumber?.trim() || "+2348000000000",
-        deviceId: profile?.hardwareDeviceId || "DEV-MOBILE-FIELD",
+        agentFullName: displayName.trim() || "Field Engineer",
+        agentPhoneNumber: phoneNumber.trim() || "+2348000000000",
+        deviceId: await getOrCreateHardwareDeviceId(),
         deviceModel: `${Platform.OS === "ios" ? "iOS" : "Android"} Field Device`,
         deviceOs: `${Platform.OS} ${Platform.Version}`,
       });
@@ -214,23 +216,15 @@ export const EnterProjectCodeScreen: React.FC = () => {
       // Role-driven only: the server decides whether this role needs identity assurance.
       const requiresAssurance = result.sessionProfile.requiresIdentityAssurance;
 
-      await updateProfile({
-        activeProjectCode: result.sessionProfile.joinCodeUsed,
-        activeProjectId: result.sessionProfile.projectId,
-        activeSessionId: result.sessionProfile.sessionId,
-        activeSessionToken: result.accessToken,
-        activeRoleId: result.sessionProfile.roleId,
-        activeRoleCode: result.sessionProfile.roleCode,
-        activeRoleName: result.sessionProfile.roleName,
-        activeFieldPersonaType: result.sessionProfile.fieldPersonaType,
-        activeAssuranceWeight: result.sessionProfile.assuranceWeight,
-        activeRequiresIdentityAssurance:
-          result.sessionProfile.requiresIdentityAssurance,
-        activePermissions: result.sessionProfile.permissions || [],
-        assuranceStatus: requiresAssurance ? "NOT_SUBMITTED" : "APPROVED",
-      });
+      // Additive: other projects on this device, and their queued work, are untouched.
+      await addJoinSession(result);
+      // The identity check has not been submitted yet, whatever the server's initial status.
+      if (requiresAssurance) await updateActiveContext({ assuranceStatus: "NOT_SUBMITTED" });
 
-      void requestPushPermissionInContext(result.accessToken);
+      void requestPushPermissionInContext([
+        ...pushIdentities,
+        { token: result.accessToken, scope: `project:${result.sessionProfile.projectId}` },
+      ]);
 
       if (requiresAssurance) {
         navigation.navigate("AssuranceWizard");

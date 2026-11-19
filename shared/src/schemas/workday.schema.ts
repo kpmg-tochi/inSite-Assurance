@@ -106,6 +106,7 @@ export const WorkdayReportCaptureSummarySchema = CaptureDtoSchema.pick({
   transcriptionStatus: true,
   transcript: true,
   durationSeconds: true,
+  resubmittedFromClientCaptureId: true,
 });
 export type WorkdayReportCaptureSummary = z.infer<typeof WorkdayReportCaptureSummarySchema>;
 

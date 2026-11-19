@@ -6,6 +6,10 @@ import {
   DemoSkipVerificationRequest,
   FieldPersonaType,
   JoinProjectMobileRequest,
+  MobileAccountProfile,
+  MobileBaselinePack,
+  MobileLoginRequest,
+  MobileLoginResponse,
   OrganizationCategory,
   resolveRatingLabels,
   WebLoginRequest,
@@ -17,8 +21,16 @@ import { AppError } from '../../middleware/error.middleware';
 import {
   invalidateUserAuthCache,
   signFieldAgentToken,
+  signMobileUserToken,
   signWebUserToken,
 } from '../../middleware/auth.middleware';
+import {
+  listMobileProjects,
+  MOBILE_USER_INCLUDE,
+  type MobileUserRow,
+  requireEffectiveMobileRole,
+  roleSummary,
+} from './mobileAccess';
 import { recordAuditEvent } from '../audit/audit.service';
 import { parseTenantBranding } from '../rbac/rbac.service';
 import { parseDevicePublicKey } from '../../utils/deviceSignature';
@@ -201,11 +213,16 @@ function invalidCredentials() {
   return new AppError('Invalid email or password', 401, 'INVALID_CREDENTIALS');
 }
 
-export async function loginWebUser(input: WebLoginRequest) {
+/**
+ * Password check shared by web and mobile sign-in: the same lockout, timing equaliser and
+ * tenant-status rules. Returns the user id on success.
+ */
+async function verifyPasswordLogin(email: string, password: string): Promise<string> {
   const user = await prisma.user.findUnique({
-    where: { email: input.email.toLowerCase() },
-    include: WEB_USER_AUTH_INCLUDE,
+    where: { email: email.toLowerCase() },
+    include: { tenant: { select: { status: true } } },
   });
+  const input = { password };
 
   if (!user || !user.isActive) {
     await bcrypt.compare(input.password, DUMMY_PASSWORD_HASH);
@@ -253,7 +270,15 @@ export async function loginWebUser(input: WebLoginRequest) {
     where: { id: user.id },
     data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: new Date() },
   });
+  return user.id;
+}
 
+export async function loginWebUser(input: WebLoginRequest) {
+  const userId = await verifyPasswordLogin(input.email, input.password);
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    include: WEB_USER_AUTH_INCLUDE,
+  });
   return {
     accessToken: issueWebToken(user),
     user: serializeWebUserProfile(user),
@@ -265,6 +290,22 @@ export async function loginWebUser(input: WebLoginRequest) {
  * other session for this user is revoked. Returns a fresh token for the current session.
  */
 export async function changeWebUserPassword(userId: string, input: ChangePasswordRequest) {
+  await applyPasswordChange(userId, input);
+  const updated = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    include: WEB_USER_AUTH_INCLUDE,
+  });
+  return {
+    accessToken: issueWebToken(updated),
+    user: serializeWebUserProfile(updated),
+  };
+}
+
+/**
+ * Sets a new password, clears `mustChangePassword` and bumps `tokenVersion`, which ends every web
+ * and mobile token of the user. The caller issues a fresh token for the current device.
+ */
+async function applyPasswordChange(userId: string, input: ChangePasswordRequest): Promise<void> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user || !user.isActive) {
     throw new AppError('Account is inactive or no longer exists', 401, 'ACCOUNT_INACTIVE');
@@ -276,21 +317,232 @@ export async function changeWebUserPassword(userId: string, input: ChangePasswor
   }
 
   const passwordHash = await bcrypt.hash(input.newPassword, 10);
-  const updated = await prisma.user.update({
+  await prisma.user.update({
     where: { id: userId },
     data: {
       passwordHash,
       mustChangePassword: false,
       tokenVersion: { increment: 1 },
     },
-    include: WEB_USER_AUTH_INCLUDE,
+  });
+  invalidateUserAuthCache(userId);
+}
+
+// ---------------------------------------------------------------------------
+// Provisioned mobile accounts (Phase 5)
+// ---------------------------------------------------------------------------
+
+function serializeMobileAccount(user: MobileUserRow, mobileDeviceId: string): MobileAccountProfile {
+  const role = requireEffectiveMobileRole(user);
+  return {
+    userId: user.id,
+    tenantId: user.tenantId,
+    fullName: user.fullName,
+    email: user.email,
+    phoneNumber: user.phoneNumber,
+    organizationName: user.organization.name,
+    mustChangePassword: user.mustChangePassword,
+    mobileDeviceId,
+    mobileRole: roleSummary(role),
+    ratingLabels: resolveRatingLabels(user.tenant.evidenceRatingLabels),
+  };
+}
+
+/**
+ * POST /auth/mobile/login. Same credential, lockout and tenant checks as the web. Refuses users
+ * without a pre-provisioned mobile role (NO_MOBILE_ACCESS) and revoked devices (DEVICE_REVOKED).
+ * Registers the device and its signing key; a new key on a known device (reinstall) replaces the
+ * old one on the device and on its sessions, since a password sign-in proves the account.
+ */
+export async function loginMobileUser(input: MobileLoginRequest): Promise<MobileLoginResponse> {
+  const userId = await verifyPasswordLogin(input.email, input.password);
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, include: MOBILE_USER_INCLUDE });
+  const role = requireEffectiveMobileRole(user);
+  const key = parseDevicePublicKey(input.devicePublicKey, input.devicePublicKeyAlg);
+
+  const existing = await prisma.mobileDevice.findUnique({
+    where: { userId_deviceId: { userId, deviceId: input.deviceId } },
+  });
+  if (existing?.revokedAt) {
+    throw new AppError(
+      'This device has been revoked for your account. Contact your administrator.',
+      403,
+      'DEVICE_REVOKED'
+    );
+  }
+
+  const device = await prisma.$transaction(async (tx) => {
+    const row = await tx.mobileDevice.upsert({
+      where: { userId_deviceId: { userId, deviceId: input.deviceId } },
+      create: {
+        userId,
+        deviceId: input.deviceId,
+        deviceModel: input.deviceModel ?? null,
+        deviceOs: input.deviceOs ?? null,
+        publicKey: key.publicKey,
+        publicKeyAlg: DEVICE_SIGNATURE_ALGORITHM,
+        publicKeyId: key.keyId,
+        lastSeenAt: new Date(),
+      },
+      update: {
+        deviceModel: input.deviceModel ?? existing?.deviceModel ?? null,
+        deviceOs: input.deviceOs ?? existing?.deviceOs ?? null,
+        publicKey: key.publicKey,
+        publicKeyAlg: DEVICE_SIGNATURE_ALGORITHM,
+        publicKeyId: key.keyId,
+        lastSeenAt: new Date(),
+      },
+    });
+    const keyReplaced = Boolean(existing && existing.publicKeyId !== key.keyId);
+    if (keyReplaced) {
+      await tx.fieldAgentSession.updateMany({
+        where: { userId, mobileDeviceId: row.id },
+        data: {
+          devicePublicKey: key.publicKey,
+          devicePublicKeyAlg: DEVICE_SIGNATURE_ALGORITHM,
+          devicePublicKeyId: key.keyId,
+          devicePublicKeyAddedAt: new Date(),
+        },
+      });
+    }
+    await recordAuditEvent(tx, {
+      tenantId: user.tenantId,
+      projectId: null,
+      actorType: 'WEB_USER',
+      actorId: user.id,
+      actorDisplayName: `${user.fullName} (${role.name})`,
+      action: 'MOBILE_USER_SIGNED_IN',
+      summaryText: `${user.fullName} signed in to the mobile app on ${input.deviceModel ?? input.deviceId}${
+        existing ? '' : ' (new device)'
+      }${keyReplaced ? '; device signing key replaced' : ''}.`,
+      payload: {
+        userId: user.id,
+        mobileDeviceId: row.id,
+        deviceId: input.deviceId,
+        newDevice: !existing,
+        keyReplaced,
+        devicePublicKeyId: key.keyId,
+      },
+    });
+    return row;
   });
   invalidateUserAuthCache(userId);
 
   return {
-    accessToken: issueWebToken(updated),
-    user: serializeWebUserProfile(updated),
+    accessToken: signMobileUserToken({
+      userId: user.id,
+      tenantId: user.tenantId,
+      deviceRowId: device.id,
+      tokenVersion: user.tokenVersion,
+    }),
+    account: serializeMobileAccount(user, device.id),
+    projects: await listMobileProjects(user),
   };
+}
+
+async function loadMobileUser(userId: string): Promise<MobileUserRow> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, include: MOBILE_USER_INCLUDE });
+  if (!user || !user.isActive) {
+    throw new AppError('Account is inactive or no longer exists', 401, 'ACCOUNT_INACTIVE');
+  }
+  return user;
+}
+
+/** Account and visible projects for a signed-in mobile user (GET /auth/me, /auth/mobile/projects). */
+export async function getMobileAccountAndProjects(userId: string, mobileDeviceId: string) {
+  const user = await loadMobileUser(userId);
+  return {
+    account: serializeMobileAccount(user, mobileDeviceId),
+    projects: await listMobileProjects(user),
+  };
+}
+
+/** POST /auth/mobile/change-password: same rules as the web; returns a fresh mobile token. */
+export async function changeMobileUserPassword(
+  principal: { userId: string; deviceRowId: string },
+  input: ChangePasswordRequest
+) {
+  await applyPasswordChange(principal.userId, input);
+  const user = await loadMobileUser(principal.userId);
+  return {
+    accessToken: signMobileUserToken({
+      userId: user.id,
+      tenantId: user.tenantId,
+      deviceRowId: principal.deviceRowId,
+      tokenVersion: user.tokenVersion,
+    }),
+    account: serializeMobileAccount(user, principal.deviceRowId),
+  };
+}
+
+/** POST /auth/mobile/logout: the device stops receiving this account's pushes. */
+export async function logoutMobileUser(principal: { userId: string; deviceRowId: string }) {
+  await prisma.pushToken.deleteMany({
+    where: { userId: principal.userId, mobileDeviceId: principal.deviceRowId },
+  });
+}
+
+type BaselineProject = {
+  id: string;
+  name: string;
+  codePrefix: string;
+  stateLocation: string;
+  reportingCadence: string;
+  timezone: string;
+  geofenceMode: string;
+  geofenceGeoJson: unknown;
+  boqItems: Array<{
+    id: string;
+    wbsCode: string;
+    section: string;
+    description: string;
+    unit: string;
+    totalQuantity: unknown;
+    budgetedCostNgn: unknown;
+    isHoldPoint: boolean;
+    holdPointInstruction: string | null;
+    cumulativeCertifiedPct: unknown;
+  }>;
+};
+
+/** The offline baseline for one project, as join returns it and the baseline endpoint serves it. */
+export function buildBaselinePack(project: BaselineProject): MobileBaselinePack {
+  const boqItems = project.boqItems.map((item) => ({
+    id: item.id,
+    wbsCode: item.wbsCode,
+    section: item.section,
+    description: item.description,
+    unit: item.unit,
+    totalQuantity: Number(item.totalQuantity),
+    budgetedCostNgn: Number(item.budgetedCostNgn),
+    isHoldPoint: item.isHoldPoint,
+    holdPointInstruction: item.holdPointInstruction,
+    cumulativeCertifiedPct: Number(item.cumulativeCertifiedPct),
+  }));
+  return {
+    projectId: project.id,
+    name: project.name,
+    codePrefix: project.codePrefix,
+    stateLocation: project.stateLocation,
+    reportingCadence: project.reportingCadence as MobileBaselinePack['reportingCadence'],
+    timezone: project.timezone,
+    geofenceMode: project.geofenceMode as MobileBaselinePack['geofenceMode'],
+    geofence: project.geofenceGeoJson as MobileBaselinePack['geofence'],
+    boqItems,
+    holdPoints: boqItems.filter((b) => b.isHoldPoint),
+  };
+}
+
+/** GET /auth/mobile/projects/:projectId/baseline. Access is checked by the field auth guard. */
+export async function getProjectBaselinePack(projectId: string): Promise<MobileBaselinePack> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    include: { boqItems: { orderBy: { wbsCode: 'asc' } } },
+  });
+  if (!project) {
+    throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
+  }
+  return buildBaselinePack(project);
 }
 
 function buildMobileSessionResponse(
@@ -344,19 +596,6 @@ function buildMobileSessionResponse(
 
   const accessToken = signFieldAgentToken({ sessionId: session.id });
 
-  const boqItems = project.boqItems.map((item) => ({
-    id: item.id,
-    wbsCode: item.wbsCode,
-    section: item.section,
-    description: item.description,
-    unit: item.unit,
-    totalQuantity: Number(item.totalQuantity),
-    budgetedCostNgn: Number(item.budgetedCostNgn),
-    isHoldPoint: item.isHoldPoint,
-    holdPointInstruction: item.holdPointInstruction,
-    cumulativeCertifiedPct: Number(item.cumulativeCertifiedPct),
-  }));
-
   return {
     accessToken,
     sessionProfile: {
@@ -366,6 +605,7 @@ function buildMobileSessionResponse(
       projectName: project.name,
       projectCodePrefix: project.codePrefix,
       joinCodeUsed: normalizedCode,
+      origin: 'JOIN_CODE' as const,
       roleId: role.id,
       roleCode: role.code,
       roleName: role.name,
@@ -381,18 +621,7 @@ function buildMobileSessionResponse(
       livenessPassed: session.livenessPassed,
       ratingLabels: resolveRatingLabels(project.tenant.evidenceRatingLabels),
     },
-    baselinePack: {
-      projectId: project.id,
-      name: project.name,
-      codePrefix: project.codePrefix,
-      stateLocation: project.stateLocation,
-      reportingCadence: project.reportingCadence,
-      timezone: project.timezone,
-      geofenceMode: project.geofenceMode,
-      geofence: project.geofenceGeoJson,
-      boqItems,
-      holdPoints: boqItems.filter((b) => b.isHoldPoint),
-    },
+    baselinePack: buildBaselinePack(project),
   };
 }
 

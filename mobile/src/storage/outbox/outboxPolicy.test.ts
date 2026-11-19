@@ -8,6 +8,8 @@ import {
   dependencyState,
   dueRows,
   MAX_ATTEMPTS,
+  shouldHoldOnNewSession,
+  type OutboxKind,
   type OutboxRow,
   type OutboxStatus,
 } from './outboxPolicy';
@@ -98,5 +100,29 @@ describe('ordering', () => {
       row({ id: 'dead', status: 'DEAD' }),
     ];
     assert.deepEqual(dueRows(rows, NOW).map((r) => r.id), ['a', 'b']);
+  });
+});
+
+describe('Phase 5 Step 8: items from an ended session', () => {
+  const current = 'join:new-session';
+  const r = (kind: OutboxKind, status: OutboxStatus, sessionKey: string | null) => ({ kind, status, sessionKey });
+
+  it('holds unsent evidence queued under another session, or before sessions were recorded', () => {
+    assert.equal(shouldHoldOnNewSession(r('CAPTURE', 'PENDING', 'join:old'), current), true);
+    assert.equal(shouldHoldOnNewSession(r('CHAT_MESSAGE', 'PENDING', null), current), true);
+    assert.equal(shouldHoldOnNewSession(r('REPORT', 'DEAD', 'join:old'), current), true);
+    assert.equal(shouldHoldOnNewSession(r('REVALIDATION', 'PENDING', 'join:old'), current), true);
+  });
+
+  it('leaves sent rows, rows of the current session, and non-evidence kinds alone', () => {
+    assert.equal(shouldHoldOnNewSession(r('CAPTURE', 'DONE', 'join:old'), current), false);
+    assert.equal(shouldHoldOnNewSession(r('CAPTURE', 'PENDING', current), current), false);
+    assert.equal(shouldHoldOnNewSession(r('TELEMETRY', 'PENDING', 'join:old'), current), false);
+    assert.equal(shouldHoldOnNewSession(r('INCIDENT', 'PENDING', 'join:old'), current), false);
+  });
+
+  it('a held row is never due and makes rows that depend on it wait, not fail', () => {
+    assert.deepEqual(dueRows([row({ id: 'h', status: 'HELD' })], NOW), []);
+    assert.equal(dependencyState(['h'], new Map([['h', 'HELD' as OutboxStatus]])), 'WAITING');
   });
 });

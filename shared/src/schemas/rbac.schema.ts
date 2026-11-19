@@ -2,9 +2,11 @@ import { z } from 'zod';
 import {
   ContractorAssuranceStatusEnum,
   FieldPersonaTypeEnum,
+  FieldSessionOriginEnum,
   OrganizationCategoryEnum,
   PermissionCategoryEnum,
   ProfessionalLicenseTypeEnum,
+  RoleOnboardingModeEnum,
   RoleSurfaceEnum,
 } from '../enums';
 
@@ -81,11 +83,38 @@ export const RoleDtoSchema = z.object({
   fieldPersonaType: FieldPersonaTypeEnum,
   assuranceWeight: z.number().min(0).max(1),
   requiresIdentityAssurance: z.boolean(),
+  /** Meaningful only for surface MOBILE or BOTH. */
+  onboardingMode: RoleOnboardingModeEnum,
   isSystemDefault: z.boolean(),
   permissions: z.array(PermissionDtoSchema),
   userCount: z.number().int().optional(),
 });
 export type RoleDto = z.infer<typeof RoleDtoSchema>;
+
+/**
+ * A pre-provisioned role is a mobile role whose account is the identity: it cannot be web-only and
+ * cannot require identity assurance. On update, the server applies the same rule to the merged role.
+ */
+function refineOnboardingMode(
+  v: { onboardingMode?: string; surface?: string; requiresIdentityAssurance?: boolean },
+  ctx: z.RefinementCtx
+) {
+  if (v.onboardingMode !== 'PROVISIONED_ACCOUNT') return;
+  if (v.surface === 'WEB') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['onboardingMode'],
+      message: 'Only mobile roles can be pre-provisioned',
+    });
+  }
+  if (v.requiresIdentityAssurance === true) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['requiresIdentityAssurance'],
+      message: 'Pre-provisioned roles do not use identity assurance; the account is the identity',
+    });
+  }
+}
 
 export const CreateRoleRequestSchema = z.object({
   name: z.string().min(2).max(80),
@@ -108,8 +137,9 @@ export const CreateRoleRequestSchema = z.object({
   fieldPersonaType: FieldPersonaTypeEnum.default('NONE'),
   assuranceWeight: z.number().min(0.1).max(1.0).default(1.0),
   requiresIdentityAssurance: z.boolean().default(false),
+  onboardingMode: RoleOnboardingModeEnum.default('JOIN_CODE'),
   permissionIds: z.array(z.string().uuid()).min(1, 'Select at least one permission'),
-});
+}).superRefine((v, ctx) => refineOnboardingMode(v, ctx));
 export type CreateRoleRequest = z.infer<typeof CreateRoleRequestSchema>;
 
 export const UpdateRoleRequestSchema = z.object({
@@ -126,8 +156,9 @@ export const UpdateRoleRequestSchema = z.object({
   fieldPersonaType: FieldPersonaTypeEnum.optional(),
   assuranceWeight: z.number().min(0.1).max(1.0).optional(),
   requiresIdentityAssurance: z.boolean().optional(),
+  onboardingMode: RoleOnboardingModeEnum.optional(),
   permissionIds: z.array(z.string().uuid()).min(1).optional(),
-});
+}).superRefine((v, ctx) => refineOnboardingMode(v, ctx));
 export type UpdateRoleRequest = z.infer<typeof UpdateRoleRequestSchema>;
 
 export const UserProjectAssignmentDtoSchema = z.object({
@@ -135,8 +166,6 @@ export const UserProjectAssignmentDtoSchema = z.object({
   projectId: z.string().uuid(),
   projectCodePrefix: z.string().optional(),
   projectName: z.string().optional(),
-  roleId: z.string().uuid().nullable().optional(),
-  roleName: z.string().nullable().optional(),
 });
 export type UserProjectAssignmentDto = z.infer<typeof UserProjectAssignmentDtoSchema>;
 
@@ -155,11 +184,22 @@ export const TenantUserDtoSchema = z.object({
   organizationCategory: OrganizationCategoryEnum,
   professionalLicenseType: ProfessionalLicenseTypeEnum.nullable().optional(),
   professionalLicenseNumber: z.string().nullable().optional(),
+  phoneNumber: z.string().nullable().optional(),
+  /** Pre-provisioned mobile role, when it differs from (or replaces) the main role on mobile. */
+  mobileRoleId: z.string().uuid().nullable().optional(),
+  mobileRoleName: z.string().nullable().optional(),
+  /** True when the user can sign in to the mobile app (main or mobile role is pre-provisioned). */
+  hasMobileAccess: z.boolean(),
   hasAllTenantProjects: z.boolean(),
   projectAssignments: z.array(UserProjectAssignmentDtoSchema),
   createdAt: z.string(),
 });
 export type TenantUserDto = z.infer<typeof TenantUserDtoSchema>;
+
+const PhoneNumberSchema = z
+  .string()
+  .trim()
+  .regex(/^\+?[0-9 ()-]{7,20}$/, 'Enter a valid phone number');
 
 export const CreateTenantUserRequestSchema = z.object({
   fullName: z.string().min(2).max(120),
@@ -170,12 +210,17 @@ export const CreateTenantUserRequestSchema = z.object({
   organizationCategory: OrganizationCategoryEnum.default('OTHER'),
   professionalLicenseType: ProfessionalLicenseTypeEnum.nullable().optional(),
   professionalLicenseNumber: z.string().max(64).optional(),
+  phoneNumber: PhoneNumberSchema.nullable().optional(),
+  mobileRoleId: z.string().uuid().nullable().optional(),
   projectIds: z.array(z.string().uuid()).default([]),
 });
 export type CreateTenantUserRequest = z.infer<typeof CreateTenantUserRequestSchema>;
 
 export const AssignUserProjectsRequestSchema = z.object({
   roleId: z.string().uuid().optional(),
+  /** null removes mobile access granted through a separate mobile role. */
+  mobileRoleId: z.string().uuid().nullable().optional(),
+  phoneNumber: PhoneNumberSchema.nullable().optional(),
   isActive: z.boolean().optional(),
   projectIds: z.array(z.string().uuid()),
 });
@@ -191,9 +236,16 @@ export const FieldSessionRosterDtoSchema = z.object({
   assuranceWeight: z.number(),
   agentFullName: z.string(),
   agentPhoneNumber: z.string(),
-  joinCodeUsed: z.string(),
+  origin: FieldSessionOriginEnum,
+  /** null for provisioned sessions. */
+  joinCodeUsed: z.string().nullable(),
+  /** Linked account for provisioned sessions. */
+  userId: z.string().uuid().nullable(),
+  userEmail: z.string().nullable(),
   deviceId: z.string(),
   deviceModel: z.string().nullable().optional(),
+  /** MobileDevice row for provisioned sessions; revoking it blocks every project. */
+  mobileDeviceId: z.string().uuid().nullable(),
   isActive: z.boolean(),
   assuranceStatus: ContractorAssuranceStatusEnum,
   lastSyncAt: z.string().nullable().optional(),
@@ -208,3 +260,37 @@ export const UpdateFieldSessionStatusRequestSchema = z.object({
 export type UpdateFieldSessionStatusRequest = z.infer<
   typeof UpdateFieldSessionStatusRequestSchema
 >;
+
+/** A device a provisioned user has signed in on. Revoking it blocks all of that user's projects. */
+export const MobileDeviceDtoSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  userFullName: z.string(),
+  userEmail: z.string(),
+  mobileRoleName: z.string().nullable(),
+  deviceId: z.string(),
+  deviceModel: z.string().nullable(),
+  deviceOs: z.string().nullable(),
+  lastSeenAt: z.string().nullable(),
+  revokedAt: z.string().nullable(),
+  sessionCount: z.number().int(),
+  createdAt: z.string(),
+});
+export type MobileDeviceDto = z.infer<typeof MobileDeviceDtoSchema>;
+
+export const RevokeMobileDeviceRequestSchema = z.object({
+  reason: z.string().max(400).optional(),
+});
+export type RevokeMobileDeviceRequest = z.infer<typeof RevokeMobileDeviceRequestSchema>;
+
+/**
+ * Switching a role's onboarding mode deactivates or issues join codes. The web asks first using
+ * this preview (GET /rbac/roles/:roleId/onboarding-impact).
+ */
+export const RoleOnboardingImpactDtoSchema = z.object({
+  roleId: z.string().uuid(),
+  activeJoinCodeCount: z.number().int(),
+  projects: z.array(z.object({ id: z.string().uuid(), codePrefix: z.string(), name: z.string() })),
+  activeJoinCodeSessionCount: z.number().int(),
+});
+export type RoleOnboardingImpactDto = z.infer<typeof RoleOnboardingImpactDtoSchema>;

@@ -39,14 +39,15 @@ type NotificationListEntry =
     }
   | {
       kind: "divider";
-      id: "older-notifications-divider";
+      id: string;
+      label: string;
     };
 
 export const NotificationCenterModal: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
-  const { activeProjectId, profile } = useProfile();
+  const { activeProjectId, activeContext } = useProfile();
 
   const {
     data: notifications = [],
@@ -56,7 +57,7 @@ export const NotificationCenterModal: React.FC = () => {
     refetch,
   } = useNotificationsQuery(
     activeProjectId,
-    Boolean(profile?.activeSessionToken),
+    Boolean(activeContext),
   );
   const markReadMutation = useMarkNotificationReadMutation(activeProjectId);
 
@@ -94,6 +95,10 @@ export const NotificationCenterModal: React.FC = () => {
       // Action-required notifications remain unread until the required flow completes.
       if (!notif.requiresAction && !notif.isRead) {
         markReadMutation.mutate(notif.id);
+      }
+      // Already answered by someone on the project: open it, but there is nothing left to resolve.
+      if (notif.actionedAt) {
+        notif = { ...notif, requiresAction: false };
       }
 
       if (notif.actionType === "OPEN_REPORT_SUMMARY") {
@@ -179,30 +184,22 @@ export const NotificationCenterModal: React.FC = () => {
 
   // Build ordered list items (unread newest first -> divider -> read newest first)
   const listData = useMemo<NotificationListEntry[]>(() => {
-    const unread = notifications.filter((n) => !n.isRead);
+    // Needs action (not yet answered by anyone) -> new -> older (read or answered).
+    const needsAction = notifications.filter((n) => n.requiresAction && !n.actionedAt && !n.isRead);
+    const unread = notifications.filter((n) => !n.isRead && !(n.requiresAction && !n.actionedAt));
     const read = notifications.filter((n) => n.isRead);
 
-    const entries: NotificationListEntry[] = unread.map((notification) => ({
-      kind: "notification",
-      id: notification.id,
-      notification,
-    }));
-
-    if (unread.length > 0 && read.length > 0) {
-      entries.push({
-        kind: "divider",
-        id: "older-notifications-divider",
-      });
-    }
-
-    for (const notification of read) {
-      entries.push({
-        kind: "notification",
-        id: notification.id,
-        notification,
-      });
-    }
-
+    const entries: NotificationListEntry[] = [];
+    const group = (label: string, list: MobileNotificationDto[]) => {
+      if (list.length === 0) return;
+      entries.push({ kind: "divider", id: `divider-${label}`, label });
+      for (const notification of list) {
+        entries.push({ kind: "notification", id: notification.id, notification });
+      }
+    };
+    group("Needs action", needsAction);
+    group("New", unread);
+    group("Older notifications", read);
     return entries;
   }, [notifications]);
 
@@ -250,7 +247,7 @@ export const NotificationCenterModal: React.FC = () => {
               return (
                 <View style={styles.dividerRow}>
                   <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>Older Notifications</Text>
+                  <Text style={styles.dividerText}>{item.label}</Text>
                   <View style={styles.dividerLine} />
                 </View>
               );

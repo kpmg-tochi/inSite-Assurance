@@ -3,9 +3,9 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { AppError } from '../middleware/error.middleware';
 import {
+  authenticateAny,
   FieldAgentJwtPayload,
   hasWebPermission,
-  requireAnyAuth,
   WebJwtPayload,
 } from '../middleware/auth.middleware';
 
@@ -117,9 +117,10 @@ export async function assertCallerProjectAccess(params: {
 }
 
 /**
- * Project-access guard for `:projectId` routes. Authenticates the caller (web or field), then
- * checks tenant and assignment (web) or session binding (field). Route-level guards still apply
- * their own surface and permission checks afterwards.
+ * Project-access guard for `:projectId` routes. Authenticates the caller (web, join-code session or
+ * provisioned account), then checks tenant and assignment (web) or session binding (field). A
+ * provisioned account's session for this project is resolved here (Phase 5). Route-level guards
+ * still apply their own surface and permission checks afterwards.
  *
  * `projectId === 'all'` is allowed through for web users only; those handlers must scope with
  * buildProjectVisibilityWhere.
@@ -130,11 +131,8 @@ export function requireProjectAccess(
   next: NextFunction,
   projectId: string
 ): void {
-  requireAnyAuth(req, res, (authErr?: unknown) => {
-    if (authErr) {
-      next(authErr);
-      return;
-    }
+  const target = projectId === ALL_PROJECTS_SENTINEL ? undefined : projectId;
+  authenticateAny(req, target).then(() => {
     if (projectId === ALL_PROJECTS_SENTINEL) {
       if (!req.webUser || req.method !== 'GET') {
         next(new AppError('Project not found', 404, 'PROJECT_NOT_FOUND'));
@@ -148,7 +146,7 @@ export function requireProjectAccess(
       webUser: req.webUser,
       fieldAgent: req.fieldAgent,
     }).then(() => next(), next);
-  });
+  }, next);
 }
 
 /** Registers the project-access guard on every `:projectId` route of a router. */

@@ -33,6 +33,7 @@ import { assertProjectObjectKey } from '../../integrations/storage.service';
 import { parseTenantBranding } from '../rbac/rbac.service';
 import { recordAuditEvent } from '../audit/audit.service';
 import { createMobileNotification } from '../notifications/notifications.service';
+import { markNotificationsActioned } from '../notifications/notificationActions';
 import { getEvidenceForBoqItems } from '../evidence/evidenceProvider';
 import {
   loadBoqItemInProject,
@@ -868,6 +869,10 @@ export async function respondToMonitorLineQuery(params: {
       summaryText: `Responded to query on [${line.boqItem.wbsCode}]${revised !== undefined ? `, revising the claim to ${revised}%` : ''}.`,
       payload: { queryId, ipcId, revisedClaimedCumulativePct: revised ?? null },
     });
+    await markNotificationsActioned(tx, projectId, { kind: 'MONITOR_QUERY_ANSWERED', monitorQueryId: queryId }, {
+      userId: webUser.userId,
+      name: webUser.fullName,
+    });
 
     return serializeMonitorQuery(updated);
   });
@@ -906,6 +911,10 @@ export async function resolveMonitorLineQuery(params: {
       action: 'MONITOR_QUERY_RESOLVED',
       summaryText: `Resolved query on [${existing.ipcLineItem.boqItem.wbsCode}]: "${input.resolutionNote}"${left === 0 ? '. All queries on the IPC are resolved.' : ''}`,
       payload: { queryId, ipcId, previousStatus: existing.status, outstandingQueries: left },
+    });
+    await markNotificationsActioned(tx, projectId, { kind: 'MONITOR_QUERY_ANSWERED', monitorQueryId: queryId }, {
+      userId: webUser.userId,
+      name: webUser.fullName,
     });
     return { query: resolved, remaining: left };
   });

@@ -136,6 +136,11 @@ export interface CaptureScreeningInput {
   gpsAccuracyMeters: number | null;
   geofenceFlag: string | null;
   signatureFlag: string | null;
+  /**
+   * Captures this one may legitimately duplicate: the original of a re-submission (Phase 5
+   * Step 8). Matches against them are not reuse.
+   */
+  allowedDuplicateOf?: string[];
 }
 
 export interface CaptureScreeningResult {
@@ -163,15 +168,20 @@ export async function screenCapture(
   if (input.signatureFlag) flags.push(input.signatureFlag);
   if (input.clientSha256.toLowerCase() !== input.serverSha256) flags.push('CLIENT_HASH_MISMATCH');
 
-  const exact = await findExactDuplicates(db, { tenantId: input.tenantId, sha256: input.serverSha256 });
+  const allowed = new Set(input.allowedDuplicateOf ?? []);
+  const exact = (await findExactDuplicates(db, { tenantId: input.tenantId, sha256: input.serverSha256 })).filter(
+    (m) => !allowed.has(m.evidenceLogId)
+  );
   if (exact.length > 0) {
     flags.push('DUPLICATE_PHOTO_SHA256_MATCH');
     duplicateOf.push(...exact);
   } else if (input.mediaType === 'SITE_PHOTO' && input.perceptualHash) {
-    const similar = await findSimilarPhotos(db, {
-      tenantId: input.tenantId,
-      perceptualHash: input.perceptualHash,
-    });
+    const similar = (
+      await findSimilarPhotos(db, {
+        tenantId: input.tenantId,
+        perceptualHash: input.perceptualHash,
+      })
+    ).filter((m) => !allowed.has(m.evidenceLogId));
     const reused = similar.filter(
       (m) =>
         m.fieldSessionId !== input.fieldSessionId ||

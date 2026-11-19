@@ -3,9 +3,13 @@ import { JOIN_CODE_EXAMPLE, JOIN_CODE_REGEX } from "../joinCodes";
 import {
   ContractorAssuranceStatusEnum,
   FieldPersonaTypeEnum,
+  FieldSessionOriginEnum,
+  GeofenceModeEnum,
   OrganizationCategoryEnum,
   ProfessionalLicenseTypeEnum,
+  ReportingCadenceEnum,
 } from "../enums";
+import { ProjectGeofenceSchema } from "./geofence.schema";
 import { TenantDtoSchema } from "./rbac.schema";
 import { ResolvedRatingLabelsSchema } from "../ratingLabels";
 
@@ -155,6 +159,7 @@ export const FieldAgentSessionProfileSchema = z.object({
   projectName: z.string(),
   projectCodePrefix: z.string(),
   joinCodeUsed: z.string(),
+  origin: FieldSessionOriginEnum.default("JOIN_CODE"),
   roleId: z.string().uuid(),
   roleCode: z.string(),
   roleName: z.string(),
@@ -261,3 +266,195 @@ export const DemoSkipVerificationRequestSchema = z.object({
 export type DemoSkipVerificationRequest = z.infer<
   typeof DemoSkipVerificationRequestSchema
 >;
+
+// ---------------------------------------------------------------------------
+// Phase 5: provisioned mobile accounts and multi-project mobile
+// ---------------------------------------------------------------------------
+
+const DevicePublicKeyFields = {
+  deviceId: z.string().min(4).max(128),
+  deviceModel: z.string().max(128).optional(),
+  deviceOs: z.string().max(64).optional(),
+  /** Base64 raw Ed25519 public key (32 bytes) of the per-install signing key. */
+  devicePublicKey: z.string().min(40).max(64),
+  devicePublicKeyAlg: z.literal("ED25519"),
+};
+
+/** POST /auth/mobile/login. Same credentials as the web portal. */
+export const MobileLoginRequestSchema = z.object({
+  email: z.string().email("Enter the email address of your account"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  ...DevicePublicKeyFields,
+});
+export type MobileLoginRequest = z.infer<typeof MobileLoginRequestSchema>;
+
+/** The pre-provisioned role a signed-in user works under in the field. */
+export const MobileRoleSummarySchema = z.object({
+  id: z.string().uuid(),
+  code: z.string(),
+  name: z.string(),
+  fieldPersonaType: FieldPersonaTypeEnum,
+  assuranceWeight: z.number(),
+  permissions: z.array(z.string()),
+});
+export type MobileRoleSummary = z.infer<typeof MobileRoleSummarySchema>;
+
+export const MobileAccountProfileSchema = z.object({
+  userId: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  fullName: z.string(),
+  email: z.string().email(),
+  phoneNumber: z.string().nullable(),
+  organizationName: z.string(),
+  mustChangePassword: z.boolean(),
+  /** The MobileDevice row this token is bound to. */
+  mobileDeviceId: z.string().uuid(),
+  mobileRole: MobileRoleSummarySchema,
+  ratingLabels: ResolvedRatingLabelsSchema,
+});
+export type MobileAccountProfile = z.infer<typeof MobileAccountProfileSchema>;
+
+/**
+ * A project the signed-in user can work on. The pending-sync count is local to the device and is
+ * not part of this contract.
+ */
+export const MobileProjectSummarySchema = z.object({
+  id: z.string().uuid(),
+  codePrefix: z.string(),
+  name: z.string(),
+  stateLocation: z.string(),
+  lgaLocation: z.string().nullable(),
+  timezone: z.string(),
+  geofenceMode: GeofenceModeEnum,
+  roleId: z.string().uuid(),
+  roleName: z.string(),
+  fieldPersonaType: FieldPersonaTypeEnum,
+  assuranceWeight: z.number(),
+});
+export type MobileProjectSummary = z.infer<typeof MobileProjectSummarySchema>;
+
+export const MobileLoginResponseSchema = z.object({
+  accessToken: z.string(),
+  account: MobileAccountProfileSchema,
+  projects: z.array(MobileProjectSummarySchema),
+});
+export type MobileLoginResponse = z.infer<typeof MobileLoginResponseSchema>;
+
+/** GET /auth/mobile/projects/:projectId/session: the caller's field session on one project. */
+export const FieldSessionSummarySchema = z.object({
+  sessionId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  origin: FieldSessionOriginEnum,
+  roleId: z.string().uuid(),
+  roleCode: z.string(),
+  roleName: z.string(),
+  fieldPersonaType: FieldPersonaTypeEnum,
+  assuranceWeight: z.number(),
+  permissions: z.array(z.string()),
+});
+export type FieldSessionSummary = z.infer<typeof FieldSessionSummarySchema>;
+
+/** POST /auth/mobile/change-password returns a fresh token (other tokens are revoked). */
+export const MobileChangePasswordResponseSchema = z.object({
+  accessToken: z.string(),
+  account: MobileAccountProfileSchema,
+});
+export type MobileChangePasswordResponse = z.infer<typeof MobileChangePasswordResponseSchema>;
+
+const BaselineBoqItemSchema = z.object({
+  id: z.string().uuid(),
+  wbsCode: z.string(),
+  section: z.string(),
+  description: z.string(),
+  unit: z.string(),
+  totalQuantity: z.number(),
+  budgetedCostNgn: z.number(),
+  isHoldPoint: z.boolean(),
+  holdPointInstruction: z.string().nullable(),
+  cumulativeCertifiedPct: z.number(),
+});
+
+/** The offline baseline a device needs per project: geofence, BOQ, hold points and cadence. */
+export const MobileBaselinePackSchema = z.object({
+  projectId: z.string().uuid(),
+  name: z.string(),
+  codePrefix: z.string(),
+  stateLocation: z.string(),
+  reportingCadence: ReportingCadenceEnum,
+  /** IANA zone that defines the project's reporting day. Absent in packs saved before Phase 4. */
+  timezone: z.string().optional(),
+  geofenceMode: GeofenceModeEnum,
+  geofence: ProjectGeofenceSchema,
+  boqItems: z.array(BaselineBoqItemSchema),
+  holdPoints: z.array(BaselineBoqItemSchema),
+});
+export type MobileBaselinePack = z.infer<typeof MobileBaselinePackSchema>;
+
+/**
+ * The one local shape the app keeps per project, whichever way the person got onto it. The app maps
+ * server responses through `fieldContextFromJoinSession` and `fieldContextFromProvisionedProject`
+ * instead of hand-mapping fields in screens.
+ */
+export const FieldProjectContextSchema = z.object({
+  projectId: z.string().uuid(),
+  projectName: z.string(),
+  projectCodePrefix: z.string(),
+  origin: FieldSessionOriginEnum,
+  /** Join-code sessions only; a provisioned session is created by the server on first use. */
+  sessionId: z.string().uuid().nullable(),
+  joinCodeUsed: z.string().nullable(),
+  roleId: z.string().uuid(),
+  roleCode: z.string().nullable(),
+  roleName: z.string(),
+  fieldPersonaType: FieldPersonaTypeEnum,
+  assuranceWeight: z.number(),
+  requiresIdentityAssurance: z.boolean(),
+  permissions: z.array(z.string()),
+  assuranceStatus: z.union([ContractorAssuranceStatusEnum, z.literal("NOT_SUBMITTED")]),
+  rejectionReason: z.string().nullable(),
+});
+export type FieldProjectContext = z.infer<typeof FieldProjectContextSchema>;
+
+export function fieldContextFromJoinSession(profile: FieldAgentSessionProfile): FieldProjectContext {
+  return {
+    projectId: profile.projectId,
+    projectName: profile.projectName,
+    projectCodePrefix: profile.projectCodePrefix,
+    origin: "JOIN_CODE",
+    sessionId: profile.sessionId,
+    joinCodeUsed: profile.joinCodeUsed,
+    roleId: profile.roleId,
+    roleCode: profile.roleCode,
+    roleName: profile.roleName,
+    fieldPersonaType: profile.fieldPersonaType,
+    assuranceWeight: profile.assuranceWeight,
+    requiresIdentityAssurance: profile.requiresIdentityAssurance,
+    permissions: profile.permissions ?? [],
+    assuranceStatus: profile.assuranceStatus ?? "NOT_SUBMITTED",
+    rejectionReason: null,
+  };
+}
+
+export function fieldContextFromProvisionedProject(
+  project: MobileProjectSummary,
+  role: MobileRoleSummary
+): FieldProjectContext {
+  return {
+    projectId: project.id,
+    projectName: project.name,
+    projectCodePrefix: project.codePrefix,
+    origin: "PROVISIONED_ACCOUNT",
+    sessionId: null,
+    joinCodeUsed: null,
+    roleId: project.roleId,
+    roleCode: role.id === project.roleId ? role.code : null,
+    roleName: project.roleName,
+    fieldPersonaType: project.fieldPersonaType,
+    assuranceWeight: project.assuranceWeight,
+    requiresIdentityAssurance: false,
+    permissions: role.permissions,
+    // The account is the identity (decision G).
+    assuranceStatus: "APPROVED",
+    rejectionReason: null,
+  };
+}

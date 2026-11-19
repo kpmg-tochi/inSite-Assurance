@@ -1,6 +1,6 @@
 import * as Location from 'expo-location';
 import { verifyPointAgainstGeofence } from '@insite/shared';
-import { getCachedBaselinePack } from '../config/apiConfig';
+import { getLoadedBaselinePack } from '../storage/baselineStore';
 
 /**
  * GPS acquisition (Phase 4). Returns a real fix or null. Never invents coordinates or chainage.
@@ -102,9 +102,12 @@ export async function acquireFix(): Promise<LocationFix | null> {
   return last ? toFix(last) : null;
 }
 
-/** Local preview using the shared geofence code and the persisted baseline pack. */
-export function previewGeofence(fix: Pick<LocationFix, 'latitude' | 'longitude'>): GeofencePreview {
-  const pack = getCachedBaselinePack();
+/** Local preview using the shared geofence code and the project's persisted baseline pack. */
+export function previewGeofence(
+  fix: Pick<LocationFix, 'latitude' | 'longitude'>,
+  projectId?: string | null
+): GeofencePreview {
+  const pack = getLoadedBaselinePack(projectId);
   if (!pack?.geofence) {
     return { isWithinGeofence: null, chainageLabel: null, distanceFromSiteMeters: null };
   }

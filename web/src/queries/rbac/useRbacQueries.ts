@@ -3,6 +3,7 @@ import {
   getAllTenants,
   getCurrentTenant,
   getEvidenceRatingLabels,
+  getMobileDevices,
   getPermissionsCatalog,
   getProjectFieldSessions,
   getTenantRoles,
@@ -65,4 +66,12 @@ export const useEvidenceRatingLabelsQuery = (enabled = true) =>
     queryKey: ['rbac', 'rating-labels'],
     queryFn: getEvidenceRatingLabels,
     enabled,
+  });
+
+export const useMobileDevicesQuery = (enabled = true) =>
+  useQuery({
+    queryKey: ['rbac', 'mobile-devices'],
+    queryFn: getMobileDevices,
+    enabled,
+    staleTime: 30 * 1000,
   });

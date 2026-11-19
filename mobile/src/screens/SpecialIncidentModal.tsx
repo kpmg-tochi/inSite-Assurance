@@ -25,7 +25,7 @@ import { defaultColors } from "../styles/commonStyles";
 export const SpecialIncidentModal: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { activeProjectId: projectId, profile } = useProfile();
+  const { activeProjectId: projectId } = useProfile();
   const onClose = () => navigation.goBack();
   const onSubmitted = () => navigation.goBack();
   const [category, setCategory] = useState<

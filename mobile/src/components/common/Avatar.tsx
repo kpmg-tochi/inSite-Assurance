@@ -44,12 +44,12 @@ const Avatar: FC<AvatarProps> = ({
   style,
   accessibilityLabel,
 }) => {
-  const { profile } = useProfile();
+  const { displayName } = useProfile();
 
   const initials = useMemo(() => {
     if (forceInitials) return forceInitials;
-    return getInitials(profile?.fullName, "CO");
-  }, [forceInitials, profile?.fullName]);
+    return getInitials(displayName, "CO");
+  }, [forceInitials, displayName]);
 
   const handleAvatarTap = () => {
     if (onPress) {

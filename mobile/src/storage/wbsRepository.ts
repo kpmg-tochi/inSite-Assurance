@@ -11,6 +11,7 @@ import { getDb, newId, nowIso } from './db/database';
 import { enqueue, findOpenRowId } from './outbox/outboxStore';
 import { kickOutbox } from './outbox/outboxProcessor';
 import { captureDisplayUri, getCaptures, type CaptureRecord } from './captureStore';
+import { getHeldState } from './heldItems';
 import { currentPeriod, reportedWbsItemIds } from './reportStore';
 
 /**
@@ -86,6 +87,8 @@ export interface WbsChatMessageRecord {
   /** ISO timestamp. Format at render. */
   createdAt: string;
   syncStatus: ChatSyncStatus;
+  /** Queued under a session that has ended; waiting for the person to remove or update it (Step 8). */
+  heldAfterSessionEnd?: boolean;
 }
 
 type ItemRow = {
@@ -134,7 +137,7 @@ export async function getWbsThreads(projectId: string): Promise<WbsItemRecord[]>
      ORDER BY is_scheduled_today DESC, is_hold_point DESC, wbs_code ASC`,
     [projectId]
   );
-  const reported = await reportedWbsItemIds(projectId, currentPeriod()).catch(() => new Set<string>());
+  const reported = await reportedWbsItemIds(projectId, currentPeriod(new Date(), projectId)).catch(() => new Set<string>());
   return rows.map((r) => ({
     id: r.id,
     projectId: r.project_id,
@@ -285,6 +288,7 @@ export async function getWbsChatMessages(wbsItemId: string): Promise<WbsChatMess
   );
   const captures = await getCaptures(rows.map((r) => r.capture_id).filter((id): id is string => Boolean(id)));
   const byId = new Map(captures.map((c) => [c.id, c]));
+  const held = await getHeldState();
   return rows.map((r) => {
     const query = r.query_json ? (JSON.parse(r.query_json) as ReportQueryDto) : null;
     return {
@@ -307,6 +311,9 @@ export async function getWbsChatMessages(wbsItemId: string): Promise<WbsChatMess
       briefDate: r.brief_date,
       createdAt: r.created_at,
       syncStatus: r.sync_status as ChatSyncStatus,
+      heldAfterSessionEnd:
+        Boolean(r.client_message_id && held.messageIds.has(r.client_message_id)) ||
+        Boolean(r.capture_id && r.sync_status !== 'SERVER' && held.captureIds.has(r.capture_id)),
     };
   });
 }

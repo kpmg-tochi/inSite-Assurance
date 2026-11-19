@@ -659,8 +659,8 @@ export function CreateProjectPage({
               Project Identity, Counterparties &amp; Schedule
             </h2>
             <p className="text-[11px] text-slate-500">
-              Establishes project baseline and generates role-segregated mobile
-              join codes (-INS, -COW, -CON).
+              Establishes project baseline and generates a mobile join code for each
+              join-code role. Pre-provisioned roles sign in with their account instead.
             </p>
           </div>
         </div>

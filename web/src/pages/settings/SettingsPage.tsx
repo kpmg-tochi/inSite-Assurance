@@ -17,6 +17,7 @@ import { UsersVisibilityTab } from "../../components/rbac/UsersVisibilityTab";
 import { TenantBrandingTab } from "../../components/rbac/TenantBrandingTab";
 import { EvidenceRatingsCard } from "../../components/rbac/EvidenceRatingsCard";
 import { JoinCodesPanel } from "../../components/JoinCodesPanel";
+import { MobileDevicesPanel } from "../../components/rbac/MobileDevicesPanel";
 import {
   StandardTable,
   TableBadge,
@@ -73,7 +74,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
       const matchesSearch =
         agent.agentFullName.toLowerCase().includes(term) ||
         agent.roleName.toLowerCase().includes(term) ||
-        agent.joinCodeUsed.toLowerCase().includes(term) ||
+        (agent.joinCodeUsed ?? agent.userEmail ?? "").toLowerCase().includes(term) ||
         agent.agentPhoneNumber.toLowerCase().includes(term);
 
       const matchesStatus =
@@ -126,14 +127,21 @@ export function SettingsPage({ project }: SettingsPageProps) {
       },
       {
         id: "joinCode",
-        header: "Join Code Used",
-        tooltip: "Cryptographic join token redeemed during device onboarding",
-        width: "w-36",
-        cell: (agent) => (
-          <span className="font-semibold text-brand-primary">
-            {agent.joinCodeUsed}
-          </span>
-        ),
+        header: "How They Joined",
+        tooltip:
+          "A project join code, or a pre-provisioned account signed in on this device",
+        width: "w-44",
+        cell: (agent) =>
+          agent.origin === "PROVISIONED_ACCOUNT" ? (
+            <div>
+              <TableBadge variant="success">Signed-in account</TableBadge>
+              <div className="text-[11px] text-slate-500 mt-0.5">{agent.userEmail}</div>
+            </div>
+          ) : (
+            <span className="font-semibold text-brand-primary">
+              {agent.joinCodeUsed}
+            </span>
+          ),
       },
       {
         id: "phone",
@@ -194,13 +202,17 @@ export function SettingsPage({ project }: SettingsPageProps) {
                     onClick: () =>
                       handleToggleAgentStatus(agent.id, !agent.isActive),
                   },
-                  {
-                    label: "Copy Join Code",
-                    onClick: () => {
-                      navigator.clipboard?.writeText(agent.joinCodeUsed);
-                      toast.success(`Copied join code ${agent.joinCodeUsed}`);
-                    },
-                  },
+                  ...(agent.joinCodeUsed
+                    ? [
+                        {
+                          label: "Copy Join Code",
+                          onClick: () => {
+                            navigator.clipboard?.writeText(agent.joinCodeUsed!);
+                            toast.success(`Copied join code ${agent.joinCodeUsed}`);
+                          },
+                        },
+                      ]
+                    : []),
                 ]}
               />
             </div>
@@ -467,6 +479,10 @@ export function SettingsPage({ project }: SettingsPageProps) {
                 "Try adjusting the keyword search or active status filter.",
             }}
           />
+          )}
+
+          {(canRevokeDevices || canManageUsers) && (
+            <MobileDevicesPanel canRevoke={canRevokeDevices} />
           )}
         </div>
       )}

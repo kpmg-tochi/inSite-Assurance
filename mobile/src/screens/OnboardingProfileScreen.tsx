@@ -15,11 +15,11 @@ import type { RootStackParamList } from "../navigation/types";
 export const OnboardingProfileScreen: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { updateProfile } = useProfile();
-  // Input fields start blank as requested
-  const [fullName, setFullName] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [roleTitle, setRoleTitle] = useState("");
+  const { savePersona, persona } = useProfile();
+  // For joining with a project code. Signed-in users get their name and phone from the account,
+  // and the role shown in the app always comes from the server, never from this form.
+  const [fullName, setFullName] = useState(persona?.fullName ?? "");
+  const [phoneNumber, setPhoneNumber] = useState(persona?.phoneNumber ?? "");
   const [isSaving, setIsSaving] = useState(false);
 
   // Derive initials dynamically from user entry
@@ -48,11 +48,10 @@ export const OnboardingProfileScreen: React.FC = () => {
 
     setIsSaving(true);
     try {
-      await updateProfile({
+      await savePersona({
         fullName: fullName.trim(),
         phoneNumber: phoneNumber.trim(),
-        roleTitle: roleTitle.trim() || "Field Site Personnel",
-        onboardingCompleted: true,
+        avatarBase64: persona?.avatarBase64 ?? null,
       });
       navigation.reset({
         index: 0,
@@ -120,18 +119,6 @@ export const OnboardingProfileScreen: React.FC = () => {
               keyboardType="phone-pad"
               placeholder="e.g. +234 803 555 0192"
               placeholderTextColor="#94A3B8"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.fieldLabel}>Role / Site Title (Optional)</Text>
-            <TextInput
-              style={styles.input}
-              value={roleTitle}
-              onChangeText={setRoleTitle}
-              placeholder="e.g. Senior Site Civil Engineer"
-              placeholderTextColor="#94A3B8"
-              autoCapitalize="words"
             />
           </View>
         </View>

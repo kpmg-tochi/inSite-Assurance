@@ -1,12 +1,15 @@
 import Constants from 'expo-constants';
 import { NativeModules, Platform } from 'react-native';
-import type {
-  FieldAgentSessionProfile,
-  ProjectGeofence,
-  ReportingCadence,
-} from '@insite/shared';
 import { formatMobileErrorMessage } from '../utils/errorFormatter';
 import { markSessionEnded, type SessionEndReason } from './sessionState';
+import {
+  getActiveProjectId,
+  projectIdFromPath,
+  scopeForProject,
+  tokenForActiveProject,
+  tokenForProject,
+  type SessionScope,
+} from './authRegistry';
 
 function extractLanHost(uriOrUrl?: string | null): string | null {
   if (!uriOrUrl) return null;
@@ -72,64 +75,8 @@ function resolveMobileApiBaseUrl(): string {
 export const MOBILE_API_BASE_URL = resolveMobileApiBaseUrl();
 export const API_BASE_URL = MOBILE_API_BASE_URL;
 
-export interface MobileBaselinePack {
-  projectId: string;
-  name: string;
-  codePrefix: string;
-  stateLocation: string;
-  reportingCadence: ReportingCadence;
-  /** IANA zone that defines the project's reporting day. Absent in packs saved before Phase 4. */
-  timezone?: string;
-  geofenceMode: 'RADIAL' | 'LINEAR_CORRIDOR';
-  geofence: ProjectGeofence;
-  boqItems: Array<{
-    id: string;
-    wbsCode: string;
-    section: string;
-    description: string;
-    unit: string;
-    totalQuantity: number;
-    budgetedCostNgn: number;
-    isHoldPoint: boolean;
-    holdPointInstruction: string | null;
-    cumulativeCertifiedPct: number;
-  }>;
-  holdPoints: Array<{
-    id: string;
-    wbsCode: string;
-    section: string;
-    description: string;
-    unit: string;
-    totalQuantity: number;
-    budgetedCostNgn: number;
-    isHoldPoint: boolean;
-    holdPointInstruction: string | null;
-    cumulativeCertifiedPct: number;
-  }>;
-}
-
-let fieldAgentToken: string | null = null;
-let activeSessionProfile: FieldAgentSessionProfile | null = null;
-let cachedBaselinePack: MobileBaselinePack | null = null;
-
-export const setFieldAgentAuth = (
-  token: string | null,
-  profile: FieldAgentSessionProfile | null
-) => {
-  fieldAgentToken = token;
-  activeSessionProfile = profile;
-};
-
-export const getFieldAgentToken = (): string | null => fieldAgentToken;
-export const getActiveSessionProfile = (): FieldAgentSessionProfile | null =>
-  activeSessionProfile;
-
-export const saveBaselinePack = (pack: MobileBaselinePack) => {
-  cachedBaselinePack = pack;
-};
-
-export const getCachedBaselinePack = (): MobileBaselinePack | null =>
-  cachedBaselinePack;
+/** The offline baseline for one project; persisted per project in SQLite (see baselineStore). */
+export type { MobileBaselinePack } from '@insite/shared';
 
 /**
  * Error from the API layer. `kind` lets callers tell "offline / server unreachable" apart from
@@ -147,19 +94,71 @@ export class MobileApiError extends Error {
   }
 }
 
-const SESSION_ENDING_403_CODES = new Set(['SESSION_REVOKED', 'TENANT_SUSPENDED']);
+export interface MobileRequestOptions extends RequestInit {
+  /**
+   * `false` sends no token (sign-in, join). A string sends that token, for example one join
+   * session's token on a route without a project. Default: chosen from the path (see authRegistry).
+   */
+  auth?: false | string;
+  /** Scope to end if `auth` is an explicit token and the server refuses it. */
+  authScope?: SessionScope;
+}
+
+/** Maps a refusal to the session scope it ends, or null when it does not end a session. */
+function endedScopeFor(
+  status: number,
+  code: string | undefined,
+  requestScope: SessionScope,
+  projectId: string | null
+): { scope: SessionScope; reason: SessionEndReason } | null {
+  if (status === 401) return { scope: requestScope, reason: 'UNAUTHORIZED' };
+  if (status !== 403 || !code) return null;
+  switch (code) {
+    case 'TENANT_SUSPENDED':
+      return { scope: requestScope, reason: 'TENANT_SUSPENDED' };
+    case 'SESSION_REVOKED':
+      // An account token is refused for one project only when that project's session is revoked.
+      return {
+        scope: requestScope === 'account' && projectId ? `project:${projectId}` : requestScope,
+        reason: 'SESSION_REVOKED',
+      };
+    case 'DEVICE_REVOKED':
+      return { scope: 'account', reason: 'DEVICE_REVOKED' };
+    case 'NO_MOBILE_ACCESS':
+      return { scope: 'account', reason: 'NO_MOBILE_ACCESS' };
+    case 'FORBIDDEN_PROJECT_ASSIGNMENT':
+      return requestScope === 'account' && projectId
+        ? { scope: `project:${projectId}`, reason: 'PROJECT_ACCESS_REMOVED' }
+        : null;
+    default:
+      return null;
+  }
+}
 
 export async function mobileRequest<T>(
   path: string,
-  options: RequestInit = {}
+  options: MobileRequestOptions = {}
 ): Promise<T> {
+  const { auth, authScope, ...init } = options;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
+    ...(init.headers as Record<string, string>),
   };
 
-  if (fieldAgentToken) {
-    headers.Authorization = `Bearer ${fieldAgentToken}`;
+  // The token follows the project in the path, so queued work for any project uses the right one.
+  const pathProjectId = projectIdFromPath(path);
+  const targetProjectId = pathProjectId ?? getActiveProjectId();
+  let token: string | null = null;
+  let requestScope: SessionScope = 'account';
+  if (typeof auth === 'string') {
+    token = auth;
+    requestScope = authScope ?? 'account';
+  } else if (auth !== false) {
+    token = pathProjectId ? tokenForProject(pathProjectId) : tokenForActiveProject();
+    requestScope = targetProjectId ? scopeForProject(targetProjectId) : 'account';
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
   }
 
   const controller = new AbortController();
@@ -168,9 +167,9 @@ export async function mobileRequest<T>(
   let response: Response;
   try {
     response = await fetch(`${MOBILE_API_BASE_URL}${path}`, {
-      ...options,
+      ...init,
       headers,
-      signal: options.signal ?? controller.signal,
+      signal: init.signal ?? controller.signal,
     });
   } catch (err) {
     throw new MobileApiError(formatMobileErrorMessage(err), 'network');
@@ -183,14 +182,9 @@ export async function mobileRequest<T>(
   if (!response.ok || !payload?.success) {
     const code: string | undefined = payload?.error?.code;
     const message = formatMobileErrorMessage(payload?.error?.message, response.status);
-    const sessionEnded =
-      Boolean(fieldAgentToken) &&
-      (response.status === 401 ||
-        (response.status === 403 && code !== undefined && SESSION_ENDING_403_CODES.has(code)));
-    if (sessionEnded) {
-      const reason: SessionEndReason =
-        code === 'SESSION_REVOKED' || code === 'TENANT_SUSPENDED' ? code : 'UNAUTHORIZED';
-      markSessionEnded(reason, payload?.error?.message ?? message);
+    const endedScope = token ? endedScopeFor(response.status, code, requestScope, targetProjectId) : null;
+    if (endedScope) {
+      markSessionEnded(endedScope.scope, endedScope.reason, payload?.error?.message ?? message);
       throw new MobileApiError(message, 'auth', response.status, code);
     }
     throw new MobileApiError(message, 'http', response.status, code);

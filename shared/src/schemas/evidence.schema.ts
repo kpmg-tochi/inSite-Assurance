@@ -67,6 +67,12 @@ export const RegisterCaptureRequestSchema = z.object({
   deviceRollDeg: z.number().nullable().optional(),
   deviceAzimuthDeg: z.number().nullable().optional(),
   signature: DeviceSignatureSchema.nullable().optional(),
+  /**
+   * Phase 5 Step 8: the clientCaptureId of the same capture queued under a session that has since
+   * ended. The capture time and GPS fix are the original's; the server flags the capture
+   * RESUBMITTED_AFTER_SESSION_END and links it to the original.
+   */
+  resubmittedFromClientCaptureId: z.string().uuid().nullable().optional(),
 });
 export type RegisterCaptureRequest = z.infer<typeof RegisterCaptureRequestSchema>;
 
@@ -106,11 +112,16 @@ export const CaptureDtoSchema = z.object({
   transcript: z.string().nullable(),
   reporterRoleName: z.string(),
   fieldPersonaType: FieldPersonaTypeEnum,
+  /** Set when this capture re-submits one queued under an ended session (flag RESUBMITTED_AFTER_SESSION_END). */
+  resubmittedFromClientCaptureId: z.string().uuid().nullable().optional(),
 });
 export type CaptureDto = z.infer<typeof CaptureDtoSchema>;
 
 /** A report position less accurate than this gets the LOW_GPS_ACCURACY badge (not a failure). */
 export const REPORT_LOW_GPS_ACCURACY_METERS = 50;
+
+/** Non-critical flag on a capture re-submitted after the session that captured it ended. */
+export const RESUBMITTED_AFTER_SESSION_END_FLAG = 'RESUBMITTED_AFTER_SESSION_END';
 
 /** Integrity flags that make a capture unusable as evidence. */
 export const CRITICAL_CAPTURE_FLAGS = [

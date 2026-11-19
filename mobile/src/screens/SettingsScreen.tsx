@@ -32,11 +32,12 @@ export const SettingsScreen: React.FC = () => {
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { profile, updateProfile, resetAllProfileState } = useProfile();
+  const { account, persona, displayName, phoneNumber: knownPhone, savePersona, resetAll } = useProfile();
+  // A signed-in account's name and phone come from the organisation; code users edit their own.
+  const isAccount = Boolean(account);
 
-  const [fullName, setFullName] = useState(profile?.fullName || "");
-  const [phoneNumber, setPhoneNumber] = useState(profile?.phoneNumber || "");
-  const [roleTitle, setRoleTitle] = useState(profile?.roleTitle || "");
+  const [fullName, setFullName] = useState(displayName);
+  const [phoneNumber, setPhoneNumber] = useState(knownPhone);
   const [isSaving, setIsSaving] = useState(false);
 
   const resetDemoMutation = useResetDemoMutation();
@@ -65,10 +66,10 @@ export const SettingsScreen: React.FC = () => {
 
     setIsSaving(true);
     try {
-      await updateProfile({
+      await savePersona({
         fullName: fullName.trim(),
         phoneNumber: phoneNumber.trim(),
-        roleTitle: roleTitle.trim() || "Field Site Personnel",
+        avatarBase64: persona?.avatarBase64 ?? null,
       });
       Toast.show({
         type: "success",
@@ -91,21 +92,7 @@ export const SettingsScreen: React.FC = () => {
   };
 
   const handleRedoOnboarding = async () => {
-    await updateProfile({
-      onboardingCompleted: false,
-      activeProjectId: null,
-      activeProjectCode: null,
-      activeSessionId: null,
-      activeSessionToken: null,
-      activeRoleId: null,
-      activeRoleCode: null,
-      activeRoleName: null,
-      activeFieldPersonaType: null,
-      activeAssuranceWeight: null,
-      activeRequiresIdentityAssurance: false,
-      activePermissions: [],
-      assuranceStatus: "NOT_SUBMITTED",
-    });
+    await resetAll();
     navigation.reset({
       index: 0,
       routes: [{ name: "Landing" }],
@@ -120,7 +107,7 @@ export const SettingsScreen: React.FC = () => {
     try {
       await resetDemoMutation.mutateAsync();
       await clearLocalData();
-      await resetAllProfileState();
+      await resetAll();
       queryClient.clear();
 
       Toast.show({
@@ -189,12 +176,19 @@ export const SettingsScreen: React.FC = () => {
 
         {/* Editable Profile Details Card */}
         <View style={styles.card}>
+          {isAccount && (
+            <Text style={[styles.helperText, { marginBottom: 12 }]}>
+              Signed in as {account?.profile.email}. Your name and phone number are managed by your
+              organisation.
+            </Text>
+          )}
           <View style={styles.inputGroup}>
             <Text style={styles.fieldLabel}>
               Full Name <Text style={{ color: "#DC2626" }}>*</Text>
             </Text>
             <TextInput
               style={styles.input}
+              editable={!isAccount}
               value={fullName}
               onChangeText={setFullName}
               placeholder="e.g. Engr. Chukwuma Okeke"
@@ -210,6 +204,7 @@ export const SettingsScreen: React.FC = () => {
             </Text>
             <TextInput
               style={styles.input}
+              editable={!isAccount}
               value={phoneNumber}
               onChangeText={setPhoneNumber}
               keyboardType="phone-pad"
@@ -218,25 +213,21 @@ export const SettingsScreen: React.FC = () => {
             />
           </View>
 
-          <View style={[styles.inputGroup, { marginBottom: 16 }]}>
-            <Text style={styles.fieldLabel}>Role / Site Title (Optional)</Text>
-            <TextInput
-              style={styles.input}
-              value={roleTitle}
-              onChangeText={setRoleTitle}
-              placeholder="e.g. Senior Site Civil Engineer"
-              placeholderTextColor="#94A3B8"
-              autoCapitalize="words"
+          {isAccount ? (
+            <PrimaryButton
+              onPress={() => navigation.navigate("ChangePassword")}
+              text="Change password"
+              accessibilityLabel="Change your account password"
             />
-          </View>
-
-          <PrimaryButton
-            onPress={handleSaveProfile}
-            text="Save Profile Changes"
-            isWorking={isSaving}
-            disabled={isSaving || !canSave}
-            accessibilityLabel="Save Profile Changes"
-          />
+          ) : (
+            <PrimaryButton
+              onPress={handleSaveProfile}
+              text="Save Profile Changes"
+              isWorking={isSaving}
+              disabled={isSaving || !canSave}
+              accessibilityLabel="Save Profile Changes"
+            />
+          )}
         </View>
 
         {/* Demo Controls Section (rendered only when DEMO_MODE is true) */}

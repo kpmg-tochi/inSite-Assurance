@@ -14,7 +14,11 @@ export type OutboxKind =
   | 'INCIDENT'
   | 'ASSURANCE';
 
-export type OutboxStatus = 'PENDING' | 'DONE' | 'DEAD';
+/**
+ * HELD (Phase 5 Step 8): queued under a session that has since ended. Never sent until the person
+ * removes it or updates it for the current session.
+ */
+export type OutboxStatus = 'PENDING' | 'DONE' | 'DEAD' | 'HELD';
 
 export interface OutboxRow {
   id: string;
@@ -116,7 +120,7 @@ export function dependencyState(
   for (const id of dependsOn) {
     const status = statusById.get(id);
     if (status === 'DEAD') return 'BLOCKED';
-    if (status === 'PENDING') waiting = true;
+    if (status === 'PENDING' || status === 'HELD') waiting = true;
   }
   return waiting ? 'WAITING' : 'READY';
 }
@@ -126,6 +130,27 @@ export function dueRows(rows: OutboxRow[], now: Date): OutboxRow[] {
   return rows
     .filter((r) => r.status === 'PENDING' && new Date(r.nextAttemptAt).getTime() <= now.getTime())
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/** Kinds that become evidence; these are held after a rejoin instead of sent under the new session. */
+export const SESSION_BOUND_KINDS: ReadonlySet<OutboxKind> = new Set<OutboxKind>([
+  'CAPTURE',
+  'CHAT_MESSAGE',
+  'REPORT',
+  'REVALIDATION',
+]);
+
+/**
+ * When a new session starts on a project (rejoin), an unsent evidence row queued under any other
+ * session, or before sessions were recorded, is held for the person to remove or update.
+ */
+export function shouldHoldOnNewSession(
+  row: Pick<OutboxRow, 'kind' | 'status'> & { sessionKey: string | null },
+  currentSessionKey: string
+): boolean {
+  if (row.status === 'DONE' || row.status === 'HELD') return false;
+  if (!SESSION_BOUND_KINDS.has(row.kind)) return false;
+  return row.sessionKey !== currentSessionKey;
 }
 
 /** Kinds sent as one request for many rows. */

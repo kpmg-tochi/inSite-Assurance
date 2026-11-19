@@ -5,7 +5,8 @@ import {
   type WorkdayTextNote,
 } from '@insite/shared';
 import { listOwnWorkdayReports } from '../api/workday/workdayApi';
-import { getCachedBaselinePack } from '../config/apiConfig';
+import { getLoadedBaselinePack } from './baselineStore';
+import { LINKABLE_CAPTURE_SQL } from './captureStore';
 import { signWithDeviceKey } from '../security/deviceKey';
 import type { LocationFix } from '../services/locationService';
 import { getDb, newId, nowIso } from './db/database';
@@ -100,12 +101,12 @@ export function reporterTimeZone(): string {
  * The zone that defines a reporting day: the project's (from the saved baseline pack), so every
  * reporter on the project shares the same "today". The server checks the same rule.
  */
-export function projectTimeZone(): string {
-  return getCachedBaselinePack()?.timezone || reporterTimeZone();
+export function projectTimeZone(projectId?: string | null): string {
+  return getLoadedBaselinePack(projectId)?.timezone || reporterTimeZone();
 }
 
-export function currentPeriod(at: Date = new Date()): string {
-  return calendarDateInTimeZone(at, projectTimeZone());
+export function currentPeriod(at: Date = new Date(), projectId?: string | null): string {
+  return calendarDateInTimeZone(at, projectTimeZone(projectId));
 }
 
 export class ReportAlreadySubmittedError extends Error {
@@ -188,7 +189,7 @@ export async function confirmReport(input: ConfirmReportInput): Promise<StoredRe
   if (!input.fix) {
     throw new Error('A GPS location is required to submit a report.');
   }
-  let workdayDate = calendarDateInTimeZone(confirmedAt, projectTimeZone());
+  let workdayDate = calendarDateInTimeZone(confirmedAt, projectTimeZone(input.projectId));
   let signable = true;
   if (input.revision) {
     const original = await revisionPeriod(input.projectId, input.revision.serverReportId);
@@ -199,13 +200,15 @@ export async function confirmReport(input: ConfirmReportInput): Promise<StoredRe
   }
 
   const captures = await db.getAllAsync<{ id: string }>(
-    `SELECT id FROM captures WHERE project_id = ? AND wbs_item_id = ? AND report_id IS NULL ORDER BY captured_at ASC`,
+    `SELECT id FROM captures WHERE project_id = ? AND wbs_item_id = ? AND report_id IS NULL AND ${LINKABLE_CAPTURE_SQL}
+     ORDER BY captured_at ASC`,
     [input.projectId, input.wbsItemId]
   );
   const notes = await db.getAllAsync<{ id: string; text_content: string; created_at: string }>(
     `SELECT id, text_content, created_at FROM chat_messages
      WHERE project_id = ? AND wbs_item_id = ? AND message_type = 'TEXT_COMMENT' AND client_message_id IS NOT NULL
        AND report_id IS NULL AND text_content IS NOT NULL
+       AND client_message_id NOT IN (SELECT entity_id FROM outbox WHERE kind = 'CHAT_MESSAGE' AND status = 'HELD')
      ORDER BY created_at ASC`,
     [input.projectId, input.wbsItemId]
   );

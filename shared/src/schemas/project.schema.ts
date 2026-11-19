@@ -4,6 +4,7 @@ import {
   FieldPersonaTypeEnum,
   PortfolioHealthEnum,
   ReportingCadenceEnum,
+  RoleOnboardingModeEnum,
 } from '../enums';
 import { ProjectGeofenceSchema } from './geofence.schema';
 
@@ -70,6 +71,8 @@ export const ProjectJoinCodeDtoSchema = z.object({
   fieldPersonaType: FieldPersonaTypeEnum,
   assuranceWeight: z.number(),
   requiresIdentityAssurance: z.boolean(),
+  /** Codes of a role switched to PROVISIONED_ACCOUNT are deactivated and cannot be reissued. */
+  roleOnboardingMode: RoleOnboardingModeEnum.optional(),
   isActive: z.boolean(),
   expiresAt: z.string().datetime().nullable(),
   maxUses: z.number().int().positive().nullable().optional(),

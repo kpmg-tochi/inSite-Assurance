@@ -3,6 +3,12 @@ import type { WbsItemRecord } from '../storage/wbsRepository';
 
 export type RootStackParamList = {
   Landing: undefined;
+  /** Pre-provisioned account sign-in (Phase 5). */
+  SignIn: undefined;
+  /** Forced on first sign-in with a temporary password; also reachable from Settings. */
+  ChangePassword: { forced?: boolean } | undefined;
+  /** Every project on the device, with pending-sync counts; tap to switch. */
+  Projects: undefined;
   Onboarding: undefined;
   EnterCode: undefined;
   AssuranceWizard: { resolveNotificationId?: string; isPreviewDemo?: boolean } | undefined;

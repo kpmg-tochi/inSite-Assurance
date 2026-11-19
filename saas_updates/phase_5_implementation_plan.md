@@ -2,7 +2,7 @@
 
 | | |
 | :--- | :--- |
-| **Status** | Not started |
+| **Status** | Implemented (2026-11-19); web click-through and on-device testing pending |
 | **Depends on** | Phase 2 (live auth context, join-code hardening), Phase 4 (project-scoped outbox, persisted baseline) |
 | **Unblocks** | Phase 8 |
 | **Read first** | [Master plan](saas_implementation_plan.md) sections 2, 3 and 6 |
@@ -73,28 +73,28 @@
 ## 5. Implementation checklist
 
 ### Step 1: Shared
-- [ ] `RoleOnboardingModeEnum`; add `onboardingMode` to role DTO and create/update schemas, with a refinement that `PROVISIONED_ACCOUNT` implies `requiresIdentityAssurance === false` and surface is not `WEB`.
-- [ ] `MobileLoginRequestSchema` (email, password, device ID, model, OS, public key), `MobileLoginResponseSchema` (token, user profile, mobile role summary, project list).
-- [ ] `MobileProjectSummarySchema` (id, code, name, location, role name, persona, weight, geofence mode, pending-outbox hint not included; that is local).
-- [ ] Add `mobileRoleId` to tenant-user create and update schemas and DTOs.
-- [ ] One exported mapper type for "session profile" so the app stops hand-mapping.
+- [x] `RoleOnboardingModeEnum`; add `onboardingMode` to role DTO and create/update schemas, with a refinement that `PROVISIONED_ACCOUNT` implies `requiresIdentityAssurance === false` and surface is not `WEB`.
+- [x] `MobileLoginRequestSchema` (email, password, device ID, model, OS, public key), `MobileLoginResponseSchema` (token, user profile, mobile role summary, project list).
+- [x] `MobileProjectSummarySchema` (id, code, name, location, role name, persona, weight, geofence mode, pending-outbox hint not included; that is local).
+- [x] Add `mobileRoleId` to tenant-user create and update schemas and DTOs.
+- [x] One exported mapper type for "session profile" so the app stops hand-mapping.
 
 ### Step 2: Server authentication
-- [ ] `POST /auth/mobile/login`: same credential checks, lockout and tenant-status checks as web login. Refuse with a clear code if the user has no provisioned mobile role (`NO_MOBILE_ACCESS`). Upsert `MobileDevice`; refuse a revoked device. Issue a token `{ tokenType: 'MOBILE_USER', userId, tenantId, deviceRowId, tokenVersion }`.
-- [ ] Extend the Phase 2 auth loader: for `MOBILE_USER` tokens on a project-scoped route, resolve the user's effective mobile role, check project visibility, then find or create the `FieldAgentSession` for `(userId, projectId, deviceId)` with `origin = PROVISIONED_ACCOUNT`, `assuranceStatus = APPROVED`, and role snapshots. Populate `req.fieldAgent` exactly as for join-code sessions, so no downstream service changes.
-- [ ] Session creation is lazy (first request per project) and idempotent under concurrency (unique constraint plus retry).
-- [ ] `GET /auth/mobile/projects`: visible active projects for the user with the effective mobile role per project.
-- [ ] `GET /auth/mobile/projects/:projectId/baseline`: the baseline pack (geofence, BOQ items, hold points, cadence) that join currently returns.
-- [ ] `/auth/me` supports `MOBILE_USER`.
-- [ ] Revocation: revoking a `MobileDevice` or deactivating the user blocks all their sessions through the loader. The existing per-session revoke still works for a single project.
-- [ ] Web tokens are refused on mobile-only routes and the reverse.
+- [x] `POST /auth/mobile/login`: same credential checks, lockout and tenant-status checks as web login. Refuse with a clear code if the user has no provisioned mobile role (`NO_MOBILE_ACCESS`). Upsert `MobileDevice`; refuse a revoked device. Issue a token `{ tokenType: 'MOBILE_USER', userId, tenantId, deviceRowId, tokenVersion }`.
+- [x] Extend the Phase 2 auth loader: for `MOBILE_USER` tokens on a project-scoped route, resolve the user's effective mobile role, check project visibility, then find or create the `FieldAgentSession` for `(userId, projectId, deviceId)` with `origin = PROVISIONED_ACCOUNT`, `assuranceStatus = APPROVED`, and role snapshots. Populate `req.fieldAgent` exactly as for join-code sessions, so no downstream service changes.
+- [x] Session creation is lazy (first request per project) and idempotent under concurrency (unique constraint plus retry).
+- [x] `GET /auth/mobile/projects`: visible active projects for the user with the effective mobile role per project.
+- [x] `GET /auth/mobile/projects/:projectId/baseline`: the baseline pack (geofence, BOQ items, hold points, cadence) that join currently returns.
+- [x] `/auth/me` supports `MOBILE_USER`.
+- [x] Revocation: revoking a `MobileDevice` or deactivating the user blocks all their sessions through the loader. The existing per-session revoke still works for a single project.
+- [x] Web tokens are refused on mobile-only routes and the reverse.
 
 ### Step 3: Server role and user management
-- [ ] `updateRoleForTenant`: handle `onboardingMode` changes. Switching to provisioned deactivates the role's active join codes in a transaction and writes `ROLE_ONBOARDING_MODE_CHANGED`. Switching back issues codes for active projects (reuse the Phase 2 issue endpoint logic).
-- [ ] Project activation and join-code generation skip provisioned roles.
-- [ ] `createUserInTenant` and `assignUserProjectsAndRole`: accept and validate `mobileRoleId` (same tenant, right surface and mode).
-- [ ] When a user gains a project assignment and has mobile access, send a push "You've been added to {project}" to their registered devices.
-- [ ] Roster endpoint (`listProjectFieldSessions`): include `origin`, linked user, and device; add a tenant-level "mobile users and devices" list.
+- [x] `updateRoleForTenant`: handle `onboardingMode` changes. Switching to provisioned deactivates the role's active join codes in a transaction and writes `ROLE_ONBOARDING_MODE_CHANGED`. Switching back issues codes for active projects (reuse the Phase 2 issue endpoint logic).
+- [x] Project activation and join-code generation skip provisioned roles.
+- [x] `createUserInTenant` and `assignUserProjectsAndRole`: accept and validate `mobileRoleId` (same tenant, right surface and mode).
+- [x] When a user gains a project assignment and has mobile access, send a push "You've been added to {project}" to their registered devices.
+- [x] Roster endpoint (`listProjectFieldSessions`): include `origin`, linked user, and device; add a tenant-level "mobile users and devices" list.
 
 ### Step 4: Web admin
 - [ ] Role builder ([RolesPermissionsTab.tsx](../web/src/components/rbac/RolesPermissionsTab.tsx)): for mobile-capable roles, an "Onboarding" control with two options, "Join code" and "Pre-provisioned account", with one-line explanations. Choosing provisioned disables and unchecks the identity-assurance toggle. Changing mode on a role with active codes shows the confirmation described in section 3.
@@ -120,8 +120,8 @@
 - [ ] Chat sender labels use the role name from the server.
 
 ### Step 7: Seed and tests
-- [ ] Seed: mark "Monitor Inspector" as provisioned for the demo tenant; give `monitor@insite.ng` that mobile role and assignments to both demo projects; keep Clerk of Works and Contractor Site Engineer on join codes.
-- [ ] Server tests: mobile login success and each refusal; lazy session creation is idempotent under 10 parallel first requests; visibility follows assignments; unassigning removes access on the next request; switching a role to provisioned deactivates its codes; provisioned sessions skip the assurance gate; device revoke blocks all projects.
+- [x] Seed: mark "Monitor Inspector" as provisioned for the demo tenant; give `monitor@insite.ng` that mobile role and assignments to both demo projects; keep Clerk of Works and Contractor Site Engineer on join codes.
+- [x] Server tests: mobile login success and each refusal; lazy session creation is idempotent under 10 parallel first requests; visibility follows assignments; unassigning removes access on the next request; switching a role to provisioned deactivates its codes; provisioned sessions skip the assurance gate; device revoke blocks all projects.
 - [ ] Manual script: one account, two projects, capture offline on project A, switch to B, capture, go online; each item lands on its own project.
 
 ---
@@ -132,14 +132,14 @@
 - [ ] On rejoin, mark every unsent chat item (photo, voice note, note, report) from the ended session with a small exclamation icon in the WBS thread. Hold these items out of the outbox until the person decides.
 - [ ] Tapping the icon explains that the item was captured under a session that has ended and will not be included as evidence as it is.
 - [ ] Two actions: **Remove** it from the thread (deletes the local file and the outbox row), or **Update** it for the current session. Update re-validates it as a new capture: a new client ID, a fresh signature with the current key and session, and the original capture time and GPS fix kept as provenance. The server records it as re-submitted under the new session, with a link to the original capture ID. A report must be re-confirmed by the person.
-- [ ] Server: a capture re-submitted this way is flagged (for example `RESUBMITTED_AFTER_SESSION_END`) so reviewers can see it, and it is never silently merged into the old session's evidence.
-- [ ] Tests: revoke, rejoin, remove, update; the updated item is accepted once and the removed one never reaches the server.
+- [x] Server: a capture re-submitted this way is flagged (for example `RESUBMITTED_AFTER_SESSION_END`) so reviewers can see it, and it is never silently merged into the old session's evidence.
+- [x] Tests: revoke, rejoin, remove, update; the updated item is accepted once and the removed one never reaches the server.
 
 **Project-wide notifications that need an action.** Read state is per field session since Phase 4 (`MobileNotificationRead`). Today the only project-wide notification that requires action is the monitor's IPC-line clarification request (`reconciliation.service.ts`, `REPORT_QUERY` with `monitorQueryId`, sent to everyone on the project). Personal notifications (report queries, identity approved or returned, query resolved) are unaffected. Owner direction:
-- [ ] Add `actionedAt` and `actionedBySessionId` / `actionedByUserId` to `MobileNotification`. When anyone completes the required action (responds to or resolves the monitor query, or submits the revision it asked for), set `actionedAt`. The notification then shows as done for everyone, with "Answered by {name}", and stops counting as unread or action-required.
-- [ ] Map each action-required type to the event that completes it, in one place: monitor query responded or resolved, report query resubmitted or resolved, identity resubmitted.
+- [x] Add `actionedAt` and `actionedBySessionId` / `actionedByUserId` to `MobileNotification`. When anyone completes the required action (responds to or resolves the monitor query, or submits the revision it asked for), set `actionedAt`. The notification then shows as done for everyone, with "Answered by {name}", and stops counting as unread or action-required.
+- [x] Map each action-required type to the event that completes it, in one place: monitor query responded or resolved, report query resubmitted or resolved, identity resubmitted.
 - [ ] Mobile notification centre: actioned items move out of the "needs action" group.
-- [ ] Tests: two sessions on one project; one acts; the other sees it actioned, not unread.
+- [x] Tests: two sessions on one project; one acts; the other sees it actioned, not unread.
 
 ## 6. Definition of done
 
@@ -151,3 +151,32 @@
 ## 7. Found during implementation
 
 _Add items here rather than expanding scope._
+
+**Verification state (2026-11-19).** Server: `npm run test` passes (81 unit, 111 route incl. 21 Phase 5). Root typecheck, web build and mobile unit tests (26) pass. Steps 4 to 6 compile and are written but have not been clicked through in a browser or run on a device, so they stay unticked; so does the manual two-project offline script in Step 7.
+
+**Step 8 part 1 (unsent items after a session ends and the person rejoins), as built.**
+- Device: local DB migration v2 adds `outbox.session_key` (the session an item was queued under: `join:<sessionId>` or `account`), `captures.resubmitted_from` and `captures.superseded_by`. New outbox status `HELD`: never sent; rows that depend on a held row wait. On rejoin (`addJoinSession` with a new session id), every unsent capture, chat message, report and revision of the project from another session, or queued before session keys existed, is held (`storage/heldItems.ts`; rule in `outboxPolicy.shouldHoldOnNewSession`, unit tested).
+- Thread: held messages show an amber warning row; tapping explains and offers Remove or Update. A held report shows as a banner with Remove or Re-confirm.
+- Remove deletes the message, its unsent capture, the local file and the outbox rows. Update copies the file under a new client ID, signs it again with the current key, keeps the original capture time and fix, marks the original superseded and queues the new one under the current session. Re-confirm re-submits every capture the report linked (including any the ended session already registered, which the new session may not link), deletes the held report and opens the confirm sheet so the person confirms again.
+- New reports never pick up superseded or held captures, or held notes.
+- Server: `RegisterCaptureRequest.resubmittedFromClientCaptureId`. If the original reached the server it must be on the same project, under another session that has ended, from the same device; otherwise 422 `INVALID_RESUBMISSION`. The capture is recorded under the caller's session with flag `RESUBMITTED_AFTER_SESSION_END` (non-critical), links (`resubmittedFromClientCaptureId`, `resubmittedFromEvidenceLogId`), and duplicate screening ignores the original itself (otherwise the identical bytes would be flagged as reuse). The original keeps its session. The web capture list shows a "Re-submitted after session ended" badge.
+- Tests: server (revoke, rejoin, update accepted once with flag and link, original unchanged; original never sent; invalid link refused) and device policy. "The removed one never reaches the server" is enforced on the device (row and file deleted) and needs the on-device check.
+- Telemetry pings and incidents are not held: they are not chat evidence, and whistleblowing must still go out.
+
+**Gaps in the plan, resolved as follows:**
+1. A `MOBILE_USER` token carries no project. The project comes from the URL `:projectId` (the project guard passes it explicitly). Routes without a project: `/auth/device-key` and `/auth/assurance-verification` refuse provisioned accounts (key registered at sign-in; no assurance), `/auth/push-token` registers against the account, `/auth/me` returns account and projects.
+2. Added `GET /auth/mobile/projects/:projectId/session` so the app learns its own session id (chat "mine" detection) and the server role and weight. Also creates the session on first use.
+3. Auth cache: `invalidateUserAuthCache` now also clears mobile-account and provisioned-session entries, so unassigning, removing the mobile role, deactivating and device revoke take effect on the next request (single instance; the Phase 2 multi-instance lag of up to 30 s still applies).
+4. A new key on a known device (reinstall) replaces the key on the `MobileDevice` row and its sessions at password sign-in; audited (`keyReplaced`).
+5. Switching a role back to join codes removes mobile access for users whose mobile role it is: the effective role is checked on every request (`NO_MOBILE_ACCESS`).
+6. Forced password change on mobile: `POST /auth/mobile/change-password` returns a fresh mobile token; other web and mobile tokens are revoked.
+7. `PushToken.deviceToken` was globally unique, but one phone holds an account and several join sessions. Now unique per `(deviceToken, ownerKey)`; pushes to a provisioned session reach the account's non-revoked mobile devices; `MobileDevice` revoke deletes that device's tokens.
+8. `FieldAgentSession.agentPhoneNumber` is required; provisioned sessions use `User.phoneNumber` or `''`.
+9. "Only ACTIVE projects": no project status exists until Phase 6, so no filter yet (comment in `mobileAccess.ts`).
+10. Chat sender role on the server was a persona bucket (`ENGINEER`/`INSPECTOR`); it is now the role name.
+11. Sign-in is audited as `MOBILE_USER_SIGNED_IN` with actor type `WEB_USER` (the account), since `AuditActorType` has no account-on-mobile value.
+12. The roster's `joinCodeUsed` is now nullable; `ContractorVerificationRecordDto.joinCodeUsed` stays a string (`''` for provisioned sessions, which never need verification).
+
+**Migrations.** Phase 5 landed as five migrations (`…180000_phase5_provisioned_mobile`, `…181000_phase5_push_token_device`, `…182000_phase5_push_token_owner`, `…184000_phase5_notification_actioned`, `…186000_phase5_capture_resubmission`) because resetting the dev database was not allowed in the session. They can be squashed into one before deploy (decision A).
+
+**Mobile store migration.** The v2 single-project profile is migrated on first launch into the v3 device state (persona plus one join session); the old key is deleted.

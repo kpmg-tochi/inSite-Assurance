@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Users,
   UserPlus,
   FolderCheck,
   Shield,
   SlidersHorizontal,
+  Smartphone,
 } from 'lucide-react';
-import type { OrganizationCategory, TenantUserDto } from '@insite/shared';
+import type { OrganizationCategory, RoleDto, TenantUserDto } from '@insite/shared';
 import {
   useTenantRolesQuery,
   useTenantUsersQuery,
@@ -19,11 +20,70 @@ import {
 import Drawer from '../Drawer';
 import Loader from '../Loader';
 
+const isProvisionedRole = (role: RoleDto | undefined) =>
+  Boolean(role && role.surface !== 'WEB' && role.onboardingMode === 'PROVISIONED_ACCOUNT');
+
+/**
+ * Mobile access (Phase 5): a separate pre-provisioned mobile role, or none. When the main role is
+ * itself a pre-provisioned mobile role, it already gives mobile sign-in.
+ */
+function MobileAccessFields(props: {
+  provisionedRoles: RoleDto[];
+  mainRole: RoleDto | undefined;
+  mobileRoleId: string;
+  onMobileRoleId: (id: string) => void;
+  phoneNumber: string;
+  onPhoneNumber: (value: string) => void;
+}) {
+  const mainGivesAccess = isProvisionedRole(props.mainRole);
+  return (
+    <div className="rounded-xl border border-slate-200 p-3 space-y-2.5">
+      <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+        <Smartphone className="w-3.5 h-3.5 text-brand-primary" />
+        Mobile access
+      </div>
+      <div>
+        <label className="block font-semibold text-slate-700 mb-1">Mobile role</label>
+        <select
+          value={props.mobileRoleId}
+          onChange={(e) => props.onMobileRoleId(e.target.value)}
+          className="w-full rounded-xl border border-slate-200 px-3 py-2"
+        >
+          <option value="">{mainGivesAccess ? 'Same as main role' : 'None (no mobile sign-in)'}</option>
+          {props.provisionedRoles.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.name}
+            </option>
+          ))}
+        </select>
+        <p className="text-[11px] text-slate-500 mt-1">
+          {props.provisionedRoles.length === 0
+            ? 'No role is pre-provisioned yet. In Roles, set a mobile role to "Pre-provisioned account" first.'
+            : 'People with a mobile role sign in to the app with this email and password and see every assigned project. No join code or identity check.'}
+        </p>
+      </div>
+      <div>
+        <label className="block font-semibold text-slate-700 mb-1">Phone number</label>
+        <input
+          type="tel"
+          value={props.phoneNumber}
+          onChange={(e) => props.onPhoneNumber(e.target.value)}
+          placeholder="+234 803 000 0000"
+          className="w-full rounded-xl border border-slate-200 px-3 py-2"
+        />
+      </div>
+    </div>
+  );
+}
+
 export function UsersVisibilityTab() {
   const { data: users = [], isLoading: usersLoading } =
     useTenantUsersQuery(true);
   const { data: roles = [] } = useTenantRolesQuery(true);
   const { data: projects = [] } = useProjectsQuery(true);
+
+  const provisionedRoles = useMemo(() => roles.filter(isProvisionedRole), [roles]);
+  const roleById = useMemo(() => new Map(roles.map((r) => [r.id, r])), [roles]);
 
   const createUserMutation = useCreateTenantUserMutation();
   const assignProjectsMutation = useAssignUserProjectsMutation();
@@ -40,11 +100,15 @@ export function UsersVisibilityTab() {
   const [organizationCategory, setOrganizationCategory] =
     useState<OrganizationCategory>('ADVISORY_MONITOR');
   const [createProjectIds, setCreateProjectIds] = useState<string[]>([]);
+  const [mobileRoleId, setMobileRoleId] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
 
   // Edit User Assignments State
   const [editRoleId, setEditRoleId] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
   const [editProjectIds, setEditProjectIds] = useState<string[]>([]);
+  const [editMobileRoleId, setEditMobileRoleId] = useState('');
+  const [editPhoneNumber, setEditPhoneNumber] = useState('');
 
   const openCreateModal = () => {
     setFullName('');
@@ -54,6 +118,8 @@ export function UsersVisibilityTab() {
     setOrganizationName('');
     setOrganizationCategory('ADVISORY_MONITOR');
     setCreateProjectIds([]);
+    setMobileRoleId('');
+    setPhoneNumber('');
     setCreateDrawerOpen(true);
   };
 
@@ -62,6 +128,8 @@ export function UsersVisibilityTab() {
     setEditRoleId(target.roleId);
     setEditIsActive(target.isActive);
     setEditProjectIds(target.projectAssignments.map((a) => a.projectId));
+    setEditMobileRoleId(target.mobileRoleId ?? '');
+    setEditPhoneNumber(target.phoneNumber ?? '');
   };
 
   const toggleProject = (
@@ -86,6 +154,8 @@ export function UsersVisibilityTab() {
       roleId,
       organizationName: organizationName.trim(),
       organizationCategory,
+      mobileRoleId: mobileRoleId || null,
+      phoneNumber: phoneNumber.trim() || null,
       projectIds: createProjectIds,
     });
     setCreateDrawerOpen(false);
@@ -99,6 +169,8 @@ export function UsersVisibilityTab() {
       payload: {
         roleId: editRoleId || undefined,
         isActive: editIsActive,
+        mobileRoleId: editMobileRoleId || null,
+        phoneNumber: editPhoneNumber.trim() || null,
         projectIds: editProjectIds,
       },
     });
@@ -175,6 +247,15 @@ export function UsersVisibilityTab() {
                     <Shield className="w-3 h-3" />
                     {u.roleName}
                   </span>
+                  {u.hasMobileAccess && (
+                    <span
+                      className="mt-1 flex w-fit items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-semibold"
+                      title="Signs in to the mobile app with this account"
+                    >
+                      <Smartphone className="w-3 h-3" />
+                      Mobile{u.mobileRoleName ? `: ${u.mobileRoleName}` : ''}
+                    </span>
+                  )}
                 </td>
                 <td className="py-3 px-4">
                   {u.hasAllTenantProjects ? (
@@ -347,6 +428,15 @@ export function UsersVisibilityTab() {
               </div>
             </div>
 
+            <MobileAccessFields
+              provisionedRoles={provisionedRoles}
+              mainRole={roleById.get(roleId)}
+              mobileRoleId={mobileRoleId}
+              onMobileRoleId={setMobileRoleId}
+              phoneNumber={phoneNumber}
+              onPhoneNumber={setPhoneNumber}
+            />
+
             <div className="pt-2">
               <div className="font-semibold text-slate-700 mb-1.5">
                 Assign Visible Projects (ignored if role has view-all)
@@ -445,6 +535,15 @@ export function UsersVisibilityTab() {
                   ))}
                 </select>
               </div>
+
+              <MobileAccessFields
+                provisionedRoles={provisionedRoles}
+                mainRole={roleById.get(editRoleId)}
+                mobileRoleId={editMobileRoleId}
+                onMobileRoleId={setEditMobileRoleId}
+                phoneNumber={editPhoneNumber}
+                onPhoneNumber={setEditPhoneNumber}
+              />
 
               <label className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
                 <input

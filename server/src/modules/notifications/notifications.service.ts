@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import { WebJwtPayload } from '../../middleware/auth.middleware';
+import { markNotificationActionedById } from './notificationActions';
 
 type PrismaTransactionOrClient = Prisma.TransactionClient | typeof prisma;
 
@@ -31,8 +32,10 @@ function serializeNotification(row: MobileNotificationRow): MobileNotificationDt
     title: row.title,
     message: row.message,
     metadata: (row.metadata as MobileNotificationMetadata) ?? {},
-    isRead: readAt !== null,
+    isRead: readAt !== null || row.actionedAt !== null,
     readAt: readAt ? readAt.toISOString() : null,
+    actionedAt: row.actionedAt ? row.actionedAt.toISOString() : null,
+    actionedByName: row.actionedByName,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -107,6 +110,27 @@ export async function listProjectNotifications(
     take: 100,
   });
   return rows.map(serializeNotification).sort((a, b) => Number(a.isRead) - Number(b.isRead));
+}
+
+/** Resolving an action-required notification from the app completes it for everyone. */
+export async function markNotificationActionedFromApp(params: {
+  projectId: string;
+  fieldSessionId: string;
+  agentFullName: string;
+  notificationId: string;
+}): Promise<MobileNotificationDto> {
+  const dto = await markNotificationRead({ ...params, resolvedByAction: true });
+  if (dto.requiresAction) {
+    await markNotificationActionedById(prisma, dto.id, {
+      sessionId: params.fieldSessionId,
+      name: params.agentFullName,
+    });
+  }
+  const row = await prisma.mobileNotification.findUniqueOrThrow({
+    where: { id: dto.id },
+    include: { reads: { where: { fieldSessionId: params.fieldSessionId }, select: { readAt: true }, take: 1 } },
+  });
+  return serializeNotification(row);
 }
 
 /**

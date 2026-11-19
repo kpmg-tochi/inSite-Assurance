@@ -5,9 +5,11 @@ import type {
   CreateTenantUserRequest,
   EvidenceRatingLabels,
   FieldSessionRosterDto,
+  MobileDeviceDto,
   PermissionDto,
   ResolvedRatingLabels,
   RoleDto,
+  RoleOnboardingImpactDto,
   TenantDto,
   TenantUserDto,
   UpdateFieldSessionStatusRequest,
@@ -148,6 +150,26 @@ export const updateProjectFieldSessionStatus = async (
   const { data } = await api.patch<ApiEnvelope<{ id: string; isActive: boolean }>>(
     `/projects/${projectId}/field-sessions/${sessionId}/status`,
     payload
+  );
+  return data.data;
+};
+
+export const getRoleOnboardingImpact = async (roleId: string) => {
+  const { data } = await api.get<ApiEnvelope<RoleOnboardingImpactDto>>(
+    `/rbac/roles/${roleId}/onboarding-impact`
+  );
+  return data.data;
+};
+
+export const getMobileDevices = async () => {
+  const { data } = await api.get<ApiEnvelope<MobileDeviceDto[]>>('/rbac/mobile-devices');
+  return data.data;
+};
+
+export const revokeMobileDevice = async (deviceRowId: string, reason?: string) => {
+  const { data } = await api.post<ApiEnvelope<MobileDeviceDto>>(
+    `/rbac/mobile-devices/${deviceRowId}/revoke`,
+    { reason }
   );
   return data.data;
 };

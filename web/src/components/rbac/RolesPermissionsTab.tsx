@@ -8,6 +8,8 @@ import {
   CheckSquare,
   Square,
   Sparkles,
+  Smartphone,
+  TriangleAlert,
 } from 'lucide-react';
 import {
   PERMISSION_CATEGORY_META,
@@ -15,8 +17,11 @@ import {
   type PermissionCategory,
   type PermissionDto,
   type RoleDto,
+  type RoleOnboardingImpactDto,
+  type RoleOnboardingMode,
   type RoleSurface,
 } from '@insite/shared';
+import { getRoleOnboardingImpact } from '../../api/rbac/rbacApi';
 import {
   usePermissionsCatalogQuery,
   useTenantRolesQuery,
@@ -65,6 +70,11 @@ export function RolesPermissionsTab() {
   const [selectedPermissionIds, setSelectedPermissionIds] = useState<
     string[]
   >([]);
+  const [onboardingMode, setOnboardingMode] = useState<RoleOnboardingMode>('JOIN_CODE');
+  // Set while the admin confirms an onboarding-mode change on an existing role.
+  const [pendingImpact, setPendingImpact] = useState<RoleOnboardingImpactDto | null>(null);
+  const [impactLoading, setImpactLoading] = useState(false);
+  const isProvisioned = surface !== 'WEB' && onboardingMode === 'PROVISIONED_ACCOUNT';
 
   const permissionsByCategory = useMemo(() => {
     const grouped: Record<string, PermissionDto[]> = {};
@@ -97,6 +107,8 @@ export function RolesPermissionsTab() {
     setAssuranceWeight(1.0);
     setRequiresIdentityAssurance(false);
     setSelectedPermissionIds([]);
+    setOnboardingMode('JOIN_CODE');
+    setPendingImpact(null);
     setDrawerOpen(true);
   };
 
@@ -111,7 +123,15 @@ export function RolesPermissionsTab() {
     setAssuranceWeight(role.assuranceWeight);
     setRequiresIdentityAssurance(role.requiresIdentityAssurance);
     setSelectedPermissionIds(role.permissions.map((p) => p.id));
+    setOnboardingMode(role.onboardingMode);
+    setPendingImpact(null);
     setDrawerOpen(true);
+  };
+
+  const chooseOnboardingMode = (mode: RoleOnboardingMode) => {
+    setOnboardingMode(mode);
+    // The account is the identity, so a pre-provisioned role never asks for ID review.
+    if (mode === 'PROVISIONED_ACCOUNT') setRequiresIdentityAssurance(false);
   };
 
   const togglePermission = (permissionId: string) => {
@@ -140,10 +160,26 @@ export function RolesPermissionsTab() {
     }
   };
 
+  const effectiveMode: RoleOnboardingMode = surface === 'WEB' ? 'JOIN_CODE' : onboardingMode;
+
   const handleSaveRole = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedPermissionIds.length === 0) return;
 
+    // Changing how people join touches join codes on live projects: confirm first.
+    if (editingRole && effectiveMode !== editingRole.onboardingMode && !pendingImpact) {
+      setImpactLoading(true);
+      try {
+        setPendingImpact(await getRoleOnboardingImpact(editingRole.id));
+      } finally {
+        setImpactLoading(false);
+      }
+      return;
+    }
+    await saveRole();
+  };
+
+  const saveRole = async () => {
     if (editingRole) {
       await updateRoleMutation.mutateAsync({
         roleId: editingRole.id,
@@ -157,7 +193,8 @@ export function RolesPermissionsTab() {
           surface,
           fieldPersonaType: surface === 'WEB' ? 'NONE' : fieldPersonaType,
           assuranceWeight: Number(assuranceWeight),
-          requiresIdentityAssurance,
+          requiresIdentityAssurance: isProvisioned ? false : requiresIdentityAssurance,
+          onboardingMode: effectiveMode,
           permissionIds: selectedPermissionIds,
         },
       });
@@ -177,10 +214,12 @@ export function RolesPermissionsTab() {
         surface,
         fieldPersonaType: surface === 'WEB' ? 'NONE' : fieldPersonaType,
         assuranceWeight: Number(assuranceWeight),
-        requiresIdentityAssurance,
+        requiresIdentityAssurance: isProvisioned ? false : requiresIdentityAssurance,
+        onboardingMode: effectiveMode,
         permissionIds: selectedPermissionIds,
       });
     }
+    setPendingImpact(null);
     setDrawerOpen(false);
   };
 
@@ -251,8 +290,16 @@ export function RolesPermissionsTab() {
                   </div>
                   <div className="text-[11px] font-mono text-slate-500 mt-0.5">
                     {role.code}
-                    {role.codeSuffix ? ` · Join Suffix -${role.codeSuffix}` : ''}
+                    {role.codeSuffix && role.onboardingMode !== 'PROVISIONED_ACCOUNT'
+                      ? ` · Join Suffix -${role.codeSuffix}`
+                      : ''}
                   </div>
+                  {role.surface !== 'WEB' && role.onboardingMode === 'PROVISIONED_ACCOUNT' && (
+                    <span className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      <Smartphone className="w-3 h-3" />
+                      Pre-provisioned: signs in with account
+                    </span>
+                  )}
                 </div>
 
                 <span
@@ -423,7 +470,7 @@ export function RolesPermissionsTab() {
                 </label>
                 <input
                   type="text"
-                  disabled={surface === 'WEB'}
+                  disabled={surface === 'WEB' || isProvisioned}
                   maxLength={4}
                   value={codeSuffix}
                   onChange={(e) =>
@@ -492,10 +539,56 @@ export function RolesPermissionsTab() {
             </div>
 
             {surface !== 'WEB' && (
-              <label className="flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer text-xs">
+              <fieldset className="space-y-2">
+                <legend className="block text-xs font-semibold text-slate-700 mb-1">Onboarding</legend>
+                {(
+                  [
+                    {
+                      mode: 'JOIN_CODE',
+                      label: 'Join code',
+                      hint: 'People join each project with a role-specific code. Use for contractors and anyone without an account.',
+                    },
+                    {
+                      mode: 'PROVISIONED_ACCOUNT',
+                      label: 'Pre-provisioned account',
+                      hint: 'People sign in with their account and see every assigned project. No code, no identity check.',
+                    },
+                  ] as const
+                ).map((opt) => (
+                  <label
+                    key={opt.mode}
+                    className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer text-xs ${
+                      onboardingMode === opt.mode
+                        ? 'border-brand-primary bg-blue-50/60'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="onboardingMode"
+                      checked={onboardingMode === opt.mode}
+                      onChange={() => chooseOnboardingMode(opt.mode)}
+                      className="mt-0.5 h-4 w-4 border-slate-300 text-brand-primary"
+                    />
+                    <span>
+                      <span className="font-semibold text-slate-800 block">{opt.label}</span>
+                      <span className="text-[11px] text-slate-500">{opt.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
+
+            {surface !== 'WEB' && (
+              <label
+                className={`flex items-center gap-2.5 p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs ${
+                  isProvisioned ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                }`}
+              >
                 <input
                   type="checkbox"
-                  checked={requiresIdentityAssurance}
+                  disabled={isProvisioned}
+                  checked={!isProvisioned && requiresIdentityAssurance}
                   onChange={(e) =>
                     setRequiresIdentityAssurance(e.target.checked)
                   }
@@ -503,6 +596,11 @@ export function RolesPermissionsTab() {
                 />
                 <span className="font-semibold text-slate-800">
                   Require photo ID, guided selfie set &amp; license review on mobile
+                  {isProvisioned && (
+                    <span className="block font-normal text-[11px] text-slate-500">
+                      Not used for pre-provisioned roles: the account is the identity.
+                    </span>
+                  )}
                 </span>
               </label>
             )}
@@ -604,25 +702,63 @@ export function RolesPermissionsTab() {
             </div>
           </div>
 
+          {pendingImpact && (
+            <div className="mx-3.5 mb-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 space-y-2">
+              <div className="flex items-center gap-1.5 font-bold">
+                <TriangleAlert className="w-3.5 h-3.5" />
+                Confirm onboarding change
+              </div>
+              {effectiveMode === 'PROVISIONED_ACCOUNT' ? (
+                <>
+                  <p>
+                    {pendingImpact.activeJoinCodeCount === 0
+                      ? 'This role has no active join codes.'
+                      : `${pendingImpact.activeJoinCodeCount} active join code(s) for this role will be deactivated on:`}
+                  </p>
+                  {pendingImpact.projects.length > 0 && (
+                    <ul className="list-disc pl-5">
+                      {pendingImpact.projects.map((p) => (
+                        <li key={p.id}>
+                          <span className="font-mono">{p.codePrefix}</span> {p.name}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p>
+                    {pendingImpact.activeJoinCodeSessionCount} person(s) who already joined with a code keep
+                    working until you revoke them. From now on, people in this role sign in with their account.
+                  </p>
+                </>
+              ) : (
+                <p>
+                  Users who have this as their mobile role lose mobile sign-in straight away. A new join code
+                  is issued for this role on every project.
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => setDrawerOpen(false)}
+              onClick={() => (pendingImpact ? setPendingImpact(null) : setDrawerOpen(false))}
               className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-100"
             >
-              Cancel
+              {pendingImpact ? 'Back' : 'Cancel'}
             </button>
             <button
               type="submit"
-              disabled={isSaving || selectedPermissionIds.length === 0}
+              disabled={isSaving || impactLoading || selectedPermissionIds.length === 0}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm disabled:opacity-50"
             >
               <ShieldCheck className="w-3.5 h-3.5" />
-              {isSaving
+              {isSaving || impactLoading
                 ? 'Saving...'
-                : editingRole
-                  ? 'Save Role Permissions'
-                  : 'Create Role'}
+                : pendingImpact
+                  ? 'Confirm and save'
+                  : editingRole
+                    ? 'Save Role Permissions'
+                    : 'Create Role'}
             </button>
           </div>
         </form>

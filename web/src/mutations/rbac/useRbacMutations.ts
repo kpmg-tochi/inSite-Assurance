@@ -16,6 +16,7 @@ import {
   createTenantRole,
   createTenantUser,
   deleteTenantRole,
+  revokeMobileDevice,
   updateEvidenceRatingLabels,
   updateProjectFieldSessionStatus,
   updateTenantBranding,
@@ -183,6 +184,22 @@ export const useUpdateFieldSessionStatusMutation = (projectId: string) => {
     },
     onError: (err: any) => {
       toast.error(err?.message || 'Failed to update device session status.');
+    },
+  });
+};
+
+export const useRevokeMobileDeviceMutation = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ deviceRowId, reason }: { deviceRowId: string; reason?: string }) =>
+      revokeMobileDevice(deviceRowId, reason),
+    onSuccess: (device) => {
+      queryClient.invalidateQueries({ queryKey: ['rbac', 'mobile-devices'] });
+      queryClient.invalidateQueries({ queryKey: ['field-sessions'] });
+      toast.success(`Revoked ${device.deviceModel ?? 'device'} for ${device.userFullName}. All their projects are blocked on it.`);
+    },
+    onError: (err: any) => {
+      toast.error(err?.message || 'Failed to revoke the device.');
     },
   });
 };

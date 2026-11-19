@@ -9,25 +9,31 @@ import { rootNavigationRef } from '../components/common/SessionEndedOverlay';
  * returned (REJECTED) goes to the identity wizard with the reason; approval shows a notice.
  */
 export function useAssuranceStatusSync(): void {
-  const { profile, refreshAssuranceStatus } = useProfile();
-  const previous = useRef(profile?.assuranceStatus);
-  const hasSession = Boolean(profile?.activeSessionToken);
+  const { activeContext, refreshAssuranceStatus } = useProfile();
+  // Only join-code sessions have an assurance step; provisioned accounts are always approved.
+  const isJoinSession = activeContext?.origin === 'JOIN_CODE';
+  const projectId = activeContext?.projectId;
+  const previous = useRef<{ projectId?: string; status?: string }>({
+    projectId,
+    status: activeContext?.assuranceStatus,
+  });
 
   useEffect(() => {
-    if (!hasSession) return;
+    if (!isJoinSession) return;
     void refreshAssuranceStatus();
     const sub = AppState.addEventListener('change', (next) => {
       if (next === 'active') void refreshAssuranceStatus();
     });
     return () => sub.remove();
-  }, [hasSession, refreshAssuranceStatus]);
+  }, [isJoinSession, projectId, refreshAssuranceStatus]);
 
   useEffect(() => {
-    const status = profile?.assuranceStatus;
+    const status = activeContext?.assuranceStatus;
     const before = previous.current;
-    previous.current = status;
-    if (!status || status === before || before === undefined) return;
-    if (status === 'REJECTED' && profile?.activeRequiresIdentityAssurance && rootNavigationRef.isReady()) {
+    previous.current = { projectId, status };
+    // Switching project is not a status change.
+    if (!status || before.projectId !== projectId || status === before.status || before.status === undefined) return;
+    if (status === 'REJECTED' && activeContext?.requiresIdentityAssurance && rootNavigationRef.isReady()) {
       rootNavigationRef.reset({ index: 0, routes: [{ name: 'AssuranceWizard' }] });
     }
     if (status === 'APPROVED') {
@@ -39,5 +45,5 @@ export function useAssuranceStatusSync(): void {
         },
       });
     }
-  }, [profile?.assuranceStatus, profile?.activeRequiresIdentityAssurance]);
+  }, [projectId, activeContext?.assuranceStatus, activeContext?.requiresIdentityAssurance]);
 }

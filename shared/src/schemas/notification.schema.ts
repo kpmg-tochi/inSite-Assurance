@@ -50,8 +50,12 @@ export const MobileNotificationDtoSchema = z.object({
   title: z.string(),
   message: z.string(),
   metadata: MobileNotificationMetadataSchema.default({}),
+  /** Read by the viewer, or completed by anyone (an actioned notification no longer counts as unread). */
   isRead: z.boolean(),
   readAt: z.string().nullable().optional(),
+  /** Set when anyone on the project completed the required action (Phase 5 Step 8). */
+  actionedAt: z.string().nullable().optional(),
+  actionedByName: z.string().nullable().optional(),
   createdAt: z.string(),
 });
 export type MobileNotificationDto = z.infer<typeof MobileNotificationDtoSchema>;

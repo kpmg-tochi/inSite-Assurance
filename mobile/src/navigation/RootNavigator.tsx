@@ -19,6 +19,8 @@ import type { RootStackParamList } from "./types";
 
 // Screens
 import { LandingScreen } from "../screens/LandingScreen";
+import { SignInScreen } from "../screens/SignInScreen";
+import { ChangePasswordScreen } from "../screens/ChangePasswordScreen";
 import { OnboardingProfileScreen } from "../screens/OnboardingProfileScreen";
 import { EnterProjectCodeScreen } from "../screens/EnterProjectCodeScreen";
 import { AssuranceVerificationWizard } from "../screens/AssuranceVerificationWizard";
@@ -37,13 +39,13 @@ import { ConfirmAiSummarySheet } from "../screens/ConfirmAiSummarySheet";
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const RootNavigator: React.FC = () => {
-  const { profile, loading, activeProjectId } = useProfile();
+  const { loading, account, persona, activeContext, activeProjectId, pushIdentities } = useProfile();
 
-  // Background lifecycle hooks
-  usePushNotifications(profile?.activeSessionToken);
+  // Background lifecycle hooks. Telemetry pings the open project only.
+  usePushNotifications(pushIdentities);
   useNetworkSync();
   useAssuranceStatusSync();
-  usePresenceTelemetry(profile?.activeProjectCode ? activeProjectId : null);
+  usePresenceTelemetry(activeProjectId || null);
 
   if (loading) {
     return (
@@ -54,12 +56,14 @@ export const RootNavigator: React.FC = () => {
   }
 
   const getInitialRouteName = (): keyof RootStackParamList => {
-    if (!profile || !profile.onboardingCompleted) return "Landing";
-    if (!profile.activeProjectCode) return "EnterCode";
-    // Role-driven only: the server says whether this role needs identity assurance.
+    if (account?.profile.mustChangePassword) return "ChangePassword";
+    if (!account && !persona) return "Landing";
+    // Signed-in users pick from their projects; code users without a project enter a code.
+    if (!activeContext) return account ? "Projects" : "EnterCode";
+    // Role-driven only: the server says whether the active session's role needs identity assurance.
     if (
-      profile.activeRequiresIdentityAssurance &&
-      (profile.assuranceStatus === "NOT_SUBMITTED" || profile.assuranceStatus === "REJECTED")
+      activeContext.requiresIdentityAssurance &&
+      (activeContext.assuranceStatus === "NOT_SUBMITTED" || activeContext.assuranceStatus === "REJECTED")
     ) {
       return "AssuranceWizard";
     }
@@ -75,6 +79,9 @@ export const RootNavigator: React.FC = () => {
         }}
       >
         <Stack.Screen name="Landing" component={LandingScreen} />
+        <Stack.Screen name="SignIn" component={SignInScreen} />
+        <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
+        <Stack.Screen name="Projects" component={ProfileAndProjectsScreen} />
         <Stack.Screen name="Onboarding" component={OnboardingProfileScreen} />
         <Stack.Screen name="EnterCode" component={EnterProjectCodeScreen} />
         <Stack.Screen

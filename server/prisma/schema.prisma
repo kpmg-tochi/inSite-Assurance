@@ -28,6 +28,17 @@ enum FieldPersonaType {
   NONE
 }
 
+// How people in a mobile-capable role get onto a project (Phase 5).
+enum RoleOnboardingMode {
+  JOIN_CODE
+  PROVISIONED_ACCOUNT
+}
+
+enum FieldSessionOrigin {
+  JOIN_CODE
+  PROVISIONED_ACCOUNT
+}
+
 enum OrganizationCategory {
   ADVISORY_MONITOR
   FINANCIER_LENDER
@@ -206,6 +217,9 @@ enum AuditActionType {
   WORKDAY_REPORTS_RELEASED
   DEVICE_KEY_REGISTERED
   REPORT_QUERY_RESOLVED
+  MOBILE_USER_SIGNED_IN
+  MOBILE_DEVICE_REVOKED
+  ROLE_ONBOARDING_MODE_CHANGED
 }
 
 enum MobileNotificationType {
@@ -273,26 +287,28 @@ model Permission {
 }
 
 model Role {
-  id                        String           @id @default(uuid()) @db.Uuid
-  tenantId                  String           @db.Uuid
+  id                        String             @id @default(uuid()) @db.Uuid
+  tenantId                  String             @db.Uuid
   name                      String
   code                      String
   codeSuffix                String?
   description               String?
-  surface                   RoleSurface      @default(WEB)
-  fieldPersonaType          FieldPersonaType @default(NONE)
-  assuranceWeight           Float            @default(1.0)
-  requiresIdentityAssurance Boolean          @default(false)
-  isSystemDefault           Boolean          @default(false)
-  createdAt                 DateTime         @default(now())
-  updatedAt                 DateTime         @updatedAt
+  surface                   RoleSurface        @default(WEB)
+  fieldPersonaType          FieldPersonaType   @default(NONE)
+  assuranceWeight           Float              @default(1.0)
+  requiresIdentityAssurance Boolean            @default(false)
+  // Only meaningful for surface MOBILE or BOTH. PROVISIONED_ACCOUNT implies no identity assurance.
+  onboardingMode            RoleOnboardingMode @default(JOIN_CODE)
+  isSystemDefault           Boolean            @default(false)
+  createdAt                 DateTime           @default(now())
+  updatedAt                 DateTime           @updatedAt
 
-  tenant             Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  rolePermissions    RolePermission[]
-  users              User[]
-  projectAssignments UserProjectAssignment[]
-  joinCodes          ProjectJoinCode[]
-  fieldSessions      FieldAgentSession[]
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rolePermissions RolePermission[]
+  users           User[]              @relation("UserMainRole")
+  mobileUsers     User[]              @relation("UserMobileRole")
+  joinCodes       ProjectJoinCode[]
+  fieldSessions   FieldAgentSession[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, codeSuffix])
@@ -341,6 +357,9 @@ model User {
   fullName                  String
   isPlatformSuperAdmin      Boolean                  @default(false)
   roleId                    String                   @db.Uuid
+  // Optional pre-provisioned mobile role (surface MOBILE or BOTH, mode PROVISIONED_ACCOUNT).
+  mobileRoleId              String?                  @db.Uuid
+  phoneNumber               String?
   organizationId            String                   @db.Uuid
   professionalLicenseType   ProfessionalLicenseType?
   professionalLicenseNumber String?
@@ -355,7 +374,10 @@ model User {
 
   tenant                  Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   notificationReads       WebNotificationRead[]
-  role                    Role                    @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  role                    Role                    @relation("UserMainRole", fields: [roleId], references: [id], onDelete: Restrict)
+  mobileRole              Role?                   @relation("UserMobileRole", fields: [mobileRoleId], references: [id], onDelete: SetNull)
+  mobileDevices           MobileDevice[]
+  fieldSessions           FieldAgentSession[]
   organization            Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   projectAssignments      UserProjectAssignment[]
   certifiedReports        ValuationReport[]       @relation("CertifiedByMonitor")
@@ -371,18 +393,17 @@ model User {
   @@index([tenantId])
   @@index([organizationId])
   @@index([roleId])
+  @@index([mobileRoleId])
 }
 
 model UserProjectAssignment {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @db.Uuid
   projectId String   @db.Uuid
-  roleId    String?  @db.Uuid
   createdAt DateTime @default(now())
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  role    Role?   @relation(fields: [roleId], references: [id], onDelete: SetNull)
 
   @@unique([userId, projectId])
   @@index([userId])
@@ -468,14 +489,20 @@ model ProjectJoinCode {
   @@index([roleId])
 }
 
+// One unit of field provenance. Either a join-code session (joinCodeId set) or a provisioned
+// account's session for one project on one device (userId set); a CHECK constraint keeps exactly
+// one of the two.
 model FieldAgentSession {
-  id                     String           @id @default(uuid()) @db.Uuid
-  projectId              String           @db.Uuid
-  joinCodeId             String           @db.Uuid
-  roleId                 String           @db.Uuid
+  id                     String             @id @default(uuid()) @db.Uuid
+  projectId              String             @db.Uuid
+  origin                 FieldSessionOrigin @default(JOIN_CODE)
+  joinCodeId             String?            @db.Uuid
+  userId                 String?            @db.Uuid
+  mobileDeviceId         String?            @db.Uuid
+  roleId                 String             @db.Uuid
   roleNameSnapshot       String
-  fieldPersonaType       FieldPersonaType @default(INDEPENDENT_VERIFIER)
-  assuranceWeight        Float            @default(1.0)
+  fieldPersonaType       FieldPersonaType   @default(INDEPENDENT_VERIFIER)
+  assuranceWeight        Float              @default(1.0)
   agentFullName          String
   agentPhoneNumber       String
   agentPinHash           String?
@@ -487,12 +514,12 @@ model FieldAgentSession {
   devicePublicKeyAlg     String?
   devicePublicKeyId      String?
   devicePublicKeyAddedAt DateTime?
-  isActive               Boolean          @default(true)
+  isActive               Boolean            @default(true)
   revokedAt              DateTime?
-  revokedByUserId        String?          @db.Uuid
+  revokedByUserId        String?            @db.Uuid
   revokeReason           String?
   lastSyncAt             DateTime?
-  createdAt              DateTime         @default(now())
+  createdAt              DateTime           @default(now())
 
   // Identity & Competence Assurance
   assuranceStatus    ContractorAssuranceStatus @default(APPROVED)
@@ -511,7 +538,9 @@ model FieldAgentSession {
   rejectionReason    String?
 
   project            Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  joinCode           ProjectJoinCode          @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
+  joinCode           ProjectJoinCode?         @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
+  user               User?                    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  mobileDevice       MobileDevice?            @relation(fields: [mobileDeviceId], references: [id], onDelete: Restrict)
   role               Role                     @relation(fields: [roleId], references: [id], onDelete: Restrict)
   evidenceLogs       FieldEvidenceLog[]
   incidentReports    IncidentReport[]
@@ -524,9 +553,38 @@ model FieldAgentSession {
   telemetryAnomalies TelemetryAnomalyDaily[]
   notificationReads  MobileNotificationRead[]
 
+  @@unique([userId, projectId, deviceId])
   @@index([projectId, roleId])
   @@index([projectId, assuranceStatus])
   @@index([deviceId])
+  @@index([userId])
+}
+
+// A device a provisioned user has signed in on. Holds the per-install signing key (Phase 4) that
+// is copied onto each of the user's sessions on this device. Revoking it blocks every project.
+model MobileDevice {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @db.Uuid
+  deviceId        String
+  deviceModel     String?
+  deviceOs        String?
+  publicKey       String
+  publicKeyAlg    String
+  publicKeyId     String
+  lastSeenAt      DateTime?
+  revokedAt       DateTime?
+  revokedByUserId String?   @db.Uuid
+  revokeReason    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fieldSessions FieldAgentSession[]
+  pushTokens    PushToken[]
+
+  @@unique([userId, deviceId])
+  @@index([userId])
+  @@map("mobile_devices")
 }
 
 model FacilityTranche {
@@ -654,6 +712,10 @@ model FieldEvidenceLog {
   serverSha256      String?
   integrityPassed   Boolean  @default(true)
   integrityFlags    Json     @default("[]")
+  // Phase 5 Step 8: re-submitted under a new session after the session that captured it ended.
+  // The original keeps its own session; this row is never merged into it.
+  resubmittedFromClientCaptureId String? @db.Uuid
+  resubmittedFromEvidenceLogId   String? @db.Uuid
 
   // Voice notes: NOT_APPLICABLE | PENDING | DONE | FAILED
   transcriptionStatus String  @default("NOT_APPLICABLE")
@@ -885,17 +947,24 @@ model AuditLog {
 
 model PushToken {
   id             String   @id @default(uuid()) @db.Uuid
-  deviceToken    String   @unique
+  deviceToken    String
+  // One phone can hold a provisioned account and several join-code sessions (Phase 5), so a token
+  // is unique per owner: "session:<id>", "user:<id>" (mobile account) or "web:<id>".
+  ownerKey       String
   devicePlatform String // ANDROID, IOS, WEB
   appVersion     String?
   sessionId      String?  @db.Uuid
   userId         String?  @db.Uuid
+  // Set when a provisioned account registers from the mobile app; revoking the device removes it.
+  mobileDeviceId String?  @db.Uuid
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  session FieldAgentSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  user    User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session      FieldAgentSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user         User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mobileDevice MobileDevice?      @relation(fields: [mobileDeviceId], references: [id], onDelete: Cascade)
 
+  @@unique([deviceToken, ownerKey])
   @@index([sessionId])
   @@index([userId])
   @@map("push_tokens")
@@ -1055,6 +1124,12 @@ model MobileNotification {
   message        String                 @db.Text
   metadata       Json                   @default("{}")
   createdAt      DateTime               @default(now())
+  // Phase 5 Step 8: set when anyone completes the action this notification asks for; it then shows
+  // as done for every session. See notifications/notificationActions.ts for what completes what.
+  actionedAt          DateTime?
+  actionedBySessionId String?   @db.Uuid
+  actionedByUserId    String?   @db.Uuid
+  actionedByName      String?
 
   project      Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   fieldSession FieldAgentSession?       @relation(fields: [fieldSessionId], references: [id], onDelete: Cascade)

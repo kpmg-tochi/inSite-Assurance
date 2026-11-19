@@ -4,6 +4,7 @@ import {
   CreateRoleRequestSchema,
   CreateTenantRequestSchema,
   CreateTenantUserRequestSchema,
+  RevokeMobileDeviceRequestSchema,
   UpdateRoleRequestSchema,
   UpdateEvidenceRatingLabelsRequestSchema,
   UpdateTenantBrandingRequestSchema,
@@ -21,7 +22,10 @@ import {
   createUserInTenant,
   deleteRoleForTenant,
   getEvidenceRatingLabels,
+  getRoleOnboardingImpact,
   getTenantDetails,
+  listMobileDevicesForTenant,
+  revokeMobileDevice,
   listAllPermissions,
   listAllTenants,
   listRolesForTenant,
@@ -138,6 +142,58 @@ router.get(
     try {
       const users = await listUsersForTenant(req.webUser!.tenantId);
       res.json({ success: true, data: users });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/v1/rbac/roles/:roleId/onboarding-impact
+ * What switching the role's onboarding mode would change (shown in the confirmation dialog).
+ */
+router.get(
+  '/roles/:roleId/onboarding-impact',
+  requirePermission('roles:create_edit'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const impact = await getRoleOnboardingImpact(req.webUser!, String(req.params.roleId));
+      res.json({ success: true, data: impact });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/v1/rbac/mobile-devices
+ * Devices that pre-provisioned users have signed in on, across the tenant.
+ */
+router.get(
+  '/mobile-devices',
+  requirePermission('sessions:revoke_device', 'users:invite_manage'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const devices = await listMobileDevicesForTenant(req.webUser!.tenantId);
+      res.json({ success: true, data: devices });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/v1/rbac/mobile-devices/:deviceId/revoke
+ * Blocks every project for that user on that device.
+ */
+router.post(
+  '/mobile-devices/:deviceId/revoke',
+  requirePermission('sessions:revoke_device'),
+  validateBody(RevokeMobileDeviceRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const device = await revokeMobileDevice(req.webUser!, String(req.params.deviceId), req.body.reason);
+      res.json({ success: true, data: device });
     } catch (error) {
       next(error);
     }

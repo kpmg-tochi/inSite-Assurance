@@ -20,13 +20,53 @@ function isExpoToken(token: string): boolean {
   return /^(Expo|Exponent)PushToken\[.+\]$/.test(token);
 }
 
+/**
+ * Mobile push tokens of a provisioned account, excluding devices that have been revoked. Web
+ * tokens (platform WEB) are never used for mobile notifications.
+ */
+function mobileTokensOfUserWhere(userId: string) {
+  return {
+    userId,
+    devicePlatform: { not: 'WEB' },
+    OR: [{ mobileDeviceId: null }, { mobileDevice: { revokedAt: null } }],
+  };
+}
+
+/**
+ * Sends to the devices of one field session. A provisioned session (Phase 5) has no tokens of its
+ * own: its user's mobile tokens are used, and the app routes the tap by `projectId`.
+ */
 export async function sendPushToFieldSession(sessionId: string, message: PushMessage): Promise<number> {
   if (env.PUSH_PROVIDER !== 'expo') return 0;
+  const session = await prisma.fieldAgentSession.findUnique({
+    where: { id: sessionId },
+    select: { userId: true, projectId: true },
+  });
+  if (!session) return 0;
   const tokens = await prisma.pushToken.findMany({
-    where: { sessionId },
+    where: session.userId
+      ? { OR: [{ sessionId }, mobileTokensOfUserWhere(session.userId)] }
+      : { sessionId },
     select: { deviceToken: true },
   });
-  const to = tokens.map((t) => t.deviceToken).filter(isExpoToken);
+  return deliver(
+    tokens.map((t) => t.deviceToken),
+    { ...message, data: { projectId: session.projectId, ...message.data } }
+  );
+}
+
+/** Sends to every registered mobile device of a provisioned account (not tied to one project). */
+export async function sendPushToMobileUser(userId: string, message: PushMessage): Promise<number> {
+  if (env.PUSH_PROVIDER !== 'expo') return 0;
+  const tokens = await prisma.pushToken.findMany({
+    where: mobileTokensOfUserWhere(userId),
+    select: { deviceToken: true },
+  });
+  return deliver(tokens.map((t) => t.deviceToken), message);
+}
+
+async function deliver(deviceTokens: string[], message: PushMessage): Promise<number> {
+  const to = [...new Set(deviceTokens)].filter(isExpoToken);
   if (to.length === 0) return 0;
 
   const controller = new AbortController();

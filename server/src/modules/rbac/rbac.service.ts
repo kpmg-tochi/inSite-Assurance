@@ -6,6 +6,9 @@ import {
   CreateTenantRequest,
   CreateTenantUserRequest,
   DEFAULT_TENANT_ROLES,
+  MobileDeviceDto,
+  RoleOnboardingImpactDto,
+  RoleOnboardingMode,
   parseEvidenceRatingLabels,
   resolveRatingLabels,
   UpdateEvidenceRatingLabelsRequest,
@@ -27,6 +30,8 @@ import {
   WebJwtPayload,
 } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
+import { issueJoinCodesForRoleOnAllProjects } from '../projects/joinCodes.service';
+import { sendPushToMobileUser } from '../../integrations/push.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -78,6 +83,7 @@ function serializeRole(r: RoleWithDetail) {
     fieldPersonaType: r.fieldPersonaType as FieldPersonaType,
     assuranceWeight: r.assuranceWeight,
     requiresIdentityAssurance: r.requiresIdentityAssurance,
+    onboardingMode: r.onboardingMode as RoleOnboardingMode,
     isSystemDefault: r.isSystemDefault,
     permissions: r.rolePermissions.map((rp) => ({
       id: rp.permission.id,
@@ -300,7 +306,10 @@ export async function createRoleForTenant(webUser: WebJwtPayload, input: CreateR
         surface: input.surface,
         fieldPersonaType: input.fieldPersonaType,
         assuranceWeight: input.assuranceWeight,
-        requiresIdentityAssurance: input.requiresIdentityAssurance,
+        // Decision G: a pre-provisioned role never requires identity assurance.
+        requiresIdentityAssurance:
+          input.onboardingMode === 'PROVISIONED_ACCOUNT' ? false : input.requiresIdentityAssurance,
+        onboardingMode: input.onboardingMode,
         isSystemDefault: false,
       },
     });
@@ -365,21 +374,42 @@ export async function updateRoleForTenant(
         : null;
   await assertCodeSuffixAvailable(existing.tenantId, codeSuffix, roleId);
 
+  // Onboarding mode applies to the merged role, not just the fields sent.
+  const nextSurface = input.surface ?? existing.surface;
+  const nextMode = (input.onboardingMode ?? existing.onboardingMode) as RoleOnboardingMode;
+  const modeChanged = nextMode !== existing.onboardingMode;
+  if (nextMode === 'PROVISIONED_ACCOUNT' && nextSurface === 'WEB') {
+    throw new AppError('Only mobile roles can be pre-provisioned', 400, 'VALIDATION_ERROR');
+  }
+  if (nextMode === 'PROVISIONED_ACCOUNT' && input.requiresIdentityAssurance === true) {
+    throw new AppError(
+      'Pre-provisioned roles do not use identity assurance; the account is the identity',
+      400,
+      'VALIDATION_ERROR'
+    );
+  }
+
   const updated = await prisma.$transaction(async (tx) => {
     await tx.role.update({
       where: { id: roleId },
       data: {
+        ...(modeChanged ? { onboardingMode: nextMode } : {}),
+        ...(nextMode === 'PROVISIONED_ACCOUNT' ? { requiresIdentityAssurance: false } : {}),
         ...(input.name ? { name: input.name.trim() } : {}),
         ...(codeSuffix !== undefined ? { codeSuffix } : {}),
         ...(input.description !== undefined ? { description: input.description } : {}),
         ...(input.surface ? { surface: input.surface } : {}),
         ...(input.fieldPersonaType ? { fieldPersonaType: input.fieldPersonaType } : {}),
         ...(input.assuranceWeight !== undefined ? { assuranceWeight: input.assuranceWeight } : {}),
-        ...(input.requiresIdentityAssurance !== undefined
+        ...(input.requiresIdentityAssurance !== undefined && nextMode !== 'PROVISIONED_ACCOUNT'
           ? { requiresIdentityAssurance: input.requiresIdentityAssurance }
           : {}),
       },
     });
+
+    if (modeChanged) {
+      await applyOnboardingModeChange(tx, webUser, { ...existing, onboardingMode: nextMode });
+    }
 
     if (input.permissionIds) {
       await tx.rolePermission.deleteMany({ where: { roleId } });
@@ -485,11 +515,11 @@ export async function listUsersForTenant(tenantId: string) {
           },
         },
       },
+      mobileRole: { select: { id: true, name: true, surface: true, onboardingMode: true } },
       organization: true,
       projectAssignments: {
         include: {
           project: { select: { id: true, codePrefix: true, name: true } },
-          role: { select: { id: true, name: true } },
         },
       },
     },
@@ -515,6 +545,10 @@ export async function listUsersForTenant(tenantId: string) {
       organizationCategory: u.organization.category as OrganizationCategory,
       professionalLicenseType: u.professionalLicenseType,
       professionalLicenseNumber: u.professionalLicenseNumber,
+      phoneNumber: u.phoneNumber,
+      mobileRoleId: u.mobileRoleId,
+      mobileRoleName: u.mobileRole?.name ?? null,
+      hasMobileAccess: isProvisioned(u.mobileRole) || isProvisioned(u.role),
       hasAllTenantProjects:
         u.isPlatformSuperAdmin || permKeys.includes('projects:view_all_tenant'),
       projectAssignments: u.projectAssignments.map((a) => ({
@@ -522,8 +556,6 @@ export async function listUsersForTenant(tenantId: string) {
         projectId: a.projectId,
         projectCodePrefix: a.project.codePrefix,
         projectName: a.project.name,
-        roleId: a.roleId,
-        roleName: a.role?.name ?? null,
       })),
       createdAt: u.createdAt.toISOString(),
     };
@@ -562,6 +594,9 @@ export async function createUserInTenant(webUser: WebJwtPayload, input: CreateTe
     throw new AppError('Target role not found in tenant', 404, 'ROLE_NOT_FOUND');
   }
   assertCallerHoldsAll(webUser, await permissionKeysForRole(prisma, role.id), 'Assign role');
+  const mobileRole = input.mobileRoleId
+    ? await findAssignableMobileRole(webUser, tenantId, input.mobileRoleId, false)
+    : null;
 
   // Only projects in the caller's tenant can be assigned.
   const validProjects =
@@ -593,6 +628,8 @@ export async function createUserInTenant(webUser: WebJwtPayload, input: CreateTe
         mustChangePassword: true,
         fullName: input.fullName,
         roleId: role.id,
+        mobileRoleId: mobileRole?.id ?? null,
+        phoneNumber: input.phoneNumber ?? null,
         organizationId: org.id,
         professionalLicenseType: input.professionalLicenseType ?? null,
         professionalLicenseNumber: input.professionalLicenseNumber ?? null,
@@ -618,6 +655,7 @@ export async function createUserInTenant(webUser: WebJwtPayload, input: CreateTe
         email: createdUser.email,
         roleId: role.id,
         roleCode: role.code,
+        mobileRoleId: mobileRole?.id ?? null,
         projectIds: validProjects.map((p) => p.id),
       },
     });
@@ -639,7 +677,11 @@ export async function assignUserProjectsAndRole(
       id: userId,
       ...(webUser.isPlatformSuperAdmin ? {} : { tenantId: webUser.tenantId }),
     },
-    include: { projectAssignments: { select: { projectId: true } } },
+    include: {
+      projectAssignments: { select: { projectId: true } },
+      role: { select: { surface: true, onboardingMode: true } },
+      mobileRole: { select: { surface: true, onboardingMode: true } },
+    },
   });
 
   if (!targetUser) {
@@ -670,11 +712,20 @@ export async function assignUserProjectsAndRole(
     });
   }
 
+  const mobileRoleChanged =
+    input.mobileRoleId !== undefined && input.mobileRoleId !== targetUser.mobileRoleId;
+  const nextMobileRole =
+    mobileRoleChanged && input.mobileRoleId
+      ? await findAssignableMobileRole(webUser, targetUser.tenantId, input.mobileRoleId, targetUser.id === webUser.userId)
+      : null;
+  const phoneChanged =
+    input.phoneNumber !== undefined && (input.phoneNumber ?? null) !== targetUser.phoneNumber;
+
   const validProjects =
     input.projectIds.length > 0
       ? await prisma.project.findMany({
           where: { id: { in: input.projectIds }, tenantId: targetUser.tenantId },
-          select: { id: true },
+          select: { id: true, name: true, codePrefix: true },
         })
       : [];
   if (validProjects.length !== new Set(input.projectIds).size) {
@@ -686,11 +737,13 @@ export async function assignUserProjectsAndRole(
   const revokeSessions = Boolean(newRole) || deactivating;
 
   await prisma.$transaction(async (tx) => {
-    if (newRole || input.isActive !== undefined) {
+    if (newRole || input.isActive !== undefined || mobileRoleChanged || phoneChanged) {
       await tx.user.update({
         where: { id: userId },
         data: {
           ...(newRole ? { roleId: newRole.id } : {}),
+          ...(mobileRoleChanged ? { mobileRoleId: nextMobileRole?.id ?? null } : {}),
+          ...(phoneChanged ? { phoneNumber: input.phoneNumber ?? null } : {}),
           ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
           ...(revokeSessions ? { tokenVersion: { increment: 1 } } : {}),
         },
@@ -724,7 +777,7 @@ export async function assignUserProjectsAndRole(
         payload: { userId },
       });
     }
-    if (newRole || reactivating) {
+    if (newRole || reactivating || mobileRoleChanged || phoneChanged) {
       await recordAuditEvent(tx, {
         tenantId: targetUser.tenantId,
         projectId: null,
@@ -733,12 +786,19 @@ export async function assignUserProjectsAndRole(
         actorDisplayName: actorName(webUser),
         action: 'USER_UPDATED',
         summaryText: `Updated user ${targetUser.fullName}:${newRole ? ` role → "${newRole.name}"` : ''}${
-          reactivating ? ' reactivated' : ''
-        }.`,
+          mobileRoleChanged
+            ? nextMobileRole
+              ? ` mobile access → "${nextMobileRole.name}"`
+              : ' mobile role removed'
+            : ''
+        }${phoneChanged ? ' phone number changed' : ''}${reactivating ? ' reactivated' : ''}.`,
         payload: {
           userId,
           previousRoleId: targetUser.roleId,
           newRoleId: newRole?.id ?? targetUser.roleId,
+          previousMobileRoleId: targetUser.mobileRoleId,
+          newMobileRoleId: mobileRoleChanged ? nextMobileRole?.id ?? null : targetUser.mobileRoleId,
+          phoneChanged,
           reactivated: reactivating,
         },
       });
@@ -763,7 +823,218 @@ export async function assignUserProjectsAndRole(
 
   invalidateUserAuthCache(userId);
   const all = await listUsersForTenant(targetUser.tenantId);
-  return all.find((u) => u.id === userId)!;
+  const result = all.find((u) => u.id === userId)!;
+
+  // Tell the person's devices about projects they can now open (fire and forget).
+  const previousProjectIds = new Set(targetUser.projectAssignments.map((a) => a.projectId));
+  const added = validProjects.filter((p) => !previousProjectIds.has(p.id));
+  if (added.length > 0 && result.hasMobileAccess && result.isActive) {
+    for (const project of added) {
+      void sendPushToMobileUser(userId, {
+        title: 'New project',
+        body: `You've been added to ${project.name} (${project.codePrefix}).`,
+        data: { actionType: 'OPEN_PROJECT', projectId: project.id },
+      }).catch(() => undefined);
+    }
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Pre-provisioned mobile access (Phase 5)
+// ---------------------------------------------------------------------------
+
+function isProvisioned(role: { surface: string; onboardingMode: string } | null | undefined): boolean {
+  return Boolean(role && role.surface !== 'WEB' && role.onboardingMode === 'PROVISIONED_ACCOUNT');
+}
+
+/** A role that can be given as a user's mobile role: same tenant, mobile surface, provisioned. */
+async function findAssignableMobileRole(
+  webUser: WebJwtPayload,
+  tenantId: string,
+  mobileRoleId: string,
+  affectsSelf: boolean
+) {
+  const role = await prisma.role.findFirst({ where: { id: mobileRoleId, tenantId } });
+  if (!role) {
+    throw new AppError('Mobile role not found in this tenant', 404, 'ROLE_NOT_FOUND');
+  }
+  if (!isProvisioned(role)) {
+    throw new AppError(
+      `"${role.name}" is not a pre-provisioned mobile role. Set its onboarding to "Pre-provisioned account" first.`,
+      400,
+      'ROLE_NOT_PROVISIONED'
+    );
+  }
+  assertCallerHoldsAll(webUser, await permissionKeysForRole(prisma, role.id), 'Assign mobile role', {
+    affectsSelf,
+  });
+  return role;
+}
+
+/**
+ * What switching this role's onboarding mode will touch, for the confirmation dialog: active join
+ * codes (and their projects) that will be deactivated, and join-code sessions that keep working.
+ */
+export async function getRoleOnboardingImpact(
+  webUser: WebJwtPayload,
+  roleId: string
+): Promise<RoleOnboardingImpactDto> {
+  const role = await prisma.role.findFirst({
+    where: { id: roleId, ...(webUser.isPlatformSuperAdmin ? {} : { tenantId: webUser.tenantId }) },
+    select: { id: true },
+  });
+  if (!role) {
+    throw new AppError('Role not found for this tenant', 404, 'ROLE_NOT_FOUND');
+  }
+  const [codes, activeJoinCodeSessionCount] = await Promise.all([
+    prisma.projectJoinCode.findMany({
+      where: { roleId, isActive: true },
+      select: { project: { select: { id: true, codePrefix: true, name: true } } },
+    }),
+    prisma.fieldAgentSession.count({ where: { roleId, origin: 'JOIN_CODE', isActive: true } }),
+  ]);
+  const projects = new Map<string, { id: string; codePrefix: string; name: string }>();
+  for (const c of codes) projects.set(c.project.id, c.project);
+  return {
+    roleId,
+    activeJoinCodeCount: codes.length,
+    projects: [...projects.values()].sort((a, b) => a.codePrefix.localeCompare(b.codePrefix)),
+    activeJoinCodeSessionCount,
+  };
+}
+
+/**
+ * Inside the role-update transaction. To provisioned: deactivate every active join code for the
+ * role (existing join-code sessions keep working until revoked). Back to join codes: issue one code
+ * per project. Writes ROLE_ONBOARDING_MODE_CHANGED on the tenant chain.
+ */
+async function applyOnboardingModeChange(
+  tx: Tx,
+  webUser: WebJwtPayload,
+  role: { id: string; tenantId: string; name: string; code: string; codeSuffix: string | null; onboardingMode: string }
+) {
+  let deactivated: Array<{ id: string; code: string; projectId: string }> = [];
+  let issuedCodes: string[] = [];
+  if (role.onboardingMode === 'PROVISIONED_ACCOUNT') {
+    deactivated = await tx.projectJoinCode.findMany({
+      where: { roleId: role.id, isActive: true },
+      select: { id: true, code: true, projectId: true },
+    });
+    await tx.projectJoinCode.updateMany({
+      where: { id: { in: deactivated.map((c) => c.id) } },
+      data: { isActive: false },
+    });
+  } else {
+    const issued = await issueJoinCodesForRoleOnAllProjects(tx, role);
+    issuedCodes = issued.map((jc) => jc.code);
+  }
+
+  await recordAuditEvent(tx, {
+    tenantId: role.tenantId,
+    projectId: null,
+    actorType: 'WEB_USER',
+    actorId: webUser.userId,
+    actorDisplayName: actorName(webUser),
+    action: 'ROLE_ONBOARDING_MODE_CHANGED',
+    summaryText:
+      role.onboardingMode === 'PROVISIONED_ACCOUNT'
+        ? `Role "${role.name}" is now pre-provisioned: people sign in with an account. ${deactivated.length} join code(s) deactivated.`
+        : `Role "${role.name}" now uses join codes. ${issuedCodes.length} join code(s) issued.`,
+    payload: {
+      roleId: role.id,
+      onboardingMode: role.onboardingMode,
+      deactivatedJoinCodeIds: deactivated.map((c) => c.id),
+      deactivatedProjectIds: [...new Set(deactivated.map((c) => c.projectId))],
+      issuedJoinCodes: issuedCodes,
+    },
+  });
+}
+
+function serializeMobileDevice(
+  d: Prisma.MobileDeviceGetPayload<{
+    include: {
+      user: { select: { fullName: true; email: true; mobileRole: { select: { name: true } }; role: { select: { name: true; surface: true; onboardingMode: true } } } };
+      _count: { select: { fieldSessions: true } };
+    };
+  }>
+): MobileDeviceDto {
+  return {
+    id: d.id,
+    userId: d.userId,
+    userFullName: d.user.fullName,
+    userEmail: d.user.email,
+    mobileRoleName: d.user.mobileRole?.name ?? (isProvisioned(d.user.role) ? d.user.role.name : null),
+    deviceId: d.deviceId,
+    deviceModel: d.deviceModel,
+    deviceOs: d.deviceOs,
+    lastSeenAt: d.lastSeenAt ? d.lastSeenAt.toISOString() : null,
+    revokedAt: d.revokedAt ? d.revokedAt.toISOString() : null,
+    sessionCount: d._count.fieldSessions,
+    createdAt: d.createdAt.toISOString(),
+  };
+}
+
+const MOBILE_DEVICE_INCLUDE = {
+  user: {
+    select: {
+      fullName: true,
+      email: true,
+      mobileRole: { select: { name: true } },
+      role: { select: { name: true, surface: true, onboardingMode: true } },
+    },
+  },
+  _count: { select: { fieldSessions: true } },
+} as const;
+
+/** Tenant-level list of provisioned users' devices, most recently seen first. */
+export async function listMobileDevicesForTenant(tenantId: string): Promise<MobileDeviceDto[]> {
+  const rows = await prisma.mobileDevice.findMany({
+    where: { user: { tenantId } },
+    include: MOBILE_DEVICE_INCLUDE,
+    orderBy: [{ revokedAt: { sort: 'asc', nulls: 'first' } }, { lastSeenAt: { sort: 'desc', nulls: 'last' } }],
+  });
+  return rows.map(serializeMobileDevice);
+}
+
+/** Revoking a device blocks every project for that user on that device, through the auth loader. */
+export async function revokeMobileDevice(
+  webUser: WebJwtPayload,
+  deviceRowId: string,
+  reason?: string
+): Promise<MobileDeviceDto> {
+  const device = await prisma.mobileDevice.findFirst({
+    where: { id: deviceRowId, ...(webUser.isPlatformSuperAdmin ? {} : { user: { tenantId: webUser.tenantId } }) },
+    include: { user: { select: { id: true, tenantId: true, fullName: true, email: true } } },
+  });
+  if (!device) {
+    throw new AppError('Device not found', 404, 'DEVICE_NOT_FOUND');
+  }
+  if (!device.revokedAt) {
+    await prisma.$transaction(async (tx) => {
+      await tx.mobileDevice.update({
+        where: { id: device.id },
+        data: { revokedAt: new Date(), revokedByUserId: webUser.userId, revokeReason: reason ?? null },
+      });
+      // Push tokens registered from this device must stop receiving the user's notifications.
+      await tx.pushToken.deleteMany({ where: { userId: device.userId, devicePlatform: { not: 'WEB' }, mobileDeviceId: device.id } });
+      await recordAuditEvent(tx, {
+        tenantId: device.user.tenantId,
+        projectId: null,
+        actorType: 'WEB_USER',
+        actorId: webUser.userId,
+        actorDisplayName: actorName(webUser),
+        action: 'MOBILE_DEVICE_REVOKED',
+        summaryText: `Revoked mobile device ${device.deviceModel ?? device.deviceId} for ${device.user.fullName} <${device.user.email}>.${
+          reason ? ` Reason: ${reason}` : ''
+        }`,
+        payload: { mobileDeviceId: device.id, userId: device.userId, deviceId: device.deviceId, reason: reason ?? null },
+      });
+    });
+    invalidateUserAuthCache(device.userId);
+  }
+  const row = await prisma.mobileDevice.findUniqueOrThrow({ where: { id: device.id }, include: MOBILE_DEVICE_INCLUDE });
+  return serializeMobileDevice(row);
 }
 
 // ---------------------------------------------------------------------------

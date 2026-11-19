@@ -19,6 +19,19 @@ export const FieldPersonaTypeEnum = z.enum([
 ]);
 export type FieldPersonaType = z.infer<typeof FieldPersonaTypeEnum>;
 
+/**
+ * How people in a mobile-capable role get onto a project (Phase 5, decision G):
+ * - JOIN_CODE: a per-project, per-role join code creates an anonymous field session.
+ * - PROVISIONED_ACCOUNT: the person signs in with a tenant account and sees every assigned project.
+ *   Provisioned roles never require identity assurance and never get join codes.
+ */
+export const RoleOnboardingModeEnum = z.enum(['JOIN_CODE', 'PROVISIONED_ACCOUNT']);
+export type RoleOnboardingMode = z.infer<typeof RoleOnboardingModeEnum>;
+
+/** Where a field session came from: a join code, or a provisioned account signing in. */
+export const FieldSessionOriginEnum = z.enum(['JOIN_CODE', 'PROVISIONED_ACCOUNT']);
+export type FieldSessionOrigin = z.infer<typeof FieldSessionOriginEnum>;
+
 export const OrganizationCategoryEnum = z.enum([
   'ADVISORY_MONITOR',
   'FINANCIER_LENDER',
@@ -729,6 +742,9 @@ export const AuditActionTypeEnum = z.enum([
   'WORKDAY_REPORTS_RELEASED',
   'DEVICE_KEY_REGISTERED',
   'REPORT_QUERY_RESOLVED',
+  'MOBILE_USER_SIGNED_IN',
+  'MOBILE_DEVICE_REVOKED',
+  'ROLE_ONBOARDING_MODE_CHANGED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 

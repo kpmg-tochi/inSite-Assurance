@@ -1,140 +1,203 @@
-import React from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
+  RefreshControl,
+  Alert,
 } from "react-native";
 import Toast from "react-native-toast-message";
 import { StatusBar } from "expo-status-bar";
-import type {
-  DemoProjectWorkspaceDto,
-  FieldPersonaType,
-} from "@insite/shared";
-import {
-  EmptyStateCard,
-  GradientHeaderLayout,
-  InSiteLoader,
-} from "../components/common";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import type { DemoProjectWorkspaceDto, FieldProjectContext } from "@insite/shared";
+import { EmptyStateCard, GradientHeaderLayout, InSiteLoader } from "../components/common";
 import { BackButton, IconButton } from "../components/inputs/Buttons";
 import Avatar from "../components/common/Avatar";
+import Pill from "../components/common/Pill";
 import { useProfile } from "../context/ProfileContext";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/types";
 import { borderRadius, defaultColors } from "../styles/commonStyles";
-import Pill from "../components/common/Pill";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { sessionEndedFor } from "../config/sessionState";
+import { outboxCountsByProject } from "../storage/outbox/outboxStore";
+import { subscribeToSyncStatus } from "../storage/outbox/outboxProcessor";
 import { useDemoProjectsQuery } from "../queries/projects/useProjectsQueries";
 import { useDemoSkipVerificationMutation } from "../queries/auth/useAuthMutations";
 import { formatMobileErrorMessage } from "../utils/errorFormatter";
 
+type Counts = Map<string, { pending: number; dead: number }>;
 
+/**
+ * Every project on this device (Phase 5): projects assigned to the signed-in account and projects
+ * joined with a code. Tap to switch; switching never discards queued work, and each project's
+ * unsent items are shown.
+ */
 export const ProfileAndProjectsScreen = () => {
-  // Navigation
-  const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-
-  // Profile context
-  const { profile, isVerified, updateProfile, clearSession } = useProfile();
-
-  // Hooks
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const {
-    data: projects = [],
-    isLoading: loadingProjects,
-    error: projectsErrorObj,
-    refetch: loadProjects,
-  } = useDemoProjectsQuery((process.env.EXPO_PUBLIC_DEMO_MODE === "true"));
-  const switchWorkspaceMutation = useDemoSkipVerificationMutation();
+    account,
+    projects,
+    activeContext,
+    activeProjectId,
+    displayName,
+    phoneNumber,
+    switchProject,
+    refreshProjects,
+    signOut,
+    addJoinSession,
+    state,
+  } = useProfile();
 
-  const projectsError = projectsErrorObj
-    ? formatMobileErrorMessage(projectsErrorObj)
-    : null;
+  const [counts, setCounts] = useState<Counts>(new Map());
+  const [refreshing, setRefreshing] = useState(false);
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
 
-  // Settings
-  const handleOpenSettings = () => navigation.navigate("SettingsModal");
+  const loadCounts = useCallback(() => {
+    outboxCountsByProject().then(setCounts).catch(() => undefined);
+  }, []);
 
-  // Functions
-  const onClose = () => navigation.goBack();
+  useFocusEffect(loadCounts);
+  // Counts follow the outbox as it sends.
+  useEffect(() => subscribeToSyncStatus(() => loadCounts()), [loadCounts]);
 
-  const onSwitchProject = async (project: DemoProjectWorkspaceDto) => {
-    const preferredRoleCode = profile?.activeRoleCode;
-    const preferredPersona =
-      profile?.activeFieldPersonaType || "CONTRACTOR_EXECUTOR";
-    const targetCode =
-      (preferredRoleCode
-        ? project.joinCodes.find((jc) => jc.roleCode === preferredRoleCode)
-        : undefined) ||
-      project.joinCodes.find((jc) => jc.fieldPersonaType === preferredPersona) ||
-      project.joinCodes.find(
-        (jc) => jc.fieldPersonaType === "CONTRACTOR_EXECUTOR",
-      ) ||
-      project.joinCodes[0];
-
-    if (!targetCode) {
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshProjects();
+    } catch (err) {
       Toast.show({
         type: "error",
-        props: {
-          title: "No Active Join Code",
-          message: `Project ${project.codePrefix} does not have an active join code configured.`,
-        },
+        props: { title: "Could not refresh", message: formatMobileErrorMessage(err) },
+      });
+    } finally {
+      loadCounts();
+      setRefreshing(false);
+    }
+  };
+
+  const openProject = async (project: FieldProjectContext) => {
+    if (switchingId) return;
+    setSwitchingId(project.projectId);
+    try {
+      if (project.projectId !== activeProjectId) await switchProject(project.projectId);
+      const needsAssurance =
+        project.requiresIdentityAssurance &&
+        (project.assuranceStatus === "NOT_SUBMITTED" || project.assuranceStatus === "REJECTED");
+      navigation.reset({ index: 0, routes: [{ name: needsAssurance ? "AssuranceWizard" : "WbsInbox" }] });
+    } finally {
+      setSwitchingId(null);
+    }
+  };
+
+  const totalPending = [...counts.values()].reduce((n, c) => n + c.pending + c.dead, 0);
+
+  const onSignOut = () => {
+    const provisionedPending = projects
+      .filter((p) => p.origin === "PROVISIONED_ACCOUNT")
+      .reduce((n, p) => n + (counts.get(p.projectId)?.pending ?? 0) + (counts.get(p.projectId)?.dead ?? 0), 0);
+    const doSignOut = async () => {
+      await signOut();
+      const remaining = state.joinSessions.length;
+      navigation.reset({ index: 0, routes: [{ name: remaining > 0 ? "Projects" : "Landing" }] });
+    };
+    Alert.alert(
+      "Sign out?",
+      provisionedPending > 0
+        ? `${provisionedPending} item(s) for your account's projects have not been sent. They stay on this phone and are sent after you sign in again, but nothing is sent while you are signed out.`
+        : "You can sign in again at any time.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign out", style: "destructive", onPress: () => void doSignOut() },
+      ]
+    );
+  };
+
+  // ---- Demo workspaces (demo builds only): adds a join session for a seeded project. ----
+  // Inline so non-demo builds compile the demo section out (see config/demoMode.ts).
+  const demo = process.env.EXPO_PUBLIC_DEMO_MODE === "true";
+  const {
+    data: demoProjects = [],
+    isLoading: loadingDemo,
+    error: demoErrorObj,
+    refetch: loadDemo,
+  } = useDemoProjectsQuery(demo);
+  const demoMutation = useDemoSkipVerificationMutation();
+  const onDemoJoin = async (project: DemoProjectWorkspaceDto) => {
+    const code =
+      project.joinCodes.find((jc) => jc.fieldPersonaType === "CONTRACTOR_EXECUTOR") ?? project.joinCodes[0];
+    if (!code) {
+      Toast.show({
+        type: "error",
+        props: { title: "No join code", message: `${project.codePrefix} has no active join code.` },
       });
       return;
     }
-
     try {
-      const result = await switchWorkspaceMutation.mutateAsync({
-        joinCode: targetCode.code,
-        agentFullName: profile?.fullName || undefined,
-        agentPhoneNumber: profile?.phoneNumber || undefined,
-        deviceId: profile?.hardwareDeviceId || undefined,
-      });
-
-      await updateProfile({
-        activeProjectId: result.sessionProfile.projectId,
-        activeProjectCode: result.sessionProfile.joinCodeUsed,
-        activeSessionId: result.sessionProfile.sessionId,
-        activeSessionToken: result.accessToken,
-        activeRoleId: result.sessionProfile.roleId,
-        activeRoleCode: result.sessionProfile.roleCode,
-        activeRoleName: result.sessionProfile.roleName,
-        activeFieldPersonaType: result.sessionProfile.fieldPersonaType,
-        activeAssuranceWeight: result.sessionProfile.assuranceWeight,
-        activeRequiresIdentityAssurance:
-          result.sessionProfile.requiresIdentityAssurance,
-        activePermissions: result.sessionProfile.permissions || [],
-        assuranceStatus: result.sessionProfile.assuranceStatus || "APPROVED",
-      });
-
-      Toast.show({
-        type: "success",
-        props: {
-          title: "Workspace Switched",
-          message: `Active project set to ${project.codePrefix} (${project.name}).`,
+      const result = await demoMutation.mutateAsync({
+        payload: {
+          joinCode: code.code,
+          agentFullName: displayName || undefined,
+          agentPhoneNumber: phoneNumber || undefined,
         },
       });
-    } catch (err: any) {
-      Toast.show({
-        type: "error",
-        props: {
-          title: "Switch Failed",
-          message:
-            err?.message || "Could not connect to server to switch workspace.",
-        },
-      });
+      await addJoinSession(result);
+      navigation.reset({ index: 0, routes: [{ name: "WbsInbox" }] });
+    } catch (err) {
+      Toast.show({ type: "error", props: { title: "Demo join failed", message: formatMobileErrorMessage(err) } });
     }
   };
 
-  const onJoinNewProject = async () => {
-    await clearSession();
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "EnterCode" }],
-    });
+  const canGoBack = navigation.canGoBack();
+  const roleLine = activeContext
+    ? `${activeContext.roleName} · weight ${activeContext.assuranceWeight.toFixed(2)}`
+    : account
+      ? `${account.profile.mobileRole.name} · weight ${account.profile.mobileRole.assuranceWeight.toFixed(2)}`
+      : "";
+
+  const renderProject = (project: FieldProjectContext) => {
+    const isActive = project.projectId === activeProjectId;
+    const c = counts.get(project.projectId);
+    const unsent = (c?.pending ?? 0) + (c?.dead ?? 0);
+    const ended = sessionEndedFor(project.projectId);
+    return (
+      <TouchableOpacity
+        key={project.projectId}
+        style={[styles.projectCard, isActive && styles.projectCardActive, switchingId === project.projectId && { opacity: 0.7 }]}
+        onPress={() => void openProject(project)}
+        disabled={Boolean(switchingId)}
+        activeOpacity={0.75}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${project.projectName}`}
+      >
+        <View style={styles.projectTop}>
+          <Text style={styles.projectCode}>{project.projectCodePrefix}</Text>
+          <Pill
+            variant={ended ? "negative" : isActive ? "positive" : "gray"}
+            text={ended ? "Access ended" : isActive ? "Open" : switchingId === project.projectId ? "Opening..." : "Open"}
+          />
+        </View>
+        <Text style={styles.projectName}>{project.projectName}</Text>
+        <Text style={styles.projectMeta}>
+          {project.roleName} · {project.origin === "PROVISIONED_ACCOUNT" ? "Your account" : "Joined with code"}
+          {project.origin === "JOIN_CODE" && project.requiresIdentityAssurance && project.assuranceStatus !== "APPROVED"
+            ? ` · ID ${project.assuranceStatus === "PENDING_APPROVAL" ? "under review" : "needed"}`
+            : ""}
+        </Text>
+        {unsent > 0 && (
+          <Text style={[styles.projectMeta, c?.dead ? styles.deadText : styles.pendingText]}>
+            {unsent} item(s) not sent yet{c?.dead ? ` · ${c.dead} could not be sent` : ""}
+          </Text>
+        )}
+      </TouchableOpacity>
+    );
   };
 
+  const accountProjects = projects.filter((p) => p.origin === "PROVISIONED_ACCOUNT");
+  const codeProjects = projects.filter((p) => p.origin === "JOIN_CODE");
 
   return (
     <>
@@ -143,151 +206,109 @@ export const ProfileAndProjectsScreen = () => {
       </View>
 
       <GradientHeaderLayout
-        leftAction={<BackButton onPress={onClose} />}
-        rightAction={
-          <IconButton icon="cog-outline" onPress={handleOpenSettings} />
-        }
+        leftAction={canGoBack ? <BackButton onPress={() => navigation.goBack()} /> : undefined}
+        rightAction={<IconButton icon="cog-outline" onPress={() => navigation.navigate("SettingsModal")} />}
         contentContainerStyle={styles.body}
         scrollable={false}
       >
         <StatusBar style="light" />
 
-        {/* User */}
         <View style={styles.user}>
-          <View style={{ marginBottom: 8 }}>
-            <Pill
-              variant={isVerified ? "positive" : "warning"}
-              text={isVerified ? "Assurance Verified" : "Verification Pending"}
-            />
-          </View>
-          <Text style={styles.userName}>{profile?.fullName}</Text>
-          <Text style={styles.userRole}>{profile?.roleTitle}</Text>
-          <Text style={styles.userPhone}>{profile?.phoneNumber}</Text>
+          <Text style={styles.userName}>{displayName}</Text>
+          {/* The role and weight come from the server, never from the device. */}
+          {roleLine ? <Text style={styles.userRole}>{roleLine}</Text> : null}
+          {account ? <Text style={styles.userPhone}>{account.profile.email}</Text> : null}
+          {phoneNumber ? <Text style={styles.userPhone}>{phoneNumber}</Text> : null}
         </View>
 
         <View style={styles.container}>
           <ScrollView
-            contentContainerStyle={{
-              ...styles.body,
-              paddingBottom: insets.bottom,
-            }}
+            contentContainerStyle={{ ...styles.body, paddingBottom: insets.bottom + 16 }}
             showsVerticalScrollIndicator={false}
+            refreshControl={account ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined}
           >
-            {/* Active Project Switcher */}
+            {totalPending > 0 && (
+              <Text style={styles.pendingBanner}>
+                {totalPending} item(s) waiting to be sent across your projects. Switching project does not affect them.
+              </Text>
+            )}
+
+            {account && (
+              <View style={styles.section}>
+                <View>
+                  <Text style={styles.sectionTitle}>Your projects</Text>
+                  <Text style={styles.sectionSubtitle}>Assigned to {account.profile.email}. Pull down to refresh.</Text>
+                </View>
+                {accountProjects.length === 0 ? (
+                  <EmptyStateCard
+                    title="No projects assigned"
+                    description="Ask your administrator to assign you to a project, then pull down to refresh."
+                    actionLabel="Refresh"
+                    onAction={onRefresh}
+                  />
+                ) : (
+                  accountProjects.map(renderProject)
+                )}
+              </View>
+            )}
+
             <View style={styles.section}>
               <View>
-                <Text style={styles.sectionTitle}>Workspaces</Text>
-                <Text style={styles.sectionSubtitle}>
-                  {(process.env.EXPO_PUBLIC_DEMO_MODE === "true")
-                    ? "Switch active project or enter a join code for an additional workspace."
-                    : "Active project workspace connected to this device."}
-                </Text>
+                <Text style={styles.sectionTitle}>Joined with a code</Text>
+                <Text style={styles.sectionSubtitle}>Projects you joined with a code from the project team.</Text>
               </View>
-
-              {!(process.env.EXPO_PUBLIC_DEMO_MODE === "true") ? (
-                profile?.activeProjectCode ? (
-                  <View style={[styles.projectCard, styles.projectCardActive]}>
-                    <View style={styles.projectTop}>
-                      <Text style={styles.projectCode}>
-                        {profile.activeProjectCode}
-                      </Text>
-                      <Pill variant="positive" text="Active" />
-                    </View>
-                    <Text style={styles.projectName}>Connected Site Session</Text>
-                    <Text style={styles.projectMeta}>
-                      Role: {profile.activeRoleName || "Field Agent"}
-                    </Text>
-                  </View>
-                ) : null
-              ) : loadingProjects ? (
-                <InSiteLoader
-                  size="sm"
-                  label="Loading workspaces from server..."
-                />
-              ) : projectsError && projects.length === 0 ? (
-                <EmptyStateCard
-                  title="Unable to Load Workspaces"
-                  description={projectsError}
-                  actionLabel="Retry"
-                  onAction={loadProjects}
-                />
-              ) : projects.length === 0 ? (
-                <EmptyStateCard
-                  title="No Projects Seeded"
-                  description="No active infrastructure projects were found in the database."
-                  actionLabel="Refresh"
-                  onAction={loadProjects}
-                />
-              ) : (
-                projects.map((project) => {
-                  const isActive =
-                    profile?.activeProjectId === project.id ||
-                    (Boolean(profile?.activeProjectCode) &&
-                      profile?.activeProjectCode?.startsWith(
-                        project.codePrefix,
-                      ));
-                  const isSwitching =
-                    switchWorkspaceMutation.isPending &&
-                    switchWorkspaceMutation.variables?.joinCode?.startsWith(
-                      project.codePrefix,
-                    );
-
-                  return (
-                    <TouchableOpacity
-                      key={project.id}
-                      style={[
-                        styles.projectCard,
-                        isActive && styles.projectCardActive,
-                        isSwitching && { opacity: 0.7 },
-                      ]}
-                      onPress={() => {
-                        if (!isActive && !switchWorkspaceMutation.isPending) {
-                          onSwitchProject(project);
-                        }
-                      }}
-                      disabled={switchWorkspaceMutation.isPending}
-                      activeOpacity={0.75}
-                    >
-                      <View style={styles.projectTop}>
-                        <Text style={styles.projectCode}>
-                          {project.codePrefix}
-                        </Text>
-                        <Pill
-                          variant={isActive ? "positive" : "gray"}
-                          text={
-                            isActive
-                              ? "Active"
-                              : isSwitching
-                                ? "Switching..."
-                                : "Switch"
-                          }
-                        />
-                      </View>
-                      <Text style={styles.projectName}>{project.name}</Text>
-                      <Text style={styles.projectMeta}>
-                        {project.stateLocation}
-                        {project.lgaLocation
-                          ? ` · ${project.lgaLocation}`
-                          : ""}{" "}
-                        ·{" "}
-                        {project.geofenceMode === "LINEAR_CORRIDOR"
-                          ? "Linear Corridor"
-                          : "Radial Geofence"}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-
+              {codeProjects.map(renderProject)}
               <TouchableOpacity
                 style={styles.joinNewButton}
-                onPress={onJoinNewProject}
+                onPress={() => navigation.navigate(state.persona || account ? "EnterCode" : "Onboarding")}
                 activeOpacity={0.8}
               >
-                <Text style={styles.joinNewButtonText}>+ Add new project</Text>
+                <Text style={styles.joinNewButtonText}>+ Join another project with a code</Text>
               </TouchableOpacity>
             </View>
 
+            {demo && (
+              <View style={styles.section}>
+                <Pill variant="warning" text="Demo mode: verification is skipped" />
+                <Text style={styles.sectionTitle}>Demo workspaces</Text>
+                {loadingDemo ? (
+                  <InSiteLoader size="sm" label="Loading demo workspaces..." />
+                ) : demoErrorObj && demoProjects.length === 0 ? (
+                  <EmptyStateCard
+                    title="Unable to load demo workspaces"
+                    description={formatMobileErrorMessage(demoErrorObj)}
+                    actionLabel="Retry"
+                    onAction={loadDemo}
+                  />
+                ) : (
+                  demoProjects.map((p) => (
+                    <TouchableOpacity
+                      key={p.id}
+                      style={styles.projectCard}
+                      onPress={() => void onDemoJoin(p)}
+                      disabled={demoMutation.isPending}
+                    >
+                      <Text style={styles.projectCode}>{p.codePrefix}</Text>
+                      <Text style={styles.projectName}>{p.name}</Text>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+            )}
+
+            {account ? (
+              <TouchableOpacity style={styles.signOutButton} onPress={onSignOut} activeOpacity={0.8}>
+                <Text style={styles.signOutText}>Sign out of {account.profile.email}</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.joinNewButton}
+                onPress={() => navigation.navigate("SignIn")}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.joinNewButtonText}>Sign in with an account</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </View>
       </GradientHeaderLayout>
@@ -296,13 +317,9 @@ export const ProfileAndProjectsScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    height: "100%",
-  },
+  container: { flex: 1, height: "100%" },
   user: {
     alignItems: "center",
-    textAlign: "center",
     justifyContent: "center",
     marginTop: 44,
     gap: 2,
@@ -316,26 +333,10 @@ const styles = StyleSheet.create({
     transform: [{ translateY: "-50%" }],
     zIndex: 200,
   },
-  userName: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: defaultColors.primary,
-  },
-  userRole: {
-    fontSize: 12,
-    color: defaultColors.primaryText,
-    marginTop: 2,
-  },
-  userPhone: {
-    fontSize: 11,
-    color: defaultColors.secondaryText,
-    marginTop: 2,
-  },
-  body: {
-    paddingTop: 16,
-    gap: 16,
-    backgroundColor: "#fff",
-  },
+  userName: { fontSize: 16, fontWeight: "800", color: defaultColors.primary },
+  userRole: { fontSize: 12, color: defaultColors.primaryText, marginTop: 2 },
+  userPhone: { fontSize: 11, color: defaultColors.secondaryText, marginTop: 2 },
+  body: { paddingTop: 16, gap: 16, backgroundColor: "#fff" },
   section: {
     padding: 12,
     borderRadius: borderRadius.medium,
@@ -344,14 +345,14 @@ const styles = StyleSheet.create({
     borderColor: defaultColors.border,
     gap: 10,
   },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-  sectionSubtitle: {
-    fontSize: 11,
-    color: "#64748B",
+  sectionTitle: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
+  sectionSubtitle: { fontSize: 11, color: "#64748B" },
+  pendingBanner: {
+    fontSize: 12,
+    color: "#92400E",
+    backgroundColor: "#FEF3C7",
+    borderRadius: 10,
+    padding: 10,
   },
   projectCard: {
     backgroundColor: "#FFFFFF",
@@ -361,29 +362,13 @@ const styles = StyleSheet.create({
     borderColor: "#E2E8F0",
     gap: 4,
   },
-  projectCardActive: {
-    borderColor: "#00338D",
-    borderWidth: 1.5,
-  },
-  projectTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  projectCode: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#0C233C",
-  },
-  projectName: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#334155",
-  },
-  projectMeta: {
-    fontSize: 11,
-    color: "#64748B",
-  },
+  projectCardActive: { borderColor: "#00338D", borderWidth: 1.5 },
+  projectTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  projectCode: { fontSize: 13, fontWeight: "800", color: "#0C233C" },
+  projectName: { fontSize: 12, fontWeight: "700", color: "#334155" },
+  projectMeta: { fontSize: 11, color: "#64748B" },
+  pendingText: { color: "#B45309", fontWeight: "700" },
+  deadText: { color: "#DC2626", fontWeight: "700" },
   joinNewButton: {
     paddingVertical: 12,
     borderRadius: 12,
@@ -393,37 +378,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FFFFFF",
   },
-  joinNewButtonText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#00338D",
-  },
-  personaCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    padding: 14,
+  joinNewButtonText: { fontSize: 12, fontWeight: "700", color: "#00338D" },
+  signOutButton: {
+    paddingVertical: 12,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
-  },
-  personaRow: {
-    flexDirection: "row",
+    borderColor: "#FECACA",
     alignItems: "center",
-    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
   },
-  personaName: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#0F172A",
-  },
-  personaDesc: {
-    fontSize: 11,
-    color: "#64748B",
-    marginTop: 2,
-    maxWidth: 260,
-  },
-  personaArrow: {
-    fontSize: 16,
-    color: "#00338D",
-    fontWeight: "700",
-  },
+  signOutText: { fontSize: 12, fontWeight: "700", color: "#DC2626" },
 });

@@ -3,6 +3,7 @@ import {
   ChangePasswordRequestSchema,
   DemoSkipVerificationRequestSchema,
   JoinProjectMobileRequestSchema,
+  MobileLoginRequestSchema,
   RegisterDeviceKeyRequestSchema,
   RegisterPushTokenSchema,
   resolveRatingLabels,
@@ -15,6 +16,7 @@ import {
   optionalAuth,
   requireAnyAuth,
   requireFieldSession,
+  requireMobileUser,
   requireWebAuth,
 } from "../../middleware/auth.middleware";
 import {
@@ -26,16 +28,22 @@ import { prisma } from "../../config/prisma";
 import { env } from "../../config/env";
 import { AppError } from "../../middleware/error.middleware";
 import {
+  changeMobileUserPassword,
   changeWebUserPassword,
   demoSkipVerificationMobile,
+  getMobileAccountAndProjects,
+  getProjectBaselinePack,
   getWebUserProfileById,
   joinProjectMobile,
+  loginMobileUser,
   loginWebUser,
+  logoutMobileUser,
   registerDeviceKey,
   registerWebUser,
 } from "./auth.service";
 import { recordAuditEvent } from "../audit/audit.service";
 import { createMobileNotification } from "../notifications/notifications.service";
+import { markNotificationsActioned } from "../notifications/notificationActions";
 import { assertProjectObjectKey } from "../../integrations/storage.service";
 
 const router = Router();
@@ -91,6 +99,123 @@ router.post(
   },
 );
 
+// ---------------------------------------------------------------------------
+// Provisioned mobile accounts (Phase 5). Web tokens are refused on these routes and mobile-account
+// tokens are refused on web routes (each guard checks the token type).
+// ---------------------------------------------------------------------------
+
+router.post(
+  "/mobile/login",
+  loginRateLimit,
+  validateBody(MobileLoginRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await loginMobileUser(req.body);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.post(
+  "/mobile/change-password",
+  loginRateLimit,
+  requireMobileUser,
+  validateBody(ChangePasswordRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await changeMobileUserPassword(req.mobileUser!, req.body);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.post(
+  "/mobile/logout",
+  requireMobileUser,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await logoutMobileUser(req.mobileUser!);
+      res.json({ success: true, data: { signedOut: true } });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/** Visible projects with the effective mobile role. NO_MOBILE_ACCESS if the role was taken away. */
+router.get(
+  "/mobile/projects",
+  requireMobileUser,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { projects } = await getMobileAccountAndProjects(
+        req.mobileUser!.userId,
+        req.mobileUser!.deviceRowId,
+      );
+      res.json({ success: true, data: projects });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/**
+ * The offline baseline pack for one project. Open to provisioned accounts that can see the project
+ * and to join-code sessions bound to it (the field guard checks both).
+ */
+router.get(
+  "/mobile/projects/:projectId/baseline",
+  requireFieldSession,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (req.fieldAgent!.projectId !== req.params.projectId) {
+        throw new AppError("Field Agent session is bound to a different project", 403, "PROJECT_MISMATCH");
+      }
+      const pack = await getProjectBaselinePack(req.fieldAgent!.projectId);
+      res.json({ success: true, data: pack });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/**
+ * The caller's field session on one project (created on first use for a provisioned account).
+ * The app needs the id to recognise its own chat messages, and shows the server role and weight.
+ */
+router.get(
+  "/mobile/projects/:projectId/session",
+  requireFieldSession,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const fa = req.fieldAgent!;
+      if (fa.projectId !== req.params.projectId) {
+        throw new AppError("Field Agent session is bound to a different project", 403, "PROJECT_MISMATCH");
+      }
+      res.json({
+        success: true,
+        data: {
+          sessionId: fa.sessionId,
+          projectId: fa.projectId,
+          origin: fa.origin,
+          roleId: fa.roleId,
+          roleCode: fa.roleCode,
+          roleName: fa.roleName,
+          fieldPersonaType: fa.fieldPersonaType,
+          assuranceWeight: fa.assuranceWeight,
+          permissions: fa.permissions,
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
 router.post(
   "/join-project",
   joinProjectRateLimit,
@@ -122,6 +247,15 @@ router.get(
             user: userProfile,
           },
         });
+        return;
+      }
+
+      if (req.mobileUser) {
+        const { account, projects } = await getMobileAccountAndProjects(
+          req.mobileUser.userId,
+          req.mobileUser.deviceRowId,
+        );
+        res.json({ success: true, data: { actorType: "MOBILE_USER", account, projects } });
         return;
       }
 
@@ -234,23 +368,33 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { deviceToken, devicePlatform, appVersion } = req.body;
+      // A provisioned account registers once for all its projects (Phase 5).
       const sessionId = req.fieldAgent?.sessionId ?? null;
-      const userId = req.webUser?.userId ?? null;
+      const userId = req.webUser?.userId ?? req.mobileUser?.userId ?? null;
+      const mobileDeviceId = req.mobileUser?.deviceRowId ?? null;
+      const ownerKey = sessionId
+        ? `session:${sessionId}`
+        : req.mobileUser
+          ? `user:${req.mobileUser.userId}`
+          : `web:${userId}`;
 
       const pushToken = await prisma.pushToken.upsert({
-        where: { deviceToken },
+        where: { deviceToken_ownerKey: { deviceToken, ownerKey } },
         create: {
           deviceToken,
+          ownerKey,
           devicePlatform,
           appVersion: appVersion ?? null,
           sessionId,
           userId,
+          mobileDeviceId,
         },
         update: {
           devicePlatform,
           appVersion: appVersion ?? null,
           sessionId,
           userId,
+          mobileDeviceId,
           updatedAt: new Date(),
         },
       });
@@ -326,6 +470,13 @@ router.post(
           captureMethod: body.selfieSet.captureMethod,
         },
       });
+
+      await markNotificationsActioned(
+        prisma,
+        updated.projectId,
+        { kind: "IDENTITY_RESUBMITTED", fieldSessionId: sessionId },
+        { sessionId, name: req.fieldAgent!.agentFullName },
+      );
 
       await createMobileNotification(prisma, {
         projectId: updated.projectId,

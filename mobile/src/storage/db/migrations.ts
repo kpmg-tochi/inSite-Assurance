@@ -185,6 +185,16 @@ CREATE TABLE project_baseline (
 );
 `,
   },
+  {
+    // Phase 5 Step 8: which session queued each item, so items from a session that has ended can be
+    // held after the person rejoins; and the link from a re-submitted capture to its original.
+    version: 2,
+    sql: `
+ALTER TABLE outbox ADD COLUMN session_key TEXT;
+ALTER TABLE captures ADD COLUMN resubmitted_from TEXT;
+ALTER TABLE captures ADD COLUMN superseded_by TEXT;
+`,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

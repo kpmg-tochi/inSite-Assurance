@@ -5,6 +5,7 @@ import {
   CaptureListItemDto,
   canonicalCaptureString,
   RegisterCaptureRequest,
+  RESUBMITTED_AFTER_SESSION_END_FLAG,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -130,8 +131,11 @@ export async function registerCapture(params: {
     }),
   });
 
+  const resubmission = await resolveResubmission(input, fieldAgent, projectId);
+
   const capturedAt = new Date(input.capturedAt);
   const screening = await screenCapture(prisma, {
+    allowedDuplicateOf: resubmission?.originalEvidenceLogId ? [resubmission.originalEvidenceLogId] : [],
     tenantId: project.tenantId,
     fieldSessionId: fieldAgent.sessionId,
     mediaType: input.mediaType,
@@ -147,6 +151,9 @@ export async function registerCapture(params: {
   });
   if (perceptualHash === null && input.mediaType === 'SITE_PHOTO') {
     screening.integrityFlags.push('IMAGE_NOT_DECODABLE');
+  }
+  if (resubmission) {
+    screening.integrityFlags.push(RESUBMITTED_AFTER_SESSION_END_FLAG);
   }
 
   try {
@@ -186,6 +193,8 @@ export async function registerCapture(params: {
           integrityFlags: screening.integrityFlags as unknown as Prisma.InputJsonValue,
           transcriptionStatus: input.mediaType === 'VOICE_NOTE' ? 'PENDING' : 'NOT_APPLICABLE',
           capturedAtDevice: capturedAt,
+          resubmittedFromClientCaptureId: resubmission?.originalClientCaptureId ?? null,
+          resubmittedFromEvidenceLogId: resubmission?.originalEvidenceLogId ?? null,
           mediaAttachments: {
             create: {
               tenantId: project.tenantId,
@@ -220,6 +229,12 @@ export async function registerCapture(params: {
           signatureVerified: signature.verified,
           isWithinGeofence: geofence.isWithinGeofence,
           duplicateOfCaptureIds: screening.duplicateOf.map((d) => d.evidenceLogId),
+          ...(resubmission
+            ? {
+                resubmittedFromClientCaptureId: resubmission.originalClientCaptureId,
+                resubmittedFromEvidenceLogId: resubmission.originalEvidenceLogId,
+              }
+            : {}),
         },
       });
 
@@ -234,6 +249,47 @@ export async function registerCapture(params: {
     }
     throw error;
   }
+}
+
+/**
+ * Phase 5 Step 8: checks a re-submission. The original may never have reached the server (it was
+ * still queued when the session ended); if it did, it must be on this project, under a different
+ * session that has ended, captured on this same device. The re-submission is recorded under the
+ * caller's session and never merged into the original's.
+ */
+async function resolveResubmission(
+  input: RegisterCaptureRequest,
+  fieldAgent: FieldAgentJwtPayload,
+  projectId: string
+): Promise<{ originalClientCaptureId: string; originalEvidenceLogId: string | null } | null> {
+  const originalClientCaptureId = input.resubmittedFromClientCaptureId;
+  if (!originalClientCaptureId) return null;
+  if (originalClientCaptureId === input.clientCaptureId) {
+    throw new AppError('A capture cannot re-submit itself', 422, 'INVALID_RESUBMISSION');
+  }
+  const original = await prisma.fieldEvidenceLog.findUnique({
+    where: { clientCaptureId: originalClientCaptureId },
+    select: {
+      id: true,
+      projectId: true,
+      fieldSessionId: true,
+      fieldSession: { select: { isActive: true, deviceId: true } },
+    },
+  });
+  if (!original) return { originalClientCaptureId, originalEvidenceLogId: null };
+  if (
+    original.projectId !== projectId ||
+    original.fieldSessionId === fieldAgent.sessionId ||
+    original.fieldSession.isActive ||
+    original.fieldSession.deviceId !== fieldAgent.deviceId
+  ) {
+    throw new AppError(
+      'Only a capture from an ended session on this device and project can be re-submitted',
+      422,
+      'INVALID_RESUBMISSION'
+    );
+  }
+  return { originalClientCaptureId, originalEvidenceLogId: original.id };
 }
 
 async function findCaptureForReplay(clientCaptureId: string, sessionId: string): Promise<CaptureDto | null> {

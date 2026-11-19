@@ -1,32 +1,59 @@
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
-import type { FieldPersonaType } from '@insite/shared';
+import type {
+  FieldProjectContext,
+  MobileAccountProfile,
+} from '@insite/shared';
 
-export interface LocalUserProfile {
+/**
+ * Everything that identifies this device's user, kept in the OS keystore (Phase 5).
+ *
+ * - `persona`: name and phone typed by someone who joins with a project code (no account).
+ * - `account`: a pre-provisioned account signed in on this device, with its token.
+ * - `joinSessions`: one per project joined with a code, each with its own token.
+ * - `projects`: the provisioned projects last listed by the server (offline cache).
+ * - `activeProjectId`: the project the app is showing.
+ *
+ * The state is always written as a whole object, so a field can be cleared (the v2 store merged
+ * with `??` and could never clear one).
+ */
+
+export interface LocalPersona {
   fullName: string;
   phoneNumber: string;
-  roleTitle?: string;
-  avatarBase64?: string | null;
-  hardwareDeviceId: string;
-  deviceKeyFingerprint: string;
-  activeProjectId?: string | null;
-  activeProjectCode?: string | null;
-  activeSessionId?: string | null;
-  activeSessionToken?: string | null;
-  activeRoleId?: string | null;
-  activeRoleCode?: string | null;
-  activeRoleName?: string | null;
-  activeFieldPersonaType?: FieldPersonaType | null;
-  activeAssuranceWeight?: number | null;
-  activeRequiresIdentityAssurance?: boolean;
-  activePermissions?: string[];
-  assuranceStatus?: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'NOT_SUBMITTED';
-  /** Reviewer's reason when the identity check was returned. */
-  rejectionReason?: string | null;
-  onboardingCompleted: boolean;
+  avatarBase64: string | null;
 }
 
-const PROFILE_KEY = 'insite_mobile_user_profile_v2';
+export interface StoredAccount {
+  token: string;
+  profile: MobileAccountProfile;
+}
+
+export interface StoredJoinSession {
+  token: string;
+  context: FieldProjectContext;
+}
+
+export interface DeviceState {
+  version: 3;
+  persona: LocalPersona | null;
+  account: StoredAccount | null;
+  joinSessions: StoredJoinSession[];
+  projects: FieldProjectContext[];
+  activeProjectId: string | null;
+}
+
+export const EMPTY_DEVICE_STATE: DeviceState = {
+  version: 3,
+  persona: null,
+  account: null,
+  joinSessions: [],
+  projects: [],
+  activeProjectId: null,
+};
+
+const STATE_KEY = 'insite_mobile_device_state_v3';
+const LEGACY_PROFILE_KEY = 'insite_mobile_user_profile_v2';
 const DEVICE_ID_KEY = 'insite_mobile_device_id_v2';
 
 /**
@@ -47,112 +74,98 @@ export async function getOrCreateHardwareDeviceId(): Promise<string> {
   }
 }
 
-/**
- * Load the profile stored securely on this physical device.
- */
-export async function loadLocalProfile(): Promise<LocalUserProfile | null> {
-  try {
-    const raw = await SecureStore.getItemAsync(PROFILE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as LocalUserProfile;
-  } catch (error) {
-    console.warn('Failed to load local profile from SecureStore:', error);
-    return null;
-  }
+/** The v2 single-project profile, read once to migrate. */
+interface LegacyProfileV2 {
+  fullName?: string;
+  phoneNumber?: string;
+  avatarBase64?: string | null;
+  activeProjectId?: string | null;
+  activeProjectCode?: string | null;
+  activeSessionId?: string | null;
+  activeSessionToken?: string | null;
+  activeRoleId?: string | null;
+  activeRoleCode?: string | null;
+  activeRoleName?: string | null;
+  activeFieldPersonaType?: FieldProjectContext['fieldPersonaType'] | null;
+  activeAssuranceWeight?: number | null;
+  activeRequiresIdentityAssurance?: boolean;
+  activePermissions?: string[];
+  assuranceStatus?: FieldProjectContext['assuranceStatus'];
+  rejectionReason?: string | null;
+  onboardingCompleted?: boolean;
 }
 
-/**
- * Persist the user profile into expo-secure-store.
- */
-export async function saveLocalProfile(profile: LocalUserProfile): Promise<void> {
-  try {
-    await SecureStore.setItemAsync(PROFILE_KEY, JSON.stringify(profile));
-  } catch (error) {
-    console.error('Failed to save profile to SecureStore:', error);
-    throw error;
-  }
-}
-
-/**
- * Convenience helper to update partial fields on the active profile.
- */
-export async function updateLocalProfile(
-  updates: Partial<LocalUserProfile>
-): Promise<LocalUserProfile> {
-  const existing = await loadLocalProfile();
-  const hardwareDeviceId =
-    existing?.hardwareDeviceId || (await getOrCreateHardwareDeviceId());
-
-  const merged: LocalUserProfile = {
-    fullName: updates.fullName || existing?.fullName || '',
-    phoneNumber: updates.phoneNumber || existing?.phoneNumber || '',
-    roleTitle: updates.roleTitle ?? existing?.roleTitle ?? '',
-    avatarBase64: updates.avatarBase64 ?? existing?.avatarBase64 ?? null,
-    hardwareDeviceId,
-    deviceKeyFingerprint:
-      existing?.deviceKeyFingerprint ||
-      `KEY-${Crypto.randomUUID().slice(0, 12).toUpperCase()}`,
-    activeProjectId: updates.activeProjectId ?? existing?.activeProjectId ?? null,
-    activeProjectCode: updates.activeProjectCode ?? existing?.activeProjectCode ?? null,
-    activeSessionId: updates.activeSessionId ?? existing?.activeSessionId ?? null,
-    activeSessionToken: updates.activeSessionToken ?? existing?.activeSessionToken ?? null,
-    activeRoleId: updates.activeRoleId ?? existing?.activeRoleId ?? null,
-    activeRoleCode: updates.activeRoleCode ?? existing?.activeRoleCode ?? null,
-    activeRoleName: updates.activeRoleName ?? existing?.activeRoleName ?? null,
-    activeFieldPersonaType:
-      updates.activeFieldPersonaType ?? existing?.activeFieldPersonaType ?? null,
-    activeAssuranceWeight:
-      updates.activeAssuranceWeight ?? existing?.activeAssuranceWeight ?? null,
-    activeRequiresIdentityAssurance:
-      updates.activeRequiresIdentityAssurance ??
-      existing?.activeRequiresIdentityAssurance ??
-      false,
-    activePermissions:
-      updates.activePermissions ?? existing?.activePermissions ?? [],
-    assuranceStatus:
-      updates.assuranceStatus ?? existing?.assuranceStatus ?? 'NOT_SUBMITTED',
-    rejectionReason:
-      updates.rejectionReason !== undefined ? updates.rejectionReason : existing?.rejectionReason ?? null,
-    onboardingCompleted:
-      updates.onboardingCompleted ?? existing?.onboardingCompleted ?? false,
-  };
-
-  await saveLocalProfile(merged);
-  return merged;
-}
-
-/**
- * Clear session data when switching project or resetting device binding.
- */
-export async function clearActiveProjectSession(): Promise<void> {
-  const existing = await loadLocalProfile();
-  if (existing) {
-    await saveLocalProfile({
-      ...existing,
-      activeProjectId: null,
-      activeProjectCode: null,
-      activeSessionId: null,
-      activeSessionToken: null,
-      activeRoleId: null,
-      activeRoleCode: null,
-      activeRoleName: null,
-      activeFieldPersonaType: null,
-      activeAssuranceWeight: null,
-      activeRequiresIdentityAssurance: false,
-      activePermissions: [],
-      assuranceStatus: 'NOT_SUBMITTED',
+function migrateLegacy(legacy: LegacyProfileV2): DeviceState {
+  const persona: LocalPersona | null = legacy.onboardingCompleted
+    ? {
+        fullName: legacy.fullName ?? '',
+        phoneNumber: legacy.phoneNumber ?? '',
+        avatarBase64: legacy.avatarBase64 ?? null,
+      }
+    : null;
+  const joinSessions: StoredJoinSession[] = [];
+  if (legacy.activeSessionToken && legacy.activeProjectId && legacy.activeSessionId && legacy.activeRoleId) {
+    joinSessions.push({
+      token: legacy.activeSessionToken,
+      context: {
+        projectId: legacy.activeProjectId,
+        // The v2 store kept only the join code; the projects screen refreshes the name.
+        projectName: legacy.activeProjectCode ?? 'Project',
+        projectCodePrefix: (legacy.activeProjectCode ?? '').split('-').slice(0, 2).join('-'),
+        origin: 'JOIN_CODE',
+        sessionId: legacy.activeSessionId,
+        joinCodeUsed: legacy.activeProjectCode ?? null,
+        roleId: legacy.activeRoleId,
+        roleCode: legacy.activeRoleCode ?? null,
+        roleName: legacy.activeRoleName ?? 'Field reporter',
+        fieldPersonaType: legacy.activeFieldPersonaType ?? 'INDEPENDENT_VERIFIER',
+        assuranceWeight: legacy.activeAssuranceWeight ?? 1,
+        requiresIdentityAssurance: Boolean(legacy.activeRequiresIdentityAssurance),
+        permissions: legacy.activePermissions ?? [],
+        assuranceStatus: legacy.assuranceStatus ?? 'NOT_SUBMITTED',
+        rejectionReason: legacy.rejectionReason ?? null,
+      },
     });
   }
+  return {
+    ...EMPTY_DEVICE_STATE,
+    persona,
+    joinSessions,
+    activeProjectId: joinSessions[0]?.context.projectId ?? null,
+  };
 }
 
-/**
- * Completely removes persisted profile and session credentials from device SecureStore.
- */
-export async function wipeAllLocalProfileData(): Promise<void> {
+export async function loadDeviceState(): Promise<DeviceState> {
   try {
-    await SecureStore.deleteItemAsync(PROFILE_KEY);
+    const raw = await SecureStore.getItemAsync(STATE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as DeviceState;
+      return { ...EMPTY_DEVICE_STATE, ...parsed, version: 3 };
+    }
+    const legacyRaw = await SecureStore.getItemAsync(LEGACY_PROFILE_KEY);
+    if (legacyRaw) {
+      const migrated = migrateLegacy(JSON.parse(legacyRaw) as LegacyProfileV2);
+      await saveDeviceState(migrated);
+      await SecureStore.deleteItemAsync(LEGACY_PROFILE_KEY).catch(() => undefined);
+      return migrated;
+    }
   } catch (error) {
-    console.warn('Failed to clear profile from SecureStore:', error);
+    console.warn('Failed to load device state from SecureStore:', error);
+  }
+  return EMPTY_DEVICE_STATE;
+}
+
+/** Writes the whole state. Callers build the next state from the previous one. */
+export async function saveDeviceState(state: DeviceState): Promise<void> {
+  await SecureStore.setItemAsync(STATE_KEY, JSON.stringify(state));
+}
+
+/** Removes everything except the hardware device id (sign-out of the last identity, reset). */
+export async function wipeDeviceState(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(STATE_KEY);
+    await SecureStore.deleteItemAsync(LEGACY_PROFILE_KEY);
+  } catch (error) {
+    console.warn('Failed to clear device state from SecureStore:', error);
   }
 }
-

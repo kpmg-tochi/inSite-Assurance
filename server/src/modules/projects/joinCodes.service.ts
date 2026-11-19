@@ -5,6 +5,7 @@ import {
   IssueJoinCodeRequest,
   JOIN_CODE_RANDOM_ALPHABET,
   JOIN_CODE_RANDOM_LENGTH,
+  RoleOnboardingMode,
   RotateJoinCodeRequest,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
@@ -77,6 +78,7 @@ export function serializeJoinCode(jc: JoinCodeRow) {
     fieldPersonaType: jc.role.fieldPersonaType as FieldPersonaType,
     assuranceWeight: jc.role.assuranceWeight,
     requiresIdentityAssurance: jc.role.requiresIdentityAssurance,
+    roleOnboardingMode: jc.role.onboardingMode as RoleOnboardingMode,
     isActive: jc.isActive,
     expiresAt: jc.expiresAt ? jc.expiresAt.toISOString() : null,
     maxUses: jc.maxUses,
@@ -102,6 +104,37 @@ function assertMayManageRole(webUser: WebJwtPayload, fieldPersonaType: string) {
       'FORBIDDEN_PERMISSION'
     );
   }
+}
+
+/** Pre-provisioned roles sign in with an account and never get join codes (Phase 5). */
+function assertRoleUsesJoinCodes(role: { name: string; onboardingMode: string }) {
+  if (role.onboardingMode === 'PROVISIONED_ACCOUNT') {
+    throw new AppError(
+      `"${role.name}" is a pre-provisioned role: people in it sign in with their account, not a join code`,
+      409,
+      'ROLE_IS_PROVISIONED'
+    );
+  }
+}
+
+/**
+ * Issues one active join code per active project for a role switched back to join codes, skipping
+ * projects that already have an active code for it. Runs inside the caller's transaction.
+ */
+export async function issueJoinCodesForRoleOnAllProjects(
+  tx: Prisma.TransactionClient,
+  role: { id: string; code: string; codeSuffix: string | null; tenantId: string }
+) {
+  // Phase 6 adds project status; until then every project in the tenant is active.
+  const projects = await tx.project.findMany({
+    where: { tenantId: role.tenantId, joinCodes: { none: { roleId: role.id, isActive: true } } },
+    select: { id: true, codePrefix: true },
+  });
+  const issued = [];
+  for (const project of projects) {
+    issued.push(await createJoinCode(tx, { projectId: project.id, codePrefix: project.codePrefix, role }));
+  }
+  return issued;
 }
 
 function actorName(webUser: WebJwtPayload) {
@@ -135,6 +168,7 @@ export async function issueProjectJoinCode(
   if (!role) {
     throw new AppError('Mobile role not found in this tenant', 404, 'ROLE_NOT_FOUND');
   }
+  assertRoleUsesJoinCodes(role);
   assertMayManageRole(webUser, role.fieldPersonaType);
 
   const created = await prisma.$transaction(async (tx) => {
@@ -179,6 +213,7 @@ export async function rotateProjectJoinCode(
   if (!existing) {
     throw new AppError('Join code not found', 404, 'JOIN_CODE_NOT_FOUND');
   }
+  assertRoleUsesJoinCodes(existing.role);
   assertMayManageRole(webUser, existing.role.fieldPersonaType);
 
   const created = await prisma.$transaction(async (tx) => {

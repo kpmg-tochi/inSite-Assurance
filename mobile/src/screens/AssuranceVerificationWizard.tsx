@@ -46,7 +46,8 @@ export const AssuranceVerificationWizard: React.FC = () => {
   const route = useRoute<RouteProp<RootStackParamList, 'AssuranceWizard'>>();
   const resolveNotificationId = route.params?.resolveNotificationId;
   const isPreviewDemo = Boolean(route.params?.isPreviewDemo);
-  const { profile, projectCode, activeProjectId, updateProfile } = useProfile();
+  const { activeContext, activeProjectId, updateActiveContext, addJoinSession, displayName, phoneNumber, pushIdentities, state } =
+    useProfile();
   const resolveNotificationMutation = useResolveNotificationMutation(activeProjectId);
   const insets = useSafeAreaInsets();
 
@@ -91,8 +92,8 @@ export const AssuranceVerificationWizard: React.FC = () => {
         .mutateAsync(resolveNotificationId)
         .catch(() => {});
     }
-    await updateProfile({ assuranceStatus: 'PENDING_APPROVAL', rejectionReason: null });
-    void requestPushPermissionInContext(profile?.activeSessionToken);
+    await updateActiveContext({ assuranceStatus: 'PENDING_APPROVAL', rejectionReason: null });
+    void requestPushPermissionInContext(pushIdentities);
     navigation.reset({
       index: 0,
       routes: [{ name: 'UnderReview' }],
@@ -101,30 +102,21 @@ export const AssuranceVerificationWizard: React.FC = () => {
 
   const handleSkipDemoVerification = async () => {
     try {
-      const targetCode = profile?.activeProjectCode || projectCode;
+      const joinCode = activeContext?.joinCodeUsed;
+      if (!joinCode) throw new Error('This project was not joined with a code.');
+      const existing = state.joinSessions.find((j) => j.context.projectId === activeProjectId);
       const result = await skipDemoMutation.mutateAsync({
-        joinCode: targetCode,
-        sessionId: profile?.activeSessionId ?? undefined,
-        agentFullName: profile?.fullName || undefined,
-        agentPhoneNumber: profile?.phoneNumber || undefined,
-        deviceId: profile?.hardwareDeviceId || undefined,
+        payload: {
+          joinCode,
+          sessionId: activeContext?.sessionId ?? undefined,
+          agentFullName: displayName || undefined,
+          agentPhoneNumber: phoneNumber || undefined,
+        },
+        existingJoinToken: existing?.token,
       });
 
-      await updateProfile({
-        activeProjectId: result.sessionProfile.projectId,
-        activeProjectCode: result.sessionProfile.joinCodeUsed,
-        activeSessionId: result.sessionProfile.sessionId,
-        activeSessionToken: result.accessToken,
-        activeRoleId: result.sessionProfile.roleId,
-        activeRoleCode: result.sessionProfile.roleCode,
-        activeRoleName: result.sessionProfile.roleName,
-        activeFieldPersonaType: result.sessionProfile.fieldPersonaType,
-        activeAssuranceWeight: result.sessionProfile.assuranceWeight,
-        activeRequiresIdentityAssurance:
-          result.sessionProfile.requiresIdentityAssurance,
-        activePermissions: result.sessionProfile.permissions || [],
-        assuranceStatus: 'APPROVED',
-      });
+      await addJoinSession(result);
+      await updateActiveContext({ assuranceStatus: 'APPROVED' });
 
       Toast.show({
         type: 'info',
@@ -197,11 +189,11 @@ export const AssuranceVerificationWizard: React.FC = () => {
 
   return (
     <View style={styles.root}>
-      {profile?.assuranceStatus === 'REJECTED' && currentStep === 'STEP_1_ID' && (
+      {activeContext?.assuranceStatus === 'REJECTED' && currentStep === 'STEP_1_ID' && (
         <View style={[styles.rejectedBar, { paddingTop: Math.max(insets.top + 8, 16) }]}>
           <Text style={styles.rejectedTitle}>Your identity check was returned</Text>
           <Text style={styles.rejectedText}>
-            {profile.rejectionReason || 'The reviewer did not give a reason.'} Please capture your ID and
+            {activeContext.rejectionReason || 'The reviewer did not give a reason.'} Please capture your ID and
             selfies again. Your reports stay held until a reviewer approves the new submission.
           </Text>
         </View>

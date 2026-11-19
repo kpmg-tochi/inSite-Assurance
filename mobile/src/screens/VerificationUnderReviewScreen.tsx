@@ -14,7 +14,7 @@ import type { RootStackParamList } from '../navigation/types';
 export const VerificationUnderReviewScreen: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { profile, refreshAssuranceStatus } = useProfile();
+  const { activeContext, refreshAssuranceStatus } = useProfile();
   const onDismiss = () =>
     navigation.reset({
       index: 0,
@@ -26,10 +26,10 @@ export const VerificationUnderReviewScreen: React.FC = () => {
   }, [refreshAssuranceStatus]);
 
   useEffect(() => {
-    if (profile?.assuranceStatus === 'APPROVED') {
+    if (activeContext?.assuranceStatus === 'APPROVED') {
       navigation.reset({ index: 0, routes: [{ name: 'WbsInbox' }] });
     }
-  }, [profile?.assuranceStatus, navigation]);
+  }, [activeContext?.assuranceStatus, navigation]);
   return (
     <GradientHeaderLayout
       title="InSite Assurance"

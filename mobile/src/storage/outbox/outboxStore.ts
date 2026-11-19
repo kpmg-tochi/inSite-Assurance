@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getDb, newId, nowIso } from '../db/database';
 import type { OutboxKind, OutboxRow, OutboxStatus } from './outboxPolicy';
+import { sessionKeyForProject } from '../../config/authRegistry';
 
 type Row = {
   id: string;
@@ -50,8 +51,8 @@ export async function enqueue(
   const now = nowIso();
   await db.runAsync(
     `INSERT INTO outbox (id, project_id, kind, entity_id, payload_json, depends_on_json, status,
-       attempts, next_attempt_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?, ?)`,
+       attempts, next_attempt_at, created_at, updated_at, session_key)
+     VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, ?, ?, ?)`,
     [
       id,
       params.projectId,
@@ -62,6 +63,7 @@ export async function enqueue(
       now,
       now,
       now,
+      sessionKeyForProject(params.projectId),
     ]
   );
   return id;
@@ -160,4 +162,20 @@ export async function listDeadRows(): Promise<DeadLetter[]> {
     const m = map(r);
     return { id: m.id, kind: m.kind, entityId: m.entityId, attempts: m.attempts, lastError: m.lastError, createdAt: m.createdAt };
   });
+}
+
+/** Unsent items per project (pending and dead-lettered), for the projects screen (Phase 5). */
+export async function outboxCountsByProject(): Promise<Map<string, { pending: number; dead: number }>> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<{ project_id: string; status: string; n: number }>(
+    `SELECT project_id, status, COUNT(*) AS n FROM outbox WHERE status != 'DONE' GROUP BY project_id, status`
+  );
+  const out = new Map<string, { pending: number; dead: number }>();
+  for (const r of rows) {
+    const entry = out.get(r.project_id) ?? { pending: 0, dead: 0 };
+    if (r.status === 'DEAD') entry.dead += r.n;
+    else entry.pending += r.n;
+    out.set(r.project_id, entry);
+  }
+  return out;
 }

@@ -4,151 +4,396 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
 import {
-  clearActiveProjectSession,
-  loadLocalProfile,
-  updateLocalProfile,
-  wipeAllLocalProfileData,
-  type LocalUserProfile,
+  fieldContextFromJoinSession,
+  fieldContextFromProvisionedProject,
+  type FieldProjectContext,
+  type MobileChangePasswordResponse,
+  type MobileLoginResponse,
+} from '@insite/shared';
+import {
+  EMPTY_DEVICE_STATE,
+  loadDeviceState,
+  saveDeviceState,
+  wipeDeviceState,
+  type DeviceState,
+  type LocalPersona,
+  type StoredAccount,
 } from '../storage/secureProfileStore';
-import { getCachedBaselinePack, saveBaselinePack, setFieldAgentAuth } from '../config/apiConfig';
-import { fetchFieldSessionStatus } from '../api/auth/authApi';
-import { persistBaselinePack } from '../storage/baselineStore';
-import { hydrateBaselinePack } from '../storage/baselineStore';
+import { setAuthRegistry } from '../config/authRegistry';
+import { clearSessionEnded } from '../config/sessionState';
+import {
+  fetchAccountProjects,
+  fetchBaselinePack,
+  fetchJoinSessionStatus,
+  fetchProjectSession,
+  signOutAccount,
+  type JoinProjectMobileResponse,
+} from '../api/auth/authApi';
+import { deleteBaselinePacks, hydrateBaselinePack, persistBaselinePack, getLoadedBaselinePack } from '../storage/baselineStore';
 import { ensureDeviceKeyRegistered } from '../security/deviceKeyRegistration';
+import { holdItemsFromEndedSessions } from '../storage/heldItems';
 import { getInitials } from '../utils/userUtils';
+import type { PushIdentity } from '../services/pushNotificationService';
 
+/**
+ * The device's identities and projects (Phase 5). One provisioned account and any number of
+ * join-code sessions can live side by side; `activeProjectId` picks what the app shows. Every
+ * server profile is mapped through the shared `fieldContextFrom*` functions, never by hand.
+ */
 interface ProfileContextValue {
-  profile: LocalUserProfile | null;
+  state: DeviceState;
   loading: boolean;
-  isVerified: boolean;
-  projectCode: string;
+  account: StoredAccount | null;
+  persona: LocalPersona | null;
+  /** Every project on the device: provisioned projects first, then join-code projects. */
+  projects: FieldProjectContext[];
+  activeContext: FieldProjectContext | null;
+  /** '' when no project is open. */
   activeProjectId: string;
+  projectCode: string;
+  /** The server session id on the active project, once known (null before first sync). */
+  activeSessionId: string | null;
+  displayName: string;
+  phoneNumber: string;
   userInitials: string;
-  refreshProfile: () => Promise<LocalUserProfile | null>;
-  updateProfile: (updates: Partial<LocalUserProfile>) => Promise<LocalUserProfile>;
-  clearSession: () => Promise<void>;
-  resetAllProfileState: () => Promise<void>;
+  isVerified: boolean;
+  /** Signed in, or has typed a name for joining with codes. */
+  hasIdentity: boolean;
+  /** Every identity on the device that should receive pushes: the account and each join session. */
+  pushIdentities: PushIdentity[];
+  signIn: (result: MobileLoginResponse) => Promise<void>;
+  completePasswordChange: (result: MobileChangePasswordResponse) => Promise<void>;
+  addJoinSession: (result: JoinProjectMobileResponse) => Promise<void>;
+  switchProject: (projectId: string) => Promise<void>;
+  /** Re-lists provisioned projects from the server (pull to refresh). */
+  refreshProjects: () => Promise<void>;
   /**
-   * Reads assurance status from the server (`/auth/me`), the only source of truth for it.
-   * Called at startup, on app foreground, on pull-to-refresh and when a push arrives.
+   * Reads assurance status for the active join session from the server (`/auth/me`), the only
+   * source of truth for it. Called at startup, on foreground, on pull-to-refresh and on push.
    */
-  refreshAssuranceStatus: () => Promise<LocalUserProfile | null>;
+  refreshAssuranceStatus: () => Promise<void>;
+  updateActiveContext: (patch: Partial<FieldProjectContext>) => Promise<void>;
+  savePersona: (persona: LocalPersona) => Promise<void>;
+  /** Removes a join-code project from this device (its queued items stay in the outbox). */
+  leaveJoinProject: (projectId: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  resetAll: () => Promise<void>;
 }
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
 
-export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [profile, setProfile] = useState<LocalUserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+function allProjects(state: DeviceState): FieldProjectContext[] {
+  const joinIds = new Set(state.joinSessions.map((j) => j.context.projectId));
+  // A project can be both assigned to the account and joined with a code; the join session wins
+  // on that project because its token is what was used for the queued work.
+  return [...state.projects.filter((p) => !joinIds.has(p.projectId)), ...state.joinSessions.map((j) => j.context)];
+}
 
-  const syncAuthToken = useCallback((saved: LocalUserProfile | null) => {
-    setFieldAgentAuth(saved?.activeSessionToken ?? null, null);
+function pickActive(state: DeviceState, preferred: string | null): string | null {
+  const ids = allProjects(state).map((p) => p.projectId);
+  if (preferred && ids.includes(preferred)) return preferred;
+  return ids[0] ?? null;
+}
+
+export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [state, setState] = useState<DeviceState>(EMPTY_DEVICE_STATE);
+  const [loading, setLoading] = useState(true);
+  const stateRef = useRef(state);
+
+  /** Persists the whole next state, then publishes it to React and the token registry. */
+  const commit = useCallback(async (next: DeviceState) => {
+    stateRef.current = next;
+    setAuthRegistry({
+      accountToken: next.account?.token ?? null,
+      joinTokens: next.joinSessions.map((j) => ({
+        projectId: j.context.projectId,
+        token: j.token,
+        sessionId: j.context.sessionId,
+      })),
+      activeProjectId: next.activeProjectId,
+    });
+    setState(next);
+    await saveDeviceState(next);
   }, []);
 
-  const refreshProfile = useCallback(async () => {
-    const saved = await loadLocalProfile();
-    syncAuthToken(saved);
-    setProfile(saved);
-    return saved;
-  }, [syncAuthToken]);
+  const update = useCallback(
+    async (fn: (prev: DeviceState) => DeviceState) => commit(fn(stateRef.current)),
+    [commit]
+  );
+
+  /** Patches one project's context wherever it lives (account list or join session). */
+  const patchProject = useCallback(
+    (prev: DeviceState, projectId: string, patch: Partial<FieldProjectContext>): DeviceState => ({
+      ...prev,
+      projects: prev.projects.map((p) => (p.projectId === projectId ? { ...p, ...patch } : p)),
+      joinSessions: prev.joinSessions.map((j) =>
+        j.context.projectId === projectId ? { ...j, context: { ...j.context, ...patch } } : j
+      ),
+    }),
+    []
+  );
+
+  /** Makes sure the project's baseline is on the device and, when online, current. */
+  const prepareProject = useCallback(
+    async (projectId: string) => {
+      await hydrateBaselinePack(projectId).catch(() => null);
+      const isProvisioned = !stateRef.current.joinSessions.some((j) => j.context.projectId === projectId);
+      try {
+        if (!getLoadedBaselinePack(projectId) || isProvisioned) await fetchBaselinePack(projectId);
+        if (isProvisioned) {
+          // Creates the provisioned session on first use and tells us its id and role.
+          const session = await fetchProjectSession(projectId);
+          await update((prev) =>
+            patchProject(prev, projectId, {
+              sessionId: session.sessionId,
+              roleName: session.roleName,
+              roleCode: session.roleCode,
+              assuranceWeight: session.assuranceWeight,
+              permissions: session.permissions,
+            })
+          );
+        }
+      } catch {
+        // Offline, or the session ended (the overlay handles that). The stored pack still works.
+      }
+    },
+    [update, patchProject]
+  );
 
   useEffect(() => {
     let mounted = true;
-    async function hydrate() {
+    (async () => {
       try {
-        const saved = await loadLocalProfile();
-        if (mounted) {
-          syncAuthToken(saved);
-          setProfile(saved);
-        }
+        const saved = await loadDeviceState();
+        const next = { ...saved, activeProjectId: pickActive(saved, saved.activeProjectId) };
+        if (!mounted) return;
+        await commit(next);
         // Geofence checks must work after a restart, offline included.
-        if (saved?.activeProjectId) {
-          await hydrateBaselinePack(saved.activeProjectId).catch(() => null);
-        }
-        if (saved?.activeSessionToken) {
-          void ensureDeviceKeyRegistered(saved.activeSessionId);
+        await Promise.all(allProjects(next).map((p) => hydrateBaselinePack(p.projectId).catch(() => null)));
+        for (const j of next.joinSessions) {
+          void ensureDeviceKeyRegistered({ sessionId: j.context.sessionId, projectId: j.context.projectId, token: j.token });
         }
       } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+        if (mounted) setLoading(false);
       }
-    }
-    hydrate();
+    })();
     return () => {
       mounted = false;
     };
-  }, [syncAuthToken]);
+  }, [commit]);
 
-  const updateProfile = useCallback(async (updates: Partial<LocalUserProfile>) => {
-    const updated = await updateLocalProfile(updates);
-    syncAuthToken(updated);
-    setProfile(updated);
-    return updated;
-  }, [syncAuthToken]);
+  const signIn = useCallback(
+    async (result: MobileLoginResponse) => {
+      const projects = result.projects.map((p) => fieldContextFromProvisionedProject(p, result.account.mobileRole));
+      await update((prev) => {
+        const next: DeviceState = {
+          ...prev,
+          account: { token: result.accessToken, profile: result.account },
+          projects,
+        };
+        return { ...next, activeProjectId: pickActive(next, prev.activeProjectId) };
+      });
+      clearSessionEnded('account');
+      if (!result.account.mustChangePassword) {
+        const active = stateRef.current.activeProjectId;
+        if (active) void prepareProject(active);
+      }
+    },
+    [update, prepareProject]
+  );
 
-  const clearSession = useCallback(async () => {
-    await clearActiveProjectSession();
-    const updated = await loadLocalProfile();
-    syncAuthToken(updated);
-    setProfile(updated);
-  }, [syncAuthToken]);
+  const completePasswordChange = useCallback(
+    async (result: MobileChangePasswordResponse) => {
+      await update((prev) => ({ ...prev, account: { token: result.accessToken, profile: result.account } }));
+      clearSessionEnded('account');
+      const active = stateRef.current.activeProjectId;
+      if (active) void prepareProject(active);
+    },
+    [update, prepareProject]
+  );
+
+  const addJoinSession = useCallback(
+    async (result: JoinProjectMobileResponse) => {
+      const context = fieldContextFromJoinSession(result.sessionProfile);
+      await update((prev) => ({
+        ...prev,
+        joinSessions: [
+          ...prev.joinSessions.filter((j) => j.context.projectId !== context.projectId),
+          { token: result.accessToken, context },
+        ],
+        activeProjectId: context.projectId,
+      }));
+      clearSessionEnded(`project:${context.projectId}`);
+      if (result.baselinePack) await persistBaselinePack(result.baselinePack).catch(() => undefined);
+      // Phase 5 Step 8: anything still queued under an earlier session on this project is held
+      // for the person to remove or update; it is never sent under the new session as it is.
+      if (context.sessionId) {
+        await holdItemsFromEndedSessions(context.projectId, `join:${context.sessionId}`).catch(() => 0);
+      }
+    },
+    [update]
+  );
+
+  const switchProject = useCallback(
+    async (projectId: string) => {
+      // Switching never touches the outbox: queued items keep their own project and token.
+      await update((prev) => ({ ...prev, activeProjectId: projectId }));
+      await prepareProject(projectId);
+    },
+    [update, prepareProject]
+  );
+
+  const refreshProjects = useCallback(async () => {
+    const account = stateRef.current.account;
+    if (!account) return;
+    const list = await fetchAccountProjects(account.token);
+    await update((prev) => {
+      const byId = new Map(prev.projects.map((p) => [p.projectId, p]));
+      const projects = list.map((p) => {
+        const fresh = fieldContextFromProvisionedProject(p, account.profile.mobileRole);
+        const known = byId.get(p.id);
+        // Keep the session id learned from the server for this device.
+        return known ? { ...fresh, sessionId: known.sessionId } : fresh;
+      });
+      const next = { ...prev, projects };
+      return { ...next, activeProjectId: pickActive(next, prev.activeProjectId) };
+    });
+  }, [update]);
 
   const refreshAssuranceStatus = useCallback(async () => {
-    const saved = await loadLocalProfile();
-    if (!saved?.activeSessionToken) return saved;
+    const current = stateRef.current;
+    const active = current.joinSessions.find((j) => j.context.projectId === current.activeProjectId);
+    if (!active) return; // Provisioned projects have no assurance step.
     try {
-      const status = await fetchFieldSessionStatus();
-      const updated = await updateLocalProfile({
-        assuranceStatus: status.assuranceStatus,
-        rejectionReason: status.assuranceStatus === 'REJECTED' ? status.rejectionReason ?? null : null,
-        activeRequiresIdentityAssurance: status.requiresIdentityAssurance,
-      });
-      setProfile(updated);
+      const status = await fetchJoinSessionStatus(active.token, active.context.projectId);
+      await update((prev) =>
+        patchProject(prev, active.context.projectId, {
+          assuranceStatus: status.assuranceStatus,
+          rejectionReason: status.assuranceStatus === 'REJECTED' ? status.rejectionReason ?? null : null,
+          requiresIdentityAssurance: status.requiresIdentityAssurance,
+          roleName: status.roleName ?? active.context.roleName,
+          assuranceWeight: status.assuranceWeight ?? active.context.assuranceWeight,
+          ...(status.project?.name ? { projectName: status.project.name } : {}),
+          ...(status.project?.codePrefix ? { projectCodePrefix: status.project.codePrefix } : {}),
+        })
+      );
       // Packs saved before projects had a time zone get it from the server.
-      const pack = getCachedBaselinePack();
+      const pack = getLoadedBaselinePack(active.context.projectId);
       if (pack && status.project?.timezone && pack.timezone !== status.project.timezone) {
-        const next = { ...pack, timezone: status.project.timezone };
-        saveBaselinePack(next);
-        await persistBaselinePack(next).catch(() => undefined);
+        await persistBaselinePack({ ...pack, timezone: status.project.timezone }).catch(() => undefined);
       }
-      return updated;
     } catch {
       // Offline or session ended (the session-ended overlay handles the latter).
-      return saved;
     }
-  }, []);
+  }, [update, patchProject]);
 
-  const resetAllProfileState = useCallback(async () => {
-    await wipeAllLocalProfileData();
-    syncAuthToken(null);
-    setProfile(null);
-  }, [syncAuthToken]);
+  const updateActiveContext = useCallback(
+    async (patch: Partial<FieldProjectContext>) => {
+      const id = stateRef.current.activeProjectId;
+      if (!id) return;
+      await update((prev) => patchProject(prev, id, patch));
+    },
+    [update, patchProject]
+  );
+
+  const savePersona = useCallback(
+    async (persona: LocalPersona) => update((prev) => ({ ...prev, persona })),
+    [update]
+  );
+
+  const leaveJoinProject = useCallback(
+    async (projectId: string) => {
+      await update((prev) => {
+        const next = { ...prev, joinSessions: prev.joinSessions.filter((j) => j.context.projectId !== projectId) };
+        return { ...next, activeProjectId: pickActive(next, prev.activeProjectId === projectId ? null : prev.activeProjectId) };
+      });
+      clearSessionEnded(`project:${projectId}`);
+    },
+    [update]
+  );
+
+  const signOut = useCallback(async () => {
+    const account = stateRef.current.account;
+    if (account) void signOutAccount(account.token).catch(() => undefined);
+    const provisionedIds = stateRef.current.projects.map((p) => p.projectId);
+    await update((prev) => {
+      const next = { ...prev, account: null, projects: [] };
+      return { ...next, activeProjectId: pickActive(next, prev.activeProjectId) };
+    });
+    clearSessionEnded('account');
+    const stillJoined = new Set(stateRef.current.joinSessions.map((j) => j.context.projectId));
+    await deleteBaselinePacks(provisionedIds.filter((id) => !stillJoined.has(id))).catch(() => undefined);
+  }, [update]);
+
+  const resetAll = useCallback(async () => {
+    const account = stateRef.current.account;
+    if (account) void signOutAccount(account.token).catch(() => undefined);
+    await wipeDeviceState();
+    await deleteBaselinePacks().catch(() => undefined);
+    clearSessionEnded();
+    await commit(EMPTY_DEVICE_STATE);
+  }, [commit]);
 
   const value = useMemo<ProfileContextValue>(() => {
-    const isVerified = profile?.assuranceStatus === 'APPROVED';
-    const projectCode = profile?.activeProjectCode || '';
-    const activeProjectId = profile?.activeProjectId || '';
-    const userInitials = getInitials(profile?.fullName, 'CO');
-
+    const projects = allProjects(state);
+    const activeContext = projects.find((p) => p.projectId === state.activeProjectId) ?? null;
+    const displayName = state.account?.profile.fullName ?? state.persona?.fullName ?? '';
     return {
-      profile,
+      state,
       loading,
-      isVerified,
-      projectCode,
-      activeProjectId,
-      userInitials,
-      refreshProfile,
-      updateProfile,
-      clearSession,
-      resetAllProfileState,
+      account: state.account,
+      persona: state.persona,
+      projects,
+      activeContext,
+      activeProjectId: activeContext?.projectId ?? '',
+      projectCode: activeContext?.projectCodePrefix ?? '',
+      activeSessionId: activeContext?.sessionId ?? null,
+      displayName,
+      phoneNumber: state.account?.profile.phoneNumber ?? state.persona?.phoneNumber ?? '',
+      userInitials: getInitials(displayName, 'CO'),
+      isVerified: activeContext?.assuranceStatus === 'APPROVED',
+      hasIdentity: Boolean(state.account || state.persona),
+      pushIdentities: [
+        ...(state.account && !state.account.profile.mustChangePassword
+          ? [{ token: state.account.token, scope: 'account' as const }]
+          : []),
+        ...state.joinSessions.map((j) => ({
+          token: j.token,
+          scope: `project:${j.context.projectId}` as const,
+        })),
+      ],
+      signIn,
+      completePasswordChange,
+      addJoinSession,
+      switchProject,
+      refreshProjects,
       refreshAssuranceStatus,
+      updateActiveContext,
+      savePersona,
+      leaveJoinProject,
+      signOut,
+      resetAll,
     };
-  }, [profile, loading, refreshProfile, updateProfile, clearSession, resetAllProfileState, refreshAssuranceStatus]);
+  }, [
+    state,
+    loading,
+    signIn,
+    completePasswordChange,
+    addJoinSession,
+    switchProject,
+    refreshProjects,
+    refreshAssuranceStatus,
+    updateActiveContext,
+    savePersona,
+    leaveJoinProject,
+    signOut,
+    resetAll,
+  ]);
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 };
@@ -160,4 +405,3 @@ export function useProfile(): ProfileContextValue {
   }
   return ctx;
 }
-

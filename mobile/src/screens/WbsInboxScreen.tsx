@@ -39,7 +39,7 @@ export const WbsInboxScreen: React.FC = () => {
     projectCode,
     userInitials,
     isVerified,
-    profile,
+    activeContext,
     refreshAssuranceStatus,
   } = useProfile();
   const syncStatus = useSyncStatus();
@@ -57,7 +57,7 @@ export const WbsInboxScreen: React.FC = () => {
 
   const { data: notifications = [] } = useNotificationsQuery(
     projectId,
-    Boolean(profile?.activeSessionToken),
+    Boolean(activeContext),
   );
   const unreadNotifs = useMemo(
     () => notifications.filter((n) => !n.isRead).length,

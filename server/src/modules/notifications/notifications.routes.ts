@@ -8,6 +8,7 @@ import {
   listProjectNotifications,
   listWebNotifications,
   markAllWebNotificationsRead,
+  markNotificationActionedFromApp,
   markNotificationRead,
   markWebNotificationRead,
 } from './notifications.service';
@@ -65,11 +66,11 @@ router.post(
   requireFieldSession,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const updated = await markNotificationRead({
+      const updated = await markNotificationActionedFromApp({
         projectId: req.fieldAgent!.projectId,
         fieldSessionId: req.fieldAgent!.sessionId,
+        agentFullName: req.fieldAgent!.agentFullName,
         notificationId: String(req.params.notificationId),
-        resolvedByAction: true,
       });
       res.json({ success: true, data: updated });
     } catch (error) {

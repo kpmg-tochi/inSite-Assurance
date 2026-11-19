@@ -17,6 +17,13 @@ import { insertPing } from './telemetryStore';
 
 export type CaptureUploadStatus = 'LOCAL' | 'UPLOADED' | 'REGISTERED';
 
+/**
+ * SQL condition: captures that may go into a new report (Phase 5 Step 8). Excludes originals
+ * replaced by a re-submission and captures held from an ended session.
+ */
+export const LINKABLE_CAPTURE_SQL = `superseded_by IS NULL
+  AND id NOT IN (SELECT entity_id FROM outbox WHERE kind = 'CAPTURE' AND status = 'HELD')`;
+
 export interface CaptureRecord {
   id: string;
   projectId: string;
@@ -37,6 +44,8 @@ export interface CaptureRecord {
   server: CaptureDto | null;
   registeredAt: string | null;
   localDeletedAt: string | null;
+  /** Original clientCaptureId when this re-submits a capture from an ended session. */
+  resubmittedFrom: string | null;
 }
 
 type Row = {
@@ -64,6 +73,7 @@ type Row = {
   server_json: string | null;
   registered_at: string | null;
   local_deleted_at: string | null;
+  resubmitted_from: string | null;
 };
 
 function map(r: Row): CaptureRecord {
@@ -97,6 +107,7 @@ function map(r: Row): CaptureRecord {
     server: r.server_json ? (JSON.parse(r.server_json) as CaptureDto) : null,
     registeredAt: r.registered_at,
     localDeletedAt: r.local_deleted_at,
+    resubmittedFrom: r.resubmitted_from ?? null,
   };
 }
 
@@ -218,7 +229,7 @@ export async function getCaptures(ids: string[]): Promise<CaptureRecord[]> {
 export async function listUnreportedCaptures(projectId: string, wbsItemId: string): Promise<CaptureRecord[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<Row>(
-    `SELECT * FROM captures WHERE project_id = ? AND wbs_item_id = ? AND report_id IS NULL
+    `SELECT * FROM captures WHERE project_id = ? AND wbs_item_id = ? AND report_id IS NULL AND ${LINKABLE_CAPTURE_SQL}
      ORDER BY captured_at ASC`,
     [projectId, wbsItemId]
   );

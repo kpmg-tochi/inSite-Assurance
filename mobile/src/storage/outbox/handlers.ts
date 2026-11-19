@@ -108,6 +108,7 @@ export function registerOutboxHandlers(): void {
         isMockLocation: c.fix?.isMocked ?? false,
         caption: c.caption,
         signature: c.signature,
+        resubmittedFromClientCaptureId: c.resubmittedFrom,
       });
       await updateCaptureUpload(c.id, { uploadStatus: 'REGISTERED', server });
     } catch (error) {

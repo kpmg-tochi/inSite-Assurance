@@ -35,20 +35,43 @@ export function JoinCodesPanel({ projectId, projectCode }: { projectId: string; 
   const [maxUses, setMaxUses] = useState("");
   const [expiresOn, setExpiresOn] = useState("");
 
+  // Pre-provisioned roles sign in with an account and never get codes (Phase 5).
+  const provisionedRoleNames = useMemo(
+    () =>
+      roles
+        .filter((r) => r.surface !== "WEB" && r.onboardingMode === "PROVISIONED_ACCOUNT")
+        .map((r) => r.name),
+    [roles],
+  );
+
   const issuableRoles = useMemo(() => {
     const fromTenant = roles
       .filter((r) => r.surface !== "WEB")
-      .map((r) => ({ id: r.id, name: r.name, fieldPersonaType: r.fieldPersonaType }));
+      .map((r) => ({
+        id: r.id,
+        name: r.name,
+        fieldPersonaType: r.fieldPersonaType,
+        onboardingMode: r.onboardingMode,
+      }));
     const fromCodes = codes.map((c) => ({
       id: c.roleId,
       name: c.roleName,
       fieldPersonaType: c.fieldPersonaType,
+      onboardingMode: c.roleOnboardingMode ?? "JOIN_CODE",
     }));
     const byId = new Map([...fromCodes, ...fromTenant].map((r) => [r.id, r]));
     return [...byId.values()].filter(
-      (r) => canSeeAllPersonas || r.fieldPersonaType === "CONTRACTOR_EXECUTOR",
+      (r) =>
+        r.onboardingMode !== "PROVISIONED_ACCOUNT" &&
+        (canSeeAllPersonas || r.fieldPersonaType === "CONTRACTOR_EXECUTOR"),
     );
   }, [roles, codes, canSeeAllPersonas]);
+
+  // Codes of a role that became pre-provisioned are deactivated; only show live history.
+  const visibleCodes = useMemo(
+    () => codes.filter((c) => c.isActive || c.roleOnboardingMode !== "PROVISIONED_ACCOUNT"),
+    [codes],
+  );
 
   const handleIssue = async () => {
     if (!roleId) {
@@ -155,7 +178,17 @@ export function JoinCodesPanel({ projectId, projectCode }: { projectId: string; 
           </span>
         </div>
       }
-      subtitle="Issue codes for new mobile roles, cap their uses, and rotate any code that may have leaked"
+      subtitle={
+        <>
+          Issue codes for new mobile roles, cap their uses, and rotate any code that may have leaked.
+          {provisionedRoleNames.length > 0 && (
+            <span className="block mt-0.5">
+              Not listed: {provisionedRoleNames.join(", ")}. These roles are pre-provisioned, so people
+              sign in with their account and need no code.
+            </span>
+          )}
+        </>
+      }
       filters={
         <div className="flex flex-wrap items-center gap-2">
           <select
@@ -197,7 +230,7 @@ export function JoinCodesPanel({ projectId, projectCode }: { projectId: string; 
         </div>
       }
       columns={columns}
-      data={codes}
+      data={visibleCodes}
       keyExtractor={(c) => c.id}
       emptyState={{
         title: "No join codes yet",

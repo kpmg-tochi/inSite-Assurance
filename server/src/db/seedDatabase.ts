@@ -216,6 +216,7 @@ async function runSeed(): Promise<void> {
   await prisma.conditionPrecedent.deleteMany();
   await prisma.facilityTranche.deleteMany();
   await prisma.fieldAgentSession.deleteMany();
+  await prisma.mobileDevice.deleteMany();
   await prisma.projectJoinCode.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.userProjectAssignment.deleteMany();
@@ -275,7 +276,11 @@ async function runSeed(): Promise<void> {
   const monitorRole = roleByCode("MONITOR");
   const lenderRole = roleByCode("LENDER");
   const contractorRole = roleByCode("CONTRACTOR");
-  const monitorInspectorMobileRole = roleByCode("MONITOR_INSPECTOR");
+  // Phase 5: monitor inspectors sign in with their account instead of a join code (decision G).
+  const monitorInspectorMobileRole = await prisma.role.update({
+    where: { id: roleByCode("MONITOR_INSPECTOR").id },
+    data: { onboardingMode: "PROVISIONED_ACCOUNT", requiresIdentityAssurance: false },
+  });
   const residentCowMobileRole = roleByCode("INDEPENDENT_RESIDENT");
   const contractorEngineerMobileRole = roleByCode("CONTRACTOR_ENGINEER");
 
@@ -326,6 +331,9 @@ async function runSeed(): Promise<void> {
       passwordHash: defaultPasswordHash,
       fullName: "QS Tunde Adebayo, FNIQS",
       roleId: monitorRole.id,
+      // Web: Independent Monitor. Field: Monitor Inspector, signed in on the mobile app.
+      mobileRoleId: monitorInspectorMobileRole.id,
+      phoneNumber: "+234 803 555 0142",
       organizationId: monitorOrg.id,
       professionalLicenseType: "QSRBN",
       professionalLicenseNumber: "3842",
@@ -437,14 +445,6 @@ async function runSeed(): Promise<void> {
       monitorOrganizationId: monitorOrg.id,
       lenderOrganizationId: lenderOrg.id,
       contractorOrganizationId: contractorOrg.id,
-    },
-  });
-
-  await prisma.projectJoinCode.create({
-    data: {
-      projectId: lkkProject.id,
-      roleId: monitorInspectorMobileRole.id,
-      code: `LKK-402-INS-${randomJoinCodeSegment()}`,
     },
   });
 
@@ -1343,19 +1343,12 @@ async function runSeed(): Promise<void> {
     },
   });
 
-  await prisma.projectJoinCode.createMany({
-    data: [
-      {
-        projectId: abjProject.id,
-        roleId: monitorInspectorMobileRole.id,
-        code: `ABJ-108-INS-${randomJoinCodeSegment()}`,
-      },
-      {
-        projectId: abjProject.id,
-        roleId: contractorEngineerMobileRole.id,
-        code: `ABJ-108-CON-${randomJoinCodeSegment()}`,
-      },
-    ],
+  await prisma.projectJoinCode.create({
+    data: {
+      projectId: abjProject.id,
+      roleId: contractorEngineerMobileRole.id,
+      code: `ABJ-108-CON-${randomJoinCodeSegment()}`,
+    },
   });
 
   const abjJoinCow = await prisma.projectJoinCode.create({
@@ -1377,6 +1370,10 @@ async function runSeed(): Promise<void> {
         userId: contractorUser.id,
         projectId: abjProject.id,
       },
+      // The monitor sees every project on the web through projects:view_all_tenant; explicit
+      // assignments make the mobile project list independent of that permission.
+      { userId: monitorUser.id, projectId: lkkProject.id },
+      { userId: monitorUser.id, projectId: abjProject.id },
     ],
   });
 
@@ -1557,7 +1554,7 @@ async function runSeed(): Promise<void> {
     "   • Super Admin Login: admin@insite.ng      / Password123! (Platform & Tenant Super Admin)",
   );
   console.log(
-    "   • Monitor Login:     monitor@insite.ng    / Password123! (QSRBN #3842)",
+    "   • Monitor Login:     monitor@insite.ng    / Password123! (QSRBN #3842; also mobile sign-in as Monitor Inspector)",
   );
   console.log(
     "   • Lender Login:      lender@insite.ng     / Password123! (ICAN #MB/049120)",

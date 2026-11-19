@@ -270,15 +270,15 @@ export async function createProjectBaseline(
       data: {
         userId: webUser.userId,
         projectId: project.id,
-        roleId: webUser.roleId,
       },
     });
 
-    // Generate Join Codes from tenant's active MOBILE / BOTH roles
+    // Join codes for the tenant's mobile roles. Pre-provisioned roles sign in with an account instead.
     const mobileRoles = await tx.role.findMany({
       where: {
         tenantId: webUser.tenantId,
         surface: { in: ['MOBILE', 'BOTH'] },
+        onboardingMode: 'JOIN_CODE',
       },
       orderBy: { assuranceWeight: 'desc' },
     });
@@ -473,6 +473,7 @@ export async function listProjectFieldSessions(
       joinCode: {
         select: { code: true },
       },
+      user: { select: { id: true, email: true } },
     },
   });
 
@@ -486,9 +487,13 @@ export async function listProjectFieldSessions(
     assuranceWeight: s.assuranceWeight,
     agentFullName: s.agentFullName,
     agentPhoneNumber: s.agentPhoneNumber,
-    joinCodeUsed: s.joinCode.code,
+    origin: s.origin,
+    joinCodeUsed: s.joinCode?.code ?? null,
+    userId: s.user?.id ?? null,
+    userEmail: s.user?.email ?? null,
     deviceId: s.deviceId,
     deviceModel: s.deviceModel,
+    mobileDeviceId: s.mobileDeviceId,
     isActive: s.isActive,
     assuranceStatus: s.assuranceStatus,
     lastSyncAt: s.lastSyncAt?.toISOString() ?? null,
@@ -628,7 +633,7 @@ export async function listContractorVerifications(
     fieldPersonaType: s.fieldPersonaType as FieldPersonaType,
     agentFullName: s.agentFullName,
     agentPhoneNumber: s.agentPhoneNumber,
-    joinCodeUsed: s.joinCode.code,
+    joinCodeUsed: s.joinCode?.code ?? '',
     corenLicenseNumber: s.corenLicenseNumber,
     idDocumentType: s.idDocumentType,
     idDocumentUrl: await signed(s.idDocumentUrl, s.project.tenantId, s.projectId),

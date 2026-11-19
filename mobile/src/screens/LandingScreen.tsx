@@ -13,7 +13,8 @@ import type { RootStackParamList } from "../navigation/types";
 export const LandingScreen: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const onGetStarted = () => navigation.navigate("Onboarding");
+  const onSignIn = () => navigation.navigate("SignIn");
+  const onJoinWithCode = () => navigation.navigate("Onboarding");
   return (
     <Container style={{ justifyContent: "space-between" }}>
       <StatusBar style="light" />
@@ -35,16 +36,27 @@ export const LandingScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Bottom Action Section: Get Started Button */}
+      {/* Two ways in (Phase 5): an account set up by your organisation, or a project code. */}
       <View style={styles.bottomSection}>
         <PrimaryButton
-          onPress={onGetStarted}
-          text="Get started"
+          onPress={onSignIn}
+          text="Sign in"
           backgroundColor="#fff"
           textColor={defaultColors.primary}
-          accessibilityLabel="Get Started with InSite Assurance"
+          accessibilityLabel="Sign in with the account your organisation set up"
           style={{ width: "100%" }}
         />
+        <PrimaryButton
+          onPress={onJoinWithCode}
+          text="Join with a project code"
+          backgroundColor="transparent"
+          textColor="#fff"
+          accessibilityLabel="Join a project with a code from the project team"
+          style={styles.outlineButton}
+        />
+        <Text style={styles.hint}>
+          Sign in if your organisation gave you an account. Use a project code if the project team gave you one.
+        </Text>
       </View>
     </Container>
   );
@@ -86,5 +98,17 @@ const styles = StyleSheet.create({
   bottomSection: {
     alignItems: "center",
     gap: 14,
+  },
+  outlineButton: {
+    width: "100%",
+    borderWidth: 1.5,
+    borderColor: "rgba(255, 255, 255, 0.7)",
+  },
+  hint: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: "rgba(255, 255, 255, 0.75)",
+    textAlign: "center",
+    maxWidth: 300,
   },
 });

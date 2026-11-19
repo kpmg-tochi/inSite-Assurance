@@ -16,8 +16,8 @@ export function useJoinProjectMutation() {
 
 export function useDemoSkipVerificationMutation() {
   return useMutation({
-    mutationFn: (payload: DemoSkipVerificationRequest) =>
-      demoSkipVerification(payload),
+    mutationFn: ({ payload, existingJoinToken }: { payload: DemoSkipVerificationRequest; existingJoinToken?: string }) =>
+      demoSkipVerification(payload, existingJoinToken),
   });
 }
 

@@ -24,6 +24,7 @@ import { whisperService } from '../../integrations/whisper.service';
 import { storageService } from '../../integrations/storage.service';
 import { recordAuditEvent } from '../audit/audit.service';
 import { createWebNotification, markNotificationsReadForSession } from '../notifications/notifications.service';
+import { markNotificationsActioned } from '../notifications/notificationActions';
 import { serializeReportQuery } from '../wbs-chat/wbsChat.service';
 import { loadBoqItemInProject, loadReportQueryInProject } from '../../utils/ownership';
 import { evaluateGeofence } from '../../utils/geofenceEvaluation';
@@ -78,6 +79,7 @@ function toCaptureSummary(c: ReportRow['captures'][number]): WorkdayReportCaptur
     transcriptionStatus: full.transcriptionStatus,
     transcript: full.transcript,
     durationSeconds: full.durationSeconds,
+    resubmittedFromClientCaptureId: full.resubmittedFromClientCaptureId ?? null,
   };
 }
 
@@ -641,6 +643,10 @@ export async function revalidateWorkdayReport(params: {
         select: { id: true },
       });
       await markNotificationsReadForSession(tx, fieldAgent.sessionId, answered.map((n) => n.id));
+      await markNotificationsActioned(tx, projectId, { kind: 'REPORT_QUERY_ANSWERED', reportQueryId: targetQueryId }, {
+        sessionId: fieldAgent.sessionId,
+        name: fieldAgent.agentFullName,
+      });
 
       await createWebNotification(tx, {
         projectId,

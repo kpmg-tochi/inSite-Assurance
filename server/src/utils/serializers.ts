@@ -122,6 +122,7 @@ export function serializeCapture(log: CaptureRow): CaptureDto {
     transcript: log.transcript,
     reporterRoleName: log.reporterRoleName,
     fieldPersonaType: log.fieldPersonaType as FieldPersonaType,
+    resubmittedFromClientCaptureId: log.resubmittedFromClientCaptureId ?? null,
   };
 }
 

@@ -1,6 +1,7 @@
 import * as Network from 'expo-network';
 import { AppState, type AppStateStatus } from 'react-native';
-import { getSessionEnded, subscribeSessionEnded } from '../../config/sessionState';
+import { listSessionEnded, sessionEndedFor, subscribeSessionEnded } from '../../config/sessionState';
+import { tokenForProject } from '../../config/authRegistry';
 import { getStorageInfo } from '../db/database';
 import {
   afterFailure,
@@ -32,6 +33,8 @@ import {
  * - A row waits for the rows it depends on (a report waits for its captures).
  * - Failures back off exponentially and dead-letter after MAX_ATTEMPTS, keeping the error.
  * - An ended session pauses the outbox without counting attempts; nothing is lost.
+ * - Phase 5: rows of every project on the device are sent, each with its own project's token. An
+ *   ended session holds only the rows of its own scope (one project, or the signed-in account).
  */
 
 export type RowHandler = (row: OutboxRow) => Promise<void>;
@@ -148,14 +151,14 @@ export async function runOutbox(_reason = 'manual'): Promise<SyncStatusSnapshot>
   return getSyncStatusSnapshot();
 }
 
+/** The message to show when some rows are held because their session ended. */
+function pausedMessage(): string | null {
+  return listSessionEnded()[0]?.message ?? null;
+}
+
 async function runOnce(): Promise<void> {
-  const ended = getSessionEnded();
-  if (ended) {
-    publish({ isSyncing: false, pausedReason: ended.message });
-    return;
-  }
   const online = await isOnline();
-  publish({ isOnline: online, pausedReason: null });
+  publish({ isOnline: online, pausedReason: pausedMessage() });
   if (!online) return;
 
   publish({ isSyncing: true });
@@ -165,7 +168,8 @@ async function runOnce(): Promise<void> {
       const rows = await listOpenRows();
       const statusById = new Map<string, OutboxStatus>(rows.map((r) => [r.id, r.status]));
       const now = new Date();
-      const due = dueRows(rows, now);
+      // Rows wait while their project has no usable token or its session ended; nothing is lost.
+      const due = dueRows(rows, now).filter((r) => tokenForProject(r.projectId) && !sessionEndedFor(r.projectId));
       if (due.length === 0) break;
       let progressed = false;
 
@@ -199,7 +203,10 @@ async function runOnce(): Promise<void> {
             progressed = anySucceeded = true;
           } catch (error) {
             const failure = classifyFailure(toClassifiable(error));
-            if (failure === 'AUTH_PAUSE') return pauseForAuth(error);
+            if (failure === 'AUTH_PAUSE') {
+              pauseForAuth(error);
+              continue;
+            }
             for (const r of chunk) {
               const outcome = afterFailure(r, failure, new Date());
               await recordFailure(r.id, outcome, describe(error));
@@ -214,6 +221,8 @@ async function runOnce(): Promise<void> {
         if (BATCHED_KINDS.has(row.kind)) continue;
         const handler = handlers.get(row.kind);
         if (!handler) continue;
+        // A row of a scope that ended earlier in this pass is held, not attempted.
+        if (sessionEndedFor(row.projectId)) continue;
         try {
           await handler(row);
           await markDone(row.id);
@@ -221,7 +230,10 @@ async function runOnce(): Promise<void> {
           progressed = anySucceeded = true;
         } catch (error) {
           const failure = classifyFailure(toClassifiable(error));
-          if (failure === 'AUTH_PAUSE') return pauseForAuth(error);
+          if (failure === 'AUTH_PAUSE') {
+            pauseForAuth(error);
+            continue;
+          }
           const outcome = afterFailure(row, failure, new Date());
           await recordFailure(row.id, outcome, describe(error));
           statusById.set(row.id, outcome.status);
@@ -239,8 +251,9 @@ async function runOnce(): Promise<void> {
   }
 }
 
+/** The session for this row's scope ended (marked by the API layer); other scopes carry on. */
 function pauseForAuth(error: unknown): void {
-  publish({ isSyncing: false, pausedReason: getSessionEnded()?.message ?? describe(error) });
+  publish({ pausedReason: pausedMessage() ?? describe(error) });
 }
 
 /** User tapped Retry on a dead-lettered item. */
@@ -270,9 +283,12 @@ export function startOutbox(): () => void {
   const app = AppState.addEventListener('change', (next: AppStateStatus) => {
     if (next === 'active') kickOutbox();
   });
-  const session = subscribeSessionEnded((state) => {
-    if (!state) kickOutbox();
-    else publish({ pausedReason: state.message });
+  let endedCount = listSessionEnded().length;
+  const session = subscribeSessionEnded((states) => {
+    // A scope came back (re-joined, signed in again): send what it was holding.
+    if (states.length < endedCount) kickOutbox();
+    endedCount = states.length;
+    publish({ pausedReason: pausedMessage() });
   });
   const timer = setInterval(() => {
     if (AppState.currentState === 'active') kickOutbox();

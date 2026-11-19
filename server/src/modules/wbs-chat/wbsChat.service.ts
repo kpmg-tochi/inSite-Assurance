@@ -17,6 +17,7 @@ import {
   markNotificationsReadForSession,
 } from '../notifications/notifications.service';
 import { loadReportQueryInProject, loadWorkdayReportInProject } from '../../utils/ownership';
+import { markNotificationsActioned } from '../notifications/notificationActions';
 
 type PrismaTransactionOrClient = Prisma.TransactionClient | typeof prisma;
 
@@ -436,6 +437,10 @@ export async function resolveReportQuery(params: {
       where: { id: query.id },
       data: { status: 'RESOLVED', resolvedAt: new Date() },
       include: { raisedByUser: { select: { fullName: true } } },
+    });
+    await markNotificationsActioned(tx, params.projectId, { kind: 'REPORT_QUERY_ANSWERED', reportQueryId: query.id }, {
+      userId: params.webUser.userId,
+      name: params.webUser.fullName,
     });
 
     const reporterSessionId = report?.reporterSessionId ?? null;
