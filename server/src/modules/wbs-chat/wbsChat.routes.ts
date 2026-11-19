@@ -3,6 +3,7 @@ import { guardProjectRoutes } from '../../utils/accessControl';
 import {
   CreateWbsChatMessageRequestSchema,
   CreateWorkdayReportQueryRequestSchema,
+  ResolveReportQueryRequestSchema,
 } from '@insite/shared';
 import {
   requireAnyAuthWithWebPermission,
@@ -13,6 +14,7 @@ import {
   createWorkdayReportQuery,
   listBoqChatMessages,
   postWbsChatMessage,
+  resolveReportQuery,
 } from './wbsChat.service';
 
 const router = guardProjectRoutes(Router());
@@ -35,6 +37,29 @@ router.post(
         queryText: req.body.queryText,
       });
       res.status(201).json({ success: true, data: created });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/v1/projects/:projectId/report-queries/:queryId/resolve
+ * Monitor closes a workday-report query (answered, or withdrawn).
+ */
+router.post(
+  '/:projectId/report-queries/:queryId/resolve',
+  requirePermission('reports:raise_query'),
+  validateBody(ResolveReportQueryRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const resolved = await resolveReportQuery({
+        projectId: String(req.params.projectId),
+        queryId: String(req.params.queryId),
+        webUser: req.webUser!,
+        resolutionNote: req.body.resolutionNote,
+      });
+      res.json({ success: true, data: resolved });
     } catch (error) {
       next(error);
     }

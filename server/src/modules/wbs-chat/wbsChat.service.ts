@@ -12,7 +12,10 @@ import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import type { WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
-import { createMobileNotification } from '../notifications/notifications.service';
+import {
+  createMobileNotification,
+  markNotificationsReadForSession,
+} from '../notifications/notifications.service';
 import { loadReportQueryInProject, loadWorkdayReportInProject } from '../../utils/ownership';
 
 type PrismaTransactionOrClient = Prisma.TransactionClient | typeof prisma;
@@ -402,4 +405,82 @@ export async function postWbsChatMessage(params: {
     }
     throw error;
   }
+}
+
+/**
+ * A monitor resolves a workday-report query (Phase 3 carry-over). Allowed while the query is OPEN
+ * (withdrawn) or RESUBMITTED (answered). After this the report cannot be revised again unless a
+ * new query is raised. The reporter's query notification is marked read and they are told.
+ */
+export async function resolveReportQuery(params: {
+  projectId: string;
+  queryId: string;
+  webUser: WebJwtPayload;
+  resolutionNote?: string;
+}): Promise<ReportQueryDto> {
+  const query = await loadReportQueryInProject(prisma, params.projectId, params.queryId);
+  if (query.status === 'RESOLVED') {
+    throw new AppError('This query is already resolved', 409, 'QUERY_ALREADY_RESOLVED');
+  }
+  const report = query.workdayReportId
+    ? await prisma.workdayReport.findUnique({
+        where: { id: query.workdayReportId },
+        select: { reporterSessionId: true },
+      })
+    : null;
+  const boq = await prisma.boqItem.findUniqueOrThrow({ where: { id: query.boqItemId }, select: { wbsCode: true } });
+  const wasAnswered = query.status === 'RESUBMITTED';
+
+  return prisma.$transaction(async (tx) => {
+    const resolved = await tx.reportQuery.update({
+      where: { id: query.id },
+      data: { status: 'RESOLVED', resolvedAt: new Date() },
+      include: { raisedByUser: { select: { fullName: true } } },
+    });
+
+    const reporterSessionId = report?.reporterSessionId ?? null;
+    if (reporterSessionId) {
+      const open = await tx.mobileNotification.findMany({
+        where: {
+          projectId: params.projectId,
+          fieldSessionId: reporterSessionId,
+          type: 'REPORT_QUERY',
+          metadata: { path: ['reportQueryId'], equals: query.id },
+        },
+        select: { id: true },
+      });
+      await markNotificationsReadForSession(tx, reporterSessionId, open.map((n) => n.id));
+      await createMobileNotification(tx, {
+        projectId: params.projectId,
+        fieldSessionId: reporterSessionId,
+        type: 'REPORT_QUERY',
+        actionType: 'OPEN_WBS_CHAT',
+        requiresAction: false,
+        title: `Query resolved · WBS ${boq.wbsCode}`,
+        message: params.resolutionNote
+          ? `${params.webUser.fullName}: ${params.resolutionNote}`
+          : `${params.webUser.fullName} closed the query on your WBS ${boq.wbsCode} report.`,
+        metadata: { wbsItemId: query.boqItemId, wbsCode: boq.wbsCode, reportQueryId: query.id },
+      });
+    }
+
+    await recordAuditEvent(tx, {
+      projectId: params.projectId,
+      actorType: 'WEB_USER',
+      actorId: params.webUser.userId,
+      actorDisplayName: `${params.webUser.fullName} (${params.webUser.roleName})`,
+      action: 'REPORT_QUERY_RESOLVED',
+      summaryText: `${params.webUser.fullName} ${wasAnswered ? 'resolved' : 'withdrew'} the query on WBS ${boq.wbsCode}${
+        params.resolutionNote ? `: "${params.resolutionNote}"` : '.'
+      }`,
+      payload: {
+        reportQueryId: query.id,
+        workdayReportId: query.workdayReportId,
+        previousStatus: query.status,
+        resolutionNote: params.resolutionNote ?? null,
+      },
+    });
+
+    return serializeReportQuery(resolved);
+  });
 }

@@ -17,7 +17,7 @@ import {
   useProjectTelemetryQuery,
   useProjectWorkdayReportsQuery,
 } from "../queries/telemetry/useTelemetryQueries";
-import { useCreateWorkdayReportQueryMutation } from "../mutations/telemetry/useTelemetryMutations";
+import { useCreateWorkdayReportQueryMutation, useResolveReportQueryMutation } from "../mutations/telemetry/useTelemetryMutations";
 import { useAuth } from "../lib/auth-context";
 import {
   StandardTable,
@@ -91,6 +91,7 @@ export function SitePresencePanel({
   const reportsQuery = useProjectWorkdayReportsQuery(projectId);
   const telemetryQuery = useProjectTelemetryQuery(projectId);
   const createQueryMutation = useCreateWorkdayReportQueryMutation(projectId);
+  const resolveQueryMutation = useResolveReportQueryMutation(projectId);
 
   const [reportSearch, setReportSearch] = useState("");
   const [pingSearch, setPingSearch] = useState("");
@@ -628,6 +629,18 @@ export function SitePresencePanel({
                       {q.monitorComment ||
                         q.aiOmissionPayload?.clarificationQuestion}
                     </p>
+                    {q.status !== "RESOLVED" && hasPermission("reports:raise_query") && (
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={() => resolveQueryMutation.mutate({ queryId: q.id })}
+                          disabled={resolveQueryMutation.isPending}
+                          className="px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700 disabled:opacity-50"
+                        >
+                          {q.status === "RESUBMITTED" ? "Mark resolved" : "Withdraw query"}
+                        </button>
+                      </div>
+                    )}
                     {q.aiOmissionPayload?.omittedItems &&
                       q.aiOmissionPayload.omittedItems.length > 0 && (
                         <ul className="list-disc list-inside text-[11px] text-amber-900 space-y-0.5 pt-1">

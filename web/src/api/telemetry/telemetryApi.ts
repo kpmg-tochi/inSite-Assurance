@@ -1,6 +1,7 @@
 import type {
   CreateWorkdayReportQueryRequest,
   ReportQueryDto,
+  ResolveReportQueryRequest,
   SiteTelemetryPingDto,
   WorkdayReportDto,
 } from "@insite/shared";
@@ -28,6 +29,19 @@ export const getProjectWorkdayReports = async (
   const { data } = await api.get<ApiEnvelope<WorkdayReportRecordDto[]>>(
     `/projects/${projectId}/workday-reports`,
     { params },
+  );
+  return data.data;
+};
+
+/** Monitor closes a workday-report query (answered or withdrawn). */
+export const resolveReportQuery = async (params: {
+  projectId: string;
+  queryId: string;
+  body: ResolveReportQueryRequest;
+}): Promise<ReportQueryDto> => {
+  const { data } = await api.post<ApiEnvelope<ReportQueryDto>>(
+    `/projects/${params.projectId}/report-queries/${params.queryId}/resolve`,
+    params.body,
   );
   return data.data;
 };

@@ -728,6 +728,7 @@ export const AuditActionTypeEnum = z.enum([
   'TELEMETRY_ANOMALY_SUMMARY',
   'WORKDAY_REPORTS_RELEASED',
   'DEVICE_KEY_REGISTERED',
+  'REPORT_QUERY_RESOLVED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 

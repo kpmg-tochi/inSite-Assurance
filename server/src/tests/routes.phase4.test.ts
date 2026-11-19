@@ -761,6 +761,79 @@ describe('Phase 4 field evidence pipeline', () => {
     });
   });
 
+  describe('Phase 2 and 3 carry-overs', () => {
+    it('lets a monitor resolve a report query, after which the report cannot be revised', async () => {
+      const latest = await prisma.workdayReport.findFirstOrThrow({ where: { parentReportId: ids.rebarReport } });
+      const url = `/api/v1/projects/${ids.lkk}/report-queries/${ids.rebarQuery}/resolve`;
+
+      const asField = await request(app).post(url).set(fieldHeaders(ids.lkkContractor)).send({});
+      assert.ok(asField.status === 401 || asField.status === 403, `field agent got ${asField.status}`);
+      const asContractor = await request(app).post(url).set(await webHeaders('contractor@insite.ng')).send({});
+      assert.equal(asContractor.status, 403);
+
+      const monitor = await webHeaders('monitor@insite.ng');
+      const resolved = await request(app).post(url).set(monitor).send({ resolutionNote: 'Mill certificate received.' });
+      assert.equal(resolved.status, 200, JSON.stringify(resolved.body));
+      assert.equal(resolved.body.data.status, 'RESOLVED');
+      assert.ok(resolved.body.data.resolvedAt);
+      const again = await request(app).post(url).set(monitor).send({});
+      assert.equal(again.status, 409);
+
+      const revise = await request(app)
+        .post(`/api/v1/projects/${ids.lkk}/workday-reports/${latest.id}/revalidate`)
+        .set(fieldHeaders(ids.lkkContractor))
+        .send({
+          clientReportId: crypto.randomUUID(),
+          reporterTimezone: 'Africa/Lagos',
+          submissionGeotag: { ...LKK_POINT, accuracyMeters: 4, isMocked: false, capturedAt: new Date().toISOString() },
+          confirmedAt: new Date().toISOString(),
+          confirmedAsFinal: true,
+        });
+      assert.equal(revise.status, 409);
+      assert.equal(revise.body.error.code, 'NO_OPEN_QUERY');
+
+      const notices = await request(app)
+        .get(`/api/v1/projects/${ids.lkk}/notifications`)
+        .set(fieldHeaders(ids.lkkContractor));
+      assert.equal(notices.status, 200);
+      const resolvedNotice = notices.body.data.find((n: { title: string }) => n.title.startsWith('Query resolved'));
+      assert.ok(resolvedNotice, 'the reporter is told the query was resolved');
+      const audit = await prisma.auditLog.findFirst({ where: { projectId: ids.lkk, action: 'REPORT_QUERY_RESOLVED' } });
+      assert.ok(audit);
+    });
+
+    it('keeps notification read state per field session', async () => {
+      const base = await prisma.fieldAgentSession.findUniqueOrThrow({
+        where: { id: ids.abjCow },
+        select: { projectId: true, joinCodeId: true, roleId: true, roleNameSnapshot: true, fieldPersonaType: true, assuranceWeight: true },
+      });
+      const other = await prisma.fieldAgentSession.create({
+        data: { ...base, agentFullName: 'Second Reader', agentPhoneNumber: '+2348000000002', deviceId: 'TEST-READER' },
+      });
+      const broadcast = await prisma.mobileNotification.create({
+        data: {
+          projectId: ids.abj,
+          fieldSessionId: null,
+          type: 'MORNING_DELIVERABLE_READY',
+          actionType: 'NONE',
+          title: 'Broadcast for read-state test',
+          message: 'Everyone on the project sees this.',
+        },
+      });
+      const mark = await request(app)
+        .patch(`/api/v1/projects/${ids.abj}/notifications/${broadcast.id}/read`)
+        .set(fieldHeaders(ids.abjCow));
+      assert.equal(mark.status, 200, JSON.stringify(mark.body));
+      assert.equal(mark.body.data.isRead, true);
+
+      const forReader = await request(app).get(`/api/v1/projects/${ids.abj}/notifications`).set(fieldHeaders(ids.abjCow));
+      const forOther = await request(app).get(`/api/v1/projects/${ids.abj}/notifications`).set(fieldHeaders(other.id));
+      const find = (res: request.Response) => res.body.data.find((n: { id: string }) => n.id === broadcast.id);
+      assert.equal(find(forReader).isRead, true);
+      assert.equal(find(forOther).isRead, false);
+    });
+  });
+
   describe('honest AI fallbacks', () => {
     it('returns PENDING transcripts and no invented text when no speech provider is configured', async () => {
       const audio = crypto.randomBytes(2048);

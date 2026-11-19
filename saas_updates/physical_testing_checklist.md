@@ -4,7 +4,7 @@ Manual checks on the web portal and on a phone that automated tests cannot cover
 
 | | |
 | :--- | :--- |
-| **Covers** | Phases 1 to 4 (Phase 4 in progress: Steps 1, 2, 4 and 6 done; parts of 3 and 5) |
+| **Covers** | Phases 1 to 4 (Phase 4 implemented) |
 | **Last updated** | 2026-11-19 |
 | **Needs** | A computer running the API and web app, one Android phone (a second phone helps for the duplicate-photo test), the seeded demo data |
 
@@ -64,6 +64,12 @@ SQLCipher and push notifications do not work in Expo Go, so testing needs a deve
 - [ ] **P4-W-05** Reconciliation workbench → evidence drawer on a line. Expected: each piece of evidence shows "Inside geofence", "Outside geofence" or "Location unknown", photo thumbnails, and the signature state.
 - [ ] **P4-W-06** Contractor verification queue. Expected: three selfie photos (front, left, right) and the ID photo are visible, with the label "Selfie set (3 poses) for manual review". There is no "liveness verified", "3D liveness" or "head-turn" wording.
 - [ ] **P4-W-07** Settings and the executive page describe identity checks as a photo ID plus a guided selfie set reviewed by a person.
+- [ ] **P4-W-08** After a reporter revises a queried report (P4-M-16), the monitor clicks "Mark resolved" on the query in Site Presence. Expected:
+  - the query shows RESOLVED
+  - the reporter gets a "Query resolved" notification
+  - the phone can no longer revise that report
+- [ ] **P4-W-09** On a query nobody has answered yet, the button reads "Withdraw query" and behaves the same way.
+- [ ] **P4-W-10** The login page and the public pages (Home, About, Mobile app) label sample positions as examples. Their integrity claims match the Phase 4 claims table (no "Live Verified Camera", no "liveness").
 
 ---
 
@@ -141,13 +147,12 @@ SQLCipher and push notifications do not work in Expo Go, so testing needs a deve
   - Sync status shows "Sending paused"
   - nothing is deleted
   - after rejoining, note what happens to the old items (sent, or listed under "Could not be sent" with a reason). This is not settled yet; Phase 5 decides how items from an ended session are handled.
+- [ ] **P4-M-24** Notifications are per person: on two phones joined to the same project, open the notification centre on one and read a project-wide notice (a morning brief). Expected: it stays unread on the other phone.
 - [ ] **P4-M-23** Presence: keep the app open on site for over an hour. Expected: presence pings appear on the web only for the times the app was open, plus one per capture and report.
 
 ---
 
 ## 4. Not ready to test yet
 
-These Phase 4 items are not built yet; skip them until this list is updated.
-- Workday-report queries cannot yet be marked resolved by a monitor (carried over from Phase 3).
-- Mobile notification read state is still shared between field users (carried over from Phase 2).
 - Configurable geofence tolerance (moved to Phase 6).
+- Moving queued items between sessions after a revoke and rejoin (Phase 5).

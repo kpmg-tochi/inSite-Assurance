@@ -23,7 +23,7 @@ import { azureOpenAiService } from '../../integrations/azure-openai.service';
 import { whisperService } from '../../integrations/whisper.service';
 import { storageService } from '../../integrations/storage.service';
 import { recordAuditEvent } from '../audit/audit.service';
-import { createWebNotification } from '../notifications/notifications.service';
+import { createWebNotification, markNotificationsReadForSession } from '../notifications/notifications.service';
 import { serializeReportQuery } from '../wbs-chat/wbsChat.service';
 import { loadBoqItemInProject, loadReportQueryInProject } from '../../utils/ownership';
 import { evaluateGeofence } from '../../utils/geofenceEvaluation';
@@ -631,16 +631,16 @@ export async function revalidateWorkdayReport(params: {
         where: { id: targetQueryId },
         data: { status: 'RESUBMITTED', respondedAt: new Date() },
       });
-      await tx.mobileNotification.updateMany({
+      const answered = await tx.mobileNotification.findMany({
         where: {
           projectId,
           fieldSessionId: fieldAgent.sessionId,
           type: 'REPORT_QUERY',
-          isRead: false,
           metadata: { path: ['reportQueryId'], equals: targetQueryId },
         },
-        data: { isRead: true, readAt: new Date() },
+        select: { id: true },
       });
+      await markNotificationsReadForSession(tx, fieldAgent.sessionId, answered.map((n) => n.id));
 
       await createWebNotification(tx, {
         projectId,

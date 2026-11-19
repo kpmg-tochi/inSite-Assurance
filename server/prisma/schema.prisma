@@ -205,6 +205,7 @@ enum AuditActionType {
   TELEMETRY_ANOMALY_SUMMARY
   WORKDAY_REPORTS_RELEASED
   DEVICE_KEY_REGISTERED
+  REPORT_QUERY_RESOLVED
 }
 
 enum MobileNotificationType {
@@ -509,9 +510,9 @@ model FieldAgentSession {
   reviewedAt         DateTime?
   rejectionReason    String?
 
-  project            Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  joinCode           ProjectJoinCode         @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
-  role               Role                    @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  project            Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  joinCode           ProjectJoinCode          @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
+  role               Role                     @relation(fields: [roleId], references: [id], onDelete: Restrict)
   evidenceLogs       FieldEvidenceLog[]
   incidentReports    IncidentReport[]
   workdayReports     WorkdayReport[]
@@ -519,8 +520,9 @@ model FieldAgentSession {
   telemetryPings     SiteTelemetryPing[]
   notifications      MobileNotification[]
   wbsChatMessages    WbsChatMessage[]
-  sentChatMessages   WbsChatMessage[]        @relation("ChatSenderSession")
+  sentChatMessages   WbsChatMessage[]         @relation("ChatSenderSession")
   telemetryAnomalies TelemetryAnomalyDaily[]
+  notificationReads  MobileNotificationRead[]
 
   @@index([projectId, roleId])
   @@index([projectId, assuranceStatus])
@@ -1052,16 +1054,30 @@ model MobileNotification {
   title          String
   message        String                 @db.Text
   metadata       Json                   @default("{}")
-  isRead         Boolean                @default(false)
-  readAt         DateTime?
   createdAt      DateTime               @default(now())
 
-  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  fieldSession FieldAgentSession? @relation(fields: [fieldSessionId], references: [id], onDelete: Cascade)
+  project      Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fieldSession FieldAgentSession?       @relation(fields: [fieldSessionId], references: [id], onDelete: Cascade)
+  reads        MobileNotificationRead[]
 
-  @@index([projectId, isRead, createdAt])
-  @@index([fieldSessionId, isRead, createdAt])
+  @@index([projectId, createdAt])
+  @@index([fieldSessionId, createdAt])
   @@map("mobile_notifications")
+}
+
+// Read state per field session (Phase 2 carry-over). A broadcast notification (fieldSessionId null)
+// read by one field user stays unread for everyone else.
+model MobileNotificationRead {
+  notificationId String   @db.Uuid
+  fieldSessionId String   @db.Uuid
+  readAt         DateTime @default(now())
+
+  notification MobileNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  fieldSession FieldAgentSession  @relation(fields: [fieldSessionId], references: [id], onDelete: Cascade)
+
+  @@id([notificationId, fieldSessionId])
+  @@index([fieldSessionId])
+  @@map("mobile_notification_reads")
 }
 
 model ReportQuery {

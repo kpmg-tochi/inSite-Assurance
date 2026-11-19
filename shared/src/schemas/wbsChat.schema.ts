@@ -108,3 +108,13 @@ export const CreateWbsChatMessageRequestSchema = z
 export type CreateWbsChatMessageRequest = z.infer<
   typeof CreateWbsChatMessageRequestSchema
 >;
+
+/**
+ * POST /projects/:projectId/report-queries/:queryId/resolve
+ * A monitor closes a workday-report query (after the reporter's revision, or to withdraw it).
+ * Once resolved, the report cannot be revised again unless a new query is raised.
+ */
+export const ResolveReportQueryRequestSchema = z.object({
+  resolutionNote: z.string().trim().max(1000).optional(),
+});
+export type ResolveReportQueryRequest = z.infer<typeof ResolveReportQueryRequestSchema>;

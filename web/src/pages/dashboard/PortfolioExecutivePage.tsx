@@ -502,10 +502,10 @@ export function PortfolioExecutivePage({
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs space-y-1.5">
           <div className="font-bold text-slate-900 flex items-center gap-1.5">
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            100% Hardware-Sealed Geofences
+            Server-checked geofences
           </div>
           <p className="text-slate-500 leading-relaxed">
-            All submitted field evidence logs are screened in real time against mathematical polygon boundaries and linear corridor coordinates. Mock locations and forged EXIF data are automatically blocked.
+            The server checks every capture and daily report against the project boundary or corridor. Reports must carry a GPS location; mock locations and recycled photos are flagged and not counted as evidence.
           </p>
         </div>
 

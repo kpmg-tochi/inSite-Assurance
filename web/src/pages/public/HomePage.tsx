@@ -358,18 +358,18 @@ export function HomePage() {
                   </li>
                   <li>
                     <strong className="text-slate-900">
-                      Live Verified Camera:
+                      In-app camera only:
                     </strong>{" "}
-                    Blocks gallery uploads, locks hardware GPS &amp; Turf.js
-                    highway chainage (<strong>KM X+YYY</strong>), and signs
-                    local SQLite bundles with SHA-256.
+                    No gallery uploads. Each photo carries the GPS fix from the
+                    shutter, is signed with a per-device key, and is checked by
+                    the server against the corridor (<strong>KM X+YYY</strong>).
                   </li>
                   <li>
                     <strong className="text-slate-900">
                       Mandatory Human Confirmation:
                     </strong>{" "}
-                    Field agents must review and sign off on Whisper-extracted
-                    Pidgin/English quantities before database commit.
+                    Field agents confirm their own daily summary and quantity.
+                    Voice transcription only suggests; it never submits.
                   </li>
                 </ul>
               </div>

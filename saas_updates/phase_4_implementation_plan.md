@@ -2,7 +2,7 @@
 
 | | |
 | :--- | :--- |
-| **Status** | In progress. Steps 1, 2, 4 and 6 built (server parts tested; mobile parts typecheck, bundle and are unit-tested in Node, not yet run on a device). Steps 3 and 5 mostly done. Remaining work and carry-overs are in the progress table in section 6. Manual checks are in [physical_testing_checklist.md](physical_testing_checklist.md). |
+| **Status** | Implemented; awaiting on-device testing. All steps are built. Server behaviour is covered by route tests, and mobile logic by Node tests plus an Android bundle build. The device checks are in [physical_testing_checklist.md](physical_testing_checklist.md) and will be run at the end of the programme. |
 | **Depends on** | Phase 2. Phase 3 recommended first (it creates the evidence provider seam); if Phase 3 has not run, create `evidenceProvider.ts` here. |
 | **Unblocks** | Phases 5, 7 |
 | **Read first** | [Master plan](saas_implementation_plan.md) sections 2, 3 and 6 |
@@ -126,8 +126,9 @@ flowchart LR
 | 2 Mobile storage and outbox | Built: `storage/db` (SQLCipher key in SecureStore, `cipher_version` check, `user_version` migrations, destructive v1 rebuild), one outbox (`storage/outbox`), captures on disk with SHA-256 and Ed25519 signature, persist-then-enqueue in one transaction, sync status screen (the former backlog modal) with dead-letter Retry. `syncEngine.ts`, `telemetryRepository.ts`, `sqliteDatabase.ts`, `incidentService.ts` and all in-memory fallbacks deleted. Signing library: `@noble/ed25519` v3 + `@noble/hashes`, random bytes from `expo-crypto`. |
 | 3 Capture correctness | Mostly built with Step 2: no hardcoded coordinates or chainage in mobile; per-capture fix kept; GPS constants with timeout; baseline pack persisted, shared `verifyPointAgainstGeofence` only; computed badges only; "reported today" from reports; hold-point text from `holdPointInstruction`, off by default, hold-point items only; chat merged by `clientMessageId` with ISO times; briefs upserted with their date. **Deviation:** `workdayDate` uses the reporter's device time zone, not a project zone (projects have none; see section 8). |
 | 4 Assurance flow | Built (session 2). Status comes from `/auth/me` at startup, on foreground, on pull-to-refresh and on push (`useAssuranceStatusSync`). `REJECTED` shows the reason and routes to the wizard, and the session stays signed in. Backlog modal is read-only. Identity uploads use `IDENTITY_*` media types. D-4.2: the vision-camera path and its three packages are deleted, `GuidedSelfieCapture` replaces it, and the request sends `selfieSet` (capture times only). The server records no liveness result (tested); the web queue shows all three poses for manual review. Routing is role-driven only. |
-| 5 Web honesty | Mostly done: map, dashboard, presence panel, evidence drawer, verification queue, executive page, settings and role settings. Evidence views show photo thumbnails and voice playback (`components/evidence/CaptureMedia.tsx`) and report badges. Not done: `LoginPage` sample coordinates, the public marketing pages (`AboutPage`, `MobileAppPage`). |
+| 5 Web honesty | Done (session 3 finished the login and public pages: sample positions are labelled as examples, and integrity claims now describe what the product actually does). Earlier: map, dashboard, presence panel, evidence drawer, verification queue, executive page, settings and role settings. Evidence views show photo thumbnails and voice playback (`components/evidence/CaptureMedia.tsx`) and report badges. The demo persona switcher on the mobile profile screen was removed: it set assurance status on the device, which the server now owns. |
 | 6 Build, push, telemetry | Built (session 2). `eas.json` has development, preview, demo and production profiles; the demo flag is on only in `demo`. **API hosts are placeholders (`SET-…-API-HOST.invalid`) until confirmed.** `app.config.ts` reads `EAS_PROJECT_ID`, `APP_VARIANT` and the demo flag. Push: `expo-notifications` plugin with the `default` Android channel; permission is asked in context (after join, after identity submission), never at launch. Taps route by `actionType`, and a push refreshes assurance status. The real app version is registered. Unused packages are removed, `expo-dev-client` is added, the duplicate `registerRootComponent` is removed, and a `start` script exists. `expo config` resolves the plugins, with no background-location permission. |
+| Carry-overs | Done (session 3). Monitors resolve workday-report queries (`POST /projects/:projectId/report-queries/:queryId/resolve`, web "Mark resolved" / "Withdraw query"; the reporter is notified, and no revision is possible afterwards). Mobile notification read state is per field session (`MobileNotificationRead`). Both are tested. |
 | 7 Tests | Server done. Mobile Node tests: 16 (`npm --workspace=@insite/mobile test`). End-to-end device script not written. |
 
 ### Step 1: Server capture and report pipeline
@@ -205,13 +206,13 @@ flowchart LR
 
 | Claim | State after Phase 4 |
 | :--- | :--- |
-| Live camera only | |
-| GPS at capture | |
-| Mock-location flag | |
-| Device signature | |
-| Duplicate / similar photo detection | |
-| Encrypted local storage | |
-| Identity check | |
+| Live camera only | The app has no gallery picker (`expo-image-picker` removed); evidence comes from the in-app camera. It is not a cryptographic guarantee: a rooted or modified phone can feed files to the app. |
+| GPS at capture | The fix at the shutter is stored with each capture; no fix is shown as "Location unavailable", never a substitute value. Every report must carry a fix (low accuracy is a badge). The server evaluates the geofence itself. |
+| Mock-location flag | The operating system's mock-location flag is recorded; on the server it makes a capture fail integrity and not count as evidence. A rooted phone can hide the flag. |
+| Device signature | Each install signs captures, reports and pings with an Ed25519 key kept in the OS keystore; the server verifies with the registered public key. Invalid fails integrity; unsigned is flagged. It proves which install sent the data, not that the content is genuine. |
+| Duplicate / similar photo detection | The server hashes the stored bytes (SHA-256, exact copies) and computes a 64-bit difference hash (near copies, distance 6 or less) across all the tenant's projects. A near copy of the same reporter's own photo within 6 hours is treated as a burst, not reuse. |
+| Encrypted local storage | Release builds encrypt the local database with SQLCipher (key in the OS keystore) and refuse to run without it. A development build without SQLCipher works unencrypted and says so on the Sync status screen. |
+| Identity check | A photo ID and a guided three-pose selfie set, compared by a person on the web. No automated liveness check, and none is claimed. |
 
 ## 8. Found during implementation
 
@@ -250,7 +251,8 @@ _Add items here rather than expanding scope._
 - *Seeded identity documents are external image URLs*, not object keys (Step 4).
 - *Assurance submissions still send the old `livenessVerification` object* because the server schema requires it. Step 4 (D-4.2) removes it on both sides.
 - *`web/src/components/ContractorVerificationQueue.tsx` changed in the working tree outside this session* (it now passes a permission flag to `useContractorVerificationsQuery`). Left as found.
-- *Carried over to Phase 4 by earlier phases and not done yet:* (a) workday-report queries are never set to `RESOLVED`: there is no monitor action for it (Phase 3, item 7); (b) mobile notification read state is shared by every field user on a project, so it needs a per-session read table (Phase 2, item 6). Both are small; do them with the rest of Step 3/5.
+- *Carried over to Phase 4 by earlier phases, now done (session 3):* (a) workday-report queries can be resolved by a monitor (Phase 3, item 7); (b) mobile notification read state is per field session, and the migration keeps existing reads of addressed notifications (Phase 2, item 6).
+- *Items from an ended session after rejoining* are not defined: queued captures would register under the new session, but a report linking captures registered by the old session is refused (`CAPTURE_NOT_OWNED`) and moves to "Could not be sent". Phase 5 (login and multi-project) should decide how queued work moves between sessions.
 - *The verification queue showed only the front selfie.* The DTO now includes `selfieLeftUrl` and `selfieRightUrl` (signed, 5 minutes), and the reviewer sees all three poses.
 - *Demo skip-verification set `livenessPassed: true, livenessScore: 1.0`.* It now records no liveness result.
 - *Expo Go cannot exercise SQLCipher.* On-device checks of Steps 2 and 3 need a development build, which depends on Step 6 (`eas.json`).

@@ -69,7 +69,7 @@ Only decisions that change how the platform is used are listed. Each has a defau
 | 1 | Multi-tenancy, branding and relational RBAC | Implemented, with carry-overs | none | [phase_1](phase_1_implementation_plan.md) |
 | 2 | Security hardening, tenant isolation and deploy baseline | Implemented, with carry-overs (see its section 7) | 1 | [phase_2](phase_2_implementation_plan.md) |
 | 3 | Disbursement integrity, reconciliation workflow and rating labels | Implemented, with carry-overs (see its section 7); web not yet clicked through | 2 | [phase_3](phase_3_implementation_plan.md) |
-| 4 | Field evidence pipeline and mobile sync reliability | In progress (Steps 1, 2, 4, 6 built; 3, 5 mostly) | 2 (3 recommended) | [phase_4](phase_4_implementation_plan.md) |
+| 4 | Field evidence pipeline and mobile sync reliability | Implemented; on-device testing pending (see physical_testing_checklist.md) | 2 (3 recommended) | [phase_4](phase_4_implementation_plan.md) |
 | 5 | Provisioned mobile users and multi-project mobile | Not started | 2, 4 | [phase_5](phase_5_implementation_plan.md) |
 | 6 | Organisations, contractor model, geofence modes and staged project creation | Not started | 2, 3 | [phase_6](phase_6_implementation_plan.md) |
 | 7 | Process engine, standards, persona-aware AI and approval chains | Not started | 3, 4, 6 | [phase_7](phase_7_implementation_plan.md) |

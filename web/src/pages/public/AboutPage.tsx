@@ -380,11 +380,13 @@ export function AboutPage() {
                   On-site personnel enter their assigned join code on the mobile
                   application without requiring corporate email provisioning.
                   The mobile app operates offline in remote corridors, storing
-                  captures locally in an encrypted SQLite database. Device
-                  gallery uploads are blocked; live shutter presses capture
-                  hardware GPS, confirm the device is physically inside the
-                  corridor, calculate highway chainage (KM X+YYY), and verify
-                  that mock-location spoofing is not active. Voice logs in
+                  captures locally in an encrypted database. There is no
+                  gallery upload: photos come from the in-app camera with the
+                  GPS fix taken at the shutter and the phone's mock-location
+                  flag. Each capture is signed with a key unique to the
+                  device. The server then checks the position against the
+                  corridor, works out the highway chainage (KM X+YYY) and
+                  screens for recycled photos. Voice logs in
                   English or Nigerian Pidgin are transcribed and converted into
                   structured material quantities. The reporter completes a
                   mandatory confirmation step to sign the log before
@@ -873,7 +875,7 @@ export function AboutPage() {
                       <CitationGroup ids={[7, 22]} />
                     </td>
                     <td className="py-3 px-4 text-slate-600 align-top">
-                      Every log carries a verified provenance badge (Monitor
+                      Every report shows who made it and in which role (Monitor
                       Inspector, Independent Clerk of Works, or Contractor
                       Engineer). Contractor self-reports trigger higher scrutiny
                       in the Smart Visit Planner.
@@ -885,9 +887,10 @@ export function AboutPage() {
                       <CitationRef id={26} />
                     </td>
                     <td className="py-3 px-4 text-slate-600 align-top">
-                      Live camera capture only; 64-bit perceptual hash (pHash)
-                      duplicate detection across projects; device mock-location
-                      screening; SHA-256 signed capture bundles.
+                      In-app camera only; server-side 64-bit perceptual hash
+                      duplicate detection across the organisation&apos;s
+                      projects; mock-location flags; every capture signed with a
+                      per-device key and hashed (SHA-256) by the server.
                     </td>
                   </tr>
                   <tr>

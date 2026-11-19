@@ -30,18 +30,6 @@ import { useDemoProjectsQuery } from "../queries/projects/useProjectsQueries";
 import { useDemoSkipVerificationMutation } from "../queries/auth/useAuthMutations";
 import { formatMobileErrorMessage } from "../utils/errorFormatter";
 
-export type Persona = {
-  roleTitle: string;
-  roleName: string;
-  fieldPersonaType: FieldPersonaType;
-  assuranceWeight: number;
-  assuranceStatus:
-    | "PENDING_APPROVAL"
-    | "APPROVED"
-    | "REJECTED"
-    | "NOT_SUBMITTED"
-    | undefined;
-};
 
 export const ProfileAndProjectsScreen = () => {
   // Navigation
@@ -147,15 +135,6 @@ export const ProfileAndProjectsScreen = () => {
     });
   };
 
-  const onApplyPersona = async (persona: Persona) => {
-    await updateProfile({
-      roleTitle: persona.roleTitle,
-      activeRoleName: persona.roleName,
-      activeFieldPersonaType: persona.fieldPersonaType,
-      activeAssuranceWeight: persona.assuranceWeight,
-      assuranceStatus: persona.assuranceStatus,
-    });
-  };
 
   return (
     <>
@@ -309,102 +288,6 @@ export const ProfileAndProjectsScreen = () => {
               </TouchableOpacity>
             </View>
 
-            {/* Demo Persona Switcher (Demo Mode only) */}
-            {(process.env.EXPO_PUBLIC_DEMO_MODE === "true") && (
-              <View style={styles.section}>
-              <View>
-                <Text style={styles.sectionTitle}>Demo Scenario Switcher</Text>
-                <Text style={styles.sectionSubtitle}>
-                  Toggle between roles to test unverified backlog queuing vs.
-                  certified monitor workflows.
-                </Text>
-              </View>
-
-              {/* Persona 1: Contractor Unverified */}
-              <TouchableOpacity
-                style={styles.personaCard}
-                onPress={() =>
-                  onApplyPersona({
-                    roleTitle: "Contractor Site Engineer (Unverified)",
-                    roleName: "Contractor Engineer",
-                    fieldPersonaType: "CONTRACTOR_EXECUTOR",
-                    assuranceWeight: 0.4,
-                    assuranceStatus: "PENDING_APPROVAL",
-                  })
-                }
-                activeOpacity={0.7}
-              >
-                <View style={styles.personaRow}>
-                  <View>
-                    <Text style={styles.personaName}>
-                      Contractor Engineer (Pending Review)
-                    </Text>
-                    <Text style={styles.personaDesc}>
-                      Logs queue in local backlog; zero AI cost incurred until
-                      approved.
-                    </Text>
-                  </View>
-                  <Text style={styles.personaArrow}>→</Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* Persona 2: Contractor Approved */}
-              <TouchableOpacity
-                style={styles.personaCard}
-                onPress={() =>
-                  onApplyPersona({
-                    roleTitle: "Senior Site Civil Engineer (COREN Verified)",
-                    roleName: "Contractor Engineer",
-                    fieldPersonaType: "CONTRACTOR_EXECUTOR",
-                    assuranceWeight: 0.4,
-                    assuranceStatus: "APPROVED",
-                  })
-                }
-                activeOpacity={0.7}
-              >
-                <View style={styles.personaRow}>
-                  <View>
-                    <Text style={styles.personaName}>
-                      Contractor Engineer (Verified)
-                    </Text>
-                    <Text style={styles.personaDesc}>
-                      COREN verified; live AI summary parsing and full sync
-                      enabled.
-                    </Text>
-                  </View>
-                  <Text style={styles.personaArrow}>→</Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* Persona 3: Independent Clerk of Works */}
-              <TouchableOpacity
-                style={styles.personaCard}
-                onPress={() =>
-                  onApplyPersona({
-                    roleTitle: "Independent Resident Clerk of Works",
-                    roleName: "Independent Resident (Clerk of Works)",
-                    fieldPersonaType: "INDEPENDENT_VERIFIER",
-                    assuranceWeight: 0.9,
-                    assuranceStatus: "APPROVED",
-                  })
-                }
-                activeOpacity={0.7}
-              >
-                <View style={styles.personaRow}>
-                  <View>
-                    <Text style={styles.personaName}>
-                      Clerk of Works (Independent)
-                    </Text>
-                    <Text style={styles.personaDesc}>
-                      Tier 2 assurance weight (0.85); daily resident
-                      inspections.
-                    </Text>
-                  </View>
-                  <Text style={styles.personaArrow}>→</Text>
-                </View>
-              </TouchableOpacity>
-              </View>
-            )}
           </ScrollView>
         </View>
       </GradientHeaderLayout>

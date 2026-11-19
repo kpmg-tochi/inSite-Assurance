@@ -63,7 +63,7 @@ export function MobileAppPage() {
                 {/* Live Turf.js Chainage Banner */}
                 <div className="bg-emerald-50 border-b border-emerald-200 px-3.5 py-2 flex items-center justify-between text-[11px]">
                   <span className="font-semibold text-emerald-900">
-                    Corridor Verified: KM 14+200
+                    Inside corridor · KM 14+200 (example)
                   </span>
                   <span className="font-medium text-emerald-700">
                     ±3.2m GPS
@@ -154,15 +154,16 @@ export function MobileAppPage() {
               Step 2 · On-Device Turf.js &amp; SQLite
             </div>
             <h3 className="text-base font-bold text-slate-900">
-              Live Verified Camera &amp; Offline Outbox
+              In-App Camera &amp; Offline Outbox
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Camera roll/gallery uploads are blocked for site evidence. At
-              shutter press, the app locks hardware GPS coordinates, screens for
-              mock-location providers, computes highway chainage (
-              <strong>KM X+YYY</strong>) offline via <strong>@turf/turf</strong>
-              , and signs the capture bundle in <strong>expo-sqlite</strong>{" "}
-              with a SHA-256 device signature hash.
+              Site evidence comes from the in-app camera only. At the shutter
+              the app records the GPS fix and the phone&apos;s mock-location
+              flag, previews the corridor position (
+              <strong>KM X+YYY</strong>) offline with <strong>@turf/turf</strong>
+              , signs the capture with a per-device key and keeps it in an
+              encrypted local database until the outbox can send it. The server
+              re-checks the position and screens for recycled photos.
             </p>
           </div>
 
@@ -171,15 +172,16 @@ export function MobileAppPage() {
               Step 3 · Mitigating ASR Risk [S20]
             </div>
             <h3 className="text-base font-bold text-slate-900">
-              Mandatory Human Confirmation Bubble
+              The Reporter Confirms Every Report
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               Published benchmarks show standard speech models exhibit higher
               word error rates on Nigerian accents (31.6% vs. 8.6% US) and can
-              mistranscribe quantities unless verified. Before any voice log is
-              committed to the database, the field reporter must review the
-              extracted quantities and tap{" "}
-              <strong>Confirm &amp; Sign Log</strong>.
+              mistranscribe quantities. Transcripts and suggested quantities
+              are only suggestions: the reporter types or edits the summary and
+              quantity and confirms{" "}
+              <strong>This is my full report for today</strong> before it is
+              sent.
             </p>
           </div>
         </div>

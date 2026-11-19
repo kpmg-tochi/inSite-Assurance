@@ -1217,7 +1217,6 @@ async function runSeed(): Promise<void> {
           reportQueryId: rebarOpenQuery.id,
           querySource: "AI_OMISSION_CHECK",
         } as unknown as Prisma.InputJsonValue,
-        isRead: false,
         createdAt: new Date(nowMs - 1000 * 60 * 14), // 14m ago
       },
       {
@@ -1237,7 +1236,6 @@ async function runSeed(): Promise<void> {
           draftQuantity: 18,
           unit: boqCulvertConcrete.unit,
         } as unknown as Prisma.InputJsonValue,
-        isRead: false,
         createdAt: new Date(nowMs - 1000 * 60 * 60 * 3), // 3h ago
       },
       {
@@ -1250,7 +1248,6 @@ async function runSeed(): Promise<void> {
         message:
           "Your COREN and NIN credentials have been queued with KPMG Project Monitoring Desk. Offline field logs remain active.",
         metadata: {} as unknown as Prisma.InputJsonValue,
-        isRead: false,
         createdAt: new Date(nowMs - 1000 * 60 * 60 * 8), // 8h ago
       },
       {
@@ -1266,7 +1263,6 @@ async function runSeed(): Promise<void> {
           wbsItemId: boqCulvertReinforcement.id,
           wbsCode: boqCulvertReinforcement.wbsCode,
         } as unknown as Prisma.InputJsonValue,
-        isRead: false,
         createdAt: new Date(nowMs - 1000 * 60 * 60 * 24 * 2), // 2d ago
       },
       {
@@ -1279,8 +1275,6 @@ async function runSeed(): Promise<void> {
         message:
           "KPMG Monitor approved your contractor identity and COREN credentials for LKK-402.",
         metadata: {} as unknown as Prisma.InputJsonValue,
-        isRead: true,
-        readAt: new Date(nowMs - 1000 * 60 * 60 * 24 * 4),
         createdAt: new Date(nowMs - 1000 * 60 * 60 * 24 * 5), // 5d ago
       },
       {
@@ -1296,11 +1290,25 @@ async function runSeed(): Promise<void> {
           wbsItemId: boqStoneBase.id,
           wbsCode: boqStoneBase.wbsCode,
         } as unknown as Prisma.InputJsonValue,
-        isRead: true,
-        readAt: new Date(nowMs - 1000 * 60 * 60 * 24 * 12),
         createdAt: new Date(nowMs - 1000 * 60 * 60 * 24 * 14), // 2w ago
       },
     ],
+  });
+
+  // Older items the contractor has already read. Read state is per field session.
+  const alreadyRead = await prisma.mobileNotification.findMany({
+    where: {
+      fieldSessionId: conSession.id,
+      title: { in: ["Identity Assurance Approved", "Morning Plan A Brief · WBS 03.01.1"] },
+    },
+    select: { id: true, createdAt: true },
+  });
+  await prisma.mobileNotificationRead.createMany({
+    data: alreadyRead.map((n) => ({
+      notificationId: n.id,
+      fieldSessionId: conSession.id,
+      readAt: new Date(n.createdAt.getTime() + 86_400_000),
+    })),
   });
 
   // ==========================================================================

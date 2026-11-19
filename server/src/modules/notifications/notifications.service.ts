@@ -13,20 +13,14 @@ import { WebJwtPayload } from '../../middleware/auth.middleware';
 
 type PrismaTransactionOrClient = Prisma.TransactionClient | typeof prisma;
 
-function serializeNotification(row: {
-  id: string;
-  projectId: string;
-  fieldSessionId: string | null;
-  type: string;
-  actionType: string;
-  requiresAction: boolean;
-  title: string;
-  message: string;
-  metadata: unknown;
-  isRead: boolean;
-  readAt: Date | null;
-  createdAt: Date;
-}): MobileNotificationDto {
+type MobileNotificationRow = Prisma.MobileNotificationGetPayload<object> & {
+  /** Reads by the viewing session only (0 or 1 row). */
+  reads?: Array<{ readAt: Date }>;
+};
+
+/** Read state is per field session: `isRead` means "read by the viewer". */
+function serializeNotification(row: MobileNotificationRow): MobileNotificationDto {
+  const readAt = row.reads && row.reads.length > 0 ? row.reads[0].readAt : null;
   return {
     id: row.id,
     projectId: row.projectId,
@@ -37,14 +31,15 @@ function serializeNotification(row: {
     title: row.title,
     message: row.message,
     metadata: (row.metadata as MobileNotificationMetadata) ?? {},
-    isRead: row.isRead,
-    readAt: row.readAt ? row.readAt.toISOString() : null,
+    isRead: readAt !== null,
+    readAt: readAt ? readAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
   };
 }
 
 /**
- * Creates a persisted notification record in PostgreSQL inside any transaction or standalone call.
+ * Creates a notification. `isRead` (seed and history only) records it as read by its addressee;
+ * it has no effect on a broadcast, which starts unread for every session.
  */
 export async function createMobileNotification(
   db: PrismaTransactionOrClient,
@@ -62,48 +57,61 @@ export async function createMobileNotification(
     createdAt?: Date;
   }
 ): Promise<MobileNotificationDto> {
+  const fieldSessionId = input.fieldSessionId ?? null;
+  const markRead = Boolean(input.isRead && fieldSessionId);
   const created = await db.mobileNotification.create({
     data: {
       projectId: input.projectId,
-      fieldSessionId: input.fieldSessionId ?? null,
+      fieldSessionId,
       type: input.type,
       actionType: input.actionType,
       requiresAction: input.requiresAction ?? false,
       title: input.title,
       message: input.message,
       metadata: (input.metadata ?? {}) as unknown as Prisma.InputJsonValue,
-      isRead: input.isRead ?? false,
-      readAt: input.readAt ?? null,
       ...(input.createdAt ? { createdAt: input.createdAt } : {}),
+      ...(markRead
+        ? { reads: { create: { fieldSessionId: fieldSessionId!, readAt: input.readAt ?? new Date() } } }
+        : {}),
     },
+    include: { reads: true },
   });
-
   return serializeNotification(created);
 }
 
+/** Marks the given notifications read for one session (idempotent). */
+export async function markNotificationsReadForSession(
+  db: PrismaTransactionOrClient,
+  fieldSessionId: string,
+  notificationIds: string[]
+): Promise<void> {
+  if (notificationIds.length === 0) return;
+  await db.mobileNotificationRead.createMany({
+    data: notificationIds.map((notificationId) => ({ notificationId, fieldSessionId })),
+    skipDuplicates: true,
+  });
+}
+
 /**
- * Lists notifications for a project (scoped to the caller's field session + project-wide broadcasts),
- * ordered unread-first, then most recent first.
+ * Notifications for the caller's session plus project-wide broadcasts, unread first, newest first.
+ * Read state is the caller's own.
  */
 export async function listProjectNotifications(
   projectId: string,
   fieldSessionId: string
 ): Promise<MobileNotificationDto[]> {
   const rows = await prisma.mobileNotification.findMany({
-    where: {
-      projectId,
-      OR: [{ fieldSessionId: null }, { fieldSessionId }],
-    },
-    orderBy: [{ isRead: 'asc' }, { createdAt: 'desc' }],
+    where: { projectId, OR: [{ fieldSessionId: null }, { fieldSessionId }] },
+    include: { reads: { where: { fieldSessionId }, select: { readAt: true }, take: 1 } },
+    orderBy: { createdAt: 'desc' },
     take: 100,
   });
-
-  return rows.map(serializeNotification);
+  return rows.map(serializeNotification).sort((a, b) => Number(a.isRead) - Number(b.isRead));
 }
 
 /**
- * Marks a notification as read on tap (only permitted when requiresAction is false),
- * or resolves an action-required notification once the required action has completed.
+ * Marks a notification read for the caller (only when no action is required), or records that
+ * an action-required notification was resolved by completing its action.
  */
 export async function markNotificationRead(params: {
   projectId: string;
@@ -111,8 +119,6 @@ export async function markNotificationRead(params: {
   notificationId: string;
   resolvedByAction?: boolean;
 }): Promise<MobileNotificationDto> {
-  // A field agent may only touch notifications addressed to their session or broadcast to
-  // their project.
   const existing = await prisma.mobileNotification.findFirst({
     where: {
       id: params.notificationId,
@@ -120,15 +126,9 @@ export async function markNotificationRead(params: {
       OR: [{ fieldSessionId: null }, { fieldSessionId: params.fieldSessionId }],
     },
   });
-
   if (!existing) {
-    throw new AppError(
-      'Notification not found for this project',
-      404,
-      'NOTIFICATION_NOT_FOUND'
-    );
+    throw new AppError('Notification not found for this project', 404, 'NOTIFICATION_NOT_FOUND');
   }
-
   if (existing.requiresAction && !params.resolvedByAction) {
     throw new AppError(
       'This notification requires completing its action before it can be marked as read.',
@@ -136,20 +136,12 @@ export async function markNotificationRead(params: {
       'NOTIFICATION_ACTION_REQUIRED'
     );
   }
-
-  if (existing.isRead) {
-    return serializeNotification(existing);
-  }
-
-  const updated = await prisma.mobileNotification.update({
+  await markNotificationsReadForSession(prisma, params.fieldSessionId, [existing.id]);
+  const row = await prisma.mobileNotification.findUniqueOrThrow({
     where: { id: existing.id },
-    data: {
-      isRead: true,
-      readAt: new Date(),
-    },
+    include: { reads: { where: { fieldSessionId: params.fieldSessionId }, select: { readAt: true }, take: 1 } },
   });
-
-  return serializeNotification(updated);
+  return serializeNotification(row);
 }
 
 type WebNotificationRow = Prisma.WebNotificationGetPayload<object> & {
