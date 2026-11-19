@@ -126,6 +126,21 @@
 
 ---
 
+### Step 8: Added from Phase 4 (owner, 2026-11-19)
+
+**Unsent items after a session ends and the person rejoins.** Today, captures and notes queued under a revoked session are sent under the new session, but a report that links captures registered by the old session is refused (`CAPTURE_NOT_OWNED`) and lands in "Could not be sent". Owner direction:
+- [ ] On rejoin, mark every unsent chat item (photo, voice note, note, report) from the ended session with a small exclamation icon in the WBS thread. Hold these items out of the outbox until the person decides.
+- [ ] Tapping the icon explains that the item was captured under a session that has ended and will not be included as evidence as it is.
+- [ ] Two actions: **Remove** it from the thread (deletes the local file and the outbox row), or **Update** it for the current session. Update re-validates it as a new capture: a new client ID, a fresh signature with the current key and session, and the original capture time and GPS fix kept as provenance. The server records it as re-submitted under the new session, with a link to the original capture ID. A report must be re-confirmed by the person.
+- [ ] Server: a capture re-submitted this way is flagged (for example `RESUBMITTED_AFTER_SESSION_END`) so reviewers can see it, and it is never silently merged into the old session's evidence.
+- [ ] Tests: revoke, rejoin, remove, update; the updated item is accepted once and the removed one never reaches the server.
+
+**Project-wide notifications that need an action.** Read state is per field session since Phase 4 (`MobileNotificationRead`). Today the only project-wide notification that requires action is the monitor's IPC-line clarification request (`reconciliation.service.ts`, `REPORT_QUERY` with `monitorQueryId`, sent to everyone on the project). Personal notifications (report queries, identity approved or returned, query resolved) are unaffected. Owner direction:
+- [ ] Add `actionedAt` and `actionedBySessionId` / `actionedByUserId` to `MobileNotification`. When anyone completes the required action (responds to or resolves the monitor query, or submits the revision it asked for), set `actionedAt`. The notification then shows as done for everyone, with "Answered by {name}", and stops counting as unread or action-required.
+- [ ] Map each action-required type to the event that completes it, in one place: monitor query responded or resolved, report query resubmitted or resolved, identity resubmitted.
+- [ ] Mobile notification centre: actioned items move out of the "needs action" group.
+- [ ] Tests: two sessions on one project; one acts; the other sees it actioned, not unread.
+
 ## 6. Definition of done
 
 - A monitor created in web admin signs in on mobile and sees both projects without a code or an assurance step.

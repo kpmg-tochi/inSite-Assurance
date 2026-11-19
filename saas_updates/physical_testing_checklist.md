@@ -155,4 +155,5 @@ SQLCipher and push notifications do not work in Expo Go, so testing needs a deve
 ## 4. Not ready to test yet
 
 - Configurable geofence tolerance (moved to Phase 6).
-- Moving queued items between sessions after a revoke and rejoin (Phase 5).
+- Moving queued items between sessions after a revoke and rejoin: an exclamation on each item, with Remove or Update (Phase 5, Step 8).
+- Project-wide action notifications marked done for everyone once someone acts (Phase 5, Step 8).
