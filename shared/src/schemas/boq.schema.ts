@@ -25,6 +25,9 @@ export const BoqItemDtoSchema = BoqItemInputSchema.extend({
   aiSuggestedTrancheId: z.string().uuid().nullable(),
   trancheMappingConfirmedByMonitor: z.boolean(),
   cumulativeCertifiedPct: z.number().min(0).max(100),
+  /** Contractor package (Phase 6). */
+  projectContractorId: z.string().uuid().nullable().optional(),
+  lastRevisionId: z.string().uuid().nullable().optional(),
 });
 export type BoqItemDto = z.infer<typeof BoqItemDtoSchema>;
 

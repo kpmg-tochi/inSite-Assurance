@@ -27,7 +27,7 @@ import {
 } from "./table";
 import Drawer from "./Drawer";
 import Loader from "./Loader";
-import { formatDateTimeShort } from "../lib/formatters";
+import { displayZoneLabel, formatDateTimeShort } from "../lib/formatters";
 import { CaptureAudio, CapturePhoto } from "./evidence/CaptureMedia";
 
 interface SitePresencePanelProps {
@@ -199,7 +199,7 @@ export function SitePresencePanel({
     {
       id: "workdayDate",
       header: "Date",
-      tooltip: "Workday date (WAT) for the signed daily report",
+      tooltip: `Workday date (${displayZoneLabel()}) for the signed daily report`,
       width: "w-28",
       cell: (r) => (
         <span className="text-xs font-mono text-slate-700 whitespace-nowrap">
@@ -295,7 +295,7 @@ export function SitePresencePanel({
   const pingColumns: TableColumnDef<SiteTelemetryPingDto>[] = [
     {
       id: "capturedAt",
-      header: "Captured (WAT)",
+      header: `Captured (${displayZoneLabel()})`,
       tooltip: "Device timestamp when the GPS ping was recorded",
       width: "w-40",
       cell: (p) => (

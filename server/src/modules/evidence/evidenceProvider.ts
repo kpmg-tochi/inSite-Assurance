@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { GeofenceStatus, Prisma, PrismaClient } from '@prisma/client';
 import {
   FieldPersonaType,
   MediaType,
@@ -32,8 +32,19 @@ type StoredGeotag = {
   accuracyMeters?: number | null;
   isMocked?: boolean;
   isWithinGeofence?: boolean | null;
+  geofenceStatus?: GeofenceStatus | null;
+  distanceOutsideMeters?: number | null;
   chainageLabel?: string | null;
 };
+
+const STATUS_RANK: Record<GeofenceStatus, number> = { INSIDE: 0, WITHIN_TOLERANCE: 1, OUTSIDE: 2 };
+
+/** Worst evaluated status across the inputs; null when none was evaluated. */
+function worstGeofenceStatus(values: Array<GeofenceStatus | null | undefined>): GeofenceStatus | null {
+  const known = values.filter((v): v is GeofenceStatus => Boolean(v));
+  if (known.length === 0) return null;
+  return known.reduce((a, b) => (STATUS_RANK[b] > STATUS_RANK[a] ? b : a));
+}
 
 function asStringArray(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === 'string' && v.trim() !== '') : [];
@@ -51,6 +62,8 @@ function toMedia(c: CaptureRow): ProvidedEvidenceMedia | null {
     capturedAt: c.capturedAtDevice.toISOString(),
     locationAvailable: c.locationAvailable,
     isWithinGeofence: c.isWithinGeofence,
+    geofenceStatus: (c.geofenceStatus as GeofenceStatus | null) ?? null,
+    distanceOutsideMeters: c.distanceOutsideMeters,
     signatureVerified: c.signatureVerified,
     integrityPassed: c.integrityPassed,
     integrityFlags: asStringArray(c.integrityFlags),
@@ -110,6 +123,10 @@ function toEvidenceItem(report: ReportRow, chainCaptures: CaptureRow[]): Provide
     isWithinGeofence: combineGeofence([
       geotag?.isWithinGeofence,
       ...chainCaptures.filter((c) => c.locationAvailable).map((c) => c.isWithinGeofence),
+    ]),
+    geofenceStatus: worstGeofenceStatus([
+      geotag?.geofenceStatus,
+      ...chainCaptures.filter((c) => c.locationAvailable).map((c) => c.geofenceStatus as GeofenceStatus | null),
     ]),
     chainageLabel: geotag?.chainageLabel ?? located?.chainageLabel ?? null,
     latitude,

@@ -5,6 +5,7 @@ import {
   FieldPersonaTypeEnum,
   MediaTypeEnum,
   TranscriptionStatusEnum,
+  GeofenceStatusEnum,
 } from '../enums';
 
 /**
@@ -100,6 +101,10 @@ export const CaptureDtoSchema = z.object({
   isMockLocation: z.boolean(),
   /** null when there was no fix or the geofence could not be evaluated. */
   isWithinGeofence: z.boolean().nullable(),
+  /** INSIDE, WITHIN_TOLERANCE or OUTSIDE (Phase 6); null when not evaluated. */
+  geofenceStatus: GeofenceStatusEnum.nullable().optional(),
+  /** Metres outside the boundary; 0 inside. */
+  distanceOutsideMeters: z.number().nullable().optional(),
   chainageLabel: z.string().nullable(),
   distanceFromSiteMeters: z.number().nullable(),
   /** true = valid device signature, false = invalid, null = unsigned or no key registered. */

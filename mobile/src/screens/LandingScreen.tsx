@@ -3,7 +3,6 @@ import { StyleSheet, Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import KpmgLogo from "../../assets/KPMG-logo.svg";
 import InSiteLogo from "../../assets/InSite_Logo_White.svg";
 import Container from "../components/common/Container";
 import { PrimaryButton } from "../components/inputs/Buttons";
@@ -19,10 +18,8 @@ export const LandingScreen: React.FC = () => {
     <Container style={{ justifyContent: "space-between" }}>
       <StatusBar style="light" />
 
-      {/* Top Section: Small White KPMG Brand Logo */}
-      <View style={styles.topSection}>
-        <KpmgLogo height={64} width={64} color="#fff" />
-      </View>
+      {/* Before sign-in the tenant is unknown: neutral InSite branding only (Phase 6). */}
+      <View style={styles.topSection} />
 
       {/* Center Hero Section: App Logo + App Title + Mission Description */}
       <View style={styles.centerSection}>
@@ -64,6 +61,7 @@ export const LandingScreen: React.FC = () => {
 
 const styles = StyleSheet.create({
   topSection: {
+    height: 64,
     alignItems: "center",
     justifyContent: "center",
   },

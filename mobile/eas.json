@@ -9,6 +9,7 @@
       "distribution": "internal",
       "env": {
         "APP_VARIANT": "development",
+        "APP_BUNDLE_ID": "com.kpmg.insiteassurance.mobile",
         "EXPO_PUBLIC_DEMO_MODE": "false"
       }
     },
@@ -19,6 +20,7 @@
       },
       "env": {
         "APP_VARIANT": "preview",
+        "APP_BUNDLE_ID": "com.kpmg.insiteassurance.mobile",
         "EXPO_PUBLIC_DEMO_MODE": "false",
         "EXPO_PUBLIC_API_BASE_URL": "https://SET-STAGING-API-HOST.invalid/api/v1"
       }
@@ -27,6 +29,7 @@
       "extends": "preview",
       "env": {
         "APP_VARIANT": "demo",
+        "APP_BUNDLE_ID": "com.kpmg.insiteassurance.mobile",
         "EXPO_PUBLIC_DEMO_MODE": "true",
         "EXPO_PUBLIC_API_BASE_URL": "https://SET-DEMO-API-HOST.invalid/api/v1"
       }
@@ -35,6 +38,7 @@
       "autoIncrement": true,
       "env": {
         "APP_VARIANT": "production",
+        "APP_BUNDLE_ID": "com.kpmg.insiteassurance.mobile",
         "EXPO_PUBLIC_DEMO_MODE": "false",
         "EXPO_PUBLIC_API_BASE_URL": "https://SET-PRODUCTION-API-HOST.invalid/api/v1"
       }

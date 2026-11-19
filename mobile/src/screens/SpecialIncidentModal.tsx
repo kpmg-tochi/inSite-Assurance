@@ -21,11 +21,14 @@ import { useSubmitIncidentMutation } from "../queries/incidents/useIncidentMutat
 import type { RootStackParamList } from "../navigation/types";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { defaultColors } from "../styles/commonStyles";
+import { getLoadedBaselinePack } from "../storage/baselineStore";
 
 export const SpecialIncidentModal: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { activeProjectId: projectId } = useProfile();
+  // Chainage only means something on a linear corridor project.
+  const isCorridor = getLoadedBaselinePack(projectId)?.geofenceMode === "LINEAR_CORRIDOR";
   const onClose = () => navigation.goBack();
   const onSubmitted = () => navigation.goBack();
   const [category, setCategory] = useState<
@@ -271,7 +274,7 @@ export const SpecialIncidentModal: React.FC = () => {
                 ]}
                 value={description}
                 onChangeText={setDescription}
-                placeholder="Provide exact location, chainage, contractor personnel involved, and observed defect or safety risk..."
+                placeholder={`Provide exact location${isCorridor ? ", chainage" : ""}, contractor personnel involved, and observed defect or safety risk...`}
                 placeholderTextColor="#94A3B8"
                 multiline
               />

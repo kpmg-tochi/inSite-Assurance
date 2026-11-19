@@ -1,3 +1,4 @@
+import { setDisplayContext } from "./formatters";
 import React, {
   createContext,
   useCallback,
@@ -119,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (res.user) {
       setUser(res.user);
       applyTenantBranding(res.user.tenant?.brandingConfig);
+      setDisplayContext({ currency: res.user.tenant?.defaultCurrency, timeZone: res.user.tenant?.timezone });
     } else {
       updateToken(null);
       setUser(null);
@@ -153,6 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateToken(res.accessToken);
     setUser(res.user);
     applyTenantBranding(res.user.tenant?.brandingConfig);
+    setDisplayContext({ currency: res.user.tenant?.defaultCurrency, timeZone: res.user.tenant?.timezone });
     toast.success(`Signed in as ${res.user.fullName} (${res.user.roleName})`);
   };
 

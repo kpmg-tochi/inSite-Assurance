@@ -29,7 +29,7 @@ export function VisitItineraryModal({
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="px-6 py-4 bg-brand-navy text-white flex items-center justify-between shrink-0">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-sky-400 bg-sky-400/10 px-2 py-0.5 rounded border border-sky-400/20">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-sky bg-brand-sky/10 px-2 py-0.5 rounded border border-brand-sky/20">
               Smart Visit Planner
             </span>
             <h3 className="text-base font-bold text-white mt-0.5">Site visit itinerary: {project.codePrefix}</h3>
@@ -120,7 +120,7 @@ export function VisitItineraryModal({
             )}
           </div>
 
-          <div className="bg-blue-50/60 rounded-xl p-3.5 border border-blue-100 text-[11px] text-slate-700 leading-relaxed">
+          <div className="bg-brand-primary/5 rounded-xl p-3.5 border border-brand-primary/15 text-[11px] text-slate-700 leading-relaxed">
             <strong>Field protocol:</strong> capture evidence inside the project geofence. Captures outside the geofence
             or that fail integrity checks are not counted as support in reconciliation.
           </div>

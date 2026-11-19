@@ -5,7 +5,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useProfile } from "../context/ProfileContext";
 import { GradientHeaderLayout } from "../components/common/GradientHeaderLayout";
-import KpmgLogo from "../../assets/KPMG-logo.svg";
+import { BrandLogo } from "../components/common/BrandLogo";
 import { PrimaryButton } from "../components/inputs/Buttons";
 import { cardShadow, defaultColors } from "../styles/commonStyles";
 import { getInitials } from "../utils/userUtils";
@@ -74,7 +74,7 @@ export const OnboardingProfileScreen: React.FC = () => {
     <GradientHeaderLayout
       title="Field Profile Setup"
       subtitle="Register your details for on-site assurance."
-      rightAction={<KpmgLogo height={64} width={64} color="#fff" />}
+      rightAction={<BrandLogo size={64} />}
       contentContainerStyle={styles.body}
     >
       <View style={{ gap: 16 }}>

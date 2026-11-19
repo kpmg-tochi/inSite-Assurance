@@ -81,7 +81,10 @@ export function PortfolioExecutivePage({
               className="font-medium text-slate-800 truncate"
               title={item.contractorName}
             >
-              {item.contractorName}
+              {item.contractorName || 'No contractor'}
+              {item.contractorCount > 1 && (
+                <span className="text-slate-500"> +{item.contractorCount - 1}</span>
+              )}
             </div>
             <div
               className="text-[11px] text-slate-500 truncate"
@@ -248,7 +251,7 @@ export function PortfolioExecutivePage({
       <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-brand-primary border border-blue-200">
+            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-brand-primary/5 text-brand-primary border border-brand-primary/25">
               Executive Cross-Project Surveillance
             </span>
             <span className="text-xs text-slate-400">·</span>
@@ -418,7 +421,7 @@ export function PortfolioExecutivePage({
         title={
           <div className="flex items-center gap-2.5">
             <span>Capital Project Risk &amp; Assurance Matrix</span>
-            <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-blue-100 border border-white/15">
+            <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-white/90 border border-white/15">
               {summary.projects.length} Projects Monitored
             </span>
           </div>
@@ -426,7 +429,7 @@ export function PortfolioExecutivePage({
         subtitle="Consolidated physical-to-financial reconciliation across all infrastructure projects"
         headerActions={
           <div className="flex items-center gap-2">
-            <span className="text-xs text-blue-200/80">
+            <span className="text-xs text-white/70">
               {summary.conflictCount === 0
                 ? 'All Covenants Satisfied'
                 : `${summary.conflictCount} Projects Flagged`}
@@ -521,7 +524,7 @@ export function PortfolioExecutivePage({
 
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs space-y-1.5">
           <div className="font-bold text-slate-900 flex items-center gap-1.5">
-            <UserCheck className="w-4 h-4 text-indigo-600" />
+            <UserCheck className="w-4 h-4 text-brand-primary" />
             Contractor Competence &amp; Identity Assurance
           </div>
           <p className="text-slate-500 leading-relaxed">

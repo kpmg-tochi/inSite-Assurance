@@ -1,5 +1,6 @@
 import type {
   CaptureMediaType,
+  GeofenceStatus,
   MorningDeliverableBriefDto,
   PlanningTier,
   ReportQueryDto,
@@ -65,6 +66,10 @@ export interface ChatCaptureView {
   isMocked: boolean;
   /** Server result once registered; otherwise null (not yet known). */
   isWithinGeofence: boolean | null;
+  /** Server status once registered (Phase 6): INSIDE, WITHIN_TOLERANCE or OUTSIDE; null when not known. */
+  geofenceStatus: GeofenceStatus | null;
+  /** Metres outside the boundary as the server measured it; null when not known. */
+  distanceOutsideMeters: number | null;
   chainageLabel: string | null;
   uploadState: 'PENDING_UPLOAD' | 'UPLOADED' | 'SERVER_ONLY';
   integrityPassed: boolean | null;
@@ -256,6 +261,9 @@ function captureView(c: CaptureRecord | undefined, server?: WbsChatMessageDto['c
       locationAvailable: c.fix !== null,
       isMocked: c.fix?.isMocked ?? false,
       isWithinGeofence: c.server?.isWithinGeofence ?? null,
+      geofenceStatus: c.server?.geofenceStatus ?? null,
+      // Metres outside the boundary (0 inside), as evaluated by the server.
+      distanceOutsideMeters: c.server?.geofenceStatus ? c.server.distanceOutsideMeters ?? null : null,
       chainageLabel: c.server?.chainageLabel ?? null,
       uploadState: c.uploadStatus === 'REGISTERED' ? 'UPLOADED' : 'PENDING_UPLOAD',
       integrityPassed: c.server?.integrityPassed ?? null,
@@ -271,6 +279,8 @@ function captureView(c: CaptureRecord | undefined, server?: WbsChatMessageDto['c
       locationAvailable: null,
       isMocked: false,
       isWithinGeofence: null,
+      geofenceStatus: null,
+      distanceOutsideMeters: null,
       chainageLabel: null,
       uploadState: 'SERVER_ONLY',
       integrityPassed: null,

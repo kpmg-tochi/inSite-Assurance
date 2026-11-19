@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, MouseEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { ProjectSummaryDto, AuditTrailResponseDto } from "../../api/types";
-import { formatDateTimeShort } from "../../lib/formatters";
+import { displayZoneLabel, formatDateTimeShort } from "../../lib/formatters";
 import {
   useProjectAuditTrailQuery,
   useTenantAuditTrailQuery,
@@ -88,7 +88,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
       id: "createdAt",
       header: "Timestamp",
       tooltip:
-        "Server UTC/WAT timestamp when this event was sealed into the immutable ledger",
+        `Server timestamp (${displayZoneLabel()}) when this event was sealed into the immutable ledger`,
       width: "w-40",
       cell: (entry) => (
         <span className="text-slate-600 whitespace-nowrap text-xs">
@@ -278,7 +278,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
         title={
           <div className="flex items-center gap-2.5">
             <span>Immutable Governance Events</span>
-            <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-blue-100 border border-white/15">
+            <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-white/90 border border-white/15">
               {entries.length} Certified Events
             </span>
           </div>

@@ -7,7 +7,7 @@ import {
 } from "../../../components/table";
 import { EvidenceBadge, ratingTone } from "../../../components/EvidenceBadge";
 import { QUERY_STATUS_CHIP } from "../../../components/EvidenceOverlayDrawer";
-import { formatCompactNaira, formatDateShort } from "../../../lib/formatters";
+import { displayCurrencySymbol, formatCompactNaira, formatDateShort } from "../../../lib/formatters";
 
 export function LineItemsTable({
   ipc,
@@ -61,7 +61,7 @@ export function LineItemsTable({
     },
     {
       id: "budget",
-      header: "Budget (₦)",
+      header: `Budget (${displayCurrencySymbol()})`,
       tooltip: "Baseline budgeted cost of this BOQ line",
       align: "right",
       cell: (li) => <span className="text-slate-600 font-medium">{formatCompactNaira(li.boqItem.budgetedCostNgn)}</span>,

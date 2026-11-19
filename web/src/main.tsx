@@ -7,6 +7,7 @@ import 'leaflet/dist/leaflet.css';
 import './index.css';
 import { AuthProvider } from './lib/auth-context';
 import { App } from './App';
+import { NavigationGuardProvider } from './lib/navigationGuard';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 function formatQueryErrorMessage(error: unknown): string {
@@ -74,7 +75,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <App />
+          <NavigationGuardProvider>
+            <App />
+          </NavigationGuardProvider>
         </AuthProvider>
       </QueryClientProvider>
     </BrowserRouter>

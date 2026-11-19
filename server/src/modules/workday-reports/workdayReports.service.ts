@@ -27,7 +27,7 @@ import { createWebNotification, markNotificationsReadForSession } from '../notif
 import { markNotificationsActioned } from '../notifications/notificationActions';
 import { serializeReportQuery } from '../wbs-chat/wbsChat.service';
 import { loadBoqItemInProject, loadReportQueryInProject } from '../../utils/ownership';
-import { evaluateGeofence } from '../../utils/geofenceEvaluation';
+import { evaluateProjectGeofence, GEOFENCE_CONTEXT_SELECT } from '../../utils/geofenceEvaluation';
 import { verifyDeviceSignature } from '../../utils/deviceSignature';
 import { serializeCapture } from '../../utils/serializers';
 import { scheduleAiOmissionCheck } from './aiOmissionCheck';
@@ -140,9 +140,12 @@ function isUniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
-function evaluateGeotag(input: SubmissionGeotagInput | null | undefined, geofenceGeoJson: unknown): SubmissionGeotag | null {
+function evaluateGeotag(
+  input: SubmissionGeotagInput | null | undefined,
+  project: Parameters<typeof evaluateProjectGeofence>[0]
+): SubmissionGeotag | null {
   if (!input) return null;
-  const evaluation = evaluateGeofence(geofenceGeoJson, input);
+  const evaluation = evaluateProjectGeofence(project, input);
   return {
     latitude: input.latitude,
     longitude: input.longitude,
@@ -151,6 +154,8 @@ function evaluateGeotag(input: SubmissionGeotagInput | null | undefined, geofenc
     isMocked: input.isMocked,
     capturedAt: input.capturedAt,
     isWithinGeofence: evaluation.isWithinGeofence,
+    geofenceStatus: evaluation.geofenceStatus,
+    distanceOutsideMeters: evaluation.distanceOutsideMeters,
     chainageLabel: evaluation.chainageLabel,
     distanceFromSiteMeters: evaluation.distanceFromSiteMeters,
   };
@@ -226,6 +231,8 @@ async function recordReportPing(
       altitudeMeters: params.geotag.altitudeMeters ?? null,
       isMocked: params.geotag.isMocked,
       isWithinGeofence: params.geotag.isWithinGeofence,
+      geofenceStatus: params.geotag.geofenceStatus ?? null,
+      distanceOutsideMeters: params.geotag.distanceOutsideMeters ?? null,
       chainageLabel: params.geotag.chainageLabel,
       distanceMeters: params.geotag.distanceFromSiteMeters,
       pingSource: 'REPORT_SUBMISSION',
@@ -239,6 +246,7 @@ function reportFlags(geotag: SubmissionGeotag, signatureFlag: string | null): st
   const flags: string[] = [];
   if (geotag.isMocked) flags.push('MOCK_GPS_LOCATION_DETECTED');
   if (geotag.isWithinGeofence === false) flags.push('OUTSIDE_PROJECT_GEOFENCE');
+  if (geotag.geofenceStatus === 'WITHIN_TOLERANCE') flags.push('WITHIN_GEOFENCE_TOLERANCE');
   if (geotag.isWithinGeofence === null) flags.push('GEOFENCE_UNAVAILABLE');
   if (geotag.accuracyMeters == null) flags.push('GPS_ACCURACY_UNKNOWN');
   else if (geotag.accuracyMeters > REPORT_LOW_GPS_ACCURACY_METERS) flags.push('LOW_GPS_ACCURACY');
@@ -305,7 +313,7 @@ export async function submitWorkdayReport(params: {
 
   assertTimezone(input.reporterTimezone);
   const [project, boqItem, session] = await Promise.all([
-    prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { geofenceGeoJson: true, timezone: true } }),
+    prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { timezone: true, ...GEOFENCE_CONTEXT_SELECT } }),
     loadBoqItemInProject(prisma, projectId, input.wbsItemId),
     loadSessionForReport(fieldAgent.sessionId),
   ]);
@@ -326,7 +334,7 @@ export async function submitWorkdayReport(params: {
     wbsItemId: input.wbsItemId,
     clientCaptureIds: input.clientCaptureIds,
   });
-  const geotag = evaluateGeotag(input.submissionGeotag, project.geofenceGeoJson);
+  const geotag = evaluateGeotag(input.submissionGeotag, project);
   const signature = verifyDeviceSignature({
     publicKey: session.devicePublicKey,
     alg: session.devicePublicKeyAlg,
@@ -368,6 +376,7 @@ export async function submitWorkdayReport(params: {
           delaysOrBlockers: input.delaysOrBlockers ?? null,
           textNotes: input.textNotes as unknown as Prisma.InputJsonValue,
           submissionGeotag: geotag as unknown as Prisma.InputJsonValue,
+          geofenceStatus: geotag?.geofenceStatus ?? null,
           deviceSignature: input.signature ?? null,
           signatureVerified: signature.verified,
           integrityFlags: flags as unknown as Prisma.InputJsonValue,
@@ -488,7 +497,7 @@ export async function revalidateWorkdayReport(params: {
     where: { id: params.reportId, projectId },
     include: {
       boqItem: { select: { wbsCode: true, isHoldPoint: true } },
-      project: { select: { geofenceGeoJson: true } },
+      project: { select: GEOFENCE_CONTEXT_SELECT },
     },
   });
   if (!prev || prev.reporterSessionId !== fieldAgent.sessionId) {
@@ -552,7 +561,7 @@ export async function revalidateWorkdayReport(params: {
       clientCaptureIds: input.clientCaptureIds,
     }),
   ]);
-  const geotag = evaluateGeotag(input.submissionGeotag, prev.project.geofenceGeoJson);
+  const geotag = evaluateGeotag(input.submissionGeotag, prev.project);
   const signature = verifyDeviceSignature({
     publicKey: session.devicePublicKey,
     alg: session.devicePublicKeyAlg,
@@ -604,6 +613,7 @@ export async function revalidateWorkdayReport(params: {
           delaysOrBlockers: input.delaysOrBlockers ?? prev.delaysOrBlockers,
           textNotes: input.textNotes as unknown as Prisma.InputJsonValue,
           submissionGeotag: geotag as unknown as Prisma.InputJsonValue,
+          geofenceStatus: geotag?.geofenceStatus ?? null,
           deviceSignature: input.signature ?? null,
           signatureVerified: signature.verified,
           integrityFlags: flags as unknown as Prisma.InputJsonValue,

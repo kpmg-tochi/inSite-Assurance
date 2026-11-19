@@ -85,6 +85,8 @@ export interface LineFacts {
   usableEvidence: ProvidedEvidenceItem[];
   excludedIntegrityEvidenceIds: string[];
   outsideGeofenceEvidenceIds: string[];
+  /** Usable evidence that was outside the boundary but within the project tolerance (Phase 6). */
+  withinToleranceEvidenceIds: string[];
   /** Integrity-clean evidence whose location could not be evaluated (no fix). Not counted. */
   unknownLocationEvidenceIds: string[];
   claimedPeriodQuantity: number;
@@ -164,6 +166,10 @@ export function computeLineFacts(
     usableEvidence,
     excludedIntegrityEvidenceIds,
     outsideGeofenceEvidenceIds,
+    // isWithinGeofence is true for WITHIN_TOLERANCE, so these are already usable; note them.
+    withinToleranceEvidenceIds: usableEvidence
+      .filter((e) => e.geofenceStatus === 'WITHIN_TOLERANCE')
+      .map((e) => e.id),
     unknownLocationEvidenceIds,
     claimedPeriodQuantity: round3(claimedPeriodQuantity),
     evidencedQuantity: round3(evidencedQuantity),
@@ -327,6 +333,11 @@ export function applyRuleCaps(
   }
   if (facts.outsideGeofenceEvidenceIds.length > 0) {
     notes.push(`${facts.outsideGeofenceEvidenceIds.length} report(s) outside the geofence were not counted.`);
+  }
+  if (facts.withinToleranceEvidenceIds.length > 0) {
+    notes.push(
+      `${facts.withinToleranceEvidenceIds.length} report(s) were outside the site boundary but within the project's tolerance and were counted.`
+    );
   }
   if (facts.unknownLocationEvidenceIds.length > 0) {
     notes.push(

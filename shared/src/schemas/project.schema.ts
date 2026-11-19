@@ -3,7 +3,6 @@ import {
   ConditionPrecedentStatusEnum,
   FieldPersonaTypeEnum,
   PortfolioHealthEnum,
-  ReportingCadenceEnum,
   RoleOnboardingModeEnum,
 } from '../enums';
 import { ProjectGeofenceSchema } from './geofence.schema';
@@ -31,32 +30,7 @@ export const FacilityTrancheInputSchema = z.object({
 });
 export type FacilityTrancheInput = z.infer<typeof FacilityTrancheInputSchema>;
 
-/**
- * Project Creation & Baseline Setup Schema
- */
-export const CreateProjectRequestSchema = z.object({
-  name: z.string().min(3).max(200),
-  codePrefix: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(/^[A-Z0-9]{3}-[0-9]{3}$/, 'Format must be e.g. LKK-402 or ABJ-105'),
-  stateLocation: z.string().min(2).max(80), // e.g., "Lagos State", "FCT Abuja", "Rivers State"
-  lgaLocation: z.string().max(120).optional(),
-  description: z.string().max(1000).optional(),
-  totalBudgetNgn: z.number().positive(),
-  reportingCadence: ReportingCadenceEnum.default('WEEKLY'),
-  workdayStartTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/).default('08:00').optional(),
-  workdayEndTime: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/).default('17:00').optional(),
-  geofence: ProjectGeofenceSchema,
-  lenderOrganizationName: z.string().min(2).max(160),
-  contractorOrganizationName: z.string().min(2).max(160),
-  tranches: z.array(FacilityTrancheInputSchema).min(1),
-});
-export type CreateProjectRequest = z.infer<typeof CreateProjectRequestSchema>;
-
-export const UpdateProjectBaselineSchema = CreateProjectRequestSchema.partial();
-export type UpdateProjectBaseline = z.infer<typeof UpdateProjectBaselineSchema>;
+// Project creation is staged (Phase 6): see projectSetup.schema.ts for the draft and step schemas.
 
 /**
  * Project Join Code DTO (Dynamic Mobile Role Binding)
@@ -73,6 +47,10 @@ export const ProjectJoinCodeDtoSchema = z.object({
   requiresIdentityAssurance: z.boolean(),
   /** Codes of a role switched to PROVISIONED_ACCOUNT are deactivated and cannot be reissued. */
   roleOnboardingMode: RoleOnboardingModeEnum.optional(),
+  /** Contractor package the code binds sessions to (Phase 6), or null for project-wide codes. */
+  projectContractorId: z.string().uuid().nullable().optional(),
+  contractorName: z.string().nullable().optional(),
+  tradeCode: z.string().nullable().optional(),
   isActive: z.boolean(),
   expiresAt: z.string().datetime().nullable(),
   maxUses: z.number().int().positive().nullable().optional(),
@@ -82,6 +60,8 @@ export type ProjectJoinCodeDto = z.infer<typeof ProjectJoinCodeDtoSchema>;
 
 export const IssueJoinCodeRequestSchema = z.object({
   roleId: z.string().uuid(),
+  /** Required for contractor-executor roles on projects with more than one contractor. */
+  projectContractorId: z.string().uuid().nullable().optional(),
   expiresAt: z.string().datetime().nullable().optional(),
   maxUses: z.number().int().positive().max(10000).nullable().optional(),
 });
@@ -120,7 +100,10 @@ export const PortfolioProjectHealthItemSchema = z.object({
   codePrefix: z.string(),
   name: z.string(),
   stateLocation: z.string(),
+  /** Main contractor (or the only one); "" when none is set. */
   contractorName: z.string(),
+  /** Number of contractors on the project; the UI shows "+N" for the others. */
+  contractorCount: z.number().int(),
   lenderName: z.string(),
   totalBudgetNgn: z.number(),
   disbursedToDateNgn: z.number(),

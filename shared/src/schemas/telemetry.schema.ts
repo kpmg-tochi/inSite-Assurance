@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { GeofenceStatusEnum } from '../enums';
 
 /**
  * D-4.3: presence is recorded only while the app is open, plus one ping per capture and report.
@@ -45,6 +46,10 @@ export const SiteTelemetryPingDtoSchema = z.object({
   altitudeMeters: z.number().nullable(),
   isMocked: z.boolean(),
   isWithinGeofence: z.boolean().nullable(),
+  /** INSIDE, WITHIN_TOLERANCE or OUTSIDE (Phase 6); null when not evaluated. */
+  geofenceStatus: GeofenceStatusEnum.nullable().optional(),
+  /** Metres outside the boundary; 0 inside. */
+  distanceOutsideMeters: z.number().nullable().optional(),
   chainageLabel: z.string().nullable(),
   distanceMeters: z.number().nullable(),
   pingSource: TelemetryPingSourceEnum,

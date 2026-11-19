@@ -12,7 +12,7 @@ import { AppError } from '../../middleware/error.middleware';
 import { FieldAgentJwtPayload } from '../../middleware/auth.middleware';
 import { assertProjectObjectKey, MEDIA_UPLOAD_POLICY, storageService } from '../../integrations/storage.service';
 import { computeDifferenceHash, screenCapture } from '../../utils/integrity';
-import { evaluateGeofence } from '../../utils/geofenceEvaluation';
+import { evaluateProjectGeofence, GEOFENCE_CONTEXT_SELECT } from '../../utils/geofenceEvaluation';
 import { verifyDeviceSignature } from '../../utils/deviceSignature';
 import { recordAuditEvent } from '../audit/audit.service';
 import { loadBoqItemInProject } from '../../utils/ownership';
@@ -85,7 +85,7 @@ export async function registerCapture(params: {
   const [project, session] = await Promise.all([
     prisma.project.findUniqueOrThrow({
       where: { id: projectId },
-      select: { id: true, tenantId: true, geofenceGeoJson: true },
+      select: { id: true, tenantId: true, ...GEOFENCE_CONTEXT_SELECT },
     }),
     prisma.fieldAgentSession.findUniqueOrThrow({
       where: { id: fieldAgent.sessionId },
@@ -111,7 +111,7 @@ export async function registerCapture(params: {
   const perceptualHash = input.mediaType === 'SITE_PHOTO' ? await computeDifferenceHash(bytes) : null;
 
   const location = input.location;
-  const geofence = evaluateGeofence(project.geofenceGeoJson, location);
+  const geofence = evaluateProjectGeofence(project, location);
 
   const signature = verifyDeviceSignature({
     publicKey: session.devicePublicKey,
@@ -177,6 +177,8 @@ export async function registerCapture(params: {
           gpsAccuracyMeters: location?.accuracyMeters ?? null,
           isMockLocation: input.isMockLocation,
           isWithinGeofence: geofence.isWithinGeofence,
+          geofenceStatus: geofence.geofenceStatus,
+          distanceOutsideMeters: geofence.distanceOutsideMeters,
           chainageKm: geofence.chainageKm,
           chainageLabel: geofence.chainageLabel,
           corridorOffsetMeters: geofence.corridorOffsetMeters,
@@ -228,6 +230,7 @@ export async function registerCapture(params: {
           integrityFlags: screening.integrityFlags,
           signatureVerified: signature.verified,
           isWithinGeofence: geofence.isWithinGeofence,
+          geofenceStatus: geofence.geofenceStatus,
           duplicateOfCaptureIds: screening.duplicateOf.map((d) => d.evidenceLogId),
           ...(resubmission
             ? {

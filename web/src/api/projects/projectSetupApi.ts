@@ -1,0 +1,127 @@
+import type {
+  ActivateProjectResponse,
+  BoqItemInput,
+  BoqPreviewResponse,
+  BoqRevisionDto,
+  ContractorSuggestionResponse,
+  CreateProjectDraftRequest,
+  ProjectContractorDto,
+  ProjectContractorInput,
+  ProjectDraftSummary,
+  ProjectSetupDto,
+  ProjectSetupStepId,
+} from '@insite/shared';
+import { api } from '../../config/apiConfig';
+import type { ApiEnvelope, BoqItemRecordDto } from '../types';
+
+/** Staged project creation (Phase 6). */
+
+export const createProjectDraft = async (payload: CreateProjectDraftRequest) => {
+  const { data } = await api.post<ApiEnvelope<ProjectSetupDto>>('/projects', payload);
+  return data.data;
+};
+
+export const getProjectSetup = async (projectId: string) => {
+  const { data } = await api.get<ApiEnvelope<ProjectSetupDto>>(`/projects/${projectId}/setup`);
+  return data.data;
+};
+
+export const saveProjectSetupStep = async (projectId: string, stepId: ProjectSetupStepId, body: unknown) => {
+  const { data } = await api.put<ApiEnvelope<ProjectSetupDto>>(`/projects/${projectId}/setup/${stepId}`, body);
+  return data.data;
+};
+
+export const activateProject = async (projectId: string) => {
+  const { data } = await api.post<ApiEnvelope<ActivateProjectResponse>>(`/projects/${projectId}/activate`);
+  return data.data;
+};
+
+export const archiveProject = async (projectId: string, reason?: string) => {
+  const { data } = await api.post<ApiEnvelope<ProjectSetupDto>>(`/projects/${projectId}/archive`, { reason });
+  return data.data;
+};
+
+export const deleteDraftProject = async (projectId: string) => {
+  await api.delete(`/projects/${projectId}`);
+};
+
+export const listDraftProjects = async () => {
+  const { data } = await api.get<ApiEnvelope<ProjectDraftSummary[]>>('/projects/drafts');
+  return data.data;
+};
+
+export interface TeamOptions {
+  users: Array<{
+    id: string;
+    fullName: string;
+    email: string;
+    roleName: string;
+    organizationName: string;
+    /** Set when the user signs in on mobile with a pre-provisioned role. */
+    mobileRoleName: string | null;
+  }>;
+  roles: Array<{
+    id: string;
+    name: string;
+    code: string;
+    fieldPersonaType: string;
+    onboardingMode: 'JOIN_CODE' | 'PROVISIONED_ACCOUNT';
+    requiresIdentityAssurance: boolean;
+  }>;
+}
+
+export const getTeamOptions = async (projectId: string) => {
+  const { data } = await api.get<ApiEnvelope<TeamOptions>>(`/projects/${projectId}/setup/team-options`);
+  return data.data;
+};
+
+// Contractors
+
+export const listProjectContractors = async (projectId: string) => {
+  const { data } = await api.get<ApiEnvelope<ProjectContractorDto[]>>(`/projects/${projectId}/contractors`);
+  return data.data;
+};
+
+export const addProjectContractor = async (projectId: string, body: Omit<ProjectContractorInput, 'id'>) => {
+  const { data } = await api.post<ApiEnvelope<ProjectContractorDto>>(`/projects/${projectId}/contractors`, body);
+  return data.data;
+};
+
+// BOQ
+
+export const previewBoq = async (projectId: string, spreadsheetBase64: string, fileName?: string) => {
+  const { data } = await api.post<ApiEnvelope<BoqPreviewResponse>>(`/projects/${projectId}/boq/preview`, {
+    spreadsheetBase64,
+    fileName,
+  });
+  return data.data;
+};
+
+export interface CommitBoqResult {
+  totalUploaded: number;
+  removedCount: number;
+  opaqueLumpSumCount: number;
+  holdPointCount: number;
+  revisionNumber: number | null;
+  items: BoqItemRecordDto[];
+}
+
+export const commitBoq = async (
+  projectId: string,
+  body: { items: BoqItemInput[]; reason?: string; mode?: 'REPLACE' | 'MERGE' }
+) => {
+  const { data } = await api.post<ApiEnvelope<CommitBoqResult>>(`/projects/${projectId}/boq/upload`, body);
+  return data.data;
+};
+
+export const listBoqRevisions = async (projectId: string) => {
+  const { data } = await api.get<ApiEnvelope<BoqRevisionDto[]>>(`/projects/${projectId}/boq/revisions`);
+  return data.data;
+};
+
+export const suggestContractorPackages = async (projectId: string) => {
+  const { data } = await api.post<ApiEnvelope<ContractorSuggestionResponse>>(
+    `/projects/${projectId}/boq/suggest-contractors`
+  );
+  return data.data;
+};

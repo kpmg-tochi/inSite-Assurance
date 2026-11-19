@@ -5,10 +5,10 @@ import {
   Routes,
   useLocation,
   useMatch,
-  useNavigate,
   useSearchParams,
 } from "react-router-dom";
 import { useAuth } from "./lib/auth-context";
+import { useGuardedNavigate } from "./lib/navigationGuard";
 import { AppShell } from "./components/AppShell";
 import Loader from "./components/Loader";
 import { LoginPage } from "./pages/auth/LoginPage";
@@ -18,7 +18,8 @@ import { MobileAppPage } from "./pages/public/MobileAppPage";
 import { PortfolioDashboardPage } from "./pages/dashboard/PortfolioDashboardPage";
 import { PortfolioExecutivePage } from "./pages/dashboard/PortfolioExecutivePage";
 import { ProjectsDirectoryPage } from "./pages/projects/ProjectsDirectoryPage";
-import { CreateProjectPage } from "./pages/projects/CreateProjectPage";
+import { NewProjectPage } from "./pages/projects/setup/NewProjectPage";
+import { ProjectSetupShell } from "./pages/projects/setup/ProjectSetupShell";
 import { ReconciliationWorkbenchPage } from "./pages/reconciliation/ReconciliationWorkbenchPage";
 import { BoqAndHoldPointsPage } from "./pages/boq/BoqAndHoldPointsPage";
 import { AuditLedgerPage } from "./pages/audit/AuditLedgerPage";
@@ -31,6 +32,11 @@ import { useProjectBoqQuery } from "./queries/boq/useBoqQueries";
 import { useProjectEvidenceQuery } from "./queries/evidence/useEvidenceQueries";
 import { useProjectIpcsQuery } from "./queries/reconciliation/useReconciliationQueries";
 import { useDownloadValuationPdfMutation } from "./mutations/reconciliation/useReconciliationMutations";
+
+function ProjectSetupRedirect({ mode }: { mode: "setup" | "settings" }) {
+  const match = useMatch(`/app/projects/:projectId/${mode}`);
+  return <Navigate to={`/app/projects/${match?.params.projectId}/${mode}/basics`} replace />;
+}
 
 function ScrollToTopOnNavigate() {
   const { pathname } = useLocation();
@@ -45,7 +51,8 @@ function AuthenticatedWorkspace() {
   const canViewBoq = hasPermission("boq:view");
   const canViewReports = hasPermission("reports:view_all");
   const canViewIpcs = hasPermission("ipc:view");
-  const navigate = useNavigate();
+  // Asks to save first when the setup wizard has unsaved changes (Phase 6).
+  const navigate = useGuardedNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const projectMatch = useMatch("/app/projects/:projectId/*");
@@ -171,6 +178,15 @@ function AuthenticatedWorkspace() {
           {pdfMutation.isPending ? "Exporting..." : "Export Valuation PDF"}
         </button>
       )}
+      {activeProject && hasPermission("projects:edit_baseline") && (
+        <button
+          type="button"
+          onClick={() => navigate(`/app/projects/${activeProject.id}/settings/basics`)}
+          className="px-3.5 py-2 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition shadow-sm backdrop-blur-sm"
+        >
+          Project settings
+        </button>
+      )}
       {hasPermission("projects:create") && (
         <button
           type="button"
@@ -202,18 +218,24 @@ function AuthenticatedWorkspace() {
           path="projects/new"
           element={
             <RequirePermission anyOf={["projects:create"]} backTo={projectHome}>
-              <CreateProjectPage
-                cancelFallbackPath={
-                  activeProject
-                    ? `/app/projects/${activeProject.id}/projects`
-                    : "/app/projects"
-                }
-                onProjectCreated={(created) => {
-                  setSelectedProjectId(created.id);
-                  navigate(`/app/projects/${created.id}/boq`);
-                }}
-              />
+              <NewProjectPage />
             </RequirePermission>
+          }
+        />
+        {/* Staged wizard (Phase 6): drafts are not in the project list, so these work without one. */}
+        <Route path="projects/:projectId/setup/:stepId" element={<ProjectSetupShell mode="setup" />} />
+        <Route path="projects/:projectId/setup" element={<ProjectSetupRedirect mode="setup" />} />
+        <Route path="projects/:projectId/settings/:stepId" element={<ProjectSetupShell mode="settings" />} />
+        <Route path="projects/:projectId/settings" element={<ProjectSetupRedirect mode="settings" />} />
+        <Route
+          path="projects"
+          element={
+            <ProjectsDirectoryPage
+              projects={projects}
+              selectedProjectId={activeProject?.id ?? null}
+              onSelectProject={setSelectedProjectId}
+              onNewProject={() => navigate("/app/projects/new")}
+            />
           }
         />
         <Route
@@ -233,17 +255,6 @@ function AuthenticatedWorkspace() {
         {activeProject ? (
           <>
             <Route index element={<Navigate to={projectHome} replace />} />
-            <Route
-              path="projects"
-              element={
-                <ProjectsDirectoryPage
-                  projects={projects}
-                  selectedProjectId={activeProject.id}
-                  onSelectProject={setSelectedProjectId}
-                  onNewProject={() => navigate("/app/projects/new")}
-                />
-              }
-            />
             <Route
               path="projects/:projectId/dashboard"
               element={

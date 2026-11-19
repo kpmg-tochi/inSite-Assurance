@@ -24,7 +24,9 @@ const ROLE_WITH_PERMISSIONS = {
 } as const;
 
 export const MOBILE_USER_INCLUDE = {
-  tenant: { select: { status: true, evidenceRatingLabels: true } },
+  tenant: {
+    select: { status: true, evidenceRatingLabels: true, name: true, brandingConfig: true, defaultCurrency: true },
+  },
   organization: { select: { name: true } },
   role: ROLE_WITH_PERMISSIONS,
   mobileRole: ROLE_WITH_PERMISSIONS,
@@ -66,14 +68,14 @@ export function roleSummary(role: RoleRow): MobileRoleSummary {
  * Projects visible on mobile equal those visible on the web: assigned projects, or every tenant
  * project when the main role holds `projects:view_all_tenant`. Always limited to the user's own
  * tenant (a platform super admin gets no cross-tenant field access).
- * Phase 6 adds project status; once it exists, only ACTIVE projects are listed here.
+ * Only ACTIVE projects: drafts and archived projects are never live on mobile (Phase 6).
  */
 export function mobileProjectVisibilityWhere(user: MobileUserRow): Prisma.ProjectWhereInput {
   const mainPermissions = user.role.rolePermissions.map((rp) => rp.permission.key);
   if (mainPermissions.includes('projects:view_all_tenant')) {
-    return { tenantId: user.tenantId };
+    return { tenantId: user.tenantId, status: 'ACTIVE' };
   }
-  return { tenantId: user.tenantId, userAssignments: { some: { userId: user.id } } };
+  return { tenantId: user.tenantId, status: 'ACTIVE', userAssignments: { some: { userId: user.id } } };
 }
 
 export async function listMobileProjects(user: MobileUserRow): Promise<MobileProjectSummary[]> {
@@ -96,7 +98,7 @@ export async function listMobileProjects(user: MobileUserRow): Promise<MobilePro
     id: p.id,
     codePrefix: p.codePrefix,
     name: p.name,
-    stateLocation: p.stateLocation,
+    stateLocation: p.stateLocation ?? '',
     lgaLocation: p.lgaLocation,
     timezone: p.timezone,
     geofenceMode: p.geofenceMode as GeofenceMode,
@@ -148,6 +150,14 @@ export async function findOrCreateProvisionedSession(params: {
 
   let session = await prisma.fieldAgentSession.findUnique({ where });
   if (!session) {
+    // A contractor-side account works for its organisation's contractor package (Phase 6).
+    const contractor =
+      role.fieldPersonaType === 'CONTRACTOR_EXECUTOR'
+        ? await prisma.projectContractor.findFirst({
+            where: { projectId, organizationId: user.organizationId },
+            select: { id: true },
+          })
+        : null;
     try {
       session = await prisma.$transaction(async (tx) => {
         const created = await tx.fieldAgentSession.create({
@@ -156,6 +166,7 @@ export async function findOrCreateProvisionedSession(params: {
             origin: 'PROVISIONED_ACCOUNT',
             userId: user.id,
             mobileDeviceId: device.id,
+            projectContractorId: contractor?.id ?? null,
             roleId: role.id,
             roleNameSnapshot: role.name,
             fieldPersonaType: role.fieldPersonaType,

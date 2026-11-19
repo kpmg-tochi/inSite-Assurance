@@ -30,6 +30,11 @@ import { formatMobileErrorMessage } from "../utils/errorFormatter";
 
 type Counts = Map<string, { pending: number; dead: number }>;
 
+/** "Lekki Electrical Ltd · ELEC" (the trade code identifies the package on multi-contractor projects). */
+function contractorLabel(c: NonNullable<FieldProjectContext["contractor"]>): string {
+  return `${c.organizationName} · ${c.tradeCode}${c.isMainContractor ? " (main contractor)" : ""}`;
+}
+
 /**
  * Every project on this device (Phase 5): projects assigned to the signed-in account and projects
  * joined with a code. Tap to switch; switching never discards queued work, and each project's
@@ -157,6 +162,8 @@ export const ProfileAndProjectsScreen = () => {
     : account
       ? `${account.profile.mobileRole.name} · weight ${account.profile.mobileRole.assuranceWeight.toFixed(2)}`
       : "";
+  // Phase 6: the contractor package the active session works for, from the server.
+  const contractorLine = activeContext?.contractor ? contractorLabel(activeContext.contractor) : "";
 
   const renderProject = (project: FieldProjectContext) => {
     const isActive = project.projectId === activeProjectId;
@@ -187,6 +194,7 @@ export const ProfileAndProjectsScreen = () => {
             ? ` · ID ${project.assuranceStatus === "PENDING_APPROVAL" ? "under review" : "needed"}`
             : ""}
         </Text>
+        {project.contractor ? <Text style={styles.projectMeta}>{contractorLabel(project.contractor)}</Text> : null}
         {unsent > 0 && (
           <Text style={[styles.projectMeta, c?.dead ? styles.deadText : styles.pendingText]}>
             {unsent} item(s) not sent yet{c?.dead ? ` · ${c.dead} could not be sent` : ""}
@@ -217,6 +225,7 @@ export const ProfileAndProjectsScreen = () => {
           <Text style={styles.userName}>{displayName}</Text>
           {/* The role and weight come from the server, never from the device. */}
           {roleLine ? <Text style={styles.userRole}>{roleLine}</Text> : null}
+          {contractorLine ? <Text style={styles.userRole}>{contractorLine}</Text> : null}
           {account ? <Text style={styles.userPhone}>{account.profile.email}</Text> : null}
           {phoneNumber ? <Text style={styles.userPhone}>{phoneNumber}</Text> : null}
         </View>

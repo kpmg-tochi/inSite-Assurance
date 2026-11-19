@@ -182,6 +182,8 @@ export const TenantUserDtoSchema = z.object({
   organizationId: z.string().uuid(),
   organizationName: z.string(),
   organizationCategory: OrganizationCategoryEnum,
+  /** All tags of the organisation (Phase 6). */
+  organizationCategories: z.array(OrganizationCategoryEnum).optional(),
   professionalLicenseType: ProfessionalLicenseTypeEnum.nullable().optional(),
   professionalLicenseNumber: z.string().nullable().optional(),
   phoneNumber: z.string().nullable().optional(),
@@ -206,13 +208,19 @@ export const CreateTenantUserRequestSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   roleId: z.string().uuid(),
-  organizationName: z.string().min(2).max(160),
+  /** A directory organisation, or a typed name (Phase 6: which is accepted depends on the tenant's input mode). */
+  organizationId: z.string().uuid().nullable().optional(),
+  organizationName: z.string().trim().min(2).max(160).optional(),
+  /** Tag added to the organisation if it is created or lacks it. */
   organizationCategory: OrganizationCategoryEnum.default('OTHER'),
   professionalLicenseType: ProfessionalLicenseTypeEnum.nullable().optional(),
   professionalLicenseNumber: z.string().max(64).optional(),
   phoneNumber: PhoneNumberSchema.nullable().optional(),
   mobileRoleId: z.string().uuid().nullable().optional(),
   projectIds: z.array(z.string().uuid()).default([]),
+}).refine((v) => Boolean(v.organizationId || v.organizationName), {
+  message: 'Choose or enter an organisation',
+  path: ['organizationName'],
 });
 export type CreateTenantUserRequest = z.infer<typeof CreateTenantUserRequestSchema>;
 
@@ -246,6 +254,10 @@ export const FieldSessionRosterDtoSchema = z.object({
   deviceModel: z.string().nullable().optional(),
   /** MobileDevice row for provisioned sessions; revoking it blocks every project. */
   mobileDeviceId: z.string().uuid().nullable(),
+  /** Contractor package the session reports for (Phase 6). */
+  projectContractorId: z.string().uuid().nullable().optional(),
+  contractorName: z.string().nullable().optional(),
+  tradeCode: z.string().nullable().optional(),
   isActive: z.boolean(),
   assuranceStatus: ContractorAssuranceStatusEnum,
   lastSyncAt: z.string().nullable().optional(),

@@ -25,13 +25,13 @@ export function ModalShell({
         <div className="px-5 py-4 bg-brand-navy text-white flex items-center justify-between shrink-0">
           <div>
             <h3 className="text-sm font-bold">{title}</h3>
-            {subtitle && <p className="text-[11px] text-blue-200/80">{subtitle}</p>}
+            {subtitle && <p className="text-[11px] text-white/70">{subtitle}</p>}
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-1 rounded-lg text-blue-200 hover:text-white"
+            className="p-1 rounded-lg text-white/75 hover:text-white"
           >
             <X className="w-4 h-4" />
           </button>

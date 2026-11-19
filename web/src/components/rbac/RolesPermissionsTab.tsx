@@ -307,8 +307,8 @@ export function RolesPermissionsTab() {
                     role.surface === 'MOBILE'
                       ? 'bg-amber-50 text-amber-800 border border-amber-200'
                       : role.surface === 'BOTH'
-                        ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
-                        : 'bg-blue-50 text-brand-primary border border-blue-200'
+                        ? 'bg-brand-primary/5 text-brand-navy border border-brand-primary/25'
+                        : 'bg-brand-primary/5 text-brand-primary border border-brand-primary/25'
                   }`}
                 >
                   {role.surface}
@@ -559,7 +559,7 @@ export function RolesPermissionsTab() {
                     key={opt.mode}
                     className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer text-xs ${
                       onboardingMode === opt.mode
-                        ? 'border-brand-primary bg-blue-50/60'
+                        ? 'border-brand-primary bg-brand-primary/5'
                         : 'border-slate-200 bg-white hover:bg-slate-50'
                     }`}
                   >
@@ -606,7 +606,7 @@ export function RolesPermissionsTab() {
             )}
 
             {/* Live Unlocked Capabilities Summary */}
-            <div className="rounded-xl bg-blue-50/70 border border-blue-200 p-3">
+            <div className="rounded-xl bg-brand-primary/5 border border-brand-primary/25 p-3">
               <div className="flex items-center gap-1.5 text-[11px] font-bold text-brand-primary">
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>

@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Building2,
   CheckCircle2,
@@ -11,17 +11,73 @@ import {
   Search,
   AlertTriangle,
   ArrowRight,
+  Archive,
+  MoreHorizontal,
+  Settings2,
+  Trash2,
 } from "lucide-react";
 import type { ProjectSummaryDto } from "../../api/types";
 import { formatCompactNaira } from "../../lib/formatters";
 import { useAuth } from "../../lib/auth-context";
+import { useDraftProjectsQuery } from "../../queries/projects/useProjectSetupQueries";
+import { useDeleteDraftMutation } from "../../mutations/projects/useProjectSetupMutations";
+import { ArchiveProjectDialog } from "../../components/projects/ArchiveProjectDialog";
 
-type ProjectStatusTab =
-  | "ALL"
-  | "ACTIVE"
-  | "PENDING_APPROVAL"
-  | "DRAFT"
-  | "COMPLETED";
+/** "⋯" menu on a project card: settings and archive (needs projects:edit_baseline). */
+function ProjectCardMenu({
+  project,
+  onSettings,
+  onArchive,
+}: {
+  project: ProjectSummaryDto;
+  onSettings: () => void;
+  onArchive: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  const item = "w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50 focus:bg-slate-50 focus:outline-none";
+  return (
+    <div className="relative shrink-0" ref={ref}>
+      <button
+        type="button"
+        aria-label={`Actions for ${project.codePrefix}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+      >
+        <MoreHorizontal className="w-4 h-4" />
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+          <button type="button" role="menuitem" className={`${item} text-slate-700`} onClick={() => { setOpen(false); onSettings(); }}>
+            <Settings2 className="w-3.5 h-3.5" /> Project settings
+          </button>
+          {project.status === "ACTIVE" && (
+            <button type="button" role="menuitem" className={`${item} text-rose-600`} onClick={() => { setOpen(false); onArchive(); }}>
+              <Archive className="w-3.5 h-3.5" /> Archive project
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type ProjectStatusTab = "ALL" | "ACTIVE" | "DRAFT" | "COMPLETED" | "ARCHIVED";
 
 interface ProjectsDirectoryPageProps {
   projects: ProjectSummaryDto[];
@@ -30,13 +86,17 @@ interface ProjectsDirectoryPageProps {
   onNewProject?: () => void;
 }
 
-function getDerivedProjectStatus(
-  project: ProjectSummaryDto,
-): Exclude<ProjectStatusTab, "ALL"> {
-  if (project.certifiedProgressPct >= 100) {
-    return "COMPLETED";
-  }
+/** Drafts come from /projects/drafts; this list holds active and archived projects. */
+function getDerivedProjectStatus(project: ProjectSummaryDto): Exclude<ProjectStatusTab, "ALL" | "DRAFT"> {
+  if (project.status === "ARCHIVED") return "ARCHIVED";
+  if (project.certifiedProgressPct >= 100) return "COMPLETED";
   return "ACTIVE";
+}
+
+function contractorLabel(project: ProjectSummaryDto): string {
+  const extra = (project.contractorCount ?? 0) - 1;
+  const name = project.contractorOrganizationName || "No contractor";
+  return extra > 0 ? `${name} +${extra}` : name;
 }
 
 function getHealthBadge(health: ProjectSummaryDto["portfolioHealth"]) {
@@ -70,22 +130,36 @@ export function ProjectsDirectoryPage({
 }: ProjectsDirectoryPageProps) {
   const { hasPermission } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<ProjectStatusTab>("ALL");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = (searchParams.get("tab") || "").toUpperCase();
+  const activeTab: ProjectStatusTab = (["ALL", "ACTIVE", "DRAFT", "COMPLETED", "ARCHIVED"] as const).includes(
+    tabParam as ProjectStatusTab
+  )
+    ? (tabParam as ProjectStatusTab)
+    : "ALL";
+  const setActiveTab = (tab: ProjectStatusTab) =>
+    setSearchParams(tab === "ALL" ? {} : { tab: tab.toLowerCase() }, { replace: true });
+  const canSeeDrafts = hasPermission("projects:create") || hasPermission("projects:edit_baseline");
+  const draftsQuery = useDraftProjectsQuery(true);
+  const drafts = draftsQuery.data ?? [];
+  const deleteDraft = useDeleteDraftMutation();
+  const canEditProjects = hasPermission("projects:edit_baseline");
+  const [archiving, setArchiving] = useState<ProjectSummaryDto | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   const counts = useMemo(() => {
     const summary = {
       ALL: projects.length,
       ACTIVE: 0,
-      PENDING_APPROVAL: 0,
-      DRAFT: 0,
+      DRAFT: drafts.length,
       COMPLETED: 0,
+      ARCHIVED: 0,
     };
     for (const p of projects) {
       summary[getDerivedProjectStatus(p)] += 1;
     }
     return summary;
-  }, [projects]);
+  }, [projects, drafts.length]);
 
   const filteredProjects = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -100,7 +174,7 @@ export function ProjectsDirectoryPage({
         project.codePrefix.toLowerCase().includes(q) ||
         project.stateLocation.toLowerCase().includes(q) ||
         (project.lgaLocation || "").toLowerCase().includes(q) ||
-        project.contractorOrganizationName.toLowerCase().includes(q) ||
+        project.contractors.some((c) => c.organizationName.toLowerCase().includes(q)) ||
         project.lenderOrganizationName.toLowerCase().includes(q)
       );
     });
@@ -109,13 +183,9 @@ export function ProjectsDirectoryPage({
   const tabs: Array<{ id: ProjectStatusTab; label: string; count: number }> = [
     { id: "ALL", label: "All Projects", count: counts.ALL },
     { id: "ACTIVE", label: "Active", count: counts.ACTIVE },
-    {
-      id: "PENDING_APPROVAL",
-      label: "Pending Approval",
-      count: counts.PENDING_APPROVAL,
-    },
-    { id: "DRAFT", label: "Drafts", count: counts.DRAFT },
+    ...(canSeeDrafts || drafts.length > 0 ? [{ id: "DRAFT" as const, label: "Drafts", count: counts.DRAFT }] : []),
     { id: "COMPLETED", label: "Completed", count: counts.COMPLETED },
+    ...(counts.ARCHIVED > 0 ? [{ id: "ARCHIVED" as const, label: "Archived", count: counts.ARCHIVED }] : []),
   ];
 
   const handleOpenProject = (
@@ -135,12 +205,12 @@ export function ProjectsDirectoryPage({
             Capital Projects Directory
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Browse all active, pending approval, draft, and completed
-            infrastructure projects across your workspace.
+            Live, completed and archived projects. Drafts are private to the
+            people setting them up until they are set active.
           </p>
         </div>
 
-        {/* {hasPermission("projects:create") && onNewProject && (
+        {hasPermission("projects:create") && onNewProject && (
           <button
             type="button"
             onClick={onNewProject}
@@ -149,7 +219,7 @@ export function ProjectsDirectoryPage({
             <Plus className="w-4 h-4" />
             New Project
           </button>
-        )} */}
+        )}
       </div>
 
       {/* Filter Tabs & Search */}
@@ -195,17 +265,60 @@ export function ProjectsDirectoryPage({
         </div>
       </div>
 
-      {/* Projects Grid */}
-      {filteredProjects.length === 0 ? (
+      {activeTab === "DRAFT" ? (
+        drafts.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-10 text-center">
+            <FolderKanban className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <div className="text-sm font-semibold text-slate-800">No drafts</div>
+            <p className="text-xs text-slate-500 mt-1">A project you start is saved here until you set it active.</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm divide-y divide-slate-100">
+            {drafts.map((d) => (
+              <div key={d.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-bold">{d.codePrefix}</span>
+                    <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[11px] font-semibold">Draft</span>
+                  </div>
+                  <p className="mt-1 text-sm font-bold text-slate-900 truncate">{d.name}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {d.completedRequiredSteps} of {d.totalRequiredSteps} required steps done · started by {d.createdByName ?? "someone"} ·
+                    last saved {new Date(d.updatedAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {d.canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Delete the draft "${d.name}"? This cannot be undone.`)) deleteDraft.mutate(d.id);
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-[11px] font-semibold text-rose-600 hover:bg-rose-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/app/projects/${d.id}/setup/review`)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold"
+                  >
+                    Resume <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : filteredProjects.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-10 text-center">
           <FolderKanban className="w-8 h-8 text-slate-300 mx-auto mb-2" />
           <div className="text-sm font-semibold text-slate-800">
             No matching projects
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            {activeTab === "PENDING_APPROVAL" || activeTab === "DRAFT"
-              ? "Drafts and pending project creation approvals will appear here once initiated."
-              : "Try adjusting your search query or status filter."}
+            Try adjusting your search query or status filter.
           </p>
         </div>
       ) : (
@@ -239,7 +352,9 @@ export function ProjectsDirectoryPage({
                           {health.label}
                         </span>
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-medium">
-                          {status === "COMPLETED" ? "Completed" : "Active"}
+                          {status === "COMPLETED" ? "Completed" : status === "ARCHIVED" ? (
+                            <span className="inline-flex items-center gap-1"><Archive className="w-3 h-3" /> Archived</span>
+                          ) : "Active"}
                         </span>
                       </div>
                       <h2 className="text-sm font-bold text-slate-900 mt-2 truncate">
@@ -255,6 +370,13 @@ export function ProjectsDirectoryPage({
                         </span>
                       </div>
                     </div>
+                    {canEditProjects && (
+                      <ProjectCardMenu
+                        project={project}
+                        onSettings={() => navigate(`/app/projects/${project.id}/settings/basics`)}
+                        onArchive={() => setArchiving(project)}
+                      />
+                    )}
                   </div>
 
                   {/* Project Budget & Certified Progress */}
@@ -290,8 +412,7 @@ export function ProjectsDirectoryPage({
                     <div className="flex items-center gap-1.5 truncate">
                       <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span className="truncate">
-                        {project.contractorOrganizationName} ·{" "}
-                        {project.lenderOrganizationName}
+                        {contractorLabel(project)} · {project.lenderOrganizationName || "No lender"}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -340,6 +461,14 @@ export function ProjectsDirectoryPage({
             );
           })}
         </div>
+      )}
+      {archiving && (
+        <ArchiveProjectDialog
+          projectId={archiving.id}
+          projectName={archiving.name}
+          codePrefix={archiving.codePrefix}
+          onClose={() => setArchiving(null)}
+        />
       )}
     </div>
   );

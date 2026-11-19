@@ -8,6 +8,7 @@ import {
   UpdateRoleRequestSchema,
   UpdateEvidenceRatingLabelsRequestSchema,
   UpdateTenantBrandingRequestSchema,
+  UpdateTenantSettingsRequestSchema,
 } from '@insite/shared';
 import {
   requirePermission,
@@ -35,6 +36,7 @@ import {
   updateTenantBranding,
 } from './rbac.service';
 import { getAndVerifyTenantAuditTrail } from '../audit/audit.service';
+import { getTenantSettings, updateTenantSettings } from '../organizations/organizations.service';
 
 const router = Router();
 
@@ -269,6 +271,37 @@ router.put(
     try {
       const updated = await updateTenantBranding(req.webUser!, req.body);
       res.json({ success: true, data: updated });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/v1/rbac/tenant/settings
+ * Organisation input mode, geofence modes and tolerance, currency and time zone. Readable by any
+ * web user of the tenant (forms need them); changed with `tenant:manage_settings`.
+ */
+router.get(
+  '/tenant/settings',
+  requireWebAuth,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json({ success: true, data: await getTenantSettings(req.webUser!.tenantId) });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/** PUT /api/v1/rbac/tenant/settings */
+router.put(
+  '/tenant/settings',
+  requirePermission('tenant:manage_settings'),
+  validateBody(UpdateTenantSettingsRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json({ success: true, data: await updateTenantSettings(req.webUser!, req.body) });
     } catch (error) {
       next(error);
     }

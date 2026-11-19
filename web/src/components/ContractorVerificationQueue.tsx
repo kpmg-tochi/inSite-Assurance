@@ -115,7 +115,7 @@ export default function ContractorVerificationQueue({
       {/* Top Header & Filter Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-blue-50 text-brand-primary flex items-center justify-center font-bold">
+          <div className="w-8 h-8 rounded-xl bg-brand-primary/5 text-brand-primary flex items-center justify-center font-bold">
             <UserCheck className="w-4 h-4" />
           </div>
           <div>
@@ -227,7 +227,7 @@ export default function ContractorVerificationQueue({
                       {/* Badges Row */}
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         {verification.corenLicenseNumber && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-50 text-brand-primary border border-blue-100">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-brand-primary/5 text-brand-primary border border-brand-primary/15">
                             <Award className="w-3 h-3 text-brand-primary" />
                             {verification.corenLicenseNumber}
                           </span>

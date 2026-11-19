@@ -66,7 +66,7 @@ export function AboutPage() {
       {/* Top Hero Banner */}
       <div className="bg-brand-navy text-white border-b border-white/10">
         <div className="max-w-7xl mx-auto px-6 py-12">
-          <div className="text-xs font-semibold uppercase tracking-wider text-blue-200">
+          <div className="text-xs font-semibold uppercase tracking-wider text-white/75">
             Validated Platform Specification
           </div>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mt-2">
@@ -88,7 +88,7 @@ export function AboutPage() {
             <h2 className="text-xl font-bold text-slate-900 border-b border-slate-100 pb-3">
               1. Executive Summary
             </h2>
-            <div className="bg-blue-50/70 border border-blue-200 rounded-xl p-4">
+            <div className="bg-brand-primary/5 border border-brand-primary/25 rounded-xl p-4">
               <div className="text-[11px] font-bold uppercase tracking-wider text-brand-primary">
                 Value Proposition
               </div>
@@ -923,7 +923,7 @@ export function AboutPage() {
         {/* Right Sticky Sidebar: High-Contrast Dark Theme Matching Hero */}
         <aside className="hidden lg:block lg:col-span-3 sticky top-24">
           <div className="bg-brand-navy rounded-2xl border border-white/15 p-4 shadow-xl text-white">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-blue-200 px-2.5 mb-2.5">
+            <div className="text-[11px] font-bold uppercase tracking-wider text-white/75 px-2.5 mb-2.5">
               On This Page
             </div>
             <nav className="space-y-1">
@@ -937,7 +937,7 @@ export function AboutPage() {
                     className={`w-full text-left px-3 py-2 rounded-xl text-xs transition ${
                       isActive
                         ? "bg-white/15 text-white font-bold shadow-sm"
-                        : "text-blue-100/80 hover:text-white hover:bg-white/5 font-medium"
+                        : "text-white/80 hover:text-white hover:bg-white/5 font-medium"
                     }`}
                   >
                     {sec.title}

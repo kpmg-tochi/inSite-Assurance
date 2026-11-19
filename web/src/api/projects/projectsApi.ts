@@ -1,4 +1,3 @@
-import type { CreateProjectRequest } from '@insite/shared';
 import { api } from '../../config/apiConfig';
 import type {
   ApiEnvelope,
@@ -17,12 +16,3 @@ export const getProjectBaseline = async (projectId: string) => {
   >(`/projects/${projectId}/baseline`);
   return data.data;
 };
-
-export const createProject = async (payload: CreateProjectRequest) => {
-  const { data } = await api.post<ApiEnvelope<ProjectSummaryDto>>(
-    '/projects',
-    payload
-  );
-  return data.data;
-};
-

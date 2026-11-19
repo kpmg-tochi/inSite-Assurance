@@ -132,9 +132,10 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
       assert.equal(body.account.email, 'monitor@insite.ng');
       assert.equal(body.account.mobileRole.code, 'MONITOR_INSPECTOR');
       assert.equal(body.account.mustChangePassword, false);
+      // Every ACTIVE assigned project; the seeded draft ENU-501 (also assigned) is not live on mobile.
       assert.deepEqual(
         body.projects.map((p: { codePrefix: string }) => p.codePrefix).sort(),
-        ['ABJ-108', 'LKK-402']
+        ['ABJ-108', 'KAN-210', 'LKK-402', 'OGN-305']
       );
       for (const p of body.projects) {
         assert.equal(p.roleName, body.account.mobileRole.name);
@@ -288,7 +289,7 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
       const me = await request(app).get('/api/v1/auth/me').set(bearer(token));
       assert.equal(me.status, 200, JSON.stringify(me.body));
       assert.equal(me.body.data.actorType, 'MOBILE_USER');
-      assert.equal(me.body.data.projects.length, 2);
+      assert.equal(me.body.data.projects.length, 4);
 
       const baseline = await request(app).get(`/api/v1/auth/mobile/projects/${ids.lkk}/baseline`).set(bearer(token));
       assert.equal(baseline.status, 200, JSON.stringify(baseline.body));
@@ -491,10 +492,14 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
 
     async function joinLkk(deviceId: string, key: Key) {
       const admin = await webLogin('admin@insite.ng');
+      // One active code per role: rotate to get a fresh one (Phase 6).
+      const current = await prisma.projectJoinCode.findFirstOrThrow({
+        where: { projectId: ids.lkk, roleId: ids.residentRole, isActive: true },
+      });
       const code = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/join-codes`)
+        .post(`/api/v1/projects/${ids.lkk}/join-codes/${current.id}/rotate`)
         .set(bearer(admin))
-        .send({ roleId: ids.residentRole });
+        .send({});
       assert.equal(code.status, 201, JSON.stringify(code.body));
       const join = await request(app).post('/api/v1/auth/join-project').send({
         joinCode: code.body.data.code,
@@ -746,7 +751,8 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
         .set(bearer(admin))
         .send({ onboardingMode: 'JOIN_CODE' });
       assert.equal(back.status, 200);
-      const projectCount = await prisma.project.count({ where: { tenantId: ids.tenant } });
+      // Codes are reissued on live projects only (drafts get theirs at activation).
+      const projectCount = await prisma.project.count({ where: { tenantId: ids.tenant, status: 'ACTIVE' } });
       assert.equal(await prisma.projectJoinCode.count({ where: { roleId: ids.residentRole, isActive: true } }), projectCount);
     });
 

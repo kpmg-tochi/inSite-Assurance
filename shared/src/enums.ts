@@ -42,6 +42,62 @@ export const OrganizationCategoryEnum = z.enum([
 ]);
 export type OrganizationCategory = z.infer<typeof OrganizationCategoryEnum>;
 
+/** Display label per organisation tag (Phase 6: an organisation can carry several tags). */
+export const ORGANIZATION_CATEGORY_META: Record<OrganizationCategory, { label: string }> = {
+  ADVISORY_MONITOR: { label: 'Independent monitor' },
+  FINANCIER_LENDER: { label: 'Lender / financier' },
+  CONTRACTOR: { label: 'Contractor' },
+  CLIENT_OWNER: { label: 'Client / owner' },
+  GOVERNMENT_MDA: { label: 'Government MDA' },
+  OTHER: { label: 'Other' },
+};
+
+/**
+ * How organisation fields (monitor, lender, contractors, a user's organisation) take input,
+ * per tenant (decision E):
+ * - FREE_TEXT: type a name; an organisation is created on save if none matches.
+ * - DIRECTORY: pick from configured organisations only.
+ * - BOTH: pick, or type a new name.
+ */
+export const OrgInputModeEnum = z.enum(['FREE_TEXT', 'DIRECTORY', 'BOTH']);
+export type OrgInputMode = z.infer<typeof OrgInputModeEnum>;
+
+/** Project lifecycle (decision C). A draft is not live anywhere; activation is one-way. */
+export const ProjectStatusEnum = z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']);
+export type ProjectStatus = z.infer<typeof ProjectStatusEnum>;
+
+/**
+ * Contractor model (decision D):
+ * - SINGLE_CONTRACTOR: one contractor, one IPC stream.
+ * - MAIN_PLUS_SUBS_UNIFIED_IPC: the main contractor submits IPCs covering every package;
+ *   subcontractors may field-report only.
+ * - MULTI_PRIME_SEPARATE_IPC: each contractor submits IPCs for its own BOQ items.
+ */
+export const ContractorExecutionModeEnum = z.enum([
+  'SINGLE_CONTRACTOR',
+  'MAIN_PLUS_SUBS_UNIFIED_IPC',
+  'MULTI_PRIME_SEPARATE_IPC',
+]);
+export type ContractorExecutionMode = z.infer<typeof ContractorExecutionModeEnum>;
+
+export const CONTRACTOR_EXECUTION_MODE_META: Record<
+  ContractorExecutionMode,
+  { label: string; description: string }
+> = {
+  SINGLE_CONTRACTOR: {
+    label: 'Single contractor',
+    description: 'One contractor delivers the whole project and submits every IPC.',
+  },
+  MAIN_PLUS_SUBS_UNIFIED_IPC: {
+    label: 'Main contractor with subcontractors',
+    description: 'The main contractor submits one IPC covering all packages; subcontractors report from site only.',
+  },
+  MULTI_PRIME_SEPARATE_IPC: {
+    label: 'Multiple prime contractors',
+    description: 'Each contractor owns its BOQ items and submits its own IPCs.',
+  },
+};
+
 export const PermissionCategoryEnum = z.enum([
   'TENANT_ADMIN',
   'PORTFOLIO_PROJECTS',
@@ -136,6 +192,14 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     unlocksViews: ['Settings -> Tenant Settings'],
   },
   {
+    key: 'organizations:manage',
+    name: 'Manage Organisation Directory',
+    description: 'Add, edit, tag and archive the organisations offered in project and user forms.',
+    category: 'TENANT_ADMIN',
+    surface: 'WEB',
+    unlocksViews: ['Settings -> Organisations'],
+  },
+  {
     key: 'templates:manage_workflows',
     name: 'Configure Project Workflow Templates',
     description: 'Define reusable client workflow templates, required steps, and approval chains.',
@@ -176,6 +240,14 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     category: 'PORTFOLIO_PROJECTS',
     surface: 'WEB',
     unlocksViews: ['+ New Project Wizard'],
+  },
+  {
+    key: 'projects:activate',
+    name: 'Activate Draft Projects',
+    description: 'Set a completed draft project live: issues join codes and makes it visible on mobile and in portfolio views.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Project setup -> Set project active'],
   },
   {
     key: 'projects:edit_baseline',
@@ -550,8 +622,43 @@ export type ContractorAssuranceStatus = z.infer<typeof ContractorAssuranceStatus
 export const GeofenceModeEnum = z.enum([
   'RADIAL',
   'LINEAR_CORRIDOR',
+  'PERIMETER',
 ]);
 export type GeofenceMode = z.infer<typeof GeofenceModeEnum>;
+
+export const GEOFENCE_MODE_META: Record<
+  GeofenceMode,
+  { label: string; shortLabel: string; description: string }
+> = {
+  RADIAL: {
+    label: 'Radial',
+    shortLabel: 'Radial',
+    description: 'A centre point and radius. Suits buildings, plants and compact sites.',
+  },
+  LINEAR_CORRIDOR: {
+    label: 'Linear corridor',
+    shortLabel: 'Corridor',
+    description: 'A centreline with a half-width, measured by chainage. Suits roads, pipelines and lines.',
+  },
+  PERIMETER: {
+    label: 'Perimeter',
+    shortLabel: 'Perimeter',
+    description: 'A drawn boundary polygon. Suits irregular sites such as estates, campuses and farms.',
+  },
+};
+
+/** Display label for a geofence mode; tolerates unknown values from older data. */
+export function geofenceModeLabel(mode: string | null | undefined): string {
+  if (!mode) return 'No geofence';
+  return (GEOFENCE_MODE_META as Record<string, { label: string }>)[mode]?.label ?? mode;
+}
+
+/**
+ * Server evaluation of a position against the project geofence (Phase 6). WITHIN_TOLERANCE is
+ * outside the boundary but inside the project's tolerance band and counts as valid evidence.
+ */
+export const GeofenceStatusEnum = z.enum(['INSIDE', 'WITHIN_TOLERANCE', 'OUTSIDE']);
+export type GeofenceStatus = z.infer<typeof GeofenceStatusEnum>;
 
 /**
  * 4. Configurable Field Reporting Cadences
@@ -745,6 +852,16 @@ export const AuditActionTypeEnum = z.enum([
   'MOBILE_USER_SIGNED_IN',
   'MOBILE_DEVICE_REVOKED',
   'ROLE_ONBOARDING_MODE_CHANGED',
+  'ORGANIZATION_CREATED',
+  'ORGANIZATION_UPDATED',
+  'PROJECT_DRAFT_CREATED',
+  'PROJECT_SETUP_STEP_SAVED',
+  'PROJECT_ACTIVATED',
+  'PROJECT_ARCHIVED',
+  'PROJECT_CONTRACTOR_ADDED',
+  'PROJECT_CONTRACTOR_REMOVED',
+  'BOQ_REVISED',
+  'PROJECT_DRAFT_DELETED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 

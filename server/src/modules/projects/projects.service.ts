@@ -1,11 +1,11 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, ProjectStatus } from '@prisma/client';
 import {
+  ContractorExecutionMode,
   countReconciliationIssues,
-  CreateProjectRequest,
   FieldPersonaType,
   GeoCoordinate,
+  GeofenceMode,
   ProjectGeofenceSchema,
-  UpdateProjectBaseline,
   verifyPointAgainstGeofence,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
@@ -22,7 +22,8 @@ import {
 } from '../../utils/accessControl';
 import { recordAuditEvent } from '../audit/audit.service';
 import { serializeBoqItem, serializeTranche } from '../../utils/serializers';
-import { createJoinCode } from './joinCodes.service';
+import { contractorHeadline } from './contractors.service';
+import { effectiveToleranceMeters } from '../../utils/geofenceEvaluation';
 import { isProjectObjectKey, storageService } from '../../integrations/storage.service';
 import { createMobileNotification } from '../notifications/notifications.service';
 import { releaseStagedReportsForSession } from '../workday-reports/workdayReports.service';
@@ -37,6 +38,8 @@ type JoinCodeWithRole = {
   expiresAt: Date | null;
   maxUses?: number | null;
   useCount?: number;
+  projectContractorId?: string | null;
+  projectContractor?: { tradeCode: string; organization: { name: string } } | null;
   role: {
     id: string;
     code: string;
@@ -69,6 +72,9 @@ export function visibleJoinCodesFor(joinCodes: JoinCodeWithRole[], webUser?: Web
       fieldPersonaType: jc.role.fieldPersonaType as FieldPersonaType,
       assuranceWeight: jc.role.assuranceWeight,
       requiresIdentityAssurance: jc.role.requiresIdentityAssurance,
+      projectContractorId: jc.projectContractorId ?? null,
+      contractorName: jc.projectContractor?.organization.name ?? null,
+      tradeCode: jc.projectContractor?.tradeCode ?? null,
       isActive: jc.isActive,
       expiresAt: jc.expiresAt ? jc.expiresAt.toISOString() : null,
       maxUses: jc.maxUses ?? null,
@@ -76,35 +82,73 @@ export function visibleJoinCodesFor(joinCodes: JoinCodeWithRole[], webUser?: Web
     }));
 }
 
-type ProjectCoreRow = Prisma.ProjectGetPayload<{
-  include: {
-    monitorOrganization: true;
-    lenderOrganization: true;
-    contractorOrganization: true;
-  };
-}>;
+const JOIN_CODE_LIST_INCLUDE = {
+  role: {
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      fieldPersonaType: true,
+      assuranceWeight: true,
+      requiresIdentityAssurance: true,
+    },
+  },
+  projectContractor: { select: { tradeCode: true, organization: { select: { name: true } } } },
+} as const;
+
+const PROJECT_CONTRACTORS_INCLUDE = {
+  orderBy: [{ isMainContractor: 'desc' as const }, { createdAt: 'asc' as const }],
+  include: { organization: { select: { id: true, name: true } } },
+};
+
+const PROJECT_CORE_INCLUDE = {
+  monitorOrganization: true,
+  lenderOrganization: true,
+  contractors: PROJECT_CONTRACTORS_INCLUDE,
+  tenant: { select: { defaultGeofenceToleranceMeters: true } },
+} satisfies Prisma.ProjectInclude;
+
+type ProjectCoreRow = Prisma.ProjectGetPayload<{ include: typeof PROJECT_CORE_INCLUDE }>;
 
 function serializeProjectCore(project: ProjectCoreRow) {
+  const headline = contractorHeadline(project.contractors);
   return {
     id: project.id,
     tenantId: project.tenantId,
+    status: project.status,
     name: project.name,
     codePrefix: project.codePrefix,
-    stateLocation: project.stateLocation,
+    stateLocation: project.stateLocation ?? '',
     lgaLocation: project.lgaLocation,
     description: project.description,
-    totalBudgetNgn: Number(project.totalBudgetNgn),
+    totalBudgetNgn: Number(project.totalBudgetNgn ?? 0),
     disbursedToDateNgn: Number(project.disbursedToDateNgn),
     certifiedProgressPct: Number(project.certifiedProgressPct),
     reportingCadence: project.reportingCadence,
     workdayStartTime: project.workdayStartTime,
     workdayEndTime: project.workdayEndTime,
-    geofenceMode: project.geofenceMode,
+    timezone: project.timezone,
+    geofenceMode: project.geofenceMode as GeofenceMode | null,
     geofence: project.geofenceGeoJson,
+    geofenceToleranceMeters: effectiveToleranceMeters(project, project.tenant),
     portfolioHealth: project.portfolioHealth,
-    monitorOrganizationName: project.monitorOrganization.name,
-    lenderOrganizationName: project.lenderOrganization.name,
-    contractorOrganizationName: project.contractorOrganization.name,
+    monitorOrganizationName: project.monitorOrganization?.name ?? '',
+    lenderOrganizationName: project.lenderOrganization?.name ?? '',
+    /** Main contractor (or the only one). */
+    contractorOrganizationName: headline.name,
+    contractorCount: headline.total,
+    contractorExecutionMode: project.contractorExecutionMode as ContractorExecutionMode | null,
+    contractors: project.contractors.map((c) => ({
+      id: c.id,
+      organizationId: c.organization.id,
+      organizationName: c.organization.name,
+      tradeCategory: c.tradeCategory,
+      tradeCode: c.tradeCode,
+      isMainContractor: c.isMainContractor,
+      allowFieldReporting: c.allowFieldReporting,
+    })),
+    activatedAt: project.activatedAt?.toISOString() ?? null,
+    archivedAt: project.archivedAt?.toISOString() ?? null,
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),
   };
@@ -123,30 +167,24 @@ const LATEST_RATED_IPC_QUERY = {
   },
 };
 
-export async function listProjectsForUser(webUser: WebJwtPayload) {
-  const visibilityWhere = buildProjectVisibilityWhere(webUser);
+/**
+ * The project directory: active and archived projects (drafts are listed separately, see
+ * listDraftProjects in projectSetup.service).
+ */
+export async function listProjectsForUser(
+  webUser: WebJwtPayload,
+  statuses: ProjectStatus[] = ['ACTIVE', 'ARCHIVED']
+) {
+  const visibilityWhere = buildProjectVisibilityWhere(webUser, undefined, {
+    statuses: statuses.filter((s) => s !== 'DRAFT'),
+  });
 
   const projects = await prisma.project.findMany({
     where: visibilityWhere,
     orderBy: { createdAt: 'desc' },
     include: {
-      monitorOrganization: true,
-      lenderOrganization: true,
-      contractorOrganization: true,
-      joinCodes: {
-        include: {
-          role: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
-              fieldPersonaType: true,
-              assuranceWeight: true,
-              requiresIdentityAssurance: true,
-            },
-          },
-        },
-      },
+      ...PROJECT_CORE_INCLUDE,
+      joinCodes: { include: JOIN_CODE_LIST_INCLUDE },
       tranches: {
         orderBy: { trancheNumber: 'asc' },
         include: { conditionsPrecedent: true },
@@ -187,153 +225,6 @@ export async function listProjectsForUser(webUser: WebJwtPayload) {
   });
 }
 
-export async function createProjectBaseline(
-  webUser: WebJwtPayload,
-  input: CreateProjectRequest
-) {
-  const existing = await prisma.project.findUnique({
-    where: {
-      tenantId_codePrefix: { tenantId: webUser.tenantId, codePrefix: input.codePrefix },
-    },
-  });
-
-  if (existing) {
-    throw new AppError(
-      `A project with code prefix "${input.codePrefix}" already exists`,
-      409,
-      'DUPLICATE_PROJECT_PREFIX'
-    );
-  }
-
-  const createdProjectId = await prisma.$transaction(async (tx) => {
-    // Find or create Lender Organization within tenant
-    let lenderOrg = await tx.organization.findFirst({
-      where: {
-        tenantId: webUser.tenantId,
-        name: { equals: input.lenderOrganizationName, mode: 'insensitive' },
-      },
-    });
-    if (!lenderOrg) {
-      lenderOrg = await tx.organization.create({
-        data: {
-          tenantId: webUser.tenantId,
-          name: input.lenderOrganizationName,
-          category: 'FINANCIER_LENDER',
-        },
-      });
-    }
-
-    // Find or create Contractor Organization within tenant
-    let contractorOrg = await tx.organization.findFirst({
-      where: {
-        tenantId: webUser.tenantId,
-        name: { equals: input.contractorOrganizationName, mode: 'insensitive' },
-      },
-    });
-    if (!contractorOrg) {
-      contractorOrg = await tx.organization.create({
-        data: {
-          tenantId: webUser.tenantId,
-          name: input.contractorOrganizationName,
-          category: 'CONTRACTOR',
-        },
-      });
-    }
-
-    const tenant = await tx.tenant.findUniqueOrThrow({
-      where: { id: webUser.tenantId },
-      select: { timezone: true },
-    });
-    const project = await tx.project.create({
-      data: {
-        tenantId: webUser.tenantId,
-        timezone: tenant.timezone,
-        name: input.name,
-        codePrefix: input.codePrefix,
-        stateLocation: input.stateLocation,
-        lgaLocation: input.lgaLocation ?? null,
-        description: input.description ?? null,
-        totalBudgetNgn: input.totalBudgetNgn,
-        reportingCadence: input.reportingCadence,
-        workdayStartTime: input.workdayStartTime ?? '08:00',
-        workdayEndTime: input.workdayEndTime ?? '17:00',
-        geofenceMode: input.geofence.mode,
-        geofenceGeoJson: input.geofence as unknown as Prisma.InputJsonValue,
-        monitorOrganizationId: webUser.organizationId,
-        lenderOrganizationId: lenderOrg.id,
-        contractorOrganizationId: contractorOrg.id,
-      },
-    });
-
-    // Assign creator to the project automatically so non-global creators still retain visibility
-    await tx.userProjectAssignment.create({
-      data: {
-        userId: webUser.userId,
-        projectId: project.id,
-      },
-    });
-
-    // Join codes for the tenant's mobile roles. Pre-provisioned roles sign in with an account instead.
-    const mobileRoles = await tx.role.findMany({
-      where: {
-        tenantId: webUser.tenantId,
-        surface: { in: ['MOBILE', 'BOTH'] },
-        onboardingMode: 'JOIN_CODE',
-      },
-      orderBy: { assuranceWeight: 'desc' },
-    });
-
-    const joinCodesData = [];
-    for (const role of mobileRoles) {
-      joinCodesData.push(
-        await createJoinCode(tx, { projectId: project.id, codePrefix: project.codePrefix, role })
-      );
-    }
-
-    // Create Facility Tranches and Conditions Precedent
-    for (const trancheInput of input.tranches) {
-      await tx.facilityTranche.create({
-        data: {
-          projectId: project.id,
-          trancheNumber: trancheInput.trancheNumber,
-          name: trancheInput.name,
-          allocatedAmountNgn: trancheInput.allocatedAmountNgn,
-          targetCompletionPct: trancheInput.targetCompletionPct,
-          conditionsPrecedent: {
-            create: trancheInput.conditionsPrecedent.map((cp) => ({
-              referenceCode: cp.referenceCode,
-              description: cp.description,
-              isMandatoryForRelease: cp.isMandatoryForRelease,
-              status: cp.status,
-              evidenceDocumentUrl: cp.evidenceDocumentUrl ?? null,
-            })),
-          },
-        },
-      });
-    }
-
-    await recordAuditEvent(tx, {
-      projectId: project.id,
-      actorType: 'WEB_USER',
-      actorId: webUser.userId,
-      actorDisplayName: `${webUser.fullName} (${webUser.roleName})`,
-      action: 'PROJECT_CREATED',
-      summaryText: `Configured project baseline "${project.name}" (${project.codePrefix}) with ${input.geofence.mode} geofence and ${input.tranches.length} facility tranches.`,
-      payload: {
-        codePrefix: project.codePrefix,
-        totalBudgetNgn: input.totalBudgetNgn,
-        geofenceMode: input.geofence.mode,
-        reportingCadence: input.reportingCadence,
-        issuedJoinCodes: joinCodesData.map((jc) => jc.code),
-      },
-    });
-
-    return project.id;
-  });
-
-  return getProjectBaselineDetails(createdProjectId, webUser);
-}
-
 export async function getProjectBaselineDetails(
   projectId: string,
   webUser?: WebJwtPayload,
@@ -342,23 +233,8 @@ export async function getProjectBaselineDetails(
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: {
-      monitorOrganization: true,
-      lenderOrganization: true,
-      contractorOrganization: true,
-      joinCodes: {
-        include: {
-          role: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
-              fieldPersonaType: true,
-              assuranceWeight: true,
-              requiresIdentityAssurance: true,
-            },
-          },
-        },
-      },
+      ...PROJECT_CORE_INCLUDE,
+      joinCodes: { include: JOIN_CODE_LIST_INCLUDE },
       tranches: {
         orderBy: { trancheNumber: 'asc' },
         include: { conditionsPrecedent: true },
@@ -373,60 +249,24 @@ export async function getProjectBaselineDetails(
     throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   }
 
-  // Field agents get the baseline they need to report against; no join codes.
+  // Field agents get the baseline they need to report against; no join codes. In multi-prime a
+  // contractor session only sees its own contractor's items.
+  const contractorScope =
+    fieldAgent && project.contractorExecutionMode === 'MULTI_PRIME_SEPARATE_IPC'
+      ? await prisma.fieldAgentSession.findUnique({
+          where: { id: fieldAgent.sessionId },
+          select: { projectContractorId: true },
+        })
+      : null;
+  const boqItems = contractorScope?.projectContractorId
+    ? project.boqItems.filter((b) => b.projectContractorId === contractorScope.projectContractorId)
+    : project.boqItems;
   return {
     ...serializeProjectCore(project),
     joinCodes: fieldAgent ? [] : visibleJoinCodesFor(project.joinCodes, webUser),
     tranches: project.tranches.map(serializeTranche),
-    boqItems: project.boqItems.map((b) => serializeBoqItem(b)),
+    boqItems: boqItems.map((b) => serializeBoqItem(b)),
   };
-}
-
-export async function updateProjectBaseline(
-  projectId: string,
-  webUser: WebJwtPayload,
-  input: UpdateProjectBaseline
-) {
-  await prisma.$transaction(async (tx) => {
-    const updated = await tx.project.update({
-      where: { id: projectId },
-      data: {
-        ...(input.name ? { name: input.name } : {}),
-        ...(input.stateLocation ? { stateLocation: input.stateLocation } : {}),
-        ...(input.lgaLocation !== undefined
-          ? { lgaLocation: input.lgaLocation }
-          : {}),
-        ...(input.description !== undefined
-          ? { description: input.description }
-          : {}),
-        ...(input.totalBudgetNgn
-          ? { totalBudgetNgn: input.totalBudgetNgn }
-          : {}),
-        ...(input.reportingCadence
-          ? { reportingCadence: input.reportingCadence }
-          : {}),
-        ...(input.geofence
-          ? {
-              geofenceMode: input.geofence.mode,
-              geofenceGeoJson:
-                input.geofence as unknown as Prisma.InputJsonValue,
-            }
-          : {}),
-      },
-    });
-
-    await recordAuditEvent(tx, {
-      projectId,
-      actorType: 'WEB_USER',
-      actorId: webUser.userId,
-      actorDisplayName: `${webUser.fullName} (${webUser.roleName})`,
-      action: 'BASELINE_UPDATED',
-      summaryText: `Updated baseline configuration for project ${updated.codePrefix}.`,
-      payload: input as Record<string, unknown>,
-    });
-  });
-
-  return getProjectBaselineDetails(projectId, webUser);
 }
 
 export async function verifyCoordinateForProject(
@@ -437,15 +277,24 @@ export async function verifyCoordinateForProject(
 ) {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { id: true, codePrefix: true, geofenceGeoJson: true },
+    select: {
+      id: true,
+      codePrefix: true,
+      geofenceGeoJson: true,
+      geofenceToleranceMeters: true,
+      tenant: { select: { defaultGeofenceToleranceMeters: true } },
+    },
   });
 
   if (!project) {
     throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   }
+  if (!project.geofenceGeoJson) {
+    throw new AppError('This project has no geofence yet', 409, 'GEOFENCE_NOT_SET');
+  }
 
   const parsedGeofence = ProjectGeofenceSchema.parse(project.geofenceGeoJson);
-  return verifyPointAgainstGeofence(coord, parsedGeofence);
+  return verifyPointAgainstGeofence(coord, parsedGeofence, effectiveToleranceMeters(project, project.tenant));
 }
 
 /**
@@ -460,7 +309,7 @@ export async function listProjectFieldSessions(
     await assertCallerProjectAccess({ projectId, webUser });
     projectFilter = { projectId };
   } else {
-    projectFilter = { project: buildProjectVisibilityWhere(webUser) };
+    projectFilter = { project: buildProjectVisibilityWhere(webUser, undefined, { statuses: ['ACTIVE', 'ARCHIVED'] }) };
   }
 
   const sessions = await prisma.fieldAgentSession.findMany({
@@ -470,6 +319,7 @@ export async function listProjectFieldSessions(
       role: {
         select: { id: true, code: true, name: true },
       },
+      projectContractor: { select: { id: true, tradeCode: true, organization: { select: { name: true } } } },
       joinCode: {
         select: { code: true },
       },
@@ -494,6 +344,9 @@ export async function listProjectFieldSessions(
     deviceId: s.deviceId,
     deviceModel: s.deviceModel,
     mobileDeviceId: s.mobileDeviceId,
+    projectContractorId: s.projectContractorId,
+    contractorName: s.projectContractor?.organization.name ?? null,
+    tradeCode: s.projectContractor?.tradeCode ?? null,
     isActive: s.isActive,
     assuranceStatus: s.assuranceStatus,
     lastSyncAt: s.lastSyncAt?.toISOString() ?? null,
@@ -578,7 +431,7 @@ export async function listContractorVerifications(
     await assertCallerProjectAccess({ projectId, webUser });
     whereClause.projectId = projectId;
   } else {
-    whereClause.project = buildProjectVisibilityWhere(webUser);
+    whereClause.project = buildProjectVisibilityWhere(webUser, undefined, { statuses: ['ACTIVE', 'ARCHIVED'] });
   }
 
   const sessions = await prisma.fieldAgentSession.findMany({
@@ -594,9 +447,11 @@ export async function listContractorVerifications(
           tenantId: true,
           name: true,
           codePrefix: true,
-          contractorOrganization: { select: { name: true } },
+          contractors: { ...PROJECT_CONTRACTORS_INCLUDE, include: { organization: { select: { name: true } } } },
         },
       },
+      // The contractor this person works for (Phase 6), not "the" project contractor.
+      projectContractor: { select: { tradeCode: true, organization: { select: { name: true } } } },
       joinCode: { select: { code: true } },
     },
   });
@@ -627,7 +482,9 @@ export async function listContractorVerifications(
     projectId: s.projectId,
     projectCodePrefix: s.project.codePrefix,
     projectName: s.project.name,
-    organizationName: s.project.contractorOrganization.name,
+    organizationName:
+      s.projectContractor?.organization.name ?? contractorHeadline(s.project.contractors).name,
+    tradeCode: s.projectContractor?.tradeCode ?? null,
     roleId: s.roleId,
     roleName: s.role.name || s.roleNameSnapshot,
     fieldPersonaType: s.fieldPersonaType as FieldPersonaType,
@@ -787,7 +644,7 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
     where: buildProjectVisibilityWhere(webUser),
     orderBy: { createdAt: 'desc' },
     include: {
-      contractorOrganization: { select: { name: true } },
+      contractors: { ...PROJECT_CONTRACTORS_INCLUDE, include: { organization: { select: { name: true } } } },
       lenderOrganization: { select: { name: true } },
       tranches: {
         orderBy: { trancheNumber: 'asc' },
@@ -827,7 +684,7 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
   let pendingContractorVerificationsCount = 0;
 
   const projectItems = projects.map((p) => {
-    const budget = Number(p.totalBudgetNgn);
+    const budget = Number(p.totalBudgetNgn ?? 0);
     const disbursed = Number(p.disbursedToDateNgn);
     totalPortfolioCommitmentNgn += budget;
     totalDisbursedToDateNgn += disbursed;
@@ -865,9 +722,10 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
       projectId: p.id,
       codePrefix: p.codePrefix,
       name: p.name,
-      stateLocation: p.stateLocation,
-      contractorName: p.contractorOrganization.name,
-      lenderName: p.lenderOrganization.name,
+      stateLocation: p.stateLocation ?? '',
+      contractorName: contractorHeadline(p.contractors).name,
+      contractorCount: p.contractors.length,
+      lenderName: p.lenderOrganization?.name ?? '',
       totalBudgetNgn: budget,
       disbursedToDateNgn: disbursed,
       certifiedProgressPct: Number(p.certifiedProgressPct),
@@ -897,6 +755,7 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
  */
 export async function listDemoProjects() {
   const projects = await prisma.project.findMany({
+    where: { status: 'ACTIVE' },
     orderBy: { createdAt: 'asc' },
     select: {
       id: true,
@@ -930,9 +789,9 @@ export async function listDemoProjects() {
     id: p.id,
     codePrefix: p.codePrefix,
     name: p.name,
-    stateLocation: p.stateLocation,
+    stateLocation: p.stateLocation ?? '',
     lgaLocation: p.lgaLocation,
-    geofenceMode: p.geofenceMode,
+    geofenceMode: p.geofenceMode as GeofenceMode,
     portfolioHealth: p.portfolioHealth,
     joinCodes: p.joinCodes.map((jc) => ({
       code: jc.code,

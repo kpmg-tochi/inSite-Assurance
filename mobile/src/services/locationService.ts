@@ -1,5 +1,5 @@
 import * as Location from 'expo-location';
-import { verifyPointAgainstGeofence } from '@insite/shared';
+import { verifyPointAgainstGeofence, type GeofenceStatus } from '@insite/shared';
 import { getLoadedBaselinePack } from '../storage/baselineStore';
 
 /**
@@ -30,9 +30,42 @@ export interface LocationFix {
 
 /** Local preview of the geofence for a fix. `null` means it could not be evaluated. */
 export interface GeofencePreview {
+  /** INSIDE, WITHIN_TOLERANCE (outside the boundary but inside the project's tolerance band) or OUTSIDE. */
+  status: GeofenceStatus | null;
+  /** true unless OUTSIDE; WITHIN_TOLERANCE counts as within. */
   isWithinGeofence: boolean | null;
+  /** Metres outside the boundary; 0 inside. */
+  distanceOutsideMeters: number | null;
+  /** Chainage, only for linear corridor projects; null otherwise. */
   chainageLabel: string | null;
   distanceFromSiteMeters: number | null;
+}
+
+const NO_PREVIEW: GeofencePreview = {
+  status: null,
+  isWithinGeofence: null,
+  distanceOutsideMeters: null,
+  chainageLabel: null,
+  distanceFromSiteMeters: null,
+};
+
+/**
+ * Short badge text for a geofence status the app or server actually computed; null when there is
+ * no status. Chainage is appended only when one exists (linear corridor projects).
+ */
+export function geofenceBadgeText(
+  status: GeofenceStatus | null | undefined,
+  distanceOutsideMeters: number | null | undefined,
+  chainageLabel?: string | null
+): string | null {
+  if (!status) return null;
+  if (status === 'WITHIN_TOLERANCE') {
+    return distanceOutsideMeters != null
+      ? `Within tolerance (${Math.round(distanceOutsideMeters)} m outside)`
+      : 'Within tolerance';
+  }
+  const base = status === 'INSIDE' ? 'In geofence' : 'Outside geofence';
+  return chainageLabel ? `${base} · ${chainageLabel}` : base;
 }
 
 /** @deprecated name kept for older screens; a geotag is a fix plus a local geofence preview. */
@@ -108,18 +141,19 @@ export function previewGeofence(
   projectId?: string | null
 ): GeofencePreview {
   const pack = getLoadedBaselinePack(projectId);
-  if (!pack?.geofence) {
-    return { isWithinGeofence: null, chainageLabel: null, distanceFromSiteMeters: null };
-  }
+  if (!pack?.geofence) return NO_PREVIEW;
   try {
-    const result = verifyPointAgainstGeofence(fix, pack.geofence);
+    // Packs stored before Phase 6 have no tolerance: treat as 0 (boundary only).
+    const result = verifyPointAgainstGeofence(fix, pack.geofence, pack.geofenceToleranceMeters ?? 0);
     return {
+      status: result.status,
       isWithinGeofence: result.isWithinGeofence,
+      distanceOutsideMeters: result.distanceOutsideMeters,
       chainageLabel: result.chainageFormatted,
       distanceFromSiteMeters: result.distanceFromCenterOrLineMeters,
     };
   } catch {
-    return { isWithinGeofence: null, chainageLabel: null, distanceFromSiteMeters: null };
+    return NO_PREVIEW;
   }
 }
 

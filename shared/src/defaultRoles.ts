@@ -65,6 +65,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'projects:view_all_tenant',
       'projects:view_executive_matrix',
       'projects:create',
+      'projects:activate',
       'projects:edit_baseline',
       'projects:manage_standards_docs',
       'boq:view',

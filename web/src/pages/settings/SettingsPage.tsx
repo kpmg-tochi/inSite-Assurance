@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { ShieldCheck, User, KeyRound, Users, Palette } from "lucide-react";
+import { ShieldCheck, User, KeyRound, Users, Palette, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import type { FieldSessionRosterDto } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
@@ -16,6 +16,8 @@ import { RolesPermissionsTab } from "../../components/rbac/RolesPermissionsTab";
 import { UsersVisibilityTab } from "../../components/rbac/UsersVisibilityTab";
 import { TenantBrandingTab } from "../../components/rbac/TenantBrandingTab";
 import { EvidenceRatingsCard } from "../../components/rbac/EvidenceRatingsCard";
+import { OrganizationsTab } from "../../components/rbac/OrganizationsTab";
+import { WorkspaceSettingsCard } from "../../components/rbac/WorkspaceSettingsCard";
 import { JoinCodesPanel } from "../../components/JoinCodesPanel";
 import { MobileDevicesPanel } from "../../components/rbac/MobileDevicesPanel";
 import {
@@ -37,13 +39,14 @@ export function SettingsPage({ project }: SettingsPageProps) {
   const canManageBranding = hasPermission("tenant:manage_branding");
   const canManageSettings = hasPermission("tenant:manage_settings");
   const canSeeTenantTab = canManageBranding || canManageSettings;
+  const canManageOrganizations = hasPermission("organizations:manage");
   const canRevokeDevices = hasPermission("sessions:revoke_device");
   const canReviewCredentials = hasPermission("assurance:review_credentials");
   const canManageRoster = hasPermission("mobilization:manage_roster");
   const canViewRoster = hasAnyPermission("sessions:revoke_device", "mobilization:manage_roster");
   const canSeeAccessTab = canReviewCredentials || canViewRoster;
 
-  type SettingsTab = "ACCESS" | "ROLES" | "USERS" | "BRANDING" | "ACCOUNT";
+  type SettingsTab = "ACCESS" | "ROLES" | "USERS" | "ORGANIZATIONS" | "BRANDING" | "ACCOUNT";
   const [activeTab, setActiveTab] = useState<SettingsTab>(() =>
     canSeeAccessTab
       ? "ACCESS"
@@ -51,9 +54,11 @@ export function SettingsPage({ project }: SettingsPageProps) {
         ? "ROLES"
         : canManageUsers
           ? "USERS"
-          : canSeeTenantTab
-            ? "BRANDING"
-            : "ACCOUNT",
+          : canManageOrganizations
+            ? "ORGANIZATIONS"
+            : canSeeTenantTab
+              ? "BRANDING"
+              : "ACCOUNT",
   );
 
   // Only fetch what the user is allowed to see.
@@ -281,7 +286,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
             <h2 className="text-lg font-bold text-slate-900">
               Governance &amp; App Settings
             </h2>
-            <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-blue-50 text-brand-primary border border-blue-200">
+            <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-brand-primary/5 text-brand-primary border border-brand-primary/25">
               {user?.roleName || "Workspace Controls"}
             </span>
           </div>
@@ -345,6 +350,21 @@ export function SettingsPage({ project }: SettingsPageProps) {
             </button>
           )}
 
+          {canManageOrganizations && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("ORGANIZATIONS")}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
+                activeTab === "ORGANIZATIONS"
+                  ? "bg-white text-brand-primary shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Building2 className="w-4 h-4" />
+              <span>Organisations</span>
+            </button>
+          )}
+
           {canSeeTenantTab && (
             <button
               type="button"
@@ -377,9 +397,11 @@ export function SettingsPage({ project }: SettingsPageProps) {
 
       {activeTab === "ROLES" && canManageRoles && <RolesPermissionsTab />}
       {activeTab === "USERS" && canManageUsers && <UsersVisibilityTab />}
+      {activeTab === "ORGANIZATIONS" && canManageOrganizations && <OrganizationsTab />}
       {activeTab === "BRANDING" && canSeeTenantTab && (
         <div className="space-y-4">
           {canManageBranding && <TenantBrandingTab />}
+          {canManageSettings && <WorkspaceSettingsCard />}
           {canManageSettings && <EvidenceRatingsCard />}
         </div>
       )}
@@ -388,9 +410,9 @@ export function SettingsPage({ project }: SettingsPageProps) {
       {activeTab === "ACCESS" && canSeeAccessTab && (
         <div className="space-y-4">
           {/* Assurance Value Proposition Notice */}
-          <div className="bg-blue-50/70 border border-blue-200/90 rounded-2xl p-4 flex items-start gap-3">
+          <div className="bg-brand-primary/5 border border-brand-primary/25 rounded-2xl p-4 flex items-start gap-3">
             <ShieldCheck className="w-5 h-5 text-brand-primary shrink-0 mt-0.5" />
-            <div className="text-xs text-blue-900/90 leading-relaxed">
+            <div className="text-xs text-brand-navy/90 leading-relaxed">
               <strong className="font-bold text-brand-navy block mb-0.5">
                 Contractor Identity &amp; Competence Assurance
               </strong>
@@ -419,7 +441,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
             title={
               <div className="flex items-center gap-2.5">
                 <span>Active Mobile Field Personnel</span>
-                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-blue-100 border border-white/15">
+                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-white/90 border border-white/15">
                   {sessionsLoading
                     ? "Loading..."
                     : `${fieldAgents.length} Enrolled Devices`}

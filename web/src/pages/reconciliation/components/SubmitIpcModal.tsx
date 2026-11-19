@@ -5,6 +5,7 @@ import { CustomSelect, type CustomSelectOption } from "../../../components/commo
 import { uploadSupportingDocument } from "../../../api/reconciliation/reconciliationApi";
 import { useSubmitIpcMutation } from "../../../mutations/reconciliation/useReconciliationMutations";
 import { formatNaira } from "../../../lib/formatters";
+import { useAuth } from "../../../lib/auth-context";
 import { ModalActions, ModalShell, inputClass } from "./ModalShell";
 
 const DOC_TYPE_OPTIONS: Array<{ value: MediaType; label: string }> = [
@@ -30,15 +31,25 @@ interface Props {
  */
 export function SubmitIpcModal({ project, ipcs, boqItems, onClose, onSubmitted }: Props) {
   const submitMutation = useSubmitIpcMutation(project.id);
+  const { user } = useAuth();
+  // Phase 6: the claim is submitted for the user's own contractor. In multi-prime it may only
+  // cover that contractor's items, and the one-open-IPC rule is per contractor.
+  const ownContractor = project.contractors.find((c) => c.organizationId === user?.organizationId) ?? null;
+  const multiPrime = project.contractorExecutionMode === "MULTI_PRIME_SEPARATE_IPC";
 
   const availableTranches = useMemo(
     () =>
       project.tranches.filter(
         (t) =>
           !t.isReleased &&
-          !ipcs.some((ipc) => ipc.trancheId === t.id && OPEN_IPC_STATUSES.includes(ipc.status)),
+          !ipcs.some(
+            (ipc) =>
+              ipc.trancheId === t.id &&
+              OPEN_IPC_STATUSES.includes(ipc.status) &&
+              (!multiPrime || ipc.projectContractorId === ownContractor?.id),
+          ),
       ),
-    [project.tranches, ipcs],
+    [project.tranches, ipcs, multiPrime, ownContractor?.id],
   );
 
   const [trancheId, setTrancheId] = useState(availableTranches[0]?.id ?? "");
@@ -52,7 +63,12 @@ export function SubmitIpcModal({ project, ipcs, boqItems, onClose, onSubmitted }
   const [formError, setFormError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  const trancheItems = boqItems.filter((b) => b.trancheId === trancheId && b.cumulativeCertifiedPct < 100);
+  const trancheItems = boqItems.filter(
+    (b) =>
+      b.trancheId === trancheId &&
+      b.cumulativeCertifiedPct < 100 &&
+      (!multiPrime || (ownContractor && b.projectContractorId === ownContractor.id)),
+  );
 
   const lines = trancheItems
     .filter((b) => (claims[b.id] ?? "").trim() !== "")

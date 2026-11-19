@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { defaultShadow } from "../../styles/commonStyles";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useActiveBranding } from "../../context/ProfileContext";
 
 interface PrimaryButtonProps {
   onPress: () => void;
@@ -32,17 +33,19 @@ export const PrimaryButton: FC<PrimaryButtonProps> = ({
   disabled,
   isWorking,
   indicatorColor = "#FFF",
-  backgroundColor = "#00338D",
+  backgroundColor,
   textColor = "#FFF",
   accessibilityLabel,
 }) => {
+  // Tenant primary colour once the tenant is known; neutral InSite default before (Phase 6).
+  const { primaryColor } = useActiveBranding();
   return (
     <TouchableOpacity
       style={[
         styles.primaryButton,
         style,
         (isWorking || disabled) && styles.primaryButtonDisabled,
-        { backgroundColor },
+        { backgroundColor: backgroundColor ?? primaryColor },
       ]}
       onPress={onPress}
       disabled={disabled || isWorking}

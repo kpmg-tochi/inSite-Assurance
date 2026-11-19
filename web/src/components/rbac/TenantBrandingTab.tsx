@@ -22,8 +22,6 @@ export function TenantBrandingTab() {
   const createTenantMutation = useCreateTenantMutation();
 
   const [tenantName, setTenantName] = useState('');
-  const [defaultCurrency, setDefaultCurrency] = useState('NGN');
-  const [timezone, setTimezone] = useState('Africa/Lagos');
   const [logoUrl, setLogoUrl] = useState('');
   const [primaryColorHex, setPrimaryColorHex] = useState('#00338D');
   const [navyColorHex, setNavyColorHex] = useState('#0C233C');
@@ -42,8 +40,6 @@ export function TenantBrandingTab() {
   useEffect(() => {
     if (!tenant) return;
     setTenantName(tenant.name);
-    setDefaultCurrency(tenant.defaultCurrency);
-    setTimezone(tenant.timezone);
     setLogoUrl(tenant.brandingConfig?.logoUrl || '');
     setPrimaryColorHex(tenant.brandingConfig?.primaryColorHex || '#00338D');
     setNavyColorHex(tenant.brandingConfig?.navyColorHex || '#0C233C');
@@ -56,8 +52,7 @@ export function TenantBrandingTab() {
     e.preventDefault();
     const updated = await updateBrandingMutation.mutateAsync({
       name: tenantName.trim() || undefined,
-      defaultCurrency: defaultCurrency.trim() || 'NGN',
-      timezone: timezone.trim() || 'Africa/Lagos',
+      // Currency and time zone are workspace settings (Phase 6), not branding.
       brandingConfig: {
         logoUrl: logoUrl.trim() || null,
         primaryColorHex,
@@ -70,6 +65,21 @@ export function TenantBrandingTab() {
     applyTenantBranding(updated.brandingConfig);
     await refreshUser();
   };
+
+  // Live preview: the colours apply to this page as you edit and revert if you leave unsaved.
+  const validHex = (h: string) => /^#[0-9A-Fa-f]{6}$/.test(h);
+  useEffect(() => {
+    if (!tenant) return;
+    if (validHex(primaryColorHex) && validHex(navyColorHex)) applyTenantBranding({ primaryColorHex, navyColorHex });
+  }, [primaryColorHex, navyColorHex, tenant]);
+  useEffect(
+    () => () => {
+      // Back to the saved branding when leaving the tab.
+      applyTenantBranding(user?.tenant?.brandingConfig);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   const handleCreateTenant = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,47 +160,46 @@ export function TenantBrandingTab() {
               type="text"
               value={tagline}
               onChange={(e) => setTagline(e.target.value)}
-              placeholder="Capital Advisory"
+              placeholder="Shown under the workspace name"
               className="w-full rounded-xl border border-slate-200 px-3 py-2"
             />
           </div>
 
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
-              Logo Image URL (leave blank for default KPMG mark)
+              Logo image URL (leave blank for the InSite mark)
             </label>
             <input
               type="text"
               value={logoUrl}
               onChange={(e) => setLogoUrl(e.target.value)}
-              placeholder="/KPMG-logo.svg or https://..."
+              placeholder="https://..."
               className="w-full rounded-xl border border-slate-200 px-3 py-2"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Default Currency
-              </label>
-              <input
-                type="text"
-                value={defaultCurrency}
-                onChange={(e) => setDefaultCurrency(e.target.value.toUpperCase())}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 font-mono"
-              />
+          <div className="rounded-xl border border-slate-200 p-3">
+            <p className="font-semibold text-slate-700 mb-2">Preview</p>
+            <div className="rounded-lg p-3 flex items-center gap-2.5" style={{ backgroundColor: validHex(navyColorHex) ? navyColorHex : '#0C233C' }}>
+              <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-1 shrink-0">
+                {logoUrl.trim() ? (
+                  <img src={logoUrl.trim()} alt="" className="w-full h-full object-contain" />
+                ) : (
+                  <span className="text-[10px] font-bold text-slate-700">IS</span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="text-white font-semibold text-sm truncate">{tenantName || 'Workspace name'}</div>
+                <div className="text-[11px] text-white/70 truncate">{tagline || 'InSite Assurance'}</div>
+              </div>
+              <span
+                className="ml-auto rounded-lg px-3 py-1.5 text-[11px] font-semibold text-white"
+                style={{ backgroundColor: validHex(primaryColorHex) ? primaryColorHex : '#00338D' }}
+              >
+                Button
+              </span>
             </div>
-            <div>
-              <label className="block font-semibold text-slate-700 mb-1">
-                Timezone
-              </label>
-              <input
-                type="text"
-                value={timezone}
-                onChange={(e) => setTimezone(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2"
-              />
-            </div>
+            <p className="mt-2 text-[11px] text-slate-500">Colours also preview on this page while you edit; they are saved only when you save.</p>
           </div>
 
           <div>
@@ -243,7 +252,7 @@ export function TenantBrandingTab() {
               type="text"
               value={pdfHeaderTitle}
               onChange={(e) => setPdfHeaderTitle(e.target.value)}
-              placeholder="e.g. KPMG Capital Projects Assurance Valuation Certificate"
+              placeholder="e.g. Capital Projects Assurance Valuation Certificate"
               className="w-full rounded-xl border border-slate-200 px-3 py-2"
             />
           </div>

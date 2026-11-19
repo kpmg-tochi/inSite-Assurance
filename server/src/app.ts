@@ -6,6 +6,7 @@ import { env } from "./config/env";
 import { errorHandler } from "./middleware/error.middleware";
 import { authRoutes } from "./modules/auth/auth.routes";
 import { rbacRoutes } from "./modules/rbac/rbac.routes";
+import { organizationsRoutes } from "./modules/organizations/organizations.routes";
 import { projectsRoutes } from "./modules/projects/projects.routes";
 import { boqRoutes } from "./modules/boq/boq.routes";
 import { evidenceRoutes } from "./modules/evidence/evidence.routes";
@@ -72,6 +73,7 @@ export function createApp() {
   // API v1 Routes
   app.use("/api/v1/auth", authRoutes);
   app.use("/api/v1/rbac", rbacRoutes);
+  app.use("/api/v1/organizations", organizationsRoutes);
   app.use("/api/v1/projects", projectsRoutes);
   app.use("/api/v1/projects", boqRoutes);
   app.use("/api/v1/projects", evidenceRoutes);

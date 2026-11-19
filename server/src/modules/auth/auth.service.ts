@@ -10,7 +10,8 @@ import {
   MobileBaselinePack,
   MobileLoginRequest,
   MobileLoginResponse,
-  OrganizationCategory,
+  MobileTenantBranding,
+  SessionContractor,
   resolveRatingLabels,
   WebLoginRequest,
   WebRegisterRequest,
@@ -31,6 +32,7 @@ import {
   requireEffectiveMobileRole,
   roleSummary,
 } from './mobileAccess';
+import { primaryCategory, resolveOrganization } from '../organizations/organizations.service';
 import { recordAuditEvent } from '../audit/audit.service';
 import { parseTenantBranding } from '../rbac/rbac.service';
 import { parseDevicePublicKey } from '../../utils/deviceSignature';
@@ -95,7 +97,7 @@ export function serializeWebUserProfile(user: LoadedWebUser): WebUserProfile {
     permissions,
     organizationId: user.organizationId,
     organizationName: user.organization.name,
-    organizationCategory: user.organization.category as OrganizationCategory,
+    organizationCategory: primaryCategory(user.organization.categories),
     professionalLicenseType: user.professionalLicenseType,
     professionalLicenseNumber: user.professionalLicenseNumber,
     mustChangePassword: user.mustChangePassword,
@@ -165,22 +167,12 @@ export async function registerWebUser(input: WebRegisterRequest) {
   const passwordHash = await bcrypt.hash(input.password, 10);
 
   const createdUserId = await prisma.$transaction(async (tx) => {
-    let organization = await tx.organization.findFirst({
-      where: {
-        tenantId: tenant.id,
-        name: { equals: input.organizationName, mode: 'insensitive' },
-      },
-    });
-
-    if (!organization) {
-      organization = await tx.organization.create({
-        data: {
-          tenantId: tenant.id,
-          name: input.organizationName,
-          category: input.organizationCategory ?? 'OTHER',
-        },
-      });
-    }
+    const { organization } = await resolveOrganization(
+      tx,
+      tenant.id,
+      { name: input.organizationName },
+      input.organizationCategory ?? 'OTHER'
+    );
 
     const created = await tx.user.create({
       data: {
@@ -345,6 +337,7 @@ function serializeMobileAccount(user: MobileUserRow, mobileDeviceId: string): Mo
     mobileDeviceId,
     mobileRole: roleSummary(role),
     ratingLabels: resolveRatingLabels(user.tenant.evidenceRatingLabels),
+    tenantBranding: mobileTenantBranding(user.tenant),
   };
 }
 
@@ -486,13 +479,17 @@ type BaselineProject = {
   id: string;
   name: string;
   codePrefix: string;
-  stateLocation: string;
+  stateLocation: string | null;
   reportingCadence: string;
   timezone: string;
-  geofenceMode: string;
+  geofenceMode: string | null;
   geofenceGeoJson: unknown;
+  geofenceToleranceMeters: number | null;
+  contractorExecutionMode: string | null;
+  tenant: { defaultGeofenceToleranceMeters: number };
   boqItems: Array<{
     id: string;
+    projectContractorId: string | null;
     wbsCode: string;
     section: string;
     description: string;
@@ -505,9 +502,19 @@ type BaselineProject = {
   }>;
 };
 
-/** The offline baseline for one project, as join returns it and the baseline endpoint serves it. */
-export function buildBaselinePack(project: BaselineProject): MobileBaselinePack {
-  const boqItems = project.boqItems.map((item) => ({
+/**
+ * The offline baseline for one project, as join returns it and the baseline endpoint serves it.
+ * In a multi-prime project a session bound to a contractor gets only that contractor's items.
+ */
+export function buildBaselinePack(
+  project: BaselineProject,
+  scope: { projectContractorId?: string | null } = {}
+): MobileBaselinePack {
+  const scoped =
+    project.contractorExecutionMode === 'MULTI_PRIME_SEPARATE_IPC' && scope.projectContractorId
+      ? project.boqItems.filter((item) => item.projectContractorId === scope.projectContractorId)
+      : project.boqItems;
+  const boqItems = scoped.map((item) => ({
     id: item.id,
     wbsCode: item.wbsCode,
     section: item.section,
@@ -523,42 +530,105 @@ export function buildBaselinePack(project: BaselineProject): MobileBaselinePack 
     projectId: project.id,
     name: project.name,
     codePrefix: project.codePrefix,
-    stateLocation: project.stateLocation,
+    stateLocation: project.stateLocation ?? '',
     reportingCadence: project.reportingCadence as MobileBaselinePack['reportingCadence'],
     timezone: project.timezone,
     geofenceMode: project.geofenceMode as MobileBaselinePack['geofenceMode'],
     geofence: project.geofenceGeoJson as MobileBaselinePack['geofence'],
+    geofenceToleranceMeters: project.geofenceToleranceMeters ?? project.tenant.defaultGeofenceToleranceMeters,
     boqItems,
     holdPoints: boqItems.filter((b) => b.isHoldPoint),
   };
 }
 
 /** GET /auth/mobile/projects/:projectId/baseline. Access is checked by the field auth guard. */
-export async function getProjectBaselinePack(projectId: string): Promise<MobileBaselinePack> {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    include: { boqItems: { orderBy: { wbsCode: 'asc' } } },
-  });
+export async function getProjectBaselinePack(projectId: string, sessionId?: string): Promise<MobileBaselinePack> {
+  const [project, session] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        boqItems: { orderBy: { wbsCode: 'asc' } },
+        tenant: { select: { defaultGeofenceToleranceMeters: true } },
+      },
+    }),
+    sessionId
+      ? prisma.fieldAgentSession.findUnique({ where: { id: sessionId }, select: { projectContractorId: true } })
+      : null,
+  ]);
   if (!project) {
     throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   }
-  return buildBaselinePack(project);
+  return buildBaselinePack(project, { projectContractorId: session?.projectContractorId ?? null });
 }
+
+type SessionContractorRow = {
+  id: string;
+  tradeCategory: string;
+  tradeCode: string;
+  isMainContractor: boolean;
+  organization: { name: string };
+} | null;
+
+export function serializeSessionContractor(c: SessionContractorRow): SessionContractor | null {
+  if (!c) return null;
+  return {
+    projectContractorId: c.id,
+    organizationName: c.organization.name,
+    tradeCategory: c.tradeCategory,
+    tradeCode: c.tradeCode,
+    isMainContractor: c.isMainContractor,
+  };
+}
+
+/** Tenant branding for the mobile app (Phase 6). */
+export function mobileTenantBranding(tenant: {
+  name: string;
+  brandingConfig: unknown;
+  defaultCurrency: string;
+}): MobileTenantBranding {
+  const branding = parseTenantBranding(tenant.brandingConfig);
+  return {
+    tenantName: tenant.name,
+    logoUrl: branding.logoUrl ?? null,
+    primaryColorHex: branding.primaryColorHex,
+    currency: tenant.defaultCurrency,
+  };
+}
+
+const SESSION_CONTRACTOR_SELECT = {
+  select: {
+    id: true,
+    tradeCategory: true,
+    tradeCode: true,
+    isMainContractor: true,
+    allowFieldReporting: true,
+    organization: { select: { name: true } },
+  },
+} as const;
 
 function buildMobileSessionResponse(
   project: {
     id: string;
     tenantId: string;
-    tenant: { evidenceRatingLabels: unknown };
+    tenant: {
+      evidenceRatingLabels: unknown;
+      name: string;
+      brandingConfig: unknown;
+      defaultCurrency: string;
+      defaultGeofenceToleranceMeters: number;
+    };
     name: string;
     codePrefix: string;
-    stateLocation: string;
+    stateLocation: string | null;
     reportingCadence: string;
     timezone: string;
-    geofenceMode: string;
+    geofenceMode: string | null;
     geofenceGeoJson: unknown;
+    geofenceToleranceMeters: number | null;
+    contractorExecutionMode: string | null;
     boqItems: Array<{
       id: string;
+      projectContractorId: string | null;
       wbsCode: string;
       section: string;
       description: string;
@@ -588,8 +658,10 @@ function buildMobileSessionResponse(
     assuranceStatus: string;
     corenLicenseNumber: string | null;
     livenessPassed: boolean;
+    projectContractorId: string | null;
   },
-  normalizedCode: string
+  normalizedCode: string,
+  contractor: SessionContractorRow = null
 ) {
   const permissions = role.rolePermissions.map((rp) => rp.permission.key);
   const fieldPersonaType = role.fieldPersonaType as FieldPersonaType;
@@ -620,8 +692,10 @@ function buildMobileSessionResponse(
       corenLicenseNumber: session.corenLicenseNumber ?? undefined,
       livenessPassed: session.livenessPassed,
       ratingLabels: resolveRatingLabels(project.tenant.evidenceRatingLabels),
+      contractor: serializeSessionContractor(contractor),
+      tenantBranding: mobileTenantBranding(project.tenant),
     },
-    baselinePack: buildBaselinePack(project),
+    baselinePack: buildBaselinePack(project, { projectContractorId: session.projectContractorId }),
   };
 }
 
@@ -632,11 +706,20 @@ function assertJoinCodeUsable(
     maxUses: number | null;
     useCount: number;
     role: { surface: string };
-    project: { tenant: { status: string } };
+    project: { status: string; tenant: { status: string } };
+    projectContractor?: { allowFieldReporting: boolean } | null;
   } | null,
   normalizedCode: string
 ): asserts record is NonNullable<typeof record> {
   if (!record || !record.isActive || record.role.surface === 'WEB') {
+    throw new AppError(
+      `Project Join Code "${normalizedCode}" is invalid or has been deactivated.`,
+      404,
+      'INVALID_JOIN_CODE'
+    );
+  }
+  // Drafts have no codes; an archived project's codes are deactivated, but check anyway.
+  if (record.project.status !== 'ACTIVE' || record.projectContractor?.allowFieldReporting === false) {
     throw new AppError(
       `Project Join Code "${normalizedCode}" is invalid or has been deactivated.`,
       404,
@@ -668,6 +751,7 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
   const joinCodeRecord = await prisma.projectJoinCode.findUnique({
     where: { code: normalizedCode },
     include: {
+      projectContractor: SESSION_CONTRACTOR_SELECT,
       role: {
         include: {
           rolePermissions: {
@@ -677,7 +761,16 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
       },
       project: {
         include: {
-          tenant: { select: { status: true, evidenceRatingLabels: true } },
+          tenant: {
+            select: {
+              status: true,
+              evidenceRatingLabels: true,
+              name: true,
+              brandingConfig: true,
+              defaultCurrency: true,
+              defaultGeofenceToleranceMeters: true,
+            },
+          },
           boqItems: {
             orderBy: { wbsCode: 'asc' },
           },
@@ -730,6 +823,7 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
       data: {
         projectId: joinCodeRecord.projectId,
         joinCodeId: joinCodeRecord.id,
+        projectContractorId: joinCodeRecord.projectContractorId,
         roleId: role.id,
         roleNameSnapshot: role.name,
         fieldPersonaType: role.fieldPersonaType,
@@ -792,7 +886,8 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
     joinCodeRecord.project,
     role,
     session,
-    normalizedCode
+    normalizedCode,
+    joinCodeRecord.projectContractor
   );
 }
 
@@ -810,6 +905,7 @@ export async function demoSkipVerificationMobile(
   const joinCodeRecord = await prisma.projectJoinCode.findUnique({
     where: { code: normalizedCode },
     include: {
+      projectContractor: SESSION_CONTRACTOR_SELECT,
       role: {
         include: {
           rolePermissions: {
@@ -819,7 +915,16 @@ export async function demoSkipVerificationMobile(
       },
       project: {
         include: {
-          tenant: { select: { status: true, evidenceRatingLabels: true } },
+          tenant: {
+            select: {
+              status: true,
+              evidenceRatingLabels: true,
+              name: true,
+              brandingConfig: true,
+              defaultCurrency: true,
+              defaultGeofenceToleranceMeters: true,
+            },
+          },
           boqItems: {
             orderBy: { wbsCode: 'asc' },
           },
@@ -917,7 +1022,8 @@ export async function demoSkipVerificationMobile(
     joinCodeRecord.project,
     role,
     session,
-    normalizedCode
+    normalizedCode,
+    joinCodeRecord.projectContractor
   );
 }
 

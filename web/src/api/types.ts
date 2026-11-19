@@ -1,7 +1,10 @@
 import type {
+  ContractorExecutionMode,
   FieldPersonaType,
+  GeofenceMode,
   PortfolioHealth,
   ProjectGeofence,
+  ProjectStatus,
   ReportingCadence,
 } from '@insite/shared';
 
@@ -10,9 +13,11 @@ export interface ApiEnvelope<T> {
   data: T;
 }
 
+/** GET /projects and /projects/:id/baseline. Drafts are not in this list (see /projects/drafts). */
 export interface ProjectSummaryDto {
   id: string;
   tenantId: string;
+  status: ProjectStatus;
   name: string;
   codePrefix: string;
   stateLocation: string;
@@ -22,12 +27,32 @@ export interface ProjectSummaryDto {
   disbursedToDateNgn: number;
   certifiedProgressPct: number;
   reportingCadence: ReportingCadence;
-  geofenceMode: 'RADIAL' | 'LINEAR_CORRIDOR';
-  geofence: ProjectGeofence;
+  workdayStartTime: string;
+  workdayEndTime: string;
+  /** IANA zone of the project's reporting day. */
+  timezone: string;
+  geofenceMode: GeofenceMode | null;
+  geofence: ProjectGeofence | null;
+  /** Effective tolerance band outside the boundary, in metres. */
+  geofenceToleranceMeters: number;
   portfolioHealth: PortfolioHealth;
   monitorOrganizationName: string;
   lenderOrganizationName: string;
+  /** Main contractor (or the only one). Use contractorCount for "+N". */
   contractorOrganizationName: string;
+  contractorCount: number;
+  contractorExecutionMode: ContractorExecutionMode | null;
+  contractors: Array<{
+    id: string;
+    organizationId: string;
+    organizationName: string;
+    tradeCategory: string;
+    tradeCode: string;
+    isMainContractor: boolean;
+    allowFieldReporting: boolean;
+  }>;
+  activatedAt: string | null;
+  archivedAt: string | null;
   openConflictCount: number;
   unfulfilledHoldPointCount: number;
   totalBoqItems: number;
@@ -42,6 +67,9 @@ export interface ProjectSummaryDto {
     fieldPersonaType: FieldPersonaType;
     assuranceWeight: number;
     requiresIdentityAssurance: boolean;
+    projectContractorId?: string | null;
+    contractorName?: string | null;
+    tradeCode?: string | null;
     isActive: boolean;
   }>;
   tranches: Array<{
@@ -66,6 +94,8 @@ export interface BoqItemRecordDto {
   id: string;
   projectId: string;
   trancheId: string | null;
+  projectContractorId?: string | null;
+  lastRevisionId?: string | null;
   aiSuggestedTrancheId: string | null;
   trancheMappingConfirmedByMonitor: boolean;
   wbsCode: string;

@@ -28,7 +28,7 @@ const DECISION_OPTIONS: CustomSelectOption<LenderDecisionType>[] = [
 
 const CP_CHIP: Record<ConditionPrecedentDto["status"], string> = {
   SATISFIED: "bg-emerald-50 text-emerald-800 border-emerald-200",
-  WAIVED: "bg-sky-50 text-sky-800 border-sky-200",
+  WAIVED: "bg-brand-sky/10 text-brand-medium border-brand-sky/30",
   PENDING: "bg-amber-50 text-amber-800 border-amber-200",
   BREACHED: "bg-rose-50 text-rose-700 border-rose-200",
 };

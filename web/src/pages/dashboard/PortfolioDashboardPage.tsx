@@ -1,6 +1,6 @@
 import React from "react";
 import { Wallet, CheckCircle2, AlertTriangle } from "lucide-react";
-import type { CaptureListItemDto } from "@insite/shared";
+import { geofenceModeLabel, type CaptureListItemDto } from "@insite/shared";
 import type { IpcClaimDto, ProjectSummaryDto } from "../../api/types";
 import {
   formatCompactNaira,
@@ -128,7 +128,7 @@ export function PortfolioDashboardPage({
 
       {/* 3. Bottom 3-Card Telemetry, Field Log & Tranche Readiness Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {/* Card A: Corridor / Boundary Telemetry */}
+        {/* Card A: Geofence / Boundary Telemetry */}
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
           <div>
             <div className="text-xs font-bold text-slate-900">
@@ -141,9 +141,15 @@ export function PortfolioDashboardPage({
               <div className="flex justify-between py-1 border-b border-slate-100">
                 <span className="text-slate-500">Geofence Mode</span>
                 <span className="font-semibold text-slate-800">
-                  {project.geofenceMode === "LINEAR_CORRIDOR"
-                    ? "Linear Highway Corridor"
-                    : "Radial Site Boundary"}
+                  {geofenceModeLabel(project.geofence?.mode ?? project.geofenceMode)}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-100">
+                <span className="text-slate-500">Tolerance band</span>
+                <span className="font-semibold text-slate-800">
+                  {project.geofence && project.geofenceToleranceMeters > 0
+                    ? `${project.geofenceToleranceMeters.toLocaleString()} m`
+                    : "None"}
                 </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100">
@@ -250,7 +256,7 @@ export function PortfolioDashboardPage({
                 Active Project Tranche Readiness
               </div>
               {activeTranche && (
-                <span className="text-[10px] font-bold text-brand-primary bg-blue-50 px-2 py-0.5 rounded">
+                <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/5 px-2 py-0.5 rounded">
                   Tranche #{activeTranche.trancheNumber}
                 </span>
               )}

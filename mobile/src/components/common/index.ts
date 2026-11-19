@@ -8,3 +8,4 @@ export { default as Pill, type PillVariant } from './Pill';
 export { InfoCallout, type InfoCalloutVariant } from './InfoCallout';
 export { default as Container } from './Container';
 export { toastConfig } from '../../config/toastConfig';
+export { BrandLogo } from './BrandLogo';

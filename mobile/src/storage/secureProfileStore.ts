@@ -3,6 +3,7 @@ import * as Crypto from 'expo-crypto';
 import type {
   FieldProjectContext,
   MobileAccountProfile,
+  MobileTenantBranding,
 } from '@insite/shared';
 
 /**
@@ -32,6 +33,8 @@ export interface StoredAccount {
 export interface StoredJoinSession {
   token: string;
   context: FieldProjectContext;
+  /** The project's tenant branding from the join response (Phase 6); absent for older sessions. */
+  tenantBranding?: MobileTenantBranding | null;
 }
 
 export interface DeviceState {

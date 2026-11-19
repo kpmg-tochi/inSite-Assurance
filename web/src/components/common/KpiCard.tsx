@@ -26,12 +26,12 @@ export interface KpiCardProps {
 }
 
 const ICON_VARIANT_CLASSES: Record<KpiIconVariant, string> = {
-  blue: "bg-blue-50 text-brand-primary",
+  blue: "bg-brand-primary/5 text-brand-primary",
   emerald: "bg-emerald-50 text-emerald-700",
   amber: "bg-amber-50 text-amber-700",
   rose: "bg-rose-50 text-rose-700",
   purple: "bg-purple-50 text-purple-700",
-  indigo: "bg-indigo-50 text-indigo-700",
+  indigo: "bg-brand-primary/5 text-brand-primary",
   slate: "bg-slate-100 text-slate-700",
 };
 

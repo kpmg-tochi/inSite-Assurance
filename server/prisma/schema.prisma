@@ -73,6 +73,35 @@ enum ProfessionalLicenseType {
 enum GeofenceMode {
   RADIAL
   LINEAR_CORRIDOR
+  PERIMETER
+}
+
+// Server evaluation of a position against the project geofence and its tolerance band (Phase 6).
+enum GeofenceStatus {
+  INSIDE
+  WITHIN_TOLERANCE
+  OUTSIDE
+}
+
+// How organisation fields take input, per tenant (decision E).
+enum OrgInputMode {
+  FREE_TEXT
+  DIRECTORY
+  BOTH
+}
+
+// Project lifecycle (decision C). ACTIVE never returns to DRAFT.
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+// Contractor model (decision D).
+enum ContractorExecutionMode {
+  SINGLE_CONTRACTOR
+  MAIN_PLUS_SUBS_UNIFIED_IPC
+  MULTI_PRIME_SEPARATE_IPC
 }
 
 enum ReportingCadence {
@@ -220,6 +249,16 @@ enum AuditActionType {
   MOBILE_USER_SIGNED_IN
   MOBILE_DEVICE_REVOKED
   ROLE_ONBOARDING_MODE_CHANGED
+  ORGANIZATION_CREATED
+  ORGANIZATION_UPDATED
+  PROJECT_DRAFT_CREATED
+  PROJECT_SETUP_STEP_SAVED
+  PROJECT_ACTIVATED
+  PROJECT_ARCHIVED
+  PROJECT_CONTRACTOR_ADDED
+  PROJECT_CONTRACTOR_REMOVED
+  BOQ_REVISED
+  PROJECT_DRAFT_DELETED
 }
 
 enum MobileNotificationType {
@@ -250,17 +289,21 @@ enum NotificationActionType {
 // ============================================================================
 
 model Tenant {
-  id                   String       @id @default(uuid()) @db.Uuid
-  name                 String
-  slug                 String       @unique
-  status               TenantStatus @default(ACTIVE)
-  defaultCurrency      String       @default("NGN")
-  timezone             String       @default("Africa/Lagos")
-  brandingConfig       Json         @default("{}")
+  id                             String         @id @default(uuid()) @db.Uuid
+  name                           String
+  slug                           String         @unique
+  status                         TenantStatus   @default(ACTIVE)
+  defaultCurrency                String         @default("NGN")
+  timezone                       String         @default("Africa/Lagos")
+  brandingConfig                 Json           @default("{}")
   // Display label and description per canonical EvidenceStrengthRating (decision B).
-  evidenceRatingLabels Json         @default("{}")
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  evidenceRatingLabels           Json           @default("{}")
+  // Phase 6 settings
+  organizationInputMode          OrgInputMode   @default(BOTH)
+  enabledGeofenceModes           GeofenceMode[] @default([RADIAL, LINEAR_CORRIDOR, PERIMETER])
+  defaultGeofenceToleranceMeters Int            @default(100)
+  createdAt                      DateTime       @default(now())
+  updatedAt                      DateTime       @updatedAt
 
   organizations Organization[]
   roles         Role[]
@@ -331,22 +374,28 @@ model RolePermission {
   @@map("role_permissions")
 }
 
+// Organisation directory (Phase 6). Tags say which parts an organisation can play; the same firm
+// may be a contractor on one project and a client on another. Name is unique per tenant
+// (case-insensitive raw index from Phase 2).
 model Organization {
-  id        String               @id @default(uuid()) @db.Uuid
-  tenantId  String               @db.Uuid
-  name      String
-  category  OrganizationCategory @default(OTHER)
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
+  id                 String                 @id @default(uuid()) @db.Uuid
+  tenantId           String                 @db.Uuid
+  name               String
+  categories         OrganizationCategory[] @default([])
+  registrationNumber String?
+  contactEmail       String?
+  contactPhone       String?
+  isArchived         Boolean                @default(false)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
 
-  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   users              User[]
-  monitoredProjects  Project[] @relation("MonitorOrganization")
-  lenderProjects     Project[] @relation("LenderOrganization")
-  contractedProjects Project[] @relation("ContractorOrganization")
+  monitoredProjects  Project[]           @relation("MonitorOrganization")
+  lenderProjects     Project[]           @relation("LenderOrganization")
+  projectContractors ProjectContractor[]
 
   @@index([tenantId])
-  @@index([category])
 }
 
 model User {
@@ -412,36 +461,48 @@ model UserProjectAssignment {
 }
 
 model Project {
-  id                   String           @id @default(uuid()) @db.Uuid
-  tenantId             String           @db.Uuid
-  name                 String
-  codePrefix           String // e.g., "LKK-402", unique per tenant
-  stateLocation        String // e.g., "Lagos State"
-  lgaLocation          String?
-  description          String?
-  totalBudgetNgn       Decimal          @db.Decimal(18, 2)
-  disbursedToDateNgn   Decimal          @default(0) @db.Decimal(18, 2)
-  certifiedProgressPct Decimal          @default(0) @db.Decimal(5, 2)
-  reportingCadence     ReportingCadence @default(WEEKLY)
-  workdayStartTime     String           @default("08:00")
-  workdayEndTime       String           @default("17:00")
+  id                      String           @id @default(uuid()) @db.Uuid
+  tenantId                String           @db.Uuid
+  name                    String
+  codePrefix              String // e.g., "LKK-402", unique per tenant
+  // Lifecycle (Phase 6). Drafts are visible only in the wizard and the Drafts tab.
+  status                  ProjectStatus    @default(DRAFT)
+  // Per wizard step: { completedAt, completedByUserId }; plus team options.
+  setupState              Json             @default("{}")
+  createdByUserId         String?          @db.Uuid
+  activatedAt             DateTime?
+  activatedByUserId       String?          @db.Uuid
+  archivedAt              DateTime?
+  // Nullable while the project is a draft; activation requires them.
+  stateLocation           String? // e.g., "Lagos State"
+  lgaLocation             String?
+  description             String?
+  totalBudgetNgn          Decimal?         @db.Decimal(18, 2)
+  disbursedToDateNgn      Decimal          @default(0) @db.Decimal(18, 2)
+  certifiedProgressPct    Decimal          @default(0) @db.Decimal(5, 2)
+  reportingCadence        ReportingCadence @default(WEEKLY)
+  workdayStartTime        String           @default("08:00")
+  workdayEndTime          String           @default("17:00")
   // IANA zone that defines a reporting day (one report per WBS item per day). Defaults to the tenant zone.
-  timezone             String           @default("Africa/Lagos")
-  geofenceMode         GeofenceMode
-  geofenceGeoJson      Json // Typed RadialGeofence or LinearCorridorGeofence
-  portfolioHealth      PortfolioHealth  @default(EVIDENCE_PARTIAL)
+  timezone                String           @default("Africa/Lagos")
+  geofenceMode            GeofenceMode?
+  geofenceGeoJson         Json? // ProjectGeofence: radial, linear corridor or perimeter
+  // Tolerance band outside the boundary; null uses Tenant.defaultGeofenceToleranceMeters.
+  geofenceToleranceMeters Int?
+  portfolioHealth         PortfolioHealth  @default(EVIDENCE_PARTIAL)
 
-  monitorOrganizationId    String @db.Uuid
-  lenderOrganizationId     String @db.Uuid
-  contractorOrganizationId String @db.Uuid
+  monitorOrganizationId   String?                  @db.Uuid
+  lenderOrganizationId    String?                  @db.Uuid
+  contractorExecutionMode ContractorExecutionMode?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant                 Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  monitorOrganization    Organization @relation("MonitorOrganization", fields: [monitorOrganizationId], references: [id])
-  lenderOrganization     Organization @relation("LenderOrganization", fields: [lenderOrganizationId], references: [id])
-  contractorOrganization Organization @relation("ContractorOrganization", fields: [contractorOrganizationId], references: [id])
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  monitorOrganization Organization?       @relation("MonitorOrganization", fields: [monitorOrganizationId], references: [id])
+  lenderOrganization  Organization?       @relation("LenderOrganization", fields: [lenderOrganizationId], references: [id])
+  contractors         ProjectContractor[]
+  boqRevisions        BoqRevision[]
 
   userAssignments    UserProjectAssignment[]
   joinCodes          ProjectJoinCode[]
@@ -463,30 +524,83 @@ model Project {
 
   @@unique([tenantId, codePrefix])
   @@index([tenantId])
+  @@index([tenantId, status])
   @@index([portfolioHealth])
   @@index([monitorOrganizationId])
   @@index([lenderOrganizationId])
-  @@index([contractorOrganizationId])
 }
 
-model ProjectJoinCode {
-  id            String    @id @default(uuid()) @db.Uuid
-  projectId     String    @db.Uuid
-  roleId        String    @db.Uuid
-  code          String    @unique // e.g., "LKK-402-INS-7K2QXM"
-  isActive      Boolean   @default(true)
-  expiresAt     DateTime?
-  maxUses       Int?
-  useCount      Int       @default(0)
-  rotatedFromId String?   @db.Uuid
-  createdAt     DateTime  @default(now())
+// A contractor on a project (Phase 6). In multi-prime each contractor owns its BOQ items and IPCs;
+// in the unified model the main contractor submits IPCs and the others report from site only.
+model ProjectContractor {
+  id                      String    @id @default(uuid()) @db.Uuid
+  projectId               String    @db.Uuid
+  organizationId          String    @db.Uuid
+  tradeCategory           String
+  tradeCode               String
+  isMainContractor        Boolean   @default(false)
+  allocatedBudgetNgn      Decimal?  @db.Decimal(18, 2)
+  allowFieldReporting     Boolean   @default(true)
+  plannedMobilizationDate DateTime? @db.Date
+  plannedCompletionDate   DateTime? @db.Date
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  role          Role                @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  organization  Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  boqItems      BoqItem[]
+  joinCodes     ProjectJoinCode[]
   fieldSessions FieldAgentSession[]
+  ipcClaims     IpcClaim[]
+
+  @@unique([projectId, organizationId])
+  @@unique([projectId, tradeCode])
+  @@index([organizationId])
+  @@map("project_contractors")
+}
+
+// One BOQ upload after activation (Phase 6). Uploads while the project is a draft need no revision.
+model BoqRevision {
+  id               String   @id @default(uuid()) @db.Uuid
+  projectId        String   @db.Uuid
+  revisionNumber   Int
+  uploadedByUserId String   @db.Uuid
+  reason           String
+  itemCount        Int
+  createdAt        DateTime @default(now())
+
+  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  boqItems BoqItem[]
+
+  @@unique([projectId, revisionNumber])
+  @@map("boq_revisions")
+}
+
+// One active code per (project, role, contractor): partial unique index
+// "ProjectJoinCode_active_project_role_contractor_key" (raw SQL, Phase 6). Keep it when generating
+// later migrations.
+model ProjectJoinCode {
+  id                  String    @id @default(uuid()) @db.Uuid
+  projectId           String    @db.Uuid
+  roleId              String    @db.Uuid
+  // Set for contractor-executor codes on projects with contractors; binds sessions to the package.
+  projectContractorId String?   @db.Uuid
+  code                String    @unique // e.g., "LKK-402-INS-7K2QXM"
+  isActive            Boolean   @default(true)
+  expiresAt           DateTime?
+  maxUses             Int?
+  useCount            Int       @default(0)
+  rotatedFromId       String?   @db.Uuid
+  createdAt           DateTime  @default(now())
+
+  project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  role              Role                @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  projectContractor ProjectContractor?  @relation(fields: [projectContractorId], references: [id], onDelete: Restrict)
+  fieldSessions     FieldAgentSession[]
 
   @@index([projectId])
   @@index([roleId])
+  @@index([projectContractorId])
 }
 
 // One unit of field provenance. Either a join-code session (joinCodeId set) or a provisioned
@@ -499,6 +613,8 @@ model FieldAgentSession {
   joinCodeId             String?            @db.Uuid
   userId                 String?            @db.Uuid
   mobileDeviceId         String?            @db.Uuid
+  // Contractor package the session reports for (from its join code); null when project-wide.
+  projectContractorId    String?            @db.Uuid
   roleId                 String             @db.Uuid
   roleNameSnapshot       String
   fieldPersonaType       FieldPersonaType   @default(INDEPENDENT_VERIFIER)
@@ -541,6 +657,7 @@ model FieldAgentSession {
   joinCode           ProjectJoinCode?         @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
   user               User?                    @relation(fields: [userId], references: [id], onDelete: Restrict)
   mobileDevice       MobileDevice?            @relation(fields: [mobileDeviceId], references: [id], onDelete: Restrict)
+  projectContractor  ProjectContractor?       @relation(fields: [projectContractorId], references: [id], onDelete: Restrict)
   role               Role                     @relation(fields: [roleId], references: [id], onDelete: Restrict)
   evidenceLogs       FieldEvidenceLog[]
   incidentReports    IncidentReport[]
@@ -558,6 +675,7 @@ model FieldAgentSession {
   @@index([projectId, assuranceStatus])
   @@index([deviceId])
   @@index([userId])
+  @@index([projectContractorId])
 }
 
 // A device a provisioned user has signed in on. Holds the per-install signing key (Phase 4) that
@@ -634,6 +752,10 @@ model BoqItem {
   trancheId                        String? @db.Uuid
   aiSuggestedTrancheId             String? @db.Uuid
   trancheMappingConfirmedByMonitor Boolean @default(false)
+  // Contractor package (Phase 6); required for every item in multi-prime before activation.
+  projectContractorId              String? @db.Uuid
+  // Last post-activation BOQ revision that changed this item.
+  lastRevisionId                   String? @db.Uuid
 
   wbsCode         String // e.g., "02.03.1"
   section         String // e.g., "BILL NO. 2 — DRAINAGE & CULVERTS"
@@ -656,18 +778,21 @@ model BoqItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project         Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tranche         FacilityTranche?          @relation(fields: [trancheId], references: [id], onDelete: SetNull)
-  evidenceLogs    FieldEvidenceLog[]
-  ipcLineItems    IpcLineItem[]
-  incidentReports IncidentReport[]
-  workdayReports  WorkdayReport[]
-  morningBriefs   MorningDeliverableBrief[]
-  reportQueries   ReportQuery[]
-  wbsChatMessages WbsChatMessage[]
+  project           Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tranche           FacilityTranche?          @relation(fields: [trancheId], references: [id], onDelete: SetNull)
+  projectContractor ProjectContractor?        @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
+  lastRevision      BoqRevision?              @relation(fields: [lastRevisionId], references: [id], onDelete: SetNull)
+  evidenceLogs      FieldEvidenceLog[]
+  ipcLineItems      IpcLineItem[]
+  incidentReports   IncidentReport[]
+  workdayReports    WorkdayReport[]
+  morningBriefs     MorningDeliverableBrief[]
+  reportQueries     ReportQuery[]
+  wbsChatMessages   WbsChatMessage[]
 
   @@unique([projectId, wbsCode])
   @@index([projectId, trancheId])
+  @@index([projectId, projectContractorId])
 }
 
 // One capture: a photo, voice note or document with its hardware metadata (Phase 4).
@@ -687,35 +812,39 @@ model FieldEvidenceLog {
   caption          String?
 
   // GPS at capture. Location fields are null when the device had no fix.
-  locationAvailable      Boolean
-  latitude               Float?
-  longitude              Float?
-  altitudeMeters         Float?
-  gpsAccuracyMeters      Float?
-  isMockLocation         Boolean  @default(false)
+  locationAvailable        Boolean
+  latitude                 Float?
+  longitude                Float?
+  altitudeMeters           Float?
+  gpsAccuracyMeters        Float?
+  isMockLocation           Boolean         @default(false)
   // Server-evaluated. null = no fix or evaluation failed; never the client's claim.
-  isWithinGeofence       Boolean?
-  chainageKm             Float?
-  chainageLabel          String?
-  corridorOffsetMeters   Float?
-  distanceFromSiteMeters Float?
+  // isWithinGeofence = INSIDE or WITHIN_TOLERANCE (Phase 6), kept for older readers.
+  isWithinGeofence         Boolean?
+  geofenceStatus           GeofenceStatus?
+  // Distance outside the boundary in metres (0 when inside); null when not evaluated.
+  distanceOutsideMeters Float?
+  chainageKm               Float?
+  chainageLabel            String?
+  corridorOffsetMeters     Float?
+  distanceFromSiteMeters   Float?
 
   // Device orientation and provenance
-  devicePitchDeg    Float?
-  deviceRollDeg     Float?
-  deviceAzimuthDeg  Float?
-  deviceSignature   String?
-  devicePublicKeyId String?
+  devicePitchDeg                 Float?
+  deviceRollDeg                  Float?
+  deviceAzimuthDeg               Float?
+  deviceSignature                String?
+  devicePublicKeyId              String?
   // true = valid, false = invalid, null = unsigned or no key registered
-  signatureVerified Boolean?
-  clientSha256      String?
-  serverSha256      String?
-  integrityPassed   Boolean  @default(true)
-  integrityFlags    Json     @default("[]")
+  signatureVerified              Boolean?
+  clientSha256                   String?
+  serverSha256                   String?
+  integrityPassed                Boolean  @default(true)
+  integrityFlags                 Json     @default("[]")
   // Phase 5 Step 8: re-submitted under a new session after the session that captured it ended.
   // The original keeps its own session; this row is never merged into it.
-  resubmittedFromClientCaptureId String? @db.Uuid
-  resubmittedFromEvidenceLogId   String? @db.Uuid
+  resubmittedFromClientCaptureId String?  @db.Uuid
+  resubmittedFromEvidenceLogId   String?  @db.Uuid
 
   // Voice notes: NOT_APPLICABLE | PENDING | DONE | FAILED
   transcriptionStatus String  @default("NOT_APPLICABLE")
@@ -766,6 +895,8 @@ model IpcClaim {
   id                    String         @id @default(uuid()) @db.Uuid
   projectId             String         @db.Uuid
   trancheId             String         @db.Uuid
+  // The contractor that submitted it (Phase 6). IPC numbers run per contractor.
+  projectContractorId   String?        @db.Uuid
   ipcNumber             Int
   periodStart           DateTime
   periodEnd             DateTime
@@ -784,14 +915,16 @@ model IpcClaim {
 
   project             Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
   tranche             FacilityTranche         @relation(fields: [trancheId], references: [id], onDelete: Restrict)
+  projectContractor   ProjectContractor?      @relation(fields: [projectContractorId], references: [id], onDelete: Restrict)
   submittedByUser     User                    @relation("SubmittedIpcClaims", fields: [submittedByUserId], references: [id])
   lineItems           IpcLineItem[]
   supportingDocuments IpcSupportingDocument[]
   valuationReports    ValuationReport[]
 
-  @@unique([projectId, ipcNumber])
+  @@unique([projectId, projectContractorId, ipcNumber])
   @@index([projectId, status])
   @@index([trancheId, status])
+  @@index([projectContractorId])
 }
 
 model IpcLineItem {
@@ -1017,6 +1150,8 @@ model WorkdayReport {
   // Text-only notes from the WBS thread: [{ id, text, capturedAt }]
   textNotes          Json                 @default("[]")
   submissionGeotag   Json?
+  // Server evaluation of the submission position (also inside submissionGeotag).
+  geofenceStatus     GeofenceStatus?
   deviceSignature    String?
   signatureVerified  Boolean?
   // Location and integrity notes shown as badges, e.g. LOW_GPS_ACCURACY, OUTSIDE_PROJECT_GEOFENCE.
@@ -1046,24 +1181,26 @@ model WorkdayReport {
 }
 
 model SiteTelemetryPing {
-  id                String   @id @default(uuid()) @db.Uuid
-  clientPingId      String   @unique @db.Uuid
-  projectId         String   @db.Uuid
-  fieldSessionId    String   @db.Uuid
-  wbsItemId         String?  @db.Uuid
-  latitude          Float
-  longitude         Float
-  accuracyMeters    Float?
-  altitudeMeters    Float?
-  isMocked          Boolean  @default(false)
-  isWithinGeofence  Boolean?
-  chainageLabel     String?
-  distanceMeters    Float?
-  pingSource        String   @default("FOREGROUND_PRESENCE") // FOREGROUND_PRESENCE | CAPTURE | REPORT_SUBMISSION | MANUAL_CHECKIN
-  deviceSignature   String?
-  signatureVerified Boolean?
-  capturedAtDevice  DateTime
-  syncedAtServer    DateTime @default(now())
+  id                       String          @id @default(uuid()) @db.Uuid
+  clientPingId             String          @unique @db.Uuid
+  projectId                String          @db.Uuid
+  fieldSessionId           String          @db.Uuid
+  wbsItemId                String?         @db.Uuid
+  latitude                 Float
+  longitude                Float
+  accuracyMeters           Float?
+  altitudeMeters           Float?
+  isMocked                 Boolean         @default(false)
+  isWithinGeofence         Boolean?
+  geofenceStatus           GeofenceStatus?
+  distanceOutsideMeters Float?
+  chainageLabel            String?
+  distanceMeters           Float?
+  pingSource               String          @default("FOREGROUND_PRESENCE") // FOREGROUND_PRESENCE | CAPTURE | REPORT_SUBMISSION | MANUAL_CHECKIN
+  deviceSignature          String?
+  signatureVerified        Boolean?
+  capturedAtDevice         DateTime
+  syncedAtServer           DateTime        @default(now())
 
   project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   fieldSession FieldAgentSession @relation(fields: [fieldSessionId], references: [id], onDelete: Cascade)
@@ -1114,21 +1251,21 @@ model MorningDeliverableBrief {
 }
 
 model MobileNotification {
-  id             String                 @id @default(uuid()) @db.Uuid
-  projectId      String                 @db.Uuid
-  fieldSessionId String?                @db.Uuid
-  type           MobileNotificationType
-  actionType     NotificationActionType @default(NONE)
-  requiresAction Boolean                @default(false)
-  title          String
-  message        String                 @db.Text
-  metadata       Json                   @default("{}")
-  createdAt      DateTime               @default(now())
+  id                  String                 @id @default(uuid()) @db.Uuid
+  projectId           String                 @db.Uuid
+  fieldSessionId      String?                @db.Uuid
+  type                MobileNotificationType
+  actionType          NotificationActionType @default(NONE)
+  requiresAction      Boolean                @default(false)
+  title               String
+  message             String                 @db.Text
+  metadata            Json                   @default("{}")
+  createdAt           DateTime               @default(now())
   // Phase 5 Step 8: set when anyone completes the action this notification asks for; it then shows
   // as done for every session. See notifications/notificationActions.ts for what completes what.
   actionedAt          DateTime?
-  actionedBySessionId String?   @db.Uuid
-  actionedByUserId    String?   @db.Uuid
+  actionedBySessionId String?                @db.Uuid
+  actionedByUserId    String?                @db.Uuid
   actionedByName      String?
 
   project      Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)

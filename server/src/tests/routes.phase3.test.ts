@@ -332,7 +332,7 @@ describe('Phase 3 disbursement integrity', () => {
 
     it('refuses a certifier without a licence on their profile', async () => {
       const monitorRole = await prisma.role.findFirstOrThrow({ where: { tenantId: ids.tenantA, code: 'MONITOR' } });
-      const org = await prisma.organization.findFirstOrThrow({ where: { tenantId: ids.tenantA, category: 'ADVISORY_MONITOR' } });
+      const org = await prisma.organization.findFirstOrThrow({ where: { tenantId: ids.tenantA, categories: { has: 'ADVISORY_MONITOR' } } });
       await prisma.user.create({
         data: {
           tenantId: ids.tenantA,

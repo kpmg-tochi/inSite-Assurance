@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response, Router } from 'express';
-import { Prisma } from '@prisma/client';
+import { Prisma, ProjectStatus } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { AppError } from '../middleware/error.middleware';
 import {
@@ -9,14 +9,23 @@ import {
   WebJwtPayload,
 } from '../middleware/auth.middleware';
 
+/** Users who may see and work on draft projects they did not create (Phase 6). */
+export function canManageDrafts(webUser: WebJwtPayload): boolean {
+  return hasWebPermission(webUser, 'projects:create', 'projects:edit_baseline');
+}
+
 /**
  * Builds a Prisma ProjectWhereInput enforcing:
  * 1. Tenant isolation (unless Platform Super Admin, optionally filtered by targetTenantId)
  * 2. Project-level visibility: users without `projects:view_all_tenant` only see explicitly assigned projects.
+ * 3. Lifecycle (Phase 6): only ACTIVE projects unless `statuses` asks for more. This is the one place
+ *    drafts are excluded; draft-aware callers (directory, wizard) ask for them explicitly. A draft
+ *    is visible to its creator and to users with `projects:create` or `projects:edit_baseline`.
  */
 export function buildProjectVisibilityWhere(
   webUser: WebJwtPayload,
-  targetTenantId?: string
+  targetTenantId?: string,
+  options: { statuses?: ProjectStatus[] } = {}
 ): Prisma.ProjectWhereInput {
   const where: Prisma.ProjectWhereInput = {};
 
@@ -39,6 +48,19 @@ export function buildProjectVisibilityWhere(
     };
   }
 
+  const statuses = options.statuses ?? ['ACTIVE'];
+  const live = statuses.filter((s) => s !== 'DRAFT');
+  const clauses: Prisma.ProjectWhereInput[] = [];
+  if (live.length > 0) clauses.push({ status: { in: live } });
+  if (statuses.includes('DRAFT')) {
+    clauses.push(
+      canManageDrafts(webUser) || webUser.isPlatformSuperAdmin
+        ? { status: 'DRAFT' }
+        : { status: 'DRAFT', createdByUserId: webUser.userId }
+    );
+  }
+  where.OR = clauses.length > 0 ? clauses : [{ id: '00000000-0000-0000-0000-000000000000' }];
+
   return where;
 }
 
@@ -55,7 +77,7 @@ export async function assertCallerProjectAccess(params: {
   projectId: string;
   webUser?: WebJwtPayload;
   fieldAgent?: FieldAgentJwtPayload;
-}): Promise<{ id: string; tenantId: string }> {
+}): Promise<{ id: string; tenantId: string; status: ProjectStatus }> {
   if (!params.webUser && !params.fieldAgent) {
     throw new AppError('Authentication required', 401, 'UNAUTHORIZED');
   }
@@ -63,14 +85,15 @@ export async function assertCallerProjectAccess(params: {
     throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   }
 
-  const project = await prisma.project.findUnique({
+  const row = await prisma.project.findUnique({
     where: { id: params.projectId },
-    select: { id: true, tenantId: true },
+    select: { id: true, tenantId: true, status: true, createdByUserId: true },
   });
 
-  if (!project) {
+  if (!row) {
     throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   }
+  const project = { id: row.id, tenantId: row.tenantId, status: row.status };
 
   if (params.fieldAgent) {
     if (params.fieldAgent.projectId !== params.projectId) {
@@ -79,6 +102,10 @@ export async function assertCallerProjectAccess(params: {
         403,
         'PROJECT_MISMATCH'
       );
+    }
+    // Drafts and archived projects are not live on mobile (Phase 6).
+    if (row.status !== 'ACTIVE') {
+      throw new AppError('This project is not active', 403, 'PROJECT_NOT_ACTIVE');
     }
     return project;
   }
@@ -90,6 +117,11 @@ export async function assertCallerProjectAccess(params: {
 
   if (project.tenantId !== webUser.tenantId) {
     // Do not reveal that the project exists in another tenant.
+    throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
+  }
+
+  // A draft exists only for its creator and for users who can create or edit project baselines.
+  if (row.status === 'DRAFT' && row.createdByUserId !== webUser.userId && !canManageDrafts(webUser)) {
     throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   }
 
@@ -145,8 +177,29 @@ export function requireProjectAccess(
       projectId,
       webUser: req.webUser,
       fieldAgent: req.fieldAgent,
-    }).then(() => next(), next);
+    }).then((project) => {
+      const refusal = req.webUser ? lifecycleRefusal(project.status, req) : null;
+      next(refusal ?? undefined);
+    }, next);
   }, next);
+}
+
+/** Routes under /projects/:projectId that work on a draft (the wizard and its data). */
+const DRAFT_ROUTE_RE = /^\/api\/v1\/projects\/[^/]+(?:\/(?:setup|activate|contractors|boq|baseline|join-codes)(?:\/|$)|\/?$)/;
+
+/**
+ * Lifecycle rules for web requests (Phase 6): a draft only serves the setup wizard and its data;
+ * an archived project is read-only.
+ */
+function lifecycleRefusal(status: ProjectStatus, req: Request): AppError | null {
+  const path = (req.originalUrl || '').split('?')[0];
+  if (status === 'DRAFT' && !DRAFT_ROUTE_RE.test(path)) {
+    return new AppError('This project is a draft. Finish setup and set it active first.', 409, 'PROJECT_IS_DRAFT');
+  }
+  if (status === 'ARCHIVED' && req.method !== 'GET') {
+    return new AppError('This project is archived and read-only', 409, 'PROJECT_ARCHIVED');
+  }
+  return null;
 }
 
 /** Registers the project-access guard on every `:projectId` route of a router. */

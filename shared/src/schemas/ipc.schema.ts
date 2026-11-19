@@ -9,6 +9,7 @@ import {
   MonitorRecommendationEnum,
   ProfessionalLicenseTypeEnum,
   QueryStatusEnum,
+  GeofenceStatusEnum,
 } from '../enums';
 
 // ============================================================================
@@ -140,6 +141,10 @@ export const ProvidedEvidenceMediaSchema = z.object({
   capturedAt: z.string().datetime(),
   locationAvailable: z.boolean(),
   isWithinGeofence: z.boolean().nullable(),
+  /** INSIDE, WITHIN_TOLERANCE or OUTSIDE (Phase 6); null when not evaluated. */
+  geofenceStatus: GeofenceStatusEnum.nullable().optional(),
+  /** Metres outside the boundary; 0 inside. */
+  distanceOutsideMeters: z.number().nullable().optional(),
   signatureVerified: z.boolean().nullable(),
   integrityPassed: z.boolean(),
   integrityFlags: z.array(z.string()),
@@ -164,6 +169,8 @@ export const ProvidedEvidenceItemSchema = z.object({
    * outside; false when something is outside; null when nothing could be evaluated.
    */
   isWithinGeofence: z.boolean().nullable(),
+  /** Worst geofence status across the report position and its located captures (Phase 6). */
+  geofenceStatus: GeofenceStatusEnum.nullable().optional(),
   chainageLabel: z.string().nullable(),
   latitude: z.number().nullable(),
   longitude: z.number().nullable(),
@@ -367,6 +374,10 @@ export const IpcClaimDtoSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().uuid(),
   trancheId: z.string().uuid(),
+  /** The contractor that submitted it (Phase 6). IPC numbers run per contractor. */
+  projectContractorId: z.string().uuid().nullable().optional(),
+  contractorName: z.string().nullable().optional(),
+  contractorTradeCode: z.string().nullable().optional(),
   ipcNumber: z.number().int(),
   periodStart: z.string().datetime(),
   periodEnd: z.string().datetime(),

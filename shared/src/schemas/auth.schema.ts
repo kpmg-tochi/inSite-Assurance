@@ -152,6 +152,25 @@ export type JoinProjectMobileRequest = z.infer<
   typeof JoinProjectMobileRequestSchema
 >;
 
+/** Tenant branding the mobile app applies once the tenant is known (Phase 6). */
+export const MobileTenantBrandingSchema = z.object({
+  tenantName: z.string(),
+  logoUrl: z.string().nullable(),
+  primaryColorHex: z.string(),
+  currency: z.string(),
+});
+export type MobileTenantBranding = z.infer<typeof MobileTenantBrandingSchema>;
+
+/** The contractor package a field session works for (Phase 6), when it is bound to one. */
+export const SessionContractorSchema = z.object({
+  projectContractorId: z.string().uuid(),
+  organizationName: z.string(),
+  tradeCategory: z.string(),
+  tradeCode: z.string(),
+  isMainContractor: z.boolean(),
+});
+export type SessionContractor = z.infer<typeof SessionContractorSchema>;
+
 export const FieldAgentSessionProfileSchema = z.object({
   sessionId: z.string().uuid(),
   tenantId: z.string().uuid(),
@@ -174,6 +193,8 @@ export const FieldAgentSessionProfileSchema = z.object({
   corenLicenseNumber: z.string().optional(),
   livenessPassed: z.boolean().optional(),
   ratingLabels: ResolvedRatingLabelsSchema.optional(),
+  contractor: SessionContractorSchema.nullable().optional(),
+  tenantBranding: MobileTenantBrandingSchema.optional(),
 });
 export type FieldAgentSessionProfile = z.infer<
   typeof FieldAgentSessionProfileSchema
@@ -195,7 +216,9 @@ export const ContractorVerificationRecordDtoSchema = z.object({
   projectId: z.string().uuid(),
   projectCodePrefix: z.string(),
   projectName: z.string(),
+  /** The session's contractor organisation (Phase 6), or the main contractor for project-wide sessions. */
   organizationName: z.string(),
+  tradeCode: z.string().nullable().optional(),
   roleId: z.string().uuid(),
   roleName: z.string(),
   fieldPersonaType: FieldPersonaTypeEnum,
@@ -244,7 +267,7 @@ export const DemoProjectWorkspaceSchema = z.object({
   name: z.string(),
   stateLocation: z.string(),
   lgaLocation: z.string().nullable().optional(),
-  geofenceMode: z.enum(["RADIAL", "LINEAR_CORRIDOR"]),
+  geofenceMode: GeofenceModeEnum,
   portfolioHealth: z.string(),
   joinCodes: z.array(DemoProjectJoinCodeSchema),
 });
@@ -311,6 +334,7 @@ export const MobileAccountProfileSchema = z.object({
   mobileDeviceId: z.string().uuid(),
   mobileRole: MobileRoleSummarySchema,
   ratingLabels: ResolvedRatingLabelsSchema,
+  tenantBranding: MobileTenantBrandingSchema.optional(),
 });
 export type MobileAccountProfile = z.infer<typeof MobileAccountProfileSchema>;
 
@@ -351,6 +375,7 @@ export const FieldSessionSummarySchema = z.object({
   fieldPersonaType: FieldPersonaTypeEnum,
   assuranceWeight: z.number(),
   permissions: z.array(z.string()),
+  contractor: SessionContractorSchema.nullable().optional(),
 });
 export type FieldSessionSummary = z.infer<typeof FieldSessionSummarySchema>;
 
@@ -385,6 +410,12 @@ export const MobileBaselinePackSchema = z.object({
   timezone: z.string().optional(),
   geofenceMode: GeofenceModeEnum,
   geofence: ProjectGeofenceSchema,
+  /** Effective tolerance band outside the boundary (Phase 6). Absent in older packs: treat as 0. */
+  geofenceToleranceMeters: z.number().int().optional(),
+  /**
+   * BOQ items this session reports on. In a multi-prime project a contractor session only gets the
+   * items assigned to its contractor.
+   */
   boqItems: z.array(BaselineBoqItemSchema),
   holdPoints: z.array(BaselineBoqItemSchema),
 });
@@ -412,6 +443,8 @@ export const FieldProjectContextSchema = z.object({
   permissions: z.array(z.string()),
   assuranceStatus: z.union([ContractorAssuranceStatusEnum, z.literal("NOT_SUBMITTED")]),
   rejectionReason: z.string().nullable(),
+  /** Contractor package this session works for (Phase 6); null when project-wide. */
+  contractor: SessionContractorSchema.nullable().optional(),
 });
 export type FieldProjectContext = z.infer<typeof FieldProjectContextSchema>;
 
@@ -432,6 +465,7 @@ export function fieldContextFromJoinSession(profile: FieldAgentSessionProfile): 
     permissions: profile.permissions ?? [],
     assuranceStatus: profile.assuranceStatus ?? "NOT_SUBMITTED",
     rejectionReason: null,
+    contractor: profile.contractor ?? null,
   };
 }
 

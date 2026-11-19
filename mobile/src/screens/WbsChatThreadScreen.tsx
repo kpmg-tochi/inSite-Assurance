@@ -21,7 +21,7 @@ import { SiteEvidenceCameraModal, type SiteEvidenceBatchSubmission } from "../co
 import { VoiceNoteBubble, VoiceNoteRecorder, type VoiceRecordingResult } from "../components/audio";
 import { EmptyStateCard, InfoCallout, InSiteLoader, Pill, type PillVariant } from "../components/common";
 import { BackButton } from "../components/inputs/Buttons";
-import { acquireFix, previewGeofence, type GeofencePreview } from "../services/locationService";
+import { acquireFix, geofenceBadgeText, previewGeofence, type GeofencePreview } from "../services/locationService";
 import { useProfile } from "../context/ProfileContext";
 import { useSendWbsMessageMutation, useWbsChatMessagesQuery, wbsQueryKeys } from "../queries/wbs/useWbsQueries";
 import {
@@ -51,6 +51,11 @@ function captureBadge(c: ChatCaptureView | undefined): { text: string; variant: 
   if (c.locationAvailable === false) return { text: "Location unavailable", variant: "warning" };
   if (c.uploadState === "PENDING_UPLOAD") return { text: "Pending upload", variant: "gray" };
   if (c.integrityPassed === false) return { text: "Failed integrity check", variant: "negative" };
+  const geofenceText = geofenceBadgeText(c.geofenceStatus, c.distanceOutsideMeters);
+  if (geofenceText && c.geofenceStatus) {
+    return { text: geofenceText, variant: c.geofenceStatus === "OUTSIDE" ? "warning" : "positive" };
+  }
+  // Captures registered before the server reported a status (Phase 6) only have the boolean.
   if (c.isWithinGeofence === true) return { text: "In geofence", variant: "positive" };
   if (c.isWithinGeofence === false) return { text: "Outside geofence", variant: "warning" };
   return { text: "Uploaded", variant: "info" };
@@ -137,11 +142,12 @@ export const WbsChatThreadScreen: React.FC = () => {
       ? { text: "Locating…", variant: "darkGlass" }
       : here === "NO_FIX"
         ? { text: "Location unavailable", variant: "warning" }
-        : here.isWithinGeofence === true
-          ? { text: here.chainageLabel ? `In geofence · ${here.chainageLabel}` : "In geofence", variant: "positive" }
-          : here.isWithinGeofence === false
-            ? { text: "Outside geofence", variant: "warning" }
-            : { text: "Geofence unknown", variant: "darkGlass" };
+        : here.status
+          ? {
+              text: geofenceBadgeText(here.status, here.distanceOutsideMeters, here.chainageLabel) ?? "",
+              variant: here.status === "OUTSIDE" ? "warning" : "positive",
+            }
+          : { text: "Geofence unknown", variant: "darkGlass" };
 
   const openServerQueryMsg = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {

@@ -33,6 +33,8 @@ import {
   demoSkipVerificationMobile,
   getMobileAccountAndProjects,
   getProjectBaselinePack,
+  serializeSessionContractor,
+  mobileTenantBranding,
   getWebUserProfileById,
   joinProjectMobile,
   loginMobileUser,
@@ -175,7 +177,7 @@ router.get(
       if (req.fieldAgent!.projectId !== req.params.projectId) {
         throw new AppError("Field Agent session is bound to a different project", 403, "PROJECT_MISMATCH");
       }
-      const pack = await getProjectBaselinePack(req.fieldAgent!.projectId);
+      const pack = await getProjectBaselinePack(req.fieldAgent!.projectId, req.fieldAgent!.sessionId);
       res.json({ success: true, data: pack });
     } catch (error) {
       next(error);
@@ -196,6 +198,14 @@ router.get(
       if (fa.projectId !== req.params.projectId) {
         throw new AppError("Field Agent session is bound to a different project", 403, "PROJECT_MISMATCH");
       }
+      const row = await prisma.fieldAgentSession.findUnique({
+        where: { id: fa.sessionId },
+        select: {
+          projectContractor: {
+            select: { id: true, tradeCategory: true, tradeCode: true, isMainContractor: true, organization: { select: { name: true } } },
+          },
+        },
+      });
       res.json({
         success: true,
         data: {
@@ -208,6 +218,7 @@ router.get(
           fieldPersonaType: fa.fieldPersonaType,
           assuranceWeight: fa.assuranceWeight,
           permissions: fa.permissions,
+          contractor: serializeSessionContractor(row?.projectContractor ?? null),
         },
       });
     } catch (error) {
@@ -283,8 +294,13 @@ router.get(
                 timezone: true,
                 geofenceMode: true,
                 geofenceGeoJson: true,
-                tenant: { select: { evidenceRatingLabels: true } },
+                tenant: {
+                  select: { evidenceRatingLabels: true, name: true, brandingConfig: true, defaultCurrency: true },
+                },
               },
+            },
+            projectContractor: {
+              select: { id: true, tradeCategory: true, tradeCode: true, isMainContractor: true, organization: { select: { name: true } } },
             },
           },
         });
@@ -319,6 +335,8 @@ router.get(
                   devicePublicKeyId: liveSession.devicePublicKeyId,
                   reviewedAt: liveSession.reviewedAt,
                   ratingLabels: resolveRatingLabels(liveSession.project.tenant.evidenceRatingLabels),
+                  contractor: serializeSessionContractor(liveSession.projectContractor),
+                  tenantBranding: mobileTenantBranding(liveSession.project.tenant),
                   project: {
                     id: liveSession.project.id,
                     tenantId: liveSession.project.tenantId,

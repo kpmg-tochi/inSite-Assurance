@@ -1,3 +1,5 @@
+import { useQuery } from "@tanstack/react-query";
+import { listProjectContractors } from "../api/projects/projectSetupApi";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "../lib/auth-context";
@@ -32,6 +34,13 @@ export function JoinCodesPanel({ projectId, projectCode }: { projectId: string; 
   const rotateMutation = useRotateJoinCodeMutation(projectId);
 
   const [roleId, setRoleId] = useState("");
+  // Phase 6: contractor field roles get one code per contractor.
+  const contractorsQuery = useQuery({
+    queryKey: ["project-contractors", projectId],
+    queryFn: () => listProjectContractors(projectId),
+  });
+  const contractors = contractorsQuery.data ?? [];
+  const [contractorId, setContractorId] = useState("");
   const [maxUses, setMaxUses] = useState("");
   const [expiresOn, setExpiresOn] = useState("");
 
@@ -78,8 +87,15 @@ export function JoinCodesPanel({ projectId, projectCode }: { projectId: string; 
       toast.error("Choose a mobile role first.");
       return;
     }
+    const role = issuableRoles.find((r) => r.id === roleId);
+    const needsContractor = role?.fieldPersonaType === "CONTRACTOR_EXECUTOR" && contractors.length > 1;
+    if (needsContractor && !contractorId) {
+      toast.error("Choose which contractor this code is for.");
+      return;
+    }
     await issueMutation.mutateAsync({
       roleId,
+      projectContractorId: role?.fieldPersonaType === "CONTRACTOR_EXECUTOR" && contractorId ? contractorId : null,
       maxUses: maxUses ? Number(maxUses) : null,
       expiresAt: expiresOn ? new Date(`${expiresOn}T23:59:59`).toISOString() : null,
     });
@@ -111,7 +127,12 @@ export function JoinCodesPanel({ projectId, projectCode }: { projectId: string; 
       header: "Role",
       tooltip: "Mobile role granted to whoever joins with this code",
       width: "w-56",
-      cell: (c) => <span className="text-slate-700">{c.roleName}</span>,
+      cell: (c) => (
+        <span className="text-slate-700">
+          {c.roleName}
+          {c.contractorName && <span className="block text-[11px] text-slate-500">{c.contractorName} ({c.tradeCode})</span>}
+        </span>
+      ),
     },
     {
       id: "uses",
@@ -173,14 +194,14 @@ export function JoinCodesPanel({ projectId, projectCode }: { projectId: string; 
       title={
         <div className="flex items-center gap-2.5">
           <span>Mobile Join Codes · {projectCode}</span>
-          <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-blue-100 border border-white/15">
+          <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-white/90 border border-white/15">
             {isLoading ? "Loading..." : `${codes.filter((c) => c.isActive).length} active`}
           </span>
         </div>
       }
       subtitle={
         <>
-          Issue codes for new mobile roles, cap their uses, and rotate any code that may have leaked.
+          One active code per role (and per contractor for contractor roles). Rotate a code to replace it.
           {provisionedRoleNames.length > 0 && (
             <span className="block mt-0.5">
               Not listed: {provisionedRoleNames.join(", ")}. These roles are pre-provisioned, so people
@@ -204,6 +225,16 @@ export function JoinCodesPanel({ projectId, projectCode }: { projectId: string; 
               </option>
             ))}
           </select>
+          {issuableRoles.find((r) => r.id === roleId)?.fieldPersonaType === "CONTRACTOR_EXECUTOR" && contractors.length > 1 && (
+            <select value={contractorId} onChange={(e) => setContractorId(e.target.value)} className={inputClass} aria-label="Contractor">
+              <option value="">Contractor…</option>
+              {contractors.filter((c) => c.allowFieldReporting).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.organizationName} ({c.tradeCode})
+                </option>
+              ))}
+            </select>
+          )}
           <input
             type="number"
             min={1}

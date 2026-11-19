@@ -241,7 +241,7 @@ export function CitationRef({ id }: CitationRefProps) {
         rel="noopener noreferrer"
         title={tooltipText}
         aria-label={tooltipText}
-        className="font-semibold text-brand-primary hover:text-brand-hover hover:underline decoration-dotted underline-offset-2 transition px-0.5 py-0 rounded hover:bg-blue-50"
+        className="font-semibold text-brand-primary hover:text-brand-hover hover:underline decoration-dotted underline-offset-2 transition px-0.5 py-0 rounded hover:bg-brand-primary/5"
       >
         [{citation.id}]
       </a>

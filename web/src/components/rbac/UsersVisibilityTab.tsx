@@ -7,7 +7,14 @@ import {
   SlidersHorizontal,
   Smartphone,
 } from 'lucide-react';
-import type { OrganizationCategory, RoleDto, TenantUserDto } from '@insite/shared';
+import {
+  ORGANIZATION_CATEGORY_META,
+  OrganizationCategoryEnum,
+  type OrganizationCategory,
+  type OrganizationRef,
+  type RoleDto,
+  type TenantUserDto,
+} from '@insite/shared';
 import {
   useTenantRolesQuery,
   useTenantUsersQuery,
@@ -19,6 +26,7 @@ import {
 } from '../../mutations/rbac/useRbacMutations';
 import Drawer from '../Drawer';
 import Loader from '../Loader';
+import { OrganizationInput } from '../organizations/OrganizationInput';
 
 const isProvisionedRole = (role: RoleDto | undefined) =>
   Boolean(role && role.surface !== 'WEB' && role.onboardingMode === 'PROVISIONED_ACCOUNT');
@@ -96,7 +104,8 @@ export function UsersVisibilityTab() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [roleId, setRoleId] = useState('');
-  const [organizationName, setOrganizationName] = useState('');
+  const [organization, setOrganization] = useState<OrganizationRef | null>(null);
+  const [organizationError, setOrganizationError] = useState<string | null>(null);
   const [organizationCategory, setOrganizationCategory] =
     useState<OrganizationCategory>('ADVISORY_MONITOR');
   const [createProjectIds, setCreateProjectIds] = useState<string[]>([]);
@@ -115,7 +124,8 @@ export function UsersVisibilityTab() {
     setEmail('');
     setPassword('');
     setRoleId(roles[0]?.id || '');
-    setOrganizationName('');
+    setOrganization(null);
+    setOrganizationError(null);
     setOrganizationCategory('ADVISORY_MONITOR');
     setCreateProjectIds([]);
     setMobileRoleId('');
@@ -147,12 +157,19 @@ export function UsersVisibilityTab() {
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!roleId) return;
+    if (!organization || (!organization.id && !organization.name?.trim())) {
+      setOrganizationError('Choose or enter an organisation');
+      return;
+    }
+    setOrganizationError(null);
     await createUserMutation.mutateAsync({
       fullName: fullName.trim(),
       email: email.trim(),
       password,
       roleId,
-      organizationName: organizationName.trim(),
+      ...(organization.id
+        ? { organizationId: organization.id }
+        : { organizationName: (organization.name ?? '').trim() }),
       organizationCategory,
       mobileRoleId: mobileRoleId || null,
       phoneNumber: phoneNumber.trim() || null,
@@ -233,7 +250,7 @@ export function UsersVisibilityTab() {
                   <div className="font-bold text-slate-900 flex items-center gap-1.5">
                     <span>{u.fullName}</span>
                     {u.isPlatformSuperAdmin && (
-                      <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-bold">
+                      <span className="px-1.5 py-0.5 rounded bg-brand-primary/5 text-brand-primary border border-brand-primary/25 text-[10px] font-bold">
                         Platform Admin
                       </span>
                     )}
@@ -241,9 +258,21 @@ export function UsersVisibilityTab() {
                   <div className="text-[11px] text-slate-500">
                     {u.email} · {u.organizationName}
                   </div>
+                  {u.organizationCategories && u.organizationCategories.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {u.organizationCategories.map((c) => (
+                        <span
+                          key={c}
+                          className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200 text-[10px] font-medium"
+                        >
+                          {ORGANIZATION_CATEGORY_META[c].label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </td>
                 <td className="py-3 px-4">
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 text-brand-primary border border-blue-200 text-[11px] font-semibold">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-brand-primary/5 text-brand-primary border border-brand-primary/25 text-[11px] font-semibold">
                     <Shield className="w-3 h-3" />
                     {u.roleName}
                   </span>
@@ -392,24 +421,22 @@ export function UsersVisibilityTab() {
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="space-y-2.5">
+              <OrganizationInput
+                label="Organisation *"
+                value={organization}
+                onChange={(next) => {
+                  setOrganization(next);
+                  if (next) setOrganizationError(null);
+                }}
+                error={organizationError}
+              />
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Organization Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={organizationName}
-                  onChange={(e) => setOrganizationName(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Org Category
+                <label htmlFor="new-user-org-tag" className="block font-semibold text-slate-700 mb-1">
+                  Organisation tag
                 </label>
                 <select
+                  id="new-user-org-tag"
                   value={organizationCategory}
                   onChange={(e) =>
                     setOrganizationCategory(
@@ -418,13 +445,15 @@ export function UsersVisibilityTab() {
                   }
                   className="w-full rounded-xl border border-slate-200 px-3 py-2"
                 >
-                  <option value="ADVISORY_MONITOR">Advisory / Monitor</option>
-                  <option value="FINANCIER_LENDER">Financier / Lender</option>
-                  <option value="CONTRACTOR">Contractor</option>
-                  <option value="CLIENT_OWNER">Client Owner</option>
-                  <option value="GOVERNMENT_MDA">Government MDA</option>
-                  <option value="OTHER">Other</option>
+                  {OrganizationCategoryEnum.options.map((c) => (
+                    <option key={c} value={c}>
+                      {ORGANIZATION_CATEGORY_META[c].label}
+                    </option>
+                  ))}
                 </select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Added to the organisation if it is new or does not have this tag yet.
+                </p>
               </div>
             </div>
 

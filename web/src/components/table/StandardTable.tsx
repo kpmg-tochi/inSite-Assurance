@@ -37,7 +37,7 @@ export function TableBadge({
     success: 'bg-emerald-50 text-emerald-800 border-emerald-200',
     warning: 'bg-amber-50 text-amber-800 border-amber-200',
     danger: 'bg-rose-50 text-rose-700 border-rose-200',
-    info: 'bg-blue-50 text-brand-primary border-blue-200',
+    info: 'bg-brand-primary/5 text-brand-primary border-brand-primary/25',
     neutral: 'bg-slate-100 text-slate-700 border-slate-200',
   };
 
@@ -260,7 +260,7 @@ export function StandardTable<T>({
             </h2>
           </div>
           {subtitle && (
-            <div className="text-xs text-blue-200/80 mt-0.5 font-normal">
+            <div className="text-xs text-white/70 mt-0.5 font-normal">
               {subtitle}
             </div>
           )}
@@ -386,7 +386,7 @@ export function StandardTable<T>({
                       onRowClick ? 'cursor-pointer' : ''
                     } ${
                       isSelected
-                        ? 'bg-blue-50/50 border-l-4 border-l-brand-primary'
+                        ? 'bg-brand-primary/5 border-l-4 border-l-brand-primary'
                         : 'hover:bg-slate-50/70'
                     } ${customClasses}`}
                   >

@@ -9,13 +9,13 @@ export function MobileAppPage() {
       <section className="kpmg-ribbed-panel text-white border-b border-white/10">
         <div className="max-w-7xl mx-auto px-6 py-16 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
           <div className="lg:col-span-7 space-y-5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-medium text-blue-100">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-medium text-white/90">
               <span>InSite Assurance Field · iOS &amp; Android (Expo)</span>
             </div>
             <h1 className="text-3xl sm:text-4xl font-bold leading-tight">
               Offline-First, Provenance-Tagged Field Evidence Capture.
             </h1>
-            <p className="text-sm sm:text-base text-blue-100/90 leading-relaxed max-w-2xl">
+            <p className="text-sm sm:text-base text-white/90 leading-relaxed max-w-2xl">
               Designed for zero training overhead and rugged Nigerian corridor
               resilience. Visiting Monitors, Resident Clerks of Works, and
               Contractor Site Engineers join via a 6-character Project Code,
@@ -33,7 +33,7 @@ export function MobileAppPage() {
               </div>
               <Link
                 to="/login"
-                className="px-4 py-2.5 rounded-xl text-blue-100 hover:text-white text-xs font-semibold underline underline-offset-4"
+                className="px-4 py-2.5 rounded-xl text-white/90 hover:text-white text-xs font-semibold underline underline-offset-4"
               >
                 View Synced Logs in Web Portal &rarr;
               </Link>
@@ -46,7 +46,7 @@ export function MobileAppPage() {
               <div className="bg-slate-50 rounded-[28px] overflow-hidden text-slate-900">
                 {/* Mobile Top Status Bar */}
                 <div className="bg-brand-navy text-white px-4 py-3.5">
-                  <div className="flex items-center justify-between text-[10px] font-semibold text-blue-200">
+                  <div className="flex items-center justify-between text-[10px] font-semibold text-white/75">
                     <span>LKK-402-COW-7K2QXM</span>
                     <span className="text-emerald-400">
                       SQLite Outbox Ready
@@ -55,7 +55,7 @@ export function MobileAppPage() {
                   <div className="text-xs font-bold mt-0.5">
                     Lekki–Epe Dual-Carriageway
                   </div>
-                  <div className="text-[10px] text-blue-200/80">
+                  <div className="text-[10px] text-white/70">
                     Tier 2: Independent Resident Clerk of Works
                   </div>
                 </div>
@@ -125,7 +125,7 @@ export function MobileAppPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-3">
-            <div className="text-xs font-bold text-brand-primary bg-blue-50 inline-block px-2.5 py-1 rounded-lg">
+            <div className="text-xs font-bold text-brand-primary bg-brand-primary/5 inline-block px-2.5 py-1 rounded-lg">
               Step 1 · Role-Bound Join Codes
             </div>
             <h3 className="text-base font-bold text-slate-900">
@@ -150,7 +150,7 @@ export function MobileAppPage() {
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-3">
-            <div className="text-xs font-bold text-brand-primary bg-blue-50 inline-block px-2.5 py-1 rounded-lg">
+            <div className="text-xs font-bold text-brand-primary bg-brand-primary/5 inline-block px-2.5 py-1 rounded-lg">
               Step 2 · On-Device Turf.js &amp; SQLite
             </div>
             <h3 className="text-base font-bold text-slate-900">
@@ -168,7 +168,7 @@ export function MobileAppPage() {
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-3">
-            <div className="text-xs font-bold text-brand-primary bg-blue-50 inline-block px-2.5 py-1 rounded-lg">
+            <div className="text-xs font-bold text-brand-primary bg-brand-primary/5 inline-block px-2.5 py-1 rounded-lg">
               Step 3 · Mitigating ASR Risk [S20]
             </div>
             <h3 className="text-base font-bold text-slate-900">

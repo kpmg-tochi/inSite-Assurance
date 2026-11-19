@@ -1,3 +1,6 @@
+import { geofenceModeLabel } from "@insite/shared";
+import { InSiteLogo } from "./InSiteLogo";
+import { useGuardedAction } from "../lib/navigationGuard";
 import React, { useState, useRef, useEffect } from "react";
 import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import {
@@ -39,6 +42,7 @@ export function AppShell({
   const { user, quickSwitchDemoAccount, logout, hasPermission } = useAuth();
   const demoAccounts = useDemoAccounts()?.accounts ?? [];
   const navigate = useNavigate();
+  const requestLeave = useGuardedAction();
   const location = useLocation();
   const isExecutive = location.pathname.includes("/executive");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -137,19 +141,23 @@ export function AppShell({
               className="flex items-center gap-2.5 overflow-hidden hover:opacity-90 transition"
             >
               <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-1 shrink-0 shadow-sm">
-                <img
-                  src={user?.tenant?.brandingConfig?.logoUrl || "/KPMG-logo.svg"}
-                  alt={user?.tenant?.name || "InSite Assurance"}
-                  className="w-full h-full object-contain"
-                />
+                {user?.tenant?.brandingConfig?.logoUrl ? (
+                  <img
+                    src={user.tenant.brandingConfig.logoUrl}
+                    alt={user?.tenant?.name || "InSite Assurance"}
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <InSiteLogo showText={false} className="h-full" />
+                )}
               </div>
               {!sidebarCollapsed && (
                 <div className="truncate">
                   <div className="text-white font-semibold text-sm leading-tight truncate">
                     {user?.tenant?.name || "InSite Assurance"}
                   </div>
-                  <div className="text-[11px] text-blue-200/80 truncate">
-                    {user?.tenant?.brandingConfig?.tagline || "Capital Advisory"}
+                  <div className="text-[11px] text-white/70 truncate">
+                    {user?.tenant?.brandingConfig?.tagline || "InSite Assurance"}
                   </div>
                 </div>
               )}
@@ -158,7 +166,7 @@ export function AppShell({
               type="button"
               onClick={() => setSidebarCollapsed((prev) => !prev)}
               title={sidebarCollapsed ? "Expand sidebar" : "Minimize sidebar"}
-              className="p-1.5 rounded-lg text-blue-200 hover:text-white hover:bg-white/10 transition shrink-0"
+              className="p-1.5 rounded-lg text-white/75 hover:text-white hover:bg-white/10 transition shrink-0"
             >
               {sidebarCollapsed ? (
                 <PanelLeftOpen className="w-4 h-4" />
@@ -171,7 +179,7 @@ export function AppShell({
           {/* Primary Navigation (Role-Segregated) */}
           <div className="space-y-1">
             {!sidebarCollapsed && (
-              <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-blue-200/60">
+              <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/55">
                 {workspaceTitleByRole}
               </div>
             )}
@@ -184,7 +192,7 @@ export function AppShell({
                 `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
                   isActive
                     ? "bg-white/15 text-white shadow-sm"
-                    : "text-blue-100/80 hover:text-white hover:bg-white/10"
+                    : "text-white/80 hover:text-white hover:bg-white/10"
                 }`
               }
             >
@@ -201,7 +209,7 @@ export function AppShell({
                 `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
                   isActive
                     ? "bg-white/15 text-white shadow-sm"
-                    : "text-blue-100/80 hover:text-white hover:bg-white/10"
+                    : "text-white/80 hover:text-white hover:bg-white/10"
                 }`
               }
             >
@@ -220,7 +228,7 @@ export function AppShell({
                   `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
                     isActive
                       ? "bg-white/15 text-white shadow-sm"
-                      : "text-blue-100/80 hover:text-white hover:bg-white/10"
+                      : "text-white/80 hover:text-white hover:bg-white/10"
                   }`
                 }
               >
@@ -239,7 +247,7 @@ export function AppShell({
                 `w-full flex items-center justify-between px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
                   isActive
                     ? "bg-white/15 text-white shadow-sm"
-                    : "text-blue-100/80 hover:text-white hover:bg-white/10"
+                    : "text-white/80 hover:text-white hover:bg-white/10"
                 }`
               }
             >
@@ -265,7 +273,7 @@ export function AppShell({
                 `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
                   isActive
                     ? "bg-white/15 text-white shadow-sm"
-                    : "text-blue-100/80 hover:text-white hover:bg-white/10"
+                    : "text-white/80 hover:text-white hover:bg-white/10"
                 }`
               }
             >
@@ -285,7 +293,7 @@ export function AppShell({
                   `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
                     isActive
                       ? "bg-white/15 text-white shadow-sm"
-                      : "text-blue-100/80 hover:text-white hover:bg-white/10"
+                      : "text-white/80 hover:text-white hover:bg-white/10"
                   }`
                 }
               >
@@ -304,7 +312,7 @@ export function AppShell({
                 `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
                   isActive
                     ? "bg-white/15 text-white shadow-sm"
-                    : "text-blue-100/80 hover:text-white hover:bg-white/10"
+                    : "text-white/80 hover:text-white hover:bg-white/10"
                 }`
               }
             >
@@ -316,7 +324,7 @@ export function AppShell({
           {/* Recent Active Projects Tree (Hidden when collapsed) */}
           {!sidebarCollapsed && recentActiveProjects.length > 0 && (
             <div className="mt-6 space-y-1">
-              <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-blue-200/60">
+              <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/55">
                 Recent Active Projects
               </div>
               <div className="pl-3 ml-2 border-l border-white/15 space-y-1">
@@ -330,7 +338,7 @@ export function AppShell({
                       className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition truncate ${
                         isSelected
                           ? "bg-white/15 text-white font-medium"
-                          : "text-blue-100/70 hover:text-white hover:bg-white/10"
+                          : "text-white/70 hover:text-white hover:bg-white/10"
                       }`}
                     >
                       <span className="font-semibold mr-1.5">
@@ -342,7 +350,7 @@ export function AppShell({
                 })}
                 <Link
                   to="/app/projects"
-                  className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-blue-200/80 hover:text-white hover:bg-white/10 transition"
+                  className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-white/70 hover:text-white hover:bg-white/10 transition"
                 >
                   <span>View All Projects</span>
                   <ArrowRight className="w-3 h-3" />
@@ -370,7 +378,7 @@ export function AppShell({
                 <div className="text-xs font-semibold text-white truncate">
                   {user?.fullName}
                 </div>
-                <div className="text-[11px] text-blue-200/80 truncate">
+                <div className="text-[11px] text-white/70 truncate">
                   {roleDisplayLabel} · {credentialText}
                 </div>
               </div>
@@ -401,7 +409,7 @@ export function AppShell({
                           onClick={() => handleRoleSwitch(acct.email)}
                           className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs hover:bg-slate-100 flex items-center justify-between transition ${
                             isCurrent
-                              ? "font-semibold text-brand-primary bg-blue-50/50"
+                              ? "font-semibold text-brand-primary bg-brand-primary/5"
                               : "text-slate-700"
                           }`}
                         >
@@ -412,7 +420,7 @@ export function AppShell({
                             </div>
                           </div>
                           {isCurrent && (
-                            <span className="text-[10px] bg-blue-50 text-brand-primary px-1.5 py-0.5 rounded font-semibold">
+                            <span className="text-[10px] bg-brand-primary/5 text-brand-primary px-1.5 py-0.5 rounded font-semibold">
                               Active
                             </span>
                           )}
@@ -430,7 +438,7 @@ export function AppShell({
                 <Link
                   to="/app/settings"
                   onClick={() => setUserPopoverOpen(false)}
-                  className="block w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-brand-primary hover:bg-blue-50 transition"
+                  className="block w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-brand-primary hover:bg-brand-primary/5 transition"
                 >
                   Governance &amp; App Settings
                 </Link>
@@ -462,8 +470,10 @@ export function AppShell({
                   type="button"
                   onClick={() => {
                     setUserPopoverOpen(false);
-                    logout();
-                    navigate("/login");
+                    requestLeave(() => {
+                      logout();
+                      navigate("/login");
+                    });
                   }}
                   className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-red-600 hover:bg-red-50 font-medium transition"
                 >
@@ -482,7 +492,7 @@ export function AppShell({
           <div className="flex items-center gap-3">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-sky-400">
+                <span className="text-xs font-bold text-brand-sky">
                   {isExecutive
                     ? "PORTFOLIO"
                     : selectedProject?.codePrefix || "PORTFOLIO"}
@@ -496,11 +506,11 @@ export function AppShell({
                 <span
                   className={`hidden sm:inline-block ml-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
                     user?.isPlatformSuperAdmin
-                      ? "bg-indigo-500/20 text-indigo-200 border-indigo-400/30"
+                      ? "bg-brand-primary/20 text-white/75 border-brand-primary/30"
                       : hasPermission("tranche:approve_disbursement")
                         ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/30"
                         : hasPermission("ipc:certify_valuation")
-                          ? "bg-blue-500/20 text-blue-200 border-blue-400/30"
+                          ? "bg-brand-primary/20 text-white/75 border-brand-primary/30"
                           : "bg-amber-500/20 text-amber-200 border-amber-400/30"
                   }`}
                 >
@@ -518,9 +528,10 @@ export function AppShell({
                 ) : selectedProject ? (
                   <>
                     <span className="text-slate-300 font-medium">
-                      {selectedProject.geofenceMode === "LINEAR_CORRIDOR"
-                        ? "Linear Highway Corridor"
-                        : "Radial Site Boundary"}
+                      {selectedProject.geofenceMode
+                        ? `${geofenceModeLabel(selectedProject.geofenceMode)} geofence`
+                        : "No geofence"}
+                      {selectedProject.status === "ARCHIVED" && " · Archived (read-only)"}
                     </span>{" "}
                     <span className="text-white/30">·</span>{" "}
                     <span className="text-slate-400">Lender:</span>{" "}
@@ -531,6 +542,7 @@ export function AppShell({
                     <span className="text-slate-400">Contractor:</span>{" "}
                     <span className="text-slate-200 font-medium">
                       {selectedProject.contractorOrganizationName}
+                      {selectedProject.contractorCount > 1 && ` +${selectedProject.contractorCount - 1}`}
                     </span>
                   </>
                 ) : (

@@ -100,15 +100,24 @@ export function ReconciliationWorkbenchPage({
   const respondMutation = useRespondMonitorQueryMutation(project.id);
   const resolveMutation = useResolveMonitorQueryMutation(project.id);
 
+  // Phase 6: several contractors may claim; IPC numbers run per contractor.
+  const contractorIds = Array.from(new Set(ipcs.map((i) => i.projectContractorId ?? "")));
+  const showContractor = project.contractorCount > 1 || contractorIds.length > 1;
+  const [contractorFilter, setContractorFilter] = useState<string>("ALL");
+  const visibleIpcs = contractorFilter === "ALL" ? ipcs : ipcs.filter((i) => i.projectContractorId === contractorFilter);
+  const contractorOptions: CustomSelectOption<string>[] = [
+    { value: "ALL", label: "All contractors" },
+    ...project.contractors.map((c) => ({ value: c.id, label: `${c.organizationName} (${c.tradeCode})` })),
+  ];
   const ipcOptions: CustomSelectOption<string>[] = useMemo(
     () =>
-      ipcs.map((i) => ({
+      visibleIpcs.map((i) => ({
         value: i.id,
-        label: `IPC #${String(i.ipcNumber).padStart(2, "0")}: ${i.tranche.name}`,
+        label: `${showContractor && i.contractorTradeCode ? `${i.contractorTradeCode} ` : ""}IPC #${String(i.ipcNumber).padStart(2, "0")}: ${i.tranche.name}`,
         badge: STATUS_LABEL[i.status],
-        description: formatCompactNaira(i.totalClaimedAmountNgn),
+        description: `${showContractor && i.contractorName ? `${i.contractorName} · ` : ""}${formatCompactNaira(i.totalClaimedAmountNgn)}`,
       })),
-    [ipcs],
+    [visibleIpcs, showContractor],
   );
 
   const submitModal =
@@ -151,10 +160,13 @@ export function ReconciliationWorkbenchPage({
         <div className="min-w-0">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Interim payment certificate</div>
           <div className="mt-1 min-w-[280px] max-w-xl">
+            {showContractor && (
+              <CustomSelect value={contractorFilter} onChange={setContractorFilter} options={contractorOptions} size="md" />
+            )}
             <CustomSelect value={ipc.id} onChange={(id) => { setSelectedLineId(null); onSelectIpc(id); }} options={ipcOptions} size="md" />
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-            <span className="font-bold px-2 py-0.5 rounded bg-blue-50 text-brand-primary">{STATUS_LABEL[ipc.status]}</span>
+            <span className="font-bold px-2 py-0.5 rounded bg-brand-primary/5 text-brand-primary">{STATUS_LABEL[ipc.status]}</span>
             {ipc.ratingEngine && (
               <span title={ipc.ratingEngineDetail ?? undefined}>
                 Rated by {ipc.ratingEngine === "AZURE_OPENAI" ? "Azure OpenAI" : "the rules engine"}

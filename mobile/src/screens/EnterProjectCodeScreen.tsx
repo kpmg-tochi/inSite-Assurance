@@ -31,48 +31,7 @@ import {
   JOIN_CODE_MAX_LENGTH,
 } from "@insite/shared";
 import type { RootStackParamList } from "../navigation/types";
-
-/**
- * Formats join codes as `AAA-999-SUF-XXXXXX` (e.g. LKK-402-CON-7K2QXM).
- * The first two hyphens are inserted automatically. The role suffix is 2-4 characters, so a
- * hyphen the user types after it is respected; without one, the last 6 characters are treated
- * as the random segment. Recomputed from scratch on every keystroke, so backspacing just works.
- */
-export function formatJoinCodeInput(raw: string): string {
-  const upper = raw.toUpperCase().replace(/[^A-Z0-9-]/g, "");
-  const alnum = upper.replace(/-/g, "");
-  const head = alnum.slice(0, 3);
-  const mid = alnum.slice(3, 6);
-
-  // Everything after the first 6 alphanumerics, keeping any hyphen the user typed.
-  let seen = 0;
-  let cut = upper.length;
-  for (let i = 0; i < upper.length; i++) {
-    if (upper[i] !== "-") seen++;
-    if (seen === 6) {
-      cut = i + 1;
-      break;
-    }
-  }
-  const tail = seen >= 6 ? upper.slice(cut).replace(/^-+/, "").replace(/-+/g, "-") : "";
-
-  let suffix = "";
-  let random = "";
-  if (tail.includes("-")) {
-    const [s, ...rest] = tail.split("-");
-    suffix = s.slice(0, 4);
-    random = rest.join("").slice(0, 6);
-  } else if (tail.length > 4) {
-    const t = tail.slice(0, 10);
-    const suffixLen = Math.min(4, Math.max(2, t.length - 6));
-    suffix = t.slice(0, suffixLen);
-    random = t.slice(suffixLen, suffixLen + 6);
-  } else {
-    suffix = tail;
-  }
-
-  return [head, mid, suffix, random].filter((part) => part.length > 0).join("-");
-}
+import { formatJoinCodeInput, normalizeJoinCode } from "../utils/joinCodeInput";
 
 export const EnterProjectCodeScreen: React.FC = () => {
   // Navigation
@@ -185,12 +144,12 @@ export const EnterProjectCodeScreen: React.FC = () => {
 
   // Validation
   const canSubmit = useMemo(() => {
-    return isValidJoinCode(projectCode);
+    return isValidJoinCode(normalizeJoinCode(projectCode));
   }, [projectCode]);
 
   // Submit project code
   const handleSubmit = async () => {
-    const normalized = projectCode.trim().toUpperCase();
+    const normalized = normalizeJoinCode(projectCode);
     if (!canSubmit) {
       Toast.show({
         type: "error",

@@ -29,17 +29,19 @@ import {
   invalidateUserAuthCache,
   WebJwtPayload,
 } from '../../middleware/auth.middleware';
+import { primaryCategory, resolveOrganization } from '../organizations/organizations.service';
 import { recordAuditEvent } from '../audit/audit.service';
 import { issueJoinCodesForRoleOnAllProjects } from '../projects/joinCodes.service';
 import { sendPushToMobileUser } from '../../integrations/push.service';
 
 type Tx = Prisma.TransactionClient;
 
+/** Neutral InSite default for tenants without their own branding (no client marks). */
 export const DEFAULT_BRANDING_CONFIG: TenantBrandingConfig = {
-  logoUrl: '/KPMG-logo.svg',
+  logoUrl: null,
   primaryColorHex: '#00338D',
   navyColorHex: '#0C233C',
-  tagline: 'Capital Advisory',
+  tagline: 'Field Evidence Assurance',
   pdfHeaderTitle: 'InSite Assurance — Disbursement Evidence & Valuation Report',
   pdfFooterDisclaimer:
     'Independent Project Monitoring Certification | Powered by InSite Assurance',
@@ -542,7 +544,8 @@ export async function listUsersForTenant(tenantId: string) {
       roleName: u.role.name,
       organizationId: u.organizationId,
       organizationName: u.organization.name,
-      organizationCategory: u.organization.category as OrganizationCategory,
+      organizationCategory: primaryCategory(u.organization.categories),
+      organizationCategories: u.organization.categories as OrganizationCategory[],
       professionalLicenseType: u.professionalLicenseType,
       professionalLicenseNumber: u.professionalLicenseNumber,
       phoneNumber: u.phoneNumber,
@@ -560,20 +563,6 @@ export async function listUsersForTenant(tenantId: string) {
       createdAt: u.createdAt.toISOString(),
     };
   });
-}
-
-async function findOrCreateOrganization(
-  tx: Tx,
-  tenantId: string,
-  name: string,
-  category: OrganizationCategory
-) {
-  const trimmed = name.trim();
-  const existing = await tx.organization.findFirst({
-    where: { tenantId, name: { equals: trimmed, mode: 'insensitive' } },
-  });
-  if (existing) return existing;
-  return tx.organization.create({ data: { tenantId, name: trimmed, category } });
 }
 
 /**
@@ -613,11 +602,12 @@ export async function createUserInTenant(webUser: WebJwtPayload, input: CreateTe
   const passwordHash = await bcrypt.hash(input.password, 10);
 
   const user = await prisma.$transaction(async (tx) => {
-    const org = await findOrCreateOrganization(
+    const { organization: org } = await resolveOrganization(
       tx,
       tenantId,
-      input.organizationName,
-      input.organizationCategory
+      { id: input.organizationId ?? undefined, name: input.organizationName ?? undefined },
+      input.organizationCategory,
+      { actor: { actorId: webUser.userId, actorDisplayName: actorName(webUser) } }
     );
 
     const createdUser = await tx.user.create({
@@ -912,7 +902,7 @@ export async function getRoleOnboardingImpact(
 async function applyOnboardingModeChange(
   tx: Tx,
   webUser: WebJwtPayload,
-  role: { id: string; tenantId: string; name: string; code: string; codeSuffix: string | null; onboardingMode: string }
+  role: { id: string; tenantId: string; name: string; code: string; codeSuffix: string | null; onboardingMode: string; fieldPersonaType: string }
 ) {
   let deactivated: Array<{ id: string; code: string; projectId: string }> = [];
   let issuedCodes: string[] = [];
@@ -1192,7 +1182,9 @@ export async function createTenantWithDefaults(webUser: WebJwtPayload, input: Cr
 
     let adminUserId: string | null = null;
     if (input.adminEmail && input.adminPassword && input.adminFullName) {
-      const org = await findOrCreateOrganization(tx, tenant.id, input.name, 'CLIENT_OWNER');
+      const { organization: org } = await resolveOrganization(tx, tenant.id, { name: input.name }, 'CLIENT_OWNER', {
+        actor: { actorId: webUser.userId, actorDisplayName: actorName(webUser) },
+      });
       const passwordHash = await bcrypt.hash(input.adminPassword, 10);
       const admin = await tx.user.create({
         data: {

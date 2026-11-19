@@ -14,7 +14,9 @@ import {
   type FieldProjectContext,
   type MobileChangePasswordResponse,
   type MobileLoginResponse,
+  type MobileTenantBranding,
 } from '@insite/shared';
+import { defaultColors } from '../styles/commonStyles';
 import {
   EMPTY_DEVICE_STATE,
   loadDeviceState,
@@ -64,6 +66,8 @@ interface ProfileContextValue {
   isVerified: boolean;
   /** Signed in, or has typed a name for joining with codes. */
   hasIdentity: boolean;
+  /** Branding of the tenant behind the active project, or the neutral InSite default (Phase 6). */
+  branding: ActiveBranding;
   /** Every identity on the device that should receive pushes: the account and each join session. */
   pushIdentities: PushIdentity[];
   signIn: (result: MobileLoginResponse) => Promise<void>;
@@ -86,6 +90,49 @@ interface ProfileContextValue {
 }
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
+
+/** The branding the app applies. `isTenant` is false for the neutral InSite default. */
+export interface ActiveBranding {
+  isTenant: boolean;
+  tenantName: string | null;
+  logoUrl: string | null;
+  primaryColor: string;
+  /** ISO 4217 code for money display. */
+  currency: string;
+}
+
+const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
+
+/** Neutral InSite default: used before sign-in and wherever the tenant is not known. */
+export const NEUTRAL_BRANDING: ActiveBranding = {
+  isTenant: false,
+  tenantName: null,
+  logoUrl: null,
+  primaryColor: defaultColors.primary,
+  currency: 'NGN',
+};
+
+function toActiveBranding(b: MobileTenantBranding | null | undefined): ActiveBranding {
+  if (!b) return NEUTRAL_BRANDING;
+  return {
+    isTenant: true,
+    tenantName: b.tenantName,
+    logoUrl: b.logoUrl || null,
+    primaryColor: HEX_COLOR.test(b.primaryColorHex) ? b.primaryColorHex : NEUTRAL_BRANDING.primaryColor,
+    currency: b.currency || NEUTRAL_BRANDING.currency,
+  };
+}
+
+/**
+ * The tenant is known from the active join session's profile or from the signed-in account. A join
+ * session wins on its own project; otherwise the account's tenant; otherwise neutral.
+ */
+function resolveBranding(state: DeviceState, activeProjectId: string | null): ActiveBranding {
+  const join = state.joinSessions.find((j) => j.context.projectId === activeProjectId);
+  if (join?.tenantBranding) return toActiveBranding(join.tenantBranding);
+  if (state.account?.profile.tenantBranding) return toActiveBranding(state.account.profile.tenantBranding);
+  return NEUTRAL_BRANDING;
+}
 
 function allProjects(state: DeviceState): FieldProjectContext[] {
   const joinIds = new Set(state.joinSessions.map((j) => j.context.projectId));
@@ -155,6 +202,8 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
               roleCode: session.roleCode,
               assuranceWeight: session.assuranceWeight,
               permissions: session.permissions,
+              // Phase 6: the contractor package the session works for (null when project-wide).
+              ...(session.contractor !== undefined ? { contractor: session.contractor } : {}),
             })
           );
         }
@@ -224,7 +273,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
         ...prev,
         joinSessions: [
           ...prev.joinSessions.filter((j) => j.context.projectId !== context.projectId),
-          { token: result.accessToken, context },
+          { token: result.accessToken, context, tenantBranding: result.sessionProfile.tenantBranding ?? null },
         ],
         activeProjectId: context.projectId,
       }));
@@ -257,8 +306,8 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
       const projects = list.map((p) => {
         const fresh = fieldContextFromProvisionedProject(p, account.profile.mobileRole);
         const known = byId.get(p.id);
-        // Keep the session id learned from the server for this device.
-        return known ? { ...fresh, sessionId: known.sessionId } : fresh;
+        // Keep the session id and contractor learned from the server's session for this device.
+        return known ? { ...fresh, sessionId: known.sessionId, contractor: known.contractor ?? null } : fresh;
       });
       const next = { ...prev, projects };
       return { ...next, activeProjectId: pickActive(next, prev.activeProjectId) };
@@ -357,6 +406,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
       phoneNumber: state.account?.profile.phoneNumber ?? state.persona?.phoneNumber ?? '',
       userInitials: getInitials(displayName, 'CO'),
       isVerified: activeContext?.assuranceStatus === 'APPROVED',
+      branding: resolveBranding(state, activeContext?.projectId ?? null),
       hasIdentity: Boolean(state.account || state.persona),
       pushIdentities: [
         ...(state.account && !state.account.profile.mustChangePassword
@@ -404,4 +454,12 @@ export function useProfile(): ProfileContextValue {
     throw new Error('useProfile must be used within a ProfileProvider');
   }
   return ctx;
+}
+
+/**
+ * Active branding for headers, logos and primary buttons. Safe outside the provider (returns the
+ * neutral default), so shared components can use it anywhere.
+ */
+export function useActiveBranding(): ActiveBranding {
+  return useContext(ProfileContext)?.branding ?? NEUTRAL_BRANDING;
 }

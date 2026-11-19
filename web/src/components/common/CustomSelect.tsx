@@ -169,7 +169,7 @@ export function CustomSelect<T extends string | number = string>({
               {selectedOption ? selectedOption.label : placeholder}
             </span>
             {selectedOption?.badge && (
-              <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-brand-primary border border-blue-200">
+              <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-brand-primary/5 text-brand-primary border border-brand-primary/25">
                 {selectedOption.badge}
               </span>
             )}
@@ -226,7 +226,7 @@ export function CustomSelect<T extends string | number = string>({
                       opt.disabled
                         ? "opacity-40 cursor-not-allowed bg-slate-50"
                         : isSelected
-                        ? "bg-blue-50/70 text-brand-primary font-semibold"
+                        ? "bg-brand-primary/5 text-brand-primary font-semibold"
                         : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
                     }`}
                   >

@@ -52,6 +52,7 @@ import {
   serializeValuationReport,
 } from '../../utils/serializers';
 import { evaluateIpcLines, ModelRater, ReconciliationLineInput } from './reconciliationEngine';
+import { contractorForWebUser, contractorHeadline } from '../projects/contractors.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -190,6 +191,7 @@ function canSeeOversightDetail(webUser: WebJwtPayload) {
 
 const IPC_INCLUDE = {
   tranche: { include: { conditionsPrecedent: true } },
+  projectContractor: { select: { id: true, tradeCode: true, organization: { select: { name: true } } } },
   supportingDocuments: true,
   valuationReports: {
     orderBy: { revisionNumber: 'asc' },
@@ -372,6 +374,9 @@ function serializeIpc(
     id: ipc.id,
     projectId: ipc.projectId,
     trancheId: ipc.trancheId,
+    projectContractorId: ipc.projectContractorId,
+    contractorName: ipc.projectContractor?.organization.name ?? null,
+    contractorTradeCode: ipc.projectContractor?.tradeCode ?? null,
     ipcNumber: ipc.ipcNumber,
     periodStart: ipc.periodStart.toISOString(),
     periodEnd: ipc.periodEnd.toISOString(),
@@ -398,10 +403,35 @@ function serializeIpc(
   };
 }
 
+/**
+ * Multi-prime (Phase 6): a contractor's users see only their own contractor's IPCs and queries.
+ * Returns the contractor id to scope to, or null when the viewer sees every IPC.
+ */
+async function contractorScopeFor(projectId: string, webUser: WebJwtPayload): Promise<string | null> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { contractorExecutionMode: true },
+  });
+  if (project?.contractorExecutionMode !== 'MULTI_PRIME_SEPARATE_IPC') return null;
+  const own = await contractorForWebUser(prisma, projectId, webUser);
+  return own?.id ?? null;
+}
+
+async function assertIpcVisibleToViewer(projectId: string, ipcId: string, webUser: WebJwtPayload) {
+  const scope = await contractorScopeFor(projectId, webUser);
+  if (!scope) return;
+  const ipc = await prisma.ipcClaim.findFirst({ where: { id: ipcId, projectId }, select: { projectContractorId: true } });
+  if (ipc && ipc.projectContractorId !== scope) {
+    // Do not reveal another contractor's claim.
+    throw new AppError('IPC claim not found', 404, 'IPC_NOT_FOUND');
+  }
+}
+
 export async function listProjectIpcClaims(projectId: string, webUser: WebJwtPayload) {
+  const scope = await contractorScopeFor(projectId, webUser);
   const [ipcs, viewer] = await Promise.all([
     prisma.ipcClaim.findMany({
-      where: { projectId },
+      where: { projectId, ...(scope ? { projectContractorId: scope } : {}) },
       orderBy: { ipcNumber: 'desc' },
       include: IPC_INCLUDE,
     }),
@@ -416,6 +446,7 @@ export async function getIpcReconciliationDetails(
   webUser: WebJwtPayload
 ): Promise<IpcClaimDto> {
   await loadIpcInProject(prisma, projectId, ipcId);
+  await assertIpcVisibleToViewer(projectId, ipcId, webUser);
   const [ipc, viewer] = await Promise.all([
     prisma.ipcClaim.findUniqueOrThrow({ where: { id: ipcId }, include: IPC_INCLUDE }),
     loadViewer(webUser),
@@ -600,17 +631,47 @@ export async function submitContractorIpcClaim(params: {
   const created = await prisma.$transaction(async (tx) => {
     // Serialises IPC numbering and the one-open-IPC-per-tranche check for this project.
     await tx.$queryRaw`SELECT id FROM "Project" WHERE id = ${projectId}::uuid FOR UPDATE`;
+
+    // Phase 6: the submitter acts for their organisation's contractor on this project.
+    const project = await tx.project.findUniqueOrThrow({
+      where: { id: projectId },
+      select: { contractorExecutionMode: true },
+    });
+    const multiPrime = project.contractorExecutionMode === 'MULTI_PRIME_SEPARATE_IPC';
+    const submitter = await contractorForWebUser(tx, projectId, webUser);
+    if (!submitter) {
+      throw new AppError(
+        "Only users of one of this project's contractors can submit an IPC.",
+        403,
+        'NOT_A_PROJECT_CONTRACTOR'
+      );
+    }
+    if (!multiPrime && !submitter.isMainContractor) {
+      throw new AppError(
+        'Only the main contractor submits IPCs on this project. Subcontractors report from site.',
+        403,
+        'NOT_MAIN_CONTRACTOR'
+      );
+    }
+
     const tranche = await loadTrancheInProject(tx, projectId, input.trancheId);
     if (tranche.isReleased) {
       throw new AppError('This tranche has been fully released', 409, 'TRANCHE_FULLY_RELEASED');
     }
+    // One open IPC per tranche; in multi-prime, per tranche per contractor.
     const open = await tx.ipcClaim.findFirst({
-      where: { trancheId: tranche.id, status: { in: OPEN_IPC_STATUSES } },
+      where: {
+        trancheId: tranche.id,
+        status: { in: OPEN_IPC_STATUSES },
+        ...(multiPrime ? { projectContractorId: submitter.id } : {}),
+      },
       select: { ipcNumber: true, status: true },
     });
     if (open) {
       throw new AppError(
-        `IPC #${open.ipcNumber} on this tranche is still open (${open.status}). Only one open IPC per tranche is allowed.`,
+        multiPrime
+          ? `Your IPC #${open.ipcNumber} on this tranche is still open (${open.status}). Only one open IPC per tranche per contractor is allowed.`
+          : `IPC #${open.ipcNumber} on this tranche is still open (${open.status}). Only one open IPC per tranche is allowed.`,
         409,
         'TRANCHE_HAS_OPEN_IPC'
       );
@@ -630,6 +691,13 @@ export async function submitContractorIpcClaim(params: {
           `BOQ item ${boq.wbsCode} is not mapped to this tranche`,
           422,
           'BOQ_ITEM_NOT_IN_TRANCHE'
+        );
+      }
+      if (multiPrime && boq.projectContractorId !== submitter.id) {
+        throw new AppError(
+          `BOQ item ${boq.wbsCode} belongs to another contractor's package`,
+          422,
+          'BOQ_ITEM_NOT_IN_PACKAGE'
         );
       }
       const prev = Number(boq.cumulativeCertifiedPct);
@@ -652,13 +720,18 @@ export async function submitContractorIpcClaim(params: {
     });
     total = roundNgn(total);
 
-    const last = await tx.ipcClaim.aggregate({ where: { projectId }, _max: { ipcNumber: true } });
+    // IPC numbers run per contractor.
+    const last = await tx.ipcClaim.aggregate({
+      where: { projectId, projectContractorId: submitter.id },
+      _max: { ipcNumber: true },
+    });
     const ipcNumber = (last._max.ipcNumber ?? 0) + 1;
 
     const ipc = await tx.ipcClaim.create({
       data: {
         projectId,
         trancheId: tranche.id,
+        projectContractorId: submitter.id,
         ipcNumber,
         periodStart: new Date(input.periodStart),
         periodEnd,
@@ -684,8 +757,14 @@ export async function submitContractorIpcClaim(params: {
       actorId: webUser.userId,
       actorDisplayName: actorName(webUser),
       action: 'IPC_SUBMITTED',
-      summaryText: `Submitted IPC #${ipcNumber} on ${tranche.name} claiming ${fmtNgn(total)} across ${lines.length} BOQ line item(s).`,
-      payload: { ipcId: ipc.id, ipcNumber, trancheId: tranche.id, totalClaimedAmountNgn: total },
+      summaryText: `Submitted IPC #${ipcNumber} (${submitter.organization.name}) on ${tranche.name} claiming ${fmtNgn(total)} across ${lines.length} BOQ line item(s).`,
+      payload: {
+        ipcId: ipc.id,
+        ipcNumber,
+        trancheId: tranche.id,
+        projectContractorId: submitter.id,
+        totalClaimedAmountNgn: total,
+      },
     });
     return ipc;
   });
@@ -707,6 +786,7 @@ export async function withdrawIpcClaim(params: {
   input: WithdrawIpcClaimRequest;
 }) {
   const { projectId, ipcId, webUser, input } = params;
+  await assertIpcVisibleToViewer(projectId, ipcId, webUser);
   await prisma.$transaction(async (tx) => {
     const ipc = await lockIpc(tx, projectId, ipcId);
     const next = assertIpcTransition(ipc.status as IpcClaimStatus, 'withdraw');
@@ -805,6 +885,7 @@ export async function respondToMonitorLineQuery(params: {
   input: RespondMonitorQueryRequest;
 }) {
   const { projectId, ipcId, queryId, webUser, input } = params;
+  await assertIpcVisibleToViewer(projectId, ipcId, webUser);
   for (const doc of input.attachedDocuments) {
     assertProjectObjectKey(doc.objectKey, webUser.tenantId, projectId);
     if (doc.boqItemId) await loadBoqItemInProject(prisma, projectId, doc.boqItemId);
@@ -1487,9 +1568,13 @@ export async function generateIpcValuationPdf(projectId: string, ipcId: string):
           tenant: true,
           monitorOrganization: true,
           lenderOrganization: true,
-          contractorOrganization: true,
+          contractors: {
+            orderBy: [{ isMainContractor: 'desc' }, { createdAt: 'asc' }],
+            include: { organization: { select: { name: true } } },
+          },
         },
       },
+      projectContractor: { include: { organization: { select: { name: true } } } },
       tranche: true,
       valuationReports: { where: { supersededAt: null }, orderBy: { revisionNumber: 'desc' }, take: 1 },
       lineItems: { include: { boqItem: true }, orderBy: { boqItem: { wbsCode: 'asc' } } },
@@ -1508,10 +1593,14 @@ export async function generateIpcValuationPdf(projectId: string, ipcId: string):
     primaryColorHex: branding.primaryColorHex,
     projectName: ipc.project.name,
     projectCodePrefix: ipc.project.codePrefix,
-    stateLocation: ipc.project.stateLocation,
-    lenderName: ipc.project.lenderOrganization.name,
-    contractorName: ipc.project.contractorOrganization.name,
-    monitorOrganizationName: ipc.project.monitorOrganization.name,
+    stateLocation: ipc.project.stateLocation ?? '',
+    lenderName: ipc.project.lenderOrganization?.name ?? '',
+    // The claim's own contractor; older claims fall back to the main contractor.
+    contractorName:
+      ipc.projectContractor?.organization.name ?? contractorHeadline(ipc.project.contractors).name,
+    monitorOrganizationName: ipc.project.monitorOrganization?.name ?? '',
+    currency: ipc.project.tenant.defaultCurrency,
+    timeZone: ipc.project.timezone,
     ipcNumber: ipc.ipcNumber,
     ipcStatus: ipc.status,
     trancheName: ipc.tranche.name,

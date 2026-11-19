@@ -1,14 +1,13 @@
+import { calendarDateInTimeZone, timeZoneOffsetMinutes } from '@insite/shared';
 import { prisma } from '../config/prisma';
-import {
-  generateDailyDispatchForProject,
-  getTodayWatDateString,
-} from '../modules/morning-briefs/morningBrief.service';
+import { generateDailyDispatchForProject } from '../modules/morning-briefs/morningBrief.service';
 
 const CHECK_INTERVAL_MS = 15 * 60 * 1000; // Every 15 minutes
 
-function getCurrentWatMinutes(): number {
-  const watNow = new Date(Date.now() + 60 * 60 * 1000);
-  return watNow.getUTCHours() * 60 + watNow.getUTCMinutes();
+/** Minutes since local midnight in the project's IANA zone. */
+function minutesNowInZone(timeZone: string, now = new Date()): number {
+  const local = new Date(now.getTime() + timeZoneOffsetMinutes(timeZone, now) * 60_000);
+  return local.getUTCHours() * 60 + local.getUTCMinutes();
 }
 
 function parseHhMmToMinutes(hhmm: string): number {
@@ -19,22 +18,23 @@ function parseHhMmToMinutes(hhmm: string): number {
 
 export async function runMorningBriefCronTick(): Promise<void> {
   try {
-    const nowWatMinutes = getCurrentWatMinutes();
-    const todayWat = getTodayWatDateString();
-
+    const now = new Date();
+    // Scheduled jobs only ever touch live projects (Phase 6).
     const projects = await prisma.project.findMany({
-      select: { id: true, name: true, workdayStartTime: true },
+      where: { status: 'ACTIVE' },
+      select: { id: true, name: true, workdayStartTime: true, timezone: true },
     });
 
     for (const project of projects) {
       const startMinutes = parseHhMmToMinutes(project.workdayStartTime || '08:00');
-      // Dispatch once current WAT time has reached workdayStartTime (within 15-min window or catch-up)
-      if (nowWatMinutes >= startMinutes) {
+      const today = calendarDateInTimeZone(now, project.timezone);
+      // Dispatch once the project's local time has reached workdayStartTime (or catch up later).
+      if (minutesNowInZone(project.timezone, now) >= startMinutes) {
         const existingCount = await prisma.morningDeliverableBrief.count({
-          where: { projectId: project.id, workdayDate: todayWat },
+          where: { projectId: project.id, workdayDate: today },
         });
         if (existingCount === 0) {
-          await generateDailyDispatchForProject(project.id, todayWat);
+          await generateDailyDispatchForProject(project.id, today);
         }
       }
     }

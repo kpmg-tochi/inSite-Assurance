@@ -12,7 +12,7 @@ export function HomePage() {
       <section className="kpmg-ribbed-panel text-white border-b border-white/10">
         <div className="max-w-7xl mx-auto px-6 py-16 lg:py-20 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           <div className="lg:col-span-6 space-y-6">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs font-medium text-blue-100">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/15 text-xs font-medium text-white/90">
               <span>Capital Project Financing &amp; Monitoring in Nigeria</span>
             </div>
 
@@ -20,14 +20,14 @@ export function HomePage() {
               Verify Physical Execution Before Tranche Funds Are Released.
             </h1>
 
-            <p className="text-sm sm:text-base text-blue-100/90 leading-relaxed">
+            <p className="text-sm sm:text-base text-white/90 leading-relaxed">
               <strong>InSite Assurance</strong> gives Nigerian project
               financiers, infrastructure guarantors, and licensed Independent
               Project Monitors a tamper-resistant field evidence and
               BOQ-to-claim reconciliation workbench.
             </p>
 
-            <div className="bg-brand-navy/75 backdrop-blur-md border border-white/15 rounded-2xl p-4 text-xs text-blue-100/90 leading-relaxed">
+            <div className="bg-brand-navy/75 backdrop-blur-md border border-white/15 rounded-2xl p-4 text-xs text-white/90 leading-relaxed">
               <strong className="text-white block mb-1">
                 The &ldquo;Auditor Co-Pilot&rdquo; Principle:
               </strong>
@@ -42,7 +42,7 @@ export function HomePage() {
             <div className="flex flex-wrap items-center gap-3 pt-2">
               <Link
                 to="/login"
-                className="px-5 py-3 rounded-xl bg-white text-brand-primary hover:bg-blue-50 text-xs font-bold shadow-lg transition"
+                className="px-5 py-3 rounded-xl bg-white text-brand-primary hover:bg-brand-primary/5 text-xs font-bold shadow-lg transition"
               >
                 Launch Assurance Portal
               </Link>
@@ -61,7 +61,7 @@ export function HomePage() {
             <div className="bg-brand-navy/75 backdrop-blur-md border border-white/20 rounded-2xl p-5 shadow-2xl space-y-4">
               <div className="flex items-center justify-between border-b border-white/10 pb-3">
                 <div>
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-200">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-white/75">
                     Live Pilot Corridor · LKK-402
                   </div>
                   <div className="text-sm font-bold text-white">
@@ -97,7 +97,7 @@ export function HomePage() {
                 <div className="absolute left-[18%] top-[56%] bg-brand-navy/90 border border-white/20 px-2.5 py-1 rounded-lg text-[10px] text-white">
                   KM 12+400 · Tier 1 Monitor
                 </div>
-                <div className="absolute left-[48%] top-[36%] bg-brand-primary border border-blue-300/40 px-2.5 py-1 rounded-lg text-[10px] font-bold text-white shadow-lg">
+                <div className="absolute left-[48%] top-[36%] bg-brand-primary border border-brand-primary/30 px-2.5 py-1 rounded-lg text-[10px] font-bold text-white shadow-lg">
                   KM 14+210 · Hold-Point WBS 02.01.2
                 </div>
               </div>
@@ -160,7 +160,7 @@ export function HomePage() {
                     />
                   ))}
                 </div>
-                <span className="text-[10px] text-blue-200">1.0x</span>
+                <span className="text-[10px] text-white/75">1.0x</span>
               </div>
               <div className="bg-white/95 rounded-xl p-2.5 text-slate-900 text-[11px] leading-snug">
                 <div className="flex justify-between font-semibold text-slate-600 mb-0.5">
@@ -195,7 +195,7 @@ export function HomePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
           <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex flex-col justify-between">
             <div>
-              <div className="text-xs font-bold text-brand-primary bg-blue-50 inline-block px-2.5 py-1 rounded-lg">
+              <div className="text-xs font-bold text-brand-primary bg-brand-primary/5 inline-block px-2.5 py-1 rounded-lg">
                 01 · Drawdown Leakage Risk
               </div>
               <h3 className="text-sm font-bold text-slate-900 mt-3">
@@ -212,7 +212,7 @@ export function HomePage() {
 
           <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex flex-col justify-between">
             <div>
-              <div className="text-xs font-bold text-brand-primary bg-blue-50 inline-block px-2.5 py-1 rounded-lg">
+              <div className="text-xs font-bold text-brand-primary bg-brand-primary/5 inline-block px-2.5 py-1 rounded-lg">
                 02 · BOQ Opacity
               </div>
               <h3 className="text-sm font-bold text-slate-900 mt-3">
@@ -229,7 +229,7 @@ export function HomePage() {
 
           <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex flex-col justify-between">
             <div>
-              <div className="text-xs font-bold text-brand-primary bg-blue-50 inline-block px-2.5 py-1 rounded-lg">
+              <div className="text-xs font-bold text-brand-primary bg-brand-primary/5 inline-block px-2.5 py-1 rounded-lg">
                 03 · Field-to-Office Gap
               </div>
               <h3 className="text-sm font-bold text-slate-900 mt-3">
@@ -246,7 +246,7 @@ export function HomePage() {
 
           <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex flex-col justify-between">
             <div>
-              <div className="text-xs font-bold text-brand-primary bg-blue-50 inline-block px-2.5 py-1 rounded-lg">
+              <div className="text-xs font-bold text-brand-primary bg-brand-primary/5 inline-block px-2.5 py-1 rounded-lg">
                 04 · Provenance &amp; Liability
               </div>
               <h3 className="text-sm font-bold text-slate-900 mt-3">

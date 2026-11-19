@@ -99,11 +99,26 @@ describe('Phase 1 Multi-Tenant SaaS & Normalized RBAC', () => {
     assert.equal(tenantWhere.tenantId, 'tenant-xyz');
     assert.equal(tenantWhere.userAssignments, undefined);
 
+    const activeOnly = { OR: [{ status: { in: ['ACTIVE'] } }] };
     const platformAdmin = makeWebUser({ isPlatformSuperAdmin: true });
-    assert.deepEqual(buildProjectVisibilityWhere(platformAdmin), {});
+    assert.deepEqual(buildProjectVisibilityWhere(platformAdmin), activeOnly);
     assert.deepEqual(buildProjectVisibilityWhere(platformAdmin, 'tenant-2'), {
       tenantId: 'tenant-2',
+      ...activeOnly,
     });
+  });
+
+  it('excludes drafts by default and shows them only to their creator or to project creators (Phase 6)', () => {
+    const viewer = makeWebUser({ userId: 'viewer-1', tenantId: 't', permissions: ['projects:view_all_tenant'] });
+    assert.deepEqual(buildProjectVisibilityWhere(viewer).OR, [{ status: { in: ['ACTIVE'] } }]);
+    assert.deepEqual(buildProjectVisibilityWhere(viewer, undefined, { statuses: ['DRAFT'] }).OR, [
+      { status: 'DRAFT', createdByUserId: 'viewer-1' },
+    ]);
+    const creator = makeWebUser({ userId: 'c-1', tenantId: 't', permissions: ['projects:view_all_tenant', 'projects:create'] });
+    assert.deepEqual(buildProjectVisibilityWhere(creator, undefined, { statuses: ['ACTIVE', 'DRAFT'] }).OR, [
+      { status: { in: ['ACTIVE'] } },
+      { status: 'DRAFT' },
+    ]);
   });
 
   it('parses white-label TenantBrandingConfig and falls back safely on malformed input', () => {

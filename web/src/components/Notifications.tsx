@@ -87,7 +87,7 @@ export default function Notifications({ projectId }: NotificationsProps) {
       case "TRANCHE_DISBURSEMENT":
         return <Coins className="w-4 h-4 text-emerald-600" />;
       case "MONITOR_QUERY":
-        return <FileQuestion className="w-4 h-4 text-blue-600" />;
+        return <FileQuestion className="w-4 h-4 text-brand-primary" />;
       default:
         return <Bell className="w-4 h-4 text-slate-500" />;
     }
@@ -102,11 +102,11 @@ export default function Notifications({ projectId }: NotificationsProps) {
       case "CONFLICT_FLAG":
         return "bg-rose-50 text-rose-800 border-rose-200";
       case "CONTRACTOR_ONBOARDING":
-        return "bg-blue-50 text-brand-primary border-blue-200";
+        return "bg-brand-primary/5 text-brand-primary border-brand-primary/25";
       case "TRANCHE_DISBURSEMENT":
         return "bg-emerald-50 text-emerald-800 border-emerald-200";
       case "MONITOR_QUERY":
-        return "bg-sky-50 text-sky-800 border-sky-200";
+        return "bg-brand-sky/10 text-brand-medium border-brand-sky/30";
       default:
         return "bg-slate-50 text-slate-700 border-slate-200";
     }
@@ -136,7 +136,7 @@ export default function Notifications({ projectId }: NotificationsProps) {
           {/* Popover Dark Navy Header */}
           <div className="bg-brand-primary px-4 py-3 text-white flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-blue-200">
+              <span className="text-xs font-bold uppercase tracking-wider text-white/75">
                 Governance Alerts
               </span>
               {unreadCount > 0 && (
@@ -151,7 +151,7 @@ export default function Notifications({ projectId }: NotificationsProps) {
                 <button
                   type="button"
                   onClick={handleMarkAllAsRead}
-                  className="text-[11px] font-medium text-blue-200 hover:text-white transition flex items-center gap-1"
+                  className="text-[11px] font-medium text-white/75 hover:text-white transition flex items-center gap-1"
                   title="Mark all notifications as read"
                 >
                   <CheckCheck className="w-3.5 h-3.5" />
@@ -218,7 +218,7 @@ export default function Notifications({ projectId }: NotificationsProps) {
                   onClick={() => handleNotificationClick(item)}
                   className={`group px-3.5 py-3 cursor-pointer transition flex items-start gap-3 ${
                     !item.isRead
-                      ? "bg-blue-50/40 hover:bg-blue-50/80"
+                      ? "bg-brand-primary/5 hover:bg-brand-primary/5"
                       : "hover:bg-slate-50/80"
                   }`}
                 >

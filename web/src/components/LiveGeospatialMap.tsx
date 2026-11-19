@@ -1,17 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from 'react-leaflet';
+import { MapPinOff } from 'lucide-react';
 import {
-  MapContainer,
-  TileLayer,
-  Polyline,
-  Circle,
-  CircleMarker,
-  Tooltip,
-  useMap,
-} from 'react-leaflet';
-import type { CaptureListItemDto } from '@insite/shared';
+  ProjectGeofenceSchema,
+  geofenceModeLabel,
+  type CaptureListItemDto,
+  type ProjectGeofence,
+} from '@insite/shared';
 import type { ProjectSummaryDto } from '../api/types';
 import { formatDateTimeShort } from '../lib/formatters';
 import { formatReporterRoleBadge } from './EvidenceBadge';
+import { GeofenceShapeLayers } from './geofence/GeofenceShapeLayers';
+import { paddedGeofenceBounds, type LatLngTuple } from './geofence/geofenceGeometry';
+import { describeGeofenceStatus } from './geofence/geofenceStatus';
 
 interface LiveGeospatialMapProps {
   project: ProjectSummaryDto;
@@ -25,18 +26,32 @@ type LocatedCapture = CaptureListItemDto & { latitude: number; longitude: number
 const isLocated = (c: CaptureListItemDto): c is LocatedCapture =>
   c.locationAvailable && c.latitude !== null && c.longitude !== null;
 
-function MapViewportUpdater({
-  center,
-  zoom,
-}: {
-  center: [number, number];
-  zoom: number;
-}) {
+/** Refits the map when the project's boundary changes. */
+function FitToGeofence({ bounds }: { bounds: [LatLngTuple, LatLngTuple] }) {
   const map = useMap();
+  const key = bounds.flat().join(',');
   useEffect(() => {
-    map.setView(center, zoom, { animate: true });
-  }, [map, center[0], center[1], zoom]);
+    map.fitBounds(bounds, { padding: [32, 32], maxZoom: 17 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, key]);
   return null;
+}
+
+/** One-line description of the boundary size for the callout. */
+function geofenceSizeText(geofence: ProjectGeofence): string {
+  switch (geofence.mode) {
+    case 'RADIAL':
+      return `${geofence.radiusMeters.toLocaleString()} m site radius`;
+    case 'LINEAR_CORRIDOR':
+      return `±${geofence.corridorHalfWidthMeters.toLocaleString()} m corridor half-width`;
+    case 'PERIMETER': {
+      const ring = geofence.perimeterCoordinates;
+      const closed =
+        ring.length > 1 && ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1];
+      const corners = closed ? ring.length - 1 : ring.length;
+      return `Site perimeter, ${corners} corners`;
+    }
+  }
 }
 
 export function LiveGeospatialMap({
@@ -79,43 +94,23 @@ export function LiveGeospatialMap({
     return filteredLogs.find((l) => l.id === activeLogId) || filteredLogs[0] || located[0] || null;
   }, [filteredLogs, located, activeLogId]);
 
-  // Compute map center & zoom from project geofence
-  const { mapCenter, mapZoom, polylinePositions, radialConfig } = useMemo(() => {
-    const gf = project.geofence;
-    if (gf.mode === 'LINEAR_CORRIDOR' && gf.centerlineCoordinates.length > 0) {
-      const latLngs: [number, number][] = gf.centerlineCoordinates.map(([lng, lat]) => [lat, lng]);
-      const midIdx = Math.floor(latLngs.length / 2);
-      return {
-        mapCenter: latLngs[midIdx],
-        mapZoom: 13,
-        polylinePositions: latLngs,
-        radialConfig: null,
-      };
-    }
-    if (gf.mode === 'RADIAL') {
-      return {
-        mapCenter: [gf.center.latitude, gf.center.longitude] as [number, number],
-        mapZoom: 15,
-        polylinePositions: null,
-        radialConfig: {
-          center: [gf.center.latitude, gf.center.longitude] as [number, number],
-          radiusMeters: gf.radiusMeters,
-        },
-      };
-    }
-    // No usable geofence: centre on the first capture, or show the whole map.
-    const first = located[0];
-    return {
-      mapCenter: (first ? [first.latitude, first.longitude] : [0, 0]) as [number, number],
-      mapZoom: first ? 12 : 2,
-      polylinePositions: null,
-      radialConfig: null,
-    };
-  }, [project, located]);
+  // Only a boundary that passes the shared schema is drawn; there is no made-up fallback location.
+  const geofence = useMemo<ProjectGeofence | null>(() => {
+    if (!project.geofence) return null;
+    const parsed = ProjectGeofenceSchema.safeParse(project.geofence);
+    return parsed.success ? parsed.data : null;
+  }, [project.geofence]);
+  const tolerance = Math.max(0, project.geofenceToleranceMeters ?? 0);
+  const mapBounds = useMemo(
+    () => (geofence ? paddedGeofenceBounds(geofence, tolerance) : null),
+    [geofence, tolerance]
+  );
+  const isCorridor = geofence?.mode === 'LINEAR_CORRIDOR';
 
   // Counted only over captures the server could evaluate; no data means no percentage.
   const evaluated = evidenceLogs.filter((l) => l.isWithinGeofence !== null);
   const withinCount = evaluated.filter((l) => l.isWithinGeofence === true).length;
+  const toleranceCount = evaluated.filter((l) => l.geofenceStatus === 'WITHIN_TOLERANCE').length;
   const withinPct = evaluated.length > 0 ? Math.round((withinCount / evaluated.length) * 100) : null;
   const noLocationCount = evidenceLogs.length - located.length;
   const mockCount = evidenceLogs.filter((l) => l.isMockLocation).length;
@@ -124,6 +119,30 @@ export function LiveGeospatialMap({
       (f) => f === 'DUPLICATE_PHOTO_SHA256_MATCH' || f === 'RECYCLED_PHOTO_PHASH_SIMILARITY'
     )
   ).length;
+
+  if (!geofence || !mapBounds) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm h-[44vh] min-h-[340px] flex flex-col items-center justify-center text-center px-6">
+        <MapPinOff className="w-8 h-8 text-slate-300" />
+        <div className="mt-3 text-sm font-bold text-slate-900">
+          {project.geofence ? 'The site boundary could not be read' : 'No site boundary set'}
+        </div>
+        <p className="mt-1 text-xs text-slate-500 max-w-md">
+          {project.geofence
+            ? 'The saved geofence is incomplete or invalid, so it is not drawn. Redraw it in the project settings.'
+            : 'Draw the geofence in the project settings to see the boundary and capture locations on a map.'}
+        </p>
+        <p className="mt-3 text-[11px] text-slate-400">
+          {located.length} capture{located.length === 1 ? '' : 's'} with a GPS fix
+          {noLocationCount > 0 ? ` · ${noLocationCount} without` : ''}
+        </p>
+      </div>
+    );
+  }
+
+  const selectedStatus = selectedLog
+    ? describeGeofenceStatus(selectedLog.geofenceStatus, selectedLog.isWithinGeofence, selectedLog.distanceOutsideMeters)
+    : null;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden relative h-[44vh] min-h-[340px]">
@@ -134,7 +153,7 @@ export function LiveGeospatialMap({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search chainage, WBS, reporter or caption..."
+            placeholder={isCorridor ? 'Search chainage, WBS, reporter or caption...' : 'Search WBS, reporter or caption...'}
             className="text-xs text-slate-800 placeholder-slate-400 bg-transparent focus:outline-none w-full"
           />
           {searchQuery && (
@@ -173,51 +192,14 @@ export function LiveGeospatialMap({
       </div>
 
       {/* Interactive React-Leaflet Map (Standard OpenStreetMap: Free Out-of-the-Box, Zero API Key) */}
-      <MapContainer center={mapCenter} zoom={mapZoom} scrollWheelZoom={true} className="w-full h-full z-0">
-        <MapViewportUpdater center={mapCenter} zoom={mapZoom} />
+      <MapContainer bounds={mapBounds} scrollWheelZoom={true} className="w-full h-full z-0">
+        <FitToGeofence bounds={mapBounds} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* Linear Corridor Polyline & Buffer */}
-        {polylinePositions && (
-          <>
-            <Polyline
-              positions={polylinePositions}
-              pathOptions={{
-                color: 'var(--hex-brand-primary)',
-                weight: 26,
-                opacity: 0.14,
-                lineCap: 'round',
-              }}
-            />
-            <Polyline
-              positions={polylinePositions}
-              pathOptions={{
-                color: 'var(--hex-brand-primary)',
-                weight: 3.5,
-                dashArray: '8 6',
-                opacity: 0.9,
-              }}
-            />
-          </>
-        )}
-
-        {/* Radial Geofence Circle */}
-        {radialConfig && (
-          <Circle
-            center={radialConfig.center}
-            radius={radialConfig.radiusMeters}
-            pathOptions={{
-              color: 'var(--hex-brand-primary)',
-              fillColor: 'var(--hex-brand-primary)',
-              fillOpacity: 0.1,
-              weight: 2,
-              dashArray: '6 4',
-            }}
-          />
-        )}
+        <GeofenceShapeLayers geofence={geofence} toleranceMeters={tolerance} />
 
         {/* Capture Pins */}
         {filteredLogs.map((log) => {
@@ -256,6 +238,9 @@ export function LiveGeospatialMap({
                   <div className="text-slate-600">
                     {formatReporterRoleBadge(log.reporterRoleName, log.fieldPersonaType)}
                   </div>
+                  <div className="text-slate-500">
+                    {describeGeofenceStatus(log.geofenceStatus, log.isWithinGeofence, log.distanceOutsideMeters).text}
+                  </div>
                 </div>
               </Tooltip>
             </CircleMarker>
@@ -266,29 +251,27 @@ export function LiveGeospatialMap({
       {/* Floating 3-Pod Dark Navy Callout Cluster (Bottom-Right) */}
       <div className="absolute bottom-3 right-3 z-[400] flex items-stretch gap-2.5 max-w-3xl pointer-events-auto">
         <div className="bg-brand-navy/95 backdrop-blur-md text-white rounded-xl p-3 shadow-xl border border-white/10 w-44 flex flex-col justify-between">
-          <div className="text-[10px] uppercase tracking-wider text-blue-200/70 font-semibold">
-            {project.geofenceMode === 'LINEAR_CORRIDOR' ? 'Corridor Check' : 'Radial Geofence'}
+          <div className="text-[10px] uppercase tracking-wider text-white/60 font-semibold">
+            {geofenceModeLabel(geofence.mode)}
           </div>
           <div className="my-1">
             <div className="text-lg font-bold">
               {withinPct === null ? 'No data' : `${withinPct}% Within`}
             </div>
-            <div className="text-[11px] text-blue-200/80">
-              {project.geofence.mode === 'LINEAR_CORRIDOR'
-                ? `±${project.geofence.corridorHalfWidthMeters}m Buffer Tolerance`
-                : project.geofence.mode === 'RADIAL'
-                  ? `${project.geofence.radiusMeters}m Site Radius`
-                  : 'Geofence not configured'}
+            <div className="text-[11px] text-white/70">{geofenceSizeText(geofence)}</div>
+            <div className="text-[11px] text-white/70">
+              {tolerance > 0 ? `${tolerance.toLocaleString()} m tolerance band` : 'No tolerance band'}
+              {toleranceCount > 0 ? ` · ${toleranceCount} within tolerance` : ''}
             </div>
           </div>
-          <div className="text-[10px] text-blue-200/80 font-medium">
+          <div className="text-[10px] text-white/70 font-medium">
             {located.length} with GPS fix
             {noLocationCount > 0 ? ` · ${noLocationCount} without` : ''}
           </div>
         </div>
 
         <div className="bg-brand-navy/95 backdrop-blur-md text-white rounded-xl p-3 shadow-xl border border-white/10 w-44 flex flex-col justify-between">
-          <div className="text-[10px] uppercase tracking-wider text-blue-200/70 font-semibold">
+          <div className="text-[10px] uppercase tracking-wider text-white/60 font-semibold">
             Integrity Check
           </div>
           <div className="my-1">
@@ -296,12 +279,12 @@ export function LiveGeospatialMap({
               {project.unfulfilledHoldPointCount} Hold-Point
               {project.unfulfilledHoldPointCount === 1 ? '' : 's'}
             </div>
-            <div className="text-[11px] text-blue-200/80">
+            <div className="text-[11px] text-white/70">
               {project.openConflictCount} IPC Line Conflict
               {project.openConflictCount === 1 ? '' : 's'}
             </div>
           </div>
-          <div className="text-[10px] text-blue-200/70">
+          <div className="text-[10px] text-white/60">
             {evidenceLogs.length === 0
               ? 'No captures yet'
               : `${mockCount} mock location · ${duplicateCount} duplicate photo`}
@@ -311,12 +294,12 @@ export function LiveGeospatialMap({
         {selectedLog && (
           <div className="bg-brand-navy/95 backdrop-blur-md text-white rounded-xl p-3 shadow-xl border border-white/10 w-64 flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase tracking-wider text-blue-200/80 font-semibold">
+              <span className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">
                 {selectedLog.chainageLabel || 'Site Pin'} ·{' '}
                 {selectedLog.reporterRoleName ||
                   (selectedLog.fieldPersonaType === 'INDEPENDENT_VERIFIER' ? 'Independent' : 'Contractor')}
               </span>
-              <span className="text-[10px] text-blue-200/60">
+              <span className="text-[10px] text-white/55">
                 {formatDateTimeShort(selectedLog.capturedAt)}
               </span>
             </div>
@@ -326,19 +309,15 @@ export function LiveGeospatialMap({
                   ? `WBS ${selectedLog.wbsCode}: ${selectedLog.wbsDescription ?? ''}`
                   : 'Not linked to a WBS item'}
               </div>
-              <p className="text-[11px] text-blue-100/80 line-clamp-2 mt-0.5">
+              <p className="text-[11px] text-white/80 line-clamp-2 mt-0.5">
                 {selectedLog.caption ||
                   (selectedLog.transcriptionStatus === 'DONE' ? selectedLog.transcript : null) ||
                   (selectedLog.workdayReportId
                     ? 'Linked to a submitted report'
                     : 'Not yet in a submitted report')}
               </p>
-              <p className="text-[10px] text-blue-200/80 mt-1">
-                {selectedLog.isWithinGeofence === true
-                  ? 'Inside geofence'
-                  : selectedLog.isWithinGeofence === false
-                    ? 'Outside geofence'
-                    : 'Geofence not evaluated'}
+              <p className="text-[10px] text-white/70 mt-1">
+                {selectedStatus?.text}
                 {' · '}
                 {selectedLog.signatureVerified === true
                   ? 'Signature checked'
@@ -348,7 +327,7 @@ export function LiveGeospatialMap({
                 {!selectedLog.integrityPassed ? ' · Failed integrity' : ''}
               </p>
             </div>
-            <div className="flex items-center justify-between text-[10px] text-blue-200/70 pt-1 border-t border-white/10">
+            <div className="flex items-center justify-between text-[10px] text-white/60 pt-1 border-t border-white/10">
               <span>{selectedLog.reporterName}</span>
               <span>
                 {selectedLog.gpsAccuracyMeters !== null

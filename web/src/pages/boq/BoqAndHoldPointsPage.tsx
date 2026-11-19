@@ -2,7 +2,7 @@ import React, { useRef, useState, useMemo, MouseEvent } from "react";
 import { ClipboardList, ShieldCheck, AlertTriangle, X } from "lucide-react";
 import { toast } from "sonner";
 import type { BoqItemRecordDto, ProjectSummaryDto } from "../../api/types";
-import { formatCompactNaira, formatNaira } from "../../lib/formatters";
+import { displayCurrencySymbol, formatCompactNaira, formatNaira } from "../../lib/formatters";
 import { formatReporterRoleBadge } from "../../components/EvidenceBadge";
 import { useAuth } from "../../lib/auth-context";
 import {
@@ -207,7 +207,7 @@ export function BoqAndHoldPointsPage({
     },
     {
       id: "rate",
-      header: "Rate (₦)",
+      header: `Rate (${displayCurrencySymbol()})`,
       tooltip: "Contract unit rate in Nigerian Naira",
       align: "right",
       cell: (item) => (
@@ -218,7 +218,7 @@ export function BoqAndHoldPointsPage({
     },
     {
       id: "budget",
-      header: "Budgeted Cost (₦)",
+      header: `Budgeted Cost (${displayCurrencySymbol()})`,
       tooltip: "Total budgeted cost (Quantity × Unit Rate) in Nigerian Naira",
       align: "right",
       cell: (item) => (
@@ -345,7 +345,7 @@ export function BoqAndHoldPointsPage({
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-brand-primary flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-brand-primary/5 text-brand-primary flex items-center justify-center">
               <ClipboardList className="w-4 h-4" />
             </div>
             <span className="text-[11px] font-medium text-slate-400">
@@ -457,7 +457,7 @@ export function BoqAndHoldPointsPage({
         title={
           <div className="flex items-center gap-2.5">
             <span>Baseline Bill of Quantities (BOQ) &amp; Hold-Point Schedule</span>
-            <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-blue-100 border border-white/15">
+            <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-white/90 border border-white/15">
               {boqItems.length} Items · {holdPointCount} Hold-Points · {opaqueCount} Opaque Lump Sums
             </span>
           </div>
@@ -567,7 +567,7 @@ export function BoqAndHoldPointsPage({
                   BOQ Work Item Specification
                 </span>
                 {activeDrawerItem.isHoldPoint && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-brand-primary border border-blue-200">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-brand-primary/5 text-brand-primary border border-brand-primary/25">
                     Mandatory Hold-Point
                   </span>
                 )}
@@ -613,7 +613,7 @@ export function BoqAndHoldPointsPage({
                 </div>
               </div>
               <div className="bg-white rounded-xl p-3 border border-slate-200">
-                <div className="text-[11px] text-slate-400">Unit Rate (₦)</div>
+                <div className="text-[11px] text-slate-400">Unit Rate ({displayCurrencySymbol()})</div>
                 <div className="text-sm font-bold text-slate-900 mt-0.5">
                   {formatNaira(activeDrawerItem.rateNgn)}
                 </div>
@@ -659,7 +659,7 @@ export function BoqAndHoldPointsPage({
             <div
               className={`rounded-xl p-3.5 border space-y-1.5 ${
                 activeDrawerItem.isHoldPoint
-                  ? "bg-blue-50/60 border-blue-200"
+                  ? "bg-brand-primary/5 border-brand-primary/25"
                   : "bg-slate-50 border-slate-200/80"
               }`}
             >

@@ -29,9 +29,18 @@ export function joinCodeSuffixForRole(role: { codeSuffix: string | null; code: s
   return (role.codeSuffix || fromCode || 'FLD').toUpperCase();
 }
 
+export const JOIN_CODE_INCLUDE = {
+  role: true,
+  projectContractor: { include: { organization: { select: { name: true } } } },
+} satisfies Prisma.ProjectJoinCodeInclude;
+
 /**
  * Creates a join code for a role on a project. `code` is globally unique, so a random-segment
  * collision is retried.
+ *
+ * With a contractor, the code binds sessions to that `ProjectContractor` (Phase 6). The trade code
+ * is part of the code (`{prefix}-{suffix}-{tradeCode}-{random}`) when the project has more than one
+ * contractor, so people can tell the codes apart.
  */
 export async function createJoinCode(
   db: Db,
@@ -39,33 +48,119 @@ export async function createJoinCode(
     projectId: string;
     codePrefix: string;
     role: { id: string; code: string; codeSuffix: string | null };
+    contractor?: { id: string; tradeCode: string } | null;
+    includeTradeCode?: boolean;
     expiresAt?: Date | null;
     maxUses?: number | null;
     rotatedFromId?: string | null;
   }
 ) {
   const suffix = joinCodeSuffixForRole(params.role);
+  const trade = params.contractor && params.includeTradeCode ? `${params.contractor.tradeCode}-` : '';
   for (let attempt = 0; attempt < 5; attempt++) {
-    const code = `${params.codePrefix}-${suffix}-${randomJoinCodeSegment()}`;
+    const code = `${params.codePrefix}-${suffix}-${trade}${randomJoinCodeSegment()}`;
     const clash = await db.projectJoinCode.findUnique({ where: { code }, select: { id: true } });
     if (clash) continue;
     return db.projectJoinCode.create({
       data: {
         projectId: params.projectId,
         roleId: params.role.id,
+        projectContractorId: params.contractor?.id ?? null,
         code,
         isActive: true,
         expiresAt: params.expiresAt ?? null,
         maxUses: params.maxUses ?? null,
         rotatedFromId: params.rotatedFromId ?? null,
       },
-      include: { role: true },
+      include: JOIN_CODE_INCLUDE,
     });
   }
   throw new AppError('Could not allocate a unique join code; try again', 503, 'JOIN_CODE_ALLOCATION_FAILED');
 }
 
-type JoinCodeRow = Prisma.ProjectJoinCodeGetPayload<{ include: { role: true } }>;
+type JoinCodeRow = Prisma.ProjectJoinCodeGetPayload<{ include: typeof JOIN_CODE_INCLUDE }>;
+
+type JoinCodeRole = { id: string; code: string; codeSuffix: string | null; fieldPersonaType: string };
+type FieldContractor = { id: string; tradeCode: string; allowFieldReporting: boolean };
+
+/**
+ * The codes a role needs on a project: one per field-reporting contractor for a contractor-executor
+ * role when the project has contractors, otherwise one project-wide code.
+ */
+export function joinCodeTargetsForRole(
+  role: JoinCodeRole,
+  contractors: FieldContractor[]
+): Array<{ contractor: { id: string; tradeCode: string } | null; includeTradeCode: boolean }> {
+  if (role.fieldPersonaType !== 'CONTRACTOR_EXECUTOR' || contractors.length === 0) {
+    return [{ contractor: null, includeTradeCode: false }];
+  }
+  const includeTradeCode = contractors.length > 1;
+  return contractors
+    .filter((c) => c.allowFieldReporting)
+    .map((c) => ({ contractor: { id: c.id, tradeCode: c.tradeCode }, includeTradeCode }));
+}
+
+/**
+ * Issues the missing active codes for the given roles on one project, skipping any
+ * (role, contractor) that already has an active code. Runs inside the caller's transaction.
+ */
+export async function issueMissingJoinCodes(
+  tx: Prisma.TransactionClient,
+  project: { id: string; codePrefix: string },
+  roles: JoinCodeRole[]
+) {
+  const contractors = await tx.projectContractor.findMany({
+    where: { projectId: project.id },
+    select: { id: true, tradeCode: true, allowFieldReporting: true },
+    orderBy: [{ isMainContractor: 'desc' }, { createdAt: 'asc' }],
+  });
+  const active = await tx.projectJoinCode.findMany({
+    where: { projectId: project.id, isActive: true },
+    select: { roleId: true, projectContractorId: true },
+  });
+  const has = new Set(active.map((a) => `${a.roleId}:${a.projectContractorId ?? ''}`));
+  const issued = [];
+  for (const role of roles) {
+    for (const target of joinCodeTargetsForRole(role, contractors)) {
+      if (has.has(`${role.id}:${target.contractor?.id ?? ''}`)) continue;
+      issued.push(
+        await createJoinCode(tx, {
+          projectId: project.id,
+          codePrefix: project.codePrefix,
+          role,
+          contractor: target.contractor,
+          includeTradeCode: target.includeTradeCode,
+        })
+      );
+    }
+  }
+  return issued;
+}
+
+/**
+ * Keeps contractor codes in step with the contractor list on a live project: deactivates codes of
+ * contractors whose field reporting is off and issues codes for new field-reporting contractors
+ * (for contractor roles already issued on the project).
+ */
+export async function reconcileContractorJoinCodes(
+  tx: Prisma.TransactionClient,
+  project: { id: string; tenantId: string; codePrefix: string }
+) {
+  await tx.projectJoinCode.updateMany({
+    where: { projectId: project.id, isActive: true, projectContractor: { allowFieldReporting: false } },
+    data: { isActive: false },
+  });
+  const roles = await tx.role.findMany({
+    where: {
+      tenantId: project.tenantId,
+      surface: { in: ['MOBILE', 'BOTH'] },
+      onboardingMode: 'JOIN_CODE',
+      fieldPersonaType: 'CONTRACTOR_EXECUTOR',
+      joinCodes: { some: { projectId: project.id } },
+    },
+  });
+  return issueMissingJoinCodes(tx, project, roles);
+}
 
 export function serializeJoinCode(jc: JoinCodeRow) {
   return {
@@ -79,6 +174,9 @@ export function serializeJoinCode(jc: JoinCodeRow) {
     assuranceWeight: jc.role.assuranceWeight,
     requiresIdentityAssurance: jc.role.requiresIdentityAssurance,
     roleOnboardingMode: jc.role.onboardingMode as RoleOnboardingMode,
+    projectContractorId: jc.projectContractorId,
+    contractorName: jc.projectContractor?.organization.name ?? null,
+    tradeCode: jc.projectContractor?.tradeCode ?? null,
     isActive: jc.isActive,
     expiresAt: jc.expiresAt ? jc.expiresAt.toISOString() : null,
     maxUses: jc.maxUses,
@@ -118,21 +216,21 @@ function assertRoleUsesJoinCodes(role: { name: string; onboardingMode: string })
 }
 
 /**
- * Issues one active join code per active project for a role switched back to join codes, skipping
- * projects that already have an active code for it. Runs inside the caller's transaction.
+ * Issues the missing active codes for a role switched back to join codes on every active project.
+ * Runs inside the caller's transaction.
  */
 export async function issueJoinCodesForRoleOnAllProjects(
   tx: Prisma.TransactionClient,
-  role: { id: string; code: string; codeSuffix: string | null; tenantId: string }
+  role: { id: string; code: string; codeSuffix: string | null; tenantId: string; fieldPersonaType: string }
 ) {
-  // Phase 6 adds project status; until then every project in the tenant is active.
+  // Live projects only: drafts get codes at activation, archived projects get none.
   const projects = await tx.project.findMany({
-    where: { tenantId: role.tenantId, joinCodes: { none: { roleId: role.id, isActive: true } } },
+    where: { tenantId: role.tenantId, status: 'ACTIVE' },
     select: { id: true, codePrefix: true },
   });
   const issued = [];
   for (const project of projects) {
-    issued.push(await createJoinCode(tx, { projectId: project.id, codePrefix: project.codePrefix, role }));
+    issued.push(...(await issueMissingJoinCodes(tx, project, [role])));
   }
   return issued;
 }
@@ -147,7 +245,7 @@ export async function listProjectJoinCodes(projectId: string, webUser: WebJwtPay
       projectId,
       ...(canManageAllPersonas(webUser) ? {} : { role: { fieldPersonaType: 'CONTRACTOR_EXECUTOR' } }),
     },
-    include: { role: true },
+    include: JOIN_CODE_INCLUDE,
     orderBy: [{ isActive: 'desc' }, { createdAt: 'desc' }],
   });
   return rows.map(serializeJoinCode);
@@ -160,8 +258,11 @@ export async function issueProjectJoinCode(
 ) {
   const project = await prisma.project.findUniqueOrThrow({
     where: { id: projectId },
-    select: { id: true, tenantId: true, codePrefix: true },
+    select: { id: true, tenantId: true, codePrefix: true, status: true },
   });
+  if (project.status !== 'ACTIVE') {
+    throw new AppError('Join codes are issued when the project is set active', 409, 'PROJECT_NOT_ACTIVE');
+  }
   const role = await prisma.role.findFirst({
     where: { id: input.roleId, tenantId: project.tenantId, surface: { in: ['MOBILE', 'BOTH'] } },
   });
@@ -171,11 +272,51 @@ export async function issueProjectJoinCode(
   assertRoleUsesJoinCodes(role);
   assertMayManageRole(webUser, role.fieldPersonaType);
 
+  // Contractor-executor codes bind to one contractor when the project has contractors.
+  const contractors = await prisma.projectContractor.findMany({
+    where: { projectId },
+    select: { id: true, tradeCode: true, allowFieldReporting: true, organization: { select: { name: true } } },
+  });
+  let contractor: (typeof contractors)[number] | null = null;
+  if (role.fieldPersonaType === 'CONTRACTOR_EXECUTOR' && contractors.length > 0) {
+    if (input.projectContractorId) {
+      contractor = contractors.find((c) => c.id === input.projectContractorId) ?? null;
+      if (!contractor) throw new AppError('Contractor not found on this project', 404, 'CONTRACTOR_NOT_FOUND');
+    } else if (contractors.length === 1) {
+      contractor = contractors[0];
+    } else {
+      throw new AppError('Choose which contractor this code is for', 422, 'CONTRACTOR_REQUIRED');
+    }
+    if (!contractor.allowFieldReporting) {
+      throw new AppError(
+        `Field reporting is off for ${contractor.organization.name}. Turn it on in the project's parties settings first.`,
+        409,
+        'CONTRACTOR_FIELD_REPORTING_OFF'
+      );
+    }
+  } else if (input.projectContractorId) {
+    throw new AppError('Only contractor field roles take a contractor', 422, 'CONTRACTOR_NOT_APPLICABLE');
+  }
+
+  const existingActive = await prisma.projectJoinCode.findFirst({
+    where: { projectId, roleId: role.id, projectContractorId: contractor?.id ?? null, isActive: true },
+    select: { code: true },
+  });
+  if (existingActive) {
+    throw new AppError(
+      `An active code already exists for this role${contractor ? ` and ${contractor.organization.name}` : ''} (${existingActive.code}). Rotate it instead.`,
+      409,
+      'ACTIVE_JOIN_CODE_EXISTS'
+    );
+  }
+
   const created = await prisma.$transaction(async (tx) => {
     const jc = await createJoinCode(tx, {
       projectId,
       codePrefix: project.codePrefix,
       role,
+      contractor: contractor ? { id: contractor.id, tradeCode: contractor.tradeCode } : null,
+      includeTradeCode: contractors.length > 1,
       expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
       maxUses: input.maxUses ?? null,
     });
@@ -185,11 +326,12 @@ export async function issueProjectJoinCode(
       actorId: webUser.userId,
       actorDisplayName: actorName(webUser),
       action: 'JOIN_CODE_ISSUED',
-      summaryText: `Issued join code ${jc.code} for role "${role.name}".`,
+      summaryText: `Issued join code ${jc.code} for role "${role.name}"${contractor ? ` (${contractor.organization.name})` : ''}.`,
       payload: {
         joinCodeId: jc.id,
         code: jc.code,
         roleId: role.id,
+        projectContractorId: jc.projectContractorId,
         expiresAt: jc.expiresAt?.toISOString() ?? null,
         maxUses: jc.maxUses,
       },
@@ -208,10 +350,17 @@ export async function rotateProjectJoinCode(
 ) {
   const existing = await prisma.projectJoinCode.findFirst({
     where: { id: joinCodeId, projectId },
-    include: { role: true, project: { select: { codePrefix: true } } },
+    include: {
+      role: true,
+      projectContractor: { select: { id: true, tradeCode: true } },
+      project: { select: { codePrefix: true, status: true, _count: { select: { contractors: true } } } },
+    },
   });
   if (!existing) {
     throw new AppError('Join code not found', 404, 'JOIN_CODE_NOT_FOUND');
+  }
+  if (existing.project.status !== 'ACTIVE') {
+    throw new AppError('Join codes can only be rotated on an active project', 409, 'PROJECT_NOT_ACTIVE');
   }
   assertRoleUsesJoinCodes(existing.role);
   assertMayManageRole(webUser, existing.role.fieldPersonaType);
@@ -222,6 +371,8 @@ export async function rotateProjectJoinCode(
       projectId,
       codePrefix: existing.project.codePrefix,
       role: existing.role,
+      contractor: existing.projectContractor,
+      includeTradeCode: existing.project._count.contractors > 1,
       expiresAt:
         input.expiresAt !== undefined
           ? input.expiresAt
@@ -244,6 +395,7 @@ export async function rotateProjectJoinCode(
         joinCodeId: jc.id,
         code: jc.code,
         roleId: existing.role.id,
+        projectContractorId: jc.projectContractorId,
       },
     });
     return jc;

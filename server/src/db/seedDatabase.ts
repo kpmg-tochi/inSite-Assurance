@@ -2,6 +2,7 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import {
+  DEFAULT_GEOFENCE_TOLERANCE_METERS,
   DEFAULT_TENANT_ROLES,
   LinearCorridorGeofence,
   RadialGeofence,
@@ -14,6 +15,7 @@ import { recordAuditEvent } from "../modules/audit/audit.service";
 import { provisionDefaultRoles } from "../modules/rbac/rbac.service";
 import { randomJoinCodeSegment } from "../modules/projects/joinCodes.service";
 import { evaluateGeofence } from "../utils/geofenceEvaluation";
+import { seedPhase6Projects } from "./seedPhase6";
 import { projectObjectPrefix } from "../integrations/storage.service";
 
 let activeSeedPromise: Promise<void> | null = null;
@@ -70,6 +72,7 @@ async function seedCaptures(params: {
     const geo = evaluateGeofence(
       params.geofence,
       located ? { latitude: c.latitude as number, longitude: c.longitude as number } : null,
+      DEFAULT_GEOFENCE_TOLERANCE_METERS,
     );
     const ext = c.mediaType === "VOICE_NOTE" ? "m4a" : "jpg";
     const sha = crypto.randomBytes(32).toString("hex");
@@ -92,6 +95,8 @@ async function seedCaptures(params: {
         gpsAccuracyMeters: located ? c.accuracyMeters ?? 5 : null,
         isMockLocation: false,
         isWithinGeofence: geo.isWithinGeofence,
+        geofenceStatus: geo.geofenceStatus,
+        distanceOutsideMeters: geo.distanceOutsideMeters,
         chainageKm: geo.chainageKm,
         chainageLabel: geo.chainageLabel,
         corridorOffsetMeters: geo.corridorOffsetMeters,
@@ -139,7 +144,11 @@ async function seedReportWithCaptures(params: {
 }) {
   const anchor = params.captures.find((c) => c.latitude !== null && c.longitude !== null);
   const geo = anchor
-    ? evaluateGeofence(params.geofence, { latitude: anchor.latitude as number, longitude: anchor.longitude as number })
+    ? evaluateGeofence(
+        params.geofence,
+        { latitude: anchor.latitude as number, longitude: anchor.longitude as number },
+        DEFAULT_GEOFENCE_TOLERANCE_METERS,
+      )
     : null;
   const report = await prisma.workdayReport.create({
     data: {
@@ -165,10 +174,13 @@ async function seedReportWithCaptures(params: {
             isMocked: false,
             capturedAt: params.confirmedAt.toISOString(),
             isWithinGeofence: geo.isWithinGeofence,
+            geofenceStatus: geo.geofenceStatus,
+            distanceOutsideMeters: geo.distanceOutsideMeters,
             chainageLabel: geo.chainageLabel,
             distanceFromSiteMeters: geo.distanceFromSiteMeters,
           } as unknown as Prisma.InputJsonValue)
         : Prisma.DbNull,
+      geofenceStatus: geo?.geofenceStatus ?? null,
       signatureVerified: null,
       aiCheckStatus: "SKIPPED",
       aiReasoning: "Seed fixture; no omission check ran.",
@@ -213,11 +225,13 @@ async function runSeed(): Promise<void> {
   await prisma.evidenceMedia.deleteMany();
   await prisma.fieldEvidenceLog.deleteMany();
   await prisma.boqItem.deleteMany();
+  await prisma.boqRevision.deleteMany();
   await prisma.conditionPrecedent.deleteMany();
   await prisma.facilityTranche.deleteMany();
   await prisma.fieldAgentSession.deleteMany();
   await prisma.mobileDevice.deleteMany();
   await prisma.projectJoinCode.deleteMany();
+  await prisma.projectContractor.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.userProjectAssignment.deleteMany();
   await prisma.project.deleteMany();
@@ -289,7 +303,9 @@ async function runSeed(): Promise<void> {
     data: {
       tenantId: defaultTenant.id,
       name: "KPMG Infrastructure & Project Monitoring Advisory",
-      category: "ADVISORY_MONITOR",
+      categories: ["ADVISORY_MONITOR"],
+      registrationNumber: "RC-114592",
+      contactEmail: "monitoring@insite.ng",
     },
   });
 
@@ -297,7 +313,7 @@ async function runSeed(): Promise<void> {
     data: {
       tenantId: defaultTenant.id,
       name: "InfraCredit Guarantee & Project Finance Desk",
-      category: "FINANCIER_LENDER",
+      categories: ["FINANCIER_LENDER"],
     },
   });
 
@@ -305,7 +321,8 @@ async function runSeed(): Promise<void> {
     data: {
       tenantId: defaultTenant.id,
       name: "Julius & Sons Civil Engineering Nigeria Ltd",
-      category: "CONTRACTOR",
+      categories: ["CONTRACTOR"],
+      registrationNumber: "RC-338210",
     },
   });
 
@@ -444,9 +461,25 @@ async function runSeed(): Promise<void> {
       portfolioHealth: "EVIDENCE_CONFLICT",
       monitorOrganizationId: monitorOrg.id,
       lenderOrganizationId: lenderOrg.id,
-      contractorOrganizationId: contractorOrg.id,
+      // Phase 6: live, single contractor.
+      status: "ACTIVE",
+      activatedAt: new Date(Date.now() - 60 * 24 * 3600 * 1000),
+      createdByUserId: monitorUser.id,
+      activatedByUserId: monitorUser.id,
+      contractorExecutionMode: "SINGLE_CONTRACTOR",
+      contractors: {
+        create: {
+          organizationId: contractorOrg.id,
+          tradeCategory: "Civil works",
+          tradeCode: "CIV",
+          isMainContractor: true,
+          allowFieldReporting: true,
+        },
+      },
     },
+    include: { contractors: true },
   });
+  const lkkContractorId = lkkProject.contractors[0].id;
 
   const lkkJoinCow = await prisma.projectJoinCode.create({
     data: {
@@ -460,6 +493,7 @@ async function runSeed(): Promise<void> {
     data: {
       projectId: lkkProject.id,
       roleId: contractorEngineerMobileRole.id,
+      projectContractorId: lkkContractorId,
       code: `LKK-402-CON-${randomJoinCodeSegment()}`,
     },
   });
@@ -662,6 +696,7 @@ async function runSeed(): Promise<void> {
     data: {
       projectId: lkkProject.id,
       joinCodeId: lkkJoinCon.id,
+      projectContractorId: lkkContractorId,
       roleId: contractorEngineerMobileRole.id,
       roleNameSnapshot: contractorEngineerMobileRole.name,
       fieldPersonaType: contractorEngineerMobileRole.fieldPersonaType,
@@ -689,6 +724,7 @@ async function runSeed(): Promise<void> {
     data: {
       projectId: lkkProject.id,
       joinCodeId: lkkJoinCon.id,
+      projectContractorId: lkkContractorId,
       roleId: contractorEngineerMobileRole.id,
       roleNameSnapshot: contractorEngineerMobileRole.name,
       fieldPersonaType: contractorEngineerMobileRole.fieldPersonaType,
@@ -775,6 +811,7 @@ async function runSeed(): Promise<void> {
     data: {
       projectId: lkkProject.id,
       trancheId: lkkTranche2.id,
+      projectContractorId: lkkContractorId,
       ipcNumber: 2,
       periodStart: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30),
       periodEnd: new Date(),
@@ -1339,14 +1376,30 @@ async function runSeed(): Promise<void> {
       portfolioHealth: "EVIDENCE_SUPPORTED",
       monitorOrganizationId: monitorOrg.id,
       lenderOrganizationId: lenderOrg.id,
-      contractorOrganizationId: contractorOrg.id,
+      status: "ACTIVE",
+      activatedAt: new Date(Date.now() - 120 * 24 * 3600 * 1000),
+      createdByUserId: monitorUser.id,
+      activatedByUserId: monitorUser.id,
+      contractorExecutionMode: "SINGLE_CONTRACTOR",
+      contractors: {
+        create: {
+          organizationId: contractorOrg.id,
+          tradeCategory: "Civil and electrical works",
+          tradeCode: "GEN",
+          isMainContractor: true,
+          allowFieldReporting: true,
+        },
+      },
     },
+    include: { contractors: true },
   });
+  const abjContractorId = abjProject.contractors[0].id;
 
   await prisma.projectJoinCode.create({
     data: {
       projectId: abjProject.id,
       roleId: contractorEngineerMobileRole.id,
+      projectContractorId: abjContractorId,
       code: `ABJ-108-CON-${randomJoinCodeSegment()}`,
     },
   });
@@ -1547,6 +1600,19 @@ async function runSeed(): Promise<void> {
     summaryText:
       "Established baseline for Idu Industrial Park 15MW Solar & Substation (ABJ-108) with 350m Radial Geofence.",
     payload: { codePrefix: "ABJ-108", budgetNgn: 4200000000 },
+  });
+
+  await seedPhase6Projects({
+    tenantId: defaultTenant.id,
+    monitorOrgId: monitorOrg.id,
+    lenderOrgId: lenderOrg.id,
+    civilContractorOrgId: contractorOrg.id,
+    monitorUserId: monitorUser.id,
+    contractorUserId: contractorUser.id,
+    contractorRoleId: contractorRole.id,
+    passwordHash: defaultPasswordHash,
+    residentRole: residentCowMobileRole,
+    contractorEngineerRole: contractorEngineerMobileRole,
   });
 
   console.log("✅ Seed complete!");

@@ -10,7 +10,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "InSite Assurance requires high-accuracy GPS to verify site presence, corridor chainage, and report submission location."
+          "locationWhenInUsePermission": "InSite Assurance requires high-accuracy GPS to verify site presence and the location of site evidence and reports."
         }
       ],
       "expo-audio",
@@ -34,7 +34,7 @@
       "infoPlist": {
         "NSCameraUsageDescription": "InSite Assurance requires live camera access to capture geotagged construction site evidence.",
         "NSMicrophoneUsageDescription": "InSite Assurance requires microphone access to record English and Nigerian Pidgin site voice logs.",
-        "NSLocationWhenInUseUsageDescription": "InSite Assurance requires high-accuracy GPS to verify corridor chainage and site geofence compliance."
+        "NSLocationWhenInUseUsageDescription": "InSite Assurance requires high-accuracy GPS to verify site presence and the location of site evidence and reports."
       }
     },
     "android": {

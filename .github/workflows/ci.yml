@@ -37,9 +37,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The lock file is written by npm 11; npm 10 (Node 22) rejects it. Keep CI on the
+      # version in .nvmrc so CI, Render and local installs use the same npm major.
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install

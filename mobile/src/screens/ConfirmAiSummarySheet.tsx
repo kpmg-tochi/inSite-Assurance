@@ -22,6 +22,7 @@ import { useSubmitWorkdayReportMutation } from '../queries/wbs/useWbsQueries';
 import { REPORT_LOW_GPS_ACCURACY_METERS } from '@insite/shared';
 import {
   acquireFix,
+  geofenceBadgeText,
   previewGeofence,
   type GeofencePreview,
   type LocationFix,
@@ -31,6 +32,13 @@ import { ReportAlreadySubmittedError } from '../storage/reportStore';
 import { StorageUnavailableError } from '../storage/db/database';
 import { VoiceNoteRecorder, formatDurationMs, type VoiceRecordingResult } from '../components/audio';
 import type { RootStackParamList } from '../navigation/types';
+
+/** " (63 m outside the boundary)" when the preview measured a distance outside it. */
+function outsideBy(preview: GeofencePreview): string {
+  return preview.distanceOutsideMeters != null
+    ? ` (${Math.round(preview.distanceOutsideMeters)} m outside the boundary)`
+    : '';
+}
 
 /**
  * The end-of-period report (owner rule 2026-11-19): one per WBS item and period, built from the
@@ -77,7 +85,7 @@ export const ConfirmAiSummarySheet: React.FC = () => {
     } finally {
       setLoadingGps(false);
     }
-  }, []);
+  }, [projectId]);
 
   useEffect(() => {
     void refreshFix();
@@ -162,11 +170,13 @@ export const ConfirmAiSummarySheet: React.FC = () => {
     ? 'No GPS location yet. A location is required to submit. Move to open sky and tap Refresh.'
     : fix.isMocked
       ? 'Mock location detected. The report will be flagged for review.'
-      : preview?.isWithinGeofence === false
-        ? 'Outside the project geofence (checked again by the server).'
-        : preview?.isWithinGeofence === true
-          ? `Inside the project geofence${preview.chainageLabel ? ` at ${preview.chainageLabel}` : ''} (checked again by the server).`
-          : 'Geofence not available on this device; the server will check it.';
+      : preview?.status === 'OUTSIDE'
+        ? `Outside the project geofence${outsideBy(preview)} (checked again by the server).`
+        : preview?.status === 'WITHIN_TOLERANCE'
+          ? `${geofenceBadgeText(preview.status, preview.distanceOutsideMeters)} (checked again by the server).`
+          : preview?.status === 'INSIDE'
+            ? `Inside the project geofence${preview.chainageLabel ? ` at ${preview.chainageLabel}` : ''} (checked again by the server).`
+            : 'Geofence not available on this device; the server will check it.';
 
   return (
     <View style={styles.container}>
@@ -305,7 +315,7 @@ export const ConfirmAiSummarySheet: React.FC = () => {
                 <Text
                   style={[
                     styles.gpsStatusText,
-                    !fix || fix.isMocked || preview?.isWithinGeofence === false ? styles.gpsWarnText : styles.gpsOkText,
+                    !fix || fix.isMocked || preview?.status === 'OUTSIDE' ? styles.gpsWarnText : styles.gpsOkText,
                   ]}
                 >
                   {gpsLine}

@@ -8,7 +8,7 @@ import {
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
-import { evaluateGeofence } from '../../utils/geofenceEvaluation';
+import { evaluateProjectGeofence } from '../../utils/geofenceEvaluation';
 import { verifyDeviceSignature } from '../../utils/deviceSignature';
 
 const CHUNK_SIZE = 200;
@@ -29,7 +29,13 @@ export async function recordTelemetryBatch(params: {
   const [project, session] = await Promise.all([
     prisma.project.findUnique({
       where: { id: params.projectId },
-      select: { id: true, geofenceGeoJson: true, tenant: { select: { timezone: true } } },
+      select: {
+        id: true,
+        geofenceGeoJson: true,
+        geofenceToleranceMeters: true,
+        timezone: true,
+        tenant: { select: { timezone: true, defaultGeofenceToleranceMeters: true } },
+      },
     }),
     prisma.fieldAgentSession.findUniqueOrThrow({
       where: { id: params.fieldSessionId },
@@ -39,7 +45,7 @@ export async function recordTelemetryBatch(params: {
   if (!project) throw new AppError('Project not found', 404);
 
   const rows: Prisma.SiteTelemetryPingCreateManyInput[] = params.input.pings.map((ping) => {
-    const evaluation = evaluateGeofence(project.geofenceGeoJson, ping);
+    const evaluation = evaluateProjectGeofence(project, ping);
     const signature = verifyDeviceSignature({
       publicKey: session.devicePublicKey,
       alg: session.devicePublicKeyAlg,
@@ -66,6 +72,8 @@ export async function recordTelemetryBatch(params: {
       altitudeMeters: ping.altitudeMeters ?? null,
       isMocked: ping.isMocked,
       isWithinGeofence: evaluation.isWithinGeofence,
+      geofenceStatus: evaluation.geofenceStatus,
+      distanceOutsideMeters: evaluation.distanceOutsideMeters,
       chainageLabel: evaluation.chainageLabel,
       distanceMeters: evaluation.distanceFromSiteMeters,
       pingSource: ping.pingSource,
@@ -203,6 +211,8 @@ export async function listProjectTelemetryPings(params: {
     altitudeMeters: r.altitudeMeters,
     isMocked: r.isMocked,
     isWithinGeofence: r.isWithinGeofence,
+    geofenceStatus: r.geofenceStatus ?? null,
+    distanceOutsideMeters: r.distanceOutsideMeters ?? null,
     chainageLabel: r.chainageLabel,
     distanceMeters: r.distanceMeters,
     pingSource: r.pingSource as SiteTelemetryPingDto['pingSource'],

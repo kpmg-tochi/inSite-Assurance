@@ -131,7 +131,7 @@ before(async () => {
       geofenceGeoJson: { mode: 'RADIAL', center: { latitude: 6.5, longitude: 3.4 }, radiusMeters: 500 },
       monitorOrganizationId: lkk.monitorOrganizationId,
       lenderOrganizationId: lkk.lenderOrganizationId,
-      contractorOrganizationId: lkk.contractorOrganizationId,
+      status: 'ACTIVE',
     },
   });
   ids.unassignedA = unassigned.id;
@@ -162,7 +162,11 @@ before(async () => {
       geofenceGeoJson: { mode: 'RADIAL', center: { latitude: 4.8, longitude: 7.0 }, radiusMeters: 500 },
       monitorOrganizationId: orgB.id,
       lenderOrganizationId: orgB.id,
-      contractorOrganizationId: orgB.id,
+      status: 'ACTIVE',
+      contractorExecutionMode: 'SINGLE_CONTRACTOR',
+      contractors: {
+        create: { organizationId: orgB.id, tradeCategory: 'General works', tradeCode: 'GEN', isMainContractor: true },
+      },
     },
   });
   ids.projectB = projectB.id;
@@ -293,7 +297,13 @@ describe('Phase 2 route security', { concurrency: false }, () => {
       const res = await request(app).get('/api/v1/projects').set(bearer(contractor));
       assert.equal(res.status, 200);
       const codes = res.body.data.map((p: { id: string }) => p.id).sort();
-      assert.deepEqual(codes, [ids.abj, ids.lkk].sort());
+      // Assigned, live projects only (Phase 6 seeds more; drafts never appear here).
+      const assigned = await prisma.project.findMany({
+        where: { status: { not: 'DRAFT' }, userAssignments: { some: { user: { email: 'contractor@insite.ng' } } } },
+        select: { id: true },
+      });
+      assert.ok(codes.includes(ids.abj) && codes.includes(ids.lkk));
+      assert.deepEqual(codes, assigned.map((p) => p.id).sort());
     });
 
     it('refuses a field agent on every project-scoped route of another project', async () => {
@@ -600,10 +610,20 @@ describe('Phase 2 route security', { concurrency: false }, () => {
     it('enforces maxUses and rotation', async () => {
       const monitor = await login('monitor@insite.ng');
       const role = await prisma.role.findFirstOrThrow({ where: { tenantId: ids.tenantA, code: 'INDEPENDENT_RESIDENT' } });
-      const issued = await request(app)
+      // Phase 6: one active code per (project, role, contractor); a second one is refused.
+      const duplicate = await request(app)
         .post(`/api/v1/projects/${ids.lkk}/join-codes`)
         .set(bearer(monitor))
         .send({ roleId: role.id, maxUses: 1 });
+      assert.equal(duplicate.status, 409, JSON.stringify(duplicate.body));
+      assert.equal(duplicate.body.error.code, 'ACTIVE_JOIN_CODE_EXISTS');
+      const current = await prisma.projectJoinCode.findFirstOrThrow({
+        where: { projectId: ids.lkk, roleId: role.id, isActive: true },
+      });
+      const issued = await request(app)
+        .post(`/api/v1/projects/${ids.lkk}/join-codes/${current.id}/rotate`)
+        .set(bearer(monitor))
+        .send({ maxUses: 1 });
       assert.equal(issued.status, 201, JSON.stringify(issued.body));
       assert.match(issued.body.data.code, /^LKK-402-COW-[0-9A-HJKMNP-TV-Z]{6}$/);
 

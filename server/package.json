@@ -15,8 +15,8 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
     "test": "npm run test:unit && npm run test:routes",
-    "test:unit": "tsx --test src/tests/rbac.phase1.test.ts src/tests/boq.parser.test.ts src/tests/reconciliation.phase3.test.ts",
-    "test:routes": "tsx --test --test-concurrency=1 src/tests/routes.phase2.test.ts src/tests/routes.phase3.test.ts src/tests/routes.phase4.test.ts src/tests/routes.phase5.test.ts"
+    "test:unit": "tsx --test src/tests/rbac.phase1.test.ts src/tests/boq.parser.test.ts src/tests/reconciliation.phase3.test.ts src/tests/geofence.phase6.test.ts",
+    "test:routes": "tsx --test --test-concurrency=1 src/tests/routes.phase2.test.ts src/tests/routes.phase3.test.ts src/tests/routes.phase4.test.ts src/tests/routes.phase5.test.ts src/tests/routes.phase6.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.726.0",

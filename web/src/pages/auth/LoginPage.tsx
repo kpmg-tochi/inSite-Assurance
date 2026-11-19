@@ -79,11 +79,6 @@ export function LoginPage() {
               className="flex items-center gap-3 hover:opacity-90 transition"
             >
               <div className="bg-white rounded-xl px-2.5 py-1.5 flex items-center justify-center shadow-sm">
-                {/* <img
-                  src="/KPMG-logo.svg"
-                  alt="KPMG"
-                  className="h-5 w-auto object-contain"
-                /> */}
                 <InSiteLogo />
               </div>
               <div className="h-4 w-px bg-white/25" />
@@ -94,19 +89,19 @@ export function LoginPage() {
             <div className="flex items-center gap-2">
               <Link
                 to="/"
-                className="text-[11px] font-medium text-blue-100/85 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 transition"
+                className="text-[11px] font-medium text-white/85 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 transition"
               >
                 Overview
               </Link>
               <Link
                 to="/about"
-                className="text-[11px] font-medium text-blue-100/85 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 transition"
+                className="text-[11px] font-medium text-white/85 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 transition"
               >
                 Specification
               </Link>
               <Link
                 to="/mobile-app"
-                className="text-[11px] font-medium text-blue-100/85 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 transition"
+                className="text-[11px] font-medium text-white/85 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 transition"
               >
                 Mobile App
               </Link>
@@ -115,13 +110,13 @@ export function LoginPage() {
 
           {/* Hero Copy */}
           <div className="mt-4 max-w-xl z-10">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-200 mb-1.5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/75 mb-1.5">
               Capital Project Governance
             </div>
             <h1 className="text-2xl xl:text-3xl font-bold leading-tight tracking-tight">
               Closing the Physical-to-Financial Assurance Gap.
             </h1>
-            <p className="text-xs xl:text-sm text-blue-100/85 mt-2 leading-relaxed">
+            <p className="text-xs xl:text-sm text-white/85 mt-2 leading-relaxed">
               Independent geospatial corridor verification, voice-to-BOQ
               extraction, and automated Interim Payment Certificate
               reconciliation for infrastructure lenders and monitors.
@@ -134,7 +129,7 @@ export function LoginPage() {
             <div className="w-[82%] bg-brand-navy/70 backdrop-blur-md border border-white/20 rounded-2xl p-4 shadow-2xl">
               <div className="flex items-center justify-between mb-2.5">
                 <div>
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-200/80">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">
                     Example corridor geofence (illustration)
                   </div>
                   <div className="text-xs font-bold text-white mt-0.5">
@@ -190,7 +185,7 @@ export function LoginPage() {
                 </div>
 
                 {/* Pin 2: Active KM 14+210 Culvert Hold-Point */}
-                <div className="absolute left-[46%] top-[40%] z-20 flex items-center gap-1.5 bg-brand-primary/95 backdrop-blur-sm border border-blue-300/40 px-2.5 py-1 rounded-lg shadow-lg">
+                <div className="absolute left-[46%] top-[40%] z-20 flex items-center gap-1.5 bg-brand-primary/95 backdrop-blur-sm border border-brand-primary/30 px-2.5 py-1 rounded-lg shadow-lg">
                   <span className="w-2.5 h-2.5 rounded-full bg-brand-sky animate-pulse" />
                   <span className="text-[10px] text-white font-bold">
                     KM 14+210 · WBS 02.03.1
@@ -198,7 +193,7 @@ export function LoginPage() {
                 </div>
 
                 {/* Bottom Telemetry Strip inside Map Preview */}
-                <div className="absolute bottom-2 left-2.5 right-2.5 z-20 flex items-center justify-between text-[10px] text-blue-200/80 bg-brand-navy/75 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/10">
+                <div className="absolute bottom-2 left-2.5 right-2.5 z-20 flex items-center justify-between text-[10px] text-white/70 bg-brand-navy/75 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/10">
                   <span>Example GPS fix · ±3.4m</span>
                   <span>±150m Corridor Buffer</span>
                 </div>
@@ -218,7 +213,7 @@ export function LoginPage() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-brand-primary border border-blue-400/30 flex items-center justify-center shrink-0 shadow">
+                  <div className="w-8 h-8 rounded-lg bg-brand-primary border border-brand-primary/30 flex items-center justify-center shrink-0 shadow">
                     <Play className="w-3.5 h-3.5 text-white fill-white ml-0.5" />
                   </div>
                   <div className="flex-1 flex items-center gap-1 h-7">
@@ -263,10 +258,9 @@ export function LoginPage() {
           </div>
 
           {/* Bottom Footer Bar */}
-          <div className="flex items-center justify-between text-[11px] text-blue-100/75 pt-2 border-t border-white/10 z-10">
+          <div className="flex items-center justify-between text-[11px] text-white/75 pt-2 border-t border-white/10 z-10">
             <span>
-              Active Pilot Corridors: LKK-402 Lekki–Epe (₦14.5B) · ABJ-108 Abuja
-              Idu Solar (₦4.2B)
+              Field evidence and disbursement reconciliation
             </span>
             <span>QSRBN · COREN · ICAN</span>
           </div>
@@ -350,7 +344,7 @@ export function LoginPage() {
 
               {/* Selected account summary card */}
               {demoAccounts[selectedRoleIdx] && (
-                <div className="mt-2.5 p-2.5 rounded-xl bg-blue-50/40 border border-blue-100/80 flex items-center justify-between text-xs">
+                <div className="mt-2.5 p-2.5 rounded-xl bg-brand-primary/5 border border-brand-primary/15 flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2.5">
                     <div className="w-7 h-7 rounded-full bg-brand-primary text-white text-xs font-bold flex items-center justify-center shrink-0 shadow-sm">
                       {demoAccounts[selectedRoleIdx].initials}
@@ -364,7 +358,7 @@ export function LoginPage() {
                       </div>
                     </div>
                   </div>
-                  <span className="text-[10px] font-semibold text-brand-primary bg-white px-2 py-0.5 rounded border border-blue-200 shrink-0">
+                  <span className="text-[10px] font-semibold text-brand-primary bg-white px-2 py-0.5 rounded border border-brand-primary/25 shrink-0">
                     {demoAccounts[selectedRoleIdx].credential}
                   </span>
                 </div>
@@ -375,7 +369,7 @@ export function LoginPage() {
 
         {/* Bottom Copyright Footer */}
         <div className="text-[11px] text-slate-400 flex items-center justify-between max-w-md w-full mx-auto pt-4">
-          <span>&copy; 2026 KPMG Advisory Services. All rights reserved.</span>
+          <span>&copy; 2026 InSite Assurance</span>
           <span className="text-slate-400">Pilot</span>
         </div>
       </div>

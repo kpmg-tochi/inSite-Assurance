@@ -6,12 +6,15 @@ import Svg, {
   LinearGradient,
   Stop,
 } from "react-native-svg";
+import { useActiveBranding } from "../../context/ProfileContext";
 
 const { width, height } = Dimensions.get("screen");
 
 export const BrandGradient = () => {
+  // Base colour is the tenant's primary once the tenant is known; neutral InSite default before.
+  const { primaryColor } = useActiveBranding();
   const colors = {
-    solidBackground: "#00338D",
+    solidBackground: primaryColor,
     leftGradient: { start: "#00B8F5", stop: "#1E49E2" },
     rightGradient: { start: "#7213EA", stop: "#00B8F5" },
     bottomGradientEnd: { start: "#0C233C", stop: "#0C233C" },

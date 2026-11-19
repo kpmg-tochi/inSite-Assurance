@@ -13,6 +13,7 @@ import { formatDateTimeShort, formatNaira } from "../lib/formatters";
 import { EvidenceBadge, formatReporterRoleBadge, ratingTone } from "./EvidenceBadge";
 import { useAuth } from "../lib/auth-context";
 import Drawer from "./Drawer";
+import { describeGeofenceStatus, GEOFENCE_TONE_CHIP } from "./geofence/geofenceStatus";
 
 interface EvidenceOverlayDrawerProps {
   projectId: string;
@@ -34,7 +35,7 @@ const RULE_CAP_TEXT: Record<string, string> = {
 
 export const QUERY_STATUS_CHIP: Record<QueryStatus, string> = {
   OPEN: "bg-amber-100 text-amber-800",
-  RESPONDED: "bg-sky-100 text-sky-800",
+  RESPONDED: "bg-brand-sky/20 text-brand-medium",
   RESOLVED: "bg-emerald-100 text-emerald-800",
 };
 
@@ -42,6 +43,16 @@ export const QUERY_STATUS_CHIP: Record<QueryStatus, string> = {
 function EvidenceCard({ projectId, item }: { projectId: string; item: ProvidedEvidenceItem }) {
   const voice = item.media.filter((m) => m.mediaType === "VOICE_NOTE");
   const photos = item.media.filter((m) => m.mediaType === "SITE_PHOTO");
+  // The item carries the worst status; the distance comes from its captures within tolerance.
+  const toleranceDistances = item.media
+    .filter((m) => m.geofenceStatus === "WITHIN_TOLERANCE" && typeof m.distanceOutsideMeters === "number")
+    .map((m) => m.distanceOutsideMeters as number);
+  const geofenceDisplay = describeGeofenceStatus(
+    item.geofenceStatus,
+    item.isWithinGeofence,
+    toleranceDistances.length > 0 ? Math.max(...toleranceDistances) : null,
+    "Location unknown",
+  );
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2 text-xs">
       <div className="flex items-start justify-between gap-2">
@@ -55,19 +66,9 @@ function EvidenceCard({ projectId, item }: { projectId: string; item: ProvidedEv
           </div>
         </div>
         <span
-          className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-            item.isWithinGeofence === true
-              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-              : item.isWithinGeofence === false
-                ? "bg-rose-50 text-rose-700 border-rose-200"
-                : "bg-slate-50 text-slate-600 border-slate-200"
-          }`}
+          className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${GEOFENCE_TONE_CHIP[geofenceDisplay.tone]}`}
         >
-          {item.isWithinGeofence === true
-            ? "Inside geofence"
-            : item.isWithinGeofence === false
-              ? "Outside geofence"
-              : "Location unknown"}
+          {geofenceDisplay.text}
         </span>
       </div>
 
@@ -387,24 +388,35 @@ export function EvidenceOverlayDrawer({
                 <MapPin className="w-3.5 h-3.5 text-brand-primary" />
                 Workday report geotag ({latestWorkdayReport.workdayDate})
               </span>
-              <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                  !latestWorkdayReport.submissionGeotag
-                    ? "bg-amber-50 text-amber-800 border-amber-200"
-                    : latestWorkdayReport.submissionGeotag.isMocked ||
-                        latestWorkdayReport.submissionGeotag.isWithinGeofence === false
-                      ? "bg-rose-50 text-rose-700 border-rose-200"
-                      : "bg-emerald-50 text-emerald-800 border-emerald-200"
-                }`}
-              >
-                {!latestWorkdayReport.submissionGeotag
-                  ? "No GPS"
-                  : latestWorkdayReport.submissionGeotag.isMocked
-                    ? "Mock GPS"
-                    : latestWorkdayReport.submissionGeotag.isWithinGeofence === false
-                      ? "Off-Site"
-                      : "On-Site"}
-              </span>
+              {(() => {
+                const geotag = latestWorkdayReport.submissionGeotag;
+                const status = geotag
+                  ? describeGeofenceStatus(geotag.geofenceStatus, geotag.isWithinGeofence, geotag.distanceOutsideMeters)
+                  : null;
+                return (
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                      !geotag
+                        ? "bg-amber-50 text-amber-800 border-amber-200"
+                        : geotag.isMocked || status?.tone === "outside"
+                          ? "bg-rose-50 text-rose-700 border-rose-200"
+                          : status?.tone === "tolerance"
+                            ? GEOFENCE_TONE_CHIP.tolerance
+                            : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    }`}
+                  >
+                    {!geotag
+                      ? "No GPS"
+                      : geotag.isMocked
+                        ? "Mock GPS"
+                        : status?.tone === "outside"
+                          ? "Off-Site"
+                          : status?.tone === "tolerance"
+                            ? status.text
+                            : "On-Site"}
+                  </span>
+                );
+              })()}
             </div>
             {latestWorkdayReport.submissionGeotag ? (
               <p className="text-[11px] font-mono text-slate-600">

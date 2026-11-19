@@ -1,4 +1,5 @@
 import {
+  calendarDateInTimeZone,
   GenerateMorningBriefRequest,
   MorningDeliverableBriefDto,
   PlanningTier,
@@ -7,10 +8,14 @@ import { prisma } from '../../config/prisma';
 import { azureOpenAiService } from '../../integrations/azure-openai.service';
 import { AppError } from '../../middleware/error.middleware';
 
-export function getTodayWatDateString(): string {
-  // Africa/Lagos is UTC+1 year-round
-  const watNow = new Date(Date.now() + 60 * 60 * 1000);
-  return watNow.toISOString().slice(0, 10);
+/** Today's calendar date (YYYY-MM-DD) in an IANA zone; the project's zone defines its day. */
+export function getTodayDateString(timeZone: string): string {
+  return calendarDateInTimeZone(new Date(), timeZone);
+}
+
+async function projectTimeZone(projectId: string): Promise<string> {
+  const p = await prisma.project.findUnique({ where: { id: projectId }, select: { timezone: true } });
+  return p?.timezone ?? 'Africa/Lagos';
 }
 
 function mapBriefToDto(row: any): MorningDeliverableBriefDto {
@@ -47,7 +52,7 @@ export async function generateOrGetMorningBriefForBoqItem(params: {
   boqItemId: string;
   input?: GenerateMorningBriefRequest;
 }): Promise<MorningDeliverableBriefDto> {
-  const workdayDate = params.input?.workdayDate || getTodayWatDateString();
+  const workdayDate = params.input?.workdayDate || getTodayDateString(await projectTimeZone(params.projectId));
 
   const existing = await prisma.morningDeliverableBrief.findUnique({
     where: {
@@ -144,8 +149,9 @@ export async function generateOrGetMorningBriefForBoqItem(params: {
  */
 export async function generateDailyDispatchForProject(
   projectId: string,
-  workdayDate = getTodayWatDateString()
+  workdayDateInput?: string
 ): Promise<MorningDeliverableBriefDto[]> {
+  const workdayDate = workdayDateInput || getTodayDateString(await projectTimeZone(projectId));
   const boqItems = await prisma.boqItem.findMany({
     where: {
       projectId,
@@ -189,7 +195,7 @@ export async function listMorningBriefsForProject(params: {
   projectId: string;
   workdayDate?: string;
 }): Promise<MorningDeliverableBriefDto[]> {
-  const workdayDate = params.workdayDate || getTodayWatDateString();
+  const workdayDate = params.workdayDate || getTodayDateString(await projectTimeZone(params.projectId));
 
   const rows = await prisma.morningDeliverableBrief.findMany({
     where: {

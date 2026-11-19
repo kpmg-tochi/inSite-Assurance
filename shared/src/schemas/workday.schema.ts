@@ -3,6 +3,7 @@ import {
   TranscriptionStatusEnum,
   WorkdayAiCheckStatusEnum,
   WorkdayReportStatusEnum,
+  GeofenceStatusEnum,
 } from '../enums';
 import { CaptureDtoSchema, DeviceSignatureSchema, ExtractedQuantityItemSchema } from './evidence.schema';
 import { CALENDAR_DATE_REGEX } from '../utils/time';
@@ -30,6 +31,11 @@ export type SubmissionGeotagInput = z.infer<typeof SubmissionGeotagInputSchema>;
 /** Stored and returned geotag: input plus the server's geofence result. */
 export const SubmissionGeotagSchema = SubmissionGeotagInputSchema.extend({
   isWithinGeofence: z.boolean().nullable(),
+  /** INSIDE, WITHIN_TOLERANCE or OUTSIDE (Phase 6); null when not evaluated. */
+  geofenceStatus: GeofenceStatusEnum.nullable().optional(),
+  /** Metres outside the boundary; 0 inside. */
+  distanceOutsideMeters: z.number().nullable().optional(),
+
   chainageLabel: z.string().nullable(),
   distanceFromSiteMeters: z.number().nonnegative().nullable(),
 });

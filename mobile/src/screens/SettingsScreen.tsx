@@ -14,7 +14,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import KpmgLogo from "../../assets/KPMG-logo.svg";
+import { BrandLogo } from "../components/common/BrandLogo";
 import { Pill } from "../components/common";
 import Avatar from "../components/common/Avatar";
 import { GradientHeaderLayout } from "../components/common/GradientHeaderLayout";
@@ -154,7 +154,7 @@ export const SettingsScreen: React.FC = () => {
       title="Settings"
       subtitle="Manage your field profile and device preferences."
       leftAction={<BackButton onPress={() => navigation.goBack()} />}
-      rightAction={<KpmgLogo height={56} width={56} color="#fff" />}
+      rightAction={<BrandLogo size={56} />}
       contentContainerStyle={{
         ...styles.body,
         paddingBottom: Math.max(insets.bottom + 24, 32),
