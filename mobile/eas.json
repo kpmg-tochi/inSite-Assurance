@@ -1,0 +1,46 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "development",
+        "EXPO_PUBLIC_DEMO_MODE": "false"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "APP_VARIANT": "preview",
+        "EXPO_PUBLIC_DEMO_MODE": "false",
+        "EXPO_PUBLIC_API_BASE_URL": "https://SET-STAGING-API-HOST.invalid/api/v1"
+      }
+    },
+    "demo": {
+      "extends": "preview",
+      "env": {
+        "APP_VARIANT": "demo",
+        "EXPO_PUBLIC_DEMO_MODE": "true",
+        "EXPO_PUBLIC_API_BASE_URL": "https://SET-DEMO-API-HOST.invalid/api/v1"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "production",
+        "EXPO_PUBLIC_DEMO_MODE": "false",
+        "EXPO_PUBLIC_API_BASE_URL": "https://SET-PRODUCTION-API-HOST.invalid/api/v1"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

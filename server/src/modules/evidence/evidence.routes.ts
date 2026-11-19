@@ -1,25 +1,13 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { guardProjectRoutes, projectIdForFieldWrite } from '../../utils/accessControl';
+import { guardProjectRoutes } from '../../utils/accessControl';
 import { z } from 'zod';
-import {
-  ConfirmEvidenceLogRequestSchema,
-  MediaTypeEnum,
-  SubmitEvidenceForExtractionRequestSchema,
-} from '@insite/shared';
-import {
-  requireAnyAuth,
-  requireFieldSession,
-  requirePermission,
-} from '../../middleware/auth.middleware';
+import { MediaTypeEnum } from '@insite/shared';
+import { requireAnyAuth, requirePermission } from '../../middleware/auth.middleware';
 import { presignRateLimit } from '../../middleware/rateLimit.middleware';
 import { validateBody } from '../../middleware/validate.middleware';
 import { assertProjectObjectKey, storageService } from '../../integrations/storage.service';
 import { prisma } from '../../config/prisma';
-import {
-  confirmEvidenceLogByAgent,
-  listProjectEvidenceTimeline,
-  submitEvidenceForAiExtraction,
-} from './evidence.service';
+import { listProjectCaptures } from './evidence.service';
 
 const router = guardProjectRoutes(Router());
 
@@ -39,8 +27,8 @@ async function projectTenantId(projectId: string): Promise<string> {
 }
 
 /**
- * GET /api/v1/projects/:projectId/evidence
- * Returns chronological Field Evidence Timeline for Web Portal & Mobile App.
+ * GET /api/v1/projects/:projectId/evidence?wbsItemId=&workdayReportId=
+ * Every registered capture with its server-computed integrity results, newest first.
  */
 router.get(
   '/:projectId/evidence',
@@ -48,8 +36,12 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const projectId = String(req.params.projectId);
-      const logs = await listProjectEvidenceTimeline(projectId, req.webUser);
-      res.json({ success: true, data: logs });
+      const captures = await listProjectCaptures(projectId, {
+        wbsItemId: typeof req.query.wbsItemId === 'string' ? req.query.wbsItemId : undefined,
+        workdayReportId:
+          typeof req.query.workdayReportId === 'string' ? req.query.workdayReportId : undefined,
+      });
+      res.json({ success: true, data: captures });
     } catch (error) {
       next(error);
     }
@@ -106,52 +98,6 @@ router.get(
         return;
       }
       res.redirect(302, url);
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * POST /api/v1/projects/:projectId/evidence/extract
- * Verifies GPS/corridor chainage, screens pHash & SHA-256 integrity, runs standalone Whisper + Azure GPT-4o,
- * and returns the Mandatory Human Confirmation Bubble payload.
- */
-router.post(
-  '/:projectId/evidence/extract',
-  requireFieldSession,
-  validateBody(SubmitEvidenceForExtractionRequestSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const draft = await submitEvidenceForAiExtraction({
-        projectId: projectIdForFieldWrite(req),
-        fieldAgent: req.fieldAgent!,
-        input: req.body,
-      });
-      res.status(201).json({ success: true, data: draft });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * POST /api/v1/projects/:projectId/evidence/:logId/confirm
- * Field Agent taps [Confirm & Sign Log] or [Edit Quantities] to commit evidence.
- */
-router.post(
-  '/:projectId/evidence/:logId/confirm',
-  requireFieldSession,
-  validateBody(ConfirmEvidenceLogRequestSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const confirmed = await confirmEvidenceLogByAgent({
-        projectId: projectIdForFieldWrite(req),
-        logId: String(req.params.logId),
-        fieldAgent: req.fieldAgent!,
-        input: req.body,
-      });
-      res.json({ success: true, data: confirmed });
     } catch (error) {
       next(error);
     }

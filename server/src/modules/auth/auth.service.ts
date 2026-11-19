@@ -1,6 +1,8 @@
 import bcrypt from 'bcryptjs';
 import {
   ChangePasswordRequest,
+  DEVICE_SIGNATURE_ALGORITHM,
+  RegisterDeviceKeyRequest,
   DemoSkipVerificationRequest,
   FieldPersonaType,
   JoinProjectMobileRequest,
@@ -19,6 +21,7 @@ import {
 } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { parseTenantBranding } from '../rbac/rbac.service';
+import { parseDevicePublicKey } from '../../utils/deviceSignature';
 
 export const WEB_USER_AUTH_INCLUDE = {
   organization: true,
@@ -299,6 +302,7 @@ function buildMobileSessionResponse(
     codePrefix: string;
     stateLocation: string;
     reportingCadence: string;
+    timezone: string;
     geofenceMode: string;
     geofenceGeoJson: unknown;
     boqItems: Array<{
@@ -383,6 +387,7 @@ function buildMobileSessionResponse(
       codePrefix: project.codePrefix,
       stateLocation: project.stateLocation,
       reportingCadence: project.reportingCadence,
+      timezone: project.timezone,
       geofenceMode: project.geofenceMode,
       geofence: project.geofenceGeoJson,
       boqItems,
@@ -461,6 +466,10 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
     ? await bcrypt.hash(input.agentPin, 8)
     : null;
 
+  const deviceKey = input.devicePublicKey
+    ? parseDevicePublicKey(input.devicePublicKey, input.devicePublicKeyAlg ?? DEVICE_SIGNATURE_ALGORITHM)
+    : null;
+
   const role = joinCodeRecord.role;
   const requiresAssurance = role.requiresIdentityAssurance;
   const initialAssuranceStatus = requiresAssurance
@@ -502,7 +511,14 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
         deviceId: input.deviceId,
         deviceModel: input.deviceModel ?? null,
         deviceOs: input.deviceOs ?? null,
-        deviceSecretHash: input.devicePublicKeyOrSecretHash ?? null,
+        ...(deviceKey
+          ? {
+              devicePublicKey: deviceKey.publicKey,
+              devicePublicKeyAlg: DEVICE_SIGNATURE_ALGORITHM,
+              devicePublicKeyId: deviceKey.keyId,
+              devicePublicKeyAddedAt: new Date(),
+            }
+          : {}),
         lastSyncAt: new Date(),
         assuranceStatus: initialAssuranceStatus,
         // Identity evidence and liveness are accepted only via /auth/assurance-verification.
@@ -617,8 +633,7 @@ export async function demoSkipVerificationMobile(
             fieldPersonaType: role.fieldPersonaType,
             assuranceWeight: role.assuranceWeight,
             assuranceStatus: 'APPROVED',
-            livenessPassed: true,
-            livenessScore: existingSession.livenessScore ?? 1.0,
+            livenessPassed: false,
             corenLicenseNumber:
               existingSession.corenLicenseNumber ?? 'DEMO-BYPASS',
             experienceSummary:
@@ -642,8 +657,7 @@ export async function demoSkipVerificationMobile(
             deviceModel: input.deviceModel ?? null,
             deviceOs: input.deviceOs ?? null,
             assuranceStatus: 'APPROVED',
-            livenessPassed: true,
-            livenessScore: 1.0,
+            livenessPassed: false,
             corenLicenseNumber: 'DEMO-BYPASS',
             experienceSummary: 'Demo-only verification bypass session.',
             reviewedAt: new Date(),
@@ -676,4 +690,47 @@ export async function demoSkipVerificationMobile(
     session,
     normalizedCode
   );
+}
+
+/**
+ * POST /auth/device-key
+ * Registers the per-install signing key on a session that has none. A key is never replaced through
+ * this endpoint: a stolen token must not be able to swap the device key.
+ */
+export async function registerDeviceKey(
+  fieldAgent: { sessionId: string; projectId: string; agentFullName: string; roleName: string },
+  input: RegisterDeviceKeyRequest
+) {
+  const key = parseDevicePublicKey(input.devicePublicKey, input.devicePublicKeyAlg);
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.fieldAgentSession.updateMany({
+      where: { id: fieldAgent.sessionId, devicePublicKey: null },
+      data: {
+        devicePublicKey: key.publicKey,
+        devicePublicKeyAlg: DEVICE_SIGNATURE_ALGORITHM,
+        devicePublicKeyId: key.keyId,
+        devicePublicKeyAddedAt: new Date(),
+      },
+    });
+    if (updated.count === 0) {
+      const current = await tx.fieldAgentSession.findUniqueOrThrow({
+        where: { id: fieldAgent.sessionId },
+        select: { devicePublicKeyId: true },
+      });
+      if (current.devicePublicKeyId === key.keyId) {
+        return { devicePublicKeyId: key.keyId, alreadyRegistered: true };
+      }
+      throw new AppError('A different device key is already registered for this session', 409, 'DEVICE_KEY_ALREADY_REGISTERED');
+    }
+    await recordAuditEvent(tx, {
+      projectId: fieldAgent.projectId,
+      actorType: 'FIELD_AGENT',
+      actorId: fieldAgent.sessionId,
+      actorDisplayName: `${fieldAgent.agentFullName} (${fieldAgent.roleName})`,
+      action: 'DEVICE_KEY_REGISTERED',
+      summaryText: 'Registered device signing key.',
+      payload: { devicePublicKeyId: key.keyId, alg: DEVICE_SIGNATURE_ALGORITHM },
+    });
+    return { devicePublicKeyId: key.keyId, alreadyRegistered: false };
+  });
 }

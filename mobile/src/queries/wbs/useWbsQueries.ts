@@ -1,19 +1,31 @@
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  getStagedBacklogReports,
-  promoteAndSyncBacklogReports,
   sendWbsChatMessage,
-  submitConfirmedWorkdayReport,
   syncWbsChatMessagesFromServer,
   syncWbsInboxFromServer,
-  type SubmitConfirmedWorkdayInput,
+  type SendChatMessageInput,
 } from '../../storage/wbsRepository';
+import {
+  confirmReport,
+  listPendingOrStagedReports,
+  refreshReportStatuses,
+  type ConfirmReportInput,
+} from '../../storage/reportStore';
+import { listDeadRows } from '../../storage/outbox/outboxStore';
+import {
+  getSyncStatusSnapshot,
+  retryOutboxItem,
+  subscribeToSyncStatus,
+  type SyncStatusSnapshot,
+} from '../../storage/outbox/outboxProcessor';
 import { notificationQueryKeys } from '../notifications/useNotificationQueries';
 
 export const wbsQueryKeys = {
   inbox: (projectId?: string | null) => ['wbs-inbox', projectId] as const,
   messages: (wbsItemId?: string | null) => ['wbs-messages', wbsItemId] as const,
-  stagedBacklog: ['staged-backlog'] as const,
+  pendingReports: (projectId?: string | null) => ['pending-reports', projectId] as const,
+  deadLetters: ['outbox-dead-letters'] as const,
 };
 
 export function useWbsInboxQuery(projectId?: string | null) {
@@ -24,10 +36,7 @@ export function useWbsInboxQuery(projectId?: string | null) {
   });
 }
 
-export function useWbsChatMessagesQuery(
-  wbsItemId?: string | null,
-  projectId?: string | null
-) {
+export function useWbsChatMessagesQuery(wbsItemId?: string | null, projectId?: string | null) {
   return useQuery({
     queryKey: wbsQueryKeys.messages(wbsItemId),
     queryFn: () => syncWbsChatMessagesFromServer(projectId, wbsItemId!),
@@ -38,52 +47,53 @@ export function useWbsChatMessagesQuery(
 export function useSendWbsMessageMutation(wbsItemId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: Parameters<typeof sendWbsChatMessage>[0]) =>
-      sendWbsChatMessage(input),
+    mutationFn: (input: SendChatMessageInput) => sendWbsChatMessage(input),
     onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: wbsQueryKeys.messages(wbsItemId),
-      });
+      queryClient.invalidateQueries({ queryKey: wbsQueryKeys.messages(wbsItemId) });
     },
   });
 }
 
-export function useStagedBacklogQuery() {
+/** Reports still on the device, or held by the server until identity approval. Read-only. */
+export function usePendingReportsQuery(projectId?: string | null) {
   return useQuery({
-    queryKey: wbsQueryKeys.stagedBacklog,
-    queryFn: getStagedBacklogReports,
+    queryKey: wbsQueryKeys.pendingReports(projectId),
+    queryFn: async () => {
+      await refreshReportStatuses(projectId!).catch(() => undefined);
+      return listPendingOrStagedReports(projectId!);
+    },
+    enabled: Boolean(projectId),
   });
 }
 
-export function usePromoteBacklogMutation(projectId: string) {
+export function useDeadLettersQuery() {
+  return useQuery({ queryKey: wbsQueryKeys.deadLetters, queryFn: listDeadRows });
+}
+
+export function useRetryOutboxItemMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (reportIds: string[]) =>
-      promoteAndSyncBacklogReports(reportIds, projectId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: wbsQueryKeys.stagedBacklog });
-      queryClient.invalidateQueries({ queryKey: wbsQueryKeys.inbox(projectId) });
-      queryClient.invalidateQueries({
-        queryKey: notificationQueryKeys.list(projectId),
-      });
-    },
+    mutationFn: (id: string) => retryOutboxItem(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: wbsQueryKeys.deadLetters }),
   });
+}
+
+/** Live outbox status (pending count, last error, paused reason, storage encryption). */
+export function useSyncStatus(): SyncStatusSnapshot {
+  const [status, setStatus] = useState<SyncStatusSnapshot>(getSyncStatusSnapshot());
+  useEffect(() => subscribeToSyncStatus(setStatus), []);
+  return status;
 }
 
 export function useSubmitWorkdayReportMutation(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: SubmitConfirmedWorkdayInput) =>
-      submitConfirmedWorkdayReport(input),
+    mutationFn: (input: ConfirmReportInput) => confirmReport(input),
     onSuccess: (_result, variables) => {
-      queryClient.invalidateQueries({ queryKey: wbsQueryKeys.stagedBacklog });
+      queryClient.invalidateQueries({ queryKey: wbsQueryKeys.pendingReports(projectId) });
       queryClient.invalidateQueries({ queryKey: wbsQueryKeys.inbox(projectId) });
-      queryClient.invalidateQueries({
-        queryKey: wbsQueryKeys.messages(variables.wbsItem.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: notificationQueryKeys.list(projectId),
-      });
+      queryClient.invalidateQueries({ queryKey: wbsQueryKeys.messages(variables.wbsItemId) });
+      queryClient.invalidateQueries({ queryKey: notificationQueryKeys.list(projectId) });
     },
   });
 }

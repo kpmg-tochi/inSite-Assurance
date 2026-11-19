@@ -26,7 +26,6 @@ export const SpecialIncidentModal: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { activeProjectId: projectId, profile } = useProfile();
-  const sessionToken = profile?.activeSessionToken || "";
   const onClose = () => navigation.goBack();
   const onSubmitted = () => navigation.goBack();
   const [category, setCategory] = useState<
@@ -57,43 +56,38 @@ export const SpecialIncidentModal: React.FC = () => {
     }
 
     try {
-      const result = await submitIncidentMutation.mutateAsync({
+      await submitIncidentMutation.mutateAsync({
         projectId,
-        sessionToken,
+        localPhotoUris: capturedPhoto ? [capturedPhoto.uri] : [],
         payload: {
-          projectId,
           category,
           severity,
           title: title.trim() || `${category.replace("_", " ")} Report`,
           description: description.trim(),
           isConfidentialWhistleblower: isConfidential,
-          photoEvidenceUrls: capturedPhoto ? [capturedPhoto.dataUri] : [],
-          deviceGpsCoordinates: capturedPhoto?.gps
+          // Only a real fix from the photo; no fix means no coordinates.
+          ...(capturedPhoto?.gps
             ? {
-                latitude: capturedPhoto.gps.latitude,
-                longitude: capturedPhoto.gps.longitude,
-                accuracyMeters: capturedPhoto.gps.accuracyMeters ?? undefined,
+                deviceGpsCoordinates: {
+                  latitude: capturedPhoto.gps.latitude,
+                  longitude: capturedPhoto.gps.longitude,
+                  accuracyMeters: capturedPhoto.gps.accuracyMeters ?? undefined,
+                },
               }
-            : {
-                latitude: 6.4698,
-                longitude: 3.5852,
-                accuracyMeters: 4.2,
-              },
+            : {}),
         },
       });
 
-      if (result.success) {
-        Toast.show({
-          type: "success",
-          props: {
-            title: "Incident Transmitted",
-            message: isConfidential
-              ? "Protected disclosure submitted with Confidential Shield. Routed strictly to Independent Monitor and Lender."
-              : "Escalation alert submitted to facility governance log.",
-          },
-        });
-        onSubmitted();
-      }
+      Toast.show({
+        type: "success",
+        props: {
+          title: "Incident saved",
+          message: isConfidential
+            ? "Saved on this device as a protected disclosure. It will be sent to the Monitor and Lender as soon as there is a connection."
+            : "Saved on this device. It will be sent as soon as there is a connection.",
+        },
+      });
+      onSubmitted();
     } catch (e: any) {
       Toast.show({
         type: "error",

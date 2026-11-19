@@ -6,11 +6,14 @@ import { IpcTransitionError } from '@insite/shared';
 export class AppError extends Error {
   public readonly statusCode: number;
   public readonly code: string;
+  /** Safe, structured detail for the client (for example which IDs were missing). */
+  public readonly details?: Record<string, unknown>;
 
-  constructor(message: string, statusCode = 400, code = 'BAD_REQUEST') {
+  constructor(message: string, statusCode = 400, code = 'BAD_REQUEST', details?: Record<string, unknown>) {
     super(message);
     this.statusCode = statusCode;
     this.code = code;
+    this.details = details;
     Object.setPrototypeOf(this, AppError.prototype);
   }
 }
@@ -30,7 +33,7 @@ export function errorHandler(
   _next: NextFunction
 ): void {
   if (err instanceof AppError) {
-    send(res, err.statusCode, err.code, err.message);
+    send(res, err.statusCode, err.code, err.message, err.details ? { details: err.details } : undefined);
     return;
   }
 

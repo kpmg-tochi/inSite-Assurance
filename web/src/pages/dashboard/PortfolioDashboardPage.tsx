@@ -1,10 +1,7 @@
 import React from "react";
 import { Wallet, CheckCircle2, AlertTriangle } from "lucide-react";
-import type {
-  FieldEvidenceLogRecordDto,
-  IpcClaimDto,
-  ProjectSummaryDto,
-} from "../../api/types";
+import type { CaptureListItemDto } from "@insite/shared";
+import type { IpcClaimDto, ProjectSummaryDto } from "../../api/types";
 import {
   formatCompactNaira,
   formatDateTimeShort,
@@ -18,7 +15,7 @@ import { KpiCard } from "../../components/common";
 
 interface PortfolioDashboardPageProps {
   project: ProjectSummaryDto;
-  evidenceLogs: FieldEvidenceLogRecordDto[];
+  evidenceLogs: CaptureListItemDto[];
   latestIpc: IpcClaimDto | null;
   onNavigateToReconciliation: () => void;
 }
@@ -43,7 +40,9 @@ export function PortfolioDashboardPage({
     ? activeTranche.conditionsPrecedent.length
     : 0;
 
-  const latestConfirmedLog = evidenceLogs[0] || null;
+  // Newest capture that is part of a submitted report.
+  const latestConfirmedLog = evidenceLogs.find((c) => c.workdayReportId !== null) || null;
+  const signedCount = evidenceLogs.filter((c) => c.signatureVerified === true).length;
 
   const isContractorOnly =
     hasPermission("ipc:submit_claim") && !hasPermission("ipc:certify_valuation");
@@ -136,7 +135,7 @@ export function PortfolioDashboardPage({
               Geofence &amp; Integrity Telemetry
             </div>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Cryptographic device signature &amp; coordinate screening
+              Results computed by the server for each capture
             </p>
             <div className="mt-3 space-y-2 text-xs">
               <div className="flex justify-between py-1 border-b border-slate-100">
@@ -148,10 +147,17 @@ export function PortfolioDashboardPage({
                 </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Verified Field Logs</span>
-                <span className="font-semibold text-emerald-700">
-                  {evidenceLogs.filter((l) => l.integrityPassed).length} /{" "}
-                  {evidenceLogs.length} Passed
+                <span className="text-slate-500">Captures passing integrity</span>
+                <span className="font-semibold text-slate-800">
+                  {evidenceLogs.length === 0
+                    ? "No data"
+                    : `${evidenceLogs.filter((l) => l.integrityPassed).length} / ${evidenceLogs.length}`}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-100">
+                <span className="text-slate-500">Device signature checked</span>
+                <span className="font-semibold text-slate-800">
+                  {evidenceLogs.length === 0 ? "No data" : `${signedCount} / ${evidenceLogs.length}`}
                 </span>
               </div>
               <div className="flex justify-between py-1 border-b border-slate-100">
@@ -176,11 +182,11 @@ export function PortfolioDashboardPage({
           <div>
             <div className="flex items-center justify-between">
               <div className="text-xs font-bold text-slate-900">
-                Latest Confirmed Field Log
+                Latest Reported Capture
               </div>
               {latestConfirmedLog && (
                 <span className="text-[10px] text-slate-400">
-                  {formatDateTimeShort(latestConfirmedLog.capturedAtDevice)}
+                  {formatDateTimeShort(latestConfirmedLog.capturedAt)}
                 </span>
               )}
             </div>
@@ -189,7 +195,7 @@ export function PortfolioDashboardPage({
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-brand-primary">
                     {latestConfirmedLog.chainageLabel || "Site Pin"} · WBS{" "}
-                    {latestConfirmedLog.boqItem?.wbsCode || "General"}
+                    {latestConfirmedLog.wbsCode || "not linked"}
                   </span>
                   <span className="text-[11px] text-slate-500">
                     {formatReporterRoleBadge(
@@ -199,24 +205,38 @@ export function PortfolioDashboardPage({
                   </span>
                 </div>
                 <p className="text-xs text-slate-700 bg-slate-50 rounded-xl p-2.5 border border-slate-200/70 leading-relaxed">
-                  {latestConfirmedLog.confirmedSummary ||
-                    latestConfirmedLog.rawWhisperTranscript ||
-                    latestConfirmedLog.rawTextNote}
+                  {latestConfirmedLog.caption ||
+                    (latestConfirmedLog.transcriptionStatus === "DONE"
+                      ? latestConfirmedLog.transcript
+                      : null) ||
+                    (latestConfirmedLog.mediaType === "VOICE_NOTE"
+                      ? "Voice note (not transcribed)"
+                      : "Photo without caption")}
                 </p>
                 <div className="flex items-center justify-between text-[11px] text-slate-500">
                   <span>
-                    Reporter:{" "}
-                    {latestConfirmedLog.fieldSession?.agentFullName ||
-                      "Field Agent"}
+                    Reporter: {latestConfirmedLog.reporterName}
                   </span>
-                  <span className="text-emerald-700 font-medium">
-                    Device Signature: Verified
+                  <span
+                    className={
+                      latestConfirmedLog.signatureVerified === true
+                        ? "text-emerald-700 font-medium"
+                        : latestConfirmedLog.signatureVerified === false
+                          ? "text-rose-700 font-medium"
+                          : "text-slate-500"
+                    }
+                  >
+                    {latestConfirmedLog.signatureVerified === true
+                      ? "Device signature checked"
+                      : latestConfirmedLog.signatureVerified === false
+                        ? "Device signature invalid"
+                        : "Not signed by device"}
                   </span>
                 </div>
               </div>
             ) : (
               <p className="text-xs text-slate-400 mt-4">
-                No field evidence logs captured yet for this project.
+                No reported captures yet for this project.
               </p>
             )}
           </div>
@@ -293,10 +313,12 @@ export function PortfolioDashboardPage({
         </div>
       </div>
 
-      {/* Contractor Assurance Verification Queue */}
-      <div className="mt-4">
-        <ContractorVerificationQueue projectId={project.id} />
-      </div>
+      {/* Contractor Assurance Verification Queue: only for roles that can review credentials */}
+      {hasPermission("assurance:review_credentials") && (
+        <div className="mt-4">
+          <ContractorVerificationQueue projectId={project.id} />
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
 export { usePushNotifications } from './usePushNotifications';
 export { useNetworkSync } from './useNetworkSync';
-export { useHourlyTelemetry } from './useHourlyTelemetry';
+export { usePresenceTelemetry } from './usePresenceTelemetry';
+export { useAssuranceStatusSync } from './useAssuranceStatusSync';
 

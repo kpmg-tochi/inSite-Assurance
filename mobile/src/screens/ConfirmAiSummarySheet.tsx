@@ -19,170 +19,154 @@ import { PrimaryButton } from '../components/inputs/Buttons';
 import { useProfile } from '../context/ProfileContext';
 import { useResolveNotificationMutation } from '../queries/notifications/useNotificationQueries';
 import { useSubmitWorkdayReportMutation } from '../queries/wbs/useWbsQueries';
+import { REPORT_LOW_GPS_ACCURACY_METERS } from '@insite/shared';
 import {
-  captureCurrentGeotag,
-  type SiteGeotag,
+  acquireFix,
+  previewGeofence,
+  type GeofencePreview,
+  type LocationFix,
 } from '../services/locationService';
-import {
-  VoiceNoteRecorder,
-  formatDurationMs,
-  type VoiceRecordingResult,
-} from '../components/audio';
+import { saveCapture } from '../storage/captureStore';
+import { ReportAlreadySubmittedError } from '../storage/reportStore';
+import { StorageUnavailableError } from '../storage/db/database';
+import { VoiceNoteRecorder, formatDurationMs, type VoiceRecordingResult } from '../components/audio';
 import type { RootStackParamList } from '../navigation/types';
 
+/**
+ * The end-of-period report (owner rule 2026-11-19): one per WBS item and period, built from the
+ * photos and notes already in the thread plus this summary and an optional voice note. The
+ * reporter must confirm it is their full report. After submitting, it can only be revised to
+ * answer a query.
+ */
 export const ConfirmAiSummarySheet: React.FC = () => {
-  const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, 'EodConfirmModal'>>();
-  const {
-    wbsItem,
-    resolveNotificationId,
-    workdayReportId,
-    reportQueryId,
-    initialSummary,
-    initialQuantity,
-    initialUnit,
-  } = route.params;
-  const isRevalidating = Boolean(workdayReportId);
-  const {
-    activeProjectId: projectId,
-    profile,
-    isVerified: isVerifiedAccount,
-  } = useProfile();
-
-  const senderName = profile?.fullName || 'Field Engineer';
-  const onCancel = () => navigation.goBack();
-  const onConfirmed = (_quantity: number, _summary: string) => navigation.goBack();
+  const { wbsItem, resolveNotificationId, workdayReportId, reportQueryId, initialSummary, initialQuantity, initialUnit } =
+    route.params;
+  const isRevision = Boolean(workdayReportId);
+  const { activeProjectId: projectId } = useProfile();
   const insets = useSafeAreaInsets();
+
   const [quantity, setQuantity] = useState(
-    initialQuantity !== undefined && !isNaN(initialQuantity)
-      ? String(initialQuantity)
-      : ''
+    initialQuantity !== undefined && !isNaN(initialQuantity) ? String(initialQuantity) : ''
   );
-  const [unit, setUnit] = useState(initialUnit || wbsItem.unit || 'm3');
+  const [unit, setUnit] = useState(initialUnit || wbsItem.unit);
   const [summary, setSummary] = useState(initialSummary || '');
   const [blockers, setBlockers] = useState('');
-  const [holdPointSigned, setHoldPointSigned] = useState(!wbsItem.isHoldPoint);
+  // Off by default and shown only for hold-point items.
+  const [holdPointClaimed, setHoldPointClaimed] = useState(false);
+  const [confirmedFinal, setConfirmedFinal] = useState(false);
 
-  const [geotag, setGeotag] = useState<SiteGeotag | null>(null);
+  const [fix, setFix] = useState<LocationFix | null>(null);
+  const [preview, setPreview] = useState<GeofencePreview | null>(null);
   const [loadingGps, setLoadingGps] = useState(true);
-  const submitReportMutation = useSubmitWorkdayReportMutation(projectId);
-  const resolveNotificationMutation = useResolveNotificationMutation(projectId);
-  const isSubmitting = submitReportMutation.isPending;
+  const submitReport = useSubmitWorkdayReportMutation(projectId);
+  const resolveNotification = useResolveNotificationMutation(projectId);
+  const [saving, setSaving] = useState(false);
 
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
-  const [eodVoiceNote, setEodVoiceNote] = useState<VoiceRecordingResult | null>(
-    null
-  );
+  const [voiceNote, setVoiceNote] = useState<VoiceRecordingResult | null>(null);
 
-  const refreshSubmissionGeotag = useCallback(async () => {
+  const refreshFix = useCallback(async () => {
     setLoadingGps(true);
     try {
-      const captured = await captureCurrentGeotag(
-        `REPORT_SUBMISSION:${wbsItem.wbsCode}`
-      );
-      setGeotag(captured);
-      return captured;
+      const next = await acquireFix();
+      setFix(next);
+      setPreview(next ? previewGeofence(next) : null);
+      return next;
     } finally {
       setLoadingGps(false);
     }
-  }, [wbsItem.wbsCode]);
+  }, []);
 
   useEffect(() => {
-    refreshSubmissionGeotag();
-  }, [refreshSubmissionGeotag]);
+    void refreshFix();
+  }, [refreshFix]);
+
+  const showError = (title: string, message: string) => Toast.show({ type: 'error', props: { title, message } });
 
   const handleConfirm = async () => {
     const qNum = parseFloat(quantity);
-    if (isNaN(qNum) || qNum <= 0) {
-      Toast.show({
-        type: 'error',
-        props: {
-          title: 'Invalid Quantity',
-          message: 'Please enter a valid positive quantity.',
-        },
-      });
+    if (isNaN(qNum) || qNum < 0) {
+      showError('Quantity needed', 'Enter the quantity completed this period (0 if none).');
+      return;
+    }
+    if (summary.trim().length < 5) {
+      showError('Summary needed', 'Describe the work done this period.');
+      return;
+    }
+    if (!fix) {
+      showError('Location required', 'Every report needs a GPS location. Move to open sky and tap Refresh.');
+      return;
+    }
+    if (!confirmedFinal) {
+      showError('Confirm your full report', 'Tick the box to confirm this is your full report for the period.');
       return;
     }
 
+    setSaving(true);
     try {
-      const activeGeotag = geotag ?? (await refreshSubmissionGeotag());
-      if (!activeGeotag) {
-        Toast.show({
-          type: 'error',
-          props: {
-            title: 'Site Geotag Required',
-            message:
-              'Location permission or GPS lock is needed to prove this daily report was submitted from the field.',
-          },
+      // The voice note is a capture like any other, so it is uploaded and verified with the report.
+      if (voiceNote) {
+        await saveCapture({
+          projectId,
+          wbsItemId: wbsItem.id,
+          mediaType: 'VOICE_NOTE',
+          sourceUri: voiceNote.uri,
+          mimeType: voiceNote.mimeType,
+          fileExtension: voiceNote.fileName.split('.').pop() || 'm4a',
+          durationSeconds: voiceNote.durationMs / 1000,
+          fix,
+          capturedAt: new Date().toISOString(),
         });
-        return;
       }
 
-      const result = await submitReportMutation.mutateAsync({
+      const report = await submitReport.mutateAsync({
         projectId,
-        wbsItem,
-        senderName,
-        reportedQuantity: qNum,
-        unitOfMeasure: unit.trim() || wbsItem.unit || 'm3',
+        wbsItemId: wbsItem.id,
         summaryText: summary.trim(),
-        delaysOrBlockers: blockers.trim() || undefined,
-        isHoldPointClaimed: holdPointSigned,
-        voiceNoteUri: eodVoiceNote?.uri ?? null,
-        submissionGeotag: activeGeotag,
-        isVerifiedAccount,
-        revalidateContext: workdayReportId
-          ? { targetReportId: workdayReportId, reportQueryId }
-          : undefined,
+        reportedQuantity: qNum,
+        unit: unit.trim() || wbsItem.unit,
+        isHoldPointClaimed: wbsItem.isHoldPoint && holdPointClaimed,
+        delaysOrBlockers: blockers.trim() || null,
+        fix,
+        revision: workdayReportId ? { serverReportId: workdayReportId, reportQueryId: reportQueryId ?? null } : undefined,
       });
 
-      if (result.syncStatus === 'STAGED_UNVERIFIED') {
-        Toast.show({
-          type: 'info',
-          props: {
-            title: 'Staged in Unverified Backlog',
-            message:
-              'Your report and GPS provenance are saved locally. AI parsing and server sync will run once your assurance verification is approved.',
-          },
-        });
-      } else if (result.syncStatus === 'QUEUED_OFFLINE') {
-        Toast.show({
-          type: 'info',
-          props: {
-            title: 'Saved Offline with Geotag',
-            message:
-              'Your signed report and submission GPS coordinates are stored locally and will sync automatically when network connectivity returns.',
-          },
-        });
-      } else {
-        Toast.show({
-          type: 'success',
-          props: {
-            title: isRevalidating ? 'Report Re-submitted' : 'Report Synced',
-            message: isRevalidating
-              ? 'Updated chat evidence was re-parsed by AI and sent to the Monitor.'
-              : 'Your signed workday report has been synced to the project ledger.',
-          },
-        });
-      }
-
-      if (resolveNotificationId) {
-        await resolveNotificationMutation
-          .mutateAsync(resolveNotificationId)
-          .catch(() => {});
-      }
-
-      onConfirmed(qNum, summary.trim());
-    } catch (err: any) {
       Toast.show({
-        type: 'error',
+        type: 'success',
         props: {
-          title: 'Submission Failed',
-          message: err?.message || 'Unable to save daily report.',
+          title: isRevision ? 'Revision saved' : 'Report saved',
+          message: `Saved on this device with ${report.captureIds.length} capture(s) and ${report.textNotes.length} note(s). It will be sent as soon as there is a connection; check Sync status for progress.`,
         },
       });
+      if (resolveNotificationId) {
+        await resolveNotification.mutateAsync(resolveNotificationId).catch(() => undefined);
+      }
+      navigation.goBack();
+    } catch (err) {
+      if (err instanceof ReportAlreadySubmittedError) {
+        showError('Already submitted', err.message);
+      } else if (err instanceof StorageUnavailableError) {
+        showError('Cannot save on this device', err.message);
+      } else {
+        showError('Not saved', (err as Error)?.message || 'The report could not be saved. Try again.');
+      }
+    } finally {
+      setSaving(false);
     }
   };
+
+  const lowAccuracy = fix?.accuracyMeters != null && fix.accuracyMeters > REPORT_LOW_GPS_ACCURACY_METERS;
+  const gpsLine = !fix
+    ? 'No GPS location yet. A location is required to submit. Move to open sky and tap Refresh.'
+    : fix.isMocked
+      ? 'Mock location detected. The report will be flagged for review.'
+      : preview?.isWithinGeofence === false
+        ? 'Outside the project geofence (checked again by the server).'
+        : preview?.isWithinGeofence === true
+          ? `Inside the project geofence${preview.chainageLabel ? ` at ${preview.chainageLabel}` : ''} (checked again by the server).`
+          : 'Geofence not available on this device; the server will check it.';
 
   return (
     <View style={styles.container}>
@@ -194,197 +178,165 @@ export const ConfirmAiSummarySheet: React.FC = () => {
         style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}
       >
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={onCancel} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7}>
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
-          <Pill variant="positive" text="Human Sign-Off Required" />
+          <Pill variant="info" text={isRevision ? 'Answering a query' : 'One report per period'} />
         </View>
-        <Text style={styles.title}>
-          {isRevalidating
-            ? 'Re-submit & Re-parse Report'
-            : 'Confirm AI Daily Summary'}
-        </Text>
+        <Text style={styles.title}>{isRevision ? 'Revise your report' : 'Submit your daily report'}</Text>
         <Text style={styles.subtitle}>
-          {isRevalidating
-            ? 'AI will re-parse your updated WBS chat evidence against the open query before notifying the Monitor.'
-            : 'Review and edit the extracted quantities before syncing to the reconciliation ledger.'}
+          {isRevision
+            ? 'Your revision includes any new photos and notes you added to the thread.'
+            : 'Your report includes every photo, voice note and note you added to this thread today. You cannot submit another report for this item today.'}
         </Text>
       </LinearGradient>
 
       <View style={styles.curvedContainer}>
         <ScrollView
-          contentContainerStyle={[
-            styles.body,
-            { paddingBottom: Math.max(insets.bottom + 20, 24) },
-          ]}
+          contentContainerStyle={[styles.body, { paddingBottom: Math.max(insets.bottom + 20, 24) }]}
           showsVerticalScrollIndicator={false}
         >
-        {/* WBS Target Card */}
-        <View style={styles.card}>
-          <Pill variant="info" text={`WBS ${wbsItem.wbsCode}`} />
-          <Text style={styles.wbsTitle}>{wbsItem.description}</Text>
-        </View>
+          <View style={styles.card}>
+            <Pill variant="info" text={`WBS ${wbsItem.wbsCode}`} />
+            <Text style={styles.wbsTitle}>{wbsItem.description}</Text>
+          </View>
 
-        {/* AI Parsed Summary Card */}
-        <View style={styles.card}>
-          <Text style={styles.fieldLabel}>Workday Summary *</Text>
-          <TextInput
-            style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-            value={summary}
-            onChangeText={setSummary}
-            multiline
-          />
-        </View>
-
-        {/* Quantities Form */}
-        <View style={styles.card}>
-          <Text style={styles.fieldLabel}>Reported Quantity for Today *</Text>
-          <View style={styles.quantityRow}>
+          <View style={styles.card}>
+            <Text style={styles.fieldLabel}>Summary of work *</Text>
             <TextInput
-              style={[styles.input, styles.quantityInput]}
-              value={quantity}
-              onChangeText={setQuantity}
-              keyboardType="decimal-pad"
-            />
-            <TextInput
-              style={[styles.input, styles.unitInput]}
-              value={unit}
-              onChangeText={setUnit}
+              style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
+              value={summary}
+              onChangeText={setSummary}
+              multiline
             />
           </View>
 
-          {/* Hold-point Checkbox */}
-          <TouchableOpacity
-            style={styles.checkboxRow}
-            onPress={() => setHoldPointSigned(!holdPointSigned)}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.checkbox, holdPointSigned && styles.checkboxActive]}>
-              {holdPointSigned && <Text style={styles.checkmark}>✓</Text>}
+          <View style={styles.card}>
+            <Text style={styles.fieldLabel}>Quantity completed this period *</Text>
+            <View style={styles.quantityRow}>
+              <TextInput
+                style={[styles.input, styles.quantityInput]}
+                value={quantity}
+                onChangeText={setQuantity}
+                keyboardType="decimal-pad"
+              />
+              <TextInput style={[styles.input, styles.unitInput]} value={unit} onChangeText={setUnit} />
             </View>
-            <Text style={styles.checkboxLabel}>
-              I certify that rebar bar-bending schedule and invert levels complied with Hold-Point
-              standards.
-            </Text>
-          </TouchableOpacity>
-        </View>
 
-        {/* Delays & Blockers */}
-        <View style={styles.card}>
-          <Text style={styles.fieldLabel}>Site Blockers &amp; Weather Notes</Text>
-          <TextInput
-            style={[styles.input, { height: 60, textAlignVertical: 'top' }]}
-            value={blockers}
-            onChangeText={setBlockers}
-            multiline
-          />
-        </View>
-
-        {/* Optional EOD Voice Summary */}
-        <View style={styles.card}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.fieldLabel}>EOD Voice Summary (Optional)</Text>
-            {!showVoiceRecorder && (
+            {wbsItem.isHoldPoint && (
               <TouchableOpacity
-                onPress={() => setShowVoiceRecorder(true)}
+                style={styles.checkboxRow}
+                onPress={() => setHoldPointClaimed(!holdPointClaimed)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.linkActionText}>
-                  {eodVoiceNote ? 'Re-record Voice Note' : '+ Record Voice Note'}
+                <View style={[styles.checkbox, holdPointClaimed && styles.checkboxActive]}>
+                  {holdPointClaimed && <Text style={styles.checkmark}>✓</Text>}
+                </View>
+                <Text style={styles.checkboxLabel}>
+                  Hold point: {wbsItem.holdPointInstruction || 'I confirm this hold point was inspected and met.'}
                 </Text>
               </TouchableOpacity>
             )}
           </View>
 
-          {showVoiceRecorder ? (
-            <VoiceNoteRecorder
-              submitLabel="Attach EOD Voice Note"
-              onRecordingComplete={(res) => {
-                setEodVoiceNote(res);
-                setShowVoiceRecorder(false);
-              }}
-              onCancel={() => setShowVoiceRecorder(false)}
+          <View style={styles.card}>
+            <Text style={styles.fieldLabel}>Delays, blockers and weather</Text>
+            <TextInput
+              style={[styles.input, { height: 60, textAlignVertical: 'top' }]}
+              value={blockers}
+              onChangeText={setBlockers}
+              multiline
             />
-          ) : eodVoiceNote ? (
-            <View style={styles.voiceAttachedPill}>
-              <Text style={styles.voiceAttachedText}>
-                Voice note attached ({formatDurationMs(eodVoiceNote.durationMs)})
-              </Text>
-              <TouchableOpacity onPress={() => setEodVoiceNote(null)}>
-                <Text style={styles.removeVoiceText}>Remove</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <Text style={styles.helperText}>
-              Record a spoken site wrap-up in English or Pidgin to accompany your daily report.
-            </Text>
-          )}
-        </View>
-
-        {/* Submission Geotag Provenance Card */}
-        <View style={styles.card}>
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.fieldLabel}>Submission Geotag Provenance</Text>
-            <TouchableOpacity
-              onPress={refreshSubmissionGeotag}
-              disabled={loadingGps}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.linkActionText}>
-                {loadingGps ? 'Locating...' : 'Refresh GPS'}
-              </Text>
-            </TouchableOpacity>
           </View>
 
-          {loadingGps ? (
-            <View style={styles.gpsLoadingRow}>
-              <ActivityIndicator size="small" color="#00338D" />
-              <Text style={styles.helperText}>Acquiring high-accuracy field coordinates...</Text>
+          <View style={styles.card}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.fieldLabel}>Voice note (optional)</Text>
+              {!showVoiceRecorder && (
+                <TouchableOpacity onPress={() => setShowVoiceRecorder(true)} activeOpacity={0.8}>
+                  <Text style={styles.linkActionText}>{voiceNote ? 'Re-record' : '+ Record voice note'}</Text>
+                </TouchableOpacity>
+              )}
             </View>
-          ) : geotag ? (
-            <View style={styles.gpsInfoBox}>
-              <Text style={styles.gpsCoordsText}>
-                {geotag.latitude.toFixed(5)}, {geotag.longitude.toFixed(5)}
-                {geotag.accuracyMeters !== null
-                  ? ` (±${Math.round(geotag.accuracyMeters)}m)`
-                  : ''}
-              </Text>
-              <Text
-                style={[
-                  styles.gpsStatusText,
-                  geotag.isMocked || geotag.isWithinGeofence === false
-                    ? styles.gpsWarnText
-                    : styles.gpsOkText,
-                ]}
-              >
-                {geotag.isMocked
-                  ? 'Mock GPS detected — flagged for monitor review'
-                  : geotag.isWithinGeofence === false
-                  ? 'Outside project geofence — submission location will be flagged'
-                  : geotag.chainageLabel
-                  ? `Verified at ${geotag.chainageLabel}`
-                  : 'Field coordinates locked & SHA-256 signed'}
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.gpsWarnText}>
-              GPS unavailable. Enable location services and tap Refresh GPS before submitting.
-            </Text>
-          )}
-        </View>
+            {showVoiceRecorder ? (
+              <VoiceNoteRecorder
+                submitLabel="Attach voice note"
+                onRecordingComplete={(res) => {
+                  setVoiceNote(res);
+                  setShowVoiceRecorder(false);
+                }}
+                onCancel={() => setShowVoiceRecorder(false)}
+              />
+            ) : voiceNote ? (
+              <View style={styles.voiceAttachedPill}>
+                <Text style={styles.voiceAttachedText}>
+                  Voice note attached ({formatDurationMs(voiceNote.durationMs)})
+                </Text>
+                <TouchableOpacity onPress={() => setVoiceNote(null)}>
+                  <Text style={styles.removeVoiceText}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <Text style={styles.helperText}>Record a spoken wrap-up in English or Pidgin.</Text>
+            )}
+          </View>
 
-        <PrimaryButton
-          onPress={handleConfirm}
-          text={
-            isRevalidating
-              ? 'Re-submit for AI Revalidation'
-              : 'Sign Off & Sync Report'
-          }
-          isWorking={isSubmitting}
-          disabled={isSubmitting}
-        />
-      </ScrollView>
-    </View>
+          <View style={styles.card}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.fieldLabel}>Location at submission</Text>
+              <TouchableOpacity onPress={refreshFix} disabled={loadingGps} activeOpacity={0.8}>
+                <Text style={styles.linkActionText}>{loadingGps ? 'Locating...' : 'Refresh'}</Text>
+              </TouchableOpacity>
+            </View>
+            {loadingGps ? (
+              <View style={styles.gpsLoadingRow}>
+                <ActivityIndicator size="small" color="#00338D" />
+                <Text style={styles.helperText}>Getting a GPS fix...</Text>
+              </View>
+            ) : (
+              <View style={styles.gpsInfoBox}>
+                {fix && (
+                  <Text style={styles.gpsCoordsText}>
+                    {fix.latitude.toFixed(5)}, {fix.longitude.toFixed(5)}
+                    {fix.accuracyMeters !== null ? ` (±${Math.round(fix.accuracyMeters)}m)` : ''}
+                    {lowAccuracy ? ' · low accuracy, the report will show a badge' : ''}
+                  </Text>
+                )}
+                <Text
+                  style={[
+                    styles.gpsStatusText,
+                    !fix || fix.isMocked || preview?.isWithinGeofence === false ? styles.gpsWarnText : styles.gpsOkText,
+                  ]}
+                >
+                  {gpsLine}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.card, styles.checkboxRow]}
+            onPress={() => setConfirmedFinal(!confirmedFinal)}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.checkbox, confirmedFinal && styles.checkboxActive]}>
+              {confirmedFinal && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+            <Text style={styles.checkboxLabel}>
+              {isRevision
+                ? 'This revision is my full answer to the query.'
+                : 'This is my full report for today. I understand I cannot submit another one for this item today.'}
+            </Text>
+          </TouchableOpacity>
+
+          <PrimaryButton
+            onPress={handleConfirm}
+            text={isRevision ? 'Submit revision' : 'Submit report'}
+            isWorking={saving}
+            disabled={saving || !confirmedFinal || !fix}
+          />
+        </ScrollView>
+      </View>
     </View>
   );
 };

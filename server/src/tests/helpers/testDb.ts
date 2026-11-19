@@ -7,6 +7,7 @@
  *
  * Import this module before anything that reads `env` or creates the Prisma client.
  */
+import os from 'os';
 import path from 'path';
 import { execSync } from 'child_process';
 import dotenv from 'dotenv';
@@ -35,6 +36,11 @@ process.env.S3_ENDPOINT = '';
 // Route tests must never call the AI provider; reconciliation tests stub the rater explicitly.
 process.env.AZURE_OPENAI_ENDPOINT = '';
 process.env.AZURE_OPENAI_API_KEY = '';
+// Nor the speech provider or push service; uploads go to a throwaway folder.
+process.env.WHISPER_API_KEY = '';
+process.env.PUSH_PROVIDER = 'none';
+process.env.AI_CHECK_SWEEP_INTERVAL_SECONDS = '0';
+process.env.LOCAL_STORAGE_DIR = path.join(os.tmpdir(), `insite-test-storage-${process.pid}`);
 
 export async function resetTestDatabase(): Promise<void> {
   const url = new URL(TEST_DATABASE_URL);

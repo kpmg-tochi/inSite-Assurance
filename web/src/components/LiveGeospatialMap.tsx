@@ -8,18 +8,22 @@ import {
   Tooltip,
   useMap,
 } from 'react-leaflet';
-import type {
-  FieldEvidenceLogRecordDto,
-  ProjectSummaryDto,
-} from '../api/types';
+import type { CaptureListItemDto } from '@insite/shared';
+import type { ProjectSummaryDto } from '../api/types';
 import { formatDateTimeShort } from '../lib/formatters';
 import { formatReporterRoleBadge } from './EvidenceBadge';
 
 interface LiveGeospatialMapProps {
   project: ProjectSummaryDto;
-  evidenceLogs: FieldEvidenceLogRecordDto[];
-  onSelectEvidenceLog?: (log: FieldEvidenceLogRecordDto) => void;
+  /** Registered captures (GET /evidence). Only captures with a GPS fix are plotted. */
+  evidenceLogs: CaptureListItemDto[];
+  onSelectEvidenceLog?: (log: CaptureListItemDto) => void;
 }
+
+type LocatedCapture = CaptureListItemDto & { latitude: number; longitude: number };
+
+const isLocated = (c: CaptureListItemDto): c is LocatedCapture =>
+  c.locationAvailable && c.latitude !== null && c.longitude !== null;
 
 function MapViewportUpdater({
   center,
@@ -41,102 +45,85 @@ export function LiveGeospatialMap({
   onSelectEvidenceLog,
 }: LiveGeospatialMapProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [tierFilter, setTierFilter] = useState<'ALL' | 'INDEPENDENT' | 'HOLD_POINT'>(
-    'ALL'
-  );
-  const [activeLogId, setActiveLogId] = useState<string | null>(
-    evidenceLogs[0]?.id ?? null
-  );
+  const [tierFilter, setTierFilter] = useState<'ALL' | 'INDEPENDENT' | 'FLAGGED'>('ALL');
+  const located = useMemo(() => evidenceLogs.filter(isLocated), [evidenceLogs]);
+  const [activeLogId, setActiveLogId] = useState<string | null>(located[0]?.id ?? null);
 
   useEffect(() => {
-    if (evidenceLogs.length > 0 && !activeLogId) {
-      setActiveLogId(evidenceLogs[0].id);
+    if (located.length > 0 && !activeLogId) {
+      setActiveLogId(located[0].id);
     }
-  }, [evidenceLogs, activeLogId]);
+  }, [located, activeLogId]);
 
   const filteredLogs = useMemo(() => {
-    return evidenceLogs.filter((log) => {
-      if (
-        tierFilter === 'INDEPENDENT' &&
-        log.fieldPersonaType !== 'INDEPENDENT_VERIFIER'
-      ) {
+    return located.filter((log) => {
+      if (tierFilter === 'INDEPENDENT' && log.fieldPersonaType !== 'INDEPENDENT_VERIFIER') {
         return false;
       }
-      if (tierFilter === 'HOLD_POINT' && !log.boqItem?.isHoldPoint) {
+      if (tierFilter === 'FLAGGED' && log.integrityPassed && log.isWithinGeofence !== false) {
         return false;
       }
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
       return (
         log.chainageLabel?.toLowerCase().includes(q) ||
-        log.boqItem?.wbsCode.toLowerCase().includes(q) ||
-        log.boqItem?.description.toLowerCase().includes(q) ||
-        log.fieldSession?.agentFullName.toLowerCase().includes(q) ||
-        log.confirmedSummary?.toLowerCase().includes(q)
+        log.wbsCode?.toLowerCase().includes(q) ||
+        log.wbsDescription?.toLowerCase().includes(q) ||
+        log.reporterName.toLowerCase().includes(q) ||
+        log.caption?.toLowerCase().includes(q)
       );
     });
-  }, [evidenceLogs, searchQuery, tierFilter]);
+  }, [located, searchQuery, tierFilter]);
 
   const selectedLog = useMemo(() => {
-    return (
-      filteredLogs.find((l) => l.id === activeLogId) ||
-      filteredLogs[0] ||
-      evidenceLogs[0] ||
-      null
-    );
-  }, [filteredLogs, evidenceLogs, activeLogId]);
+    return filteredLogs.find((l) => l.id === activeLogId) || filteredLogs[0] || located[0] || null;
+  }, [filteredLogs, located, activeLogId]);
 
   // Compute map center & zoom from project geofence
-  const { mapCenter, mapZoom, polylinePositions, radialConfig } =
-    useMemo(() => {
-      const gf = project.geofence;
-      if (
-        gf.mode === 'LINEAR_CORRIDOR' &&
-        gf.centerlineCoordinates.length > 0
-      ) {
-        const latLngs: [number, number][] = gf.centerlineCoordinates.map(
-          ([lng, lat]) => [lat, lng]
-        );
-        const midIdx = Math.floor(latLngs.length / 2);
-        return {
-          mapCenter: latLngs[midIdx] || ([6.4698, 3.6402] as [number, number]),
-          mapZoom: 13,
-          polylinePositions: latLngs,
-          radialConfig: null,
-        };
-      }
-      if (gf.mode === 'RADIAL') {
-        return {
-          mapCenter: [gf.center.latitude, gf.center.longitude] as [
-            number,
-            number,
-          ],
-          mapZoom: 15,
-          polylinePositions: null,
-          radialConfig: {
-            center: [gf.center.latitude, gf.center.longitude] as [
-              number,
-              number,
-            ],
-            radiusMeters: gf.radiusMeters,
-          },
-        };
-      }
+  const { mapCenter, mapZoom, polylinePositions, radialConfig } = useMemo(() => {
+    const gf = project.geofence;
+    if (gf.mode === 'LINEAR_CORRIDOR' && gf.centerlineCoordinates.length > 0) {
+      const latLngs: [number, number][] = gf.centerlineCoordinates.map(([lng, lat]) => [lat, lng]);
+      const midIdx = Math.floor(latLngs.length / 2);
       return {
-        mapCenter: [6.4698, 3.6402] as [number, number],
-        mapZoom: 12,
-        polylinePositions: null,
+        mapCenter: latLngs[midIdx],
+        mapZoom: 13,
+        polylinePositions: latLngs,
         radialConfig: null,
       };
-    }, [project]);
+    }
+    if (gf.mode === 'RADIAL') {
+      return {
+        mapCenter: [gf.center.latitude, gf.center.longitude] as [number, number],
+        mapZoom: 15,
+        polylinePositions: null,
+        radialConfig: {
+          center: [gf.center.latitude, gf.center.longitude] as [number, number],
+          radiusMeters: gf.radiusMeters,
+        },
+      };
+    }
+    // No usable geofence: centre on the first capture, or show the whole map.
+    const first = located[0];
+    return {
+      mapCenter: (first ? [first.latitude, first.longitude] : [0, 0]) as [number, number],
+      mapZoom: first ? 12 : 2,
+      polylinePositions: null,
+      radialConfig: null,
+    };
+  }, [project, located]);
 
-  const withinCorridorCount = evidenceLogs.filter(
-    (l) => l.isWithinGeofence
+  // Counted only over captures the server could evaluate; no data means no percentage.
+  const evaluated = evidenceLogs.filter((l) => l.isWithinGeofence !== null);
+  const withinCount = evaluated.filter((l) => l.isWithinGeofence === true).length;
+  const withinPct = evaluated.length > 0 ? Math.round((withinCount / evaluated.length) * 100) : null;
+  const noLocationCount = evidenceLogs.length - located.length;
+  const mockCount = evidenceLogs.filter((l) => l.isMockLocation).length;
+  const duplicateCount = evidenceLogs.filter((l) =>
+    l.integrityFlags.some(
+      (f) => f === 'DUPLICATE_PHOTO_SHA256_MATCH' || f === 'RECYCLED_PHOTO_PHASH_SIMILARITY'
+    )
   ).length;
-  const withinCorridorPct =
-    evidenceLogs.length > 0
-      ? Math.round((withinCorridorCount / evidenceLogs.length) * 100)
-      : 100;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden relative h-[44vh] min-h-[340px]">
@@ -147,7 +134,7 @@ export function LiveGeospatialMap({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search chainage (KM 4+200) or WBS..."
+            placeholder="Search chainage, WBS, reporter or caption..."
             className="text-xs text-slate-800 placeholder-slate-400 bg-transparent focus:outline-none w-full"
           />
           {searchQuery && (
@@ -163,50 +150,30 @@ export function LiveGeospatialMap({
 
         <div className="flex items-center gap-2 pointer-events-auto">
           <div className="bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-xl p-1 shadow-md flex items-center gap-1 text-xs">
-            <button
-              type="button"
-              onClick={() => setTierFilter('ALL')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                tierFilter === 'ALL'
-                  ? 'bg-brand-primary text-white'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              All Logs ({evidenceLogs.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setTierFilter('INDEPENDENT')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                tierFilter === 'INDEPENDENT'
-                  ? 'bg-brand-primary text-white'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              Independent Monitors
-            </button>
-            <button
-              type="button"
-              onClick={() => setTierFilter('HOLD_POINT')}
-              className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                tierFilter === 'HOLD_POINT'
-                  ? 'bg-brand-primary text-white'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              Hold-Points
-            </button>
+            {(
+              [
+                ['ALL', `All Captures (${located.length})`],
+                ['INDEPENDENT', 'Independent Monitors'],
+                ['FLAGGED', 'Flagged'],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTierFilter(key)}
+                className={`px-2.5 py-1 rounded-lg font-medium transition ${
+                  tierFilter === key ? 'bg-brand-primary text-white' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
       {/* Interactive React-Leaflet Map (Standard OpenStreetMap: Free Out-of-the-Box, Zero API Key) */}
-      <MapContainer
-        center={mapCenter}
-        zoom={mapZoom}
-        scrollWheelZoom={true}
-        className="w-full h-full z-0"
-      >
+      <MapContainer center={mapCenter} zoom={mapZoom} scrollWheelZoom={true} className="w-full h-full z-0">
         <MapViewportUpdater center={mapCenter} zoom={mapZoom} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -252,13 +219,13 @@ export function LiveGeospatialMap({
           />
         )}
 
-        {/* Field Evidence Pins */}
+        {/* Capture Pins */}
         {filteredLogs.map((log) => {
           const isSelected = selectedLog?.id === log.id;
           const pinColor = !log.integrityPassed
             ? 'var(--hex-status-danger)'
             : log.fieldPersonaType === 'INDEPENDENT_VERIFIER'
-              ? log.assuranceWeight >= 0.9
+              ? log.signatureVerified === true
                 ? 'var(--hex-brand-primary)'
                 : 'var(--hex-brand-pacific)'
               : 'var(--hex-status-warning)';
@@ -277,17 +244,14 @@ export function LiveGeospatialMap({
               eventHandlers={{
                 click: () => {
                   setActiveLogId(log.id);
-                  if (onSelectEvidenceLog) {
-                    onSelectEvidenceLog(log);
-                  }
+                  onSelectEvidenceLog?.(log);
                 },
               }}
             >
               <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
                 <div className="text-xs font-sans">
                   <div className="font-bold text-slate-900">
-                    {log.chainageLabel || 'Geotagged Capture'} ·{' '}
-                    {log.boqItem?.wbsCode || 'General'}
+                    {log.chainageLabel || 'Capture'} · {log.wbsCode || 'No WBS item'}
                   </div>
                   <div className="text-slate-600">
                     {formatReporterRoleBadge(log.reporterRoleName, log.fieldPersonaType)}
@@ -303,25 +267,23 @@ export function LiveGeospatialMap({
       <div className="absolute bottom-3 right-3 z-[400] flex items-stretch gap-2.5 max-w-3xl pointer-events-auto">
         <div className="bg-brand-navy/95 backdrop-blur-md text-white rounded-xl p-3 shadow-xl border border-white/10 w-44 flex flex-col justify-between">
           <div className="text-[10px] uppercase tracking-wider text-blue-200/70 font-semibold">
-            {project.geofenceMode === 'LINEAR_CORRIDOR'
-              ? 'Corridor Verification'
-              : 'Radial Geofence'}
+            {project.geofenceMode === 'LINEAR_CORRIDOR' ? 'Corridor Check' : 'Radial Geofence'}
           </div>
           <div className="my-1">
             <div className="text-lg font-bold">
-              {withinCorridorPct}% Within
+              {withinPct === null ? 'No data' : `${withinPct}% Within`}
             </div>
             <div className="text-[11px] text-blue-200/80">
-              {project.geofenceMode === 'LINEAR_CORRIDOR' &&
-              project.geofence.mode === 'LINEAR_CORRIDOR'
+              {project.geofence.mode === 'LINEAR_CORRIDOR'
                 ? `±${project.geofence.corridorHalfWidthMeters}m Buffer Tolerance`
                 : project.geofence.mode === 'RADIAL'
                   ? `${project.geofence.radiusMeters}m Site Radius`
-                  : 'Geofence Active'}
+                  : 'Geofence not configured'}
             </div>
           </div>
-          <div className="text-[10px] text-emerald-400 font-medium">
-            {evidenceLogs.length} Geotagged Captures
+          <div className="text-[10px] text-blue-200/80 font-medium">
+            {located.length} with GPS fix
+            {noLocationCount > 0 ? ` · ${noLocationCount} without` : ''}
           </div>
         </div>
 
@@ -340,7 +302,9 @@ export function LiveGeospatialMap({
             </div>
           </div>
           <div className="text-[10px] text-blue-200/70">
-            0 Mock GPS · 0 Duplicate pHash
+            {evidenceLogs.length === 0
+              ? 'No captures yet'
+              : `${mockCount} mock location · ${duplicateCount} duplicate photo`}
           </div>
         </div>
 
@@ -350,28 +314,47 @@ export function LiveGeospatialMap({
               <span className="text-[10px] uppercase tracking-wider text-blue-200/80 font-semibold">
                 {selectedLog.chainageLabel || 'Site Pin'} ·{' '}
                 {selectedLog.reporterRoleName ||
-                  (selectedLog.fieldPersonaType === 'INDEPENDENT_VERIFIER'
-                    ? 'Independent'
-                    : 'Contractor')}
+                  (selectedLog.fieldPersonaType === 'INDEPENDENT_VERIFIER' ? 'Independent' : 'Contractor')}
               </span>
               <span className="text-[10px] text-blue-200/60">
-                {formatDateTimeShort(selectedLog.capturedAtDevice)}
+                {formatDateTimeShort(selectedLog.capturedAt)}
               </span>
             </div>
             <div className="my-1">
               <div className="text-xs font-semibold text-white truncate">
-                WBS {selectedLog.boqItem?.wbsCode || 'Site'}:{' '}
-                {selectedLog.boqItem?.description || 'Field Observation'}
+                {selectedLog.wbsCode
+                  ? `WBS ${selectedLog.wbsCode}: ${selectedLog.wbsDescription ?? ''}`
+                  : 'Not linked to a WBS item'}
               </div>
               <p className="text-[11px] text-blue-100/80 line-clamp-2 mt-0.5">
-                {selectedLog.confirmedSummary ||
-                  selectedLog.rawWhisperTranscript ||
-                  selectedLog.rawTextNote}
+                {selectedLog.caption ||
+                  (selectedLog.transcriptionStatus === 'DONE' ? selectedLog.transcript : null) ||
+                  (selectedLog.workdayReportId
+                    ? 'Linked to a submitted report'
+                    : 'Not yet in a submitted report')}
+              </p>
+              <p className="text-[10px] text-blue-200/80 mt-1">
+                {selectedLog.isWithinGeofence === true
+                  ? 'Inside geofence'
+                  : selectedLog.isWithinGeofence === false
+                    ? 'Outside geofence'
+                    : 'Geofence not evaluated'}
+                {' · '}
+                {selectedLog.signatureVerified === true
+                  ? 'Signature checked'
+                  : selectedLog.signatureVerified === false
+                    ? 'Signature invalid'
+                    : 'Unsigned'}
+                {!selectedLog.integrityPassed ? ' · Failed integrity' : ''}
               </p>
             </div>
             <div className="flex items-center justify-between text-[10px] text-blue-200/70 pt-1 border-t border-white/10">
-              <span>{selectedLog.fieldSession?.agentFullName || 'Agent'}</span>
-              <span>±{selectedLog.gpsAccuracyMeters.toFixed(1)}m GPS</span>
+              <span>{selectedLog.reporterName}</span>
+              <span>
+                {selectedLog.gpsAccuracyMeters !== null
+                  ? `±${selectedLog.gpsAccuracyMeters.toFixed(1)}m GPS`
+                  : 'Accuracy unknown'}
+              </span>
             </div>
           </div>
         )}

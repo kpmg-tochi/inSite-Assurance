@@ -1,8 +1,4 @@
 import { z } from 'zod';
-import {
-  SubmissionGeotagSchema,
-  WorkdayEvidenceItemSchema,
-} from './workday.schema';
 
 export const ReportQuerySourceEnum = z.enum([
   'MONITOR',
@@ -72,8 +68,23 @@ export const WbsChatMessageDtoSchema = z.object({
   senderName: z.string(),
   senderRole: z.string(),
   messageType: WbsChatMessageTypeEnum,
+  clientMessageId: z.string().uuid().nullable().optional(),
+  /** Field session that sent the message, if a field agent sent it. */
+  senderSessionId: z.string().uuid().nullable().optional(),
+  /** Web user that sent the message, if a web user sent it. */
+  senderUserId: z.string().uuid().nullable().optional(),
   textContent: z.string().nullable().optional(),
-  mediaUrls: z.array(z.string()).default([]),
+  /** The registered capture shown in this message (photo or voice note). */
+  capture: z
+    .object({
+      clientCaptureId: z.string().uuid(),
+      mediaType: z.string(),
+      objectKey: z.string(),
+      mimeType: z.string(),
+      durationSeconds: z.number().nullable(),
+    })
+    .nullable()
+    .optional(),
   latitude: z.number().nullable().optional(),
   longitude: z.number().nullable().optional(),
   chainageLabel: z.string().nullable().optional(),
@@ -82,43 +93,18 @@ export const WbsChatMessageDtoSchema = z.object({
 });
 export type WbsChatMessageDto = z.infer<typeof WbsChatMessageDtoSchema>;
 
-export const CreateWbsChatMessageRequestSchema = z.object({
-  workdayReportId: z.string().uuid().optional(),
-  reportQueryId: z.string().uuid().optional(),
-  messageType: WbsChatMessageTypeEnum.default('TEXT_COMMENT'),
-  textContent: z.string().max(3000).optional(),
-  mediaUrls: z.array(z.string()).default([]),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
-  chainageLabel: z.string().optional(),
-});
+export const CreateWbsChatMessageRequestSchema = z
+  .object({
+    /** Client UUID; a repeat returns the existing message (idempotent). Required from devices. */
+    clientMessageId: z.string().uuid().optional(),
+    workdayReportId: z.string().uuid().optional(),
+    reportQueryId: z.string().uuid().optional(),
+    messageType: WbsChatMessageTypeEnum.default('TEXT_COMMENT'),
+    textContent: z.string().max(3000).optional(),
+    /** Client capture ID of an already registered capture. Media is never sent inline. */
+    captureId: z.string().uuid().optional(),
+  })
+  .strict();
 export type CreateWbsChatMessageRequest = z.infer<
   typeof CreateWbsChatMessageRequestSchema
->;
-
-export const RevalidateChatEntrySchema = z.object({
-  senderName: z.string(),
-  senderRole: z.string(),
-  messageType: z.string(),
-  textContent: z.string().optional(),
-  caption: z.string().optional(),
-  chainageLabel: z.string().optional(),
-  timestamp: z.string().optional(),
-});
-export type RevalidateChatEntry = z.infer<typeof RevalidateChatEntrySchema>;
-
-export const RevalidateWorkdayReportRequestSchema = z.object({
-  reportQueryId: z.string().uuid().optional(),
-  summaryText: z.string().max(3000).optional(),
-  reportedQuantity: z.number().nonnegative().optional(),
-  unitOfMeasure: z.string().optional(),
-  delaysOrBlockers: z.string().optional(),
-  isHoldPointClaimed: z.boolean().optional(),
-  voiceNoteUrl: z.string().nullable().optional(),
-  evidenceItems: z.array(WorkdayEvidenceItemSchema).default([]),
-  chatMessages: z.array(RevalidateChatEntrySchema).default([]),
-  submissionGeotag: SubmissionGeotagSchema.optional(),
-});
-export type RevalidateWorkdayReportRequest = z.infer<
-  typeof RevalidateWorkdayReportRequestSchema
 >;

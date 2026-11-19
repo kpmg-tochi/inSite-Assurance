@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { requestPushPermissionInContext } from "../services/pushNotificationService";
 import {
   View,
   Text,
@@ -210,9 +211,8 @@ export const EnterProjectCodeScreen: React.FC = () => {
         deviceOs: `${Platform.OS} ${Platform.Version}`,
       });
 
-      const requiresAssurance =
-        result.sessionProfile.requiresIdentityAssurance ||
-        result.sessionProfile.fieldPersonaType === "CONTRACTOR_EXECUTOR";
+      // Role-driven only: the server decides whether this role needs identity assurance.
+      const requiresAssurance = result.sessionProfile.requiresIdentityAssurance;
 
       await updateProfile({
         activeProjectCode: result.sessionProfile.joinCodeUsed,
@@ -229,6 +229,8 @@ export const EnterProjectCodeScreen: React.FC = () => {
         activePermissions: result.sessionProfile.permissions || [],
         assuranceStatus: requiresAssurance ? "NOT_SUBMITTED" : "APPROVED",
       });
+
+      void requestPushPermissionInContext(result.accessToken);
 
       if (requiresAssurance) {
         navigation.navigate("AssuranceWizard");

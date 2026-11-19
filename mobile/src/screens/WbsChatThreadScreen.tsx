@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -8,45 +8,65 @@ import {
   Image,
   StyleSheet,
 } from "react-native";
+import Toast from "react-native-toast-message";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  useNavigation,
-  useRoute,
-  type RouteProp,
-} from "@react-navigation/native";
+import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import {
-  SiteEvidenceCameraModal,
-  type SiteEvidenceBatchSubmission,
-} from "../components/camera";
-import {
-  VoiceNoteBubble,
-  VoiceNoteRecorder,
-  formatDurationMs,
-  type VoiceRecordingResult,
-} from "../components/audio";
-import {
-  EmptyStateCard,
-  InfoCallout,
-  InSiteLoader,
-  Pill,
-} from "../components/common";
+import { formatElapsedTime } from "@insite/shared";
+import { SiteEvidenceCameraModal, type SiteEvidenceBatchSubmission } from "../components/camera";
+import { VoiceNoteBubble, VoiceNoteRecorder, type VoiceRecordingResult } from "../components/audio";
+import { EmptyStateCard, InfoCallout, InSiteLoader, Pill, type PillVariant } from "../components/common";
 import { BackButton } from "../components/inputs/Buttons";
-import { captureCurrentGeotag } from "../services/locationService";
+import { acquireFix, previewGeofence, type GeofencePreview } from "../services/locationService";
 import { useProfile } from "../context/ProfileContext";
-import {
-  useSendWbsMessageMutation,
-  useWbsChatMessagesQuery,
-} from "../queries/wbs/useWbsQueries";
+import { useSendWbsMessageMutation, useWbsChatMessagesQuery } from "../queries/wbs/useWbsQueries";
+import { saveCapture } from "../storage/captureStore";
+import type { ChatCaptureView, WbsChatMessageRecord } from "../storage/wbsRepository";
+import { getMediaUrl } from "../api/evidence/evidenceApi";
 import type { RootStackParamList } from "../navigation/types";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { defaultColors } from "../styles/commonStyles";
+
+/** Time of a message, formatted at render from its ISO timestamp. */
+function timeLabel(iso: string): string {
+  return formatElapsedTime(iso) || "";
+}
+
+/** The only states a capture badge may show: what the app or server actually computed. */
+function captureBadge(c: ChatCaptureView | undefined): { text: string; variant: PillVariant } | null {
+  if (!c) return null;
+  if (c.isMocked) return { text: "Mock location flagged", variant: "negative" };
+  if (c.locationAvailable === false) return { text: "Location unavailable", variant: "warning" };
+  if (c.uploadState === "PENDING_UPLOAD") return { text: "Pending upload", variant: "gray" };
+  if (c.integrityPassed === false) return { text: "Failed integrity check", variant: "negative" };
+  if (c.isWithinGeofence === true) return { text: "In geofence", variant: "positive" };
+  if (c.isWithinGeofence === false) return { text: "Outside geofence", variant: "warning" };
+  return { text: "Uploaded", variant: "info" };
+}
+
+/** Shows the local file, or fetches a short-lived signed URL for a server-only capture. */
+const CaptureImage: React.FC<{ projectId: string; capture: ChatCaptureView; style: any }> = ({
+  projectId,
+  capture,
+  style,
+}) => {
+  const [uri, setUri] = useState<string | null>(capture.localUri);
+  useEffect(() => {
+    if (capture.localUri || !capture.objectKey || !projectId) return;
+    let alive = true;
+    getMediaUrl(projectId, capture.objectKey)
+      .then((u) => alive && setUri(u))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [projectId, capture.localUri, capture.objectKey]);
+  return uri ? <Image source={{ uri }} style={style} resizeMode="cover" /> : <View style={[style, { backgroundColor: "#E2E8F0" }]} />;
+};
 
 export const WbsChatThreadScreen: React.FC = () => {
-  const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, "WbsThread">>();
   const {
     wbsItem,
@@ -56,26 +76,43 @@ export const WbsChatThreadScreen: React.FC = () => {
     reportQueryId: routeReportQueryId,
   } = route.params;
   const { activeProjectId, profile } = useProfile();
-
   const userName = profile?.fullName || "Field Engineer";
-  const onBack = () => navigation.goBack();
+  const mySessionId = profile?.activeSessionId ?? null;
   const [inputText, setInputText] = useState("");
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [here, setHere] = useState<GeofencePreview | "LOCATING" | "NO_FIX">("LOCATING");
   const insets = useSafeAreaInsets();
 
-  const { data: messages = [], isLoading: loadingMessages } =
-    useWbsChatMessagesQuery(wbsItem.id, activeProjectId);
-  const sendMessageMutation = useSendWbsMessageMutation(wbsItem.id);
+  const { data: messages = [], isLoading: loadingMessages } = useWbsChatMessagesQuery(wbsItem.id, activeProjectId);
+  const sendMessage = useSendWbsMessageMutation(wbsItem.id);
 
-  // Determine whether an unresolved query (from Monitor or AI Omission Check) is open on this WBS thread
+  // Header shows where the phone is now, computed locally (the server checks every capture again).
+  useEffect(() => {
+    let alive = true;
+    acquireFix().then((fix) => {
+      if (alive) setHere(fix ? previewGeofence(fix) : "NO_FIX");
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const herePill: { text: string; variant: PillVariant } =
+    here === "LOCATING"
+      ? { text: "Locating…", variant: "darkGlass" }
+      : here === "NO_FIX"
+        ? { text: "Location unavailable", variant: "warning" }
+        : here.isWithinGeofence === true
+          ? { text: here.chainageLabel ? `In geofence · ${here.chainageLabel}` : "In geofence", variant: "positive" }
+          : here.isWithinGeofence === false
+            ? { text: "Outside geofence", variant: "warning" }
+            : { text: "Geofence unknown", variant: "darkGlass" };
+
   const openServerQueryMsg = useMemo(() => {
     for (let i = messages.length - 1; i >= 0; i--) {
       const m = messages[i];
-      if (
-        (m.messageType === "AI_QUERY" || m.messageType === "MONITOR_QUERY") &&
-        (!m.queryDetails || m.queryDetails.status === "OPEN")
-      ) {
+      if ((m.messageType === "AI_QUERY" || m.messageType === "MONITOR_QUERY") && m.queryDetails?.status === "OPEN") {
         return m;
       }
     }
@@ -83,150 +120,131 @@ export const WbsChatThreadScreen: React.FC = () => {
   }, [messages]);
 
   const effectiveReportId =
-    openServerQueryMsg?.workdayReportId ||
-    openServerQueryMsg?.queryDetails?.workdayReportId ||
-    routeWorkdayReportId;
-  const effectiveQueryId =
-    openServerQueryMsg?.reportQueryId ||
-    openServerQueryMsg?.queryDetails?.id ||
-    routeReportQueryId;
+    openServerQueryMsg?.workdayReportId || openServerQueryMsg?.queryDetails?.workdayReportId || routeWorkdayReportId;
+  const effectiveQueryId = openServerQueryMsg?.reportQueryId || openServerQueryMsg?.queryDetails?.id || routeReportQueryId;
+  const hasOpenQuery = Boolean(openServerQueryMsg || (activeQueryNotificationId && effectiveQueryId));
 
-  const hasOpenQuery = Boolean(
-    openServerQueryMsg || activeQueryNotificationId || effectiveQueryId,
-  );
-
-  const onOpenEodConfirmation = () =>
+  const onOpenReport = () =>
     navigation.navigate("EodConfirmModal", {
       wbsItem,
       resolveNotificationId: activeQueryNotificationId,
-      workdayReportId: hasOpenQuery
-        ? (effectiveReportId ?? undefined)
-        : undefined,
+      workdayReportId: hasOpenQuery ? (effectiveReportId ?? undefined) : undefined,
       reportQueryId: hasOpenQuery ? (effectiveQueryId ?? undefined) : undefined,
-      initialSummary:
-        hasOpenQuery && !openServerQueryMsg ? queryPrompt : undefined,
+      initialSummary: hasOpenQuery && !openServerQueryMsg ? queryPrompt : undefined,
     });
 
-  const handleSendText = async () => {
-    if (!inputText.trim()) return;
-    const textToSend = inputText.trim();
-    setInputText("");
+  const isMine = (m: WbsChatMessageRecord) =>
+    m.syncStatus !== "SERVER" || (mySessionId !== null && m.senderSessionId === mySessionId);
 
-    await sendMessageMutation.mutateAsync({
-      projectId: activeProjectId ?? undefined,
-      wbsItemId: wbsItem.id,
-      workdayReportId: effectiveReportId ?? undefined,
-      reportQueryId: effectiveQueryId ?? undefined,
-      senderName: userName,
-      senderRole: "ENGINEER",
-      messageType: "TEXT_COMMENT",
-      textContent: textToSend,
-      timestamp: "Just now",
+  const fail = (err: unknown) =>
+    Toast.show({
+      type: "error",
+      props: { title: "Not saved", message: (err as Error)?.message || "Could not save on this device." },
     });
+
+  const base = {
+    projectId: activeProjectId,
+    wbsItemId: wbsItem.id,
+    senderName: userName,
+    senderSessionId: mySessionId,
+    senderRole: "ENGINEER",
+    workdayReportId: hasOpenQuery ? (effectiveReportId ?? null) : null,
+    reportQueryId: hasOpenQuery ? (effectiveQueryId ?? null) : null,
   };
 
-  const handleSnapPhoto = () => {
-    setShowCameraModal(true);
+  const handleSendText = async () => {
+    const text = inputText.trim();
+    if (!text) return;
+    setInputText("");
+    try {
+      await sendMessage.mutateAsync({ ...base, messageType: "TEXT_COMMENT", textContent: text });
+    } catch (err) {
+      setInputText(text);
+      fail(err);
+    }
   };
 
   const handleBatchCaptured = async (batch: SiteEvidenceBatchSubmission) => {
     if (batch.photos.length === 0) return;
-    const firstGps = batch.photos.find((p) => p.gps)?.gps;
-    const photoUris = batch.photos.map((p) => p.dataUri);
-
-    await sendMessageMutation.mutateAsync({
-      projectId: activeProjectId ?? undefined,
-      wbsItemId: wbsItem.id,
-      workdayReportId: effectiveReportId ?? undefined,
-      reportQueryId: effectiveQueryId ?? undefined,
-      senderName: userName,
-      senderRole: "ENGINEER",
-      messageType: "PHOTO",
-      mediaUri: photoUris[0],
-      mediaUris: photoUris,
-      caption:
-        batch.caption ||
-        (photoUris.length > 1
-          ? `${photoUris.length} site photos captured`
-          : `Site progress photo (${batch.photos[0].orientation})`),
-      latitude: firstGps?.latitude ?? 6.4698,
-      longitude: firstGps?.longitude ?? 3.5852,
-      chainageLabel: firstGps
-        ? `GPS ${firstGps.latitude.toFixed(4)}, ${firstGps.longitude.toFixed(4)}`
-        : "Ch 14+200",
-      timestamp: "Just now",
-    });
-
     setShowCameraModal(false);
+    try {
+      for (const [i, photo] of batch.photos.entries()) {
+        const capture = await saveCapture({
+          projectId: activeProjectId,
+          wbsItemId: wbsItem.id,
+          mediaType: "SITE_PHOTO",
+          sourceUri: photo.uri,
+          mimeType: "image/jpeg",
+          fileExtension: "jpg",
+          caption: batch.caption || null,
+          // The fix taken at this photo's shutter; none means "location unavailable", never a default.
+          fix: photo.gps ?? null,
+          capturedAt: photo.capturedAt,
+        });
+        await sendMessage.mutateAsync({
+          ...base,
+          messageType: "PHOTO",
+          captureId: capture.id,
+          textContent: i === 0 ? batch.caption || null : null,
+        });
+      }
+    } catch (err) {
+      fail(err);
+    }
   };
 
   const handleVoiceNoteRecorded = async (result: VoiceRecordingResult) => {
-    const gps = await captureCurrentGeotag(`VOICE_NOTE:${wbsItem.wbsCode}`);
-    await sendMessageMutation.mutateAsync({
-      projectId: activeProjectId ?? undefined,
-      wbsItemId: wbsItem.id,
-      workdayReportId: effectiveReportId ?? undefined,
-      reportQueryId: effectiveQueryId ?? undefined,
-      senderName: userName,
-      senderRole: "ENGINEER",
-      messageType: "VOICE_NOTE",
-      mediaUri: result.uri,
-      durationMs: result.durationMs,
-      waveform: result.waveform,
-      textContent: `Voice log (${formatDurationMs(result.durationMs)})`,
-      latitude: gps?.latitude,
-      longitude: gps?.longitude,
-      chainageLabel: gps
-        ? gps.chainageLabel ||
-          `GPS ${gps.latitude.toFixed(4)}, ${gps.longitude.toFixed(4)}`
-        : "Ch 14+200",
-      timestamp: "Just now",
-    });
-
     setShowVoiceRecorder(false);
+    try {
+      const fix = await acquireFix();
+      const capture = await saveCapture({
+        projectId: activeProjectId,
+        wbsItemId: wbsItem.id,
+        mediaType: "VOICE_NOTE",
+        sourceUri: result.uri,
+        mimeType: result.mimeType,
+        fileExtension: result.fileName.split(".").pop() || "m4a",
+        durationSeconds: result.durationMs / 1000,
+        fix,
+        capturedAt: new Date().toISOString(),
+      });
+      await sendMessage.mutateAsync({ ...base, messageType: "VOICE_NOTE", captureId: capture.id });
+    } catch (err) {
+      fail(err);
+    }
   };
 
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-
-      {/* Dynamic Gradient Thread Header */}
       <LinearGradient
         colors={["#0891B2", "#1E3A8A", "#312E81", "#1E1B4B"]}
         locations={[0, 0.35, 0.75, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0.9 }}
-        style={[
-          styles.headerGradient,
-          { paddingTop: Math.max(insets.top + 8, 20) },
-        ]}
+        style={[styles.headerGradient, { paddingTop: Math.max(insets.top + 8, 20) }]}
       >
         <View style={styles.headerTop}>
           <View style={styles.closeRow}>
-            <BackButton onPress={onBack} />
+            <BackButton onPress={() => navigation.goBack()} />
             <Text style={styles.threadWbsTitle}>WBS {wbsItem.wbsCode}</Text>
           </View>
-          <Pill variant="positive" text="In-Zone · Ch 14+200" />
+          <Pill variant={herePill.variant} text={herePill.text} />
         </View>
-
         <Text style={styles.threadWbsDesc} numberOfLines={1}>
           {wbsItem.description}
         </Text>
       </LinearGradient>
 
-      {/* Curved Chat Stream Container */}
       <View style={styles.curvedContainer}>
-        <ScrollView
-          contentContainerStyle={styles.chatStream}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={styles.chatStream} showsVerticalScrollIndicator={false}>
           {hasOpenQuery && !openServerQueryMsg && (
             <InfoCallout
               variant="warning"
-              title="Clarification Requested"
+              title="Clarification requested"
               description={
                 queryPrompt ||
-                "Add clarifying photos, voice notes, or omission reasons in this chat, then tap Re-submit Daily Report below."
+                "Add photos, voice notes or a reason in this chat, then revise your report below."
               }
             />
           )}
@@ -234,8 +252,8 @@ export const WbsChatThreadScreen: React.FC = () => {
             <InSiteLoader size="sm" label="Loading WBS thread..." />
           ) : messages.length === 0 ? (
             <EmptyStateCard
-              title={`WBS ${wbsItem.wbsCode} Thread Ready`}
-              description="Snap a live site photo, record a voice log, or post a progress/delay note below."
+              title={`WBS ${wbsItem.wbsCode} thread`}
+              description="Add photos, voice notes and notes here during the day. Submit your full report at the end of the day."
             />
           ) : null}
           {messages.map((msg) => {
@@ -244,67 +262,29 @@ export const WbsChatThreadScreen: React.FC = () => {
                 <View key={msg.id} style={styles.briefCard}>
                   <View style={styles.briefBadgeRow}>
                     <Text style={styles.briefBadgeText}>
-                      Workday Start · 08:00 WAT
+                      Morning brief{msg.briefDate ? ` · ${msg.briefDate}` : ""}
                     </Text>
                   </View>
-                  <Text style={styles.briefTitle}>
-                    Morning Deliverable Brief
-                  </Text>
+                  <Text style={styles.briefTitle}>Today's deliverable</Text>
                   <Text style={styles.briefBody}>{msg.textContent}</Text>
                 </View>
               );
             }
 
-            if (msg.messageType === "EOD_PROMPT") {
-              return (
-                <View key={msg.id} style={styles.eodCard}>
-                  <View style={styles.briefBadgeRow}>
-                    <Text style={styles.briefBadgeText}>
-                      Workday End · 17:00 WAT
-                    </Text>
-                  </View>
-                  <Text style={styles.eodTitle}>End-of-Day Wrap-Up</Text>
-                  <Text style={styles.eodBody}>{msg.textContent}</Text>
-                  <TouchableOpacity
-                    style={styles.eodButton}
-                    onPress={onOpenEodConfirmation}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.eodButtonText}>
-                      Record EOD Summary &amp; Submit
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            }
-
-            if (
-              msg.messageType === "AI_QUERY" ||
-              msg.messageType === "MONITOR_QUERY"
-            ) {
+            if (msg.messageType === "AI_QUERY" || msg.messageType === "MONITOR_QUERY") {
               const isAiQuery = msg.messageType === "AI_QUERY";
               const queryStatus = msg.queryDetails?.status || "OPEN";
               const isOpen = queryStatus === "OPEN";
-              const omitted =
-                msg.queryDetails?.aiOmissionPayload?.omittedItems || [];
-
+              const omitted = msg.queryDetails?.aiOmissionPayload?.omittedItems || [];
               return (
-                <View
-                  key={msg.id}
-                  style={[
-                    styles.queryCard,
-                    !isOpen && styles.queryCardResolved,
-                  ]}
-                >
+                <View key={msg.id} style={[styles.queryCard, !isOpen && styles.queryCardResolved]}>
                   <View style={styles.queryHeaderRow}>
                     <Pill
-                      variant={
-                        !isOpen ? "positive" : isAiQuery ? "warning" : "info"
-                      }
-                      text={isAiQuery ? "AI Omission Query" : "Monitor Query"}
+                      variant={!isOpen ? "positive" : isAiQuery ? "warning" : "info"}
+                      text={isAiQuery ? "Missing evidence check" : "Monitor query"}
                     />
                     <Text style={styles.queryTimeText}>
-                      {queryStatus} · {msg.timestamp}
+                      {queryStatus} · {timeLabel(msg.createdAt)}
                     </Text>
                   </View>
                   <Text style={styles.querySenderText}>{msg.senderName}</Text>
@@ -325,64 +305,22 @@ export const WbsChatThreadScreen: React.FC = () => {
             if (msg.messageType === "QUERY_RESPONSE") {
               return (
                 <View key={msg.id} style={styles.queryResponseCard}>
-                  <Text style={styles.queryResponseBadge}>
-                    Resubmitted for AI Re-parse · {msg.timestamp}
-                  </Text>
-                  <Text style={styles.queryResponseText}>
-                    {msg.textContent}
-                  </Text>
+                  <Text style={styles.queryResponseBadge}>Revision submitted · {timeLabel(msg.createdAt)}</Text>
+                  <Text style={styles.queryResponseText}>{msg.textContent}</Text>
                 </View>
               );
             }
 
-            if (msg.messageType === "PHOTO") {
-              const photoList =
-                msg.mediaUris && msg.mediaUris.length > 0
-                  ? msg.mediaUris
-                  : msg.mediaUri
-                    ? [msg.mediaUri]
-                    : [];
-              const isGrid = photoList.length > 1;
-
+            if (msg.messageType === "PHOTO" && msg.capture) {
+              const badge = captureBadge(msg.capture);
               return (
                 <View key={msg.id} style={styles.photoMessageContainer}>
-                  {isGrid ? (
-                    <View style={styles.photoBubbleGrid}>
-                      {photoList.map((uri, idx) => {
-                        const isOddFullSpan =
-                          photoList.length % 2 === 1 && idx === 0;
-                        return (
-                          <Image
-                            key={`${msg.id}-img-${idx}`}
-                            source={{ uri }}
-                            style={[
-                              styles.photoGridItem,
-                              isOddFullSpan && styles.photoGridItemFull,
-                            ]}
-                            resizeMode="cover"
-                          />
-                        );
-                      })}
-                    </View>
-                  ) : (
-                    photoList[0] && (
-                      <Image
-                        source={{ uri: photoList[0] }}
-                        style={styles.photoImage}
-                        resizeMode="cover"
-                      />
-                    )
-                  )}
-
+                  <CaptureImage projectId={activeProjectId} capture={msg.capture} style={styles.photoImage} />
                   <View style={styles.photoCaptionBox}>
-                    {Boolean(msg.caption) && (
-                      <Text style={styles.photoCaptionText}>{msg.caption}</Text>
-                    )}
+                    {Boolean(msg.textContent) && <Text style={styles.photoCaptionText}>{msg.textContent}</Text>}
                     <View style={styles.photoMetaRow}>
-                      <Text style={styles.photoMetaText}>
-                        {msg.chainageLabel || "Ch 14+200"} · GPS Verified
-                      </Text>
-                      <Text style={styles.photoMetaText}>{msg.timestamp}</Text>
+                      {badge && <Pill variant={badge.variant} text={badge.text} />}
+                      <Text style={styles.photoMetaText}>{timeLabel(msg.createdAt)}</Text>
                     </View>
                   </View>
                 </View>
@@ -390,57 +328,39 @@ export const WbsChatThreadScreen: React.FC = () => {
             }
 
             if (msg.messageType === "VOICE_NOTE") {
+              const badge = captureBadge(msg.capture);
               return (
                 <VoiceNoteBubble
                   key={msg.id}
                   senderName={msg.senderName}
-                  audioUri={msg.mediaUri}
-                  durationMs={msg.durationMs}
-                  waveform={msg.waveform}
-                  timestamp={msg.timestamp}
-                  chainageLabel={msg.chainageLabel}
-                  isMe={msg.senderRole === "ENGINEER"}
+                  audioUri={msg.capture?.localUri ?? undefined}
+                  durationMs={msg.capture?.durationSeconds != null ? msg.capture.durationSeconds * 1000 : undefined}
+                  timestamp={timeLabel(msg.createdAt)}
+                  chainageLabel={badge?.text}
+                  isMe={isMine(msg)}
                 />
               );
             }
 
-            // Text comment bubble
-            const isMe = msg.senderRole === "ENGINEER";
+            const isMe = isMine(msg);
             return (
-              <View
-                key={msg.id}
-                style={[
-                  styles.chatBubble,
-                  isMe ? styles.chatBubbleMe : styles.chatBubbleOther,
-                ]}
-              >
-                <Text
-                  style={[styles.bubbleSender, isMe && styles.bubbleSenderMe]}
-                >
-                  {msg.senderName}
-                </Text>
-                <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>
-                  {msg.textContent}
-                </Text>
+              <View key={msg.id} style={[styles.chatBubble, isMe ? styles.chatBubbleMe : styles.chatBubbleOther]}>
+                <Text style={[styles.bubbleSender, isMe && styles.bubbleSenderMe]}>{msg.senderName}</Text>
+                <Text style={[styles.bubbleText, isMe && styles.bubbleTextMe]}>{msg.textContent}</Text>
                 <Text style={[styles.bubbleTime, isMe && styles.bubbleTimeMe]}>
-                  {msg.timestamp}
+                  {msg.syncStatus === "QUEUED" ? "Waiting to send · " : ""}
+                  {timeLabel(msg.createdAt)}
                 </Text>
               </View>
             );
           })}
         </ScrollView>
 
-        {/* Bottom Composer */}
-        <View
-          style={[
-            styles.composerContainer,
-            { paddingBottom: Math.max(insets.bottom + 6, 12) },
-          ]}
-        >
+        <View style={[styles.composerContainer, { paddingBottom: Math.max(insets.bottom + 6, 12) }]}>
           {showVoiceRecorder && (
             <View style={styles.voiceRecorderWrapper}>
               <VoiceNoteRecorder
-                submitLabel="Send Voice Log"
+                submitLabel="Send voice note"
                 onRecordingComplete={handleVoiceNoteRecorded}
                 onCancel={() => setShowVoiceRecorder(false)}
               />
@@ -450,78 +370,55 @@ export const WbsChatThreadScreen: React.FC = () => {
           <View style={styles.composerRow}>
             <TouchableOpacity
               style={styles.cameraIconBtn}
-              onPress={handleSnapPhoto}
+              onPress={() => setShowCameraModal(true)}
               activeOpacity={0.8}
-              accessibilityLabel="Snap in-app camera photo"
+              accessibilityLabel="Take a site photo"
             >
-              <MaterialCommunityIcons
-                name={"camera"}
-                size={16}
-                color={"#fff"}
-              />
+              <MaterialCommunityIcons name={"camera"} size={16} color={"#fff"} />
             </TouchableOpacity>
-
             <TouchableOpacity
-              style={[
-                styles.cameraIconBtn,
-                showVoiceRecorder && styles.micIconBtnActive,
-              ]}
+              style={[styles.cameraIconBtn, showVoiceRecorder && styles.micIconBtnActive]}
               onPress={() => setShowVoiceRecorder((prev) => !prev)}
               activeOpacity={0.8}
-              accessibilityLabel="Record field voice note"
+              accessibilityLabel="Record a voice note"
             >
-              <MaterialCommunityIcons
-                name={"microphone"}
-                size={16}
-                color={"#fff"}
-              />
+              <MaterialCommunityIcons name={"microphone"} size={16} color={"#fff"} />
             </TouchableOpacity>
-
             <TextInput
               style={styles.composerInput}
               value={inputText}
               onChangeText={setInputText}
-              placeholder={`Message or delay note for WBS ${wbsItem.wbsCode}...`}
+              placeholder={`Note for WBS ${wbsItem.wbsCode} (e.g. cement arrived late)`}
               placeholderTextColor="#94A3B8"
             />
-
             <TouchableOpacity
               style={styles.sendIconBtn}
               onPress={handleSendText}
               activeOpacity={0.8}
-              accessibilityLabel="Send comment"
+              accessibilityLabel="Send note"
             >
               <Text style={styles.sendIconText}>➤</Text>
             </TouchableOpacity>
           </View>
 
-          {/* EOD Action Quick Bar (re-enabled when an active query requires resubmission) */}
           {wbsItem.isReportedToday && !hasOpenQuery ? (
             <View style={[styles.quickEodBar, styles.quickEodBarCompleted]}>
-              <Text style={styles.quickEodBarCompletedText}>
-                Daily Report Submitted Today ✓
-              </Text>
+              <Text style={styles.quickEodBarCompletedText}>Report submitted for today ✓</Text>
             </View>
           ) : (
             <TouchableOpacity
-              style={[
-                styles.quickEodBar,
-                hasOpenQuery && styles.quickEodBarResubmit,
-              ]}
-              onPress={onOpenEodConfirmation}
+              style={[styles.quickEodBar, hasOpenQuery && styles.quickEodBarResubmit]}
+              onPress={onOpenReport}
               activeOpacity={0.8}
             >
               <Text style={styles.quickEodBarText}>
-                {hasOpenQuery
-                  ? "Re-submit Daily Report (Query Open)"
-                  : "Submit Daily Report"}
+                {hasOpenQuery ? "Revise report (query open)" : "Submit full report for today"}
               </Text>
             </TouchableOpacity>
           )}
         </View>
       </View>
 
-      {/* Modular Site Evidence Camera & Batch Caption Modal */}
       <SiteEvidenceCameraModal
         visible={showCameraModal}
         wbsCode={wbsItem.wbsCode}

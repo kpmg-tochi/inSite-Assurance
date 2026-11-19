@@ -535,6 +535,7 @@ describe('Phase 2 route security', { concurrency: false }, () => {
         .post(`/api/v1/projects/${ids.lkk}/incidents`)
         .set(bearer(fieldToken))
         .send({
+          clientIncidentId: crypto.randomUUID(),
           category: 'WHISTLEBLOWING',
           title: 'Cement diversion',
           description: 'Bags of cement leaving site at night on a private truck.',

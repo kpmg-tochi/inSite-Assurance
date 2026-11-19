@@ -2,7 +2,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { guardProjectRoutes, projectIdForFieldWrite } from '../../utils/accessControl';
 import {
   RevalidateWorkdayReportRequestSchema,
-  SubmitWorkdayReportBundleSchema,
+  SubmitWorkdayReportRequestSchema,
+  SuggestWorkdaySummaryRequestSchema,
 } from '@insite/shared';
 import {
   requireAnyAuthWithWebPermission,
@@ -12,27 +13,50 @@ import { validateBody } from '../../middleware/validate.middleware';
 import {
   listProjectWorkdayReports,
   revalidateWorkdayReport,
-  submitWorkdayReportBundle,
+  submitWorkdayReport,
+  suggestWorkdaySummary,
 } from './workdayReports.service';
 
 const router = guardProjectRoutes(Router());
 
 /**
  * POST /api/v1/projects/:projectId/workday-reports
- * Submits a signed End-of-Day workday report with submission geotag provenance.
+ * Submits a confirmed end-of-day report. 201 when created, 200 when replaying the same clientReportId.
  */
 router.post(
   '/:projectId/workday-reports',
   requireFieldSession,
-  validateBody(SubmitWorkdayReportBundleSchema),
+  validateBody(SubmitWorkdayReportRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const report = await submitWorkdayReportBundle({
+      const result = await submitWorkdayReport({
         projectId: projectIdForFieldWrite(req),
-        reporterSessionId: req.fieldAgent!.sessionId,
+        fieldAgent: req.fieldAgent!,
         input: req.body,
       });
-      res.status(201).json({ success: true, data: report });
+      res.status(result.created ? 201 : 200).json({ success: true, data: result.report });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/v1/projects/:projectId/workday-reports/suggest
+ * Optional assist: transcripts plus a suggested summary and quantity. Not stored as evidence.
+ */
+router.post(
+  '/:projectId/workday-reports/suggest',
+  requireFieldSession,
+  validateBody(SuggestWorkdaySummaryRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const suggestion = await suggestWorkdaySummary({
+        projectId: projectIdForFieldWrite(req),
+        fieldAgent: req.fieldAgent!,
+        input: req.body,
+      });
+      res.json({ success: true, data: suggestion });
     } catch (error) {
       next(error);
     }
@@ -41,7 +65,7 @@ router.post(
 
 /**
  * POST /api/v1/projects/:projectId/workday-reports/:reportId/revalidate
- * Re-submits a queried WBS daily report for AI chat re-parsing and notifies the Monitor.
+ * A new revision answering a query. Same idempotency and ownership rules as a submission.
  */
 router.post(
   '/:projectId/workday-reports/:reportId/revalidate',
@@ -49,13 +73,13 @@ router.post(
   validateBody(RevalidateWorkdayReportRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const report = await revalidateWorkdayReport({
+      const result = await revalidateWorkdayReport({
         projectId: projectIdForFieldWrite(req),
         reportId: String(req.params.reportId),
-        reporterSessionId: req.fieldAgent!.sessionId,
+        fieldAgent: req.fieldAgent!,
         input: req.body,
       });
-      res.status(201).json({ success: true, data: report });
+      res.status(result.created ? 201 : 200).json({ success: true, data: result.report });
     } catch (error) {
       next(error);
     }
@@ -64,7 +88,7 @@ router.post(
 
 /**
  * GET /api/v1/projects/:projectId/workday-reports
- * Lists daily workday reports for the Web Portal and mobile sync.
+ * Lists workday reports for the web portal and for mobile sync (field agents see only their own).
  */
 router.get(
   '/:projectId/workday-reports',
@@ -73,10 +97,7 @@ router.get(
     try {
       const reports = await listProjectWorkdayReports({
         projectId: String(req.params.projectId),
-        workdayDate: req.query.workdayDate
-          ? String(req.query.workdayDate)
-          : undefined,
-        // Field agents only ever see their own reports.
+        workdayDate: req.query.workdayDate ? String(req.query.workdayDate) : undefined,
         reporterSessionId: req.fieldAgent?.sessionId,
       });
       res.json({ success: true, data: reports });
@@ -87,4 +108,3 @@ router.get(
 );
 
 export const workdayReportsRoutes = router;
-

@@ -21,6 +21,8 @@ export interface LocalUserProfile {
   activeRequiresIdentityAssurance?: boolean;
   activePermissions?: string[];
   assuranceStatus?: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'NOT_SUBMITTED';
+  /** Reviewer's reason when the identity check was returned. */
+  rejectionReason?: string | null;
   onboardingCompleted: boolean;
 }
 
@@ -109,6 +111,8 @@ export async function updateLocalProfile(
       updates.activePermissions ?? existing?.activePermissions ?? [],
     assuranceStatus:
       updates.assuranceStatus ?? existing?.assuranceStatus ?? 'NOT_SUBMITTED',
+    rejectionReason:
+      updates.rejectionReason !== undefined ? updates.rejectionReason : existing?.rejectionReason ?? null,
     onboardingCompleted:
       updates.onboardingCompleted ?? existing?.onboardingCompleted ?? false,
   };

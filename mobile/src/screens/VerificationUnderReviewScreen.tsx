@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useProfile } from '../context/ProfileContext';
 import { View, Text, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -13,11 +14,22 @@ import type { RootStackParamList } from '../navigation/types';
 export const VerificationUnderReviewScreen: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { profile, refreshAssuranceStatus } = useProfile();
   const onDismiss = () =>
     navigation.reset({
       index: 0,
       routes: [{ name: 'WbsInbox' }],
     });
+
+  useEffect(() => {
+    void refreshAssuranceStatus();
+  }, [refreshAssuranceStatus]);
+
+  useEffect(() => {
+    if (profile?.assuranceStatus === 'APPROVED') {
+      navigation.reset({ index: 0, routes: [{ name: 'WbsInbox' }] });
+    }
+  }, [profile?.assuranceStatus, navigation]);
   return (
     <GradientHeaderLayout
       title="InSite Assurance"
@@ -29,20 +41,20 @@ export const VerificationUnderReviewScreen: React.FC = () => {
 
         <Text style={styles.title}>Submission Under Review</Text>
         <Text style={styles.subtitle}>
-          Your government ID photo, facial liveness signature, and COREN credentials have been
-          submitted to the Independent Project Monitor for facility verification.
+          Your ID photo, three selfies and COREN credentials have been sent to the Independent
+          Monitor, who will compare them and approve or return them.
         </Text>
 
         <InfoCallout
           variant="info"
-          title="Non-Blocking Field Access"
-          description="You do not need to wait for approval to begin your site day! You can proceed directly to the WBS chat inbox, snap photos, and record notes."
+          title="You can start work now"
+          description="Take photos, record voice notes and submit your daily reports while you wait."
         />
 
         <InfoCallout
           variant="neutral"
-          title="Local Backlog Protection"
-          description="To prevent unauthorized baseline updates and preserve AI compute, your daily logs will queue safely on this device. When approved, a push notification will alert you to review and confirm your submission backlog."
+          title="Reports are held until approval"
+          description="Your reports are sent to the server and held there. When your identity is approved they are submitted automatically; you do not need to send them again. If the review is returned, you will see the reason and can resubmit."
         />
 
         <PrimaryButton

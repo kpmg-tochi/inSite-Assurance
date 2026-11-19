@@ -2,9 +2,11 @@ import { createApp } from "./app";
 import { env } from "./config/env";
 import { prisma } from "./config/prisma";
 import { startMorningBriefCron } from "./jobs/morningBriefCron";
+import { startAiOmissionCheckSweep } from "./modules/workday-reports/aiOmissionCheck";
 
 const app = createApp();
 const stopMorningBriefCron = startMorningBriefCron();
+const stopAiCheckSweep = startAiOmissionCheckSweep(env.AI_CHECK_SWEEP_INTERVAL_SECONDS);
 
 const server = app.listen(env.PORT, "0.0.0.0", () => {
   console.log(
@@ -15,6 +17,7 @@ const server = app.listen(env.PORT, "0.0.0.0", () => {
 async function shutdown() {
   console.log("[InSite Assurance API] Shutting down gracefully...");
   stopMorningBriefCron();
+  stopAiCheckSweep();
   server.close(async () => {
     await prisma.$disconnect();
     process.exit(0);

@@ -24,6 +24,7 @@ export * from './schemas/wbsChat.schema';
 
 // Global Shared Utilities
 export * from './utils/time';
+export * from './utils/deviceSignature';
 
 // Shared Turf.js Radial & Linear Corridor Chainage Geospatial Utilities
 export * from './geo/geofence';

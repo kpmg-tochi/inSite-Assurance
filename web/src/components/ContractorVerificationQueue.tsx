@@ -41,9 +41,10 @@ export default function ContractorVerificationQueue({
     useState<ContractorVerificationRecordDto | null>(null);
   const [reviewRemarks, setReviewRemarks] = useState('');
 
-  // Fetch real verification submissions from API
+  // The endpoint requires assurance:review_credentials; never request it without that permission.
   const { data: verifications = [], isLoading } = useContractorVerificationsQuery(
-    projectId || 'all'
+    projectId || 'all',
+    hasPermission('assurance:review_credentials')
   );
 
   const reviewMutation = useReviewContractorVerificationMutation();
@@ -129,7 +130,7 @@ export default function ContractorVerificationQueue({
               )}
             </div>
             <p className="text-xs text-slate-500">
-              Identity, live 3D selfie liveness, and COREN credentials submitted via mobile onboarding
+              ID photo, guided selfie set (3 poses) and COREN credentials for manual review
             </p>
           </div>
         </div>
@@ -205,14 +206,6 @@ export default function ContractorVerificationQueue({
                           alt={verification.agentFullName}
                           className="w-11 h-11 rounded-xl object-cover border border-slate-200 shadow-2xs"
                         />
-                        {verification.livenessPassed && (
-                          <div
-                            className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-xs"
-                            title="3D Liveness Verified"
-                          >
-                            <Check className="w-2.5 h-2.5 stroke-[3]" />
-                          </div>
-                        )}
                       </div>
                     ) : (
                       <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-700 font-bold flex items-center justify-center text-sm shrink-0 border border-slate-200">
@@ -247,10 +240,10 @@ export default function ContractorVerificationQueue({
                           </span>
                         )}
 
-                        {verification.livenessPassed && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-                            <Check className="w-3 h-3 text-emerald-600" />
-                            3D Liveness Passed
+                        {verification.selfieImageUrl && verification.selfieLeftUrl && verification.selfieRightUrl && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700">
+                            <Camera className="w-3 h-3 text-slate-500" />
+                            Selfie set (3 poses) for manual review
                           </span>
                         )}
 
@@ -380,20 +373,46 @@ export default function ContractorVerificationQueue({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 font-bold text-slate-900">
                     <Camera className="w-4 h-4 text-brand-primary" />
-                    Live 3D Viewfinder Biometrics
+                    Selfie set (3 poses) for manual review
                   </div>
-                  {selectedVerification.livenessPassed && (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                      3D Liveness Confirmed
-                    </span>
-                  )}
+                </div>
+
+                {/* D-4.2: no automated liveness check runs. The reviewer compares the three poses
+                    with each other and with the ID photo. */}
+                <div className="grid grid-cols-3 gap-2">
+                  {(
+                    [
+                      ['Front', selectedVerification.selfieImageUrl],
+                      ['Left', selectedVerification.selfieLeftUrl],
+                      ['Right', selectedVerification.selfieRightUrl],
+                    ] as const
+                  ).map(([label, url]) => (
+                    <div key={label}>
+                      <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                        {label}
+                      </div>
+                      {url ? (
+                        <a href={url} target="_blank" rel="noopener noreferrer">
+                          <img
+                            src={url}
+                            alt={`Selfie ${label.toLowerCase()}`}
+                            className="w-full aspect-square object-cover rounded-lg border border-slate-200"
+                          />
+                        </a>
+                      ) : (
+                        <div className="rounded-lg border border-dashed border-slate-300 aspect-square flex items-center justify-center text-slate-400 text-[11px]">
+                          Not provided
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   {/* Selfie Preview */}
                   <div>
                     <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                      Live Selfie Capture
+                      Front selfie
                     </div>
                     {selectedVerification.selfieImageUrl ? (
                       <div className="relative rounded-lg overflow-hidden border border-slate-200 aspect-square bg-slate-200">
@@ -402,9 +421,6 @@ export default function ContractorVerificationQueue({
                           alt="Selfie"
                           className="w-full h-full object-cover"
                         />
-                        <div className="absolute bottom-0 inset-x-0 bg-slate-950/70 text-white text-[9px] p-1 text-center font-medium">
-                          Active Head-Turn Verified
-                        </div>
                       </div>
                     ) : (
                       <div className="rounded-lg border border-dashed border-slate-300 aspect-square flex items-center justify-center text-slate-400 text-[11px]">
@@ -440,7 +456,7 @@ export default function ContractorVerificationQueue({
                 </div>
 
                 <div className="text-[11px] text-slate-500 pt-1 border-t border-slate-200/60 leading-relaxed">
-                  Liveness verified via client-side head movement telemetry. Government ID document is encrypted in an AES-256 private vault compliant with NDPA 2023 regulations.
+                  No automated liveness check is run. Approve only if the three poses show the same live person as the ID photo. Images are private and shown through links that expire after 5 minutes.
                 </div>
               </div>
 

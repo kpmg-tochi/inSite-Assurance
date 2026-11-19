@@ -7,11 +7,14 @@ import {
   RadialGeofence,
   SYSTEM_PERMISSIONS_CATALOG,
   verifyPointAgainstGeofence,
+  calendarDateInTimeZone,
 } from "@insite/shared";
 import { prisma } from "../config/prisma";
 import { recordAuditEvent } from "../modules/audit/audit.service";
 import { provisionDefaultRoles } from "../modules/rbac/rbac.service";
 import { randomJoinCodeSegment } from "../modules/projects/joinCodes.service";
+import { evaluateGeofence } from "../utils/geofenceEvaluation";
+import { projectObjectPrefix } from "../integrations/storage.service";
 
 let activeSeedPromise: Promise<void> | null = null;
 
@@ -26,6 +29,166 @@ export async function seedDatabase(): Promise<void> {
 
   return activeSeedPromise;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4 seed helper: evidence is a confirmed workday report plus its captures.
+// Seeded captures have no stored object and no device signature; they carry the SEED_FIXTURE
+// flag so the UI shows them as unverified fixtures, never as verified evidence.
+// ---------------------------------------------------------------------------
+
+const SEED_TIMEZONE = "Africa/Lagos";
+
+type SeedCapture = {
+  mediaType: "SITE_PHOTO" | "VOICE_NOTE" | "MILL_CERTIFICATE";
+  caption?: string;
+  latitude: number | null;
+  longitude: number | null;
+  accuracyMeters?: number;
+  capturedAt: Date;
+  transcript?: string;
+};
+
+type SeedSession = {
+  id: string;
+  roleId: string;
+  roleNameSnapshot: string;
+  fieldPersonaType: Prisma.FieldAgentSessionGetPayload<object>["fieldPersonaType"];
+  assuranceWeight: number;
+};
+
+async function seedCaptures(params: {
+  tenantId: string;
+  projectId: string;
+  session: SeedSession;
+  boqItemId: string;
+  workdayReportId: string;
+  geofence: unknown;
+  captures: SeedCapture[];
+}) {
+  for (const c of params.captures) {
+    const located = c.latitude !== null && c.longitude !== null;
+    const geo = evaluateGeofence(
+      params.geofence,
+      located ? { latitude: c.latitude as number, longitude: c.longitude as number } : null,
+    );
+    const ext = c.mediaType === "VOICE_NOTE" ? "m4a" : "jpg";
+    const sha = crypto.randomBytes(32).toString("hex");
+    await prisma.fieldEvidenceLog.create({
+      data: {
+        projectId: params.projectId,
+        boqItemId: params.boqItemId,
+        fieldSessionId: params.session.id,
+        clientCaptureId: crypto.randomUUID(),
+        workdayReportId: params.workdayReportId,
+        reporterRoleId: params.session.roleId,
+        reporterRoleName: params.session.roleNameSnapshot,
+        fieldPersonaType: params.session.fieldPersonaType,
+        assuranceWeight: params.session.assuranceWeight,
+        status: "REGISTERED",
+        caption: c.caption ?? null,
+        locationAvailable: located,
+        latitude: c.latitude,
+        longitude: c.longitude,
+        gpsAccuracyMeters: located ? c.accuracyMeters ?? 5 : null,
+        isMockLocation: false,
+        isWithinGeofence: geo.isWithinGeofence,
+        chainageKm: geo.chainageKm,
+        chainageLabel: geo.chainageLabel,
+        corridorOffsetMeters: geo.corridorOffsetMeters,
+        distanceFromSiteMeters: geo.distanceFromSiteMeters,
+        signatureVerified: null,
+        serverSha256: sha,
+        clientSha256: sha,
+        integrityPassed: true,
+        integrityFlags: ["SEED_FIXTURE"] as unknown as Prisma.InputJsonValue,
+        transcriptionStatus: c.mediaType === "VOICE_NOTE" ? (c.transcript ? "DONE" : "PENDING") : "NOT_APPLICABLE",
+        transcript: c.transcript ?? null,
+        transcriptionEngine: c.transcript ? "SEED_FIXTURE" : null,
+        capturedAtDevice: c.capturedAt,
+        mediaAttachments: {
+          create: {
+            tenantId: params.tenantId,
+            projectId: params.projectId,
+            mediaType: c.mediaType,
+            objectKey: `${projectObjectPrefix(params.tenantId, params.projectId)}seed/${crypto.randomUUID()}.${ext}`,
+            mimeType: c.mediaType === "VOICE_NOTE" ? "audio/mp4" : "image/jpeg",
+            byteSize: 1,
+            sha256FileHash: sha,
+            perceptualHash: null,
+            durationSeconds: c.mediaType === "VOICE_NOTE" ? 24 : null,
+          },
+        },
+      },
+    });
+  }
+}
+
+async function seedReportWithCaptures(params: {
+  tenantId: string;
+  projectId: string;
+  session: SeedSession;
+  boqItem: { id: string; unit: string };
+  geofence: unknown;
+  summaryText: string;
+  reportedQuantity: number;
+  unitOfMeasure?: string;
+  isHoldPointClaimed?: boolean;
+  delaysOrBlockers?: string;
+  confirmedAt: Date;
+  captures: SeedCapture[];
+}) {
+  const anchor = params.captures.find((c) => c.latitude !== null && c.longitude !== null);
+  const geo = anchor
+    ? evaluateGeofence(params.geofence, { latitude: anchor.latitude as number, longitude: anchor.longitude as number })
+    : null;
+  const report = await prisma.workdayReport.create({
+    data: {
+      clientReportId: crypto.randomUUID(),
+      projectId: params.projectId,
+      reporterSessionId: params.session.id,
+      wbsItemId: params.boqItem.id,
+      workdayDate: calendarDateInTimeZone(params.confirmedAt, SEED_TIMEZONE),
+      reporterTimezone: SEED_TIMEZONE,
+      status: "CONFIRMED",
+      revisionNumber: 1,
+      summaryText: params.summaryText,
+      reportedQuantity: params.reportedQuantity,
+      unitOfMeasure: params.unitOfMeasure ?? params.boqItem.unit,
+      isHoldPointClaimed: params.isHoldPointClaimed ?? false,
+      delaysOrBlockers: params.delaysOrBlockers ?? null,
+      submissionGeotag: anchor && geo
+        ? ({
+            latitude: anchor.latitude,
+            longitude: anchor.longitude,
+            accuracyMeters: anchor.accuracyMeters ?? 5,
+            altitudeMeters: null,
+            isMocked: false,
+            capturedAt: params.confirmedAt.toISOString(),
+            isWithinGeofence: geo.isWithinGeofence,
+            chainageLabel: geo.chainageLabel,
+            distanceFromSiteMeters: geo.distanceFromSiteMeters,
+          } as unknown as Prisma.InputJsonValue)
+        : Prisma.DbNull,
+      signatureVerified: null,
+      aiCheckStatus: "SKIPPED",
+      aiReasoning: "Seed fixture; no omission check ran.",
+      humanConfirmedAt: params.confirmedAt,
+      createdAt: params.confirmedAt,
+    },
+  });
+  await seedCaptures({
+    tenantId: params.tenantId,
+    projectId: params.projectId,
+    session: params.session,
+    boqItemId: params.boqItem.id,
+    workdayReportId: report.id,
+    geofence: params.geofence,
+    captures: params.captures,
+  });
+  return report;
+}
+
+const hoursAgo = (h: number) => new Date(Date.now() - 1000 * 60 * 60 * h);
 
 async function runSeed(): Promise<void> {
   console.log("🌱 Starting InSite Assurance database seed...");
@@ -512,8 +675,8 @@ async function runSeed(): Promise<void> {
       idDocumentType: "NIN_SLIP",
       idDocumentUrl: "https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=600&q=80",
       selfieImageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80",
-      livenessScore: 0.98,
-      livenessPassed: true,
+      livenessScore: null,
+      livenessPassed: false,
       corenLicenseNumber: "COREN R.55102",
       experienceSummary: "8 years highway and drainage structural works. Resident Site Engineer for Julius & Sons.",
       reviewedByUserId: monitorUser.id,
@@ -539,8 +702,8 @@ async function runSeed(): Promise<void> {
       idDocumentType: "FRSC_DRIVERS_LICENSE",
       idDocumentUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80",
       selfieImageUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80",
-      livenessScore: 0.95,
-      livenessPassed: true,
+      livenessScore: null,
+      livenessPassed: false,
       corenLicenseNumber: "COREN R.61044",
       experienceSummary: "10 years reinforced concrete box culverts, soil stabilization, and quality control on highway corridors. Project Site Engineer, Julius & Sons Civil Engineering.",
       lastSyncAt: new Date(),
@@ -553,106 +716,58 @@ async function runSeed(): Promise<void> {
     lkkCorridorGeofence,
   );
 
-  const cowEvidenceLog = await prisma.fieldEvidenceLog.create({
-    data: {
-      projectId: lkkProject.id,
-      boqItemId: boqCulvertConcrete.id,
-      fieldSessionId: cowSession.id,
-      clientCaptureId: crypto.randomUUID(),
-      reporterRoleId: residentCowMobileRole.id,
-      reporterRoleName: residentCowMobileRole.name,
-      fieldPersonaType: residentCowMobileRole.fieldPersonaType,
-      assuranceWeight: residentCowMobileRole.assuranceWeight,
-      status: "CONFIRMED",
-      latitude: 6.4502,
-      longitude: 3.57,
-      gpsAccuracyMeters: 4.2,
-      isMockLocation: false,
-      isWithinGeofence: cowGeoCheck.isWithinGeofence,
-      chainageKm: cowGeoCheck.chainageKm,
-      chainageLabel: cowGeoCheck.chainageFormatted,
-      corridorOffsetMeters: cowGeoCheck.corridorOffsetMeters,
-      verificationBadgeText: cowGeoCheck.verificationBadgeText,
-      devicePitchDeg: 68.5,
-      deviceRollDeg: 1.4,
-      deviceSignatureHash: crypto.randomBytes(32).toString("hex"),
-      rawWhisperTranscript:
-        "We dey for chainage fourteen plus two hundred this afternoon. Contractor don cast twelve meters of the box culvert wall and use forty bags of Dangote cement, plus two trips of granite. Rain delay the second cell.",
-      confirmedSummary:
-        "Cast 12m of box culvert wall at KM 14+210. 40 bags of cement and 2 trips of granite used. Blocker: Heavy rain halted pouring on Cell 2.",
-      confirmedQuantities: [
-        {
-          materialOrWork: "Box culvert wall cast",
-          quantity: 12,
-          unit: "m",
-          boqWbsCodeHint: "02.01.2",
-        },
-        {
-          materialOrWork: "Dangote 42.5R Cement used",
-          quantity: 40,
-          unit: "bags",
-          boqWbsCodeHint: "02.01.2",
-        },
-        {
-          materialOrWork: "Crushed granite aggregate",
-          quantity: 2,
-          unit: "trips",
-          boqWbsCodeHint: "02.01.2",
-        },
-      ] as unknown as Prisma.InputJsonValue,
-      siteBlockers: [
-        "Heavy rainfall halted concrete pour on Cell 2 at KM 14+210",
-      ] as unknown as Prisma.InputJsonValue,
-      visionObservationSummary:
-        "Visible timber shuttering and fresh concrete pour on single culvert cell; second cell excavation flooded with rainwater.",
-      wasEditedByAgent: false,
-      confirmationSignatureHash: crypto.randomBytes(16).toString("hex"),
-      capturedAtDevice: new Date(Date.now() - 1000 * 60 * 60 * 18),
-      confirmedAt: new Date(Date.now() - 1000 * 60 * 60 * 17),
-    },
+  const cowEvidenceReport = await seedReportWithCaptures({
+    tenantId: lkkProject.tenantId,
+    projectId: lkkProject.id,
+    session: cowSession,
+    boqItem: boqCulvertConcrete,
+    geofence: lkkCorridorGeofence,
+    summaryText:
+      "Cast box culvert wall on Cell 1 at KM 14+210. Heavy rain halted pouring on Cell 2.",
+    reportedQuantity: 12,
+    delaysOrBlockers: "Heavy rainfall halted concrete pour on Cell 2 at KM 14+210",
+    confirmedAt: hoursAgo(17),
+    captures: [
+      {
+        mediaType: "SITE_PHOTO",
+        caption: "Cell 1 wall pour, timber shuttering in place",
+        latitude: 6.4502,
+        longitude: 3.57,
+        accuracyMeters: 4.2,
+        capturedAt: hoursAgo(18),
+      },
+      {
+        mediaType: "VOICE_NOTE",
+        latitude: 6.4502,
+        longitude: 3.57,
+        accuracyMeters: 4.2,
+        capturedAt: hoursAgo(18),
+        transcript:
+          "We dey for chainage fourteen plus two hundred this afternoon. Contractor don cast the box culvert wall. Rain delay the second cell.",
+      },
+    ],
   });
 
-  const conGeoCheck = verifyPointAgainstGeofence(
-    { longitude: 3.588, latitude: 6.4518 },
-    lkkCorridorGeofence,
-  );
-
-  const conEvidenceLog = await prisma.fieldEvidenceLog.create({
-    data: {
-      projectId: lkkProject.id,
-      boqItemId: boqStoneBase.id,
-      fieldSessionId: conSession.id,
-      clientCaptureId: crypto.randomUUID(),
-      reporterRoleId: contractorEngineerMobileRole.id,
-      reporterRoleName: contractorEngineerMobileRole.name,
-      fieldPersonaType: contractorEngineerMobileRole.fieldPersonaType,
-      assuranceWeight: contractorEngineerMobileRole.assuranceWeight,
-      status: "CONFIRMED",
-      latitude: 6.4518,
-      longitude: 3.588,
-      gpsAccuracyMeters: 6.8,
-      isMockLocation: false,
-      isWithinGeofence: conGeoCheck.isWithinGeofence,
-      chainageKm: conGeoCheck.chainageKm,
-      chainageLabel: conGeoCheck.chainageFormatted,
-      corridorOffsetMeters: conGeoCheck.corridorOffsetMeters,
-      verificationBadgeText: conGeoCheck.verificationBadgeText,
-      deviceSignatureHash: crypto.randomBytes(32).toString("hex"),
-      rawTextNote:
-        "Spread and compacted 18,500 m2 of crushed stone base between KM 15+800 and KM 16+400.",
-      confirmedSummary:
-        "Contractor self-report: Spread and compacted 18,500 m2 of crushed stone base course.",
-      confirmedQuantities: [
-        {
-          materialOrWork: "Crushed stone base laid",
-          quantity: 18500,
-          unit: "m2",
-          boqWbsCodeHint: "03.01.1",
-        },
-      ] as unknown as Prisma.InputJsonValue,
-      capturedAtDevice: new Date(Date.now() - 1000 * 60 * 60 * 10),
-      confirmedAt: new Date(Date.now() - 1000 * 60 * 60 * 9),
-    },
+  const conEvidenceReport = await seedReportWithCaptures({
+    tenantId: lkkProject.tenantId,
+    projectId: lkkProject.id,
+    session: conSession,
+    boqItem: boqStoneBase,
+    geofence: lkkCorridorGeofence,
+    summaryText:
+      "Contractor self-report: spread and compacted crushed stone base course between KM 15+800 and KM 16+400.",
+    reportedQuantity: 18500,
+    confirmedAt: hoursAgo(9),
+    captures: [
+      {
+        mediaType: "SITE_PHOTO",
+        caption: "Compacted stone base, KM 16+000",
+        latitude: 6.4518,
+        longitude: 3.588,
+        accuracyMeters: 6.8,
+        capturedAt: hoursAgo(10),
+      },
+    ],
   });
 
   // Active IPC Claim #2 on LKK-402 showing all 4 Evidence Strength Ratings
@@ -693,7 +808,7 @@ async function runSeed(): Promise<void> {
       highestCorroboratingRoleName: residentCowMobileRole.name,
       highestCorroboratingWeight: residentCowMobileRole.assuranceWeight,
       corroboratingEvidenceLogIds: [
-        cowEvidenceLog.id,
+        cowEvidenceReport.id,
       ] as unknown as Prisma.InputJsonValue,
     },
   });
@@ -716,7 +831,7 @@ async function runSeed(): Promise<void> {
       highestCorroboratingRoleName: residentCowMobileRole.name,
       highestCorroboratingWeight: residentCowMobileRole.assuranceWeight,
       corroboratingEvidenceLogIds: [
-        cowEvidenceLog.id,
+        cowEvidenceReport.id,
       ] as unknown as Prisma.InputJsonValue,
     },
   });
@@ -739,7 +854,7 @@ async function runSeed(): Promise<void> {
       highestCorroboratingRoleName: contractorEngineerMobileRole.name,
       highestCorroboratingWeight: contractorEngineerMobileRole.assuranceWeight,
       corroboratingEvidenceLogIds: [
-        conEvidenceLog.id,
+        conEvidenceReport.id,
       ] as unknown as Prisma.InputJsonValue,
     },
   });
@@ -800,7 +915,7 @@ async function runSeed(): Promise<void> {
     summaryText:
       "Confirmed voice & photo log at Chainage KM 14+210: 12m box culvert wall cast, 40 bags of cement used; Cell 2 delayed by rain.",
     payload: {
-      evidenceLogId: cowEvidenceLog.id,
+      workdayReportId: cowEvidenceReport.id,
       chainage: cowGeoCheck.chainageFormatted,
       quantities: [{ item: "Cement", qty: 40, unit: "bags" }],
     },
@@ -845,19 +960,22 @@ async function runSeed(): Promise<void> {
       summaryText:
         "Poured concrete on Cell 1 walls at KM 14+210 (28 m3). Shuttering stripped on Section A.",
       reportedQuantity: 28,
+      clientReportId: crypto.randomUUID(),
+      reporterTimezone: SEED_TIMEZONE,
+      aiCheckStatus: "DONE",
+      aiCheckEngine: "SEED_FIXTURE",
       unitOfMeasure: boqCulvertConcrete.unit,
       isHoldPointClaimed: true,
-      evidenceItems: [] as unknown as Prisma.InputJsonValue,
       submissionGeotag: {
         latitude: 6.4502,
         longitude: 3.57,
         accuracyMeters: 5.5,
         isMocked: false,
         isWithinGeofence: true,
-        chainageLabel: "KM 14+210 (Within Corridor)",
+        chainageLabel: "KM 14+210",
+        distanceFromSiteMeters: null,
         capturedAt: new Date(nowMs - 1000 * 60 * 60 * 5).toISOString(),
       } as unknown as Prisma.InputJsonValue,
-      aiParsedConfidence: 0.64,
       aiReasoning:
         "AI Omission Check flagged missing geotagged slump-test / concrete pour photos with no omission reason.",
       humanConfirmedAt: new Date(nowMs - 1000 * 60 * 60 * 5),
@@ -895,30 +1013,44 @@ async function runSeed(): Promise<void> {
       reportedQuantity: 28,
       unitOfMeasure: boqCulvertConcrete.unit,
       isHoldPointClaimed: true,
-      evidenceItems: [
-        {
-          id: crypto.randomUUID(),
-          type: "PHOTO",
-          caption: "Slump test reading 75mm and Box Culvert Cell 1 finish",
-          capturedAt: new Date(nowMs - 1000 * 60 * 50).toISOString(),
-          gpsCoordinates: { latitude: 6.4502, longitude: 3.57, accuracyMeters: 4.8 },
-        },
-      ] as unknown as Prisma.InputJsonValue,
+      clientReportId: crypto.randomUUID(),
+      reporterTimezone: SEED_TIMEZONE,
+      aiCheckStatus: "DONE",
+      aiCheckEngine: "SEED_FIXTURE",
       submissionGeotag: {
         latitude: 6.4502,
         longitude: 3.57,
         accuracyMeters: 4.8,
         isMocked: false,
         isWithinGeofence: true,
-        chainageLabel: "KM 14+210 (Within Corridor)",
+        chainageLabel: "KM 14+210",
+        distanceFromSiteMeters: null,
         capturedAt: new Date(nowMs - 1000 * 60 * 45).toISOString(),
       } as unknown as Prisma.InputJsonValue,
-      aiParsedConfidence: 0.92,
       aiReasoning:
         "Re-parsed WBS 02.01.2 chat after MONITOR query: slump test reading (75mm) and geotagged photo verification confirmed.",
       humanConfirmedAt: new Date(nowMs - 1000 * 60 * 45),
       createdAt: new Date(nowMs - 1000 * 60 * 45),
     },
+  });
+
+  await seedCaptures({
+    tenantId: lkkProject.tenantId,
+    projectId: lkkProject.id,
+    session: conSession,
+    boqItemId: boqCulvertConcrete.id,
+    workdayReportId: culvertRev2.id,
+    geofence: lkkCorridorGeofence,
+    captures: [
+      {
+        mediaType: "SITE_PHOTO",
+        caption: "Slump test reading 75mm and Box Culvert Cell 1 finish",
+        latitude: 6.4502,
+        longitude: 3.57,
+        accuracyMeters: 4.8,
+        capturedAt: new Date(nowMs - 1000 * 60 * 50),
+      },
+    ],
   });
 
   const rebarReportRev1 = await prisma.workdayReport.create({
@@ -932,19 +1064,22 @@ async function runSeed(): Promise<void> {
       summaryText:
         "Cut and fixed 6.5 tons Y16/Y20 steel reinforcement cages for Culvert Cell 2 at KM 14+200.",
       reportedQuantity: 6.5,
+      clientReportId: crypto.randomUUID(),
+      reporterTimezone: SEED_TIMEZONE,
+      aiCheckStatus: "DONE",
+      aiCheckEngine: "SEED_FIXTURE",
       unitOfMeasure: boqCulvertReinforcement.unit,
       isHoldPointClaimed: true,
-      evidenceItems: [] as unknown as Prisma.InputJsonValue,
       submissionGeotag: {
         latitude: 6.4501,
         longitude: 3.5698,
         accuracyMeters: 6.0,
         isMocked: false,
         isWithinGeofence: true,
-        chainageLabel: "KM 14+200 (Within Corridor)",
+        chainageLabel: "KM 14+200",
+        distanceFromSiteMeters: null,
         capturedAt: new Date(nowMs - 1000 * 60 * 30).toISOString(),
       } as unknown as Prisma.InputJsonValue,
-      aiParsedConfidence: 0.61,
       aiReasoning:
         "AI Omission Check flagged missing mandatory Hold-Point rebar spacer photo and Mill Certificate with no omission reason documented.",
       humanConfirmedAt: new Date(nowMs - 1000 * 60 * 30),
@@ -1356,56 +1491,45 @@ async function runSeed(): Promise<void> {
     },
   });
 
-  const abjGeo = verifyPointAgainstGeofence(
-    { latitude: 9.0489, longitude: 7.3497 },
-    abjRadialGeofence,
-  );
   const abjEvidence = [
     {
-      boqItemId: abjPvModules.id,
+      boqItem: abjPvModules,
       summary: "Installed and torqued 3,200 kWp of PV modules on rows A1–A16.",
-      quantities: [{ materialOrWork: "PV modules installed", quantity: 3200, unit: "kWp" }],
+      quantity: 3200,
       hoursAgo: 72,
     },
     {
-      boqItemId: abjPvModules.id,
+      boqItem: abjPvModules,
       summary: "Installed 2,900 kWp of PV modules on rows B1–B14; string cabling in progress.",
-      quantities: [{ materialOrWork: "PV modules installed", quantity: 2900, unit: "kWp" }],
+      quantity: 2900,
       hoursAgo: 30,
     },
     {
-      boqItemId: abjTransformer.id,
+      boqItem: abjTransformer,
       summary: "Transformer T1 set on plinth; nameplate and earthing connections photographed.",
-      quantities: [{ materialOrWork: "Transformer installed", quantity: 1, unit: "nr" }],
+      quantity: 1,
       hoursAgo: 26,
     },
   ];
   for (const e of abjEvidence) {
-    await prisma.fieldEvidenceLog.create({
-      data: {
-        projectId: abjProject.id,
-        boqItemId: e.boqItemId,
-        fieldSessionId: abjCowSession.id,
-        clientCaptureId: crypto.randomUUID(),
-        reporterRoleId: residentCowMobileRole.id,
-        reporterRoleName: residentCowMobileRole.name,
-        fieldPersonaType: residentCowMobileRole.fieldPersonaType,
-        assuranceWeight: residentCowMobileRole.assuranceWeight,
-        status: "CONFIRMED",
-        latitude: 9.0489,
-        longitude: 7.3497,
-        gpsAccuracyMeters: 4.0,
-        isMockLocation: false,
-        isWithinGeofence: abjGeo.isWithinGeofence,
-        verificationBadgeText: abjGeo.verificationBadgeText,
-        deviceSignatureHash: crypto.randomBytes(32).toString("hex"),
-        confirmedSummary: e.summary,
-        confirmedQuantities: e.quantities as unknown as Prisma.InputJsonValue,
-        siteBlockers: [] as unknown as Prisma.InputJsonValue,
-        confirmationSignatureHash: crypto.randomBytes(16).toString("hex"),
-        capturedAtDevice: new Date(Date.now() - 1000 * 60 * 60 * e.hoursAgo),
-        confirmedAt: new Date(Date.now() - 1000 * 60 * 60 * (e.hoursAgo - 1)),
-      },
+    await seedReportWithCaptures({
+      tenantId: abjProject.tenantId,
+      projectId: abjProject.id,
+      session: abjCowSession,
+      boqItem: e.boqItem,
+      geofence: abjRadialGeofence,
+      summaryText: e.summary,
+      reportedQuantity: e.quantity,
+      confirmedAt: hoursAgo(e.hoursAgo - 1),
+      captures: [
+        {
+          mediaType: "SITE_PHOTO",
+          latitude: 9.0489,
+          longitude: 7.3497,
+          accuracyMeters: 4.0,
+          capturedAt: hoursAgo(e.hoursAgo),
+        },
+      ],
     });
   }
 

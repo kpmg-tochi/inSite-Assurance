@@ -63,7 +63,7 @@ router.get(
 
 /**
  * POST /api/v1/projects/:projectId/boq/:boqItemId/messages
- * Appends a new WBS chat message (e.g., field evidence photo, voice log, or clarification note).
+ * Appends a WBS chat message. Media is referenced by a registered capture (captureId).
  */
 router.post(
   '/:projectId/boq/:boqItemId/messages',
@@ -82,15 +82,16 @@ router.post(
             : 'INSPECTOR';
       }
 
-      const created = await postWbsChatMessage({
+      const result = await postWbsChatMessage({
         projectId: String(req.params.projectId),
         boqItemId: String(req.params.boqItemId),
         fieldSessionId: req.fieldAgent?.sessionId,
+        senderUserId: req.webUser?.userId,
         senderName,
         senderRole,
         input: req.body,
       });
-      res.status(201).json({ success: true, data: created });
+      res.status(result.created ? 201 : 200).json({ success: true, data: result.message });
     } catch (error) {
       next(error);
     }

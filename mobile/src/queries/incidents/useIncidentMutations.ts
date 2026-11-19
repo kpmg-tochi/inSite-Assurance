@@ -1,21 +1,17 @@
 import { useMutation } from '@tanstack/react-query';
-import type { CreateIncidentReportRequest } from '@insite/shared';
-import { submitIncidentReport } from '../../services/incidentService';
+import { queueIncident, type IncidentInput } from '../../storage/incidentStore';
 
 export interface SubmitIncidentMutationInput {
   projectId: string;
-  sessionToken: string;
-  payload: CreateIncidentReportRequest;
+  payload: IncidentInput;
+  /** Local photo files; the outbox uploads them and sends their object keys. */
+  localPhotoUris?: string[];
 }
 
+/** Saves the incident on the device and queues it; resolves once it is safely stored. */
 export function useSubmitIncidentMutation() {
   return useMutation({
-    mutationFn: ({
-      projectId,
-      sessionToken,
-      payload,
-    }: SubmitIncidentMutationInput) =>
-      submitIncidentReport(projectId, sessionToken, payload),
+    mutationFn: ({ projectId, payload, localPhotoUris }: SubmitIncidentMutationInput) =>
+      queueIncident(projectId, payload, localPhotoUris ?? []),
   });
 }
-

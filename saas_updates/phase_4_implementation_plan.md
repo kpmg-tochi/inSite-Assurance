@@ -2,7 +2,7 @@
 
 | | |
 | :--- | :--- |
-| **Status** | Not started |
+| **Status** | In progress. Steps 1, 2, 4 and 6 built (server parts tested; mobile parts typecheck, bundle and are unit-tested in Node, not yet run on a device). Steps 3 and 5 mostly done. Remaining work and carry-overs are in the progress table in section 6. Manual checks are in [physical_testing_checklist.md](physical_testing_checklist.md). |
 | **Depends on** | Phase 2. Phase 3 recommended first (it creates the evidence provider seam); if Phase 3 has not run, create `evidenceProvider.ts` here. |
 | **Unblocks** | Phases 5, 7 |
 | **Read first** | [Master plan](saas_implementation_plan.md) sections 2, 3 and 6 |
@@ -118,22 +118,36 @@ flowchart LR
 
 ## 6. Implementation checklist
 
+**Progress, 2026-11-19 (session 1).** Items are ticked only when verified. "Built" means the code is in place, typechecks, the Android bundle builds (`npx expo export --platform android`) and the pure logic is unit-tested in Node, but it has not been run on a device. A development build is needed for that, because SQLCipher does not run in Expo Go.
+
+| Step | State |
+| :--- | :--- |
+| 1 Server | Done and tested (25 route tests in `routes.phase4.test.ts`). Device-key and push items: server side done; device side pending. |
+| 2 Mobile storage and outbox | Built: `storage/db` (SQLCipher key in SecureStore, `cipher_version` check, `user_version` migrations, destructive v1 rebuild), one outbox (`storage/outbox`), captures on disk with SHA-256 and Ed25519 signature, persist-then-enqueue in one transaction, sync status screen (the former backlog modal) with dead-letter Retry. `syncEngine.ts`, `telemetryRepository.ts`, `sqliteDatabase.ts`, `incidentService.ts` and all in-memory fallbacks deleted. Signing library: `@noble/ed25519` v3 + `@noble/hashes`, random bytes from `expo-crypto`. |
+| 3 Capture correctness | Mostly built with Step 2: no hardcoded coordinates or chainage in mobile; per-capture fix kept; GPS constants with timeout; baseline pack persisted, shared `verifyPointAgainstGeofence` only; computed badges only; "reported today" from reports; hold-point text from `holdPointInstruction`, off by default, hold-point items only; chat merged by `clientMessageId` with ISO times; briefs upserted with their date. **Deviation:** `workdayDate` uses the reporter's device time zone, not a project zone (projects have none; see section 8). |
+| 4 Assurance flow | Built (session 2). Status comes from `/auth/me` at startup, on foreground, on pull-to-refresh and on push (`useAssuranceStatusSync`). `REJECTED` shows the reason and routes to the wizard, and the session stays signed in. Backlog modal is read-only. Identity uploads use `IDENTITY_*` media types. D-4.2: the vision-camera path and its three packages are deleted, `GuidedSelfieCapture` replaces it, and the request sends `selfieSet` (capture times only). The server records no liveness result (tested); the web queue shows all three poses for manual review. Routing is role-driven only. |
+| 5 Web honesty | Mostly done: map, dashboard, presence panel, evidence drawer, verification queue, executive page, settings and role settings. Evidence views show photo thumbnails and voice playback (`components/evidence/CaptureMedia.tsx`) and report badges. Not done: `LoginPage` sample coordinates, the public marketing pages (`AboutPage`, `MobileAppPage`). |
+| 6 Build, push, telemetry | Built (session 2). `eas.json` has development, preview, demo and production profiles; the demo flag is on only in `demo`. **API hosts are placeholders (`SET-…-API-HOST.invalid`) until confirmed.** `app.config.ts` reads `EAS_PROJECT_ID`, `APP_VARIANT` and the demo flag. Push: `expo-notifications` plugin with the `default` Android channel; permission is asked in context (after join, after identity submission), never at launch. Taps route by `actionType`, and a push refreshes assurance status. The real app version is registered. Unused packages are removed, `expo-dev-client` is added, the duplicate `registerRootComponent` is removed, and a `start` script exists. `expo config` resolves the plugins, with no background-location permission. |
+| 7 Tests | Server done. Mobile Node tests: 16 (`npm --workspace=@insite/mobile test`). End-to-end device script not written. |
+
 ### Step 1: Server capture and report pipeline
-- [ ] Local dev storage: implement upload and file handlers for `LOCAL_DEV_SIMULATED` (disk under a git-ignored folder, same auth as the media endpoint) so the full flow works without S3.
-- [ ] `POST /projects/:projectId/captures`: idempotent on `clientCaptureId` (return the existing row). Verifies the object exists, computes `serverSha256`, verifies the device signature, evaluates the geofence with `verifyPointAgainstGeofence`, runs integrity screening, writes `CAPTURE_REGISTERED` or `CAPTURE_FLAGGED_INTEGRITY`.
-- [ ] Integrity screening rewrite in [integrity.ts](../server/src/utils/integrity.ts): real perceptual hash from image bytes (for example a difference hash with `sharp`); duplicate search by indexed lookup scoped to the tenant, exact on `serverSha256` and near-match on pHash within the project and across the tenant; no arbitrary 500-row window. Never trust client hashes.
-- [ ] Geofence: one helper used by captures, telemetry and reports. If evaluation fails or there is no fix, store `null` and add a flag. Never keep the client's claim.
+- [x] Local dev storage: implement upload and file handlers for `LOCAL_DEV_SIMULATED` (disk under a git-ignored folder, same auth as the media endpoint) so the full flow works without S3.
+- [x] `POST /projects/:projectId/captures`: idempotent on `clientCaptureId` (return the existing row). Verifies the object exists, computes `serverSha256`, verifies the device signature, evaluates the geofence with `verifyPointAgainstGeofence`, runs integrity screening, writes `CAPTURE_REGISTERED` or `CAPTURE_FLAGGED_INTEGRITY`.
+- [x] Integrity screening rewrite in [integrity.ts](../server/src/utils/integrity.ts): real perceptual hash from image bytes (for example a difference hash with `sharp`); duplicate search by indexed lookup scoped to the tenant, exact on `serverSha256` and near-match on pHash within the project and across the tenant; no arbitrary 500-row window. Never trust client hashes.
+- [x] Geofence: one helper used by captures, telemetry and reports. If evaluation fails or there is no fix, store `null` and add a flag. Never keep the client's claim.
 - [ ] Device key: at join (and at login in Phase 5) the device registers a public key. Captures, reports and pings are signed over a canonical string; the server verifies and stores the result. Choose a pure-JS curve library that runs in React Native and Node; confirm the choice against current library docs before adopting.
-- [ ] `POST /workday-reports`: idempotent on `clientReportId`; links captures (all must belong to the session's project and reporter); assurance gate enforced server-side (`STAGED_UNVERIFIED` when the session is not approved, and no AI call); AI omission check moves out of the request path (set `aiCheckStatus = PENDING`, process after responding, then raise the query if needed).
-- [ ] Staged reports are released by the server when a session is approved (in `reviewContractorVerification`), not by the client.
-- [ ] Revalidation: same idempotency and ownership rules; closes the targeted query.
-- [ ] Remove the `extract` and `confirm` routes and their shared schemas. Add `POST /workday-reports/suggest` (optional assist: transcript plus quantity suggestion for the summary sheet).
-- [ ] Implement `evidenceProvider.ts` per section 4 (replace the Phase 3 placeholder body). Add a test that a confirmed mobile-style report with captures changes a reconciliation rating.
-- [ ] Speech and AI honesty: with no provider or on failure, return `transcriptionStatus = PENDING/FAILED` and no text. Canned transcripts and the first-BOQ-item fallback only under `DEMO_MODE`, labelled "simulated". Remove "verified against project geofence" from fallback text.
-- [ ] Telemetry: idempotent on `clientPingId`; `createMany`; accept batches larger than 100 by chunking; replace per-ping audit entries with one `TELEMETRY_ANOMALY_SUMMARY` per session per day per anomaly type.
-- [ ] Chat: idempotent on `clientMessageId`; media by `captureId`; reject data URIs and `file://`.
-- [ ] Incidents: idempotent on `clientIncidentId`.
+  - *Server side done and tested:* Ed25519, verified with Node's built-in `crypto` (no server library). Key registered at join (`devicePublicKey`) or once via `POST /auth/device-key`; canonical strings in `shared/src/utils/deviceSignature.ts`. Still open: the device signing library (Step 2).
+- [x] `POST /workday-reports`: idempotent on `clientReportId`; links captures (all must belong to the session's project and reporter); assurance gate enforced server-side (`STAGED_UNVERIFIED` when the session is not approved, and no AI call); AI omission check moves out of the request path (set `aiCheckStatus = PENDING`, process after responding, then raise the query if needed).
+- [x] Staged reports are released by the server when a session is approved (in `reviewContractorVerification`), not by the client.
+- [x] Revalidation: same idempotency and ownership rules; closes the targeted query.
+- [x] Remove the `extract` and `confirm` routes and their shared schemas. Add `POST /workday-reports/suggest` (optional assist: transcript plus quantity suggestion for the summary sheet).
+- [x] Implement `evidenceProvider.ts` per section 4 (replace the Phase 3 placeholder body). Add a test that a confirmed mobile-style report with captures changes a reconciliation rating.
+- [x] Speech and AI honesty: with no provider or on failure, return `transcriptionStatus = PENDING/FAILED` and no text. Canned transcripts and the first-BOQ-item fallback only under `DEMO_MODE`, labelled "simulated". Remove "verified against project geofence" from fallback text.
+- [x] Telemetry: idempotent on `clientPingId`; `createMany`; accept batches larger than 100 by chunking; replace per-ping audit entries with one `TELEMETRY_ANOMALY_SUMMARY` per session per day per anomaly type.
+- [x] Chat: idempotent on `clientMessageId`; media by `captureId`; reject data URIs and `file://`.
+- [x] Incidents: idempotent on `clientIncidentId`.
 - [ ] `/auth/me` for field sessions is the source of truth for assurance status; add a mobile notification and push on approval and rejection (exists for the notification; confirm push).
+  - *Server side done:* `/auth/me` returns status, reason and `devicePublicKeyId`; a rejected session now stays signed in (tested). Push was never sent by the server; `integrations/push.service.ts` now sends through Expo after approval/rejection. Not verified end to end (tests run with `PUSH_PROVIDER=none`; needs the Step 6 mobile config).
 
 ### Step 2: Mobile storage and outbox
 - [ ] Enable SQLCipher for `expo-sqlite` with a key held in SecureStore (check the current Expo docs for the config-plugin option and key pragma). Remove "encrypted" wording anywhere it is not true until this lands.
@@ -162,7 +176,7 @@ flowchart LR
 - [ ] Backlog modal: remove the static "Account Verified" pill and client-side release; it becomes a read-only view of staged reports that the server will release.
 - [ ] Assurance upload: a row is synced only when every upload succeeded and the server accepted the keys. Use a dedicated media type for ID and selfie, not `SITE_PHOTO`.
 - [ ] D-4.2: delete the dead vision-camera path and its three dependencies. Rename the component and copy to "guided selfie capture". Stop sending `isLive`, yaw and eye-probability values; send the three images and capture times. Server: stop setting `livenessScore`; `livenessPassed` stays false unless a real check exists. Web queue: remove "Active Head-Turn Verified"; label as "Selfie set (3 poses) for manual review".
-- [ ] Role-driven assurance only: use `requiresIdentityAssurance` from the server, never the persona.
+- [x] Role-driven assurance only: use `requiresIdentityAssurance` from the server, never the persona.
 
 ### Step 5: Web honesty pass
 - [ ] Replace hardcoded integrity text with values computed from data, or remove it: `LiveGeospatialMap.tsx`, `PortfolioDashboardPage.tsx`, `ContractorVerificationQueue.tsx`, `PortfolioExecutivePage.tsx`.
@@ -173,11 +187,11 @@ flowchart LR
 - [ ] Add `eas.json` with development, preview and production profiles; demo flag on only in a demo profile; API base URL per profile.
 - [ ] Push: add the config plugin and project ID, Android channel, tap handler that routes by `actionType`; request permission in context, not on the landing screen; real app version in the token registration.
 - [ ] D-4.3: keep foreground telemetry; add a ping on each capture and report; fix overlapping flush callers with a single lock; change wording in app and web.
-- [ ] Remove unused dependencies (`expo-image-picker`, `@react-navigation/stack`); fix the duplicate `registerRootComponent`; add the missing `start` script; align `@types/react-native` with the installed React Native.
+- [x] Remove unused dependencies (`expo-image-picker`, `@react-navigation/stack`); fix the duplicate `registerRootComponent`; add the missing `start` script; align `@types/react-native` with the installed React Native. (`@types/react-native` removed: React Native ships its own types.)
 
 ### Step 7: Tests
-- [ ] Server: capture idempotency, signature verification pass and fail, duplicate and near-duplicate detection with real image fixtures, geofence null handling, report idempotency under a simulated client retry, assurance gate, staged release on approval, provider-unavailable returns pending.
-- [ ] Mobile: unit tests for the outbox processor (ordering, backoff, dead-letter, auth pause) and the report builder, run in Node with an in-memory SQLite shim or by isolating pure logic.
+- [x] Server: capture idempotency, signature verification pass and fail, duplicate and near-duplicate detection with real image fixtures, geofence null handling, report idempotency under a simulated client retry, assurance gate, staged release on approval, provider-unavailable returns pending.
+- [x] Mobile: unit tests for the outbox processor (ordering, backoff, dead-letter, auth pause) and the report builder, run in Node with an in-memory SQLite shim or by isolating pure logic.
 - [ ] End to end (manual script in this file's appendix once written): airplane-mode capture of three photos and a voice note, confirm report, kill app, relaunch, go online; one report with four captures arrives exactly once and appears in reconciliation.
 
 ---
@@ -202,3 +216,41 @@ flowchart LR
 ## 8. Found during implementation
 
 _Add items here rather than expanding scope._
+
+**Step 1 decisions and notes (2026-11-19)**
+- *Rejected sessions were deactivated.* `reviewContractorVerification` set `isActive = false` on REJECT, so the device got 401 and could never show the reason. Changed: the session stays active with `REJECTED`; its reports stay staged; revoking is a separate action.
+- *Revalidation no longer lets the model rewrite a confirmed report.* `reparseWorkdayChatAfterQuery` is removed. The reporter's values are stored (omitted fields keep the previous revision's); the omission check runs after the response like a submission.
+- *Rules-based omission check is labelled.* Without Azure the deterministic rules check still runs and is stored with `aiCheckEngine = RULES` and no confidence score (the old fallback invented 0.62 / 0.92).
+- *Near-duplicate rule.* dHash distance at most 6 within the tenant is "recycled" and critical, except a near-duplicate of the same reporter's own capture within 6 hours, which is a burst (`SIMILAR_TO_RECENT_OWN_CAPTURE`, not critical). Constants in `server/src/utils/integrity.ts`.
+- *Project time zone.* Projects have no time zone field; telemetry anomaly days use the tenant time zone. Phase 6 should add a per-project zone if projects can span zones.
+- *Production now refuses to start without S3* (local disk storage is development only). Confirm the Render environment has the S3 variables set before deploying.
+- *New native dependency:* `sharp` (server) for perceptual hashing.
+
+- *One report per period (owner decision, 2026-11-19).* During the period the reporter adds photos and notes to the WBS thread; at the end they submit one full report (with voice note and details) and must confirm it is their full report (`confirmedAsFinal: true`). A second report for the same reporter, WBS item and period is refused (`409 REPORT_ALREADY_SUBMITTED`). A revision is accepted only on the latest revision and only to answer an OPEN query (`409 NO_OPEN_QUERY` / `REPORT_SUPERSEDED`). Backed by partial unique indexes in migration `20261119120000_phase4_one_report_per_period` (not expressible in `schema.prisma`; keep them if a later `migrate dev` proposes dropping them). "Period" is the calendar day until Phase 8 adds reporting cadence. Mobile (Step 3) must show the "this is my full report" confirmation and hide submit once a report exists for the period.
+
+**Step 2 decisions and notes (2026-11-19)**
+- *Reporting period uses the device time zone.* Step 3 asks for the project time zone, but projects have none (tenants do, and the baseline pack does not carry it). The report stores `reporterTimezone`, so the server can re-derive later. Phase 6 should add a project zone to the baseline pack.
+- *A report links everything unreported for the WBS item.* On submit, every capture and typed note in that WBS thread not yet in a report is attached, per the owner rule (evidence gathered during the period, one full report at the end).
+- *Reports without a GPS fix are allowed* and marked "location unavailable", the same rule as captures. The old sheet blocked submission without a fix.
+- *Revisions from another device are sent unsigned* when the original report's period is not known on this device (and the API cannot be reached to look it up), rather than with a signature the server would reject.
+- *Local files are kept 14 days after the server registers them*, then deleted (`LOCAL_FILE_RETENTION_DAYS`). After that, photos are shown through the authenticated media endpoint.
+- *A development build without SQLCipher opens the database unencrypted* and the sync status screen says so; a release build without SQLCipher refuses to open it. This keeps Expo Go usable for UI work without ever claiming encryption.
+- *The incident photo goes through presign and is sent as an object key*; the old code sent a base64 data URI and fell back to hardcoded coordinates.
+
+**Owner decisions, 2026-11-19 (session 2)**
+- *Project time zone as a safeguard.* `Project.timezone` (default: the tenant zone) defines the reporting day. The server rejects a report whose `workdayDate` is not the date of `confirmedAt` in that zone (`WORKDAY_DATE_MISMATCH`), and one dated more than 15 minutes in the future (`CONFIRMED_AT_IN_FUTURE`). The baseline pack and `/auth/me` carry the zone; the phone computes "today" with it. The wizard field is in Phase 6.
+- *Location is required on every report.* `submissionGeotag` is mandatory for submissions and revisions. Low accuracy (over `REPORT_LOW_GPS_ACCURACY_METERS` = 50 m) is a badge, not a failure. Reports store `integrityFlags` (`LOW_GPS_ACCURACY`, `GPS_ACCURACY_UNKNOWN`, `OUTSIDE_PROJECT_GEOFENCE`, `GEOFENCE_UNAVAILABLE`, `MOCK_GPS_LOCATION_DETECTED`, `UNSIGNED`, …), shown as badges on the web. Captures in the chat may still lack a fix ("Location unavailable").
+- *Geofence tolerance* (configurable, default 100 m, "within tolerance" counted as valid and noted) is specified in the Phase 6 plan, Step 3, alongside the geofence modes.
+- *Photo retention:* the 14-day local retention after server registration stands.
+
+**Open items found**
+- *Dev database needs a reset* to apply `20261119090000_phase4_evidence_pipeline` (the migration adds required columns to tables that hold data): `cd server && npx prisma migrate reset --force && npm run prisma:seed`. Not run in this session (blocked by permissions). The route tests apply it to the `_test` database.
+- *Web hand-written types drift from the server.* `web/src/api/types.ts` (`FieldEvidenceLogRecordDto`) and `web/src/api/telemetry/telemetryApi.ts` (workday report with `evidenceItems` / `voiceNoteUrl`) no longer match `GET /evidence` (now `CaptureListItemDto`) and `GET /workday-reports` (now `WorkdayReportDto` with `captures`). They compile but render missing fields in `LiveGeospatialMap`, `SitePresencePanel` and `PortfolioDashboardPage`. Step 5 must switch them to the shared types. `EvidenceOverlayDrawer` (already on the shared type) was fixed in Step 1.
+- *WBS chat threads are visible to every field session on the project*, including other contractors' messages and queries addressed to someone else. Out of scope here; Phase 5 or 7.
+- *Seeded identity documents are external image URLs*, not object keys (Step 4).
+- *Assurance submissions still send the old `livenessVerification` object* because the server schema requires it. Step 4 (D-4.2) removes it on both sides.
+- *`web/src/components/ContractorVerificationQueue.tsx` changed in the working tree outside this session* (it now passes a permission flag to `useContractorVerificationsQuery`). Left as found.
+- *Carried over to Phase 4 by earlier phases and not done yet:* (a) workday-report queries are never set to `RESOLVED`: there is no monitor action for it (Phase 3, item 7); (b) mobile notification read state is shared by every field user on a project, so it needs a per-session read table (Phase 2, item 6). Both are small; do them with the rest of Step 3/5.
+- *The verification queue showed only the front selfie.* The DTO now includes `selfieLeftUrl` and `selfieRightUrl` (signed, 5 minutes), and the reviewer sees all three poses.
+- *Demo skip-verification set `livenessPassed: true, livenessScore: 1.0`.* It now records no liveness result.
+- *Expo Go cannot exercise SQLCipher.* On-device checks of Steps 2 and 3 need a development build, which depends on Step 6 (`eas.json`).

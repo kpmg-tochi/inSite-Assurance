@@ -59,11 +59,17 @@ export function serializeWbsChatMessage(row: {
   workdayReportId: string | null;
   reportQueryId: string | null;
   fieldSessionId: string | null;
+  clientMessageId: string | null;
+  senderSessionId: string | null;
+  senderUserId: string | null;
   senderName: string;
   senderRole: string;
   messageType: string;
   textContent: string | null;
-  mediaUrls: unknown;
+  capture?: {
+    clientCaptureId: string;
+    mediaAttachments: Array<{ mediaType: string; objectKey: string; mimeType: string; durationSeconds: number | null }>;
+  } | null;
   latitude: number | null;
   longitude: number | null;
   chainageLabel: string | null;
@@ -77,13 +83,23 @@ export function serializeWbsChatMessage(row: {
     workdayReportId: row.workdayReportId,
     reportQueryId: row.reportQueryId,
     fieldSessionId: row.fieldSessionId,
+    clientMessageId: row.clientMessageId,
+    senderSessionId: row.senderSessionId,
+    senderUserId: row.senderUserId,
     senderName: row.senderName,
     senderRole: row.senderRole,
     messageType: row.messageType as WbsChatMessageType,
     textContent: row.textContent,
-    mediaUrls: Array.isArray(row.mediaUrls)
-      ? (row.mediaUrls as string[])
-      : [],
+    capture:
+      row.capture && row.capture.mediaAttachments[0]
+        ? {
+            clientCaptureId: row.capture.clientCaptureId,
+            mediaType: row.capture.mediaAttachments[0].mediaType,
+            objectKey: row.capture.mediaAttachments[0].objectKey,
+            mimeType: row.capture.mediaAttachments[0].mimeType,
+            durationSeconds: row.capture.mediaAttachments[0].durationSeconds,
+          }
+        : null,
     latitude: row.latitude,
     longitude: row.longitude,
     chainageLabel: row.chainageLabel,
@@ -147,6 +163,7 @@ export async function dispatchReportQueryBundle(
       workdayReportId: params.workdayReportId ?? null,
       reportQueryId: query.id,
       fieldSessionId: params.fieldSessionId ?? null,
+      senderUserId: params.source === 'MONITOR' ? params.raisedByUserId ?? null : null,
       senderName:
         params.source === 'MONITOR'
           ? params.raisedByName || 'Independent Monitor'
@@ -238,52 +255,72 @@ export async function createWorkdayReportQuery(params: {
   });
 }
 
+const MESSAGE_INCLUDE = {
+  reportQuery: { include: { raisedByUser: { select: { fullName: true } } } },
+  capture: {
+    select: {
+      clientCaptureId: true,
+      mediaAttachments: { select: { mediaType: true, objectKey: true, mimeType: true, durationSeconds: true } },
+    },
+  },
+} satisfies Prisma.WbsChatMessageInclude;
+
 export async function listBoqChatMessages(params: {
   projectId: string;
   boqItemId: string;
 }): Promise<WbsChatMessageDto[]> {
   const rows = await prisma.wbsChatMessage.findMany({
-    where: {
-      projectId: params.projectId,
-      boqItemId: params.boqItemId,
-    },
-    include: {
-      reportQuery: {
-        include: {
-          raisedByUser: { select: { fullName: true } },
-        },
-      },
-    },
+    where: { projectId: params.projectId, boqItemId: params.boqItemId },
+    include: MESSAGE_INCLUDE,
     orderBy: { createdAt: 'asc' },
     take: 200,
   });
-
   return rows.map(serializeWbsChatMessage);
 }
 
+/**
+ * Appends a message to a WBS thread. Idempotent on clientMessageId (required from devices). Media
+ * is referenced by a registered capture; URLs, file paths and data URIs are never accepted.
+ */
 export async function postWbsChatMessage(params: {
   projectId: string;
   boqItemId: string;
   fieldSessionId?: string;
+  senderUserId?: string;
   senderName: string;
   senderRole: string;
   input: CreateWbsChatMessageRequest;
-}): Promise<WbsChatMessageDto> {
+}): Promise<{ message: WbsChatMessageDto; created: boolean }> {
+  const { input } = params;
+  if (params.fieldSessionId && !input.clientMessageId) {
+    throw new AppError('clientMessageId is required', 400, 'CLIENT_MESSAGE_ID_REQUIRED');
+  }
+  if (input.clientMessageId) {
+    const existing = await prisma.wbsChatMessage.findUnique({
+      where: { clientMessageId: input.clientMessageId },
+      include: MESSAGE_INCLUDE,
+    });
+    if (existing) {
+      const sameSender =
+        (params.fieldSessionId && existing.senderSessionId === params.fieldSessionId) ||
+        (params.senderUserId && existing.senderUserId === params.senderUserId);
+      if (!sameSender) {
+        throw new AppError('This message ID is already in use', 409, 'MESSAGE_ID_CONFLICT');
+      }
+      return { message: serializeWbsChatMessage(existing), created: false };
+    }
+  }
+
   const boq = await prisma.boqItem.findFirst({
     where: { id: params.boqItemId, projectId: params.projectId },
     select: { id: true },
   });
-
   if (!boq) {
     throw new AppError('BOQ item not found in project', 404, 'BOQ_ITEM_NOT_FOUND');
   }
   // Linked report and query must belong to this project and this WBS item.
-  if (params.input.workdayReportId) {
-    const report = await loadWorkdayReportInProject(
-      prisma,
-      params.projectId,
-      params.input.workdayReportId
-    );
+  if (input.workdayReportId) {
+    const report = await loadWorkdayReportInProject(prisma, params.projectId, input.workdayReportId);
     if (report.wbsItemId !== params.boqItemId) {
       throw new AppError('Workday report not found', 404, 'WORKDAY_REPORT_NOT_FOUND');
     }
@@ -291,41 +328,78 @@ export async function postWbsChatMessage(params: {
       throw new AppError('Workday report not found', 404, 'WORKDAY_REPORT_NOT_FOUND');
     }
   }
-  if (params.input.reportQueryId) {
-    const query = await loadReportQueryInProject(
-      prisma,
-      params.projectId,
-      params.input.reportQueryId
-    );
+  if (input.reportQueryId) {
+    const query = await loadReportQueryInProject(prisma, params.projectId, input.reportQueryId);
     if (query.boqItemId !== params.boqItemId) {
       throw new AppError('Report query not found', 404, 'REPORT_QUERY_NOT_FOUND');
     }
   }
 
-  const created = await prisma.wbsChatMessage.create({
-    data: {
-      projectId: params.projectId,
-      boqItemId: params.boqItemId,
-      workdayReportId: params.input.workdayReportId ?? null,
-      reportQueryId: params.input.reportQueryId ?? null,
-      fieldSessionId: params.fieldSessionId ?? null,
-      senderName: params.senderName,
-      senderRole: params.senderRole,
-      messageType: params.input.messageType,
-      textContent: params.input.textContent ?? null,
-      mediaUrls: params.input.mediaUrls as unknown as Prisma.InputJsonValue,
-      latitude: params.input.latitude ?? null,
-      longitude: params.input.longitude ?? null,
-      chainageLabel: params.input.chainageLabel ?? null,
-    },
-    include: {
-      reportQuery: {
-        include: {
-          raisedByUser: { select: { fullName: true } },
-        },
-      },
-    },
-  });
+  let captureId: string | null = null;
+  let location: { latitude: number | null; longitude: number | null; chainageLabel: string | null } = {
+    latitude: null,
+    longitude: null,
+    chainageLabel: null,
+  };
+  if (input.captureId) {
+    const capture = await prisma.fieldEvidenceLog.findUnique({
+      where: { clientCaptureId: input.captureId },
+      select: { id: true, projectId: true, fieldSessionId: true, boqItemId: true, latitude: true, longitude: true, chainageLabel: true },
+    });
+    if (!capture) {
+      throw new AppError('Register the capture before posting it', 409, 'CAPTURES_NOT_REGISTERED', {
+        missingClientCaptureIds: [input.captureId],
+      });
+    }
+    if (
+      capture.projectId !== params.projectId ||
+      (params.fieldSessionId && capture.fieldSessionId !== params.fieldSessionId) ||
+      (capture.boqItemId && capture.boqItemId !== params.boqItemId)
+    ) {
+      throw new AppError('Capture not found', 404, 'CAPTURE_NOT_FOUND');
+    }
+    captureId = capture.id;
+    location = { latitude: capture.latitude, longitude: capture.longitude, chainageLabel: capture.chainageLabel };
+  } else if (input.messageType === 'PHOTO' || input.messageType === 'VOICE_NOTE') {
+    throw new AppError('Photo and voice messages must reference a registered capture', 400, 'CAPTURE_REQUIRED');
+  }
 
-  return serializeWbsChatMessage(created);
+  try {
+    const created = await prisma.wbsChatMessage.create({
+      data: {
+        projectId: params.projectId,
+        boqItemId: params.boqItemId,
+        workdayReportId: input.workdayReportId ?? null,
+        reportQueryId: input.reportQueryId ?? null,
+        fieldSessionId: params.fieldSessionId ?? null,
+        clientMessageId: input.clientMessageId ?? null,
+        senderSessionId: params.fieldSessionId ?? null,
+        senderUserId: params.senderUserId ?? null,
+        captureId,
+        senderName: params.senderName,
+        senderRole: params.senderRole,
+        messageType: input.messageType,
+        textContent: input.textContent ?? null,
+        // Location shown on a media message is the capture's server-evaluated location only.
+        latitude: location.latitude,
+        longitude: location.longitude,
+        chainageLabel: location.chainageLabel,
+      },
+      include: MESSAGE_INCLUDE,
+    });
+    return { message: serializeWbsChatMessage(created), created: true };
+  } catch (error) {
+    if (
+      input.clientMessageId &&
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    ) {
+      const existing = await prisma.wbsChatMessage.findUniqueOrThrow({
+        where: { clientMessageId: input.clientMessageId },
+        include: MESSAGE_INCLUDE,
+      });
+      return { message: serializeWbsChatMessage(existing), created: false };
+    }
+    throw error;
+  }
 }

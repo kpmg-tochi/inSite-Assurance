@@ -85,6 +85,8 @@ export interface LineFacts {
   usableEvidence: ProvidedEvidenceItem[];
   excludedIntegrityEvidenceIds: string[];
   outsideGeofenceEvidenceIds: string[];
+  /** Integrity-clean evidence whose location could not be evaluated (no fix). Not counted. */
+  unknownLocationEvidenceIds: string[];
   claimedPeriodQuantity: number;
   evidencedQuantity: number;
   independentEvidencedQuantity: number;
@@ -117,9 +119,12 @@ export function computeLineFacts(
 
   const excludedIntegrityEvidenceIds = inPeriod.filter((e) => !e.integrityPassed).map((e) => e.id);
   const outsideGeofenceEvidenceIds = inPeriod
-    .filter((e) => e.integrityPassed && !e.isWithinGeofence)
+    .filter((e) => e.integrityPassed && e.isWithinGeofence === false)
     .map((e) => e.id);
-  const usableEvidence = inPeriod.filter((e) => e.integrityPassed && e.isWithinGeofence);
+  const unknownLocationEvidenceIds = inPeriod
+    .filter((e) => e.integrityPassed && e.isWithinGeofence === null)
+    .map((e) => e.id);
+  const usableEvidence = inPeriod.filter((e) => e.integrityPassed && e.isWithinGeofence === true);
 
   const boqUnit = normalizeUnit(line.unit);
   const mismatched = new Set<string>();
@@ -147,7 +152,9 @@ export function computeLineFacts(
   const pct = (q: number) => (claimedPeriodQuantity > 0 ? round2((q / claimedPeriodQuantity) * 100) : null);
 
   const independent = usableEvidence.filter(isIndependent);
-  const holdPointEvidence = forItem.filter((e) => e.integrityPassed && e.isWithinGeofence && isIndependent(e));
+  const holdPointEvidence = forItem.filter(
+    (e) => e.integrityPassed && e.isWithinGeofence === true && isIndependent(e)
+  );
   const latestIndependent = [...independent].sort(
     (a, b) => new Date(b.capturedAt).getTime() - new Date(a.capturedAt).getTime()
   )[0];
@@ -157,6 +164,7 @@ export function computeLineFacts(
     usableEvidence,
     excludedIntegrityEvidenceIds,
     outsideGeofenceEvidenceIds,
+    unknownLocationEvidenceIds,
     claimedPeriodQuantity: round3(claimedPeriodQuantity),
     evidencedQuantity: round3(evidencedQuantity),
     independentEvidencedQuantity: round3(independentEvidencedQuantity),
@@ -318,7 +326,12 @@ export function applyRuleCaps(
     notes.push(`Quantities in other units were not counted (${facts.mismatchedUnits.join(', ')}; BOQ unit ${line.unit}).`);
   }
   if (facts.outsideGeofenceEvidenceIds.length > 0) {
-    notes.push(`${facts.outsideGeofenceEvidenceIds.length} capture(s) outside the geofence were not counted.`);
+    notes.push(`${facts.outsideGeofenceEvidenceIds.length} report(s) outside the geofence were not counted.`);
+  }
+  if (facts.unknownLocationEvidenceIds.length > 0) {
+    notes.push(
+      `${facts.unknownLocationEvidenceIds.length} report(s) without a usable location fix were not counted.`
+    );
   }
 
   return {

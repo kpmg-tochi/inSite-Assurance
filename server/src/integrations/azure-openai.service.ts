@@ -18,6 +18,15 @@ import type {
   ModelRaterOutput,
 } from '../modules/reconciliation/reconciliationEngine';
 
+export interface OmissionCheckResult {
+  hasUnexplainedOmission: boolean;
+  omissionPayload: AiOmissionPayload | null;
+  /** Model-reported confidence; null for the rules engine, which has none. */
+  aiConfidence: number | null;
+  aiReasoning: string;
+  engine: 'AZURE_OPENAI' | 'RULES';
+}
+
 class AzureOpenAiService {
   private client: AzureOpenAI | null = null;
 
@@ -47,9 +56,9 @@ class AzureOpenAiService {
     offlineManualQuantities?: ExtractedQuantityItem[];
     photoUrl?: string;
     projectBoqItems: Array<{ wbsCode: string; description: string; unit: string }>;
-  }): Promise<AiFieldNoteExtraction> {
+  }): Promise<{ extraction: AiFieldNoteExtraction; engine: 'AZURE_OPENAI' | 'RULES' }> {
     if (!this.client) {
-      return this.fallbackFieldExtraction(params);
+      return { extraction: this.fallbackFieldExtraction(params), engine: 'RULES' };
     }
 
     try {
@@ -102,13 +111,13 @@ class AzureOpenAiService {
 
       const parsed = completion.choices[0]?.message?.parsed;
       if (parsed) {
-        return parsed;
+        return { extraction: parsed, engine: 'AZURE_OPENAI' };
       }
     } catch (error) {
       console.warn('[AzureOpenAiService.extractFieldNoteFromTranscript] Fallback triggered:', error);
     }
 
-    return this.fallbackFieldExtraction(params);
+    return { extraction: this.fallbackFieldExtraction(params), engine: 'RULES' };
   }
 
   private fallbackFieldExtraction(params: {
@@ -137,7 +146,7 @@ class AzureOpenAiService {
               : 'Measured site work',
           quantity: qty,
           unit,
-          boqWbsCodeHint: params.projectBoqItems[0]?.wbsCode ?? null,
+          boqWbsCodeHint: null,
         });
       }
     }
@@ -150,16 +159,14 @@ class AzureOpenAiService {
       blockers.push('Material delivery or logistics delay noted');
     }
 
+    // Rules engine: restates the reporter's own words and numbers. It never links a BOQ item and
+    // never describes a photo.
     return {
-      normalizedSummary:
-        text.length > 0
-          ? text
-          : 'Field photo and site update captured for verification.',
+      normalizedSummary: text,
       extractedQuantities: extracted,
       siteBlockers: blockers,
-      matchedBoqWbsCodes: params.projectBoqItems.slice(0, 1).map((b) => b.wbsCode),
-      visionObservationSummary:
-        'Site capture logged and verified against project geofence.',
+      matchedBoqWbsCodes: [],
+      visionObservationSummary: null,
     };
   }
 
@@ -489,15 +496,10 @@ UNTRUSTED_TEXT>>>`,
     holdPointInstruction?: string | null;
     isHoldPointClaimed: boolean;
     morningChecklist: string[];
-    evidenceItems: Array<{ type: string; caption?: string; mediaUrl?: string }>;
-    voiceNoteUrl?: string | null;
-    delaysOrBlockers?: string;
-  }): Promise<{
-    hasUnexplainedOmission: boolean;
-    omissionPayload: AiOmissionPayload | null;
-    aiConfidence: number;
-    aiReasoning: string;
-  }> {
+    captures: Array<{ mediaType: string; caption: string | null }>;
+    textNotes: string[];
+    delaysOrBlockers?: string | null;
+  }): Promise<OmissionCheckResult> {
     const fallback = this.fallbackEvaluateOmissions(params);
 
     if (!this.client) {
@@ -542,8 +544,8 @@ UNTRUSTED_TEXT>>>`,
               `Submitted Summary: "${params.summaryText}"\n` +
               `Reported Quantity: ${params.reportedQuantity} ${params.unit}\n` +
               `Blockers/Delays Note: "${params.delaysOrBlockers || 'None'}"\n` +
-              `Evidence Items Attached (${params.evidenceItems.length}): ${JSON.stringify(params.evidenceItems)}\n` +
-              `Voice Note Attached: ${Boolean(params.voiceNoteUrl)}`,
+              `Captures attached (${params.captures.length}): ${JSON.stringify(params.captures)}\n` +
+              `Text notes: ${JSON.stringify(params.textNotes)}`,
           },
         ],
         response_format: zodResponseFormat(OmissionEvalSchema, 'workday_omission_eval'),
@@ -565,6 +567,7 @@ UNTRUSTED_TEXT>>>`,
             : null,
           aiConfidence: parsed.aiConfidence,
           aiReasoning: parsed.aiReasoning,
+          engine: 'AZURE_OPENAI',
         };
       }
     } catch (error) {
@@ -584,10 +587,12 @@ UNTRUSTED_TEXT>>>`,
     holdPointInstruction?: string | null;
     isHoldPointClaimed: boolean;
     morningChecklist: string[];
-    evidenceItems: Array<{ type: string; caption?: string; mediaUrl?: string }>;
-    delaysOrBlockers?: string;
-  }) {
-    const photoCount = params.evidenceItems.filter((e) => e.type === 'PHOTO').length;
+    captures: Array<{ mediaType: string; caption: string | null }>;
+    delaysOrBlockers?: string | null;
+  }): OmissionCheckResult {
+    const photoCount = params.captures.filter(
+      (c) => c.mediaType === 'SITE_PHOTO' || c.mediaType === 'MILL_CERTIFICATE' || c.mediaType === 'LAB_CUBE_TEST_CERT'
+    ).length;
     const combinedText = `${params.summaryText} ${params.delaysOrBlockers || ''}`.toLowerCase();
 
     const checklistNeedsPhotoOrCert = params.morningChecklist.some((item) =>
@@ -623,149 +628,23 @@ UNTRUSTED_TEXT>>>`,
           reasonProvidedInReport: false,
           clarificationQuestion: `Required evidence for WBS ${params.wbsCode} was omitted without an explanation: ${requirement} Please attach the missing site photo/proof or state why it could not be captured today, then re-submit.`,
         },
-        aiConfidence: 0.62,
-        aiReasoning: `AI Omission Check flagged missing visual/Hold-Point evidence (${photoCount} photos attached) with no omission reason documented in report.`,
+        aiConfidence: null,
+        aiReasoning: `Rules check: visual or hold-point evidence is required but ${photoCount} photo/certificate capture(s) were attached and no reason was given.`,
+        engine: 'RULES',
       };
     }
 
     return {
       hasUnexplainedOmission: false,
       omissionPayload: null,
-      aiConfidence: photoCount > 0 ? 0.92 : 0.84,
+      aiConfidence: null,
       aiReasoning:
         photoCount > 0
-          ? `Report backed by ${photoCount} photo evidence item(s) and aligned with WBS ${params.wbsCode}.`
+          ? `Rules check: ${photoCount} photo/certificate capture(s) attached.`
           : hasJustification
-            ? `Supporting visual proof omitted, but valid operational reason/blocker was documented in report.`
-            : `Report aligns with WBS ${params.wbsCode} deliverable parameters.`,
-    };
-  }
-
-  /**
-   * 6. Re-parses the full updated WBS chat thread + newly provided evidence/justification
-   * against the original Monitor or AI query context when resubmitting a report.
-   */
-  public async reparseWorkdayChatAfterQuery(params: {
-    wbsCode: string;
-    wbsDescription: string;
-    unit: string;
-    previousSummary: string;
-    previousQuantity: number;
-    originalQuery: {
-      source: string;
-      monitorComment?: string | null;
-      aiOmissionPayload?: AiOmissionPayload | null;
-    };
-    chatMessages: Array<{
-      senderName: string;
-      senderRole: string;
-      messageType: string;
-      textContent?: string | null;
-      caption?: string | null;
-    }>;
-    newEvidenceCount: number;
-    overrideSummary?: string;
-    overrideQuantity?: number;
-  }): Promise<{
-    updatedSummary: string;
-    updatedQuantity: number;
-    aiConfidence: number;
-    aiReasoning: string;
-    omissionAddressed: boolean;
-  }> {
-    const queryPromptText =
-      params.originalQuery.monitorComment ||
-      params.originalQuery.aiOmissionPayload?.clarificationQuestion ||
-      'Clarification requested';
-
-    const chatLines = params.chatMessages
-      .map(
-        (m) =>
-          `[${m.senderRole} - ${m.senderName}] (${m.messageType}): ${m.textContent || m.caption || ''}`
-      )
-      .filter((line) => line.trim().length > 0)
-      .join('\n');
-
-    if (this.client) {
-      const RevalidationSchema = z.object({
-        updatedSummary: z.string(),
-        updatedQuantity: z.number().nonnegative(),
-        aiConfidence: z.number().min(0).max(1),
-        aiReasoning: z.string(),
-        omissionAddressed: z.boolean(),
-      });
-
-      try {
-        const completion = await this.client.beta.chat.completions.parse({
-          model: env.AZURE_OPENAI_GPT_DEPLOYMENT,
-          temperature: 0.1,
-          messages: [
-            {
-              role: 'system',
-              content:
-                'You are an infrastructure assurance AI co-pilot re-evaluating a queried daily WBS report. ' +
-                'Synthesize the prior report, the original query (Monitor comment or AI omission details), ' +
-                'and the engineer’s newly added evidence/clarifications from the WBS chat into an updated summary.',
-            },
-            {
-              role: 'user',
-              content:
-                `WBS [${params.wbsCode}] ${params.wbsDescription}\n` +
-                `Previous Summary: "${params.previousSummary}" (${params.previousQuantity} ${params.unit})\n` +
-                `Original Query (${params.originalQuery.source}): ${queryPromptText}\n` +
-                `AI Omission Context: ${JSON.stringify(params.originalQuery.aiOmissionPayload ?? null)}\n` +
-                `Updated Chat Thread:\n${chatLines || 'No extra messages'}\n` +
-                `New Evidence Items Attached: ${params.newEvidenceCount}\n` +
-                `User Edited Summary Override: "${params.overrideSummary || ''}"`,
-            },
-          ],
-          response_format: zodResponseFormat(RevalidationSchema, 'workday_chat_revalidation'),
-        });
-
-        const parsed = completion.choices[0]?.message?.parsed;
-        if (parsed) {
-          return {
-            updatedSummary: params.overrideSummary?.trim() || parsed.updatedSummary,
-            updatedQuantity:
-              params.overrideQuantity !== undefined ? params.overrideQuantity : parsed.updatedQuantity,
-            aiConfidence: parsed.aiConfidence,
-            aiReasoning: parsed.aiReasoning,
-            omissionAddressed: parsed.omissionAddressed,
-          };
-        }
-      } catch (err) {
-        console.warn('[AzureOpenAiService.reparseWorkdayChatAfterQuery] Fallback:', err);
-      }
-    }
-
-    const engineerFollowUps = params.chatMessages
-      .filter((m) => m.senderRole === 'ENGINEER' || m.senderRole === 'INSPECTOR')
-      .map((m) => m.textContent || m.caption)
-      .filter((txt): txt is string => Boolean(txt && txt.trim()))
-      .slice(-4);
-
-    const updatedSummary =
-      params.overrideSummary?.trim() ||
-      [
-        params.previousSummary.trim(),
-        engineerFollowUps.length > 0
-          ? `Query Clarification: ${engineerFollowUps.join(' · ')}`
-          : null,
-      ]
-        .filter(Boolean)
-        .join(' | ');
-
-    const hasEvidenceOrNote = params.newEvidenceCount > 0 || engineerFollowUps.length > 0;
-
-    return {
-      updatedSummary,
-      updatedQuantity:
-        params.overrideQuantity !== undefined ? params.overrideQuantity : params.previousQuantity,
-      aiConfidence: hasEvidenceOrNote ? 0.91 : 0.72,
-      aiReasoning: hasEvidenceOrNote
-        ? `Re-parsed WBS ${params.wbsCode} chat after ${params.originalQuery.source} query ("${queryPromptText.slice(0, 90)}"). Incorporates ${params.newEvidenceCount} newly attached evidence item(s) and ${engineerFollowUps.length} field clarification note(s).`
-        : `Resubmission logged against ${params.originalQuery.source} query; awaiting additional photo/note proof if still unclear.`,
-      omissionAddressed: hasEvidenceOrNote,
+            ? 'Rules check: no visual proof attached; the report gives a reason.'
+            : 'Rules check: no visual proof was required by the hold-point or checklist rules.',
+      engine: 'RULES',
     };
   }
 }

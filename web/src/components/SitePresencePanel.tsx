@@ -28,11 +28,37 @@ import {
 import Drawer from "./Drawer";
 import Loader from "./Loader";
 import { formatDateTimeShort } from "../lib/formatters";
+import { CaptureAudio, CapturePhoto } from "./evidence/CaptureMedia";
 
 interface SitePresencePanelProps {
   projectId: string;
   initialReportId?: string | null;
   initialWbsItemId?: string | null;
+}
+
+const REPORT_FLAG_LABELS: Record<string, string> = {
+  LOW_GPS_ACCURACY: "Low GPS accuracy",
+  GPS_ACCURACY_UNKNOWN: "GPS accuracy unknown",
+  OUTSIDE_PROJECT_GEOFENCE: "Outside geofence",
+  GEOFENCE_UNAVAILABLE: "Geofence not evaluated",
+  MOCK_GPS_LOCATION_DETECTED: "Mock location",
+  SIGNATURE_INVALID: "Device signature invalid",
+  UNSIGNED: "Not signed by device",
+  NO_DEVICE_KEY: "No device key registered",
+};
+
+/** D-4.3: presence is recorded while the app is open, plus one ping per capture and report. */
+function pingSourceLabel(source: string): string {
+  switch (source) {
+    case "REPORT_SUBMISSION":
+      return "Report submitted";
+    case "CAPTURE":
+      return "Capture";
+    case "MANUAL_CHECKIN":
+      return "Check-in";
+    default:
+      return "App open";
+  }
 }
 
 function getGeotagBadge(
@@ -53,7 +79,7 @@ function getGeotagBadge(
   if (geotag.isWithinGeofence === false) {
     return { label: "Off-Site", variant: "danger" };
   }
-  return { label: "GPS Locked", variant: "warning" };
+  return { label: "Geofence not evaluated", variant: "warning" };
 }
 
 export function SitePresencePanel({
@@ -291,7 +317,7 @@ export function SitePresencePanel({
     {
       id: "source",
       header: "Ping Type",
-      tooltip: "Hourly background presence ping vs EOD report submission ping",
+      tooltip: "Presence while the app is open, or the ping recorded with a capture or report",
       width: "w-40",
       cell: (p) => (
         <TableBadge
@@ -299,7 +325,7 @@ export function SitePresencePanel({
             p.pingSource === "REPORT_SUBMISSION" ? "info" : "neutral"
           }
         >
-          {p.pingSource === "REPORT_SUBMISSION" ? "Report Submit" : "Hourly Ping"}
+          {pingSourceLabel(p.pingSource)}
         </TableBadge>
       ),
     },
@@ -343,7 +369,7 @@ export function SitePresencePanel({
       <div className="bg-white rounded-2xl border border-slate-200/80 p-10 flex flex-col items-center justify-center gap-3">
         <Loader size="sm" />
         <span className="text-xs text-slate-500 font-medium">
-          Loading daily report geotags and hourly site telemetry...
+          Loading daily report geotags and site presence...
         </span>
       </div>
     );
@@ -369,10 +395,10 @@ export function SitePresencePanel({
         }}
       />
 
-      {/* Hourly Telemetry Pings */}
+      {/* Presence pings */}
       <StandardTable
-        title="Hourly Site Presence Telemetry"
-        subtitle="Automated hourly GPS pings recorded during active workday hours to confirm continuous on-site presence."
+        title="Site Presence"
+        subtitle="GPS positions recorded while the field app is open, and with each capture and report. The app does not track location in the background."
         columns={pingColumns}
         data={filteredPings}
         keyExtractor={(p) => p.id}
@@ -382,7 +408,7 @@ export function SitePresencePanel({
           placeholder: "Search personnel or chainage...",
         }}
         emptyState={{
-          title: "No hourly site telemetry pings recorded yet.",
+          title: "No presence pings recorded yet.",
         }}
       />
 
@@ -502,7 +528,7 @@ export function SitePresencePanel({
             <div className="rounded-xl border border-slate-200 p-4 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-bold text-slate-800">
-                  Signed Workday Summary ({selectedReport.reportedQuantity}{" "}
+                  Reporter-confirmed summary ({selectedReport.reportedQuantity}{" "}
                   {selectedReport.unitOfMeasure})
                 </p>
                 {selectedReport.resolvedQueryId && (
@@ -512,16 +538,55 @@ export function SitePresencePanel({
               <p className="text-xs text-slate-600 leading-relaxed">
                 {selectedReport.summaryText}
               </p>
+              {selectedReport.delaysOrBlockers && (
+                <p className="text-xs text-rose-700">
+                  Blockers: {selectedReport.delaysOrBlockers}
+                </p>
+              )}
+              <p className="text-[11px] text-slate-500">
+                {selectedReport.signatureVerified === true
+                  ? "Device signature checked."
+                  : selectedReport.signatureVerified === false
+                    ? "Device signature invalid."
+                    : "Not signed by the device."}
+                {selectedReport.status === "STAGED_UNVERIFIED"
+                  ? " Staged: reporter identity not yet approved, not counted as evidence."
+                  : ""}
+              </p>
+              {selectedReport.integrityFlags.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {selectedReport.integrityFlags.map((f) => (
+                    <TableBadge
+                      key={f}
+                      variant={
+                        f === "MOCK_GPS_LOCATION_DETECTED" || f === "SIGNATURE_INVALID"
+                          ? "danger"
+                          : "warning"
+                      }
+                    >
+                      {REPORT_FLAG_LABELS[f] ?? f}
+                    </TableBadge>
+                  ))}
+                </div>
+              )}
+
+              {selectedReport.aiCheckStatus === "PENDING" ||
+              selectedReport.aiCheckStatus === "RUNNING" ? (
+                <p className="text-[11px] text-slate-500">Omission check pending.</p>
+              ) : selectedReport.aiCheckStatus === "FAILED" ? (
+                <p className="text-[11px] text-amber-700">Omission check failed; it will be retried.</p>
+              ) : null}
 
               {selectedReport.aiReasoning && (
                 <div className="mt-2 pt-2.5 border-t border-slate-100 flex items-start gap-2 text-[11px] text-slate-600">
                   <Sparkles className="w-3.5 h-3.5 text-brand-primary shrink-0 mt-0.5" />
                   <div>
                     <span className="font-semibold text-slate-800">
-                      AI Review
-                      {selectedReport.aiParsedConfidence != null
-                        ? ` (${Math.round(selectedReport.aiParsedConfidence * 100)}% confidence)`
-                        : ""}
+                      {selectedReport.aiCheckEngine === "AZURE_OPENAI"
+                        ? "AI omission check"
+                        : selectedReport.aiCheckEngine === "RULES"
+                          ? "Rules omission check"
+                          : "Omission check"}
                       :{" "}
                     </span>
                     {selectedReport.aiReasoning}
@@ -576,40 +641,117 @@ export function SitePresencePanel({
               </div>
             )}
 
-            {/* Attached Photo / Media Evidence Count */}
-            {selectedReport.evidenceItems &&
-              selectedReport.evidenceItems.length > 0 && (
-                <div className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-2">
-                  <p className="text-xs font-bold text-slate-800">
-                    Attached Evidence Items ({selectedReport.evidenceItems.length})
-                  </p>
-                  <div className="space-y-1.5">
-                    {selectedReport.evidenceItems.map((ev) => (
-                      <div
-                        key={ev.id}
-                        className="text-[11px] text-slate-600 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100 flex items-center justify-between gap-2"
-                      >
+            {/* Captures linked to this revision, with the server's integrity results */}
+            {selectedReport.captures.length > 0 && (
+              <div className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-2">
+                <p className="text-xs font-bold text-slate-800">
+                  Captures ({selectedReport.captures.length})
+                </p>
+                <div className="space-y-1.5">
+                  {selectedReport.captures.map((c) => (
+                    <div
+                      key={c.id}
+                      className="text-[11px] text-slate-600 bg-slate-50 rounded-lg px-2.5 py-1.5 border border-slate-100 space-y-1"
+                    >
+                      <div className="flex items-center justify-between gap-2">
                         <span className="font-medium text-slate-800 truncate">
-                          [{ev.type}] {ev.caption || "Field capture"}
+                          {c.mediaType === "VOICE_NOTE"
+                            ? "Voice note"
+                            : c.mediaType === "SITE_PHOTO"
+                              ? "Photo"
+                              : "Document"}
+                          {c.caption ? ` · ${c.caption}` : ""}
                         </span>
                         <span className="text-slate-400 shrink-0">
-                          {formatDateTimeShort(ev.capturedAt)}
+                          {formatDateTimeShort(c.capturedAt)}
                         </span>
                       </div>
-                    ))}
-                  </div>
+                      <div className="flex flex-wrap gap-1">
+                        <TableBadge
+                          variant={
+                            c.isWithinGeofence === true
+                              ? "success"
+                              : c.isWithinGeofence === false
+                                ? "danger"
+                                : "neutral"
+                          }
+                        >
+                          {!c.locationAvailable
+                            ? "Location unavailable"
+                            : c.isWithinGeofence === true
+                              ? "Inside geofence"
+                              : c.isWithinGeofence === false
+                                ? "Outside geofence"
+                                : "Geofence not evaluated"}
+                        </TableBadge>
+                        <TableBadge
+                          variant={
+                            c.signatureVerified === true
+                              ? "success"
+                              : c.signatureVerified === false
+                                ? "danger"
+                                : "neutral"
+                          }
+                        >
+                          {c.signatureVerified === true
+                            ? "Signature checked"
+                            : c.signatureVerified === false
+                              ? "Signature invalid"
+                              : "Unsigned"}
+                        </TableBadge>
+                        {c.isMockLocation && <TableBadge variant="danger">Mock location</TableBadge>}
+                        {!c.integrityPassed && (
+                          <TableBadge variant="danger">Failed integrity: not counted</TableBadge>
+                        )}
+                      </div>
+                      {c.integrityFlags.length > 0 && (
+                        <p className="text-[10px] text-slate-500">
+                          Flags: {c.integrityFlags.join(", ")}
+                        </p>
+                      )}
+                      {c.mediaType === "SITE_PHOTO" && (
+                        <CapturePhoto projectId={projectId} objectKey={c.objectKey} alt={c.caption || "Site photo"} className="w-full h-40" />
+                      )}
+                      {c.mediaType === "VOICE_NOTE" && (
+                        <CaptureAudio projectId={projectId} objectKey={c.objectKey} />
+                      )}
+                      {c.mediaType === "VOICE_NOTE" && (
+                        <p className="text-[10px] text-slate-500">
+                          {c.transcriptionStatus === "DONE" && c.transcript
+                            ? `Transcript: ${c.transcript}`
+                            : c.transcriptionStatus === "FAILED"
+                              ? "Transcription failed."
+                              : "Not transcribed."}
+                        </p>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              )}
+              </div>
+            )}
 
-            {/* Same-Day Hourly Telemetry Timeline */}
+            {selectedReport.textNotes.length > 0 && (
+              <div className="rounded-xl border border-slate-200 bg-white p-3.5 space-y-1.5">
+                <p className="text-xs font-bold text-slate-800">
+                  Notes ({selectedReport.textNotes.length})
+                </p>
+                {selectedReport.textNotes.map((n) => (
+                  <p key={n.id} className="text-[11px] text-slate-600">
+                    {formatDateTimeShort(n.capturedAt)} · {n.text}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            {/* Same-day presence timeline */}
             <div className="space-y-2.5">
               <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5" />
-                Same-Day Hourly Presence Timeline ({selectedReporterDayPings.length})
+                Same-day presence while the app was open ({selectedReporterDayPings.length})
               </h4>
               {selectedReporterDayPings.length === 0 ? (
                 <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
-                  No hourly telemetry pings recorded for this reporter on{" "}
+                  No presence pings recorded for this reporter on{" "}
                   {selectedReport.workdayDate}.
                 </p>
               ) : (
@@ -631,9 +773,7 @@ export function SitePresencePanel({
                           <div>
                             <p className="font-semibold text-slate-800">
                               {formatDateTimeShort(ping.capturedAtDevice)} ·{" "}
-                              {ping.pingSource === "REPORT_SUBMISSION"
-                                ? "Report Submit"
-                                : "Hourly Check"}
+                              {pingSourceLabel(ping.pingSource)}
                             </p>
                             <p className="text-[11px] font-mono text-slate-500">
                               {ping.chainageLabel ||

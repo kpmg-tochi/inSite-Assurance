@@ -78,6 +78,8 @@ export interface MobileBaselinePack {
   codePrefix: string;
   stateLocation: string;
   reportingCadence: ReportingCadence;
+  /** IANA zone that defines the project's reporting day. Absent in packs saved before Phase 4. */
+  timezone?: string;
   geofenceMode: 'RADIAL' | 'LINEAR_CORRIDOR';
   geofence: ProjectGeofence;
   boqItems: Array<{

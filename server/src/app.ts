@@ -17,6 +17,8 @@ import { workdayReportsRoutes } from "./modules/workday-reports/workdayReports.r
 import { morningBriefRoutes } from "./modules/morning-briefs/morningBrief.routes";
 import { notificationsRoutes } from "./modules/notifications/notifications.routes";
 import { wbsChatRoutes } from "./modules/wbs-chat/wbsChat.routes";
+import { capturesRoutes } from "./modules/evidence/captures.routes";
+import { localStorageRoutes } from "./modules/storage/localStorage.routes";
 import { storageService } from "./integrations/storage.service";
 import { azureOpenAiService } from "./integrations/azure-openai.service";
 import { whisperService } from "./integrations/whisper.service";
@@ -53,13 +55,15 @@ export function createApp() {
       integrations: {
         azureOpenAiGpt4o: azureOpenAiService.isConfigured()
           ? "LIVE_AZURE_OPENAI"
-          : "DETERMINISTIC_FALLBACK",
+          : "RULES_ONLY",
         standaloneWhisper: whisperService.isConfigured()
           ? "LIVE_STANDALONE_WHISPER"
-          : "SIMULATED_FALLBACK",
+          : env.DEMO_MODE
+            ? "SIMULATED_DEMO"
+            : "NOT_CONFIGURED",
         objectStorage: storageService.isCloudConfigured()
           ? "S3_COMPATIBLE"
-          : "LOCAL_DEV_SIMULATED",
+          : "LOCAL_DISK_DEV",
       },
       timestamp: new Date().toISOString(),
     });
@@ -79,6 +83,12 @@ export function createApp() {
   app.use("/api/v1/projects", morningBriefRoutes);
   app.use("/api/v1/projects", notificationsRoutes);
   app.use("/api/v1/projects", wbsChatRoutes);
+  app.use("/api/v1/projects", capturesRoutes);
+
+  // Development object storage when S3 is not configured (never in production; see env checks).
+  if (!storageService.isCloudConfigured() && env.NODE_ENV !== "production") {
+    app.use("/api/v1/storage/local-dev", localStorageRoutes);
+  }
 
   app.use("/api", (_req: Request, res: Response) => {
     res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "Route not found" } });

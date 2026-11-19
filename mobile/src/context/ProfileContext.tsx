@@ -14,7 +14,11 @@ import {
   wipeAllLocalProfileData,
   type LocalUserProfile,
 } from '../storage/secureProfileStore';
-import { setFieldAgentAuth } from '../config/apiConfig';
+import { getCachedBaselinePack, saveBaselinePack, setFieldAgentAuth } from '../config/apiConfig';
+import { fetchFieldSessionStatus } from '../api/auth/authApi';
+import { persistBaselinePack } from '../storage/baselineStore';
+import { hydrateBaselinePack } from '../storage/baselineStore';
+import { ensureDeviceKeyRegistered } from '../security/deviceKeyRegistration';
 import { getInitials } from '../utils/userUtils';
 
 interface ProfileContextValue {
@@ -28,6 +32,11 @@ interface ProfileContextValue {
   updateProfile: (updates: Partial<LocalUserProfile>) => Promise<LocalUserProfile>;
   clearSession: () => Promise<void>;
   resetAllProfileState: () => Promise<void>;
+  /**
+   * Reads assurance status from the server (`/auth/me`), the only source of truth for it.
+   * Called at startup, on app foreground, on pull-to-refresh and when a push arrives.
+   */
+  refreshAssuranceStatus: () => Promise<LocalUserProfile | null>;
 }
 
 const ProfileContext = createContext<ProfileContextValue | null>(null);
@@ -56,6 +65,13 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
           syncAuthToken(saved);
           setProfile(saved);
         }
+        // Geofence checks must work after a restart, offline included.
+        if (saved?.activeProjectId) {
+          await hydrateBaselinePack(saved.activeProjectId).catch(() => null);
+        }
+        if (saved?.activeSessionToken) {
+          void ensureDeviceKeyRegistered(saved.activeSessionId);
+        }
       } finally {
         if (mounted) {
           setLoading(false);
@@ -82,6 +98,31 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
     setProfile(updated);
   }, [syncAuthToken]);
 
+  const refreshAssuranceStatus = useCallback(async () => {
+    const saved = await loadLocalProfile();
+    if (!saved?.activeSessionToken) return saved;
+    try {
+      const status = await fetchFieldSessionStatus();
+      const updated = await updateLocalProfile({
+        assuranceStatus: status.assuranceStatus,
+        rejectionReason: status.assuranceStatus === 'REJECTED' ? status.rejectionReason ?? null : null,
+        activeRequiresIdentityAssurance: status.requiresIdentityAssurance,
+      });
+      setProfile(updated);
+      // Packs saved before projects had a time zone get it from the server.
+      const pack = getCachedBaselinePack();
+      if (pack && status.project?.timezone && pack.timezone !== status.project.timezone) {
+        const next = { ...pack, timezone: status.project.timezone };
+        saveBaselinePack(next);
+        await persistBaselinePack(next).catch(() => undefined);
+      }
+      return updated;
+    } catch {
+      // Offline or session ended (the session-ended overlay handles the latter).
+      return saved;
+    }
+  }, []);
+
   const resetAllProfileState = useCallback(async () => {
     await wipeAllLocalProfileData();
     syncAuthToken(null);
@@ -105,8 +146,9 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
       updateProfile,
       clearSession,
       resetAllProfileState,
+      refreshAssuranceStatus,
     };
-  }, [profile, loading, refreshProfile, updateProfile, clearSession, resetAllProfileState]);
+  }, [profile, loading, refreshProfile, updateProfile, clearSession, resetAllProfileState, refreshAssuranceStatus]);
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 };

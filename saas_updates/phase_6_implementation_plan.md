@@ -67,6 +67,8 @@
 | Join codes are issued at activation | A draft has none. |
 | Tranche allocations | Their sum may not exceed the project budget. Less than the budget is allowed with a warning. |
 | Geofence modes offered | Tenant setting `enabledGeofenceModes`, default all three. A project keeps its mode if the tenant later disables it. |
+| Geofence tolerance (owner, 2026-11-19) | Every mode has a tolerance band outside its boundary. A position outside the boundary but within the tolerance counts as valid and is noted on the capture or report ("63 m outside the boundary, within tolerance"). Beyond the tolerance it is outside. Tenant default `defaultGeofenceToleranceMeters` = 100; a project may override it. |
+| Project time zone (owner, 2026-11-19) | Set in the wizard, defaulting to the tenant zone. It defines the reporting day (one report per WBS item per day) and is enforced by the server since Phase 4. |
 
 ---
 
@@ -88,6 +90,8 @@
 
 **Geofence**
 - Prisma `GeofenceMode`: add `PERIMETER`.
+- `Tenant`: add `defaultGeofenceToleranceMeters Int @default(100)`. `Project`: add `geofenceToleranceMeters Int?` (null means the tenant default). The perimeter schema's own `toleranceMeters` is replaced by this general setting.
+- Add a Prisma enum `GeofenceStatus { INSIDE, WITHIN_TOLERANCE, OUTSIDE }` and a nullable `geofenceStatus` column on `FieldEvidenceLog`, `SiteTelemetryPing` and the stored report geotag (null = not evaluated). Keep `isWithinGeofence` as `INSIDE or WITHIN_TOLERANCE` so existing readers keep working.
 - `FieldEvidenceLog` and telemetry: add `distanceToBoundaryMeters Float?`; keep chainage fields for linear.
 
 **BOQ baseline**
@@ -140,11 +144,16 @@ After activation, the same step pages serve as project settings under `/app/proj
 
 ### Step 3: Geofence
 - [ ] Shared schema: `PerimeterGeofenceSchema { mode: 'PERIMETER', perimeterCoordinates: LonLat[] (min 3, ring auto-closed, max ~500), toleranceMeters (default 0, max 500), siteLabel? }`. Reject self-intersecting rings. Add to the union.
-- [ ] Shared maths: `verifyPerimeterGeofence` using point-in-polygon plus distance to the nearest edge; inside, or within tolerance of the edge, counts as within. Add the Turf modules it needs to `shared/package.json`.
+- [ ] Shared maths: `verifyPerimeterGeofence` using point-in-polygon plus distance to the nearest edge. Add the Turf modules it needs to `shared/package.json`.
+- [ ] Tolerance for all modes: `verifyPointAgainstGeofence(point, geofence, toleranceMeters)` returns `status` (`INSIDE`, `WITHIN_TOLERANCE`, `OUTSIDE`) and `distanceOutsideMeters` (0 when inside). Radial: distance beyond the radius; linear: offset beyond the half-width; perimeter: distance to the nearest edge when outside.
+- [ ] Server: `server/src/utils/geofenceEvaluation.ts` (the single helper from Phase 4) takes the project's effective tolerance and stores `geofenceStatus` and the distance on captures, telemetry and report geotags. Add a `WITHIN_GEOFENCE_TOLERANCE` flag (not critical) so it shows as a badge.
+- [ ] Reconciliation: `WITHIN_TOLERANCE` counts as usable evidence and the line rationale notes it (`reconciliationEngine.ts` currently counts only `isWithinGeofence === true`).
+- [ ] Web and mobile badges: "Within tolerance (N m outside)". The mobile preview uses the same shared function and the tolerance from the baseline pack.
 - [ ] Dispatcher becomes an exhaustive switch with a compile-time `never` check.
 - [ ] Result type: add `distanceToBoundaryMeters`; keep the old distance field populated for radial and linear so existing readers work; chainage stays null for non-linear.
 - [ ] `geofenceCentroid(geofence)` and `geofenceBounds(geofence)` helpers for maps.
 - [ ] Server: validate the project's mode against the tenant's `enabledGeofenceModes` on save.
+- [ ] Tenant settings: `defaultGeofenceToleranceMeters` (0 to 1000). Wizard step 3: tolerance override, and project time zone (IANA list, default the tenant zone; `Project.timezone` exists since Phase 4). Both go into the mobile baseline pack.
 - [ ] Web: one `GeofenceEditor` built on the existing Leaflet setup: pick a mode, then click to place a centre and drag a radius, click to add corridor waypoints and set half-width, or click to add polygon vertices. Coordinates can still be typed or pasted as a fallback. Replace the two hand-typed editors.
 - [ ] Web: `LiveGeospatialMap` draws all three shapes and fits to `geofenceBounds`; remove the Lagos fallback. Replace mode ternaries in `AppShell.tsx`, `PortfolioDashboardPage.tsx`, `EvidenceOverlayDrawer.tsx` with a label helper. Delete the local union in `web/src/api/types.ts`.
 - [ ] Mobile: mode label helper; nothing else should need changing after Phase 4. Verify with a perimeter project.

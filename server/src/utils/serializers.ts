@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { FieldPersonaType } from '@insite/shared';
+import { CaptureDto, FieldPersonaType } from '@insite/shared';
 import { hasWebPermission, WebJwtPayload } from '../middleware/auth.middleware';
 
 /**
@@ -84,82 +84,44 @@ export function serializeBoqItem(
   };
 }
 
-export function serializeEvidenceMedia(media: Prisma.EvidenceMediaGetPayload<object>) {
-  return {
-    id: media.id,
-    mediaType: media.mediaType,
-    objectKey: media.objectKey,
-    mimeType: media.mimeType,
-    byteSize: media.byteSize,
-    sha256FileHash: media.sha256FileHash,
-    durationSeconds: media.durationSeconds,
-    createdAt: media.createdAt.toISOString(),
-  };
-}
+type CaptureRow = Prisma.FieldEvidenceLogGetPayload<{ include: { mediaAttachments: true } }>;
 
-type EvidenceLogRow = Prisma.FieldEvidenceLogGetPayload<object> & {
-  mediaAttachments?: Prisma.EvidenceMediaGetPayload<object>[];
-  fieldSession?: FieldSessionLike | null;
-  boqItem?: { id: string; wbsCode: string; description: string; unit: string; isHoldPoint: boolean } | null;
-};
-
-export function serializeEvidenceLog(log: EvidenceLogRow, opts: { detailedSessions: boolean }) {
+/** One capture (photo, voice note or document) with its server-computed integrity results. */
+export function serializeCapture(log: CaptureRow): CaptureDto {
+  const media = log.mediaAttachments[0];
   return {
     id: log.id,
+    clientCaptureId: log.clientCaptureId,
     projectId: log.projectId,
-    boqItemId: log.boqItemId,
+    wbsItemId: log.boqItemId,
+    workdayReportId: log.workdayReportId,
     fieldSessionId: log.fieldSessionId,
-    reporterRoleId: log.reporterRoleId,
-    reporterRoleName: log.reporterRoleName,
-    fieldPersonaType: log.fieldPersonaType as FieldPersonaType,
-    assuranceWeight: log.assuranceWeight,
-    status: log.status,
+    status: log.status as CaptureDto['status'],
+    mediaType: (media?.mediaType ?? 'SITE_PHOTO') as CaptureDto['mediaType'],
+    objectKey: media?.objectKey ?? '',
+    mimeType: media?.mimeType ?? '',
+    byteSize: media?.byteSize ?? 0,
+    durationSeconds: media?.durationSeconds ?? null,
+    caption: log.caption,
+    capturedAt: log.capturedAtDevice.toISOString(),
+    registeredAt: log.syncedAtServer.toISOString(),
+    locationAvailable: log.locationAvailable,
     latitude: log.latitude,
     longitude: log.longitude,
-    altitudeMeters: log.altitudeMeters,
     gpsAccuracyMeters: log.gpsAccuracyMeters,
     isMockLocation: log.isMockLocation,
     isWithinGeofence: log.isWithinGeofence,
-    chainageKm: log.chainageKm,
     chainageLabel: log.chainageLabel,
-    corridorOffsetMeters: log.corridorOffsetMeters,
-    verificationBadgeText: log.verificationBadgeText,
-    devicePitchDeg: log.devicePitchDeg,
-    deviceRollDeg: log.deviceRollDeg,
-    deviceAzimuthDeg: log.deviceAzimuthDeg,
-    deviceSignatureHash: log.deviceSignatureHash,
+    distanceFromSiteMeters: log.distanceFromSiteMeters,
+    signatureVerified: log.signatureVerified,
+    serverSha256: log.serverSha256,
+    perceptualHash: media?.perceptualHash ?? null,
     integrityPassed: log.integrityPassed,
-    integrityFlags: (log.integrityFlags as string[]) ?? [],
-    rawTextNote: log.rawTextNote,
-    rawWhisperTranscript: log.rawWhisperTranscript,
-    confirmedSummary: log.confirmedSummary,
-    confirmedQuantities: (log.confirmedQuantities as unknown[]) ?? [],
-    siteBlockers: (log.siteBlockers as string[]) ?? [],
-    visionObservationSummary: log.visionObservationSummary,
-    wasEditedByAgent: log.wasEditedByAgent,
-    confirmationSignatureHash: log.confirmationSignatureHash,
-    capturedAtDevice: log.capturedAtDevice.toISOString(),
-    syncedAtServer: log.syncedAtServer.toISOString(),
-    confirmedAt: iso(log.confirmedAt),
-    ...(log.boqItem !== undefined
-      ? {
-          boqItem: log.boqItem
-            ? {
-                id: log.boqItem.id,
-                wbsCode: log.boqItem.wbsCode,
-                description: log.boqItem.description,
-                unit: log.boqItem.unit,
-                isHoldPoint: log.boqItem.isHoldPoint,
-              }
-            : null,
-        }
-      : {}),
-    ...(log.fieldSession
-      ? { fieldSession: serializeFieldSessionSummary(log.fieldSession, opts.detailedSessions) }
-      : {}),
-    ...(log.mediaAttachments
-      ? { mediaAttachments: log.mediaAttachments.map(serializeEvidenceMedia) }
-      : {}),
+    integrityFlags: Array.isArray(log.integrityFlags) ? (log.integrityFlags as string[]) : [],
+    transcriptionStatus: log.transcriptionStatus as CaptureDto['transcriptionStatus'],
+    transcript: log.transcript,
+    reporterRoleName: log.reporterRoleName,
+    fieldPersonaType: log.fieldPersonaType as FieldPersonaType,
   };
 }
 

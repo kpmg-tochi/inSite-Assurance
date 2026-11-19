@@ -87,58 +87,8 @@ export interface BoqItemRecordDto {
   } | null;
 }
 
-export interface FieldEvidenceLogRecordDto {
-  id: string;
-  projectId: string;
-  boqItemId: string | null;
-  reporterRoleId: string | null;
-  reporterRoleName: string;
-  fieldPersonaType: FieldPersonaType;
-  assuranceWeight: number;
-  status: string;
-  latitude: number;
-  longitude: number;
-  gpsAccuracyMeters: number;
-  isMockLocation: boolean;
-  isWithinGeofence: boolean;
-  chainageKm: number | null;
-  chainageLabel: string | null;
-  corridorOffsetMeters: number | null;
-  verificationBadgeText: string;
-  deviceSignatureHash: string;
-  integrityPassed: boolean;
-  integrityFlags: string[];
-  rawTextNote: string | null;
-  rawWhisperTranscript: string | null;
-  confirmedSummary: string | null;
-  confirmedQuantities: Array<{
-    materialOrWork: string;
-    quantity: number;
-    unit: string;
-    boqWbsCodeHint?: string | null;
-  }>;
-  siteBlockers: string[];
-  visionObservationSummary: string | null;
-  capturedAtDevice: string;
-  confirmedAt: string | null;
-  boqItem?: {
-    id: string;
-    wbsCode: string;
-    description: string;
-    unit: string;
-    isHoldPoint: boolean;
-  } | null;
-  fieldSession?: {
-    id: string;
-    agentFullName: string;
-    agentPhoneNumber: string;
-    roleId: string;
-    roleNameSnapshot: string;
-    fieldPersonaType: FieldPersonaType;
-    assuranceWeight: number;
-    deviceModel: string | null;
-  };
-}
+/** Server contract for GET /projects/:projectId/evidence (Phase 4). */
+export type { CaptureListItemDto } from "@insite/shared";
 
 export interface AuditTrailResponseDto {
   tenantId?: string;

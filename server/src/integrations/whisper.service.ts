@@ -12,6 +12,12 @@ export const NIGERIAN_CONSTRUCTION_WHISPER_PROMPT =
   'Lafarge, BUA, ready-mix Grade C25 C30 concrete, slump test, cube crushing test, waybill, Naira, bags, trips, ' +
   'tons, cubic meters, we dey for site, contractor don cast, rain delay work.';
 
+export interface TranscriptionResult {
+  status: 'DONE' | 'FAILED' | 'UNAVAILABLE';
+  transcript: string | null;
+  engine: 'STANDALONE_WHISPER' | 'SIMULATED_DEMO' | null;
+}
+
 class StandaloneWhisperService {
   private client: OpenAI | null = null;
 
@@ -29,56 +35,47 @@ class StandaloneWhisperService {
   }
 
   /**
-   * Transcribes an audio voice note from raw bytes using the standalone Whisper API endpoint.
-   * Callers read the bytes from the configured bucket by object key; no URL is ever fetched.
+   * Transcribes a voice note from raw bytes (read from the bucket by object key; no URL is fetched).
+   *
+   * Never invents a transcript: with no provider it returns UNAVAILABLE, on error FAILED, both with
+   * no text. A labelled simulated transcript is returned only in DEMO_MODE.
    */
   public async transcribeAudio(params: {
-    audioBuffer?: Buffer;
+    audioBuffer: Buffer | null;
     fileName?: string;
     mimeType?: string;
-    fallbackContextHint?: string;
-  }): Promise<{ transcript: string; providerMode: 'STANDALONE_WHISPER' | 'SIMULATED_FALLBACK' }> {
+  }): Promise<TranscriptionResult> {
     if (!this.client) {
-      const simulated =
-        params.fallbackContextHint ||
-        'We dey for corridor site today. Team don cast 12 meters of the reinforced drainage culvert wall and use 40 bags of Dangote cement with 2 trips of granite.';
-      return {
-        transcript: simulated,
-        providerMode: 'SIMULATED_FALLBACK',
-      };
+      if (env.DEMO_MODE) {
+        return {
+          status: 'DONE',
+          transcript:
+            '[Simulated transcript, demo mode] Team cast 12 meters of culvert wall and used 40 bags of cement.',
+          engine: 'SIMULATED_DEMO',
+        };
+      }
+      return { status: 'UNAVAILABLE', transcript: null, engine: null };
+    }
+    if (!params.audioBuffer) {
+      return { status: 'FAILED', transcript: null, engine: 'STANDALONE_WHISPER' };
     }
 
     try {
-      const audioBytes = params.audioBuffer;
-      if (!audioBytes) {
-        throw new Error('No audio bytes provided for transcription');
-      }
-
       const fileObj = await toFile(
-        audioBytes,
+        params.audioBuffer,
         params.fileName || 'field-voice-note.m4a',
         { type: params.mimeType || 'audio/mp4' }
       );
-
       const transcription = await this.client.audio.transcriptions.create({
         file: fileObj,
         model: env.WHISPER_MODEL || 'whisper-1',
         prompt: NIGERIAN_CONSTRUCTION_WHISPER_PROMPT,
         temperature: 0.1,
       });
-
-      return {
-        transcript: transcription.text.trim(),
-        providerMode: 'STANDALONE_WHISPER',
-      };
+      return { status: 'DONE', transcript: transcription.text.trim(), engine: 'STANDALONE_WHISPER' };
     } catch (error) {
-      console.warn('[StandaloneWhisperService] Falling back due to error:', error);
-      return {
-        transcript:
-          params.fallbackContextHint ||
-          'Voice note captured on site; awaiting manual quantity confirmation.',
-        providerMode: 'SIMULATED_FALLBACK',
-      };
+      console.warn('[StandaloneWhisperService] Transcription failed:', error);
+      return { status: 'FAILED', transcript: null, engine: 'STANDALONE_WHISPER' };
     }
   }
 }

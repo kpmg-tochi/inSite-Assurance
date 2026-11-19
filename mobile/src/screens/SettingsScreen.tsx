@@ -22,10 +22,7 @@ import { BackButton, PrimaryButton } from "../components/inputs/Buttons";
 import { useProfile } from "../context/ProfileContext";
 import type { RootStackParamList } from "../navigation/types";
 import { useResetDemoMutation } from "../queries/projects/useProjectsQueries";
-import { resetInMemoryAssuranceState } from "../storage/assuranceRepository";
-import { clearLocalDatabaseTables } from "../storage/sqliteDatabase";
-import { resetInMemoryTelemetryState } from "../storage/telemetryRepository";
-import { resetInMemoryWbsState } from "../storage/wbsRepository";
+import { clearLocalData } from "../storage/db/database";
 import { cardShadow, defaultColors } from "../styles/commonStyles";
 import { formatMobileErrorMessage } from "../utils/errorFormatter";
 import { getInitials } from "../utils/userUtils";
@@ -122,10 +119,7 @@ export const SettingsScreen: React.FC = () => {
   const performFullDemoReset = async () => {
     try {
       await resetDemoMutation.mutateAsync();
-      await clearLocalDatabaseTables();
-      resetInMemoryWbsState();
-      resetInMemoryTelemetryState();
-      resetInMemoryAssuranceState();
+      await clearLocalData();
       await resetAllProfileState();
       queryClient.clear();
 

@@ -608,12 +608,9 @@ export type PortfolioHealth = z.infer<typeof PortfolioHealthEnum>;
 /**
  * 7. Field Evidence Log Lifecycle States
  */
+/** Server state of one registered capture (photo, voice note or document). */
 export const EvidenceLogStatusEnum = z.enum([
-  'LOCAL_CAPTURED',
-  'QUEUED_OFFLINE',
-  'UPLOADING_SYNC',
-  'AWAITING_CONFIRMATION',
-  'CONFIRMED',
+  'REGISTERED',
   'FLAGGED_INTEGRITY',
 ]);
 export type EvidenceLogStatus = z.infer<typeof EvidenceLogStatusEnum>;
@@ -629,6 +626,8 @@ export const MediaTypeEnum = z.enum([
   'MILL_CERTIFICATE',
   'BOQ_SPREADSHEET',
   'VALUATION_REPORT_PDF',
+  'IDENTITY_DOCUMENT',
+  'IDENTITY_SELFIE',
 ]);
 export type MediaType = z.infer<typeof MediaTypeEnum>;
 
@@ -724,6 +723,11 @@ export const AuditActionTypeEnum = z.enum([
   'IPC_WITHDRAWN',
   'TRANCHE_DECISION_REVERSED',
   'TENANT_SETTINGS_UPDATED',
+  'CAPTURE_REGISTERED',
+  'CAPTURE_FLAGGED_INTEGRITY',
+  'TELEMETRY_ANOMALY_SUMMARY',
+  'WORKDAY_REPORTS_RELEASED',
+  'DEVICE_KEY_REGISTERED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 
@@ -758,10 +762,31 @@ export type IncidentStatus = z.infer<typeof IncidentStatusEnum>;
  * 12. Workday Report Status
  */
 export const WorkdayReportStatusEnum = z.enum([
+  // Reporter's identity assurance is not approved yet; released by the server on approval.
   'STAGED_UNVERIFIED',
-  'READY_FOR_AI',
-  'EXTRACTED',
   'CONFIRMED',
-  'SYNCED',
 ]);
 export type WorkdayReportStatus = z.infer<typeof WorkdayReportStatusEnum>;
+
+/** Post-submission omission check. Runs after the response, never in the request path. */
+export const WorkdayAiCheckStatusEnum = z.enum([
+  'PENDING',
+  'RUNNING',
+  'DONE',
+  'SKIPPED',
+  'FAILED',
+]);
+export type WorkdayAiCheckStatus = z.infer<typeof WorkdayAiCheckStatusEnum>;
+
+/** Media types a field device may register as a capture. */
+export const CaptureMediaTypeEnum = z.enum([
+  'SITE_PHOTO',
+  'VOICE_NOTE',
+  'WAYBILL_DOCUMENT',
+  'LAB_CUBE_TEST_CERT',
+  'MILL_CERTIFICATE',
+]);
+export type CaptureMediaType = z.infer<typeof CaptureMediaTypeEnum>;
+
+export const TranscriptionStatusEnum = z.enum(['NOT_APPLICABLE', 'PENDING', 'DONE', 'FAILED']);
+export type TranscriptionStatus = z.infer<typeof TranscriptionStatusEnum>;

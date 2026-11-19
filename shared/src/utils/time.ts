@@ -37,3 +37,38 @@ export function formatElapsedTime(
   const diffYears = Math.floor(diffDays / 365);
   return `${diffYears}y`;
 }
+
+/**
+ * Calendar date (YYYY-MM-DD) of `instant` in an IANA time zone, e.g. "Africa/Lagos".
+ * Falls back to UTC when the zone is unknown to the runtime.
+ */
+export function calendarDateInTimeZone(instant: string | Date, timeZone: string): string {
+  const date = instant instanceof Date ? instant : new Date(instant);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error('calendarDateInTimeZone: invalid date');
+  }
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+    return `${get('year')}-${get('month')}-${get('day')}`;
+  } catch {
+    return date.toISOString().slice(0, 10);
+  }
+}
+
+/** True when `timeZone` is an IANA zone this runtime can format with. */
+export function isValidTimeZone(timeZone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const CALENDAR_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { X, MapPin, AlertTriangle, Volume2, Image as ImageIcon } from "lucide-react";
+import { X, MapPin, AlertTriangle } from "lucide-react";
 import type {
   IpcClaimDto,
   IpcLineItemDto,
@@ -8,7 +8,7 @@ import type {
   QueryStatus,
 } from "@insite/shared";
 import { useProjectWorkdayReportsQuery } from "../queries/telemetry/useTelemetryQueries";
-import { getMediaUrl } from "../api/reconciliation/reconciliationApi";
+import { CaptureAudio, CapturePhoto } from "./evidence/CaptureMedia";
 import { formatDateTimeShort, formatNaira } from "../lib/formatters";
 import { EvidenceBadge, formatReporterRoleBadge, ratingTone } from "./EvidenceBadge";
 import { useAuth } from "../lib/auth-context";
@@ -39,69 +39,6 @@ export const QUERY_STATUS_CHIP: Record<QueryStatus, string> = {
 };
 
 /** Loads a short-lived signed URL on demand and plays the real file. No placeholder player. */
-function AudioClip({ projectId, media }: { projectId: string; media: ProvidedEvidenceMedia }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setUrl(await getMediaUrl(projectId, media.objectKey));
-    } catch (err) {
-      setError((err as { message?: string })?.message || "Could not load the audio.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (url) {
-    return <audio controls src={url} className="w-full h-9" onError={() => setError("The audio file could not be played.")} />;
-  }
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <button
-        type="button"
-        onClick={load}
-        disabled={loading}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 font-semibold text-slate-700 disabled:opacity-50"
-      >
-        <Volume2 className="w-3.5 h-3.5" />
-        {loading ? "Loading..." : "Load voice note"}
-      </button>
-      {media.durationSeconds ? (
-        <span className="text-slate-400">{Math.round(media.durationSeconds)}s</span>
-      ) : null}
-      {error && <span className="text-rose-700">{error}</span>}
-    </div>
-  );
-}
-
-function PhotoLink({ projectId, media }: { projectId: string; media: ProvidedEvidenceMedia }) {
-  const [error, setError] = useState<string | null>(null);
-  const open = async () => {
-    setError(null);
-    try {
-      window.open(await getMediaUrl(projectId, media.objectKey), "_blank", "noopener,noreferrer");
-    } catch (err) {
-      setError((err as { message?: string })?.message || "Could not open the photo.");
-    }
-  };
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <button
-        type="button"
-        onClick={open}
-        className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-slate-300 bg-white hover:bg-slate-50 text-[11px] font-medium text-slate-700"
-      >
-        <ImageIcon className="w-3 h-3" /> Open photo
-      </button>
-      {error && <span className="text-[11px] text-rose-700">{error}</span>}
-    </span>
-  );
-}
-
 function EvidenceCard({ projectId, item }: { projectId: string; item: ProvidedEvidenceItem }) {
   const voice = item.media.filter((m) => m.mediaType === "VOICE_NOTE");
   const photos = item.media.filter((m) => m.mediaType === "SITE_PHOTO");
@@ -119,12 +56,18 @@ function EvidenceCard({ projectId, item }: { projectId: string; item: ProvidedEv
         </div>
         <span
           className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-            item.isWithinGeofence
+            item.isWithinGeofence === true
               ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-              : "bg-rose-50 text-rose-700 border-rose-200"
+              : item.isWithinGeofence === false
+                ? "bg-rose-50 text-rose-700 border-rose-200"
+                : "bg-slate-50 text-slate-600 border-slate-200"
           }`}
         >
-          {item.isWithinGeofence ? "Inside geofence" : "Outside geofence"}
+          {item.isWithinGeofence === true
+            ? "Inside geofence"
+            : item.isWithinGeofence === false
+              ? "Outside geofence"
+              : "Location unknown"}
         </span>
       </div>
 
@@ -164,12 +107,12 @@ function EvidenceCard({ projectId, item }: { projectId: string; item: ProvidedEv
       {(voice.length > 0 || photos.length > 0) && (
         <div className="pt-1 space-y-1.5">
           {voice.map((m) => (
-            <AudioClip key={m.id} projectId={projectId} media={m} />
+            <CaptureAudio key={m.id} projectId={projectId} objectKey={m.objectKey} />
           ))}
           {photos.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {photos.map((m) => (
-                <PhotoLink key={m.id} projectId={projectId} media={m} />
+                <CapturePhoto key={m.id} projectId={projectId} objectKey={m.objectKey} alt="Site photo" className="w-20 h-20" />
               ))}
             </div>
           )}
@@ -177,7 +120,13 @@ function EvidenceCard({ projectId, item }: { projectId: string; item: ProvidedEv
       )}
 
       <div className="text-[10px] text-slate-400">
-        GPS ±{item.gpsAccuracyMeters.toFixed(1)}m
+        {item.gpsAccuracyMeters !== null ? `GPS ±${item.gpsAccuracyMeters.toFixed(1)}m` : "No GPS fix"}
+        {" · "}
+        {item.signatureVerified === true
+          ? "Device signature checked"
+          : item.signatureVerified === false
+            ? "Device signature invalid"
+            : "Not signed by device"}
         {item.confirmedAt ? ` · Confirmed by reporter ${formatDateTimeShort(item.confirmedAt)}` : ""}
       </div>
     </div>

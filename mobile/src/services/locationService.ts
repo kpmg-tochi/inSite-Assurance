@@ -1,23 +1,42 @@
-import * as Crypto from 'expo-crypto';
 import * as Location from 'expo-location';
-import {
-  verifyLinearCorridorGeofence,
-  verifyRadialGeofence,
-} from '@insite/shared';
+import { verifyPointAgainstGeofence } from '@insite/shared';
 import { getCachedBaselinePack } from '../config/apiConfig';
 
-export interface SiteGeotag {
+/**
+ * GPS acquisition (Phase 4). Returns a real fix or null. Never invents coordinates or chainage.
+ *
+ * The geofence result here is only a local preview for the person holding the phone; the server
+ * evaluates the geofence again and its result is the one that counts.
+ */
+
+/** Give up on a fresh fix after this long and fall back to a recent one. */
+export const GPS_TIMEOUT_MS = 15_000;
+/** A last-known position older than this is not used. */
+export const GPS_MAX_AGE_MS = 2 * 60_000;
+/** A fix less accurate than this is reported but marked as poor. */
+export const GPS_POOR_ACCURACY_METERS = 50;
+/** A last-known position less accurate than this is not used at all. */
+export const GPS_FALLBACK_MAX_ACCURACY_METERS = 150;
+
+/** One GPS reading as the hardware reported it. */
+export interface LocationFix {
   latitude: number;
   longitude: number;
   accuracyMeters: number | null;
   altitudeMeters: number | null;
   isMocked: boolean;
+  capturedAt: string;
+}
+
+/** Local preview of the geofence for a fix. `null` means it could not be evaluated. */
+export interface GeofencePreview {
   isWithinGeofence: boolean | null;
   chainageLabel: string | null;
   distanceFromSiteMeters: number | null;
-  capturedAt: string;
-  deviceSignatureHash: string;
 }
+
+/** @deprecated name kept for older screens; a geotag is a fix plus a local geofence preview. */
+export type SiteGeotag = LocationFix & GeofencePreview;
 
 export interface LocationPermissionState {
   granted: boolean;
@@ -25,128 +44,84 @@ export interface LocationPermissionState {
   status: string;
 }
 
-/**
- * Request foreground GPS permission for site geotagging and telemetry.
- */
 export async function requestLocationPermission(): Promise<LocationPermissionState> {
   try {
     const existing = await Location.getForegroundPermissionsAsync();
     if (existing.granted) {
-      return {
-        granted: true,
-        canAskAgain: existing.canAskAgain,
-        status: existing.status,
-      };
+      return { granted: true, canAskAgain: existing.canAskAgain, status: existing.status };
     }
-
     const requested = await Location.requestForegroundPermissionsAsync();
-    return {
-      granted: requested.granted,
-      canAskAgain: requested.canAskAgain,
-      status: requested.status,
-    };
+    return { granted: requested.granted, canAskAgain: requested.canAskAgain, status: requested.status };
   } catch (err) {
     console.warn('Location permission request failed:', err);
     return { granted: false, canAskAgain: false, status: 'undetermined' };
   }
 }
 
-/**
- * Evaluates a GPS coordinate against the locally cached project geofence, if available.
- */
-function evaluateGeofence(latitude: number, longitude: number): {
-  isWithinGeofence: boolean | null;
-  chainageLabel: string | null;
-  distanceFromSiteMeters: number | null;
-} {
-  const pack = getCachedBaselinePack();
-  if (!pack?.geofence) {
-    return {
-      isWithinGeofence: null,
-      chainageLabel: null,
-      distanceFromSiteMeters: null,
-    };
-  }
-
-  try {
-    const result =
-      pack.geofence.mode === 'LINEAR_CORRIDOR'
-        ? verifyLinearCorridorGeofence({ latitude, longitude }, pack.geofence)
-        : verifyRadialGeofence({ latitude, longitude }, pack.geofence);
-
-    return {
-      isWithinGeofence: result.isWithinGeofence,
-      chainageLabel: result.chainageFormatted ?? null,
-      distanceFromSiteMeters: result.distanceFromCenterOrLineMeters ?? null,
-    };
-  } catch (err) {
-    console.warn('Geofence evaluation failed:', err);
-    return {
-      isWithinGeofence: null,
-      chainageLabel: null,
-      distanceFromSiteMeters: null,
-    };
-  }
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), ms);
+    promise
+      .then((v) => {
+        clearTimeout(timer);
+        resolve(v);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        resolve(null);
+      });
+  });
 }
 
-/**
- * Captures a high-accuracy GPS geotag with fallback to last known position,
- * evaluates project geofence status if cached, and signs the coordinates with SHA-256.
- */
-export async function captureCurrentGeotag(
-  contextTag = 'GENERAL'
-): Promise<SiteGeotag | null> {
-  const perm = await requestLocationPermission();
-  if (!perm.granted) {
-    return null;
-  }
-
-  let position: Location.LocationObject | null = null;
-
-  try {
-    position = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-    });
-  } catch (err) {
-    console.warn('High-accuracy GPS timed out, trying last known position:', err);
-    try {
-      position = await Location.getLastKnownPositionAsync({
-        maxAge: 5 * 60 * 1000,
-        requiredAccuracy: 150,
-      });
-    } catch {
-      position = null;
-    }
-  }
-
-  if (!position) {
-    return null;
-  }
-
-  const { latitude, longitude, accuracy, altitude } = position.coords;
-  const capturedAt = new Date(position.timestamp || Date.now()).toISOString();
-  const isMocked = Boolean((position as any).mocked);
-  const geofence = evaluateGeofence(latitude, longitude);
-
-  const signaturePayload = `${contextTag}:${latitude.toFixed(6)}:${longitude.toFixed(
-    6
-  )}:${capturedAt}:${isMocked ? '1' : '0'}`;
-  const deviceSignatureHash = await Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    signaturePayload
-  );
-
+function toFix(position: Location.LocationObject): LocationFix {
   return {
-    latitude,
-    longitude,
-    accuracyMeters: accuracy ?? null,
-    altitudeMeters: altitude ?? null,
-    isMocked,
-    isWithinGeofence: geofence.isWithinGeofence,
-    chainageLabel: geofence.chainageLabel,
-    distanceFromSiteMeters: geofence.distanceFromSiteMeters,
-    capturedAt,
-    deviceSignatureHash,
+    latitude: position.coords.latitude,
+    longitude: position.coords.longitude,
+    accuracyMeters: position.coords.accuracy ?? null,
+    altitudeMeters: position.coords.altitude ?? null,
+    isMocked: Boolean(position.mocked),
+    capturedAt: new Date(position.timestamp || Date.now()).toISOString(),
   };
 }
 
+/** A fresh fix within GPS_TIMEOUT_MS, else a recent accurate last-known one, else null. */
+export async function acquireFix(): Promise<LocationFix | null> {
+  const perm = await requestLocationPermission();
+  if (!perm.granted) return null;
+
+  const fresh = await withTimeout(
+    Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+    GPS_TIMEOUT_MS
+  );
+  if (fresh) return toFix(fresh);
+
+  const last = await Location.getLastKnownPositionAsync({
+    maxAge: GPS_MAX_AGE_MS,
+    requiredAccuracy: GPS_FALLBACK_MAX_ACCURACY_METERS,
+  }).catch(() => null);
+  return last ? toFix(last) : null;
+}
+
+/** Local preview using the shared geofence code and the persisted baseline pack. */
+export function previewGeofence(fix: Pick<LocationFix, 'latitude' | 'longitude'>): GeofencePreview {
+  const pack = getCachedBaselinePack();
+  if (!pack?.geofence) {
+    return { isWithinGeofence: null, chainageLabel: null, distanceFromSiteMeters: null };
+  }
+  try {
+    const result = verifyPointAgainstGeofence(fix, pack.geofence);
+    return {
+      isWithinGeofence: result.isWithinGeofence,
+      chainageLabel: result.chainageFormatted,
+      distanceFromSiteMeters: result.distanceFromCenterOrLineMeters,
+    };
+  } catch {
+    return { isWithinGeofence: null, chainageLabel: null, distanceFromSiteMeters: null };
+  }
+}
+
+/** A fix plus its local geofence preview, or null when there is no fix. */
+export async function captureCurrentGeotag(_contextTag = 'GENERAL'): Promise<SiteGeotag | null> {
+  const fix = await acquireFix();
+  return fix ? { ...fix, ...previewGeofence(fix) } : null;
+}

@@ -85,12 +85,21 @@ enum EvidenceStrengthRating {
 }
 
 enum EvidenceLogStatus {
-  LOCAL_CAPTURED
-  QUEUED_OFFLINE
-  UPLOADING_SYNC
-  AWAITING_CONFIRMATION
-  CONFIRMED
+  REGISTERED
   FLAGGED_INTEGRITY
+}
+
+enum WorkdayReportStatus {
+  STAGED_UNVERIFIED
+  CONFIRMED
+}
+
+enum WorkdayAiCheckStatus {
+  PENDING
+  RUNNING
+  DONE
+  SKIPPED
+  FAILED
 }
 
 enum MediaType {
@@ -101,6 +110,8 @@ enum MediaType {
   MILL_CERTIFICATE
   BOQ_SPREADSHEET
   VALUATION_REPORT_PDF
+  IDENTITY_DOCUMENT
+  IDENTITY_SELFIE
 }
 
 enum ConditionPrecedentStatus {
@@ -189,6 +200,11 @@ enum AuditActionType {
   IPC_WITHDRAWN
   TRANCHE_DECISION_REVERSED
   TENANT_SETTINGS_UPDATED
+  CAPTURE_REGISTERED
+  CAPTURE_FLAGGED_INTEGRITY
+  TELEMETRY_ANOMALY_SUMMARY
+  WORKDAY_REPORTS_RELEASED
+  DEVICE_KEY_REGISTERED
 }
 
 enum MobileNotificationType {
@@ -387,6 +403,8 @@ model Project {
   reportingCadence     ReportingCadence @default(WEEKLY)
   workdayStartTime     String           @default("08:00")
   workdayEndTime       String           @default("17:00")
+  // IANA zone that defines a reporting day (one report per WBS item per day). Defaults to the tenant zone.
+  timezone             String           @default("Africa/Lagos")
   geofenceMode         GeofenceMode
   geofenceGeoJson      Json // Typed RadialGeofence or LinearCorridorGeofence
   portfolioHealth      PortfolioHealth  @default(EVIDENCE_PARTIAL)
@@ -403,22 +421,23 @@ model Project {
   lenderOrganization     Organization @relation("LenderOrganization", fields: [lenderOrganizationId], references: [id])
   contractorOrganization Organization @relation("ContractorOrganization", fields: [contractorOrganizationId], references: [id])
 
-  userAssignments  UserProjectAssignment[]
-  joinCodes        ProjectJoinCode[]
-  fieldSessions    FieldAgentSession[]
-  tranches         FacilityTranche[]
-  boqItems         BoqItem[]
-  evidenceLogs     FieldEvidenceLog[]
-  ipcClaims        IpcClaim[]
-  auditLogs        AuditLog[]
-  incidentReports  IncidentReport[]
-  workdayReports   WorkdayReport[]
-  telemetryPings   SiteTelemetryPing[]
-  morningBriefs    MorningDeliverableBrief[]
-  notifications    MobileNotification[]
-  reportQueries    ReportQuery[]
-  wbsChatMessages  WbsChatMessage[]
-  webNotifications WebNotification[]
+  userAssignments    UserProjectAssignment[]
+  joinCodes          ProjectJoinCode[]
+  fieldSessions      FieldAgentSession[]
+  tranches           FacilityTranche[]
+  boqItems           BoqItem[]
+  evidenceLogs       FieldEvidenceLog[]
+  ipcClaims          IpcClaim[]
+  auditLogs          AuditLog[]
+  incidentReports    IncidentReport[]
+  workdayReports     WorkdayReport[]
+  telemetryPings     SiteTelemetryPing[]
+  telemetryAnomalies TelemetryAnomalyDaily[]
+  morningBriefs      MorningDeliverableBrief[]
+  notifications      MobileNotification[]
+  reportQueries      ReportQuery[]
+  wbsChatMessages    WbsChatMessage[]
+  webNotifications   WebNotification[]
 
   @@unique([tenantId, codePrefix])
   @@index([tenantId])
@@ -449,26 +468,30 @@ model ProjectJoinCode {
 }
 
 model FieldAgentSession {
-  id               String           @id @default(uuid()) @db.Uuid
-  projectId        String           @db.Uuid
-  joinCodeId       String           @db.Uuid
-  roleId           String           @db.Uuid
-  roleNameSnapshot String
-  fieldPersonaType FieldPersonaType @default(INDEPENDENT_VERIFIER)
-  assuranceWeight  Float            @default(1.0)
-  agentFullName    String
-  agentPhoneNumber String
-  agentPinHash     String?
-  deviceId         String
-  deviceModel      String?
-  deviceOs         String?
-  deviceSecretHash String?
-  isActive         Boolean          @default(true)
-  revokedAt        DateTime?
-  revokedByUserId  String?          @db.Uuid
-  revokeReason     String?
-  lastSyncAt       DateTime?
-  createdAt        DateTime         @default(now())
+  id                     String           @id @default(uuid()) @db.Uuid
+  projectId              String           @db.Uuid
+  joinCodeId             String           @db.Uuid
+  roleId                 String           @db.Uuid
+  roleNameSnapshot       String
+  fieldPersonaType       FieldPersonaType @default(INDEPENDENT_VERIFIER)
+  assuranceWeight        Float            @default(1.0)
+  agentFullName          String
+  agentPhoneNumber       String
+  agentPinHash           String?
+  deviceId               String
+  deviceModel            String?
+  deviceOs               String?
+  // Per-install Ed25519 public key (base64 raw). Captures, reports and pings are signed with it.
+  devicePublicKey        String?
+  devicePublicKeyAlg     String?
+  devicePublicKeyId      String?
+  devicePublicKeyAddedAt DateTime?
+  isActive               Boolean          @default(true)
+  revokedAt              DateTime?
+  revokedByUserId        String?          @db.Uuid
+  revokeReason           String?
+  lastSyncAt             DateTime?
+  createdAt              DateTime         @default(now())
 
   // Identity & Competence Assurance
   assuranceStatus    ContractorAssuranceStatus @default(APPROVED)
@@ -486,16 +509,18 @@ model FieldAgentSession {
   reviewedAt         DateTime?
   rejectionReason    String?
 
-  project         Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  joinCode        ProjectJoinCode      @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
-  role            Role                 @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  evidenceLogs    FieldEvidenceLog[]
-  incidentReports IncidentReport[]
-  workdayReports  WorkdayReport[]
-  pushTokens      PushToken[]
-  telemetryPings  SiteTelemetryPing[]
-  notifications   MobileNotification[]
-  wbsChatMessages WbsChatMessage[]
+  project            Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  joinCode           ProjectJoinCode         @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
+  role               Role                    @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  evidenceLogs       FieldEvidenceLog[]
+  incidentReports    IncidentReport[]
+  workdayReports     WorkdayReport[]
+  pushTokens         PushToken[]
+  telemetryPings     SiteTelemetryPing[]
+  notifications      MobileNotification[]
+  wbsChatMessages    WbsChatMessage[]
+  sentChatMessages   WbsChatMessage[]        @relation("ChatSenderSession")
+  telemetryAnomalies TelemetryAnomalyDaily[]
 
   @@index([projectId, roleId])
   @@index([projectId, assuranceStatus])
@@ -585,80 +610,92 @@ model BoqItem {
   @@index([projectId, trancheId])
 }
 
+// One capture: a photo, voice note or document with its hardware metadata (Phase 4).
+// Evidence for reconciliation is a confirmed WorkdayReport plus the captures linked to it.
 model FieldEvidenceLog {
   id               String            @id @default(uuid()) @db.Uuid
   projectId        String            @db.Uuid
   boqItemId        String?           @db.Uuid
   fieldSessionId   String            @db.Uuid
   clientCaptureId  String            @unique @db.Uuid
+  workdayReportId  String?           @db.Uuid
   reporterRoleId   String?           @db.Uuid
   reporterRoleName String            @default("Field Reporter")
   fieldPersonaType FieldPersonaType  @default(INDEPENDENT_VERIFIER)
   assuranceWeight  Float             @default(1.0)
-  status           EvidenceLogStatus @default(AWAITING_CONFIRMATION)
+  status           EvidenceLogStatus @default(REGISTERED)
+  caption          String?
 
-  // Hardware GPS & Corridor Verification
-  latitude              Float
-  longitude             Float
-  altitudeMeters        Float?
-  gpsAccuracyMeters     Float
-  isMockLocation        Boolean @default(false)
-  isWithinGeofence      Boolean
-  chainageKm            Float?
-  chainageLabel         String? // e.g., "KM 14+200"
-  corridorOffsetMeters  Float?
-  verificationBadgeText String
+  // GPS at capture. Location fields are null when the device had no fix.
+  locationAvailable      Boolean
+  latitude               Float?
+  longitude              Float?
+  altitudeMeters         Float?
+  gpsAccuracyMeters      Float?
+  isMockLocation         Boolean  @default(false)
+  // Server-evaluated. null = no fix or evaluation failed; never the client's claim.
+  isWithinGeofence       Boolean?
+  chainageKm             Float?
+  chainageLabel          String?
+  corridorOffsetMeters   Float?
+  distanceFromSiteMeters Float?
 
-  // Device Orientation & Cryptographic Provenance
-  devicePitchDeg      Float?
-  deviceRollDeg       Float?
-  deviceAzimuthDeg    Float?
-  deviceSignatureHash String
-  integrityPassed     Boolean @default(true)
-  integrityFlags      Json    @default("[]") // Array of flag strings
+  // Device orientation and provenance
+  devicePitchDeg    Float?
+  deviceRollDeg     Float?
+  deviceAzimuthDeg  Float?
+  deviceSignature   String?
+  devicePublicKeyId String?
+  // true = valid, false = invalid, null = unsigned or no key registered
+  signatureVerified Boolean?
+  clientSha256      String?
+  serverSha256      String?
+  integrityPassed   Boolean  @default(true)
+  integrityFlags    Json     @default("[]")
 
-  // Speech / Text & Mandatory Human Confirmation
-  rawTextNote               String?
-  rawWhisperTranscript      String?
-  confirmedSummary          String?
-  confirmedQuantities       Json    @default("[]") // Array of ExtractedQuantityItem
-  siteBlockers              Json    @default("[]") // Array of strings
-  visionObservationSummary  String?
-  wasEditedByAgent          Boolean @default(false)
-  confirmationSignatureHash String?
+  // Voice notes: NOT_APPLICABLE | PENDING | DONE | FAILED
+  transcriptionStatus String  @default("NOT_APPLICABLE")
+  transcript          String?
+  transcriptionEngine String?
 
   capturedAtDevice DateTime
-  syncedAtServer   DateTime  @default(now())
-  confirmedAt      DateTime?
+  syncedAtServer   DateTime @default(now())
 
   project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   boqItem          BoqItem?          @relation(fields: [boqItemId], references: [id], onDelete: SetNull)
   fieldSession     FieldAgentSession @relation(fields: [fieldSessionId], references: [id], onDelete: Restrict)
+  workdayReport    WorkdayReport?    @relation(fields: [workdayReportId], references: [id], onDelete: SetNull)
   mediaAttachments EvidenceMedia[]
+  chatMessages     WbsChatMessage[]
 
   @@index([projectId, status])
   @@index([projectId, boqItemId])
-  @@index([projectId, reporterRoleId])
+  @@index([workdayReportId])
+  @@index([fieldSessionId, capturedAtDevice])
 }
 
 model EvidenceMedia {
   id              String    @id @default(uuid()) @db.Uuid
   evidenceLogId   String    @db.Uuid
+  // Denormalised so duplicate screening is an indexed lookup within one tenant.
+  tenantId        String    @db.Uuid
+  projectId       String    @db.Uuid
   mediaType       MediaType
   objectKey       String
-  fileUrl         String?
   mimeType        String
   byteSize        Int
+  // Computed by the server from the stored bytes.
   sha256FileHash  String
-  perceptualHash  String? // 64-bit pHash hex/binary string for duplicate site photo screening
+  // 64-bit difference hash (16 hex chars), computed by the server from image bytes.
+  perceptualHash  String?
   durationSeconds Float?
   createdAt       DateTime  @default(now())
 
   evidenceLog FieldEvidenceLog @relation(fields: [evidenceLogId], references: [id], onDelete: Cascade)
 
   @@index([evidenceLogId])
-  @@index([perceptualHash])
-  @@index([sha256FileHash])
+  @@index([tenantId, sha256FileHash])
+  @@index([tenantId, mediaType])
 }
 
 model IpcClaim {
@@ -864,6 +901,7 @@ model PushToken {
 
 model IncidentReport {
   id                          String    @id @default(uuid()) @db.Uuid
+  clientIncidentId            String    @unique @db.Uuid
   projectId                   String    @db.Uuid
   reporterSessionId           String    @db.Uuid
   wbsItemId                   String?   @db.Uuid
@@ -889,59 +927,72 @@ model IncidentReport {
 }
 
 model WorkdayReport {
-  id                 String    @id @default(uuid()) @db.Uuid
-  projectId          String    @db.Uuid
-  reporterSessionId  String    @db.Uuid
-  wbsItemId          String    @db.Uuid
-  workdayDate        String // YYYY-MM-DD
-  status             String    @default("STAGED_UNVERIFIED") // STAGED_UNVERIFIED, READY_FOR_AI, EXTRACTED, CONFIRMED, SYNCED
-  revisionNumber     Int       @default(1)
-  parentReportId     String?   @db.Uuid
-  resolvedQueryId    String?   @db.Uuid
-  summaryText        String    @db.Text
-  reportedQuantity   Decimal   @default(0) @db.Decimal(14, 3)
+  id                 String               @id @default(uuid()) @db.Uuid
+  clientReportId     String               @unique @db.Uuid
+  projectId          String               @db.Uuid
+  reporterSessionId  String               @db.Uuid
+  wbsItemId          String               @db.Uuid
+  workdayDate        String // YYYY-MM-DD in the reporter's time zone
+  reporterTimezone   String
+  status             WorkdayReportStatus  @default(STAGED_UNVERIFIED)
+  revisionNumber     Int                  @default(1)
+  parentReportId     String?              @db.Uuid
+  resolvedQueryId    String?              @db.Uuid
+  summaryText        String               @db.Text
+  reportedQuantity   Decimal              @default(0) @db.Decimal(14, 3)
   unitOfMeasure      String
-  isHoldPointClaimed Boolean   @default(false)
-  evidenceItems      Json // Array of captured photos, voice notes, captions
-  voiceNoteUrl       String?
+  isHoldPointClaimed Boolean              @default(false)
+  delaysOrBlockers   String?              @db.Text
+  // Text-only notes from the WBS thread: [{ id, text, capturedAt }]
+  textNotes          Json                 @default("[]")
   submissionGeotag   Json?
-  aiParsedConfidence Float?
-  aiReasoning        String?   @db.Text
+  deviceSignature    String?
+  signatureVerified  Boolean?
+  // Location and integrity notes shown as badges, e.g. LOW_GPS_ACCURACY, OUTSIDE_PROJECT_GEOFENCE.
+  integrityFlags     Json                 @default("[]")
+  aiCheckStatus      WorkdayAiCheckStatus @default(PENDING)
+  aiCheckEngine      String?
+  aiReasoning        String?              @db.Text
   humanConfirmedAt   DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  releasedAt         DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
 
-  project         Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  reporterSession FieldAgentSession @relation(fields: [reporterSessionId], references: [id], onDelete: Cascade)
-  boqItem         BoqItem           @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
-  parentReport    WorkdayReport?    @relation("WorkdayReportRevisions", fields: [parentReportId], references: [id], onDelete: SetNull)
-  revisions       WorkdayReport[]   @relation("WorkdayReportRevisions")
+  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reporterSession FieldAgentSession  @relation(fields: [reporterSessionId], references: [id], onDelete: Cascade)
+  boqItem         BoqItem            @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
+  parentReport    WorkdayReport?     @relation("WorkdayReportRevisions", fields: [parentReportId], references: [id], onDelete: SetNull)
+  revisions       WorkdayReport[]    @relation("WorkdayReportRevisions")
   queries         ReportQuery[]
   chatMessages    WbsChatMessage[]
+  captures        FieldEvidenceLog[]
 
   @@index([projectId, wbsItemId, workdayDate])
   @@index([projectId, status])
+  @@index([aiCheckStatus, updatedAt])
   @@index([parentReportId])
   @@map("workday_reports")
 }
 
 model SiteTelemetryPing {
-  id                  String   @id @default(uuid()) @db.Uuid
-  projectId           String   @db.Uuid
-  fieldSessionId      String   @db.Uuid
-  wbsItemId           String?  @db.Uuid
-  latitude            Float
-  longitude           Float
-  accuracyMeters      Float?
-  altitudeMeters      Float?
-  isMocked            Boolean  @default(false)
-  isWithinGeofence    Boolean?
-  chainageLabel       String?
-  distanceMeters      Float?
-  pingSource          String   @default("HOURLY_TELEMETRY") // HOURLY_TELEMETRY | REPORT_SUBMISSION | MANUAL_CHECKIN
-  deviceSignatureHash String
-  capturedAtDevice    DateTime
-  syncedAtServer      DateTime @default(now())
+  id                String   @id @default(uuid()) @db.Uuid
+  clientPingId      String   @unique @db.Uuid
+  projectId         String   @db.Uuid
+  fieldSessionId    String   @db.Uuid
+  wbsItemId         String?  @db.Uuid
+  latitude          Float
+  longitude         Float
+  accuracyMeters    Float?
+  altitudeMeters    Float?
+  isMocked          Boolean  @default(false)
+  isWithinGeofence  Boolean?
+  chainageLabel     String?
+  distanceMeters    Float?
+  pingSource        String   @default("FOREGROUND_PRESENCE") // FOREGROUND_PRESENCE | CAPTURE | REPORT_SUBMISSION | MANUAL_CHECKIN
+  deviceSignature   String?
+  signatureVerified Boolean?
+  capturedAtDevice  DateTime
+  syncedAtServer    DateTime @default(now())
 
   project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   fieldSession FieldAgentSession @relation(fields: [fieldSessionId], references: [id], onDelete: Cascade)
@@ -949,6 +1000,25 @@ model SiteTelemetryPing {
   @@index([projectId, capturedAtDevice])
   @@index([fieldSessionId, capturedAtDevice])
   @@map("site_telemetry_pings")
+}
+
+// One row per session, calendar day and anomaly type. Replaces one audit entry per ping.
+model TelemetryAnomalyDaily {
+  id             String   @id @default(uuid()) @db.Uuid
+  projectId      String   @db.Uuid
+  fieldSessionId String   @db.Uuid
+  day            String // YYYY-MM-DD in the tenant time zone
+  anomalyType    String // MOCK_LOCATION | OUTSIDE_GEOFENCE
+  pingCount      Int      @default(0)
+  firstSeenAt    DateTime
+  lastSeenAt     DateTime
+
+  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fieldSession FieldAgentSession @relation(fields: [fieldSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([fieldSessionId, day, anomalyType])
+  @@index([projectId, day])
+  @@map("telemetry_anomaly_daily")
 }
 
 model MorningDeliverableBrief {
@@ -1026,12 +1096,16 @@ model WbsChatMessage {
   boqItemId       String   @db.Uuid
   workdayReportId String?  @db.Uuid
   reportQueryId   String?  @db.Uuid
+  // The field session whose thread this is (target of queries); not necessarily the sender.
   fieldSessionId  String?  @db.Uuid
+  clientMessageId String?  @unique @db.Uuid
+  senderSessionId String?  @db.Uuid
+  senderUserId    String?  @db.Uuid
+  captureId       String?  @db.Uuid
   senderName      String
   senderRole      String // AI_CO_PILOT | MONITOR | ENGINEER | INSPECTOR
   messageType     String // AI_QUERY | MONITOR_QUERY | QUERY_RESPONSE | TEXT_COMMENT | PHOTO | VOICE_NOTE
   textContent     String?  @db.Text
-  mediaUrls       Json     @default("[]")
   latitude        Float?
   longitude       Float?
   chainageLabel   String?
@@ -1042,6 +1116,8 @@ model WbsChatMessage {
   workdayReport WorkdayReport?     @relation(fields: [workdayReportId], references: [id], onDelete: SetNull)
   reportQuery   ReportQuery?       @relation(fields: [reportQueryId], references: [id], onDelete: SetNull)
   fieldSession  FieldAgentSession? @relation(fields: [fieldSessionId], references: [id], onDelete: SetNull)
+  senderSession FieldAgentSession? @relation("ChatSenderSession", fields: [senderSessionId], references: [id], onDelete: SetNull)
+  capture       FieldEvidenceLog?  @relation(fields: [captureId], references: [id], onDelete: SetNull)
 
   @@index([projectId, boqItemId, createdAt])
   @@index([reportQueryId])

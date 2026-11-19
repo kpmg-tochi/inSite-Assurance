@@ -399,7 +399,7 @@ export function PortfolioExecutivePage({
                 {summary.pendingContractorVerificationsCount === 1 ? '' : 's'} Pending Sign-Off
               </div>
               <p className="text-xs text-amber-700 mt-0.5">
-                On-site civil engineers require biometric liveness and COREN verification before project capture access is granted.
+                Contractor engineers submit a photo ID, a guided selfie set and COREN credentials; their reports are held until a reviewer approves them.
               </p>
             </div>
           </div>
@@ -525,7 +525,7 @@ export function PortfolioExecutivePage({
             Contractor Competence &amp; Identity Assurance
           </div>
           <p className="text-slate-500 leading-relaxed">
-            On-site field engineers must undergo active 3D selfie liveness checks and upload validated COREN credentials before mobile capture permissions are granted by Independent Monitors.
+            Contractor field engineers submit a photo ID, a guided selfie set (3 poses) and COREN credentials. Their reports are held by the server until an Independent Monitor reviews and approves them.
           </p>
         </div>
       </div>

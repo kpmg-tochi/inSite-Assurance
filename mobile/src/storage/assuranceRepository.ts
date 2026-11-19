@@ -1,133 +1,88 @@
-import { getDatabase } from './sqliteDatabase';
-import type { LivenessVerification } from '@insite/shared';
+import { Directory, File, Paths } from 'expo-file-system';
+import type { GuidedSelfieSet } from '@insite/shared';
+import { getDb, newId, nowIso } from './db/database';
+import { enqueue } from './outbox/outboxStore';
+import { kickOutbox } from './outbox/outboxProcessor';
+
+/**
+ * Identity assurance dossier (ID photo, three selfies, credentials). Saved locally and sent by the
+ * outbox. It counts as sent only when every image uploaded and the server accepted the keys.
+ */
 
 export interface QueuedAssuranceSubmission {
-  id: string;
   projectId: string;
   idType: string;
   idPhotoUri: string;
   selfieFrontUri: string;
   selfieLeftUri: string;
   selfieRightUri: string;
-  livenessVerification: LivenessVerification;
+  selfieSet: GuidedSelfieSet;
   regulatoryBody: string;
   licenseNumber: string;
   experienceSummary: string;
-  status: 'QUEUED_OFFLINE' | 'SYNCED';
-  createdAt: string;
-  syncedAt: string | null;
 }
 
-let memSubmissions: QueuedAssuranceSubmission[] = [];
+export type AssuranceImageSlot = 'idDocument' | 'selfieFront' | 'selfieLeft' | 'selfieRight';
 
-export function resetInMemoryAssuranceState(): void {
-  memSubmissions = [];
+/** Moves a camera file out of the cache (which the OS may clear) into app storage. */
+function keepFile(dir: Directory, uri: string, name: string): string {
+  const dest = new File(dir, name);
+  const src = new File(uri);
+  try {
+    src.move(dest);
+  } catch {
+    src.copy(dest);
+  }
+  return dest.uri;
 }
 
-export async function saveQueuedAssuranceSubmission(
-  input: Omit<QueuedAssuranceSubmission, 'id' | 'status' | 'createdAt' | 'syncedAt'>
-): Promise<QueuedAssuranceSubmission> {
-  const record: QueuedAssuranceSubmission = {
-    ...input,
-    id: `asv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    status: 'QUEUED_OFFLINE',
-    createdAt: new Date().toISOString(),
-    syncedAt: null,
+export async function saveQueuedAssuranceSubmission(submission: QueuedAssuranceSubmission): Promise<string> {
+  const id = newId();
+  const dir = new Directory(Paths.document, 'identity');
+  dir.create({ idempotent: true, intermediates: true });
+  const input: QueuedAssuranceSubmission = {
+    ...submission,
+    idPhotoUri: keepFile(dir, submission.idPhotoUri, `${id}-id.jpg`),
+    selfieFrontUri: keepFile(dir, submission.selfieFrontUri, `${id}-front.jpg`),
+    selfieLeftUri: keepFile(dir, submission.selfieLeftUri, `${id}-left.jpg`),
+    selfieRightUri: keepFile(dir, submission.selfieRightUri, `${id}-right.jpg`),
   };
-
-  memSubmissions = [record, ...memSubmissions];
-
-  const db = await getDatabase();
-  if (db) {
-    try {
-      await db.runAsync(
-        `INSERT INTO assurance_submissions
-         (id, project_id, id_type, id_photo_uri, selfie_front_uri, selfie_left_uri,
-          selfie_right_uri, liveness_json, regulatory_body, license_number,
-          experience_summary, status, created_at, synced_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          record.id,
-          record.projectId,
-          record.idType,
-          record.idPhotoUri,
-          record.selfieFrontUri,
-          record.selfieLeftUri,
-          record.selfieRightUri,
-          JSON.stringify(record.livenessVerification),
-          record.regulatoryBody,
-          record.licenseNumber,
-          record.experienceSummary,
-          record.status,
-          record.createdAt,
-          null,
-        ]
-      );
-    } catch (err) {
-      console.warn('SQLite error saving assurance submission:', err);
-    }
-  }
-
-  return record;
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      'INSERT INTO assurance_submissions (id, project_id, payload_json, created_at) VALUES (?, ?, ?, ?)',
+      [id, input.projectId, JSON.stringify(input), nowIso()]
+    );
+    await enqueue(db, { projectId: input.projectId, kind: 'ASSURANCE', entityId: id });
+  });
+  kickOutbox();
+  return id;
 }
 
-export async function getPendingAssuranceSubmissions(
-  projectId?: string
-): Promise<QueuedAssuranceSubmission[]> {
-  const db = await getDatabase();
-  if (db) {
-    try {
-      const rows = projectId
-        ? await db.getAllAsync<any>(
-            `SELECT * FROM assurance_submissions WHERE status = 'QUEUED_OFFLINE' AND project_id = ? ORDER BY created_at ASC`,
-            [projectId]
-          )
-        : await db.getAllAsync<any>(
-            `SELECT * FROM assurance_submissions WHERE status = 'QUEUED_OFFLINE' ORDER BY created_at ASC`
-          );
-
-      return rows.map((r) => ({
-        id: r.id,
-        projectId: r.project_id,
-        idType: r.id_type,
-        idPhotoUri: r.id_photo_uri,
-        selfieFrontUri: r.selfie_front_uri,
-        selfieLeftUri: r.selfie_left_uri,
-        selfieRightUri: r.selfie_right_uri,
-        livenessVerification: JSON.parse(r.liveness_json),
-        regulatoryBody: r.regulatory_body,
-        licenseNumber: r.license_number,
-        experienceSummary: r.experience_summary,
-        status: r.status,
-        createdAt: r.created_at,
-        syncedAt: r.synced_at,
-      }));
-    } catch (err) {
-      console.warn('SQLite error loading queued assurance submissions:', err);
-    }
-  }
-
-  return memSubmissions.filter(
-    (s) => s.status === 'QUEUED_OFFLINE' && (!projectId || s.projectId === projectId)
+export async function loadAssuranceSubmission(id: string): Promise<{
+  payload: QueuedAssuranceSubmission;
+  uploadedKeys: Partial<Record<AssuranceImageSlot, string>>;
+} | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ payload_json: string; uploaded_keys_json: string }>(
+    'SELECT payload_json, uploaded_keys_json FROM assurance_submissions WHERE id = ?',
+    [id]
   );
+  return row
+    ? { payload: JSON.parse(row.payload_json), uploadedKeys: JSON.parse(row.uploaded_keys_json || '{}') }
+    : null;
+}
+
+/** Remembers one uploaded image so a retry does not upload it again. */
+export async function recordAssuranceUpload(id: string, slot: AssuranceImageSlot, objectKey: string): Promise<void> {
+  const current = await loadAssuranceSubmission(id);
+  if (!current) return;
+  const keys = { ...current.uploadedKeys, [slot]: objectKey };
+  const db = await getDb();
+  await db.runAsync('UPDATE assurance_submissions SET uploaded_keys_json = ? WHERE id = ?', [JSON.stringify(keys), id]);
 }
 
 export async function markAssuranceSubmissionSynced(id: string): Promise<void> {
-  const syncedAt = new Date().toISOString();
-  memSubmissions = memSubmissions.map((s) =>
-    s.id === id ? { ...s, status: 'SYNCED', syncedAt } : s
-  );
-
-  const db = await getDatabase();
-  if (db) {
-    try {
-      await db.runAsync(
-        `UPDATE assurance_submissions SET status = 'SYNCED', synced_at = ? WHERE id = ?`,
-        [syncedAt, id]
-      );
-    } catch (err) {
-      console.warn('SQLite error marking assurance submission synced:', err);
-    }
-  }
+  const db = await getDb();
+  await db.runAsync('UPDATE assurance_submissions SET synced_at = ? WHERE id = ?', [nowIso(), id]);
 }
-

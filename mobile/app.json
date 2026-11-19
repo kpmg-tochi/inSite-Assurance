@@ -13,7 +13,20 @@
           "locationWhenInUsePermission": "InSite Assurance requires high-accuracy GPS to verify site presence, corridor chainage, and report submission location."
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#00338D",
+          "defaultChannel": "default"
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true,

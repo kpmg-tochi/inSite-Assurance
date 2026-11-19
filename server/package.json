@@ -16,7 +16,7 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "test": "npm run test:unit && npm run test:routes",
     "test:unit": "tsx --test src/tests/rbac.phase1.test.ts src/tests/boq.parser.test.ts src/tests/reconciliation.phase3.test.ts",
-    "test:routes": "tsx --test --test-concurrency=1 src/tests/routes.phase2.test.ts src/tests/routes.phase3.test.ts"
+    "test:routes": "tsx --test --test-concurrency=1 src/tests/routes.phase2.test.ts src/tests/routes.phase3.test.ts src/tests/routes.phase4.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.726.0",
@@ -36,6 +36,7 @@
     "openai": "^4.104.0",
     "pdfkit": "^0.15.2",
     "pg": "^8.23.1",
+    "sharp": "^0.34.4",
     "zod": "^3.24.1"
   },
   "devDependencies": {

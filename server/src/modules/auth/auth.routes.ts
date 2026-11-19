@@ -3,6 +3,7 @@ import {
   ChangePasswordRequestSchema,
   DemoSkipVerificationRequestSchema,
   JoinProjectMobileRequestSchema,
+  RegisterDeviceKeyRequestSchema,
   RegisterPushTokenSchema,
   resolveRatingLabels,
   SubmitAssuranceVerificationRequestSchema,
@@ -30,6 +31,7 @@ import {
   getWebUserProfileById,
   joinProjectMobile,
   loginWebUser,
+  registerDeviceKey,
   registerWebUser,
 } from "./auth.service";
 import { recordAuditEvent } from "../audit/audit.service";
@@ -144,6 +146,7 @@ router.get(
                 reportingCadence: true,
                 workdayStartTime: true,
                 workdayEndTime: true,
+                timezone: true,
                 geofenceMode: true,
                 geofenceGeoJson: true,
                 tenant: { select: { evidenceRatingLabels: true } },
@@ -179,6 +182,7 @@ router.get(
                   deviceId: liveSession.deviceId,
                   assuranceStatus: liveSession.assuranceStatus,
                   rejectionReason: liveSession.rejectionReason,
+                  devicePublicKeyId: liveSession.devicePublicKeyId,
                   reviewedAt: liveSession.reviewedAt,
                   ratingLabels: resolveRatingLabels(liveSession.project.tenant.evidenceRatingLabels),
                   project: {
@@ -190,6 +194,7 @@ router.get(
                     reportingCadence: liveSession.project.reportingCadence,
                     workdayStartTime: liveSession.project.workdayStartTime,
                     workdayEndTime: liveSession.project.workdayEndTime,
+                    timezone: liveSession.project.timezone,
                     geofenceMode: liveSession.project.geofenceMode,
                     geofenceGeoJson: liveSession.project.geofenceGeoJson,
                   },
@@ -198,6 +203,24 @@ router.get(
         });
         return;
       }
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/**
+ * POST /api/v1/auth/device-key
+ * One-time registration of the per-install Ed25519 public key for the calling field session.
+ */
+router.post(
+  "/device-key",
+  requireFieldSession,
+  validateBody(RegisterDeviceKeyRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await registerDeviceKey(req.fieldAgent!, req.body);
+      res.status(result.alreadyRegistered ? 200 : 201).json({ success: true, data: result });
     } catch (error) {
       next(error);
     }
@@ -249,7 +272,7 @@ router.post(
 
 /**
  * POST /api/v1/auth/assurance-verification
- * Persists ID photo, 3-pose liveness selfies + CV metadata, and regulatory credentials
+ * Stores the ID photo, the guided selfie set (3 poses) and credentials for manual review (D-4.2).
  * onto the contractor's FieldAgentSession for Independent Monitor / Lender review.
  */
 router.post(
@@ -273,8 +296,10 @@ router.post(
           selfieImageUrl: body.selfieFrontUrl,
           selfieLeftUrl: body.selfieLeftUrl,
           selfieRightUrl: body.selfieRightUrl,
-          livenessPassed: Boolean(body.livenessVerification?.isLive),
-          livenessMetadata: body.livenessVerification as any,
+          // D-4.2: a guided selfie set for manual review. No liveness check runs, so none is recorded.
+          livenessPassed: false,
+          livenessScore: null,
+          livenessMetadata: body.selfieSet,
           corenLicenseNumber: body.corenLicenseNumber,
           experienceSummary: body.experienceSummary,
           assuranceStatus: "PENDING_APPROVAL",
@@ -295,11 +320,10 @@ router.post(
         actorId: sessionId,
         actorDisplayName: req.fieldAgent!.agentFullName,
         action: "CONTRACTOR_ASSURANCE_SUBMITTED",
-        summaryText: `Contractor submitted 3-pose liveness (${body.livenessVerification?.detectorEngine}) and ${body.idDocumentType} credentials.`,
+        summaryText: `Contractor submitted an ID photo (${body.idDocumentType}) and a guided selfie set (3 poses) for manual review.`,
         payload: {
           idDocumentType: body.idDocumentType,
-          livenessPassed: updated.livenessPassed,
-          detectorEngine: body.livenessVerification?.detectorEngine,
+          captureMethod: body.selfieSet.captureMethod,
         },
       });
 

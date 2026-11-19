@@ -1,106 +1,44 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-} from 'react-native';
-import Toast from 'react-native-toast-message';
+import React from 'react';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  useNavigation,
-  useRoute,
-  type RouteProp,
-} from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import {
-  EmptyStateCard,
-  InfoCallout,
-  InSiteLoader,
-  Pill,
-} from '../components/common';
-import { PrimaryButton } from '../components/inputs/Buttons';
+import { formatElapsedTime } from '@insite/shared';
+import { EmptyStateCard, InfoCallout, InSiteLoader, Pill } from '../components/common';
 import { useProfile } from '../context/ProfileContext';
-import { useResolveNotificationMutation } from '../queries/notifications/useNotificationQueries';
 import {
-  usePromoteBacklogMutation,
-  useStagedBacklogQuery,
+  useDeadLettersQuery,
+  usePendingReportsQuery,
+  useRetryOutboxItemMutation,
+  useSyncStatus,
 } from '../queries/wbs/useWbsQueries';
 import type { RootStackParamList } from '../navigation/types';
 
+const KIND_LABEL: Record<string, string> = {
+  CAPTURE: 'Photo or voice note',
+  REPORT: 'Daily report',
+  REVALIDATION: 'Report revision',
+  CHAT_MESSAGE: 'Chat message',
+  TELEMETRY: 'Presence ping',
+  INCIDENT: 'Incident report',
+  ASSURANCE: 'Identity submission',
+};
+
+/**
+ * Sync status (Phase 4). Read-only: what is waiting to send, what failed (with Retry), and which
+ * reports the server is holding until identity approval. The server releases held reports when
+ * the identity check is approved; the device never re-submits them.
+ */
 export const BacklogReviewModal: React.FC = () => {
-  const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const route = useRoute<RouteProp<RootStackParamList, 'BacklogModal'>>();
-  const resolveNotificationId = route.params?.resolveNotificationId;
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { activeProjectId: projectId } = useProfile();
-  const onClose = () => navigation.goBack();
-  const onBatchConfirmed = () => navigation.goBack();
   const insets = useSafeAreaInsets();
-  const [deselectedIds, setDeselectedIds] = useState<Record<string, boolean>>({});
-
-  const { data: rawItems = [], isLoading: loading } = useStagedBacklogQuery();
-  const promoteMutation = usePromoteBacklogMutation(projectId);
-  const resolveNotificationMutation = useResolveNotificationMutation(projectId);
-  const isProcessing = promoteMutation.isPending;
-
-  const backlogItems = rawItems.map((r) => ({
-    ...r,
-    selected: !deselectedIds[r.id],
-  }));
-
-  const toggleItem = (id: string) => {
-    setDeselectedIds((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
-
-  const handleProcessBatch = async () => {
-    const selectedIds = backlogItems.filter((i) => i.selected).map((i) => i.id);
-    if (selectedIds.length === 0) {
-      Toast.show({
-        type: 'error',
-        props: {
-          title: 'No Items Selected',
-          message: 'Select at least one queued report to sync.',
-        },
-      });
-      return;
-    }
-
-    try {
-      const result = await promoteMutation.mutateAsync(selectedIds);
-      Toast.show({
-        type: 'success',
-        props: {
-          title: 'Backlog Processed',
-          message: `${result.syncedCount} report(s) synced to the project ledger.${
-            result.queuedCount > 0
-              ? ` ${result.queuedCount} remaining queued for connectivity.`
-              : ''
-          }`,
-        },
-      });
-      if (resolveNotificationId) {
-        await resolveNotificationMutation
-          .mutateAsync(resolveNotificationId)
-          .catch(() => {});
-      }
-      onBatchConfirmed();
-    } catch (err: any) {
-      Toast.show({
-        type: 'error',
-        props: {
-          title: 'Sync Error',
-          message: err?.message || 'Unable to process queued backlog.',
-        },
-      });
-    }
-  };
+  const status = useSyncStatus();
+  const { data: reports = [], isLoading } = usePendingReportsQuery(projectId);
+  const { data: dead = [] } = useDeadLettersQuery();
+  const retry = useRetryOutboxItemMutation();
 
   return (
     <View style={styles.container}>
@@ -112,78 +50,97 @@ export const BacklogReviewModal: React.FC = () => {
         style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}
       >
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7}>
             <Text style={styles.closeText}>Close ✕</Text>
           </TouchableOpacity>
-          <Pill variant="positive" text="Account Verified" />
+          <Pill
+            variant={status.pausedReason ? 'warning' : status.isOnline ? 'positive' : 'info'}
+            text={status.pausedReason ? 'Paused' : status.isOnline ? 'Online' : 'Offline'}
+          />
         </View>
-        <Text style={styles.title}>Queued Report Backlog</Text>
+        <Text style={styles.title}>Sync status</Text>
         <Text style={styles.subtitle}>
-          Your contractor credentials have been approved! Review and confirm your queued field
-          submissions before sending them to the Independent Monitor.
+          {status.pendingCount === 0
+            ? 'Everything on this device has been sent.'
+            : `${status.pendingCount} item(s) waiting to send.`}
+          {status.lastSyncedAt ? ` Last sent ${formatElapsedTime(status.lastSyncedAt)} ago.` : ''}
         </Text>
       </LinearGradient>
 
       <View style={styles.curvedContainer}>
         <ScrollView
-          contentContainerStyle={[
-            styles.body,
-            { paddingBottom: Math.max(insets.bottom + 20, 24) },
-          ]}
+          contentContainerStyle={[styles.body, { paddingBottom: Math.max(insets.bottom + 20, 24) }]}
           showsVerticalScrollIndicator={false}
         >
-          {loading ? (
-            <InSiteLoader size="md" label="Loading queued field reports..." />
-          ) : backlogItems.length === 0 ? (
+          {status.pausedReason && (
+            <InfoCallout variant="warning" title="Sending is paused" description={status.pausedReason} />
+          )}
+          {status.lastError && !status.pausedReason && (
+            <InfoCallout variant="warning" title="Last error" description={status.lastError} />
+          )}
+          {status.storageEncrypted === false && (
+            <InfoCallout
+              variant="warning"
+              title="Local data is not encrypted"
+              description="This is a development build without SQLCipher. Release builds encrypt data on the device."
+            />
+          )}
+
+          {dead.length > 0 && (
+            <View style={styles.itemCard}>
+              <Text style={styles.itemTitle}>Could not be sent ({dead.length})</Text>
+              {dead.map((d) => (
+                <View key={d.id} style={styles.itemMeta}>
+                  <Text style={styles.itemMetaText} numberOfLines={2}>
+                    {KIND_LABEL[d.kind] ?? d.kind}: {d.lastError ?? 'Unknown error'}
+                  </Text>
+                  <TouchableOpacity onPress={() => retry.mutate(d.id)} disabled={retry.isPending}>
+                    <Text style={styles.closeText}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {isLoading ? (
+            <InSiteLoader size="md" label="Loading reports..." />
+          ) : reports.length === 0 ? (
             <EmptyStateCard
-              title="No Queued Reports in Backlog"
-              description="All signed End-of-Day reports have already been synced to the server."
+              title="No reports waiting"
+              description="Every daily report from this device has been accepted by the server."
             />
           ) : (
-            <>
-              {backlogItems.map((item) => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.itemCard, item.selected && styles.itemCardSelected]}
-                  onPress={() => toggleItem(item.id)}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.itemTop}>
-                    <Pill
-                      variant="info"
-                      text={`WBS ${item.wbsCode || 'ITEM'}`}
-                    />
-                    <Text style={styles.itemDate}>{item.workdayDate}</Text>
-                  </View>
+            reports.map((r) => (
+              <View key={r.id} style={styles.itemCard}>
+                <View style={styles.itemTop}>
+                  <Pill
+                    variant={r.serverStatus === 'STAGED_UNVERIFIED' ? 'warning' : 'info'}
+                    text={
+                      r.serverStatus === 'STAGED_UNVERIFIED'
+                        ? 'Held until identity approval'
+                        : r.syncStatus === 'SENT'
+                          ? 'Sent'
+                          : 'Waiting to send'
+                    }
+                  />
+                  <Text style={styles.itemDate}>{r.workdayDate}</Text>
+                </View>
+                <Text style={styles.itemTitle}>{r.summaryText}</Text>
+                <View style={styles.itemMeta}>
+                  <Text style={styles.itemMetaText}>
+                    {r.reportedQuantity} {r.unit} · {r.captureIds.length} capture(s)
+                  </Text>
+                </View>
+              </View>
+            ))
+          )}
 
-                  <Text style={styles.itemTitle}>{item.summaryText}</Text>
-
-                  <View style={styles.itemMeta}>
-                    <Text style={styles.itemMetaText}>
-                      Reported: {item.reportedQuantity} {item.unit}
-                    </Text>
-                    <Text style={styles.itemMetaText}>Status: {item.status}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-
-              <InfoCallout
-                variant="info"
-                title="Batch AI Verification"
-                description="Confirming this backlog submits your queued reports and GPS provenance to the project BOQ reconciliation ledger."
-              />
-
-              <PrimaryButton
-                onPress={handleProcessBatch}
-                text={
-                  isProcessing
-                    ? 'Syncing Backlog...'
-                    : 'Confirm & Sync Selected Reports'
-                }
-                isWorking={isProcessing}
-                disabled={isProcessing}
-              />
-            </>
+          {reports.some((r) => r.serverStatus === 'STAGED_UNVERIFIED') && (
+            <InfoCallout
+              variant="info"
+              title="Held reports"
+              description="The server keeps these until your identity check is approved, then submits them automatically. You do not need to send them again."
+            />
           )}
         </ScrollView>
       </View>

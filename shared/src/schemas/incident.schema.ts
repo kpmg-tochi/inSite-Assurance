@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { IncidentCategoryEnum, IncidentSeverityEnum, IncidentStatusEnum } from '../enums';
 
 export const CreateIncidentReportRequestSchema = z.object({
+  /** Client UUID; a repeat returns the existing incident (idempotent). */
+  clientIncidentId: z.string().uuid(),
   // Ignored by the server: the project comes from the field session. Kept for client compatibility.
   projectId: z.string().uuid().optional(),
   wbsItemId: z.string().uuid().nullable().optional(),
@@ -10,7 +12,8 @@ export const CreateIncidentReportRequestSchema = z.object({
   title: z.string().min(3).max(200),
   description: z.string().min(10).max(2000),
   isConfidentialWhistleblower: z.boolean().default(false),
-  photoEvidenceUrls: z.array(z.string()).default([]),
+  /** Object keys issued by presign for this project. URLs, file paths and data URIs are rejected. */
+  photoEvidenceUrls: z.array(z.string()).max(10).default([]),
   voiceNoteUrl: z.string().nullable().optional(),
   deviceGpsCoordinates: z.object({
     latitude: z.number(),

@@ -8,7 +8,8 @@ import {
   SessionEndedOverlay,
 } from "../components/common/SessionEndedOverlay";
 import {
-  useHourlyTelemetry,
+  useAssuranceStatusSync,
+  usePresenceTelemetry,
   useNetworkSync,
   usePushNotifications,
 } from "../hooks";
@@ -41,12 +42,8 @@ export const RootNavigator: React.FC = () => {
   // Background lifecycle hooks
   usePushNotifications(profile?.activeSessionToken);
   useNetworkSync();
-  useHourlyTelemetry({
-    activeProjectCode: profile?.activeProjectCode,
-    activeProjectId,
-    workdayStartHour: 7,
-    workdayEndHour: 19,
-  });
+  useAssuranceStatusSync();
+  usePresenceTelemetry(profile?.activeProjectCode ? activeProjectId : null);
 
   if (loading) {
     return (
@@ -59,10 +56,10 @@ export const RootNavigator: React.FC = () => {
   const getInitialRouteName = (): keyof RootStackParamList => {
     if (!profile || !profile.onboardingCompleted) return "Landing";
     if (!profile.activeProjectCode) return "EnterCode";
+    // Role-driven only: the server says whether this role needs identity assurance.
     if (
-      (profile.activeRequiresIdentityAssurance ||
-        profile.activeFieldPersonaType === "CONTRACTOR_EXECUTOR") &&
-      profile.assuranceStatus === "NOT_SUBMITTED"
+      profile.activeRequiresIdentityAssurance &&
+      (profile.assuranceStatus === "NOT_SUBMITTED" || profile.assuranceStatus === "REJECTED")
     ) {
       return "AssuranceWizard";
     }

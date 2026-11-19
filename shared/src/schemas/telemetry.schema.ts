@@ -1,31 +1,34 @@
 import { z } from 'zod';
 
+/**
+ * D-4.3: presence is recorded only while the app is open, plus one ping per capture and report.
+ */
 export const TelemetryPingSourceEnum = z.enum([
-  'HOURLY_TELEMETRY',
+  'FOREGROUND_PRESENCE',
+  'CAPTURE',
   'REPORT_SUBMISSION',
   'MANUAL_CHECKIN',
 ]);
 export type TelemetryPingSource = z.infer<typeof TelemetryPingSourceEnum>;
 
+/** Geofence fields are computed by the server; the device never asserts them. */
 export const TelemetryPingInputSchema = z.object({
-  id: z.string().min(4).max(128).optional(),
+  clientPingId: z.string().uuid(),
   wbsItemId: z.string().uuid().nullable().optional(),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   accuracyMeters: z.number().nonnegative().nullable().optional(),
   altitudeMeters: z.number().nullable().optional(),
   isMocked: z.boolean().default(false),
-  isWithinGeofence: z.boolean().nullable().optional(),
-  chainageLabel: z.string().max(120).nullable().optional(),
-  distanceMeters: z.number().nonnegative().nullable().optional(),
-  pingSource: TelemetryPingSourceEnum.default('HOURLY_TELEMETRY'),
-  deviceSignatureHash: z.string().min(16).max(256),
+  pingSource: TelemetryPingSourceEnum.default('FOREGROUND_PRESENCE'),
   capturedAt: z.string().datetime(),
+  signature: z.string().min(64).max(200).nullable().optional(),
 });
 export type TelemetryPingInput = z.infer<typeof TelemetryPingInputSchema>;
 
 export const CreateTelemetryBatchSchema = z.object({
-  pings: z.array(TelemetryPingInputSchema).min(1).max(100),
+  // Large offline backlogs are accepted; the server writes them in chunks.
+  pings: z.array(TelemetryPingInputSchema).min(1).max(2000),
 });
 export type CreateTelemetryBatch = z.infer<typeof CreateTelemetryBatchSchema>;
 
@@ -45,7 +48,7 @@ export const SiteTelemetryPingDtoSchema = z.object({
   chainageLabel: z.string().nullable(),
   distanceMeters: z.number().nullable(),
   pingSource: TelemetryPingSourceEnum,
-  deviceSignatureHash: z.string(),
+  signatureVerified: z.boolean().nullable(),
   capturedAtDevice: z.string().datetime(),
   syncedAtServer: z.string().datetime(),
 });

@@ -1,114 +1,50 @@
 import { AppState, type AppStateStatus } from 'react-native';
-import { uploadTelemetryPings } from '../api/telemetry/telemetryApi';
-import { captureCurrentGeotag } from './locationService';
-import {
-  getLastHourlyPingTimestamp,
-  getUnsyncedTelemetryPings,
-  markTelemetryPingsSynced,
-  recordTelemetryPing,
-} from '../storage/telemetryRepository';
+import { getLastPingTime, recordPresencePing } from '../storage/telemetryStore';
+import { acquireFix } from './locationService';
 
-const ONE_HOUR_MS = 60 * 60 * 1000;
+/**
+ * Presence while the app is open (D-4.3). No background location: a ping is taken when the app
+ * comes to the foreground and then at most every `intervalMs` while it stays open. Captures and
+ * reports add their own pings. Pings are stored and sent by the outbox (no separate flush loop).
+ */
 
-export interface TelemetryScheduleConfig {
+const DEFAULT_INTERVAL_MS = 60 * 60 * 1000;
+
+export interface PresenceScheduleConfig {
   projectId: string;
-  workdayStartHour?: number; // 24h local time, default 7 (07:00)
-  workdayEndHour?: number; // 24h local time, default 19 (19:00)
-  intervalMs?: number; // default 1 hour
+  intervalMs?: number;
 }
 
-function isWithinWorkdayWindow(startHour = 7, endHour = 19): boolean {
-  const hour = new Date().getHours();
-  return hour >= startHour && hour < endHour;
-}
+let inFlight = false;
 
-/**
- * Syncs any locally queued telemetry pings to the backend when online.
- * Leaves them queued in SQLite if the network is unreachable.
- */
-export async function flushTelemetryQueue(projectId: string): Promise<number> {
-  const unsynced = await getUnsyncedTelemetryPings(projectId);
-  if (unsynced.length === 0) return 0;
-
+export async function recordPresenceIfDue(config: PresenceScheduleConfig): Promise<boolean> {
+  if (!config.projectId || inFlight || AppState.currentState !== 'active') return false;
+  inFlight = true;
   try {
-    await uploadTelemetryPings(projectId, unsynced);
-    await markTelemetryPingsSynced(unsynced.map((p) => p.id));
-    return unsynced.length;
-  } catch {
-    // Offline or endpoint not yet reachable — pings remain safely queued in SQLite
-    return 0;
+    const interval = config.intervalMs ?? DEFAULT_INTERVAL_MS;
+    const last = await getLastPingTime(config.projectId, 'FOREGROUND_PRESENCE');
+    if (last !== null && Date.now() - last < interval) return false;
+    const fix = await acquireFix();
+    if (!fix) return false;
+    await recordPresencePing({ projectId: config.projectId, fix, source: 'FOREGROUND_PRESENCE' });
+    return true;
+  } catch (err) {
+    console.warn('[presence] ping skipped:', err);
+    return false;
+  } finally {
+    inFlight = false;
   }
 }
 
-/**
- * Captures an hourly telemetry ping if >= intervalMs has elapsed since the last ping
- * and the current time is within the configured workday window.
- */
-export async function runHourlyTelemetryCheck(
-  config: TelemetryScheduleConfig
-): Promise<boolean> {
-  const {
-    projectId,
-    workdayStartHour = 7,
-    workdayEndHour = 19,
-    intervalMs = ONE_HOUR_MS,
-  } = config;
-
-  if (!projectId || !isWithinWorkdayWindow(workdayStartHour, workdayEndHour)) {
-    return false;
-  }
-
-  const lastPingMs = await getLastHourlyPingTimestamp(projectId);
-  const nowMs = Date.now();
-  if (lastPingMs !== null && nowMs - lastPingMs < intervalMs) {
-    // Still attempt to flush any unsynced pings from earlier offline hours
-    await flushTelemetryQueue(projectId);
-    return false;
-  }
-
-  const geotag = await captureCurrentGeotag(`TELEMETRY:${projectId}`);
-  if (!geotag) {
-    return false;
-  }
-
-  await recordTelemetryPing({
-    projectId,
-    geotag,
-    pingSource: 'HOURLY_TELEMETRY',
+export function startPresenceScheduler(config: PresenceScheduleConfig): () => void {
+  const interval = config.intervalMs ?? DEFAULT_INTERVAL_MS;
+  void recordPresenceIfDue(config);
+  const timer = setInterval(() => void recordPresenceIfDue(config), Math.min(interval, 5 * 60_000));
+  const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+    if (next === 'active') void recordPresenceIfDue(config);
   });
-
-  await flushTelemetryQueue(projectId);
-  return true;
-}
-
-/**
- * Starts the hourly site-presence telemetry scheduler while the app is active,
- * plus AppState resume catch-up when returning from background.
- * Returns a cleanup function.
- */
-export function startHourlyTelemetryScheduler(
-  config: TelemetryScheduleConfig
-): () => void {
-  const intervalMs = config.intervalMs ?? ONE_HOUR_MS;
-
-  // Immediate check on mount
-  runHourlyTelemetryCheck(config).catch(() => {});
-
-  const timer = setInterval(() => {
-    runHourlyTelemetryCheck(config).catch(() => {});
-  }, intervalMs);
-
-  const handleAppStateChange = (nextState: AppStateStatus) => {
-    if (nextState === 'active') {
-      runHourlyTelemetryCheck(config).catch(() => {});
-    }
-  };
-
-  const subscription = AppState.addEventListener('change', handleAppStateChange);
-
   return () => {
     clearInterval(timer);
-    subscription.remove();
+    sub.remove();
   };
 }
-

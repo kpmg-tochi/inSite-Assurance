@@ -61,6 +61,18 @@ const EnvSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().optional().default(''),
   S3_SECRET_ACCESS_KEY: z.string().optional().default(''),
   S3_PUBLIC_BASE_URL: z.string().optional().default(''),
+
+  // Without S3, uploads go to this folder through signed local URLs (development only).
+  LOCAL_STORAGE_DIR: z.string().optional().default(''),
+  // Base URL devices use to reach this API (local storage URLs). A phone cannot reach "localhost".
+  PUBLIC_API_BASE_URL: z.string().optional().default(''),
+
+  // Expo push delivery. "none" records notifications without sending a push.
+  PUSH_PROVIDER: z.enum(['expo', 'none']).optional(),
+  EXPO_ACCESS_TOKEN: z.string().optional().default(''),
+
+  // Background sweep for omission checks that were not processed after submission.
+  AI_CHECK_SWEEP_INTERVAL_SECONDS: z.coerce.number().int().min(0).default(300),
 });
 
 const parsedEnv = EnvSchema.parse(process.env);
@@ -68,6 +80,10 @@ const parsedEnv = EnvSchema.parse(process.env);
 export const env = {
   ...parsedEnv,
   DEMO_MODE: parsedEnv.DEMO_MODE || parsedEnv.ENABLE_DEMO_ENDPOINTS,
+  LOCAL_STORAGE_DIR:
+    parsedEnv.LOCAL_STORAGE_DIR || path.resolve(__dirname, '../../.local-storage'),
+  PUBLIC_API_BASE_URL: (parsedEnv.PUBLIC_API_BASE_URL || `http://localhost:${parsedEnv.PORT}`).replace(/\/+$/, ''),
+  PUSH_PROVIDER: parsedEnv.PUSH_PROVIDER ?? (parsedEnv.NODE_ENV === 'test' ? 'none' : 'expo'),
 };
 
 /**
@@ -85,6 +101,9 @@ export function findUnsafeProductionConfig(config: typeof env): string[] {
   }
   if (config.DEMO_MODE) {
     problems.push('DEMO_MODE / ENABLE_DEMO_ENDPOINTS must be off in production');
+  }
+  if (!config.S3_ENDPOINT || !config.S3_ACCESS_KEY_ID || !config.S3_SECRET_ACCESS_KEY) {
+    problems.push('S3 storage must be configured in production (local disk storage is development only)');
   }
   return problems;
 }

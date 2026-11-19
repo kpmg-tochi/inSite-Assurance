@@ -15,7 +15,8 @@ const router = guardProjectRoutes(Router());
 
 /**
  * POST /api/v1/projects/:projectId/telemetry
- * Ingests hourly site-presence pings and report-submission pings from mobile.
+ * Ingests presence pings recorded while the app is open, plus capture and report pings.
+ * Idempotent on clientPingId; the response counts how many were new.
  */
 router.post(
   '/:projectId/telemetry',
@@ -26,6 +27,7 @@ router.post(
       const result = await recordTelemetryBatch({
         projectId: projectIdForFieldWrite(req),
         fieldSessionId: req.fieldAgent!.sessionId,
+        actorDisplayName: `${req.fieldAgent!.agentFullName} (${req.fieldAgent!.roleName})`,
         input: req.body,
       });
       res.status(201).json({ success: true, data: result });

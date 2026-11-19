@@ -382,12 +382,11 @@ export function SettingsPage({ project }: SettingsPageProps) {
               <strong className="font-bold text-brand-navy block mb-0.5">
                 Contractor Identity &amp; Competence Assurance
               </strong>
-              Contractors joining via mobile must submit a valid government
-              photo ID, undergo live facial liveness verification, and provide
-              proof of professional qualifications (COREN / QSRBN). Independent
-              Monitors and Lenders review this verification before project
-              capture permissions are activated, preventing unauthorized access
-              and fraudulent drawdown logs.
+              Contractors joining via mobile submit a government photo ID, a
+              guided selfie set (3 poses) and proof of professional
+              qualifications (COREN / QSRBN). A reviewer compares them by eye;
+              no automated liveness check is run. Reports from a contractor are
+              held until the review is approved.
             </div>
           </div>
 

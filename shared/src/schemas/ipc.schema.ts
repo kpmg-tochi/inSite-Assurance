@@ -131,36 +131,55 @@ export const ProvidedEvidenceQuantitySchema = z.object({
 export type ProvidedEvidenceQuantity = z.infer<typeof ProvidedEvidenceQuantitySchema>;
 
 export const ProvidedEvidenceMediaSchema = z.object({
+  /** Capture ID. */
   id: z.string(),
   mediaType: MediaTypeEnum,
   objectKey: z.string(),
   mimeType: z.string(),
   durationSeconds: z.number().nullable(),
+  capturedAt: z.string().datetime(),
+  locationAvailable: z.boolean(),
+  isWithinGeofence: z.boolean().nullable(),
+  signatureVerified: z.boolean().nullable(),
+  integrityPassed: z.boolean(),
+  integrityFlags: z.array(z.string()),
 });
 export type ProvidedEvidenceMedia = z.infer<typeof ProvidedEvidenceMediaSchema>;
 
+/**
+ * One piece of evidence: a confirmed workday report (latest revision) with the captures that
+ * support it across its revision chain. A capture with no confirmed report is not evidence.
+ */
 export const ProvidedEvidenceItemSchema = z.object({
+  /** Workday report ID (latest revision). */
   id: z.string(),
-  source: z.literal('FIELD_EVIDENCE_LOG'),
+  source: z.literal('WORKDAY_REPORT'),
   boqItemId: z.string(),
   reporterName: z.string().nullable(),
   reporterRoleName: z.string(),
   fieldPersonaType: FieldPersonaTypeEnum,
   assuranceWeight: z.number(),
-  isWithinGeofence: z.boolean(),
+  /**
+   * true when the report position or any located capture is inside the geofence and none is
+   * outside; false when something is outside; null when nothing could be evaluated.
+   */
+  isWithinGeofence: z.boolean().nullable(),
   chainageLabel: z.string().nullable(),
-  latitude: z.number(),
-  longitude: z.number(),
-  gpsAccuracyMeters: z.number(),
-  verificationBadgeText: z.string(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
+  gpsAccuracyMeters: z.number().nullable(),
+  workdayDate: z.string(),
+  revisionNumber: z.number().int(),
   summary: z.string().nullable(),
   quantities: z.array(ProvidedEvidenceQuantitySchema),
   blockers: z.array(z.string()),
+  isHoldPointClaimed: z.boolean(),
   capturedAt: z.string().datetime(),
   confirmedAt: z.string().datetime().nullable(),
-  /** False when the capture failed an integrity check; such evidence never counts as support. */
+  /** False when any capture or the report position failed an integrity check. */
   integrityPassed: z.boolean(),
   integrityFlags: z.array(z.string()),
+  signatureVerified: z.boolean().nullable(),
   media: z.array(ProvidedEvidenceMediaSchema),
 });
 export type ProvidedEvidenceItem = z.infer<typeof ProvidedEvidenceItemSchema>;

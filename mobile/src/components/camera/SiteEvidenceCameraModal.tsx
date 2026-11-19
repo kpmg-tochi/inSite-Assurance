@@ -130,7 +130,7 @@ export const SiteEvidenceCameraModal: React.FC<Props> = ({
                   ]}
                 >
                   <Image
-                    source={{ uri: photo.dataUri }}
+                    source={{ uri: photo.uri }}
                     style={styles.gridImage}
                     resizeMode="cover"
                   />
@@ -168,7 +168,7 @@ export const SiteEvidenceCameraModal: React.FC<Props> = ({
               style={styles.captionInput}
               value={caption}
               onChangeText={setCaption}
-              placeholder="Describe all captured angles (e.g. Invert slab rebar @ Ch 14+200)..."
+              placeholder="Describe what the photos show (e.g. invert slab rebar, north face)..."
               placeholderTextColor="#94A3B8"
               multiline
             />

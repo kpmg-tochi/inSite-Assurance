@@ -16,9 +16,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import {
-  FaceLivenessCameraOverlay,
+  GuidedSelfieCapture,
   IdCardCameraOverlay,
-  type FaceLivenessResult,
+  type GuidedSelfieResult,
   type IdCardCapturePayload,
 } from '../components/camera';
 import {
@@ -29,12 +29,12 @@ import { useProfile } from '../context/ProfileContext';
 import { useDemoSkipVerificationMutation } from '../queries/auth/useAuthMutations';
 import { useResolveNotificationMutation } from '../queries/notifications/useNotificationQueries';
 import { saveQueuedAssuranceSubmission } from '../storage/assuranceRepository';
-import { triggerOfflineSync } from '../storage/syncEngine';
+import { requestPushPermissionInContext } from '../services/pushNotificationService';
 import type { RootStackParamList } from '../navigation/types';
 
 export interface AssuranceVerificationPackage {
   idDocument: IdCardCapturePayload;
-  selfieLiveness: FaceLivenessResult;
+  selfies: GuidedSelfieResult;
   credentials: CredentialsSubmissionPayload;
 }
 
@@ -52,7 +52,7 @@ export const AssuranceVerificationWizard: React.FC = () => {
 
   const [currentStep, setCurrentStep] = useState<WizardStep>('STEP_1_ID');
   const [idPayload, setIdPayload] = useState<IdCardCapturePayload | null>(null);
-  const [selfiePayload, setSelfiePayload] = useState<FaceLivenessResult | null>(null);
+  const [selfiePayload, setSelfiePayload] = useState<GuidedSelfieResult | null>(null);
   const skipDemoMutation = useDemoSkipVerificationMutation();
   const isSkippingDemo = skipDemoMutation.isPending;
 
@@ -77,22 +77,22 @@ export const AssuranceVerificationWizard: React.FC = () => {
         projectId: activeProjectId,
         idType: pkg.idDocument.idType,
         idPhotoUri: pkg.idDocument.capture.uri,
-        selfieFrontUri: pkg.selfieLiveness.frontCapture.uri,
-        selfieLeftUri: pkg.selfieLiveness.leftCapture.uri,
-        selfieRightUri: pkg.selfieLiveness.rightCapture.uri,
-        livenessVerification: pkg.selfieLiveness.livenessVerification,
+        selfieFrontUri: pkg.selfies.front.uri,
+        selfieLeftUri: pkg.selfies.left.uri,
+        selfieRightUri: pkg.selfies.right.uri,
+        selfieSet: pkg.selfies.selfieSet,
         regulatoryBody: pkg.credentials.regulatoryBody,
         licenseNumber: pkg.credentials.licenseNumber,
         experienceSummary: pkg.credentials.experienceSummary,
       });
-      triggerOfflineSync('assurance_submitted').catch(() => {});
     }
     if (resolveNotificationId) {
       await resolveNotificationMutation
         .mutateAsync(resolveNotificationId)
         .catch(() => {});
     }
-    await updateProfile({ assuranceStatus: 'PENDING_APPROVAL' });
+    await updateProfile({ assuranceStatus: 'PENDING_APPROVAL', rejectionReason: null });
+    void requestPushPermissionInContext(profile?.activeSessionToken);
     navigation.reset({
       index: 0,
       routes: [{ name: 'UnderReview' }],
@@ -167,9 +167,9 @@ export const AssuranceVerificationWizard: React.FC = () => {
 
     if (currentStep === 'STEP_2_SELFIE') {
       return (
-        <FaceLivenessCameraOverlay
+        <GuidedSelfieCapture
           onCancel={() => setCurrentStep('STEP_1_ID')}
-          onLivenessVerified={(result) => {
+          onCaptured={(result) => {
             setSelfiePayload(result);
             setCurrentStep('STEP_3_CREDENTIALS');
           }}
@@ -184,7 +184,7 @@ export const AssuranceVerificationWizard: React.FC = () => {
           if (idPayload && selfiePayload) {
             handleVerificationSubmitted({
               idDocument: idPayload,
-              selfieLiveness: selfiePayload,
+              selfies: selfiePayload,
               credentials,
             });
           } else {
@@ -197,6 +197,15 @@ export const AssuranceVerificationWizard: React.FC = () => {
 
   return (
     <View style={styles.root}>
+      {profile?.assuranceStatus === 'REJECTED' && currentStep === 'STEP_1_ID' && (
+        <View style={[styles.rejectedBar, { paddingTop: Math.max(insets.top + 8, 16) }]}>
+          <Text style={styles.rejectedTitle}>Your identity check was returned</Text>
+          <Text style={styles.rejectedText}>
+            {profile.rejectionReason || 'The reviewer did not give a reason.'} Please capture your ID and
+            selfies again. Your reports stay held until a reviewer approves the new submission.
+          </Text>
+        </View>
+      )}
       <View style={styles.stepContainer}>{renderCurrentStep()}</View>
 
       {(process.env.EXPO_PUBLIC_DEMO_MODE === "true") && !isPreviewDemo && (
@@ -236,6 +245,22 @@ const styles = StyleSheet.create({
   },
   stepContainer: {
     flex: 1,
+  },
+  rejectedBar: {
+    backgroundColor: '#7F1D1D',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 4,
+  },
+  rejectedTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  rejectedText: {
+    color: '#FECACA',
+    fontSize: 12,
+    lineHeight: 17,
   },
   demoBar: {
     backgroundColor: '#0C233C',

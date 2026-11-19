@@ -1,22 +1,23 @@
 import type {
+  CaptureMediaType,
   MorningDeliverableBriefDto,
   PlanningTier,
   ReportQueryDto,
+  WbsChatMessageDto,
 } from '@insite/shared';
-import { formatElapsedTime } from '@insite/shared';
-import { getDatabase } from './sqliteDatabase';
 import { fetchMorningBriefs, fetchProjectBoqItems } from '../api/boq/boqApi';
-import {
-  fetchBoqChatMessages,
-  postBoqChatMessage,
-} from '../api/wbs/wbsChatApi';
-import {
-  revalidateWorkdayReport,
-  submitWorkdayReport,
-} from '../api/workday/workdayApi';
-import type { SiteGeotag } from '../services/locationService';
-import { recordTelemetryPing } from './telemetryRepository';
-import { flushTelemetryQueue } from '../services/telemetryService';
+import { fetchBoqChatMessages } from '../api/wbs/wbsChatApi';
+import { getDb, newId, nowIso } from './db/database';
+import { enqueue, findOpenRowId } from './outbox/outboxStore';
+import { kickOutbox } from './outbox/outboxProcessor';
+import { captureDisplayUri, getCaptures, type CaptureRecord } from './captureStore';
+import { currentPeriod, reportedWbsItemIds } from './reportStore';
+
+/**
+ * WBS threads and their chat (Phase 4). All persistence is SQLite; there is no in-memory copy
+ * that could diverge from it. Messages the user writes are saved first, then queued; server
+ * messages are merged by clientMessageId so nothing appears twice.
+ */
 
 export interface WbsItemRecord {
   id: string;
@@ -28,731 +29,444 @@ export interface WbsItemRecord {
   totalQuantity: number;
   cumulativeCertifiedPct: number;
   isHoldPoint: boolean;
+  holdPointInstruction: string | null;
   isScheduledToday: boolean;
   planningTier: PlanningTier;
+  /** A report for this item exists for the current period (on this device or on the server). */
   isReportedToday: boolean;
   unreadCount: number;
   lastMessageText: string;
+  /** ISO time of the last message, or '' if none. Format at render. */
   lastMessageTimestamp: string;
+}
+
+export type ChatMessageType =
+  | 'MORNING_BRIEF'
+  | 'PHOTO'
+  | 'TEXT_COMMENT'
+  | 'VOICE_NOTE'
+  | 'EOD_PROMPT'
+  | 'AI_QUERY'
+  | 'MONITOR_QUERY'
+  | 'QUERY_RESPONSE';
+
+export type ChatSyncStatus = 'QUEUED' | 'SENT' | 'SERVER';
+
+export interface ChatCaptureView {
+  id: string;
+  mediaType: CaptureMediaType | string;
+  /** Local file, or null when only the server copy remains. */
+  localUri: string | null;
+  objectKey: string | null;
+  durationSeconds: number | null;
+  /** null when not known on this device (a capture sent from another device). */
+  locationAvailable: boolean | null;
+  isMocked: boolean;
+  /** Server result once registered; otherwise null (not yet known). */
+  isWithinGeofence: boolean | null;
+  chainageLabel: string | null;
+  uploadState: 'PENDING_UPLOAD' | 'UPLOADED' | 'SERVER_ONLY';
+  integrityPassed: boolean | null;
 }
 
 export interface WbsChatMessageRecord {
   id: string;
   wbsItemId: string;
   senderName: string;
-  senderRole: string; // 'SYSTEM_BRIEF' | 'AI_CO_PILOT' | 'MONITOR' | 'ENGINEER' | 'INSPECTOR'
-  messageType:
-    | 'MORNING_BRIEF'
-    | 'PHOTO'
-    | 'TEXT_COMMENT'
-    | 'VOICE_NOTE'
-    | 'EOD_PROMPT'
-    | 'AI_CONFIRMATION'
-    | 'AI_QUERY'
-    | 'MONITOR_QUERY'
-    | 'QUERY_RESPONSE';
+  senderRole: string;
+  senderSessionId: string | null;
+  messageType: ChatMessageType;
   textContent?: string;
-  mediaUri?: string;
-  mediaUris?: string[];
-  caption?: string;
-  durationMs?: number;
-  waveform?: number[];
-  latitude?: number;
-  longitude?: number;
-  chainageLabel?: string;
+  capture?: ChatCaptureView;
   workdayReportId?: string | null;
   reportQueryId?: string | null;
   queryDetails?: ReportQueryDto | null;
-  timestamp: string;
-  isDelivered: boolean;
-}
-
-export interface StagedWorkdayReportRecord {
-  id: string;
-  wbsItemId: string;
-  wbsCode?: string;
-  wbsDescription?: string;
-  workdayDate: string;
-  summaryText: string;
-  reportedQuantity: number;
-  unit: string;
-  status: string;
+  /** For morning briefs: the day the brief is for. */
+  briefDate?: string | null;
+  /** ISO timestamp. Format at render. */
   createdAt: string;
+  syncStatus: ChatSyncStatus;
 }
 
-// Local memory cache (populated from SQLite / API; zero hardcoded demo fixtures)
-let memWbsItems: WbsItemRecord[] = [];
-let memChatMessages: Record<string, WbsChatMessageRecord[]> = {};
-let memStagedReports: StagedWorkdayReportRecord[] = [];
+type ItemRow = {
+  id: string;
+  project_id: string;
+  wbs_code: string;
+  description: string;
+  unit: string;
+  rate_ngn: number;
+  total_quantity: number;
+  cumulative_certified_pct: number;
+  is_hold_point: number;
+  hold_point_instruction: string | null;
+  is_scheduled_today: number;
+  planning_tier: string;
+  last_message_text: string | null;
+  last_message_at: string | null;
+};
 
-export function resetInMemoryWbsState(): void {
-  memWbsItems = [];
-  memChatMessages = {};
-  memStagedReports = [];
-}
+type MessageRow = {
+  id: string;
+  client_message_id: string | null;
+  server_id: string | null;
+  project_id: string;
+  wbs_item_id: string;
+  sender_session_id: string | null;
+  sender_name: string;
+  sender_role: string;
+  message_type: string;
+  text_content: string | null;
+  capture_id: string | null;
+  capture_json: string | null;
+  workday_report_id: string | null;
+  report_query_id: string | null;
+  query_json: string | null;
+  brief_date: string | null;
+  created_at: string;
+  sync_status: string;
+};
 
-/**
- * Retrieve all actionable WBS threads for the current project from SQLite cache.
- */
+/** Threads for a project from SQLite, with "reported" computed from reports for this period. */
 export async function getWbsThreads(projectId: string): Promise<WbsItemRecord[]> {
-  const db = await getDatabase();
-  if (db) {
-    try {
-      const rows = await db.getAllAsync<any>(
-        'SELECT * FROM wbs_items WHERE project_id = ? ORDER BY is_scheduled_today DESC, is_hold_point DESC, wbs_code ASC',
-        [projectId]
-      );
-      if (rows && rows.length > 0) {
-        return rows.map((r) => ({
-          id: r.id,
-          projectId: r.project_id,
-          wbsCode: r.wbs_code,
-          description: r.description,
-          unit: r.unit,
-          rateNgn: r.rate_ngn,
-          totalQuantity: r.total_quantity,
-          cumulativeCertifiedPct: r.cumulative_certified_pct,
-          isHoldPoint: Boolean(r.is_hold_point),
-          isScheduledToday: Boolean(r.is_scheduled_today),
-          planningTier: (r.planning_tier ||
-            (r.is_scheduled_today ? 'PLAN_A' : 'UNBLOCKED_POOL')) as PlanningTier,
-          isReportedToday: Boolean(r.is_reported_today),
-          unreadCount: r.unread_count,
-          lastMessageText: r.last_message_text || '',
-          lastMessageTimestamp: r.last_message_timestamp || '',
-        }));
-      }
-    } catch (e) {
-      console.warn('SQLite error loading WBS threads:', e);
-    }
-  }
-  return memWbsItems.filter((w) => w.projectId === projectId);
+  const db = await getDb();
+  const rows = await db.getAllAsync<ItemRow>(
+    `SELECT * FROM wbs_items WHERE project_id = ?
+     ORDER BY is_scheduled_today DESC, is_hold_point DESC, wbs_code ASC`,
+    [projectId]
+  );
+  const reported = await reportedWbsItemIds(projectId, currentPeriod()).catch(() => new Set<string>());
+  return rows.map((r) => ({
+    id: r.id,
+    projectId: r.project_id,
+    wbsCode: r.wbs_code,
+    description: r.description,
+    unit: r.unit,
+    rateNgn: r.rate_ngn,
+    totalQuantity: r.total_quantity,
+    cumulativeCertifiedPct: r.cumulative_certified_pct,
+    isHoldPoint: Boolean(r.is_hold_point),
+    holdPointInstruction: r.hold_point_instruction,
+    isScheduledToday: Boolean(r.is_scheduled_today),
+    planningTier: (r.planning_tier || 'UNBLOCKED_POOL') as PlanningTier,
+    isReportedToday: reported.has(r.id),
+    unreadCount: 0,
+    lastMessageText: r.last_message_text ?? '',
+    lastMessageTimestamp: r.last_message_at ?? '',
+  }));
+}
+
+function briefText(brief: MorningDeliverableBriefDto): string {
+  const checklist =
+    brief.reportingChecklist.length > 0
+      ? `\n\nReport pointers:\n${brief.reportingChecklist.map((p) => `• ${p}`).join('\n')}`
+      : '';
+  return `${brief.headline}\n${brief.expectedDeliverable}${checklist}`;
 }
 
 /**
- * Hydrates WBS threads and today's Morning Deliverable Briefs from the backend API
- * into local SQLite storage.
+ * Pulls BOQ items and morning briefs into SQLite. Briefs are upserted, so a regenerated brief
+ * replaces the old one (TD-P2-5). On failure the cached threads are returned with the error.
  */
 export async function syncWbsInboxFromServer(projectId: string): Promise<{
   items: WbsItemRecord[];
   syncError: string | null;
 }> {
   let syncError: string | null = null;
-
   try {
     const [boqItems, morningBriefs] = await Promise.all([
       fetchProjectBoqItems(projectId),
-      fetchMorningBriefs(projectId).catch(
-        () => [] as MorningDeliverableBriefDto[]
-      ),
+      fetchMorningBriefs(projectId).catch(() => [] as MorningDeliverableBriefDto[]),
     ]);
-
-    const briefByBoqId = new Map<string, MorningDeliverableBriefDto>();
-    for (const brief of morningBriefs) {
-      briefByBoqId.set(brief.boqItemId, brief);
-    }
-
-    const mapped: WbsItemRecord[] = (boqItems || []).map((b) => {
-      const brief = briefByBoqId.get(b.id);
-      const isScheduled = Boolean(b.isScheduledToday);
-      const tier: PlanningTier =
-        brief?.planningTier ||
-        (b.planningTier as PlanningTier) ||
-        (isScheduled ? 'PLAN_A' : 'UNBLOCKED_POOL');
-
-      return {
-        id: b.id,
-        projectId,
-        wbsCode: b.wbsCode,
-        description: b.description,
-        unit: b.unit,
-        rateNgn: Number(b.rateNgn ?? 0),
-        totalQuantity: Number(b.totalQuantity ?? 0),
-        cumulativeCertifiedPct: Number(b.cumulativeCertifiedPct ?? 0),
-        isHoldPoint: Boolean(b.isHoldPoint),
-        isScheduledToday: isScheduled,
-        planningTier: tier,
-        isReportedToday: Number(b.cumulativeCertifiedPct ?? 0) >= 100,
-        unreadCount: brief ? 1 : 0,
-        lastMessageText: brief
-          ? `${brief.headline} · ${brief.expectedDeliverable}`
-          : b.holdPointInstruction || 'Tap to log site progress or photos',
-        lastMessageTimestamp: brief ? '08:00 WAT' : '',
-      };
-    });
-
-    memWbsItems = mapped;
-
-    const db = await getDatabase();
-    if (db) {
-      for (const item of mapped) {
+    const briefByBoqId = new Map(morningBriefs.map((b) => [b.boqItemId, b]));
+    const db = await getDb();
+    await db.withTransactionAsync(async () => {
+      for (const b of boqItems ?? []) {
+        const brief = briefByBoqId.get(b.id);
+        const tier: PlanningTier =
+          brief?.planningTier || (b.planningTier as PlanningTier) || (b.isScheduledToday ? 'PLAN_A' : 'UNBLOCKED_POOL');
         await db.runAsync(
-          `INSERT OR REPLACE INTO wbs_items
-           (id, project_id, wbs_code, description, unit, rate_ngn, total_quantity,
-            cumulative_certified_pct, is_hold_point, is_scheduled_today, planning_tier,
-            is_reported_today, unread_count, last_message_text, last_message_timestamp)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO wbs_items (id, project_id, wbs_code, description, unit, rate_ngn, total_quantity,
+             cumulative_certified_pct, is_hold_point, hold_point_instruction, is_scheduled_today, planning_tier)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             wbs_code = excluded.wbs_code, description = excluded.description, unit = excluded.unit,
+             rate_ngn = excluded.rate_ngn, total_quantity = excluded.total_quantity,
+             cumulative_certified_pct = excluded.cumulative_certified_pct,
+             is_hold_point = excluded.is_hold_point, hold_point_instruction = excluded.hold_point_instruction,
+             is_scheduled_today = excluded.is_scheduled_today, planning_tier = excluded.planning_tier`,
           [
-            item.id,
-            item.projectId,
-            item.wbsCode,
-            item.description,
-            item.unit,
-            item.rateNgn,
-            item.totalQuantity,
-            item.cumulativeCertifiedPct,
-            item.isHoldPoint ? 1 : 0,
-            item.isScheduledToday ? 1 : 0,
-            item.planningTier,
-            item.isReportedToday ? 1 : 0,
-            item.unreadCount,
-            item.lastMessageText,
-            item.lastMessageTimestamp,
+            b.id,
+            projectId,
+            b.wbsCode,
+            b.description,
+            b.unit,
+            Number(b.rateNgn ?? 0),
+            Number(b.totalQuantity ?? 0),
+            Number(b.cumulativeCertifiedPct ?? 0),
+            b.isHoldPoint ? 1 : 0,
+            b.holdPointInstruction ?? null,
+            b.isScheduledToday ? 1 : 0,
+            tier,
           ]
         );
-
-        const brief = briefByBoqId.get(item.id);
         if (brief) {
-          const briefMsgId = `brief-${brief.id}`;
-          const checklistText =
-            brief.reportingChecklist.length > 0
-              ? `\n\nReport Pointers:\n${brief.reportingChecklist
-                  .map((p) => `• ${p}`)
-                  .join('\n')}`
-              : '';
-          const fullText = `${brief.headline}\n${brief.expectedDeliverable}${checklistText}`;
-
+          // One brief message per WBS item, replaced when the brief changes.
           await db.runAsync(
-            `INSERT OR IGNORE INTO wbs_chat_messages
-             (id, wbs_item_id, sender_name, sender_role, message_type, text_content, timestamp, is_delivered)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              briefMsgId,
-              item.id,
-              'InSite Morning Brief',
-              'SYSTEM_BRIEF',
-              'MORNING_BRIEF',
-              fullText,
-              '08:00 WAT',
-              1,
-            ]
+            `INSERT INTO chat_messages (id, project_id, wbs_item_id, sender_name, sender_role, message_type,
+               text_content, brief_date, created_at, sync_status)
+             VALUES (?, ?, ?, 'InSite Morning Brief', 'SYSTEM_BRIEF', 'MORNING_BRIEF', ?, ?, ?, 'SERVER')
+             ON CONFLICT(id) DO UPDATE SET text_content = excluded.text_content,
+               brief_date = excluded.brief_date, created_at = excluded.created_at`,
+            [`brief-${b.id}`, projectId, b.id, briefText(brief), brief.workdayDate, brief.createdAt]
           );
         }
       }
-    }
-  } catch (err: any) {
-    syncError =
-      err?.message || 'Offline or server unreachable — showing cached WBS items.';
+    });
+    await refreshLastMessages(projectId);
+  } catch (err) {
+    syncError = (err as Error)?.message || 'Offline or server unreachable. Showing saved WBS items.';
   }
+  return { items: await getWbsThreads(projectId), syncError };
+}
 
-  const items = await getWbsThreads(projectId);
-  return { items, syncError };
+async function refreshLastMessages(projectId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE wbs_items SET
+       last_message_text = (SELECT COALESCE(m.text_content, m.message_type) FROM chat_messages m
+                            WHERE m.wbs_item_id = wbs_items.id ORDER BY m.created_at DESC LIMIT 1),
+       last_message_at = (SELECT m.created_at FROM chat_messages m
+                          WHERE m.wbs_item_id = wbs_items.id ORDER BY m.created_at DESC LIMIT 1)
+     WHERE project_id = ?`,
+    [projectId]
+  );
+}
+
+function captureView(c: CaptureRecord | undefined, server?: WbsChatMessageDto['capture']): ChatCaptureView | undefined {
+  if (c) {
+    return {
+      id: c.id,
+      mediaType: c.mediaType,
+      localUri: captureDisplayUri(c),
+      objectKey: c.objectKey,
+      durationSeconds: c.durationSeconds,
+      locationAvailable: c.fix !== null,
+      isMocked: c.fix?.isMocked ?? false,
+      isWithinGeofence: c.server?.isWithinGeofence ?? null,
+      chainageLabel: c.server?.chainageLabel ?? null,
+      uploadState: c.uploadStatus === 'REGISTERED' ? 'UPLOADED' : 'PENDING_UPLOAD',
+      integrityPassed: c.server?.integrityPassed ?? null,
+    };
+  }
+  if (server) {
+    return {
+      id: server.clientCaptureId,
+      mediaType: server.mediaType,
+      localUri: null,
+      objectKey: server.objectKey,
+      durationSeconds: server.durationSeconds,
+      locationAvailable: null,
+      isMocked: false,
+      isWithinGeofence: null,
+      chainageLabel: null,
+      uploadState: 'SERVER_ONLY',
+      integrityPassed: null,
+    };
+  }
+  return undefined;
+}
+
+/** Messages for a thread from SQLite, oldest first. */
+export async function getWbsChatMessages(wbsItemId: string): Promise<WbsChatMessageRecord[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<MessageRow>(
+    'SELECT * FROM chat_messages WHERE wbs_item_id = ? ORDER BY created_at ASC',
+    [wbsItemId]
+  );
+  const captures = await getCaptures(rows.map((r) => r.capture_id).filter((id): id is string => Boolean(id)));
+  const byId = new Map(captures.map((c) => [c.id, c]));
+  return rows.map((r) => {
+    const query = r.query_json ? (JSON.parse(r.query_json) as ReportQueryDto) : null;
+    return {
+      id: r.id,
+      wbsItemId: r.wbs_item_id,
+      senderName: r.sender_name,
+      senderRole: r.sender_role,
+      senderSessionId: r.sender_session_id,
+      messageType: r.message_type as ChatMessageType,
+      textContent: r.text_content ?? undefined,
+      capture: r.capture_id
+        ? captureView(
+            byId.get(r.capture_id),
+            r.capture_json ? (JSON.parse(r.capture_json) as WbsChatMessageDto['capture']) : undefined
+          )
+        : undefined,
+      workdayReportId: r.workday_report_id,
+      reportQueryId: r.report_query_id,
+      queryDetails: query,
+      briefDate: r.brief_date,
+      createdAt: r.created_at,
+      syncStatus: r.sync_status as ChatSyncStatus,
+    };
+  });
 }
 
 /**
- * Retrieve chat timeline messages for a specific WBS thread.
- */
-export async function getWbsChatMessages(
-  wbsItemId: string
-): Promise<WbsChatMessageRecord[]> {
-  const db = await getDatabase();
-  if (db) {
-    try {
-      const rows = await db.getAllAsync<any>(
-        'SELECT * FROM wbs_chat_messages WHERE wbs_item_id = ? ORDER BY rowid ASC',
-        [wbsItemId]
-      );
-      if (rows && rows.length > 0) {
-        return rows.map((r) => ({
-          id: r.id,
-          wbsItemId: r.wbs_item_id,
-          senderName: r.sender_name,
-          senderRole: r.sender_role,
-          messageType: r.message_type,
-          textContent: r.text_content,
-          mediaUri: r.media_uri,
-          mediaUris: r.media_uris_json ? JSON.parse(r.media_uris_json) : undefined,
-          caption: r.caption,
-          durationMs: r.duration_ms ?? undefined,
-          waveform: r.waveform_json ? JSON.parse(r.waveform_json) : undefined,
-          latitude: r.latitude,
-          longitude: r.longitude,
-          chainageLabel: r.chainage_label,
-          timestamp: r.timestamp,
-          isDelivered: Boolean(r.is_delivered),
-        }));
-      }
-    } catch (e) {
-      console.warn('SQLite error loading messages:', e);
-    }
-  }
-  return memChatMessages[wbsItemId] ? [...memChatMessages[wbsItemId]] : [];
-}
-
-/**
- * Pulls server-persisted WBS chat messages (e.g. Monitor & AI Omission queries)
- * and merges them cleanly with local SQLite messages.
+ * Merges server messages into SQLite: a message this device sent (same clientMessageId) is
+ * updated in place, others are inserted once by server ID. Returns the merged thread.
  */
 export async function syncWbsChatMessagesFromServer(
   projectId: string | null | undefined,
   wbsItemId: string
 ): Promise<WbsChatMessageRecord[]> {
-  const localMessages = await getWbsChatMessages(wbsItemId);
-  if (!projectId) {
-    return localMessages;
-  }
-
-  try {
-    const serverMessages = await fetchBoqChatMessages(projectId, wbsItemId);
-    const localIds = new Set(localMessages.map((m) => m.id));
-    const db = await getDatabase();
-
-    const mappedServer: WbsChatMessageRecord[] = [];
-    for (const s of serverMessages) {
-      const rec: WbsChatMessageRecord = {
-        id: s.id,
-        wbsItemId: s.boqItemId,
-        senderName: s.senderName,
-        senderRole: s.senderRole,
-        messageType: s.messageType as WbsChatMessageRecord['messageType'],
-        textContent: s.textContent ?? undefined,
-        mediaUri: s.mediaUrls?.[0],
-        mediaUris: s.mediaUrls && s.mediaUrls.length > 0 ? s.mediaUrls : undefined,
-        latitude: s.latitude ?? undefined,
-        longitude: s.longitude ?? undefined,
-        chainageLabel: s.chainageLabel ?? undefined,
-        workdayReportId: s.workdayReportId ?? null,
-        reportQueryId: s.reportQueryId ?? null,
-        queryDetails: s.queryDetails ?? null,
-        timestamp: formatElapsedTime(s.createdAt) || 'Just now',
-        isDelivered: true,
-      };
-      mappedServer.push(rec);
-
-      if (db && !localIds.has(s.id)) {
-        try {
+  if (projectId) {
+    try {
+      const serverMessages = await fetchBoqChatMessages(projectId, wbsItemId);
+      const db = await getDb();
+      await db.withTransactionAsync(async () => {
+        for (const s of serverMessages) {
+          const queryJson = s.queryDetails ? JSON.stringify(s.queryDetails) : null;
+          if (s.clientMessageId) {
+            const updated = await db.runAsync(
+              `UPDATE chat_messages SET server_id = ?, sync_status = 'SENT', query_json = COALESCE(?, query_json)
+               WHERE client_message_id = ?`,
+              [s.id, queryJson, s.clientMessageId]
+            );
+            if (updated.changes > 0) continue;
+          }
           await db.runAsync(
-            `INSERT OR IGNORE INTO wbs_chat_messages
-             (id, wbs_item_id, sender_name, sender_role, message_type, text_content, media_uri, media_uris_json, latitude, longitude, chainage_label, timestamp, is_delivered)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+            `INSERT INTO chat_messages (id, client_message_id, server_id, project_id, wbs_item_id,
+               sender_session_id, sender_name, sender_role, message_type, text_content, capture_id,
+               capture_json, workday_report_id, report_query_id, query_json, created_at, sync_status)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'SERVER')
+             ON CONFLICT(id) DO UPDATE SET query_json = excluded.query_json, text_content = excluded.text_content`,
             [
-              rec.id,
-              rec.wbsItemId,
-              rec.senderName,
-              rec.senderRole,
-              rec.messageType,
-              rec.textContent ?? null,
-              rec.mediaUri ?? null,
-              rec.mediaUris ? JSON.stringify(rec.mediaUris) : null,
-              rec.latitude ?? null,
-              rec.longitude ?? null,
-              rec.chainageLabel ?? null,
-              rec.timestamp,
+              s.id,
+              s.clientMessageId ?? null,
+              s.id,
+              projectId,
+              wbsItemId,
+              s.senderSessionId ?? null,
+              s.senderName,
+              s.senderRole,
+              s.messageType,
+              s.textContent ?? null,
+              s.capture?.clientCaptureId ?? null,
+              s.capture ? JSON.stringify(s.capture) : null,
+              s.workdayReportId ?? null,
+              s.reportQueryId ?? null,
+              queryJson,
+              s.createdAt,
             ]
           );
-        } catch {
-          // Ignore duplicate SQLite insert race
         }
-      }
+      });
+      await refreshLastMessages(projectId);
+    } catch {
+      // Offline: show what is stored.
     }
-
-    // Keep local messages that haven't originated from server + attach live server metadata
-    const serverById = new Map(mappedServer.map((m) => [m.id, m]));
-    const merged: WbsChatMessageRecord[] = [];
-    for (const local of localMessages) {
-      const serverMatch = serverById.get(local.id);
-      if (serverMatch) {
-        merged.push({ ...local, ...serverMatch });
-        serverById.delete(local.id);
-      } else {
-        merged.push(local);
-      }
-    }
-    for (const remaining of serverById.values()) {
-      merged.push(remaining);
-    }
-
-    return merged;
-  } catch {
-    return localMessages;
   }
+  return getWbsChatMessages(wbsItemId);
 }
 
-/**
- * Append a new message (photo, comment, or voice note) to a WBS chat thread.
- */
-export async function sendWbsChatMessage(
-  message: Omit<WbsChatMessageRecord, 'id' | 'isDelivered'> & {
-    projectId?: string;
-    skipServerMirror?: boolean;
-  }
-): Promise<WbsChatMessageRecord> {
-  const { projectId, skipServerMirror, ...recordFields } = message;
-  const newMsg: WbsChatMessageRecord = {
-    ...recordFields,
-    id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    isDelivered: true,
-  };
-
-  if (!memChatMessages[message.wbsItemId]) {
-    memChatMessages[message.wbsItemId] = [];
-  }
-  memChatMessages[message.wbsItemId].push(newMsg);
-
-  const previewText =
-    message.caption || message.textContent || 'New attachment captured';
-  const parent = memWbsItems.find((w) => w.id === message.wbsItemId);
-  if (parent) {
-    parent.lastMessageText = previewText;
-    parent.lastMessageTimestamp = message.timestamp;
-  }
-
-  const db = await getDatabase();
-  if (db) {
-    try {
-      await db.runAsync(
-        `INSERT INTO wbs_chat_messages 
-         (id, wbs_item_id, sender_name, sender_role, message_type, text_content, media_uri, media_uris_json, caption, duration_ms, waveform_json, latitude, longitude, chainage_label, timestamp, is_delivered)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          newMsg.id,
-          newMsg.wbsItemId,
-          newMsg.senderName,
-          newMsg.senderRole,
-          newMsg.messageType,
-          newMsg.textContent ?? null,
-          newMsg.mediaUri ?? null,
-          newMsg.mediaUris ? JSON.stringify(newMsg.mediaUris) : null,
-          newMsg.caption ?? null,
-          newMsg.durationMs ?? null,
-          newMsg.waveform ? JSON.stringify(newMsg.waveform) : null,
-          newMsg.latitude ?? null,
-          newMsg.longitude ?? null,
-          newMsg.chainageLabel ?? null,
-          newMsg.timestamp,
-          1,
-        ]
-      );
-
-      await db.runAsync(
-        `UPDATE wbs_items SET last_message_text = ?, last_message_timestamp = ? WHERE id = ?`,
-        [previewText, message.timestamp, message.wbsItemId]
-      );
-    } catch (e) {
-      console.warn('SQLite error inserting chat message:', e);
-    }
-  }
-
-  if (projectId && !skipServerMirror) {
-    if (
-      recordFields.messageType === 'PHOTO' ||
-      recordFields.messageType === 'VOICE_NOTE' ||
-      recordFields.messageType === 'TEXT_COMMENT'
-    ) {
-      postBoqChatMessage(projectId, recordFields.wbsItemId, {
-        workdayReportId: recordFields.workdayReportId ?? undefined,
-        reportQueryId: recordFields.reportQueryId ?? undefined,
-        messageType: recordFields.messageType,
-        textContent: recordFields.textContent || recordFields.caption,
-        mediaUrls:
-          recordFields.mediaUris && recordFields.mediaUris.length > 0
-            ? recordFields.mediaUris
-            : recordFields.mediaUri
-              ? [recordFields.mediaUri]
-              : [],
-        latitude: recordFields.latitude,
-        longitude: recordFields.longitude,
-        chainageLabel: recordFields.chainageLabel,
-      }).catch(() => {});
-    }
-  }
-
-  return newMsg;
-}
-
-export interface SubmitConfirmedWorkdayInput {
+export interface SendChatMessageInput {
   projectId: string;
-  wbsItem: WbsItemRecord;
+  wbsItemId: string;
   senderName: string;
-  reportedQuantity: number;
-  unitOfMeasure: string;
-  summaryText: string;
-  delaysOrBlockers?: string;
-  isHoldPointClaimed: boolean;
-  voiceNoteUri?: string | null;
-  submissionGeotag: SiteGeotag | null;
-  isVerifiedAccount?: boolean;
-  revalidateContext?: {
-    targetReportId: string;
+  senderSessionId: string | null;
+  senderRole: string;
+  messageType: 'TEXT_COMMENT' | 'PHOTO' | 'VOICE_NOTE';
+  textContent?: string | null;
+  /** clientCaptureId of a capture saved with captureStore.saveCapture. */
+  captureId?: string | null;
+  workdayReportId?: string | null;
+  reportQueryId?: string | null;
+}
+
+/** Saves a message and queues it (behind its capture, if any). Returns once it is stored. */
+export async function sendWbsChatMessage(input: SendChatMessageInput): Promise<WbsChatMessageRecord> {
+  const db = await getDb();
+  const clientMessageId = newId();
+  const createdAt = nowIso();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT INTO chat_messages (id, client_message_id, project_id, wbs_item_id, sender_session_id,
+         sender_name, sender_role, message_type, text_content, capture_id, workday_report_id,
+         report_query_id, created_at, sync_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'QUEUED')`,
+      [
+        clientMessageId,
+        clientMessageId,
+        input.projectId,
+        input.wbsItemId,
+        input.senderSessionId,
+        input.senderName,
+        input.senderRole,
+        input.messageType,
+        input.textContent ?? null,
+        input.captureId ?? null,
+        input.workdayReportId ?? null,
+        input.reportQueryId ?? null,
+        createdAt,
+      ]
+    );
+    const dependsOn: string[] = [];
+    if (input.captureId) {
+      const open = await findOpenRowId(db, 'CAPTURE', input.captureId);
+      if (open) dependsOn.push(open);
+    }
+    await enqueue(db, {
+      projectId: input.projectId,
+      kind: 'CHAT_MESSAGE',
+      entityId: clientMessageId,
+      dependsOn,
+    });
+    await db.runAsync(
+      'UPDATE wbs_items SET last_message_text = ?, last_message_at = ? WHERE id = ?',
+      [input.textContent || (input.messageType === 'PHOTO' ? 'Photo' : 'Voice note'), createdAt, input.wbsItemId]
+    );
+  });
+  kickOutbox();
+  const all = await getWbsChatMessages(input.wbsItemId);
+  return all.find((m) => m.id === clientMessageId)!;
+}
+
+/** Request body for a queued message (used by the outbox handler). */
+export async function loadQueuedMessage(clientMessageId: string): Promise<{
+  projectId: string;
+  wbsItemId: string;
+  body: {
+    clientMessageId: string;
+    messageType: 'TEXT_COMMENT' | 'PHOTO' | 'VOICE_NOTE';
+    textContent?: string;
+    captureId?: string;
+    workdayReportId?: string;
     reportQueryId?: string;
   };
-}
-
-export interface SubmitConfirmedWorkdayResult {
-  localReportId: string;
-  syncStatus: 'SYNCED' | 'QUEUED_OFFLINE' | 'STAGED_UNVERIFIED';
-}
-
-/**
- * Persists a confirmed End-of-Day workday report with its submission geotag
- * offline-first into SQLite, logs a REPORT_SUBMISSION telemetry ping, posts a
- * confirmation bubble in the WBS chat thread, and attempts backend sync (when verified).
- */
-export async function submitConfirmedWorkdayReport(
-  input: SubmitConfirmedWorkdayInput
-): Promise<SubmitConfirmedWorkdayResult> {
-  const localReportId = `eod-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  const createdAt = new Date().toISOString();
-  const workdayDate = createdAt.slice(0, 10);
-
-  if (input.submissionGeotag) {
-    await recordTelemetryPing({
-      projectId: input.projectId,
-      wbsItemId: input.wbsItem.id,
-      geotag: input.submissionGeotag,
-      pingSource: 'REPORT_SUBMISSION',
-    });
-  }
-
-  const threadMessages = await syncWbsChatMessagesFromServer(
-    input.projectId,
-    input.wbsItem.id
-  );
-  const evidenceItems = threadMessages
-    .filter(
-      (m) =>
-        m.messageType === 'PHOTO' ||
-        m.messageType === 'VOICE_NOTE' ||
-        m.messageType === 'TEXT_COMMENT'
-    )
-    .map((m) => ({
-      id: m.id,
-      type:
-        m.messageType === 'PHOTO'
-          ? ('PHOTO' as const)
-          : m.messageType === 'VOICE_NOTE'
-          ? ('VOICE_NOTE' as const)
-          : ('TEXT_NOTE' as const),
-      mediaUrl: m.mediaUri,
-      caption: m.caption || m.textContent,
-      gpsCoordinates:
-        typeof m.latitude === 'number' && typeof m.longitude === 'number'
-          ? { latitude: m.latitude, longitude: m.longitude }
-          : undefined,
-      capturedAt: createdAt,
-    }));
-
-  const payload = {
-    localReportId,
-    projectId: input.projectId,
-    wbsItemId: input.wbsItem.id,
-    workdayDate,
-    summaryText: input.summaryText,
-    voiceNoteUrl: input.voiceNoteUri ?? null,
-    evidenceItems,
-    reportedQuantity: input.reportedQuantity,
-    unitOfMeasure: input.unitOfMeasure,
-    delaysOrBlockers: input.delaysOrBlockers || undefined,
-    isHoldPointClaimed: input.isHoldPointClaimed,
-    submissionGeotag: input.submissionGeotag ?? undefined,
+} | null> {
+  const db = await getDb();
+  const r = await db.getFirstAsync<MessageRow>('SELECT * FROM chat_messages WHERE client_message_id = ?', [
+    clientMessageId,
+  ]);
+  if (!r) return null;
+  return {
+    projectId: r.project_id,
+    wbsItemId: r.wbs_item_id,
+    body: {
+      clientMessageId,
+      messageType: r.message_type as 'TEXT_COMMENT' | 'PHOTO' | 'VOICE_NOTE',
+      ...(r.text_content ? { textContent: r.text_content } : {}),
+      ...(r.capture_id ? { captureId: r.capture_id } : {}),
+      ...(r.workday_report_id ? { workdayReportId: r.workday_report_id } : {}),
+      ...(r.report_query_id ? { reportQueryId: r.report_query_id } : {}),
+    },
   };
-
-  let syncStatus: 'SYNCED' | 'QUEUED_OFFLINE' | 'STAGED_UNVERIFIED' =
-    input.isVerifiedAccount === false ? 'STAGED_UNVERIFIED' : 'QUEUED_OFFLINE';
-
-  if (syncStatus !== 'STAGED_UNVERIFIED') {
-    try {
-      if (input.revalidateContext?.targetReportId) {
-        await revalidateWorkdayReport(
-          input.projectId,
-          input.revalidateContext.targetReportId,
-          {
-            reportQueryId: input.revalidateContext.reportQueryId,
-            summaryText: input.summaryText || undefined,
-            reportedQuantity: input.reportedQuantity,
-            unitOfMeasure: input.unitOfMeasure,
-            delaysOrBlockers: input.delaysOrBlockers || undefined,
-            isHoldPointClaimed: input.isHoldPointClaimed,
-            voiceNoteUrl: input.voiceNoteUri ?? null,
-            evidenceItems,
-            chatMessages: threadMessages.map((m) => ({
-              senderName: m.senderName,
-              senderRole: m.senderRole,
-              messageType: m.messageType,
-              textContent: m.textContent,
-              caption: m.caption,
-              chainageLabel: m.chainageLabel,
-              timestamp: m.timestamp,
-            })),
-            submissionGeotag: input.submissionGeotag ?? undefined,
-          }
-        );
-      } else {
-        await submitWorkdayReport(input.projectId, payload);
-      }
-      syncStatus = 'SYNCED';
-      await flushTelemetryQueue(input.projectId);
-    } catch {
-      syncStatus = 'QUEUED_OFFLINE';
-    }
-  }
-
-  const stagedRecord: StagedWorkdayReportRecord = {
-    id: localReportId,
-    wbsItemId: input.wbsItem.id,
-    wbsCode: input.wbsItem.wbsCode,
-    wbsDescription: input.wbsItem.description,
-    workdayDate,
-    summaryText: input.summaryText,
-    reportedQuantity: input.reportedQuantity,
-    unit: input.unitOfMeasure,
-    status: syncStatus,
-    createdAt,
-  };
-  memStagedReports = [stagedRecord, ...memStagedReports];
-
-  const db = await getDatabase();
-  if (db) {
-    try {
-      await db.runAsync(
-        `INSERT INTO staged_workday_reports
-         (id, wbs_item_id, workday_date, summary_text, reported_quantity, unit, status, evidence_json, voice_note_uri, submission_geotag_json, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          localReportId,
-          input.wbsItem.id,
-          workdayDate,
-          input.summaryText,
-          input.reportedQuantity,
-          input.unitOfMeasure,
-          syncStatus,
-          JSON.stringify(evidenceItems),
-          input.voiceNoteUri ?? null,
-          input.submissionGeotag ? JSON.stringify(input.submissionGeotag) : null,
-          createdAt,
-        ]
-      );
-
-      await db.runAsync(
-        `UPDATE wbs_items SET is_reported_today = 1 WHERE id = ?`,
-        [input.wbsItem.id]
-      );
-    } catch (err) {
-      console.warn('SQLite error saving workday report:', err);
-    }
-  }
-
-  const gpsLabel = input.submissionGeotag
-    ? `GPS ${input.submissionGeotag.latitude.toFixed(4)}, ${input.submissionGeotag.longitude.toFixed(4)}`
-    : 'GPS pending';
-
-  await sendWbsChatMessage({
-    projectId: input.projectId,
-    skipServerMirror: true,
-    wbsItemId: input.wbsItem.id,
-    senderName: input.senderName,
-    senderRole: 'ENGINEER',
-    messageType: 'AI_CONFIRMATION',
-    textContent: input.revalidateContext?.targetReportId
-      ? `Report Re-submitted for AI Re-parse: ${input.reportedQuantity} ${input.unitOfMeasure} · ${input.summaryText}`
-      : `Daily Report Signed Off: ${input.reportedQuantity} ${input.unitOfMeasure} · ${input.summaryText}`,
-    latitude: input.submissionGeotag?.latitude,
-    longitude: input.submissionGeotag?.longitude,
-    chainageLabel: input.submissionGeotag?.chainageLabel || gpsLabel,
-    timestamp: 'Just now',
-  });
-
-  return { localReportId, syncStatus };
 }
 
-/**
- * Queries real staged/queued workday reports from SQLite for BacklogReviewModal.
- */
-export async function getStagedBacklogReports(): Promise<
-  StagedWorkdayReportRecord[]
-> {
-  const db = await getDatabase();
-  if (db) {
-    try {
-      const rows = await db.getAllAsync<any>(
-        `SELECT r.*, w.wbs_code, w.description as wbs_description
-         FROM staged_workday_reports r
-         LEFT JOIN wbs_items w ON w.id = r.wbs_item_id
-         WHERE r.status IN ('STAGED_UNVERIFIED', 'QUEUED_OFFLINE')
-         ORDER BY r.created_at DESC`
-      );
-      return rows.map((r) => ({
-        id: r.id,
-        wbsItemId: r.wbs_item_id,
-        wbsCode: r.wbs_code ?? undefined,
-        wbsDescription: r.wbs_description ?? undefined,
-        workdayDate: r.workday_date,
-        summaryText: r.summary_text,
-        reportedQuantity: r.reported_quantity,
-        unit: r.unit,
-        status: r.status,
-        createdAt: r.created_at,
-      }));
-    } catch (err) {
-      console.warn('SQLite error loading staged backlog:', err);
-    }
-  }
-
-  return memStagedReports.filter(
-    (r) => r.status === 'STAGED_UNVERIFIED' || r.status === 'QUEUED_OFFLINE'
+export async function markMessageSent(clientMessageId: string, serverId: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE chat_messages SET server_id = ?, sync_status = 'SENT' WHERE client_message_id = ?`,
+    [serverId, clientMessageId]
   );
-}
-
-/**
- * Promotes selected STAGED_UNVERIFIED reports to QUEUED_OFFLINE and attempts immediate sync.
- */
-export async function promoteAndSyncBacklogReports(
-  reportIds: string[],
-  projectId: string
-): Promise<{ syncedCount: number; queuedCount: number }> {
-  if (reportIds.length === 0) return { syncedCount: 0, queuedCount: 0 };
-
-  let syncedCount = 0;
-  let queuedCount = 0;
-  const db = await getDatabase();
-
-  if (db) {
-    for (const id of reportIds) {
-      const row = await db.getFirstAsync<any>(
-        `SELECT * FROM staged_workday_reports WHERE id = ?`,
-        [id]
-      );
-      if (!row) continue;
-
-      try {
-        await submitWorkdayReport(projectId, {
-          localReportId: row.id,
-          projectId,
-          wbsItemId: row.wbs_item_id,
-          workdayDate: row.workday_date,
-          summaryText: row.summary_text,
-          voiceNoteUrl: row.voice_note_uri ?? null,
-          evidenceItems: row.evidence_json ? JSON.parse(row.evidence_json) : [],
-          reportedQuantity: row.reported_quantity,
-          unitOfMeasure: row.unit,
-          submissionGeotag: row.submission_geotag_json
-            ? JSON.parse(row.submission_geotag_json)
-            : undefined,
-        });
-        await db.runAsync(
-          `UPDATE staged_workday_reports SET status = 'SYNCED' WHERE id = ?`,
-          [id]
-        );
-        syncedCount += 1;
-      } catch {
-        await db.runAsync(
-          `UPDATE staged_workday_reports SET status = 'QUEUED_OFFLINE' WHERE id = ?`,
-          [id]
-        );
-        queuedCount += 1;
-      }
-    }
-  }
-
-  return { syncedCount, queuedCount };
 }

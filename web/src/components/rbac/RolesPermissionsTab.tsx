@@ -301,7 +301,7 @@ export function RolesPermissionsTab() {
               <span className="text-[11px] text-slate-500">
                 {role.userCount ?? 0} assigned user
                 {(role.userCount ?? 0) === 1 ? '' : 's'}
-                {role.requiresIdentityAssurance ? ' · ID/Liveness Req.' : ''}
+                {role.requiresIdentityAssurance ? ' · ID review required' : ''}
               </span>
 
               <div className="flex items-center gap-1.5">
@@ -502,7 +502,7 @@ export function RolesPermissionsTab() {
                   className="h-4 w-4 rounded-sm border-slate-300 text-brand-primary"
                 />
                 <span className="font-semibold text-slate-800">
-                  Require Mobile Government ID, 3D Liveness Selfie &amp; License Onboarding Review
+                  Require photo ID, guided selfie set &amp; license review on mobile
                 </span>
               </label>
             )}

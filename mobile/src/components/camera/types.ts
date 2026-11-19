@@ -31,10 +31,10 @@ export interface ImageQualityAssessment {
   isPlaceholderAssessment: boolean;
 }
 
+/** A photo on disk. Never base64: the file is moved into app storage and uploaded from disk. */
 export interface CameraCaptureResult {
   uri: string;
-  base64: string | null;
-  dataUri: string;
+  byteSize: number;
   width: number;
   height: number;
   orientation: DeviceOrientation;

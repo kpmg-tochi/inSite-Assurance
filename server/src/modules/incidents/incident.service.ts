@@ -9,6 +9,7 @@ import {
 } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { loadBoqItemInProject } from '../../utils/ownership';
+import { assertProjectObjectKey } from '../../integrations/storage.service';
 
 /** Display name used wherever a confidential reporter's identity would otherwise appear. */
 export const PROTECTED_DISCLOSURE_LABEL = 'Protected disclosure';
@@ -69,6 +70,26 @@ export async function createIncidentReport(
   input: CreateIncidentReportRequest
 ) {
   const projectId = fieldAgent.projectId;
+
+  // Idempotent on clientIncidentId: a retried submission returns the original incident.
+  const existing = await prisma.incidentReport.findUnique({
+    where: { clientIncidentId: input.clientIncidentId },
+    include: INCIDENT_INCLUDE,
+  });
+  if (existing) {
+    if (existing.reporterSessionId !== fieldAgent.sessionId) {
+      throw new AppError('This incident ID is already in use', 409, 'INCIDENT_ID_CONFLICT');
+    }
+    return { incident: serializeIncident(existing, { fieldAgent }), created: false };
+  }
+
+  // Photos and voice notes are object keys issued for this project; never URLs, paths or data URIs.
+  for (const key of input.photoEvidenceUrls) {
+    assertProjectObjectKey(key, fieldAgent.tenantId, projectId);
+  }
+  if (input.voiceNoteUrl) {
+    assertProjectObjectKey(input.voiceNoteUrl, fieldAgent.tenantId, projectId);
+  }
   if (input.wbsItemId) {
     await loadBoqItemInProject(prisma, projectId, input.wbsItemId);
   }
@@ -79,6 +100,7 @@ export async function createIncidentReport(
   const incident = await prisma.$transaction(async (tx) => {
     const created = await tx.incidentReport.create({
       data: {
+        clientIncidentId: input.clientIncidentId,
         projectId,
         reporterSessionId: fieldAgent.sessionId,
         wbsItemId: input.wbsItemId ?? null,
@@ -116,9 +138,18 @@ export async function createIncidentReport(
     });
 
     return created;
+  }).catch(async (error) => {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const replay = await prisma.incidentReport.findUnique({
+        where: { clientIncidentId: input.clientIncidentId },
+        include: INCIDENT_INCLUDE,
+      });
+      if (replay && replay.reporterSessionId === fieldAgent.sessionId) return replay;
+    }
+    throw error;
   });
 
-  return serializeIncident(incident, { fieldAgent });
+  return { incident: serializeIncident(incident, { fieldAgent }), created: true };
 }
 
 export async function listProjectIncidents(params: {

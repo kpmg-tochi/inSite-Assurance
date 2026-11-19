@@ -103,7 +103,7 @@ function line(overrides: Partial<ReconciliationLineInput> = {}): ReconciliationL
 function ev(overrides: Partial<ProvidedEvidenceItem> = {}): ProvidedEvidenceItem {
   return {
     id: `ev-${Math.random().toString(36).slice(2)}`,
-    source: 'FIELD_EVIDENCE_LOG',
+    source: 'WORKDAY_REPORT',
     boqItemId: 'boq-1',
     reporterName: 'Agent',
     reporterRoleName: 'Resident CoW',
@@ -114,14 +114,17 @@ function ev(overrides: Partial<ProvidedEvidenceItem> = {}): ProvidedEvidenceItem
     latitude: 0,
     longitude: 0,
     gpsAccuracyMeters: 5,
-    verificationBadgeText: 'Inside geofence',
+    workdayDate: '2026-10-15',
+    revisionNumber: 1,
     summary: 'Poured concrete',
     quantities: [{ materialOrWork: 'Concrete poured', quantity: 200, unit: 'm3' }],
     blockers: [],
+    isHoldPointClaimed: false,
     capturedAt: IN_PERIOD,
     confirmedAt: IN_PERIOD,
     integrityPassed: true,
     integrityFlags: [],
+    signatureVerified: true,
     media: [],
     ...overrides,
   };

@@ -1,29 +1,27 @@
 import { z } from 'zod';
 import {
+  CaptureMediaTypeEnum,
   EvidenceLogStatusEnum,
   FieldPersonaTypeEnum,
   MediaTypeEnum,
+  TranscriptionStatusEnum,
 } from '../enums';
-import { GeofenceVerificationResultSchema } from './geofence.schema';
 
 /**
- * Extracted Material / Work Quantity Item (Section 4.B Mandatory Confirmation Bubble)
- * e.g., { materialOrWork: "bags of cement", quantity: 40, unit: "bags", isWorkProgress: false }
+ * Extracted material / work quantity (used by the optional summary assist).
+ * e.g. { materialOrWork: "bags of cement", quantity: 40, unit: "bags" }
  */
 export const ExtractedQuantityItemSchema = z.object({
-  materialOrWork: z.string().min(1).max(160), // e.g., "Drainage culvert cast", "Cement used"
+  materialOrWork: z.string().min(1).max(160),
   quantity: z.number().nonnegative(),
-  unit: z.string().min(1).max(32),            // e.g., "m", "bags", "trips", "m3", "tons"
+  unit: z.string().min(1).max(32),
   boqWbsCodeHint: z.string().nullable().optional(),
 });
 export type ExtractedQuantityItem = z.infer<typeof ExtractedQuantityItemSchema>;
 
-/**
- * Azure OpenAI (Whisper + GPT-4o) Field Voice/Text Extraction Schema
- * Used directly with Structured Outputs to populate the Mobile Mandatory Confirmation Bubble.
- */
+/** Structured output of the AI extraction model (summary assist only; never stored as evidence). */
 export const AiFieldNoteExtractionSchema = z.object({
-  normalizedSummary: z.string(), // e.g., "Cast 12m of drainage culvert. 40 bags of cement used. Blocker: Granite delivery delayed."
+  normalizedSummary: z.string(),
   extractedQuantities: z.array(ExtractedQuantityItemSchema),
   siteBlockers: z.array(z.string()),
   matchedBoqWbsCodes: z.array(z.string()),
@@ -31,89 +29,102 @@ export const AiFieldNoteExtractionSchema = z.object({
 });
 export type AiFieldNoteExtraction = z.infer<typeof AiFieldNoteExtractionSchema>;
 
-/**
- * Hardware Capture Provenance & Sensor Metadata (Section 4.B & Section 7.4)
- */
-export const CaptureHardwareMetadataSchema = z.object({
-  clientCaptureId: z.string().uuid(), // Deterministic offline outbox UUID
+const Sha256HexSchema = z
+  .string()
+  .regex(/^[0-9a-fA-F]{64}$/, 'sha256 must be 64 hex characters');
+
+/** Base64 Ed25519 signature over the canonical string (see utils/deviceSignature). */
+export const DeviceSignatureSchema = z.string().min(64).max(200);
+
+/** GPS fix at the moment of capture. `null` on the request means the device had no fix. */
+export const CaptureLocationSchema = z.object({
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
+  accuracyMeters: z.number().nonnegative().nullable(),
   altitudeMeters: z.number().nullable().optional(),
-  gpsAccuracyMeters: z.number().nonnegative(),
+});
+export type CaptureLocation = z.infer<typeof CaptureLocationSchema>;
+
+/**
+ * POST /projects/:projectId/captures
+ * Registers one uploaded photo, voice note or document. Idempotent on `clientCaptureId`.
+ */
+export const RegisterCaptureRequestSchema = z.object({
+  clientCaptureId: z.string().uuid(),
+  wbsItemId: z.string().uuid().nullable().optional(),
+  mediaType: CaptureMediaTypeEnum,
+  objectKey: z.string().min(3).max(512),
+  mimeType: z.string().min(3).max(80),
+  byteSize: z.number().int().positive(),
+  /** Device-computed hash of the file bytes. The server recomputes it and flags a mismatch. */
+  sha256: Sha256HexSchema,
+  durationSeconds: z.number().nonnegative().nullable().optional(),
+  capturedAt: z.string().datetime(),
+  location: CaptureLocationSchema.nullable(),
   isMockLocation: z.boolean().default(false),
+  caption: z.string().max(500).nullable().optional(),
   devicePitchDeg: z.number().nullable().optional(),
   deviceRollDeg: z.number().nullable().optional(),
   deviceAzimuthDeg: z.number().nullable().optional(),
-  capturedAtDevice: z.string().datetime(),
-  deviceSignatureHash: z.string().min(16).max(256), // SHA-256 of (clientCaptureId + coords + timestamp + mediaHashes)
+  signature: DeviceSignatureSchema.nullable().optional(),
 });
-export type CaptureHardwareMetadata = z.infer<typeof CaptureHardwareMetadataSchema>;
+export type RegisterCaptureRequest = z.infer<typeof RegisterCaptureRequestSchema>;
 
-/**
- * Media Attachment Item in a Field Capture Bundle
- */
-export const EvidenceMediaAttachmentInputSchema = z.object({
-  mediaType: MediaTypeEnum,
-  objectKey: z.string().min(3),
-  /** Ignored by the server: media is read by objectKey from the bucket. */
-  publicOrSignedUrl: z.string().url().optional(),
-  mimeType: z.string().min(3),
-  byteSize: z.number().int().positive(),
-  sha256FileHash: z.string().min(16).max(128),
-  durationSeconds: z.number().nonnegative().nullable().optional(),
-});
-export type EvidenceMediaAttachmentInput = z.infer<
-  typeof EvidenceMediaAttachmentInputSchema
->;
-
-/**
- * Step 1 (Online Sync): Submit synced media + hardware metadata for AI Extraction & Integrity Verification
- */
-export const SubmitEvidenceForExtractionRequestSchema = z.object({
-  boqItemId: z.string().uuid().nullable().optional(),
-  rawTextNote: z.string().max(2000).nullable().optional(),
-  offlineManualQuantities: z.array(ExtractedQuantityItemSchema).default([]),
-  hardwareMetadata: CaptureHardwareMetadataSchema,
-  mediaAttachments: z.array(EvidenceMediaAttachmentInputSchema).min(1),
-});
-export type SubmitEvidenceForExtractionRequest = z.infer<
-  typeof SubmitEvidenceForExtractionRequestSchema
->;
-
-/**
- * Step 2: Mandatory Human Confirmation Bubble Payload returned to the Mobile App
- */
-export const EvidenceConfirmationDraftResponseSchema = z.object({
-  evidenceLogId: z.string().uuid(),
+/** One capture as returned to field devices and the web portal. */
+export const CaptureDtoSchema = z.object({
+  id: z.string().uuid(),
   clientCaptureId: z.string().uuid(),
+  projectId: z.string().uuid(),
+  wbsItemId: z.string().uuid().nullable(),
+  workdayReportId: z.string().uuid().nullable(),
+  fieldSessionId: z.string().uuid(),
   status: EvidenceLogStatusEnum,
-  reporterRoleId: z.string().uuid(),
+  mediaType: MediaTypeEnum,
+  objectKey: z.string(),
+  mimeType: z.string(),
+  byteSize: z.number().int(),
+  durationSeconds: z.number().nullable(),
+  caption: z.string().nullable(),
+  capturedAt: z.string().datetime(),
+  registeredAt: z.string().datetime(),
+  locationAvailable: z.boolean(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
+  gpsAccuracyMeters: z.number().nullable(),
+  isMockLocation: z.boolean(),
+  /** null when there was no fix or the geofence could not be evaluated. */
+  isWithinGeofence: z.boolean().nullable(),
+  chainageLabel: z.string().nullable(),
+  distanceFromSiteMeters: z.number().nullable(),
+  /** true = valid device signature, false = invalid, null = unsigned or no key registered. */
+  signatureVerified: z.boolean().nullable(),
+  serverSha256: z.string().nullable(),
+  perceptualHash: z.string().nullable(),
+  integrityPassed: z.boolean(),
+  integrityFlags: z.array(z.string()),
+  transcriptionStatus: TranscriptionStatusEnum,
+  transcript: z.string().nullable(),
   reporterRoleName: z.string(),
   fieldPersonaType: FieldPersonaTypeEnum,
-  assuranceWeight: z.number(),
-  geofenceVerification: GeofenceVerificationResultSchema,
-  integrityPassed: z.boolean(),
-  integrityFlags: z.array(z.string()), // e.g., ["DUPLICATE_PHOTO_PHASH", "MOCK_GPS_DETECTED"]
-  rawWhisperTranscript: z.string().nullable(),
-  proposedExtraction: AiFieldNoteExtractionSchema,
-  capturedAtDevice: z.string().datetime(),
 });
-export type EvidenceConfirmationDraftResponse = z.infer<
-  typeof EvidenceConfirmationDraftResponseSchema
->;
+export type CaptureDto = z.infer<typeof CaptureDtoSchema>;
 
-/**
- * Step 3: Field Agent taps [✅ Confirm & Sign Log] or [✏️ Edit Quantities]
- */
-export const ConfirmEvidenceLogRequestSchema = z.object({
-  confirmedBoqItemId: z.string().uuid().nullable().optional(),
-  confirmedSummary: z.string().min(2).max(2000),
-  confirmedQuantities: z.array(ExtractedQuantityItemSchema),
-  confirmedSiteBlockers: z.array(z.string()).default([]),
-  wasEditedByAgent: z.boolean().default(false),
-  confirmationSignatureHash: z.string().min(8).max(256),
+/** A report position less accurate than this gets the LOW_GPS_ACCURACY badge (not a failure). */
+export const REPORT_LOW_GPS_ACCURACY_METERS = 50;
+
+/** Integrity flags that make a capture unusable as evidence. */
+export const CRITICAL_CAPTURE_FLAGS = [
+  'MOCK_GPS_LOCATION_DETECTED',
+  'DUPLICATE_PHOTO_SHA256_MATCH',
+  'RECYCLED_PHOTO_PHASH_SIMILARITY',
+  'SIGNATURE_INVALID',
+  'CLIENT_HASH_MISMATCH',
+] as const;
+
+/** GET /projects/:projectId/evidence — captures with their WBS item and reporter. */
+export const CaptureListItemDtoSchema = CaptureDtoSchema.extend({
+  wbsCode: z.string().nullable(),
+  wbsDescription: z.string().nullable(),
+  reporterName: z.string(),
 });
-export type ConfirmEvidenceLogRequest = z.infer<
-  typeof ConfirmEvidenceLogRequestSchema
->;
-
+export type CaptureListItemDto = z.infer<typeof CaptureListItemDtoSchema>;

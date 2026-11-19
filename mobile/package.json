@@ -4,24 +4,28 @@
   "private": true,
   "main": "index.js",
   "scripts": {
+    "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test src/security/signing.test.ts src/storage/outbox/outboxPolicy.test.ts src/storage/reportPayload.test.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
     "@insite/shared": "^0.1.0",
+    "@noble/ed25519": "^3.2.0",
+    "@noble/hashes": "^1.8.0",
     "@react-navigation/native": "^7.5.2",
     "@react-navigation/native-stack": "^7.21.1",
-    "@react-navigation/stack": "^7.12.2",
     "@tanstack/react-query": "^5.107.1",
     "expo": "~58.0.25",
     "expo-audio": "~58.0.12",
     "expo-camera": "^58.0.14",
     "expo-constants": "~58.0.16",
     "expo-crypto": "~58.0.8",
-    "expo-image-picker": "~58.0.10",
+    "expo-dev-client": "~58.0.21",
+    "expo-file-system": "~58.0.14",
     "expo-linear-gradient": "~58.0.4",
     "expo-location": "~58.0.22",
     "expo-network": "~58.0.5",
@@ -34,15 +38,11 @@
     "react-native-safe-area-context": "~5.11.1",
     "react-native-screens": "~4.30.1",
     "react-native-svg": "15.16.0",
-    "react-native-toast-message": "^2.5.2",
-    "react-native-vision-camera": "^5.2.4",
-    "react-native-vision-camera-face-detector": "^2.1.0",
-    "react-native-worklets-core": "^1.6.3"
+    "react-native-toast-message": "^2.5.2"
   },
   "devDependencies": {
     "@babel/plugin-transform-shorthand-properties": "^8.0.1",
     "@types/react": "~19.3.0",
-    "@types/react-native": "^0.72.8",
     "react-native-svg-transformer": "^1.5.3",
     "typescript": "~6.0.3"
   }

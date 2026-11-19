@@ -1,425 +1,249 @@
+import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import {
-  ConfirmEvidenceLogRequest,
-  ProjectGeofenceSchema,
-  SubmitEvidenceForExtractionRequest,
-  verifyPointAgainstGeofence,
+  CaptureDto,
+  CaptureListItemDto,
+  canonicalCaptureString,
+  RegisterCaptureRequest,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
-import { FieldAgentJwtPayload, WebJwtPayload } from '../../middleware/auth.middleware';
-import { whisperService } from '../../integrations/whisper.service';
-import { assertProjectObjectKey, storageService } from '../../integrations/storage.service';
-import { azureOpenAiService } from '../../integrations/azure-openai.service';
-import { screenCaptureIntegrity } from '../../utils/integrity';
+import { FieldAgentJwtPayload } from '../../middleware/auth.middleware';
+import { assertProjectObjectKey, MEDIA_UPLOAD_POLICY, storageService } from '../../integrations/storage.service';
+import { computeDifferenceHash, screenCapture } from '../../utils/integrity';
+import { evaluateGeofence } from '../../utils/geofenceEvaluation';
+import { verifyDeviceSignature } from '../../utils/deviceSignature';
 import { recordAuditEvent } from '../audit/audit.service';
 import { loadBoqItemInProject } from '../../utils/ownership';
-import { canSeeFieldSessionDetail, serializeEvidenceLog } from '../../utils/serializers';
+import { serializeCapture } from '../../utils/serializers';
 
-export async function listProjectEvidenceTimeline(projectId: string, webUser?: WebJwtPayload) {
+const CAPTURE_INCLUDE = { mediaAttachments: true } satisfies Prisma.FieldEvidenceLogInclude;
+
+/** GET /projects/:projectId/evidence — every registered capture, newest first. */
+export async function listProjectCaptures(
+  projectId: string,
+  filters: { wbsItemId?: string; workdayReportId?: string; limit?: number } = {}
+): Promise<CaptureListItemDto[]> {
   const logs = await prisma.fieldEvidenceLog.findMany({
-    where: { projectId },
-    orderBy: { capturedAtDevice: 'desc' },
-    include: {
-      boqItem: {
-        select: {
-          id: true,
-          wbsCode: true,
-          description: true,
-          unit: true,
-          isHoldPoint: true,
-        },
-      },
-      fieldSession: {
-        select: {
-          id: true,
-          agentFullName: true,
-          agentPhoneNumber: true,
-          roleId: true,
-          roleNameSnapshot: true,
-          fieldPersonaType: true,
-          assuranceWeight: true,
-          deviceModel: true,
-        },
-      },
-      mediaAttachments: true,
-    },
-  });
-
-  const detailedSessions = canSeeFieldSessionDetail(webUser);
-  return logs.map((log) => serializeEvidenceLog(log, { detailedSessions }));
-}
-
-export async function submitEvidenceForAiExtraction(params: {
-  projectId: string;
-  fieldAgent: FieldAgentJwtPayload;
-  input: SubmitEvidenceForExtractionRequest;
-}) {
-  if (params.fieldAgent.projectId !== params.projectId) {
-    throw new AppError(
-      'Field Agent session is bound to a different project',
-      403,
-      'PROJECT_MISMATCH'
-    );
-  }
-
-  const project = await prisma.project.findUnique({
-    where: { id: params.projectId },
-    include: {
-      boqItems: {
-        select: { id: true, wbsCode: true, description: true, unit: true },
-      },
-    },
-  });
-
-  if (!project) {
-    throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
-  }
-  for (const media of params.input.mediaAttachments) {
-    assertProjectObjectKey(media.objectKey, project.tenantId, project.id);
-  }
-  if (params.input.boqItemId) {
-    await loadBoqItemInProject(prisma, project.id, params.input.boqItemId);
-  }
-
-  // 1. Run Turf.js Radial or Linear Corridor Chainage Verification
-  const parsedGeofence = ProjectGeofenceSchema.parse(project.geofenceGeoJson);
-  const geofenceResult = verifyPointAgainstGeofence(
-    {
-      latitude: params.input.hardwareMetadata.latitude,
-      longitude: params.input.hardwareMetadata.longitude,
-    },
-    parsedGeofence
-  );
-
-  // 2. Run Hardware & Media Integrity Screening (Mock GPS, SHA-256 & 64-bit pHash)
-  const integrityResult = await screenCaptureIntegrity({
-    projectId: params.projectId,
-    hardwareMetadata: params.input.hardwareMetadata,
-    geofenceResult,
-    mediaAttachments: params.input.mediaAttachments,
-  });
-
-  // 2b. Check Contractor Identity Assurance Gate
-  const liveSession = await prisma.fieldAgentSession.findUnique({
-    where: { id: params.fieldAgent.sessionId },
-  });
-
-  if (liveSession && liveSession.assuranceStatus !== 'APPROVED') {
-    // Stage report locally without incurring Whisper/Vision/GPT-4o API costs
-    const stagedLog = await prisma.$transaction(async (tx) => {
-      const created = await tx.fieldEvidenceLog.create({
-        data: {
-          projectId: params.projectId,
-          boqItemId: params.input.boqItemId ?? null,
-          fieldSessionId: params.fieldAgent.sessionId,
-          clientCaptureId: params.input.hardwareMetadata.clientCaptureId,
-          reporterRoleId: params.fieldAgent.roleId,
-          reporterRoleName: params.fieldAgent.roleName,
-          fieldPersonaType: params.fieldAgent.fieldPersonaType,
-          assuranceWeight: params.fieldAgent.assuranceWeight,
-          status: 'QUEUED_OFFLINE',
-          latitude: params.input.hardwareMetadata.latitude,
-          longitude: params.input.hardwareMetadata.longitude,
-          altitudeMeters: params.input.hardwareMetadata.altitudeMeters ?? null,
-          gpsAccuracyMeters: params.input.hardwareMetadata.gpsAccuracyMeters,
-          isMockLocation: params.input.hardwareMetadata.isMockLocation,
-          isWithinGeofence: geofenceResult.isWithinGeofence,
-          chainageKm: geofenceResult.chainageKm,
-          chainageLabel: geofenceResult.chainageFormatted,
-          corridorOffsetMeters: geofenceResult.corridorOffsetMeters,
-          verificationBadgeText: geofenceResult.verificationBadgeText,
-          devicePitchDeg: params.input.hardwareMetadata.devicePitchDeg ?? null,
-          deviceRollDeg: params.input.hardwareMetadata.deviceRollDeg ?? null,
-          deviceAzimuthDeg: params.input.hardwareMetadata.deviceAzimuthDeg ?? null,
-          deviceSignatureHash: params.input.hardwareMetadata.deviceSignatureHash,
-          integrityPassed: integrityResult.integrityPassed,
-          integrityFlags:
-            integrityResult.integrityFlags as unknown as Prisma.InputJsonValue,
-          rawTextNote: params.input.rawTextNote ?? null,
-          rawWhisperTranscript: null,
-          confirmedSummary:
-            params.input.rawTextNote ??
-            'Queued unverified contractor report (Awaiting verification approval)',
-          confirmedQuantities:
-            (params.input.offlineManualQuantities ??
-              []) as unknown as Prisma.InputJsonValue,
-          siteBlockers: [] as unknown as Prisma.InputJsonValue,
-          visionObservationSummary: null,
-          capturedAtDevice: new Date(
-            params.input.hardwareMetadata.capturedAtDevice
-          ),
-        },
-      });
-
-      for (const media of params.input.mediaAttachments) {
-        await tx.evidenceMedia.create({
-          data: {
-            evidenceLogId: created.id,
-            mediaType: media.mediaType,
-            objectKey: media.objectKey,
-            fileUrl: null,
-            mimeType: media.mimeType,
-            byteSize: media.byteSize,
-            sha256FileHash: media.sha256FileHash,
-            perceptualHash:
-              integrityResult.computedPerceptualHashes[media.objectKey] ?? null,
-            durationSeconds: media.durationSeconds ?? null,
-          },
-        });
-      }
-
-      return created;
-    });
-
-    return {
-      evidenceLogId: stagedLog.id,
-      clientCaptureId: stagedLog.clientCaptureId,
-      status: stagedLog.status,
-      reporterRoleId: stagedLog.reporterRoleId ?? params.fieldAgent.roleId,
-      reporterRoleName: stagedLog.reporterRoleName,
-      fieldPersonaType: stagedLog.fieldPersonaType,
-      assuranceWeight: stagedLog.assuranceWeight,
-      integrityPassed: integrityResult.integrityPassed,
-      integrityFlags: integrityResult.integrityFlags,
-      capturedAtDevice: stagedLog.capturedAtDevice.toISOString(),
-      isUnverifiedContractorQueued: true,
-      proposedExtraction: {
-        normalizedSummary:
-          params.input.rawTextNote ??
-          'Submission queued pending contractor verification approval.',
-        extractedQuantities: params.input.offlineManualQuantities ?? [],
-        siteBlockers: [],
-        matchedBoqWbsCodes: [],
-        visionObservationSummary: null,
-      },
-      geofenceResult,
-      integrityResult,
-    };
-  }
-
-  // 3. Standalone Whisper Transcription (if VOICE_NOTE attachment is present)
-  const voiceAttachment = params.input.mediaAttachments.find(
-    (m) => m.mediaType === 'VOICE_NOTE'
-  );
-  let rawWhisperTranscript: string | null = null;
-
-  if (voiceAttachment) {
-    const audioBuffer = await storageService
-      .getObjectBuffer(voiceAttachment.objectKey)
-      .catch(() => null);
-    const whisperRes = await whisperService.transcribeAudio({
-      audioBuffer: audioBuffer ?? undefined,
-      mimeType: voiceAttachment.mimeType,
-      fallbackContextHint: params.input.rawTextNote ?? undefined,
-    });
-    rawWhisperTranscript = whisperRes.transcript;
-  }
-
-  const combinedTextForExtraction = [
-    rawWhisperTranscript,
-    params.input.rawTextNote,
-  ]
-    .filter(Boolean)
-    .join(' | ');
-
-  // 4. Azure OpenAI GPT-4o Quantity & Blocker Extraction
-  const photoAttachment = params.input.mediaAttachments.find(
-    (m) => m.mediaType === 'SITE_PHOTO'
-  );
-
-  const proposedExtraction =
-    await azureOpenAiService.extractFieldNoteFromTranscript({
-      rawTranscriptOrNote: combinedTextForExtraction,
-      offlineManualQuantities: params.input.offlineManualQuantities,
-      // A short-lived URL we sign ourselves; never a client-supplied URL.
-      photoUrl:
-        photoAttachment && storageService.isCloudConfigured()
-          ? await storageService.getPresignedReadUrl(photoAttachment.objectKey, 300)
-          : undefined,
-      projectBoqItems: project.boqItems,
-    });
-
-  // Resolve BOQ item link if not explicitly passed
-  let resolvedBoqItemId = params.input.boqItemId ?? null;
-  if (!resolvedBoqItemId && proposedExtraction.matchedBoqWbsCodes.length > 0) {
-    const matched = project.boqItems.find(
-      (b) => b.wbsCode === proposedExtraction.matchedBoqWbsCodes[0]
-    );
-    if (matched) {
-      resolvedBoqItemId = matched.id;
-    }
-  }
-
-  const initialStatus = integrityResult.integrityPassed
-    ? 'AWAITING_CONFIRMATION'
-    : 'FLAGGED_INTEGRITY';
-
-  // 5. Persist Draft Log in PostgreSQL
-  const savedLog = await prisma.$transaction(async (tx) => {
-    const log = await tx.fieldEvidenceLog.create({
-      data: {
-        projectId: params.projectId,
-        boqItemId: resolvedBoqItemId,
-        fieldSessionId: params.fieldAgent.sessionId,
-        clientCaptureId: params.input.hardwareMetadata.clientCaptureId,
-        reporterRoleId: params.fieldAgent.roleId,
-        reporterRoleName: params.fieldAgent.roleName,
-        fieldPersonaType: params.fieldAgent.fieldPersonaType,
-        assuranceWeight: params.fieldAgent.assuranceWeight,
-        status: initialStatus,
-        latitude: params.input.hardwareMetadata.latitude,
-        longitude: params.input.hardwareMetadata.longitude,
-        altitudeMeters: params.input.hardwareMetadata.altitudeMeters ?? null,
-        gpsAccuracyMeters: params.input.hardwareMetadata.gpsAccuracyMeters,
-        isMockLocation: params.input.hardwareMetadata.isMockLocation,
-        isWithinGeofence: geofenceResult.isWithinGeofence,
-        chainageKm: geofenceResult.chainageKm,
-        chainageLabel: geofenceResult.chainageFormatted,
-        corridorOffsetMeters: geofenceResult.corridorOffsetMeters,
-        verificationBadgeText: geofenceResult.verificationBadgeText,
-        devicePitchDeg: params.input.hardwareMetadata.devicePitchDeg ?? null,
-        deviceRollDeg: params.input.hardwareMetadata.deviceRollDeg ?? null,
-        deviceAzimuthDeg: params.input.hardwareMetadata.deviceAzimuthDeg ?? null,
-        deviceSignatureHash: params.input.hardwareMetadata.deviceSignatureHash,
-        integrityPassed: integrityResult.integrityPassed,
-        integrityFlags:
-          integrityResult.integrityFlags as unknown as Prisma.InputJsonValue,
-        rawTextNote: params.input.rawTextNote ?? null,
-        rawWhisperTranscript,
-        confirmedSummary: proposedExtraction.normalizedSummary,
-        confirmedQuantities:
-          proposedExtraction.extractedQuantities as unknown as Prisma.InputJsonValue,
-        siteBlockers:
-          proposedExtraction.siteBlockers as unknown as Prisma.InputJsonValue,
-        visionObservationSummary:
-          proposedExtraction.visionObservationSummary ?? null,
-        capturedAtDevice: new Date(
-          params.input.hardwareMetadata.capturedAtDevice
-        ),
-      },
-    });
-
-    for (const media of params.input.mediaAttachments) {
-      await tx.evidenceMedia.create({
-        data: {
-          evidenceLogId: log.id,
-          mediaType: media.mediaType,
-          objectKey: media.objectKey,
-          fileUrl: null,
-          mimeType: media.mimeType,
-          byteSize: media.byteSize,
-          sha256FileHash: media.sha256FileHash,
-          perceptualHash:
-            integrityResult.computedPerceptualHashes[media.objectKey] ?? null,
-          durationSeconds: media.durationSeconds ?? null,
-        },
-      });
-    }
-
-    await recordAuditEvent(tx, {
-      projectId: params.projectId,
-      actorType: 'FIELD_AGENT',
-      actorId: params.fieldAgent.sessionId,
-      actorDisplayName: `${params.fieldAgent.agentFullName} (${params.fieldAgent.roleName})`,
-      action: integrityResult.integrityPassed
-        ? 'EVIDENCE_EXTRACTED'
-        : 'EVIDENCE_FLAGGED_INTEGRITY',
-      summaryText: integrityResult.integrityPassed
-        ? `Extracted field log draft (${geofenceResult.verificationBadgeText}); awaiting mandatory human confirmation.`
-        : `Field capture flagged by integrity screen: ${integrityResult.integrityFlags.join(', ')}`,
-      payload: {
-        evidenceLogId: log.id,
-        integrityPassed: integrityResult.integrityPassed,
-        integrityFlags: integrityResult.integrityFlags,
-        chainage: geofenceResult.chainageFormatted,
-      },
-    });
-
-    return log;
-  });
-
-  return {
-    evidenceLogId: savedLog.id,
-    clientCaptureId: savedLog.clientCaptureId,
-    status: savedLog.status,
-    reporterRoleId: savedLog.reporterRoleId ?? params.fieldAgent.roleId,
-    reporterRoleName: savedLog.reporterRoleName,
-    fieldPersonaType: savedLog.fieldPersonaType,
-    assuranceWeight: savedLog.assuranceWeight,
-    geofenceVerification: geofenceResult,
-    integrityPassed: integrityResult.integrityPassed,
-    integrityFlags: integrityResult.integrityFlags,
-    rawWhisperTranscript,
-    proposedExtraction,
-    capturedAtDevice: savedLog.capturedAtDevice.toISOString(),
-  };
-}
-
-export async function confirmEvidenceLogByAgent(params: {
-  projectId: string;
-  logId: string;
-  fieldAgent: FieldAgentJwtPayload;
-  input: ConfirmEvidenceLogRequest;
-}) {
-  const existing = await prisma.fieldEvidenceLog.findFirst({
     where: {
-      id: params.logId,
-      projectId: params.projectId,
-      fieldSessionId: params.fieldAgent.sessionId,
+      projectId,
+      ...(filters.wbsItemId ? { boqItemId: filters.wbsItemId } : {}),
+      ...(filters.workdayReportId ? { workdayReportId: filters.workdayReportId } : {}),
+    },
+    orderBy: { capturedAtDevice: 'desc' },
+    take: Math.min(filters.limit ?? 300, 1000),
+    include: {
+      ...CAPTURE_INCLUDE,
+      boqItem: { select: { wbsCode: true, description: true } },
+      fieldSession: { select: { agentFullName: true } },
     },
   });
-
-  if (!existing) {
-    throw new AppError('Evidence log not found', 404, 'EVIDENCE_LOG_NOT_FOUND');
-  }
-  if (params.input.confirmedBoqItemId) {
-    await loadBoqItemInProject(prisma, params.projectId, params.input.confirmedBoqItemId);
-  }
-
-  return prisma.$transaction(async (tx) => {
-    const nextStatus = existing.integrityPassed
-      ? 'CONFIRMED'
-      : 'FLAGGED_INTEGRITY';
-
-    const updated = await tx.fieldEvidenceLog.update({
-      where: { id: existing.id },
-      data: {
-        status: nextStatus,
-        ...(params.input.confirmedBoqItemId !== undefined
-          ? { boqItemId: params.input.confirmedBoqItemId }
-          : {}),
-        confirmedSummary: params.input.confirmedSummary,
-        confirmedQuantities:
-          params.input.confirmedQuantities as unknown as Prisma.InputJsonValue,
-        siteBlockers:
-          params.input.confirmedSiteBlockers as unknown as Prisma.InputJsonValue,
-        wasEditedByAgent: params.input.wasEditedByAgent,
-        confirmationSignatureHash: params.input.confirmationSignatureHash,
-        confirmedAt: new Date(),
-      },
-      include: {
-        boqItem: true,
-        mediaAttachments: true,
-      },
-    });
-
-    await recordAuditEvent(tx, {
-      projectId: params.projectId,
-      actorType: 'FIELD_AGENT',
-      actorId: params.fieldAgent.sessionId,
-      actorDisplayName: `${params.fieldAgent.agentFullName} (${params.fieldAgent.roleName})`,
-      action: 'EVIDENCE_CONFIRMED',
-      summaryText: `Field reporter confirmed & signed log (${updated.verificationBadgeText}): "${params.input.confirmedSummary}"`,
-      payload: {
-        evidenceLogId: updated.id,
-        wasEditedByAgent: params.input.wasEditedByAgent,
-        confirmedQuantities: params.input.confirmedQuantities,
-        confirmationSignatureHash: params.input.confirmationSignatureHash,
-      },
-    });
-
-    return serializeEvidenceLog(updated, { detailedSessions: false });
-  });
+  return logs.map((log) => ({
+    ...serializeCapture(log),
+    wbsCode: log.boqItem?.wbsCode ?? null,
+    wbsDescription: log.boqItem?.description ?? null,
+    reporterName: log.fieldSession.agentFullName,
+  }));
 }
 
+/** Captures the field agent registered, for device reconciliation after reinstall or sync. */
+export async function listOwnCaptures(fieldAgent: FieldAgentJwtPayload, since?: Date): Promise<CaptureDto[]> {
+  const logs = await prisma.fieldEvidenceLog.findMany({
+    where: {
+      projectId: fieldAgent.projectId,
+      fieldSessionId: fieldAgent.sessionId,
+      ...(since ? { syncedAtServer: { gte: since } } : {}),
+    },
+    orderBy: { capturedAtDevice: 'desc' },
+    take: 500,
+    include: CAPTURE_INCLUDE,
+  });
+  return logs.map(serializeCapture);
+}
+
+export type RegisterCaptureResult = { capture: CaptureDto; created: boolean };
+
+/**
+ * POST /projects/:projectId/captures
+ *
+ * Idempotent on `clientCaptureId`: a repeat from the same session returns the existing capture.
+ * The object must already be uploaded. The server hashes the stored bytes, computes the
+ * perceptual hash, verifies the device signature, evaluates the geofence and screens for
+ * duplicates within the tenant. No client assertion about hashes or geofence is stored as fact.
+ */
+export async function registerCapture(params: {
+  projectId: string;
+  fieldAgent: FieldAgentJwtPayload;
+  input: RegisterCaptureRequest;
+}): Promise<RegisterCaptureResult> {
+  const { input, fieldAgent, projectId } = params;
+
+  const existing = await findCaptureForReplay(input.clientCaptureId, fieldAgent.sessionId);
+  if (existing) return { capture: existing, created: false };
+
+  const [project, session] = await Promise.all([
+    prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+      select: { id: true, tenantId: true, geofenceGeoJson: true },
+    }),
+    prisma.fieldAgentSession.findUniqueOrThrow({
+      where: { id: fieldAgent.sessionId },
+      select: { devicePublicKey: true, devicePublicKeyAlg: true, devicePublicKeyId: true },
+    }),
+  ]);
+
+  assertProjectObjectKey(input.objectKey, project.tenantId, project.id);
+  const policy = MEDIA_UPLOAD_POLICY[input.mediaType];
+  const mimeType = input.mimeType.toLowerCase();
+  if (!policy.mimeTypes.includes(mimeType)) {
+    throw new AppError(`Content type ${input.mimeType} is not allowed for ${input.mediaType}`, 415, 'UNSUPPORTED_MEDIA_TYPE');
+  }
+  if (input.wbsItemId) {
+    await loadBoqItemInProject(prisma, projectId, input.wbsItemId);
+  }
+
+  const bytes = await storageService.getObjectBuffer(input.objectKey, policy.maxBytes);
+  if (!bytes) {
+    throw new AppError('Upload the file before registering the capture', 409, 'OBJECT_NOT_UPLOADED');
+  }
+  const serverSha256 = crypto.createHash('sha256').update(bytes).digest('hex');
+  const perceptualHash = input.mediaType === 'SITE_PHOTO' ? await computeDifferenceHash(bytes) : null;
+
+  const location = input.location;
+  const geofence = evaluateGeofence(project.geofenceGeoJson, location);
+
+  const signature = verifyDeviceSignature({
+    publicKey: session.devicePublicKey,
+    alg: session.devicePublicKeyAlg,
+    signature: input.signature,
+    message: canonicalCaptureString({
+      clientCaptureId: input.clientCaptureId,
+      projectId,
+      mediaType: input.mediaType,
+      sha256: input.sha256,
+      byteSize: input.byteSize,
+      capturedAt: input.capturedAt,
+      latitude: location?.latitude ?? null,
+      longitude: location?.longitude ?? null,
+      accuracyMeters: location?.accuracyMeters ?? null,
+      isMockLocation: input.isMockLocation,
+    }),
+  });
+
+  const capturedAt = new Date(input.capturedAt);
+  const screening = await screenCapture(prisma, {
+    tenantId: project.tenantId,
+    fieldSessionId: fieldAgent.sessionId,
+    mediaType: input.mediaType,
+    serverSha256,
+    clientSha256: input.sha256,
+    perceptualHash,
+    capturedAt,
+    locationAvailable: Boolean(location),
+    isMockLocation: input.isMockLocation,
+    gpsAccuracyMeters: location?.accuracyMeters ?? null,
+    geofenceFlag: geofence.flag,
+    signatureFlag: signature.flag,
+  });
+  if (perceptualHash === null && input.mediaType === 'SITE_PHOTO') {
+    screening.integrityFlags.push('IMAGE_NOT_DECODABLE');
+  }
+
+  try {
+    const created = await prisma.$transaction(async (tx) => {
+      const log = await tx.fieldEvidenceLog.create({
+        data: {
+          projectId,
+          boqItemId: input.wbsItemId ?? null,
+          fieldSessionId: fieldAgent.sessionId,
+          clientCaptureId: input.clientCaptureId,
+          reporterRoleId: fieldAgent.roleId,
+          reporterRoleName: fieldAgent.roleName,
+          fieldPersonaType: fieldAgent.fieldPersonaType,
+          assuranceWeight: fieldAgent.assuranceWeight,
+          status: screening.integrityPassed ? 'REGISTERED' : 'FLAGGED_INTEGRITY',
+          caption: input.caption ?? null,
+          locationAvailable: Boolean(location),
+          latitude: location?.latitude ?? null,
+          longitude: location?.longitude ?? null,
+          altitudeMeters: location?.altitudeMeters ?? null,
+          gpsAccuracyMeters: location?.accuracyMeters ?? null,
+          isMockLocation: input.isMockLocation,
+          isWithinGeofence: geofence.isWithinGeofence,
+          chainageKm: geofence.chainageKm,
+          chainageLabel: geofence.chainageLabel,
+          corridorOffsetMeters: geofence.corridorOffsetMeters,
+          distanceFromSiteMeters: geofence.distanceFromSiteMeters,
+          devicePitchDeg: input.devicePitchDeg ?? null,
+          deviceRollDeg: input.deviceRollDeg ?? null,
+          deviceAzimuthDeg: input.deviceAzimuthDeg ?? null,
+          deviceSignature: input.signature ?? null,
+          devicePublicKeyId: session.devicePublicKeyId,
+          signatureVerified: signature.verified,
+          clientSha256: input.sha256.toLowerCase(),
+          serverSha256,
+          integrityPassed: screening.integrityPassed,
+          integrityFlags: screening.integrityFlags as unknown as Prisma.InputJsonValue,
+          transcriptionStatus: input.mediaType === 'VOICE_NOTE' ? 'PENDING' : 'NOT_APPLICABLE',
+          capturedAtDevice: capturedAt,
+          mediaAttachments: {
+            create: {
+              tenantId: project.tenantId,
+              projectId,
+              mediaType: input.mediaType,
+              objectKey: input.objectKey,
+              mimeType,
+              byteSize: bytes.length,
+              sha256FileHash: serverSha256,
+              perceptualHash,
+              durationSeconds: input.durationSeconds ?? null,
+            },
+          },
+        },
+        include: CAPTURE_INCLUDE,
+      });
+
+      await recordAuditEvent(tx, {
+        projectId,
+        actorType: 'FIELD_AGENT',
+        actorId: fieldAgent.sessionId,
+        actorDisplayName: `${fieldAgent.agentFullName} (${fieldAgent.roleName})`,
+        action: screening.integrityPassed ? 'CAPTURE_REGISTERED' : 'CAPTURE_FLAGGED_INTEGRITY',
+        summaryText: screening.integrityPassed
+          ? `Registered ${input.mediaType.toLowerCase().replace('_', ' ')} capture.`
+          : `Capture flagged by integrity screening: ${screening.integrityFlags.join(', ')}`,
+        payload: {
+          captureId: log.id,
+          clientCaptureId: log.clientCaptureId,
+          mediaType: input.mediaType,
+          integrityFlags: screening.integrityFlags,
+          signatureVerified: signature.verified,
+          isWithinGeofence: geofence.isWithinGeofence,
+          duplicateOfCaptureIds: screening.duplicateOf.map((d) => d.evidenceLogId),
+        },
+      });
+
+      return log;
+    });
+    return { capture: serializeCapture(created), created: true };
+  } catch (error) {
+    // Concurrent retry of the same capture: return the row the other request created.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      const replay = await findCaptureForReplay(input.clientCaptureId, fieldAgent.sessionId);
+      if (replay) return { capture: replay, created: false };
+    }
+    throw error;
+  }
+}
+
+async function findCaptureForReplay(clientCaptureId: string, sessionId: string): Promise<CaptureDto | null> {
+  const existing = await prisma.fieldEvidenceLog.findUnique({
+    where: { clientCaptureId },
+    include: CAPTURE_INCLUDE,
+  });
+  if (!existing) return null;
+  if (existing.fieldSessionId !== sessionId) {
+    throw new AppError('This capture ID is already in use', 409, 'CAPTURE_ID_CONFLICT');
+  }
+  return serializeCapture(existing);
+}

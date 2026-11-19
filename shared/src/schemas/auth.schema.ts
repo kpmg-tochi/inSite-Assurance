@@ -97,38 +97,38 @@ export const JoinProjectMobileRequestSchema = z.object({
   deviceId: z.string().min(4).max(128),
   deviceModel: z.string().max(128).optional(),
   deviceOs: z.string().max(64).optional(),
-  devicePublicKeyOrSecretHash: z.string().max(256).optional(),
+  /** Base64 raw Ed25519 public key (32 bytes) of the per-install signing key. */
+  devicePublicKey: z.string().min(40).max(64).optional(),
+  devicePublicKeyAlg: z.literal("ED25519").optional(),
 
-  // Assurance Onboarding Fields (Driven by Role.requiresIdentityAssurance).
-  // idDocumentUrl, selfieImageUrl and livenessPassed are ignored by the server: identity
-  // evidence arrives only through POST /auth/assurance-verification.
+  // Assurance onboarding fields (driven by Role.requiresIdentityAssurance). Identity images
+  // arrive only through POST /auth/assurance-verification.
   corenLicenseNumber: z.string().max(50).optional(),
   idDocumentType: z.string().max(120).optional(),
-  idDocumentUrl: z.string().max(500).optional(),
-  selfieImageUrl: z.string().max(500).optional(),
-  livenessPassed: z.boolean().optional(),
   experienceSummary: z.string().max(1000).optional(),
 });
 
-export const LivenessPoseFrameSchema = z.object({
-  yawDeg: z.number(),
-  eyeOpenProb: z.number().min(0).max(1).optional(),
-  capturedAt: z.string().datetime(),
+/**
+ * POST /auth/device-key
+ * Registers the per-install signing key for a session that has none yet (one-time).
+ */
+export const RegisterDeviceKeyRequestSchema = z.object({
+  devicePublicKey: z.string().min(40).max(64),
+  devicePublicKeyAlg: z.literal("ED25519"),
 });
+export type RegisterDeviceKeyRequest = z.infer<typeof RegisterDeviceKeyRequestSchema>;
 
-export const LivenessVerificationSchema = z.object({
-  isLive: z.boolean(),
-  detectorEngine: z
-    .enum(["MLKIT_ON_DEVICE", "GUIDED_CAPTURE"])
-    .default("MLKIT_ON_DEVICE"),
-  poses: z.object({
-    front: LivenessPoseFrameSchema,
-    left: LivenessPoseFrameSchema,
-    right: LivenessPoseFrameSchema,
-  }),
-  sha256BundleHash: z.string().min(16).max(256),
+/**
+ * D-4.2: the identity check is a guided three-pose selfie set plus an ID photo, reviewed by a
+ * person. The app does not detect liveness and sends no liveness result; only the capture times.
+ */
+export const GuidedSelfieSetSchema = z.object({
+  captureMethod: z.literal("GUIDED_SELFIE"),
+  frontCapturedAt: z.string().datetime(),
+  leftCapturedAt: z.string().datetime(),
+  rightCapturedAt: z.string().datetime(),
 });
-export type LivenessVerification = z.infer<typeof LivenessVerificationSchema>;
+export type GuidedSelfieSet = z.infer<typeof GuidedSelfieSetSchema>;
 
 export const SubmitAssuranceVerificationRequestSchema = z.object({
   projectId: z.string().uuid(),
@@ -137,7 +137,7 @@ export const SubmitAssuranceVerificationRequestSchema = z.object({
   selfieFrontUrl: z.string().min(3).max(500),
   selfieLeftUrl: z.string().min(3).max(500),
   selfieRightUrl: z.string().min(3).max(500),
-  livenessVerification: LivenessVerificationSchema,
+  selfieSet: GuidedSelfieSetSchema,
   corenLicenseNumber: z.string().min(2).max(50),
   experienceSummary: z.string().min(5).max(1000),
 });
@@ -199,10 +199,13 @@ export const ContractorVerificationRecordDtoSchema = z.object({
   joinCodeUsed: z.string(),
   corenLicenseNumber: z.string().nullable().optional(),
   idDocumentType: z.string().nullable().optional(),
+  /** Short-lived signed URLs for the reviewer (null for missing or legacy values). */
   idDocumentUrl: z.string().nullable().optional(),
   selfieImageUrl: z.string().nullable().optional(),
+  selfieLeftUrl: z.string().nullable().optional(),
+  selfieRightUrl: z.string().nullable().optional(),
+  /** True only if a real liveness check ran. The guided selfie set never sets it (D-4.2). */
   livenessPassed: z.boolean(),
-  livenessScore: z.number().nullable().optional(),
   experienceSummary: z.string().nullable().optional(),
   assuranceStatus: ContractorAssuranceStatusEnum,
   deviceId: z.string().optional(),

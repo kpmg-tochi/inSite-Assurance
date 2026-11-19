@@ -63,7 +63,7 @@ export const IdCardCameraOverlay: React.FC<Props> = ({
 
         <View style={styles.previewImageWrapper}>
           <Image
-            source={{ uri: pendingCapture.dataUri }}
+            source={{ uri: pendingCapture.uri }}
             style={styles.previewImage}
             resizeMode="contain"
           />

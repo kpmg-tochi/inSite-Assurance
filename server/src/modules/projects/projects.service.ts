@@ -25,6 +25,9 @@ import { serializeBoqItem, serializeTranche } from '../../utils/serializers';
 import { createJoinCode } from './joinCodes.service';
 import { isProjectObjectKey, storageService } from '../../integrations/storage.service';
 import { createMobileNotification } from '../notifications/notifications.service';
+import { releaseStagedReportsForSession } from '../workday-reports/workdayReports.service';
+import { scheduleAiOmissionCheck } from '../workday-reports/aiOmissionCheck';
+import { sendPushToFieldSession } from '../../integrations/push.service';
 
 type JoinCodeWithRole = {
   id: string;
@@ -155,15 +158,11 @@ export async function listProjectsForUser(webUser: WebJwtPayload) {
           isOpaqueLumpSum: true,
         },
       },
+      // Most recent registered capture of any kind.
       evidenceLogs: {
-        where: { status: 'CONFIRMED' },
         orderBy: { capturedAtDevice: 'desc' },
-        select: {
-          id: true,
-          capturedAtDevice: true,
-          boqItemId: true,
-          fieldPersonaType: true,
-        },
+        take: 1,
+        select: { capturedAtDevice: true },
       },
       ipcClaims: LATEST_RATED_IPC_QUERY,
     },
@@ -241,9 +240,14 @@ export async function createProjectBaseline(
       });
     }
 
+    const tenant = await tx.tenant.findUniqueOrThrow({
+      where: { id: webUser.tenantId },
+      select: { timezone: true },
+    });
     const project = await tx.project.create({
       data: {
         tenantId: webUser.tenantId,
+        timezone: tenant.timezone,
         name: input.name,
         codePrefix: input.codePrefix,
         stateLocation: input.stateLocation,
@@ -632,7 +636,6 @@ export async function listContractorVerifications(
     selfieLeftUrl: await signed(s.selfieLeftUrl, s.project.tenantId, s.projectId),
     selfieRightUrl: await signed(s.selfieRightUrl, s.project.tenantId, s.projectId),
     livenessPassed: s.livenessPassed,
-    livenessScore: s.livenessScore,
     experienceSummary: s.experienceSummary,
     assuranceStatus: s.assuranceStatus,
     deviceId: s.deviceId,
@@ -671,20 +674,19 @@ export async function reviewContractorVerification(
   }
 
   const nextStatus = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-  const isActive = decision === 'APPROVE';
+  const rejectionMessage = remarks || 'Verification rejected by reviewer.';
+  let releasedReportIds: string[] = [];
 
+  // A rejected session stays signed in so the device can show the reason and route the person
+  // back to the identity wizard. Its reports stay staged; revocation is a separate action.
   const updated = await prisma.$transaction(async (tx) => {
     const updated = await tx.fieldAgentSession.update({
       where: { id: sessionId },
       data: {
         assuranceStatus: nextStatus,
-        isActive,
         reviewedByUserId: webUser.userId,
         reviewedAt: new Date(),
-        rejectionReason:
-          decision === 'REJECT'
-            ? remarks || 'Verification rejected by reviewer.'
-            : null,
+        rejectionReason: decision === 'REJECT' ? rejectionMessage : null,
       },
     });
 
@@ -723,38 +725,21 @@ export async function reviewContractorVerification(
       message:
         decision === 'APPROVE'
           ? `${webUser.fullName} approved your identity and ${session.corenLicenseNumber || 'regulatory'} credentials.`
-          : `Verification was returned: ${remarks || 'Please re-capture clear ID and liveness selfies.'}`,
+          : `Verification was returned: ${remarks || 'Please re-capture a clear ID photo and selfies.'}`,
     });
 
     if (decision === 'APPROVE') {
-      const stagedReports = await tx.workdayReport.findMany({
-        where: {
+      // The server releases staged reports; the device never re-submits them.
+      releasedReportIds = await releaseStagedReportsForSession(tx, { projectId, sessionId });
+      if (releasedReportIds.length > 0) {
+        await recordAuditEvent(tx, {
           projectId,
-          reporterSessionId: sessionId,
-          status: 'STAGED_UNVERIFIED',
-        },
-        include: { boqItem: { select: { wbsCode: true, unit: true } } },
-        take: 10,
-      });
-
-      for (const report of stagedReports) {
-        await createMobileNotification(tx, {
-          projectId,
-          fieldSessionId: sessionId,
-          type: 'BACKLOG_REVIEW_REQUIRED',
-          actionType: 'OPEN_REPORT_SUMMARY',
-          requiresAction: true,
-          title: `Review Queued Report · WBS ${report.boqItem.wbsCode}`,
-          message:
-            'Your staged report is ready for AI summary confirmation before final submission.',
-          metadata: {
-            workdayReportId: report.id,
-            wbsItemId: report.wbsItemId,
-            wbsCode: report.boqItem.wbsCode,
-            draftSummary: report.summaryText,
-            draftQuantity: Number(report.reportedQuantity),
-            unit: report.unitOfMeasure || report.boqItem.unit,
-          },
+          actorType: 'WEB_USER',
+          actorId: webUser.userId,
+          actorDisplayName: `${webUser.fullName} (${webUser.roleName})`,
+          action: 'WORKDAY_REPORTS_RELEASED',
+          summaryText: `Released ${releasedReportIds.length} staged report(s) from ${session.agentFullName} after identity approval.`,
+          payload: { sessionId, workdayReportIds: releasedReportIds },
         });
       }
     }
@@ -763,7 +748,22 @@ export async function reviewContractorVerification(
   });
 
   invalidateSessionAuthCache(sessionId);
+  for (const reportId of releasedReportIds) scheduleAiOmissionCheck(reportId);
+  void sendPushToFieldSession(sessionId, {
+    title: decision === 'APPROVE' ? 'Identity approved' : 'Identity check returned',
+    body:
+      decision === 'APPROVE'
+        ? releasedReportIds.length > 0
+          ? `Your identity was approved. ${releasedReportIds.length} staged report(s) were submitted.`
+          : 'Your identity was approved.'
+        : `Your identity check was returned: ${rejectionMessage}`,
+    data: {
+      actionType: decision === 'APPROVE' ? 'NONE' : 'OPEN_ASSURANCE_WIZARD',
+      assuranceStatus: nextStatus,
+    },
+  });
   return {
+    releasedReportCount: releasedReportIds.length,
     id: updated.id,
     projectId: updated.projectId,
     agentFullName: updated.agentFullName,

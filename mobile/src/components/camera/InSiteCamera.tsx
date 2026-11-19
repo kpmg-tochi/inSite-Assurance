@@ -18,6 +18,8 @@ import {
 } from "react-native";
 import { CameraView, type CameraType, useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
+import { File } from "expo-file-system";
+import { acquireFix } from "../../services/locationService";
 import { assessCapturedImageQuality } from "./qualityAssessment";
 import type {
   CameraCaptureResult,
@@ -28,32 +30,10 @@ import type {
   InSiteCameraProps,
 } from "./types";
 
+/** The fix at the shutter, or undefined when there is none. Never a substitute value. */
 async function captureGpsMetadata(): Promise<CameraGpsMetadata | undefined> {
-  try {
-    const perm = await Location.requestForegroundPermissionsAsync();
-    const granted = Boolean(
-      (perm as any)?.granted || (perm as any)?.status === "granted",
-    );
-    if (!granted) {
-      return undefined;
-    }
-
-    const position = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.High,
-    });
-
-    return {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude,
-      accuracyMeters: position.coords.accuracy ?? null,
-      altitudeMeters: position.coords.altitude ?? null,
-      isMocked: Boolean((position as any).mocked),
-      capturedAt: new Date(position.timestamp || Date.now()).toISOString(),
-    };
-  } catch (err) {
-    console.warn("InSiteCamera: GPS capture failed or timed out:", err);
-    return undefined;
-  }
+  const fix = await acquireFix().catch(() => null);
+  return fix ?? undefined;
 }
 
 export const InSiteCamera = forwardRef<InSiteCameraHandle, InSiteCameraProps>(
@@ -134,7 +114,7 @@ export const InSiteCamera = forwardRef<InSiteCameraHandle, InSiteCameraProps>(
           const [photo, gps] = await Promise.all([
             cameraViewRef.current.takePictureAsync({
               quality: jpegQuality,
-              base64: true,
+              base64: false,
               exif: true,
             }),
             geoTag ? captureGpsMetadata() : Promise.resolve(undefined),
@@ -144,22 +124,23 @@ export const InSiteCamera = forwardRef<InSiteCameraHandle, InSiteCameraProps>(
             throw new Error("Camera returned an empty image frame.");
           }
 
-          const base64String = photo.base64 ?? null;
-          const dataUri = base64String
-            ? `data:image/jpeg;base64,${base64String}`
-            : photo.uri;
+          let byteSize = 0;
+          try {
+            byteSize = new File(photo.uri).size;
+          } catch {
+            byteSize = 0;
+          }
 
           const qualityAssessment = assessCapturedImageQuality({
             width: photo.width,
             height: photo.height,
-            base64: base64String,
+            byteSize,
             expectedOrientation: orientation,
           });
 
           const result: CameraCaptureResult = {
             uri: photo.uri,
-            base64: base64String,
-            dataUri,
+            byteSize,
             width: photo.width,
             height: photo.height,
             orientation,

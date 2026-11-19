@@ -833,8 +833,8 @@ export function CreateProjectPage({
               Geofence Verification Boundary
             </h2>
             <p className="text-[11px] text-slate-500">
-              All hourly presence pings and mobile field evidence captures are
-              snapped and validated against this boundary.
+              Presence pings and field captures are checked against this
+              boundary by the server.
             </p>
           </div>
         </div>

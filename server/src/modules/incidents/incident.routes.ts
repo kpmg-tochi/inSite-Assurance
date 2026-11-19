@@ -26,7 +26,7 @@ router.post(
     try {
       projectIdForFieldWrite(req);
       const result = await createIncidentReport(req.fieldAgent!, req.body);
-      res.status(201).json({ success: true, data: result });
+      res.status(result.created ? 201 : 200).json({ success: true, data: result.incident });
     } catch (error) {
       next(error);
     }

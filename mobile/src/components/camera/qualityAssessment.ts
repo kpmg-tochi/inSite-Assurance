@@ -11,7 +11,8 @@ import type { DeviceOrientation, ImageQualityAssessment } from './types';
 export function assessCapturedImageQuality(params: {
   width: number;
   height: number;
-  base64: string | null;
+  /** File size in bytes (0 if unknown). */
+  byteSize: number;
   expectedOrientation?: DeviceOrientation;
 }): ImageQualityAssessment {
   const warnings: string[] = [];
@@ -22,17 +23,14 @@ export function assessCapturedImageQuality(params: {
     warnings.push('Image resolution is below 480px on the shortest edge.');
   }
 
-  // Estimate JPEG payload bytes from base64 length
-  const estimatedBytes = params.base64
-    ? Math.floor((params.base64.length * 3) / 4)
-    : 0;
+  const estimatedBytes = params.byteSize;
 
   // Very small JPEG (< 12 KB) often indicates an obstructed or pitch-black frame
   let sharpnessProxyScore = 0.88;
-  if (params.base64 && estimatedBytes < 12_000) {
+  if (estimatedBytes > 0 && estimatedBytes < 12_000) {
     sharpnessProxyScore = 0.42;
     warnings.push('Frame appears unusually dark or low-detail. Ensure good lighting.');
-  } else if (params.base64 && estimatedBytes > 80_000) {
+  } else if (estimatedBytes > 80_000) {
     sharpnessProxyScore = 0.94;
   }
 

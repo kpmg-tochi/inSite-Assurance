@@ -49,3 +49,6 @@ web-build/
 .DS_Store
 Thumbs.db
 
+
+# Local dev object storage (Phase 4)
+server/.local-storage/

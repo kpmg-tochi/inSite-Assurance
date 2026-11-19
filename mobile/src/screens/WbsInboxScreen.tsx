@@ -24,7 +24,7 @@ import {
 } from "../components/common";
 import { useProfile } from "../context/ProfileContext";
 import { useNotificationsQuery } from "../queries/notifications/useNotificationQueries";
-import { useWbsInboxQuery } from "../queries/wbs/useWbsQueries";
+import { useSyncStatus, useWbsInboxQuery } from "../queries/wbs/useWbsQueries";
 import { formatMobileErrorMessage } from "../utils/errorFormatter";
 import type { RootStackParamList } from "../navigation/types";
 import { Feather } from "@expo/vector-icons";
@@ -40,7 +40,9 @@ export const WbsInboxScreen: React.FC = () => {
     userInitials,
     isVerified,
     profile,
+    refreshAssuranceStatus,
   } = useProfile();
+  const syncStatus = useSyncStatus();
 
   const onSelectWbsThread = (wbsItem: WbsItemRecord) =>
     navigation.navigate("WbsThread", { wbsItem });
@@ -87,7 +89,7 @@ export const WbsInboxScreen: React.FC = () => {
 
   const onRefresh = async () => {
     setDismissedError(false);
-    await refetch();
+    await Promise.all([refetch(), refreshAssuranceStatus()]);
   };
 
   const activeThreads = useMemo(
@@ -295,8 +297,37 @@ export const WbsInboxScreen: React.FC = () => {
             <View style={styles.unverifiedBannerContent}>
               <Pill variant="warning" text="Verification Pending" />
               <Text style={styles.unverifiedText}>
-                Reports queue locally without AI costs. Once verified, tap here
-                to review your backlog.
+                Your reports are sent and held by the server until your identity
+                is approved, then submitted automatically. Tap for sync status.
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Sync status: shown whenever something is waiting, paused or failed */}
+        {(syncStatus.pendingCount > 0 || syncStatus.deadCount > 0 || syncStatus.pausedReason) && (
+          <TouchableOpacity
+            style={styles.unverifiedBanner}
+            onPress={onOpenBacklogModal}
+            activeOpacity={0.9}
+          >
+            <View style={styles.unverifiedBannerContent}>
+              <Pill
+                variant={syncStatus.deadCount > 0 || syncStatus.pausedReason ? "negative" : "info"}
+                text={
+                  syncStatus.pausedReason
+                    ? "Sending paused"
+                    : syncStatus.deadCount > 0
+                      ? `${syncStatus.deadCount} not sent`
+                      : syncStatus.isOnline
+                        ? "Sending"
+                        : "Offline"
+                }
+              />
+              <Text style={styles.unverifiedText}>
+                {syncStatus.pausedReason
+                  ? syncStatus.pausedReason
+                  : `${syncStatus.pendingCount} item(s) saved on this device and waiting to send. Tap for details.`}
               </Text>
             </View>
           </TouchableOpacity>
