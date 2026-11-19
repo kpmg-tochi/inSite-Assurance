@@ -19,7 +19,8 @@ import {
 import { getCapture, updateCaptureUpload } from '../captureStore';
 import { loadIncident, markIncidentSent, recordIncidentPhotoUploaded } from '../incidentStore';
 import { buildRevalidateRequest, buildSubmitRequest } from '../reportPayload';
-import { getReport, markReportSent } from '../reportStore';
+import { getReport, markReportRefused, markReportSent } from '../reportStore';
+import { CONTRACTOR_REPORTING_OFF_CODE, CONTRACTOR_REPORTING_OFF_MESSAGE } from './outboxPolicy';
 import { loadPingInputs } from '../telemetryStore';
 import { loadQueuedMessage, markMessageSent } from '../wbsRepository';
 import {
@@ -120,11 +121,23 @@ export function registerOutboxHandlers(): void {
     }
   });
 
+  /** Marks the report itself as not sent when contractor reporting is off, then rethrows for the outbox. */
+  const refusedReport =
+    (reportId: string) =>
+    async (error: unknown): Promise<never> => {
+      if ((error as { code?: string })?.code === CONTRACTOR_REPORTING_OFF_CODE) {
+        await markReportRefused(reportId, CONTRACTOR_REPORTING_OFF_MESSAGE).catch(() => undefined);
+      }
+      throw error;
+    };
+
   registerOutboxHandler('REPORT', async (row) => {
     const report = await getReport(row.entityId);
     if (!report) throw new LocalPermanentError('Report not found on this device.');
     if (report.syncStatus === 'SENT') return;
-    const server = await submitWorkdayReport(report.projectId, buildSubmitRequest(report));
+    const server = await submitWorkdayReport(report.projectId, buildSubmitRequest(report)).catch(
+      refusedReport(report.id)
+    );
     await markReportSent(report.id, server);
   });
 
@@ -137,7 +150,7 @@ export function registerOutboxHandlers(): void {
       report.projectId,
       report.revisesServerReportId,
       buildRevalidateRequest(report)
-    );
+    ).catch(refusedReport(report.id));
     await markReportSent(report.id, server);
   });
 

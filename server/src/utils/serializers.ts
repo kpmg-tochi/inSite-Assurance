@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { CaptureDto, FieldPersonaType } from '@insite/shared';
+import { ApprovalProgressDto, CaptureDto, FieldPersonaType } from '@insite/shared';
 import { hasWebPermission, WebJwtPayload } from '../middleware/auth.middleware';
 
 /**
@@ -216,7 +216,8 @@ export function serializeTrancheDecision(d: DecisionRow, allDecisions: DecisionR
 }
 
 export function serializeValuationReport(
-  r: Prisma.ValuationReportGetPayload<object> & { trancheDecisions?: DecisionRow[] }
+  r: Prisma.ValuationReportGetPayload<object> & { trancheDecisions?: DecisionRow[] },
+  approval: ApprovalProgressDto | null = null
 ) {
   const decisions = [...(r.trancheDecisions ?? [])].sort(
     (a, b) => a.decidedAt.getTime() - b.decidedAt.getTime()
@@ -224,6 +225,11 @@ export function serializeValuationReport(
   return {
     id: r.id,
     ipcClaimId: r.ipcClaimId,
+    projectId: r.projectId,
+    trancheId: r.trancheId,
+    source: r.source,
+    milestoneVerificationId: r.milestoneVerificationId,
+    approval,
     revisionNumber: r.revisionNumber,
     trancheRecommendation: r.trancheRecommendation,
     totalClaimedNgn: Number(r.totalClaimedNgn),

@@ -7,6 +7,7 @@ import {
   type MobileNotificationType,
 } from "@insite/shared";
 import Pill, { type PillVariant } from "../common/Pill";
+import { reportQueryLabel } from "../../utils/reportStatus";
 import { SubtleGradient } from "../common/SubtleGradient";
 import {
   borderRadius,
@@ -108,6 +109,17 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
     NOTIFICATION_VISUALS.ASSURANCE_PENDING;
   const elapsedLabel = formatElapsedTime(notification.createdAt);
   const wbsCode = notification.metadata?.wbsCode;
+  // Report queries say where they came from (Phase 7): standards check, omission check or monitor.
+  const querySource = notification.metadata?.querySource;
+  const badgeText =
+    notification.type === "REPORT_QUERY" && querySource
+      ? reportQueryLabel(querySource)
+      : visuals.badgeText;
+  const rawCodes = (notification.metadata as Record<string, unknown> | undefined)?.standardCodes;
+  const standardCodes =
+    querySource === "AI_STANDARDS_CHECK" && Array.isArray(rawCodes)
+      ? rawCodes.filter((c): c is string => typeof c === "string" && c.length > 0)
+      : [];
   const showActionButton = Boolean(
     visuals.ctaLabel &&
       (notification.requiresAction || notification.actionType !== "NONE"),
@@ -169,10 +181,15 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
             <View style={styles.metaLeft}>
               <Pill
                 variant={notification.isRead ? "gray" : visuals.pillVariant}
-                text={visuals.badgeText}
+                text={badgeText}
               />
               {wbsCode ? (
                 <Text style={styles.wbsTag}>WBS {wbsCode}</Text>
+              ) : null}
+              {standardCodes.length > 0 ? (
+                <Text style={styles.wbsTag} numberOfLines={1}>
+                  {standardCodes.join(", ")}
+                </Text>
               ) : null}
             </View>
 

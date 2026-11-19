@@ -12,6 +12,7 @@ import { formatReporterRoleBadge } from "../../components/EvidenceBadge";
 import { useAuth } from "../../lib/auth-context";
 import ContractorVerificationQueue from "../../components/ContractorVerificationQueue";
 import { KpiCard } from "../../components/common";
+import { useProjectProcess } from "../../queries/process/useProcessQueries";
 
 interface PortfolioDashboardPageProps {
   project: ProjectSummaryDto;
@@ -27,6 +28,10 @@ export function PortfolioDashboardPage({
   onNavigateToReconciliation,
 }: PortfolioDashboardPageProps) {
   const { hasPermission } = useAuth();
+  // Phase 7: hide modules the project's process turned off.
+  const processQuery = useProjectProcess(project.id);
+  const tranchesOn = processQuery.data?.config.enableTranchesAndCps ?? true;
+  const holdPointsOn = processQuery.data?.config.enableHoldPoints ?? true;
 
   const activeTranche =
     project.tranches.find((t) => !t.isReleased) || project.tranches[0] || null;
@@ -109,10 +114,12 @@ export function PortfolioDashboardPage({
             isContractorOnly ? "Open Query" : "Conflict"
           }${project.openConflictCount === 1 ? "" : "s"}`}
           subtitle={
-            <span className="text-amber-700 font-medium">
-              {project.unfulfilledHoldPointCount} Unfulfilled Hold-Point
-              {project.unfulfilledHoldPointCount === 1 ? "" : "s"}
-            </span>
+            holdPointsOn ? (
+              <span className="text-amber-700 font-medium">
+                {project.unfulfilledHoldPointCount} Unfulfilled Hold-Point
+                {project.unfulfilledHoldPointCount === 1 ? "" : "s"}
+              </span>
+            ) : undefined
           }
           action={
             <button
@@ -253,9 +260,9 @@ export function PortfolioDashboardPage({
           <div>
             <div className="flex items-center justify-between">
               <div className="text-xs font-bold text-slate-900">
-                Active Project Tranche Readiness
+                {tranchesOn ? "Active Project Tranche Readiness" : "Release Readiness"}
               </div>
-              {activeTranche && (
+              {activeTranche && tranchesOn && (
                 <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/5 px-2 py-0.5 rounded">
                   Tranche #{activeTranche.trancheNumber}
                 </span>
@@ -272,7 +279,7 @@ export function PortfolioDashboardPage({
                     · Target: {activeTranche.targetCompletionPct}%
                   </div>
                 </div>
-                <div className="space-y-1.5">
+                {tranchesOn && <div className="space-y-1.5">
                   <div className="flex justify-between text-[11px]">
                     <span className="text-slate-500">
                       Conditions Precedent Satisfied
@@ -295,7 +302,7 @@ export function PortfolioDashboardPage({
                       className="h-full bg-brand-primary rounded-full"
                     />
                   </div>
-                </div>
+                </div>}
                 <div className="pt-1 flex items-center justify-between text-[11px]">
                   <span className="text-slate-500">
                     Holdback Recommendation

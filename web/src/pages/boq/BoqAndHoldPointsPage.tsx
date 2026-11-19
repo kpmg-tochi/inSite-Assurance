@@ -10,6 +10,8 @@ import {
   useUploadBoqMutation,
 } from "../../mutations/boq/useBoqMutations";
 import Drawer from "../../components/Drawer";
+import { BriefPreview } from "../../components/process/BriefPreview";
+import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import {
   StandardTable,
   TableBadge,
@@ -40,6 +42,12 @@ export function BoqAndHoldPointsPage({
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [selectedBoqItem, setSelectedBoqItem] =
     useState<BoqItemRecordDto | null>(null);
+
+  // Phase 7: modules the project's process turned off are hidden.
+  const processQuery = useProjectProcess(project.id);
+  const tranchesOn = processQuery.data?.config.enableTranchesAndCps ?? true;
+  const holdPointsOn = processQuery.data?.config.enableHoldPoints ?? true;
+  const contractorReportingOn = processQuery.data?.config.allowContractorFieldReporting ?? true;
 
   const updateMappingsMutation = useUpdateBoqMappingsMutation(project.id);
   const uploadBoqMutation = useUploadBoqMutation(project.id);
@@ -227,7 +235,7 @@ export function BoqAndHoldPointsPage({
         </span>
       ),
     },
-    {
+    ...(tranchesOn ? [{
       id: "tranche",
       header: "Mapped Tranche",
       tooltip: "Project disbursement tranche fed by this BOQ work item",
@@ -239,7 +247,7 @@ export function BoqAndHoldPointsPage({
         ) : (
           <TableBadge variant="neutral">Unmapped</TableBadge>
         ),
-    },
+    } as TableColumnDef<BoqItemRecordDto>] : []),
     {
       id: "governance",
       header: "Governance",
@@ -247,13 +255,13 @@ export function BoqAndHoldPointsPage({
         "Mandatory visual Hold-Point status and QSRBN unitemized lump-sum warnings",
       cell: (item) => (
         <div className="flex items-center gap-1.5 flex-wrap">
-          {item.isHoldPoint && (
+          {holdPointsOn && item.isHoldPoint && (
             <TableBadge variant="warning">Mandatory Hold-Point</TableBadge>
           )}
           {item.isOpaqueLumpSum && (
             <TableBadge variant="danger">Opaque Lump Sum</TableBadge>
           )}
-          {!item.isHoldPoint && !item.isOpaqueLumpSum && (
+          {!(holdPointsOn && item.isHoldPoint) && !item.isOpaqueLumpSum && (
             <TableBadge variant="neutral">Standard Item</TableBadge>
           )}
         </div>
@@ -280,7 +288,7 @@ export function BoqAndHoldPointsPage({
                 label: "View Specifications Drawer",
                 onClick: () => setSelectedBoqItem(item),
               },
-              ...(canConfigureHoldPoints
+              ...(canConfigureHoldPoints && holdPointsOn
                 ? [
                     {
                       label: item.isHoldPoint
@@ -308,7 +316,9 @@ export function BoqAndHoldPointsPage({
           <div className="text-sm sm:text-base font-bold text-slate-900 mt-0.5">
             {isContractorView
               ? "Approved Bill of Quantities & Pre-Pour Hold-Point Checklist"
-              : "Bill of Quantities (BOQ), Tranche Mappings & Hold-Point Rules"}
+              : tranchesOn && holdPointsOn
+                ? "Bill of Quantities (BOQ), Tranche Mappings & Hold-Point Rules"
+                : "Bill of Quantities (BOQ)"}
           </div>
         </div>
 
@@ -329,20 +339,20 @@ export function BoqAndHoldPointsPage({
             >
               Import BOQ (.xlsx / .csv)
             </button>
-            <button
+            {tranchesOn && <button
               type="button"
               disabled={isUpdating}
               onClick={handleConfirmAllTrancheMappings}
               className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm transition disabled:opacity-50"
             >
               Confirm All Tranche Mappings
-            </button>
+            </button>}
           </div>
         )}
       </div>
 
       {/* 2. Three BOQ & Hold-Point KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className={`grid grid-cols-1 gap-3 ${holdPointsOn ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <div className="w-8 h-8 rounded-lg bg-brand-primary/5 text-brand-primary flex items-center justify-center">
@@ -362,7 +372,7 @@ export function BoqAndHoldPointsPage({
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
+        {holdPointsOn && <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
               <ShieldCheck className="w-4 h-4" />
@@ -379,7 +389,7 @@ export function BoqAndHoldPointsPage({
               Requires Tier 1 pre-pour verification before cover-up
             </div>
           </div>
-        </div>
+        </div>}
 
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between">
@@ -456,9 +466,9 @@ export function BoqAndHoldPointsPage({
       <StandardTable<BoqItemRecordDto>
         title={
           <div className="flex items-center gap-2.5">
-            <span>Baseline Bill of Quantities (BOQ) &amp; Hold-Point Schedule</span>
+            <span>{holdPointsOn ? <>Baseline Bill of Quantities (BOQ) &amp; Hold-Point Schedule</> : "Baseline Bill of Quantities (BOQ)"}</span>
             <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-white/90 border border-white/15">
-              {boqItems.length} Items · {holdPointCount} Hold-Points · {opaqueCount} Opaque Lump Sums
+              {boqItems.length} Items{holdPointsOn ? ` · ${holdPointCount} Hold-Points` : ""} · {opaqueCount} Opaque Lump Sums
             </span>
           </div>
         }
@@ -476,14 +486,14 @@ export function BoqAndHoldPointsPage({
               >
                 Import BOQ (.xlsx / .csv)
               </button>
-              <button
+              {tranchesOn && <button
                 type="button"
                 disabled={isUpdating}
                 onClick={handleConfirmAllTrancheMappings}
                 className="px-3.5 py-1.5 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-2xs transition disabled:opacity-50"
               >
                 Confirm All Tranche Mappings
-              </button>
+              </button>}
             </div>
           ) : undefined
         }
@@ -505,7 +515,7 @@ export function BoqAndHoldPointsPage({
             >
               All ({boqItems.length})
             </button>
-            <button
+            {holdPointsOn && <button
               type="button"
               onClick={() => setBoqFilter("HOLD_POINTS")}
               className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
@@ -515,7 +525,7 @@ export function BoqAndHoldPointsPage({
               }`}
             >
               Hold-Points ({holdPointCount})
-            </button>
+            </button>}
             <button
               type="button"
               onClick={() => setBoqFilter("OPAQUE")}
@@ -527,7 +537,7 @@ export function BoqAndHoldPointsPage({
             >
               Opaque Lump Sums ({opaqueCount})
             </button>
-            <button
+            {tranchesOn && <button
               type="button"
               onClick={() => setBoqFilter("MAPPED")}
               className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
@@ -537,7 +547,7 @@ export function BoqAndHoldPointsPage({
               }`}
             >
               Confirmed Mappings
-            </button>
+            </button>}
           </div>
         }
         columns={boqColumns}
@@ -566,7 +576,7 @@ export function BoqAndHoldPointsPage({
                 <span className="text-[10px] font-bold uppercase tracking-wider text-brand-primary">
                   BOQ Work Item Specification
                 </span>
-                {activeDrawerItem.isHoldPoint && (
+                {holdPointsOn && activeDrawerItem.isHoldPoint && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-brand-primary/5 text-brand-primary border border-brand-primary/25">
                     Mandatory Hold-Point
                   </span>
@@ -637,7 +647,7 @@ export function BoqAndHoldPointsPage({
             </div>
 
             {/* Tranche Mapping Card */}
-            <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/80 space-y-1.5">
+            {tranchesOn && <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/80 space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                   Mapped Project Tranche
@@ -653,10 +663,10 @@ export function BoqAndHoldPointsPage({
                   ? `Tranche #${activeDrawerItem.tranche.trancheNumber}: ${activeDrawerItem.tranche.name}`
                   : "Unmapped — Pending Tranche Assignment"}
               </div>
-            </div>
+            </div>}
 
             {/* Mandatory Hold-Point Rule Card */}
-            <div
+            {holdPointsOn && <div
               className={`rounded-xl p-3.5 border space-y-1.5 ${
                 activeDrawerItem.isHoldPoint
                   ? "bg-brand-primary/5 border-brand-primary/25"
@@ -672,7 +682,15 @@ export function BoqAndHoldPointsPage({
                 {activeDrawerItem.holdPointInstruction ||
                   "Standard geotagged progress photo and voice note verification applies."}
               </p>
-            </div>
+            </div>}
+
+            {/* Phase 7: today's brief for each persona, with the standards applied */}
+            <BriefPreview
+              key={activeDrawerItem.id}
+              projectId={project.id}
+              boqItemId={activeDrawerItem.id}
+              contractorReportingOn={contractorReportingOn}
+            />
 
             {/* QSRBN Hygiene / Opacity Screening Card */}
             {activeDrawerItem.isOpaqueLumpSum && (
@@ -690,7 +708,7 @@ export function BoqAndHoldPointsPage({
 
           {/* Drawer Footer Actions */}
           <div className="p-3.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between gap-2">
-            {canConfigureHoldPoints && (
+            {canConfigureHoldPoints && holdPointsOn && (
               <button
                 type="button"
                 disabled={isUpdating}

@@ -65,9 +65,7 @@ before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
   service = await import('../modules/reconciliation/reconciliation.service');
-  const { seedDatabase } = await import('../db/seedDatabase');
   const { createApp } = await import('../app');
-  await seedDatabase();
   app = createApp();
 
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: 'kpmg-nigeria' } });

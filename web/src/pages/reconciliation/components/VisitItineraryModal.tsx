@@ -15,14 +15,17 @@ const CHECKLIST = [
 export function VisitItineraryModal({
   project,
   ipc,
+  holdPointsOn = true,
   onClose,
 }: {
   project: ProjectSummaryDto;
   ipc: IpcClaimDto;
+  /** False when the project turned hold points off (Phase 7): hold-point flags and instructions are ignored. */
+  holdPointsOn?: boolean;
   onClose: () => void;
 }) {
   const { user } = useAuth();
-  const targets = ipc.lineItems.filter((li) => li.visitPlannerFlag || li.missingHoldPointFlag);
+  const targets = ipc.lineItems.filter((li) => li.visitPlannerFlag || (holdPointsOn && li.missingHoldPointFlag));
 
   return (
     <div className="fixed inset-0 bg-slate-950/45 backdrop-blur-xs z-50 flex items-center justify-center p-4">
@@ -102,7 +105,7 @@ export function VisitItineraryModal({
                         <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                         {li.visitPlannerReason || "Physical inspection required before release"}
                       </div>
-                      {li.boqItem.holdPointInstruction && (
+                      {holdPointsOn && li.boqItem.holdPointInstruction && (
                         <div className="text-[11px] text-slate-600">{li.boqItem.holdPointInstruction}</div>
                       )}
                     </div>

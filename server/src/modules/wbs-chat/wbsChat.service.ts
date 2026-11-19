@@ -4,6 +4,7 @@ import {
   ReportQueryDto,
   ReportQuerySource,
   ReportQueryStatus,
+  StandardsViolationItem,
   WbsChatMessageDto,
   WbsChatMessageType,
 } from '@insite/shared';
@@ -31,6 +32,7 @@ export function serializeReportQuery(row: {
   status: string;
   monitorComment: string | null;
   aiOmissionPayload: unknown;
+  standardsViolationsPayload?: unknown;
   raisedByUserId: string | null;
   createdAt: Date;
   respondedAt: Date | null;
@@ -48,6 +50,9 @@ export function serializeReportQuery(row: {
     monitorComment: row.monitorComment,
     aiOmissionPayload:
       (row.aiOmissionPayload as AiOmissionPayload | null) ?? null,
+    standardsViolations: Array.isArray(row.standardsViolationsPayload)
+      ? (row.standardsViolationsPayload as StandardsViolationItem[])
+      : null,
     raisedByUserId: row.raisedByUserId,
     raisedByName: row.raisedByUser?.fullName ?? null,
     createdAt: row.createdAt.toISOString(),
@@ -114,6 +119,16 @@ export function serializeWbsChatMessage(row: {
   };
 }
 
+/** Chat and push text for a standards query: the codes and what to rectify. */
+export function standardsQueryText(violations: StandardsViolationItem[]): string {
+  if (violations.length === 0) return 'The report does not show that the applicable standards were met.';
+  return (
+    'The report does not show that these standards were met: ' +
+    violations.map((v) => `${v.standardCode}: ${v.violationSummary} ${v.requiredRectification}`).join(' ') +
+    ' Answer with a revised report.'
+  );
+}
+
 /**
  * Shared transactional helper that persists a ReportQuery (Monitor or AI omission check),
  * appends a WBS chat message so it appears inline on Mobile, and emits a REPORT_QUERY notification.
@@ -130,6 +145,8 @@ export async function dispatchReportQueryBundle(
     source: ReportQuerySource;
     monitorComment?: string | null;
     aiOmissionPayload?: AiOmissionPayload | null;
+    /** AI_STANDARDS_CHECK (Phase 7). */
+    standardsViolations?: StandardsViolationItem[] | null;
     raisedByUserId?: string | null;
     raisedByName?: string;
     requestedProofTypes?: string[];
@@ -148,6 +165,9 @@ export async function dispatchReportQueryBundle(
       aiOmissionPayload: params.aiOmissionPayload
         ? (params.aiOmissionPayload as unknown as Prisma.InputJsonValue)
         : Prisma.JsonNull,
+      standardsViolationsPayload: params.standardsViolations?.length
+        ? (params.standardsViolations as unknown as Prisma.InputJsonValue)
+        : Prisma.JsonNull,
     },
     include: {
       raisedByUser: { select: { fullName: true } },
@@ -157,8 +177,10 @@ export async function dispatchReportQueryBundle(
   const messageText =
     params.source === 'MONITOR'
       ? params.monitorComment || 'Clarification requested by Monitor.'
-      : params.aiOmissionPayload?.clarificationQuestion ||
-        'Required evidence was omitted without an explanation.';
+      : params.source === 'AI_STANDARDS_CHECK'
+        ? standardsQueryText(params.standardsViolations ?? [])
+        : params.aiOmissionPayload?.clarificationQuestion ||
+          'Required evidence was omitted without an explanation.';
 
   await tx.wbsChatMessage.create({
     data: {
@@ -187,7 +209,9 @@ export async function dispatchReportQueryBundle(
     title:
       params.source === 'MONITOR'
         ? `Monitor Query · WBS ${params.wbsCode}`
-        : `Missing Evidence Query · WBS ${params.wbsCode}`,
+        : params.source === 'AI_STANDARDS_CHECK'
+          ? `Standards Query · WBS ${params.wbsCode}`
+          : `Missing Evidence Query · WBS ${params.wbsCode}`,
     message:
       params.source === 'MONITOR'
         ? `${params.raisedByName || 'Independent Monitor'}: ${messageText}`
@@ -201,6 +225,7 @@ export async function dispatchReportQueryBundle(
       aiOmissionPayload:
         (params.aiOmissionPayload as unknown as Record<string, unknown>) ??
         undefined,
+      standardCodes: params.standardsViolations?.map((v) => v.standardCode),
       requestedProofTypes: params.requestedProofTypes,
     },
   });

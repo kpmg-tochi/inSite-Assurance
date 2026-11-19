@@ -81,9 +81,7 @@ before(async () => {
   ({ prisma } = await import('../config/prisma'));
   shared = await import('@insite/shared');
   ({ signFieldAgentToken } = await import('../middleware/auth.middleware'));
-  const { seedDatabase } = await import('../db/seedDatabase');
   const { createApp } = await import('../app');
-  await seedDatabase();
   app = createApp();
 
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: 'kpmg-nigeria' } });
@@ -135,7 +133,8 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
       // Every ACTIVE assigned project; the seeded draft ENU-501 (also assigned) is not live on mobile.
       assert.deepEqual(
         body.projects.map((p: { codePrefix: string }) => p.codePrefix).sort(),
-        ['ABJ-108', 'KAN-210', 'LKK-402', 'OGN-305']
+        // EDO-410 is the Phase 7 seeded project (visible through projects:view_all_tenant).
+        ['ABJ-108', 'EDO-410', 'KAN-210', 'LKK-402', 'OGN-305']
       );
       for (const p of body.projects) {
         assert.equal(p.roleName, body.account.mobileRole.name);
@@ -289,7 +288,7 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
       const me = await request(app).get('/api/v1/auth/me').set(bearer(token));
       assert.equal(me.status, 200, JSON.stringify(me.body));
       assert.equal(me.body.data.actorType, 'MOBILE_USER');
-      assert.equal(me.body.data.projects.length, 4);
+      assert.equal(me.body.data.projects.length, 5); // + EDO-410 (Phase 7 seed)
 
       const baseline = await request(app).get(`/api/v1/auth/mobile/projects/${ids.lkk}/baseline`).set(bearer(token));
       assert.equal(baseline.status, 200, JSON.stringify(baseline.body));

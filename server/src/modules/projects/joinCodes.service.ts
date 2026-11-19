@@ -12,6 +12,7 @@ import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import { hasWebPermission, WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
+import { getProcessConfig } from '../process/processConfig.service';
 
 type Db = Prisma.TransactionClient | PrismaClient;
 
@@ -107,8 +108,13 @@ export function joinCodeTargetsForRole(
 export async function issueMissingJoinCodes(
   tx: Prisma.TransactionClient,
   project: { id: string; codePrefix: string },
-  roles: JoinCodeRole[]
+  inputRoles: JoinCodeRole[]
 ) {
+  let roles = inputRoles;
+  // Phase 7: with contractor field reporting off for the project, no contractor-executor codes.
+  if (!(await getProcessConfig(project.id, tx)).allowContractorFieldReporting) {
+    roles = roles.filter((r) => r.fieldPersonaType !== 'CONTRACTOR_EXECUTOR');
+  }
   const contractors = await tx.projectContractor.findMany({
     where: { projectId: project.id },
     select: { id: true, tradeCode: true, allowFieldReporting: true },
@@ -271,6 +277,9 @@ export async function issueProjectJoinCode(
   }
   assertRoleUsesJoinCodes(role);
   assertMayManageRole(webUser, role.fieldPersonaType);
+  if (role.fieldPersonaType === 'CONTRACTOR_EXECUTOR' && !(await getProcessConfig(projectId)).allowContractorFieldReporting) {
+    throw new AppError('Contractor field reporting is off for this project', 409, 'CONTRACTOR_FIELD_REPORTING_DISABLED');
+  }
 
   // Contractor-executor codes bind to one contractor when the project has contractors.
   const contractors = await prisma.projectContractor.findMany({

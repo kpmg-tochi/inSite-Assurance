@@ -1,8 +1,11 @@
 import { z } from 'zod';
+import { StandardsViolationItemSchema } from './standards.schema';
 
+/** Where a report query came from (Phase 7: an enum in the database, plus the standards check). */
 export const ReportQuerySourceEnum = z.enum([
   'MONITOR',
   'AI_OMISSION_CHECK',
+  'AI_STANDARDS_CHECK',
 ]);
 export type ReportQuerySource = z.infer<typeof ReportQuerySourceEnum>;
 
@@ -31,6 +34,8 @@ export const ReportQueryDtoSchema = z.object({
   status: ReportQueryStatusEnum,
   monitorComment: z.string().nullable().optional(),
   aiOmissionPayload: AiOmissionPayloadSchema.nullable().optional(),
+  /** AI_STANDARDS_CHECK queries: the standards the report did not show it met (Phase 7). */
+  standardsViolations: z.array(StandardsViolationItemSchema).nullable().optional(),
   raisedByUserId: z.string().uuid().nullable().optional(),
   raisedByName: z.string().nullable().optional(),
   createdAt: z.string(),

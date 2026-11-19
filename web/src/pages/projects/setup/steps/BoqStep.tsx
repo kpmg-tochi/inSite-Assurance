@@ -59,6 +59,8 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
   const settings = useTenantSettingsQuery();
   const currency = settings.data?.defaultCurrency ?? "NGN";
   const isLive = setup.status !== "DRAFT";
+  // Phase 7: hold points can be turned off in the project process; existing flags are kept but hidden.
+  const holdPointsOn = setup.process.config.enableHoldPoints;
   const boqQuery = useProjectBoqQuery(projectId);
   const revisions = useBoqRevisionsQuery(projectId, isLive);
   const items = useMemo(() => boqQuery.data ?? [], [boqQuery.data]);
@@ -379,7 +381,7 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
                   <th className="px-3 py-2">Description</th>
                   <th className="px-3 py-2 text-right">Amount</th>
                   <th className="px-3 py-2">Lump sum</th>
-                  <th className="px-3 py-2">Hold point</th>
+                  {holdPointsOn && <th className="px-3 py-2">Hold point</th>}
                   <th className="px-3 py-2">Tranche</th>
                   {showContractorColumn && <th className="px-3 py-2">Contractor</th>}
                 </tr>
@@ -410,7 +412,7 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
                           disabled={readOnly}
                         />
                       </td>
-                      <td className="px-3 py-2 min-w-[180px]">
+                      {holdPointsOn && <td className="px-3 py-2 min-w-[180px]">
                         <label className="inline-flex items-center gap-1.5">
                           <input
                             type="checkbox"
@@ -429,7 +431,7 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
                             disabled={readOnly}
                           />
                         )}
-                      </td>
+                      </td>}
                       <td className="px-3 py-2 min-w-[160px]">
                         <select
                           className={inputClass(!m.trancheId)}

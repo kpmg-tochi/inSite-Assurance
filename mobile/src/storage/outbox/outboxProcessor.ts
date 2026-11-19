@@ -7,6 +7,7 @@ import {
   afterFailure,
   BATCHED_KINDS,
   classifyFailure,
+  failureMessage,
   dependencyState,
   dueRows,
   TELEMETRY_BATCH_SIZE,
@@ -112,7 +113,8 @@ export async function refreshOutboxCounts(): Promise<void> {
 }
 
 function describe(error: unknown): string {
-  return (error as Error)?.message || 'Unknown error';
+  const e = error as ClassifiableError & { message?: string };
+  return failureMessage({ code: e?.code, message: e?.message });
 }
 
 function toClassifiable(error: unknown): ClassifiableError {

@@ -11,6 +11,9 @@ import {
   CheckCheck,
   X,
   ExternalLink,
+  ShieldAlert,
+  ClipboardCheck,
+  Landmark,
 } from "lucide-react";
 import { formatElapsedTime, type WebNotificationCategory, type WebNotificationDto } from "@insite/shared";
 import {
@@ -18,6 +21,18 @@ import {
   useMarkWebNotificationReadMutation,
   useWebNotificationsQuery,
 } from "../queries/notifications/useWebNotificationsQueries";
+
+const CATEGORY_LABELS: Record<WebNotificationCategory, string> = {
+  REPORT_RESUBMITTED: "Report resubmitted",
+  CONFLICT_FLAG: "Evidence conflict",
+  CONTRACTOR_ONBOARDING: "Contractor onboarding",
+  TRANCHE_DISBURSEMENT: "Tranche disbursement",
+  MONITOR_QUERY: "Monitor query",
+  AI_OMISSION_FLAG: "Omission check",
+  STANDARDS_VIOLATION_FLAGGED: "Standards violation",
+  REPORT_PENDING_APPROVAL: "Report awaiting approval",
+  DISBURSEMENT_PENDING_APPROVAL: "Disbursement awaiting approval",
+};
 
 interface NotificationsProps {
   projectId?: string;
@@ -88,10 +103,18 @@ export default function Notifications({ projectId }: NotificationsProps) {
         return <Coins className="w-4 h-4 text-emerald-600" />;
       case "MONITOR_QUERY":
         return <FileQuestion className="w-4 h-4 text-brand-primary" />;
+      case "STANDARDS_VIOLATION_FLAGGED":
+        return <ShieldAlert className="w-4 h-4 text-rose-600" />;
+      case "REPORT_PENDING_APPROVAL":
+        return <ClipboardCheck className="w-4 h-4 text-amber-600" />;
+      case "DISBURSEMENT_PENDING_APPROVAL":
+        return <Landmark className="w-4 h-4 text-amber-600" />;
       default:
         return <Bell className="w-4 h-4 text-slate-500" />;
     }
   };
+
+  const getCategoryLabel = (category: WebNotificationCategory) => CATEGORY_LABELS[category] ?? "Notification";
 
   const getCategoryBadgeClass = (category: WebNotificationCategory) => {
     switch (category) {
@@ -107,6 +130,11 @@ export default function Notifications({ projectId }: NotificationsProps) {
         return "bg-emerald-50 text-emerald-800 border-emerald-200";
       case "MONITOR_QUERY":
         return "bg-brand-sky/10 text-brand-medium border-brand-sky/30";
+      case "STANDARDS_VIOLATION_FLAGGED":
+        return "bg-rose-50 text-rose-800 border-rose-200";
+      case "REPORT_PENDING_APPROVAL":
+      case "DISBURSEMENT_PENDING_APPROVAL":
+        return "bg-amber-50 text-amber-800 border-amber-200";
       default:
         return "bg-slate-50 text-slate-700 border-slate-200";
     }
@@ -223,7 +251,11 @@ export default function Notifications({ projectId }: NotificationsProps) {
                   }`}
                 >
                   <div className="pt-0.5 shrink-0 flex items-center">
-                    <div className="w-7 h-7 rounded-lg flex items-center justify-center border bg-white text-slate-600 border-slate-200">
+                    <div
+                      title={getCategoryLabel(item.category)}
+                      aria-label={getCategoryLabel(item.category)}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center border bg-white text-slate-600 border-slate-200"
+                    >
                       {getCategoryIcon(item.category)}
                     </div>
                   </div>
@@ -235,14 +267,15 @@ export default function Notifications({ projectId }: NotificationsProps) {
                           item.category,
                         )}`}
                       >
-                        {item.title}
+                        {getCategoryLabel(item.category)}
                       </span>
                       <span className="text-[10px] text-slate-400 whitespace-nowrap">
                         {formatElapsedTime(item.createdAt)}
                       </span>
                     </div>
+                    <p className="text-xs font-semibold text-slate-900 leading-snug mt-1 line-clamp-1">{item.title}</p>
 
-                    <p className="text-xs text-slate-700 leading-snug font-normal line-clamp-2 mt-1">
+                    <p className="text-xs text-slate-700 leading-snug font-normal line-clamp-2 mt-0.5">
                       {item.description}
                     </p>
 

@@ -14,6 +14,10 @@ import { kickOutbox } from './outbox/outboxProcessor';
 import { captureDisplayUri, getCaptures, type CaptureRecord } from './captureStore';
 import { getHeldState } from './heldItems';
 import { currentPeriod, reportedWbsItemIds } from './reportStore';
+import { personaCopy } from '../utils/personaCopy';
+import { briefMetaJson, parseBriefMeta, type BriefMeta } from './briefMeta';
+
+export type { BriefMeta } from './briefMeta';
 
 /**
  * WBS threads and their chat (Phase 4). All persistence is SQLite; there is no in-memory copy
@@ -89,6 +93,8 @@ export interface WbsChatMessageRecord {
   queryDetails?: ReportQueryDto | null;
   /** For morning briefs: the day the brief is for. */
   briefDate?: string | null;
+  /** For morning briefs synced since Phase 7; null for older cached briefs. */
+  brief?: BriefMeta | null;
   /** ISO timestamp. Format at render. */
   createdAt: string;
   syncStatus: ChatSyncStatus;
@@ -130,6 +136,7 @@ type MessageRow = {
   report_query_id: string | null;
   query_json: string | null;
   brief_date: string | null;
+  brief_json: string | null;
   created_at: string;
   sync_status: string;
 };
@@ -163,10 +170,12 @@ export async function getWbsThreads(projectId: string): Promise<WbsItemRecord[]>
   }));
 }
 
+/** Brief body as stored. The pointers heading follows the persona the server wrote the brief for. */
 function briefText(brief: MorningDeliverableBriefDto): string {
+  const heading = personaCopy(brief.targetPersona).pointersHeading;
   const checklist =
     brief.reportingChecklist.length > 0
-      ? `\n\nReport pointers:\n${brief.reportingChecklist.map((p) => `• ${p}`).join('\n')}`
+      ? `\n\n${heading}\n${brief.reportingChecklist.map((p) => `• ${p}`).join('\n')}`
       : '';
   return `${brief.headline}\n${brief.expectedDeliverable}${checklist}`;
 }
@@ -221,11 +230,19 @@ export async function syncWbsInboxFromServer(projectId: string): Promise<{
           // One brief message per WBS item, replaced when the brief changes.
           await db.runAsync(
             `INSERT INTO chat_messages (id, project_id, wbs_item_id, sender_name, sender_role, message_type,
-               text_content, brief_date, created_at, sync_status)
-             VALUES (?, ?, ?, 'InSite Morning Brief', 'SYSTEM_BRIEF', 'MORNING_BRIEF', ?, ?, ?, 'SERVER')
+               text_content, brief_date, brief_json, created_at, sync_status)
+             VALUES (?, ?, ?, 'InSite Morning Brief', 'SYSTEM_BRIEF', 'MORNING_BRIEF', ?, ?, ?, ?, 'SERVER')
              ON CONFLICT(id) DO UPDATE SET text_content = excluded.text_content,
-               brief_date = excluded.brief_date, created_at = excluded.created_at`,
-            [`brief-${b.id}`, projectId, b.id, briefText(brief), brief.workdayDate, brief.createdAt]
+               brief_date = excluded.brief_date, brief_json = excluded.brief_json, created_at = excluded.created_at`,
+            [
+              `brief-${b.id}`,
+              projectId,
+              b.id,
+              briefText(brief),
+              brief.workdayDate,
+              briefMetaJson(brief),
+              brief.createdAt,
+            ]
           );
         }
       }
@@ -319,6 +336,7 @@ export async function getWbsChatMessages(wbsItemId: string): Promise<WbsChatMess
       reportQueryId: r.report_query_id,
       queryDetails: query,
       briefDate: r.brief_date,
+      brief: r.message_type === 'MORNING_BRIEF' ? parseBriefMeta(r.brief_json) : null,
       createdAt: r.created_at,
       syncStatus: r.sync_status as ChatSyncStatus,
       heldAfterSessionEnd:

@@ -67,7 +67,29 @@ const RETRYABLE_CODES = new Set([
   'OBJECT_NOT_UPLOADED', // the upload did not land; the handler re-uploads
 ]);
 
+/**
+ * Phase 7: the project switched contractor field reporting off. The contractor's session stays
+ * valid, so this must not pause the outbox like an ended session, and retrying cannot succeed
+ * until the project changes the setting: dead-letter at once with a message the person understands.
+ */
+export const CONTRACTOR_REPORTING_OFF_CODE = 'CONTRACTOR_FIELD_REPORTING_DISABLED';
+export const CONTRACTOR_REPORTING_OFF_MESSAGE =
+  'Contractor reporting is off for this project. This item stays on this device and was not sent. Ask the project monitor; tap Retry only if they turn contractor reporting back on.';
+
+/** Server codes with a fixed message for the person, shown instead of the raw server text. */
+const PERMANENT_CODE_MESSAGES: Record<string, string> = {
+  [CONTRACTOR_REPORTING_OFF_CODE]: CONTRACTOR_REPORTING_OFF_MESSAGE,
+};
+
+/** The message stored on a failed row: a fixed one for known permanent codes, else the error text. */
+export function failureMessage(error: ClassifiableError & { message?: string }): string {
+  if (error.code && PERMANENT_CODE_MESSAGES[error.code]) return PERMANENT_CODE_MESSAGES[error.code];
+  return error.message || 'Unknown error';
+}
+
 export function classifyFailure(error: ClassifiableError): FailureClass {
+  // Checked first: whatever status the server uses (403 on submissions, 409 on join), never retry.
+  if (error.code === CONTRACTOR_REPORTING_OFF_CODE) return 'PERMANENT';
   if (error.kind === 'auth') return 'AUTH_PAUSE';
   if (error.kind === 'network') return 'RETRY';
   if (error.kind === 'local') return 'PERMANENT';

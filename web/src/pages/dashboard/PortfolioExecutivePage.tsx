@@ -31,6 +31,7 @@ import {
   TableColumnDef,
 } from '../../components/table';
 import { KpiCard } from '../../components/common';
+import { useProjectProcessMap } from '../../queries/process/useProcessQueries';
 
 interface PortfolioExecutivePageProps {
   onSelectProject: (projectId: string) => void;
@@ -42,6 +43,10 @@ export function PortfolioExecutivePage({
   useAuth();
   const { data: summary, isLoading, refetch } = usePortfolioExecutiveQuery();
   const [searchTerm, setSearchTerm] = useState('');
+  // Phase 7: per-project process settings, to hide tranche and hold-point details a project turned off.
+  // One cached request per listed project; until loaded (or if unreadable) the details are shown.
+  const projectIds = useMemo(() => (summary?.projects ?? []).map((p) => p.projectId), [summary]);
+  const processMap = useProjectProcessMap(projectIds, projectIds.length > 0);
   const [healthFilter, setHealthFilter] = useState<'ALL' | 'EVIDENCE_SUPPORTED' | 'EVIDENCE_PARTIAL' | 'EVIDENCE_CONFLICT'>('ALL');
 
   const portfolioColumns: TableColumnDef<PortfolioProjectHealthItem>[] = useMemo(
@@ -123,7 +128,7 @@ export function PortfolioExecutivePage({
           <div className="w-28 space-y-1">
             <div className="flex justify-between text-[11px] font-semibold text-slate-700">
               <span>{item.certifiedProgressPct}%</span>
-              {item.activeTrancheNumber && (
+              {item.activeTrancheNumber && (processMap.get(item.projectId)?.enableTranchesAndCps ?? true) && (
                 <span className="text-brand-primary text-[10px]">
                   Tranche #{item.activeTrancheNumber}
                 </span>
@@ -151,7 +156,11 @@ export function PortfolioExecutivePage({
           if (item.portfolioHealth === 'EVIDENCE_PARTIAL') {
             return <TableBadge variant="warning">Under Observation</TableBadge>;
           }
-          return <TableBadge variant="danger">Hold-Point Breached</TableBadge>;
+          return (
+            <TableBadge variant="danger">
+              {(processMap.get(item.projectId)?.enableHoldPoints ?? true) ? 'Hold-Point Breached' : 'Evidence Conflict'}
+            </TableBadge>
+          );
         },
       },
       {
@@ -170,7 +179,7 @@ export function PortfolioExecutivePage({
             ) : (
               <div className="text-slate-400 text-[11px]">0 Open Conflicts</div>
             )}
-            {item.unfulfilledHoldPointCount > 0 ? (
+            {!(processMap.get(item.projectId)?.enableHoldPoints ?? true) ? null : item.unfulfilledHoldPointCount > 0 ? (
               <div className="text-rose-700 font-semibold text-[10px]">
                 {item.unfulfilledHoldPointCount} Bypassed Hold-Point
                 {item.unfulfilledHoldPointCount === 1 ? '' : 's'}
@@ -202,7 +211,7 @@ export function PortfolioExecutivePage({
         ),
       },
     ],
-    [onSelectProject]
+    [onSelectProject, processMap]
   );
 
   if (isLoading) {

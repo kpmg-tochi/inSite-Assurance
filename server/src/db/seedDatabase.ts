@@ -16,6 +16,7 @@ import { provisionDefaultRoles } from "../modules/rbac/rbac.service";
 import { randomJoinCodeSegment } from "../modules/projects/joinCodes.service";
 import { evaluateGeofence } from "../utils/geofenceEvaluation";
 import { seedPhase6Projects } from "./seedPhase6";
+import { seedPhase7 } from "./seedPhase7";
 import { projectObjectPrefix } from "../integrations/storage.service";
 
 let activeSeedPromise: Promise<void> | null = null;
@@ -216,8 +217,15 @@ async function runSeed(): Promise<void> {
   await prisma.siteTelemetryPing.deleteMany();
   await prisma.morningDeliverableBrief.deleteMany();
   await prisma.mobileNotification.deleteMany();
+  await prisma.approvalAction.deleteMany();
+  await prisma.approvalStep.deleteMany();
   await prisma.trancheDecision.deleteMany();
   await prisma.valuationReport.deleteMany();
+  await prisma.milestoneVerification.deleteMany();
+  await prisma.projectStandardSpecification.deleteMany();
+  await prisma.projectNeedsAssessmentDocument.deleteMany();
+  await prisma.projectProcessConfig.deleteMany();
+  await prisma.workflowTemplate.deleteMany();
   await prisma.monitorQuery.deleteMany();
   await prisma.ipcSupportingDocument.deleteMany();
   await prisma.ipcLineItem.deleteMany();
@@ -1613,6 +1621,18 @@ async function runSeed(): Promise<void> {
     passwordHash: defaultPasswordHash,
     residentRole: residentCowMobileRole,
     contractorEngineerRole: contractorEngineerMobileRole,
+  });
+
+  await seedPhase7({
+    tenantId: defaultTenant.id,
+    monitorOrgId: monitorOrg.id,
+    lenderOrgId: lenderOrg.id,
+    civilContractorOrgId: contractorOrg.id,
+    monitorUserId: monitorUser.id,
+    lenderUserId: (await prisma.user.findUniqueOrThrow({ where: { email: "lender@insite.ng" } })).id,
+    monitorRoleId: monitorRole.id,
+    passwordHash: defaultPasswordHash,
+    residentRole: residentCowMobileRole,
   });
 
   console.log("✅ Seed complete!");

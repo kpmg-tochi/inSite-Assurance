@@ -5,7 +5,11 @@ import {
   canonicalReportString,
   isValidTimeZone,
   REPORT_LOW_GPS_ACCURACY_METERS,
+  ApprovalProgressDto,
+  FieldPersonaType,
   RevalidateWorkdayReportRequest,
+  ReviewWorkdayReportRequest,
+  StandardsViolationItem,
   SubmissionGeotag,
   SubmissionGeotagInput,
   SubmitWorkdayReportRequest,
@@ -18,7 +22,22 @@ import {
 import { prisma } from '../../config/prisma';
 import { env } from '../../config/env';
 import { AppError } from '../../middleware/error.middleware';
-import { FieldAgentJwtPayload } from '../../middleware/auth.middleware';
+import { FieldAgentJwtPayload, WebJwtPayload } from '../../middleware/auth.middleware';
+import {
+  assertFieldReportingAllowed,
+  ensureChain,
+  getChainVersionSteps,
+  getProcessConfig,
+} from '../process/processConfig.service';
+import {
+  assertMayAct,
+  buildApprovalProgress,
+  gateForStep,
+  loadActions,
+  nextApplicableStep,
+  recordApprovalAction,
+} from '../process/approvalChain';
+import { dispatchReportQueryBundle } from '../wbs-chat/wbsChat.service';
 import { azureOpenAiService } from '../../integrations/azure-openai.service';
 import { whisperService } from '../../integrations/whisper.service';
 import { storageService } from '../../integrations/storage.service';
@@ -36,7 +55,7 @@ type Tx = Prisma.TransactionClient;
 
 const REPORT_INCLUDE = {
   boqItem: { select: { wbsCode: true, description: true } },
-  reporterSession: { select: { agentFullName: true, roleNameSnapshot: true } },
+  reporterSession: { select: { agentFullName: true, roleNameSnapshot: true, userId: true } },
   captures: { include: { mediaAttachments: true }, orderBy: { capturedAtDevice: 'asc' } },
 } satisfies Prisma.WorkdayReportInclude;
 
@@ -83,7 +102,14 @@ function toCaptureSummary(c: ReportRow['captures'][number]): WorkdayReportCaptur
   };
 }
 
-export function serializeWorkdayReport(r: ReportRow, extra: { idempotentReplay?: boolean } = {}): WorkdayReportDto {
+function asViolations(raw: unknown): StandardsViolationItem[] {
+  return Array.isArray(raw) ? (raw as StandardsViolationItem[]) : [];
+}
+
+export function serializeWorkdayReport(
+  r: ReportRow,
+  extra: { idempotentReplay?: boolean; approval?: ApprovalProgressDto | null } = {}
+): WorkdayReportDto {
   return {
     id: r.id,
     clientReportId: r.clientReportId,
@@ -117,8 +143,80 @@ export function serializeWorkdayReport(r: ReportRow, extra: { idempotentReplay?:
     releasedAt: r.releasedAt?.toISOString() ?? null,
     createdAt: r.createdAt.toISOString(),
     queries: r.queries ? r.queries.map(serializeReportQuery) : [],
+    reporterPersonaType: r.reporterPersonaType as FieldPersonaType,
+    standardsCompliancePassed: r.standardsCompliancePassed,
+    standardsViolations: asViolations(r.standardsViolationsJson),
+    approvalChainVersion: r.approvalChainVersion,
+    currentApprovalStep: r.currentApprovalStep,
+    approvedCompletedAt: r.approvedCompletedAt?.toISOString() ?? null,
+    approval: extra.approval ?? null,
     ...(extra.idempotentReplay ? { idempotentReplay: true } : {}),
   };
+}
+
+/** The report's position on its approval chain, or null when it was never on one. */
+async function approvalProgressFor(r: ReportRow, viewer?: WebJwtPayload | null): Promise<ApprovalProgressDto | null> {
+  if (r.approvalChainVersion === null) return null;
+  return buildApprovalProgress(prisma, {
+    projectId: r.projectId,
+    chainType: 'REPORT',
+    version: r.approvalChainVersion,
+    subjectType: 'WORKDAY_REPORT',
+    subjectId: r.id,
+    currentStepOrder: r.status === 'APPROVED_COMPLETED' ? null : r.currentApprovalStep,
+    amount: null,
+    viewer,
+    excludedUserId: r.reporterSession.userId,
+    excludedReason: 'You submitted this report, so someone else must review it.',
+  });
+}
+
+export async function serializeWithApproval(
+  r: ReportRow,
+  viewer?: WebJwtPayload | null,
+  extra: { idempotentReplay?: boolean } = {}
+): Promise<WorkdayReportDto> {
+  return serializeWorkdayReport(r, { ...extra, approval: await approvalProgressFor(r, viewer) });
+}
+
+/**
+ * Where an accepted report goes (Phase 7): straight to CONFIRMED, or onto the report approval chain
+ * at its first step when the project requires report approval. A revision of a report already on a
+ * chain re-enters that chain version at step 1 (items in flight keep their chain).
+ */
+async function acceptedReportState(
+  tx: Tx,
+  projectId: string,
+  inheritedChainVersion: number | null
+): Promise<{ status: 'CONFIRMED' | 'PENDING_APPROVAL'; approvalChainVersion: number | null; currentApprovalStep: number }> {
+  const config = await getProcessConfig(projectId, tx);
+  if (!config.requireReportApproval && inheritedChainVersion === null) {
+    return { status: 'CONFIRMED', approvalChainVersion: null, currentApprovalStep: 0 };
+  }
+  const version = inheritedChainVersion ?? (await ensureChain(tx, projectId, 'REPORT')).version;
+  const steps = await getChainVersionSteps(tx, projectId, 'REPORT', version);
+  const first = nextApplicableStep(steps, 0, null);
+  if (!first) return { status: 'CONFIRMED', approvalChainVersion: null, currentApprovalStep: 0 };
+  return { status: 'PENDING_APPROVAL', approvalChainVersion: version, currentApprovalStep: first.stepOrder };
+}
+
+async function notifyPendingApproval(
+  tx: Tx,
+  params: { projectId: string; reportId: string; wbsItemId: string; wbsCode: string; version: number; stepOrder: number; reporterName: string }
+) {
+  const steps = await getChainVersionSteps(tx, params.projectId, 'REPORT', params.version);
+  const step = steps.find((s) => s.stepOrder === params.stepOrder);
+  if (!step) return;
+  await createWebNotification(tx, {
+    projectId: params.projectId,
+    targetPermissionKey: step.requiredPermissionKey,
+    targetRoleId: step.requiredRoleId,
+    category: 'REPORT_PENDING_APPROVAL',
+    title: `Report awaiting ${step.label} · WBS ${params.wbsCode}`,
+    description: `${params.reporterName}'s report on WBS ${params.wbsCode} is waiting for "${step.label}" (step ${step.stepOrder} of ${steps.length}).`,
+    actionUrl: `/app/projects/${params.projectId}/audit?tab=presence&wbsItemId=${params.wbsItemId}&reportId=${params.reportId}`,
+    metadata: { workdayReportId: params.reportId, wbsItemId: params.wbsItemId, stepOrder: step.stepOrder, chainVersion: params.version },
+  });
 }
 
 export type SubmitResult = { report: WorkdayReportDto; created: boolean };
@@ -133,7 +231,7 @@ async function findReportForReplay(clientReportId: string, sessionId: string): P
   if (existing.reporterSessionId !== sessionId) {
     throw new AppError('This report ID is already in use', 409, 'REPORT_ID_CONFLICT');
   }
-  return serializeWorkdayReport(existing, { idempotentReplay: true });
+  return serializeWithApproval(existing, null, { idempotentReplay: true });
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -310,6 +408,7 @@ export async function submitWorkdayReport(params: {
 
   const replay = await findReportForReplay(input.clientReportId, fieldAgent.sessionId);
   if (replay) return { report: replay, created: false };
+  await assertFieldReportingAllowed(projectId, fieldAgent.fieldPersonaType);
 
   assertTimezone(input.reporterTimezone);
   const [project, boqItem, session] = await Promise.all([
@@ -353,12 +452,16 @@ export async function submitWorkdayReport(params: {
     }),
   });
 
-  const approved = session.assuranceStatus === 'APPROVED';
+  // Phase 7: with identity assurance off for the project, the gate does not apply.
+  const config = await getProcessConfig(projectId);
+  const approved = session.assuranceStatus === 'APPROVED' || !config.enableContractorIdentityAssurance;
+  const runChecks = config.enableAiOmissionCheck || config.enableAiStandardsCheck;
   const flags = reportFlags(geotag!, signature.flag);
 
   let created: ReportRow;
   try {
     created = await prisma.$transaction(async (tx) => {
+      const accepted = approved ? await acceptedReportState(tx, projectId, null) : null;
       const report = await tx.workdayReport.create({
         data: {
           clientReportId: input.clientReportId,
@@ -367,7 +470,10 @@ export async function submitWorkdayReport(params: {
           wbsItemId: input.wbsItemId,
           workdayDate: input.workdayDate,
           reporterTimezone: input.reporterTimezone,
-          status: approved ? 'CONFIRMED' : 'STAGED_UNVERIFIED',
+          status: accepted?.status ?? 'STAGED_UNVERIFIED',
+          approvalChainVersion: accepted?.approvalChainVersion ?? null,
+          currentApprovalStep: accepted?.currentApprovalStep ?? 0,
+          reporterPersonaType: fieldAgent.fieldPersonaType,
           revisionNumber: 1,
           summaryText: input.summaryText,
           reportedQuantity: input.reportedQuantity,
@@ -380,12 +486,23 @@ export async function submitWorkdayReport(params: {
           deviceSignature: input.signature ?? null,
           signatureVerified: signature.verified,
           integrityFlags: flags as unknown as Prisma.InputJsonValue,
-          aiCheckStatus: approved ? 'PENDING' : 'SKIPPED',
+          aiCheckStatus: approved && runChecks ? 'PENDING' : 'SKIPPED',
           humanConfirmedAt: new Date(input.confirmedAt),
         },
       });
       await linkCaptures(tx, report.id, input.wbsItemId, captures.map((c) => c.id));
       await recordReportPing(tx, { projectId, sessionId: fieldAgent.sessionId, wbsItemId: input.wbsItemId, geotag });
+      if (report.status === 'PENDING_APPROVAL' && report.approvalChainVersion !== null) {
+        await notifyPendingApproval(tx, {
+          projectId,
+          reportId: report.id,
+          wbsItemId: input.wbsItemId,
+          wbsCode: boqItem.wbsCode,
+          version: report.approvalChainVersion,
+          stepOrder: report.currentApprovalStep,
+          reporterName: fieldAgent.agentFullName,
+        });
+      }
 
       await recordAuditEvent(tx, {
         projectId,
@@ -394,7 +511,9 @@ export async function submitWorkdayReport(params: {
         actorDisplayName: `${fieldAgent.agentFullName} (${fieldAgent.roleName})`,
         action: 'WORKDAY_REPORT_SUBMITTED',
         summaryText: approved
-          ? `Submitted WBS ${boqItem.wbsCode} report for ${input.workdayDate} (${input.reportedQuantity} ${input.unitOfMeasure}, ${captures.length} capture(s)).`
+          ? `Submitted WBS ${boqItem.wbsCode} report for ${input.workdayDate} (${input.reportedQuantity} ${input.unitOfMeasure}, ${captures.length} capture(s))${
+              report.status === 'PENDING_APPROVAL' ? '; awaiting approval' : ''
+            }.`
           : `Staged WBS ${boqItem.wbsCode} report for ${input.workdayDate}; reporter identity not yet approved.`,
         payload: {
           workdayReportId: report.id,
@@ -425,7 +544,7 @@ export async function submitWorkdayReport(params: {
   }
 
   if (created.aiCheckStatus === 'PENDING') scheduleAiOmissionCheck(created.id);
-  return { report: serializeWorkdayReport(created), created: true };
+  return { report: await serializeWithApproval(created), created: true };
 }
 
 /**
@@ -491,6 +610,7 @@ export async function revalidateWorkdayReport(params: {
 
   const replay = await findReportForReplay(input.clientReportId, fieldAgent.sessionId);
   if (replay) return { report: replay, created: false };
+  await assertFieldReportingAllowed(projectId, fieldAgent.fieldPersonaType);
 
   assertTimezone(input.reporterTimezone);
   const prev = await prisma.workdayReport.findFirst({
@@ -579,7 +699,9 @@ export async function revalidateWorkdayReport(params: {
       confirmedAt: input.confirmedAt,
     }),
   });
-  const approved = session.assuranceStatus === 'APPROVED';
+  const config = await getProcessConfig(projectId);
+  const approved = session.assuranceStatus === 'APPROVED' || !config.enableContractorIdentityAssurance;
+  const runChecks = config.enableAiOmissionCheck || config.enableAiStandardsCheck;
   const flags = reportFlags(geotag!, signature.flag);
   if (new Date(input.confirmedAt).getTime() - Date.now() > MAX_FUTURE_CONFIRMATION_MS) {
     throw new AppError('The report is dated in the future. Check the phone clock.', 400, 'CONFIRMED_AT_IN_FUTURE');
@@ -593,6 +715,8 @@ export async function revalidateWorkdayReport(params: {
         _max: { revisionNumber: true },
       });
       const revisionNumber = (maxRev._max.revisionNumber ?? prev.revisionNumber) + 1;
+      // A revision of a report on an approval chain re-enters the same chain version at step 1.
+      const accepted = approved ? await acceptedReportState(tx, projectId, prev.approvalChainVersion) : null;
 
       const report = await tx.workdayReport.create({
         data: {
@@ -602,7 +726,10 @@ export async function revalidateWorkdayReport(params: {
           wbsItemId: prev.wbsItemId,
           workdayDate: prev.workdayDate,
           reporterTimezone: input.reporterTimezone,
-          status: approved ? 'CONFIRMED' : 'STAGED_UNVERIFIED',
+          status: accepted?.status ?? 'STAGED_UNVERIFIED',
+          approvalChainVersion: accepted?.approvalChainVersion ?? prev.approvalChainVersion,
+          currentApprovalStep: accepted?.currentApprovalStep ?? 0,
+          reporterPersonaType: fieldAgent.fieldPersonaType,
           revisionNumber,
           parentReportId: prev.id,
           resolvedQueryId: targetQueryId,
@@ -617,12 +744,23 @@ export async function revalidateWorkdayReport(params: {
           deviceSignature: input.signature ?? null,
           signatureVerified: signature.verified,
           integrityFlags: flags as unknown as Prisma.InputJsonValue,
-          aiCheckStatus: approved ? 'PENDING' : 'SKIPPED',
+          aiCheckStatus: approved && runChecks ? 'PENDING' : 'SKIPPED',
           humanConfirmedAt: new Date(input.confirmedAt),
         },
       });
       await linkCaptures(tx, report.id, prev.wbsItemId, captures.map((c) => c.id));
       await recordReportPing(tx, { projectId, sessionId: fieldAgent.sessionId, wbsItemId: prev.wbsItemId, geotag });
+      if (report.status === 'PENDING_APPROVAL' && report.approvalChainVersion !== null) {
+        await notifyPendingApproval(tx, {
+          projectId,
+          reportId: report.id,
+          wbsItemId: prev.wbsItemId,
+          wbsCode: prev.boqItem.wbsCode,
+          version: report.approvalChainVersion,
+          stepOrder: report.currentApprovalStep,
+          reporterName: fieldAgent.agentFullName,
+        });
+      }
 
       await tx.wbsChatMessage.create({
         data: {
@@ -703,12 +841,13 @@ export async function revalidateWorkdayReport(params: {
   }
 
   if (created.aiCheckStatus === 'PENDING') scheduleAiOmissionCheck(created.id);
-  return { report: serializeWorkdayReport(created), created: true };
+  return { report: await serializeWithApproval(created), created: true };
 }
 
 /**
  * Releases a session's staged reports when its identity assurance is approved. Called inside the
- * approval transaction; returns the released IDs so the caller can schedule their checks.
+ * approval transaction; returns the released IDs so the caller can schedule their checks. With
+ * report approval on, released reports enter the approval chain.
  */
 export async function releaseStagedReportsForSession(
   tx: Tx,
@@ -716,25 +855,176 @@ export async function releaseStagedReportsForSession(
 ): Promise<string[]> {
   const staged = await tx.workdayReport.findMany({
     where: { projectId: params.projectId, reporterSessionId: params.sessionId, status: 'STAGED_UNVERIFIED' },
-    select: { id: true },
+    select: { id: true, approvalChainVersion: true },
   });
   if (staged.length === 0) return [];
-  const ids = staged.map((r) => r.id);
-  await tx.workdayReport.updateMany({
-    where: { id: { in: ids } },
-    data: { status: 'CONFIRMED', releasedAt: new Date(), aiCheckStatus: 'PENDING' },
+  const config = await getProcessConfig(params.projectId, tx);
+  const checks = config.enableAiOmissionCheck || config.enableAiStandardsCheck;
+  const now = new Date();
+  for (const r of staged) {
+    const accepted = await acceptedReportState(tx, params.projectId, r.approvalChainVersion);
+    await tx.workdayReport.update({
+      where: { id: r.id },
+      data: {
+        status: accepted.status,
+        approvalChainVersion: accepted.approvalChainVersion,
+        currentApprovalStep: accepted.currentApprovalStep,
+        releasedAt: now,
+        aiCheckStatus: checks ? 'PENDING' : 'SKIPPED',
+      },
+    });
+  }
+  return checks ? staged.map((r) => r.id) : [];
+}
+
+/**
+ * POST /projects/:projectId/workday-reports/:reportId/review (Phase 7)
+ *
+ * Acts on the current step of the report's approval chain. APPROVE advances to the next step or
+ * completes (APPROVED_COMPLETED, which then counts as evidence). RETURN sends the report back with
+ * a query to the reporter; the revision re-enters the chain at step 1.
+ */
+export async function reviewWorkdayReport(params: {
+  projectId: string;
+  reportId: string;
+  webUser: WebJwtPayload;
+  input: ReviewWorkdayReportRequest;
+}): Promise<WorkdayReportDto> {
+  const { projectId, reportId, webUser, input } = params;
+  await prisma.$transaction(async (tx) => {
+    const exists = await tx.workdayReport.findFirst({ where: { id: reportId, projectId }, select: { id: true } });
+    if (!exists) throw new AppError('Workday report not found', 404, 'WORKDAY_REPORT_NOT_FOUND');
+    await tx.$queryRaw`SELECT id FROM "workday_reports" WHERE id = ${reportId}::uuid FOR UPDATE`;
+    const report = await tx.workdayReport.findUniqueOrThrow({
+      where: { id: reportId },
+      include: {
+        boqItem: { select: { wbsCode: true } },
+        reporterSession: { select: { userId: true, agentFullName: true } },
+      },
+    });
+    if (report.status !== 'PENDING_APPROVAL' || report.approvalChainVersion === null) {
+      throw new AppError('This report is not waiting for approval', 409, 'REPORT_NOT_PENDING_APPROVAL', { status: report.status });
+    }
+    const newer = await tx.workdayReport.findFirst({ where: { parentReportId: report.id }, select: { id: true } });
+    if (newer) {
+      throw new AppError('A newer revision of this report exists; review that one', 409, 'REPORT_SUPERSEDED', {
+        workdayReportId: newer.id,
+      });
+    }
+
+    const steps = await getChainVersionSteps(tx, projectId, 'REPORT', report.approvalChainVersion);
+    const step = steps.find((s) => s.stepOrder === report.currentApprovalStep) ?? null;
+    const actions = await loadActions(tx, 'WORKDAY_REPORT', report.id);
+    assertMayAct(
+      gateForStep({
+        webUser,
+        step,
+        actions,
+        excludedUserId: report.reporterSession.userId,
+        excludedReason: 'You submitted this report, so someone else must review it.',
+      }),
+      step
+    );
+
+    await recordApprovalAction(tx, {
+      projectId,
+      chainType: 'REPORT',
+      subjectType: 'WORKDAY_REPORT',
+      subjectId: report.id,
+      step: step!,
+      decision: input.decision,
+      actorUserId: webUser.userId,
+      notes: input.notes ?? null,
+    });
+    const actorDisplayName = `${webUser.fullName} (${webUser.roleName})`;
+
+    if (input.decision === 'RETURN') {
+      await tx.workdayReport.update({
+        where: { id: report.id },
+        data: { status: 'RETURNED_FOR_REVISION', currentApprovalStep: 0 },
+      });
+      await dispatchReportQueryBundle(tx, {
+        projectId,
+        boqItemId: report.wbsItemId,
+        wbsCode: report.boqItem.wbsCode,
+        workdayReportId: report.id,
+        fieldSessionId: report.reporterSessionId,
+        source: 'MONITOR',
+        monitorComment: `Returned at "${step!.label}": ${input.notes}`,
+        raisedByUserId: webUser.userId,
+        raisedByName: webUser.fullName,
+      });
+      await recordAuditEvent(tx, {
+        projectId,
+        actorType: 'WEB_USER',
+        actorId: webUser.userId,
+        actorDisplayName,
+        action: 'WORKDAY_REPORT_RETURNED',
+        summaryText: `Returned WBS ${report.boqItem.wbsCode} report (${report.workdayDate}, rev ${report.revisionNumber}) at step ${step!.stepOrder} "${step!.label}": ${input.notes}`,
+        payload: { workdayReportId: report.id, stepOrder: step!.stepOrder, chainVersion: report.approvalChainVersion, notes: input.notes },
+      });
+      return;
+    }
+
+    const next = nextApplicableStep(steps, step!.stepOrder, null);
+    if (next) {
+      await tx.workdayReport.update({ where: { id: report.id }, data: { currentApprovalStep: next.stepOrder } });
+      await notifyPendingApproval(tx, {
+        projectId,
+        reportId: report.id,
+        wbsItemId: report.wbsItemId,
+        wbsCode: report.boqItem.wbsCode,
+        version: report.approvalChainVersion,
+        stepOrder: next.stepOrder,
+        reporterName: report.reporterSession.agentFullName,
+      });
+      await recordAuditEvent(tx, {
+        projectId,
+        actorType: 'WEB_USER',
+        actorId: webUser.userId,
+        actorDisplayName,
+        action: 'APPROVAL_STEP_ACTIONED',
+        summaryText: `Approved step ${step!.stepOrder} "${step!.label}" of the WBS ${report.boqItem.wbsCode} report (${report.workdayDate}); now at "${next.label}".`,
+        payload: { workdayReportId: report.id, stepOrder: step!.stepOrder, nextStepOrder: next.stepOrder, notes: input.notes ?? null },
+      });
+      return;
+    }
+
+    await tx.workdayReport.update({
+      where: { id: report.id },
+      data: { status: 'APPROVED_COMPLETED', currentApprovalStep: 0, approvedCompletedAt: new Date() },
+    });
+    await recordAuditEvent(tx, {
+      projectId,
+      actorType: 'WEB_USER',
+      actorId: webUser.userId,
+      actorDisplayName,
+      action: 'WORKDAY_REPORT_APPROVED',
+      summaryText: `Approved WBS ${report.boqItem.wbsCode} report (${report.workdayDate}, rev ${report.revisionNumber}) at the final step "${step!.label}". It now counts as evidence.`,
+      payload: { workdayReportId: report.id, stepOrder: step!.stepOrder, chainVersion: report.approvalChainVersion, notes: input.notes ?? null },
+    });
   });
-  return ids;
+
+  const row = await prisma.workdayReport.findUniqueOrThrow({ where: { id: reportId }, include: REPORT_INCLUDE_WITH_QUERIES });
+  return serializeWithApproval(row, webUser);
 }
 
 export async function listProjectWorkdayReports(params: {
   projectId: string;
   workdayDate?: string;
   reporterSessionId?: string;
+  /** Provisioned account: its reports from every session (device) on this project. */
+  reporterUserId?: string | null;
+  /** Web viewer: approval positions say whether they may act. */
+  viewer?: WebJwtPayload | null;
+  /** Phase 7 review queue filter. */
+  status?: string;
 }): Promise<WorkdayReportDto[]> {
   const where: Prisma.WorkdayReportWhereInput = { projectId: params.projectId };
-  if (params.reporterSessionId) where.reporterSessionId = params.reporterSessionId;
+  if (params.reporterUserId) where.reporterSession = { userId: params.reporterUserId };
+  else if (params.reporterSessionId) where.reporterSessionId = params.reporterSessionId;
   if (params.workdayDate) where.workdayDate = params.workdayDate;
+  if (params.status) where.status = params.status as Prisma.WorkdayReportWhereInput['status'];
 
   const rows = await prisma.workdayReport.findMany({
     where,
@@ -742,7 +1032,7 @@ export async function listProjectWorkdayReports(params: {
     orderBy: [{ createdAt: 'desc' }, { revisionNumber: 'desc' }],
     take: 150,
   });
-  return rows.map((r) => serializeWorkdayReport(r));
+  return Promise.all(rows.map((r) => serializeWithApproval(r, params.viewer ?? null)));
 }
 
 /**

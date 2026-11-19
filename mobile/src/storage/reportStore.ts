@@ -140,6 +140,12 @@ export async function reportedWbsItemIds(projectId: string, workdayDate: string)
     [projectId, workdayDate]
   );
   const ids = new Set(rows.map((r) => r.wbs_item_id));
+  // Reports from another device of the same account, as last listed by the server (works offline).
+  const remote = await db.getAllAsync<{ wbs_item_id: string }>(
+    `SELECT DISTINCT wbs_item_id FROM server_reports WHERE project_id = ? AND workday_date = ?`,
+    [projectId, workdayDate]
+  );
+  for (const r of remote) ids.add(r.wbs_item_id);
   try {
     for (const r of await listOwnWorkdayReports(projectId, workdayDate)) ids.add(r.wbsItemId);
   } catch {
@@ -316,26 +322,92 @@ export async function markReportSent(id: string, server: WorkdayReportDto): Prom
   );
 }
 
-/** Reports still on the device or held by the server until identity approval (read-only list). */
+/**
+ * Reports still on the device, held by the server until identity approval, waiting on the report
+ * approval chain, or returned for revision (Phase 7). Read-only list.
+ */
 export async function listPendingOrStagedReports(projectId: string): Promise<StoredReport[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<Row>(
     `SELECT * FROM workday_reports WHERE project_id = ?
-       AND (sync_status != 'SENT' OR server_status = 'STAGED_UNVERIFIED')
+       AND (sync_status != 'SENT'
+            OR server_status IN ('STAGED_UNVERIFIED', 'PENDING_APPROVAL', 'RETURNED_FOR_REVISION'))
      ORDER BY created_at DESC`,
     [projectId]
   );
   return rows.map(map);
 }
 
-/** Refreshes the server status of sent reports (e.g. STAGED_UNVERIFIED released after approval). */
+/** Status of this period's report for one WBS item, for the thread's "Today's report" pill. */
+export interface ItemReportStatus {
+  serverStatus: string | null;
+  syncStatus: ReportSyncStatus;
+  /** False when the report was submitted from another device of the same account. */
+  fromThisDevice: boolean;
+}
+
+/**
+ * The newest report on this device for a WBS item and period; when there is none, the newest one
+ * the server listed for this person (another device of the same account). Null when neither exists.
+ */
+export async function getItemReportStatus(
+  projectId: string,
+  wbsItemId: string,
+  workdayDate: string
+): Promise<ItemReportStatus | null> {
+  const db = await getDb();
+  const local = await db.getFirstAsync<Row>(
+    `SELECT * FROM workday_reports WHERE project_id = ? AND wbs_item_id = ? AND workday_date = ?
+     ORDER BY created_at DESC LIMIT 1`,
+    [projectId, wbsItemId, workdayDate]
+  );
+  if (local) {
+    const r = map(local);
+    return { serverStatus: r.serverStatus, syncStatus: r.syncStatus, fromThisDevice: true };
+  }
+  const remote = await db.getFirstAsync<{ status: string }>(
+    `SELECT status FROM server_reports WHERE project_id = ? AND wbs_item_id = ? AND workday_date = ?
+     ORDER BY revision_number DESC, updated_at DESC LIMIT 1`,
+    [projectId, wbsItemId, workdayDate]
+  );
+  return remote ? { serverStatus: remote.status, syncStatus: 'SENT', fromThisDevice: false } : null;
+}
+
+/**
+ * Refreshes report statuses from the server. Reports this device holds get their status updated;
+ * every listed report (including ones from another device of the same account, Phase 7) is kept as
+ * a status-only record in `server_reports`. Nothing here is queued or sent.
+ */
 export async function refreshReportStatuses(projectId: string): Promise<void> {
   const server = await listOwnWorkdayReports(projectId);
   const db = await getDb();
-  for (const r of server) {
-    await db.runAsync(
-      'UPDATE workday_reports SET server_status = ? WHERE server_report_id = ? OR id = ?',
-      [r.status, r.id, r.clientReportId]
-    );
-  }
+  const now = nowIso();
+  await db.withTransactionAsync(async () => {
+    for (const r of server) {
+      await db.runAsync(
+        'UPDATE workday_reports SET server_status = ? WHERE server_report_id = ? OR id = ?',
+        [r.status, r.id, r.clientReportId]
+      );
+      await db.runAsync(
+        `INSERT INTO server_reports (server_report_id, client_report_id, project_id, wbs_item_id, workday_date,
+           status, revision_number, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(server_report_id) DO UPDATE SET status = excluded.status,
+           revision_number = excluded.revision_number, updated_at = excluded.updated_at`,
+        [r.id, r.clientReportId, projectId, r.wbsItemId, r.workdayDate, r.status, r.revisionNumber ?? 0, now]
+      );
+    }
+  });
+}
+
+/**
+ * The server refused a report for good with a reason the reporter must see (for example contractor
+ * field reporting switched off). The outbox row is dead-lettered separately; this marks the report.
+ */
+export async function markReportRefused(id: string, message: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`UPDATE workday_reports SET sync_status = 'FAILED', last_error = ? WHERE id = ?`, [
+    message.slice(0, 500),
+    id,
+  ]);
 }

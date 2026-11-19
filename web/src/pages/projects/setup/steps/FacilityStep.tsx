@@ -136,6 +136,12 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
         )
       }
     >
+      {!setup.process.config.enableTranchesAndCps && (
+        <p className="rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-4 py-2.5 text-[11px] text-brand-navy">
+          Tranches and conditions precedent are off in this project's process settings. Tranches are optional: with none,
+          activation creates one tranche for the whole budget, and conditions precedent are not checked at release.
+        </p>
+      )}
       <div
         className={`rounded-xl px-4 py-2.5 text-xs font-medium ${
           over ? "bg-rose-50 text-rose-700" : under ? "bg-amber-50 text-amber-800" : "bg-slate-50 text-slate-700"

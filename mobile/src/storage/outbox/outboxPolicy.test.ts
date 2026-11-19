@@ -5,6 +5,9 @@ import {
   afterFailure,
   backoffMs,
   classifyFailure,
+  CONTRACTOR_REPORTING_OFF_CODE,
+  CONTRACTOR_REPORTING_OFF_MESSAGE,
+  failureMessage,
   dependencyState,
   dueRows,
   MAX_ATTEMPTS,
@@ -124,5 +127,26 @@ describe('Phase 5 Step 8: items from an ended session', () => {
   it('a held row is never due and makes rows that depend on it wait, not fail', () => {
     assert.deepEqual(dueRows([row({ id: 'h', status: 'HELD' })], NOW), []);
     assert.equal(dependencyState(['h'], new Map([['h', 'HELD' as OutboxStatus]])), 'WAITING');
+  });
+});
+
+describe('contractor field reporting switched off (Phase 7)', () => {
+  it('dead-letters at once, whatever status the server uses, and never pauses the outbox', () => {
+    for (const status of [403, 409]) {
+      assert.equal(classifyFailure({ kind: 'http', status, code: CONTRACTOR_REPORTING_OFF_CODE }), 'PERMANENT');
+    }
+    // Even if the API layer ever tagged it as an auth refusal, it must not pause every row.
+    assert.equal(classifyFailure({ kind: 'auth', status: 403, code: CONTRACTOR_REPORTING_OFF_CODE }), 'PERMANENT');
+    const outcome = afterFailure(row({ attempts: 0 }), 'PERMANENT', NOW);
+    assert.equal(outcome.status, 'DEAD');
+    assert.equal(outcome.attempts, 1);
+  });
+
+  it('stores a clear message instead of the raw server text', () => {
+    const msg = failureMessage({ code: CONTRACTOR_REPORTING_OFF_CODE, message: 'Forbidden' });
+    assert.equal(msg, CONTRACTOR_REPORTING_OFF_MESSAGE);
+    assert.ok(msg.startsWith('Contractor reporting is off for this project'));
+    assert.equal(failureMessage({ code: 'OTHER', message: 'Server said no' }), 'Server said no');
+    assert.equal(failureMessage({}), 'Unknown error');
   });
 });

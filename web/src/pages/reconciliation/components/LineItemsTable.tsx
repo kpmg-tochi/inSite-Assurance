@@ -13,10 +13,13 @@ export function LineItemsTable({
   ipc,
   selectedLineId,
   onSelectLine,
+  showHoldPoints = true,
 }: {
   ipc: IpcClaimDto;
   selectedLineId: string | null;
   onSelectLine: (line: IpcLineItemDto) => void;
+  /** False when the project turned hold points off (Phase 7). */
+  showHoldPoints?: boolean;
 }) {
   const columns: TableColumnDef<IpcLineItemDto>[] = [
     {
@@ -30,7 +33,7 @@ export function LineItemsTable({
           <div className="space-y-1">
             <span className="font-bold text-slate-900 text-xs">{li.boqItem.wbsCode}</span>
             <div className="flex flex-col gap-1 items-start">
-              {li.boqItem.isHoldPoint && (
+              {showHoldPoints && li.boqItem.isHoldPoint && (
                 <TableBadge variant={li.missingHoldPointFlag ? "danger" : "warning"}>
                   {li.missingHoldPointFlag ? "Hold point unmet" : "Hold point"}
                 </TableBadge>
@@ -153,7 +156,7 @@ export function LineItemsTable({
       keyExtractor={(li) => li.id}
       selectedId={selectedLineId ?? undefined}
       onRowClick={onSelectLine}
-      rowClassName={(li) => (li.missingHoldPointFlag ? ratingTone("CONTRADICTED").row : ratingTone(li.aiEvidenceRating).row)}
+      rowClassName={(li) => (showHoldPoints && li.missingHoldPointFlag ? ratingTone("CONTRADICTED").row : ratingTone(li.aiEvidenceRating).row)}
     />
   );
 }

@@ -19,6 +19,8 @@ import { morningBriefRoutes } from "./modules/morning-briefs/morningBrief.routes
 import { notificationsRoutes } from "./modules/notifications/notifications.routes";
 import { wbsChatRoutes } from "./modules/wbs-chat/wbsChat.routes";
 import { capturesRoutes } from "./modules/evidence/captures.routes";
+import { processRoutes, workflowTemplateRoutes } from "./modules/process/process.routes";
+import { requestContextMiddleware } from "./utils/requestContext";
 import { localStorageRoutes } from "./modules/storage/localStorage.routes";
 import { storageService } from "./integrations/storage.service";
 import { azureOpenAiService } from "./integrations/azure-openai.service";
@@ -36,6 +38,8 @@ export function createApp() {
   );
   app.use(express.json({ limit: "15mb" }));
   app.use(express.urlencoded({ extended: true }));
+  // Phase 7: per-request memo (process configuration is read once per request).
+  app.use(requestContextMiddleware);
 
   if (env.NODE_ENV !== "test") {
     app.use(morgan("dev"));
@@ -86,6 +90,8 @@ export function createApp() {
   app.use("/api/v1/projects", notificationsRoutes);
   app.use("/api/v1/projects", wbsChatRoutes);
   app.use("/api/v1/projects", capturesRoutes);
+  app.use("/api/v1/projects", processRoutes);
+  app.use("/api/v1/workflow-templates", workflowTemplateRoutes);
 
   // Development object storage when S3 is not configured (never in production; see env checks).
   if (!storageService.isCloudConfigured() && env.NODE_ENV !== "production") {

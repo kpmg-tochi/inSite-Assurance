@@ -10,7 +10,9 @@ import {
   ProfessionalLicenseTypeEnum,
   QueryStatusEnum,
   GeofenceStatusEnum,
+  ValuationSourceEnum,
 } from '../enums';
+import { ApprovalProgressDtoSchema, MilestoneVerificationLineSchema } from './process.schema';
 
 // ============================================================================
 // Requests
@@ -264,7 +266,12 @@ export type TrancheDecisionDto = z.infer<typeof TrancheDecisionDtoSchema>;
 
 export const ValuationReportDtoSchema = z.object({
   id: z.string().uuid(),
-  ipcClaimId: z.string().uuid(),
+  /** Null for a direct milestone valuation (Phase 7). */
+  ipcClaimId: z.string().uuid().nullable(),
+  projectId: z.string().uuid(),
+  trancheId: z.string().uuid(),
+  source: ValuationSourceEnum,
+  milestoneVerificationId: z.string().uuid().nullable(),
   revisionNumber: z.number().int(),
   trancheRecommendation: MonitorRecommendationEnum,
   totalClaimedNgn: z.number(),
@@ -279,8 +286,25 @@ export const ValuationReportDtoSchema = z.object({
   certifiedAt: z.string().datetime(),
   supersededAt: z.string().datetime().nullable(),
   decisions: z.array(TrancheDecisionDtoSchema),
+  /** Position on the project's disbursement chain (Phase 7); null for valuations made before chains. */
+  approval: ApprovalProgressDtoSchema.nullable().optional(),
 });
 export type ValuationReportDto = z.infer<typeof ValuationReportDtoSchema>;
+
+/** A direct milestone valuation with its verification lines and what the caller may do next. */
+export const DirectMilestoneValuationDtoSchema = ValuationReportDtoSchema.extend({
+  trancheName: z.string(),
+  trancheNumber: z.number().int(),
+  verificationSummary: z.string(),
+  lines: z.array(MilestoneVerificationLineSchema),
+  activeDecision: TrancheDecisionDtoSchema.nullable(),
+  actions: z.object({
+    review: z.object({ allowed: z.boolean(), reason: z.string().nullable() }),
+    decide: z.object({ allowed: z.boolean(), reason: z.string().nullable() }),
+    reverseDecision: z.object({ allowed: z.boolean(), reason: z.string().nullable() }),
+  }),
+});
+export type DirectMilestoneValuationDto = z.infer<typeof DirectMilestoneValuationDtoSchema>;
 
 export const IpcBoqItemSummarySchema = z.object({
   id: z.string().uuid(),
@@ -410,6 +434,8 @@ export const IpcClaimDtoSchema = z.object({
     respondQuery: IpcActionGateSchema,
     resolveQuery: IpcActionGateSchema,
     certify: IpcActionGateSchema,
+    /** Phase 7: an added disbursement-chain step between certification and release. */
+    reviewValuation: IpcActionGateSchema,
     decide: IpcActionGateSchema,
     reverseDecision: IpcActionGateSchema,
     withdraw: IpcActionGateSchema,

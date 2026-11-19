@@ -2,6 +2,8 @@ import type {
   CreateWorkdayReportQueryRequest,
   ReportQueryDto,
   ResolveReportQueryRequest,
+  ReviewWorkdayReportRequest,
+  WorkdayReportStatus,
   SiteTelemetryPingDto,
   WorkdayReportDto,
 } from "@insite/shared";
@@ -24,7 +26,7 @@ export const getProjectTelemetryPings = async (
 
 export const getProjectWorkdayReports = async (
   projectId: string,
-  params?: { workdayDate?: string },
+  params?: { workdayDate?: string; status?: WorkdayReportStatus },
 ): Promise<WorkdayReportRecordDto[]> => {
   const { data } = await api.get<ApiEnvelope<WorkdayReportRecordDto[]>>(
     `/projects/${projectId}/workday-reports`,
@@ -53,6 +55,19 @@ export const createWorkdayReportQuery = async (params: {
 }): Promise<ReportQueryDto> => {
   const { data } = await api.post<ApiEnvelope<ReportQueryDto>>(
     `/projects/${params.projectId}/workday-reports/${params.reportId}/queries`,
+    params.body,
+  );
+  return data.data;
+};
+
+/** Approve or return a report at the current step of its approval chain (Phase 7). */
+export const reviewWorkdayReport = async (params: {
+  projectId: string;
+  reportId: string;
+  body: ReviewWorkdayReportRequest;
+}): Promise<WorkdayReportDto> => {
+  const { data } = await api.post<ApiEnvelope<WorkdayReportDto>>(
+    `/projects/${params.projectId}/workday-reports/${params.reportId}/review`,
     params.body,
   );
   return data.data;

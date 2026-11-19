@@ -8,6 +8,8 @@ import {
 } from '../../storage/wbsRepository';
 import {
   confirmReport,
+  currentPeriod,
+  getItemReportStatus,
   listPendingOrStagedReports,
   refreshReportStatuses,
   type ConfirmReportInput,
@@ -25,6 +27,8 @@ export const wbsQueryKeys = {
   inbox: (projectId?: string | null) => ['wbs-inbox', projectId] as const,
   messages: (wbsItemId?: string | null) => ['wbs-messages', wbsItemId] as const,
   pendingReports: (projectId?: string | null) => ['pending-reports', projectId] as const,
+  itemReport: (projectId: string | null | undefined, wbsItemId: string) =>
+    ['item-report', projectId, wbsItemId] as const,
   deadLetters: ['outbox-dead-letters'] as const,
 };
 
@@ -66,6 +70,21 @@ export function usePendingReportsQuery(projectId?: string | null) {
   });
 }
 
+/**
+ * The status of this period's report for one WBS item, refreshed from the server when online.
+ * Includes reports from another device of the same account. Null when there is none.
+ */
+export function useItemReportStatusQuery(projectId: string | null | undefined, wbsItemId: string) {
+  return useQuery({
+    queryKey: wbsQueryKeys.itemReport(projectId, wbsItemId),
+    queryFn: async () => {
+      await refreshReportStatuses(projectId!).catch(() => undefined);
+      return getItemReportStatus(projectId!, wbsItemId, currentPeriod(new Date(), projectId));
+    },
+    enabled: Boolean(projectId),
+  });
+}
+
 export function useDeadLettersQuery() {
   return useQuery({ queryKey: wbsQueryKeys.deadLetters, queryFn: listDeadRows });
 }
@@ -93,6 +112,7 @@ export function useSubmitWorkdayReportMutation(projectId: string) {
       queryClient.invalidateQueries({ queryKey: wbsQueryKeys.pendingReports(projectId) });
       queryClient.invalidateQueries({ queryKey: wbsQueryKeys.inbox(projectId) });
       queryClient.invalidateQueries({ queryKey: wbsQueryKeys.messages(variables.wbsItemId) });
+      queryClient.invalidateQueries({ queryKey: wbsQueryKeys.itemReport(projectId, variables.wbsItemId) });
       queryClient.invalidateQueries({ queryKey: notificationQueryKeys.list(projectId) });
     },
   });

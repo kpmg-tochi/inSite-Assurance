@@ -2,6 +2,12 @@ import type {
   CertificationComputation,
   CertifyIpcValuationRequest,
   CreateMonitorQueryRequest,
+  DirectMilestoneSuggestionDto,
+  DirectMilestoneValuationDto,
+  MilestoneVerificationLine,
+  ProfessionalLicenseType,
+  ReviewValuationRequest,
+  VerifyDirectMilestoneRequest,
   IpcClaimDto,
   LenderTrancheDecisionRequest,
   MediaType,
@@ -223,4 +229,81 @@ export const downloadValuationReportPdf = async (projectId: string, ipcId: strin
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+};
+
+/** PDF for any valuation (IPC or direct milestone), by valuation id (Phase 7). */
+export const downloadValuationPdfById = async (projectId: string, valuationId: string) => {
+  const response = await api.get(`/projects/${projectId}/valuations/${valuationId}/valuation-report.pdf`, {
+    responseType: 'blob',
+  });
+  const blob = new Blob([response.data], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `inSite-Valuation-Report-${valuationId.slice(0, 8)}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
+
+// ---------------------------------------------------------------------------
+// Phase 7: disbursement chain and direct milestone release
+// ---------------------------------------------------------------------------
+
+/** Approve or return a valuation at an added step between certification and release. */
+export const reviewValuation = async (payload: {
+  projectId: string;
+  valuationId: string;
+  body: ReviewValuationRequest;
+}) => {
+  const { data } = await api.post<ApiEnvelope<{ ipcId: string | null }>>(
+    `/projects/${payload.projectId}/valuations/${payload.valuationId}/review`,
+    payload.body
+  );
+  return data.data;
+};
+
+export const getDirectMilestoneSuggestion = async (projectId: string, trancheId: string) => {
+  const { data } = await api.get<ApiEnvelope<DirectMilestoneSuggestionDto>>(
+    `/projects/${projectId}/milestones/direct-verify/suggestion`,
+    { params: { trancheId } }
+  );
+  return data.data;
+};
+
+/** Server-computed amounts for a direct milestone verification (also returned by a dry run). */
+export interface DirectMilestoneComputation {
+  trancheId: string;
+  lines: MilestoneVerificationLine[];
+  totalClaimedNgn: number;
+  totalCertifiedNgn: number;
+  recommendedReleaseAmountNgn: number;
+  recommendedHoldbackAmountNgn: number;
+  certifierFullName: string;
+  certifierLicenseType: ProfessionalLicenseType;
+  certifierLicenseNumber: string;
+  revisionNumber: number;
+}
+
+export interface VerifyDirectMilestoneResult {
+  dryRun: boolean;
+  valuationReportId: string | null;
+  computation: DirectMilestoneComputation;
+  valuation?: DirectMilestoneValuationDto;
+}
+
+export const verifyDirectMilestone = async (payload: { projectId: string; body: VerifyDirectMilestoneRequest }) => {
+  const { data } = await api.post<ApiEnvelope<VerifyDirectMilestoneResult>>(
+    `/projects/${payload.projectId}/milestones/direct-verify`,
+    payload.body
+  );
+  return data.data;
+};
+
+export const listDirectMilestoneValuations = async (projectId: string) => {
+  const { data } = await api.get<ApiEnvelope<DirectMilestoneValuationDto[]>>(
+    `/projects/${projectId}/milestones/valuations`
+  );
+  return data.data;
 };

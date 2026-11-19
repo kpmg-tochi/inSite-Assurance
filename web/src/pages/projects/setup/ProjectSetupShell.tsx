@@ -92,9 +92,11 @@ export function ProjectSetupShell({ mode }: { mode: SetupMode }) {
   }
 
   const base = `/app/projects/${projectId}/${mode}`;
-  const index = steps.findIndex((s) => s.id === step.id);
-  const next = steps[index + 1];
-  const prev = steps[index - 1];
+  // Phase 7: the server omits steps that do not apply (e.g. standards when both document modes are off).
+  const shownSteps = steps.filter((s) => s.id === "review" || s.id === step.id || setup.steps.some((st) => st.stepId === s.id));
+  const index = shownSteps.findIndex((s) => s.id === step.id);
+  const next = shownSteps[index + 1];
+  const prev = shownSteps[index - 1];
   const canEdit =
     setup.status === "ARCHIVED"
       ? false
@@ -180,11 +182,13 @@ export function ProjectSetupShell({ mode }: { mode: SetupMode }) {
         <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-5">
           <nav aria-label="Setup steps" className="bg-white rounded-2xl border border-slate-200/80 p-3 shadow-sm h-fit lg:sticky lg:top-4">
             <ol className="space-y-1">
-              {steps.map((s, i) => {
+              {shownSteps.map((s, i) => {
                 const st = statusOf(s.id);
+                // Requiredness can depend on the project (Phase 7 standards step); the server decides.
+                const required = st?.required ?? s.required;
                 const current = s.id === step.id;
                 const complete = s.id === "review" ? setup.status !== "DRAFT" : st?.complete ?? false;
-                const flagged = s.required && st && !st.complete && st.saved;
+                const flagged = required && st && !st.complete && st.saved;
                 return (
                   <li key={s.id}>
                     <button
@@ -205,7 +209,7 @@ export function ProjectSetupShell({ mode }: { mode: SetupMode }) {
                       <span className="flex-1">
                         {i + 1}. {s.title}
                       </span>
-                      {!s.required && s.id !== "review" && <span className="text-[10px] font-normal text-slate-400">optional</span>}
+                      {!required && s.id !== "review" && <span className="text-[10px] font-normal text-slate-400">optional</span>}
                     </button>
                   </li>
                 );

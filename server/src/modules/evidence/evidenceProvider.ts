@@ -6,6 +6,7 @@ import {
   ProvidedEvidenceMedia,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
+import { getProcessConfig } from '../process/processConfig.service';
 
 /**
  * The single source of evidence for reconciliation (the Phase 3 / Phase 4 seam).
@@ -154,6 +155,18 @@ function toEvidenceItem(report: ReportRow, chainCaptures: CaptureRow[]): Provide
 }
 
 /**
+ * Report statuses that count as evidence (Phase 7).
+ * - Report approval off: CONFIRMED.
+ * - Report approval on: APPROVED_COMPLETED. CONFIRMED reports on such a project were accepted before
+ *   approval was switched on and finished under those rules (config changes apply to new items
+ *   only), so they keep counting; no new CONFIRMED report is created while approval is on.
+ * Either way PENDING_APPROVAL, RETURNED_FOR_REVISION and STAGED_UNVERIFIED never count.
+ */
+export function countedReportStatuses(requireReportApproval: boolean): Array<'CONFIRMED' | 'APPROVED_COMPLETED'> {
+  return requireReportApproval ? ['APPROVED_COMPLETED', 'CONFIRMED'] : ['CONFIRMED', 'APPROVED_COMPLETED'];
+}
+
+/**
  * Evidence for the given BOQ items confirmed at or before `upTo`, newest first.
  * Items from other projects are never returned, whatever IDs are passed.
  */
@@ -164,19 +177,33 @@ export async function getEvidenceForBoqItems(
   db: Db = prisma
 ): Promise<ProvidedEvidenceItem[]> {
   if (boqItemIds.length === 0) return [];
+  const config = await getProcessConfig(projectId, db === prisma ? prisma : (db as Prisma.TransactionClient));
 
   const reports = await db.workdayReport.findMany({
     where: {
       projectId,
       wbsItemId: { in: boqItemIds },
-      status: 'CONFIRMED',
+      status: { in: countedReportStatuses(config.requireReportApproval) },
       humanConfirmedAt: { lte: upTo },
     },
     orderBy: [{ humanConfirmedAt: 'desc' }, { revisionNumber: 'desc' }],
     include: REPORT_INCLUDE,
   });
 
+  // Captures of earlier revisions count with the latest counted revision, whatever the earlier
+  // revision's own status (e.g. RETURNED_FOR_REVISION): load the ancestors separately.
   const byId = new Map(reports.map((r) => [r.id, r]));
+  let missing = reports.map((r) => r.parentReportId).filter((id): id is string => Boolean(id) && !byId.has(id!));
+  while (missing.length > 0) {
+    const ancestors = await db.workdayReport.findMany({
+      where: { id: { in: missing }, projectId },
+      include: REPORT_INCLUDE,
+    });
+    for (const a of ancestors) byId.set(a.id, a);
+    missing = ancestors.map((a) => a.parentReportId).filter((id): id is string => Boolean(id) && !byId.has(id!));
+  }
+  // Superseded: a counted report whose newer revision also counts (within the same window). A newer
+  // revision still pending approval leaves the earlier counted one in place.
   const hasNewerRevision = new Set(
     reports.map((r) => r.parentReportId).filter((id): id is string => Boolean(id))
   );

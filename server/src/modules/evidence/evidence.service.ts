@@ -8,6 +8,7 @@ import {
   RESUBMITTED_AFTER_SESSION_END_FLAG,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
+import { assertFieldReportingAllowed } from '../process/processConfig.service';
 import { AppError } from '../../middleware/error.middleware';
 import { FieldAgentJwtPayload } from '../../middleware/auth.middleware';
 import { assertProjectObjectKey, MEDIA_UPLOAD_POLICY, storageService } from '../../integrations/storage.service';
@@ -81,6 +82,7 @@ export async function registerCapture(params: {
 
   const existing = await findCaptureForReplay(input.clientCaptureId, fieldAgent.sessionId);
   if (existing) return { capture: existing, created: false };
+  await assertFieldReportingAllowed(projectId, fieldAgent.fieldPersonaType);
 
   const [project, session] = await Promise.all([
     prisma.project.findUniqueOrThrow({

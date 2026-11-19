@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, Circle, Pencil } from "lucide-react";
 import {
   CONTRACTOR_EXECUTION_MODE_META,
+  DISBURSEMENT_MECHANISM_META,
+  DOCUMENT_MODE_META,
   formatMoney,
   geofenceModeLabel,
   type ProjectSetupDto,
@@ -49,11 +51,27 @@ function summaryFor(stepId: string, s: ProjectSetupDto, currency: string): strin
     case "boq":
       return [
         `${s.boq.itemCount} item(s), ${formatMoney(s.boq.totalBudgetedCostNgn, { currency })}`,
-        `${s.boq.holdPointCount} hold point(s)`,
+        ...(s.process.config.enableHoldPoints ? [`${s.boq.holdPointCount} hold point(s)`] : []),
         `${s.boq.unmappedCount} not mapped to a tranche`,
       ];
     case "reporting":
       return [`${s.reporting.reportingCadence.replace("_", " ").toLowerCase()} reports`, `${s.reporting.workdayStartTime}–${s.reporting.workdayEndTime}`];
+    case "process": {
+      const p = s.process;
+      return [
+        p.workflowTemplateName ? `Template: ${p.workflowTemplateName}` : "No template applied",
+        DISBURSEMENT_MECHANISM_META[p.config.disbursementMechanism].label,
+        p.config.requireReportApproval
+          ? `Report approval: ${p.reportChain.steps.length} step(s)`
+          : "Report approval off",
+        `Disbursement chain: ${p.disbursementChain.steps.length} step(s)`,
+      ];
+    }
+    case "standards":
+      return [
+        `${s.standards.standardCount} standard(s) (${DOCUMENT_MODE_META[s.process.config.standardsSpecificationMode].label.toLowerCase()})`,
+        `${s.standards.needsAssessmentCount} needs-assessment document(s) (${DOCUMENT_MODE_META[s.process.config.needsAssessmentMode].label.toLowerCase()})`,
+      ];
     case "team":
       return [
         `${s.team.userIds.length} person(s) assigned`,
@@ -108,9 +126,11 @@ export function ReviewStep({ projectId, setup, mode }: StepProps) {
     <div className="space-y-5">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {visibleSteps()
-          .filter((st) => st.id !== "review")
-          .map((st) => {
-            const status = steps.find((s) => s.stepId === st.id);
+          .filter((st) => st.id !== "review" && steps.some((s) => s.stepId === st.id))
+          .map((registered) => {
+            const status = steps.find((s) => s.stepId === registered.id);
+            // Requiredness can depend on the project (Phase 7); the server decides.
+            const st = { ...registered, required: status?.required ?? registered.required };
             const complete = status?.complete ?? false;
             return (
               <div key={st.id} className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">

@@ -32,6 +32,7 @@ import { ReportAlreadySubmittedError } from '../storage/reportStore';
 import { StorageUnavailableError } from '../storage/db/database';
 import { VoiceNoteRecorder, formatDurationMs, type VoiceRecordingResult } from '../components/audio';
 import type { RootStackParamList } from '../navigation/types';
+import { personaCopy } from '../utils/personaCopy';
 
 /** " (63 m outside the boundary)" when the preview measured a distance outside it. */
 function outsideBy(preview: GeofencePreview): string {
@@ -52,7 +53,8 @@ export const ConfirmAiSummarySheet: React.FC = () => {
   const { wbsItem, resolveNotificationId, workdayReportId, reportQueryId, initialSummary, initialQuantity, initialUnit } =
     route.params;
   const isRevision = Boolean(workdayReportId);
-  const { activeProjectId: projectId } = useProfile();
+  const { activeProjectId: projectId, activeContext } = useProfile();
+  const copy = personaCopy(activeContext?.fieldPersonaType);
   const insets = useSafeAreaInsets();
 
   const [quantity, setQuantity] = useState(
@@ -193,7 +195,7 @@ export const ConfirmAiSummarySheet: React.FC = () => {
           </TouchableOpacity>
           <Pill variant="info" text={isRevision ? 'Answering a query' : 'One report per period'} />
         </View>
-        <Text style={styles.title}>{isRevision ? 'Revise your report' : 'Submit your daily report'}</Text>
+        <Text style={styles.title}>{isRevision ? 'Revise your report' : copy.reportSheetTitle}</Text>
         <Text style={styles.subtitle}>
           {isRevision
             ? 'Your revision includes any new photos and notes you added to the thread.'

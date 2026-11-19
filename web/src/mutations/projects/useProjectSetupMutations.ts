@@ -48,6 +48,10 @@ export const useSaveSetupStepMutation = (projectId: string) => {
         queryClient.invalidateQueries({ queryKey: ['project-baseline', projectId] });
       }
       if (args.stepId === 'boq') queryClient.invalidateQueries({ queryKey: ['boq', projectId] });
+      if (args.stepId === 'process') {
+        queryClient.invalidateQueries({ queryKey: ['project-process', projectId] });
+        queryClient.invalidateQueries({ queryKey: ['morning-briefs', projectId] });
+      }
       if (!args.silent) toast.success('Saved.');
     },
     onError: (err: Error) => toast.error(err?.message || 'Could not save this step.'),

@@ -2,17 +2,20 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { guardProjectRoutes, projectIdForFieldWrite } from '../../utils/accessControl';
 import {
   RevalidateWorkdayReportRequestSchema,
+  ReviewWorkdayReportRequestSchema,
   SubmitWorkdayReportRequestSchema,
   SuggestWorkdaySummaryRequestSchema,
 } from '@insite/shared';
 import {
   requireAnyAuthWithWebPermission,
   requireFieldSession,
+  requireWebAuth,
 } from '../../middleware/auth.middleware';
 import { validateBody } from '../../middleware/validate.middleware';
 import {
   listProjectWorkdayReports,
   revalidateWorkdayReport,
+  reviewWorkdayReport,
   submitWorkdayReport,
   suggestWorkdaySummary,
 } from './workdayReports.service';
@@ -99,8 +102,36 @@ router.get(
         projectId: String(req.params.projectId),
         workdayDate: req.query.workdayDate ? String(req.query.workdayDate) : undefined,
         reporterSessionId: req.fieldAgent?.sessionId,
+        // A provisioned account sees its reports from all its devices; a join-code session only its own.
+        reporterUserId: req.fieldAgent?.origin === 'PROVISIONED_ACCOUNT' ? req.fieldAgent.userId : null,
+        viewer: req.webUser ?? null,
+        status: typeof req.query.status === 'string' ? req.query.status : undefined,
       });
       res.json({ success: true, data: reports });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * POST /api/v1/projects/:projectId/workday-reports/:reportId/review (Phase 7)
+ * Approve or return a report at the current step of its approval chain. The step names the
+ * permission (and optionally the role) required; the service checks it.
+ */
+router.post(
+  '/:projectId/workday-reports/:reportId/review',
+  requireWebAuth,
+  validateBody(ReviewWorkdayReportRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const report = await reviewWorkdayReport({
+        projectId: String(req.params.projectId),
+        reportId: String(req.params.reportId),
+        webUser: req.webUser!,
+        input: req.body,
+      });
+      res.json({ success: true, data: report });
     } catch (error) {
       next(error);
     }

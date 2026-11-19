@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import type { SiteTelemetryPingDto } from "@insite/shared";
+import type { SiteTelemetryPingDto, WorkdayReportStatus } from "@insite/shared";
 import {
   MapPin,
   Clock,
@@ -17,7 +17,13 @@ import {
   useProjectTelemetryQuery,
   useProjectWorkdayReportsQuery,
 } from "../queries/telemetry/useTelemetryQueries";
-import { useCreateWorkdayReportQueryMutation, useResolveReportQueryMutation } from "../mutations/telemetry/useTelemetryMutations";
+import {
+  useCreateWorkdayReportQueryMutation,
+  useResolveReportQueryMutation,
+  useReviewWorkdayReportMutation,
+} from "../mutations/telemetry/useTelemetryMutations";
+import { ApprovalProgressBar } from "./process/ApprovalProgressBar";
+import { StandardsCheckCard, StandardsStatusBadge, StandardsViolationList } from "./process/StandardsStatus";
 import { useAuth } from "../lib/auth-context";
 import {
   StandardTable,
@@ -35,6 +41,15 @@ interface SitePresencePanelProps {
   initialReportId?: string | null;
   initialWbsItemId?: string | null;
 }
+
+/** Report statuses (Phase 7 adds the approval states). */
+const REPORT_STATUS_META: Record<WorkdayReportStatus, { label: string; variant: "success" | "warning" | "danger" | "info" | "neutral" }> = {
+  STAGED_UNVERIFIED: { label: "Staged (identity pending)", variant: "neutral" },
+  CONFIRMED: { label: "Confirmed", variant: "success" },
+  PENDING_APPROVAL: { label: "Pending approval", variant: "warning" },
+  APPROVED_COMPLETED: { label: "Approved", variant: "success" },
+  RETURNED_FOR_REVISION: { label: "Returned for revision", variant: "danger" },
+};
 
 const REPORT_FLAG_LABELS: Record<string, string> = {
   LOW_GPS_ACCURACY: "Low GPS accuracy",
@@ -92,6 +107,10 @@ export function SitePresencePanel({
   const telemetryQuery = useProjectTelemetryQuery(projectId);
   const createQueryMutation = useCreateWorkdayReportQueryMutation(projectId);
   const resolveQueryMutation = useResolveReportQueryMutation(projectId);
+  const reviewMutation = useReviewWorkdayReportMutation(projectId);
+  const [pendingOnly, setPendingOnly] = useState(false);
+  // Phase 7: reports waiting on the approval chain, filtered by the server (?status=PENDING_APPROVAL).
+  const pendingQuery = useProjectWorkdayReportsQuery(projectId, true, "PENDING_APPROVAL");
 
   const [reportSearch, setReportSearch] = useState("");
   const [pingSearch, setPingSearch] = useState("");
@@ -120,9 +139,14 @@ export function SitePresencePanel({
     }
   }, [reports, initialReportId, initialWbsItemId]);
 
+  const pendingReports = useMemo(() => pendingQuery.data || [], [pendingQuery.data]);
+
   const selectedReport = useMemo(
-    () => reports.find((r) => r.id === selectedReportId) || null,
-    [reports, selectedReportId],
+    () =>
+      reports.find((r) => r.id === selectedReportId) ||
+      pendingReports.find((r) => r.id === selectedReportId) ||
+      null,
+    [reports, pendingReports, selectedReportId],
   );
 
   // Reset bottom query composer when switching reports
@@ -134,7 +158,7 @@ export function SitePresencePanel({
   // Group reports by (wbsItemId, workdayDate) so the table displays the latest submission cleanly
   const groupedLatestReports = useMemo(() => {
     const map = new Map<string, WorkdayReportRecordDto>();
-    for (const r of reports) {
+    for (const r of pendingOnly ? pendingReports : reports) {
       const key = `${r.wbsItemId}::${r.workdayDate}`;
       const existing = map.get(key);
       if (!existing || r.revisionNumber > existing.revisionNumber) {
@@ -142,7 +166,7 @@ export function SitePresencePanel({
       }
     }
     return Array.from(map.values());
-  }, [reports]);
+  }, [reports, pendingReports, pendingOnly]);
 
   // Timeline revisions for the currently inspected WBS item + workdayDate
   const selectedThreadRevisions = useMemo(() => {
@@ -155,6 +179,8 @@ export function SitePresencePanel({
       )
       .sort((a, b) => a.revisionNumber - b.revisionNumber);
   }, [reports, selectedReport]);
+
+  const pendingApprovalCount = pendingReports.length;
 
   const filteredReports = useMemo(() => {
     const q = reportSearch.trim().toLowerCase();
@@ -247,7 +273,7 @@ export function SitePresencePanel({
     },
     {
       id: "status",
-      header: "Query / GPS",
+      header: "Status / GPS",
       tooltip:
         "Open query/omission status alongside submission GPS geofence check",
       width: "w-44",
@@ -262,8 +288,15 @@ export function SitePresencePanel({
         const hasResubmitted =
           !hasOpen && allQueries.some((q) => q.status === "RESUBMITTED");
 
+        const statusMeta = REPORT_STATUS_META[r.status];
         return (
           <div className="flex items-center gap-1.5 flex-wrap">
+            {r.status !== "CONFIRMED" && statusMeta && (
+              <TableBadge variant={statusMeta.variant}>{statusMeta.label}</TableBadge>
+            )}
+            {r.standardsCompliancePassed === false && (
+              <StandardsStatusBadge passed={false} />
+            )}
             <TableBadge variant={badge.variant}>{badge.label}</TableBadge>
             {hasOpen && <TableBadge variant="warning">Query Open</TableBadge>}
             {hasResubmitted && (
@@ -386,6 +419,19 @@ export function SitePresencePanel({
         data={filteredReports}
         keyExtractor={(r) => r.id}
         onRowClick={(r) => setSelectedReportId(r.id)}
+        filters={
+          pendingApprovalCount > 0 || pendingOnly ? (
+            <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-brand-primary"
+                checked={pendingOnly}
+                onChange={(e) => setPendingOnly(e.target.checked)}
+              />
+              Pending approval only ({pendingApprovalCount})
+            </label>
+          ) : undefined
+        }
         search={{
           value: reportSearch,
           onChange: setReportSearch,
@@ -552,7 +598,11 @@ export function SitePresencePanel({
                     : "Not signed by the device."}
                 {selectedReport.status === "STAGED_UNVERIFIED"
                   ? " Staged: reporter identity not yet approved, not counted as evidence."
-                  : ""}
+                  : selectedReport.status === "PENDING_APPROVAL"
+                    ? " Waiting on the report approval chain; not counted as evidence yet."
+                    : selectedReport.status === "RETURNED_FOR_REVISION"
+                      ? " Returned to the reporter for revision; not counted as evidence."
+                      : ""}
               </p>
               {selectedReport.integrityFlags.length > 0 && (
                 <div className="flex flex-wrap gap-1">
@@ -596,6 +646,36 @@ export function SitePresencePanel({
               )}
             </div>
 
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <TableBadge variant={REPORT_STATUS_META[selectedReport.status]?.variant ?? "neutral"}>
+                {REPORT_STATUS_META[selectedReport.status]?.label ?? selectedReport.status}
+              </TableBadge>
+              <TableBadge variant={selectedReport.reporterPersonaType === "INDEPENDENT_VERIFIER" ? "info" : "neutral"}>
+                {selectedReport.reporterPersonaType === "INDEPENDENT_VERIFIER" ? "Independent verifier" : "Contractor"}
+              </TableBadge>
+              {selectedReport.approvedCompletedAt && (
+                <span className="text-[11px] text-slate-500">
+                  Approved {formatDateTimeShort(selectedReport.approvedCompletedAt)}
+                </span>
+              )}
+            </div>
+
+            <StandardsCheckCard
+              passed={selectedReport.standardsCompliancePassed}
+              violations={selectedReport.standardsViolations}
+            />
+
+            {selectedReport.approval && (
+              <ApprovalProgressBar
+                title="Report approval"
+                approval={selectedReport.approval}
+                isPending={reviewMutation.isPending}
+                onReview={(decision, notes) =>
+                  reviewMutation.mutateAsync({ reportId: selectedReport.id, decision, notes })
+                }
+              />
+            )}
+
             {/* Queries Attached to This Revision */}
             {selectedReport.queries && selectedReport.queries.length > 0 && (
               <div className="space-y-2">
@@ -617,7 +697,9 @@ export function SitePresencePanel({
                       <span className="font-bold text-slate-800">
                         {q.source === "AI_OMISSION_CHECK"
                           ? "AI Omission Check"
-                          : `Monitor Query (${q.raisedByName || "Monitor"})`}
+                          : q.source === "AI_STANDARDS_CHECK"
+                            ? "Standards Check"
+                            : `Monitor Query (${q.raisedByName || "Monitor"})`}
                       </span>
                       <TableBadge
                         variant={q.status === "OPEN" ? "warning" : "success"}
@@ -640,6 +722,9 @@ export function SitePresencePanel({
                           {q.status === "RESUBMITTED" ? "Mark resolved" : "Withdraw query"}
                         </button>
                       </div>
+                    )}
+                    {q.standardsViolations && q.standardsViolations.length > 0 && (
+                      <StandardsViolationList violations={q.standardsViolations} />
                     )}
                     {q.aiOmissionPayload?.omittedItems &&
                       q.aiOmissionPayload.omittedItems.length > 0 && (

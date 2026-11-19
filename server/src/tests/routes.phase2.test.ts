@@ -97,10 +97,8 @@ before(async () => {
   ({ prisma } = await import('../config/prisma'));
   ({ signFieldAgentToken } = await import('../middleware/auth.middleware'));
   ({ recordAuditEvent, getAndVerifyProjectAuditTrail } = await import('../modules/audit/audit.service'));
-  const { seedDatabase } = await import('../db/seedDatabase');
   const { createApp } = await import('../app');
 
-  await seedDatabase();
   app = createApp();
 
   const tenantA = await prisma.tenant.findUniqueOrThrow({ where: { slug: 'kpmg-nigeria' } });

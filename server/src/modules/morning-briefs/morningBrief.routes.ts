@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { guardProjectRoutes } from '../../utils/accessControl';
-import { GenerateMorningBriefRequestSchema } from '@insite/shared';
+import { BriefPersonaEnum, GenerateMorningBriefRequestSchema } from '@insite/shared';
 import {
   hasWebPermission,
   requireAnyAuthWithWebPermission,
@@ -12,7 +12,13 @@ import {
   generateDailyDispatchForProject,
   generateOrGetMorningBriefForBoqItem,
   listMorningBriefsForProject,
+  resolveBriefPersona,
 } from './morningBrief.service';
+
+function requestedPersona(raw: unknown) {
+  const parsed = BriefPersonaEnum.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
 
 const router = guardProjectRoutes(Router());
 
@@ -38,9 +44,17 @@ router.post(
           'FORBIDDEN_PERMISSION'
         );
       }
+      const projectId = String(req.params.projectId);
+      const targetPersona = await resolveBriefPersona({
+        projectId,
+        fieldAgent: req.fieldAgent,
+        webUser: req.webUser,
+        requested: requestedPersona(req.body?.targetPersona ?? req.query.persona),
+      });
       const brief = await generateOrGetMorningBriefForBoqItem({
-        projectId: String(req.params.projectId),
+        projectId,
         boqItemId: String(req.params.boqItemId),
+        targetPersona,
         input: req.body,
       });
       res.status(201).json({ success: true, data: brief });
@@ -60,9 +74,11 @@ router.post(
   requirePermission('projects:edit_baseline'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const persona = requestedPersona(req.body?.targetPersona);
       const briefs = await generateDailyDispatchForProject(
         String(req.params.projectId),
-        req.body?.workdayDate ? String(req.body.workdayDate) : undefined
+        req.body?.workdayDate ? String(req.body.workdayDate) : undefined,
+        persona ? [persona] : undefined
       );
       res.status(201).json({ success: true, data: briefs });
     } catch (error) {
@@ -73,15 +89,24 @@ router.post(
 
 /**
  * GET /api/v1/projects/:projectId/morning-briefs
- * Returns today's Morning Deliverable Briefs ordered by Plan A -> Fallbacks.
+ * Returns today's Morning Deliverable Briefs ordered by Plan A -> Fallbacks, for the caller's persona
+ * (field) or ?persona= (web; defaults to the contractor brief when contractors report).
  */
 router.get(
   '/:projectId/morning-briefs',
   requireAnyAuthWithWebPermission('boq:view'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
+      const projectId = String(req.params.projectId);
+      const targetPersona = await resolveBriefPersona({
+        projectId,
+        fieldAgent: req.fieldAgent,
+        webUser: req.webUser,
+        requested: requestedPersona(req.query.persona),
+      });
       const briefs = await listMorningBriefsForProject({
-        projectId: String(req.params.projectId),
+        projectId,
+        targetPersona,
         workdayDate: req.query.workdayDate
           ? String(req.query.workdayDate)
           : undefined,

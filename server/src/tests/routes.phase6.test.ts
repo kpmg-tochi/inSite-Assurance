@@ -76,10 +76,8 @@ const PERIMETER = {
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
-  const { seedDatabase } = await import('../db/seedDatabase');
   const { createApp } = await import('../app');
   ({ runMorningBriefCronTick } = await import('../jobs/morningBriefCron'));
-  await seedDatabase();
   app = createApp();
 
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: 'kpmg-nigeria' } });

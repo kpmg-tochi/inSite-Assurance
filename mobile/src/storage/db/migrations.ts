@@ -195,6 +195,33 @@ ALTER TABLE captures ADD COLUMN resubmitted_from TEXT;
 ALTER TABLE captures ADD COLUMN superseded_by TEXT;
 `,
   },
+  {
+    // Phase 7 Step 8: who a morning brief is written for and the standards it applies, so the brief
+    // card titles and lists them from what the server sent rather than from the current session.
+    version: 3,
+    sql: `
+ALTER TABLE chat_messages ADD COLUMN brief_json TEXT;
+`,
+  },
+  {
+    // Phase 7 Step 8: the server's status for every report of this person on the project, including
+    // reports submitted from another device of the same account. Status only: the report content
+    // stays on the device that wrote it, and nothing here is ever sent.
+    version: 4,
+    sql: `
+CREATE TABLE IF NOT EXISTS server_reports (
+  server_report_id TEXT PRIMARY KEY NOT NULL,
+  client_report_id TEXT,
+  project_id TEXT NOT NULL,
+  wbs_item_id TEXT NOT NULL,
+  workday_date TEXT NOT NULL,
+  status TEXT NOT NULL,
+  revision_number INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS server_reports_period ON server_reports (project_id, wbs_item_id, workday_date);
+`,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
@@ -206,6 +233,7 @@ export const DATA_TABLES = [
   'workday_reports',
   'wbs_items',
   'chat_messages',
+  'server_reports',
   'telemetry_pings',
   'incidents',
   'assurance_submissions',

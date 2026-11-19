@@ -20,7 +20,8 @@ export interface ValuationReportPdfInput {
   currency?: string;
   /** Project IANA zone for printed times. */
   timeZone?: string;
-  ipcNumber: number;
+  /** Null for a direct milestone valuation (Phase 7: no contractor claim). */
+  ipcNumber: number | null;
   ipcStatus: string;
   trancheName: string;
   totalClaimedNgn: number;
@@ -66,13 +67,15 @@ export async function generateValuationReportPdfBuffer(
   data: ValuationReportPdfInput,
 ): Promise<Buffer> {
   const money = moneyFormatter(data.currency ?? "NGN");
+  const direct = data.ipcNumber === null;
+  const subject = direct ? "Direct milestone verification" : `IPC #${data.ipcNumber}`;
   return new Promise((resolve, reject) => {
     const cert = data.certification;
     const doc = new PDFDocument({
       size: "A4",
       margin: 45,
       info: {
-        Title: `Disbursement Evidence & Valuation Report — ${data.projectCodePrefix} IPC #${data.ipcNumber}`,
+        Title: `Disbursement Evidence & Valuation Report — ${data.projectCodePrefix} ${subject}`,
         Author: cert?.certifierFullName ?? data.tenantName ?? "InSite Assurance",
       },
     });
@@ -109,7 +112,7 @@ export async function generateValuationReportPdfBuffer(
         .fontSize(10)
         .fillColor("#b91c1c")
         .text(
-          `DRAFT: IPC #${data.ipcNumber} has not been certified (status ${data.ipcStatus}). No certified or recommended amounts exist yet.`,
+          `DRAFT: ${subject} has not been certified (status ${data.ipcStatus}). No certified or recommended amounts exist yet.`,
         );
     }
 
@@ -127,7 +130,7 @@ export async function generateValuationReportPdfBuffer(
     doc.text(`Lender / Guarantor: ${data.lenderName}`);
     doc.text(`Contractor: ${data.contractorName}`);
     doc.text(`Independent Monitoring Practice: ${data.monitorOrganizationName}`);
-    doc.text(`Facility Tranche: ${data.trancheName} (IPC #${data.ipcNumber})`);
+    doc.text(`Facility Tranche: ${data.trancheName} (${subject})`);
     doc.text(`Evidence rating engine: ${engineText(data.ratingEngine, data.ratingEngineDetail)}`);
 
     doc.moveDown(0.8);
@@ -139,9 +142,13 @@ export async function generateValuationReportPdfBuffer(
       .text("1. Tranche Disbursement & Holdback Summary", { underline: true });
     doc.moveDown(0.4);
     doc.fontSize(10).fillColor("#1e293b");
-    doc.text(`• Contractor Requested Amount (IPC #${data.ipcNumber}): ${money(data.totalClaimedNgn)}`);
+    doc.text(
+      direct
+        ? `• System Claim from Verified Evidence (no contractor claim): ${money(data.totalClaimedNgn)}`
+        : `• Contractor Requested Amount (${subject}): ${money(data.totalClaimedNgn)}`,
+    );
     if (cert) {
-      doc.text(`• Monitor Certified Value (revision ${cert.revisionNumber}): ${money(cert.totalCertifiedNgn)}`);
+      doc.text(`• ${direct ? "Verified" : "Monitor Certified"} Value (revision ${cert.revisionNumber}): ${money(cert.totalCertifiedNgn)}`);
       doc.text(`• Recommended Release: ${money(cert.recommendedReleaseNgn)}`);
       doc.text(`• Recommended Holdback: ${money(cert.recommendedHoldbackNgn)}`);
       doc.text(`• Formal Recommendation: ${cert.trancheRecommendation}`);
@@ -168,7 +175,7 @@ export async function generateValuationReportPdfBuffer(
       .text(
         cert?.executiveSummary ??
           data.aiExecutiveSummary ??
-          "Reconciliation has not run for this IPC.",
+          (direct ? "No verification summary." : "Reconciliation has not run for this IPC."),
         { align: "justify" },
       );
 
@@ -194,7 +201,7 @@ export async function generateValuationReportPdfBuffer(
         .fontSize(8.5)
         .fillColor("#475569")
         .text(
-          `   Budget: ${money(item.budgetedCostNgn)} | Claimed: ${item.contractorClaimedPct}% | Evidence Rating: ${item.ratingLabel} | ${certified}`,
+          `   Budget: ${money(item.budgetedCostNgn)} | ${direct ? "Evidence supports" : "Claimed"}: ${item.contractorClaimedPct}% | Evidence Rating: ${item.ratingLabel} | ${certified}`,
         );
       doc.moveDown(0.35);
     }

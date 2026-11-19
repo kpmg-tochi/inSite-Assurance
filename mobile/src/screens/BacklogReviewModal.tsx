@@ -15,6 +15,8 @@ import {
   useSyncStatus,
 } from '../queries/wbs/useWbsQueries';
 import type { RootStackParamList } from '../navigation/types';
+import { personaCopy } from '../utils/personaCopy';
+import { reportStatusView } from '../utils/reportStatus';
 
 const KIND_LABEL: Record<string, string> = {
   CAPTURE: 'Photo or voice note',
@@ -33,7 +35,8 @@ const KIND_LABEL: Record<string, string> = {
  */
 export const BacklogReviewModal: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { activeProjectId: projectId } = useProfile();
+  const { activeProjectId: projectId, activeContext } = useProfile();
+  const copy = personaCopy(activeContext?.fieldPersonaType);
   const insets = useSafeAreaInsets();
   const status = useSyncStatus();
   const { data: reports = [], isLoading } = usePendingReportsQuery(projectId);
@@ -107,22 +110,15 @@ export const BacklogReviewModal: React.FC = () => {
           ) : reports.length === 0 ? (
             <EmptyStateCard
               title="No reports waiting"
-              description="Every daily report from this device has been accepted by the server."
+              description={copy.backlogEmptyDescription}
             />
           ) : (
-            reports.map((r) => (
+            reports.map((r) => {
+              const statusView = reportStatusView(r.serverStatus, r.syncStatus);
+              return (
               <View key={r.id} style={styles.itemCard}>
                 <View style={styles.itemTop}>
-                  <Pill
-                    variant={r.serverStatus === 'STAGED_UNVERIFIED' ? 'warning' : 'info'}
-                    text={
-                      r.serverStatus === 'STAGED_UNVERIFIED'
-                        ? 'Held until identity approval'
-                        : r.syncStatus === 'SENT'
-                          ? 'Sent'
-                          : 'Waiting to send'
-                    }
-                  />
+                  <Pill variant={statusView.variant} text={statusView.label} />
                   <Text style={styles.itemDate}>{r.workdayDate}</Text>
                 </View>
                 <Text style={styles.itemTitle}>{r.summaryText}</Text>
@@ -131,15 +127,21 @@ export const BacklogReviewModal: React.FC = () => {
                     {r.reportedQuantity} {r.unit} · {r.captureIds.length} capture(s)
                   </Text>
                 </View>
+                {statusView.needsAction && (
+                  <Text style={styles.itemMetaText}>
+                    A reviewer returned this report. Open the WBS thread to answer the query with a revision.
+                  </Text>
+                )}
               </View>
-            ))
+              );
+            })
           )}
 
           {reports.some((r) => r.serverStatus === 'STAGED_UNVERIFIED') && (
             <InfoCallout
               variant="info"
               title="Held reports"
-              description="The server keeps these until your identity check is approved, then submits them automatically. You do not need to send them again."
+              description={copy.heldReportsDescription}
             />
           )}
         </ScrollView>

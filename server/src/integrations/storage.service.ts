@@ -49,6 +49,16 @@ export const MEDIA_UPLOAD_POLICY: Record<MediaType, { mimeTypes: string[]; maxBy
   VALUATION_REPORT_PDF: { mimeTypes: ['application/pdf'], maxBytes: 20 * MB },
   IDENTITY_DOCUMENT: { mimeTypes: DOC_TYPES, maxBytes: 15 * MB },
   IDENTITY_SELFIE: { mimeTypes: IMAGE_TYPES, maxBytes: 15 * MB },
+  // Phase 7: needs assessments and standards reference documents.
+  PROJECT_DOCUMENT: {
+    mimeTypes: [
+      ...DOC_TYPES,
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+    ],
+    maxBytes: 25 * MB,
+  },
 };
 
 export const MAX_UPLOAD_BYTES = Math.max(

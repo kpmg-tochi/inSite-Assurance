@@ -1,6 +1,6 @@
 import { calendarDateInTimeZone, timeZoneOffsetMinutes } from '@insite/shared';
 import { prisma } from '../config/prisma';
-import { generateDailyDispatchForProject } from '../modules/morning-briefs/morningBrief.service';
+import { briefPersonasForProject, generateDailyDispatchForProject } from '../modules/morning-briefs/morningBrief.service';
 
 const CHECK_INTERVAL_MS = 15 * 60 * 1000; // Every 15 minutes
 
@@ -30,11 +30,14 @@ export async function runMorningBriefCronTick(): Promise<void> {
       const today = calendarDateInTimeZone(now, project.timezone);
       // Dispatch once the project's local time has reached workdayStartTime (or catch up later).
       if (minutesNowInZone(project.timezone, now) >= startMinutes) {
-        const existingCount = await prisma.morningDeliverableBrief.count({
-          where: { projectId: project.id, workdayDate: today },
-        });
-        if (existingCount === 0) {
-          await generateDailyDispatchForProject(project.id, today);
+        // Phase 7: one dispatch per persona that reports on the project.
+        for (const persona of await briefPersonasForProject(project.id)) {
+          const existingCount = await prisma.morningDeliverableBrief.count({
+            where: { projectId: project.id, workdayDate: today, targetPersona: persona },
+          });
+          if (existingCount === 0) {
+            await generateDailyDispatchForProject(project.id, today, [persona]);
+          }
         }
       }
     }

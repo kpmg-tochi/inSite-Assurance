@@ -219,9 +219,7 @@ before(async () => {
   aiCheck = await import('../modules/workday-reports/aiOmissionCheck');
   provider = await import('../modules/evidence/evidenceProvider');
   engine = await import('../modules/reconciliation/reconciliationEngine');
-  const { seedDatabase } = await import('../db/seedDatabase');
   const { createApp } = await import('../app');
-  await seedDatabase();
   app = createApp();
   aiCheck.setAiOmissionCheckScheduler((id) => scheduled.push(id));
 

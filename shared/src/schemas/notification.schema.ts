@@ -67,6 +67,10 @@ export const WebNotificationCategoryEnum = z.enum([
   'TRANCHE_DISBURSEMENT',
   'MONITOR_QUERY',
   'AI_OMISSION_FLAG',
+  // Phase 7
+  'STANDARDS_VIOLATION_FLAGGED',
+  'REPORT_PENDING_APPROVAL',
+  'DISBURSEMENT_PENDING_APPROVAL',
 ]);
 export type WebNotificationCategory = z.infer<typeof WebNotificationCategoryEnum>;
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { ShieldCheck, User, KeyRound, Users, Palette, Building2 } from "lucide-react";
+import { ShieldCheck, User, KeyRound, Users, Palette, Building2, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import type { FieldSessionRosterDto } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
@@ -20,6 +20,7 @@ import { OrganizationsTab } from "../../components/rbac/OrganizationsTab";
 import { WorkspaceSettingsCard } from "../../components/rbac/WorkspaceSettingsCard";
 import { JoinCodesPanel } from "../../components/JoinCodesPanel";
 import { MobileDevicesPanel } from "../../components/rbac/MobileDevicesPanel";
+import { WorkflowTemplatesTab } from "../../components/process/WorkflowTemplatesTab";
 import {
   StandardTable,
   TableBadge,
@@ -40,13 +41,14 @@ export function SettingsPage({ project }: SettingsPageProps) {
   const canManageSettings = hasPermission("tenant:manage_settings");
   const canSeeTenantTab = canManageBranding || canManageSettings;
   const canManageOrganizations = hasPermission("organizations:manage");
+  const canManageWorkflows = hasPermission("templates:manage_workflows");
   const canRevokeDevices = hasPermission("sessions:revoke_device");
   const canReviewCredentials = hasPermission("assurance:review_credentials");
   const canManageRoster = hasPermission("mobilization:manage_roster");
   const canViewRoster = hasAnyPermission("sessions:revoke_device", "mobilization:manage_roster");
   const canSeeAccessTab = canReviewCredentials || canViewRoster;
 
-  type SettingsTab = "ACCESS" | "ROLES" | "USERS" | "ORGANIZATIONS" | "BRANDING" | "ACCOUNT";
+  type SettingsTab = "ACCESS" | "ROLES" | "USERS" | "ORGANIZATIONS" | "WORKFLOWS" | "BRANDING" | "ACCOUNT";
   const [activeTab, setActiveTab] = useState<SettingsTab>(() =>
     canSeeAccessTab
       ? "ACCESS"
@@ -56,7 +58,9 @@ export function SettingsPage({ project }: SettingsPageProps) {
           ? "USERS"
           : canManageOrganizations
             ? "ORGANIZATIONS"
-            : canSeeTenantTab
+            : canManageWorkflows
+              ? "WORKFLOWS"
+              : canSeeTenantTab
               ? "BRANDING"
               : "ACCOUNT",
   );
@@ -365,6 +369,21 @@ export function SettingsPage({ project }: SettingsPageProps) {
             </button>
           )}
 
+          {canManageWorkflows && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("WORKFLOWS")}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
+                activeTab === "WORKFLOWS"
+                  ? "bg-white text-brand-primary shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Workflow className="w-4 h-4" />
+              <span>Workflow templates</span>
+            </button>
+          )}
+
           {canSeeTenantTab && (
             <button
               type="button"
@@ -398,6 +417,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
       {activeTab === "ROLES" && canManageRoles && <RolesPermissionsTab />}
       {activeTab === "USERS" && canManageUsers && <UsersVisibilityTab />}
       {activeTab === "ORGANIZATIONS" && canManageOrganizations && <OrganizationsTab />}
+      {activeTab === "WORKFLOWS" && canManageWorkflows && <WorkflowTemplatesTab />}
       {activeTab === "BRANDING" && canSeeTenantTab && (
         <div className="space-y-4">
           {canManageBranding && <TenantBrandingTab />}

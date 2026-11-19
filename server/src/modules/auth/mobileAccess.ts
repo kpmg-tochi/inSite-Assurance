@@ -72,10 +72,16 @@ export function roleSummary(role: RoleRow): MobileRoleSummary {
  */
 export function mobileProjectVisibilityWhere(user: MobileUserRow): Prisma.ProjectWhereInput {
   const mainPermissions = user.role.rolePermissions.map((rp) => rp.permission.key);
+  // Phase 7: a contractor-executor account does not see projects that switched contractor field
+  // reporting off (no row means the default, which allows it).
+  const contractorGate: Prisma.ProjectWhereInput =
+    effectiveMobileRole(user)?.fieldPersonaType === 'CONTRACTOR_EXECUTOR'
+      ? { NOT: { processConfig: { allowContractorFieldReporting: false } } }
+      : {};
   if (mainPermissions.includes('projects:view_all_tenant')) {
-    return { tenantId: user.tenantId, status: 'ACTIVE' };
+    return { tenantId: user.tenantId, status: 'ACTIVE', ...contractorGate };
   }
-  return { tenantId: user.tenantId, status: 'ACTIVE', userAssignments: { some: { userId: user.id } } };
+  return { tenantId: user.tenantId, status: 'ACTIVE', userAssignments: { some: { userId: user.id } }, ...contractorGate };
 }
 
 export async function listMobileProjects(user: MobileUserRow): Promise<MobileProjectSummary[]> {

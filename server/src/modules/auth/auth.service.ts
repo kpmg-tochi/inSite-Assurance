@@ -34,6 +34,7 @@ import {
 } from './mobileAccess';
 import { primaryCategory, resolveOrganization } from '../organizations/organizations.service';
 import { recordAuditEvent } from '../audit/audit.service';
+import { getProcessConfig } from '../process/processConfig.service';
 import { parseTenantBranding } from '../rbac/rbac.service';
 import { parseDevicePublicKey } from '../../utils/deviceSignature';
 
@@ -793,7 +794,10 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
     : null;
 
   const role = joinCodeRecord.role;
-  const requiresAssurance = role.requiresIdentityAssurance;
+  // Phase 7: the project may switch the identity check off whatever the role says.
+  const requiresAssurance =
+    role.requiresIdentityAssurance &&
+    (await getProcessConfig(joinCodeRecord.projectId)).enableContractorIdentityAssurance;
   const initialAssuranceStatus = requiresAssurance
     ? 'PENDING_APPROVAL'
     : 'APPROVED';

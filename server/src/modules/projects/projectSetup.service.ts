@@ -40,6 +40,13 @@ import {
   syncProjectContractors,
 } from './contractors.service';
 import { issueMissingJoinCodes, reconcileContractorJoinCodes } from './joinCodes.service';
+import {
+  applyProcessSettings,
+  getProjectProcessSettings,
+  initialiseProjectProcess,
+} from '../process/processConfig.service';
+import { countStandardsDocs } from '../standards/standards.service';
+import type { ProjectProcessStep } from '@insite/shared';
 
 /**
  * Staged project creation (Phase 6, decision C). A project starts as a DRAFT from the basics step,
@@ -106,7 +113,7 @@ type SetupProjectRow = Prisma.ProjectGetPayload<{ include: typeof SETUP_INCLUDE 
 async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
   const project = await db.project.findUnique({ where: { id: projectId }, include: SETUP_INCLUDE });
   if (!project) throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
-  const [contractors, itemCount, unmappedCount, unassignedContractorCount, holdPointCount, budgetSum] =
+  const [contractors, itemCount, unmappedCount, unassignedContractorCount, holdPointCount, budgetSum, process, standards] =
     await Promise.all([
       getProjectContractors(db, projectId),
       db.boqItem.count({ where: { projectId } }),
@@ -114,10 +121,14 @@ async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
       db.boqItem.count({ where: { projectId, projectContractorId: null } }),
       db.boqItem.count({ where: { projectId, isHoldPoint: true } }),
       db.boqItem.aggregate({ where: { projectId }, _sum: { budgetedCostNgn: true } }),
+      getProjectProcessSettings(projectId, db),
+      countStandardsDocs(db, projectId),
     ]);
   return {
     project,
     contractors,
+    process,
+    standards,
     boq: {
       itemCount,
       unmappedCount,
@@ -150,6 +161,7 @@ function enabledModes(project: SetupProjectRow): GeofenceMode[] {
 /** Issues per step, from the saved data. Required steps must have no issues to activate. */
 function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupIssue[]; warnings: SetupIssue[] }> {
   const { project, contractors, boq } = loaded;
+  const config = loaded.process.config;
   const out: Record<string, { issues: SetupIssue[]; warnings: SetupIssue[] }> = {};
   const budget = project.totalBudgetNgn === null ? null : Number(project.totalBudgetNgn);
 
@@ -203,7 +215,10 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
   const facility: SetupIssue[] = [];
   const facilityWarnings: SetupIssue[] = [];
   if (project.tranches.length === 0) {
-    facility.push({ code: 'TRANCHE_REQUIRED', message: 'Add at least one tranche.', field: 'tranches' });
+    // Phase 7: with tranches off, activation creates one implicit tranche for the whole budget.
+    if (config.enableTranchesAndCps) {
+      facility.push({ code: 'TRANCHE_REQUIRED', message: 'Add at least one tranche.', field: 'tranches' });
+    }
   } else if (budget !== null) {
     const sum = project.tranches.reduce((s, t) => s + Number(t.allocatedAmountNgn), 0);
     if (sum > budget + 0.005) {
@@ -227,7 +242,8 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
   if (boq.itemCount === 0) {
     boqIssues.push({ code: 'BOQ_REQUIRED', message: 'Upload the bill of quantities.', field: 'items' });
   } else {
-    if (boq.unmappedCount > 0) {
+    // With tranches off, unmapped items are mapped to the implicit tranche at activation.
+    if (boq.unmappedCount > 0 && (config.enableTranchesAndCps || project.tranches.length > 1)) {
       boqIssues.push({
         code: 'BOQ_ITEMS_UNMAPPED',
         message: `${boq.unmappedCount} BOQ item(s) are not mapped to a tranche.`,
@@ -247,24 +263,56 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
   // Reporting: always has valid defaults; the step must still be reviewed (saved) once.
   out.reporting = { issues: [], warnings: [] };
   out.team = { issues: [], warnings: [] };
+
+  // Process: valid by construction (validated on save).
+  out.process = { issues: [], warnings: [] };
+
+  // Standards and needs assessment (Phase 7): requirements follow the process configuration.
+  const standardsIssues: SetupIssue[] = [];
+  if (config.standardsSpecificationMode === 'REQUIRED_AT_CREATION' && loaded.standards.standardCount === 0) {
+    standardsIssues.push({ code: 'STANDARDS_REQUIRED', message: 'Add at least one project standard.', field: 'standards' });
+  }
+  if (config.needsAssessmentMode === 'REQUIRED_AT_CREATION' && loaded.standards.needsAssessmentCount === 0) {
+    standardsIssues.push({
+      code: 'NEEDS_ASSESSMENT_REQUIRED',
+      message: 'Upload at least one needs-assessment document.',
+      field: 'needsAssessments',
+    });
+  }
+  out.standards = { issues: standardsIssues, warnings: [] };
   return out;
+}
+
+/** Whether a step is required for this project (the standards step follows the process modes). */
+function stepRequired(step: { id: string; required: boolean }, loaded: LoadedSetup): boolean {
+  if (step.id !== 'standards') return step.required;
+  const c = loaded.process.config;
+  return c.standardsSpecificationMode === 'REQUIRED_AT_CREATION' || c.needsAssessmentMode === 'REQUIRED_AT_CREATION';
+}
+
+/** Hidden steps: the standards step disappears when both document modes are off. */
+function stepVisible(step: { id: string }, loaded: LoadedSetup): boolean {
+  if (step.id !== 'standards') return true;
+  const c = loaded.process.config;
+  return !(c.standardsSpecificationMode === 'DISABLED' && c.needsAssessmentMode === 'DISABLED');
 }
 
 function buildStepStatuses(loaded: LoadedSetup): SetupStepStatus[] {
   const state = parseSetupState(loaded.project.setupState);
   const computed = computeStepIssues(loaded);
   const isLive = loaded.project.status !== 'DRAFT';
-  return PROJECT_SETUP_STEPS.filter((s) => s.id !== 'review').map((step) => {
+  return PROJECT_SETUP_STEPS.filter((s) => s.id !== 'review' && stepVisible(s, loaded)).map((step) => {
     const saved = state.steps[step.id];
+    const required = stepRequired(step, loaded);
     const issues = [...(computed[step.id]?.issues ?? [])];
     // A draft's steps must each be opened and saved; live projects were activated already.
-    if (!saved && !isLive && step.required && step.id !== 'basics') {
+    if (!saved && !isLive && required && step.id !== 'basics') {
       issues.unshift({ code: 'STEP_NOT_SAVED', message: `Open "${step.title}" and save it.` });
     }
     return {
       stepId: step.id,
       title: step.title,
-      required: step.required,
+      required,
       saved: Boolean(saved) || step.id === 'basics' || isLive,
       savedAt: saved?.savedAt ?? null,
       complete: issues.length === 0,
@@ -336,6 +384,8 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
       userIds: project.userAssignments.map((a) => a.userId),
       joinCodeRoleIds: state.team.joinCodeRoleIds,
     },
+    process: loaded.process,
+    standards: loaded.standards,
     steps,
     canActivate: project.status === 'DRAFT' && steps.every((s) => !s.required || s.complete),
   };
@@ -411,6 +461,8 @@ export async function createProjectDraft(webUser: WebJwtPayload, input: CreatePr
       },
     });
     await tx.userProjectAssignment.create({ data: { userId: webUser.userId, projectId: project.id } });
+    // Phase 7: process settings and both chains, from the tenant's default template if any.
+    await initialiseProjectProcess(tx, project);
     await recordAuditEvent(tx, {
       projectId: project.id,
       actorType: 'WEB_USER',
@@ -812,6 +864,32 @@ const saveTeam: StepSaver = async ({ tx, project, webUser, input }) => {
   return { changedFields, payload: { usersAdded: added, usersRemoved: removed }, affectedUserIds: [...added, ...removed] };
 };
 
+/** Phase 7: template provenance, switches and both chains. Chain edits write new versions. */
+const saveProcess: StepSaver = async ({ tx, project, input }) => {
+  const data = input as ProjectProcessStep;
+  if (data.workflowTemplateId) {
+    const template = await tx.workflowTemplate.findFirst({
+      where: { id: data.workflowTemplateId, tenantId: project.tenantId },
+      select: { id: true },
+    });
+    if (!template) throw new AppError('Workflow template not found', 404, 'WORKFLOW_TEMPLATE_NOT_FOUND');
+  }
+  const result = await applyProcessSettings(tx, project, {
+    config: data.config,
+    reportChain: data.reportChain,
+    disbursementChain: data.disbursementChain,
+    workflowTemplateId: data.workflowTemplateId,
+    confirmDeactivateContractorCodes: data.confirmDeactivateContractorCodes,
+  });
+  return {
+    changedFields: result.changedFields,
+    payload: { deactivatedJoinCodes: result.deactivatedJoinCodes, issuedJoinCodes: result.issuedJoinCodes },
+  };
+};
+
+/** Phase 7: standards and documents are saved through their own endpoints; saving marks the step reviewed. */
+const saveStandards: StepSaver = async () => ({ changedFields: [] });
+
 const STEP_SAVERS: Record<ProjectSetupStepId, StepSaver> = {
   basics: saveBasics,
   parties: saveParties,
@@ -819,6 +897,8 @@ const STEP_SAVERS: Record<ProjectSetupStepId, StepSaver> = {
   facility: saveFacility,
   boq: saveBoq,
   reporting: saveReporting,
+  process: saveProcess,
+  standards: saveStandards,
   team: saveTeam,
 };
 
@@ -932,6 +1012,26 @@ export async function activateProject(projectId: string, webUser: WebJwtPayload)
     }
     if (issues.length > 0) {
       throw new AppError('The project cannot be activated yet', 422, 'PROJECT_INCOMPLETE', { issues });
+    }
+
+    // Phase 7: tranches off means one implicit tranche covering the whole budget and every item.
+    if (!loaded.process.config.enableTranchesAndCps) {
+      let implicit = project.tranches[0] ?? null;
+      if (!implicit) {
+        implicit = await tx.facilityTranche.create({
+          data: {
+            projectId,
+            trancheNumber: 1,
+            name: 'Whole project',
+            allocatedAmountNgn: project.totalBudgetNgn ?? 0,
+            targetCompletionPct: 100,
+          },
+          include: { conditionsPrecedent: true },
+        });
+      }
+      if (project.tranches.length <= 1) {
+        await tx.boqItem.updateMany({ where: { projectId, trancheId: null }, data: { trancheId: implicit.id } });
+      }
     }
 
     // Join codes for the chosen roles (all join-code mobile roles when none were chosen).

@@ -24,6 +24,8 @@ export interface DefaultRoleDefinition {
 export const SEGREGATED_DISBURSEMENT_PERMISSIONS: string[] = [
   'ipc:certify_valuation',
   'tranche:approve_disbursement',
+  // Phase 7: direct milestone verification is a certification, so it is segregated the same way.
+  'milestone:verify_direct_release',
 ];
 
 const FIELD_BASE_PERMISSIONS = [

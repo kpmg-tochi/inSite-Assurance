@@ -1,5 +1,11 @@
 import React, { useState } from "react";
-import type { ConditionPrecedentDto, IpcClaimDto, LenderDecisionType } from "@insite/shared";
+import type {
+  ConditionPrecedentDto,
+  IpcClaimDto,
+  LenderDecisionType,
+  TrancheDecisionDto,
+  ValuationReportDto,
+} from "@insite/shared";
 import { CustomSelect, type CustomSelectOption } from "../../../components/common";
 import { useAuth } from "../../../lib/auth-context";
 import { IS_DEMO_MODE } from "../../../config/demoMode";
@@ -33,7 +39,22 @@ const CP_CHIP: Record<ConditionPrecedentDto["status"], string> = {
   BREACHED: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
-function ConditionRow({ projectId, trancheId, cp }: { projectId: string; trancheId: string; cp: ConditionPrecedentDto }) {
+/** The tranche a decision releases from; CPs are optional (absent when the module is off). */
+export interface DecisionTranche {
+  id: string;
+  name: string;
+  allocatedAmountNgn: number;
+  releasedAmountNgn: number;
+  conditionsPrecedent?: Array<
+    Pick<ConditionPrecedentDto, "id" | "referenceCode" | "description" | "isMandatoryForRelease" | "status"> & {
+      waiverReason?: string | null;
+    }
+  >;
+}
+
+type DecisionCondition = NonNullable<DecisionTranche["conditionsPrecedent"]>[number];
+
+function ConditionRow({ projectId, trancheId, cp }: { projectId: string; trancheId: string; cp: DecisionCondition }) {
   const { hasPermission } = useAuth();
   const waiveMutation = useWaiveConditionMutation(projectId);
   const statusMutation = useUpdateConditionStatusMutation(projectId);
@@ -108,18 +129,37 @@ function ConditionRow({ projectId, trancheId, cp }: { projectId: string; tranche
   );
 }
 
-export function LenderDecisionModal({ projectId, ipc, onClose }: { projectId: string; ipc: IpcClaimDto; onClose: () => void }) {
+/**
+ * Release decision on a certified valuation. Works for an IPC valuation and for a direct
+ * milestone valuation (Phase 7): both go through POST /tranches/:trancheId/decision.
+ */
+export function TrancheDecisionModal({
+  projectId,
+  tranche,
+  report,
+  decide,
+  subtitle,
+  cpsEnabled = true,
+  onClose,
+}: {
+  projectId: string;
+  tranche: DecisionTranche;
+  report: ValuationReportDto;
+  decide: { allowed: boolean; reason: string | null };
+  subtitle: string;
+  /** False when the project turned tranches and conditions precedent off. */
+  cpsEnabled?: boolean;
+  onClose: () => void;
+}) {
   const decideMutation = useDecideTrancheMutation(projectId);
-  const report = ipc.valuationReport;
   const [decision, setDecision] = useState<LenderDecisionType>("APPROVE_FULL");
   const [amount, setAmount] = useState("");
   const [creditRef, setCreditRef] = useState(IS_DEMO_MODE ? "IC-CC-2026-Q4-019" : "");
   const [notes, setNotes] = useState("");
 
-  if (!report) return null;
-  const cps = ipc.tranche.conditionsPrecedent ?? [];
+  const cps = cpsEnabled ? tranche.conditionsPrecedent ?? [] : [];
   const blocking = cps.filter((cp) => cp.isMandatoryForRelease && (cp.status === "PENDING" || cp.status === "BREACHED"));
-  const remaining = ipc.tranche.allocatedAmountNgn - ipc.tranche.releasedAmountNgn;
+  const remaining = tranche.allocatedAmountNgn - tranche.releasedAmountNgn;
   const maxApprovable = Math.min(report.recommendedReleaseAmountNgn, remaining);
   const amountNum = Number(amount);
   const amountBad = decision === "APPROVE_WITH_HOLDBACK" && (amount === "" || !(amountNum > 0) || amountNum > maxApprovable);
@@ -132,7 +172,7 @@ export function LenderDecisionModal({ projectId, ipc, onClose }: { projectId: st
     if (cpBlocked || amountBad || fullBlocked) return;
     try {
       await decideMutation.mutateAsync({
-        trancheId: ipc.trancheId,
+        trancheId: tranche.id,
         body: {
           valuationReportId: report.id,
           decision,
@@ -148,9 +188,9 @@ export function LenderDecisionModal({ projectId, ipc, onClose }: { projectId: st
   };
 
   return (
-    <ModalShell title="Tranche disbursement decision" subtitle={`${ipc.tranche.name} · valuation revision ${report.revisionNumber}`} onClose={onClose} maxWidth="max-w-2xl">
+    <ModalShell title="Tranche disbursement decision" subtitle={subtitle} onClose={onClose} maxWidth="max-w-2xl">
       <form onSubmit={handleSubmit} className="p-5 space-y-4">
-        {!ipc.actions.decide.allowed && <BlockedNotice>{ipc.actions.decide.reason}</BlockedNotice>}
+        {!decide.allowed && <BlockedNotice>{decide.reason}</BlockedNotice>}
 
         <dl className="bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs grid grid-cols-2 gap-y-1">
           <dt className="text-slate-500">Certified by</dt>
@@ -159,18 +199,20 @@ export function LenderDecisionModal({ projectId, ipc, onClose }: { projectId: st
           <dd className="text-right font-bold text-emerald-700">{formatNaira(report.recommendedReleaseAmountNgn)}</dd>
           <dt className="text-slate-500">Recommended holdback</dt>
           <dd className="text-right font-bold text-amber-700">{formatNaira(report.recommendedHoldbackAmountNgn)}</dd>
-          <dt className="text-slate-500">Tranche unreleased allocation</dt>
+          <dt className="text-slate-500">{cpsEnabled ? "Tranche unreleased allocation" : "Unreleased allocation"}</dt>
           <dd className="text-right font-medium">{formatNaira(remaining)}</dd>
         </dl>
 
-        <div className="space-y-2">
-          <div className="text-xs font-semibold text-slate-700">Conditions precedent</div>
-          {cps.length === 0 ? (
-            <p className="text-xs text-slate-500">No conditions precedent on this tranche.</p>
-          ) : (
-            cps.map((cp) => <ConditionRow key={cp.id} projectId={projectId} trancheId={ipc.trancheId} cp={cp} />)
-          )}
-        </div>
+        {cpsEnabled && (
+          <div className="space-y-2">
+            <div className="text-xs font-semibold text-slate-700">Conditions precedent</div>
+            {cps.length === 0 ? (
+              <p className="text-xs text-slate-500">No conditions precedent on this tranche.</p>
+            ) : (
+              cps.map((cp) => <ConditionRow key={cp.id} projectId={projectId} trancheId={tranche.id} cp={cp} />)
+            )}
+          </div>
+        )}
 
         <CustomSelect label="Decision" value={decision} onChange={setDecision} options={DECISION_OPTIONS} />
 
@@ -208,18 +250,68 @@ export function LenderDecisionModal({ projectId, ipc, onClose }: { projectId: st
           submitLabel="Record decision"
           pendingLabel="Recording..."
           isPending={decideMutation.isPending}
-          disabled={!ipc.actions.decide.allowed || cpBlocked || amountBad || fullBlocked}
+          disabled={!decide.allowed || cpBlocked || amountBad || fullBlocked}
         />
       </form>
     </ModalShell>
   );
 }
 
+export function LenderDecisionModal({
+  projectId,
+  ipc,
+  cpsEnabled,
+  onClose,
+}: {
+  projectId: string;
+  ipc: IpcClaimDto;
+  cpsEnabled?: boolean;
+  onClose: () => void;
+}) {
+  const report = ipc.valuationReport;
+  if (!report) return null;
+  return (
+    <TrancheDecisionModal
+      projectId={projectId}
+      tranche={ipc.tranche}
+      report={report}
+      decide={ipc.actions.decide}
+      subtitle={`${ipc.tranche.name} · valuation revision ${report.revisionNumber}`}
+      cpsEnabled={cpsEnabled}
+      onClose={onClose}
+    />
+  );
+}
+
 export function ReverseDecisionModal({ projectId, ipc, onClose }: { projectId: string; ipc: IpcClaimDto; onClose: () => void }) {
+  if (!ipc.activeDecision) return null;
+  return (
+    <ReverseTrancheDecisionModal
+      projectId={projectId}
+      decision={ipc.activeDecision}
+      subtitle={`IPC #${ipc.ipcNumber}`}
+      returnsTo="the IPC returns to certified"
+      onClose={onClose}
+    />
+  );
+}
+
+/** Linked reversal of a final decision (IPC or direct milestone valuation). */
+export function ReverseTrancheDecisionModal({
+  projectId,
+  decision,
+  subtitle,
+  returnsTo,
+  onClose,
+}: {
+  projectId: string;
+  decision: TrancheDecisionDto;
+  subtitle: string;
+  returnsTo: string;
+  onClose: () => void;
+}) {
   const reverseMutation = useReverseDecisionMutation(projectId);
   const [reason, setReason] = useState("");
-  const decision = ipc.activeDecision;
-  if (!decision) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -232,12 +324,12 @@ export function ReverseDecisionModal({ projectId, ipc, onClose }: { projectId: s
   };
 
   return (
-    <ModalShell title="Reverse tranche decision" subtitle={`IPC #${ipc.ipcNumber}`} onClose={onClose} maxWidth="max-w-lg">
+    <ModalShell title="Reverse tranche decision" subtitle={subtitle} onClose={onClose} maxWidth="max-w-lg">
       <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs">
         <p className="text-slate-700">
           This records a linked reversal of <strong>{decision.decision}</strong> ({formatNaira(decision.approvedDisbursementAmountNgn)} released).
-          The original decision is kept; the released amount is reduced by the same figure and the IPC returns to
-          certified, so a corrected decision can be recorded.
+          The original decision is kept; the released amount is reduced by the same figure and {returnsTo}, so a
+          corrected decision can be recorded.
         </p>
         <label className="block font-medium text-slate-700">
           Reason

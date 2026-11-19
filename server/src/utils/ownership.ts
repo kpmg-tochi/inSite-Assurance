@@ -50,7 +50,7 @@ export async function loadQueryInIpc(db: Db, ipcId: string, queryId: string) {
 export async function loadValuationReportInProject(db: Db, projectId: string, reportId: string) {
   assertUuid(reportId, 'Valuation report', 'VALUATION_REPORT_NOT_FOUND');
   const report = await db.valuationReport.findFirst({
-    where: { id: reportId, ipcClaim: { projectId } },
+    where: { id: reportId, projectId },
     include: { ipcClaim: true },
   });
   if (!report) throw notFound('Valuation report', 'VALUATION_REPORT_NOT_FOUND');

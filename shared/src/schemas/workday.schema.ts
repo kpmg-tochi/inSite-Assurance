@@ -4,7 +4,10 @@ import {
   WorkdayAiCheckStatusEnum,
   WorkdayReportStatusEnum,
   GeofenceStatusEnum,
+  FieldPersonaTypeEnum,
 } from '../enums';
+import { ApprovalProgressDtoSchema } from './process.schema';
+import { StandardsViolationItemSchema } from './standards.schema';
 import { CaptureDtoSchema, DeviceSignatureSchema, ExtractedQuantityItemSchema } from './evidence.schema';
 import { CALENDAR_DATE_REGEX } from '../utils/time';
 import { ReportQueryDtoSchema } from './wbsChat.schema';
@@ -153,6 +156,16 @@ export const WorkdayReportDtoSchema = z.object({
   releasedAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),
   queries: z.array(ReportQueryDtoSchema).default([]),
+  /** Phase 7: the reporter's persona when the report was submitted. */
+  reporterPersonaType: FieldPersonaTypeEnum,
+  /** Null until checked, or when it could not be decided (shown as "not checked"). */
+  standardsCompliancePassed: z.boolean().nullable(),
+  standardsViolations: z.array(StandardsViolationItemSchema),
+  approvalChainVersion: z.number().int().nullable(),
+  currentApprovalStep: z.number().int(),
+  approvedCompletedAt: z.string().datetime().nullable(),
+  /** Position on the report approval chain; null when approval was off at submission. */
+  approval: ApprovalProgressDtoSchema.nullable(),
   /** True when this response is a replay of an earlier identical submission. */
   idempotentReplay: z.boolean().optional(),
 });

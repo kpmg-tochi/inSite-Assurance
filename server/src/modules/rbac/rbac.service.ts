@@ -31,6 +31,7 @@ import {
 } from '../../middleware/auth.middleware';
 import { primaryCategory, resolveOrganization } from '../organizations/organizations.service';
 import { recordAuditEvent } from '../audit/audit.service';
+import { seedStarterTemplates } from '../process/workflowTemplates.service';
 import { issueJoinCodesForRoleOnAllProjects } from '../projects/joinCodes.service';
 import { sendPushToMobileUser } from '../../integrations/push.service';
 
@@ -1179,6 +1180,8 @@ export async function createTenantWithDefaults(webUser: WebJwtPayload, input: Cr
     });
 
     const roles = await provisionDefaultRoles(tx, tenant.id);
+    // Phase 7: the three starter workflow templates.
+    await seedStarterTemplates(tx, tenant.id);
 
     let adminUserId: string | null = null;
     if (input.adminEmail && input.adminPassword && input.adminFullName) {

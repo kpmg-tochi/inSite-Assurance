@@ -26,6 +26,7 @@ import { useProfile } from "../context/ProfileContext";
 import { useNotificationsQuery } from "../queries/notifications/useNotificationQueries";
 import { useSyncStatus, useWbsInboxQuery } from "../queries/wbs/useWbsQueries";
 import { formatMobileErrorMessage } from "../utils/errorFormatter";
+import { personaCopy } from "../utils/personaCopy";
 import type { RootStackParamList } from "../navigation/types";
 import { Feather } from "@expo/vector-icons";
 
@@ -43,6 +44,7 @@ export const WbsInboxScreen: React.FC = () => {
     refreshAssuranceStatus,
   } = useProfile();
   const syncStatus = useSyncStatus();
+  const copy = personaCopy(activeContext?.fieldPersonaType);
 
   const onSelectWbsThread = (wbsItem: WbsItemRecord) =>
     navigation.navigate("WbsThread", { wbsItem });
@@ -238,7 +240,7 @@ export const WbsInboxScreen: React.FC = () => {
         {/* Big Bold Screen Title (Like Image 2 "Activity") */}
         <View style={styles.titleRow}>
           <Text style={styles.screenTitle}>Deliverables</Text>
-          <Text style={styles.screenSubtitle}>Daily Field WBS Breakdown</Text>
+          <Text style={styles.screenSubtitle}>{copy.inboxSubtitle}</Text>
         </View>
 
         {/* Filter Pills (Styled like Image 2 "All", "DMs", "Mentions", etc.) */}
@@ -295,11 +297,8 @@ export const WbsInboxScreen: React.FC = () => {
             activeOpacity={0.9}
           >
             <View style={styles.unverifiedBannerContent}>
-              <Pill variant="warning" text="Verification Pending" />
-              <Text style={styles.unverifiedText}>
-                Your reports are sent and held by the server until your identity
-                is approved, then submitted automatically. Tap for sync status.
-              </Text>
+              <Pill variant="warning" text={copy.verificationPendingPill} />
+              <Text style={styles.unverifiedText}>{copy.verificationPendingText}</Text>
             </View>
           </TouchableOpacity>
         )}

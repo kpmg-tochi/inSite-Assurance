@@ -23,6 +23,8 @@ interface EvidenceOverlayDrawerProps {
   onOpenRaiseQuery?: (lineItem: IpcLineItemDto) => void;
   onRespondQuery?: (queryId: string, responseText: string, revisedClaimedPct?: number) => Promise<void>;
   onResolveQuery?: (queryId: string, resolutionNote: string) => Promise<void>;
+  /** False when the project turned hold points off (Phase 7): hold-point flags and caps are not shown. */
+  holdPointsOn?: boolean;
 }
 
 const RULE_CAP_TEXT: Record<string, string> = {
@@ -142,6 +144,7 @@ export function EvidenceOverlayDrawer({
   onOpenRaiseQuery,
   onRespondQuery,
   onResolveQuery,
+  holdPointsOn = true,
 }: EvidenceOverlayDrawerProps) {
   const { hasAnyPermission } = useAuth();
   const canSeeEvidence = hasAnyPermission(
@@ -165,6 +168,10 @@ export function EvidenceOverlayDrawer({
   if (!lineItem) return null;
 
   const tone = ratingTone(lineItem.aiEvidenceRating);
+  const holdPointUnmet = holdPointsOn && lineItem.missingHoldPointFlag;
+  const visibleCaps = holdPointsOn
+    ? lineItem.ruleCapsApplied
+    : lineItem.ruleCapsApplied.filter((cap) => cap !== "HOLD_POINT_WITHOUT_INDEPENDENT_EVIDENCE");
   const outstanding = lineItem.queries.find((q) => q.status === "OPEN" || q.status === "RESPONDED");
   const latestWorkdayReport = (workdayReportsQuery.data ?? []).find(
     (r) => r.wbsItemId === lineItem.boqItemId || r.wbsCode === lineItem.boqItem.wbsCode,
@@ -254,10 +261,10 @@ export function EvidenceOverlayDrawer({
           </div>
         </div>
 
-        {(lineItem.aiRationale || lineItem.missingHoldPointFlag || lineItem.ruleCapsApplied.length > 0) && (
-          <div className={`rounded-xl p-3 border ${lineItem.missingHoldPointFlag ? ratingTone("CONTRADICTED").panel : tone.panel}`}>
-            <div className={`text-[11px] font-bold uppercase tracking-wider ${lineItem.missingHoldPointFlag ? ratingTone("CONTRADICTED").text : tone.text}`}>
-              {lineItem.missingHoldPointFlag ? "Mandatory hold point unfulfilled" : "Reconciliation assessment"}
+        {(lineItem.aiRationale || holdPointUnmet || visibleCaps.length > 0) && (
+          <div className={`rounded-xl p-3 border ${holdPointUnmet ? ratingTone("CONTRADICTED").panel : tone.panel}`}>
+            <div className={`text-[11px] font-bold uppercase tracking-wider ${holdPointUnmet ? ratingTone("CONTRADICTED").text : tone.text}`}>
+              {holdPointUnmet ? "Mandatory hold point unfulfilled" : "Reconciliation assessment"}
             </div>
             {lineItem.evidenceCoveragePct !== null && (
               <p className="text-xs mt-1 text-slate-700">
@@ -267,9 +274,9 @@ export function EvidenceOverlayDrawer({
               </p>
             )}
             {lineItem.aiRationale && <p className="text-xs mt-1 leading-relaxed text-slate-700">{lineItem.aiRationale}</p>}
-            {lineItem.ruleCapsApplied.length > 0 && (
+            {visibleCaps.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
-                {lineItem.ruleCapsApplied.map((cap) => (
+                {visibleCaps.map((cap) => (
                   <span key={cap} className="px-2 py-0.5 rounded bg-white/70 border border-slate-200 text-[10px] font-semibold text-slate-700">
                     {RULE_CAP_TEXT[cap] ?? cap}
                   </span>

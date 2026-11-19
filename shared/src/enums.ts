@@ -748,6 +748,8 @@ export const MediaTypeEnum = z.enum([
   'VALUATION_REPORT_PDF',
   'IDENTITY_DOCUMENT',
   'IDENTITY_SELFIE',
+  // Phase 7: needs-assessment documents and standards reference files.
+  'PROJECT_DOCUMENT',
 ]);
 export type MediaType = z.infer<typeof MediaTypeEnum>;
 
@@ -862,6 +864,19 @@ export const AuditActionTypeEnum = z.enum([
   'PROJECT_CONTRACTOR_REMOVED',
   'BOQ_REVISED',
   'PROJECT_DRAFT_DELETED',
+  // Phase 7: process engine, standards, approvals
+  'WORKFLOW_TEMPLATE_SAVED',
+  'PROJECT_PROCESS_CONFIG_UPDATED',
+  'PROJECT_STANDARD_CREATED',
+  'PROJECT_STANDARD_UPDATED',
+  'PROJECT_STANDARD_DELETED',
+  'NEEDS_ASSESSMENT_UPLOADED',
+  'NEEDS_ASSESSMENT_DELETED',
+  'WORKDAY_REPORT_APPROVED',
+  'WORKDAY_REPORT_RETURNED',
+  'STANDARDS_VIOLATION_FLAGGED',
+  'APPROVAL_STEP_ACTIONED',
+  'DIRECT_MILESTONE_VERIFIED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 
@@ -898,7 +913,14 @@ export type IncidentStatus = z.infer<typeof IncidentStatusEnum>;
 export const WorkdayReportStatusEnum = z.enum([
   // Reporter's identity assurance is not approved yet; released by the server on approval.
   'STAGED_UNVERIFIED',
+  // Accepted. With report approval off (Phase 7) this is final and counts as evidence.
   'CONFIRMED',
+  // Phase 7, report approval on: waiting on a step of the project's report approval chain.
+  'PENDING_APPROVAL',
+  // Phase 7: every step of the report chain approved; counts as evidence.
+  'APPROVED_COMPLETED',
+  // Phase 7: a reviewer returned it; the reporter answers the query with a revision.
+  'RETURNED_FOR_REVISION',
 ]);
 export type WorkdayReportStatus = z.infer<typeof WorkdayReportStatusEnum>;
 
@@ -924,3 +946,92 @@ export type CaptureMediaType = z.infer<typeof CaptureMediaTypeEnum>;
 
 export const TranscriptionStatusEnum = z.enum(['NOT_APPLICABLE', 'PENDING', 'DONE', 'FAILED']);
 export type TranscriptionStatus = z.infer<typeof TranscriptionStatusEnum>;
+
+/**
+ * 13. Process engine (Phase 7)
+ */
+
+/** Whether a document set must be provided while the project is a draft. */
+export const NeedsAssessmentModeEnum = z.enum(['REQUIRED_AT_CREATION', 'OPTIONAL_AT_CREATION', 'DISABLED']);
+export type NeedsAssessmentMode = z.infer<typeof NeedsAssessmentModeEnum>;
+
+export const StandardsSpecificationModeEnum = z.enum(['REQUIRED_AT_CREATION', 'OPTIONAL_AT_CREATION', 'DISABLED']);
+export type StandardsSpecificationMode = z.infer<typeof StandardsSpecificationModeEnum>;
+
+export const DOCUMENT_MODE_META: Record<NeedsAssessmentMode, { label: string }> = {
+  REQUIRED_AT_CREATION: { label: 'Required before activation' },
+  OPTIONAL_AT_CREATION: { label: 'Optional' },
+  DISABLED: { label: 'Off' },
+};
+
+/**
+ * How money is released on a project:
+ * - IPC_CLAIM_REQUIRED: the contractor submits an IPC; the monitor certifies it (Phase 3).
+ * - MILESTONE_DIRECT_DISBURSEMENT: no contractor claim; a licensed verifier certifies progress
+ *   directly against field evidence and the system builds the claim.
+ */
+export const DisbursementMechanismEnum = z.enum(['IPC_CLAIM_REQUIRED', 'MILESTONE_DIRECT_DISBURSEMENT']);
+export type DisbursementMechanism = z.infer<typeof DisbursementMechanismEnum>;
+
+export const DISBURSEMENT_MECHANISM_META: Record<DisbursementMechanism, { label: string; description: string }> = {
+  IPC_CLAIM_REQUIRED: {
+    label: 'Contractor IPC claims',
+    description: 'The contractor submits an IPC; the monitor certifies it against evidence before release.',
+  },
+  MILESTONE_DIRECT_DISBURSEMENT: {
+    label: 'Direct milestone release',
+    description: 'No contractor claim. A licensed verifier certifies progress from field evidence, then release.',
+  },
+};
+
+export const StandardCategoryEnum = z.enum([
+  'MATERIAL_QUALITY',
+  'EXECUTION_METHOD',
+  'TESTING_TOLERANCE',
+  'SAFETY_ENVIRONMENT',
+  'GENERAL_SPECIFICATION',
+]);
+export type StandardCategory = z.infer<typeof StandardCategoryEnum>;
+
+export const STANDARD_CATEGORY_META: Record<StandardCategory, { label: string }> = {
+  MATERIAL_QUALITY: { label: 'Material quality' },
+  EXECUTION_METHOD: { label: 'Execution method' },
+  TESTING_TOLERANCE: { label: 'Testing and tolerance' },
+  SAFETY_ENVIRONMENT: { label: 'Safety and environment' },
+  GENERAL_SPECIFICATION: { label: 'General specification' },
+};
+
+export const NeedsAssessmentDocTypeEnum = z.enum([
+  'COMMUNITY_NEEDS_ASSESSMENT',
+  'FEASIBILITY_STUDY',
+  'ENVIRONMENTAL_SOCIAL_IMPACT',
+  'STAKEHOLDER_REQUIREMENTS',
+  'TECHNICAL_BASELINE',
+]);
+export type NeedsAssessmentDocType = z.infer<typeof NeedsAssessmentDocTypeEnum>;
+
+export const NEEDS_ASSESSMENT_DOC_TYPE_META: Record<NeedsAssessmentDocType, { label: string }> = {
+  COMMUNITY_NEEDS_ASSESSMENT: { label: 'Community needs assessment' },
+  FEASIBILITY_STUDY: { label: 'Feasibility study' },
+  ENVIRONMENTAL_SOCIAL_IMPACT: { label: 'Environmental and social impact' },
+  STAKEHOLDER_REQUIREMENTS: { label: 'Stakeholder requirements' },
+  TECHNICAL_BASELINE: { label: 'Technical baseline' },
+};
+
+export const ApprovalChainTypeEnum = z.enum(['REPORT', 'DISBURSEMENT']);
+export type ApprovalChainType = z.infer<typeof ApprovalChainTypeEnum>;
+
+export const ApprovalSubjectTypeEnum = z.enum(['WORKDAY_REPORT', 'VALUATION_REPORT']);
+export type ApprovalSubjectType = z.infer<typeof ApprovalSubjectTypeEnum>;
+
+/** REJECT is stored for history but no endpoint accepts it yet (see Phase 7 section 7). */
+export const ApprovalDecisionEnum = z.enum(['APPROVE', 'RETURN', 'REJECT']);
+export type ApprovalDecision = z.infer<typeof ApprovalDecisionEnum>;
+
+/** Who a morning brief is written for. */
+export const BriefPersonaEnum = z.enum(['CONTRACTOR_EXECUTOR', 'INDEPENDENT_VERIFIER']);
+export type BriefPersona = z.infer<typeof BriefPersonaEnum>;
+
+/** How a valuation came about: a contractor IPC, or a verifier's direct milestone verification. */
+export const ValuationSourceEnum = z.enum(['IPC_CLAIM', 'MILESTONE_DIRECT']);
+export type ValuationSource = z.infer<typeof ValuationSourceEnum>;

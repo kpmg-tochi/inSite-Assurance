@@ -7,6 +7,8 @@ import { SiteStep } from "./steps/SiteStep";
 import { FacilityStep } from "./steps/FacilityStep";
 import { BoqStep } from "./steps/BoqStep";
 import { ReportingStep } from "./steps/ReportingStep";
+import { ProcessStep } from "./steps/ProcessStep";
+import { StandardsStep } from "./steps/StandardsStep";
 import { TeamStep } from "./steps/TeamStep";
 import { ReviewStep } from "./steps/ReviewStep";
 
@@ -27,6 +29,8 @@ const COMPONENTS: Record<string, React.ComponentType<StepProps>> = {
   facility: FacilityStep,
   boq: BoqStep,
   reporting: ReportingStep,
+  process: ProcessStep,
+  standards: StandardsStep,
   team: TeamStep,
   review: ReviewStep,
 };

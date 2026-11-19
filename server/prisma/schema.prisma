@@ -132,6 +132,70 @@ enum EvidenceLogStatus {
 enum WorkdayReportStatus {
   STAGED_UNVERIFIED
   CONFIRMED
+  // Phase 7 report approval
+  PENDING_APPROVAL
+  APPROVED_COMPLETED
+  RETURNED_FOR_REVISION
+}
+
+// Phase 7: process engine
+enum DocumentRequirementMode {
+  REQUIRED_AT_CREATION
+  OPTIONAL_AT_CREATION
+  DISABLED
+}
+
+enum DisbursementMechanism {
+  IPC_CLAIM_REQUIRED
+  MILESTONE_DIRECT_DISBURSEMENT
+}
+
+enum StandardCategory {
+  MATERIAL_QUALITY
+  EXECUTION_METHOD
+  TESTING_TOLERANCE
+  SAFETY_ENVIRONMENT
+  GENERAL_SPECIFICATION
+}
+
+enum NeedsAssessmentDocType {
+  COMMUNITY_NEEDS_ASSESSMENT
+  FEASIBILITY_STUDY
+  ENVIRONMENTAL_SOCIAL_IMPACT
+  STAKEHOLDER_REQUIREMENTS
+  TECHNICAL_BASELINE
+}
+
+enum ApprovalChainType {
+  REPORT
+  DISBURSEMENT
+}
+
+enum ApprovalSubjectType {
+  WORKDAY_REPORT
+  VALUATION_REPORT
+}
+
+enum ApprovalDecision {
+  APPROVE
+  RETURN
+  REJECT
+}
+
+enum BriefPersona {
+  CONTRACTOR_EXECUTOR
+  INDEPENDENT_VERIFIER
+}
+
+enum ReportQuerySource {
+  MONITOR
+  AI_OMISSION_CHECK
+  AI_STANDARDS_CHECK
+}
+
+enum ValuationSource {
+  IPC_CLAIM
+  MILESTONE_DIRECT
 }
 
 enum WorkdayAiCheckStatus {
@@ -152,6 +216,7 @@ enum MediaType {
   VALUATION_REPORT_PDF
   IDENTITY_DOCUMENT
   IDENTITY_SELFIE
+  PROJECT_DOCUMENT
 }
 
 enum ConditionPrecedentStatus {
@@ -259,6 +324,18 @@ enum AuditActionType {
   PROJECT_CONTRACTOR_REMOVED
   BOQ_REVISED
   PROJECT_DRAFT_DELETED
+  WORKFLOW_TEMPLATE_SAVED
+  PROJECT_PROCESS_CONFIG_UPDATED
+  PROJECT_STANDARD_CREATED
+  PROJECT_STANDARD_UPDATED
+  PROJECT_STANDARD_DELETED
+  NEEDS_ASSESSMENT_UPLOADED
+  NEEDS_ASSESSMENT_DELETED
+  WORKDAY_REPORT_APPROVED
+  WORKDAY_REPORT_RETURNED
+  STANDARDS_VIOLATION_FLAGGED
+  APPROVAL_STEP_ACTIONED
+  DIRECT_MILESTONE_VERIFIED
 }
 
 enum MobileNotificationType {
@@ -305,11 +382,12 @@ model Tenant {
   createdAt                      DateTime       @default(now())
   updatedAt                      DateTime       @updatedAt
 
-  organizations Organization[]
-  roles         Role[]
-  users         User[]
-  projects      Project[]
-  auditLogs     AuditLog[]
+  organizations     Organization[]
+  roles             Role[]
+  users             User[]
+  projects          Project[]
+  auditLogs         AuditLog[]
+  workflowTemplates WorkflowTemplate[]
 
   @@map("tenants")
 }
@@ -438,6 +516,8 @@ model User {
   resolvedMonitorQueries  MonitorQuery[]          @relation("ResolvedMonitorQueries")
   pushTokens              PushToken[]
   raisedReportQueries     ReportQuery[]           @relation("RaisedReportQueries")
+  approvalActions         ApprovalAction[]
+  milestoneVerifications  MilestoneVerification[]
 
   @@index([tenantId])
   @@index([organizationId])
@@ -504,23 +584,31 @@ model Project {
   contractors         ProjectContractor[]
   boqRevisions        BoqRevision[]
 
-  userAssignments    UserProjectAssignment[]
-  joinCodes          ProjectJoinCode[]
-  fieldSessions      FieldAgentSession[]
-  tranches           FacilityTranche[]
-  boqItems           BoqItem[]
-  evidenceLogs       FieldEvidenceLog[]
-  ipcClaims          IpcClaim[]
-  auditLogs          AuditLog[]
-  incidentReports    IncidentReport[]
-  workdayReports     WorkdayReport[]
-  telemetryPings     SiteTelemetryPing[]
-  telemetryAnomalies TelemetryAnomalyDaily[]
-  morningBriefs      MorningDeliverableBrief[]
-  notifications      MobileNotification[]
-  reportQueries      ReportQuery[]
-  wbsChatMessages    WbsChatMessage[]
-  webNotifications   WebNotification[]
+  userAssignments        UserProjectAssignment[]
+  joinCodes              ProjectJoinCode[]
+  fieldSessions          FieldAgentSession[]
+  tranches               FacilityTranche[]
+  boqItems               BoqItem[]
+  evidenceLogs           FieldEvidenceLog[]
+  ipcClaims              IpcClaim[]
+  auditLogs              AuditLog[]
+  incidentReports        IncidentReport[]
+  workdayReports         WorkdayReport[]
+  telemetryPings         SiteTelemetryPing[]
+  telemetryAnomalies     TelemetryAnomalyDaily[]
+  morningBriefs          MorningDeliverableBrief[]
+  notifications          MobileNotification[]
+  reportQueries          ReportQuery[]
+  wbsChatMessages        WbsChatMessage[]
+  webNotifications       WebNotification[]
+  // Phase 7
+  processConfig          ProjectProcessConfig?
+  approvalSteps          ApprovalStep[]
+  approvalActions        ApprovalAction[]
+  standards              ProjectStandardSpecification[]
+  needsAssessments       ProjectNeedsAssessmentDocument[]
+  valuationReports       ValuationReport[]
+  milestoneVerifications MilestoneVerification[]
 
   @@unique([tenantId, codePrefix])
   @@index([tenantId])
@@ -717,10 +805,12 @@ model FacilityTranche {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  conditionsPrecedent ConditionPrecedent[]
-  boqItems            BoqItem[]
-  ipcClaims           IpcClaim[]
+  project                Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  conditionsPrecedent    ConditionPrecedent[]
+  boqItems               BoqItem[]
+  ipcClaims              IpcClaim[]
+  valuationReports       ValuationReport[]
+  milestoneVerifications MilestoneVerification[]
 
   @@unique([projectId, trancheNumber])
 }
@@ -812,22 +902,22 @@ model FieldEvidenceLog {
   caption          String?
 
   // GPS at capture. Location fields are null when the device had no fix.
-  locationAvailable        Boolean
-  latitude                 Float?
-  longitude                Float?
-  altitudeMeters           Float?
-  gpsAccuracyMeters        Float?
-  isMockLocation           Boolean         @default(false)
+  locationAvailable      Boolean
+  latitude               Float?
+  longitude              Float?
+  altitudeMeters         Float?
+  gpsAccuracyMeters      Float?
+  isMockLocation         Boolean         @default(false)
   // Server-evaluated. null = no fix or evaluation failed; never the client's claim.
   // isWithinGeofence = INSIDE or WITHIN_TOLERANCE (Phase 6), kept for older readers.
-  isWithinGeofence         Boolean?
-  geofenceStatus           GeofenceStatus?
+  isWithinGeofence       Boolean?
+  geofenceStatus         GeofenceStatus?
   // Distance outside the boundary in metres (0 when inside); null when not evaluated.
-  distanceOutsideMeters Float?
-  chainageKm               Float?
-  chainageLabel            String?
-  corridorOffsetMeters     Float?
-  distanceFromSiteMeters   Float?
+  distanceOutsideMeters  Float?
+  chainageKm             Float?
+  chainageLabel          String?
+  corridorOffsetMeters   Float?
+  distanceFromSiteMeters Float?
 
   // Device orientation and provenance
   devicePitchDeg                 Float?
@@ -1006,9 +1096,20 @@ model MonitorQuery {
   @@index([ipcLineItemId, status])
 }
 
+// One certification. Phase 7: either of an IPC (source IPC_CLAIM, ipcClaimId set) or of a direct
+// milestone verification (source MILESTONE_DIRECT, ipcClaimId null). A CHECK constraint
+// (ValuationReport_source_ipc_check, raw SQL) keeps ipcClaimId set exactly when source = IPC_CLAIM.
 model ValuationReport {
   id                            String                  @id @default(uuid()) @db.Uuid
-  ipcClaimId                    String                  @db.Uuid
+  projectId                     String                  @db.Uuid
+  trancheId                     String                  @db.Uuid
+  source                        ValuationSource         @default(IPC_CLAIM)
+  ipcClaimId                    String?                 @db.Uuid
+  milestoneVerificationId       String?                 @unique @db.Uuid
+  // Disbursement chain this valuation runs on (null for valuations made before chains existed).
+  approvalChainVersion          Int?
+  // Step order being waited on; 0 once the valuation was returned.
+  currentApprovalStep           Int                     @default(0)
   revisionNumber                Int                     @default(1)
   certifiedByUserId             String                  @db.Uuid
   trancheRecommendation         MonitorRecommendation
@@ -1026,11 +1127,36 @@ model ValuationReport {
   certifiedAt                   DateTime                @default(now())
   supersededAt                  DateTime?
 
-  ipcClaim         IpcClaim          @relation(fields: [ipcClaimId], references: [id], onDelete: Cascade)
-  certifiedByUser  User              @relation("CertifiedByMonitor", fields: [certifiedByUserId], references: [id])
-  trancheDecisions TrancheDecision[]
+  project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tranche               FacilityTranche        @relation(fields: [trancheId], references: [id], onDelete: Restrict)
+  ipcClaim              IpcClaim?              @relation(fields: [ipcClaimId], references: [id], onDelete: Cascade)
+  milestoneVerification MilestoneVerification? @relation(fields: [milestoneVerificationId], references: [id], onDelete: Restrict)
+  certifiedByUser       User                   @relation("CertifiedByMonitor", fields: [certifiedByUserId], references: [id])
+  trancheDecisions      TrancheDecision[]
 
   @@unique([ipcClaimId, revisionNumber])
+  @@index([projectId, source])
+  @@index([trancheId])
+}
+
+// A verifier's direct milestone verification (Phase 7, no contractor claim). The system claim is
+// built from evidence; lineVerificationsJson holds the per-item figures the server computed.
+model MilestoneVerification {
+  id                    String   @id @default(uuid()) @db.Uuid
+  projectId             String   @db.Uuid
+  trancheId             String   @db.Uuid
+  verifiedByUserId      String   @db.Uuid
+  verificationSummary   String   @db.Text
+  lineVerificationsJson Json     @default("[]")
+  createdAt             DateTime @default(now())
+
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tranche         FacilityTranche  @relation(fields: [trancheId], references: [id], onDelete: Restrict)
+  verifiedByUser  User             @relation(fields: [verifiedByUserId], references: [id])
+  valuationReport ValuationReport?
+
+  @@index([projectId, trancheId])
+  @@map("milestone_verifications")
 }
 
 model TrancheDecision {
@@ -1131,38 +1257,47 @@ model IncidentReport {
 }
 
 model WorkdayReport {
-  id                 String               @id @default(uuid()) @db.Uuid
-  clientReportId     String               @unique @db.Uuid
-  projectId          String               @db.Uuid
-  reporterSessionId  String               @db.Uuid
-  wbsItemId          String               @db.Uuid
-  workdayDate        String // YYYY-MM-DD in the reporter's time zone
-  reporterTimezone   String
-  status             WorkdayReportStatus  @default(STAGED_UNVERIFIED)
-  revisionNumber     Int                  @default(1)
-  parentReportId     String?              @db.Uuid
-  resolvedQueryId    String?              @db.Uuid
-  summaryText        String               @db.Text
-  reportedQuantity   Decimal              @default(0) @db.Decimal(14, 3)
-  unitOfMeasure      String
-  isHoldPointClaimed Boolean              @default(false)
-  delaysOrBlockers   String?              @db.Text
+  id                        String               @id @default(uuid()) @db.Uuid
+  clientReportId            String               @unique @db.Uuid
+  projectId                 String               @db.Uuid
+  reporterSessionId         String               @db.Uuid
+  wbsItemId                 String               @db.Uuid
+  workdayDate               String // YYYY-MM-DD in the reporter's time zone
+  reporterTimezone          String
+  status                    WorkdayReportStatus  @default(STAGED_UNVERIFIED)
+  revisionNumber            Int                  @default(1)
+  parentReportId            String?              @db.Uuid
+  resolvedQueryId           String?              @db.Uuid
+  summaryText               String               @db.Text
+  reportedQuantity          Decimal              @default(0) @db.Decimal(14, 3)
+  unitOfMeasure             String
+  isHoldPointClaimed        Boolean              @default(false)
+  delaysOrBlockers          String?              @db.Text
   // Text-only notes from the WBS thread: [{ id, text, capturedAt }]
-  textNotes          Json                 @default("[]")
-  submissionGeotag   Json?
+  textNotes                 Json                 @default("[]")
+  submissionGeotag          Json?
   // Server evaluation of the submission position (also inside submissionGeotag).
-  geofenceStatus     GeofenceStatus?
-  deviceSignature    String?
-  signatureVerified  Boolean?
+  geofenceStatus            GeofenceStatus?
+  deviceSignature           String?
+  signatureVerified         Boolean?
   // Location and integrity notes shown as badges, e.g. LOW_GPS_ACCURACY, OUTSIDE_PROJECT_GEOFENCE.
-  integrityFlags     Json                 @default("[]")
-  aiCheckStatus      WorkdayAiCheckStatus @default(PENDING)
-  aiCheckEngine      String?
-  aiReasoning        String?              @db.Text
-  humanConfirmedAt   DateTime?
-  releasedAt         DateTime?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  integrityFlags            Json                 @default("[]")
+  aiCheckStatus             WorkdayAiCheckStatus @default(PENDING)
+  aiCheckEngine             String?
+  aiReasoning               String?              @db.Text
+  humanConfirmedAt          DateTime?
+  releasedAt                DateTime?
+  // Phase 7
+  reporterPersonaType       FieldPersonaType     @default(INDEPENDENT_VERIFIER)
+  // null until checked, or when the check could not decide ("not checked").
+  standardsCompliancePassed Boolean?
+  standardsViolationsJson   Json                 @default("[]")
+  approvalChainVersion      Int?
+  // Step order being waited on while PENDING_APPROVAL; 0 otherwise.
+  currentApprovalStep       Int                  @default(0)
+  approvedCompletedAt       DateTime?
+  createdAt                 DateTime             @default(now())
+  updatedAt                 DateTime             @updatedAt
 
   project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   reporterSession FieldAgentSession  @relation(fields: [reporterSessionId], references: [id], onDelete: Cascade)
@@ -1181,26 +1316,26 @@ model WorkdayReport {
 }
 
 model SiteTelemetryPing {
-  id                       String          @id @default(uuid()) @db.Uuid
-  clientPingId             String          @unique @db.Uuid
-  projectId                String          @db.Uuid
-  fieldSessionId           String          @db.Uuid
-  wbsItemId                String?         @db.Uuid
-  latitude                 Float
-  longitude                Float
-  accuracyMeters           Float?
-  altitudeMeters           Float?
-  isMocked                 Boolean         @default(false)
-  isWithinGeofence         Boolean?
-  geofenceStatus           GeofenceStatus?
+  id                    String          @id @default(uuid()) @db.Uuid
+  clientPingId          String          @unique @db.Uuid
+  projectId             String          @db.Uuid
+  fieldSessionId        String          @db.Uuid
+  wbsItemId             String?         @db.Uuid
+  latitude              Float
+  longitude             Float
+  accuracyMeters        Float?
+  altitudeMeters        Float?
+  isMocked              Boolean         @default(false)
+  isWithinGeofence      Boolean?
+  geofenceStatus        GeofenceStatus?
   distanceOutsideMeters Float?
-  chainageLabel            String?
-  distanceMeters           Float?
-  pingSource               String          @default("FOREGROUND_PRESENCE") // FOREGROUND_PRESENCE | CAPTURE | REPORT_SUBMISSION | MANUAL_CHECKIN
-  deviceSignature          String?
-  signatureVerified        Boolean?
-  capturedAtDevice         DateTime
-  syncedAtServer           DateTime        @default(now())
+  chainageLabel         String?
+  distanceMeters        Float?
+  pingSource            String          @default("FOREGROUND_PRESENCE") // FOREGROUND_PRESENCE | CAPTURE | REPORT_SUBMISSION | MANUAL_CHECKIN
+  deviceSignature       String?
+  signatureVerified     Boolean?
+  capturedAtDevice      DateTime
+  syncedAtServer        DateTime        @default(now())
 
   project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   fieldSession FieldAgentSession @relation(fields: [fieldSessionId], references: [id], onDelete: Cascade)
@@ -1230,22 +1365,25 @@ model TelemetryAnomalyDaily {
 }
 
 model MorningDeliverableBrief {
-  id                  String   @id @default(uuid()) @db.Uuid
-  projectId           String   @db.Uuid
-  boqItemId           String   @db.Uuid
-  workdayDate         String // YYYY-MM-DD
-  planningTier        String   @default("PLAN_A")
-  headline            String
-  expectedDeliverable String   @db.Text
-  reportingChecklist  Json     @default("[]")
-  dailyTargetQuantity Decimal? @db.Decimal(14, 3)
-  generatedByAi       Boolean  @default(false)
-  createdAt           DateTime @default(now())
+  id                   String       @id @default(uuid()) @db.Uuid
+  projectId            String       @db.Uuid
+  boqItemId            String       @db.Uuid
+  workdayDate          String // YYYY-MM-DD
+  planningTier         String       @default("PLAN_A")
+  headline             String
+  expectedDeliverable  String       @db.Text
+  reportingChecklist   Json         @default("[]")
+  dailyTargetQuantity  Decimal?     @db.Decimal(14, 3)
+  generatedByAi        Boolean      @default(false)
+  // Phase 7: one brief per persona; an inspector's brief never tells them to build anything.
+  targetPersona        BriefPersona @default(CONTRACTOR_EXECUTOR)
+  appliedStandardsJson Json         @default("[]")
+  createdAt            DateTime     @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   boqItem BoqItem @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
 
-  @@unique([projectId, boqItemId, workdayDate])
+  @@unique([projectId, boqItemId, workdayDate, targetPersona])
   @@index([projectId, workdayDate])
   @@map("morning_deliverable_briefs")
 }
@@ -1293,19 +1431,21 @@ model MobileNotificationRead {
 }
 
 model ReportQuery {
-  id                String    @id @default(uuid()) @db.Uuid
-  projectId         String    @db.Uuid
-  boqItemId         String    @db.Uuid
-  workdayReportId   String?   @db.Uuid
-  ipcLineItemId     String?   @db.Uuid
-  raisedByUserId    String?   @db.Uuid
-  source            String    @default("MONITOR") // MONITOR | AI_OMISSION_CHECK
-  status            String    @default("OPEN") // OPEN | RESUBMITTED | RESOLVED
-  monitorComment    String?   @db.Text
-  aiOmissionPayload Json?
-  createdAt         DateTime  @default(now())
-  respondedAt       DateTime?
-  resolvedAt        DateTime?
+  id                         String            @id @default(uuid()) @db.Uuid
+  projectId                  String            @db.Uuid
+  boqItemId                  String            @db.Uuid
+  workdayReportId            String?           @db.Uuid
+  ipcLineItemId              String?           @db.Uuid
+  raisedByUserId             String?           @db.Uuid
+  source                     ReportQuerySource @default(MONITOR)
+  status                     String            @default("OPEN") // OPEN | RESUBMITTED | RESOLVED
+  monitorComment             String?           @db.Text
+  aiOmissionPayload          Json?
+  // AI_STANDARDS_CHECK: StandardsViolationItem[] (Phase 7)
+  standardsViolationsPayload Json?
+  createdAt                  DateTime          @default(now())
+  respondedAt                DateTime?
+  resolvedAt                 DateTime?
 
   project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   boqItem       BoqItem          @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
@@ -1382,4 +1522,142 @@ model WebNotificationRead {
   @@id([notificationId, userId])
   @@index([userId])
   @@map("web_notification_reads")
+}
+
+// ============================================================================
+// PHASE 7: PROCESS ENGINE, STANDARDS, APPROVAL CHAINS
+// ============================================================================
+
+// A tenant's reusable process. Applying it copies configJson into the project's own rows, so
+// later template edits never change a project (WorkflowTemplateConfigSchema validates it).
+model WorkflowTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  configJson  Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("workflow_templates")
+}
+
+model ProjectProcessConfig {
+  id                                String                  @id @default(uuid()) @db.Uuid
+  projectId                         String                  @unique @db.Uuid
+  // Provenance only: the template the settings were copied from.
+  workflowTemplateId                String?                 @db.Uuid
+  needsAssessmentMode               DocumentRequirementMode @default(OPTIONAL_AT_CREATION)
+  standardsSpecificationMode        DocumentRequirementMode @default(OPTIONAL_AT_CREATION)
+  disbursementMechanism             DisbursementMechanism   @default(IPC_CLAIM_REQUIRED)
+  enableTranchesAndCps              Boolean                 @default(true)
+  enableHoldPoints                  Boolean                 @default(true)
+  allowContractorFieldReporting     Boolean                 @default(true)
+  enableContractorIdentityAssurance Boolean                 @default(true)
+  enableAiOmissionCheck             Boolean                 @default(true)
+  enableAiStandardsCheck            Boolean                 @default(true)
+  requireReportApproval             Boolean                 @default(false)
+  enableHandoverModule              Boolean                 @default(false)
+  enableRetentionModule             Boolean                 @default(false)
+  createdAt                         DateTime                @default(now())
+  updatedAt                         DateTime                @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_process_configs")
+}
+
+// One step of a project's approval chain. Chains are never edited in place: a change writes a new
+// version (and deactivates the old one), and items in flight keep the version they started on.
+model ApprovalStep {
+  id                    String            @id @default(uuid()) @db.Uuid
+  projectId             String            @db.Uuid
+  chainType             ApprovalChainType
+  version               Int
+  stepOrder             Int
+  label                 String
+  requiredPermissionKey String
+  requiredRoleId        String?           @db.Uuid
+  minAmountThresholdNgn Decimal?          @db.Decimal(18, 2)
+  isSystemStep          Boolean           @default(false)
+  isActive              Boolean           @default(true)
+  createdAt             DateTime          @default(now())
+
+  project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actions ApprovalAction[]
+
+  @@unique([projectId, chainType, version, stepOrder])
+  @@index([projectId, chainType, isActive])
+  @@map("approval_steps")
+}
+
+model ApprovalAction {
+  id          String              @id @default(uuid()) @db.Uuid
+  projectId   String              @db.Uuid
+  chainType   ApprovalChainType
+  subjectType ApprovalSubjectType
+  subjectId   String              @db.Uuid
+  stepId      String              @db.Uuid
+  stepOrder   Int
+  decision    ApprovalDecision
+  actorUserId String              @db.Uuid
+  notes       String?
+  createdAt   DateTime            @default(now())
+
+  project Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  step    ApprovalStep @relation(fields: [stepId], references: [id], onDelete: Restrict)
+  actor   User         @relation(fields: [actorUserId], references: [id])
+
+  @@index([subjectType, subjectId, createdAt])
+  @@index([projectId, chainType])
+  @@map("approval_actions")
+}
+
+model ProjectStandardSpecification {
+  id                 String           @id @default(uuid()) @db.Uuid
+  projectId          String           @db.Uuid
+  code               String
+  title              String
+  category           StandardCategory
+  specificationText  String           @db.Text
+  documentObjectKey  String?
+  // Empty = the whole project; otherwise WBS codes, each covering the codes below it.
+  applicableWbsCodes Json             @default("[]")
+  isMandatory        Boolean          @default(true)
+  createdByUserId    String           @db.Uuid
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, code])
+  @@map("project_standard_specifications")
+}
+
+model ProjectNeedsAssessmentDocument {
+  id                   String                 @id @default(uuid()) @db.Uuid
+  projectId            String                 @db.Uuid
+  title                String
+  documentType         NeedsAssessmentDocType
+  objectKey            String
+  mimeType             String
+  byteSize             Int
+  // Null until summarised; never invented when no AI provider is available.
+  extractedSummaryText String?                @db.Text
+  keyFindingsJson      Json                   @default("[]")
+  // NOT_REQUESTED | PENDING | DONE
+  summaryStatus        String                 @default("NOT_REQUESTED")
+  summaryEngine        String?
+  uploadedByUserId     String                 @db.Uuid
+  uploadedAt           DateTime               @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_needs_assessment_documents")
 }

@@ -23,7 +23,15 @@ import { EmptyStateCard, InfoCallout, InSiteLoader, Pill, type PillVariant } fro
 import { BackButton } from "../components/inputs/Buttons";
 import { acquireFix, geofenceBadgeText, previewGeofence, type GeofencePreview } from "../services/locationService";
 import { useProfile } from "../context/ProfileContext";
-import { useSendWbsMessageMutation, useWbsChatMessagesQuery, wbsQueryKeys } from "../queries/wbs/useWbsQueries";
+import {
+  useItemReportStatusQuery,
+  useSendWbsMessageMutation,
+  useWbsChatMessagesQuery,
+  wbsQueryKeys,
+} from "../queries/wbs/useWbsQueries";
+import { personaCopy } from "../utils/personaCopy";
+import { briefCardCopy } from "../storage/briefMeta";
+import { reportQueryLabel, reportStatusView } from "../utils/reportStatus";
 import {
   HELD_EXPLANATION,
   listHeldReports,
@@ -101,7 +109,11 @@ export const WbsChatThreadScreen: React.FC = () => {
   const [here, setHere] = useState<GeofencePreview | "LOCATING" | "NO_FIX">("LOCATING");
   const insets = useSafeAreaInsets();
 
+  const copy = personaCopy(activeContext?.fieldPersonaType);
   const { data: messages = [], isLoading: loadingMessages } = useWbsChatMessagesQuery(wbsItem.id, activeProjectId);
+  const { data: myReport } = useItemReportStatusQuery(activeProjectId, wbsItem.id);
+  // Only statuses stored from the server (this device's reports, or another device's of the same account).
+  const myReportStatus = myReport ? reportStatusView(myReport.serverStatus, myReport.syncStatus) : null;
   const sendMessage = useSendWbsMessageMutation(wbsItem.id);
   const queryClient = useQueryClient();
   const [heldReports, setHeldReports] = useState<HeldReport[]>([]);
@@ -257,6 +269,9 @@ export const WbsChatThreadScreen: React.FC = () => {
 
   const renderMessageBody = (msg: WbsChatMessageRecord): React.ReactNode => {
       if (msg.messageType === "MORNING_BRIEF") {
+        // Title follows the persona the server wrote this brief for; older cached briefs use the session's.
+        const briefCopy = briefCardCopy(msg.brief, activeContext?.fieldPersonaType);
+        const standards = msg.brief?.appliedStandards ?? [];
         return (
           <View key={msg.id} style={styles.briefCard}>
             <View style={styles.briefBadgeRow}>
@@ -264,23 +279,37 @@ export const WbsChatThreadScreen: React.FC = () => {
                 Morning brief{msg.briefDate ? ` · ${msg.briefDate}` : ""}
               </Text>
             </View>
-            <Text style={styles.briefTitle}>Today's deliverable</Text>
+            <Text style={styles.briefTitle}>{briefCopy.briefCardTitle}</Text>
             <Text style={styles.briefBody}>{msg.textContent}</Text>
+            {standards.length > 0 && (
+              <View style={styles.standardsBox}>
+                <Text style={styles.standardsHeading}>{briefCopy.standardsHeading}</Text>
+                {standards.map((s) => (
+                  <Text key={s.code} style={styles.standardsItem}>
+                    <Text style={styles.standardsCode}>{s.code}</Text>
+                    {s.summaryRule ? `: ${s.summaryRule}` : s.title ? `: ${s.title}` : ""}
+                  </Text>
+                ))}
+              </View>
+            )}
           </View>
         );
       }
 
       if (msg.messageType === "AI_QUERY" || msg.messageType === "MONITOR_QUERY") {
-        const isAiQuery = msg.messageType === "AI_QUERY";
+        const source = msg.queryDetails?.source;
+        const isStandardsQuery = source === "AI_STANDARDS_CHECK";
+        const isAiQuery = isStandardsQuery || source === "AI_OMISSION_CHECK" || (!source && msg.messageType === "AI_QUERY");
         const queryStatus = msg.queryDetails?.status || "OPEN";
         const isOpen = queryStatus === "OPEN";
         const omitted = msg.queryDetails?.aiOmissionPayload?.omittedItems || [];
+        const violations = isStandardsQuery ? (msg.queryDetails?.standardsViolations ?? []) : [];
         return (
           <View key={msg.id} style={[styles.queryCard, !isOpen && styles.queryCardResolved]}>
             <View style={styles.queryHeaderRow}>
               <Pill
-                variant={!isOpen ? "positive" : isAiQuery ? "warning" : "info"}
-                text={isAiQuery ? "Missing evidence check" : "Monitor query"}
+                variant={!isOpen ? "positive" : isStandardsQuery ? "negative" : isAiQuery ? "warning" : "info"}
+                text={reportQueryLabel(source, msg.messageType)}
               />
               <Text style={styles.queryTimeText}>
                 {queryStatus} · {timeLabel(msg.createdAt)}
@@ -288,6 +317,21 @@ export const WbsChatThreadScreen: React.FC = () => {
             </View>
             <Text style={styles.querySenderText}>{msg.senderName}</Text>
             <Text style={styles.queryBodyText}>{msg.textContent}</Text>
+            {violations.length > 0 && (
+              <View style={styles.omittedListBox}>
+                {violations.map((v, idx) => (
+                  <View key={`${v.standardCode}-${idx}`} style={styles.violationItem}>
+                    <Text style={styles.violationTitle}>
+                      {v.standardCode}
+                      {v.severity === "CRITICAL" ? " · Critical" : " · Warning"}
+                      {v.standardTitle ? ` · ${v.standardTitle}` : ""}
+                    </Text>
+                    <Text style={styles.omittedListItem}>{v.violationSummary}</Text>
+                    <Text style={styles.violationFix}>Required: {v.requiredRectification}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
             {omitted.length > 0 && (
               <View style={styles.omittedListBox}>
                 {omitted.map((item, idx) => (
@@ -514,7 +558,15 @@ export const WbsChatThreadScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          {wbsItem.isReportedToday && !hasOpenQuery ? (
+          {myReportStatus && (
+            <View style={styles.reportStatusRow}>
+              <Text style={styles.reportStatusLabel}>
+                {myReport?.fromThisDevice === false ? "Today's report · another device" : "Today's report"}
+              </Text>
+              <Pill variant={myReportStatus.variant} text={myReportStatus.label} />
+            </View>
+          )}
+          {(wbsItem.isReportedToday || myReport) && !hasOpenQuery ? (
             <View style={[styles.quickEodBar, styles.quickEodBarCompleted]}>
               <Text style={styles.quickEodBarCompletedText}>Report submitted for today ✓</Text>
             </View>
@@ -525,7 +577,11 @@ export const WbsChatThreadScreen: React.FC = () => {
               activeOpacity={0.8}
             >
               <Text style={styles.quickEodBarText}>
-                {hasOpenQuery ? "Revise report (query open)" : "Submit full report for today"}
+                {hasOpenQuery
+                  ? myReportStatus?.needsAction
+                    ? "Revise report (returned for revision)"
+                    : "Revise report (query open)"
+                  : copy.endOfDayButton}
               </Text>
             </TouchableOpacity>
           )}
@@ -648,6 +704,53 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#334155",
     lineHeight: 16,
+  },
+  standardsBox: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#CBD5E1",
+    gap: 3,
+  },
+  standardsHeading: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#1E293B",
+  },
+  standardsItem: {
+    fontSize: 11,
+    color: "#334155",
+    lineHeight: 16,
+  },
+  standardsCode: {
+    fontWeight: "700",
+    color: "#1E3A8A",
+  },
+  violationItem: {
+    gap: 2,
+    marginBottom: 6,
+  },
+  violationTitle: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#991B1B",
+  },
+  violationFix: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#1E293B",
+    lineHeight: 15,
+  },
+  reportStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 6,
+  },
+  reportStatusLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#475569",
   },
   eodCard: {
     backgroundColor: "#FFFFFF",

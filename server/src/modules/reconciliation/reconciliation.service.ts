@@ -53,6 +53,17 @@ import {
 } from '../../utils/serializers';
 import { evaluateIpcLines, ModelRater, ReconciliationLineInput } from './reconciliationEngine';
 import { contractorForWebUser, contractorHeadline } from '../projects/contractors.service';
+import { getProcessConfig } from '../process/processConfig.service';
+import {
+  actOnReviewStep,
+  assertAtReleaseStep,
+  recordReleaseAction,
+  releaseGate,
+  reviewGate,
+  startValuationOnChain,
+  valuationProgress,
+} from './disbursementChain';
+import type { ApprovalProgressDto, ReviewValuationRequest } from '@insite/shared';
 
 type Tx = Prisma.TransactionClient;
 
@@ -92,7 +103,12 @@ async function lockIpc(tx: Tx, projectId: string, ipcId: string) {
   return tx.ipcClaim.findUniqueOrThrow({ where: { id: ipcId } });
 }
 
-async function lockTranche(tx: Tx, trancheId: string) {
+export async function lockValuation(tx: Tx, valuationId: string) {
+  await tx.$queryRaw`SELECT id FROM "ValuationReport" WHERE id = ${valuationId}::uuid FOR UPDATE`;
+  return tx.valuationReport.findUniqueOrThrow({ where: { id: valuationId }, include: { trancheDecisions: true } });
+}
+
+export async function lockTranche(tx: Tx, trancheId: string) {
   await tx.$queryRaw`SELECT id FROM "FacilityTranche" WHERE id = ${trancheId}::uuid FOR UPDATE`;
   return tx.facilityTranche.findUniqueOrThrow({
     where: { id: trancheId },
@@ -145,7 +161,7 @@ async function refreshProjectHealth(tx: Tx, projectId: string) {
 }
 
 /** Budget-weighted mean of BOQ certified percentages. */
-async function refreshCertifiedProgress(tx: Tx, projectId: string) {
+export async function refreshCertifiedProgress(tx: Tx, projectId: string) {
   const items = await tx.boqItem.findMany({
     where: { projectId },
     select: { budgetedCostNgn: true, cumulativeCertifiedPct: true },
@@ -161,7 +177,7 @@ async function refreshCertifiedProgress(tx: Tx, projectId: string) {
   return rounded;
 }
 
-function cpSnapshot(cps: Prisma.ConditionPrecedentGetPayload<object>[]) {
+export function cpSnapshot(cps: Prisma.ConditionPrecedentGetPayload<object>[]) {
   return cps.map((cp) => ({
     id: cp.id,
     referenceCode: cp.referenceCode,
@@ -170,7 +186,7 @@ function cpSnapshot(cps: Prisma.ConditionPrecedentGetPayload<object>[]) {
   }));
 }
 
-function blockingConditions(cps: Prisma.ConditionPrecedentGetPayload<object>[]) {
+export function blockingConditions(cps: Prisma.ConditionPrecedentGetPayload<object>[]) {
   return cps.filter(
     (cp) => cp.isMandatoryForRelease && (cp.status === 'PENDING' || cp.status === 'BREACHED')
   );
@@ -235,7 +251,32 @@ function activeDecisionOf(report: IpcRow['valuationReports'][number] | null) {
   );
 }
 
-function computeActions(ipc: IpcRow, viewer: Viewer): IpcClaimDto['actions'] {
+/** Phase 7: the live valuation's chain position and the caller's gates on it. */
+interface ChainView {
+  progress: ApprovalProgressDto | null;
+  review: { allowed: boolean; reason: string | null };
+  release: { allowed: boolean; reason: string | null };
+}
+
+const NO_CHAIN: ChainView = {
+  progress: null,
+  review: { allowed: false, reason: 'Nothing is waiting for review.' },
+  release: { allowed: true, reason: null },
+};
+
+async function chainViewFor(ipc: IpcRow, webUser: WebJwtPayload): Promise<ChainView> {
+  const live = liveRevision(ipc);
+  if (!live) return NO_CHAIN;
+  const decided = Boolean(activeDecisionOf(live));
+  const [progress, review, release] = await Promise.all([
+    valuationProgress(prisma, live, webUser, decided),
+    reviewGate(prisma, live, webUser, decided),
+    releaseGate(prisma, live, webUser),
+  ]);
+  return { progress, review, release };
+}
+
+function computeActions(ipc: IpcRow, viewer: Viewer, chain: ChainView = NO_CHAIN): IpcClaimDto['actions'] {
   const u = viewer.webUser;
   const status = ipc.status as IpcClaimStatus;
   const queries = ipc.lineItems.flatMap((l) => l.queries);
@@ -283,10 +324,15 @@ function computeActions(ipc: IpcRow, viewer: Viewer): IpcClaimDto['actions'] {
       [outstanding === 0, 'Resolve all open queries before certifying.'],
       [viewer.hasLicence, 'Add your professional licence to your profile to certify.'],
     ]),
+    reviewValuation: gate([
+      [state('decide')[0], 'Nothing is waiting for review.'],
+      [chain.review.allowed, chain.review.reason ?? 'Nothing is waiting for review.'],
+    ]),
     decide: gate([
       [holdsExplicitly(u, APPROVE), 'Your role does not hold the disbursement approval permission.'],
       state('decide'),
       [!live || live.certifiedByUserId !== u.userId, 'You certified this valuation, so you cannot record the lender decision on it.'],
+      [chain.release.allowed, chain.release.reason ?? 'Not at the release step yet.'],
     ]),
     reverseDecision: gate([
       [holdsExplicitly(u, APPROVE), 'Your role does not hold the disbursement approval permission.'],
@@ -303,7 +349,9 @@ function computeActions(ipc: IpcRow, viewer: Viewer): IpcClaimDto['actions'] {
 function serializeIpc(
   ipc: IpcRow,
   viewer: Viewer,
-  evidence: ProvidedEvidenceItem[] | null
+  evidence: ProvidedEvidenceItem[] | null,
+  chain: ChainView = NO_CHAIN,
+  holdPointsEnabled = true
 ): IpcClaimDto {
   const oversight = canSeeOversightDetail(viewer.webUser);
   const live = liveRevision(ipc);
@@ -321,7 +369,7 @@ function serializeIpc(
     aiRationale: oversight ? li.aiRationale : null,
     visitPlannerFlag: oversight ? li.visitPlannerFlag : false,
     visitPlannerReason: oversight ? li.visitPlannerReason : null,
-    missingHoldPointFlag: li.missingHoldPointFlag,
+    missingHoldPointFlag: holdPointsEnabled && li.missingHoldPointFlag,
     highestCorroboratingRoleName: li.highestCorroboratingRoleName,
     highestCorroboratingWeight: li.highestCorroboratingWeight,
     corroboratingEvidenceLogIds: oversight ? ((li.corroboratingEvidenceLogIds as string[]) ?? []) : [],
@@ -342,8 +390,8 @@ function serializeIpc(
       totalQuantity: Number(li.boqItem.totalQuantity),
       rateNgn: Number(li.boqItem.rateNgn),
       budgetedCostNgn: Number(li.boqItem.budgetedCostNgn),
-      isHoldPoint: li.boqItem.isHoldPoint,
-      holdPointInstruction: li.boqItem.holdPointInstruction,
+      isHoldPoint: holdPointsEnabled && li.boqItem.isHoldPoint,
+      holdPointInstruction: holdPointsEnabled ? li.boqItem.holdPointInstruction : null,
       isOpaqueLumpSum: li.boqItem.isOpaqueLumpSum,
       opacityWarningReason: li.boqItem.opacityWarningReason,
       cumulativeCertifiedPct: Number(li.boqItem.cumulativeCertifiedPct),
@@ -367,7 +415,9 @@ function serializeIpc(
             li.visitPlannerReason || 'Requires physical verification by the independent monitor.',
         }));
 
-  const revisions = ipc.valuationReports.map(serializeValuationReport);
+  const revisions = ipc.valuationReports.map((r) =>
+    serializeValuationReport(r, live && r.id === live.id ? chain.progress : null)
+  );
   const liveDto = live ? revisions.find((r) => r.id === live.id) ?? null : null;
 
   return {
@@ -399,7 +449,7 @@ function serializeIpc(
     activeDecision: active && liveDto ? liveDto.decisions.find((d) => d.id === active.id) ?? null : null,
     lineItems,
     smartVisitPlannerQueue,
-    actions: computeActions(ipc, viewer),
+    actions: computeActions(ipc, viewer, chain),
   };
 }
 
@@ -437,7 +487,10 @@ export async function listProjectIpcClaims(projectId: string, webUser: WebJwtPay
     }),
     loadViewer(webUser),
   ]);
-  return ipcs.map((ipc) => serializeIpc(ipc, viewer, null));
+  const config = await getProcessConfig(projectId);
+  return Promise.all(
+    ipcs.map(async (ipc) => serializeIpc(ipc, viewer, null, await chainViewFor(ipc, webUser), config.enableHoldPoints))
+  );
 }
 
 export async function getIpcReconciliationDetails(
@@ -458,7 +511,8 @@ export async function getIpcReconciliationDetails(
         ipc.periodEnd
       )
     : null;
-  return serializeIpc(ipc, viewer, evidence);
+  const config = await getProcessConfig(projectId);
+  return serializeIpc(ipc, viewer, evidence, await chainViewFor(ipc, webUser), config.enableHoldPoints);
 }
 
 // ---------------------------------------------------------------------------
@@ -493,6 +547,7 @@ export async function runAiReconciliationForIpc(
   assertReconcilable(ipc.status as IpcClaimStatus, await countOutstandingQueries(prisma, ipc.id));
 
   const labels = resolveRatingLabels(ipc.project.tenant.evidenceRatingLabels);
+  const holdPointsEnabled = (await getProcessConfig(projectId)).enableHoldPoints;
   const evidence = await getEvidenceForBoqItems(
     projectId,
     ipc.lineItems.map((l) => l.boqItemId),
@@ -506,7 +561,8 @@ export async function runAiReconciliationForIpc(
     unit: li.boqItem.unit,
     totalQuantity: Number(li.boqItem.totalQuantity),
     budgetedCostNgn: Number(li.boqItem.budgetedCostNgn),
-    isHoldPoint: li.boqItem.isHoldPoint,
+    // Phase 7: with hold points off, hold-point flags are ignored by the rule caps.
+    isHoldPoint: holdPointsEnabled && li.boqItem.isHoldPoint,
     isOpaqueLumpSum: li.boqItem.isOpaqueLumpSum,
     previousCertifiedPct: Number(li.previousCertifiedPct),
     contractorClaimedPct: Number(li.contractorClaimedPct),
@@ -618,6 +674,14 @@ export async function submitContractorIpcClaim(params: {
   input: SubmitIpcClaimRequest;
 }): Promise<IpcClaimDto> {
   const { projectId, webUser, input } = params;
+
+  if ((await getProcessConfig(projectId)).disbursementMechanism === 'MILESTONE_DIRECT_DISBURSEMENT') {
+    throw new AppError(
+      'This project releases money against verified milestones; contractors do not submit IPCs.',
+      409,
+      'DISBURSEMENT_MODE_IS_DIRECT'
+    );
+  }
 
   const periodEnd = new Date(input.periodEnd);
   if (periodEnd.getTime() > Date.now() + PERIOD_END_SKEW_MS) {
@@ -1159,6 +1223,9 @@ export async function certifyIpcValuationByMonitor(params: {
       });
       const report = await tx.valuationReport.create({
         data: {
+          projectId,
+          trancheId: ipc.trancheId,
+          source: 'IPC_CLAIM',
           ipcClaimId: ipcId,
           revisionNumber: comp.revisionNumber,
           certifiedByUserId: webUser.userId,
@@ -1200,6 +1267,16 @@ export async function certifyIpcValuationByMonitor(params: {
         data: { totalCertifiedNgn: comp.totalCertifiedNgn, status: next },
       });
 
+      // Phase 7: certification is step 1 of the project's disbursement chain.
+      const chain = await startValuationOnChain(tx, {
+        projectId,
+        valuationId: report.id,
+        certifier: webUser,
+        recommendedReleaseNgn: comp.recommendedReleaseAmountNgn,
+        label: `IPC #${ipc.ipcNumber} valuation (rev ${comp.revisionNumber})`,
+        actionUrl: `/app/projects/${projectId}/reconciliation?ipcId=${ipcId}`,
+      });
+
       await recordAuditEvent(tx, {
         projectId,
         actorType: 'WEB_USER',
@@ -1222,10 +1299,13 @@ export async function certifyIpcValuationByMonitor(params: {
           certifierLicenseType: comp.certifierLicenseType,
           certifierLicenseNumber: comp.certifierLicenseNumber,
           projectCertifiedProgressPct: progress,
+          approvalChainVersion: chain.version,
+          nextApprovalStep: { stepOrder: chain.currentStep.stepOrder, label: chain.currentStep.label },
         },
       });
 
-      return { valuationReport: serializeValuationReport(report), computation: comp };
+      const saved = await tx.valuationReport.findUniqueOrThrow({ where: { id: report.id }, include: { trancheDecisions: true } });
+      return { valuationReport: serializeValuationReport(saved), computation: comp };
     });
     return { dryRun: false, ...result };
   } catch (error) {
@@ -1248,22 +1328,21 @@ export async function recordLenderTrancheDecision(params: {
 }) {
   const { projectId, trancheId, webUser, input } = params;
   requireExplicit(webUser, APPROVE);
+  const config = await getProcessConfig(projectId);
 
   return prisma.$transaction(async (tx) => {
     await loadTrancheInProject(tx, projectId, trancheId);
     const reportRef = await loadValuationReportInProject(tx, projectId, input.valuationReportId);
-    if (reportRef.ipcClaim.trancheId !== trancheId) {
+    if (reportRef.trancheId !== trancheId) {
       throw new AppError('The valuation report belongs to a different tranche', 409, 'TRANCHE_MISMATCH');
     }
 
-    const ipc = await lockIpc(tx, projectId, reportRef.ipcClaimId);
+    // IPC valuations follow the IPC state machine; direct milestone valuations have no IPC.
+    const ipc = reportRef.ipcClaimId ? await lockIpc(tx, projectId, reportRef.ipcClaimId) : null;
     const tranche = await lockTranche(tx, trancheId);
-    const next = assertIpcTransition(ipc.status as IpcClaimStatus, 'decide');
+    const next = ipc ? assertIpcTransition(ipc.status as IpcClaimStatus, 'decide') : null;
 
-    const report = await tx.valuationReport.findUniqueOrThrow({
-      where: { id: reportRef.id },
-      include: { trancheDecisions: true },
-    });
+    const report = await lockValuation(tx, reportRef.id);
     if (report.supersededAt) {
       throw new AppError('This valuation revision has been superseded', 409, 'VALUATION_SUPERSEDED');
     }
@@ -1282,9 +1361,11 @@ export async function recordLenderTrancheDecision(params: {
         'SEGREGATION_OF_DUTIES'
       );
     }
+    // Phase 7: release is the last step of the disbursement chain.
+    const releaseStep = await assertAtReleaseStep(tx, report, webUser);
 
-    // D-3.2 unmet mandatory Conditions Precedent block any release.
-    if (input.decision !== 'HOLD') {
+    // D-3.2 unmet mandatory Conditions Precedent block any release (unless CPs are off for the project).
+    if (input.decision !== 'HOLD' && config.enableTranchesAndCps) {
       const blocking = blockingConditions(tranche.conditionsPrecedent);
       if (blocking.length > 0) {
         throw new AppError(
@@ -1334,8 +1415,16 @@ export async function recordLenderTrancheDecision(params: {
         cpSnapshotJson: cpSnapshot(tranche.conditionsPrecedent) as unknown as Prisma.InputJsonValue,
       },
     });
+    await recordReleaseAction(tx, {
+      projectId,
+      valuationId: report.id,
+      step: releaseStep,
+      webUser,
+      hold: input.decision === 'HOLD',
+      notes: input.approverNotes ?? null,
+    });
 
-    await tx.ipcClaim.update({ where: { id: ipc.id }, data: { status: next } });
+    if (ipc && next) await tx.ipcClaim.update({ where: { id: ipc.id }, data: { status: next } });
 
     if (approved > 0) {
       const released = roundNgn(Number(tranche.releasedAmountNgn) + approved);
@@ -1352,21 +1441,24 @@ export async function recordLenderTrancheDecision(params: {
       });
     }
 
+    const subject = ipc ? `IPC #${ipc.ipcNumber}` : `direct milestone verification on ${tranche.name}`;
     await recordAuditEvent(tx, {
       projectId,
       actorType: 'WEB_USER',
       actorId: webUser.userId,
       actorDisplayName: actorName(webUser),
       action: 'LENDER_TRANCHE_DECIDED',
-      summaryText: `Recorded decision ${input.decision} on IPC #${ipc.ipcNumber} (valuation revision ${report.revisionNumber}): released ${fmtNgn(approved)}, held back ${fmtNgn(heldBack)}.`,
+      summaryText: `Recorded decision ${input.decision} on ${subject} (valuation revision ${report.revisionNumber}): released ${fmtNgn(approved)}, held back ${fmtNgn(heldBack)}.`,
       payload: {
         trancheDecisionId: decision.id,
-        ipcId: ipc.id,
+        ipcId: ipc?.id ?? null,
         valuationReportId: report.id,
+        valuationSource: report.source,
         decision: input.decision,
         approvedDisbursementAmountNgn: approved,
         heldBackAmountNgn: heldBack,
         cpSnapshot: cpSnapshot(tranche.conditionsPrecedent),
+        conditionsPrecedentChecked: config.enableTranchesAndCps,
       },
     });
 
@@ -1385,7 +1477,7 @@ export async function reverseTrancheDecision(params: {
 
   return prisma.$transaction(async (tx) => {
     const original = await tx.trancheDecision.findFirst({
-      where: { id: decisionId, valuationReport: { ipcClaim: { projectId } } },
+      where: { id: decisionId, valuationReport: { projectId } },
       include: { valuationReport: { include: { ipcClaim: true } }, reversedBy: true },
     });
     if (!original) throw new AppError('Tranche decision not found', 404, 'DECISION_NOT_FOUND');
@@ -1397,9 +1489,10 @@ export async function reverseTrancheDecision(params: {
     }
 
     const ipcId = original.valuationReport.ipcClaimId;
-    const ipc = await lockIpc(tx, projectId, ipcId);
-    const tranche = await lockTranche(tx, original.valuationReport.ipcClaim.trancheId);
-    const next = assertIpcTransition(ipc.status as IpcClaimStatus, 'reverse_decision');
+    const ipc = ipcId ? await lockIpc(tx, projectId, ipcId) : null;
+    const tranche = await lockTranche(tx, original.valuationReport.trancheId);
+    const next = ipc ? assertIpcTransition(ipc.status as IpcClaimStatus, 'reverse_decision') : null;
+    if (!ipc) await lockValuation(tx, original.valuationReportId);
 
     const approved = Number(original.approvedDisbursementAmountNgn);
     const reversal = await tx.trancheDecision.create({
@@ -1430,19 +1523,21 @@ export async function reverseTrancheDecision(params: {
         data: { disbursedToDateNgn: { decrement: approved } },
       });
     }
-    await tx.ipcClaim.update({ where: { id: ipcId }, data: { status: next } });
+    if (ipc && next) await tx.ipcClaim.update({ where: { id: ipc.id }, data: { status: next } });
 
+    const subject = ipc ? `IPC #${ipc.ipcNumber}` : `direct milestone verification on ${tranche.name}`;
     await recordAuditEvent(tx, {
       projectId,
       actorType: 'WEB_USER',
       actorId: webUser.userId,
       actorDisplayName: actorName(webUser),
       action: 'TRANCHE_DECISION_REVERSED',
-      summaryText: `Reversed decision ${original.decision} on IPC #${ipc.ipcNumber} (reversing ${fmtNgn(approved)} released): ${input.reason}`,
+      summaryText: `Reversed decision ${original.decision} on ${subject} (reversing ${fmtNgn(approved)} released): ${input.reason}`,
       payload: {
         reversalDecisionId: reversal.id,
         reversesDecisionId: original.id,
-        ipcId,
+        ipcId: ipc?.id ?? null,
+        valuationReportId: original.valuationReportId,
         reversedAmountNgn: approved,
         reason: input.reason,
       },
@@ -1451,6 +1546,112 @@ export async function reverseTrancheDecision(params: {
     return serializeTrancheDecision(reversal, [original, reversal]);
   });
 }
+
+// ---------------------------------------------------------------------------
+// Added disbursement-chain steps (Phase 7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Undoes what a certification wrote to the BOQ: each line's item goes back to its previous
+ * certified percentage (only if nothing later changed it).
+ */
+export async function revertCertifiedPercentages(
+  tx: Tx,
+  projectId: string,
+  lines: Array<{ boqItemId: string; previousCertifiedPct: number; certifiedPct: number }>
+) {
+  for (const line of lines) {
+    await tx.boqItem.updateMany({
+      where: { id: line.boqItemId, projectId, cumulativeCertifiedPct: line.certifiedPct },
+      data: { cumulativeCertifiedPct: line.previousCertifiedPct },
+    });
+  }
+  await refreshCertifiedProgress(tx, projectId);
+}
+
+/**
+ * POST /projects/:projectId/valuations/:valuationId/review: approve or return a valuation at an
+ * added step between certification and release. A return supersedes the valuation and puts the
+ * BOQ back as it was; an IPC goes back to AI_RECONCILED to be certified again.
+ */
+export async function reviewValuation(params: {
+  projectId: string;
+  valuationId: string;
+  webUser: WebJwtPayload;
+  input: ReviewValuationRequest;
+}) {
+  const { projectId, valuationId, webUser, input } = params;
+  const result = await prisma.$transaction(async (tx) => {
+    const ref = await loadValuationReportInProject(tx, projectId, valuationId);
+    const ipc = ref.ipcClaimId ? await lockIpc(tx, projectId, ref.ipcClaimId) : null;
+    const valuation = await lockValuation(tx, valuationId);
+    const decided = valuation.trancheDecisions.some(
+      (d) => !d.reversesDecisionId && !valuation.trancheDecisions.some((o) => o.reversesDecisionId === d.id)
+    );
+    if (decided) throw new AppError('A decision has already been recorded on this valuation', 409, 'DECISION_ALREADY_RECORDED');
+    const label = ipc ? `IPC #${ipc.ipcNumber} valuation (rev ${valuation.revisionNumber})` : `Milestone verification (rev ${valuation.revisionNumber})`;
+    const actionUrl = ipc
+      ? `/app/projects/${projectId}/reconciliation?ipcId=${ipc.id}`
+      : `/app/projects/${projectId}/reconciliation?valuationId=${valuation.id}`;
+
+    const { step, next } = await actOnReviewStep(tx, valuation, webUser, input.decision, input.notes ?? null, { label, actionUrl });
+
+    if (input.decision === 'RETURN') {
+      await tx.valuationReport.update({ where: { id: valuation.id }, data: { supersededAt: new Date() } });
+      if (ipc) {
+        // The Phase 3 "reopen a certified IPC" transition: it can be certified again once no
+        // query is open (the state machine is unchanged by Phase 7).
+        const to = assertIpcTransition(ipc.status as IpcClaimStatus, 'raise_query');
+        await tx.ipcClaim.update({ where: { id: ipc.id }, data: { status: to, totalCertifiedNgn: null } });
+        const lines = await tx.ipcLineItem.findMany({ where: { ipcClaimId: ipc.id } });
+        await revertCertifiedPercentages(
+          tx,
+          projectId,
+          lines
+            .filter((l) => l.monitorCertifiedPct !== null)
+            .map((l) => ({
+              boqItemId: l.boqItemId,
+              previousCertifiedPct: Number(l.previousCertifiedPct),
+              certifiedPct: Number(l.monitorCertifiedPct),
+            }))
+        );
+      } else if (valuation.milestoneVerificationId) {
+        const verification = await tx.milestoneVerification.findUniqueOrThrow({ where: { id: valuation.milestoneVerificationId } });
+        const lines = Array.isArray(verification.lineVerificationsJson)
+          ? (verification.lineVerificationsJson as Array<{ boqItemId: string; previousCertifiedPct: number; verifiedCumulativePct: number }>)
+          : [];
+        await revertCertifiedPercentages(
+          tx,
+          projectId,
+          lines.map((l) => ({ boqItemId: l.boqItemId, previousCertifiedPct: l.previousCertifiedPct, certifiedPct: l.verifiedCumulativePct }))
+        );
+      }
+    }
+
+    await recordAuditEvent(tx, {
+      projectId,
+      actorType: 'WEB_USER',
+      actorId: webUser.userId,
+      actorDisplayName: actorName(webUser),
+      action: 'APPROVAL_STEP_ACTIONED',
+      summaryText:
+        input.decision === 'RETURN'
+          ? `Returned ${label} at "${step.label}": ${input.notes}. The valuation is superseded and must be certified again.`
+          : `Approved ${label} at "${step.label}"; now waiting for "${next?.label}".`,
+      payload: {
+        valuationReportId: valuation.id,
+        ipcId: ipc?.id ?? null,
+        stepOrder: step.stepOrder,
+        decision: input.decision,
+        nextStepOrder: next?.stepOrder ?? null,
+        notes: input.notes ?? null,
+      },
+    });
+    return { ipcId: ipc?.id ?? null };
+  });
+  return result;
+}
+
 
 // ---------------------------------------------------------------------------
 // Conditions Precedent (D-3.2)

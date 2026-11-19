@@ -23,6 +23,11 @@ export * from './schemas/telemetry.schema';
 export * from './schemas/morningBrief.schema';
 export * from './schemas/notification.schema';
 export * from './schemas/wbsChat.schema';
+export * from './schemas/standards.schema';
+export * from './schemas/process.schema';
+
+// Data
+export * from './data/standardsLibrary';
 
 // Global Shared Utilities
 export * from './utils/time';

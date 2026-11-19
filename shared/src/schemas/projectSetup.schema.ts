@@ -11,6 +11,7 @@ import { isValidTimeZone } from '../utils/time';
 import { GeofenceToleranceMetersSchema, ProjectGeofenceSchema } from './geofence.schema';
 import { OrganizationRefSchema } from './organization.schema';
 import { FacilityTrancheInputSchema } from './project.schema';
+import { ProjectProcessSettingsDtoSchema, ProjectProcessStepSchema, ProjectStandardsStepSchema } from './process.schema';
 
 /**
  * Staged project creation (Phase 6, decision C). A project is created as a DRAFT from the basics
@@ -43,11 +44,15 @@ export const PROJECT_SETUP_STEPS: ProjectSetupStepDefinition[] = [
   { id: 'facility', title: 'Facility', route: 'facility', required: true, order: 40, description: 'Tranches and conditions precedent' },
   { id: 'boq', title: 'Bill of quantities', route: 'boq', required: true, order: 50, description: 'BOQ items, hold points, tranches and packages' },
   { id: 'reporting', title: 'Reporting', route: 'reporting', required: true, order: 60, description: 'Cadence and working day' },
+  // Phase 7. Valid defaults, so not required; the standards step becomes required when the process
+  // configuration sets standards or needs assessments to REQUIRED_AT_CREATION (server-computed).
+  { id: 'process', title: 'Workflow and process', route: 'process', required: false, order: 62, description: 'Template, process switches and approval chains' },
+  { id: 'standards', title: 'Standards and needs assessment', route: 'standards', required: false, order: 64, description: 'Project standards and needs-assessment documents' },
   { id: 'team', title: 'Team', route: 'team', required: false, order: 70, description: 'Web users, mobile users and join codes' },
   { id: 'review', title: 'Review', route: 'review', required: false, order: 1000, description: 'Check and set the project active' },
 ];
 
-export const ProjectSetupStepIdEnum = z.enum(['basics', 'parties', 'site', 'facility', 'boq', 'reporting', 'team']);
+export const ProjectSetupStepIdEnum = z.enum(['basics', 'parties', 'site', 'facility', 'boq', 'reporting', 'process', 'standards', 'team']);
 export type ProjectSetupStepId = z.infer<typeof ProjectSetupStepIdEnum>;
 
 const TimeOfDay = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Use 24-hour HH:MM');
@@ -184,6 +189,8 @@ export const PROJECT_STEP_SAVE_SCHEMAS = {
   facility: ProjectFacilityStepSchema,
   boq: ProjectBoqStepSchema,
   reporting: ProjectReportingStepSchema,
+  process: ProjectProcessStepSchema,
+  standards: ProjectStandardsStepSchema,
   team: ProjectTeamStepSchema,
 } as const;
 
@@ -315,6 +322,12 @@ export const ProjectSetupDtoSchema = z.object({
   team: z.object({
     userIds: z.array(z.string().uuid()),
     joinCodeRoleIds: z.array(z.string().uuid()).nullable(),
+  }),
+  /** Phase 7 */
+  process: ProjectProcessSettingsDtoSchema,
+  standards: z.object({
+    standardCount: z.number().int(),
+    needsAssessmentCount: z.number().int(),
   }),
   steps: z.array(SetupStepStatusSchema),
   canActivate: z.boolean(),

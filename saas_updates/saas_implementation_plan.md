@@ -72,7 +72,7 @@ Only decisions that change how the platform is used are listed. Each has a defau
 | 4 | Field evidence pipeline and mobile sync reliability | Implemented; on-device testing pending (see physical_testing_checklist.md) | 2 (3 recommended) | [phase_4](phase_4_implementation_plan.md) |
 | 5 | Provisioned mobile users and multi-project mobile | Implemented; web click-through and on-device testing pending (see its section 7) | 2, 4 | [phase_5](phase_5_implementation_plan.md) |
 | 6 | Organisations, contractor model, geofence modes and staged project creation | Implemented; web click-through and on-device testing pending (see its section 8) | 2, 3 | [phase_6](phase_6_implementation_plan.md) |
-| 7 | Process engine, standards, persona-aware AI and approval chains | Not started | 3, 4, 6 | [phase_7](phase_7_implementation_plan.md) |
+| 7 | Process engine, standards, persona-aware AI and approval chains | Implemented; web click-through and on-device testing pending (see its section 7) | 3, 4, 6 | [phase_7](phase_7_implementation_plan.md) |
 | 8 | Reporting cadence, late reports, mobilization and attendance alerts | Not started | 5, 6, 7 | [phase_8](phase_8_implementation_plan.md) |
 | 9 | Schedule variance and "Catch Project Up" | Not started | 6, 8 | [phase_9](phase_9_implementation_plan.md) |
 | 10 | Stakeholder handover and retention management | Not started | 6, 7 | [phase_10](phase_10_implementation_plan.md) |
@@ -84,7 +84,7 @@ flowchart LR
     P2 --> P4["4 Evidence pipeline + mobile"]
     P3 --> P6["6 Orgs, contractors, geofence, wizard"]
     P4 --> P5["5 Provisioned mobile users"]
-    P3 --> P7["7 Process engine + approvals"]
+    P3 --> P7["7 Process engine + approvals (done)"]
     P4 --> P7
     P6 --> P7
     P5 --> P8["8 Cadence + mobilization"]

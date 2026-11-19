@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Wallet, CheckCircle2, ShieldAlert, Printer, AlertTriangle } from "lucide-react";
 import { canIpcTransition, type IpcClaimDto, type IpcClaimStatus, type IpcLineItemDto } from "@insite/shared";
 import type { BoqItemRecordDto, ProjectSummaryDto } from "../../api/types";
@@ -8,12 +9,16 @@ import { useAuth } from "../../lib/auth-context";
 import { CustomSelect, type CustomSelectOption, KpiCard } from "../../components/common";
 import Loader from "../../components/Loader";
 import { useIpcDetailsQuery } from "../../queries/reconciliation/useReconciliationQueries";
+import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import {
   useReconcileIpcMutation,
   useResolveMonitorQueryMutation,
   useRespondMonitorQueryMutation,
+  useReviewValuationMutation,
   useWithdrawIpcMutation,
 } from "../../mutations/reconciliation/useReconciliationMutations";
+import { ApprovalProgressBar } from "../../components/process/ApprovalProgressBar";
+import { DirectMilestonePanel } from "./components/DirectMilestonePanel";
 import { SubmitIpcModal } from "./components/SubmitIpcModal";
 import { CertifyValuationModal } from "./components/CertifyValuationModal";
 import { LenderDecisionModal, ReverseDecisionModal } from "./components/LenderDecisionModal";
@@ -96,6 +101,26 @@ export function ReconciliationWorkbenchPage({
   const detailQuery = useIpcDetailsQuery(project.id, selectedIpc?.id);
   const ipc: IpcClaimDto | null = detailQuery.data?.id === selectedIpc?.id ? detailQuery.data ?? null : selectedIpc;
 
+  // Phase 7: the project's process decides IPC vs direct milestone mode and which modules show.
+  const processQuery = useProjectProcess(project.id);
+  const processConfig = processQuery.data?.config;
+  const directMode = processConfig?.disbursementMechanism === "MILESTONE_DIRECT_DISBURSEMENT";
+  const tranchesOn = processConfig?.enableTranchesAndCps ?? true;
+  const holdPointsOn = processConfig?.enableHoldPoints ?? true;
+  const reviewValuationMutation = useReviewValuationMutation(project.id);
+
+  // ?valuationId= (disbursement notifications): in IPC mode, select the IPC that owns the valuation.
+  // Direct mode handles it in the milestone panel.
+  const [searchParams] = useSearchParams();
+  const linkedValuationId = searchParams.get("valuationId");
+  useEffect(() => {
+    if (!linkedValuationId || directMode) return;
+    const owner = ipcs.find(
+      (i) => i.valuationReport?.id === linkedValuationId || i.valuationRevisions?.some((r) => r.id === linkedValuationId),
+    );
+    if (owner && owner.id !== selectedIpc?.id) onSelectIpc(owner.id);
+  }, [linkedValuationId, directMode, ipcs, selectedIpc?.id, onSelectIpc]);
+
   const reconcileMutation = useReconcileIpcMutation(project.id);
   const respondMutation = useRespondMonitorQueryMutation(project.id);
   const resolveMutation = useResolveMonitorQueryMutation(project.id);
@@ -125,13 +150,26 @@ export function ReconciliationWorkbenchPage({
       <SubmitIpcModal project={project} ipcs={ipcs} boqItems={boqItems} onClose={close} onSubmitted={onSelectIpc} />
     ) : null;
 
+  if (processQuery.isLoading) {
+    return (
+      <div className="flex items-center gap-2 p-8 text-xs text-slate-500">
+        <Loader size="sm" /> Loading the project's process…
+      </div>
+    );
+  }
+
+  // Direct milestone release replaces contractor claims (the mechanism is locked once either exists).
+  if (directMode && ipcs.length === 0) {
+    return <DirectMilestonePanel project={project} tranchesOn={tranchesOn} holdPointsOn={holdPointsOn} />;
+  }
+
   if (!ipc) {
     return (
       <>
         <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center">
           <h3 className="text-sm font-bold text-slate-900">No interim payment certificates yet</h3>
           <p className="text-xs text-slate-500 mt-1">Submitting a claim runs evidence reconciliation against field evidence for the claim period.</p>
-          {canSubmitIpc && (
+          {canSubmitIpc && !directMode && (
             <button type="button" onClick={() => setModal({ kind: "submit" })} className={`mt-4 ${buttonPrimary}`}>
               Submit first IPC claim
             </button>
@@ -147,7 +185,7 @@ export function ReconciliationWorkbenchPage({
   const selectedLine = ipc.lineItems.find((li) => li.id === selectedLineId) ?? null;
   const supportedCount = ipc.lineItems.filter((li) => li.aiEvidenceRating === "SUPPORTED").length;
   const flaggedCount = ipc.lineItems.filter(
-    (li) => li.aiEvidenceRating === "CONTRADICTED" || li.aiEvidenceRating === "UNSUPPORTED" || li.missingHoldPointFlag,
+    (li) => li.aiEvidenceRating === "CONTRADICTED" || li.aiEvidenceRating === "UNSUPPORTED" || (holdPointsOn && li.missingHoldPointFlag),
   ).length;
   const outstandingQueryLines = ipc.lineItems.filter((li) => li.queries.some((q) => q.status === "OPEN" || q.status === "RESPONDED"));
   const isOversight = hasAnyPermission("ipc:trigger_ai_reconcile", "ipc:certify_valuation", "tranche:approve_disbursement");
@@ -201,8 +239,14 @@ export function ReconciliationWorkbenchPage({
             </button>
           )}
           {hasPermission("tranche:approve_disbursement") && report && ipc.status === "MONITOR_CERTIFIED" && (
-            <button type="button" onClick={() => setModal({ kind: "decide" })} title={actions.decide.reason ?? undefined} className={buttonPrimary}>
-              Record tranche decision
+            <button
+              type="button"
+              onClick={() => setModal({ kind: "decide" })}
+              disabled={!actions.decide.allowed}
+              title={actions.decide.reason ?? undefined}
+              className={buttonPrimary}
+            >
+              {tranchesOn ? "Record tranche decision" : "Record release decision"}
             </button>
           )}
           {actions.reverseDecision.allowed && (
@@ -210,7 +254,7 @@ export function ReconciliationWorkbenchPage({
               Reverse decision
             </button>
           )}
-          {canSubmitIpc && (
+          {canSubmitIpc && !directMode && (
             <button type="button" onClick={() => setModal({ kind: "submit" })} className={buttonPrimary}>
               + Submit new IPC
             </button>
@@ -223,6 +267,11 @@ export function ReconciliationWorkbenchPage({
           <AlertTriangle className="w-4 h-4" />
           The claim is saved but evidence reconciliation has not completed. Ratings below are not yet meaningful.
           {actions.reconcile.allowed ? " Re-run reconciliation to retry." : " The monitor can re-run it."}
+        </div>
+      )}
+      {hasPermission("tranche:approve_disbursement") && report && ipc.status === "MONITOR_CERTIFIED" && !actions.decide.allowed && actions.decide.reason && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-[11px] text-slate-600">
+          Release decision unavailable: {actions.decide.reason}
         </div>
       )}
       {(actions.certify.reason && hasPermission("ipc:certify_valuation") && ipc.status !== "LENDER_DECIDED" && ipc.status !== "REJECTED_WITHDRAWN" && !actions.certify.allowed) && (
@@ -255,13 +304,13 @@ export function ReconciliationWorkbenchPage({
           valueColorClass="text-amber-700"
           subtitle={
             <span className="text-amber-700 font-medium">
-              {flaggedCount} line(s) rated {ratingLabels.CONTRADICTED.label}, {ratingLabels.UNSUPPORTED.label} or with an unmet hold point
+              {flaggedCount} line(s) rated {ratingLabels.CONTRADICTED.label}, {ratingLabels.UNSUPPORTED.label}{holdPointsOn ? " or with an unmet hold point" : ""}
             </span>
           }
         />
       </div>
 
-      <LineItemsTable ipc={ipc} selectedLineId={selectedLineId} onSelectLine={(li) => setSelectedLineId(li.id)} />
+      <LineItemsTable ipc={ipc} selectedLineId={selectedLineId} onSelectLine={(li) => setSelectedLineId(li.id)} showHoldPoints={holdPointsOn} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {isOversight ? (
@@ -269,7 +318,7 @@ export function ReconciliationWorkbenchPage({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <div className="text-xs font-bold text-slate-900">Smart Visit Planner</div>
-                <p className="text-[11px] text-slate-500 mt-0.5">Lines lacking independent evidence or with an unmet hold point</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">{holdPointsOn ? "Lines lacking independent evidence or with an unmet hold point" : "Lines lacking independent evidence"}</p>
               </div>
               <button type="button" onClick={() => setModal({ kind: "itinerary" })} className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 shrink-0">
                 <Printer className="w-3.5 h-3.5 text-brand-primary" />
@@ -372,9 +421,27 @@ export function ReconciliationWorkbenchPage({
                 </div>
               ) : ipc.status === "MONITOR_CERTIFIED" ? (
                 <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium">
-                  Awaiting the lender decision.
+                  {report.approval && !report.approval.completed && report.approval.currentStepOrder !== report.approval.steps.length
+                    ? "Going through the disbursement chain before the release decision."
+                    : "Awaiting the lender decision."}
                 </div>
               ) : null}
+
+              {/* Phase 7: position on the project's disbursement chain */}
+              {report.approval && (
+                <ApprovalProgressBar
+                  title="Disbursement chain"
+                  approval={report.approval}
+                  isPending={reviewValuationMutation.isPending}
+                  hideActions={!actions.reviewValuation.allowed}
+                  onReview={(decision, notes) =>
+                    reviewValuationMutation.mutateAsync({ valuationId: report.id, decision, notes })
+                  }
+                />
+              )}
+              {!actions.reviewValuation.allowed && actions.reviewValuation.reason && report.approval && !report.approval.completed && hasPermission("ipc:view") && (
+                <p className="text-[11px] text-slate-500">{actions.reviewValuation.reason}</p>
+              )}
 
               {reversals.length > 0 && (
                 <div className="space-y-1">
@@ -400,6 +467,7 @@ export function ReconciliationWorkbenchPage({
         projectId={project.id}
         lineItem={selectedLine}
         actions={actions}
+        holdPointsOn={holdPointsOn}
         onClose={() => setSelectedLineId(null)}
         onOpenRaiseQuery={(line) => setModal({ kind: "query", line })}
         onRespondQuery={async (queryId, text, revised) => {
@@ -416,10 +484,10 @@ export function ReconciliationWorkbenchPage({
 
       {submitModal}
       {modal.kind === "certify" && <CertifyValuationModal projectId={project.id} ipc={ipc} onClose={close} />}
-      {modal.kind === "decide" && <LenderDecisionModal projectId={project.id} ipc={ipc} onClose={close} />}
+      {modal.kind === "decide" && <LenderDecisionModal projectId={project.id} ipc={ipc} cpsEnabled={tranchesOn} onClose={close} />}
       {modal.kind === "reverse" && <ReverseDecisionModal projectId={project.id} ipc={ipc} onClose={close} />}
       {modal.kind === "withdraw" && <WithdrawModal projectId={project.id} ipc={ipc} onClose={close} />}
-      {modal.kind === "itinerary" && <VisitItineraryModal project={project} ipc={ipc} onClose={close} />}
+      {modal.kind === "itinerary" && <VisitItineraryModal project={project} ipc={ipc} holdPointsOn={holdPointsOn} onClose={close} />}
       {modal.kind === "query" && <RaiseQueryModal projectId={project.id} ipc={ipc} lineItem={modal.line} onClose={close} />}
     </div>
   );

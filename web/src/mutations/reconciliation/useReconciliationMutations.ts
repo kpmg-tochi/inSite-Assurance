@@ -9,6 +9,7 @@ import type {
   ReverseTrancheDecisionRequest,
   SubmitIpcClaimRequest,
   UpdateConditionPrecedentStatusRequest,
+  VerifyDirectMilestoneRequest,
   WaiveConditionPrecedentRequest,
   WithdrawIpcClaimRequest,
 } from '@insite/shared';
@@ -16,7 +17,10 @@ import {
   certifyIpcValuation,
   createMonitorQuery,
   decideTrancheRelease,
+  downloadValuationPdfById,
   downloadValuationReportPdf,
+  reviewValuation,
+  verifyDirectMilestone,
   reconcileIpc,
   resolveMonitorQuery,
   respondMonitorQuery,
@@ -36,6 +40,10 @@ function invalidateReconciliation(queryClient: QueryClient, projectId: string) {
   queryClient.invalidateQueries({ queryKey: ['ipc-details', projectId] });
   queryClient.invalidateQueries({ queryKey: ['projects'] });
   queryClient.invalidateQueries({ queryKey: ['audit-trail', projectId] });
+  // Phase 7: direct milestone valuations share the decision and review endpoints.
+  queryClient.invalidateQueries({ queryKey: ['direct-valuations', projectId] });
+  queryClient.invalidateQueries({ queryKey: ['direct-milestone-suggestion', projectId] });
+  queryClient.invalidateQueries({ queryKey: ['web-notifications'] });
 }
 
 export const useSubmitIpcMutation = (projectId: string) => {
@@ -216,3 +224,55 @@ export const useDownloadValuationPdfMutation = (projectId: string | undefined) =
     mutationFn: (ipcId: string) => downloadValuationReportPdf(projectId!, ipcId),
     onError: (err) => toast.error(errorMessage(err, 'Could not export the valuation PDF.')),
   });
+
+/** PDF of any valuation by id (IPC or direct milestone). */
+export const useDownloadValuationPdfByIdMutation = (projectId: string | undefined) =>
+  useMutation({
+    mutationFn: (valuationId: string) => downloadValuationPdfById(projectId!, valuationId),
+    onError: (err) => toast.error(errorMessage(err, 'Could not export the valuation PDF.')),
+  });
+
+/** Approve or return a valuation at an added disbursement-chain step (Phase 7). */
+export const useReviewValuationMutation = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { valuationId: string; decision: 'APPROVE' | 'RETURN'; notes: string | null }) =>
+      reviewValuation({
+        projectId,
+        valuationId: payload.valuationId,
+        body: { decision: payload.decision, notes: payload.notes },
+      }),
+    onSuccess: (_data, payload) => {
+      invalidateReconciliation(queryClient, projectId);
+      toast.success(
+        payload.decision === 'RETURN'
+          ? 'Valuation returned. It must be certified again.'
+          : 'Step approved. The valuation moves to the next step.'
+      );
+    },
+    onError: (err) => toast.error(errorMessage(err, 'Could not record the review.')),
+  });
+};
+
+/** Dry run: no toast on success; the flow shows the server-computed amounts. */
+export const useDirectMilestonePreviewMutation = (projectId: string) =>
+  useMutation({
+    mutationFn: (body: VerifyDirectMilestoneRequest) =>
+      verifyDirectMilestone({ projectId, body: { ...body, dryRun: true } }),
+  });
+
+export const useVerifyDirectMilestoneMutation = (projectId: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: VerifyDirectMilestoneRequest) =>
+      verifyDirectMilestone({ projectId, body: { ...body, dryRun: false } }),
+    onSuccess: (data) => {
+      invalidateReconciliation(queryClient, projectId);
+      queryClient.invalidateQueries({ queryKey: ['boq', projectId] });
+      toast.success(
+        `Milestone verified (revision ${data.computation.revisionNumber}). It now goes down the disbursement chain.`
+      );
+    },
+    onError: (err) => toast.error(errorMessage(err, 'Could not verify the milestone.')),
+  });
+};
