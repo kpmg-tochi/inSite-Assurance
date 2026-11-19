@@ -76,6 +76,10 @@ export const WebNotificationCategoryEnum = z.enum([
   // Phase 8
   'REPORT_MISSED',
   'ATTENDANCE_ALERT',
+  // Phase 9
+  'SCHEDULE_BEHIND',
+  'SCHEDULE_REVISION_PENDING',
+  'SCHEDULE_REVISION_DECIDED',
 ]);
 export type WebNotificationCategory = z.infer<typeof WebNotificationCategoryEnum>;
 

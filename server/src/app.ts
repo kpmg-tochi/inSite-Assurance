@@ -21,6 +21,7 @@ import { wbsChatRoutes } from "./modules/wbs-chat/wbsChat.routes";
 import { capturesRoutes } from "./modules/evidence/captures.routes";
 import { processRoutes, workflowTemplateRoutes } from "./modules/process/process.routes";
 import { mobilizationRoutes } from "./modules/mobilization/mobilization.routes";
+import { scheduleRoutes } from "./modules/schedule/schedule.routes";
 import { requestContextMiddleware } from "./utils/requestContext";
 import { localStorageRoutes } from "./modules/storage/localStorage.routes";
 import { storageService } from "./integrations/storage.service";
@@ -93,6 +94,7 @@ export function createApp() {
   app.use("/api/v1/projects", capturesRoutes);
   app.use("/api/v1/projects", processRoutes);
   app.use("/api/v1/projects", mobilizationRoutes);
+  app.use("/api/v1/projects", scheduleRoutes);
   app.use("/api/v1/workflow-templates", workflowTemplateRoutes);
 
   // Development object storage when S3 is not configured (never in production; see env checks).

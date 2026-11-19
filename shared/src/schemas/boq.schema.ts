@@ -28,6 +28,13 @@ export const BoqItemDtoSchema = BoqItemInputSchema.extend({
   /** Contractor package (Phase 6). */
   projectContractorId: z.string().uuid().nullable().optional(),
   lastRevisionId: z.string().uuid().nullable().optional(),
+  /** Manual brief override (Phase 9): PLAN_A | FALLBACK_BACKLOG | UNBLOCKED_POOL. */
+  planningTier: z.string().optional(),
+  /** Phase 9: planned window (YYYY-MM-DD, project zone); null until scheduled. */
+  plannedStartDate: z.string().nullable().optional(),
+  plannedEndDate: z.string().nullable().optional(),
+  actualStartDate: z.string().nullable().optional(),
+  actualCompletionDate: z.string().nullable().optional(),
 });
 export type BoqItemDto = z.infer<typeof BoqItemDtoSchema>;
 

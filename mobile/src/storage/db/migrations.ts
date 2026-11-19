@@ -222,6 +222,16 @@ CREATE TABLE IF NOT EXISTS server_reports (
 CREATE INDEX IF NOT EXISTS server_reports_period ON server_reports (project_id, wbs_item_id, workday_date);
 `,
   },
+  {
+    // Phase 9: each WBS item's planned window (YYYY-MM-DD, project zone) from the server's schedule.
+    // is_scheduled_today is no longer written or read (the server dropped the flag); it stays only
+    // because SQLite cannot drop a column in older versions.
+    version: 5,
+    sql: `
+ALTER TABLE wbs_items ADD COLUMN planned_start_date TEXT;
+ALTER TABLE wbs_items ADD COLUMN planned_end_date TEXT;
+`,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -23,6 +23,7 @@ import {
 import { recordAuditEvent } from '../audit/audit.service';
 import { serializeBoqItem, serializeTranche } from '../../utils/serializers';
 import { contractorHeadline } from './contractors.service';
+import { serializeScheduleBadge } from '../schedule/schedule.service';
 import { effectiveToleranceMeters } from '../../utils/geofenceEvaluation';
 import { isProjectObjectKey, storageService } from '../../integrations/storage.service';
 import { createMobileNotification } from '../notifications/notifications.service';
@@ -133,6 +134,8 @@ function serializeProjectCore(project: ProjectCoreRow) {
     geofence: project.geofenceGeoJson,
     geofenceToleranceMeters: effectiveToleranceMeters(project, project.tenant),
     portfolioHealth: project.portfolioHealth,
+    /** Phase 9: stored by the schedule-variance job; null until computed. */
+    scheduleVariance: serializeScheduleBadge(project),
     monitorOrganizationName: project.monitorOrganization?.name ?? '',
     lenderOrganizationName: project.lenderOrganization?.name ?? '',
     /** Main contractor (or the only one). */
@@ -736,6 +739,7 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
       openConflictCount: openConflicts,
       unfulfilledHoldPointCount: unfulfilledHoldPoints,
       pendingContractorCount: pendingContractors,
+      scheduleVariance: serializeScheduleBadge(p),
     };
   });
 

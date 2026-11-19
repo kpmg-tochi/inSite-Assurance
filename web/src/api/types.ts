@@ -6,6 +6,7 @@ import type {
   ProjectGeofence,
   ProjectStatus,
   ReportingCadence,
+  ScheduleVarianceBadge,
 } from '@insite/shared';
 
 export interface ApiEnvelope<T> {
@@ -36,6 +37,8 @@ export interface ProjectSummaryDto {
   /** Effective tolerance band outside the boundary, in metres. */
   geofenceToleranceMeters: number;
   portfolioHealth: PortfolioHealth;
+  /** Phase 9: variance badge stored by the schedule-variance job; null until computed. */
+  scheduleVariance: ScheduleVarianceBadge | null;
   monitorOrganizationName: string;
   lenderOrganizationName: string;
   /** Main contractor (or the only one). Use contractorCount for "+N". */

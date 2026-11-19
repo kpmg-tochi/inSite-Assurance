@@ -74,7 +74,7 @@ Only decisions that change how the platform is used are listed. Each has a defau
 | 6     | Organisations, contractor model, geofence modes and staged project creation | Implemented; web click-through and on-device testing pending (see its section 8) | 2, 3              | [phase_6](phase_6_implementation_plan.md)   |
 | 7     | Process engine, standards, persona-aware AI and approval chains             | Implemented; web click-through and on-device testing pending (see its section 7) | 3, 4, 6           | [phase_7](phase_7_implementation_plan.md)   |
 | 8     | Reporting cadence, late reports, mobilization and attendance alerts         | Implemented; web click-through and on-device testing pending (see its section 7) | 5, 6, 7           | [phase_8](phase_8_implementation_plan.md)   |
-| 9     | Schedule variance and "Catch Project Up"                                    | Not started                                                                      | 6, 8              | [phase_9](phase_9_implementation_plan.md)   |
+| 9     | Schedule variance and "Catch Project Up"                                    | Implemented; web clicked through; mobile on-device pending (see its section 7)  | 6, 8              | [phase_9](phase_9_implementation_plan.md)   |
 | 10    | Stakeholder handover and retention management                               | Not started                                                                      | 6, 7              | [phase_10](phase_10_implementation_plan.md) |
 
 ```mermaid

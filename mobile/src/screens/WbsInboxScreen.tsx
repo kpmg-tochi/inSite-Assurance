@@ -35,6 +35,18 @@ import { Feather } from "@expo/vector-icons";
 
 type InboxTab = "ACTIVE" | "REPORTED";
 
+/** Phase 9: scheduled this period = the server briefed it as Plan A, or its planned window says so. */
+const isScheduledNow = (t: WbsItemRecord) =>
+  t.planningTier === "PLAN_A" || t.periodStatus === "DUE_THIS_PERIOD" || t.periodStatus === "OVERDUE";
+
+/** "12 Mar to 28 Mar" from planned dates (calendar dates; no time zone shift). */
+function plannedWindowText(start: string | null, end: string | null): string | null {
+  if (!start || !end) return null;
+  const fmt = (d: string) =>
+    new Date(`${d}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+  return `Planned ${fmt(start)} to ${fmt(end)}`;
+}
+
 export const WbsInboxScreen: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -123,9 +135,7 @@ export const WbsInboxScreen: React.FC = () => {
 
   const planAItems = useMemo(
     () =>
-      filteredActive.filter(
-        (t) => t.planningTier === "PLAN_A" || t.isScheduledToday,
-      ),
+      filteredActive.filter(isScheduledNow),
     [filteredActive],
   );
 
@@ -134,8 +144,7 @@ export const WbsInboxScreen: React.FC = () => {
       filteredActive
         .filter(
           (t) =>
-            t.planningTier !== "PLAN_A" &&
-            !t.isScheduledToday &&
+            !isScheduledNow(t) &&
             (t.planningTier === "FALLBACK_BACKLOG" || !t.isHoldPoint),
         )
         .slice(0, 3),
@@ -150,12 +159,15 @@ export const WbsInboxScreen: React.FC = () => {
     return filteredActive.filter((t) => !shownIds.has(t.id));
   }, [filteredActive, planAItems, fallbackItems]);
 
-  const renderThreadCard = (thread: WbsItemRecord, isFallback = false) => (
+  const renderThreadCard = (thread: WbsItemRecord, isFallback = false) => {
+    const scheduled = isScheduledNow(thread);
+    const windowText = plannedWindowText(thread.plannedStartDate, thread.plannedEndDate);
+    return (
     <TouchableOpacity
       key={thread.id}
       style={[
         styles.wbsCard,
-        thread.isScheduledToday && styles.wbsCardScheduled,
+        scheduled && styles.wbsCardScheduled,
       ]}
       onPress={() => onSelectWbsThread(thread)}
       activeOpacity={0.7}
@@ -164,10 +176,14 @@ export const WbsInboxScreen: React.FC = () => {
         <Text style={styles.wbsCode}>WBS {thread.wbsCode}</Text>
         <View style={styles.badgesRow}>
           {thread.isHoldPoint && <Pill variant="warning" text="Hold-Point" />}
-          {thread.isScheduledToday && (
+          {thread.periodStatus === "OVERDUE" ? (
+            <Pill variant="negative" text="Overdue" />
+          ) : scheduled ? (
             <Pill variant="info" text={scheduledPill} />
-          )}
-          {isFallback && !thread.isScheduledToday && (
+          ) : thread.periodStatus === "UPCOMING" && !isFallback ? (
+            <Pill variant="gray" text="Upcoming" />
+          ) : null}
+          {isFallback && !scheduled && (
             <Pill variant="gray" text="Fallback Ready" />
           )}
           {thread.isReportedToday && (
@@ -179,6 +195,17 @@ export const WbsInboxScreen: React.FC = () => {
       <Text style={styles.wbsDescription} numberOfLines={2}>
         {thread.description}
       </Text>
+      {windowText && (
+        <Text
+          style={[
+            styles.plannedWindow,
+            thread.periodStatus === "OVERDUE" && styles.plannedWindowOverdue,
+          ]}
+        >
+          {windowText}
+          {thread.periodStatus === "OVERDUE" ? " · past its planned end" : ""}
+        </Text>
+      )}
 
       <View style={styles.lastMessageRow}>
         <Text style={styles.lastMessageText} numberOfLines={1}>
@@ -189,7 +216,8 @@ export const WbsInboxScreen: React.FC = () => {
         </Text>
       </View>
     </TouchableOpacity>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -655,6 +683,14 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
     gap: 8,
+  },
+  plannedWindow: {
+    fontSize: 11,
+    color: "#64748B",
+  },
+  plannedWindowOverdue: {
+    color: "#B91C1C",
+    fontWeight: "600",
   },
   wbsCardScheduled: {
     borderColor: "#00338D",

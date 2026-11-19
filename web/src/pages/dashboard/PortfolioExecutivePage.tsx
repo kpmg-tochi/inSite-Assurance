@@ -32,6 +32,7 @@ import {
 } from '../../components/table';
 import { KpiCard } from '../../components/common';
 import { useProjectProcessMap } from '../../queries/process/useProcessQueries';
+import { ScheduleBadge } from '../../components/schedule/ScheduleVarianceBadge';
 
 interface PortfolioExecutivePageProps {
   onSelectProject: (projectId: string) => void;
@@ -117,6 +118,14 @@ export function PortfolioExecutivePage({
             </div>
           </div>
         ),
+      },
+      {
+        id: 'schedule',
+        header: 'Schedule',
+        tooltip: 'Variance against the planned schedule on certified progress, in working weeks (updated daily)',
+        width: 'w-32',
+        cell: (item) =>
+          item.scheduleVariance ? <ScheduleBadge badge={item.scheduleVariance} size="xs" /> : <span className="text-[11px] text-slate-400">No schedule</span>,
       },
       {
         id: 'progress',

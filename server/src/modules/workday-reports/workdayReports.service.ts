@@ -50,6 +50,7 @@ import { evaluateProjectGeofence, GEOFENCE_CONTEXT_SELECT } from '../../utils/ge
 import { verifyDeviceSignature } from '../../utils/deviceSignature';
 import { serializeCapture } from '../../utils/serializers';
 import { scheduleAiOmissionCheck } from './aiOmissionCheck';
+import { recordItemActualStart } from '../schedule/schedule.service';
 import {
   CADENCE_PROJECT_SELECT,
   cadenceSettingsForDate,
@@ -58,6 +59,9 @@ import {
   periodKeyForDate,
   reporterScopeFor,
 } from '../cadence/cadence.service';
+
+/** Report statuses that count as evidence (and so mark an item's actual start). */
+const isCountedStatus = (status: string) => status === 'CONFIRMED' || status === 'APPROVED_COMPLETED';
 
 type Tx = Prisma.TransactionClient;
 
@@ -513,6 +517,8 @@ export async function submitWorkdayReport(params: {
         },
       });
       await linkCaptures(tx, report.id, input.wbsItemId, captures.map((c) => c.id));
+      // Phase 9: the first counted report on an item marks its actual start.
+      if (isCountedStatus(report.status)) await recordItemActualStart(tx, projectId, input.wbsItemId, input.workdayDate);
       await recordReportPing(tx, { projectId, sessionId: fieldAgent.sessionId, wbsItemId: input.wbsItemId, geotag });
       const obligationId = await fulfilObligation(tx, {
         projectId,
@@ -796,6 +802,7 @@ export async function revalidateWorkdayReport(params: {
         },
       });
       await linkCaptures(tx, report.id, prev.wbsItemId, captures.map((c) => c.id));
+      if (isCountedStatus(report.status)) await recordItemActualStart(tx, projectId, prev.wbsItemId, report.workdayDate);
       await recordReportPing(tx, { projectId, sessionId: fieldAgent.sessionId, wbsItemId: prev.wbsItemId, geotag });
       if (report.status === 'PENDING_APPROVAL' && report.approvalChainVersion !== null) {
         await notifyPendingApproval(tx, {
@@ -902,7 +909,7 @@ export async function releaseStagedReportsForSession(
 ): Promise<string[]> {
   const staged = await tx.workdayReport.findMany({
     where: { projectId: params.projectId, reporterSessionId: params.sessionId, status: 'STAGED_UNVERIFIED' },
-    select: { id: true, approvalChainVersion: true },
+    select: { id: true, approvalChainVersion: true, wbsItemId: true, workdayDate: true },
   });
   if (staged.length === 0) return [];
   const config = await getProcessConfig(params.projectId, tx);
@@ -920,6 +927,7 @@ export async function releaseStagedReportsForSession(
         aiCheckStatus: checks ? 'PENDING' : 'SKIPPED',
       },
     });
+    if (isCountedStatus(accepted.status)) await recordItemActualStart(tx, params.projectId, r.wbsItemId, r.workdayDate);
   }
   return checks ? staged.map((r) => r.id) : [];
 }
@@ -1041,6 +1049,7 @@ export async function reviewWorkdayReport(params: {
       where: { id: report.id },
       data: { status: 'APPROVED_COMPLETED', currentApprovalStep: 0, approvedCompletedAt: new Date() },
     });
+    await recordItemActualStart(tx, projectId, report.wbsItemId, report.workdayDate);
     await recordAuditEvent(tx, {
       projectId,
       actorType: 'WEB_USER',

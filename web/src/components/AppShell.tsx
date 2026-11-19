@@ -14,6 +14,7 @@ import {
   BarChart3,
   FolderKanban,
   ArrowRight,
+  CalendarRange,
 } from "lucide-react";
 import type { ProjectSummaryDto } from "../api/types";
 import { useAuth } from "../lib/auth-context";
@@ -282,6 +283,24 @@ export function AppShell({
                 <span className="truncate">{navLabels.boq}</span>
               )}
             </NavLink>
+            )}
+
+            {/* Phase 9: schedule and variance */}
+            {hasPermission("schedule:view_variance") && (
+              <NavLink
+                to={selectedProject ? `${projectBasePath}/schedule` : "/app/projects"}
+                title="Schedule"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                    isActive
+                      ? "bg-white/15 text-white shadow-sm"
+                      : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`
+                }
+              >
+                <CalendarRange className="w-4 h-4 shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">Schedule</span>}
+              </NavLink>
             )}
 
             {/* Audit Ledger gated by audit:view_ledger permission */}

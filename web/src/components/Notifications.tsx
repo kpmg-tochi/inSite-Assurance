@@ -34,6 +34,9 @@ const CATEGORY_LABELS: Record<WebNotificationCategory, string> = {
   DISBURSEMENT_PENDING_APPROVAL: "Disbursement awaiting approval",
   REPORT_MISSED: "Missed report",
   ATTENDANCE_ALERT: "Attendance alert",
+  SCHEDULE_BEHIND: "Behind schedule",
+  SCHEDULE_REVISION_PENDING: "Schedule revision awaiting approval",
+  SCHEDULE_REVISION_DECIDED: "Schedule revision decided",
 };
 
 interface NotificationsProps {

@@ -223,3 +223,38 @@ export async function getEvidenceForBoqItems(
   }
   return items;
 }
+
+/**
+ * Reported (verified but not yet certified) progress per BOQ item, percent of the item's total
+ * quantity (Phase 9). Uses the same counted statuses and supersession as reconciliation: a counted
+ * report whose newer revision also counts is replaced by it. Report quantities are per period, so
+ * they are summed; contractor and verifier reports describe the same work, so each persona is
+ * summed separately and the larger total is used. Capped at 100.
+ */
+export async function getReportedProgressByItem(
+  projectId: string,
+  items: Array<{ id: string; totalQuantity: number }>,
+  db: Db = prisma
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  if (items.length === 0) return out;
+  const config = await getProcessConfig(projectId, db === prisma ? prisma : (db as Prisma.TransactionClient));
+  const reports = await db.workdayReport.findMany({
+    where: { projectId, wbsItemId: { in: items.map((i) => i.id) }, status: { in: countedReportStatuses(config.requireReportApproval) } },
+    select: { id: true, parentReportId: true, wbsItemId: true, reporterPersonaType: true, reportedQuantity: true },
+  });
+  const superseded = new Set(reports.map((r) => r.parentReportId).filter((id): id is string => Boolean(id)));
+  const sums = new Map<string, Map<string, number>>();
+  for (const r of reports) {
+    if (superseded.has(r.id)) continue;
+    const byPersona = sums.get(r.wbsItemId) ?? new Map<string, number>();
+    byPersona.set(r.reporterPersonaType, (byPersona.get(r.reporterPersonaType) ?? 0) + Number(r.reportedQuantity));
+    sums.set(r.wbsItemId, byPersona);
+  }
+  for (const item of items) {
+    const byPersona = sums.get(item.id);
+    const qty = byPersona ? Math.max(...byPersona.values()) : 0;
+    out.set(item.id, item.totalQuantity > 0 ? Math.min(100, Math.max(0, (qty / item.totalQuantity) * 100)) : 0);
+  }
+  return out;
+}

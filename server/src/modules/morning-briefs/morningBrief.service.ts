@@ -6,12 +6,14 @@ import {
   GenerateMorningBriefRequest,
   MorningDeliverableBriefDto,
   PlanningTier,
+  windowOverlaps,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { azureOpenAiService } from '../../integrations/azure-openai.service';
 import { AppError } from '../../middleware/error.middleware';
 import type { FieldAgentJwtPayload, WebJwtPayload } from '../../middleware/auth.middleware';
 import { getProcessConfig } from '../process/processConfig.service';
+import { getReportedProgressByItem } from '../evidence/evidenceProvider';
 import { getApplicableStandards, toAppliedStandards } from '../standards/standards.service';
 import {
   cadenceSettingsForDate,
@@ -99,6 +101,8 @@ export async function generateOrGetMorningBriefForBoqItem(params: {
   targetPersona: BriefPersona;
   input?: GenerateMorningBriefRequest;
   context?: Awaited<ReturnType<typeof periodContext>>;
+  /** Phase 9: PLAN_A for items scheduled in the period, FALLBACK_BACKLOG for fallbacks. */
+  planningTier?: PlanningTier;
 }): Promise<MorningDeliverableBriefDto> {
   const { projectId, boqItemId, targetPersona } = params;
   const ctx = params.context ?? (await periodContext(projectId, params.input?.workdayDate));
@@ -130,6 +134,12 @@ export async function generateOrGetMorningBriefForBoqItem(params: {
   if (!project) throw new AppError('Project not found', 404);
   if (!boqItem) throw new AppError('BOQ/WBS item not found for project', 404);
 
+  // Phase 9: the planned window decides the tier; planningTier PLAN_A on the item is a manual override.
+  const tier: PlanningTier =
+    params.planningTier ??
+    (boqItem.planningTier === 'PLAN_A' || windowOverlaps(boqItem.plannedStartDate, boqItem.plannedEndDate, key.periodStart, key.periodEnd)
+      ? 'PLAN_A'
+      : 'FALLBACK_BACKLOG');
   const dailyTarget =
     params.input?.dailyTargetQuantity ?? (boqItem.dailyTargetQuantity ? Number(boqItem.dailyTargetQuantity) : null);
   const appliedStandards = toAppliedStandards(await getApplicableStandards(projectId, boqItem.wbsCode));
@@ -147,7 +157,7 @@ export async function generateOrGetMorningBriefForBoqItem(params: {
     isHoldPoint,
     holdPointInstruction: isHoldPoint ? boqItem.holdPointInstruction : null,
     previousReportSummary: latestReport?.summaryText ?? null,
-    planningTier: boqItem.planningTier || (boqItem.isScheduledToday ? 'PLAN_A' : 'UNBLOCKED_POOL'),
+    planningTier: tier,
     targetPersona,
     applicableStandards: appliedStandards,
     reportingCadence: ctx.settings.reportingCadence,
@@ -173,7 +183,7 @@ export async function generateOrGetMorningBriefForBoqItem(params: {
       reportingPeriodEnd: key.periodEnd,
       dueAt: key.dueAt,
       targetPersona,
-      planningTier: boqItem.planningTier || (boqItem.isScheduledToday ? 'PLAN_A' : 'FALLBACK_BACKLOG'),
+      planningTier: tier,
       ...content,
     },
     update: content,
@@ -215,12 +225,20 @@ export async function generateDispatchForProject(
   personas?: BriefPersona[]
 ): Promise<MorningDeliverableBriefDto[]> {
   const ctx = await periodContext(projectId, workdayDateInput);
-  const targets = await dispatchTargets(projectId);
+  const targets = await dispatchTargets(projectId, ctx.key);
   const forPersonas = personas ?? (await briefPersonasForProject(projectId));
   const briefs: MorningDeliverableBriefDto[] = [];
   for (const targetPersona of forPersonas) {
     for (const item of targets) {
-      briefs.push(await generateOrGetMorningBriefForBoqItem({ projectId, boqItemId: item.id, targetPersona, context: ctx }));
+      briefs.push(
+        await generateOrGetMorningBriefForBoqItem({
+          projectId,
+          boqItemId: item.id,
+          targetPersona,
+          context: ctx,
+          planningTier: item.isScheduled ? 'PLAN_A' : 'FALLBACK_BACKLOG',
+        })
+      );
     }
   }
   await createObligationsForPeriod({ projectId, key: ctx.key, personas: forPersonas, items: targets });
@@ -229,27 +247,62 @@ export async function generateDispatchForProject(
 
 
 /**
- * Items in scope for a period. `isScheduledToday` and `planningTier` still decide this until
- * Phase 9 adds planned dates; read the flag as "scheduled this period".
+ * Items in scope for a period (Phase 9):
+ * - scheduled: not done, and the planned window overlaps the period, or ended before it (overdue
+ *   work stays due until it is done), or planningTier PLAN_A (manual override);
+ * - up to three fallbacks: not done, not scheduled, every predecessor done, and not blocked by a
+ *   hold point (when hold points are on) unless marked FALLBACK_BACKLOG; earliest planned start first.
+ * "Done" means certified at 100%, or field reports already cover the whole quantity.
  */
-async function dispatchTargets(projectId: string) {
+export async function dispatchTargets(projectId: string, key: { periodStart: string; periodEnd: string }) {
   const config = await getProcessConfig(projectId);
-  const boqItems = await prisma.boqItem.findMany({
-    where: { projectId, cumulativeCertifiedPct: { lt: 100 } },
-    orderBy: [{ isScheduledToday: 'desc' }, { wbsCode: 'asc' }],
-  });
-  // "Scheduled this period" (isScheduledToday is the Phase 4 name of the flag).
-  const planA = boqItems.filter((b) => b.planningTier === 'PLAN_A' || b.isScheduledToday);
-  // Up to 3 constraint-free fallback items (not blocked by a hold point, when hold points are on).
-  const fallbacks = boqItems
+  const [boqItems, dependencies] = await Promise.all([
+    prisma.boqItem.findMany({
+      where: { projectId },
+      orderBy: { wbsCode: 'asc' },
+      select: {
+        id: true,
+        projectContractorId: true,
+        planningTier: true,
+        isHoldPoint: true,
+        totalQuantity: true,
+        cumulativeCertifiedPct: true,
+        plannedStartDate: true,
+        plannedEndDate: true,
+      },
+    }),
+    prisma.boqItemDependency.findMany({ where: { projectId }, select: { predecessorBoqItemId: true, successorBoqItemId: true } }),
+  ]);
+  const reported = await getReportedProgressByItem(
+    projectId,
+    boqItems.map((b) => ({ id: b.id, totalQuantity: Number(b.totalQuantity) }))
+  );
+  const done = new Set(
+    boqItems.filter((b) => Number(b.cumulativeCertifiedPct) >= 100 || (reported.get(b.id) ?? 0) >= 100).map((b) => b.id)
+  );
+  const open = boqItems.filter((b) => !done.has(b.id));
+  const scheduled = open.filter(
+    (b) =>
+      b.planningTier === 'PLAN_A' ||
+      windowOverlaps(b.plannedStartDate, b.plannedEndDate, key.periodStart, key.periodEnd) ||
+      (b.plannedEndDate !== null && b.plannedEndDate < key.periodStart)
+  );
+  const scheduledIds = new Set(scheduled.map((b) => b.id));
+  const predecessors = new Map<string, string[]>();
+  for (const d of dependencies) {
+    predecessors.set(d.successorBoqItemId, [...(predecessors.get(d.successorBoqItemId) ?? []), d.predecessorBoqItemId]);
+  }
+  const fallbacks = open
     .filter(
       (b) =>
-        !planA.some((p) => p.id === b.id) &&
+        !scheduledIds.has(b.id) &&
+        (predecessors.get(b.id) ?? []).every((p) => done.has(p)) &&
         (b.planningTier === 'FALLBACK_BACKLOG' || !(config.enableHoldPoints && b.isHoldPoint))
     )
+    .sort((a, b) => (a.plannedStartDate ?? '9999-12-31').localeCompare(b.plannedStartDate ?? '9999-12-31'))
     .slice(0, 3);
   return [
-    ...planA.map((b) => ({ id: b.id, projectContractorId: b.projectContractorId, isScheduled: true })),
+    ...scheduled.map((b) => ({ id: b.id, projectContractorId: b.projectContractorId, isScheduled: true })),
     ...fallbacks.map((b) => ({ id: b.id, projectContractorId: b.projectContractorId, isScheduled: false })),
   ];
 }

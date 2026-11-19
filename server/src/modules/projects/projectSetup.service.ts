@@ -928,6 +928,8 @@ const STEP_SAVERS: Record<ProjectSetupStepId, StepSaver> = {
   reporting: saveReporting,
   process: saveProcess,
   standards: saveStandards,
+  // Phase 9: dates and dependencies are saved through PUT /schedule/baseline; this marks the step reviewed.
+  schedule: saveStandards,
   team: saveTeam,
 };
 

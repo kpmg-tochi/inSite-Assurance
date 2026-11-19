@@ -145,7 +145,6 @@ before(async () => {
         rateNgn: 1000,
         budgetedCostNgn: 100000,
         planningTier: 'PLAN_A',
-        isScheduledToday: true,
       },
     });
     ids.items.push(item.id);

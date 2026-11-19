@@ -25,6 +25,7 @@ import {
   WithdrawIpcClaimRequest,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
+import { syncActualCompletionDates } from '../schedule/schedule.service';
 import { AppError } from '../../middleware/error.middleware';
 import { hasWebPermission, WebJwtPayload } from '../../middleware/auth.middleware';
 import { azureOpenAiService } from '../../integrations/azure-openai.service';
@@ -174,6 +175,8 @@ export async function refreshCertifiedProgress(tx: Tx, projectId: string) {
       : 0;
   const rounded = Math.round(pct * 100) / 100;
   await tx.project.update({ where: { id: projectId }, data: { certifiedProgressPct: rounded } });
+  // Phase 9: items reaching (or leaving) 100% certified get (or lose) their completion date.
+  await syncActualCompletionDates(tx, projectId);
   return rounded;
 }
 

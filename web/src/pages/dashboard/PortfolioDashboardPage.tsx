@@ -13,6 +13,7 @@ import { useAuth } from "../../lib/auth-context";
 import ContractorVerificationQueue from "../../components/ContractorVerificationQueue";
 import { KpiCard } from "../../components/common";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
+import { ScheduleBadge } from "../../components/schedule/ScheduleVarianceBadge";
 
 interface PortfolioDashboardPageProps {
   project: ProjectSummaryDto;
@@ -92,6 +93,7 @@ export function PortfolioDashboardPage({
           iconVariant="emerald"
           title="Verified Progress"
           value={`${project.certifiedProgressPct.toFixed(1)}%`}
+          badge={<ScheduleBadge badge={project.scheduleVariance} size="xs" />}
           subtitle={
             latestIpc
               ? `Latest Claim: IPC #${String(latestIpc.ipcNumber).padStart(

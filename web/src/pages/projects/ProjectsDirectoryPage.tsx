@@ -22,6 +22,7 @@ import { useAuth } from "../../lib/auth-context";
 import { useDraftProjectsQuery } from "../../queries/projects/useProjectSetupQueries";
 import { useDeleteDraftMutation } from "../../mutations/projects/useProjectSetupMutations";
 import { ArchiveProjectDialog } from "../../components/projects/ArchiveProjectDialog";
+import { ScheduleBadge } from "../../components/schedule/ScheduleVarianceBadge";
 
 /** "⋯" menu on a project card: settings and archive (needs projects:edit_baseline). */
 function ProjectCardMenu({
@@ -404,6 +405,11 @@ export function ProjectsDirectoryPage({
                           }}
                         />
                       </div>
+                      {project.scheduleVariance && (
+                        <div className="mt-1.5">
+                          <ScheduleBadge badge={project.scheduleVariance} size="xs" />
+                        </div>
+                      )}
                     </div>
                   </div>
 

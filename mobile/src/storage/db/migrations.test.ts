@@ -51,6 +51,8 @@ describe('SQLite migrations', () => {
     assert.equal(migrate(db), LATEST_SCHEMA_VERSION);
     assert.ok(columns(db, 'chat_messages').includes('brief_json'));
     assert.ok(columns(db, 'server_reports').includes('status'));
+    assert.ok(columns(db, 'wbs_items').includes('planned_start_date'));
+    assert.ok(columns(db, 'wbs_items').includes('planned_end_date'));
     for (const table of DATA_TABLES) assert.ok(columns(db, table).length > 0, `missing table ${table}`);
   });
 

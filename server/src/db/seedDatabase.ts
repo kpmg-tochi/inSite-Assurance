@@ -17,6 +17,7 @@ import { randomJoinCodeSegment } from "../modules/projects/joinCodes.service";
 import { evaluateGeofence } from "../utils/geofenceEvaluation";
 import { seedPhase6Projects } from "./seedPhase6";
 import { seedPhase7 } from "./seedPhase7";
+import { seedPhase9 } from "./seedPhase9";
 import { projectObjectPrefix } from "../integrations/storage.service";
 import { CADENCE_PROJECT_SELECT, cadenceSettingsOf, periodKeyForDate } from "../modules/cadence/cadence.service";
 
@@ -1647,6 +1648,9 @@ async function runSeed(): Promise<void> {
     passwordHash: defaultPasswordHash,
     residentRole: residentCowMobileRole,
   });
+
+  // Phase 9: schedule baselines (one project on schedule, one four weeks behind with a pending revision).
+  await seedPhase9();
 
   console.log("✅ Seed complete!");
   console.log(

@@ -891,6 +891,12 @@ export const AuditActionTypeEnum = z.enum([
   'ATTENDANCE_ALERT_RESOLVED',
   'MANUAL_CHECKIN_RECORDED',
   'REPORTING_OBLIGATION_EXCUSED',
+  // Phase 9: schedule baseline and revisions
+  'SCHEDULE_BASELINE_SET',
+  'SCHEDULE_REVISION_PROPOSED',
+  'SCHEDULE_REVISION_APPLIED',
+  'SCHEDULE_REVISION_REJECTED',
+  'SCHEDULE_REVISION_WITHDRAWN',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 

@@ -1,3 +1,4 @@
+import { itemPeriodStatus, type ItemPeriodStatus } from '@insite/shared';
 import type {
   CaptureMediaType,
   GeofenceStatus,
@@ -36,7 +37,11 @@ export interface WbsItemRecord {
   cumulativeCertifiedPct: number;
   isHoldPoint: boolean;
   holdPointInstruction: string | null;
-  isScheduledToday: boolean;
+  /** Phase 9: planned window (YYYY-MM-DD, project zone); null until the item is scheduled. */
+  plannedStartDate: string | null;
+  plannedEndDate: string | null;
+  /** Where the planned window sits relative to the current reporting period (computed here). */
+  periodStatus: ItemPeriodStatus;
   planningTier: PlanningTier;
   /** A report for this item exists for the current period (on this device or on the server). */
   isReportedToday: boolean;
@@ -113,7 +118,8 @@ type ItemRow = {
   cumulative_certified_pct: number;
   is_hold_point: number;
   hold_point_instruction: string | null;
-  is_scheduled_today: number;
+  planned_start_date: string | null;
+  planned_end_date: string | null;
   planning_tier: string;
   last_message_text: string | null;
   last_message_at: string | null;
@@ -146,10 +152,11 @@ export async function getWbsThreads(projectId: string): Promise<WbsItemRecord[]>
   const db = await getDb();
   const rows = await db.getAllAsync<ItemRow>(
     `SELECT * FROM wbs_items WHERE project_id = ?
-     ORDER BY is_scheduled_today DESC, is_hold_point DESC, wbs_code ASC`,
+     ORDER BY planned_start_date IS NULL, planned_start_date ASC, is_hold_point DESC, wbs_code ASC`,
     [projectId]
   );
-  const reported = await reportedWbsItemIds(projectId, currentPeriod(new Date(), projectId)).catch(() => new Set<string>());
+  const period = currentPeriod(new Date(), projectId);
+  const reported = await reportedWbsItemIds(projectId, period).catch(() => new Set<string>());
   return rows.map((r) => ({
     id: r.id,
     projectId: r.project_id,
@@ -161,7 +168,13 @@ export async function getWbsThreads(projectId: string): Promise<WbsItemRecord[]>
     cumulativeCertifiedPct: r.cumulative_certified_pct,
     isHoldPoint: Boolean(r.is_hold_point),
     holdPointInstruction: r.hold_point_instruction,
-    isScheduledToday: Boolean(r.is_scheduled_today),
+    plannedStartDate: r.planned_start_date,
+    plannedEndDate: r.planned_end_date,
+    periodStatus: itemPeriodStatus(
+      { plannedStartDate: r.planned_start_date, plannedEndDate: r.planned_end_date, progressPct: r.cumulative_certified_pct },
+      period.start,
+      period.end
+    ),
     planningTier: (r.planning_tier || 'UNBLOCKED_POOL') as PlanningTier,
     isReportedToday: reported.has(r.id),
     unreadCount: 0,
@@ -200,17 +213,18 @@ export async function syncWbsInboxFromServer(projectId: string): Promise<{
       for (const b of boqItems ?? []) {
         const brief = briefByBoqId.get(b.id);
         const tier: PlanningTier =
-          brief?.planningTier || (b.planningTier as PlanningTier) || (b.isScheduledToday ? 'PLAN_A' : 'UNBLOCKED_POOL');
+          brief?.planningTier || (b.planningTier as PlanningTier) || 'UNBLOCKED_POOL';
         await db.runAsync(
           `INSERT INTO wbs_items (id, project_id, wbs_code, description, unit, rate_ngn, total_quantity,
-             cumulative_certified_pct, is_hold_point, hold_point_instruction, is_scheduled_today, planning_tier)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             cumulative_certified_pct, is_hold_point, hold_point_instruction, planned_start_date, planned_end_date, planning_tier)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
              wbs_code = excluded.wbs_code, description = excluded.description, unit = excluded.unit,
              rate_ngn = excluded.rate_ngn, total_quantity = excluded.total_quantity,
              cumulative_certified_pct = excluded.cumulative_certified_pct,
              is_hold_point = excluded.is_hold_point, hold_point_instruction = excluded.hold_point_instruction,
-             is_scheduled_today = excluded.is_scheduled_today, planning_tier = excluded.planning_tier`,
+             planned_start_date = excluded.planned_start_date, planned_end_date = excluded.planned_end_date,
+             planning_tier = excluded.planning_tier`,
           [
             b.id,
             projectId,
@@ -222,7 +236,8 @@ export async function syncWbsInboxFromServer(projectId: string): Promise<{
             Number(b.cumulativeCertifiedPct ?? 0),
             b.isHoldPoint ? 1 : 0,
             b.holdPointInstruction ?? null,
-            b.isScheduledToday ? 1 : 0,
+            b.plannedStartDate ?? null,
+            b.plannedEndDate ?? null,
             tier,
           ]
         );

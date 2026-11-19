@@ -23,6 +23,7 @@ import { ProjectSetupShell } from "./pages/projects/setup/ProjectSetupShell";
 import { ReconciliationWorkbenchPage } from "./pages/reconciliation/ReconciliationWorkbenchPage";
 import { BoqAndHoldPointsPage } from "./pages/boq/BoqAndHoldPointsPage";
 import { AuditLedgerPage } from "./pages/audit/AuditLedgerPage";
+import { ProjectSchedulePage } from "./pages/schedule/ProjectSchedulePage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { ChangePasswordPage } from "./pages/auth/ChangePasswordPage";
 import { RequirePermission } from "./components/PermissionGate";
@@ -290,6 +291,14 @@ function AuthenticatedWorkspace() {
                     project={activeProject}
                     boqItems={boqQuery.data || []}
                   />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="projects/:projectId/schedule"
+              element={
+                <RequirePermission anyOf={["schedule:view_variance"]} backTo={projectHome}>
+                  <ProjectSchedulePage project={activeProject} />
                 </RequirePermission>
               }
             />

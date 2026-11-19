@@ -6,6 +6,7 @@ import {
   RoleOnboardingModeEnum,
 } from '../enums';
 import { ProjectGeofenceSchema } from './geofence.schema';
+import { ScheduleVarianceBadgeSchema } from './schedule.schema';
 
 /**
  * Facility Tranche & Condition Precedent (CP) Schemas (Section 4.A Role 1)
@@ -113,6 +114,8 @@ export const PortfolioProjectHealthItemSchema = z.object({
   openConflictCount: z.number(),
   unfulfilledHoldPointCount: z.number(),
   pendingContractorCount: z.number(),
+  /** Phase 9: stored by the schedule-variance job; null without a baseline. */
+  scheduleVariance: ScheduleVarianceBadgeSchema.nullable().optional(),
 });
 export type PortfolioProjectHealthItem = z.infer<
   typeof PortfolioProjectHealthItemSchema
