@@ -10,6 +10,7 @@ import {
   ReportingCadenceEnum,
 } from "../enums";
 import { ProjectGeofenceSchema } from "./geofence.schema";
+import { ProjectCadenceSettingsDtoSchema } from "./cadence.schema";
 import { TenantDtoSchema } from "./rbac.schema";
 import { ResolvedRatingLabelsSchema } from "../ratingLabels";
 
@@ -408,6 +409,11 @@ export const MobileBaselinePackSchema = z.object({
   reportingCadence: ReportingCadenceEnum,
   /** IANA zone that defines the project's reporting day. Absent in packs saved before Phase 4. */
   timezone: z.string().optional(),
+  /**
+   * Phase 8: everything the app needs to compute the current period with the shared module.
+   * Absent in packs saved before Phase 8: treat the cadence as daily with a Mon-Sat week.
+   */
+  cadence: ProjectCadenceSettingsDtoSchema.optional(),
   geofenceMode: GeofenceModeEnum,
   geofence: ProjectGeofenceSchema,
   /** Effective tolerance band outside the boundary (Phase 6). Absent in older packs: treat as 0. */

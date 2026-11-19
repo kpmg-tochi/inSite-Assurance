@@ -13,15 +13,25 @@ import { AppError } from '../../middleware/error.middleware';
 import type { FieldAgentJwtPayload, WebJwtPayload } from '../../middleware/auth.middleware';
 import { getProcessConfig } from '../process/processConfig.service';
 import { getApplicableStandards, toAppliedStandards } from '../standards/standards.service';
+import {
+  cadenceSettingsForDate,
+  createObligationsForPeriod,
+  loadCadenceProject,
+  periodKeyForDate,
+  PeriodKey,
+} from '../cadence/cadence.service';
 
 /** Today's calendar date (YYYY-MM-DD) in an IANA zone; the project's zone defines its day. */
 export function getTodayDateString(timeZone: string): string {
   return calendarDateInTimeZone(new Date(), timeZone);
 }
 
-async function projectTimeZone(projectId: string): Promise<string> {
-  const p = await prisma.project.findUnique({ where: { id: projectId }, select: { timezone: true } });
-  return p?.timezone ?? 'Africa/Lagos';
+/** The project's cadence settings and the period that contains `date` (default: today). */
+async function periodContext(projectId: string, date?: string) {
+  const project = await loadCadenceProject(prisma, projectId);
+  const day = date || getTodayDateString(project.timezone);
+  const settings = cadenceSettingsForDate(project, day);
+  return { project, settings, day, key: periodKeyForDate(settings, day) };
 }
 
 type BriefRow = Prisma.MorningDeliverableBriefGetPayload<{ include: { boqItem: true } }>;
@@ -51,6 +61,9 @@ function mapBriefToDto(row: BriefRow, holdPointsEnabled = true): MorningDelivera
     generatedByAi: row.generatedByAi,
     targetPersona: row.targetPersona,
     appliedStandards: asAppliedStandards(row.appliedStandardsJson),
+    reportingPeriodStart: row.reportingPeriodStart,
+    reportingPeriodEnd: row.reportingPeriodEnd,
+    dueAt: row.dueAt.toISOString(),
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -76,21 +89,31 @@ export async function resolveBriefPersona(params: {
 }
 
 /**
- * Generates (or returns the cached) brief for one WBS item, day and persona. Idempotent per
- * (projectId, boqItemId, workdayDate, targetPersona).
+ * Generates (or returns the cached) brief for one WBS item, reporting period and persona.
+ * Idempotent per (projectId, boqItemId, reportingPeriodStart, targetPersona). `input.workdayDate`
+ * selects the period (default: today in the project zone).
  */
 export async function generateOrGetMorningBriefForBoqItem(params: {
   projectId: string;
   boqItemId: string;
   targetPersona: BriefPersona;
   input?: GenerateMorningBriefRequest;
+  context?: Awaited<ReturnType<typeof periodContext>>;
 }): Promise<MorningDeliverableBriefDto> {
   const { projectId, boqItemId, targetPersona } = params;
-  const workdayDate = params.input?.workdayDate || getTodayDateString(await projectTimeZone(projectId));
+  const ctx = params.context ?? (await periodContext(projectId, params.input?.workdayDate));
+  const { key } = ctx;
   const config = await getProcessConfig(projectId);
-  const key = { projectId_boqItemId_workdayDate_targetPersona: { projectId, boqItemId, workdayDate, targetPersona } };
+  const uniqueKey = {
+    projectId_boqItemId_reportingPeriodStart_targetPersona: {
+      projectId,
+      boqItemId,
+      reportingPeriodStart: key.periodStart,
+      targetPersona,
+    },
+  };
 
-  const existing = await prisma.morningDeliverableBrief.findUnique({ where: key, include: { boqItem: true } });
+  const existing = await prisma.morningDeliverableBrief.findUnique({ where: uniqueKey, include: { boqItem: true } });
   if (existing && !params.input?.expectedDeliverableOverride) {
     return mapBriefToDto(existing, config.enableHoldPoints);
   }
@@ -127,6 +150,9 @@ export async function generateOrGetMorningBriefForBoqItem(params: {
     planningTier: boqItem.planningTier || (boqItem.isScheduledToday ? 'PLAN_A' : 'UNBLOCKED_POOL'),
     targetPersona,
     applicableStandards: appliedStandards,
+    reportingCadence: ctx.settings.reportingCadence,
+    periodStart: key.periodStart,
+    periodEnd: key.periodEnd,
   });
 
   const content = {
@@ -138,11 +164,14 @@ export async function generateOrGetMorningBriefForBoqItem(params: {
     appliedStandardsJson: appliedStandards as unknown as Prisma.InputJsonValue,
   };
   const saved = await prisma.morningDeliverableBrief.upsert({
-    where: key,
+    where: uniqueKey,
     create: {
       projectId,
       boqItemId,
-      workdayDate,
+      workdayDate: ctx.day,
+      reportingPeriodStart: key.periodStart,
+      reportingPeriodEnd: key.periodEnd,
+      dueAt: key.dueAt,
       targetPersona,
       planningTier: boqItem.planningTier || (boqItem.isScheduledToday ? 'PLAN_A' : 'FALLBACK_BACKLOG'),
       ...content,
@@ -176,34 +205,40 @@ export async function briefPersonasForProject(projectId: string): Promise<BriefP
 }
 
 /**
- * Generates daily briefs for a project's Plan A items and up to 3 unblocked fallback items, once
- * per persona that reports on the project (or only for `personas` when given).
+ * Generates the period's briefs for a project's scheduled (Plan A) items and up to 3 unblocked
+ * fallback items, once per persona that reports on the project (or only for `personas`), and
+ * creates the period's reporting obligations for the scheduled items.
  */
-export async function generateDailyDispatchForProject(
+export async function generateDispatchForProject(
   projectId: string,
   workdayDateInput?: string,
   personas?: BriefPersona[]
 ): Promise<MorningDeliverableBriefDto[]> {
-  const workdayDate = workdayDateInput || getTodayDateString(await projectTimeZone(projectId));
+  const ctx = await periodContext(projectId, workdayDateInput);
   const targets = await dispatchTargets(projectId);
   const forPersonas = personas ?? (await briefPersonasForProject(projectId));
   const briefs: MorningDeliverableBriefDto[] = [];
   for (const targetPersona of forPersonas) {
     for (const item of targets) {
-      briefs.push(
-        await generateOrGetMorningBriefForBoqItem({ projectId, boqItemId: item.id, targetPersona, input: { workdayDate } })
-      );
+      briefs.push(await generateOrGetMorningBriefForBoqItem({ projectId, boqItemId: item.id, targetPersona, context: ctx }));
     }
   }
+  await createObligationsForPeriod({ projectId, key: ctx.key, personas: forPersonas, items: targets });
   return briefs;
 }
 
+
+/**
+ * Items in scope for a period. `isScheduledToday` and `planningTier` still decide this until
+ * Phase 9 adds planned dates; read the flag as "scheduled this period".
+ */
 async function dispatchTargets(projectId: string) {
   const config = await getProcessConfig(projectId);
   const boqItems = await prisma.boqItem.findMany({
     where: { projectId, cumulativeCertifiedPct: { lt: 100 } },
     orderBy: [{ isScheduledToday: 'desc' }, { wbsCode: 'asc' }],
   });
+  // "Scheduled this period" (isScheduledToday is the Phase 4 name of the flag).
   const planA = boqItems.filter((b) => b.planningTier === 'PLAN_A' || b.isScheduledToday);
   // Up to 3 constraint-free fallback items (not blocked by a hold point, when hold points are on).
   const fallbacks = boqItems
@@ -213,21 +248,25 @@ async function dispatchTargets(projectId: string) {
         (b.planningTier === 'FALLBACK_BACKLOG' || !(config.enableHoldPoints && b.isHoldPoint))
     )
     .slice(0, 3);
-  return [...planA, ...fallbacks];
+  return [
+    ...planA.map((b) => ({ id: b.id, projectContractorId: b.projectContractorId, isScheduled: true })),
+    ...fallbacks.map((b) => ({ id: b.id, projectContractorId: b.projectContractorId, isScheduled: false })),
+  ];
 }
 
 /**
- * Briefs for one day and one persona, ordered Plan A, then fallback backlog, then the pool.
+ * Briefs for the period containing `workdayDate` (default today) and one persona, ordered Plan A,
+ * then fallback backlog, then the pool.
  */
 export async function listMorningBriefsForProject(params: {
   projectId: string;
   targetPersona: BriefPersona;
   workdayDate?: string;
 }): Promise<MorningDeliverableBriefDto[]> {
-  const workdayDate = params.workdayDate || getTodayDateString(await projectTimeZone(params.projectId));
+  const { key } = await periodContext(params.projectId, params.workdayDate);
   const config = await getProcessConfig(params.projectId);
   const rows = await prisma.morningDeliverableBrief.findMany({
-    where: { projectId: params.projectId, workdayDate, targetPersona: params.targetPersona },
+    where: { projectId: params.projectId, reportingPeriodStart: key.periodStart, targetPersona: params.targetPersona },
     include: { boqItem: true },
     orderBy: { createdAt: 'asc' },
   });
@@ -236,3 +275,5 @@ export async function listMorningBriefsForProject(params: {
     .map((r) => mapBriefToDto(r, config.enableHoldPoints))
     .sort((a, b) => (tierOrder[a.planningTier] ?? 3) - (tierOrder[b.planningTier] ?? 3));
 }
+
+export type { PeriodKey };

@@ -668,6 +668,9 @@ export const ReportingCadenceEnum = z.enum([
   'WEEKLY',
   'BI_WEEKLY',
   'INSPECTION_ONLY',
+  // Phase 8
+  'MONTHLY',
+  'CUSTOM_INTERVAL',
 ]);
 export type ReportingCadence = z.infer<typeof ReportingCadenceEnum>;
 
@@ -802,6 +805,8 @@ export const AuditActorTypeEnum = z.enum([
   'WEB_USER',
   'FIELD_AGENT',
   'AI_SYSTEM',
+  // Phase 8: scheduled jobs (missed reports, attendance alerts)
+  'SYSTEM',
 ]);
 export type AuditActorType = z.infer<typeof AuditActorTypeEnum>;
 
@@ -877,6 +882,15 @@ export const AuditActionTypeEnum = z.enum([
   'STANDARDS_VIOLATION_FLAGGED',
   'APPROVAL_STEP_ACTIONED',
   'DIRECT_MILESTONE_VERIFIED',
+  // Phase 8: cadence, mobilization, attendance
+  'REPORT_SUBMITTED_LATE',
+  'REPORT_MISSED',
+  'PARTICIPANT_PREREGISTERED',
+  'PARTICIPANT_REMINDER_SENT',
+  'ATTENDANCE_ALERT_RAISED',
+  'ATTENDANCE_ALERT_RESOLVED',
+  'MANUAL_CHECKIN_RECORDED',
+  'REPORTING_OBLIGATION_EXCUSED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 

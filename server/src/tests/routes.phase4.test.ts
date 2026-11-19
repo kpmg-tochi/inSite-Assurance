@@ -179,10 +179,13 @@ async function registerCapture(params: {
 }
 
 let periodOffset = 0;
-/** Each report gets its own period unless a test sets one: one report per reporter, item and period. */
+/**
+ * Each report gets its own period unless a test sets one: one report per reporter, item and period.
+ * The ABJ project reports weekly (Phase 8), so dates step a week at a time (always a Wednesday).
+ */
 function nextPeriod(): string {
   periodOffset += 1;
-  return shared.calendarDateInTimeZone(new Date(Date.UTC(2025, 0, 1) + periodOffset * 86_400_000), 'UTC');
+  return shared.calendarDateInTimeZone(new Date(Date.UTC(2025, 0, 1) + periodOffset * 7 * 86_400_000), 'UTC');
 }
 
 /**
@@ -742,6 +745,9 @@ describe('Phase 4 field evidence pipeline', () => {
       assert.equal(revise.body.error.code, 'NO_OPEN_QUERY');
 
       // The database refuses a second original report for the period even if the check is bypassed.
+      const original = await prisma.workdayReport.findFirstOrThrow({
+        where: { reporterSessionId: ids.abjCow, wbsItemId: ids.pvModules, workdayDate: period, parentReportId: null },
+      });
       await assert.rejects(
         prisma.workdayReport.create({
           data: {
@@ -750,6 +756,9 @@ describe('Phase 4 field evidence pipeline', () => {
             reporterSessionId: ids.abjCow,
             wbsItemId: ids.pvModules,
             workdayDate: period,
+            reportingPeriodStart: original.reportingPeriodStart,
+            reportingPeriodEnd: original.reportingPeriodEnd,
+            dueAt: original.dueAt,
             reporterTimezone: 'Africa/Lagos',
             summaryText: 'Direct insert',
             unitOfMeasure: 'kWp',

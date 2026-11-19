@@ -2,6 +2,8 @@ import React, { useMemo, useState } from "react";
 import { Search, Smartphone } from "lucide-react";
 import { useTeamOptionsQuery } from "../../../../queries/projects/useProjectSetupQueries";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
+import { ExpectedParticipantsPanel } from "../../../../components/projects/ExpectedParticipantsPanel";
+import { useAuth } from "../../../../lib/auth-context";
 import {
   extractErrors,
   inputClass,
@@ -31,6 +33,8 @@ export function TeamStep({ projectId, setup, readOnly, mode }: StepProps) {
     `${u.fullName} ${u.email} ${u.organizationName}`.toLowerCase().includes(search.toLowerCase())
   );
   const creatorId = setup.createdByUserId;
+  const { hasAnyPermission } = useAuth();
+  const canSeeRoster = hasAnyPermission("mobilization:manage_roster", "presence:manage_noshow_alerts");
 
   useRegisterStep(dirty, async (opts) => {
     if (!dirty) return true;
@@ -129,6 +133,21 @@ export function TeamStep({ projectId, setup, readOnly, mode }: StepProps) {
           </p>
         )}
       </StepSection>
+
+      {canSeeRoster && (
+        <StepSection
+          title="Expected on site"
+          description="Pre-register who you expect and when. Saved as you add each person; reminders and attendance alerts start once the project is active."
+        >
+          <ExpectedParticipantsPanel
+            projectId={projectId}
+            readOnly={readOnly}
+            options={options.data}
+            contractors={setup.parties.contractors}
+            reminderOffsetsDays={setup.reporting.reminderOffsetsDays}
+          />
+        </StepSection>
+      )}
     </div>
   );
 }

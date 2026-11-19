@@ -9,6 +9,7 @@ import {
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
+import { syncParticipantForSession } from '../mobilization/participants.service';
 
 /**
  * Phase 5: provisioned mobile accounts. A signed-in user works in the field under one
@@ -207,6 +208,8 @@ export async function findOrCreateProvisionedSession(params: {
             deviceId: device.deviceId,
           },
         });
+        // Phase 8: the expected participant for this account is now registered and ready.
+        await syncParticipantForSession(tx, created.id);
         return created;
       });
     } catch (error) {

@@ -43,6 +43,10 @@ export const MorningDeliverableBriefDtoSchema = z.object({
   targetPersona: BriefPersonaEnum,
   /** Project standards that apply to this item, passed to the model as reference data. */
   appliedStandards: z.array(AppliedStandardSchema),
+  /** Phase 8: the reporting period the brief covers and when its report is due. */
+  reportingPeriodStart: z.string(),
+  reportingPeriodEnd: z.string(),
+  dueAt: z.string(),
   createdAt: z.string().datetime(),
 });
 export type MorningDeliverableBriefDto = z.infer<

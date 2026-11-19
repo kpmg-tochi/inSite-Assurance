@@ -9,7 +9,7 @@ import {
 import { AppError } from '../../middleware/error.middleware';
 import { validateBody } from '../../middleware/validate.middleware';
 import {
-  generateDailyDispatchForProject,
+  generateDispatchForProject,
   generateOrGetMorningBriefForBoqItem,
   listMorningBriefsForProject,
   resolveBriefPersona,
@@ -66,8 +66,8 @@ router.post(
 
 /**
  * POST /api/v1/projects/:projectId/morning-briefs/dispatch
- * Triggers daily Plan A + Fallback brief generation for a project. Spends AI tokens, so it is
- * restricted to web users who can edit the project baseline.
+ * Generates the current period's Plan A + fallback briefs (and the period's reporting obligations)
+ * for a project. Spends AI tokens, so it is restricted to web users who can edit the baseline.
  */
 router.post(
   '/:projectId/morning-briefs/dispatch',
@@ -75,7 +75,7 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const persona = requestedPersona(req.body?.targetPersona);
-      const briefs = await generateDailyDispatchForProject(
+      const briefs = await generateDispatchForProject(
         String(req.params.projectId),
         req.body?.workdayDate ? String(req.body.workdayDate) : undefined,
         persona ? [persona] : undefined
@@ -89,7 +89,7 @@ router.post(
 
 /**
  * GET /api/v1/projects/:projectId/morning-briefs
- * Returns today's Morning Deliverable Briefs ordered by Plan A -> Fallbacks, for the caller's persona
+ * Returns the current period's briefs (or the period containing ?workdayDate) ordered Plan A -> Fallbacks, for the caller's persona
  * (field) or ?persona= (web; defaults to the contractor brief when contractors report).
  */
 router.get(

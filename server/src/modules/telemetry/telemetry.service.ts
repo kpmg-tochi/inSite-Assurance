@@ -10,6 +10,7 @@ import { AppError } from '../../middleware/error.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { evaluateProjectGeofence } from '../../utils/geofenceEvaluation';
 import { verifyDeviceSignature } from '../../utils/deviceSignature';
+import { markParticipantsOnSite } from '../mobilization/participants.service';
 
 const CHUNK_SIZE = 200;
 
@@ -25,7 +26,12 @@ export async function recordTelemetryBatch(params: {
   fieldSessionId: string;
   actorDisplayName: string;
   input: CreateTelemetryBatch;
+  /** Phase 8: field:manual_checkin is required for MANUAL_CHECKIN pings. */
+  mayCheckIn?: boolean;
 }): Promise<{ received: number; created: number; duplicates: number }> {
+  if (params.mayCheckIn === false && params.input.pings.some((p) => p.pingSource === 'MANUAL_CHECKIN')) {
+    throw new AppError('Checking in requires field:manual_checkin', 403, 'FORBIDDEN_PERMISSION');
+  }
   const [project, session] = await Promise.all([
     prisma.project.findUnique({
       where: { id: params.projectId },
@@ -125,9 +131,54 @@ export async function recordTelemetryBatch(params: {
     for (const a of freshAnomalies.values()) {
       await recordAnomalySummary({ ...params, anomaly: a });
     }
+    await recordCheckIns({ ...params, fresh, timeZone: project.timezone });
   }
 
   return { received: params.input.pings.length, created, duplicates: params.input.pings.length - created };
+}
+
+/**
+ * Phase 8: a stored MANUAL_CHECKIN ping is audited, and any in-geofence ping (the first of a day
+ * counts as a check-in) marks the session's expected participants as on site.
+ */
+async function recordCheckIns(params: {
+  projectId: string;
+  fieldSessionId: string;
+  actorDisplayName: string;
+  fresh: Prisma.SiteTelemetryPingCreateManyInput[];
+  timeZone: string;
+}) {
+  const manual = params.fresh.filter((r) => r.pingSource === 'MANUAL_CHECKIN');
+  const inGeofence = params.fresh.some(
+    (r) => !r.isMocked && (r.geofenceStatus === 'INSIDE' || r.geofenceStatus === 'WITHIN_TOLERANCE' || (r.geofenceStatus == null && r.isWithinGeofence === true))
+  );
+  if (manual.length === 0 && !inGeofence) return;
+  await prisma.$transaction(async (tx) => {
+    for (const ping of manual) {
+      const at = new Date(ping.capturedAtDevice);
+      const where =
+        ping.geofenceStatus === 'INSIDE' ? 'inside the site boundary'
+        : ping.geofenceStatus === 'WITHIN_TOLERANCE' ? 'within the site tolerance band'
+        : ping.geofenceStatus === 'OUTSIDE' ? 'outside the site boundary'
+        : 'with no site boundary to check against';
+      await recordAuditEvent(tx, {
+        projectId: params.projectId,
+        actorType: 'FIELD_AGENT',
+        actorId: params.fieldSessionId,
+        actorDisplayName: params.actorDisplayName,
+        action: 'MANUAL_CHECKIN_RECORDED',
+        summaryText: `Checked in on ${calendarDateInTimeZone(at, params.timeZone)} ${where}${ping.isMocked ? ' (mock location reported)' : ''}.`,
+        payload: {
+          clientPingId: ping.clientPingId,
+          capturedAt: at.toISOString(),
+          geofenceStatus: ping.geofenceStatus ?? null,
+          isMocked: ping.isMocked ?? false,
+          signatureVerified: ping.signatureVerified ?? null,
+        },
+      });
+    }
+    if (inGeofence) await markParticipantsOnSite(tx, params.fieldSessionId);
+  });
 }
 
 async function recordAnomalySummary(params: {

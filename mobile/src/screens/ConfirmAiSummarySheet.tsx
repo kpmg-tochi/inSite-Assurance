@@ -33,6 +33,7 @@ import { StorageUnavailableError } from '../storage/db/database';
 import { VoiceNoteRecorder, formatDurationMs, type VoiceRecordingResult } from '../components/audio';
 import type { RootStackParamList } from '../navigation/types';
 import { personaCopy } from '../utils/personaCopy';
+import { projectCadenceSettings } from '../utils/activeCadence';
 
 /** " (63 m outside the boundary)" when the preview measured a distance outside it. */
 function outsideBy(preview: GeofencePreview): string {
@@ -54,7 +55,7 @@ export const ConfirmAiSummarySheet: React.FC = () => {
     route.params;
   const isRevision = Boolean(workdayReportId);
   const { activeProjectId: projectId, activeContext } = useProfile();
-  const copy = personaCopy(activeContext?.fieldPersonaType);
+  const copy = personaCopy(activeContext?.fieldPersonaType, projectCadenceSettings(activeContext?.projectId).reportingCadence);
   const insets = useSafeAreaInsets();
 
   const [quantity, setQuantity] = useState(

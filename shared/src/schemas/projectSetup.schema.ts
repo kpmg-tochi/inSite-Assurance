@@ -12,6 +12,7 @@ import { GeofenceToleranceMetersSchema, ProjectGeofenceSchema } from './geofence
 import { OrganizationRefSchema } from './organization.schema';
 import { FacilityTrancheInputSchema } from './project.schema';
 import { ProjectProcessSettingsDtoSchema, ProjectProcessStepSchema, ProjectStandardsStepSchema } from './process.schema';
+import { ProjectCadenceFieldsSchema, ProjectCadenceSettingsDtoSchema } from './cadence.schema';
 
 /**
  * Staged project creation (Phase 6, decision C). A project is created as a DRAFT from the basics
@@ -162,10 +163,16 @@ export const ProjectReportingStepSchema = z
     reportingCadence: ReportingCadenceEnum,
     workdayStartTime: TimeOfDay,
     workdayEndTime: TimeOfDay,
+    // Phase 8: omitted fields keep their stored values.
+    ...ProjectCadenceFieldsSchema.partial().shape,
   })
   .refine((v) => v.workdayStartTime < v.workdayEndTime, {
     message: 'The working day must end after it starts',
     path: ['workdayEndTime'],
+  })
+  .refine((v) => v.reportingCadence !== 'CUSTOM_INTERVAL' || (v.customIntervalDays ?? 0) >= 1, {
+    message: 'Set how many days a custom period lasts',
+    path: ['customIntervalDays'],
   });
 export type ProjectReportingStep = z.infer<typeof ProjectReportingStepSchema>;
 
@@ -314,10 +321,9 @@ export const ProjectSetupDtoSchema = z.object({
     holdPointCount: z.number().int(),
     totalBudgetedCostNgn: z.number(),
   }),
-  reporting: z.object({
-    reportingCadence: ReportingCadenceEnum,
-    workdayStartTime: z.string(),
-    workdayEndTime: z.string(),
+  reporting: ProjectCadenceSettingsDtoSchema.extend({
+    /** Project-level mobilization reminder schedule (days before the planned date). */
+    reminderOffsetsDays: z.array(z.number().int()),
   }),
   team: z.object({
     userIds: z.array(z.string().uuid()),

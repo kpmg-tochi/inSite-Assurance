@@ -166,6 +166,12 @@ export const WorkdayReportDtoSchema = z.object({
   approvedCompletedAt: z.string().datetime().nullable(),
   /** Position on the report approval chain; null when approval was off at submission. */
   approval: ApprovalProgressDtoSchema.nullable(),
+  /** Phase 8: period the report belongs to (workdayDate stays the day the work was done). */
+  reportingPeriodStart: z.string(),
+  reportingPeriodEnd: z.string(),
+  dueAt: z.string(),
+  isLateSubmission: z.boolean(),
+  lateByMinutes: z.number().int().nullable(),
   /** True when this response is a replay of an earlier identical submission. */
   idempotentReplay: z.boolean().optional(),
 });

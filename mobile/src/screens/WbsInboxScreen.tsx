@@ -27,6 +27,9 @@ import { useNotificationsQuery } from "../queries/notifications/useNotificationQ
 import { useSyncStatus, useWbsInboxQuery } from "../queries/wbs/useWbsQueries";
 import { formatMobileErrorMessage } from "../utils/errorFormatter";
 import { personaCopy } from "../utils/personaCopy";
+import { projectCadenceSettings } from "../utils/activeCadence";
+import { PeriodCheckInCard } from "../components/PeriodCheckInCard";
+import { cadenceCopy } from "../utils/projectCadence";
 import type { RootStackParamList } from "../navigation/types";
 import { Feather } from "@expo/vector-icons";
 
@@ -44,7 +47,12 @@ export const WbsInboxScreen: React.FC = () => {
     refreshAssuranceStatus,
   } = useProfile();
   const syncStatus = useSyncStatus();
-  const copy = personaCopy(activeContext?.fieldPersonaType);
+  const copy = personaCopy(activeContext?.fieldPersonaType, projectCadenceSettings(activeContext?.projectId).reportingCadence);
+  // Phase 8: wording follows the project's reporting cadence.
+  const cadence = projectCadenceSettings(projectId).reportingCadence;
+  const periodCopy = cadenceCopy(cadence);
+  const scheduledPill = cadence === "DAILY" ? "Plan A · Today" : cadence === "INSPECTION_ONLY" ? "Plan A" : "Plan A · This period";
+  const canCheckIn = Boolean(activeContext?.permissions?.includes("field:manual_checkin"));
 
   const onSelectWbsThread = (wbsItem: WbsItemRecord) =>
     navigation.navigate("WbsThread", { wbsItem });
@@ -157,7 +165,7 @@ export const WbsInboxScreen: React.FC = () => {
         <View style={styles.badgesRow}>
           {thread.isHoldPoint && <Pill variant="warning" text="Hold-Point" />}
           {thread.isScheduledToday && (
-            <Pill variant="info" text="Plan A · Today" />
+            <Pill variant="info" text={scheduledPill} />
           )}
           {isFallback && !thread.isScheduledToday && (
             <Pill variant="gray" text="Fallback Ready" />
@@ -239,7 +247,7 @@ export const WbsInboxScreen: React.FC = () => {
 
         {/* Big Bold Screen Title (Like Image 2 "Activity") */}
         <View style={styles.titleRow}>
-          <Text style={styles.screenTitle}>Deliverables</Text>
+          <Text style={styles.screenTitle}>{periodCopy.deliverablesHeading}</Text>
           <Text style={styles.screenSubtitle}>{copy.inboxSubtitle}</Text>
         </View>
 
@@ -289,6 +297,9 @@ export const WbsInboxScreen: React.FC = () => {
           { paddingBottom: Math.max(insets.bottom, 16) },
         ]}
       >
+        {/* Phase 8: current period, due countdown and today's check-in */}
+        {projectId && <PeriodCheckInCard projectId={projectId} canCheckIn={canCheckIn} />}
+
         {/* Unverified Mode Warning Banner */}
         {!isVerified && (
           <TouchableOpacity

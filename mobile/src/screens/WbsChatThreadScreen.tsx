@@ -30,6 +30,8 @@ import {
   wbsQueryKeys,
 } from "../queries/wbs/useWbsQueries";
 import { personaCopy } from "../utils/personaCopy";
+import { projectCadenceSettings } from "../utils/activeCadence";
+import { cadenceCopy } from "../utils/projectCadence";
 import { briefCardCopy } from "../storage/briefMeta";
 import { reportQueryLabel, reportStatusView } from "../utils/reportStatus";
 import {
@@ -109,7 +111,8 @@ export const WbsChatThreadScreen: React.FC = () => {
   const [here, setHere] = useState<GeofencePreview | "LOCATING" | "NO_FIX">("LOCATING");
   const insets = useSafeAreaInsets();
 
-  const copy = personaCopy(activeContext?.fieldPersonaType);
+  const copy = personaCopy(activeContext?.fieldPersonaType, projectCadenceSettings(activeContext?.projectId).reportingCadence);
+  const periodCopy = cadenceCopy(projectCadenceSettings(activeContext?.projectId).reportingCadence);
   const { data: messages = [], isLoading: loadingMessages } = useWbsChatMessagesQuery(wbsItem.id, activeProjectId);
   const { data: myReport } = useItemReportStatusQuery(activeProjectId, wbsItem.id);
   // Only statuses stored from the server (this device's reports, or another device's of the same account).
@@ -561,14 +564,14 @@ export const WbsChatThreadScreen: React.FC = () => {
           {myReportStatus && (
             <View style={styles.reportStatusRow}>
               <Text style={styles.reportStatusLabel}>
-                {myReport?.fromThisDevice === false ? "Today's report · another device" : "Today's report"}
+                {myReport?.fromThisDevice === false ? `${periodCopy.reportNoun} · another device` : periodCopy.reportNoun}
               </Text>
               <Pill variant={myReportStatus.variant} text={myReportStatus.label} />
             </View>
           )}
           {(wbsItem.isReportedToday || myReport) && !hasOpenQuery ? (
             <View style={[styles.quickEodBar, styles.quickEodBarCompleted]}>
-              <Text style={styles.quickEodBarCompletedText}>Report submitted for today ✓</Text>
+              <Text style={styles.quickEodBarCompletedText}>{`${periodCopy.submittedLabel} ✓`}</Text>
             </View>
           ) : (
             <TouchableOpacity

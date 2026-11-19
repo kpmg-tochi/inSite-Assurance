@@ -58,7 +58,9 @@ const field = (sessionId: string) => ({ Authorization: `Bearer ${signFieldAgentT
 let periodOffset = 0;
 function nextPeriod(): string {
   periodOffset += 1;
-  return shared.calendarDateInTimeZone(new Date(Date.UTC(2025, 5, 1) + periodOffset * 86_400_000), 'UTC');
+  // EDO-410 reports weekly (Phase 8): step a week at a time so each report has its own period.
+  // 2025-06-04 is a Wednesday, so every date is a workday before the Saturday due time.
+  return shared.calendarDateInTimeZone(new Date(Date.UTC(2025, 5, 4) + periodOffset * 7 * 86_400_000), 'UTC');
 }
 
 function reportBody(wbsItemId: string, overrides: Record<string, unknown> = {}, point = EDO_POINT) {

@@ -22,6 +22,9 @@ import {
   ReportingCadence,
   SetupIssue,
   SetupStepStatus,
+  addDays,
+  nextPeriodStart,
+  zonedCalendarDate,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -40,6 +43,7 @@ import {
   syncProjectContractors,
 } from './contractors.service';
 import { issueMissingJoinCodes, reconcileContractorJoinCodes } from './joinCodes.service';
+import { cadenceSettingsOf, serializeCadenceSettings } from '../cadence/cadence.service';
 import {
   applyProcessSettings,
   getProjectProcessSettings,
@@ -376,9 +380,9 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
     },
     boq,
     reporting: {
+      ...serializeCadenceSettings(project),
       reportingCadence: project.reportingCadence as ReportingCadence,
-      workdayStartTime: project.workdayStartTime,
-      workdayEndTime: project.workdayEndTime,
+      reminderOffsetsDays: project.mobilizationReminderOffsetsDays,
     },
     team: {
       userIds: project.userAssignments.map((a) => a.userId),
@@ -799,15 +803,40 @@ const saveBoq: StepSaver = async ({ tx, project, input }) => {
   return { changedFields: ['items'], payload: { updatedItemCount: data.items.length } };
 };
 
+/** Fields that change the shape of reporting periods (Phase 8). */
+const PERIOD_SHAPE_FIELDS = ['reportingCadence', 'workWeekDays', 'periodStartDayOfWeek', 'customIntervalDays', 'cadenceAnchorDate'] as const;
+
+/**
+ * Saves cadence settings. On a live project a change to the period shape waits until the next
+ * period starts (Phase 8: open obligations and the running period keep their shape); a change to
+ * times or grace only applies at once (existing obligations keep their due time).
+ */
 const saveReporting: StepSaver = async ({ tx, project, input }) => {
-  const data = input as ProjectReportingStep;
-  const before = {
-    reportingCadence: project.reportingCadence,
-    workdayStartTime: project.workdayStartTime,
-    workdayEndTime: project.workdayEndTime,
-  };
-  await tx.project.update({ where: { id: project.id }, data });
-  return { changedFields: diffFields(before, data) };
+  const data = Object.fromEntries(
+    Object.entries(input as ProjectReportingStep).filter(([, v]) => v !== undefined)
+  ) as ProjectReportingStep;
+  const current = serializeCadenceSettings(project);
+  const before: Record<string, unknown> = { ...current };
+  const changedFields = diffFields(before, data);
+  const shapeChanged = PERIOD_SHAPE_FIELDS.some(
+    (k) => data[k] !== undefined && JSON.stringify(data[k] ?? null) !== JSON.stringify(current[k] ?? null)
+  );
+  if (project.status === 'ACTIVE' && shapeChanged) {
+    const today = zonedCalendarDate(new Date(), project.timezone);
+    const effectiveFrom = nextPeriodStart(cadenceSettingsOf(project), new Date()) ?? addDays(today, 1);
+    const pending = { ...current, ...data };
+    delete (pending as Record<string, unknown>).timezone;
+    await tx.project.update({
+      where: { id: project.id },
+      data: { pendingCadenceJson: pending as unknown as Prisma.InputJsonValue, pendingCadenceEffectiveFrom: effectiveFrom },
+    });
+    return { changedFields, payload: { pendingCadenceEffectiveFrom: effectiveFrom } };
+  }
+  await tx.project.update({
+    where: { id: project.id },
+    data: { ...data, pendingCadenceJson: Prisma.DbNull, pendingCadenceEffectiveFrom: null },
+  });
+  return { changedFields };
 };
 
 const saveTeam: StepSaver = async ({ tx, project, webUser, input }) => {
@@ -999,6 +1028,7 @@ export async function activateProject(projectId: string, webUser: WebJwtPayload)
         reportingCadence: project.reportingCadence,
         workdayStartTime: project.workdayStartTime,
         workdayEndTime: project.workdayEndTime,
+        customIntervalDays: project.customIntervalDays,
       },
     });
     if (!composed.success) {

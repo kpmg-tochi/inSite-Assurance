@@ -13,6 +13,7 @@ import { getDb, newId, nowIso } from './db/database';
 import { enqueue, findOpenRowId } from './outbox/outboxStore';
 import { kickOutbox } from './outbox/outboxProcessor';
 import { reportCanonical, type LocalReport } from './reportPayload';
+import { cadenceSettingsFromPack, periodAt, type PeriodWindow } from '../utils/projectCadence';
 
 /**
  * Workday reports (Phase 4, owner rule 2026-11-19).
@@ -105,13 +106,19 @@ export function projectTimeZone(projectId?: string | null): string {
   return getLoadedBaselinePack(projectId)?.timezone || reporterTimeZone();
 }
 
-export function currentPeriod(at: Date = new Date(), projectId?: string | null): string {
-  return calendarDateInTimeZone(at, projectTimeZone(projectId));
+/**
+ * The reporting period containing `at` as a calendar window (Phase 8): a day for daily cadence, a
+ * week for weekly, and so on, computed by the shared module from the project's baseline pack.
+ */
+export function currentPeriod(at: Date = new Date(), projectId?: string | null): PeriodWindow {
+  const settings = cadenceSettingsFromPack(getLoadedBaselinePack(projectId), projectTimeZone(projectId));
+  const p = periodAt(settings, at);
+  return { start: p.start, end: p.end };
 }
 
 export class ReportAlreadySubmittedError extends Error {
   constructor() {
-    super('You have already submitted your report for this WBS item today. It can only be revised to answer a query.');
+    super('You have already submitted your report for this WBS item and period. It can only be revised to answer a query.');
     this.name = 'ReportAlreadySubmittedError';
   }
 }
@@ -120,34 +127,34 @@ export class ReportAlreadySubmittedError extends Error {
 export async function getReportForPeriod(
   projectId: string,
   wbsItemId: string,
-  workdayDate: string
+  period: PeriodWindow
 ): Promise<StoredReport | null> {
   const db = await getDb();
   const row = await db.getFirstAsync<Row>(
-    `SELECT * FROM workday_reports WHERE project_id = ? AND wbs_item_id = ? AND workday_date = ?
+    `SELECT * FROM workday_reports WHERE project_id = ? AND wbs_item_id = ? AND workday_date BETWEEN ? AND ?
        AND revises_server_report_id IS NULL
      ORDER BY created_at ASC LIMIT 1`,
-    [projectId, wbsItemId, workdayDate]
+    [projectId, wbsItemId, period.start, period.end]
   );
   return row ? map(row) : null;
 }
 
 /** WBS item IDs that already have a report this period (local or on the server). */
-export async function reportedWbsItemIds(projectId: string, workdayDate: string): Promise<Set<string>> {
+export async function reportedWbsItemIds(projectId: string, period: PeriodWindow): Promise<Set<string>> {
   const db = await getDb();
   const rows = await db.getAllAsync<{ wbs_item_id: string }>(
-    `SELECT DISTINCT wbs_item_id FROM workday_reports WHERE project_id = ? AND workday_date = ?`,
-    [projectId, workdayDate]
+    `SELECT DISTINCT wbs_item_id FROM workday_reports WHERE project_id = ? AND workday_date BETWEEN ? AND ?`,
+    [projectId, period.start, period.end]
   );
   const ids = new Set(rows.map((r) => r.wbs_item_id));
   // Reports from another device of the same account, as last listed by the server (works offline).
   const remote = await db.getAllAsync<{ wbs_item_id: string }>(
-    `SELECT DISTINCT wbs_item_id FROM server_reports WHERE project_id = ? AND workday_date = ?`,
-    [projectId, workdayDate]
+    `SELECT DISTINCT wbs_item_id FROM server_reports WHERE project_id = ? AND workday_date BETWEEN ? AND ?`,
+    [projectId, period.start, period.end]
   );
   for (const r of remote) ids.add(r.wbs_item_id);
   try {
-    for (const r of await listOwnWorkdayReports(projectId, workdayDate)) ids.add(r.wbsItemId);
+    for (const r of await listOwnWorkdayReports(projectId, { periodStart: period.start })) ids.add(r.wbsItemId);
   } catch {
     // Offline: local reports only.
   }
@@ -201,7 +208,7 @@ export async function confirmReport(input: ConfirmReportInput): Promise<StoredRe
     const original = await revisionPeriod(input.projectId, input.revision.serverReportId);
     if (original) workdayDate = original;
     else signable = false; // The server keeps the original period; an unsigned revision is flagged, not failed.
-  } else if (await getReportForPeriod(input.projectId, input.wbsItemId, workdayDate)) {
+  } else if (await getReportForPeriod(input.projectId, input.wbsItemId, currentPeriod(new Date(confirmedAt), input.projectId))) {
     throw new ReportAlreadySubmittedError();
   }
 
@@ -353,22 +360,22 @@ export interface ItemReportStatus {
 export async function getItemReportStatus(
   projectId: string,
   wbsItemId: string,
-  workdayDate: string
+  period: PeriodWindow
 ): Promise<ItemReportStatus | null> {
   const db = await getDb();
   const local = await db.getFirstAsync<Row>(
-    `SELECT * FROM workday_reports WHERE project_id = ? AND wbs_item_id = ? AND workday_date = ?
+    `SELECT * FROM workday_reports WHERE project_id = ? AND wbs_item_id = ? AND workday_date BETWEEN ? AND ?
      ORDER BY created_at DESC LIMIT 1`,
-    [projectId, wbsItemId, workdayDate]
+    [projectId, wbsItemId, period.start, period.end]
   );
   if (local) {
     const r = map(local);
     return { serverStatus: r.serverStatus, syncStatus: r.syncStatus, fromThisDevice: true };
   }
   const remote = await db.getFirstAsync<{ status: string }>(
-    `SELECT status FROM server_reports WHERE project_id = ? AND wbs_item_id = ? AND workday_date = ?
+    `SELECT status FROM server_reports WHERE project_id = ? AND wbs_item_id = ? AND workday_date BETWEEN ? AND ?
      ORDER BY revision_number DESC, updated_at DESC LIMIT 1`,
-    [projectId, wbsItemId, workdayDate]
+    [projectId, wbsItemId, period.start, period.end]
   );
   return remote ? { serverStatus: remote.status, syncStatus: 'SENT', fromThisDevice: false } : null;
 }

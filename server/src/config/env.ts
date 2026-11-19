@@ -73,6 +73,15 @@ const EnvSchema = z.object({
 
   // Background sweep for omission checks that were not processed after submission.
   AI_CHECK_SWEEP_INTERVAL_SECONDS: z.coerce.number().int().min(0).default(300),
+
+  // Phase 8: scheduled jobs. Set false on API instances when a worker process owns the jobs.
+  JOBS_ENABLED: booleanEnvSchema(true),
+  // Phase 8 outbound messages (D-8.1 default: email). console = log only (development).
+  MESSAGING_EMAIL_PROVIDER: z.enum(['console', 'resend', 'none']).optional(),
+  MESSAGING_EMAIL_FROM: z.string().optional().default(''),
+  RESEND_API_KEY: z.string().optional().default(''),
+  MESSAGING_TENANT_DAILY_CAP: z.coerce.number().int().min(0).default(500),
+  MESSAGING_RECIPIENT_DAILY_CAP: z.coerce.number().int().min(0).default(5),
 });
 
 const parsedEnv = EnvSchema.parse(process.env);
@@ -84,6 +93,8 @@ export const env = {
     parsedEnv.LOCAL_STORAGE_DIR || path.resolve(__dirname, '../../.local-storage'),
   PUBLIC_API_BASE_URL: (parsedEnv.PUBLIC_API_BASE_URL || `http://localhost:${parsedEnv.PORT}`).replace(/\/+$/, ''),
   PUSH_PROVIDER: parsedEnv.PUSH_PROVIDER ?? (parsedEnv.NODE_ENV === 'test' ? 'none' : 'expo'),
+  MESSAGING_EMAIL_PROVIDER:
+    parsedEnv.MESSAGING_EMAIL_PROVIDER ?? (parsedEnv.NODE_ENV === 'production' ? 'none' : 'console'),
 };
 
 /**

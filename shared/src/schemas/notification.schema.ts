@@ -9,6 +9,8 @@ export const MobileNotificationTypeEnum = z.enum([
   'HOLD_POINT_ALERT',
   'MORNING_DELIVERABLE_READY',
   'SITE_GEOFENCE_WARNING',
+  // Phase 8
+  'REPORT_OVERDUE',
 ]);
 export type MobileNotificationType = z.infer<typeof MobileNotificationTypeEnum>;
 
@@ -71,6 +73,9 @@ export const WebNotificationCategoryEnum = z.enum([
   'STANDARDS_VIOLATION_FLAGGED',
   'REPORT_PENDING_APPROVAL',
   'DISBURSEMENT_PENDING_APPROVAL',
+  // Phase 8
+  'REPORT_MISSED',
+  'ATTENDANCE_ALERT',
 ]);
 export type WebNotificationCategory = z.infer<typeof WebNotificationCategoryEnum>;
 

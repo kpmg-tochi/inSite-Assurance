@@ -43,8 +43,11 @@ export const suggestWorkdaySummary = async (
 /** The calling reporter's own reports (field sessions only ever see their own). */
 export const listOwnWorkdayReports = async (
   projectId: string,
-  workdayDate?: string
+  filter?: { workdayDate?: string; periodStart?: string }
 ): Promise<WorkdayReportDto[]> => {
-  const q = workdayDate ? `?workdayDate=${encodeURIComponent(workdayDate)}` : '';
+  const params = new URLSearchParams();
+  if (filter?.workdayDate) params.set('workdayDate', filter.workdayDate);
+  if (filter?.periodStart) params.set('periodStart', filter.periodStart);
+  const q = params.toString() ? `?${params.toString()}` : '';
   return mobileRequest<WorkdayReportDto[]>(`/projects/${projectId}/workday-reports${q}`);
 };

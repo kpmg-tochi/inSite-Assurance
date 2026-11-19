@@ -1,4 +1,4 @@
-import type { BriefPersona, FieldPersonaType } from '@insite/shared';
+import type { BriefPersona, FieldPersonaType, ReportingCadence } from '@insite/shared';
 
 /**
  * Persona-aware wording for the field app (Phase 7 Step 8).
@@ -33,24 +33,36 @@ export interface PersonaCopy {
   heldReportsDescription: string;
 }
 
-const CONTRACTOR: PersonaCopy = {
-  inboxSubtitle: 'Daily Field WBS Breakdown',
-  briefCardTitle: "Today's deliverable",
+/** Phase 8: the span a report covers, by cadence. Daily (or unknown) keeps the original wording. */
+function span(cadence?: ReportingCadence | null) {
+  switch (cadence) {
+    case 'WEEKLY': return { adj: 'Weekly', this: 'this week', thisCap: "This week's" };
+    case 'BI_WEEKLY': return { adj: 'Fortnightly', this: 'this fortnight', thisCap: "This fortnight's" };
+    case 'MONTHLY': return { adj: 'Monthly', this: 'this month', thisCap: "This month's" };
+    case 'CUSTOM_INTERVAL': return { adj: 'Period', this: 'this period', thisCap: "This period's" };
+    case 'INSPECTION_ONLY': return { adj: 'Inspection', this: 'this inspection', thisCap: 'This' };
+    default: return { adj: 'Daily', this: 'today', thisCap: "Today's" };
+  }
+}
+
+const contractor = (c?: ReportingCadence | null): PersonaCopy => ({
+  inboxSubtitle: `${span(c).adj} Field WBS Breakdown`,
+  briefCardTitle: `${span(c).thisCap} deliverable`,
   pointersHeading: 'Report pointers:',
   standardsHeading: 'Standards to follow:',
-  endOfDayButton: 'Submit full report for today',
-  reportSheetTitle: 'Submit your daily report',
+  endOfDayButton: `Submit full report for ${span(c).this}`,
+  reportSheetTitle: `Submit your ${span(c).adj.toLowerCase()} report`,
   verificationPendingPill: 'Verification Pending',
   verificationPendingText:
     'Your reports are sent and held by the server until your identity is approved, then submitted automatically. Tap for sync status.',
-  backlogEmptyDescription: 'Every daily report from this device has been accepted by the server.',
+  backlogEmptyDescription: `Every ${span(c).adj.toLowerCase()} report from this device has been accepted by the server.`,
   heldReportsDescription:
     'The server keeps these until your identity check is approved, then submits them automatically. You do not need to send them again.',
-};
+});
 
-const VERIFIER: PersonaCopy = {
-  inboxSubtitle: 'Daily Inspection & Verification',
-  briefCardTitle: "Today's inspection brief",
+const verifier = (c?: ReportingCadence | null): PersonaCopy => ({
+  inboxSubtitle: c === 'INSPECTION_ONLY' ? 'Inspection & Verification' : `${span(c).adj} Inspection & Verification`,
+  briefCardTitle: `${span(c).thisCap} inspection brief`,
   pointersHeading: 'What to verify and record:',
   standardsHeading: 'Standards to check:',
   endOfDayButton: 'Record inspection summary & submit',
@@ -62,8 +74,11 @@ const VERIFIER: PersonaCopy = {
   backlogEmptyDescription: 'Every inspection report from this device has been accepted by the server.',
   heldReportsDescription:
     'The server keeps your inspection reports until your identity check is approved, then submits them automatically. You do not need to send them again.',
-};
+});
 
-export function personaCopy(persona: FieldPersonaType | BriefPersona | null | undefined): PersonaCopy {
-  return copyPersona(persona) === 'CONTRACTOR_EXECUTOR' ? CONTRACTOR : VERIFIER;
+export function personaCopy(
+  persona: FieldPersonaType | BriefPersona | null | undefined,
+  cadence?: ReportingCadence | null
+): PersonaCopy {
+  return copyPersona(persona) === 'CONTRACTOR_EXECUTOR' ? contractor(cadence) : verifier(cadence);
 }

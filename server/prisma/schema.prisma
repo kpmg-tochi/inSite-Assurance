@@ -109,6 +109,9 @@ enum ReportingCadence {
   WEEKLY
   BI_WEEKLY
   INSPECTION_ONLY
+  // Phase 8
+  MONTHLY
+  CUSTOM_INTERVAL
 }
 
 enum PortfolioHealth {
@@ -257,6 +260,7 @@ enum AuditActorType {
   WEB_USER
   FIELD_AGENT
   AI_SYSTEM
+  SYSTEM
 }
 
 enum ContractorAssuranceStatus {
@@ -336,6 +340,64 @@ enum AuditActionType {
   STANDARDS_VIOLATION_FLAGGED
   APPROVAL_STEP_ACTIONED
   DIRECT_MILESTONE_VERIFIED
+  // Phase 8
+  REPORT_SUBMITTED_LATE
+  REPORT_MISSED
+  PARTICIPANT_PREREGISTERED
+  PARTICIPANT_REMINDER_SENT
+  ATTENDANCE_ALERT_RAISED
+  ATTENDANCE_ALERT_RESOLVED
+  MANUAL_CHECKIN_RECORDED
+  REPORTING_OBLIGATION_EXCUSED
+}
+
+// Phase 8: cadence, mobilization, attendance, jobs and outbound messages
+enum ReportingObligationStatus {
+  PENDING
+  SUBMITTED
+  LATE
+  MISSED
+  EXCUSED
+}
+
+enum MobilizationStatus {
+  INVITED
+  REGISTERED_PENDING_ASSURANCE
+  READY_FOR_MOBILIZATION
+  MOBILIZED_ON_SITE
+  NO_SHOW_FLAGGED
+  WITHDRAWN
+}
+
+enum AttendanceAlertType {
+  MOBILIZATION_NO_SHOW
+  WORKDAY_MISSED_CHECKIN
+  UNVERIFIED_AT_MOBILIZATION
+}
+
+enum AttendanceAlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  EXCUSED
+  RESOLVED
+}
+
+enum JobRunStatus {
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum OutboundChannel {
+  EMAIL
+  SMS
+  PUSH
+}
+
+enum OutboundMessageStatus {
+  QUEUED
+  SENT
+  FAILED
 }
 
 enum MobileNotificationType {
@@ -347,6 +409,7 @@ enum MobileNotificationType {
   HOLD_POINT_ALERT
   MORNING_DELIVERABLE_READY
   SITE_GEOFENCE_WARNING
+  REPORT_OVERDUE
 }
 
 enum NotificationActionType {
@@ -388,6 +451,7 @@ model Tenant {
   projects          Project[]
   auditLogs         AuditLog[]
   workflowTemplates WorkflowTemplate[]
+  outboundMessages  OutboundMessage[]
 
   @@map("tenants")
 }
@@ -424,12 +488,13 @@ model Role {
   createdAt                 DateTime           @default(now())
   updatedAt                 DateTime           @updatedAt
 
-  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  rolePermissions RolePermission[]
-  users           User[]              @relation("UserMainRole")
-  mobileUsers     User[]              @relation("UserMobileRole")
-  joinCodes       ProjectJoinCode[]
-  fieldSessions   FieldAgentSession[]
+  tenant               Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rolePermissions      RolePermission[]
+  users                User[]                       @relation("UserMainRole")
+  mobileUsers          User[]                       @relation("UserMobileRole")
+  joinCodes            ProjectJoinCode[]
+  fieldSessions        FieldAgentSession[]
+  expectedParticipants ExpectedProjectParticipant[]
 
   @@unique([tenantId, code])
   @@unique([tenantId, codeSuffix])
@@ -499,25 +564,26 @@ model User {
   createdAt                 DateTime                 @default(now())
   updatedAt                 DateTime                 @updatedAt
 
-  tenant                  Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant                  Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   notificationReads       WebNotificationRead[]
-  role                    Role                    @relation("UserMainRole", fields: [roleId], references: [id], onDelete: Restrict)
-  mobileRole              Role?                   @relation("UserMobileRole", fields: [mobileRoleId], references: [id], onDelete: SetNull)
+  role                    Role                         @relation("UserMainRole", fields: [roleId], references: [id], onDelete: Restrict)
+  mobileRole              Role?                        @relation("UserMobileRole", fields: [mobileRoleId], references: [id], onDelete: SetNull)
   mobileDevices           MobileDevice[]
   fieldSessions           FieldAgentSession[]
-  organization            Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organization            Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   projectAssignments      UserProjectAssignment[]
-  certifiedReports        ValuationReport[]       @relation("CertifiedByMonitor")
-  trancheDecisions        TrancheDecision[]       @relation("DecidedByLender")
-  submittedIpcClaims      IpcClaim[]              @relation("SubmittedIpcClaims")
-  waivedConditions        ConditionPrecedent[]    @relation("WaivedConditions")
-  raisedMonitorQueries    MonitorQuery[]          @relation("RaisedMonitorQueries")
-  respondedMonitorQueries MonitorQuery[]          @relation("RespondedMonitorQueries")
-  resolvedMonitorQueries  MonitorQuery[]          @relation("ResolvedMonitorQueries")
+  certifiedReports        ValuationReport[]            @relation("CertifiedByMonitor")
+  trancheDecisions        TrancheDecision[]            @relation("DecidedByLender")
+  submittedIpcClaims      IpcClaim[]                   @relation("SubmittedIpcClaims")
+  waivedConditions        ConditionPrecedent[]         @relation("WaivedConditions")
+  raisedMonitorQueries    MonitorQuery[]               @relation("RaisedMonitorQueries")
+  respondedMonitorQueries MonitorQuery[]               @relation("RespondedMonitorQueries")
+  resolvedMonitorQueries  MonitorQuery[]               @relation("ResolvedMonitorQueries")
   pushTokens              PushToken[]
-  raisedReportQueries     ReportQuery[]           @relation("RaisedReportQueries")
+  raisedReportQueries     ReportQuery[]                @relation("RaisedReportQueries")
   approvalActions         ApprovalAction[]
   milestoneVerifications  MilestoneVerification[]
+  expectedParticipations  ExpectedProjectParticipant[]
 
   @@index([tenantId])
   @@index([organizationId])
@@ -571,6 +637,20 @@ model Project {
   geofenceToleranceMeters Int?
   portfolioHealth         PortfolioHealth  @default(EVIDENCE_PARTIAL)
 
+  // Phase 8: cadence. ISO weekdays (1 = Monday). reportDueTime null = workdayEndTime.
+  workWeekDays                    Int[]   @default([1, 2, 3, 4, 5, 6])
+  periodStartDayOfWeek            Int     @default(1)
+  customIntervalDays              Int?
+  reportDueTime                   String?
+  reportGraceMinutes              Int     @default(0)
+  cadenceAnchorDate               String?
+  // Phase 8: mobilization reminder schedule (days before the planned date).
+  mobilizationReminderOffsetsDays Int[]   @default([7, 3, 1])
+  // A cadence change on a live project waits here until the next period starts
+  // (ProjectReportingStep JSON; applied by brief-dispatch, read by cadenceSettingsForDate).
+  pendingCadenceJson              Json?
+  pendingCadenceEffectiveFrom     String?
+
   monitorOrganizationId   String?                  @db.Uuid
   lenderOrganizationId    String?                  @db.Uuid
   contractorExecutionMode ContractorExecutionMode?
@@ -609,6 +689,11 @@ model Project {
   needsAssessments       ProjectNeedsAssessmentDocument[]
   valuationReports       ValuationReport[]
   milestoneVerifications MilestoneVerification[]
+  // Phase 8
+  reportingObligations   ReportingObligation[]
+  expectedParticipants   ExpectedProjectParticipant[]
+  attendanceAlerts       SiteAttendanceAlert[]
+  outboundMessages       OutboundMessage[]
 
   @@unique([tenantId, codePrefix])
   @@index([tenantId])
@@ -634,12 +719,13 @@ model ProjectContractor {
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 
-  project       Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  organization  Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  boqItems      BoqItem[]
-  joinCodes     ProjectJoinCode[]
-  fieldSessions FieldAgentSession[]
-  ipcClaims     IpcClaim[]
+  project              Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization         Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  boqItems             BoqItem[]
+  joinCodes            ProjectJoinCode[]
+  fieldSessions        FieldAgentSession[]
+  ipcClaims            IpcClaim[]
+  expectedParticipants ExpectedProjectParticipant[]
 
   @@unique([projectId, organizationId])
   @@unique([projectId, tradeCode])
@@ -741,22 +827,24 @@ model FieldAgentSession {
   reviewedAt         DateTime?
   rejectionReason    String?
 
-  project            Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  joinCode           ProjectJoinCode?         @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
-  user               User?                    @relation(fields: [userId], references: [id], onDelete: Restrict)
-  mobileDevice       MobileDevice?            @relation(fields: [mobileDeviceId], references: [id], onDelete: Restrict)
-  projectContractor  ProjectContractor?       @relation(fields: [projectContractorId], references: [id], onDelete: Restrict)
-  role               Role                     @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  evidenceLogs       FieldEvidenceLog[]
-  incidentReports    IncidentReport[]
-  workdayReports     WorkdayReport[]
-  pushTokens         PushToken[]
-  telemetryPings     SiteTelemetryPing[]
-  notifications      MobileNotification[]
-  wbsChatMessages    WbsChatMessage[]
-  sentChatMessages   WbsChatMessage[]         @relation("ChatSenderSession")
-  telemetryAnomalies TelemetryAnomalyDaily[]
-  notificationReads  MobileNotificationRead[]
+  project              Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  joinCode             ProjectJoinCode?             @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
+  user                 User?                        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  mobileDevice         MobileDevice?                @relation(fields: [mobileDeviceId], references: [id], onDelete: Restrict)
+  projectContractor    ProjectContractor?           @relation(fields: [projectContractorId], references: [id], onDelete: Restrict)
+  role                 Role                         @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  evidenceLogs         FieldEvidenceLog[]
+  incidentReports      IncidentReport[]
+  workdayReports       WorkdayReport[]
+  pushTokens           PushToken[]
+  telemetryPings       SiteTelemetryPing[]
+  notifications        MobileNotification[]
+  wbsChatMessages      WbsChatMessage[]
+  sentChatMessages     WbsChatMessage[]             @relation("ChatSenderSession")
+  telemetryAnomalies   TelemetryAnomalyDaily[]
+  notificationReads    MobileNotificationRead[]
+  expectedParticipants ExpectedProjectParticipant[]
+  attendanceAlerts     SiteAttendanceAlert[]
 
   @@unique([userId, projectId, deviceId])
   @@index([projectId, roleId])
@@ -868,17 +956,18 @@ model BoqItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project           Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tranche           FacilityTranche?          @relation(fields: [trancheId], references: [id], onDelete: SetNull)
-  projectContractor ProjectContractor?        @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
-  lastRevision      BoqRevision?              @relation(fields: [lastRevisionId], references: [id], onDelete: SetNull)
-  evidenceLogs      FieldEvidenceLog[]
-  ipcLineItems      IpcLineItem[]
-  incidentReports   IncidentReport[]
-  workdayReports    WorkdayReport[]
-  morningBriefs     MorningDeliverableBrief[]
-  reportQueries     ReportQuery[]
-  wbsChatMessages   WbsChatMessage[]
+  project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tranche              FacilityTranche?          @relation(fields: [trancheId], references: [id], onDelete: SetNull)
+  projectContractor    ProjectContractor?        @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
+  lastRevision         BoqRevision?              @relation(fields: [lastRevisionId], references: [id], onDelete: SetNull)
+  evidenceLogs         FieldEvidenceLog[]
+  ipcLineItems         IpcLineItem[]
+  incidentReports      IncidentReport[]
+  workdayReports       WorkdayReport[]
+  morningBriefs        MorningDeliverableBrief[]
+  reportQueries        ReportQuery[]
+  wbsChatMessages      WbsChatMessage[]
+  reportingObligations ReportingObligation[]
 
   @@unique([projectId, wbsCode])
   @@index([projectId, trancheId])
@@ -1296,19 +1385,27 @@ model WorkdayReport {
   // Step order being waited on while PENDING_APPROVAL; 0 otherwise.
   currentApprovalStep       Int                  @default(0)
   approvedCompletedAt       DateTime?
+  // Phase 8: the reporting period (workdayDate stays the day the work was done).
+  reportingPeriodStart      String
+  reportingPeriodEnd        String
+  dueAt                     DateTime
+  isLateSubmission          Boolean              @default(false)
+  lateByMinutes             Int?
   createdAt                 DateTime             @default(now())
   updatedAt                 DateTime             @updatedAt
 
-  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  reporterSession FieldAgentSession  @relation(fields: [reporterSessionId], references: [id], onDelete: Cascade)
-  boqItem         BoqItem            @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
-  parentReport    WorkdayReport?     @relation("WorkdayReportRevisions", fields: [parentReportId], references: [id], onDelete: SetNull)
-  revisions       WorkdayReport[]    @relation("WorkdayReportRevisions")
+  project         Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reporterSession FieldAgentSession     @relation(fields: [reporterSessionId], references: [id], onDelete: Cascade)
+  boqItem         BoqItem               @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
+  parentReport    WorkdayReport?        @relation("WorkdayReportRevisions", fields: [parentReportId], references: [id], onDelete: SetNull)
+  revisions       WorkdayReport[]       @relation("WorkdayReportRevisions")
   queries         ReportQuery[]
   chatMessages    WbsChatMessage[]
   captures        FieldEvidenceLog[]
+  obligations     ReportingObligation[]
 
   @@index([projectId, wbsItemId, workdayDate])
+  @@index([projectId, reportingPeriodStart])
   @@index([projectId, status])
   @@index([aiCheckStatus, updatedAt])
   @@index([parentReportId])
@@ -1378,13 +1475,18 @@ model MorningDeliverableBrief {
   // Phase 7: one brief per persona; an inspector's brief never tells them to build anything.
   targetPersona        BriefPersona @default(CONTRACTOR_EXECUTOR)
   appliedStandardsJson Json         @default("[]")
+  // Phase 8: one brief per item, persona and reporting period. workdayDate is the dispatch day.
+  reportingPeriodStart String
+  reportingPeriodEnd   String
+  dueAt                DateTime
   createdAt            DateTime     @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   boqItem BoqItem @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
 
-  @@unique([projectId, boqItemId, workdayDate, targetPersona])
+  @@unique([projectId, boqItemId, reportingPeriodStart, targetPersona])
   @@index([projectId, workdayDate])
+  @@index([projectId, reportingPeriodStart])
   @@map("morning_deliverable_briefs")
 }
 
@@ -1660,4 +1762,139 @@ model ProjectNeedsAssessmentDocument {
 
   @@index([projectId])
   @@map("project_needs_assessment_documents")
+}
+
+// ============================================================================
+// PHASE 8: CADENCE, MOBILIZATION, ATTENDANCE, JOBS, OUTBOUND MESSAGES
+// ============================================================================
+
+// One report owed for one WBS item and reporting period by one reporter scope:
+// "contractor:<projectContractorId>", "contractor:project" (no packages) or "verifier".
+model ReportingObligation {
+  id              String                    @id @default(uuid()) @db.Uuid
+  projectId       String                    @db.Uuid
+  boqItemId       String                    @db.Uuid
+  reporterScope   String
+  periodStart     String
+  periodEnd       String
+  dueAt           DateTime
+  // dueAt plus the project's grace when the obligation was created.
+  lateAfter       DateTime
+  status          ReportingObligationStatus @default(PENDING)
+  workdayReportId String?                   @db.Uuid
+  alertedAt       DateTime?
+  excusedNote     String?
+  excusedByUserId String?                   @db.Uuid
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  boqItem       BoqItem        @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
+  workdayReport WorkdayReport? @relation(fields: [workdayReportId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, boqItemId, reporterScope, periodStart])
+  @@index([projectId, periodStart])
+  @@index([status, lateAfter])
+  @@map("reporting_obligations")
+}
+
+// Someone expected on a project (mobilization roster). Linked to an account for provisioned roles,
+// or described by name plus email or phone for join-code roles.
+model ExpectedProjectParticipant {
+  id                          String             @id @default(uuid()) @db.Uuid
+  projectId                   String             @db.Uuid
+  projectContractorId         String?            @db.Uuid
+  roleId                      String             @db.Uuid
+  userId                      String?            @db.Uuid
+  fullName                    String
+  email                       String?
+  phoneNumber                 String?
+  plannedMobilizationDate     String // YYYY-MM-DD in the project time zone
+  // HH:MM; null = the project's workday start time.
+  expectedCheckInTime         String?
+  checkInGraceMinutes         Int                @default(120)
+  // Used only when usesProjectReminderSchedule is false.
+  reminderOffsetsDays         Int[]              @default([7, 3, 1])
+  usesProjectReminderSchedule Boolean            @default(true)
+  lastReminderSentAt          DateTime?
+  linkedFieldSessionId        String?            @db.Uuid
+  mobilizationStatus          MobilizationStatus @default(INVITED)
+  createdByUserId             String             @db.Uuid
+  createdAt                   DateTime           @default(now())
+  updatedAt                   DateTime           @updatedAt
+
+  project            Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectContractor  ProjectContractor?    @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
+  role               Role                  @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  user               User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  linkedFieldSession FieldAgentSession?    @relation(fields: [linkedFieldSessionId], references: [id], onDelete: SetNull)
+  alerts             SiteAttendanceAlert[]
+
+  @@index([projectId, mobilizationStatus])
+  @@index([projectId, plannedMobilizationDate])
+  @@index([userId])
+  @@map("expected_project_participants")
+}
+
+model SiteAttendanceAlert {
+  id               String                @id @default(uuid()) @db.Uuid
+  projectId        String                @db.Uuid
+  participantId    String?               @db.Uuid
+  fieldSessionId   String?               @db.Uuid
+  workdayDate      String
+  alertType        AttendanceAlertType
+  status           AttendanceAlertStatus @default(OPEN)
+  resolvedByUserId String?               @db.Uuid
+  resolutionNotes  String?
+  resolvedAt       DateTime?
+  createdAt        DateTime              @default(now())
+
+  project      Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  participant  ExpectedProjectParticipant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  fieldSession FieldAgentSession?          @relation(fields: [fieldSessionId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, participantId, workdayDate, alertType])
+  @@index([projectId, status])
+  @@map("site_attendance_alerts")
+}
+
+// One claimed unit of scheduled work. The unique (jobName, scopeKey) makes each unit run once
+// across API instances; a FAILED unit may be claimed again.
+model JobRun {
+  id         String       @id @default(uuid()) @db.Uuid
+  jobName    String
+  scopeKey   String
+  startedAt  DateTime     @default(now())
+  finishedAt DateTime?
+  status     JobRunStatus @default(RUNNING)
+  detail     String?
+
+  @@unique([jobName, scopeKey])
+  @@index([jobName, startedAt])
+  @@map("job_runs")
+}
+
+model OutboundMessage {
+  id                String                @id @default(uuid()) @db.Uuid
+  tenantId          String                @db.Uuid
+  projectId         String?               @db.Uuid
+  channel           OutboundChannel
+  toAddress         String
+  templateKey       String
+  payloadJson       Json                  @default("{}")
+  status            OutboundMessageStatus @default(QUEUED)
+  providerMessageId String?
+  error             String?
+  attempts          Int                   @default(0)
+  nextAttemptAt     DateTime              @default(now())
+  createdAt         DateTime              @default(now())
+  sentAt            DateTime?
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([tenantId, createdAt])
+  @@index([toAddress, createdAt])
+  @@map("outbound_messages")
 }

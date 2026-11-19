@@ -16,7 +16,7 @@ type PrismaClientType = typeof import('../config/prisma')['prisma'];
 
 let app: Express;
 let prisma: PrismaClientType;
-let runMorningBriefCronTick: typeof import('../jobs/morningBriefCron')['runMorningBriefCronTick'];
+let runJobOnce: typeof import('../jobs')['runJobOnce'];
 
 const PASSWORD = 'Password123!';
 const DAY = 24 * 3600 * 1000;
@@ -77,7 +77,9 @@ before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
   const { createApp } = await import('../app');
-  ({ runMorningBriefCronTick } = await import('../jobs/morningBriefCron'));
+  const jobs = await import('../jobs');
+  jobs.registerAllJobs();
+  ({ runJobOnce } = jobs);
   app = createApp();
 
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: 'kpmg-nigeria' } });
@@ -302,7 +304,7 @@ describe('Phase 6', { concurrency: false }, () => {
       const field = await request(app).get(`/api/v1/projects/${ids.draft}/notifications`).set(bearer(mobile.accessToken));
       assert.ok([403, 404].includes(field.status), String(field.status));
 
-      await runMorningBriefCronTick();
+      await runJobOnce('brief-dispatch');
       assert.equal(await prisma.morningDeliverableBrief.count({ where: { projectId: ids.draft } }), 0);
     });
 

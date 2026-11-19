@@ -29,6 +29,7 @@ router.post(
         fieldSessionId: req.fieldAgent!.sessionId,
         actorDisplayName: `${req.fieldAgent!.agentFullName} (${req.fieldAgent!.roleName})`,
         input: req.body,
+        mayCheckIn: req.fieldAgent!.permissions.includes('field:manual_checkin'),
       });
       res.status(201).json({ success: true, data: result });
     } catch (error) {

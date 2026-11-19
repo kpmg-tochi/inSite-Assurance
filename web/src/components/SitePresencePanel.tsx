@@ -155,11 +155,12 @@ export function SitePresencePanel({
     setQueryText("");
   }, [selectedReportId]);
 
-  // Group reports by (wbsItemId, workdayDate) so the table displays the latest submission cleanly
+  // Group reports by (wbsItemId, reporting period) so the table shows the latest revision of each.
+  // For a daily cadence the period is the day (Phase 8).
   const groupedLatestReports = useMemo(() => {
     const map = new Map<string, WorkdayReportRecordDto>();
     for (const r of pendingOnly ? pendingReports : reports) {
-      const key = `${r.wbsItemId}::${r.workdayDate}`;
+      const key = `${r.wbsItemId}::${r.reportingPeriodStart}`;
       const existing = map.get(key);
       if (!existing || r.revisionNumber > existing.revisionNumber) {
         map.set(key, r);
@@ -175,7 +176,7 @@ export function SitePresencePanel({
       .filter(
         (r) =>
           r.wbsItemId === selectedReport.wbsItemId &&
-          r.workdayDate === selectedReport.workdayDate,
+          r.reportingPeriodStart === selectedReport.reportingPeriodStart,
       )
       .sort((a, b) => a.revisionNumber - b.revisionNumber);
   }, [reports, selectedReport]);
@@ -190,7 +191,8 @@ export function SitePresencePanel({
         r.wbsCode.toLowerCase().includes(q) ||
         r.reporterName.toLowerCase().includes(q) ||
         r.summaryText.toLowerCase().includes(q) ||
-        r.workdayDate.includes(q),
+        r.workdayDate.includes(q) ||
+        r.reportingPeriodStart.includes(q),
     );
   }, [groupedLatestReports, reportSearch]);
 
@@ -224,14 +226,18 @@ export function SitePresencePanel({
   const reportColumns: TableColumnDef<WorkdayReportRecordDto>[] = [
     {
       id: "workdayDate",
-      header: "Date",
-      tooltip: `Workday date (${displayZoneLabel()}) for the signed daily report`,
-      width: "w-28",
-      cell: (r) => (
-        <span className="text-xs font-mono text-slate-700 whitespace-nowrap">
-          {r.workdayDate}
-        </span>
-      ),
+      header: "Period",
+      tooltip: `Reporting period, and the day the report was made (${displayZoneLabel()})`,
+      width: "w-36",
+      cell: (r) =>
+        r.reportingPeriodStart === r.reportingPeriodEnd ? (
+          <span className="text-xs font-mono text-slate-700 whitespace-nowrap">{r.workdayDate}</span>
+        ) : (
+          <div className="text-xs font-mono whitespace-nowrap">
+            <p className="text-slate-700">{r.reportingPeriodStart} → {r.reportingPeriodEnd}</p>
+            <p className="text-[11px] text-slate-500">made {r.workdayDate}</p>
+          </div>
+        ),
     },
     {
       id: "wbs",
@@ -281,7 +287,7 @@ export function SitePresencePanel({
         const badge = getGeotagBadge(r.submissionGeotag);
         const threadReports = reports.filter(
           (item) =>
-            item.wbsItemId === r.wbsItemId && item.workdayDate === r.workdayDate,
+            item.wbsItemId === r.wbsItemId && item.reportingPeriodStart === r.reportingPeriodStart,
         );
         const allQueries = threadReports.flatMap((tr) => tr.queries || []);
         const hasOpen = allQueries.some((q) => q.status === "OPEN");
@@ -296,6 +302,11 @@ export function SitePresencePanel({
             )}
             {r.standardsCompliancePassed === false && (
               <StandardsStatusBadge passed={false} />
+            )}
+            {r.isLateSubmission && (
+              <TableBadge variant="warning" title={`Due ${new Date(r.dueAt).toLocaleString()}`}>
+                Late{r.lateByMinutes ? ` · ${r.lateByMinutes >= 120 ? `${Math.round(r.lateByMinutes / 60)}h` : `${r.lateByMinutes}m`}` : ""}
+              </TableBadge>
             )}
             <TableBadge variant={badge.variant}>{badge.label}</TableBadge>
             {hasOpen && <TableBadge variant="warning">Query Open</TableBadge>}
@@ -413,7 +424,7 @@ export function SitePresencePanel({
     <div className="space-y-6">
       {/* Daily Workday Reports & Submission Geotags */}
       <StandardTable
-        title="Daily Workday Reports & Submission Geotags"
+        title="Field Reports & Submission Geotags"
         subtitle="Verify End-of-Day geotags, review resubmitted report timelines, or raise Monitor queries to field WBS chats."
         columns={reportColumns}
         data={filteredReports}

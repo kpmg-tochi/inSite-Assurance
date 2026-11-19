@@ -89,6 +89,13 @@ const NOTIFICATION_VISUALS: Record<
     badgeText: "Geofence Alert",
     pillVariant: "warning",
   },
+  REPORT_OVERDUE: {
+    icon: "alert-circle",
+    accentColor: "#DC2626",
+    iconBg: "#FEE2E2",
+    badgeText: "Report overdue",
+    pillVariant: "negative",
+  },
 };
 
 export interface NotificationCardProps {

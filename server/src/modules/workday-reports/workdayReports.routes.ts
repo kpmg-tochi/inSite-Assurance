@@ -106,6 +106,8 @@ router.get(
         reporterUserId: req.fieldAgent?.origin === 'PROVISIONED_ACCOUNT' ? req.fieldAgent.userId : null,
         viewer: req.webUser ?? null,
         status: typeof req.query.status === 'string' ? req.query.status : undefined,
+        periodStart: typeof req.query.periodStart === 'string' ? req.query.periodStart : undefined,
+        lateOnly: req.query.late === 'true',
       });
       res.json({ success: true, data: reports });
     } catch (error) {

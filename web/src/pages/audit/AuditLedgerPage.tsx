@@ -16,6 +16,7 @@ import {
 import Drawer from "../../components/Drawer";
 import Loader from "../../components/Loader";
 import { SitePresencePanel } from "../../components/SitePresencePanel";
+import { ReportingCadencePanel } from "../../components/ReportingCadencePanel";
 import { ShieldCheck, X, FileText, User, Calendar, Tag } from "lucide-react";
 
 type AuditLedgerEntry = AuditTrailResponseDto["entries"][number];
@@ -222,11 +223,14 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
       </div>
 
       {activeTab === "presence" ? (
-        <SitePresencePanel
-          projectId={project.id}
-          initialReportId={initialReportId}
-          initialWbsItemId={initialWbsItemId}
-        />
+        <div className="space-y-5">
+          <ReportingCadencePanel projectId={project.id} />
+          <SitePresencePanel
+            projectId={project.id}
+            initialReportId={initialReportId}
+            initialWbsItemId={initialWbsItemId}
+          />
+        </div>
       ) : isLoading ? (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-10 flex flex-col items-center justify-center gap-3">
           <Loader size="sm" />

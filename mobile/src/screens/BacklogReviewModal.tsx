@@ -16,6 +16,7 @@ import {
 } from '../queries/wbs/useWbsQueries';
 import type { RootStackParamList } from '../navigation/types';
 import { personaCopy } from '../utils/personaCopy';
+import { projectCadenceSettings } from '../utils/activeCadence';
 import { reportStatusView } from '../utils/reportStatus';
 
 const KIND_LABEL: Record<string, string> = {
@@ -36,7 +37,7 @@ const KIND_LABEL: Record<string, string> = {
 export const BacklogReviewModal: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { activeProjectId: projectId, activeContext } = useProfile();
-  const copy = personaCopy(activeContext?.fieldPersonaType);
+  const copy = personaCopy(activeContext?.fieldPersonaType, projectCadenceSettings(activeContext?.projectId).reportingCadence);
   const insets = useSafeAreaInsets();
   const status = useSyncStatus();
   const { data: reports = [], isLoading } = usePendingReportsQuery(projectId);

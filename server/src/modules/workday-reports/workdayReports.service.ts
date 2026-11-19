@@ -50,6 +50,14 @@ import { evaluateProjectGeofence, GEOFENCE_CONTEXT_SELECT } from '../../utils/ge
 import { verifyDeviceSignature } from '../../utils/deviceSignature';
 import { serializeCapture } from '../../utils/serializers';
 import { scheduleAiOmissionCheck } from './aiOmissionCheck';
+import {
+  CADENCE_PROJECT_SELECT,
+  cadenceSettingsForDate,
+  fulfilObligation,
+  lateness,
+  periodKeyForDate,
+  reporterScopeFor,
+} from '../cadence/cadence.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -150,6 +158,11 @@ export function serializeWorkdayReport(
     currentApprovalStep: r.currentApprovalStep,
     approvedCompletedAt: r.approvedCompletedAt?.toISOString() ?? null,
     approval: extra.approval ?? null,
+    reportingPeriodStart: r.reportingPeriodStart,
+    reportingPeriodEnd: r.reportingPeriodEnd,
+    dueAt: r.dueAt.toISOString(),
+    isLateSubmission: r.isLateSubmission,
+    lateByMinutes: r.lateByMinutes,
     ...(extra.idempotentReplay ? { idempotentReplay: true } : {}),
   };
 }
@@ -378,6 +391,7 @@ async function loadSessionForReport(sessionId: string) {
   return prisma.fieldAgentSession.findUniqueOrThrow({
     where: { id: sessionId },
     select: {
+      projectContractorId: true,
       assuranceStatus: true,
       agentFullName: true,
       devicePublicKey: true,
@@ -412,7 +426,7 @@ export async function submitWorkdayReport(params: {
 
   assertTimezone(input.reporterTimezone);
   const [project, boqItem, session] = await Promise.all([
-    prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { timezone: true, ...GEOFENCE_CONTEXT_SELECT } }),
+    prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { ...CADENCE_PROJECT_SELECT, ...GEOFENCE_CONTEXT_SELECT } }),
     loadBoqItemInProject(prisma, projectId, input.wbsItemId),
     loadSessionForReport(fieldAgent.sessionId),
   ]);
@@ -420,11 +434,14 @@ export async function submitWorkdayReport(params: {
     throw new AppError('This WBS item is not a hold point', 400, 'HOLD_POINT_NOT_APPLICABLE');
   }
   assertReportingDay(input, project.timezone);
+  // Phase 8: the report belongs to the reporting period containing its work day.
+  const period = periodKeyForDate(cadenceSettingsForDate(project, input.workdayDate), input.workdayDate);
+  const late = lateness(period, new Date(input.confirmedAt));
   await assertNoReportForPeriod({
     projectId,
     sessionId: fieldAgent.sessionId,
     wbsItemId: input.wbsItemId,
-    workdayDate: input.workdayDate,
+    periodStart: period.periodStart,
   });
 
   const captures = await loadLinkableCaptures({
@@ -469,6 +486,11 @@ export async function submitWorkdayReport(params: {
           reporterSessionId: fieldAgent.sessionId,
           wbsItemId: input.wbsItemId,
           workdayDate: input.workdayDate,
+          reportingPeriodStart: period.periodStart,
+          reportingPeriodEnd: period.periodEnd,
+          dueAt: period.dueAt,
+          isLateSubmission: late.isLate,
+          lateByMinutes: late.lateByMinutes,
           reporterTimezone: input.reporterTimezone,
           status: accepted?.status ?? 'STAGED_UNVERIFIED',
           approvalChainVersion: accepted?.approvalChainVersion ?? null,
@@ -492,6 +514,25 @@ export async function submitWorkdayReport(params: {
       });
       await linkCaptures(tx, report.id, input.wbsItemId, captures.map((c) => c.id));
       await recordReportPing(tx, { projectId, sessionId: fieldAgent.sessionId, wbsItemId: input.wbsItemId, geotag });
+      const obligationId = await fulfilObligation(tx, {
+        projectId,
+        boqItemId: input.wbsItemId,
+        scope: reporterScopeFor(fieldAgent.fieldPersonaType, session.projectContractorId),
+        periodStart: period.periodStart,
+        reportId: report.id,
+        isLate: late.isLate,
+      });
+      if (late.isLate) {
+        await recordAuditEvent(tx, {
+          projectId,
+          actorType: 'FIELD_AGENT',
+          actorId: fieldAgent.sessionId,
+          actorDisplayName: `${fieldAgent.agentFullName} (${fieldAgent.roleName})`,
+          action: 'REPORT_SUBMITTED_LATE',
+          summaryText: `WBS ${boqItem.wbsCode} report for ${period.periodStart} to ${period.periodEnd} arrived ${late.lateByMinutes} min after its due time. Accepted and flagged late.`,
+          payload: { workdayReportId: report.id, obligationId, dueAt: period.dueAt.toISOString(), lateByMinutes: late.lateByMinutes },
+        });
+      }
       if (report.status === 'PENDING_APPROVAL' && report.approvalChainVersion !== null) {
         await notifyPendingApproval(tx, {
           projectId,
@@ -537,7 +578,7 @@ export async function submitWorkdayReport(params: {
         projectId,
         sessionId: fieldAgent.sessionId,
         wbsItemId: input.wbsItemId,
-        workdayDate: input.workdayDate,
+        periodStart: period.periodStart,
       });
     }
     throw error;
@@ -556,14 +597,14 @@ async function assertNoReportForPeriod(params: {
   projectId: string;
   sessionId: string;
   wbsItemId: string;
-  workdayDate: string;
+  periodStart: string;
 }) {
   const existing = await prisma.workdayReport.findFirst({
     where: {
       projectId: params.projectId,
       reporterSessionId: params.sessionId,
       wbsItemId: params.wbsItemId,
-      workdayDate: params.workdayDate,
+      reportingPeriodStart: params.periodStart,
       parentReportId: null,
     },
     select: { id: true },
@@ -725,6 +766,12 @@ export async function revalidateWorkdayReport(params: {
           reporterSessionId: fieldAgent.sessionId,
           wbsItemId: prev.wbsItemId,
           workdayDate: prev.workdayDate,
+          // A revision answers a query on the same period; lateness stays the original's.
+          reportingPeriodStart: prev.reportingPeriodStart,
+          reportingPeriodEnd: prev.reportingPeriodEnd,
+          dueAt: prev.dueAt,
+          isLateSubmission: prev.isLateSubmission,
+          lateByMinutes: prev.lateByMinutes,
           reporterTimezone: input.reporterTimezone,
           status: accepted?.status ?? 'STAGED_UNVERIFIED',
           approvalChainVersion: accepted?.approvalChainVersion ?? prev.approvalChainVersion,
@@ -1019,12 +1066,17 @@ export async function listProjectWorkdayReports(params: {
   viewer?: WebJwtPayload | null;
   /** Phase 7 review queue filter. */
   status?: string;
+  /** Phase 8: reports of one reporting period. */
+  periodStart?: string;
+  lateOnly?: boolean;
 }): Promise<WorkdayReportDto[]> {
   const where: Prisma.WorkdayReportWhereInput = { projectId: params.projectId };
   if (params.reporterUserId) where.reporterSession = { userId: params.reporterUserId };
   else if (params.reporterSessionId) where.reporterSessionId = params.reporterSessionId;
   if (params.workdayDate) where.workdayDate = params.workdayDate;
   if (params.status) where.status = params.status as Prisma.WorkdayReportWhereInput['status'];
+  if (params.periodStart) where.reportingPeriodStart = params.periodStart;
+  if (params.lateOnly) where.isLateSubmission = true;
 
   const rows = await prisma.workdayReport.findMany({
     where,

@@ -407,7 +407,7 @@ UNTRUSTED_TEXT>>>`,
     let rejected = 0;
     for (const strict of [false, true]) {
       try {
-        const out = await model(briefSystemPrompt(params.targetPersona, strict), briefUserContent(params));
+        const out = await model(briefSystemPrompt(params.targetPersona, strict, params), briefUserContent(params));
         if (!out) break;
         const parsed = MorningBriefOutputSchema.parse(out);
         if (params.targetPersona === 'INDEPENDENT_VERIFIER' && containsExecutionInstruction(parsed)) {

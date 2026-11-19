@@ -185,7 +185,7 @@ export function requireProjectAccess(
 }
 
 /** Routes under /projects/:projectId that work on a draft (the wizard and its data). */
-const DRAFT_ROUTE_RE = /^\/api\/v1\/projects\/[^/]+(?:\/(?:setup|activate|contractors|boq|baseline|join-codes|process|standards|needs-assessments|evidence\/presign|media)(?:\/|$)|\/?$)/;
+const DRAFT_ROUTE_RE = /^\/api\/v1\/projects\/[^/]+(?:\/(?:setup|activate|contractors|boq|baseline|join-codes|process|standards|needs-assessments|evidence\/presign|media|participants)(?:\/|$)|\/?$)/;
 
 /**
  * Lifecycle rules for web requests (Phase 6): a draft only serves the setup wizard and its data;

@@ -29,6 +29,7 @@ import { createMobileNotification } from '../notifications/notifications.service
 import { releaseStagedReportsForSession } from '../workday-reports/workdayReports.service';
 import { scheduleAiOmissionCheck } from '../workday-reports/aiOmissionCheck';
 import { sendPushToFieldSession } from '../../integrations/push.service';
+import { syncParticipantForSession } from '../mobilization/participants.service';
 
 type JoinCodeWithRole = {
   id: string;
@@ -551,6 +552,7 @@ export async function reviewContractorVerification(
         rejectionReason: decision === 'REJECT' ? rejectionMessage : null,
       },
     });
+    await syncParticipantForSession(tx, sessionId);
 
     await recordAuditEvent(tx, {
       projectId,

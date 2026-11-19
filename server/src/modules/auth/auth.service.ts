@@ -37,6 +37,8 @@ import { recordAuditEvent } from '../audit/audit.service';
 import { getProcessConfig } from '../process/processConfig.service';
 import { parseTenantBranding } from '../rbac/rbac.service';
 import { parseDevicePublicKey } from '../../utils/deviceSignature';
+import { syncParticipantForSession } from '../mobilization/participants.service';
+import { CadenceProjectRow, serializeCadenceSettings } from '../cadence/cadence.service';
 
 export const WEB_USER_AUTH_INCLUDE = {
   organization: true,
@@ -476,7 +478,7 @@ export async function logoutMobileUser(principal: { userId: string; deviceRowId:
   });
 }
 
-type BaselineProject = {
+type BaselineProject = CadenceProjectRow & {
   id: string;
   name: string;
   codePrefix: string;
@@ -534,6 +536,8 @@ export function buildBaselinePack(
     stateLocation: project.stateLocation ?? '',
     reportingCadence: project.reportingCadence as MobileBaselinePack['reportingCadence'],
     timezone: project.timezone,
+    // Phase 8: the app computes the current period with the shared module from these settings.
+    cadence: serializeCadenceSettings(project),
     geofenceMode: project.geofenceMode as MobileBaselinePack['geofenceMode'],
     geofence: project.geofenceGeoJson as MobileBaselinePack['geofence'],
     geofenceToleranceMeters: project.geofenceToleranceMeters ?? project.tenant.defaultGeofenceToleranceMeters,
@@ -608,7 +612,7 @@ const SESSION_CONTRACTOR_SELECT = {
 } as const;
 
 function buildMobileSessionResponse(
-  project: {
+  project: CadenceProjectRow & {
     id: string;
     tenantId: string;
     tenant: {
@@ -882,6 +886,8 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
         corenLicenseNumber: input.corenLicenseNumber ?? null,
       },
     });
+    // Phase 8: link to the expected participant with this phone number.
+    await syncParticipantForSession(tx, createdSession.id);
 
     return createdSession;
   });
@@ -1018,6 +1024,7 @@ export async function demoSkipVerificationMobile(
         roleName: role.name,
       },
     });
+    await syncParticipantForSession(tx, updatedOrCreated.id);
 
     return updatedOrCreated;
   });

@@ -18,6 +18,14 @@ import { evaluateGeofence } from "../utils/geofenceEvaluation";
 import { seedPhase6Projects } from "./seedPhase6";
 import { seedPhase7 } from "./seedPhase7";
 import { projectObjectPrefix } from "../integrations/storage.service";
+import { CADENCE_PROJECT_SELECT, cadenceSettingsOf, periodKeyForDate } from "../modules/cadence/cadence.service";
+
+/** Phase 8: the reporting period fields of a seeded report on a work day. */
+async function seedPeriodFields(projectId: string, workdayDate: string) {
+  const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: CADENCE_PROJECT_SELECT });
+  const key = periodKeyForDate(cadenceSettingsOf(project), workdayDate);
+  return { reportingPeriodStart: key.periodStart, reportingPeriodEnd: key.periodEnd, dueAt: key.dueAt };
+}
 
 let activeSeedPromise: Promise<void> | null = null;
 
@@ -153,6 +161,7 @@ async function seedReportWithCaptures(params: {
     : null;
   const report = await prisma.workdayReport.create({
     data: {
+      ...(await seedPeriodFields(params.projectId, calendarDateInTimeZone(params.confirmedAt, SEED_TIMEZONE))),
       clientReportId: crypto.randomUUID(),
       projectId: params.projectId,
       reporterSessionId: params.session.id,
@@ -996,6 +1005,7 @@ async function runSeed(): Promise<void> {
   // Seed a queried Workday Report (Rev #1 -> Monitor Query -> Resubmitted Rev #2) + an active OPEN queried report
   const culvertRev1 = await prisma.workdayReport.create({
     data: {
+      ...(await seedPeriodFields(lkkProject.id, todayStr)),
       projectId: lkkProject.id,
       reporterSessionId: conSession.id,
       wbsItemId: boqCulvertConcrete.id,
@@ -1045,6 +1055,7 @@ async function runSeed(): Promise<void> {
 
   const culvertRev2 = await prisma.workdayReport.create({
     data: {
+      ...(await seedPeriodFields(lkkProject.id, todayStr)),
       projectId: lkkProject.id,
       reporterSessionId: conSession.id,
       wbsItemId: boqCulvertConcrete.id,
@@ -1100,6 +1111,7 @@ async function runSeed(): Promise<void> {
 
   const rebarReportRev1 = await prisma.workdayReport.create({
     data: {
+      ...(await seedPeriodFields(lkkProject.id, todayStr)),
       projectId: lkkProject.id,
       reporterSessionId: conSession.id,
       wbsItemId: boqCulvertReinforcement.id,
@@ -1378,7 +1390,8 @@ async function runSeed(): Promise<void> {
       totalBudgetNgn: 4200000000,
       disbursedToDateNgn: 2100000000,
       certifiedProgressPct: 68.0,
-      reportingCadence: "WEEKLY",
+      // Daily: the seeded PV-module reports are three days apart (one report per item and period).
+      reportingCadence: "DAILY",
       geofenceMode: "RADIAL",
       geofenceGeoJson: abjRadialGeofence as unknown as Prisma.InputJsonValue,
       portfolioHealth: "EVIDENCE_SUPPORTED",

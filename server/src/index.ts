@@ -1,12 +1,19 @@
 import { createApp } from "./app";
 import { env } from "./config/env";
 import { prisma } from "./config/prisma";
-import { startMorningBriefCron } from "./jobs/morningBriefCron";
+import { registerAllJobs, startJobRunner } from "./jobs";
 import { startAiOmissionCheckSweep } from "./modules/workday-reports/aiOmissionCheck";
 
 const app = createApp();
-const stopMorningBriefCron = startMorningBriefCron();
+// Phase 8: brief dispatch, overdue reports, reminders, attendance and message retries. Each job
+// takes a database lock per tick and claims each unit of work, so several instances are safe.
+registerAllJobs();
+const stopJobs = startJobRunner({ enabled: env.JOBS_ENABLED });
 const stopAiCheckSweep = startAiOmissionCheckSweep(env.AI_CHECK_SWEEP_INTERVAL_SECONDS);
+
+if (env.NODE_ENV === "production" && env.MESSAGING_EMAIL_PROVIDER !== "resend") {
+  console.warn("[InSite Assurance API] No email provider configured: mobilization reminders by email will not be sent.");
+}
 
 const server = app.listen(env.PORT, "0.0.0.0", () => {
   console.log(
@@ -16,7 +23,7 @@ const server = app.listen(env.PORT, "0.0.0.0", () => {
 
 async function shutdown() {
   console.log("[InSite Assurance API] Shutting down gracefully...");
-  stopMorningBriefCron();
+  stopJobs();
   stopAiCheckSweep();
   server.close(async () => {
     await prisma.$disconnect();
