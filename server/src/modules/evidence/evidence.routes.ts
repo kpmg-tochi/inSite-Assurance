@@ -2,10 +2,11 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { guardProjectRoutes } from '../../utils/accessControl';
 import { z } from 'zod';
 import { MediaTypeEnum } from '@insite/shared';
-import { requireAnyAuth, requirePermission } from '../../middleware/auth.middleware';
+import { hasWebPermission, requireAnyAuth, requirePermission } from '../../middleware/auth.middleware';
+import { AppError } from '../../middleware/error.middleware';
 import { presignRateLimit } from '../../middleware/rateLimit.middleware';
 import { validateBody } from '../../middleware/validate.middleware';
-import { assertProjectObjectKey, storageService } from '../../integrations/storage.service';
+import { assertProjectObjectKey, isHandoverObjectKey, storageService } from '../../integrations/storage.service';
 import { prisma } from '../../config/prisma';
 import { listProjectCaptures } from './evidence.service';
 
@@ -92,7 +93,19 @@ router.get(
         await projectTenantId(projectId),
         projectId
       );
-      const url = await storageService.getPresignedReadUrl(key, 300);
+      const tenantId = await projectTenantId(projectId);
+      let attachmentName: string | undefined;
+      if (isHandoverObjectKey(key, tenantId, projectId)) {
+        // Phase 10: stakeholder uploads are for handover reviewers only, and anything that is not an
+        // image, audio or video is served as a download.
+        if (!req.webUser || !hasWebPermission(req.webUser, 'handover:review_feedback')) {
+          throw new AppError('File reference must be an object key issued for this project', 400, 'INVALID_OBJECT_KEY');
+        }
+        const info = await storageService.headObject(key);
+        const type = (info?.contentType ?? '').toLowerCase();
+        if (!/^(image|audio|video)\//.test(type)) attachmentName = key.split('/').pop() ?? 'download';
+      }
+      const url = await storageService.getPresignedReadUrl(key, 300, { attachmentName });
       if (req.query.format === 'json') {
         res.json({ success: true, data: { url, expiresInSeconds: 300 } });
         return;

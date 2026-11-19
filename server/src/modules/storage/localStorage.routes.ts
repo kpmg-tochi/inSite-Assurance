@@ -2,6 +2,7 @@ import express, { Router, Request, Response, NextFunction } from 'express';
 import {
   MAX_UPLOAD_BYTES,
   storageService,
+  verifyLocalPartUrl,
   verifyLocalStorageUrl,
 } from '../../integrations/storage.service';
 import { AppError } from '../../middleware/error.middleware';
@@ -37,6 +38,25 @@ router.put(
   }
 );
 
+/** Phase 10: one part of a resumable upload (signed for this upload, part number and size cap). */
+router.put(
+  '/part',
+  express.raw({ type: () => true, limit: MAX_UPLOAD_BYTES }),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const signed = verifyLocalPartUrl(req.query as Record<string, unknown>);
+      const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+      if (body.length === 0 || body.length > signed.maxBytes) {
+        throw new AppError('Part size is not allowed', 400, 'CONTENT_LENGTH_MISMATCH');
+      }
+      await storageService.putLocalPart({ ...signed, body });
+      res.status(200).end();
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
 router.get('/file', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const signed = verifyLocalStorageUrl('get', req.query as Record<string, unknown>);
@@ -48,6 +68,10 @@ router.get('/file', async (req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Cache-Control', 'private, max-age=60');
     // The web portal on another origin renders these in <img>/<audio>.
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (signed.attachmentName) {
+      res.setHeader('Content-Disposition', `attachment; filename="${signed.attachmentName}"`);
+    }
     res.send(object.body);
   } catch (error) {
     next(error);

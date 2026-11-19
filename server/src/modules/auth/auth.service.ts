@@ -489,6 +489,7 @@ type BaselineProject = CadenceProjectRow & {
   geofenceGeoJson: unknown;
   geofenceToleranceMeters: number | null;
   contractorExecutionMode: string | null;
+  constructionPhase?: string;
   tenant: { defaultGeofenceToleranceMeters: number };
   boqItems: Array<{
     id: string;
@@ -543,6 +544,8 @@ export function buildBaselinePack(
     geofenceToleranceMeters: project.geofenceToleranceMeters ?? project.tenant.defaultGeofenceToleranceMeters,
     boqItems,
     holdPoints: boqItems.filter((b) => b.isHoldPoint),
+    // Phase 10: lets the app offer defect work once construction has ended.
+    constructionPhase: (project.constructionPhase ?? 'ACTIVE_CONSTRUCTION') as MobileBaselinePack['constructionPhase'],
   };
 }
 

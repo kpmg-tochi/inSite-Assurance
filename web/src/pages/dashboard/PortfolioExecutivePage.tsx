@@ -518,6 +518,9 @@ export function PortfolioExecutivePage({
         }}
       />
 
+      {/* Phase 10: projects in their defects liability period, with retention held */}
+      <RetentionOverview projects={summary.projects} />
+
       {/* 5. Executive Covenant & Disbursement Safeguards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs space-y-1.5">
@@ -551,5 +554,67 @@ export function PortfolioExecutivePage({
         </div>
       </div>
     </div>
+  );
+}
+
+const RETENTION_PHASE_LABEL: Record<string, string> = {
+  ACTIVE_CONSTRUCTION: 'Construction',
+  HANDOVER_IN_PROGRESS: 'Handover',
+  RETENTION_PERIOD: 'Defects liability',
+  COMPLETED_CLOSED: 'Closed',
+};
+
+/** Phase 10: projects in handover or their liability period, with retention held and days remaining. */
+function RetentionOverview({ projects }: { projects: PortfolioProjectHealthItem[] }) {
+  const rows = projects.filter(
+    (p) => p.retention && (p.retention.phase === 'HANDOVER_IN_PROGRESS' || p.retention.phase === 'RETENTION_PERIOD' || p.retention.heldNgn > 0)
+  );
+  if (rows.length === 0) return null;
+  const totalHeld = rows.reduce((s, p) => s + (p.retention?.heldNgn ?? 0), 0);
+  return (
+    <section className="rounded-2xl border border-slate-200/80 bg-white shadow-2xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+        <h2 className="text-sm font-bold text-slate-900">Projects in retention</h2>
+        <span className="text-xs text-slate-500">Retention held across these projects: {formatNaira(totalHeld)}</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-4 py-2">Project</th>
+              <th className="px-4 py-2">Phase</th>
+              <th className="px-4 py-2 text-right">Held</th>
+              <th className="px-4 py-2 text-right">Released</th>
+              <th className="px-4 py-2">Liability period ends</th>
+              <th className="px-4 py-2 text-right">Open defects</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((p) => {
+              const r = p.retention!;
+              return (
+                <tr key={p.projectId}>
+                  <td className="px-4 py-2">
+                    <Link to={`/app/projects/${p.projectId}/retention`} className="font-semibold text-brand-primary hover:underline">
+                      {p.codePrefix}
+                    </Link>{' '}
+                    <span className="text-slate-500">{p.name}</span>
+                  </td>
+                  <td className="px-4 py-2">{RETENTION_PHASE_LABEL[r.phase]}</td>
+                  <td className="px-4 py-2 text-right font-semibold">{formatNaira(r.heldNgn)}</td>
+                  <td className="px-4 py-2 text-right">{formatNaira(r.releasedNgn)}</td>
+                  <td className="px-4 py-2">
+                    {r.retentionEndDate
+                      ? `${r.retentionEndDate}${r.daysRemaining !== null ? (r.daysRemaining >= 0 ? ` (${r.daysRemaining} days)` : ' (ended)') : ''}`
+                      : '—'}
+                  </td>
+                  <td className="px-4 py-2 text-right">{r.openDefectCount}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

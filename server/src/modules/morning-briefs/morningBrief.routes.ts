@@ -1,3 +1,4 @@
+import { assertConstructionOngoing } from '../closeout/closeoutGate';
 import { Router, Request, Response, NextFunction } from 'express';
 import { guardProjectRoutes } from '../../utils/accessControl';
 import { BriefPersonaEnum, GenerateMorningBriefRequestSchema } from '@insite/shared';
@@ -45,6 +46,7 @@ router.post(
         );
       }
       const projectId = String(req.params.projectId);
+      await assertConstructionOngoing(projectId, 'briefs');
       const targetPersona = await resolveBriefPersona({
         projectId,
         fieldAgent: req.fieldAgent,
@@ -75,6 +77,7 @@ router.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const persona = requestedPersona(req.body?.targetPersona);
+      await assertConstructionOngoing(String(req.params.projectId), 'briefs');
       const briefs = await generateDispatchForProject(
         String(req.params.projectId),
         req.body?.workdayDate ? String(req.body.workdayDate) : undefined,

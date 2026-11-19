@@ -22,6 +22,8 @@ import { capturesRoutes } from "./modules/evidence/captures.routes";
 import { processRoutes, workflowTemplateRoutes } from "./modules/process/process.routes";
 import { mobilizationRoutes } from "./modules/mobilization/mobilization.routes";
 import { scheduleRoutes } from "./modules/schedule/schedule.routes";
+import { closeoutRoutes } from "./modules/closeout/closeout.routes";
+import { handoverPublicRoutes } from "./modules/closeout/handoverPublic.routes";
 import { requestContextMiddleware } from "./utils/requestContext";
 import { localStorageRoutes } from "./modules/storage/localStorage.routes";
 import { storageService } from "./integrations/storage.service";
@@ -38,6 +40,10 @@ export function createApp() {
       credentials: true,
     }),
   );
+  // Phase 10: the public stakeholder handover API has its own small body limit and rate limits, so
+  // it is mounted before the app-wide parsers. It reaches nothing else.
+  app.use("/api/v1/public/handover", handoverPublicRoutes);
+
   app.use(express.json({ limit: "15mb" }));
   app.use(express.urlencoded({ extended: true }));
   // Phase 7: per-request memo (process configuration is read once per request).
@@ -95,6 +101,7 @@ export function createApp() {
   app.use("/api/v1/projects", processRoutes);
   app.use("/api/v1/projects", mobilizationRoutes);
   app.use("/api/v1/projects", scheduleRoutes);
+  app.use("/api/v1/projects", closeoutRoutes);
   app.use("/api/v1/workflow-templates", workflowTemplateRoutes);
 
   // Development object storage when S3 is not configured (never in production; see env checks).

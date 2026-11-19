@@ -1,4 +1,5 @@
 import type {
+  ConstructionPhase,
   ContractorExecutionMode,
   FieldPersonaType,
   GeofenceMode,
@@ -19,6 +20,12 @@ export interface ProjectSummaryDto {
   id: string;
   tenantId: string;
   status: ProjectStatus;
+  /** Phase 10: where an active project is in its life. */
+  constructionPhase: ConstructionPhase;
+  practicalCompletionDate: string | null;
+  retentionEndDate: string | null;
+  /** Phase 10: percentage withheld from each release (applies only with the retention module on). */
+  retentionPercentage: number | null;
   name: string;
   codePrefix: string;
   stateLocation: string;

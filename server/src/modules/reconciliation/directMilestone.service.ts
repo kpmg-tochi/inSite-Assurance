@@ -21,6 +21,8 @@ import { serializeTrancheDecision, serializeValuationReport } from '../../utils/
 import { normalizeUnit } from './reconciliationEngine';
 import { refreshCertifiedProgress } from './reconciliation.service';
 import { releaseGate, reviewGate, startValuationOnChain, valuationProgress } from './disbursementChain';
+import { assertConstructionOngoing } from '../closeout/closeoutGate';
+import { pdfReleaseDecision } from '../closeout/retention.service';
 
 /**
  * Direct milestone release (Phase 7 Step 6): release against a verified milestone with no
@@ -133,6 +135,7 @@ export async function verifyDirectMilestone(params: {
     throw new AppError(`This action requires the ${VERIFY} permission on your role`, 403, 'FORBIDDEN_PERMISSION');
   }
   await assertDirectMode(projectId);
+  await assertConstructionOngoing(projectId, 'milestone verifications');
 
   try {
     return await prisma.$transaction(async (tx) => {
@@ -396,6 +399,8 @@ export async function generateValuationPdfById(projectId: string, valuationId: s
     include: {
       tranche: true,
       milestoneVerification: true,
+      trancheDecisions: true,
+      retentionRelease: { include: { projectContractor: { include: { organization: { select: { name: true } } } } } },
       ipcClaim: { select: { ipcNumber: true, status: true } },
       project: {
         include: {
@@ -429,7 +434,11 @@ export async function generateValuationPdfById(projectId: string, valuationId: s
     projectCodePrefix: v.project.codePrefix,
     stateLocation: v.project.stateLocation ?? '',
     lenderName: v.project.lenderOrganization?.name ?? '',
-    contractorName: contractorHeadline(v.project.contractors).name,
+    contractorName: v.retentionRelease?.projectContractor.organization.name ?? contractorHeadline(v.project.contractors).name,
+    retentionRelease: v.retentionRelease
+      ? { stage: v.retentionRelease.stage, contractorName: v.retentionRelease.projectContractor.organization.name }
+      : null,
+    releaseDecision: pdfReleaseDecision(v.trancheDecisions, v.project.retentionPercentage),
     monitorOrganizationName: v.project.monitorOrganization?.name ?? '',
     currency: v.project.tenant.defaultCurrency,
     timeZone: v.project.timezone,

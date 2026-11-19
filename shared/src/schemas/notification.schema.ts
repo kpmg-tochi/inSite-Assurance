@@ -11,6 +11,8 @@ export const MobileNotificationTypeEnum = z.enum([
   'SITE_GEOFENCE_WARNING',
   // Phase 8
   'REPORT_OVERDUE',
+  // Phase 10
+  'DEFECT_UPDATE',
 ]);
 export type MobileNotificationType = z.infer<typeof MobileNotificationTypeEnum>;
 
@@ -20,6 +22,8 @@ export const NotificationActionTypeEnum = z.enum([
   'OPEN_WBS_CHAT',
   'OPEN_BACKLOG_REVIEW',
   'OPEN_ASSURANCE_WIZARD',
+  // Phase 10
+  'OPEN_DEFECTS',
 ]);
 export type NotificationActionType = z.infer<typeof NotificationActionTypeEnum>;
 
@@ -36,6 +40,8 @@ export const MobileNotificationMetadataSchema = z
     draftQuantity: z.number().optional(),
     unit: z.string().optional(),
     requestedProofTypes: z.array(z.string()).optional(),
+    /** Phase 10: the defect ticket a DEFECT_UPDATE is about. */
+    defectTicketId: z.string().uuid().optional(),
   })
   .passthrough();
 export type MobileNotificationMetadata = z.infer<
@@ -80,6 +86,10 @@ export const WebNotificationCategoryEnum = z.enum([
   'SCHEDULE_BEHIND',
   'SCHEDULE_REVISION_PENDING',
   'SCHEDULE_REVISION_DECIDED',
+  // Phase 10
+  'HANDOVER_SUBMITTED',
+  'DEFECT_TICKET',
+  'RETENTION_RELEASE',
 ]);
 export type WebNotificationCategory = z.infer<typeof WebNotificationCategoryEnum>;
 

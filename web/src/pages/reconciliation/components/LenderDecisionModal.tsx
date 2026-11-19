@@ -17,6 +17,9 @@ import {
   useWaiveConditionMutation,
 } from "../../../mutations/reconciliation/useReconciliationMutations";
 import { BlockedNotice, ModalActions, ModalShell, inputClass } from "./ModalShell";
+import { retentionWithheldFor } from "@insite/shared";
+import { useProjectProcess } from "../../../queries/process/useProcessQueries";
+import { useProjectsQuery } from "../../../queries/projects/useProjectsQueries";
 
 const DECISION_OPTIONS: CustomSelectOption<LenderDecisionType>[] = [
   {
@@ -167,6 +170,16 @@ export function TrancheDecisionModal({
   const fullBlocked =
     decision === "APPROVE_FULL" && (report.recommendedReleaseAmountNgn <= 0 || report.recommendedReleaseAmountNgn > remaining);
 
+  // Phase 10: preview of the retention the server will withhold (the server computes the real split).
+  const processQuery = useProjectProcess(projectId);
+  const projectsQuery = useProjectsQuery();
+  const retentionPct =
+    report.source !== "RETENTION_RELEASE" && processQuery.data?.config.enableRetentionModule
+      ? projectsQuery.data?.find((p) => p.id === projectId)?.retentionPercentage ?? null
+      : null;
+  const previewApproved = decision === "APPROVE_FULL" ? report.recommendedReleaseAmountNgn : decision === "HOLD" ? 0 : amountNum > 0 ? amountNum : 0;
+  const previewRetention = retentionPct ? retentionWithheldFor(previewApproved, retentionPct) : 0;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cpBlocked || amountBad || fullBlocked) return;
@@ -201,6 +214,14 @@ export function TrancheDecisionModal({
           <dd className="text-right font-bold text-amber-700">{formatNaira(report.recommendedHoldbackAmountNgn)}</dd>
           <dt className="text-slate-500">{cpsEnabled ? "Tranche unreleased allocation" : "Unreleased allocation"}</dt>
           <dd className="text-right font-medium">{formatNaira(remaining)}</dd>
+          {retentionPct ? (
+            <>
+              <dt className="text-slate-500">Retention withheld ({retentionPct}%)</dt>
+              <dd className="text-right font-bold text-sky-700">{formatNaira(previewRetention)}</dd>
+              <dt className="text-slate-500">Paid to the contractor</dt>
+              <dd className="text-right font-bold">{formatNaira(Math.round((previewApproved - previewRetention) * 100) / 100)}</dd>
+            </>
+          ) : null}
         </dl>
 
         {cpsEnabled && (

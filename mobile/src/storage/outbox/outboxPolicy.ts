@@ -12,7 +12,9 @@ export type OutboxKind =
   | 'CHAT_MESSAGE'
   | 'TELEMETRY'
   | 'INCIDENT'
-  | 'ASSURANCE';
+  | 'ASSURANCE'
+  // Phase 10: mark a defect fixed, or verify/reopen it (payload carries the action).
+  | 'DEFECT_ACTION';
 
 /**
  * HELD (Phase 5 Step 8): queued under a session that has since ended. Never sent until the person
@@ -160,6 +162,7 @@ export const SESSION_BOUND_KINDS: ReadonlySet<OutboxKind> = new Set<OutboxKind>(
   'CHAT_MESSAGE',
   'REPORT',
   'REVALIDATION',
+  'DEFECT_ACTION',
 ]);
 
 /**

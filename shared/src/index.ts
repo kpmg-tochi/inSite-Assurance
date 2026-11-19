@@ -27,6 +27,8 @@ export * from './schemas/standards.schema';
 export * from './schemas/process.schema';
 export * from './schemas/cadence.schema';
 export * from './schemas/schedule.schema';
+export * from './schemas/handover.schema';
+export * from './schemas/retention.schema';
 
 // Data
 export * from './data/standardsLibrary';
@@ -37,6 +39,8 @@ export * from './utils/deviceSignature';
 export * from './utils/format';
 export * from './utils/reportingPeriod';
 export * from './utils/schedule';
+export * from './utils/retention';
+export * from './utils/handoverText';
 
 // Shared Turf.js Radial & Linear Corridor Chainage Geospatial Utilities
 export * from './geo/geofence';

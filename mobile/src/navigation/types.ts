@@ -14,6 +14,8 @@ export type RootStackParamList = {
   AssuranceWizard: { resolveNotificationId?: string; isPreviewDemo?: boolean } | undefined;
   UnderReview: undefined;
   WbsInbox: undefined;
+  /** Phase 10: defect tickets after handover (contractor fixes, verifier checks). */
+  Defects: undefined;
   WbsThread: {
     wbsItem: WbsItemRecord;
     activeQueryNotificationId?: string;

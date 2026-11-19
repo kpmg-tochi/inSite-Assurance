@@ -260,6 +260,10 @@ export const TrancheDecisionDtoSchema = z.object({
   /** True when a later reversal record cancels this decision. */
   isReversed: z.boolean(),
   cpSnapshot: z.array(CpSnapshotEntrySchema),
+  /** Phase 10: retention withheld from this release (negative on a reversal). */
+  retentionWithheldNgn: z.number().default(0),
+  /** What the contractor receives: approved minus retention withheld. */
+  netReleasedNgn: z.number().default(0),
   decidedAt: z.string().datetime(),
 });
 export type TrancheDecisionDto = z.infer<typeof TrancheDecisionDtoSchema>;

@@ -75,7 +75,7 @@ Only decisions that change how the platform is used are listed. Each has a defau
 | 7     | Process engine, standards, persona-aware AI and approval chains             | Implemented; web click-through and on-device testing pending (see its section 7) | 3, 4, 6           | [phase_7](phase_7_implementation_plan.md)   |
 | 8     | Reporting cadence, late reports, mobilization and attendance alerts         | Implemented; web click-through and on-device testing pending (see its section 7) | 5, 6, 7           | [phase_8](phase_8_implementation_plan.md)   |
 | 9     | Schedule variance and "Catch Project Up"                                    | Implemented; web clicked through; mobile on-device pending (see its section 7)  | 6, 8              | [phase_9](phase_9_implementation_plan.md)   |
-| 10    | Stakeholder handover and retention management                               | Not started                                                                      | 6, 7              | [phase_10](phase_10_implementation_plan.md) |
+| 10    | Stakeholder handover and retention management                               | Implemented; web clicked through; mobile on-device pending (see its section 7) | 6, 7              | [phase_10](phase_10_implementation_plan.md) |
 
 ```mermaid
 flowchart LR
@@ -91,7 +91,7 @@ flowchart LR
     P6 --> P8
     P7 --> P8
     P8 --> P9["9 Schedule variance"]
-    P6 --> P10["10 Handover + retention"]
+    P6 --> P10["10 Handover + retention (done)"]
     P7 --> P10
 ```
 

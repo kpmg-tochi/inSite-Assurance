@@ -7,6 +7,8 @@ import {
   uploadFileToPresignedUrl,
 } from '../../api/evidence/evidenceApi';
 import { createIncidentReport } from '../../api/incidents/incidentsApi';
+import { postDefectAction } from '../../api/defects/defectsApi';
+import { DEFECT_ALREADY_APPLIED_CODES, defectActionBody, type DefectActionPayload } from '../../utils/defects';
 import { uploadTelemetryPings } from '../../api/telemetry/telemetryApi';
 import { postBoqChatMessage } from '../../api/wbs/wbsChatApi';
 import { revalidateWorkdayReport, submitWorkdayReport } from '../../api/workday/workdayApi';
@@ -177,6 +179,26 @@ export function registerOutboxHandlers(): void {
     const ready = await loadIncident(row.entityId);
     const created = await createIncidentReport(row.projectId, ready!.request);
     if (created?.id) await markIncidentSent(row.entityId, created.id);
+  });
+
+  // Phase 10: a defect action. Its photos were sent first (dependsOn). A retry after a lost response
+  // finds the ticket already moved on; that counts as done.
+  registerOutboxHandler('DEFECT_ACTION', async (row) => {
+    const payload = row.payload as unknown as DefectActionPayload;
+    if (!payload?.ticketId) throw new LocalPermanentError('Defect update is missing its ticket.');
+    let body: Record<string, unknown>;
+    try {
+      body = defectActionBody(payload);
+    } catch (err) {
+      throw new LocalPermanentError((err as Error).message);
+    }
+    try {
+      await postDefectAction(row.projectId, payload.ticketId, payload.kind, body);
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code && DEFECT_ALREADY_APPLIED_CODES.includes(code) && row.attempts > 0) return;
+      throw error;
+    }
   });
 
   // Every image must upload and the server must accept the keys before this is marked sent.

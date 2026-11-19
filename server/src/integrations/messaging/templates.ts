@@ -93,13 +93,85 @@ export function mobilizationReminder(ctx: TemplateContext, d: MobilizationRemind
   };
 }
 
+// ---------------------------------------------------------------------------
+// Phase 10: stakeholder handover. Plain language, no jargon about tranches or IPCs.
+// ---------------------------------------------------------------------------
+
+export interface HandoverLinkData {
+  recipientName: string;
+  projectName: string;
+  /** Sensitive: the link is the credential (with the code when one is required). */
+  handoverUrl: string;
+  expiresOn: string;
+  requiresCode: boolean;
+}
+
+export function handoverLink(ctx: TemplateContext, d: HandoverLinkData): RenderedMessage {
+  const subject = `${d.projectName}: please review the completed works`;
+  const steps = [
+    'Open the link below on your phone or computer.',
+    ...(d.requiresCode ? ['We will email you a 6-digit code to confirm it is you.'] : []),
+    'Tell us whether you accept the works, accept them with problems that need fixing, or do not accept them. You can add photos.',
+  ];
+  const text = [
+    `Hello ${d.recipientName},`,
+    '',
+    `The works on ${d.projectName} are ready to be handed over, and we would like your view.`,
+    '',
+    ...steps.map((s) => `- ${s}`),
+    '',
+    d.handoverUrl,
+    '',
+    `The link works until ${d.expiresOn}. Do not forward it: it is for you only.`,
+    '',
+    ctx.tenantName,
+  ].join('\n');
+  const html = layout(ctx, 'Please review the completed works', [
+    `Hello ${esc(d.recipientName)},`,
+    `The works on <strong>${esc(d.projectName)}</strong> are ready to be handed over, and we would like your view.`,
+    `<ul style="padding-left:18px;margin:0">${steps.map((s) => `<li style="margin-bottom:6px">${esc(s)}</li>`).join('')}</ul>`,
+    `<a href="${esc(d.handoverUrl)}" style="display:inline-block;background:${esc(ctx.brandColor)};color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold">Review the works</a>`,
+    `The link works until ${esc(d.expiresOn)}. Do not forward it: it is for you only.`,
+  ]);
+  return { subject, text, html, pushBody: `Please review the completed works on ${d.projectName}.` };
+}
+
+export interface HandoverCodeData {
+  recipientName: string;
+  projectName: string;
+  /** Sensitive. */
+  oneTimeCode: string;
+  validMinutes: number;
+}
+
+export function handoverCode(ctx: TemplateContext, d: HandoverCodeData): RenderedMessage {
+  const subject = `Your code for ${d.projectName}: ${d.oneTimeCode}`;
+  const text = [
+    `Hello ${d.recipientName},`,
+    '',
+    `Your code is ${d.oneTimeCode}. It works for ${d.validMinutes} minutes.`,
+    '',
+    'If you did not ask for this code, you can ignore this email.',
+    '',
+    ctx.tenantName,
+  ].join('\n');
+  const html = layout(ctx, 'Your one-time code', [
+    `Hello ${esc(d.recipientName)},`,
+    `Your code for <strong>${esc(d.projectName)}</strong> is <strong style="font-size:20px;letter-spacing:3px">${esc(d.oneTimeCode)}</strong>. It works for ${esc(d.validMinutes)} minutes.`,
+    'If you did not ask for this code, you can ignore this email.',
+  ]);
+  return { subject, text, html, pushBody: 'Your one-time code has arrived.' };
+}
+
 export const TEMPLATES = {
   MOBILIZATION_REMINDER: mobilizationReminder,
+  HANDOVER_LINK: handoverLink,
+  HANDOVER_CODE: handoverCode,
 } as const;
 
 export type TemplateKey = keyof typeof TEMPLATES;
 export type TemplateData<K extends TemplateKey> = Parameters<(typeof TEMPLATES)[K]>[1];
 
 export function renderTemplate<K extends TemplateKey>(key: K, ctx: TemplateContext, data: TemplateData<K>): RenderedMessage {
-  return TEMPLATES[key](ctx, data);
+  return (TEMPLATES[key] as (c: TemplateContext, d: TemplateData<K>) => RenderedMessage)(ctx, data);
 }

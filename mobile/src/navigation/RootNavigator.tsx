@@ -27,6 +27,7 @@ import { AssuranceVerificationWizard } from "../screens/AssuranceVerificationWiz
 import { VerificationUnderReviewScreen } from "../screens/VerificationUnderReviewScreen";
 import { WbsInboxScreen } from "../screens/WbsInboxScreen";
 import { WbsChatThreadScreen } from "../screens/WbsChatThreadScreen";
+import DefectsScreen from "../screens/DefectsScreen";
 
 // Modals
 import { ProfileAndProjectsScreen } from "../screens/ProfileAndProjectsScreen";
@@ -94,6 +95,7 @@ export const RootNavigator: React.FC = () => {
         />
         <Stack.Screen name="WbsInbox" component={WbsInboxScreen} />
         <Stack.Screen name="WbsThread" component={WbsChatThreadScreen} />
+        <Stack.Screen name="Defects" component={DefectsScreen} />
 
         {/* MODAL SCREENS */}
         <Stack.Group

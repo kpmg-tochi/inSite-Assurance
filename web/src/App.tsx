@@ -24,6 +24,9 @@ import { ReconciliationWorkbenchPage } from "./pages/reconciliation/Reconciliati
 import { BoqAndHoldPointsPage } from "./pages/boq/BoqAndHoldPointsPage";
 import { AuditLedgerPage } from "./pages/audit/AuditLedgerPage";
 import { ProjectSchedulePage } from "./pages/schedule/ProjectSchedulePage";
+import { ProjectHandoverPage } from "./pages/closeout/ProjectHandoverPage";
+import { RetentionDefectsPage } from "./pages/closeout/RetentionDefectsPage";
+import PublicHandoverPage from "./pages/handover/PublicHandoverPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { ChangePasswordPage } from "./pages/auth/ChangePasswordPage";
 import { RequirePermission } from "./components/PermissionGate";
@@ -138,7 +141,7 @@ function AuthenticatedWorkspace() {
   const handleSelectProject = (projectId: string) => {
     setSelectedProjectId(projectId);
     const subRouteMatch = location.pathname.match(
-      /\/app\/projects\/[^/]+\/(dashboard|reconciliation|boq|audit)/,
+      /\/app\/projects\/[^/]+\/(dashboard|reconciliation|boq|audit|schedule|handover|retention)/,
     );
     const subRoute = subRouteMatch?.[1] || "dashboard";
     const safeSubRoute =
@@ -303,6 +306,25 @@ function AuthenticatedWorkspace() {
               }
             />
             <Route
+              path="projects/:projectId/handover"
+              element={
+                <RequirePermission anyOf={["handover:manage_links", "handover:review_feedback"]} backTo={projectHome}>
+                  <ProjectHandoverPage project={activeProject} />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="projects/:projectId/retention"
+              element={
+                <RequirePermission
+                  anyOf={["retention:manage_defects", "retention:release_escrow", "ipc:certify_valuation", "tranche:approve_disbursement", "audit:view_ledger"]}
+                  backTo={projectHome}
+                >
+                  <RetentionDefectsPage project={activeProject} />
+                </RequirePermission>
+              }
+            />
+            <Route
               path="projects/:projectId/audit"
               element={
                 <RequirePermission anyOf={["audit:view_ledger"]} backTo={projectHome}>
@@ -390,6 +412,9 @@ export function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/mobile-app" element={<MobileAppPage />} />
+
+        {/* Phase 10: public stakeholder handover (no account, no portal chrome) */}
+        <Route path="/handover/:token" element={<PublicHandoverPage />} />
 
         {/* Login Route */}
         <Route

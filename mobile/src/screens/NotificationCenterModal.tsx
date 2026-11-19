@@ -131,6 +131,12 @@ export const NotificationCenterModal: React.FC = () => {
         return;
       }
 
+      // Phase 10: defect assigned, fixed, closed or overdue.
+      if (notif.actionType === "OPEN_DEFECTS") {
+        navigation.replace("Defects");
+        return;
+      }
+
       if (notif.actionType === "OPEN_BACKLOG_REVIEW") {
         navigation.replace("BacklogModal", {
           resolveNotificationId: notif.requiresAction ? notif.id : undefined,

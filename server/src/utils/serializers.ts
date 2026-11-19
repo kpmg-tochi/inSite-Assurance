@@ -201,6 +201,9 @@ export function serializeTrancheDecision(d: DecisionRow, allDecisions: DecisionR
     decision: d.decision,
     approvedDisbursementAmountNgn: Number(d.approvedDisbursementAmountNgn),
     heldBackAmountNgn: Number(d.heldBackAmountNgn),
+    // Phase 10: retention withheld from this release; the contractor receives the net amount.
+    retentionWithheldNgn: Number(d.retentionWithheldNgn),
+    netReleasedNgn: Math.round((Number(d.approvedDisbursementAmountNgn) - Number(d.retentionWithheldNgn)) * 100) / 100,
     creditCommitteeReference: d.creditCommitteeReference,
     approverNotes: d.approverNotes,
     decidedByUserId: d.decidedByUserId,

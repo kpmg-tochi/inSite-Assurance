@@ -27,6 +27,7 @@ const KIND_LABEL: Record<string, string> = {
   TELEMETRY: 'Presence ping',
   INCIDENT: 'Incident report',
   ASSURANCE: 'Identity submission',
+  DEFECT_ACTION: 'Defect update',
 };
 
 /**

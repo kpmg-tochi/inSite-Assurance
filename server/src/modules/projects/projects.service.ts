@@ -7,6 +7,8 @@ import {
   GeofenceMode,
   ProjectGeofenceSchema,
   verifyPointAgainstGeofence,
+  calendarDaysUntil,
+  zonedCalendarDate,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -118,6 +120,11 @@ function serializeProjectCore(project: ProjectCoreRow) {
     id: project.id,
     tenantId: project.tenantId,
     status: project.status,
+    /** Phase 10: where an active project is in its life. */
+    constructionPhase: project.constructionPhase,
+    practicalCompletionDate: project.practicalCompletionDate,
+    retentionEndDate: project.retentionEndDate,
+    retentionPercentage: project.retentionPercentage === null ? null : Number(project.retentionPercentage),
     name: project.name,
     codePrefix: project.codePrefix,
     stateLocation: project.stateLocation ?? '',
@@ -677,6 +684,12 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
         },
         select: { id: true },
       },
+      // Phase 10: retention column (module switch and open defects).
+      processConfig: { select: { enableRetentionModule: true } },
+      defectTickets: {
+        where: { status: { in: ['OPEN', 'ASSIGNED', 'RECTIFIED_PENDING_VERIFICATION'] } },
+        select: { id: true },
+      },
     },
   });
 
@@ -740,6 +753,18 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
       unfulfilledHoldPointCount: unfulfilledHoldPoints,
       pendingContractorCount: pendingContractors,
       scheduleVariance: serializeScheduleBadge(p),
+      retention: p.processConfig?.enableRetentionModule
+        ? {
+            phase: p.constructionPhase,
+            heldNgn: Number(p.retentionHeldNgn),
+            releasedNgn: Number(p.retentionReleasedNgn),
+            retentionEndDate: p.retentionEndDate,
+            daysRemaining: p.retentionEndDate
+              ? calendarDaysUntil(zonedCalendarDate(new Date(), p.timezone), p.retentionEndDate)
+              : null,
+            openDefectCount: p.defectTickets.length,
+          }
+        : null,
     };
   });
 

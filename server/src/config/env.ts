@@ -82,6 +82,8 @@ const EnvSchema = z.object({
   RESEND_API_KEY: z.string().optional().default(''),
   MESSAGING_TENANT_DAILY_CAP: z.coerce.number().int().min(0).default(500),
   MESSAGING_RECIPIENT_DAILY_CAP: z.coerce.number().int().min(0).default(5),
+  // Phase 10: base URL of the web portal, used for stakeholder handover links.
+  WEB_APP_BASE_URL: z.string().optional().default(''),
 });
 
 const parsedEnv = EnvSchema.parse(process.env);
@@ -95,6 +97,7 @@ export const env = {
   PUSH_PROVIDER: parsedEnv.PUSH_PROVIDER ?? (parsedEnv.NODE_ENV === 'test' ? 'none' : 'expo'),
   MESSAGING_EMAIL_PROVIDER:
     parsedEnv.MESSAGING_EMAIL_PROVIDER ?? (parsedEnv.NODE_ENV === 'production' ? 'none' : 'console'),
+  WEB_APP_BASE_URL: (parsedEnv.WEB_APP_BASE_URL || 'http://localhost:5173').replace(/\/+$/, ''),
 };
 
 /**
@@ -115,6 +118,9 @@ export function findUnsafeProductionConfig(config: typeof env): string[] {
   }
   if (!config.S3_ENDPOINT || !config.S3_ACCESS_KEY_ID || !config.S3_SECRET_ACCESS_KEY) {
     problems.push('S3 storage must be configured in production (local disk storage is development only)');
+  }
+  if (!/^https:\/\//.test(config.WEB_APP_BASE_URL)) {
+    problems.push('WEB_APP_BASE_URL must be the https address of the web portal (stakeholder handover links)');
   }
   return problems;
 }

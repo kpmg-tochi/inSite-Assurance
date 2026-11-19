@@ -202,6 +202,10 @@ export async function createWebNotification(
     actionUrl?: string | null;
     metadata?: Record<string, unknown>;
     createdAt?: Date;
+    /** Phase 10: only this organisation's users (e.g. the contractor a defect is assigned to). */
+    targetOrganizationId?: string | null;
+    /** Phase 10: monitoring side only; hidden from users whose organisation is a project contractor. */
+    hideFromProjectContractors?: boolean;
   }
 ): Promise<WebNotificationDto> {
   const created = await db.webNotification.create({
@@ -209,6 +213,8 @@ export async function createWebNotification(
       projectId: input.projectId,
       targetPermissionKey: input.targetPermissionKey ?? 'reports:view_all',
       targetRoleId: input.targetRoleId ?? null,
+      targetOrganizationId: input.targetOrganizationId ?? null,
+      hideFromProjectContractors: input.hideFromProjectContractors ?? false,
       category: input.category,
       title: input.title,
       description: input.description,
@@ -225,11 +231,23 @@ function buildWebNotificationFilter(webUser: WebJwtPayload): Prisma.WebNotificat
     return {};
   }
   return {
-    OR: [
-      { targetRoleId: webUser.roleId },
+    AND: [
       {
-        targetRoleId: null,
-        targetPermissionKey: { in: webUser.permissions },
+        OR: [
+          { targetRoleId: webUser.roleId },
+          {
+            targetRoleId: null,
+            targetPermissionKey: { in: webUser.permissions },
+          },
+        ],
+      },
+      // Phase 10: organisation targeting (contractor-facing) and monitoring-side-only notifications.
+      { OR: [{ targetOrganizationId: null }, { targetOrganizationId: webUser.organizationId }] },
+      {
+        OR: [
+          { hideFromProjectContractors: false },
+          { project: { contractors: { none: { organizationId: webUser.organizationId } } } },
+        ],
       },
     ],
   };

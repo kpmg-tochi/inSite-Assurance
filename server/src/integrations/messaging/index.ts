@@ -13,7 +13,7 @@ import { renderTemplate, TemplateData, TemplateKey } from './templates';
 
 export const MAX_DELIVERY_ATTEMPTS = 5;
 /** Payload keys removed once a message is delivered (e.g. a join code). */
-const SENSITIVE_PAYLOAD_KEYS = ['joinCode'];
+const SENSITIVE_PAYLOAD_KEYS = ['joinCode', 'handoverUrl', 'oneTimeCode'];
 
 export type SendOutcome =
   | { status: 'SENT' | 'QUEUED' | 'FAILED'; messageId: string }

@@ -64,7 +64,15 @@ import {
   startValuationOnChain,
   valuationProgress,
 } from './disbursementChain';
-import type { ApprovalProgressDto, ReviewValuationRequest } from '@insite/shared';
+import type { ApprovalProgressDto, RetentionShare, ReviewValuationRequest } from '@insite/shared';
+import {
+  applyRetentionHeld,
+  applyRetentionRelease,
+  assertRetentionReleaseStillAllowed,
+  computeRetentionForRelease,
+  pdfReleaseDecision,
+} from '../closeout/retention.service';
+import { assertConstructionOngoing } from '../closeout/closeoutGate';
 
 type Tx = Prisma.TransactionClient;
 
@@ -685,6 +693,7 @@ export async function submitContractorIpcClaim(params: {
       'DISBURSEMENT_MODE_IS_DIRECT'
     );
   }
+  await assertConstructionOngoing(projectId, 'IPC claims');
 
   const periodEnd = new Date(input.periodEnd);
   if (periodEnd.getTime() > Date.now() + PERIOD_END_SKEW_MS) {
@@ -1367,8 +1376,15 @@ export async function recordLenderTrancheDecision(params: {
     // Phase 7: release is the last step of the disbursement chain.
     const releaseStep = await assertAtReleaseStep(tx, report, webUser);
 
+    // Phase 10: a retention release is not a tranche drawdown; its own preconditions apply instead.
+    const isRetentionRelease = report.source === 'RETENTION_RELEASE';
+    const retentionRequest =
+      isRetentionRelease && input.decision !== 'HOLD'
+        ? await assertRetentionReleaseStillAllowed(tx, projectId, report.id)
+        : null;
+
     // D-3.2 unmet mandatory Conditions Precedent block any release (unless CPs are off for the project).
-    if (input.decision !== 'HOLD' && config.enableTranchesAndCps) {
+    if (input.decision !== 'HOLD' && config.enableTranchesAndCps && !isRetentionRelease) {
       const blocking = blockingConditions(tranche.conditionsPrecedent);
       if (blocking.length > 0) {
         throw new AppError(
@@ -1397,7 +1413,7 @@ export async function recordLenderTrancheDecision(params: {
         );
       }
     }
-    if (approved > remaining + NGN_EPSILON) {
+    if (!isRetentionRelease && approved > remaining + NGN_EPSILON) {
       throw new AppError(
         `The approved amount exceeds the tranche's unreleased allocation (${fmtNgn(remaining)})`,
         422,
@@ -1405,6 +1421,13 @@ export async function recordLenderTrancheDecision(params: {
       );
     }
     const heldBack = roundNgn(Math.max(0, Number(report.totalClaimedNgn) - approved));
+    // Phase 10: retention withheld from this release, split per contractor.
+    const retention = await computeRetentionForRelease(tx, {
+      projectId,
+      approvedNgn: approved,
+      valuation: report,
+      ipcProjectContractorId: ipc?.projectContractorId ?? null,
+    });
 
     const decision = await tx.trancheDecision.create({
       data: {
@@ -1416,6 +1439,8 @@ export async function recordLenderTrancheDecision(params: {
         creditCommitteeReference: input.creditCommitteeReference ?? null,
         approverNotes: input.approverNotes ?? null,
         cpSnapshotJson: cpSnapshot(tranche.conditionsPrecedent) as unknown as Prisma.InputJsonValue,
+        retentionWithheldNgn: retention.withheldNgn,
+        retentionAllocationJson: retention.allocation as unknown as Prisma.InputJsonValue,
       },
     });
     await recordReleaseAction(tx, {
@@ -1429,7 +1454,10 @@ export async function recordLenderTrancheDecision(params: {
 
     if (ipc && next) await tx.ipcClaim.update({ where: { id: ipc.id }, data: { status: next } });
 
-    if (approved > 0) {
+    if (approved > 0 && retentionRequest) {
+      // Held retention moves to released and is paid to the contractor; the tranche is untouched.
+      await applyRetentionRelease(tx, projectId, retentionRequest.projectContractorId, approved, 1);
+    } else if (approved > 0) {
       const released = roundNgn(Number(tranche.releasedAmountNgn) + approved);
       await tx.facilityTranche.update({
         where: { id: trancheId },
@@ -1438,20 +1466,30 @@ export async function recordLenderTrancheDecision(params: {
           isReleased: released >= Number(tranche.allocatedAmountNgn) - NGN_EPSILON,
         },
       });
+      // The contractor receives the approved amount less retention.
       await tx.project.update({
         where: { id: projectId },
-        data: { disbursedToDateNgn: { increment: approved } },
+        data: { disbursedToDateNgn: { increment: roundNgn(approved - retention.withheldNgn) } },
       });
+      await applyRetentionHeld(tx, projectId, retention.allocation, 1);
     }
 
-    const subject = ipc ? `IPC #${ipc.ipcNumber}` : `direct milestone verification on ${tranche.name}`;
+    const subject = isRetentionRelease
+      ? 'retention release'
+      : ipc
+        ? `IPC #${ipc.ipcNumber}`
+        : `direct milestone verification on ${tranche.name}`;
     await recordAuditEvent(tx, {
       projectId,
       actorType: 'WEB_USER',
       actorId: webUser.userId,
       actorDisplayName: actorName(webUser),
       action: 'LENDER_TRANCHE_DECIDED',
-      summaryText: `Recorded decision ${input.decision} on ${subject} (valuation revision ${report.revisionNumber}): released ${fmtNgn(approved)}, held back ${fmtNgn(heldBack)}.`,
+      summaryText:
+        `Recorded decision ${input.decision} on ${subject} (valuation revision ${report.revisionNumber}): released ${fmtNgn(approved)}, held back ${fmtNgn(heldBack)}` +
+        (retention.withheldNgn > 0
+          ? `; retention withheld ${fmtNgn(retention.withheldNgn)}, paid to contractor ${fmtNgn(roundNgn(approved - retention.withheldNgn))}.`
+          : '.'),
       payload: {
         trancheDecisionId: decision.id,
         ipcId: ipc?.id ?? null,
@@ -1461,9 +1499,48 @@ export async function recordLenderTrancheDecision(params: {
         approvedDisbursementAmountNgn: approved,
         heldBackAmountNgn: heldBack,
         cpSnapshot: cpSnapshot(tranche.conditionsPrecedent),
-        conditionsPrecedentChecked: config.enableTranchesAndCps,
+        conditionsPrecedentChecked: config.enableTranchesAndCps && !isRetentionRelease,
+        retentionWithheldNgn: retention.withheldNgn,
+        retentionAllocation: retention.allocation,
       },
     });
+    if (retention.withheldNgn > 0) {
+      await recordAuditEvent(tx, {
+        projectId,
+        actorType: 'SYSTEM',
+        actorId: 'retention',
+        actorDisplayName: 'Retention',
+        action: 'RETENTION_WITHHELD',
+        summaryText: `Withheld ${fmtNgn(retention.withheldNgn)} retention (${retention.percentage}%) from the ${fmtNgn(approved)} released on ${subject}.`,
+        payload: {
+          trancheDecisionId: decision.id,
+          valuationReportId: report.id,
+          retentionPercentage: retention.percentage,
+          approvedDisbursementAmountNgn: approved,
+          retentionWithheldNgn: retention.withheldNgn,
+          netReleasedNgn: roundNgn(approved - retention.withheldNgn),
+          allocation: retention.allocation,
+        },
+      });
+    }
+    if (retentionRequest && approved > 0) {
+      await recordAuditEvent(tx, {
+        projectId,
+        actorType: 'WEB_USER',
+        actorId: webUser.userId,
+        actorDisplayName: actorName(webUser),
+        action: 'RETENTION_RELEASED',
+        summaryText: `Released ${fmtNgn(approved)} of held retention (${retentionRequest.stage === 'FINAL' ? 'final' : 'practical completion'} release).`,
+        payload: {
+          trancheDecisionId: decision.id,
+          valuationReportId: report.id,
+          retentionReleaseRequestId: retentionRequest.id,
+          projectContractorId: retentionRequest.projectContractorId,
+          stage: retentionRequest.stage,
+          releasedNgn: approved,
+        },
+      });
+    }
 
     return serializeTrancheDecision(decision, [decision]);
   });
@@ -1498,6 +1575,11 @@ export async function reverseTrancheDecision(params: {
     if (!ipc) await lockValuation(tx, original.valuationReportId);
 
     const approved = Number(original.approvedDisbursementAmountNgn);
+    const isRetentionRelease = original.valuationReport.source === 'RETENTION_RELEASE';
+    const withheld = Number(original.retentionWithheldNgn);
+    const allocation = (Array.isArray(original.retentionAllocationJson)
+      ? original.retentionAllocationJson
+      : []) as unknown as RetentionShare[];
     const reversal = await tx.trancheDecision.create({
       data: {
         valuationReportId: original.valuationReportId,
@@ -1509,10 +1591,18 @@ export async function reverseTrancheDecision(params: {
         approverNotes: input.reason,
         reversesDecisionId: original.id,
         cpSnapshotJson: cpSnapshot(tranche.conditionsPrecedent) as unknown as Prisma.InputJsonValue,
+        retentionWithheldNgn: -withheld,
+        retentionAllocationJson: allocation as unknown as Prisma.InputJsonValue,
       },
     });
 
-    if (approved > 0) {
+    if (approved > 0 && isRetentionRelease) {
+      // Phase 10: the released retention goes back to held.
+      const request = await tx.retentionReleaseRequest.findUniqueOrThrow({
+        where: { valuationReportId: original.valuationReportId },
+      });
+      await applyRetentionRelease(tx, projectId, request.projectContractorId, approved, -1);
+    } else if (approved > 0) {
       const released = roundNgn(Number(tranche.releasedAmountNgn) - approved);
       await tx.facilityTranche.update({
         where: { id: tranche.id },
@@ -1523,25 +1613,36 @@ export async function reverseTrancheDecision(params: {
       });
       await tx.project.update({
         where: { id: projectId },
-        data: { disbursedToDateNgn: { decrement: approved } },
+        data: { disbursedToDateNgn: { decrement: roundNgn(approved - withheld) } },
       });
+      // Phase 10: the withheld part is reversed with the same split (refused if already released).
+      await applyRetentionHeld(tx, projectId, allocation, -1);
     }
     if (ipc && next) await tx.ipcClaim.update({ where: { id: ipc.id }, data: { status: next } });
 
-    const subject = ipc ? `IPC #${ipc.ipcNumber}` : `direct milestone verification on ${tranche.name}`;
+    const subject = isRetentionRelease
+      ? 'retention release'
+      : ipc
+        ? `IPC #${ipc.ipcNumber}`
+        : `direct milestone verification on ${tranche.name}`;
     await recordAuditEvent(tx, {
       projectId,
       actorType: 'WEB_USER',
       actorId: webUser.userId,
       actorDisplayName: actorName(webUser),
       action: 'TRANCHE_DECISION_REVERSED',
-      summaryText: `Reversed decision ${original.decision} on ${subject} (reversing ${fmtNgn(approved)} released): ${input.reason}`,
+      summaryText:
+        `Reversed decision ${original.decision} on ${subject} (reversing ${fmtNgn(approved)} released` +
+        (withheld > 0 ? ` and ${fmtNgn(withheld)} retention withheld` : '') +
+        `): ${input.reason}`,
       payload: {
         reversalDecisionId: reversal.id,
         reversesDecisionId: original.id,
         ipcId: ipc?.id ?? null,
         valuationReportId: original.valuationReportId,
+        valuationSource: original.valuationReport.source,
         reversedAmountNgn: approved,
+        reversedRetentionWithheldNgn: withheld,
         reason: input.reason,
       },
     });
@@ -1592,10 +1693,17 @@ export async function reviewValuation(params: {
       (d) => !d.reversesDecisionId && !valuation.trancheDecisions.some((o) => o.reversesDecisionId === d.id)
     );
     if (decided) throw new AppError('A decision has already been recorded on this valuation', 409, 'DECISION_ALREADY_RECORDED');
-    const label = ipc ? `IPC #${ipc.ipcNumber} valuation (rev ${valuation.revisionNumber})` : `Milestone verification (rev ${valuation.revisionNumber})`;
+    const isRetention = valuation.source === 'RETENTION_RELEASE';
+    const label = ipc
+      ? `IPC #${ipc.ipcNumber} valuation (rev ${valuation.revisionNumber})`
+      : isRetention
+        ? 'Retention release'
+        : `Milestone verification (rev ${valuation.revisionNumber})`;
     const actionUrl = ipc
       ? `/app/projects/${projectId}/reconciliation?ipcId=${ipc.id}`
-      : `/app/projects/${projectId}/reconciliation?valuationId=${valuation.id}`;
+      : isRetention
+        ? `/app/projects/${projectId}/retention`
+        : `/app/projects/${projectId}/reconciliation?valuationId=${valuation.id}`;
 
     const { step, next } = await actOnReviewStep(tx, valuation, webUser, input.decision, input.notes ?? null, { label, actionUrl });
 
@@ -1780,7 +1888,12 @@ export async function generateIpcValuationPdf(projectId: string, ipcId: string):
       },
       projectContractor: { include: { organization: { select: { name: true } } } },
       tranche: true,
-      valuationReports: { where: { supersededAt: null }, orderBy: { revisionNumber: 'desc' }, take: 1 },
+      valuationReports: {
+        where: { supersededAt: null },
+        orderBy: { revisionNumber: 'desc' },
+        take: 1,
+        include: { trancheDecisions: true },
+      },
       lineItems: { include: { boqItem: true }, orderBy: { boqItem: { wbsCode: 'asc' } } },
     },
   });
@@ -1826,6 +1939,7 @@ export async function generateIpcValuationPdf(projectId: string, ipcId: string):
         }
       : null,
     aiExecutiveSummary: ipc.aiExecutiveSummary,
+    releaseDecision: report ? pdfReleaseDecision(report.trancheDecisions, ipc.project.retentionPercentage) : null,
     lineItems: ipc.lineItems.map((li) => ({
       wbsCode: li.boqItem.wbsCode,
       description: li.boqItem.description,

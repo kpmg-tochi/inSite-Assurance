@@ -26,7 +26,8 @@ type UnpdfModule = {
 };
 
 function finish(text: string, engine: string): ExtractionResult {
-  const clean = text.replace(/\u0000/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  // NUL bytes (common in PDF text layers) removed without a control character in a regex.
+  const clean = text.split(String.fromCharCode(0)).join('').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   if (clean.replace(/\s/g, '').length < MIN_TEXT_CHARS) {
     return { status: 'NO_TEXT', reason: 'The document has no readable text (it may be scanned or an image).' };
   }

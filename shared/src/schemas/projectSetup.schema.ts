@@ -1,3 +1,4 @@
+import { RetentionSettingsSchema } from './retention.schema';
 import { z } from 'zod';
 import {
   ContractorExecutionModeEnum,
@@ -134,6 +135,8 @@ export type ProjectSiteStepInput = z.input<typeof ProjectSiteStepSchema>;
 
 export const ProjectFacilityStepSchema = z.object({
   tranches: z.array(FacilityTrancheInputSchema).max(50).default([]),
+  /** Phase 10: retention settings; omitted = unchanged. Shown only with the retention module on. */
+  retention: RetentionSettingsSchema.optional(),
 });
 export type ProjectFacilityStep = z.infer<typeof ProjectFacilityStepSchema>;
 
@@ -317,6 +320,13 @@ export const ProjectSetupDtoSchema = z.object({
         ),
       })
     ),
+    retention: z.object({
+      retentionPercentage: z.number().nullable(),
+      retentionDurationMonths: z.number().int().nullable(),
+      retentionReleaseAtCompletionPct: z.number(),
+      /** Retention already withheld; the percentage applies to later releases only. */
+      heldNgn: z.number(),
+    }),
   }),
   boq: z.object({
     itemCount: z.number().int(),

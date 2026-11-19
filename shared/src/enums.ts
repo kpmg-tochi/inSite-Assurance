@@ -67,6 +67,13 @@ export const ProjectStatusEnum = z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']);
 export type ProjectStatus = z.infer<typeof ProjectStatusEnum>;
 
 /**
+ * Phase 10: where an ACTIVE project is in its life. Independent of ProjectStatus (DRAFT, ACTIVE,
+ * ARCHIVED), which it does not change.
+ */
+export const ConstructionPhaseEnum = z.enum(['ACTIVE_CONSTRUCTION', 'HANDOVER_IN_PROGRESS', 'RETENTION_PERIOD', 'COMPLETED_CLOSED']);
+export type ConstructionPhase = z.infer<typeof ConstructionPhaseEnum>;
+
+/**
  * Contractor model (decision D):
  * - SINGLE_CONTRACTOR: one contractor, one IPC stream.
  * - MAIN_PLUS_SUBS_UNIFIED_IPC: the main contractor submits IPCs covering every package;
@@ -897,6 +904,19 @@ export const AuditActionTypeEnum = z.enum([
   'SCHEDULE_REVISION_APPLIED',
   'SCHEDULE_REVISION_REJECTED',
   'SCHEDULE_REVISION_WITHDRAWN',
+  // Phase 10: handover, retention and defects
+  'HANDOVER_LINK_CREATED',
+  'HANDOVER_LINK_REVOKED',
+  'HANDOVER_SUBMITTED',
+  'HANDOVER_REVIEWED',
+  'PROJECT_PHASE_CHANGED',
+  'RETENTION_WITHHELD',
+  'DEFECT_TICKET_RAISED',
+  'DEFECT_TICKET_UPDATED',
+  'DEFECT_TICKET_CLOSED',
+  'RETENTION_RELEASED',
+  'RETENTION_RELEASE_REQUESTED',
+  'RETENTION_RELEASE_CANCELLED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 
@@ -1053,5 +1073,5 @@ export const BriefPersonaEnum = z.enum(['CONTRACTOR_EXECUTOR', 'INDEPENDENT_VERI
 export type BriefPersona = z.infer<typeof BriefPersonaEnum>;
 
 /** How a valuation came about: a contractor IPC, or a verifier's direct milestone verification. */
-export const ValuationSourceEnum = z.enum(['IPC_CLAIM', 'MILESTONE_DIRECT']);
+export const ValuationSourceEnum = z.enum(['IPC_CLAIM', 'MILESTONE_DIRECT', 'RETENTION_RELEASE']);
 export type ValuationSource = z.infer<typeof ValuationSourceEnum>;

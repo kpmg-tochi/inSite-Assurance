@@ -65,7 +65,20 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
   const save = useSaveSetupStepMutation(projectId);
   const strip = (r: TrancheRow[]) => r.map(({ key: _k, cps, ...t }) => ({ ...t, cps: cps.map(({ key: _c, ...c }) => c) }));
-  const dirty = JSON.stringify(strip(rows)) !== JSON.stringify(strip(initial));
+  // Phase 10: retention settings, shown and saved only with the retention module on.
+  const retentionOn = setup.process.config.enableRetentionModule;
+  const r0 = setup.facility.retention;
+  const initialRetention = useMemo(
+    () => ({
+      pct: r0.retentionPercentage === null ? "" : String(r0.retentionPercentage),
+      months: r0.retentionDurationMonths === null ? "" : String(r0.retentionDurationMonths),
+      completionPct: String(r0.retentionReleaseAtCompletionPct),
+    }),
+    [r0]
+  );
+  const [retention, setRetention] = useState(initialRetention);
+  const retentionDirty = retentionOn && JSON.stringify(retention) !== JSON.stringify(initialRetention);
+  const dirty = JSON.stringify(strip(rows)) !== JSON.stringify(strip(initial)) || retentionDirty;
 
   const total = rows.reduce((s, r) => s + (parseNumberInput(r.amount) ?? 0), 0);
   const over = budget > 0 && total > budget + 0.005;
@@ -90,6 +103,15 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
       });
     });
     if (over) fields.tranches = "Tranche allocations add up to more than the project budget.";
+    const pctValue = retention.pct.trim() === "" ? null : parseNumberInput(retention.pct);
+    const monthsValue = retention.months.trim() === "" ? null : parseNumberInput(retention.months);
+    const completionValue = parseNumberInput(retention.completionPct) ?? 0;
+    if (retentionOn) {
+      if (pctValue !== null && (pctValue < 0 || pctValue > 20)) fields["retention.retentionPercentage"] = "0 to 20";
+      if (pctValue && !monthsValue) fields["retention.retentionDurationMonths"] = "Set the liability period";
+      if (monthsValue !== null && (!Number.isInteger(monthsValue) || monthsValue < 1 || monthsValue > 60)) fields["retention.retentionDurationMonths"] = "1 to 60 months";
+      if (completionValue < 0 || completionValue > 100) fields["retention.retentionReleaseAtCompletionPct"] = "0 to 100";
+    }
     if (Object.keys(fields).length > 0) {
       setErrors({ fields, general: "Some fields need attention." });
       return false;
@@ -109,6 +131,15 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
           status: "PENDING" as const,
         })),
       })),
+      ...(retentionOn
+        ? {
+            retention: {
+              retentionPercentage: pctValue,
+              retentionDurationMonths: monthsValue,
+              retentionReleaseAtCompletionPct: completionValue,
+            },
+          }
+        : {}),
     };
     try {
       await save.mutateAsync({ stepId: "facility", body, silent: opts?.silent });
@@ -227,6 +258,35 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
           </div>
         ))}
       </div>
+      {retentionOn && (
+        <div className="space-y-3 rounded-xl border border-slate-200 p-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">Retention</p>
+            <p className="text-[11px] text-slate-500">
+              A percentage held back from every release until the defects liability period ends. A change applies to later releases only
+              {r0.heldNgn > 0 ? ` (${formatMoney(r0.heldNgn, { currency })} is already held)` : ""}.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <label className={labelClass}>Retention (%)</label>
+              <input inputMode="decimal" placeholder="e.g. 5" className={inputClass(Boolean(errors.fields["retention.retentionPercentage"]))} value={retention.pct} onChange={(e) => setRetention((x) => ({ ...x, pct: e.target.value }))} disabled={readOnly} />
+              <FieldError message={errors.fields["retention.retentionPercentage"]} />
+            </div>
+            <div>
+              <label className={labelClass}>Defects liability period (months)</label>
+              <input inputMode="numeric" placeholder="e.g. 12" className={inputClass(Boolean(errors.fields["retention.retentionDurationMonths"]))} value={retention.months} onChange={(e) => setRetention((x) => ({ ...x, months: e.target.value }))} disabled={readOnly} />
+              <FieldError message={errors.fields["retention.retentionDurationMonths"]} />
+            </div>
+            <div>
+              <label className={labelClass}>Released at practical completion (%)</label>
+              <input inputMode="decimal" className={inputClass(Boolean(errors.fields["retention.retentionReleaseAtCompletionPct"]))} value={retention.completionPct} onChange={(e) => setRetention((x) => ({ ...x, completionPct: e.target.value }))} disabled={readOnly} />
+              <FieldError message={errors.fields["retention.retentionReleaseAtCompletionPct"]} />
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-400">0% at practical completion means everything is released at the end of the period (the default).</p>
+        </div>
+      )}
     </StepSection>
   );
 }

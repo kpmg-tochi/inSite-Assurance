@@ -37,6 +37,9 @@ const CATEGORY_LABELS: Record<WebNotificationCategory, string> = {
   SCHEDULE_BEHIND: "Behind schedule",
   SCHEDULE_REVISION_PENDING: "Schedule revision awaiting approval",
   SCHEDULE_REVISION_DECIDED: "Schedule revision decided",
+  HANDOVER_SUBMITTED: "Handover response",
+  DEFECT_TICKET: "Defect",
+  RETENTION_RELEASE: "Retention release",
 };
 
 interface NotificationsProps {

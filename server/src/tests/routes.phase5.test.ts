@@ -133,8 +133,9 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
       // Every ACTIVE assigned project; the seeded draft ENU-501 (also assigned) is not live on mobile.
       assert.deepEqual(
         body.projects.map((p: { codePrefix: string }) => p.codePrefix).sort(),
-        // EDO-410 is the Phase 7 seeded project (visible through projects:view_all_tenant).
-        ['ABJ-108', 'EDO-410', 'KAN-210', 'LKK-402', 'OGN-305']
+        // EDO-410 (Phase 7), KWR-502 and OGN-501 (Phase 10) are seeded projects visible through
+        // projects:view_all_tenant.
+        ['ABJ-108', 'EDO-410', 'KAN-210', 'KWR-502', 'LKK-402', 'OGN-305', 'OGN-501']
       );
       for (const p of body.projects) {
         assert.equal(p.roleName, body.account.mobileRole.name);
@@ -288,7 +289,7 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
       const me = await request(app).get('/api/v1/auth/me').set(bearer(token));
       assert.equal(me.status, 200, JSON.stringify(me.body));
       assert.equal(me.body.data.actorType, 'MOBILE_USER');
-      assert.equal(me.body.data.projects.length, 5); // + EDO-410 (Phase 7 seed)
+      assert.equal(me.body.data.projects.length, 7); // + EDO-410 (Phase 7), KWR-502 and OGN-501 (Phase 10)
 
       const baseline = await request(app).get(`/api/v1/auth/mobile/projects/${ids.lkk}/baseline`).set(bearer(token));
       assert.equal(baseline.status, 200, JSON.stringify(baseline.body));

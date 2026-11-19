@@ -1,3 +1,4 @@
+import { PortfolioRetentionItemSchema } from './retention.schema';
 import { z } from 'zod';
 import {
   ConditionPrecedentStatusEnum,
@@ -116,6 +117,8 @@ export const PortfolioProjectHealthItemSchema = z.object({
   pendingContractorCount: z.number(),
   /** Phase 9: stored by the schedule-variance job; null without a baseline. */
   scheduleVariance: ScheduleVarianceBadgeSchema.nullable().optional(),
+  /** Phase 10: set when the retention module is on for the project. */
+  retention: PortfolioRetentionItemSchema.nullable().optional(),
 });
 export type PortfolioProjectHealthItem = z.infer<
   typeof PortfolioProjectHealthItemSchema

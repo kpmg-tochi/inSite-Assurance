@@ -52,6 +52,16 @@ export interface ValuationReportPdfInput {
     monitorCertifiedPct: number | null;
     monitorCertifiedNgn: number | null;
   }>;
+  /** Phase 10: the active lender decision with its retention split, when one is recorded. */
+  releaseDecision?: {
+    decision: string;
+    approvedNgn: number;
+    retentionWithheldNgn: number;
+    netReleasedNgn: number;
+    retentionPercentage: number | null;
+  } | null;
+  /** Phase 10: a retention release (no claim, no BOQ lines). */
+  retentionRelease?: { stage: string; contractorName: string } | null;
 }
 
 const moneyFormatter = (currency: string) => (n: number) =>
@@ -68,7 +78,11 @@ export async function generateValuationReportPdfBuffer(
 ): Promise<Buffer> {
   const money = moneyFormatter(data.currency ?? "NGN");
   const direct = data.ipcNumber === null;
-  const subject = direct ? "Direct milestone verification" : `IPC #${data.ipcNumber}`;
+  const subject = data.retentionRelease
+    ? `Retention release (${data.retentionRelease.stage === "FINAL" ? "final" : "practical completion"})`
+    : direct
+      ? "Direct milestone verification"
+      : `IPC #${data.ipcNumber}`;
   return new Promise((resolve, reject) => {
     const cert = data.certification;
     const doc = new PDFDocument({
@@ -143,9 +157,11 @@ export async function generateValuationReportPdfBuffer(
     doc.moveDown(0.4);
     doc.fontSize(10).fillColor("#1e293b");
     doc.text(
-      direct
-        ? `• System Claim from Verified Evidence (no contractor claim): ${money(data.totalClaimedNgn)}`
-        : `• Contractor Requested Amount (${subject}): ${money(data.totalClaimedNgn)}`,
+      data.retentionRelease
+        ? `• Held retention requested for release to ${data.retentionRelease.contractorName}: ${money(data.totalClaimedNgn)}`
+        : direct
+          ? `• System Claim from Verified Evidence (no contractor claim): ${money(data.totalClaimedNgn)}`
+          : `• Contractor Requested Amount (${subject}): ${money(data.totalClaimedNgn)}`,
     );
     if (cert) {
       doc.text(`• ${direct ? "Verified" : "Monitor Certified"} Value (revision ${cert.revisionNumber}): ${money(cert.totalCertifiedNgn)}`);
@@ -154,6 +170,16 @@ export async function generateValuationReportPdfBuffer(
       doc.text(`• Formal Recommendation: ${cert.trancheRecommendation}`);
     } else {
       doc.text("• Certified value, recommended release and holdback: not yet certified");
+    }
+    const rd = data.releaseDecision;
+    if (rd) {
+      doc.text(`• Lender Decision: ${rd.decision}, approved ${money(rd.approvedNgn)}`);
+      if (rd.retentionWithheldNgn > 0) {
+        doc.text(
+          `• Retention Withheld${rd.retentionPercentage !== null ? ` (${rd.retentionPercentage}%)` : ""}: ${money(rd.retentionWithheldNgn)}`,
+        );
+      }
+      doc.text(`• Paid to Contractor: ${money(rd.netReleasedNgn)}`);
     }
 
     doc.moveDown(0.8);

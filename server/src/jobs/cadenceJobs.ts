@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { cadenceHasPeriods, formatDueLabel, getReportingPeriod, periodNoun, ReportingCadence, zonedCalendarDate } from '@insite/shared';
 import { prisma } from '../config/prisma';
 import { sendPushToFieldSession } from '../integrations/push.service';
@@ -12,8 +13,16 @@ import { briefPersonasForProject, generateDispatchForProject } from '../modules/
 import { createMobileNotification, createWebNotification } from '../modules/notifications/notifications.service';
 import { JobContext, registerJob, runUnit } from './runner';
 
-/** Scheduled jobs only ever touch live projects of tenants that are not suspended. */
-export const LIVE_PROJECT_WHERE = { status: 'ACTIVE', tenant: { status: { not: 'SUSPENDED' } } } as const;
+/**
+ * Scheduled jobs only ever touch live projects of tenants that are not suspended. Phase 10: once a
+ * project is in its defects liability period (or closed), construction jobs (briefs, reporting
+ * obligations, mobilization, attendance, schedule variance) stop for it.
+ */
+export const LIVE_PROJECT_WHERE: Prisma.ProjectWhereInput = {
+  status: 'ACTIVE',
+  constructionPhase: { in: ['ACTIVE_CONSTRUCTION', 'HANDOVER_IN_PROGRESS'] },
+  tenant: { status: { not: 'SUSPENDED' } },
+};
 
 /**
  * brief-dispatch: at a project's period start (first workday of the period, at workdayStartTime in

@@ -199,6 +199,8 @@ enum ReportQuerySource {
 enum ValuationSource {
   IPC_CLAIM
   MILESTONE_DIRECT
+  // Phase 10: release of held retention (no IPC, no milestone verification)
+  RETENTION_RELEASE
 }
 
 enum WorkdayAiCheckStatus {
@@ -355,6 +357,66 @@ enum AuditActionType {
   SCHEDULE_REVISION_APPLIED
   SCHEDULE_REVISION_REJECTED
   SCHEDULE_REVISION_WITHDRAWN
+  // Phase 10
+  HANDOVER_LINK_CREATED
+  HANDOVER_LINK_REVOKED
+  HANDOVER_SUBMITTED
+  HANDOVER_REVIEWED
+  PROJECT_PHASE_CHANGED
+  RETENTION_WITHHELD
+  DEFECT_TICKET_RAISED
+  DEFECT_TICKET_UPDATED
+  DEFECT_TICKET_CLOSED
+  RETENTION_RELEASED
+  RETENTION_RELEASE_REQUESTED
+  RETENTION_RELEASE_CANCELLED
+}
+
+// Phase 10: where an ACTIVE project is in its life (ProjectStatus is unchanged).
+enum ConstructionPhase {
+  ACTIVE_CONSTRUCTION
+  HANDOVER_IN_PROGRESS
+  RETENTION_PERIOD
+  COMPLETED_CLOSED
+}
+
+enum HandoverStakeholderType {
+  COMMUNITY_REPRESENTATIVE
+  CLIENT_STAFF
+  END_USER
+  OTHER
+}
+
+enum HandoverDecision {
+  ACCEPTED
+  ACCEPTED_WITH_SNAGS
+  REJECTED
+}
+
+enum DefectSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum DefectTicketStatus {
+  OPEN
+  ASSIGNED
+  RECTIFIED_PENDING_VERIFICATION
+  VERIFIED_CLOSED
+  REJECTED_NOT_A_DEFECT
+}
+
+enum RetentionReleaseStage {
+  COMPLETION
+  FINAL
+}
+
+enum RetentionReleaseRequestStatus {
+  PENDING_CERTIFICATION
+  CERTIFIED
+  CANCELLED
 }
 
 // Phase 8: cadence, mobilization, attendance, jobs and outbound messages
@@ -416,6 +478,8 @@ enum MobileNotificationType {
   MORNING_DELIVERABLE_READY
   SITE_GEOFENCE_WARNING
   REPORT_OVERDUE
+  // Phase 10
+  DEFECT_UPDATE
 }
 
 enum NotificationActionType {
@@ -424,6 +488,8 @@ enum NotificationActionType {
   OPEN_WBS_CHAT
   OPEN_BACKLOG_REVIEW
   OPEN_ASSURANCE_WIZARD
+  // Phase 10
+  OPEN_DEFECTS
 }
 
 // ============================================================================
@@ -673,6 +739,19 @@ model Project {
   // Set when the "behind" web notification went out; cleared when the project recovers.
   scheduleBehindAlertedAt    DateTime?
 
+  // Phase 10: construction phase and retention (dates are YYYY-MM-DD in the project zone).
+  constructionPhase               ConstructionPhase @default(ACTIVE_CONSTRUCTION)
+  constructionPhaseChangedAt      DateTime?
+  retentionPercentage             Decimal?          @db.Decimal(5, 2)
+  retentionReleaseAtCompletionPct Decimal           @default(0) @db.Decimal(5, 2)
+  retentionDurationMonths         Int?
+  practicalCompletionDate         String?
+  retentionStartDate              String?
+  retentionEndDate                String?
+  // Sums of the ProjectContractor balances, kept in the same transactions.
+  retentionHeldNgn                Decimal           @default(0) @db.Decimal(18, 2)
+  retentionReleasedNgn            Decimal           @default(0) @db.Decimal(18, 2)
+
   monitorOrganizationId   String?                  @db.Uuid
   lenderOrganizationId    String?                  @db.Uuid
   contractorExecutionMode ContractorExecutionMode?
@@ -719,6 +798,11 @@ model Project {
   // Phase 9
   boqItemDependencies    BoqItemDependency[]
   scheduleRevisions      ScheduleRevision[]
+  // Phase 10
+  handoverLinks          HandoverLink[]
+  handoverSubmissions    HandoverSubmission[]
+  defectTickets          RetentionDefectTicket[]
+  retentionReleases      RetentionReleaseRequest[]
 
   @@unique([tenantId, codePrefix])
   @@index([tenantId])
@@ -741,6 +825,9 @@ model ProjectContractor {
   allowFieldReporting     Boolean   @default(true)
   plannedMobilizationDate DateTime? @db.Date
   plannedCompletionDate   DateTime? @db.Date
+  // Phase 10: retention per contractor (the project holds the sums).
+  retentionHeldNgn        Decimal   @default(0) @db.Decimal(18, 2)
+  retentionReleasedNgn    Decimal   @default(0) @db.Decimal(18, 2)
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt
 
@@ -751,6 +838,8 @@ model ProjectContractor {
   fieldSessions        FieldAgentSession[]
   ipcClaims            IpcClaim[]
   expectedParticipants ExpectedProjectParticipant[]
+  defectTickets        RetentionDefectTicket[]
+  retentionReleases    RetentionReleaseRequest[]
 
   @@unique([projectId, organizationId])
   @@unique([projectId, tradeCode])
@@ -1253,11 +1342,12 @@ model ValuationReport {
   certifiedAt                   DateTime                @default(now())
   supersededAt                  DateTime?
 
-  project               Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tranche               FacilityTranche        @relation(fields: [trancheId], references: [id], onDelete: Restrict)
-  ipcClaim              IpcClaim?              @relation(fields: [ipcClaimId], references: [id], onDelete: Cascade)
-  milestoneVerification MilestoneVerification? @relation(fields: [milestoneVerificationId], references: [id], onDelete: Restrict)
-  certifiedByUser       User                   @relation("CertifiedByMonitor", fields: [certifiedByUserId], references: [id])
+  project               Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tranche               FacilityTranche          @relation(fields: [trancheId], references: [id], onDelete: Restrict)
+  ipcClaim              IpcClaim?                @relation(fields: [ipcClaimId], references: [id], onDelete: Cascade)
+  milestoneVerification MilestoneVerification?   @relation(fields: [milestoneVerificationId], references: [id], onDelete: Restrict)
+  retentionRelease      RetentionReleaseRequest?
+  certifiedByUser       User                     @relation("CertifiedByMonitor", fields: [certifiedByUserId], references: [id])
   trancheDecisions      TrancheDecision[]
 
   @@unique([ipcClaimId, revisionNumber])
@@ -1297,6 +1387,10 @@ model TrancheDecision {
   // Set on a reversal record: the decision it cancels. Reversal amounts are negative.
   reversesDecisionId            String?            @unique @db.Uuid
   cpSnapshotJson                Json               @default("[]")
+  // Phase 10: retention withheld from this release (negative on a reversal) and its split per
+  // ProjectContractor: [{ projectContractorId, amountNgn }].
+  retentionWithheldNgn          Decimal            @default(0) @db.Decimal(18, 2)
+  retentionAllocationJson       Json               @default("[]")
   decidedAt                     DateTime           @default(now())
 
   valuationReport  ValuationReport  @relation(fields: [valuationReportId], references: [id], onDelete: Cascade)
@@ -1632,16 +1726,20 @@ model WbsChatMessage {
 }
 
 model WebNotification {
-  id                  String   @id @default(uuid()) @db.Uuid
-  projectId           String   @db.Uuid
-  targetPermissionKey String   @default("reports:view_all")
-  targetRoleId        String?  @db.Uuid
-  category            String // REPORT_RESUBMITTED | CONFLICT_FLAG | CONTRACTOR_ONBOARDING | TRANCHE_DISBURSEMENT | MONITOR_QUERY | AI_OMISSION_FLAG
-  title               String
-  description         String   @db.Text
-  actionUrl           String?
-  metadata            Json     @default("{}")
-  createdAt           DateTime @default(now())
+  id                         String   @id @default(uuid()) @db.Uuid
+  projectId                  String   @db.Uuid
+  targetPermissionKey        String   @default("reports:view_all")
+  targetRoleId               String?  @db.Uuid
+  category                   String // REPORT_RESUBMITTED | CONFLICT_FLAG | CONTRACTOR_ONBOARDING | TRANCHE_DISBURSEMENT | MONITOR_QUERY | AI_OMISSION_FLAG
+  title                      String
+  description                String   @db.Text
+  actionUrl                  String?
+  metadata                   Json     @default("{}")
+  // Phase 10: only users of this organisation see it (e.g. the contractor a defect is assigned to).
+  targetOrganizationId       String?  @db.Uuid
+  // Phase 10: hidden from users whose organisation is a contractor on the project (monitoring side only).
+  hideFromProjectContractors Boolean  @default(false)
+  createdAt                  DateTime @default(now())
 
   project Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   reads   WebNotificationRead[]
@@ -1996,4 +2094,144 @@ model ScheduleRevision {
   @@unique([projectId, revisionNumber])
   @@index([projectId, status])
   @@map("schedule_revisions")
+}
+
+// ============================================================================
+// Phase 10: stakeholder handover, retention and defects
+// ============================================================================
+
+// A secure link for an external stakeholder. Only the SHA-256 of the token is stored.
+model HandoverLink {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  projectId           String                  @db.Uuid
+  tokenHash           String                  @unique
+  label               String
+  recipientName       String
+  recipientContact    String
+  stakeholderType     HandoverStakeholderType
+  handoverSummary     String                  @db.Text
+  requiresOtp         Boolean                 @default(true)
+  otpHash             String?
+  otpExpiresAt        DateTime?
+  // Failed code attempts; at the limit the link is locked until re-issued.
+  otpAttempts         Int                     @default(0)
+  lockedAt            DateTime?
+  expiresAt           DateTime
+  maxSubmissions      Int                     @default(1)
+  revokedAt           DateTime?
+  reissuedFromLinkId  String?                 @db.Uuid
+  // Upload allowance reserved by presigned uploads (per-link caps).
+  reservedUploadBytes BigInt                  @default(0)
+  reservedUploadCount Int                     @default(0)
+  createdByUserId     String                  @db.Uuid
+  createdAt           DateTime                @default(now())
+  lastAccessedAt      DateTime?
+
+  project     Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  submissions HandoverSubmission[]
+
+  @@index([projectId, createdAt])
+  @@map("handover_links")
+}
+
+model HandoverSubmission {
+  id               String           @id @default(uuid()) @db.Uuid
+  handoverLinkId   String           @db.Uuid
+  projectId        String           @db.Uuid
+  decision         HandoverDecision
+  submitterName    String
+  submitterRole    String
+  // Plain text (sanitised); never HTML.
+  feedbackText     String           @db.Text
+  // [{ title, location, description, photos: [{ objectKey, fileName, mimeType, byteSize, kind }] }]
+  snagsJson        Json             @default("[]")
+  // [{ objectKey, fileName, mimeType, byteSize, kind }]
+  attachmentsJson  Json             @default("[]")
+  submittedAt      DateTime         @default(now())
+  clientIp         String?
+  userAgent        String?
+  reviewedByUserId String?          @db.Uuid
+  reviewedAt       DateTime?
+  reviewNotes      String?
+
+  link          HandoverLink            @relation(fields: [handoverLinkId], references: [id], onDelete: Cascade)
+  project       Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  defectTickets RetentionDefectTicket[]
+
+  @@index([projectId, submittedAt])
+  @@index([handoverLinkId])
+  @@map("handover_submissions")
+}
+
+model RetentionDefectTicket {
+  id                         String             @id @default(uuid()) @db.Uuid
+  projectId                  String             @db.Uuid
+  // Per-project running number (DEF-001).
+  ticketNumber               Int
+  // The liable party: the main contractor in the unified model unless a subcontractor is named.
+  projectContractorId        String             @db.Uuid
+  boqItemId                  String?            @db.Uuid
+  sourceHandoverSubmissionId String?            @db.Uuid
+  sourceSnagIndex            Int?
+  title                      String
+  description                String             @db.Text
+  location                   String?
+  severity                   DefectSeverity     @default(MEDIUM)
+  status                     DefectTicketStatus @default(OPEN)
+  dueDate                    String?
+  // Stakeholder snag photos (handover uploads; never field evidence).
+  snagPhotoKeys              Json               @default("[]")
+  raisedByUserId             String             @db.Uuid
+  assignedAt                 DateTime?
+  // clientCaptureIds of Phase 4 captures.
+  rectificationCaptureIds    Json               @default("[]")
+  rectificationNotes         String?
+  rectifiedAt                DateTime?
+  rectifiedByLabel           String?
+  verificationCaptureIds     Json               @default("[]")
+  verificationNotes          String?
+  verifiedByUserId           String?            @db.Uuid
+  verifiedByLabel            String?
+  verifiedAt                 DateTime?
+  // Reason for "not a defect" or the last reopen.
+  resolutionReason           String?
+  reopenCount                Int                @default(0)
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
+
+  project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectContractor ProjectContractor   @relation(fields: [projectContractorId], references: [id], onDelete: Restrict)
+  sourceSubmission  HandoverSubmission? @relation(fields: [sourceHandoverSubmissionId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, ticketNumber])
+  @@unique([sourceHandoverSubmissionId, sourceSnagIndex])
+  @@index([projectId, status])
+  @@index([projectContractorId, status])
+  @@map("retention_defect_tickets")
+}
+
+// A request to release held retention for one contractor. Initiated with retention:release_escrow;
+// a licensed monitor's certification creates the RETENTION_RELEASE valuation, which then runs
+// through the disbursement chain like any other valuation.
+model RetentionReleaseRequest {
+  id                  String                        @id @default(uuid()) @db.Uuid
+  projectId           String                        @db.Uuid
+  projectContractorId String                        @db.Uuid
+  stage               RetentionReleaseStage
+  amountNgn           Decimal                       @db.Decimal(18, 2)
+  status              RetentionReleaseRequestStatus @default(PENDING_CERTIFICATION)
+  notes               String?
+  requestedByUserId   String                        @db.Uuid
+  requestedAt         DateTime                      @default(now())
+  certifiedAt         DateTime?
+  cancelledAt         DateTime?
+  valuationReportId   String?                       @unique @db.Uuid
+
+  project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectContractor ProjectContractor @relation(fields: [projectContractorId], references: [id], onDelete: Restrict)
+  valuationReport   ValuationReport?  @relation(fields: [valuationReportId], references: [id], onDelete: Restrict)
+
+  @@index([projectId, status])
+  @@index([projectContractorId])
+  @@map("retention_release_requests")
 }

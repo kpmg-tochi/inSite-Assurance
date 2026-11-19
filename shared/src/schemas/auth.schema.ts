@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { JOIN_CODE_EXAMPLE, JOIN_CODE_REGEX } from "../joinCodes";
 import {
+  ConstructionPhaseEnum,
   ContractorAssuranceStatusEnum,
   FieldPersonaTypeEnum,
   FieldSessionOriginEnum,
@@ -424,6 +425,8 @@ export const MobileBaselinePackSchema = z.object({
    */
   boqItems: z.array(BaselineBoqItemSchema),
   holdPoints: z.array(BaselineBoqItemSchema),
+  /** Phase 10. Absent in older packs: treat as ACTIVE_CONSTRUCTION. */
+  constructionPhase: ConstructionPhaseEnum.optional(),
 });
 export type MobileBaselinePack = z.infer<typeof MobileBaselinePackSchema>;
 

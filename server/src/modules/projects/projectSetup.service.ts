@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import {
   ActivateProjectResponse,
+  addCalendarMonths,
   ContractorExecutionMode,
   CreateProjectDraftRequest,
   GeofenceMode,
@@ -377,6 +378,12 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
           status: cp.status,
         })),
       })),
+      retention: {
+        retentionPercentage: project.retentionPercentage === null ? null : Number(project.retentionPercentage),
+        retentionDurationMonths: project.retentionDurationMonths,
+        retentionReleaseAtCompletionPct: Number(project.retentionReleaseAtCompletionPct),
+        heldNgn: Number(project.retentionHeldNgn),
+      },
     },
     boq,
     reporting: {
@@ -753,9 +760,37 @@ const saveFacility: StepSaver = async ({ tx, project, input }) => {
       });
     }
   }
+  // Phase 10: retention settings. A new percentage applies to later releases only; a new duration
+  // moves the end of a liability period that has already started.
+  const changedFields = ['tranches'];
+  let retentionPayload: Record<string, unknown> | undefined;
+  if (data.retention) {
+    const r = data.retention;
+    const pct = r.retentionPercentage && r.retentionPercentage > 0 ? r.retentionPercentage : null;
+    if (pct !== null && !r.retentionDurationMonths) {
+      throw new AppError('Set the defects liability period for retention.', 422, 'RETENTION_DURATION_REQUIRED');
+    }
+    const current = await tx.project.findUniqueOrThrow({
+      where: { id: project.id },
+      select: { retentionStartDate: true },
+    });
+    await tx.project.update({
+      where: { id: project.id },
+      data: {
+        retentionPercentage: pct,
+        retentionDurationMonths: r.retentionDurationMonths,
+        retentionReleaseAtCompletionPct: r.retentionReleaseAtCompletionPct,
+        ...(current.retentionStartDate
+          ? { retentionEndDate: addCalendarMonths(current.retentionStartDate, r.retentionDurationMonths ?? 0) }
+          : {}),
+      },
+    });
+    changedFields.push('retention');
+    retentionPayload = { ...r, retentionPercentage: pct };
+  }
   return {
-    changedFields: ['tranches'],
-    payload: { trancheCount: data.tranches.length, allocatedTotalNgn: sum },
+    changedFields,
+    payload: { trancheCount: data.tranches.length, allocatedTotalNgn: sum, retention: retentionPayload ?? null },
   };
 };
 

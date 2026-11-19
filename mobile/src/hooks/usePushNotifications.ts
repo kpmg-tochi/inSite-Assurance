@@ -27,6 +27,9 @@ async function routeFor(data: PushData, projectId: string | null): Promise<void>
     case 'OPEN_BACKLOG_REVIEW':
       rootNavigationRef.navigate('BacklogModal');
       return;
+    case 'OPEN_DEFECTS':
+      rootNavigationRef.navigate('Defects');
+      return;
     case 'OPEN_WBS_CHAT': {
       if (projectId && data.wbsItemId) {
         const thread = (await getWbsThreads(projectId).catch(() => [])).find((t) => t.id === data.wbsItemId);

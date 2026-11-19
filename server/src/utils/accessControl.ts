@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response, Router } from 'express';
-import { Prisma, ProjectStatus } from '@prisma/client';
+import { ConstructionPhase, Prisma, ProjectStatus } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { AppError } from '../middleware/error.middleware';
 import {
@@ -77,7 +77,7 @@ export async function assertCallerProjectAccess(params: {
   projectId: string;
   webUser?: WebJwtPayload;
   fieldAgent?: FieldAgentJwtPayload;
-}): Promise<{ id: string; tenantId: string; status: ProjectStatus }> {
+}): Promise<{ id: string; tenantId: string; status: ProjectStatus; constructionPhase: ConstructionPhase }> {
   if (!params.webUser && !params.fieldAgent) {
     throw new AppError('Authentication required', 401, 'UNAUTHORIZED');
   }
@@ -87,13 +87,13 @@ export async function assertCallerProjectAccess(params: {
 
   const row = await prisma.project.findUnique({
     where: { id: params.projectId },
-    select: { id: true, tenantId: true, status: true, createdByUserId: true },
+    select: { id: true, tenantId: true, status: true, createdByUserId: true, constructionPhase: true },
   });
 
   if (!row) {
     throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   }
-  const project = { id: row.id, tenantId: row.tenantId, status: row.status };
+  const project = { id: row.id, tenantId: row.tenantId, status: row.status, constructionPhase: row.constructionPhase };
 
   if (params.fieldAgent) {
     if (params.fieldAgent.projectId !== params.projectId) {
@@ -178,7 +178,9 @@ export function requireProjectAccess(
       webUser: req.webUser,
       fieldAgent: req.fieldAgent,
     }).then((project) => {
-      const refusal = req.webUser ? lifecycleRefusal(project.status, req) : null;
+      const refusal = req.webUser
+        ? lifecycleRefusal(project.status, req)
+        : fieldPhaseRefusal(project.constructionPhase, req);
       next(refusal ?? undefined);
     }, next);
   }, next);
@@ -200,6 +202,25 @@ function lifecycleRefusal(status: ProjectStatus, req: Request): AppError | null 
     return new AppError('This project is archived and read-only', 409, 'PROJECT_ARCHIVED');
   }
   return null;
+}
+
+/**
+ * Phase 10: once construction has ended (defects liability period, or closed), field sessions may
+ * still read, but may only write for defect work: defect actions, the captures that evidence them
+ * (presign, register, and the capture's location ping) and notification reads.
+ */
+const FIELD_DEFECT_WORK_RE = /^\/api\/v1\/projects\/[^/]+\/(?:defects|captures|evidence\/presign|telemetry|notifications)(?:\/|$)/;
+
+function fieldPhaseRefusal(phase: ConstructionPhase, req: Request): AppError | null {
+  if (phase !== 'RETENTION_PERIOD' && phase !== 'COMPLETED_CLOSED') return null;
+  if (req.method === 'GET' || req.method === 'HEAD') return null;
+  const path = (req.originalUrl || '').split('?')[0];
+  if (FIELD_DEFECT_WORK_RE.test(path)) return null;
+  return new AppError(
+    'Construction on this project has ended. Only defect work can be recorded now.',
+    409,
+    'PROJECT_CONSTRUCTION_ENDED'
+  );
 }
 
 /** Registers the project-access guard on every `:projectId` route of a router. */

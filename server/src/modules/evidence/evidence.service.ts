@@ -11,7 +11,7 @@ import { prisma } from '../../config/prisma';
 import { assertFieldReportingAllowed } from '../process/processConfig.service';
 import { AppError } from '../../middleware/error.middleware';
 import { FieldAgentJwtPayload } from '../../middleware/auth.middleware';
-import { assertProjectObjectKey, MEDIA_UPLOAD_POLICY, storageService } from '../../integrations/storage.service';
+import { assertProjectObjectKey, isHandoverObjectKey, MEDIA_UPLOAD_POLICY, storageService } from '../../integrations/storage.service';
 import { computeDifferenceHash, screenCapture } from '../../utils/integrity';
 import { evaluateProjectGeofence, GEOFENCE_CONTEXT_SELECT } from '../../utils/geofenceEvaluation';
 import { verifyDeviceSignature } from '../../utils/deviceSignature';
@@ -96,6 +96,10 @@ export async function registerCapture(params: {
   ]);
 
   assertProjectObjectKey(input.objectKey, project.tenantId, project.id);
+  // Phase 10: stakeholder handover uploads are quarantined and never become field evidence.
+  if (isHandoverObjectKey(input.objectKey, project.tenantId, project.id)) {
+    throw new AppError('File reference must be an object key issued for this project', 400, 'INVALID_OBJECT_KEY');
+  }
   const policy = MEDIA_UPLOAD_POLICY[input.mediaType];
   const mimeType = input.mimeType.toLowerCase();
   if (!policy.mimeTypes.includes(mimeType)) {

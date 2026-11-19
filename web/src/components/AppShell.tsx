@@ -15,7 +15,11 @@ import {
   FolderKanban,
   ArrowRight,
   CalendarRange,
+  Handshake,
+  Wrench,
 } from "lucide-react";
+import { ProjectPhaseBanner } from "./closeout/ProjectPhaseBanner";
+import { useProjectProcess } from "../queries/process/useProcessQueries";
 import type { ProjectSummaryDto } from "../api/types";
 import { useAuth } from "../lib/auth-context";
 import { useDemoAccounts } from "../config/useDemoAccounts";
@@ -31,6 +35,15 @@ interface AppShellProps {
   headerActions?: React.ReactNode;
   children: React.ReactNode;
 }
+
+/** Phase 10: who sees the Retention and defects tab (same as the server route). */
+const RETENTION_VIEW_PERMISSIONS = [
+  "retention:manage_defects",
+  "retention:release_escrow",
+  "ipc:certify_valuation",
+  "tranche:approve_disbursement",
+  "audit:view_ledger",
+];
 
 export function AppShell({
   projects,
@@ -101,6 +114,9 @@ export function AppShell({
   const projectBasePath = selectedProject
     ? `/app/projects/${selectedProject.id}`
     : "/app/projects";
+
+  // Phase 10: the Handover and Retention tabs exist only when the module is on for the project.
+  const closeout = useProjectProcess(selectedProject?.id, selectedProject?.status !== "DRAFT").data?.config;
 
   const recentActiveProjects = React.useMemo(() => {
     const active = projects.filter((p) => p.certifiedProgressPct < 100);
@@ -300,6 +316,36 @@ export function AppShell({
               >
                 <CalendarRange className="w-4 h-4 shrink-0" />
                 {!sidebarCollapsed && <span className="truncate">Schedule</span>}
+              </NavLink>
+            )}
+
+            {/* Phase 10: handover and retention, shown only when the module is on for the project */}
+            {selectedProject && closeout?.enableHandoverModule && (hasPermission("handover:manage_links") || hasPermission("handover:review_feedback")) && (
+              <NavLink
+                to={`${projectBasePath}/handover`}
+                title="Handover"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                    isActive ? "bg-white/15 text-white shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`
+                }
+              >
+                <Handshake className="w-4 h-4 shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">Handover</span>}
+              </NavLink>
+            )}
+            {selectedProject && closeout?.enableRetentionModule && RETENTION_VIEW_PERMISSIONS.some((k) => hasPermission(k)) && (
+              <NavLink
+                to={`${projectBasePath}/retention`}
+                title="Retention and defects"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                    isActive ? "bg-white/15 text-white shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`
+                }
+              >
+                <Wrench className="w-4 h-4 shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">Retention and defects</span>}
               </NavLink>
             )}
 
@@ -570,6 +616,12 @@ export function AppShell({
                   </span>
                 )}
               </p>
+              {/* Phase 10: construction phase and phase-change actions */}
+              {!isExecutive && selectedProject && (
+                <div className="mt-1.5">
+                  <ProjectPhaseBanner projectId={selectedProject.id} projectStatus={selectedProject.status} />
+                </div>
+              )}
             </div>
           </div>
 

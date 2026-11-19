@@ -155,7 +155,8 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
     fieldPersonaType: 'INDEPENDENT_VERIFIER',
     assuranceWeight: 1.0,
     requiresIdentityAssurance: false,
-    permissionKeys: [...FIELD_BASE_PERMISSIONS],
+    // Phase 10: verifiers check and close defect rectification during the liability period.
+    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'retention:manage_defects'],
   },
   {
     name: 'Independent Resident Clerk of Works',
@@ -167,7 +168,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
     fieldPersonaType: 'INDEPENDENT_VERIFIER',
     assuranceWeight: 0.85,
     requiresIdentityAssurance: false,
-    permissionKeys: [...FIELD_BASE_PERMISSIONS],
+    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'retention:manage_defects'],
   },
   {
     name: 'Contractor Site Engineer',

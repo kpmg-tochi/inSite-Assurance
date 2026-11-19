@@ -96,6 +96,15 @@ const NOTIFICATION_VISUALS: Record<
     badgeText: "Report overdue",
     pillVariant: "negative",
   },
+  // Phase 10
+  DEFECT_UPDATE: {
+    icon: "tool",
+    accentColor: "#0369A1",
+    iconBg: "#E0F2FE",
+    badgeText: "Defect",
+    pillVariant: "info",
+    ctaLabel: "Open defects",
+  },
 };
 
 export interface NotificationCardProps {

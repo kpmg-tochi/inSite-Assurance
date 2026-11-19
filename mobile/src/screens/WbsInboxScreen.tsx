@@ -32,6 +32,8 @@ import { PeriodCheckInCard } from "../components/PeriodCheckInCard";
 import { cadenceCopy } from "../utils/projectCadence";
 import type { RootStackParamList } from "../navigation/types";
 import { Feather } from "@expo/vector-icons";
+import { getLoadedBaselinePack } from "../storage/baselineStore";
+import { showDefectsEntry } from "../utils/defects";
 
 type InboxTab = "ACTIVE" | "REPORTED";
 
@@ -70,6 +72,8 @@ export const WbsInboxScreen: React.FC = () => {
     navigation.navigate("WbsThread", { wbsItem });
   const onOpenProfile = () => navigation.navigate("ProfileModal");
   const onOpenNotifications = () => navigation.navigate("NotificationsModal");
+  // Phase 10: defect work once the project is in handover or its liability period.
+  const defectsVisible = showDefectsEntry(getLoadedBaselinePack(projectId)?.constructionPhase, activeContext?.permissions);
   const onOpenIncidentModal = () => navigation.navigate("IncidentModal");
   const onOpenBacklogModal = () => navigation.navigate("BacklogModal");
   const [dismissedError, setDismissedError] = useState(false);
@@ -242,6 +246,18 @@ export const WbsInboxScreen: React.FC = () => {
 
           {/* Right Action Icons + Profile Avatar with presence badge */}
           <View style={styles.headerActions}>
+            {defectsVisible && (
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={() => navigation.navigate("Defects")}
+                activeOpacity={0.7}
+                accessibilityLabel="Defects"
+              >
+                <Text style={styles.iconText}>
+                  <Feather name="tool" size={16} color={"#fff"} />
+                </Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.iconButton}
               onPress={onOpenNotifications}

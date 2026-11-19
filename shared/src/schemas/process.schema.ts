@@ -32,7 +32,6 @@ export const ProjectProcessConfigSchema = z.object({
   enableAiOmissionCheck: z.boolean(),
   enableAiStandardsCheck: z.boolean(),
   requireReportApproval: z.boolean(),
-  /** Stored only; Phase 10 gives them behaviour. */
   enableHandoverModule: z.boolean(),
   enableRetentionModule: z.boolean(),
 });
@@ -88,11 +87,11 @@ export const PROCESS_TOGGLE_META: Record<
   },
   enableHandoverModule: {
     label: 'Stakeholder handover',
-    description: 'Stored now; the handover module arrives in a later release.',
+    description: 'Send stakeholders a secure link to accept the works, accept with snags or reject. Off: hidden and refused.',
   },
   enableRetentionModule: {
     label: 'Retention and defects',
-    description: 'Stored now; the retention module arrives in a later release.',
+    description: 'Withhold a percentage of every release, track defects in the liability period and release retention when they clear.',
   },
 };
 

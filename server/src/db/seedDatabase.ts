@@ -18,6 +18,7 @@ import { evaluateGeofence } from "../utils/geofenceEvaluation";
 import { seedPhase6Projects } from "./seedPhase6";
 import { seedPhase7 } from "./seedPhase7";
 import { seedPhase9 } from "./seedPhase9";
+import { seedPhase10 } from "./seedPhase10";
 import { projectObjectPrefix } from "../integrations/storage.service";
 import { CADENCE_PROJECT_SELECT, cadenceSettingsOf, periodKeyForDate } from "../modules/cadence/cadence.service";
 
@@ -229,6 +230,11 @@ async function runSeed(): Promise<void> {
   await prisma.mobileNotification.deleteMany();
   await prisma.approvalAction.deleteMany();
   await prisma.approvalStep.deleteMany();
+  // Phase 10 (release requests restrict deleting valuations; tickets restrict deleting contractors).
+  await prisma.retentionReleaseRequest.deleteMany();
+  await prisma.retentionDefectTicket.deleteMany();
+  await prisma.handoverSubmission.deleteMany();
+  await prisma.handoverLink.deleteMany();
   await prisma.trancheDecision.deleteMany();
   await prisma.valuationReport.deleteMany();
   await prisma.milestoneVerification.deleteMany();
@@ -1651,6 +1657,15 @@ async function runSeed(): Promise<void> {
 
   // Phase 9: schedule baselines (one project on schedule, one four weeks behind with a pending revision).
   await seedPhase9();
+
+  // Phase 10: one project in handover (pending link), one in its defects liability period.
+  await seedPhase10({
+    tenantId: defaultTenant.id,
+    monitorOrgId: monitorOrg.id,
+    lenderOrgId: lenderOrg.id,
+    civilContractorOrgId: contractorOrg.id,
+    monitorUserId: monitorUser.id,
+  });
 
   console.log("✅ Seed complete!");
   console.log(

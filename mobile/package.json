@@ -5,11 +5,11 @@
   "main": "index.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/security/signing.test.ts src/storage/outbox/outboxPolicy.test.ts src/storage/reportPayload.test.ts src/config/authRegistry.test.ts src/utils/joinCodeInput.test.ts src/utils/personaCopy.test.ts src/utils/reportStatus.test.ts src/storage/db/migrations.test.ts src/utils/projectCadence.test.ts"
+    "test": "tsx --test src/security/signing.test.ts src/storage/outbox/outboxPolicy.test.ts src/storage/reportPayload.test.ts src/config/authRegistry.test.ts src/utils/joinCodeInput.test.ts src/utils/personaCopy.test.ts src/utils/reportStatus.test.ts src/storage/db/migrations.test.ts src/utils/projectCadence.test.ts src/utils/defects.test.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
