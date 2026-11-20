@@ -166,7 +166,7 @@ export const useRequestRetentionReleaseMutation = (projectId: string) => {
     mutationFn: (body: RequestRetentionReleaseRequest) => requestRetentionRelease(projectId, body),
     onSuccess: () => {
       invalidateCloseout(queryClient, projectId);
-      toast.success('Release requested. A licensed certifier must certify it next.');
+      toast.success('Release requested. A certifier must certify it next.');
     },
     onError: (err) => toast.error(errorMessage(err, 'Could not request the release.')),
   });

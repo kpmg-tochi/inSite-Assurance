@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import type {
   CertificationComputation,
   CertifyIpcValuationRequest,
@@ -7,9 +6,14 @@ import type {
   MonitorRecommendation,
 } from "@insite/shared";
 import { CustomSelect, type CustomSelectOption } from "../../../components/common";
-import { useAuth, useTerm } from "../../../lib/auth-context";
+import { useTerm } from "../../../lib/auth-context";
 import { IS_DEMO_MODE } from "../../../config/demoMode";
-import { formatLicenseCredential, formatNaira } from "../../../lib/formatters";
+import { formatNaira } from "../../../lib/formatters";
+import {
+  CertifierRegistrationBox,
+  signatureRegistrationSuffix,
+  useCertifierRegistration,
+} from "../../../components/credentials/CertifierRegistration";
 import {
   useCertificationPreviewMutation,
   useCertifyValuationMutation,
@@ -46,11 +50,11 @@ export function CertifyValuationModal({
   ipc: IpcClaimDto;
   onClose: () => void;
 }) {
-  const { user } = useAuth();
   const term = useTerm();
   const previewMutation = useCertificationPreviewMutation(projectId);
   const certifyMutation = useCertifyValuationMutation(projectId);
-  const hasLicence = Boolean(user?.professionalLicenseType && user?.professionalLicenseNumber);
+  // Phase 12: the project's registration policy decides whether a registration is needed.
+  const { blocked: registrationBlocked, registration } = useCertifierRegistration(projectId);
 
   const [recommendation, setRecommendation] = useState<MonitorRecommendation>("SUPPORT_WITH_HOLDBACK");
   const [releaseAmount, setReleaseAmount] = useState("");
@@ -118,20 +122,7 @@ export function CertifyValuationModal({
       maxWidth="max-w-2xl"
     >
       <form onSubmit={handleSubmit} className="p-5 space-y-4">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Certifier (from your profile)</div>
-          <div className="font-semibold text-slate-900 mt-0.5">{user?.fullName}</div>
-          {hasLicence ? (
-            <div className="text-brand-primary font-medium">
-              {formatLicenseCredential(user?.professionalLicenseType, user?.professionalLicenseNumber)}
-            </div>
-          ) : (
-            <div className="text-rose-700 font-medium mt-1">
-              Your profile has no professional licence, so you cannot certify. Ask a user administrator to add your licence type and number in{" "}
-              <Link to="/app/settings" className="underline">Settings</Link>.
-            </div>
-          )}
-        </div>
+        <CertifierRegistrationBox projectId={projectId} />
 
         {!ipc.actions.certify.allowed && <BlockedNotice>{ipc.actions.certify.reason}</BlockedNotice>}
 
@@ -216,8 +207,9 @@ export function CertifyValuationModal({
         <label className="flex items-start gap-2 text-xs text-slate-700">
           <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5" />
           <span>
-            I certify that these percentages reflect my independent professional assessment, and I sign this {term("valuation", { lower: true })}
-            with the licence shown above.
+            I certify that these percentages reflect my independent professional assessment, and I sign this{" "}
+            {term("valuation", { lower: true })}
+            {signatureRegistrationSuffix(registration)}.
           </span>
         </label>
 
@@ -226,7 +218,7 @@ export function CertifyValuationModal({
           submitLabel="Sign and certify"
           pendingLabel="Certifying..."
           isPending={certifyMutation.isPending}
-          disabled={!ack || !formReady || !hasLicence || !ipc.actions.certify.allowed}
+          disabled={!ack || !formReady || registrationBlocked || !ipc.actions.certify.allowed}
         />
       </form>
     </ModalShell>

@@ -32,6 +32,8 @@ import {
 import { primaryCategory, resolveOrganization } from '../organizations/organizations.service';
 import { recordAuditEvent } from '../audit/audit.service';
 import { seedStarterTemplates } from '../process/workflowTemplates.service';
+import { provisionDefaultRegistrationBodies } from '../credentials/registrationBodies.service';
+import { normaliseProfileRegistration } from '../credentials/credentialPolicy.service';
 import { issueJoinCodesForRoleOnAllProjects } from '../projects/joinCodes.service';
 import { sendPushToMobileUser } from '../../integrations/push.service';
 
@@ -547,8 +549,8 @@ export async function listUsersForTenant(tenantId: string) {
       organizationName: u.organization.name,
       organizationCategory: primaryCategory(u.organization.categories),
       organizationCategories: u.organization.categories as OrganizationCategory[],
-      professionalLicenseType: u.professionalLicenseType,
-      professionalLicenseNumber: u.professionalLicenseNumber,
+      professionalRegistrationBodyCode: u.professionalRegistrationBodyCode,
+      professionalRegistrationNumber: u.professionalRegistrationNumber,
       phoneNumber: u.phoneNumber,
       mobileRoleId: u.mobileRoleId,
       mobileRoleName: u.mobileRole?.name ?? null,
@@ -622,8 +624,10 @@ export async function createUserInTenant(webUser: WebJwtPayload, input: CreateTe
         mobileRoleId: mobileRole?.id ?? null,
         phoneNumber: input.phoneNumber ?? null,
         organizationId: org.id,
-        professionalLicenseType: input.professionalLicenseType ?? null,
-        professionalLicenseNumber: input.professionalLicenseNumber ?? null,
+        ...(await normaliseProfileRegistration(tx, tenantId, {
+          code: input.professionalRegistrationBodyCode ?? null,
+          number: input.professionalRegistrationNumber ?? null,
+        })),
       },
     });
 
@@ -711,6 +715,18 @@ export async function assignUserProjectsAndRole(
       : null;
   const phoneChanged =
     input.phoneNumber !== undefined && (input.phoneNumber ?? null) !== targetUser.phoneNumber;
+  // Phase 12: registration body and number (omitted = unchanged).
+  const registration = await normaliseProfileRegistration(
+    prisma,
+    targetUser.tenantId,
+    { code: input.professionalRegistrationBodyCode, number: input.professionalRegistrationNumber },
+    targetUser
+  );
+  const registrationChanged =
+    (registration.professionalRegistrationBodyCode !== undefined &&
+      registration.professionalRegistrationBodyCode !== targetUser.professionalRegistrationBodyCode) ||
+    (registration.professionalRegistrationNumber !== undefined &&
+      registration.professionalRegistrationNumber !== targetUser.professionalRegistrationNumber);
 
   const validProjects =
     input.projectIds.length > 0
@@ -728,13 +744,14 @@ export async function assignUserProjectsAndRole(
   const revokeSessions = Boolean(newRole) || deactivating;
 
   await prisma.$transaction(async (tx) => {
-    if (newRole || input.isActive !== undefined || mobileRoleChanged || phoneChanged) {
+    if (newRole || input.isActive !== undefined || mobileRoleChanged || phoneChanged || registrationChanged) {
       await tx.user.update({
         where: { id: userId },
         data: {
           ...(newRole ? { roleId: newRole.id } : {}),
           ...(mobileRoleChanged ? { mobileRoleId: nextMobileRole?.id ?? null } : {}),
           ...(phoneChanged ? { phoneNumber: input.phoneNumber ?? null } : {}),
+          ...(registrationChanged ? registration : {}),
           ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
           ...(revokeSessions ? { tokenVersion: { increment: 1 } } : {}),
         },
@@ -768,7 +785,7 @@ export async function assignUserProjectsAndRole(
         payload: { userId },
       });
     }
-    if (newRole || reactivating || mobileRoleChanged || phoneChanged) {
+    if (newRole || reactivating || mobileRoleChanged || phoneChanged || registrationChanged) {
       await recordAuditEvent(tx, {
         tenantId: targetUser.tenantId,
         projectId: null,
@@ -782,7 +799,9 @@ export async function assignUserProjectsAndRole(
               ? ` mobile access → "${nextMobileRole.name}"`
               : ' mobile role removed'
             : ''
-        }${phoneChanged ? ' phone number changed' : ''}${reactivating ? ' reactivated' : ''}.`,
+        }${phoneChanged ? ' phone number changed' : ''}${registrationChanged ? ' professional registration changed' : ''}${
+          reactivating ? ' reactivated' : ''
+        }.`,
         payload: {
           userId,
           previousRoleId: targetUser.roleId,
@@ -790,6 +809,7 @@ export async function assignUserProjectsAndRole(
           previousMobileRoleId: targetUser.mobileRoleId,
           newMobileRoleId: mobileRoleChanged ? nextMobileRole?.id ?? null : targetUser.mobileRoleId,
           phoneChanged,
+          registrationChanged,
           reactivated: reactivating,
         },
       });
@@ -1182,6 +1202,8 @@ export async function createTenantWithDefaults(webUser: WebJwtPayload, input: Cr
     const roles = await provisionDefaultRoles(tx, tenant.id);
     // Phase 7: the three starter workflow templates.
     await seedStarterTemplates(tx, tenant.id);
+    // Phase 12: the default registration bodies.
+    await provisionDefaultRegistrationBodies(tx, tenant.id);
 
     let adminUserId: string | null = null;
     if (input.adminEmail && input.adminPassword && input.adminFullName) {

@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Wallet, CheckCircle2, ShieldAlert, Printer, AlertTriangle } from "lucide-react";
 import { canIpcTransition, type IpcClaimDto, type IpcClaimStatus, type IpcLineItemDto } from "@insite/shared";
 import type { BoqItemRecordDto, ProjectSummaryDto } from "../../api/types";
-import { formatCompactNaira, formatDateShort, formatDateTimeShort, formatNaira } from "../../lib/formatters";
+import { formatCompactNaira, formatDateShort, formatDateTimeShort, formatNaira, formatRegistrationCredential } from "../../lib/formatters";
 import { EvidenceOverlayDrawer } from "../../components/EvidenceOverlayDrawer";
 import { useAuth, useTerm } from "../../lib/auth-context";
 import { CustomSelect, type CustomSelectOption, KpiCard } from "../../components/common";
@@ -232,7 +232,7 @@ export function ReconciliationWorkbenchPage({
             <button
               type="button"
               onClick={() => setModal({ kind: "certify" })}
-              // The modal explains any remaining blocker (licence, open queries); only the state gates opening it.
+              // The modal explains any remaining blocker (registration under the project policy, open queries); only the state gates opening it.
               disabled={!canIpcTransition(ipc.status, "certify")}
               title={actions.certify.reason ?? undefined}
               className={buttonPrimary}
@@ -396,9 +396,12 @@ export function ReconciliationWorkbenchPage({
                   <span className="font-semibold text-slate-800">
                     Revision {report.revisionNumber}: {report.certifierFullName}
                   </span>
-                  <span className="text-[11px] text-brand-primary font-bold">
-                    {report.certifierLicenseType} #{report.certifierLicenseNumber}
-                  </span>
+                  {/* Phase 12: printed only when the certifier gave a registration. */}
+                  {formatRegistrationCredential(report.certifierLicenseType, report.certifierLicenseNumber) && (
+                    <span className="text-[11px] text-brand-primary font-bold">
+                      {formatRegistrationCredential(report.certifierLicenseType, report.certifierLicenseNumber)}
+                    </span>
+                  )}
                 </div>
                 <div className="text-[11px] text-slate-500 mt-0.5">
                   {report.trancheRecommendation.replace(/_/g, " ").toLowerCase()} · release {formatNaira(report.recommendedReleaseAmountNgn)} · certified{" "}

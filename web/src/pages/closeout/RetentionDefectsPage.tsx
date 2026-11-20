@@ -18,6 +18,11 @@ import { CustomSelect, KpiCard } from "../../components/common";
 import { TableBadge } from "../../components/table/StandardTable";
 import { CapturePhoto } from "../../components/evidence/CaptureMedia";
 import { BlockedNotice, ModalActions, ModalShell, inputClass } from "../reconciliation/components/ModalShell";
+import {
+  CertifierRegistrationBox,
+  signatureRegistrationSuffix,
+  useCertifierRegistration,
+} from "../../components/credentials/CertifierRegistration";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { useDefectTicketsQuery, useRetentionSummaryQuery } from "../../queries/closeout/useCloseoutQueries";
 import {
@@ -241,7 +246,7 @@ function RequestReleaseModal({
     <ModalShell title={`Request ${term("retention", { lower: true })} release`} subtitle={`${contractor.contractorName} · ${STAGE_LABEL[stage]}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3 p-5 text-xs">
         <p className="text-slate-600">
-          A licensed certifier certifies the release next; it then follows the project's disbursement approval chain like any other{" "}
+          A certifier certifies the release next; it then follows the project's disbursement approval chain like any other{" "}
           {term("valuation", { lower: true })}.
         </p>
         <label className="block space-y-1">
@@ -332,6 +337,8 @@ function ActionButton({ onClick, children, primary }: { onClick: () => void; chi
 function CertifyModal({ projectId, request, onClose }: { projectId: string; request: RetentionReleaseRequestDto; onClose: () => void }) {
   const mutation = useCertifyRetentionReleaseMutation(projectId);
   const term = useTerm();
+  // Phase 12: the project's registration policy decides whether a registration is needed.
+  const { blocked: registrationBlocked, registration } = useCertifierRegistration(projectId);
   const [summary, setSummary] = useState("");
   const [ack, setAck] = useState(false);
   const submit = async (e: React.FormEvent) => {
@@ -346,15 +353,19 @@ function CertifyModal({ projectId, request, onClose }: { projectId: string; requ
   return (
     <ModalShell title={`Certify ${term("retention", { lower: true })} release`} subtitle={`${formatNaira(request.amountNgn)} · ${request.contractorName}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3 p-5 text-xs">
+        <CertifierRegistrationBox projectId={projectId} />
         <label className="block space-y-1">
           <span className="font-semibold text-slate-700">Certification summary</span>
           <textarea rows={4} required minLength={10} value={summary} onChange={(e) => setSummary(e.target.value)} className={inputClass} maxLength={4000} />
         </label>
         <label className="flex items-start gap-2">
           <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5" />
-          <span>I certify this release under my professional licence. My name and licence are recorded on the {term("valuation", { lower: true })}.</span>
+          <span>
+            I certify this release{signatureRegistrationSuffix(registration)}. My name
+            {registration ? " and registration are" : " is"} recorded on the {term("valuation", { lower: true })}.
+          </span>
         </label>
-        <ModalActions onCancel={onClose} submitLabel="Certify" pendingLabel="Certifying…" isPending={mutation.isPending} disabled={!ack || summary.trim().length < 10} />
+        <ModalActions onCancel={onClose} submitLabel="Certify" pendingLabel="Certifying…" isPending={mutation.isPending} disabled={!ack || summary.trim().length < 10 || registrationBlocked} />
       </form>
     </ModalShell>
   );

@@ -7,12 +7,12 @@ import {
   LenderDecisionTypeEnum,
   MediaTypeEnum,
   MonitorRecommendationEnum,
-  ProfessionalLicenseTypeEnum,
   QueryStatusEnum,
   GeofenceStatusEnum,
   ValuationSourceEnum,
 } from '../enums';
 import { ApprovalProgressDtoSchema, MilestoneVerificationLineSchema } from './process.schema';
+import { MilestonePaymentTermsSchema, TrancheCompletionRuleEnum, TranchePaymentBasisEnum } from './milestonePayment.schema';
 
 // ============================================================================
 // Requests
@@ -216,6 +216,11 @@ export const TrancheDtoSchema = z.object({
   targetCompletionPct: z.number(),
   isReleased: z.boolean(),
   conditionsPrecedent: z.array(ConditionPrecedentDtoSchema).optional(),
+  /** Phase 12: how this payment milestone pays. */
+  paymentBasis: TranchePaymentBasisEnum.default('MEASURED'),
+  completionRule: TrancheCompletionRuleEnum.nullable().default(null),
+  fixedReleaseAmountNgn: z.number().nullable().default(null),
+  completionRequiredItemPct: z.number().default(100),
 });
 export type TrancheDto = z.infer<typeof TrancheDtoSchema>;
 
@@ -285,8 +290,11 @@ export const ValuationReportDtoSchema = z.object({
   executiveCertificationSummary: z.string(),
   certifiedByUserId: z.string().uuid(),
   certifierFullName: z.string(),
-  certifierLicenseType: ProfessionalLicenseTypeEnum,
-  certifierLicenseNumber: z.string(),
+  /** Phase 12: registration snapshot; all null when none was given or the policy is HIDDEN. */
+  certifierLicenseType: z.string().nullable(),
+  certifierLicenseNumber: z.string().nullable(),
+  certifierRegistrationBodyName: z.string().nullable(),
+  certifierRegistrationPrefix: z.string().nullable(),
   certifiedAt: z.string().datetime(),
   supersededAt: z.string().datetime().nullable(),
   decisions: z.array(TrancheDecisionDtoSchema),
@@ -302,6 +310,8 @@ export const DirectMilestoneValuationDtoSchema = ValuationReportDtoSchema.extend
   verificationSummary: z.string(),
   lines: z.array(MilestoneVerificationLineSchema),
   activeDecision: TrancheDecisionDtoSchema.nullable(),
+  /** Phase 12: basis and completion criteria as verified (null for measured verifications made before Phase 12). */
+  paymentTerms: MilestonePaymentTermsSchema.nullable().default(null),
   actions: z.object({
     review: z.object({ allowed: z.boolean(), reason: z.string().nullable() }),
     decide: z.object({ allowed: z.boolean(), reason: z.string().nullable() }),

@@ -3,13 +3,14 @@ import { ShieldCheck, User, KeyRound, Users, Palette, Building2, Workflow, Layer
 import { ProjectTypesTab } from "../../components/deliveryModels/ProjectTypesTab";
 import { RegionsCard } from "../../components/deliveryModels/RegionsCard";
 import { TerminologyCard } from "../../components/deliveryModels/TerminologyCard";
+import { ProfessionalRegistrationCard } from "../../components/credentials/ProfessionalRegistrationCard";
 import { toast } from "sonner";
 import type { FieldSessionRosterDto } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth } from "../../lib/auth-context";
 import {
   formatDateTimeShort,
-  formatLicenseCredential,
+  formatRegistrationCredential,
 } from "../../lib/formatters";
 import ContractorVerificationQueue from "../../components/ContractorVerificationQueue";
 import { useContractorVerificationsQuery } from "../../queries/projects/useContractorVerificationQueries";
@@ -454,6 +455,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
           {canManageSettings && <WorkspaceSettingsCard />}
           {canManageSettings && <EvidenceRatingsCard />}
           {canManageSettings && <TerminologyCard />}
+          {canManageSettings && <ProfessionalRegistrationCard />}
         </div>
       )}
 
@@ -595,14 +597,20 @@ export function SettingsPage({ project }: SettingsPageProps) {
               </div>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
                 <span className="text-slate-400 block text-[11px]">
-                  Professional Credential
+                  Professional registration
                 </span>
                 <span className="font-bold text-brand-primary">
-                  {formatLicenseCredential(
-                    user?.professionalLicenseType,
-                    user?.professionalLicenseNumber,
-                  )}
+                  {formatRegistrationCredential(
+                    user?.professionalRegistrationBodyCode,
+                    user?.professionalRegistrationNumber,
+                  ) ?? "None on file"}
                 </span>
+                {user?.certifierRegistrationRequirement === "REQUIRED" &&
+                  !user?.professionalRegistrationNumber && (
+                    <span className="block text-[11px] text-amber-700 mt-1">
+                      Certifiers in this workspace need a registration. Ask a user administrator to add yours.
+                    </span>
+                  )}
               </div>
             </div>
           </div>

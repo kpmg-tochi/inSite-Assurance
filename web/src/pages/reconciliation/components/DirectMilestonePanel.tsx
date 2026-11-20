@@ -1,16 +1,23 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { ChevronDown, ChevronRight, Download } from "lucide-react";
-import type {
-  DirectMilestoneSuggestionDto,
-  DirectMilestoneValuationDto,
-  MonitorRecommendation,
-  VerifyDirectMilestoneRequest,
+import {
+  evaluateMilestoneCompletion,
+  type DirectMilestoneSuggestionDto,
+  type DirectMilestoneValuationDto,
+  type MilestonePaymentTerms,
+  type MonitorRecommendation,
+  type VerifyDirectMilestoneRequest,
 } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../../api/types";
 import type { DirectMilestoneComputation } from "../../../api/reconciliation/reconciliationApi";
 import { useAuth, useTerm } from "../../../lib/auth-context";
-import { formatDateTimeShort, formatLicenseCredential, formatNaira } from "../../../lib/formatters";
+import { formatDateTimeShort, formatNaira, formatRegistrationCredential } from "../../../lib/formatters";
+import {
+  CertifierRegistrationBox,
+  signatureRegistrationSuffix,
+  useCertifierRegistration,
+} from "../../../components/credentials/CertifierRegistration";
 import { CustomSelect, type CustomSelectOption } from "../../../components/common";
 import Loader from "../../../components/Loader";
 import { ApprovalProgressBar } from "../../../components/process/ApprovalProgressBar";
@@ -25,6 +32,7 @@ import {
   useVerifyDirectMilestoneMutation,
 } from "../../../mutations/reconciliation/useReconciliationMutations";
 import { BlockedNotice, ModalShell, inputClass } from "./ModalShell";
+import { PaymentTermsBox } from "../../../components/payments/PaymentTermsBox";
 import { ReverseTrancheDecisionModal, TrancheDecisionModal } from "./LenderDecisionModal";
 
 const RECOMMENDATION_OPTIONS: CustomSelectOption<MonitorRecommendation>[] = [
@@ -200,9 +208,10 @@ function VerifyMilestoneModal({
   holdPointsOn: boolean;
   onClose: () => void;
 }) {
-  const { user } = useAuth();
   const term = useTerm();
-  const hasLicence = Boolean(user?.professionalLicenseType && user?.professionalLicenseNumber);
+  // Phase 12: the project's registration policy decides whether a registration is needed.
+  const { blocked: registrationBlocked, registration } = useCertifierRegistration(project.id);
+  const [holdbackReason, setHoldbackReason] = useState("");
   const openTranches = project.tranches.filter((t) => !t.isReleased);
   const [step, setStep] = useState<FlowStep>(openTranches.length === 1 ? "items" : "tranche");
   const [trancheId, setTrancheId] = useState<string>(openTranches.length === 1 ? openTranches[0].id : "");
@@ -239,6 +248,36 @@ function VerifyMilestoneModal({
   const verifiesSomething = Boolean(
     suggestion?.items.some((item) => Number(pcts[item.boqItemId]) > item.previousCertifiedPct),
   );
+  // Phase 12: a fixed payment milestone shows its criteria against the entered percentages (the
+  // server decides; this only previews it).
+  const fixedBasis = suggestion?.paymentBasis === "FIXED_ON_COMPLETION";
+  const liveTerms = useMemo<MilestonePaymentTerms | null>(() => {
+    if (!suggestion || suggestion.paymentBasis !== "FIXED_ON_COMPLETION") return null;
+    const completion = evaluateMilestoneCompletion({
+      rule: suggestion.completionRule,
+      requiredItemPct: suggestion.completionRequiredItemPct,
+      targetCompletionPct: suggestion.targetCompletionPct,
+      items: suggestion.items.map((item) => ({
+        boqItemId: item.boqItemId,
+        wbsCode: item.wbsCode,
+        budgetedCostNgn: item.budgetedCostNgn,
+        verifiedCumulativePct: Number(pcts[item.boqItemId] ?? item.previousCertifiedPct),
+      })),
+    });
+    return {
+      paymentBasis: "FIXED_ON_COMPLETION",
+      completionRule: suggestion.completionRule,
+      completionRequiredItemPct: suggestion.completionRequiredItemPct,
+      targetCompletionPct: suggestion.targetCompletionPct,
+      completionMet: completion.met,
+      unmetReasons: completion.unmetReasons,
+      weightedProgressPct: completion.weightedProgressPct,
+      fixedReleaseAmountNgn: suggestion.fixedReleaseAmountNgn,
+      alreadyReleasedNgn: suggestion.alreadyReleasedNgn,
+    };
+  }, [suggestion, pcts]);
+  const fixedDue = liveTerms ? Math.max(0, (liveTerms.fixedReleaseAmountNgn ?? 0) - liveTerms.alreadyReleasedNgn) : 0;
+  const canContinue = verifiesSomething || Boolean(liveTerms?.completionMet);
 
   const buildBody = (): VerifyDirectMilestoneRequest | null => {
     if (!suggestion) return null;
@@ -251,14 +290,18 @@ function VerifyMilestoneModal({
         remarks: remarks[item.boqItemId]?.trim() || null,
       })),
       trancheRecommendation: recommendation,
-      ...(recommendation === "SUPPORT_WITH_HOLDBACK" ? { holdbackReleaseAmountNgn: Number(holdbackAmount || 0) } : {}),
+      ...(recommendation === "SUPPORT_WITH_HOLDBACK"
+        ? { holdbackReleaseAmountNgn: Number(holdbackAmount || 0), ...(fixedBasis ? { holdbackReason: holdbackReason.trim() } : {}) }
+        : {}),
       certifierDigitalSignatureAck: true,
     };
   };
 
   const summaryReady =
     summary.trim().length >= 10 &&
-    (recommendation !== "SUPPORT_WITH_HOLDBACK" || (holdbackAmount !== "" && Number(holdbackAmount) >= 0));
+    (recommendation !== "SUPPORT_WITH_HOLDBACK" ||
+      (holdbackAmount !== "" && Number(holdbackAmount) >= 0 && (!fixedBasis || holdbackReason.trim().length >= 5))) &&
+    (!fixedBasis || recommendation === "HOLD" || Boolean(liveTerms?.completionMet));
 
   const runPreview = async () => {
     const body = buildBody();
@@ -316,15 +359,7 @@ function VerifyMilestoneModal({
           ))}
         </ol>
 
-        {!hasLicence && (
-          <BlockedNotice>
-            Your profile has no professional licence, so you cannot verify. Ask a user administrator to add your licence type and number in{" "}
-            <Link to="/app/settings" className="underline">
-              Settings
-            </Link>
-            .
-          </BlockedNotice>
-        )}
+        {registrationBlocked && <CertifierRegistrationBox projectId={project.id} verb="verify" />}
 
         {step === "tranche" && (
           <div className="space-y-3">
@@ -357,6 +392,7 @@ function VerifyMilestoneModal({
                 {suggestion.openValuationId && (
                   <BlockedNotice>A verification on this {term("tranche", { lower: true })} is still going through approval. Finish or return it before verifying again.</BlockedNotice>
                 )}
+                {liveTerms && <PaymentTermsBox terms={liveTerms} title="Payment milestone criteria (with the percentages below)" />}
                 <p className="text-[11px] text-slate-500">
                   Each input starts at what the counted evidence supports. You can lower it to your own assessment, but not below
                   what is already certified or above the evidence.
@@ -389,8 +425,8 @@ function VerifyMilestoneModal({
               </button>
               <button
                 type="button"
-                disabled={!suggestion || Boolean(suggestion.openValuationId) || lineErrors.length > 0 || !verifiesSomething}
-                title={!verifiesSomething ? "Verify progress on at least one item beyond what is already certified." : undefined}
+                disabled={!suggestion || Boolean(suggestion.openValuationId) || lineErrors.length > 0 || !canContinue}
+                title={!canContinue ? "Verify progress on at least one item beyond what is already certified." : undefined}
                 onClick={() => setStep("summary")}
                 className={buttonPrimary}
               >
@@ -416,10 +452,26 @@ function VerifyMilestoneModal({
               )}
             </label>
             <CustomSelect label="Recommendation" value={recommendation} onChange={setRecommendation} options={RECOMMENDATION_OPTIONS} />
+            {fixedBasis && recommendation === "SUPPORT_FULL_RELEASE" && (
+              <p className="text-xs text-slate-700">
+                Release amount (fixed, computed by the server): <strong>{formatNaira(fixedDue)}</strong>
+              </p>
+            )}
+            {fixedBasis && recommendation !== "HOLD" && !liveTerms?.completionMet && (
+              <BlockedNotice>The completion criteria are not met, so only a hold can be recommended.</BlockedNotice>
+            )}
             {recommendation === "SUPPORT_WITH_HOLDBACK" && (
               <label className="block text-xs font-medium text-slate-700">
-                Amount to release now (NGN), at most the total verified
+                {fixedBasis
+                  ? `Amount to release now (NGN), below the fixed amount due (${formatNaira(fixedDue)})`
+                  : "Amount to release now (NGN), at most the total verified"}
                 <input type="number" min={0} step="0.01" value={holdbackAmount} onChange={(e) => setHoldbackAmount(e.target.value)} className={`${inputClass} mt-1`} />
+              </label>
+            )}
+            {fixedBasis && recommendation === "SUPPORT_WITH_HOLDBACK" && (
+              <label className="block text-xs font-medium text-slate-700">
+                Why is part of the fixed amount held back?
+                <textarea rows={2} maxLength={1500} value={holdbackReason} onChange={(e) => setHoldbackReason(e.target.value)} className={`${inputClass} mt-1`} />
               </label>
             )}
             {error && <BlockedNotice>{error}</BlockedNotice>}
@@ -438,24 +490,28 @@ function VerifyMilestoneModal({
           <div className="space-y-3">
             <p className="text-[11px] text-slate-500">Amounts computed by the server. Nothing is saved until you sign.</p>
             <ComputationTable computation={computation} />
+            {computation.paymentTerms && <PaymentTermsBox terms={computation.paymentTerms} />}
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
               <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Verifier</div>
               <div className="font-semibold text-slate-900 mt-0.5">{computation.certifierFullName}</div>
-              <div className="text-brand-primary font-medium">
-                {formatLicenseCredential(computation.certifierLicenseType, computation.certifierLicenseNumber)}
-              </div>
+              {formatRegistrationCredential(computation.certifierLicenseType, computation.certifierLicenseNumber) && (
+                <div className="text-brand-primary font-medium">
+                  {formatRegistrationCredential(computation.certifierLicenseType, computation.certifierLicenseNumber)}
+                </div>
+              )}
             </div>
             <label className="flex items-start gap-2 text-xs text-slate-700">
               <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5" />
               <span>
-                I verified this progress independently against field evidence, and I sign this {term("valuation", { lower: true })} with the licence shown above.
+                I verified this progress independently against field evidence, and I sign this {term("valuation", { lower: true })}
+                {signatureRegistrationSuffix(formatRegistrationCredential(computation.certifierLicenseType, computation.certifierLicenseNumber) ?? registration)}.
               </span>
             </label>
             <div className="flex justify-between gap-2 border-t border-slate-100 pt-3">
               <button type="button" onClick={() => setStep("summary")} className={buttonSecondary}>
                 Back
               </button>
-              <button type="button" disabled={!ack || !hasLicence || verify.isPending} onClick={submit} className={buttonPrimary}>
+              <button type="button" disabled={!ack || registrationBlocked || verify.isPending} onClick={submit} className={buttonPrimary}>
                 {verify.isPending ? "Signing…" : "Sign and verify"}
               </button>
             </div>
@@ -514,7 +570,11 @@ function DirectValuationCard({
             {superseded && <span className="ml-2 text-[10px] font-semibold text-slate-400">superseded</span>}
           </div>
           <div className="text-[11px] text-slate-500">
-            Verified by {valuation.certifierFullName} ({valuation.certifierLicenseType} #{valuation.certifierLicenseNumber}) ·{" "}
+            Verified by {valuation.certifierFullName}
+            {formatRegistrationCredential(valuation.certifierLicenseType, valuation.certifierLicenseNumber)
+              ? ` (${formatRegistrationCredential(valuation.certifierLicenseType, valuation.certifierLicenseNumber)})`
+              : ""}{" "}
+            ·{" "}
             {formatDateTimeShort(valuation.certifiedAt)}
           </div>
           <div className="text-[11px] text-slate-600 mt-0.5">
@@ -547,6 +607,8 @@ function DirectValuationCard({
           )}
         </div>
       </div>
+
+      {valuation.paymentTerms && <PaymentTermsBox terms={valuation.paymentTerms} title="Payment basis (as verified)" />}
 
       {!valuation.activeDecision && !superseded && hasPermission("tranche:approve_disbursement") && !valuation.actions.decide.allowed && valuation.actions.decide.reason && (
         <p className="text-[11px] text-slate-500">Release decision unavailable: {valuation.actions.decide.reason}</p>
@@ -636,7 +698,7 @@ export function DirectMilestonePanel({
           <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Direct milestone release</div>
           <div className="text-sm font-bold text-slate-900 mt-0.5">Milestone verifications</div>
           <p className="text-[11px] text-slate-500 mt-0.5">
-            No {term("contractor", { lower: true })} claim on this project. A licensed verifier certifies progress from counted field evidence; the{" "}
+            No {term("contractor", { lower: true })} claim on this project. A verifier certifies progress from counted field evidence; the{" "}
             {term("valuation", { lower: true })} then goes through the disbursement chain to the release decision.
           </p>
         </div>
@@ -659,7 +721,7 @@ export function DirectMilestonePanel({
         <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center">
           <h3 className="text-sm font-bold text-slate-900">No milestone verifications yet</h3>
           <p className="text-xs text-slate-500 mt-1">
-            {canVerify ? "Verify a milestone to start the first release." : "A licensed verifier starts the first release by verifying a milestone."}
+            {canVerify ? "Verify a milestone to start the first release." : "A verifier starts the first release by verifying a milestone."}
           </p>
         </div>
       ) : (
@@ -687,6 +749,7 @@ export function DirectMilestonePanel({
           decide={deciding.actions.decide}
           subtitle={`${deciding.trancheName} · milestone verification revision ${deciding.revisionNumber}`}
           cpsEnabled={tranchesOn}
+          paymentTerms={deciding.paymentTerms}
           onClose={() => setDeciding(null)}
         />
       )}

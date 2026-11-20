@@ -12,7 +12,6 @@ import {
   IpcClaimStatus,
   LenderTrancheDecisionRequest,
   OPEN_IPC_STATUSES,
-  ProfessionalLicenseType,
   ProvidedEvidenceItem,
   RatingEngine,
   resolveRatingLabels,
@@ -22,6 +21,7 @@ import {
   RespondMonitorQueryRequest,
   ReverseTrancheDecisionRequest,
   SubmitIpcClaimRequest,
+  trancheReleaseTarget,
   UpdateConditionPrecedentStatusRequest,
   WaiveConditionPrecedentRequest,
   WithdrawIpcClaimRequest,
@@ -36,6 +36,12 @@ import { assertProjectObjectKey } from '../../integrations/storage.service';
 import { parseTenantBranding } from '../rbac/rbac.service';
 import { recordAuditEvent } from '../audit/audit.service';
 import { terminologyForProject } from '../organizations/terminology.service';
+import {
+  assertCertifierCredentials,
+  certifierActorDisplayName,
+  certifierCannotActReason,
+  credentialPolicyForProject,
+} from '../credentials/credentialPolicy.service';
 import { createMobileNotification } from '../notifications/notifications.service';
 import { markNotificationsActioned } from '../notifications/notificationActions';
 import { getEvidenceForBoqItems } from '../evidence/evidenceProvider';
@@ -125,6 +131,19 @@ export async function lockTranche(tx: Tx, trancheId: string) {
   return tx.facilityTranche.findUniqueOrThrow({
     where: { id: trancheId },
     include: { conditionsPrecedent: true },
+  });
+}
+
+/** Phase 12: released amount at which a tranche counts as fully released (fixed basis: its fixed amount). */
+export function trancheReleaseTargetOf(t: {
+  paymentBasis: string;
+  fixedReleaseAmountNgn: Prisma.Decimal | null;
+  allocatedAmountNgn: Prisma.Decimal;
+}): number {
+  return trancheReleaseTarget({
+    paymentBasis: t.paymentBasis,
+    fixedReleaseAmountNgn: t.fixedReleaseAmountNgn === null ? null : Number(t.fixedReleaseAmountNgn),
+    allocatedAmountNgn: Number(t.allocatedAmountNgn),
   });
 }
 
@@ -237,18 +256,19 @@ type IpcRow = Prisma.IpcClaimGetPayload<{ include: typeof IPC_INCLUDE }>;
 
 interface Viewer {
   webUser: WebJwtPayload;
-  hasLicence: boolean;
+  /** Phase 12: why the project's registration policy stops this viewer certifying, or null. */
+  registrationBlocker: string | null;
 }
 
-async function loadViewer(webUser: WebJwtPayload): Promise<Viewer> {
-  const user = await prisma.user.findUnique({
-    where: { id: webUser.userId },
-    select: { professionalLicenseType: true, professionalLicenseNumber: true },
-  });
-  return {
-    webUser,
-    hasLicence: Boolean(user?.professionalLicenseType && user?.professionalLicenseNumber?.trim()),
-  };
+async function loadViewer(webUser: WebJwtPayload, projectId: string): Promise<Viewer> {
+  const [user, policy] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: webUser.userId },
+      select: { professionalRegistrationBodyCode: true, professionalRegistrationNumber: true },
+    }),
+    credentialPolicyForProject(projectId),
+  ]);
+  return { webUser, registrationBlocker: certifierCannotActReason(policy.certifier, user) };
 }
 
 function liveRevision(ipc: IpcRow) {
@@ -336,7 +356,7 @@ function computeActions(ipc: IpcRow, viewer: Viewer, chain: ChainView = NO_CHAIN
       [holdsExplicitly(u, CERTIFY), 'Your role does not hold the certify permission.'],
       state('certify'),
       [outstanding === 0, 'Resolve all open queries before certifying.'],
-      [viewer.hasLicence, 'Add your professional licence to your profile to certify.'],
+      [!viewer.registrationBlocker, viewer.registrationBlocker ?? ''],
     ]),
     reviewValuation: gate([
       [state('decide')[0], 'Nothing is waiting for review.'],
@@ -499,7 +519,7 @@ export async function listProjectIpcClaims(projectId: string, webUser: WebJwtPay
       orderBy: { ipcNumber: 'desc' },
       include: IPC_INCLUDE,
     }),
-    loadViewer(webUser),
+    loadViewer(webUser, projectId),
   ]);
   const config = await getProcessConfig(projectId);
   return Promise.all(
@@ -516,7 +536,7 @@ export async function getIpcReconciliationDetails(
   await assertIpcVisibleToViewer(projectId, ipcId, webUser);
   const [ipc, viewer] = await Promise.all([
     prisma.ipcClaim.findUniqueOrThrow({ where: { id: ipcId }, include: IPC_INCLUDE }),
-    loadViewer(webUser),
+    loadViewer(webUser, projectId),
   ]);
   const evidence = canSeeOversightDetail(webUser)
     ? await getEvidenceForBoqItems(
@@ -736,6 +756,14 @@ export async function submitContractorIpcClaim(params: {
     const tranche = await loadTrancheInProject(tx, projectId, input.trancheId);
     if (tranche.isReleased) {
       throw new AppError('This tranche has been fully released', 409, 'TRANCHE_FULLY_RELEASED');
+    }
+    // Phase 12 (D-12.2): fixed payment milestones are released through direct verification only.
+    if (tranche.paymentBasis === 'FIXED_ON_COMPLETION') {
+      throw new AppError(
+        'This payment milestone pays a fixed amount on completion, which works with direct milestone verification only, not IPC claims.',
+        409,
+        'FIXED_BASIS_WITH_IPC'
+      );
     }
     // One open IPC per tranche; in multi-prime, per tranche per contractor.
     const open = await tx.ipcClaim.findFirst({
@@ -1105,22 +1133,17 @@ export async function resolveMonitorLineQuery(params: {
 
 async function computeCertification(
   tx: Tx,
+  projectId: string,
   ipcId: string,
   webUser: WebJwtPayload,
   input: CertifyIpcValuationRequest
 ): Promise<CertificationComputation> {
-  const user = await tx.user.findUniqueOrThrow({
-    where: { id: webUser.userId },
-    select: { fullName: true, professionalLicenseType: true, professionalLicenseNumber: true },
+  // Phase 12: the project's certifier policy decides whether a registration is needed and copied.
+  const certifier = await assertCertifierCredentials(tx, {
+    userId: webUser.userId,
+    tenantId: webUser.tenantId,
+    requirement: (await credentialPolicyForProject(projectId, tx)).certifier,
   });
-  const licenceNumber = user.professionalLicenseNumber?.trim();
-  if (!user.professionalLicenseType || !licenceNumber) {
-    throw new AppError(
-      'Your profile has no professional licence. Add your licence type and number before certifying.',
-      422,
-      'CERTIFIER_LICENCE_MISSING'
-    );
-  }
 
   const lines = await tx.ipcLineItem.findMany({
     where: { ipcClaimId: ipcId },
@@ -1198,9 +1221,8 @@ async function computeCertification(
     totalCertifiedNgn: totalCertified,
     recommendedReleaseAmountNgn: recommended,
     recommendedHoldbackAmountNgn: roundNgn(Math.max(0, totalClaimed - recommended)),
-    certifierFullName: user.fullName,
-    certifierLicenseType: user.professionalLicenseType as ProfessionalLicenseType,
-    certifierLicenseNumber: licenceNumber,
+    certifierFullName: certifier.fullName,
+    ...certifier.snapshot,
     revisionNumber: (last._max.revisionNumber ?? 0) + 1,
   };
 }
@@ -1228,7 +1250,7 @@ export async function certifyIpcValuationByMonitor(params: {
       if ((await countOutstandingQueries(tx, ipcId)) > 0) {
         throw new AppError('Resolve all open queries before certifying', 409, 'QUERIES_OUTSTANDING');
       }
-      const comp = await computeCertification(tx, ipcId, webUser, input);
+      const comp = await computeCertification(tx, projectId, ipcId, webUser, input);
       if (params.dryRun) throw new DryRunRollback(comp);
 
       const now = new Date();
@@ -1253,6 +1275,8 @@ export async function certifyIpcValuationByMonitor(params: {
           certifierFullName: comp.certifierFullName,
           certifierLicenseType: comp.certifierLicenseType,
           certifierLicenseNumber: comp.certifierLicenseNumber,
+          certifierRegistrationBodyName: comp.certifierRegistrationBodyName,
+          certifierRegistrationPrefix: comp.certifierRegistrationPrefix,
           reportPdfUrl: `/api/v1/projects/${projectId}/ipcs/${ipcId}/valuation-report.pdf`,
           certifiedAt: now,
         },
@@ -1301,7 +1325,7 @@ export async function certifyIpcValuationByMonitor(params: {
         projectId,
         actorType: 'WEB_USER',
         actorId: webUser.userId,
-        actorDisplayName: `${comp.certifierFullName} (${comp.certifierLicenseType} #${comp.certifierLicenseNumber})`,
+        actorDisplayName: certifierActorDisplayName(comp.certifierFullName, comp),
         action: 'VALUATION_REPORT_CERTIFIED',
         summaryText:
           `Certified IPC #${ipc.ipcNumber} valuation revision ${comp.revisionNumber} (${input.trancheRecommendation}): ` +
@@ -1471,7 +1495,8 @@ export async function recordLenderTrancheDecision(params: {
         where: { id: trancheId },
         data: {
           releasedAmountNgn: released,
-          isReleased: released >= Number(tranche.allocatedAmountNgn) - NGN_EPSILON,
+          // Phase 12: a fixed payment milestone is fully released at its fixed amount.
+          isReleased: released >= trancheReleaseTargetOf(tranche) - NGN_EPSILON,
         },
       });
       // The contractor receives the approved amount less retention.
@@ -1616,7 +1641,8 @@ export async function reverseTrancheDecision(params: {
         where: { id: tranche.id },
         data: {
           releasedAmountNgn: released,
-          isReleased: released >= Number(tranche.allocatedAmountNgn) - NGN_EPSILON,
+          // Phase 12: a fixed payment milestone is fully released at its fixed amount.
+          isReleased: released >= trancheReleaseTargetOf(tranche) - NGN_EPSILON,
         },
       });
       await tx.project.update({
@@ -1945,6 +1971,8 @@ export async function generateIpcValuationPdf(projectId: string, ipcId: string):
           certifierFullName: report.certifierFullName,
           certifierLicenseType: report.certifierLicenseType,
           certifierLicenseNumber: report.certifierLicenseNumber,
+          certifierRegistrationBodyName: report.certifierRegistrationBodyName,
+          certifierRegistrationPrefix: report.certifierRegistrationPrefix,
           certifiedAtIso: report.certifiedAt.toISOString(),
         }
       : null,

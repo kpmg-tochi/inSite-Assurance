@@ -29,6 +29,11 @@ import {
   addDays,
   nextPeriodStart,
   zonedCalendarDate,
+  DEFAULT_COMPLETION_RULE,
+  DEFAULT_REQUIRED_ITEM_PCT,
+  paymentBasisMechanismConflict,
+  TrancheCompletionRule,
+  TranchePaymentBasis,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -50,6 +55,7 @@ import { issueMissingJoinCodes, reconcileContractorJoinCodes } from './joinCodes
 import { cadenceSettingsOf, serializeCadenceSettings } from '../cadence/cadence.service';
 import {
   applyProcessSettings,
+  getProcessConfig,
   getProjectProcessSettings,
   initialiseProjectProcess,
 } from '../process/processConfig.service';
@@ -282,6 +288,14 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
       });
     }
   }
+  // Phase 12 (D-12.2): fixed-amount payment milestones need direct milestone verification.
+  if (config.disbursementMechanism === 'IPC_CLAIM_REQUIRED' && project.tranches.some((t) => t.paymentBasis === 'FIXED_ON_COMPLETION')) {
+    facility.push({
+      code: 'FIXED_BASIS_WITH_IPC',
+      message: 'Fixed-amount payment milestones work with direct milestone verification only. Switch them to measured value or change the disbursement mechanism.',
+      field: 'tranches',
+    });
+  }
   out.facility = { issues: facility, warnings: facilityWarnings };
 
   // BOQ
@@ -436,6 +450,10 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
         allocatedAmountNgn: Number(t.allocatedAmountNgn),
         targetCompletionPct: Number(t.targetCompletionPct),
         isReleased: t.isReleased,
+        paymentBasis: t.paymentBasis,
+        completionRule: t.completionRule,
+        fixedReleaseAmountNgn: t.fixedReleaseAmountNgn === null ? null : Number(t.fixedReleaseAmountNgn),
+        completionRequiredItemPct: Number(t.completionRequiredItemPct),
         conditionsPrecedent: t.conditionsPrecedent.map((cp) => ({
           id: cp.id,
           referenceCode: cp.referenceCode,
@@ -449,6 +467,10 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
         retentionDurationMonths: project.retentionDurationMonths,
         retentionReleaseAtCompletionPct: Number(project.retentionReleaseAtCompletionPct),
         heldNgn: Number(project.retentionHeldNgn),
+      },
+      paymentDefaults: {
+        defaultBasis: loaded.typeConfig?.payments.defaultBasis ?? 'MEASURED',
+        defaultCompletionRule: loaded.typeConfig?.payments.defaultCompletionRule ?? null,
       },
     },
     boq,
@@ -824,6 +846,31 @@ const saveSite: StepSaver = async ({ tx, project, input }) => {
   return { changedFields: diffFields(before, after) };
 };
 
+/**
+ * Phase 12: the stored payment terms of a tranche from the form. Omitted fields keep the stored
+ * value (or, for a new tranche, the project type's default); the measured basis clears the rest.
+ */
+function trancheTermsFor(
+  t: ProjectFacilityStep['tranches'][number],
+  before: { paymentBasis: TranchePaymentBasis; completionRule: TrancheCompletionRule | null; fixedReleaseAmountNgn: Prisma.Decimal | null; completionRequiredItemPct: Prisma.Decimal } | null,
+  defaults: { defaultBasis: TranchePaymentBasis; defaultCompletionRule: TrancheCompletionRule | null } | null
+) {
+  const paymentBasis: TranchePaymentBasis = t.paymentBasis ?? before?.paymentBasis ?? defaults?.defaultBasis ?? 'MEASURED';
+  const completionRequiredItemPct = t.completionRequiredItemPct ?? (before ? Number(before.completionRequiredItemPct) : DEFAULT_REQUIRED_ITEM_PCT);
+  if (paymentBasis === 'MEASURED') {
+    return { paymentBasis, completionRule: null, fixedReleaseAmountNgn: null, completionRequiredItemPct };
+  }
+  const completionRule: TrancheCompletionRule =
+    (t.completionRule !== undefined ? t.completionRule : before?.completionRule) ?? defaults?.defaultCompletionRule ?? DEFAULT_COMPLETION_RULE;
+  const fixedReleaseAmountNgn =
+    t.fixedReleaseAmountNgn !== undefined
+      ? t.fixedReleaseAmountNgn
+      : before?.fixedReleaseAmountNgn !== null && before?.fixedReleaseAmountNgn !== undefined
+        ? Number(before.fixedReleaseAmountNgn)
+        : null;
+  return { paymentBasis, completionRule, fixedReleaseAmountNgn, completionRequiredItemPct };
+}
+
 const saveFacility: StepSaver = async ({ tx, project, input }) => {
   const data = input as ProjectFacilityStep;
   const budget = project.totalBudgetNgn === null ? null : Number(project.totalBudgetNgn);
@@ -860,15 +907,33 @@ const saveFacility: StepSaver = async ({ tx, project, input }) => {
     }
   }
 
+  // Phase 12: payment basis per payment milestone. New ones default to the project type's basis.
+  const paymentDefaults = resolveProjectTypeConfig(project.projectTypeSnapshotJson)?.payments;
+  const mechanism = (await getProcessConfig(project.id, tx)).disbursementMechanism;
   for (const t of data.tranches) {
+    const before = t.id ? byId.get(t.id)! : null;
+    const terms = trancheTermsFor(t, before, paymentDefaults ?? null);
+    const conflict = paymentBasisMechanismConflict(mechanism, terms.paymentBasis);
+    if (conflict) throw new AppError(`${t.name}: ${conflict}`, 409, 'FIXED_BASIS_WITH_IPC');
+    if (terms.fixedReleaseAmountNgn !== null && terms.fixedReleaseAmountNgn > t.allocatedAmountNgn + 0.005) {
+      throw new AppError(`${t.name}: the fixed amount cannot exceed the allocation.`, 422, 'FIXED_AMOUNT_EXCEEDS_ALLOCATION');
+    }
+    if (before && Number(before.releasedAmountNgn) > 0) {
+      if (before.paymentBasis !== terms.paymentBasis) {
+        throw new AppError(`${t.name}: the payment basis cannot change once money has been released.`, 409, 'TRANCHE_BASIS_LOCKED');
+      }
+      if (terms.fixedReleaseAmountNgn !== null && terms.fixedReleaseAmountNgn < Number(before.releasedAmountNgn) - 0.005) {
+        throw new AppError(`${t.name}: the fixed amount cannot be below the amount already released.`, 409, 'TRANCHE_BELOW_RELEASED');
+      }
+    }
     const base = {
       trancheNumber: t.trancheNumber,
       name: t.name,
       allocatedAmountNgn: t.allocatedAmountNgn,
       targetCompletionPct: t.targetCompletionPct,
+      ...terms,
     };
-    if (t.id) {
-      const before = byId.get(t.id)!;
+    if (t.id && before) {
       if (t.allocatedAmountNgn < Number(before.releasedAmountNgn)) {
         throw new AppError(`${t.name}: the allocation cannot be below the amount already released.`, 409, 'TRANCHE_BELOW_RELEASED');
       }
@@ -997,7 +1062,7 @@ const saveBoq: StepSaver = async ({ tx, project, input }) => {
 };
 
 /** Fields that change the shape of reporting periods (Phase 8). */
-const PERIOD_SHAPE_FIELDS = ['reportingCadence', 'workWeekDays', 'periodStartDayOfWeek', 'customIntervalDays', 'cadenceAnchorDate'] as const;
+const PERIOD_SHAPE_FIELDS = ['reportingCadence', 'workWeekDays', 'periodStartDayOfWeek', 'customIntervalDays', 'cadenceAnchorDate', 'cadenceQuarterAnchorMonth'] as const;
 
 /**
  * Saves cadence settings. On a live project a change to the period shape waits until the next

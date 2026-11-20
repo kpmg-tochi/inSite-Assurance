@@ -1,6 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { formatMoney, type ProjectFacilityStep } from "@insite/shared";
+import {
+  formatMoney,
+  TRANCHE_COMPLETION_RULE_META,
+  TRANCHE_PAYMENT_BASIS_META,
+  type ProjectFacilityStep,
+  type TrancheCompletionRule,
+  type TranchePaymentBasis,
+} from "@insite/shared";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import { useTenantSettingsQuery } from "../../../../queries/organizations/useOrganizationQueries";
 import { useTerm } from "../../../../lib/auth-context";
@@ -33,6 +40,12 @@ interface TrancheRow {
   targetPct: string;
   isReleased: boolean;
   cps: CpRow[];
+  /** Phase 12: payment basis and completion rule. */
+  basis: TranchePaymentBasis;
+  rule: TrancheCompletionRule;
+  /** Fixed amount; empty = the allocation. */
+  fixedAmount: string;
+  requiredItemPct: string;
 }
 
 let seq = 0;
@@ -52,6 +65,10 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
         amount: String(t.allocatedAmountNgn),
         targetPct: String(t.targetCompletionPct),
         isReleased: t.isReleased,
+        basis: t.paymentBasis,
+        rule: t.completionRule ?? "ALL_ITEMS_COMPLETE",
+        fixedAmount: t.fixedReleaseAmountNgn === null ? "" : String(t.fixedReleaseAmountNgn),
+        requiredItemPct: String(t.completionRequiredItemPct),
         cps: t.conditionsPrecedent.map((cp) => ({
           key: cp.id,
           id: cp.id,
@@ -64,6 +81,9 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
     [setup.facility]
   );
   const [rows, setRows] = useState(initial);
+  // Phase 12: new payment milestones start with the project type's basis; fixed needs direct verification.
+  const paymentDefaults = setup.facility.paymentDefaults;
+  const directMode = setup.process.config.disbursementMechanism === "MILESTONE_DIRECT_DISBURSEMENT";
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
   const save = useSaveSetupStepMutation(projectId);
   const strip = (r: TrancheRow[]) => r.map(({ key: _k, cps, ...t }) => ({ ...t, cps: cps.map(({ key: _c, ...c }) => c) }));
@@ -99,6 +119,14 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
       if (amt === null || amt <= 0) fields[`tranches.${i}.allocatedAmountNgn`] = "Enter an amount above zero";
       const pct = parseNumberInput(r.targetPct);
       if (pct === null || pct < 0 || pct > 100) fields[`tranches.${i}.targetCompletionPct`] = "0 to 100";
+      if (r.basis === "FIXED_ON_COMPLETION") {
+        const fixed = r.fixedAmount.trim() === "" ? null : parseNumberInput(r.fixedAmount);
+        if (r.fixedAmount.trim() !== "" && (fixed === null || fixed <= 0)) fields[`tranches.${i}.fixedReleaseAmountNgn`] = "Enter an amount above zero";
+        if (fixed !== null && amt !== null && fixed > amt + 0.005) fields[`tranches.${i}.fixedReleaseAmountNgn`] = "At most the allocation";
+        const req = parseNumberInput(r.requiredItemPct);
+        if (r.rule === "ALL_ITEMS_COMPLETE" && (req === null || req < 1 || req > 100)) fields[`tranches.${i}.completionRequiredItemPct`] = "1 to 100";
+        if (!directMode) fields[`tranches.${i}.paymentBasis`] = "A fixed amount needs direct milestone verification (see the Process step).";
+      }
       r.cps.forEach((cp, j) => {
         if (!cp.referenceCode.trim()) fields[`tranches.${i}.conditionsPrecedent.${j}.referenceCode`] = "Required";
         if (cp.description.trim().length < 4) fields[`tranches.${i}.conditionsPrecedent.${j}.description`] = "At least 4 characters";
@@ -125,6 +153,10 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
         name: r.name.trim(),
         allocatedAmountNgn: parseNumberInput(r.amount)!,
         targetCompletionPct: parseNumberInput(r.targetPct)!,
+        paymentBasis: r.basis,
+        completionRule: r.basis === "FIXED_ON_COMPLETION" ? r.rule : null,
+        fixedReleaseAmountNgn: r.basis === "FIXED_ON_COMPLETION" && r.fixedAmount.trim() !== "" ? parseNumberInput(r.fixedAmount) : null,
+        ...(r.basis === "FIXED_ON_COMPLETION" ? { completionRequiredItemPct: parseNumberInput(r.requiredItemPct) ?? 100 } : {}),
         conditionsPrecedent: r.cps.map((cp) => ({
           ...(cp.id ? { id: cp.id } : {}),
           referenceCode: cp.referenceCode.trim(),
@@ -161,7 +193,23 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
         !readOnly && (
           <button
             type="button"
-            onClick={() => setRows((rs) => [...rs, { key: k(), name: `Tranche ${rs.length + 1}`, amount: "", targetPct: "", isReleased: false, cps: [] }])}
+            onClick={() =>
+              setRows((rs) => [
+                ...rs,
+                {
+                  key: k(),
+                  name: `Tranche ${rs.length + 1}`,
+                  amount: "",
+                  targetPct: "",
+                  isReleased: false,
+                  cps: [],
+                  basis: directMode ? paymentDefaults.defaultBasis : "MEASURED",
+                  rule: paymentDefaults.defaultCompletionRule ?? "ALL_ITEMS_COMPLETE",
+                  fixedAmount: "",
+                  requiredItemPct: "100",
+                },
+              ])
+            }
             className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
           >
             <Plus className="w-3.5 h-3.5" /> Add {term("tranche", { lower: true })}
@@ -214,6 +262,64 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
                   </button>
                 )}
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 rounded-lg bg-slate-50 p-3">
+              <div className="md:col-span-4">
+                <label className={labelClass}>Payment basis</label>
+                <select
+                  className={inputClass(Boolean(errors.fields[`tranches.${i}.paymentBasis`]))}
+                  value={r.basis}
+                  onChange={(e) => update(r.key, { basis: e.target.value as TranchePaymentBasis })}
+                  disabled={readOnly || r.isReleased}
+                >
+                  {(["MEASURED", "FIXED_ON_COMPLETION"] as const).map((b) => (
+                    <option key={b} value={b} disabled={b === "FIXED_ON_COMPLETION" && !directMode}>
+                      {TRANCHE_PAYMENT_BASIS_META[b].label}
+                    </option>
+                  ))}
+                </select>
+                <FieldError message={errors.fields[`tranches.${i}.paymentBasis`]} />
+                <p className="text-[11px] text-slate-500 mt-1">{TRANCHE_PAYMENT_BASIS_META[r.basis].description}</p>
+              </div>
+              {r.basis === "FIXED_ON_COMPLETION" && (
+                <>
+                  <div className="md:col-span-3">
+                    <label className={labelClass}>Completion rule</label>
+                    <select className={inputClass(false)} value={r.rule} onChange={(e) => update(r.key, { rule: e.target.value as TrancheCompletionRule })} disabled={readOnly}>
+                      {(["ALL_ITEMS_COMPLETE", "WEIGHTED_PROGRESS_REACHED"] as const).map((rule) => (
+                        <option key={rule} value={rule}>
+                          {TRANCHE_COMPLETION_RULE_META[rule].label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      {r.rule === "WEIGHTED_PROGRESS_REACHED"
+                        ? "Uses the target progress % above."
+                        : TRANCHE_COMPLETION_RULE_META[r.rule].description}
+                    </p>
+                  </div>
+                  {r.rule === "ALL_ITEMS_COMPLETE" && (
+                    <div className="md:col-span-2">
+                      <label className={labelClass}>Each item at least (%)</label>
+                      <input inputMode="decimal" className={inputClass(Boolean(errors.fields[`tranches.${i}.completionRequiredItemPct`]))} value={r.requiredItemPct} onChange={(e) => update(r.key, { requiredItemPct: e.target.value })} disabled={readOnly} />
+                      <FieldError message={errors.fields[`tranches.${i}.completionRequiredItemPct`]} />
+                    </div>
+                  )}
+                  <div className="md:col-span-3">
+                    <label className={labelClass}>Fixed amount ({currency})</label>
+                    <input
+                      inputMode="decimal"
+                      placeholder={r.amount ? `${r.amount} (the allocation)` : "The allocation"}
+                      className={inputClass(Boolean(errors.fields[`tranches.${i}.fixedReleaseAmountNgn`]))}
+                      value={r.fixedAmount}
+                      onChange={(e) => update(r.key, { fixedAmount: e.target.value })}
+                      disabled={readOnly}
+                    />
+                    <FieldError message={errors.fields[`tranches.${i}.fixedReleaseAmountNgn`]} />
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="space-y-2">

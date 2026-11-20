@@ -595,7 +595,7 @@ export function RolesPermissionsTab() {
                   className="h-4 w-4 rounded-sm border-slate-300 text-brand-primary"
                 />
                 <span className="font-semibold text-slate-800">
-                  Require photo ID, guided selfie set &amp; license review on mobile
+                  Require photo ID, guided selfie set &amp; registration review (per the registration policy) on mobile
                   {isProvisioned && (
                     <span className="block font-normal text-[11px] text-slate-500">
                       Not used for pre-provisioned roles: the account is the identity.

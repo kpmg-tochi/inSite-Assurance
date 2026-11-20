@@ -226,10 +226,11 @@ export default function ContractorVerificationQueue({
 
                       {/* Badges Row */}
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        {verification.corenLicenseNumber && (
+                        {verification.registrationNumber && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-brand-primary/5 text-brand-primary border border-brand-primary/15">
                             <Award className="w-3 h-3 text-brand-primary" />
-                            {verification.corenLicenseNumber}
+                            {verification.registrationBodyCode ? `${verification.registrationBodyCode} ` : ''}
+                            {verification.registrationNumber}
                           </span>
                         )}
 
@@ -460,26 +461,30 @@ export default function ContractorVerificationQueue({
                 </div>
               </div>
 
-              {/* Professional Credentials & COREN License */}
+              {/* Professional registration (Phase 12: shown only when one was given) */}
               <div className="bg-white rounded-xl p-4 border border-slate-200 space-y-3">
                 <div className="flex items-center gap-2 font-bold text-slate-900">
                   <Award className="w-4 h-4 text-brand-primary" />
-                  Engineering Competence &amp; Accreditation
+                  Competence &amp; registration
                 </div>
 
                 <div className="space-y-2">
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">License Authority</span>
-                    <span className="font-semibold text-slate-800">
-                      COREN (Council for Regulation of Engineering)
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500">Registration Number</span>
-                    <span className="font-bold text-brand-primary">
-                      {selectedVerification.corenLicenseNumber || 'Unspecified'}
-                    </span>
-                  </div>
+                  {selectedVerification.registrationNumber && (
+                    <>
+                      <div className="flex justify-between py-1 border-b border-slate-100">
+                        <span className="text-slate-500">Registration body</span>
+                        <span className="font-semibold text-slate-800">
+                          {selectedVerification.registrationBodyName ||
+                            selectedVerification.registrationBodyCode ||
+                            'Not stated'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-slate-100">
+                        <span className="text-slate-500">Registration number</span>
+                        <span className="font-bold text-brand-primary">{selectedVerification.registrationNumber}</span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between py-1 border-b border-slate-100">
                     <span className="text-slate-500">ID Document Type</span>
                     <span className="font-semibold text-slate-800">

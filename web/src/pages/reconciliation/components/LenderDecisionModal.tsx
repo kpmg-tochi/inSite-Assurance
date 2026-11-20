@@ -17,7 +17,8 @@ import {
   useWaiveConditionMutation,
 } from "../../../mutations/reconciliation/useReconciliationMutations";
 import { BlockedNotice, ModalActions, ModalShell, inputClass } from "./ModalShell";
-import { retentionWithheldFor } from "@insite/shared";
+import { retentionWithheldFor, type MilestonePaymentTerms } from "@insite/shared";
+import { PaymentTermsBox } from "../../../components/payments/PaymentTermsBox";
 import { useProjectProcess } from "../../../queries/process/useProcessQueries";
 import { useProjectsQuery } from "../../../queries/projects/useProjectsQueries";
 
@@ -143,11 +144,14 @@ export function TrancheDecisionModal({
   decide,
   subtitle,
   cpsEnabled = true,
+  paymentTerms = null,
   onClose,
 }: {
   projectId: string;
   tranche: DecisionTranche;
   report: ValuationReportDto;
+  /** Phase 12: a direct milestone verification's payment basis and whether its criteria were met. */
+  paymentTerms?: MilestonePaymentTerms | null;
   decide: { allowed: boolean; reason: string | null };
   subtitle: string;
   /** False when the project turned tranches and conditions precedent off. */
@@ -205,6 +209,8 @@ export function TrancheDecisionModal({
     <ModalShell title={`${term("tranche")} disbursement decision`} subtitle={subtitle} onClose={onClose} maxWidth="max-w-2xl">
       <form onSubmit={handleSubmit} className="p-5 space-y-4">
         {!decide.allowed && <BlockedNotice>{decide.reason}</BlockedNotice>}
+
+        {paymentTerms && <PaymentTermsBox terms={paymentTerms} title="Payment basis (as verified)" />}
 
         <dl className="bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs grid grid-cols-2 gap-y-1">
           <dt className="text-slate-500">Certified by</dt>

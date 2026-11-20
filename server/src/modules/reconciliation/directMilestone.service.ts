@@ -2,8 +2,11 @@ import { Prisma } from '@prisma/client';
 import {
   DirectMilestoneSuggestionDto,
   DirectMilestoneValuationDto,
+  evaluateMilestoneCompletion,
+  fixedMilestoneDue,
+  MilestonePaymentTerms,
+  MilestonePaymentTermsSchema,
   MilestoneVerificationLine,
-  ProfessionalLicenseType,
   resolveRatingLabels,
   resolveTerminology,
   VerifyDirectMilestoneRequest,
@@ -24,6 +27,7 @@ import { refreshCertifiedProgress } from './reconciliation.service';
 import { releaseGate, reviewGate, startValuationOnChain, valuationProgress } from './disbursementChain';
 import { assertConstructionOngoing } from '../closeout/closeoutGate';
 import { pdfReleaseDecision } from '../closeout/retention.service';
+import { assertCertifierCredentials, credentialPolicyForProject } from '../credentials/credentialPolicy.service';
 
 /**
  * Direct milestone release (Phase 7 Step 6): release against a verified milestone with no
@@ -93,14 +97,73 @@ async function openDirectValuation(db: Tx | typeof prisma, trancheId: string) {
   );
 }
 
+type TrancheTermsRow = {
+  paymentBasis: string;
+  completionRule: string | null;
+  completionRequiredItemPct: Prisma.Decimal;
+  targetCompletionPct: Prisma.Decimal;
+  fixedReleaseAmountNgn: Prisma.Decimal | null;
+  allocatedAmountNgn: Prisma.Decimal;
+  releasedAmountNgn: Prisma.Decimal;
+};
+
+type EvidenceRow = Awaited<ReturnType<typeof evidenceForTranche>>[number];
+
+/**
+ * Phase 12: the payment terms of a tranche evaluated against per-item verified percentages. The
+ * measured basis does not judge completion.
+ */
+function paymentTermsFor(tranche: TrancheTermsRow, rows: EvidenceRow[], verifiedPct: (row: EvidenceRow) => number): MilestonePaymentTerms {
+  const fixed = tranche.paymentBasis === 'FIXED_ON_COMPLETION';
+  const completionRule = fixed ? ((tranche.completionRule ?? 'ALL_ITEMS_COMPLETE') as MilestonePaymentTerms['completionRule']) : null;
+  const completion = evaluateMilestoneCompletion({
+    rule: completionRule,
+    requiredItemPct: Number(tranche.completionRequiredItemPct),
+    targetCompletionPct: Number(tranche.targetCompletionPct),
+    items: rows.map((r) => ({
+      boqItemId: r.item.id,
+      wbsCode: r.item.wbsCode,
+      budgetedCostNgn: Number(r.item.budgetedCostNgn),
+      verifiedCumulativePct: verifiedPct(r),
+    })),
+  });
+  const due = fixedMilestoneDue({
+    fixedReleaseAmountNgn: tranche.fixedReleaseAmountNgn === null ? null : Number(tranche.fixedReleaseAmountNgn),
+    allocatedAmountNgn: Number(tranche.allocatedAmountNgn),
+    releasedAmountNgn: Number(tranche.releasedAmountNgn),
+  });
+  return {
+    paymentBasis: fixed ? 'FIXED_ON_COMPLETION' : 'MEASURED',
+    completionRule,
+    completionRequiredItemPct: fixed && completionRule === 'ALL_ITEMS_COMPLETE' ? Number(tranche.completionRequiredItemPct) : null,
+    targetCompletionPct: Number(tranche.targetCompletionPct),
+    completionMet: fixed ? completion.met : null,
+    unmetReasons: fixed ? completion.unmetReasons : [],
+    weightedProgressPct: completion.weightedProgressPct,
+    fixedReleaseAmountNgn: fixed ? due.fixedReleaseAmountNgn : null,
+    alreadyReleasedNgn: due.alreadyReleasedNgn,
+  };
+}
+
 export async function getDirectMilestoneSuggestion(projectId: string, trancheId: string): Promise<DirectMilestoneSuggestionDto> {
   const config = await assertDirectMode(projectId);
   const tranche = await loadTrancheInProject(prisma, projectId, trancheId);
   const [rows, open] = await Promise.all([evidenceForTranche(prisma, projectId, trancheId), openDirectValuation(prisma, trancheId)]);
+  // Completion as it would stand if every item were verified at the most the evidence supports.
+  const terms = paymentTermsFor(tranche, rows, (r) => r.maxVerifiablePct);
   return {
     trancheId,
     trancheName: tranche.name,
     openValuationId: open?.id ?? null,
+    paymentBasis: terms.paymentBasis,
+    completionRule: terms.completionRule,
+    completionRequiredItemPct: Number(tranche.completionRequiredItemPct),
+    targetCompletionPct: terms.targetCompletionPct,
+    completionMet: terms.completionMet,
+    unmetReasons: terms.unmetReasons,
+    weightedProgressPct: terms.weightedProgressPct ?? 0,
+    fixedReleaseAmountNgn: terms.fixedReleaseAmountNgn,
+    alreadyReleasedNgn: terms.alreadyReleasedNgn,
     items: rows.map((r) => ({
       boqItemId: r.item.id,
       wbsCode: r.item.wbsCode,
@@ -154,18 +217,13 @@ export async function verifyDirectMilestone(params: {
         );
       }
 
-      const user = await tx.user.findUniqueOrThrow({
-        where: { id: webUser.userId },
-        select: { fullName: true, professionalLicenseType: true, professionalLicenseNumber: true },
+      // Phase 12: the project's certifier policy decides whether a registration is needed and copied.
+      const certifier = await assertCertifierCredentials(tx, {
+        userId: webUser.userId,
+        tenantId: webUser.tenantId,
+        requirement: (await credentialPolicyForProject(projectId, tx)).certifier,
+        verb: 'verifying',
       });
-      const licence = user.professionalLicenseNumber?.trim();
-      if (!user.professionalLicenseType || !licence) {
-        throw new AppError(
-          'Your profile has no professional licence. Add your licence type and number before verifying.',
-          422,
-          'CERTIFIER_LICENCE_MISSING'
-        );
-      }
 
       const rows = await evidenceForTranche(tx, projectId, tranche.id);
       const byId = new Map(rows.map((r) => [r.item.id, r]));
@@ -205,12 +263,50 @@ export async function verifyDirectMilestone(params: {
       });
       totalClaimed = roundNgn(totalClaimed);
       totalVerified = roundNgn(totalVerified);
-      if (!lines.some((l) => l.verifiedCumulativePct > l.previousCertifiedPct)) {
+
+      // Phase 12: payment terms judged on the verified lines (unlisted items keep their certified %).
+      const verifiedById = new Map(lines.map((l) => [l.boqItemId, l.verifiedCumulativePct]));
+      const paymentTerms = paymentTermsFor(tranche, rows, (r) => verifiedById.get(r.item.id) ?? r.previousCertifiedPct);
+      const fixedBasis = paymentTerms.paymentBasis === 'FIXED_ON_COMPLETION';
+      // Fixed basis: nothing is payable before the completion rule is met (checked first, so the
+      // verifier is told why rather than that nothing moved).
+      if (fixedBasis && input.trancheRecommendation !== 'HOLD' && !paymentTerms.completionMet) {
+        throw new AppError(
+          `This payment milestone is not complete, so nothing can be released yet: ${paymentTerms.unmetReasons.join(' ')}`,
+          422,
+          'MILESTONE_COMPLETION_NOT_MET',
+          { unmetReasons: paymentTerms.unmetReasons }
+        );
+      }
+      const progressed = lines.some((l) => l.verifiedCumulativePct > l.previousCertifiedPct);
+      // A fixed milestone already complete (e.g. held earlier) can be put forward again without new progress.
+      if (!progressed && !(fixedBasis && paymentTerms.completionMet)) {
         throw new AppError('Verify progress on at least one item beyond what is already certified', 422, 'NOTHING_VERIFIED');
       }
 
       let recommended = 0;
-      if (input.trancheRecommendation === 'SUPPORT_FULL_RELEASE') recommended = totalVerified;
+      if (fixedBasis) {
+        // Fixed basis: the amount is the fixed amount still unpaid, payable only once complete.
+        const due = roundNgn(Math.max(0, (paymentTerms.fixedReleaseAmountNgn ?? 0) - paymentTerms.alreadyReleasedNgn));
+        totalClaimed = due;
+        totalVerified = paymentTerms.completionMet ? due : 0;
+        if (input.trancheRecommendation === 'SUPPORT_FULL_RELEASE') {
+          if (due <= 0) throw new AppError('The fixed amount of this payment milestone has already been released', 409, 'NOTHING_TO_RELEASE');
+          recommended = due;
+        } else if (input.trancheRecommendation === 'SUPPORT_WITH_HOLDBACK') {
+          recommended = roundNgn(input.holdbackReleaseAmountNgn ?? 0);
+          if (recommended >= due - NGN_EPSILON) {
+            throw new AppError(
+              `A release with holdback must be below the fixed amount due (${fmtNgn(due)}); recommend a full release instead.`,
+              422,
+              'HOLDBACK_NOT_BELOW_FIXED_AMOUNT'
+            );
+          }
+          if ((input.holdbackReason ?? '').trim().length < 5) {
+            throw new AppError('Say why part of the fixed amount is held back (at least 5 characters).', 422, 'HOLDBACK_REASON_REQUIRED');
+          }
+        }
+      } else if (input.trancheRecommendation === 'SUPPORT_FULL_RELEASE') recommended = totalVerified;
       else if (input.trancheRecommendation === 'SUPPORT_WITH_HOLDBACK') {
         recommended = roundNgn(input.holdbackReleaseAmountNgn ?? 0);
         if (recommended > totalVerified + NGN_EPSILON) {
@@ -222,6 +318,7 @@ export async function verifyDirectMilestone(params: {
         }
       }
       const holdback = roundNgn(Math.max(0, totalClaimed - recommended));
+      const holdbackReason = input.trancheRecommendation === 'SUPPORT_WITH_HOLDBACK' ? input.holdbackReason?.trim() || null : null;
       const previousRevisions = await tx.valuationReport.count({ where: { trancheId: tranche.id, source: 'MILESTONE_DIRECT' } });
       const computation = {
         trancheId: tranche.id,
@@ -230,10 +327,11 @@ export async function verifyDirectMilestone(params: {
         totalCertifiedNgn: totalVerified,
         recommendedReleaseAmountNgn: recommended,
         recommendedHoldbackAmountNgn: holdback,
-        certifierFullName: user.fullName,
-        certifierLicenseType: user.professionalLicenseType as ProfessionalLicenseType,
-        certifierLicenseNumber: licence,
+        certifierFullName: certifier.fullName,
+        ...certifier.snapshot,
         revisionNumber: previousRevisions + 1,
+        paymentTerms,
+        holdbackReason,
       };
       if (input.dryRun) throw new DryRun(computation);
 
@@ -244,6 +342,7 @@ export async function verifyDirectMilestone(params: {
           verifiedByUserId: webUser.userId,
           verificationSummary: input.verificationSummary,
           lineVerificationsJson: lines as unknown as Prisma.InputJsonValue,
+          paymentTermsJson: paymentTerms as unknown as Prisma.InputJsonValue,
         },
       });
       const now = new Date();
@@ -261,10 +360,11 @@ export async function verifyDirectMilestone(params: {
           totalCertifiedNgn: totalVerified,
           recommendedReleaseAmountNgn: recommended,
           recommendedHoldbackAmountNgn: holdback,
-          executiveCertificationSummary: input.verificationSummary,
-          certifierFullName: user.fullName,
-          certifierLicenseType: user.professionalLicenseType!,
-          certifierLicenseNumber: licence,
+          executiveCertificationSummary: holdbackReason
+            ? `${input.verificationSummary}\n\nHoldback reason: ${holdbackReason}`
+            : input.verificationSummary,
+          certifierFullName: certifier.fullName,
+          ...certifier.snapshot,
           certifiedAt: now,
         },
       });
@@ -292,10 +392,13 @@ export async function verifyDirectMilestone(params: {
         projectId,
         actorType: 'WEB_USER',
         actorId: webUser.userId,
-        actorDisplayName: `${user.fullName} (${user.professionalLicenseType} #${licence})`,
+        actorDisplayName: certifier.actorDisplayName,
         action: 'DIRECT_MILESTONE_VERIFIED',
-        summaryText:
-          `Verified milestone progress on ${tranche.name} (revision ${computation.revisionNumber}, ${input.trancheRecommendation}): ` +
+        summaryText: fixedBasis
+          ? `Verified fixed payment milestone ${tranche.name} (revision ${computation.revisionNumber}, ${input.trancheRecommendation}): ` +
+            `completion ${paymentTerms.completionMet ? 'met' : 'not met'}; fixed amount due ${fmtNgn(totalClaimed)}; recommended release ${fmtNgn(recommended)}` +
+            (holdbackReason ? `; holdback reason: ${holdbackReason}.` : '.')
+          : `Verified milestone progress on ${tranche.name} (revision ${computation.revisionNumber}, ${input.trancheRecommendation}): ` +
           `verified ${fmtNgn(totalVerified)} of ${fmtNgn(totalClaimed)} supported by evidence; recommended release ${fmtNgn(recommended)}.`,
         payload: {
           valuationReportId: valuation.id,
@@ -306,6 +409,8 @@ export async function verifyDirectMilestone(params: {
           totalCertifiedNgn: totalVerified,
           recommendedReleaseAmountNgn: recommended,
           recommendedHoldbackAmountNgn: holdback,
+          paymentTerms,
+          holdbackReason,
           projectCertifiedProgressPct: progress,
           approvalChainVersion: chain.version,
           nextApprovalStep: { stepOrder: chain.currentStep.stepOrder, label: chain.currentStep.label },
@@ -355,6 +460,7 @@ async function serializeDirect(v: DirectRow, viewer: WebJwtPayload): Promise<Dir
       ? (v.milestoneVerification!.lineVerificationsJson as unknown as MilestoneVerificationLine[])
       : [],
     activeDecision: active ? serializeTrancheDecision(active, sortedDecisions) : null,
+    paymentTerms: parsePaymentTerms(v.milestoneVerification?.paymentTermsJson),
     actions: {
       review: gate([
         [!v.supersededAt, 'This verification was returned.'],
@@ -461,8 +567,11 @@ export async function generateValuationPdfById(projectId: string, valuationId: s
       certifierFullName: v.certifierFullName,
       certifierLicenseType: v.certifierLicenseType,
       certifierLicenseNumber: v.certifierLicenseNumber,
+      certifierRegistrationBodyName: v.certifierRegistrationBodyName,
+      certifierRegistrationPrefix: v.certifierRegistrationPrefix,
       certifiedAtIso: v.certifiedAt.toISOString(),
     },
+    paymentTerms: parsePaymentTerms(v.milestoneVerification?.paymentTermsJson),
     lineItems: lines.map((l) => ({
       wbsCode: l.wbsCode,
       description: l.description,
@@ -473,6 +582,12 @@ export async function generateValuationPdfById(projectId: string, valuationId: s
       monitorCertifiedNgn: l.verifiedAmountNgn,
     })),
   });
+}
+
+function parsePaymentTerms(raw: unknown): MilestonePaymentTerms | null {
+  if (!raw) return null;
+  const parsed = MilestonePaymentTermsSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
 }
 
 export function canViewDirectValuations(webUser: WebJwtPayload) {

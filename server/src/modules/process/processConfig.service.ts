@@ -338,6 +338,17 @@ export async function applyProcessSettings(
       'DISBURSEMENT_MECHANISM_LOCKED'
     );
   }
+  // Phase 12 (D-12.2): fixed-amount payment milestones work with direct verification only.
+  if (next.disbursementMechanism === 'IPC_CLAIM_REQUIRED') {
+    const fixed = await tx.facilityTranche.count({ where: { projectId, paymentBasis: 'FIXED_ON_COMPLETION' } });
+    if (fixed > 0) {
+      throw new AppError(
+        `${fixed} payment milestone(s) pay a fixed amount on completion, which works with direct milestone verification only. Switch them to measured value first.`,
+        409,
+        'FIXED_BASIS_WITH_IPC'
+      );
+    }
+  }
 
   let deactivatedJoinCodes = 0;
   let issuedJoinCodes: string[] = [];

@@ -88,8 +88,8 @@ export async function seedPhase6Projects(p: {
       fullName: "Engr. Ifeoma Okafor, MNSE",
       roleId: p.contractorRoleId,
       organizationId: voltaic.id,
-      professionalLicenseType: "COREN",
-      professionalLicenseNumber: "R.61844",
+      professionalRegistrationBodyCode: "COREN",
+      professionalRegistrationNumber: "R.61844",
     },
   });
 

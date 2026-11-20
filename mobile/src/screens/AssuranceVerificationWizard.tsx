@@ -29,6 +29,8 @@ import { useProfile } from '../context/ProfileContext';
 import { useDemoSkipVerificationMutation } from '../queries/auth/useAuthMutations';
 import { useResolveNotificationMutation } from '../queries/notifications/useNotificationQueries';
 import { saveQueuedAssuranceSubmission } from '../storage/assuranceRepository';
+import { getLoadedBaselinePack } from '../storage/baselineStore';
+import { assuranceRegistrationSetup } from '../utils/assuranceRegistration';
 import { requestPushPermissionInContext } from '../services/pushNotificationService';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -82,8 +84,8 @@ export const AssuranceVerificationWizard: React.FC = () => {
         selfieLeftUri: pkg.selfies.left.uri,
         selfieRightUri: pkg.selfies.right.uri,
         selfieSet: pkg.selfies.selfieSet,
-        regulatoryBody: pkg.credentials.regulatoryBody,
-        licenseNumber: pkg.credentials.licenseNumber,
+        registrationNumber: pkg.credentials.registrationNumber ?? null,
+        registrationBodyCode: pkg.credentials.registrationBodyCode ?? null,
         experienceSummary: pkg.credentials.experienceSummary,
       });
     }
@@ -171,6 +173,7 @@ export const AssuranceVerificationWizard: React.FC = () => {
 
     return (
       <AssuranceCredentialsStep
+        registration={assuranceRegistrationSetup(getLoadedBaselinePack(activeProjectId))}
         onBack={() => setCurrentStep('STEP_2_SELFIE')}
         onSubmit={(credentials) => {
           if (idPayload && selfiePayload) {

@@ -2,7 +2,7 @@
 
 | | |
 | :--- | :--- |
-| **Status** | Not started |
+| **Status** | Implemented; Prisma migration, route test run and web/mobile click-through pending (see section 7) |
 | **Depends on** | Phase 11 (project types, terminology) |
 | **Unblocks** | Phase 13 (milestone-linked payments), Phase 15 (final payment gate) |
 | **Read first** | [Master plan](saas_implementation_plan.md) sections 2, 3 and 6; [Phase 11](phase_11_implementation_plan.md) section 3 |
@@ -76,36 +76,36 @@ Payments today: with tranches on, each `FacilityTranche` has `allocatedAmountNgn
 ## 5. Implementation checklist
 
 ### Step 1: Registration bodies
-- [ ] CRUD under tenant settings (`tenant:manage_settings`); archive instead of delete when referenced.
-- [ ] Seed the six bodies for every tenant (tenant provisioning creates them too).
-- [ ] All selects that list licence types read the tenant list.
+- [ ] CRUD under tenant settings (`tenant:manage_settings`); archive instead of delete when referenced. *(route test written, pending migration)*
+- [ ] Seed the six bodies for every tenant (tenant provisioning creates them too). *(route test written, pending migration)*
+- [ ] All selects that list licence types read the tenant list. *(web user forms and the mobile picker read the tenant list; typecheck/build only, click-through pending)*
 
 ### Step 2: Credential policy and resolver
-- [ ] Shared `CredentialPolicySchema`, `resolveCredentialPolicy(tenantPolicy, projectTypeSnapshot)`, and `credentialFieldRules(policy)` → `{ visible, required, label, helpText }` used by every form (web and mobile) so display and validation cannot drift.
-- [ ] Server `assertCertifierCredentials(user, policy)` used by all three certification paths and by the viewer `canAct` reason; returns the snapshot fields (possibly null).
-- [ ] `GET /projects/:id/credential-policy`; tenant settings DTO carries the tenant policy; the mobile baseline pack carries the project's resolved `fieldAssurance` policy.
-- [ ] Tenant settings UI: two selects with explanatory copy; project type editor: "Credentials" tab with "use tenant setting" as the first option.
+- [x] Shared `CredentialPolicySchema`, `resolveCredentialPolicy(tenantPolicy, projectTypeSnapshot)`, and `credentialFieldRules(policy)` → `{ visible, required, label, helpText }` used by every form (web and mobile) so display and validation cannot drift. *(unit-tested: `server/src/tests/credentials.phase12.test.ts`, `mobile/src/utils/assuranceRegistration.test.ts`)*
+- [ ] Server `assertCertifierCredentials(user, policy)` used by all three certification paths and by the viewer `canAct` reason; returns the snapshot fields (possibly null). *(route test written, pending migration)*
+- [ ] `GET /projects/:id/credential-policy`; tenant settings DTO carries the tenant policy; the mobile baseline pack carries the project's resolved `fieldAssurance` policy. *(route test written, pending migration)* (tenant policy is served by `GET /credentials/settings`, see section 7)
+- [ ] Tenant settings UI: two selects with explanatory copy; project type editor: "Credentials" tab with "use tenant setting" as the first option. *(built; web click-through pending)*
 
 ### Step 3: Apply the policy everywhere
-- [ ] Server: IPC certification, direct milestone verification, retention certification, assurance submission (server rejects a missing number only when `REQUIRED`).
-- [ ] PDF and audit `actorDisplayName`: print "Reg. No." only when present; with `HIDDEN`, print nothing about registration.
-- [ ] Web: profile, user create/edit, certify modal, direct milestone panel, retention certify, workbench cannot-act banner, contractor verification queue (show the number only if present).
-- [ ] Mobile: `AssuranceCredentialsStep` uses `credentialFieldRules`: hidden, optional (no blocking alert) or required; body picker from the pack.
-- [ ] Grep check in section 7: no remaining unconditional licence requirement (`professionalLicense`, `corenLicense`, `hasLicence`).
+- [ ] Server: IPC certification, direct milestone verification, retention certification, assurance submission (server rejects a missing number only when `REQUIRED`). *(route test written, pending migration)*
+- [ ] PDF and audit `actorDisplayName`: print "Reg. No." only when present; with `HIDDEN`, print nothing about registration. *(route test written, pending migration)* (the test checks the audit name and that the PDF renders, not the PDF text)
+- [ ] Web: profile, user create/edit, certify modal, direct milestone panel, retention certify, workbench cannot-act banner, contractor verification queue (show the number only if present). *(built; typecheck and vite build pass; click-through pending)*
+- [ ] Mobile: `AssuranceCredentialsStep` uses `credentialFieldRules`: hidden, optional (no blocking alert) or required; body picker from the pack. *(rules unit-tested; on-device run pending)*
+- [x] Grep check in section 7: no remaining unconditional licence requirement (`professionalLicense`, `corenLicense`, `hasLicence`).
 
 ### Step 4: Fixed-amount payment milestones
-- [ ] Shared: basis and rule enums, Facility step schema fields, `DirectMilestoneSuggestionDto` gains `paymentBasis`, `completionRule`, `completionMet`, `unmetReasons[]`, `fixedReleaseAmountNgn`, `alreadyReleasedNgn`.
-- [ ] Server direct verification: for fixed basis, compute completion from the verified lines; refuse `SUPPORT_FULL_RELEASE` when not met (422 `MILESTONE_COMPLETION_NOT_MET` with reasons); compute amounts server-side; CPs, chain, segregation and retention unchanged. `dryRun` returns the same computation.
-- [ ] Facility step UI: per payment milestone basis, rule, fixed amount (defaults to allocated), required % per item for `ALL_ITEMS_COMPLETE`.
-- [ ] Direct milestone panel: shows criteria and progress against them; release amount is read-only for fixed basis.
-- [ ] Lender decision window and PDF show basis and criteria met.
-- [ ] Config validation: fixed basis + IPC mechanism refused.
+- [x] Shared: basis and rule enums, Facility step schema fields, `DirectMilestoneSuggestionDto` gains `paymentBasis`, `completionRule`, `completionMet`, `unmetReasons[]`, `fixedReleaseAmountNgn`, `alreadyReleasedNgn`. *(completion and amount maths unit-tested)*
+- [ ] Server direct verification: for fixed basis, compute completion from the verified lines; refuse `SUPPORT_FULL_RELEASE` when not met (422 `MILESTONE_COMPLETION_NOT_MET` with reasons); compute amounts server-side; CPs, chain, segregation and retention unchanged. `dryRun` returns the same computation. *(route test written, pending migration)*
+- [ ] Facility step UI: per payment milestone basis, rule, fixed amount (defaults to allocated), required % per item for `ALL_ITEMS_COMPLETE`. *(built with one required % per milestone, see section 7; click-through pending)*
+- [ ] Direct milestone panel: shows criteria and progress against them; release amount is read-only for fixed basis. *(built; click-through pending)*
+- [ ] Lender decision window and PDF show basis and criteria met. *(built; click-through pending; PDF rendering route-tested only for status)*
+- [ ] Config validation: fixed basis + IPC mechanism refused. *(project type schema refusal unit-tested; facility, process and type routes: route test written, pending migration)*
 
 ### Step 5: Seed and tests
-- [ ] Seeded programme tenant: policy `OPTIONAL`/`OPTIONAL`; one certifier without a registration; Central project with three fixed payment milestones (e.g. 30% substructure, 40% superstructure, 30% finishes and WASH).
-- [ ] Existing tenants: policy unset → `REQUIRED`, existing tests pass unchanged.
-- [ ] Route tests: each certification path with each policy value; PDF/DTO fields null when absent; assurance with `HIDDEN` sends nothing and is accepted; fixed milestone refused when incomplete, released at the fixed amount when complete, holdback with reason, retention withheld; fixed + IPC refused.
-- [ ] Mobile unit test for `credentialFieldRules`.
+- [ ] Seeded programme tenant: policy `OPTIONAL`/`OPTIONAL`; one certifier without a registration; Central project with three fixed payment milestones (e.g. 30% substructure, 40% superstructure, 30% finishes and WASH). *(`server/src/db/seedPhase12.ts` written and typechecks; not run: the DB is not migrated)*
+- [ ] Existing tenants: policy unset → `REQUIRED`, existing tests pass unchanged. *(default unit-tested; existing route suites pending migration)*
+- [ ] Route tests: each certification path with each policy value; PDF/DTO fields null when absent; assurance with `HIDDEN` sends nothing and is accepted; fixed milestone refused when incomplete, released at the fixed amount when complete, holdback with reason, retention withheld; fixed + IPC refused. *(written: `server/src/tests/routes.phase12.test.ts`, in `test:routes`; not run, pending migration)*
+- [x] Mobile unit test for `credentialFieldRules`. *(`mobile/src/utils/assuranceRegistration.test.ts`)*
 
 ---
 
@@ -118,4 +118,53 @@ Payments today: with tranches on, each `FacilityTranche` has `allocatedAmountNgn
 
 ## 7. Found during implementation
 
-*(empty)*
+### Migration requirements (for the coordinator; no migration folder was created)
+
+The schema was edited live and `prisma generate` run; the database was not migrated. Decision A applies (rewrite, no backfill), so dropping and adding columns is acceptable; renaming is not needed because no data is kept. What the migration must contain:
+
+| Object | Change |
+| :--- | :--- |
+| enum `ProfessionalLicenseType` | **Drop** (after the columns below stop using it). |
+| `User.professionalLicenseType` (enum) | **Drop** the column; **add** `professionalRegistrationBodyCode TEXT NULL`. |
+| `User.professionalLicenseNumber` | **Drop**; **add** `professionalRegistrationNumber TEXT NULL`. (A `RENAME COLUMN` is equally fine for this one; there is no data to keep.) |
+| `ValuationReport.certifierLicenseType` | Change type from the enum to `TEXT` and make it **nullable** (drop + add is fine). Same column name. |
+| `ValuationReport.certifierLicenseNumber` | **Drop NOT NULL** (stays `TEXT`). Same column name. |
+| `ValuationReport` | **Add** `certifierRegistrationBodyName TEXT NULL`, `certifierRegistrationPrefix TEXT NULL`. |
+| `FieldAgentSession.corenLicenseNumber` | **Drop**; **add** `registrationNumber TEXT NULL`, `registrationBodyCode TEXT NULL`. |
+| `Tenant` (`tenants`) | **Add** `credentialPolicyJson JSONB NOT NULL DEFAULT '{}'`. |
+| new enums | `TranchePaymentBasis` (`MEASURED`, `FIXED_ON_COMPLETION`), `TrancheCompletionRule` (`ALL_ITEMS_COMPLETE`, `WEIGHTED_PROGRESS_REACHED`). |
+| `FacilityTranche` | **Add** `paymentBasis "TranchePaymentBasis" NOT NULL DEFAULT 'MEASURED'`, `completionRule "TrancheCompletionRule" NULL`, `fixedReleaseAmountNgn DECIMAL(18,2) NULL`, `completionRequiredItemPct DECIMAL(5,2) NOT NULL DEFAULT 100`. |
+| `MilestoneVerification` (`milestone_verifications`) | **Add** `paymentTermsJson JSONB NULL`. |
+| new table `professional_registration_bodies` (model `ProfessionalRegistrationBody`) | `id UUID PK`, `tenantId UUID NOT NULL` FK → `tenants(id)` ON DELETE CASCADE, `code TEXT`, `fullName TEXT`, `displayPrefix TEXT`, `exampleNumber TEXT NULL`, `isArchived BOOLEAN DEFAULT false`, `sortOrder INT DEFAULT 0`, `createdAt`, `updatedAt`; **unique** `(tenantId, code)`, index `(tenantId)`. |
+| enum `AuditActionType` | **Add** `CREDENTIAL_POLICY_UPDATED`, `REGISTRATION_BODY_SAVED`. |
+
+No hand-written SQL is needed for Phase 12 (no partial indexes or CHECKs); the existing hand-written objects listed in CLAUDE.md must survive the regeneration as usual. `prisma migrate diff` will produce the enum → text change as drop + add of `certifierLicenseType`; that is acceptable under decision A. The seed reset list in `runSeed` now clears `professionalRegistrationBody` before `tenant`.
+
+### Decisions and deviations
+
+1. **Snapshot columns keep their names.** `ValuationReport.certifierLicenseType` / `certifierLicenseNumber` were kept (now nullable text) and the DTO fields keep those names; `certifierLicenseType` holds the body **code**. Milestone verification and retention certification write the same `ValuationReport` snapshot, so there are no separate snapshot columns to change.
+2. **Field sessions store the body separately.** The plan only renamed the request field; the column `FieldAgentSession.corenLicenseNumber` was replaced by `registrationNumber` + `registrationBodyCode` (the app used to send "COREN R.123" as one display string). DTOs: `registrationNumber`, `registrationBodyCode` (+ `registrationBodyName` on the verification queue). The old request field `corenLicenseNumber` is still accepted on join and assurance for one release.
+3. **Tenant policy endpoint.** The tenant policy and the body list are served by `GET /api/v1/credentials/settings` (and changed with `PUT /credentials/policy`, `POST|PUT|DELETE /credentials/registration-bodies`) instead of being added to `TenantSettingsDto`, so the existing workspace settings form is untouched. `WebUserProfile` carries `certifierRegistrationRequirement` (tenant level) for the profile page.
+4. **One required % per payment milestone, not per item.** `ALL_ITEMS_COMPLETE` uses `FacilityTranche.completionRequiredItemPct` (default 100) for every mapped item. Per-item percentages would need the BOQ items in the Facility step, which comes before the BOQ step; add a per-item override on the BOQ step if the client needs it.
+5. **Fixed basis amounts.** Server computes `due = (fixedReleaseAmountNgn ?? allocatedAmountNgn) − releasedAmountNgn`. On the valuation: `totalClaimedNgn = due`, `totalCertifiedNgn = due` when the rule is met (else 0). Any recommendation other than `HOLD` is refused while incomplete (`MILESTONE_COMPLETION_NOT_MET`, checked before `NOTHING_VERIFIED` so the verifier sees why). `SUPPORT_WITH_HOLDBACK` needs an amount strictly below `due` (`HOLDBACK_NOT_BELOW_FIXED_AMOUNT`) and a reason of 5+ characters (`HOLDBACK_REASON_REQUIRED`); the reason is appended to the valuation summary and stored in the computation and audit payload. A complete fixed milestone can be put forward again without new progress (e.g. after a hold). A fixed tranche counts as fully released (`isReleased`) at its fixed amount, not its allocation.
+6. **Payment terms are snapshotted** on `MilestoneVerification.paymentTermsJson` and returned as `DirectMilestoneValuationDto.paymentTerms` (lender modal, PDF, valuation card), so later edits to the tranche do not rewrite what was verified.
+7. **Fixed + IPC refusals.** Facility step save and process settings change (to IPC with fixed tranches) answer 409 `FIXED_BASIS_WITH_IPC`; IPC submission on a fixed tranche is also refused (409). A project type whose template uses IPC claims with `payments.defaultBasis = FIXED_ON_COMPLETION` answers **422** `TEMPLATE_CONFLICTS_WITH_PROJECT_TYPE` (the existing Phase 11 hook), and the type schema itself refuses `mechanism: IPC_CLAIM_REQUIRED` with the fixed basis (400). The facility step also reports an activation issue `FIXED_BASIS_WITH_IPC`.
+8. **Payment basis lock.** A tranche's basis cannot change once money was released on it (409 `TRANCHE_BASIS_LOCKED`); the fixed amount cannot exceed the allocation (422) or drop below what was released (409).
+9. **Seed writes type configs in place.** `seedPhase12` adds `credentials` and `payments` to both programme types without bumping their version (Phase 11 tests assert version 1) and copies the config into the projects' snapshots. New logins: `programme.monitor@insite.ng` (Monitor, no registration) and `programme.funder@insite.ng` (Lender role in the flagship, for the funder-scoped release step), both on PRG-102.
+10. **"Verified Credential" placeholder removed.** The web formatter used to print "Verified Credential" when a user had no licence; it now prints nothing (profile shows "None on file"). The PDF heading "Licensed Independent Monitor Certification Sign-Off" became "Independent Monitor Certification Sign-Off", and the statement mentions professional standards only when a registration is printed.
+11. **Not changed (out of scope):** the Azure OpenAI system prompt still calls the monitor "QSRBN-licensed" (AI prompts keep canonical wording); public marketing pages mention licensed monitors; the default role description of Independent Monitor still says "Licensed Quantity Surveyor or COREN Engineer".
+12. **Possible issue, not verified:** retention allocation for a fixed milestone in a multi-prime project weights contractors by the verification lines' `verifiedAmountNgn`, which can be 0 when a complete milestone is put forward without new progress. `allocateRetention` falls back to the main contractor, so nothing is lost, but the split would not follow the items. Single-contractor projects (the seeded Central project) are unaffected.
+13. **Workbench banner.** The IPC workbench shows the server's cannot-act reason (now policy-driven) in the certify button tooltip and in the certify modal; no separate banner was added.
+
+### Grep check (Step 3)
+
+`grep -rn "professionalLicense\|corenLicense\|hasLicence" shared/src server/src web/src mobile/src` finds only the deprecated `corenLicenseNumber` request alias (two schema fields, two server fallbacks reading it as `registrationNumber`) and tests that send it. No code requires a licence unconditionally; every check goes through `assertCertifierCredentials` / `certifierCannotActReason` / `fieldAssuranceRegistration` (`server/src/modules/credentials/credentialPolicy.service.ts`).
+
+### Verification run (this session)
+
+- `npm run typecheck`: shared and server pass. Web fails only in `Notifications.tsx` and `ReportingStep.tsx` (Phase 14 work in progress by another agent); mobile fails only in `NotificationCard.tsx` (same). No errors in Phase 12 files.
+- `npm run lint`: 0 errors (75 pre-existing warnings).
+- `npm --workspace=@insite/server run test:unit`: 213/213 pass (includes `credentials.phase12.test.ts`).
+- `npm --workspace=@insite/mobile run test`: 70/70 pass (includes `assuranceRegistration.test.ts`).
+- Web: `vite build` succeeds; `npm --workspace=@insite/web run build` stops at the Phase 14 typecheck errors above.
+- Route tests (`routes.phase12.test.ts` and all earlier suites): not run, the database is not migrated.

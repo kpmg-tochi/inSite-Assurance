@@ -17,9 +17,13 @@ export interface QueuedAssuranceSubmission {
   selfieLeftUri: string;
   selfieRightUri: string;
   selfieSet: GuidedSelfieSet;
-  regulatoryBody: string;
-  licenseNumber: string;
+  /** Phase 12: null when the project hides registration or none was given. */
+  registrationNumber: string | null;
+  registrationBodyCode: string | null;
   experienceSummary: string;
+  /** @deprecated Rows queued before Phase 12 hold these instead. */
+  regulatoryBody?: string;
+  licenseNumber?: string;
 }
 
 export type AssuranceImageSlot = 'idDocument' | 'selfieFront' | 'selfieLeft' | 'selfieRight';
@@ -85,4 +89,15 @@ export async function recordAssuranceUpload(id: string, slot: AssuranceImageSlot
 export async function markAssuranceSubmissionSynced(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync('UPDATE assurance_submissions SET synced_at = ? WHERE id = ?', [nowIso(), id]);
+}
+
+/**
+ * Phase 12: the registration fields to send. Rows queued before Phase 12 kept the body and number
+ * separately as well, so they map onto the new fields (never a combined display string).
+ */
+export function registrationFieldsOf(payload: QueuedAssuranceSubmission): { registrationNumber?: string; registrationBodyCode?: string } {
+  const number = (payload.registrationNumber ?? payload.licenseNumber ?? '').trim();
+  if (!number) return {};
+  const code = (payload.registrationBodyCode ?? payload.regulatoryBody ?? '').trim();
+  return { registrationNumber: number, ...(code ? { registrationBodyCode: code } : {}) };
 }

@@ -25,7 +25,7 @@ import type { ProjectSummaryDto } from "../api/types";
 import { useAuth } from "../lib/auth-context";
 import { useDemoAccounts } from "../config/useDemoAccounts";
 import { IS_DEMO_MODE } from "../config/demoMode";
-import { formatLicenseCredential, getInitials } from "../lib/formatters";
+import { formatRegistrationCredential, getInitials } from "../lib/formatters";
 import Notifications from "./Notifications";
 
 interface AppShellProps {
@@ -81,9 +81,9 @@ export function AppShell({
   }, []);
 
   const userInitials = getInitials(user?.fullName || "User");
-  const credentialText = formatLicenseCredential(
-    user?.professionalLicenseType,
-    user?.professionalLicenseNumber,
+  const credentialText = formatRegistrationCredential(
+    user?.professionalRegistrationBodyCode,
+    user?.professionalRegistrationNumber,
   );
 
   const roleDisplayLabel = user?.roleName || user?.roleCode || "Team Member";
@@ -464,7 +464,8 @@ export function AppShell({
                   {user?.fullName}
                 </div>
                 <div className="text-[11px] text-white/70 truncate">
-                  {roleDisplayLabel} · {credentialText}
+                  {roleDisplayLabel}
+                  {credentialText ? ` · ${credentialText}` : ""}
                 </div>
               </div>
             )}

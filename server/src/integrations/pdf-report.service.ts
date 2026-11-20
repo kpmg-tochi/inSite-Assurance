@@ -1,9 +1,11 @@
 import PDFDocument from "pdfkit";
 import {
+  describeCompletionRule,
   formatDateTimeInZone,
-  PROFESSIONAL_LICENSE_META,
-  ProfessionalLicenseType,
+  formatRegistration,
+  MilestonePaymentTerms,
   ResolvedTerminology,
+  TRANCHE_PAYMENT_BASIS_META,
   resolveTerm,
   TerminologyKey,
 } from "@insite/shared";
@@ -41,8 +43,11 @@ export interface ValuationReportPdfInput {
     trancheRecommendation: string;
     executiveSummary: string;
     certifierFullName: string;
-    certifierLicenseType: ProfessionalLicenseType;
-    certifierLicenseNumber: string;
+    /** Phase 12: registration snapshot; nothing about registration prints when the number is null. */
+    certifierLicenseType: string | null;
+    certifierLicenseNumber: string | null;
+    certifierRegistrationBodyName: string | null;
+    certifierRegistrationPrefix: string | null;
     certifiedAtIso: string;
   } | null;
   lineItems: Array<{
@@ -67,6 +72,8 @@ export interface ValuationReportPdfInput {
   retentionRelease?: { stage: string; contractorName: string } | null;
   /** Phase 11: tenant wording for domain terms; omitted uses the defaults (Lender, Tranche, IPC …). */
   terminology?: ResolvedTerminology;
+  /** Phase 12: payment basis and completion criteria of a direct milestone verification. */
+  paymentTerms?: MilestonePaymentTerms | null;
 }
 
 const moneyFormatter = (currency: string) => (n: number) =>
@@ -239,6 +246,21 @@ export async function generateValuationReportPdfBuffer(
       doc.moveDown(0.35);
     }
 
+    // Phase 12: payment basis and whether the completion criteria were met.
+    const terms = data.paymentTerms;
+    if (terms && terms.paymentBasis === "FIXED_ON_COMPLETION") {
+      doc.moveDown(0.4);
+      doc.fontSize(10).fillColor("#0f172a").text(`Payment basis: ${TRANCHE_PAYMENT_BASIS_META[terms.paymentBasis].label}`);
+      doc
+        .fontSize(9)
+        .fillColor("#334155")
+        .text(
+          `Fixed amount ${money(terms.fixedReleaseAmountNgn ?? 0)} (already released ${money(terms.alreadyReleasedNgn)}). ` +
+            `Completion criteria: ${describeCompletionRule(terms.completionRule, terms.completionRequiredItemPct, terms.targetCompletionPct)}. ` +
+            (terms.completionMet ? "Met." : `Not met: ${terms.unmetReasons.join(" ")}`),
+        );
+    }
+
     doc.moveDown(1.2);
 
     // Sign-Off Block
@@ -247,23 +269,30 @@ export async function generateValuationReportPdfBuffer(
     doc
       .fontSize(10.5)
       .fillColor("#0f172a")
-      .text("4. Licensed Independent Monitor Certification Sign-Off");
+      .text("4. Independent Monitor Certification Sign-Off");
     doc.moveDown(0.3);
 
     if (cert) {
-      const licenseMeta =
-        PROFESSIONAL_LICENSE_META[cert.certifierLicenseType] ?? PROFESSIONAL_LICENSE_META.QSRBN;
+      // Phase 12: the registration line prints only when the snapshot holds a number.
+      const registration = formatRegistration({
+        bodyCode: cert.certifierLicenseType,
+        prefix: cert.certifierRegistrationPrefix,
+        number: cert.certifierLicenseNumber,
+      });
       doc
         .fontSize(9)
         .fillColor("#334155")
         .text(
-          "I hereby certify that the physical progress and valuation figures stated above have been independently reviewed against geotagged field evidence, hold-point records, and contract Bill of Quantities in accordance with Nigerian professional regulatory standards.",
+          "I hereby certify that the physical progress and valuation figures stated above have been independently reviewed against geotagged field evidence, hold-point records, and contract Bill of Quantities" +
+            (registration ? " in accordance with the professional standards of my registration body." : "."),
         );
       doc.moveDown(0.5);
       doc.fontSize(10).fillColor("#0f172a").text(`Certified By: ${cert.certifierFullName}`);
-      doc.text(
-        `Regulatory Credential: ${licenseMeta.displayPrefix} ${cert.certifierLicenseNumber} (${licenseMeta.fullName})`,
-      );
+      if (registration) {
+        doc.text(
+          `Professional registration: ${registration}${cert.certifierRegistrationBodyName ? ` (${cert.certifierRegistrationBodyName})` : ""}`,
+        );
+      }
       doc.text(`Timestamp: ${formatDateTimeInZone(cert.certifiedAtIso, data.timeZone ?? "UTC")}`);
     } else {
       doc.fontSize(9).fillColor("#334155").text(`Not signed: this ${t("ipc", true)} has not been certified.`);

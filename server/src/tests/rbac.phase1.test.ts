@@ -155,8 +155,8 @@ describe('Phase 1 Multi-Tenant SaaS & Normalized RBAC', () => {
       tenantId: 't-1',
       roleId: 'r-1',
       organizationId: 'o-1',
-      professionalLicenseType: 'QSRBN',
-      professionalLicenseNumber: '3842',
+      professionalRegistrationBodyCode: 'QSRBN',
+      professionalRegistrationNumber: '3842',
       tenant: {
         id: 't-1',
         name: 'KPMG Advisory',

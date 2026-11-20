@@ -2,7 +2,7 @@ import { AlertTriangle, Printer, Square, X } from "lucide-react";
 import type { IpcClaimDto } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../../api/types";
 import { useAuth } from "../../../lib/auth-context";
-import { formatCompactNaira, formatLicenseCredential } from "../../../lib/formatters";
+import { formatCompactNaira, formatRegistrationCredential } from "../../../lib/formatters";
 
 const CHECKLIST = [
   "Dimensional and level check",
@@ -61,7 +61,7 @@ export function VisitItineraryModal({
               <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Prepared by</div>
               <div className="font-bold text-slate-900 mt-0.5">{user?.fullName}</div>
               <div className="text-[11px] text-brand-primary font-medium">
-                {formatLicenseCredential(user?.professionalLicenseType, user?.professionalLicenseNumber)}
+                {formatRegistrationCredential(user?.professionalRegistrationBodyCode, user?.professionalRegistrationNumber)}
               </div>
             </div>
             <div className="pt-2 border-t border-slate-200/60 sm:col-span-2">

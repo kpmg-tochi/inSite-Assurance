@@ -5,7 +5,6 @@ import {
   certificationPermissionFor,
   CertifyRetentionReleaseRequest,
   OPEN_DEFECT_STATUSES,
-  ProfessionalLicenseType,
   RequestRetentionReleaseRequest,
   RETENTION_NGN_EPSILON,
   retentionReleaseCap,
@@ -25,6 +24,11 @@ import { recordAuditEvent } from '../audit/audit.service';
 import { createWebNotification } from '../notifications/notifications.service';
 import { getProcessConfig } from '../process/processConfig.service';
 import { terminologyForProject } from '../organizations/terminology.service';
+import {
+  assertCertifierCredentials,
+  certifierCannotActReason,
+  credentialPolicyForProject,
+} from '../credentials/credentialPolicy.service';
 import { serializeValuationReport } from '../../utils/serializers';
 import { releaseGate, reviewGate, startValuationOnChain, valuationProgress } from '../reconciliation/disbursementChain';
 import { assertModuleOn, fmtNgn, projectToday } from './closeoutGate';
@@ -304,7 +308,13 @@ async function userNames(db: Db, ids: string[]) {
   return new Map(users.map((u) => [u.id, u.fullName]));
 }
 
-async function serializeRequest(r: RequestRow, viewer: WebJwtPayload, names: Map<string, string>, certifyPermission: string): Promise<RetentionReleaseRequestDto> {
+async function serializeRequest(
+  r: RequestRow,
+  viewer: WebJwtPayload,
+  names: Map<string, string>,
+  certifyPermission: string,
+  registrationBlocker: string | null = null
+): Promise<RetentionReleaseRequestDto> {
   const v = r.valuationReport;
   const active = activeDecisionOf(v);
   const decided = Boolean(active);
@@ -344,6 +354,8 @@ async function serializeRequest(r: RequestRow, viewer: WebJwtPayload, names: Map
       certify: gate([
         [r.status === 'PENDING_CERTIFICATION', 'Only a request awaiting certification can be certified.'],
         [viewer.permissions.includes(certifyPermission), 'Your role does not hold the certification permission.'],
+        // Phase 12: only when the project's certifier policy is REQUIRED.
+        [!registrationBlocker, registrationBlocker ?? ''],
       ]),
       cancel: gate([
         [r.status === 'PENDING_CERTIFICATION', 'Only a request awaiting certification can be cancelled.'],
@@ -375,6 +387,14 @@ export async function getRetentionSummary(projectId: string, viewer: WebJwtPaylo
   const p = ctx.project;
   const names = await userNames(prisma, ctx.requests.map((r) => r.requestedByUserId));
   const certifyPermission = certificationPermissionFor(config.disbursementMechanism);
+  const [policy, viewerProfile] = await Promise.all([
+    credentialPolicyForProject(projectId),
+    prisma.user.findUnique({
+      where: { id: viewer.userId },
+      select: { professionalRegistrationBodyCode: true, professionalRegistrationNumber: true },
+    }),
+  ]);
+  const registrationBlocker = certifierCannotActReason(policy.certifier, viewerProfile);
   return {
     projectId,
     enabled: true,
@@ -403,7 +423,7 @@ export async function getRetentionSummary(projectId: string, viewer: WebJwtPaylo
         stages: (['COMPLETION', 'FINAL'] as const).map((stage) => stageOption(ctx, c.id, stage)),
       };
     }),
-    requests: await Promise.all(ctx.requests.map((r) => serializeRequest(r, viewer, names, certifyPermission))),
+    requests: await Promise.all(ctx.requests.map((r) => serializeRequest(r, viewer, names, certifyPermission, registrationBlocker))),
     canRequestRelease: viewer.permissions.includes(RELEASE_ESCROW) || viewer.isPlatformSuperAdmin,
   };
 }
@@ -449,7 +469,7 @@ export async function requestRetentionRelease(params: { projectId: string; webUs
       targetPermissionKey: certificationPermissionFor(config.disbursementMechanism),
       category: 'RETENTION_RELEASE',
       title: `${resolveTerm(await terminologyForProject(projectId, tx), 'retention')} release for ${contractor.organization.name} awaiting certification`,
-      description: `${fmtNgn(amount)} (${input.stage === 'FINAL' ? 'final release' : 'release at practical completion'}) needs a licensed certifier.`,
+      description: `${fmtNgn(amount)} (${input.stage === 'FINAL' ? 'final release' : 'release at practical completion'}) needs certification.`,
       actionUrl: `/app/projects/${projectId}/retention`,
       metadata: { retentionReleaseRequestId: request.id },
     });
@@ -531,18 +551,12 @@ export async function certifyRetentionRelease(params: {
       throw new AppError(`Retention cannot be released yet: ${unmet.join(' ')}`, 409, 'RETENTION_RELEASE_PRECONDITIONS_UNMET', { unmet });
     }
 
-    const user = await tx.user.findUniqueOrThrow({
-      where: { id: webUser.userId },
-      select: { fullName: true, professionalLicenseType: true, professionalLicenseNumber: true },
+    // Phase 12: the project's certifier policy decides whether a registration is needed and copied.
+    const certifier = await assertCertifierCredentials(tx, {
+      userId: webUser.userId,
+      tenantId: webUser.tenantId,
+      requirement: (await credentialPolicyForProject(projectId, tx)).certifier,
     });
-    const licence = user.professionalLicenseNumber?.trim();
-    if (!user.professionalLicenseType || !licence) {
-      throw new AppError(
-        'Your profile has no professional licence. Add your licence type and number before certifying.',
-        422,
-        'CERTIFIER_LICENCE_MISSING'
-      );
-    }
     // ValuationReport needs a tranche; retention is not drawn from a tranche, so the last tranche is
     // the accounting anchor and its allocation is never touched by a retention release.
     const anchor = await tx.facilityTranche.findFirst({ where: { projectId }, orderBy: { trancheNumber: 'desc' } });
@@ -563,9 +577,8 @@ export async function certifyRetentionRelease(params: {
         recommendedReleaseAmountNgn: amount,
         recommendedHoldbackAmountNgn: 0,
         executiveCertificationSummary: input.executiveCertificationSummary,
-        certifierFullName: user.fullName,
-        certifierLicenseType: user.professionalLicenseType as ProfessionalLicenseType,
-        certifierLicenseNumber: licence,
+        certifierFullName: certifier.fullName,
+        ...certifier.snapshot,
       },
     });
     await tx.valuationReport.update({
@@ -588,7 +601,7 @@ export async function certifyRetentionRelease(params: {
       projectId,
       actorType: 'WEB_USER',
       actorId: webUser.userId,
-      actorDisplayName: `${user.fullName} (${user.professionalLicenseType} #${licence})`,
+      actorDisplayName: certifier.actorDisplayName,
       action: 'VALUATION_REPORT_CERTIFIED',
       summaryText: `Certified the ${stageLabel} of ${fmtNgn(amount)} for ${contractor.organization.name}.`,
       payload: {

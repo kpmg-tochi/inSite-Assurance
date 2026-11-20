@@ -1,4 +1,5 @@
 import { PortfolioRetentionItemSchema } from './retention.schema';
+import { TranchePaymentInputSchema } from './milestonePayment.schema';
 import { z } from 'zod';
 import {
   ConditionPrecedentStatusEnum,
@@ -45,7 +46,7 @@ export const FacilityTrancheInputSchema = z.object({
   allocatedAmountNgn: z.number().positive(),
   targetCompletionPct: z.number().min(0).max(100),
   conditionsPrecedent: z.array(ConditionPrecedentInputSchema).default([]),
-});
+}).merge(TranchePaymentInputSchema); // Phase 12: payment basis and completion rule
 export type FacilityTrancheInput = z.infer<typeof FacilityTrancheInputSchema>;
 
 // Project creation is staged (Phase 6): see projectSetup.schema.ts for the draft and step schemas.

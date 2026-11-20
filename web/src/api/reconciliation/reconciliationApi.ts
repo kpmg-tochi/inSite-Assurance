@@ -5,7 +5,7 @@ import type {
   DirectMilestoneSuggestionDto,
   DirectMilestoneValuationDto,
   MilestoneVerificationLine,
-  ProfessionalLicenseType,
+  MilestonePaymentTerms,
   ReviewValuationRequest,
   VerifyDirectMilestoneRequest,
   IpcClaimDto,
@@ -281,9 +281,15 @@ export interface DirectMilestoneComputation {
   recommendedReleaseAmountNgn: number;
   recommendedHoldbackAmountNgn: number;
   certifierFullName: string;
-  certifierLicenseType: ProfessionalLicenseType;
-  certifierLicenseNumber: string;
+  /** Phase 12: registration snapshot; null when none was given or the policy is HIDDEN. */
+  certifierLicenseType: string | null;
+  certifierLicenseNumber: string | null;
+  certifierRegistrationBodyName?: string | null;
+  certifierRegistrationPrefix?: string | null;
   revisionNumber: number;
+  /** Phase 12: payment basis and completion as verified (dry run and verification). */
+  paymentTerms?: MilestonePaymentTerms | null;
+  holdbackReason?: string | null;
 }
 
 export interface VerifyDirectMilestoneResult {

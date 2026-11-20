@@ -4,8 +4,7 @@ import {
   formatDateInZone,
   formatDateTimeInZone,
   formatMoney,
-  PROFESSIONAL_LICENSE_META,
-  ProfessionalLicenseType,
+  formatRegistrationShort,
   timeZoneAbbreviation,
 } from '@insite/shared';
 
@@ -56,15 +55,12 @@ export function getInitials(fullName: string): string {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
-export function formatLicenseCredential(
-  licenseType?: ProfessionalLicenseType | null,
-  licenseNumber?: string | null
-): string {
-  if (!licenseType || !licenseNumber) {
-    return 'Verified Credential';
-  }
-  const meta = PROFESSIONAL_LICENSE_META[licenseType];
-  return `${meta ? meta.code : licenseType} #${licenseNumber}`;
+/**
+ * Phase 12: "QSRBN #3842", or null when there is no registration number (nothing is shown; the
+ * old "Verified Credential" placeholder claimed something that was not on file).
+ */
+export function formatRegistrationCredential(bodyCode?: string | null, number?: string | null): string | null {
+  return formatRegistrationShort({ bodyCode, number });
 }
 
 export function formatDateShort(isoString?: string | null): string {

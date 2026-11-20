@@ -11,6 +11,7 @@ import {
   SYSTEM_PERMISSIONS_CATALOG,
   type ApprovalChainType,
 } from '../enums';
+import { TrancheCompletionRuleEnum, TranchePaymentBasisEnum } from './milestonePayment.schema';
 
 /**
  * Process engine (Phase 7): per-project process configuration, workflow templates and approval
@@ -469,6 +470,8 @@ export const VerifyDirectMilestoneRequestSchema = z
     trancheRecommendation: MonitorRecommendationEnum,
     /** SUPPORT_WITH_HOLDBACK only: the amount to release now, bounded by the total verified. */
     holdbackReleaseAmountNgn: z.number().nonnegative().optional(),
+    /** Phase 12: why part of a fixed payment milestone is held back (required by the server for the fixed basis). */
+    holdbackReason: z.string().trim().max(1500).nullable().optional(),
     certifierDigitalSignatureAck: z.literal(true),
     /** Compute and return the amounts without saving. */
     dryRun: z.boolean().optional(),
@@ -516,6 +519,18 @@ export const DirectMilestoneSuggestionDtoSchema = z.object({
   items: z.array(DirectMilestoneItemSuggestionSchema),
   /** A verification on this tranche still going through the chain blocks a new one. */
   openValuationId: z.string().uuid().nullable(),
+  /** Phase 12: how the payment milestone pays and whether its completion rule is met today. */
+  paymentBasis: TranchePaymentBasisEnum,
+  completionRule: TrancheCompletionRuleEnum.nullable(),
+  completionRequiredItemPct: z.number(),
+  targetCompletionPct: z.number(),
+  /** Evaluated on the most each item can be verified at now (null for the measured basis). */
+  completionMet: z.boolean().nullable(),
+  unmetReasons: z.array(z.string()),
+  weightedProgressPct: z.number(),
+  /** Fixed basis: the amount paid on completion (null for the measured basis). */
+  fixedReleaseAmountNgn: z.number().nullable(),
+  alreadyReleasedNgn: z.number(),
 });
 export type DirectMilestoneSuggestionDto = z.infer<typeof DirectMilestoneSuggestionDtoSchema>;
 

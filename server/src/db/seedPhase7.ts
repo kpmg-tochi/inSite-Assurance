@@ -151,8 +151,8 @@ export async function seedPhase7(p: {
       fullName: "Engr. Osaro Igbinedion, MNSE",
       roleId: p.monitorRoleId,
       organizationId: p.monitorOrgId,
-      professionalLicenseType: "COREN",
-      professionalLicenseNumber: "R.51877",
+      professionalRegistrationBodyCode: "COREN",
+      professionalRegistrationNumber: "R.51877",
     },
   });
   await prisma.userProjectAssignment.createMany({

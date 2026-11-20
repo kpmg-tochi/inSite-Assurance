@@ -5,7 +5,6 @@ import {
   FieldSessionOriginEnum,
   OrganizationCategoryEnum,
   PermissionCategoryEnum,
-  ProfessionalLicenseTypeEnum,
   RoleOnboardingModeEnum,
   RoleSurfaceEnum,
 } from '../enums';
@@ -184,8 +183,8 @@ export const TenantUserDtoSchema = z.object({
   organizationCategory: OrganizationCategoryEnum,
   /** All tags of the organisation (Phase 6). */
   organizationCategories: z.array(OrganizationCategoryEnum).optional(),
-  professionalLicenseType: ProfessionalLicenseTypeEnum.nullable().optional(),
-  professionalLicenseNumber: z.string().nullable().optional(),
+  professionalRegistrationBodyCode: z.string().nullable().optional(),
+  professionalRegistrationNumber: z.string().nullable().optional(),
   phoneNumber: z.string().nullable().optional(),
   /** Pre-provisioned mobile role, when it differs from (or replaces) the main role on mobile. */
   mobileRoleId: z.string().uuid().nullable().optional(),
@@ -213,8 +212,9 @@ export const CreateTenantUserRequestSchema = z.object({
   organizationName: z.string().trim().min(2).max(160).optional(),
   /** Tag added to the organisation if it is created or lacks it. */
   organizationCategory: OrganizationCategoryEnum.default('OTHER'),
-  professionalLicenseType: ProfessionalLicenseTypeEnum.nullable().optional(),
-  professionalLicenseNumber: z.string().max(64).optional(),
+  /** Phase 12: a code from the tenant's registration bodies (checked by the server). */
+  professionalRegistrationBodyCode: z.string().trim().max(16).nullable().optional(),
+  professionalRegistrationNumber: z.string().trim().max(64).nullable().optional(),
   phoneNumber: PhoneNumberSchema.nullable().optional(),
   mobileRoleId: z.string().uuid().nullable().optional(),
   projectIds: z.array(z.string().uuid()).default([]),
@@ -230,6 +230,9 @@ export const AssignUserProjectsRequestSchema = z.object({
   mobileRoleId: z.string().uuid().nullable().optional(),
   phoneNumber: PhoneNumberSchema.nullable().optional(),
   isActive: z.boolean().optional(),
+  /** Phase 12: omitted = unchanged; null clears. */
+  professionalRegistrationBodyCode: z.string().trim().max(16).nullable().optional(),
+  professionalRegistrationNumber: z.string().trim().max(64).nullable().optional(),
   projectIds: z.array(z.string().uuid()),
 });
 export type AssignUserProjectsRequest = z.infer<typeof AssignUserProjectsRequestSchema>;

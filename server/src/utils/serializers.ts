@@ -161,6 +161,11 @@ export function serializeTranche(
     releasedAmountNgn: Number(t.releasedAmountNgn),
     targetCompletionPct: Number(t.targetCompletionPct),
     isReleased: t.isReleased,
+    // Phase 12
+    paymentBasis: t.paymentBasis,
+    completionRule: t.completionRule,
+    fixedReleaseAmountNgn: t.fixedReleaseAmountNgn === null ? null : Number(t.fixedReleaseAmountNgn),
+    completionRequiredItemPct: Number(t.completionRequiredItemPct),
     ...(t.conditionsPrecedent
       ? {
           conditionsPrecedent: [...t.conditionsPrecedent]
@@ -245,8 +250,11 @@ export function serializeValuationReport(
     executiveCertificationSummary: r.executiveCertificationSummary,
     certifiedByUserId: r.certifiedByUserId,
     certifierFullName: r.certifierFullName,
+    // Phase 12: snapshot as stored (null when no registration was given or the policy was HIDDEN).
     certifierLicenseType: r.certifierLicenseType,
     certifierLicenseNumber: r.certifierLicenseNumber,
+    certifierRegistrationBodyName: r.certifierRegistrationBodyName,
+    certifierRegistrationPrefix: r.certifierRegistrationPrefix,
     certifiedAt: r.certifiedAt.toISOString(),
     supersededAt: iso(r.supersededAt),
     decisions: decisions.map((d) => serializeTrancheDecision(d, decisions)),

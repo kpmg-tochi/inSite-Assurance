@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
 import {
   ChangePasswordRequest,
   DEVICE_SIGNATURE_ALGORITHM,
@@ -12,6 +13,7 @@ import {
   MobileLoginResponse,
   MobileTenantBranding,
   SessionContractor,
+  resolveCredentialPolicy,
   resolveRatingLabels,
   resolveTerminology,
   WebLoginRequest,
@@ -36,6 +38,7 @@ import {
 import { primaryCategory, resolveOrganization } from '../organizations/organizations.service';
 import { recordAuditEvent } from '../audit/audit.service';
 import { getProcessConfig } from '../process/processConfig.service';
+import { fieldAssuranceRegistration, normaliseProfileRegistration } from '../credentials/credentialPolicy.service';
 import { parseTenantBranding } from '../rbac/rbac.service';
 import { parseDevicePublicKey } from '../../utils/deviceSignature';
 import { syncParticipantForSession } from '../mobilization/participants.service';
@@ -102,8 +105,10 @@ export function serializeWebUserProfile(user: LoadedWebUser): WebUserProfile {
     organizationId: user.organizationId,
     organizationName: user.organization.name,
     organizationCategory: primaryCategory(user.organization.categories),
-    professionalLicenseType: user.professionalLicenseType,
-    professionalLicenseNumber: user.professionalLicenseNumber,
+    professionalRegistrationBodyCode: user.professionalRegistrationBodyCode,
+    professionalRegistrationNumber: user.professionalRegistrationNumber,
+    // Phase 12: the tenant-level certifier policy (project types may override it per project).
+    certifierRegistrationRequirement: resolveCredentialPolicy(user.tenant.credentialPolicyJson).certifier,
     mustChangePassword: user.mustChangePassword,
     ratingLabels: resolveRatingLabels(user.tenant.evidenceRatingLabels),
     terminology: resolveTerminology(user.tenant.terminologyLabels),
@@ -187,8 +192,10 @@ export async function registerWebUser(input: WebRegisterRequest) {
         fullName: input.fullName,
         roleId: targetRole.id,
         organizationId: organization.id,
-        professionalLicenseType: input.professionalLicenseType ?? null,
-        professionalLicenseNumber: input.professionalLicenseNumber ?? null,
+        ...(await normaliseProfileRegistration(tx, tenant.id, {
+          code: input.professionalRegistrationBodyCode ?? null,
+          number: input.professionalRegistrationNumber ?? null,
+        })),
       },
     });
 
@@ -492,7 +499,13 @@ type BaselineProject = CadenceProjectRow & {
   geofenceToleranceMeters: number | null;
   contractorExecutionMode: string | null;
   constructionPhase?: string;
-  tenant: { defaultGeofenceToleranceMeters: number };
+  /** Phase 12: present when the caller loaded the registration policy for the pack. */
+  projectTypeSnapshotJson?: unknown;
+  tenant: {
+    defaultGeofenceToleranceMeters: number;
+    credentialPolicyJson?: unknown;
+    registrationBodies?: Array<{ code: string; fullName: string; displayPrefix: string; exampleNumber: string | null }>;
+  };
   boqItems: Array<{
     id: string;
     projectContractorId: string | null;
@@ -548,8 +561,28 @@ export function buildBaselinePack(
     holdPoints: boqItems.filter((b) => b.isHoldPoint),
     // Phase 10: lets the app offer defect work once construction has ended.
     constructionPhase: (project.constructionPhase ?? 'ACTIVE_CONSTRUCTION') as MobileBaselinePack['constructionPhase'],
+    // Phase 12: what the assurance step asks for on this project.
+    ...(project.tenant.registrationBodies
+      ? {
+          fieldAssurance: {
+            registration: resolveCredentialPolicy(project.tenant.credentialPolicyJson ?? {}, project.projectTypeSnapshotJson ?? null)
+              .fieldAssurance,
+            registrationBodies: project.tenant.registrationBodies,
+          },
+        }
+      : {}),
   };
 }
+
+/** Tenant fields the baseline pack needs for the Phase 12 registration policy. */
+export const BASELINE_TENANT_CREDENTIAL_SELECT = {
+  credentialPolicyJson: true,
+  registrationBodies: {
+    where: { isArchived: false },
+    orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+    select: { code: true, fullName: true, displayPrefix: true, exampleNumber: true },
+  },
+} satisfies Prisma.TenantSelect;
 
 /** GET /auth/mobile/projects/:projectId/baseline. Access is checked by the field auth guard. */
 export async function getProjectBaselinePack(projectId: string, sessionId?: string): Promise<MobileBaselinePack> {
@@ -558,7 +591,7 @@ export async function getProjectBaselinePack(projectId: string, sessionId?: stri
       where: { id: projectId },
       include: {
         boqItems: { orderBy: { wbsCode: 'asc' } },
-        tenant: { select: { defaultGeofenceToleranceMeters: true } },
+        tenant: { select: { defaultGeofenceToleranceMeters: true, ...BASELINE_TENANT_CREDENTIAL_SELECT } },
       },
     }),
     sessionId
@@ -670,7 +703,8 @@ function buildMobileSessionResponse(
     agentPhoneNumber: string;
     deviceId: string;
     assuranceStatus: string;
-    corenLicenseNumber: string | null;
+    registrationNumber: string | null;
+    registrationBodyCode: string | null;
     livenessPassed: boolean;
     projectContractorId: string | null;
   },
@@ -703,7 +737,8 @@ function buildMobileSessionResponse(
       agentPhoneNumber: session.agentPhoneNumber,
       deviceId: session.deviceId,
       assuranceStatus: session.assuranceStatus,
-      corenLicenseNumber: session.corenLicenseNumber ?? undefined,
+      registrationNumber: session.registrationNumber ?? undefined,
+      registrationBodyCode: session.registrationBodyCode ?? undefined,
       livenessPassed: session.livenessPassed,
       ratingLabels: resolveRatingLabels(project.tenant.evidenceRatingLabels),
       contractor: serializeSessionContractor(contractor),
@@ -784,6 +819,7 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
               brandingConfig: true,
               defaultCurrency: true,
               defaultGeofenceToleranceMeters: true,
+              ...BASELINE_TENANT_CREDENTIAL_SELECT,
             },
           },
           boqItems: {
@@ -815,6 +851,18 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
   const initialAssuranceStatus = requiresAssurance
     ? 'PENDING_APPROVAL'
     : 'APPROVED';
+  // Phase 12: registration follows the project's fieldAssurance policy. At join it never blocks
+  // (the assurance step enforces REQUIRED); HIDDEN drops whatever was sent.
+  const fieldRegistrationPolicy = resolveCredentialPolicy(
+    joinCodeRecord.project.tenant.credentialPolicyJson,
+    joinCodeRecord.project.projectTypeSnapshotJson
+  ).fieldAssurance;
+  const registration = await fieldAssuranceRegistration(prisma, {
+    tenantId: joinCodeRecord.project.tenantId,
+    requirement: fieldRegistrationPolicy === 'REQUIRED' ? 'OPTIONAL' : fieldRegistrationPolicy,
+    registrationNumber: input.registrationNumber ?? input.corenLicenseNumber ?? null,
+    registrationBodyCode: input.registrationBodyCode ?? null,
+  });
 
   const session = await prisma.$transaction(async (tx) => {
     // Claim one use atomically so concurrent joins cannot exceed maxUses.
@@ -867,7 +915,8 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
           input.idDocumentType ??
           (requiresAssurance ? 'National Identity (NIN)' : null),
         livenessPassed: false,
-        corenLicenseNumber: input.corenLicenseNumber ?? null,
+        registrationNumber: registration.registrationNumber,
+        registrationBodyCode: registration.registrationBodyCode,
         experienceSummary: input.experienceSummary ?? null,
       },
     });
@@ -881,7 +930,7 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
         ? 'CONTRACTOR_ASSURANCE_SUBMITTED'
         : 'FIELD_AGENT_JOINED',
       summaryText: requiresAssurance
-        ? `${role.name} ${input.agentFullName} submitted identity & license (${input.corenLicenseNumber || 'Credentials'}) for project ${joinCodeRecord.project.codePrefix} — Awaiting verification.`
+        ? `${role.name} ${input.agentFullName} joined project ${joinCodeRecord.project.codePrefix} and must complete identity assurance — Awaiting verification.`
         : `Field reporter ${input.agentFullName} joined project ${joinCodeRecord.project.codePrefix} using code ${normalizedCode} as ${role.name}.`,
       payload: {
         joinCode: normalizedCode,
@@ -893,7 +942,8 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
         deviceId: input.deviceId,
         deviceModel: input.deviceModel ?? null,
         assuranceStatus: initialAssuranceStatus,
-        corenLicenseNumber: input.corenLicenseNumber ?? null,
+        registrationNumber: registration.registrationNumber,
+        registrationBodyCode: registration.registrationBodyCode,
       },
     });
     // Phase 8: link to the expected participant with this phone number.
@@ -944,6 +994,7 @@ export async function demoSkipVerificationMobile(
               brandingConfig: true,
               defaultCurrency: true,
               defaultGeofenceToleranceMeters: true,
+              ...BASELINE_TENANT_CREDENTIAL_SELECT,
             },
           },
           boqItems: {
@@ -989,8 +1040,7 @@ export async function demoSkipVerificationMobile(
             assuranceWeight: role.assuranceWeight,
             assuranceStatus: 'APPROVED',
             livenessPassed: false,
-            corenLicenseNumber:
-              existingSession.corenLicenseNumber ?? 'DEMO-BYPASS',
+            registrationNumber: existingSession.registrationNumber,
             experienceSummary:
               existingSession.experienceSummary ??
               'Demo-only verification bypass session.',
@@ -1013,7 +1063,6 @@ export async function demoSkipVerificationMobile(
             deviceOs: input.deviceOs ?? null,
             assuranceStatus: 'APPROVED',
             livenessPassed: false,
-            corenLicenseNumber: 'DEMO-BYPASS',
             experienceSummary: 'Demo-only verification bypass session.',
             reviewedAt: new Date(),
             lastSyncAt: new Date(),

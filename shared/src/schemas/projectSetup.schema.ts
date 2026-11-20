@@ -12,6 +12,7 @@ import { isValidTimeZone } from '../utils/time';
 import { GeofenceToleranceMetersSchema, ProjectGeofenceSchema } from './geofence.schema';
 import { OrganizationRefSchema } from './organization.schema';
 import { FacilityTrancheInputSchema } from './project.schema';
+import { TrancheCompletionRuleEnum, TranchePaymentBasisEnum } from './milestonePayment.schema';
 import { ProjectProcessSettingsDtoSchema, ProjectProcessStepSchema, ProjectStandardsStepSchema } from './process.schema';
 import { ProjectCadenceFieldsSchema, ProjectCadenceSettingsDtoSchema } from './cadence.schema';
 import {
@@ -340,6 +341,11 @@ export const ProjectSetupDtoSchema = z.object({
         allocatedAmountNgn: z.number(),
         targetCompletionPct: z.number(),
         isReleased: z.boolean(),
+        /** Phase 12 */
+        paymentBasis: TranchePaymentBasisEnum,
+        completionRule: TrancheCompletionRuleEnum.nullable(),
+        fixedReleaseAmountNgn: z.number().nullable(),
+        completionRequiredItemPct: z.number(),
         conditionsPrecedent: z.array(
           z.object({
             id: z.string().uuid(),
@@ -357,6 +363,11 @@ export const ProjectSetupDtoSchema = z.object({
       retentionReleaseAtCompletionPct: z.number(),
       /** Retention already withheld; the percentage applies to later releases only. */
       heldNgn: z.number(),
+    }),
+    /** Phase 12: defaults for a new payment milestone (from the project type, else measured). */
+    paymentDefaults: z.object({
+      defaultBasis: TranchePaymentBasisEnum,
+      defaultCompletionRule: TrancheCompletionRuleEnum.nullable(),
     }),
   }),
   boq: z.object({

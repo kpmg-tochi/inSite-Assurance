@@ -533,6 +533,16 @@ export async function listContractorVerifications(
       : [];
 
   const reviewerMap = new Map(reviewers.map((r) => [r.id, r.fullName]));
+  // Phase 12: body names for the registration codes shown (archived bodies included).
+  const bodyCodes = [...new Set(sessions.map((s) => s.registrationBodyCode).filter((c): c is string => Boolean(c)))];
+  const bodies = bodyCodes.length
+    ? await prisma.professionalRegistrationBody.findMany({
+        where: { code: { in: bodyCodes }, tenantId: { in: [...new Set(sessions.map((s) => s.project.tenantId))] } },
+        select: { tenantId: true, code: true, fullName: true },
+      })
+    : [];
+  const bodyName = (tenantId: string, code: string | null) =>
+    code ? bodies.find((b) => b.tenantId === tenantId && b.code === code)?.fullName ?? null : null;
 
   // Stored values are object keys; hand out 5-minute signed URLs, and nothing for legacy values
   // that are not keys in the session's project namespace.
@@ -555,7 +565,9 @@ export async function listContractorVerifications(
     agentFullName: s.agentFullName,
     agentPhoneNumber: s.agentPhoneNumber,
     joinCodeUsed: s.joinCode?.code ?? '',
-    corenLicenseNumber: s.corenLicenseNumber,
+    registrationNumber: s.registrationNumber,
+    registrationBodyCode: s.registrationBodyCode,
+    registrationBodyName: bodyName(s.project.tenantId, s.registrationBodyCode),
     idDocumentType: s.idDocumentType,
     idDocumentUrl: await signed(s.idDocumentUrl, s.project.tenantId, s.projectId),
     selfieImageUrl: await signed(s.selfieImageUrl, s.project.tenantId, s.projectId),
@@ -628,12 +640,14 @@ export async function reviewContractorVerification(
           : 'CONTRACTOR_ASSURANCE_REJECTED',
       summaryText:
         decision === 'APPROVE'
-          ? `${webUser.fullName} (${webUser.roleName}) verified and approved credentials for ${session.agentFullName} (${session.corenLicenseNumber || 'License'}). Mobile field access activated.`
+          ? `${webUser.fullName} (${webUser.roleName}) verified and approved credentials for ${session.agentFullName}${
+              session.registrationNumber ? ` (registration ${session.registrationNumber})` : ''
+            }. Mobile field access activated.`
           : `${webUser.fullName} (${webUser.roleName}) rejected verification for ${session.agentFullName}. Reason: ${remarks || 'Incomplete credentials'}.`,
       payload: {
         sessionId,
         agentFullName: session.agentFullName,
-        corenLicenseNumber: session.corenLicenseNumber,
+        registrationNumber: session.registrationNumber,
         decision,
         remarks: remarks || null,
       },
@@ -651,7 +665,7 @@ export async function reviewContractorVerification(
           : 'Verification Resubmission Needed',
       message:
         decision === 'APPROVE'
-          ? `${webUser.fullName} approved your identity and ${session.corenLicenseNumber || 'regulatory'} credentials.`
+          ? `${webUser.fullName} approved your identity${session.registrationNumber ? ' and registration' : ''}.`
           : `Verification was returned: ${remarks || 'Please re-capture a clear ID photo and selfies.'}`,
     });
 

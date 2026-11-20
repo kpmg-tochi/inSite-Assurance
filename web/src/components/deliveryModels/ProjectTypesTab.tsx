@@ -9,6 +9,14 @@ import {
   type ProjectTypeFunderDefault,
   type ReportingCadence,
   type SaveProjectTypeRequestInput,
+  CREDENTIAL_REQUIREMENT_META,
+  CREDENTIAL_SUBJECT_META,
+  TRANCHE_COMPLETION_RULE_META,
+  TRANCHE_PAYMENT_BASIS_META,
+  type CredentialRequirement,
+  type CredentialSubject,
+  type TrancheCompletionRule,
+  type TranchePaymentBasis,
 } from "@insite/shared";
 import { StandardTable, TableActionButton, TableBadge, type TableColumnDef } from "../table";
 import { CustomSelect } from "../common";
@@ -45,8 +53,28 @@ interface Draft {
   reportingCadence: ReportingCadence;
   workdayStartTime: string;
   workdayEndTime: string;
+  /** Phase 12: registration policy per subject; "" uses the tenant setting. */
+  credentialCertifier: CredentialRequirement | "";
+  credentialFieldAssurance: CredentialRequirement | "";
+  /** Phase 12: payment milestone defaults for new projects of this type. */
+  paymentBasis: TranchePaymentBasis;
+  paymentCompletionRule: TrancheCompletionRule;
   /** Keys added by later phases, kept untouched on save. */
   rest: Record<string, unknown>;
+}
+
+/** Phase 12: credentials and payments as stored on the type (read leniently). */
+function phase12From(config: unknown) {
+  const c = (config ?? {}) as {
+    credentials?: { certifier?: CredentialRequirement | null; fieldAssurance?: CredentialRequirement | null };
+    payments?: { defaultBasis?: TranchePaymentBasis; defaultCompletionRule?: TrancheCompletionRule | null };
+  };
+  return {
+    credentialCertifier: c.credentials?.certifier ?? ("" as const),
+    credentialFieldAssurance: c.credentials?.fieldAssurance ?? ("" as const),
+    paymentBasis: c.payments?.defaultBasis ?? ("MEASURED" as const),
+    paymentCompletionRule: c.payments?.defaultCompletionRule ?? ("ALL_ITEMS_COMPLETE" as const),
+  };
 }
 
 function draftFrom(t: ProjectTypeDto | null): Draft {
@@ -74,6 +102,7 @@ function draftFrom(t: ProjectTypeDto | null): Draft {
     reportingCadence: reportingDefaults?.reportingCadence ?? "WEEKLY",
     workdayStartTime: reportingDefaults?.workdayStartTime ?? "08:00",
     workdayEndTime: reportingDefaults?.workdayEndTime ?? "17:00",
+    ...phase12From(c),
     rest: rest as Record<string, unknown>,
   };
 }
@@ -97,6 +126,16 @@ function payloadFrom(d: Draft): SaveProjectTypeRequestInput {
     reportingDefaults: d.reportingOn
       ? { reportingCadence: d.reportingCadence, workdayStartTime: d.workdayStartTime, workdayEndTime: d.workdayEndTime }
       : null,
+    // Phase 12
+    credentials: {
+      certifier: d.credentialCertifier || null,
+      fieldAssurance: d.credentialFieldAssurance || null,
+    },
+    payments: {
+      ...((d.rest.payments as Record<string, unknown> | undefined) ?? {}),
+      defaultBasis: d.paymentBasis,
+      defaultCompletionRule: d.paymentBasis === "FIXED_ON_COMPLETION" ? d.paymentCompletionRule : null,
+    },
   };
   return {
     code: d.code,
@@ -309,6 +348,75 @@ export function ProjectTypesTab() {
               <div>
                 <p className="text-xs font-medium text-slate-700 mb-1">Default {term("funderParty", { lower: true })}</p>
                 <CustomSelect value={draft.defaultFunderId} onChange={(v) => set({ defaultFunderId: v })} options={orgOptions} searchable placeholder="Choose" />
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className={sectionCls}>
+          <h3 className="text-sm font-bold text-slate-900">Credentials</h3>
+          <p className="text-[11px] text-slate-500">
+            Whether a professional registration is required, optional or hidden on projects of this type. Permissions and
+            segregation of duties apply either way.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(
+              [
+                ["certifier", "credentialCertifier"],
+                ["fieldAssurance", "credentialFieldAssurance"],
+              ] as Array<[CredentialSubject, "credentialCertifier" | "credentialFieldAssurance"]>
+            ).map(([subject, key]) => (
+              <div key={subject}>
+                <p className="text-xs font-medium text-slate-700 mb-1">{CREDENTIAL_SUBJECT_META[subject].label}</p>
+                <CustomSelect
+                  value={draft[key]}
+                  onChange={(v) => set({ [key]: v as CredentialRequirement | "" } as Partial<Draft>)}
+                  options={[
+                    { value: "", label: "Use the workspace setting" },
+                    ...(["REQUIRED", "OPTIONAL", "HIDDEN"] as const).map((r) => ({
+                      value: r,
+                      label: CREDENTIAL_REQUIREMENT_META[r].label,
+                      description: CREDENTIAL_REQUIREMENT_META[r].description,
+                    })),
+                  ]}
+                />
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className={sectionCls}>
+          <h3 className="text-sm font-bold text-slate-900">{term("tranche", { plural: true })}: payment basis</h3>
+          <p className="text-[11px] text-slate-500">
+            The default for each new {term("tranche", { lower: true })} of a project of this type; it can be changed per{" "}
+            {term("tranche", { lower: true })} in the Facility step. A fixed amount works with direct milestone verification only, so the
+            workflow template must not use {term("contractor", { lower: true })} claims.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <p className="text-xs font-medium text-slate-700 mb-1">Payment basis</p>
+              <CustomSelect
+                value={draft.paymentBasis}
+                onChange={(v) => set({ paymentBasis: v as TranchePaymentBasis })}
+                options={(["MEASURED", "FIXED_ON_COMPLETION"] as const).map((b) => ({
+                  value: b,
+                  label: TRANCHE_PAYMENT_BASIS_META[b].label,
+                  description: TRANCHE_PAYMENT_BASIS_META[b].description,
+                }))}
+              />
+            </div>
+            {draft.paymentBasis === "FIXED_ON_COMPLETION" && (
+              <div>
+                <p className="text-xs font-medium text-slate-700 mb-1">Completion rule</p>
+                <CustomSelect
+                  value={draft.paymentCompletionRule}
+                  onChange={(v) => set({ paymentCompletionRule: v as TrancheCompletionRule })}
+                  options={(["ALL_ITEMS_COMPLETE", "WEIGHTED_PROGRESS_REACHED"] as const).map((r) => ({
+                    value: r,
+                    label: TRANCHE_COMPLETION_RULE_META[r].label,
+                    description: TRANCHE_COMPLETION_RULE_META[r].description,
+                  }))}
+                />
               </div>
             )}
           </div>

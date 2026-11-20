@@ -5,7 +5,6 @@ import {
   EvidenceStrengthRatingEnum,
   LenderDecisionTypeEnum,
   MonitorRecommendationEnum,
-  ProfessionalLicenseTypeEnum,
 } from "../enums";
 
 /**
@@ -93,8 +92,11 @@ export const CertificationComputationSchema = z.object({
   recommendedReleaseAmountNgn: z.number(),
   recommendedHoldbackAmountNgn: z.number(),
   certifierFullName: z.string(),
-  certifierLicenseType: ProfessionalLicenseTypeEnum,
-  certifierLicenseNumber: z.string(),
+  /** Phase 12: registration snapshot from the profile, following the credential policy (null when absent or HIDDEN). */
+  certifierLicenseType: z.string().nullable(),
+  certifierLicenseNumber: z.string().nullable(),
+  certifierRegistrationBodyName: z.string().nullable(),
+  certifierRegistrationPrefix: z.string().nullable(),
   revisionNumber: z.number().int(),
 });
 export type CertificationComputation = z.infer<typeof CertificationComputationSchema>;
