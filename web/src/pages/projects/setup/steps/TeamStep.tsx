@@ -4,6 +4,7 @@ import { useTeamOptionsQuery } from "../../../../queries/projects/useProjectSetu
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import { ExpectedParticipantsPanel } from "../../../../components/projects/ExpectedParticipantsPanel";
 import { useAuth } from "../../../../lib/auth-context";
+import { TeamWorkloadNotice } from "../../../../components/inspections/SupervisorsCard";
 import {
   extractErrors,
   inputClass,
@@ -99,6 +100,8 @@ export function TeamStep({ projectId, setup, readOnly, mode }: StepProps) {
         <p className="text-[11px] text-slate-500">
           People who can see every project in the workspace have access whether or not they are listed here.
         </p>
+        {/* Phase 14: supervisors over the project type's site or distance limits (warning only) */}
+        <TeamWorkloadNotice projectId={projectId} userIds={state.userIds} />
       </StepSection>
 
       <StepSection

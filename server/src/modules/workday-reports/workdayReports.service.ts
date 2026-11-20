@@ -60,6 +60,7 @@ import {
   periodKeyForDate,
   reporterScopeFor,
 } from '../cadence/cadence.service';
+import { itemStreamForReporter, streamCadenceRow } from '../cadence/streams.service';
 
 /** Report statuses that count as evidence (and so mark an item's actual start). */
 const isCountedStatus = (status: string) => status === 'CONFIRMED' || status === 'APPROVED_COMPLETED';
@@ -88,7 +89,7 @@ function asTextNotes(raw: unknown): WorkdayTextNote[] {
   return Array.isArray(raw) ? (raw as WorkdayTextNote[]) : [];
 }
 
-function toCaptureSummary(c: ReportRow['captures'][number]): WorkdayReportCaptureSummary {
+export function toCaptureSummary(c: ReportRow['captures'][number]): WorkdayReportCaptureSummary {
   const full = serializeCapture(c);
   return {
     id: full.id,
@@ -439,8 +440,14 @@ export async function submitWorkdayReport(params: {
     throw new AppError('This WBS item is not a hold point', 400, 'HOLD_POINT_NOT_APPLICABLE');
   }
   assertReportingDay(input, project.timezone);
-  // Phase 8: the report belongs to the reporting period containing its work day.
-  const period = periodKeyForDate(cadenceSettingsForDate(project, input.workdayDate), input.workdayDate);
+  // Phase 8: the report belongs to the reporting period containing its work day. Phase 14: of the
+  // ITEM_REPORTS stream the reporter's role owes, when the project has streams.
+  const stream = await itemStreamForReporter(prisma, projectId, {
+    roleId: fieldAgent.roleId,
+    projectContractorId: session.projectContractorId,
+  });
+  const cadenceRow = stream ? streamCadenceRow(project, stream) : project;
+  const period = periodKeyForDate(cadenceSettingsForDate(cadenceRow, input.workdayDate), input.workdayDate);
   const late = lateness(period, new Date(input.confirmedAt));
   await assertNoReportForPeriod({
     projectId,
@@ -528,6 +535,7 @@ export async function submitWorkdayReport(params: {
         periodStart: period.periodStart,
         reportId: report.id,
         isLate: late.isLate,
+        streamId: stream?.id ?? null,
       });
       if (late.isLate) {
         await recordAuditEvent(tx, {

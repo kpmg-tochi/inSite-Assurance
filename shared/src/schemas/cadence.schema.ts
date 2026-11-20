@@ -29,6 +29,8 @@ export const ProjectCadenceFieldsSchema = z.object({
   reportGraceMinutes: z.number().int().min(0).max(24 * 60),
   /** First day of a bi-weekly or custom period. */
   cadenceAnchorDate: CalendarDate.nullable(),
+  /** Phase 14: month (1-12) a QUARTERLY year starts in. */
+  cadenceQuarterAnchorMonth: z.number().int().min(1).max(12),
 });
 export type ProjectCadenceFields = z.infer<typeof ProjectCadenceFieldsSchema>;
 
@@ -42,6 +44,8 @@ export const ProjectCadenceSettingsDtoSchema = z.object({
   reportDueTime: z.string().nullable(),
   reportGraceMinutes: z.number().int(),
   cadenceAnchorDate: z.string().nullable(),
+  /** Phase 14. Absent in packs saved before it: January. */
+  cadenceQuarterAnchorMonth: z.number().int().nullable().optional(),
   timezone: z.string(),
 });
 export type ProjectCadenceSettingsDto = z.infer<typeof ProjectCadenceSettingsDtoSchema>;
@@ -70,13 +74,20 @@ export const VERIFIER_REPORTER_SCOPE = 'verifier';
 export const CONTRACTOR_REPORTER_SCOPE_PREFIX = 'contractor:';
 /** Contractor reporting on a project without contractor packages. */
 export const CONTRACTOR_PROJECT_WIDE_SCOPE = 'contractor:project';
+/** Phase 14: the one obligation per period of an INSPECTION stream (boqItemId null). */
+export const INSPECTION_REPORTER_SCOPE = 'inspection';
 
 export const ReportingObligationDtoSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().uuid(),
-  boqItemId: z.string().uuid(),
-  wbsCode: z.string(),
-  wbsDescription: z.string(),
+  /** Phase 14: null for an INSPECTION stream obligation (one per period, not per item). */
+  boqItemId: z.string().uuid().nullable(),
+  wbsCode: z.string().nullable(),
+  wbsDescription: z.string().nullable(),
+  /** Phase 14: the reporting stream; null = the project's implicit default stream. */
+  streamId: z.string().uuid().nullable(),
+  streamLabel: z.string().nullable(),
+  siteInspectionReportId: z.string().uuid().nullable(),
   reporterScope: z.string(),
   /** Display name of the scope: contractor organisation, or "Independent verifier". */
   reporterScopeLabel: z.string(),

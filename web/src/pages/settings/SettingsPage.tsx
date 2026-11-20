@@ -1,6 +1,9 @@
 import React, { useState, useMemo } from "react";
 import { ShieldCheck, User, KeyRound, Users, Palette, Building2, Workflow, Layers } from "lucide-react";
 import { ProjectTypesTab } from "../../components/deliveryModels/ProjectTypesTab";
+import { ClipboardCheck } from "lucide-react";
+import { ChecklistTemplatesCard } from "../../components/inspections/ChecklistTemplatesCard";
+import { SupervisorsCard } from "../../components/inspections/SupervisorsCard";
 import { RegionsCard } from "../../components/deliveryModels/RegionsCard";
 import { TerminologyCard } from "../../components/deliveryModels/TerminologyCard";
 import { ProfessionalRegistrationCard } from "../../components/credentials/ProfessionalRegistrationCard";
@@ -56,7 +59,11 @@ export function SettingsPage({ project }: SettingsPageProps) {
   const canManageRegions = hasPermission("regions:manage");
   const canSeeDeliveryTab = canManageProjectTypes || canManageRegions;
 
-  type SettingsTab = "ACCESS" | "ROLES" | "USERS" | "ORGANIZATIONS" | "WORKFLOWS" | "DELIVERY" | "BRANDING" | "ACCOUNT";
+  // Phase 14: checklist templates and the supervisors view.
+  const canManageChecklists = hasPermission("inspections:manage_templates");
+  const canSeeInspectionsTab = canManageChecklists || hasPermission("inspections:view");
+
+  type SettingsTab = "ACCESS" | "ROLES" | "USERS" | "ORGANIZATIONS" | "WORKFLOWS" | "DELIVERY" | "INSPECTIONS" | "BRANDING" | "ACCOUNT";
   const [activeTab, setActiveTab] = useState<SettingsTab>(() =>
     canSeeAccessTab
       ? "ACCESS"
@@ -70,6 +77,8 @@ export function SettingsPage({ project }: SettingsPageProps) {
               ? "WORKFLOWS"
               : canSeeDeliveryTab
               ? "DELIVERY"
+              : canSeeInspectionsTab
+              ? "INSPECTIONS"
               : canSeeTenantTab
               ? "BRANDING"
               : "ACCOUNT",
@@ -409,6 +418,21 @@ export function SettingsPage({ project }: SettingsPageProps) {
             </button>
           )}
 
+          {canSeeInspectionsTab && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("INSPECTIONS")}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
+                activeTab === "INSPECTIONS"
+                  ? "bg-white text-brand-primary shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <ClipboardCheck className="w-4 h-4" />
+              <span>Inspections &amp; supervisors</span>
+            </button>
+          )}
+
           {canSeeTenantTab && (
             <button
               type="button"
@@ -447,6 +471,12 @@ export function SettingsPage({ project }: SettingsPageProps) {
         <div className="space-y-4">
           {canManageProjectTypes && <ProjectTypesTab />}
           {canManageRegions && <RegionsCard />}
+        </div>
+      )}
+      {activeTab === "INSPECTIONS" && canSeeInspectionsTab && (
+        <div className="space-y-4">
+          <ChecklistTemplatesCard />
+          <SupervisorsCard />
         </div>
       )}
       {activeTab === "BRANDING" && canSeeTenantTab && (

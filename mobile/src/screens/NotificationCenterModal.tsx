@@ -137,6 +137,12 @@ export const NotificationCenterModal: React.FC = () => {
         return;
       }
 
+      // Phase 14: an inspection finding aimed at this contractor.
+      if (notif.actionType === "OPEN_INSPECTION_FINDINGS") {
+        navigation.replace("InspectionFindings");
+        return;
+      }
+
       if (notif.actionType === "OPEN_BACKLOG_REVIEW") {
         navigation.replace("BacklogModal", {
           resolveNotificationId: notif.requiresAction ? notif.id : undefined,

@@ -11,6 +11,8 @@
  * - BI_WEEKLY: 14 days counted from `cadenceAnchorDate`.
  * - CUSTOM_INTERVAL: `customIntervalDays` days counted from `cadenceAnchorDate`.
  * - MONTHLY: the calendar month; due on its last workday.
+ * - QUARTERLY (Phase 14): calendar quarters starting in `cadenceQuarterAnchorMonth` (default January,
+ *   so Jan-Mar, Apr-Jun, ...); due on the last workday of the quarter.
  * - INSPECTION_ONLY: no periods (every function returns null or an empty list).
  *
  * Every date belongs to exactly one period: a non-workday after the due day (for example the Sunday
@@ -35,6 +37,8 @@ export interface CadenceSettings {
   reportGraceMinutes: number;
   /** YYYY-MM-DD; first day of a bi-weekly or custom period. */
   cadenceAnchorDate?: string | null;
+  /** Phase 14: month (1-12) a QUARTERLY year starts in; null or absent means January. */
+  cadenceQuarterAnchorMonth?: number | null;
   /** IANA zone, e.g. "Africa/Lagos". */
   timezone: string;
 }
@@ -175,6 +179,12 @@ function defaultAnchor(settings: CadenceSettings): string {
   return addDays(start, delta);
 }
 
+/** Month (1-12) a quarterly year starts in (Phase 14). */
+export function quarterAnchorMonthOf(settings: Pick<CadenceSettings, 'cadenceQuarterAnchorMonth'>): number {
+  const m = settings.cadenceQuarterAnchorMonth;
+  return Number.isInteger(m) && (m as number) >= 1 && (m as number) <= 12 ? (m as number) : 1;
+}
+
 /** Calendar range [start, calendarEnd] of the period containing `date`, or null without periods. */
 function calendarRange(settings: CadenceSettings, date: string): { start: string; end: string } | null {
   switch (settings.reportingCadence) {
@@ -197,6 +207,15 @@ function calendarRange(settings: CadenceSettings, date: string): { start: string
       const index = Math.floor(offset / length);
       const start = addDays(anchor, index * length);
       return { start, end: addDays(start, length - 1) };
+    }
+    case 'QUARTERLY': {
+      const [y, m] = date.split('-').map(Number);
+      const anchor = quarterAnchorMonthOf(settings) - 1;
+      const absMonth = y * 12 + (m - 1);
+      const startAbs = anchor + 3 * Math.floor((absMonth - anchor) / 3);
+      const startDay = Math.floor(Date.UTC(Math.floor(startAbs / 12), startAbs % 12, 1) / DAY_MS);
+      const nextStartDay = Math.floor(Date.UTC(Math.floor((startAbs + 3) / 12), (startAbs + 3) % 12, 1) / DAY_MS);
+      return { start: formatDay(startDay), end: formatDay(nextStartDay - 1) };
     }
     case 'MONTHLY': {
       const start = `${date.slice(0, 7)}-01`;
@@ -276,6 +295,8 @@ export function periodNoun(cadence: ReportingCadence): { adjective: string; curr
       return { adjective: 'Fortnightly', current: "This fortnight's", report: 'Fortnightly report' };
     case 'MONTHLY':
       return { adjective: 'Monthly', current: "This month's", report: 'Monthly report' };
+    case 'QUARTERLY':
+      return { adjective: 'Quarterly', current: "This quarter's", report: 'Quarterly report' };
     case 'CUSTOM_INTERVAL':
       return { adjective: 'Period', current: "This period's", report: 'Period report' };
     case 'INSPECTION_ONLY':

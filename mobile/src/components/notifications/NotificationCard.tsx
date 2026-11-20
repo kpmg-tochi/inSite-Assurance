@@ -105,6 +105,15 @@ const NOTIFICATION_VISUALS: Record<
     pillVariant: "info",
     ctaLabel: "Open defects",
   },
+  // Phase 14
+  INSPECTION_FINDING: {
+    icon: "alert-triangle",
+    accentColor: "#B45309",
+    iconBg: "#FEF3C7",
+    badgeText: "Finding",
+    pillVariant: "warning",
+    ctaLabel: "Open findings",
+  },
 };
 
 export interface NotificationCardProps {

@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { StandardsViolationItem, WorkdayAiCheckStatus } from '@insite/shared';
+import { ChecklistSectionsSchema, StandardsViolationItem, validateInspectionAnswers, WorkdayAiCheckStatus } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { azureOpenAiService } from '../../integrations/azure-openai.service';
 import { dispatchReportQueryBundle } from '../wbs-chat/wbsChat.service';
@@ -238,6 +238,107 @@ export async function runAiOmissionCheck(reportId: string): Promise<WorkdayAiChe
 
 const STUCK_RUNNING_MS = 10 * 60 * 1000;
 
+// ---------------------------------------------------------------------------
+// Phase 14: inspection mode
+// ---------------------------------------------------------------------------
+
+const inspectionDefaultScheduler: Scheduler = (inspectionId) => {
+  setImmediate(() => {
+    runInspectionOmissionCheck(inspectionId).catch((error) => {
+      console.error('[aiOmissionCheck] inspection check failed', inspectionId, error);
+    });
+  });
+};
+let inspectionScheduler: Scheduler = inspectionDefaultScheduler;
+
+/** Tests replace the scheduler to run inspection checks deterministically. */
+export function setInspectionCheckScheduler(next: Scheduler | null): void {
+  inspectionScheduler = next ?? inspectionDefaultScheduler;
+}
+
+export function scheduleInspectionOmissionCheck(inspectionId: string): void {
+  inspectionScheduler(inspectionId);
+}
+
+/**
+ * Inspection mode of the omission check: flags checklist items that need a photo and have none
+ * (photo required, or required on fail and answered as a fail). Deterministic, so the engine is
+ * always RULES (no model call and no fabricated text). Flags are stored on the inspection and the
+ * monitoring side is notified. Runs off the request path.
+ */
+export async function runInspectionOmissionCheck(inspectionId: string): Promise<WorkdayAiCheckStatus | null> {
+  const claimed = await prisma.siteInspectionReport.updateMany({
+    where: { id: inspectionId, aiCheckStatus: 'PENDING' },
+    data: { aiCheckStatus: 'RUNNING' },
+  });
+  if (claimed.count === 0) return null;
+  try {
+    const r = await prisma.siteInspectionReport.findUniqueOrThrow({
+      where: { id: inspectionId },
+      include: { template: { select: { sectionsJson: true } }, captures: { select: { checklistItemKey: true, integrityPassed: true } } },
+    });
+    const sections = ChecklistSectionsSchema.parse(r.template.sectionsJson);
+    const answers = (Array.isArray(r.answersJson) ? r.answersJson : []) as Array<{ itemKey: string; value: unknown; comment?: string | null }>;
+    // Only photos actually linked to the item count (a claimed id that never linked does not).
+    const photosByItem = new Map<string, number>();
+    for (const c of r.captures) if (c.checklistItemKey) photosByItem.set(c.checklistItemKey, (photosByItem.get(c.checklistItemKey) ?? 0) + 1);
+    const check = validateInspectionAnswers(
+      sections,
+      answers.map((a) => ({
+        itemKey: a.itemKey,
+        value: (a.value ?? null) as string | number | null,
+        comment: a.comment ?? null,
+        clientCaptureIds: Array.from({ length: photosByItem.get(a.itemKey) ?? 0 }, () => '00000000-0000-0000-0000-000000000000'),
+      }))
+    );
+    const labels = new Map(sections.flatMap((s) => s.items).map((i) => [i.key, i.label]));
+    const flags = check.missingPhotoItemKeys.map((itemKey) => ({
+      itemKey,
+      message: `"${labels.get(itemKey) ?? itemKey}" needs a photo and has none.`,
+    }));
+    await prisma.$transaction(async (tx) => {
+      await tx.siteInspectionReport.update({
+        where: { id: r.id },
+        data: { aiCheckStatus: 'DONE', aiCheckEngine: 'RULES', aiFlagsJson: flags as unknown as Prisma.InputJsonValue },
+      });
+      if (flags.length > 0) {
+        await createWebNotification(tx, {
+          projectId: r.projectId,
+          targetPermissionKey: 'inspections:view',
+          category: 'AI_OMISSION_FLAG',
+          title: `Inspection photos missing · ${flags.length} item(s)`,
+          description: `${r.reporterName}'s inspection of ${r.visitDate} has items that need photos: ${flags.map((f) => labels.get(f.itemKey) ?? f.itemKey).join(', ')}.`,
+          actionUrl: `/app/projects/${r.projectId}/inspections?inspectionId=${r.id}`,
+          metadata: { siteInspectionReportId: r.id, itemKeys: check.missingPhotoItemKeys },
+          hideFromProjectContractors: true,
+        });
+      }
+    });
+    return 'DONE';
+  } catch (error) {
+    await prisma.siteInspectionReport.update({ where: { id: inspectionId }, data: { aiCheckStatus: 'FAILED' } }).catch(() => undefined);
+    console.error('[aiOmissionCheck] inspection check error', inspectionId, error);
+    return 'FAILED';
+  }
+}
+
+/** Runs PENDING inspection checks older than `minAgeMs`; requeues ones stuck in RUNNING. */
+export async function sweepPendingInspectionChecks(minAgeMs = 60 * 1000): Promise<number> {
+  const now = Date.now();
+  await prisma.siteInspectionReport.updateMany({
+    where: { aiCheckStatus: 'RUNNING', updatedAt: { lt: new Date(now - STUCK_RUNNING_MS) } },
+    data: { aiCheckStatus: 'PENDING' },
+  });
+  const pending = await prisma.siteInspectionReport.findMany({
+    where: { aiCheckStatus: 'PENDING', updatedAt: { lt: new Date(now - minAgeMs) } },
+    select: { id: true },
+    orderBy: { updatedAt: 'asc' },
+    take: 50,
+  });
+  for (const r of pending) await runInspectionOmissionCheck(r.id);
+  return pending.length;
+}
+
 /** Runs every PENDING check older than `minAgeMs`, and requeues checks stuck in RUNNING. */
 export async function sweepPendingAiOmissionChecks(minAgeMs = 60 * 1000): Promise<number> {
   const now = Date.now();
@@ -261,6 +362,7 @@ export function startAiOmissionCheckSweep(intervalSeconds: number): () => void {
   if (intervalSeconds <= 0) return () => undefined;
   const timer = setInterval(() => {
     sweepPendingAiOmissionChecks().catch((error) => console.error('[aiOmissionCheck] sweep failed', error));
+    sweepPendingInspectionChecks().catch((error) => console.error('[aiOmissionCheck] inspection sweep failed', error));
   }, intervalSeconds * 1000);
   timer.unref();
   return () => clearInterval(timer);

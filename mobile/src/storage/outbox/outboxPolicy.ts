@@ -14,7 +14,10 @@ export type OutboxKind =
   | 'INCIDENT'
   | 'ASSURANCE'
   // Phase 10: mark a defect fixed, or verify/reopen it (payload carries the action).
-  | 'DEFECT_ACTION';
+  | 'DEFECT_ACTION'
+  // Phase 14: a confirmed site inspection (waits for its photos), and a finding resolution.
+  | 'SITE_INSPECTION'
+  | 'FINDING_RESOLUTION';
 
 /**
  * HELD (Phase 5 Step 8): queued under a session that has since ended. Never sent until the person
@@ -163,6 +166,8 @@ export const SESSION_BOUND_KINDS: ReadonlySet<OutboxKind> = new Set<OutboxKind>(
   'REPORT',
   'REVALIDATION',
   'DEFECT_ACTION',
+  'SITE_INSPECTION',
+  'FINDING_RESOLUTION',
 ]);
 
 /**

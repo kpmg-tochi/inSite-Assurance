@@ -28,6 +28,8 @@ const KIND_LABEL: Record<string, string> = {
   INCIDENT: 'Incident report',
   ASSURANCE: 'Identity submission',
   DEFECT_ACTION: 'Defect update',
+  SITE_INSPECTION: 'Site inspection',
+  FINDING_RESOLUTION: 'Finding update',
 };
 
 /**

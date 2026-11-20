@@ -27,6 +27,7 @@ import { AuditLedgerPage } from "./pages/audit/AuditLedgerPage";
 import { ProjectSchedulePage } from "./pages/schedule/ProjectSchedulePage";
 import { ProjectHandoverPage } from "./pages/closeout/ProjectHandoverPage";
 import { RetentionDefectsPage } from "./pages/closeout/RetentionDefectsPage";
+import { ProjectInspectionsPage } from "./pages/inspections/ProjectInspectionsPage";
 import PublicHandoverPage from "./pages/handover/PublicHandoverPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { ChangePasswordPage } from "./pages/auth/ChangePasswordPage";
@@ -339,6 +340,14 @@ function AuthenticatedWorkspace() {
                   backTo={projectHome}
                 >
                   <RetentionDefectsPage project={activeProject} />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="projects/:projectId/inspections"
+              element={
+                <RequirePermission anyOf={["inspections:view", "inspections:manage_findings"]} backTo={projectHome}>
+                  <ProjectInspectionsPage project={activeProject} />
                 </RequirePermission>
               }
             />

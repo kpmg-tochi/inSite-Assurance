@@ -150,6 +150,15 @@ SQLCipher and push notifications do not work in Expo Go, so testing needs a deve
 - [ ] **P4-M-24** Notifications are per person: on two phones joined to the same project, open the notification centre on one and read a project-wide notice (a morning brief). Expected: it stays unread on the other phone.
 - [ ] **P4-M-23** Presence: keep the app open on site for over an hour. Expected: presence pings appear on the web only for the times the app was open, plus one per capture and report.
 
+### 3.7 Phase 14: streams, site inspections and findings (device run pending)
+Use the programme tenant (seedPhase14): join PRG-211 with a Monitor Inspector join code (or sign in as a provisioned account in a supervisor role), and a contractor engineer code on a second phone.
+- [ ] **P14-M-01** Period cards: the inbox shows one card per stream the person owes ("M&E visit · Quarterly report" for the inspector; "Resident supervision" for a resident), with the right quarter and due date. A project without streams still shows one card.
+- [ ] **P14-M-02** Offline inspection: in flight mode, start a routine inspection, answer every section (one screen per section), take a photo for each item that needs one, close and reopen the app mid-way. Expected: the draft resumes at the same section with its answers and photos.
+- [ ] **P14-M-03** The section "Next" button stays disabled until required answers, fail comments and required photos are there; Confirm needs the overall finding and a summary.
+- [ ] **P14-M-04** Confirm offline, then go online. Expected: Sync status shows the photos sending first, then "Site inspection"; the web Inspections tab shows the inspection with photos under each item, and a failed item as a finding for the main contractor.
+- [ ] **P14-M-05** Contractor phone: a push "Inspection finding to fix" arrives; the warning icon opens Findings; mark it resolved with a photo offline, then online. Expected: the web finding shows Resolved with the photo; a contractor of another package never sees it.
+- [ ] **P14-M-06** Upload more than 7 days after the visit date (set the visit in an earlier week by using an older draft). Expected: the web marks the inspection late and the quarter's obligation LATE.
+
 ---
 
 ## 4. Not ready to test yet

@@ -14,6 +14,7 @@ import ContractorVerificationQueue from "../../components/ContractorVerification
 import { KpiCard } from "../../components/common";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { ScheduleBadge } from "../../components/schedule/ScheduleVarianceBadge";
+import { InspectionOverviewCard } from "../../components/inspections/InspectionOverviewCard";
 
 interface PortfolioDashboardPageProps {
   project: ProjectSummaryDto;
@@ -134,6 +135,9 @@ export function PortfolioDashboardPage({
           }
         />
       </div>
+
+      {/* Phase 14: last inspection per visit type, next due inspection, open findings, baseline */}
+      {hasPermission("inspections:view") && <InspectionOverviewCard projectId={project.id} />}
 
       {/* 3. Bottom 3-Card Telemetry, Field Log & Tranche Readiness Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">

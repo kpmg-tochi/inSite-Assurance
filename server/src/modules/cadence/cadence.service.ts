@@ -6,6 +6,7 @@ import {
   CONTRACTOR_PROJECT_WIDE_SCOPE,
   CONTRACTOR_REPORTER_SCOPE_PREFIX,
   FieldPersonaType,
+  INSPECTION_REPORTER_SCOPE,
   getReportingPeriod,
   getReportingPeriodForDate,
   ProjectCadenceOverviewDto,
@@ -40,6 +41,7 @@ export const CADENCE_PROJECT_SELECT = {
   reportDueTime: true,
   reportGraceMinutes: true,
   cadenceAnchorDate: true,
+  cadenceQuarterAnchorMonth: true,
   timezone: true,
   pendingCadenceJson: true,
   pendingCadenceEffectiveFrom: true,
@@ -58,6 +60,7 @@ export function cadenceSettingsOf(project: CadenceProjectRow): CadenceSettings {
     reportDueTime: project.reportDueTime,
     reportGraceMinutes: project.reportGraceMinutes,
     cadenceAnchorDate: project.cadenceAnchorDate,
+    cadenceQuarterAnchorMonth: project.cadenceQuarterAnchorMonth,
     timezone: project.timezone,
   };
 }
@@ -73,6 +76,7 @@ const PENDING_FIELDS = [
   'reportDueTime',
   'reportGraceMinutes',
   'cadenceAnchorDate',
+  'cadenceQuarterAnchorMonth',
 ] as const;
 
 function pendingSettings(project: CadenceProjectRow): Partial<CadenceProjectRow> | null {
@@ -107,7 +111,13 @@ export async function applyDuePendingCadence(project: CadenceProjectRow, today: 
 }
 
 export function serializeCadenceSettings(project: CadenceProjectRow): ProjectCadenceSettingsDto {
-  return { ...cadenceSettingsOf(project), customIntervalDays: project.customIntervalDays, reportDueTime: project.reportDueTime, cadenceAnchorDate: project.cadenceAnchorDate };
+  return {
+    ...cadenceSettingsOf(project),
+    customIntervalDays: project.customIntervalDays,
+    reportDueTime: project.reportDueTime,
+    cadenceAnchorDate: project.cadenceAnchorDate,
+    cadenceQuarterAnchorMonth: project.cadenceQuarterAnchorMonth,
+  };
 }
 
 export async function loadCadenceProject(db: Db, projectId: string): Promise<CadenceProjectRow> {
@@ -200,6 +210,8 @@ export async function createObligationsForPeriod(params: {
   key: PeriodKey;
   personas: BriefPersona[];
   items: Array<{ id: string; projectContractorId: string | null; isScheduled: boolean }>;
+  /** Phase 14: the ITEM_REPORTS stream the obligations belong to (null/absent = implicit stream). */
+  stream?: { id: string; projectContractorId: string | null } | null;
 }): Promise<number> {
   if (!params.key.hasObligations) return 0;
   const contractors = await prisma.projectContractor.findMany({
@@ -211,8 +223,12 @@ export async function createObligationsForPeriod(params: {
     for (const persona of params.personas) {
       const scope = persona === 'INDEPENDENT_VERIFIER' ? VERIFIER_REPORTER_SCOPE : contractorScopeForItem(item, contractors);
       if (!scope) continue;
+      // Phase 14: a stream limited to one package owes only that package's contractor reports.
+      const limitTo = params.stream?.projectContractorId;
+      if (limitTo && scope !== VERIFIER_REPORTER_SCOPE && scope !== `${CONTRACTOR_REPORTER_SCOPE_PREFIX}${limitTo}`) continue;
       rows.push({
         projectId: params.projectId,
+        streamId: params.stream?.id ?? null,
         boqItemId: item.id,
         reporterScope: scope,
         periodStart: params.key.periodStart,
@@ -234,12 +250,23 @@ export async function createObligationsForPeriod(params: {
  */
 export async function fulfilObligation(
   tx: Prisma.TransactionClient,
-  params: { projectId: string; boqItemId: string; scope: string; periodStart: string; reportId: string; isLate: boolean }
+  params: {
+    projectId: string;
+    boqItemId: string;
+    scope: string;
+    periodStart: string;
+    reportId: string;
+    isLate: boolean;
+    /** Phase 14: the reporter's ITEM_REPORTS stream (null = implicit stream). */
+    streamId?: string | null;
+  }
 ): Promise<string | null> {
   const open: ReportingObligationStatus[] = ['PENDING', 'MISSED'];
+  const streamId = params.streamId ?? null;
   let target = await tx.reportingObligation.findFirst({
     where: {
       projectId: params.projectId,
+      streamId,
       boqItemId: params.boqItemId,
       periodStart: params.periodStart,
       reporterScope: params.scope,
@@ -251,6 +278,7 @@ export async function fulfilObligation(
     target = await tx.reportingObligation.findFirst({
       where: {
         projectId: params.projectId,
+        streamId,
         boqItemId: params.boqItemId,
         periodStart: params.periodStart,
         reporterScope: { startsWith: CONTRACTOR_REPORTER_SCOPE_PREFIX },
@@ -274,6 +302,7 @@ export async function fulfilObligation(
 
 const OBLIGATION_INCLUDE = {
   boqItem: { select: { wbsCode: true, description: true } },
+  stream: { select: { label: true, kind: true } },
 } satisfies Prisma.ReportingObligationInclude;
 
 type ObligationRow = Prisma.ReportingObligationGetPayload<{ include: typeof OBLIGATION_INCLUDE }>;
@@ -281,7 +310,9 @@ type ObligationRow = Prisma.ReportingObligationGetPayload<{ include: typeof OBLI
 function serializeObligation(row: ObligationRow, contractorNames: Map<string, string>): ReportingObligationDto {
   const contractorId = contractorIdOfScope(row.reporterScope);
   const label =
-    row.reporterScope === VERIFIER_REPORTER_SCOPE
+    row.reporterScope === INSPECTION_REPORTER_SCOPE
+      ? row.stream?.label ?? 'Site inspection'
+      : row.reporterScope === VERIFIER_REPORTER_SCOPE
       ? 'Independent verifier'
       : contractorId
         ? contractorNames.get(contractorId) ?? 'Contractor'
@@ -290,8 +321,11 @@ function serializeObligation(row: ObligationRow, contractorNames: Map<string, st
     id: row.id,
     projectId: row.projectId,
     boqItemId: row.boqItemId,
-    wbsCode: row.boqItem.wbsCode,
-    wbsDescription: row.boqItem.description,
+    wbsCode: row.boqItem?.wbsCode ?? null,
+    wbsDescription: row.boqItem?.description ?? null,
+    streamId: row.streamId,
+    streamLabel: row.stream?.label ?? null,
+    siteInspectionReportId: row.siteInspectionReportId,
     reporterScope: row.reporterScope,
     reporterScopeLabel: label,
     periodStart: row.periodStart,
@@ -387,7 +421,9 @@ export async function excuseObligation(params: {
       actorId: params.webUser.userId,
       actorDisplayName: `${params.webUser.fullName} (${params.webUser.roleName})`,
       action: 'REPORTING_OBLIGATION_EXCUSED',
-      summaryText: `Excused the ${row.reporterScope === VERIFIER_REPORTER_SCOPE ? 'verifier' : 'contractor'} report on WBS ${row.boqItem.wbsCode} for ${row.periodStart} to ${row.periodEnd}: ${params.notes}`,
+      summaryText: row.boqItem
+        ? `Excused the ${row.reporterScope === VERIFIER_REPORTER_SCOPE ? 'verifier' : 'contractor'} report on WBS ${row.boqItem.wbsCode} for ${row.periodStart} to ${row.periodEnd}: ${params.notes}`
+        : `Excused the ${row.stream?.label ?? 'site inspection'} for ${row.periodStart} to ${row.periodEnd}: ${params.notes}`,
       payload: { obligationId: row.id, previousStatus: row.status, notes: params.notes },
     });
   });

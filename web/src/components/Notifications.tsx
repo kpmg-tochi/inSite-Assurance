@@ -41,6 +41,9 @@ const CATEGORY_LABELS: Record<WebNotificationCategory, string> = {
   HANDOVER_SUBMITTED: "Handover response",
   DEFECT_TICKET: "Defect",
   RETENTION_RELEASE: "Retention release",
+  INSPECTION_PENDING_APPROVAL: "Inspection awaiting approval",
+  INSPECTION_FINDING: "Inspection finding",
+  INSPECTION_MISSED: "Missed inspection",
 };
 
 interface NotificationsProps {

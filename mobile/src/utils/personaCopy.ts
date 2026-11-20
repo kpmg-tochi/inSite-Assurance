@@ -31,6 +31,11 @@ export interface PersonaCopy {
   /** Sync status screen. */
   backlogEmptyDescription: string;
   heldReportsDescription: string;
+  /** Phase 14: inbox entry to the checklist inspection flow. */
+  inspectionEntry: string;
+  /** Phase 14: inbox entry to inspection findings, and the screen subtitle. */
+  findingsEntry: string;
+  findingsSubtitle: string;
 }
 
 /** Phase 8: the span a report covers, by cadence. Daily (or unknown) keeps the original wording. */
@@ -39,6 +44,7 @@ function span(cadence?: ReportingCadence | null) {
     case 'WEEKLY': return { adj: 'Weekly', this: 'this week', thisCap: "This week's" };
     case 'BI_WEEKLY': return { adj: 'Fortnightly', this: 'this fortnight', thisCap: "This fortnight's" };
     case 'MONTHLY': return { adj: 'Monthly', this: 'this month', thisCap: "This month's" };
+    case 'QUARTERLY': return { adj: 'Quarterly', this: 'this quarter', thisCap: "This quarter's" };
     case 'CUSTOM_INTERVAL': return { adj: 'Period', this: 'this period', thisCap: "This period's" };
     case 'INSPECTION_ONLY': return { adj: 'Inspection', this: 'this inspection', thisCap: 'This' };
     default: return { adj: 'Daily', this: 'today', thisCap: "Today's" };
@@ -58,6 +64,9 @@ const contractor = (c?: ReportingCadence | null): PersonaCopy => ({
   backlogEmptyDescription: `Every ${span(c).adj.toLowerCase()} report from this device has been accepted by the server.`,
   heldReportsDescription:
     'The server keeps these until your identity check is approved, then submits them automatically. You do not need to send them again.',
+  inspectionEntry: 'Site inspection',
+  findingsEntry: 'Inspection findings to fix',
+  findingsSubtitle: 'Problems an inspection found in your work. Fix them, take photos and mark them resolved.',
 });
 
 const verifier = (c?: ReportingCadence | null): PersonaCopy => ({
@@ -74,6 +83,9 @@ const verifier = (c?: ReportingCadence | null): PersonaCopy => ({
   backlogEmptyDescription: 'Every inspection report from this device has been accepted by the server.',
   heldReportsDescription:
     'The server keeps your inspection reports until your identity check is approved, then submits them automatically. You do not need to send them again.',
+  inspectionEntry: 'Start a site inspection',
+  findingsEntry: 'Inspection findings',
+  findingsSubtitle: 'Findings raised from inspections on this project. Contractors fix them; you can record the fix too.',
 });
 
 export function personaCopy(

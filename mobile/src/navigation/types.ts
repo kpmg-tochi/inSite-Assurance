@@ -16,6 +16,10 @@ export type RootStackParamList = {
   WbsInbox: undefined;
   /** Phase 10: defect tickets after handover (contractor fixes, verifier checks). */
   Defects: undefined;
+  /** Phase 14: the checklist site inspection flow (resumes an open draft). */
+  Inspection: undefined;
+  /** Phase 14: inspection findings (contractor fixes its own; verifiers record fixes). */
+  InspectionFindings: undefined;
   WbsThread: {
     wbsItem: WbsItemRecord;
     activeQueryNotificationId?: string;

@@ -9,6 +9,7 @@ import {
 } from "@insite/shared";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import { useCadenceOverviewQuery } from "../../../../queries/cadence/useCadenceQueries";
+import { ReportingStreamsEditor } from "../../../../components/inspections/ReportingStreamsEditor";
 import {
   extractErrors,
   FieldError,
@@ -27,10 +28,12 @@ const CADENCE_TEXT: Record<ReportingCadence, { label: string; description: strin
   BI_WEEKLY: { label: "Every two weeks", description: "One report per item every 14 days, counted from a start date." },
   MONTHLY: { label: "Monthly", description: "One report per item each calendar month, due on its last working day." },
   CUSTOM_INTERVAL: { label: "Custom period", description: "Periods of a set number of days from a start date." },
+  QUARTERLY: { label: "Quarterly", description: "One report per item each calendar quarter, due on its last working day." },
   INSPECTION_ONLY: { label: "Inspections only", description: "Reports at inspection visits. Nothing is due and nothing is late." },
 };
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export function ReportingStep({ projectId, setup, readOnly }: StepProps) {
   const initial = useMemo(() => {
@@ -45,6 +48,7 @@ export function ReportingStep({ projectId, setup, readOnly }: StepProps) {
       reportDueTime: r.reportDueTime,
       reportGraceMinutes: r.reportGraceMinutes,
       cadenceAnchorDate: r.cadenceAnchorDate,
+      cadenceQuarterAnchorMonth: r.cadenceQuarterAnchorMonth ?? 1,
     };
   }, [setup.reporting]);
   const [state, setState] = useState(initial);
@@ -96,6 +100,7 @@ export function ReportingStep({ projectId, setup, readOnly }: StepProps) {
     set("workWeekDays", state.workWeekDays.includes(d) ? state.workWeekDays.filter((x) => x !== d) : [...state.workWeekDays, d].sort((a, b) => a - b));
 
   return (
+    <>
     <StepSection title="Reporting" description={`How often field reports are due and when the working day runs. Times are in ${timezone}.`}>
       {errors.general && <p className="text-xs font-medium text-red-600">{errors.general}</p>}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" role="radiogroup" aria-label="Reporting cadence">
@@ -185,6 +190,26 @@ export function ReportingStep({ projectId, setup, readOnly }: StepProps) {
         )}
       </div>
 
+      {state.reportingCadence === "QUARTERLY" && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <label className={labelClass} htmlFor="quarter-anchor">Quarters start in</label>
+            <select
+              id="quarter-anchor"
+              className={inputClass()}
+              value={state.cadenceQuarterAnchorMonth}
+              onChange={(e) => set("cadenceQuarterAnchorMonth", Number(e.target.value))}
+              disabled={readOnly}
+            >
+              {MONTHS.map((m, i) => (
+                <option key={m} value={i + 1}>{m}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-slate-500">January gives Jan–Mar, Apr–Jun, Jul–Sep, Oct–Dec.</p>
+          </div>
+        </div>
+      )}
+
       {(usesWeekStart || usesAnchor || state.reportingCadence === "CUSTOM_INTERVAL") && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {usesWeekStart && (
@@ -247,5 +272,8 @@ export function ReportingStep({ projectId, setup, readOnly }: StepProps) {
         )}
       </div>
     </StepSection>
+    {/* Phase 14: reporting streams (each with its own cadence and owners) */}
+    <ReportingStreamsEditor projectId={projectId} setup={setup} readOnly={readOnly} />
+    </>
   );
 }

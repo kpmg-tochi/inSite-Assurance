@@ -22,17 +22,29 @@ import {
   periodKeyForDate,
   PeriodKey,
 } from '../cadence/cadence.service';
+import {
+  itemStreamForPersona,
+  loadActiveStreams,
+  projectHasStreams,
+  StreamRow,
+  streamCadenceRow,
+  streamPersonas,
+} from '../cadence/streams.service';
 
 /** Today's calendar date (YYYY-MM-DD) in an IANA zone; the project's zone defines its day. */
 export function getTodayDateString(timeZone: string): string {
   return calendarDateInTimeZone(new Date(), timeZone);
 }
 
-/** The project's cadence settings and the period that contains `date` (default: today). */
-async function periodContext(projectId: string, date?: string) {
+/**
+ * The project's cadence settings and the period that contains `date` (default: today). Phase 14:
+ * with reporting streams, the period of `stream`, or of the first ITEM_REPORTS stream `persona` owes.
+ */
+async function periodContext(projectId: string, date?: string, opts: { stream?: StreamRow | null; persona?: BriefPersona } = {}) {
   const project = await loadCadenceProject(prisma, projectId);
   const day = date || getTodayDateString(project.timezone);
-  const settings = cadenceSettingsForDate(project, day);
+  const stream = opts.stream ?? (opts.persona ? await itemStreamForPersona(prisma, projectId, opts.persona) : null);
+  const settings = cadenceSettingsForDate(stream ? streamCadenceRow(project, stream) : project, day);
   return { project, settings, day, key: periodKeyForDate(settings, day) };
 }
 
@@ -105,7 +117,7 @@ export async function generateOrGetMorningBriefForBoqItem(params: {
   planningTier?: PlanningTier;
 }): Promise<MorningDeliverableBriefDto> {
   const { projectId, boqItemId, targetPersona } = params;
-  const ctx = params.context ?? (await periodContext(projectId, params.input?.workdayDate));
+  const ctx = params.context ?? (await periodContext(projectId, params.input?.workdayDate, { persona: targetPersona }));
   const { key } = ctx;
   const config = await getProcessConfig(projectId);
   const uniqueKey = {
@@ -222,9 +234,24 @@ export async function briefPersonasForProject(projectId: string): Promise<BriefP
 export async function generateDispatchForProject(
   projectId: string,
   workdayDateInput?: string,
-  personas?: BriefPersona[]
+  personas?: BriefPersona[],
+  /** Phase 14: dispatch for one ITEM_REPORTS stream (its period, its obligations). */
+  stream?: StreamRow | null
 ): Promise<MorningDeliverableBriefDto[]> {
-  const ctx = await periodContext(projectId, workdayDateInput);
+  if (!stream) {
+    // Phase 14: a project with streams dispatches per ITEM_REPORTS stream (INSPECTION streams get no briefs).
+    const streams = (await loadActiveStreams(prisma, projectId)).filter((s) => s.kind === 'ITEM_REPORTS');
+    if (streams.length > 0 || (await projectHasStreams(prisma, projectId))) {
+      const wanted = personas ?? (await briefPersonasForProject(projectId));
+      const out: MorningDeliverableBriefDto[] = [];
+      for (const s of streams) {
+        const owed = (await streamPersonas(prisma, s)).filter((p) => wanted.includes(p));
+        if (owed.length) out.push(...(await generateDispatchForProject(projectId, workdayDateInput, owed, s)));
+      }
+      return out;
+    }
+  }
+  const ctx = await periodContext(projectId, workdayDateInput, { stream: stream ?? null, persona: stream ? undefined : personas?.[0] });
   const targets = await dispatchTargets(projectId, ctx.key);
   const forPersonas = personas ?? (await briefPersonasForProject(projectId));
   const briefs: MorningDeliverableBriefDto[] = [];
@@ -241,7 +268,7 @@ export async function generateDispatchForProject(
       );
     }
   }
-  await createObligationsForPeriod({ projectId, key: ctx.key, personas: forPersonas, items: targets });
+  await createObligationsForPeriod({ projectId, key: ctx.key, personas: forPersonas, items: targets, stream: stream ?? null });
   return briefs;
 }
 
@@ -316,7 +343,7 @@ export async function listMorningBriefsForProject(params: {
   targetPersona: BriefPersona;
   workdayDate?: string;
 }): Promise<MorningDeliverableBriefDto[]> {
-  const { key } = await periodContext(params.projectId, params.workdayDate);
+  const { key } = await periodContext(params.projectId, params.workdayDate, { persona: params.targetPersona });
   const config = await getProcessConfig(params.projectId);
   const rows = await prisma.morningDeliverableBrief.findMany({
     where: { projectId: params.projectId, reportingPeriodStart: key.periodStart, targetPersona: params.targetPersona },

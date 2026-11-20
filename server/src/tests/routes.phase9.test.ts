@@ -600,7 +600,7 @@ describe('Phase 9', () => {
       const tiers = Object.fromEntries(generated.map((b) => [name(b.boqItemId), b.planningTier]));
       assert.deepEqual(tiers, { inWindow: 'PLAN_A', overdue: 'PLAN_A', override: 'PLAN_A', later: 'FALLBACK_BACKLOG' });
       const obligations = await prisma.reportingObligation.findMany({ where: { projectId: ids.briefProject } });
-      assert.deepEqual(obligations.map((o) => name(o.boqItemId)).sort(), ['inWindow', 'overdue', 'override']);
+      assert.deepEqual(obligations.map((o) => name(o.boqItemId!)).sort(), ['inWindow', 'overdue', 'override']);
     });
 
     it('a fallback becomes eligible once its predecessor is done', async () => {

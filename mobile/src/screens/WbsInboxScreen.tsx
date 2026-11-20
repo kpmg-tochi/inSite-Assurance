@@ -34,6 +34,7 @@ import type { RootStackParamList } from "../navigation/types";
 import { Feather } from "@expo/vector-icons";
 import { getLoadedBaselinePack } from "../storage/baselineStore";
 import { showDefectsEntry } from "../utils/defects";
+import { showFindingsEntry, streamPeriodCards, visitTypesOffered } from "../utils/inspections";
 
 type InboxTab = "ACTIVE" | "REPORTED";
 
@@ -74,6 +75,11 @@ export const WbsInboxScreen: React.FC = () => {
   const onOpenNotifications = () => navigation.navigate("NotificationsModal");
   // Phase 10: defect work once the project is in handover or its liability period.
   const defectsVisible = showDefectsEntry(getLoadedBaselinePack(projectId)?.constructionPhase, activeContext?.permissions);
+  // Phase 14: period cards per owed stream, the inspection flow and inspection findings.
+  const pack = getLoadedBaselinePack(projectId);
+  const periodCards = streamPeriodCards(pack, projectCadenceSettings(projectId));
+  const inspectionsVisible = visitTypesOffered(pack?.inspections).length > 0;
+  const findingsVisible = showFindingsEntry(activeContext?.permissions);
   const onOpenIncidentModal = () => navigation.navigate("IncidentModal");
   const onOpenBacklogModal = () => navigation.navigate("BacklogModal");
   const [dismissedError, setDismissedError] = useState(false);
@@ -246,6 +252,18 @@ export const WbsInboxScreen: React.FC = () => {
 
           {/* Right Action Icons + Profile Avatar with presence badge */}
           <View style={styles.headerActions}>
+            {findingsVisible && (
+              <TouchableOpacity
+                style={styles.iconButton}
+                onPress={() => navigation.navigate("InspectionFindings")}
+                activeOpacity={0.7}
+                accessibilityLabel={copy.findingsEntry}
+              >
+                <Text style={styles.iconText}>
+                  <Feather name="alert-triangle" size={16} color={"#fff"} />
+                </Text>
+              </TouchableOpacity>
+            )}
             {defectsVisible && (
               <TouchableOpacity
                 style={styles.iconButton}
@@ -342,7 +360,31 @@ export const WbsInboxScreen: React.FC = () => {
         ]}
       >
         {/* Phase 8: current period, due countdown and today's check-in */}
-        {projectId && <PeriodCheckInCard projectId={projectId} canCheckIn={canCheckIn} />}
+        {/* Phase 14: one card per reporting stream the person owes (the first carries the check-in) */}
+        {projectId &&
+          periodCards.map((c, i) => (
+            <PeriodCheckInCard
+              key={c.key}
+              projectId={projectId}
+              canCheckIn={canCheckIn}
+              settings={c.label ? c.settings : undefined}
+              label={c.label}
+              showCheckIn={i === 0}
+            />
+          ))}
+        {projectId && inspectionsVisible && (
+          <TouchableOpacity
+            style={styles.inspectionEntry}
+            onPress={() => navigation.navigate("Inspection")}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={copy.inspectionEntry}
+          >
+            <Feather name="clipboard" size={16} color="#1E3A8A" />
+            <Text style={styles.inspectionEntryText}>{copy.inspectionEntry}</Text>
+            <Feather name="chevron-right" size={16} color="#64748B" />
+          </TouchableOpacity>
+        )}
 
         {/* Unverified Mode Warning Banner */}
         {!isVerified && (
@@ -481,6 +523,18 @@ export const WbsInboxScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  // Phase 14
+  inspectionEntry: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#E2E8F0",
+    backgroundColor: "#FFFFFF",
+  },
+  inspectionEntryText: { flex: 1, fontSize: 14, fontWeight: "700", color: "#1E3A8A" },
   container: {
     flex: 1,
     backgroundColor: "#1E1B4B",

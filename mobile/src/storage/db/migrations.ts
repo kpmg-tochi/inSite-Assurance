@@ -232,6 +232,25 @@ ALTER TABLE wbs_items ADD COLUMN planned_start_date TEXT;
 ALTER TABLE wbs_items ADD COLUMN planned_end_date TEXT;
 `,
   },
+  {
+    // Phase 14: site inspection drafts (survive app restarts) and the confirmed request waiting in
+    // the outbox. status: DRAFT | QUEUED | SENT. The request never holds file paths: photos are
+    // referenced by clientCaptureId and sent first by the outbox.
+    version: 6,
+    sql: `
+CREATE TABLE IF NOT EXISTS inspection_drafts (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'DRAFT',
+  draft_json TEXT NOT NULL,
+  request_json TEXT,
+  server_id TEXT,
+  last_error TEXT,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS inspection_drafts_project ON inspection_drafts (project_id, status);
+`,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
@@ -248,6 +267,7 @@ export const DATA_TABLES = [
   'incidents',
   'assurance_submissions',
   'project_baseline',
+  'inspection_drafts',
 ];
 
 /** Migrations still to run for a database at `currentVersion`. */

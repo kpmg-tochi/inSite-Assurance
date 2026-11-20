@@ -15,6 +15,7 @@ import {
   FolderKanban,
   ArrowRight,
   CalendarRange,
+  ClipboardCheck,
   Handshake,
   Wrench,
   Globe2,
@@ -336,6 +337,24 @@ export function AppShell({
               >
                 <CalendarRange className="w-4 h-4 shrink-0" />
                 {!sidebarCollapsed && <span className="truncate">Schedule</span>}
+              </NavLink>
+            )}
+
+            {/* Phase 14: site inspections and findings */}
+            {selectedProject && (hasPermission("inspections:view") || hasPermission("inspections:manage_findings")) && (
+              <NavLink
+                to={`${projectBasePath}/inspections`}
+                title="Inspections"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                    isActive
+                      ? "bg-white/15 text-white shadow-sm"
+                      : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`
+                }
+              >
+                <ClipboardCheck className="w-4 h-4 shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">Inspections</span>}
               </NavLink>
             )}
 

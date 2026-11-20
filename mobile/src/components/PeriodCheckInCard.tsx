@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { formatDueLabel } from '@insite/shared';
+import { formatDueLabel, type CadenceSettings } from '@insite/shared';
 import { Pill } from './common';
 import { colors } from '../styles/commonStyles';
 import { getLoadedBaselinePack } from '../storage/baselineStore';
@@ -22,9 +22,17 @@ function useNow(intervalMs = 60_000): Date {
  * Phase 8: the current reporting period with its due countdown (or overdue state), and today's
  * check-in. The check-in result shown is the server's geofence evaluation, never a local guess.
  */
-export const PeriodCheckInCard: React.FC<{ projectId: string; canCheckIn: boolean }> = ({ projectId, canCheckIn }) => {
+export const PeriodCheckInCard: React.FC<{
+  projectId: string;
+  canCheckIn: boolean;
+  /** Phase 14: a reporting stream's settings and label (one card per stream the person owes). */
+  settings?: CadenceSettings;
+  label?: string | null;
+  /** Only the first card shows today's check-in. */
+  showCheckIn?: boolean;
+}> = ({ projectId, canCheckIn, settings: streamSettings, label, showCheckIn = true }) => {
   const now = useNow();
-  const settings = cadenceSettingsFromPack(getLoadedBaselinePack(projectId), projectTimeZone(projectId));
+  const settings = streamSettings ?? cadenceSettingsFromPack(getLoadedBaselinePack(projectId), projectTimeZone(projectId));
   const period = useMemo(() => periodAt(settings, now), [settings, now]);
   const copy = cadenceCopy(settings.reportingCadence);
   const due = dueStatus(period, now);
@@ -59,7 +67,7 @@ export const PeriodCheckInCard: React.FC<{ projectId: string; canCheckIn: boolea
   return (
     <View style={styles.card} accessibilityRole="summary">
       <View style={styles.row}>
-        <Text style={styles.heading}>{copy.deliverablesHeading}</Text>
+        <Text style={styles.heading}>{label ? `${label} · ${copy.reportNoun}` : copy.deliverablesHeading}</Text>
         {due && <Pill variant={due.overdue ? 'negative' : 'info'} text={due.label} />}
       </View>
       <Text style={styles.sub}>
@@ -68,6 +76,7 @@ export const PeriodCheckInCard: React.FC<{ projectId: string; canCheckIn: boolea
         {due?.overdue ? ` · send your ${copy.reportNoun.toLowerCase()} now; it will be marked late` : ''}
         {!due ? ' · no due time (inspections only)' : ''}
       </Text>
+      {showCheckIn && (
       <View style={[styles.row, styles.checkInRow]}>
         <View style={styles.checkInStatus}>
           <Feather
@@ -89,7 +98,8 @@ export const PeriodCheckInCard: React.FC<{ projectId: string; canCheckIn: boolea
           </TouchableOpacity>
         )}
       </View>
-      {message && <Text style={styles.message}>{message}</Text>}
+      )}
+      {showCheckIn && message && <Text style={styles.message}>{message}</Text>}
     </View>
   );
 };

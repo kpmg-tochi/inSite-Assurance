@@ -3,7 +3,8 @@ import {
   DEFAULT_PROJECT_PROCESS_CONFIG,
   defaultReportChain,
   RadialGeofence,
-  SaveProjectTypeRequest,
+  SaveProjectTypeRequestInput,
+  SaveProjectTypeRequestSchema,
   WorkflowTemplateConfig,
 } from "@insite/shared";
 import { prisma } from "../config/prisma";
@@ -217,7 +218,7 @@ export async function seedPhase11(p: { passwordHash: string }) {
 
   // Project types.
   const reportingDefaults = { reportingCadence: "WEEKLY" as const, workdayStartTime: "07:30", workdayEndTime: "16:30" };
-  const central: SaveProjectTypeRequest = {
+  const central: SaveProjectTypeRequestInput = {
     code: "CENTRAL",
     name: "Central Delivery Model",
     description: "Delivered and funded centrally by the Programme Authority.",
@@ -242,7 +243,7 @@ export async function seedPhase11(p: { passwordHash: string }) {
       reportingDefaults,
     },
   };
-  const coFunded: SaveProjectTypeRequest = {
+  const coFunded: SaveProjectTypeRequestInput = {
     code: "CO_FUNDED",
     name: "Co-Funded Delivery Model",
     description: "Delivered and funded by a regional delivery entity, itself funded by the Programme Authority.",
@@ -267,8 +268,8 @@ export async function seedPhase11(p: { passwordHash: string }) {
       reportingDefaults: { ...reportingDefaults, reportingCadence: "BI_WEEKLY" },
     },
   };
-  const centralType = await createProjectType(adminPayload, central);
-  const coFundedType = await createProjectType(adminPayload, coFunded);
+  const centralType = await createProjectType(adminPayload, SaveProjectTypeRequestSchema.parse(central));
+  const coFundedType = await createProjectType(adminPayload, SaveProjectTypeRequestSchema.parse(coFunded));
 
   // Projects through the real services.
   async function project(spec: {

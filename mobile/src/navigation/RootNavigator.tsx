@@ -28,6 +28,8 @@ import { VerificationUnderReviewScreen } from "../screens/VerificationUnderRevie
 import { WbsInboxScreen } from "../screens/WbsInboxScreen";
 import { WbsChatThreadScreen } from "../screens/WbsChatThreadScreen";
 import DefectsScreen from "../screens/DefectsScreen";
+import InspectionScreen from "../screens/InspectionScreen";
+import InspectionFindingsScreen from "../screens/InspectionFindingsScreen";
 
 // Modals
 import { ProfileAndProjectsScreen } from "../screens/ProfileAndProjectsScreen";
@@ -96,6 +98,8 @@ export const RootNavigator: React.FC = () => {
         <Stack.Screen name="WbsInbox" component={WbsInboxScreen} />
         <Stack.Screen name="WbsThread" component={WbsChatThreadScreen} />
         <Stack.Screen name="Defects" component={DefectsScreen} />
+        <Stack.Screen name="Inspection" component={InspectionScreen} />
+        <Stack.Screen name="InspectionFindings" component={InspectionFindingsScreen} />
 
         {/* MODAL SCREENS */}
         <Stack.Group

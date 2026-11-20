@@ -96,6 +96,11 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'handover:manage_links',
       'handover:review_feedback',
       'retention:manage_defects',
+      // Phase 14
+      'inspections:submit',
+      'inspections:view',
+      'inspections:manage_templates',
+      'inspections:manage_findings',
     ],
   },
   {
@@ -125,6 +130,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'audit:view_ledger',
       'handover:review_feedback',
       'retention:release_escrow',
+      'inspections:view',
     ],
   },
   {
@@ -145,6 +151,9 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'ipc:view',
       'ipc:submit_claim',
       'retention:manage_defects',
+      // Phase 14: sees and resolves inspection findings aimed at its organisation.
+      'inspections:view',
+      'inspections:manage_findings',
     ],
   },
   {
@@ -170,6 +179,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'ipc:view',
       'valuation:export_pdf',
       'audit:view_ledger',
+      'inspections:view',
     ],
   },
   {
@@ -183,7 +193,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
     assuranceWeight: 1.0,
     requiresIdentityAssurance: false,
     // Phase 10: verifiers check and close defect rectification during the liability period.
-    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'retention:manage_defects'],
+    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'retention:manage_defects', 'inspections:submit', 'inspections:manage_findings'],
   },
   {
     name: 'Independent Resident Clerk of Works',
@@ -195,7 +205,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
     fieldPersonaType: 'INDEPENDENT_VERIFIER',
     assuranceWeight: 0.85,
     requiresIdentityAssurance: false,
-    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'retention:manage_defects'],
+    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'retention:manage_defects', 'inspections:submit', 'inspections:manage_findings'],
   },
   {
     name: 'Contractor Site Engineer',
@@ -207,6 +217,6 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
     fieldPersonaType: 'CONTRACTOR_EXECUTOR',
     assuranceWeight: 0.4,
     requiresIdentityAssurance: true,
-    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'reports:respond_query', 'retention:manage_defects'],
+    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'reports:respond_query', 'retention:manage_defects', 'inspections:manage_findings'],
   },
 ];
