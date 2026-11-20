@@ -52,3 +52,7 @@ Thumbs.db
 
 # Local dev object storage (Phase 4)
 server/.local-storage/
+
+# Mobile platform folders
+mobile/android/
+mobile/ios/
