@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import {
+  paymentBasisMechanismConflict,
   ProjectReportingStepSchema,
   ProjectTypeConfig,
   ProjectTypeConfigSchema,
@@ -15,6 +16,7 @@ import { AppError } from '../../middleware/error.middleware';
 import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { applyTemplateConfig } from '../process/processConfig.service';
+import { createStreamsFromProjectType } from '../cadence/streams.service';
 
 /**
  * Project types (Phase 11). A type references a workflow template and holds the rest of a delivery
@@ -97,12 +99,17 @@ export async function tenantHasActiveProjectTypes(db: Db, tenantId: string): Pro
 }
 
 /**
- * Hook for Phase 12: refuses a workflow template whose disbursement mechanism contradicts the
- * type's payment configuration. This phase defines no payment configuration, so nothing is refused.
+ * Phase 12: refuses a workflow template whose disbursement mechanism contradicts the type's payment
+ * configuration (fixed-amount payment milestones need direct verification, D-12.2; a stated
+ * mechanism must match the template's).
  */
 export function templateConflictsWithType(template: WorkflowTemplateConfig, config: ProjectTypeConfig): string | null {
-  void template;
-  void config.payments;
+  const mechanism = template.process.disbursementMechanism;
+  const basisConflict = paymentBasisMechanismConflict(mechanism, config.payments.defaultBasis);
+  if (basisConflict) return `${basisConflict} The chosen workflow template uses contractor IPC claims.`;
+  if (config.payments.mechanism && config.payments.mechanism !== mechanism) {
+    return 'The payment settings expect a different disbursement mechanism from the chosen workflow template.';
+  }
   return null;
 }
 
@@ -312,6 +319,11 @@ export async function applyProjectTypeToProject(
     prefilled.push('reporting');
   }
   await tx.project.update({ where: { id: project.id }, data });
+  // Phase 14: the type's reporting streams replace the draft's.
+  if (config.reportingStreams.length > 0) {
+    const created = await createStreamsFromProjectType(tx, { projectId: project.id, tenantId: project.tenantId, streams: config.reportingStreams });
+    if (created.length) prefilled.push('reportingStreams');
+  }
 
   await recordAuditEvent(tx, {
     projectId: project.id,

@@ -7,11 +7,12 @@ import {
   FieldSessionOriginEnum,
   GeofenceModeEnum,
   OrganizationCategoryEnum,
-  ProfessionalLicenseTypeEnum,
   ReportingCadenceEnum,
 } from "../enums";
+import { CredentialRequirementEnum, RegistrationBodyOptionSchema } from "./credentials.schema";
 import { ProjectGeofenceSchema } from "./geofence.schema";
 import { ProjectCadenceSettingsDtoSchema } from "./cadence.schema";
+import { MobileInspectionPackSchema } from "./inspection.schema";
 import { TenantDtoSchema } from "./rbac.schema";
 import { ResolvedRatingLabelsSchema } from "../ratingLabels";
 import { ResolvedTerminologySchema } from "../terminology";
@@ -34,8 +35,9 @@ export const WebRegisterRequestSchema = z.object({
   roleCode: z.string().min(2).max(40).default("MONITOR").optional(),
   organizationName: z.string().min(2).max(160),
   organizationCategory: OrganizationCategoryEnum.default("OTHER").optional(),
-  professionalLicenseType: ProfessionalLicenseTypeEnum.nullable().optional(),
-  professionalLicenseNumber: z.string().max(64).optional(),
+  /** Phase 12: a code from the tenant's registration bodies (checked by the server). */
+  professionalRegistrationBodyCode: z.string().trim().max(16).nullable().optional(),
+  professionalRegistrationNumber: z.string().trim().max(64).optional(),
 });
 export type WebRegisterRequest = z.infer<typeof WebRegisterRequestSchema>;
 
@@ -69,8 +71,10 @@ export const WebUserProfileSchema = z.object({
   organizationId: z.string().uuid(),
   organizationName: z.string(),
   organizationCategory: OrganizationCategoryEnum.default("OTHER"),
-  professionalLicenseType: ProfessionalLicenseTypeEnum.nullable(),
-  professionalLicenseNumber: z.string().nullable(),
+  professionalRegistrationBodyCode: z.string().nullable(),
+  professionalRegistrationNumber: z.string().nullable(),
+  /** Phase 12: the tenant-level certifier policy (a project type may override it per project). */
+  certifierRegistrationRequirement: CredentialRequirementEnum.default('REQUIRED'),
   mustChangePassword: z.boolean().default(false),
   /** Tenant display labels for evidence ratings, resolved against the defaults. */
   ratingLabels: ResolvedRatingLabelsSchema,
@@ -112,6 +116,10 @@ export const JoinProjectMobileRequestSchema = z.object({
 
   // Assurance onboarding fields (driven by Role.requiresIdentityAssurance). Identity images
   // arrive only through POST /auth/assurance-verification.
+  // Phase 12: registration follows the project's fieldAssurance policy (enforced by the server).
+  registrationNumber: z.string().trim().max(50).optional(),
+  registrationBodyCode: z.string().trim().max(16).optional(),
+  /** @deprecated Phase 12: old name of `registrationNumber`, accepted for one release. */
   corenLicenseNumber: z.string().max(50).optional(),
   idDocumentType: z.string().max(120).optional(),
   experienceSummary: z.string().max(1000).optional(),
@@ -147,7 +155,14 @@ export const SubmitAssuranceVerificationRequestSchema = z.object({
   selfieLeftUrl: z.string().min(3).max(500),
   selfieRightUrl: z.string().min(3).max(500),
   selfieSet: GuidedSelfieSetSchema,
-  corenLicenseNumber: z.string().min(2).max(50),
+  /**
+   * Phase 12: optional here; the server requires a number only when the project's fieldAssurance
+   * policy is REQUIRED, and ignores it when HIDDEN.
+   */
+  registrationNumber: z.string().trim().min(2).max(50).optional(),
+  registrationBodyCode: z.string().trim().max(16).optional(),
+  /** @deprecated Phase 12: old name of `registrationNumber`, accepted for one release. */
+  corenLicenseNumber: z.string().trim().min(2).max(50).optional(),
   experienceSummary: z.string().min(5).max(1000),
 });
 export type SubmitAssuranceVerificationRequest = z.infer<
@@ -197,7 +212,8 @@ export const FieldAgentSessionProfileSchema = z.object({
   agentPhoneNumber: z.string(),
   deviceId: z.string(),
   assuranceStatus: ContractorAssuranceStatusEnum.optional(),
-  corenLicenseNumber: z.string().optional(),
+  registrationNumber: z.string().optional(),
+  registrationBodyCode: z.string().optional(),
   livenessPassed: z.boolean().optional(),
   ratingLabels: ResolvedRatingLabelsSchema.optional(),
   contractor: SessionContractorSchema.nullable().optional(),
@@ -232,7 +248,10 @@ export const ContractorVerificationRecordDtoSchema = z.object({
   agentFullName: z.string(),
   agentPhoneNumber: z.string(),
   joinCodeUsed: z.string(),
-  corenLicenseNumber: z.string().nullable().optional(),
+  /** Phase 12: null when none was given (policy OPTIONAL or HIDDEN). */
+  registrationNumber: z.string().nullable().optional(),
+  registrationBodyCode: z.string().nullable().optional(),
+  registrationBodyName: z.string().nullable().optional(),
   idDocumentType: z.string().nullable().optional(),
   /** Short-lived signed URLs for the reviewer (null for missing or legacy values). */
   idDocumentUrl: z.string().nullable().optional(),
@@ -432,6 +451,18 @@ export const MobileBaselinePackSchema = z.object({
   holdPoints: z.array(BaselineBoqItemSchema),
   /** Phase 10. Absent in older packs: treat as ACTIVE_CONSTRUCTION. */
   constructionPhase: ConstructionPhaseEnum.optional(),
+  /** Phase 14: streams this person owes and their checklist templates. Absent in older packs. */
+  inspections: MobileInspectionPackSchema.optional(),
+  /**
+   * Phase 12: the project's resolved registration policy for identity assurance and the tenant's
+   * active registration bodies. Absent in older packs: treat as REQUIRED with no body list.
+   */
+  fieldAssurance: z
+    .object({
+      registration: CredentialRequirementEnum,
+      registrationBodies: z.array(RegistrationBodyOptionSchema),
+    })
+    .optional(),
 });
 export type MobileBaselinePack = z.infer<typeof MobileBaselinePackSchema>;
 

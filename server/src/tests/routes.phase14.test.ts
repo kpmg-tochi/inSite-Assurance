@@ -92,10 +92,20 @@ function inspectionBody(over: Record<string, unknown> = {}) {
 }
 
 async function session(p: { projectId: string; roleId: string; name: string; persona: 'INDEPENDENT_VERIFIER' | 'CONTRACTOR_EXECUTOR'; contractorId?: string | null }) {
+  // The origin CHECK needs a join code; reuse the active one per project, role and contractor (partial unique index).
+  const { createJoinCode } = await import('../modules/projects/joinCodes.service');
+  const role = await prisma.role.findUniqueOrThrow({ where: { id: p.roleId } });
+  const project = await prisma.project.findUniqueOrThrow({ where: { id: p.projectId } });
+  const contractor = p.contractorId ? await prisma.projectContractor.findUniqueOrThrow({ where: { id: p.contractorId } }) : null;
+  const code =
+    (await prisma.projectJoinCode.findFirst({
+      where: { projectId: p.projectId, roleId: role.id, projectContractorId: p.contractorId ?? null, isActive: true },
+    })) ?? (await createJoinCode(prisma, { projectId: p.projectId, codePrefix: project.codePrefix, role, contractor }));
   const s = await prisma.fieldAgentSession.create({
     data: {
       projectId: p.projectId,
       origin: 'JOIN_CODE',
+      joinCodeId: code.id,
       roleId: p.roleId,
       roleNameSnapshot: p.name,
       fieldPersonaType: p.persona,
@@ -301,9 +311,12 @@ describe('Phase 14', () => {
       assert.equal(view.body.data.defaultStream.label, 'Default');
       await prisma.projectJoinCode.create({ data: { projectId: ids.plain, roleId: ids.residentRole, code: 'INS-1402-COW-TEST' } });
       await jobs.runJobOnce('brief-dispatch', new Date('2025-04-07T07:30:00Z'));
-      const obligations = await prisma.reportingObligation.findMany({ where: { projectId: ids.plain } });
-      assert.equal(obligations.length, 2);
-      assert.ok(obligations.every((o) => o.streamId === null && o.boqItemId !== null && o.periodStart === '2025-04-07'));
+      // Earlier dispatch ticks in this file already produced the previous week's rows; check this week only.
+      const obligations = await prisma.reportingObligation.findMany({ where: { projectId: ids.plain, periodStart: '2025-04-07' } });
+      assert.equal(obligations.length, 2, JSON.stringify(obligations.map((o) => [o.reporterScope, o.boqItemId, o.periodStart])));
+      assert.ok(obligations.every((o) => o.streamId === null && o.boqItemId !== null));
+      const all = await prisma.reportingObligation.findMany({ where: { projectId: ids.plain } });
+      assert.ok(all.every((o) => o.streamId === null && o.boqItemId !== null));
     });
 
     it('a live shape change waits for the stream’s next period', async () => {

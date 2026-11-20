@@ -1,5 +1,12 @@
 import { z } from 'zod';
 import { ProjectReportingStepSchema } from './projectSetup.schema';
+import {
+  ProjectTypeInspectionsConfigSchema,
+  ProjectTypeReportingStreamSchema,
+  ProjectTypeSupervisionConfigSchema,
+} from './inspection.schema';
+import { ProjectTypeCredentialsConfigSchema } from './credentials.schema';
+import { ProjectTypePaymentsConfigSchema } from './milestonePayment.schema';
 
 /**
  * Project types (Phase 11): a delivery model ("Central Delivery Model", "Co-Funded Delivery
@@ -58,13 +65,18 @@ export const ProjectTypeConfigSchema = z.object({
   /** Pre-fills the Reporting step of a new project (values already saved are kept). */
   reportingDefaults: ProjectReportingStepSchema.nullable().default(null),
   // Reserved, filled by later phases (kept as-is until then).
-  credentials: z.unknown().optional(), // Phase 12
-  payments: z.unknown().optional(), // Phase 12
+  /** Phase 12: registration policy per subject; an omitted subject uses the tenant setting. */
+  credentials: ProjectTypeCredentialsConfigSchema.default({}),
+  /** Phase 12: payment milestone defaults for new tranches, and the mechanism the type expects. */
+  payments: ProjectTypePaymentsConfigSchema.default({}),
   contractMilestones: z.unknown().optional(), // Phase 13
   documentRequirements: z.unknown().optional(), // Phase 13
-  reportingStreams: z.unknown().optional(), // Phase 14
-  inspections: z.unknown().optional(), // Phase 14
-  supervision: z.unknown().optional(), // Phase 14
+  /** Phase 14: streams created on a project when the type is applied (roles by code). */
+  reportingStreams: z.array(ProjectTypeReportingStreamSchema).max(10).default([]),
+  /** Phase 14: checklist template per visit type. */
+  inspections: ProjectTypeInspectionsConfigSchema.default({}),
+  /** Phase 14: who counts as a supervisor and the workload warning thresholds. */
+  supervision: ProjectTypeSupervisionConfigSchema.default({}),
   closure: z.unknown().optional(), // Phase 15
   kpiTargets: z.unknown().optional(), // Phase 16
 });

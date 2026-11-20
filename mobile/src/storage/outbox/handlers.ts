@@ -8,6 +8,9 @@ import {
 } from '../../api/evidence/evidenceApi';
 import { createIncidentReport } from '../../api/incidents/incidentsApi';
 import { postDefectAction } from '../../api/defects/defectsApi';
+import { postFindingResolution, submitSiteInspection } from '../../api/inspections/inspectionsApi';
+import { FINDING_ALREADY_RESOLVED_CODES, findingResolutionBody, type FindingResolutionPayload } from '../../utils/inspections';
+import { getQueuedInspection, markInspectionSent } from '../inspectionStore';
 import { DEFECT_ALREADY_APPLIED_CODES, defectActionBody, type DefectActionPayload } from '../../utils/defects';
 import { uploadTelemetryPings } from '../../api/telemetry/telemetryApi';
 import { postBoqChatMessage } from '../../api/wbs/wbsChatApi';
@@ -16,6 +19,7 @@ import {
   loadAssuranceSubmission,
   markAssuranceSubmissionSynced,
   recordAssuranceUpload,
+  registrationFieldsOf,
   type AssuranceImageSlot,
 } from '../assuranceRepository';
 import { getCapture, updateCaptureUpload } from '../captureStore';
@@ -201,6 +205,35 @@ export function registerOutboxHandlers(): void {
     }
   });
 
+  // Phase 14: a confirmed inspection; its photos were sent first (dependsOn). Idempotent on the
+  // clientReportId: a retry after a lost response gets the original back.
+  registerOutboxHandler('SITE_INSPECTION', async (row) => {
+    const stored = await getQueuedInspection(row.entityId);
+    if (!stored?.request) throw new LocalPermanentError('Inspection not found on this device.');
+    if (stored.status === 'SENT') return;
+    const server = await submitSiteInspection(row.projectId, stored.request);
+    await markInspectionSent(row.entityId, server.id);
+  });
+
+  // Phase 14: a finding resolution behind its photos. Already resolved on a retry counts as done.
+  registerOutboxHandler('FINDING_RESOLUTION', async (row) => {
+    const payload = row.payload as unknown as FindingResolutionPayload;
+    if (!payload?.findingId) throw new LocalPermanentError('Finding update is missing its finding.');
+    let body: { notes: string; clientCaptureIds: string[] };
+    try {
+      body = findingResolutionBody(payload);
+    } catch (err) {
+      throw new LocalPermanentError((err as Error).message);
+    }
+    try {
+      await postFindingResolution(row.projectId, payload.findingId, body);
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      if (code && FINDING_ALREADY_RESOLVED_CODES.includes(code) && row.attempts > 0) return;
+      throw error;
+    }
+  });
+
   // Every image must upload and the server must accept the keys before this is marked sent.
   registerOutboxHandler('ASSURANCE', async (row) => {
     const loaded = await loadAssuranceSubmission(row.entityId);
@@ -232,7 +265,8 @@ export function registerOutboxHandlers(): void {
       selfieLeftUrl: keys.selfieLeft!,
       selfieRightUrl: keys.selfieRight!,
       selfieSet: payload.selfieSet,
-      corenLicenseNumber: `${payload.regulatoryBody} ${payload.licenseNumber}`.trim(),
+      // Phase 12: separate fields; rows queued before Phase 12 carry the old ones.
+      ...registrationFieldsOf(payload),
       experienceSummary: payload.experienceSummary,
     });
     await markAssuranceSubmissionSynced(row.entityId);

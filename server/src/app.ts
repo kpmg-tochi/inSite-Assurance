@@ -23,9 +23,12 @@ import { processRoutes, workflowTemplateRoutes } from "./modules/process/process
 import { mobilizationRoutes } from "./modules/mobilization/mobilization.routes";
 import { scheduleRoutes } from "./modules/schedule/schedule.routes";
 import { closeoutRoutes } from "./modules/closeout/closeout.routes";
+import { inspectionsRoutes } from "./modules/inspections/inspections.routes";
+import { inspectionTemplatesRoutes, supervisionRoutes } from "./modules/inspections/inspectionTemplates.routes";
 import { handoverPublicRoutes } from "./modules/closeout/handoverPublic.routes";
 import { projectTypesRoutes } from "./modules/projectTypes/projectTypes.routes";
 import { regionsRoutes } from "./modules/regions/regions.routes";
+import { credentialsRoutes, projectCredentialRoutes } from "./modules/credentials/credentials.routes";
 import { requestContextMiddleware } from "./utils/requestContext";
 import { localStorageRoutes } from "./modules/storage/localStorage.routes";
 import { storageService } from "./integrations/storage.service";
@@ -104,10 +107,17 @@ export function createApp() {
   app.use("/api/v1/projects", mobilizationRoutes);
   app.use("/api/v1/projects", scheduleRoutes);
   app.use("/api/v1/projects", closeoutRoutes);
+  // Phase 14: reporting streams, inspections, findings, supervision
+  app.use("/api/v1/projects", inspectionsRoutes);
+  app.use("/api/v1/inspection-templates", inspectionTemplatesRoutes);
+  app.use("/api/v1/supervision", supervisionRoutes);
   app.use("/api/v1/workflow-templates", workflowTemplateRoutes);
   // Phase 11: delivery models
   app.use("/api/v1/project-types", projectTypesRoutes);
   app.use("/api/v1/regions", regionsRoutes);
+  // Phase 12: professional registration policy and bodies
+  app.use("/api/v1/credentials", credentialsRoutes);
+  app.use("/api/v1/projects", projectCredentialRoutes);
 
   // Development object storage when S3 is not configured (never in production; see env checks).
   if (!storageService.isCloudConfigured() && env.NODE_ENV !== "production") {

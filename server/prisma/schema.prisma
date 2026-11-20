@@ -59,13 +59,16 @@ enum PermissionCategory {
   AUDIT_CLOSEOUT
 }
 
-enum ProfessionalLicenseType {
-  QSRBN // Quantity Surveyors Registration Board of Nigeria
-  COREN // Council for the Regulation of Engineering in Nigeria
-  ARCON // Architects Registration Council of Nigeria
-  CORBON // Council of Registered Builders of Nigeria
-  ICAN // Institute of Chartered Accountants of Nigeria
-  OTHER
+// Phase 12: how a payment milestone (tranche) pays.
+enum TranchePaymentBasis {
+  MEASURED
+  FIXED_ON_COMPLETION
+}
+
+// Phase 12: when a fixed payment milestone counts as complete (Phase 13 adds CONTRACT_MILESTONE_DONE).
+enum TrancheCompletionRule {
+  ALL_ITEMS_COMPLETE
+  WEIGHTED_PROGRESS_REACHED
 }
 
 // FieldPersonaType replaces static IndependenceTier enum on Role & FieldAgentSession
@@ -112,6 +115,8 @@ enum ReportingCadence {
   // Phase 8
   MONTHLY
   CUSTOM_INTERVAL
+  // Phase 14
+  QUARTERLY
 }
 
 enum PortfolioHealth {
@@ -177,6 +182,8 @@ enum ApprovalChainType {
 enum ApprovalSubjectType {
   WORKDAY_REPORT
   VALUATION_REPORT
+  // Phase 14
+  SITE_INSPECTION
 }
 
 enum ApprovalDecision {
@@ -375,6 +382,16 @@ enum AuditActionType {
   PROJECT_TYPE_APPLIED
   ORGANIZATION_HIERARCHY_CHANGED
   TERMINOLOGY_UPDATED
+  // Phase 14
+  INSPECTION_SUBMITTED
+  INSPECTION_REVIEWED
+  INSPECTION_FINDING_RAISED
+  INSPECTION_FINDING_RESOLVED
+  REPORTING_STREAMS_SAVED
+  CHECKLIST_TEMPLATE_SAVED
+  // Phase 12
+  CREDENTIAL_POLICY_UPDATED
+  REGISTRATION_BODY_SAVED
 }
 
 // Phase 11: which organisation an approval step actor must belong to (ANY = Phase 7 behaviour).
@@ -500,6 +517,8 @@ enum MobileNotificationType {
   REPORT_OVERDUE
   // Phase 10
   DEFECT_UPDATE
+  // Phase 14
+  INSPECTION_FINDING
 }
 
 enum NotificationActionType {
@@ -510,6 +529,8 @@ enum NotificationActionType {
   OPEN_ASSURANCE_WIZARD
   // Phase 10
   OPEN_DEFECTS
+  // Phase 14
+  OPEN_INSPECTION_FINDINGS
 }
 
 // ============================================================================
@@ -536,18 +557,23 @@ model Tenant {
   defaultGeofenceToleranceMeters Int            @default(100)
   // Phase 11: tenant wording per terminology key ({ key: { singular, plural? } }); keys fixed in shared.
   terminologyLabels              Json           @default("{}")
+  // Phase 12: professional registration policy { certifier?, fieldAssurance? } (REQUIRED | OPTIONAL | HIDDEN).
+  credentialPolicyJson           Json           @default("{}")
   createdAt                      DateTime       @default(now())
   updatedAt                      DateTime       @updatedAt
 
-  organizations     Organization[]
-  roles             Role[]
-  users             User[]
-  projects          Project[]
-  auditLogs         AuditLog[]
-  workflowTemplates WorkflowTemplate[]
-  outboundMessages  OutboundMessage[]
-  projectTypes      ProjectType[]
-  regions           Region[]
+  organizations      Organization[]
+  roles              Role[]
+  users              User[]
+  projects           Project[]
+  auditLogs          AuditLog[]
+  workflowTemplates  WorkflowTemplate[]
+  outboundMessages   OutboundMessage[]
+  projectTypes       ProjectType[]
+  regions            Region[]
+  // Phase 14
+  checklistTemplates InspectionChecklistTemplate[]
+  registrationBodies ProfessionalRegistrationBody[]
 
   @@map("tenants")
 }
@@ -644,27 +670,28 @@ model Organization {
 }
 
 model User {
-  id                        String                   @id @default(uuid()) @db.Uuid
-  tenantId                  String                   @db.Uuid
-  email                     String                   @unique
-  passwordHash              String
-  fullName                  String
-  isPlatformSuperAdmin      Boolean                  @default(false)
-  roleId                    String                   @db.Uuid
+  id                               String    @id @default(uuid()) @db.Uuid
+  tenantId                         String    @db.Uuid
+  email                            String    @unique
+  passwordHash                     String
+  fullName                         String
+  isPlatformSuperAdmin             Boolean   @default(false)
+  roleId                           String    @db.Uuid
   // Optional pre-provisioned mobile role (surface MOBILE or BOTH, mode PROVISIONED_ACCOUNT).
-  mobileRoleId              String?                  @db.Uuid
-  phoneNumber               String?
-  organizationId            String                   @db.Uuid
-  professionalLicenseType   ProfessionalLicenseType?
-  professionalLicenseNumber String?
-  isActive                  Boolean                  @default(true)
-  mustChangePassword        Boolean                  @default(false)
-  tokenVersion              Int                      @default(0)
-  failedLoginCount          Int                      @default(0)
-  lockedUntil               DateTime?
-  lastLoginAt               DateTime?
-  createdAt                 DateTime                 @default(now())
-  updatedAt                 DateTime                 @updatedAt
+  mobileRoleId                     String?   @db.Uuid
+  phoneNumber                      String?
+  organizationId                   String    @db.Uuid
+  // Phase 12: a code of the tenant's ProfessionalRegistrationBody list (validated by the server).
+  professionalRegistrationBodyCode String?
+  professionalRegistrationNumber   String?
+  isActive                         Boolean   @default(true)
+  mustChangePassword               Boolean   @default(false)
+  tokenVersion                     Int       @default(0)
+  failedLoginCount                 Int       @default(0)
+  lockedUntil                      DateTime?
+  lastLoginAt                      DateTime?
+  createdAt                        DateTime  @default(now())
+  updatedAt                        DateTime  @updatedAt
 
   tenant                     Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   notificationReads          WebNotificationRead[]
@@ -748,6 +775,8 @@ model Project {
   reportDueTime                   String?
   reportGraceMinutes              Int     @default(0)
   cadenceAnchorDate               String?
+  // Phase 14: month (1-12) a QUARTERLY year starts in.
+  cadenceQuarterAnchorMonth       Int     @default(1)
   // Phase 8: mobilization reminder schedule (days before the planned date).
   mobilizationReminderOffsetsDays Int[]   @default([7, 3, 1])
   // A cadence change on a live project waits here until the next period starts
@@ -845,6 +874,10 @@ model Project {
   handoverSubmissions    HandoverSubmission[]
   defectTickets          RetentionDefectTicket[]
   retentionReleases      RetentionReleaseRequest[]
+  // Phase 14
+  reportingStreams       ProjectReportingStream[]
+  siteInspections        SiteInspectionReport[]
+  inspectionFindings     InspectionFinding[]
 
   @@unique([tenantId, codePrefix])
   @@index([tenantId])
@@ -885,6 +918,9 @@ model ProjectContractor {
   expectedParticipants ExpectedProjectParticipant[]
   defectTickets        RetentionDefectTicket[]
   retentionReleases    RetentionReleaseRequest[]
+  // Phase 14
+  reportingStreams     ProjectReportingStream[]
+  inspectionFindings   InspectionFinding[]
 
   @@unique([projectId, organizationId])
   @@unique([projectId, tradeCode])
@@ -971,20 +1007,22 @@ model FieldAgentSession {
   createdAt              DateTime           @default(now())
 
   // Identity & Competence Assurance
-  assuranceStatus    ContractorAssuranceStatus @default(APPROVED)
-  idDocumentType     String?
-  idDocumentUrl      String?
-  selfieImageUrl     String?
-  selfieLeftUrl      String?
-  selfieRightUrl     String?
-  livenessScore      Float?
-  livenessPassed     Boolean                   @default(false)
-  livenessMetadata   Json?
-  corenLicenseNumber String?
-  experienceSummary  String?
-  reviewedByUserId   String?                   @db.Uuid
-  reviewedAt         DateTime?
-  rejectionReason    String?
+  assuranceStatus      ContractorAssuranceStatus @default(APPROVED)
+  idDocumentType       String?
+  idDocumentUrl        String?
+  selfieImageUrl       String?
+  selfieLeftUrl        String?
+  selfieRightUrl       String?
+  livenessScore        Float?
+  livenessPassed       Boolean                   @default(false)
+  livenessMetadata     Json?
+  // Phase 12: replaces corenLicenseNumber; both null when none was given or the policy is HIDDEN.
+  registrationNumber   String?
+  registrationBodyCode String?
+  experienceSummary    String?
+  reviewedByUserId     String?                   @db.Uuid
+  reviewedAt           DateTime?
+  rejectionReason      String?
 
   project              Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   joinCode             ProjectJoinCode?             @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
@@ -1041,16 +1079,22 @@ model MobileDevice {
 }
 
 model FacilityTranche {
-  id                  String   @id @default(uuid()) @db.Uuid
-  projectId           String   @db.Uuid
-  trancheNumber       Int
-  name                String // e.g., "Tranche 2 — Substructure & Box Culverts"
-  allocatedAmountNgn  Decimal  @db.Decimal(18, 2)
-  releasedAmountNgn   Decimal  @default(0) @db.Decimal(18, 2)
-  targetCompletionPct Decimal  @db.Decimal(5, 2)
-  isReleased          Boolean  @default(false)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                        String                 @id @default(uuid()) @db.Uuid
+  projectId                 String                 @db.Uuid
+  trancheNumber             Int
+  name                      String // e.g., "Tranche 2 — Substructure & Box Culverts"
+  allocatedAmountNgn        Decimal                @db.Decimal(18, 2)
+  releasedAmountNgn         Decimal                @default(0) @db.Decimal(18, 2)
+  targetCompletionPct       Decimal                @db.Decimal(5, 2)
+  isReleased                Boolean                @default(false)
+  // Phase 12: payment basis. Fixed: pays fixedReleaseAmountNgn (null = allocated) once completionRule is met.
+  paymentBasis              TranchePaymentBasis    @default(MEASURED)
+  completionRule            TrancheCompletionRule?
+  fixedReleaseAmountNgn     Decimal?               @db.Decimal(18, 2)
+  // ALL_ITEMS_COMPLETE: the percentage every mapped item must reach.
+  completionRequiredItemPct Decimal                @default(100) @db.Decimal(5, 2)
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
 
   project                Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
   conditionsPrecedent    ConditionPrecedent[]
@@ -1195,6 +1239,9 @@ model FieldEvidenceLog {
   // The original keeps its own session; this row is never merged into it.
   resubmittedFromClientCaptureId String?  @db.Uuid
   resubmittedFromEvidenceLogId   String?  @db.Uuid
+  // Phase 14: a photo for one checklist item of a site inspection.
+  siteInspectionReportId         String?  @db.Uuid
+  checklistItemKey               String?
 
   // Voice notes: NOT_APPLICABLE | PENDING | DONE | FAILED
   transcriptionStatus String  @default("NOT_APPLICABLE")
@@ -1208,12 +1255,14 @@ model FieldEvidenceLog {
   boqItem          BoqItem?          @relation(fields: [boqItemId], references: [id], onDelete: SetNull)
   fieldSession     FieldAgentSession @relation(fields: [fieldSessionId], references: [id], onDelete: Restrict)
   workdayReport    WorkdayReport?    @relation(fields: [workdayReportId], references: [id], onDelete: SetNull)
+  siteInspection   SiteInspectionReport? @relation(fields: [siteInspectionReportId], references: [id], onDelete: SetNull)
   mediaAttachments EvidenceMedia[]
   chatMessages     WbsChatMessage[]
 
   @@index([projectId, status])
   @@index([projectId, boqItemId])
   @@index([workdayReportId])
+  @@index([siteInspectionReportId])
   @@index([fieldSessionId, capturedAtDevice])
 }
 
@@ -1360,31 +1409,35 @@ model MonitorQuery {
 // milestone verification (source MILESTONE_DIRECT, ipcClaimId null). A CHECK constraint
 // (ValuationReport_source_ipc_check, raw SQL) keeps ipcClaimId set exactly when source = IPC_CLAIM.
 model ValuationReport {
-  id                            String                  @id @default(uuid()) @db.Uuid
-  projectId                     String                  @db.Uuid
-  trancheId                     String                  @db.Uuid
-  source                        ValuationSource         @default(IPC_CLAIM)
-  ipcClaimId                    String?                 @db.Uuid
-  milestoneVerificationId       String?                 @unique @db.Uuid
+  id                            String                @id @default(uuid()) @db.Uuid
+  projectId                     String                @db.Uuid
+  trancheId                     String                @db.Uuid
+  source                        ValuationSource       @default(IPC_CLAIM)
+  ipcClaimId                    String?               @db.Uuid
+  milestoneVerificationId       String?               @unique @db.Uuid
   // Disbursement chain this valuation runs on (null for valuations made before chains existed).
   approvalChainVersion          Int?
   // Step order being waited on; 0 once the valuation was returned.
-  currentApprovalStep           Int                     @default(0)
-  revisionNumber                Int                     @default(1)
-  certifiedByUserId             String                  @db.Uuid
+  currentApprovalStep           Int                   @default(0)
+  revisionNumber                Int                   @default(1)
+  certifiedByUserId             String                @db.Uuid
   trancheRecommendation         MonitorRecommendation
-  recommendedReleaseAmountNgn   Decimal                 @db.Decimal(18, 2)
-  recommendedHoldbackAmountNgn  Decimal                 @db.Decimal(18, 2)
+  recommendedReleaseAmountNgn   Decimal               @db.Decimal(18, 2)
+  recommendedHoldbackAmountNgn  Decimal               @db.Decimal(18, 2)
   executiveCertificationSummary String
   // Snapshots copied from the certifying User at certification time, never from the request.
   certifierFullName             String
-  certifierLicenseType          ProfessionalLicenseType
-  certifierLicenseNumber        String
-  totalClaimedNgn               Decimal                 @db.Decimal(18, 2)
-  totalCertifiedNgn             Decimal                 @db.Decimal(18, 2)
+  // Phase 12: registration snapshot (body code, number, body name and prefix as they were). All null
+  // when the certifier gave none (policy OPTIONAL) or the policy was HIDDEN.
+  certifierLicenseType          String?
+  certifierLicenseNumber        String?
+  certifierRegistrationBodyName String?
+  certifierRegistrationPrefix   String?
+  totalClaimedNgn               Decimal               @db.Decimal(18, 2)
+  totalCertifiedNgn             Decimal               @db.Decimal(18, 2)
   reportPdfObjectKey            String?
   reportPdfUrl                  String?
-  certifiedAt                   DateTime                @default(now())
+  certifiedAt                   DateTime              @default(now())
   supersededAt                  DateTime?
 
   project               Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1409,6 +1462,8 @@ model MilestoneVerification {
   verifiedByUserId      String   @db.Uuid
   verificationSummary   String   @db.Text
   lineVerificationsJson Json     @default("[]")
+  // Phase 12: the payment terms as verified (MilestonePaymentTermsSchema); null before Phase 12.
+  paymentTermsJson      Json?
   createdAt             DateTime @default(now())
 
   project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1956,7 +2011,11 @@ model ProjectNeedsAssessmentDocument {
 model ReportingObligation {
   id              String                    @id @default(uuid()) @db.Uuid
   projectId       String                    @db.Uuid
-  boqItemId       String                    @db.Uuid
+  // Phase 14: null for an INSPECTION stream obligation (one per period).
+  boqItemId       String?                   @db.Uuid
+  // Phase 14: null = the project's implicit stream.
+  streamId        String?                   @db.Uuid
+  siteInspectionReportId String?            @db.Uuid
   reporterScope   String
   periodStart     String
   periodEnd       String
@@ -1971,11 +2030,17 @@ model ReportingObligation {
   createdAt       DateTime                  @default(now())
   updatedAt       DateTime                  @updatedAt
 
-  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  boqItem       BoqItem        @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
-  workdayReport WorkdayReport? @relation(fields: [workdayReportId], references: [id], onDelete: SetNull)
+  project        Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  boqItem        BoqItem?                @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
+  workdayReport  WorkdayReport?          @relation(fields: [workdayReportId], references: [id], onDelete: SetNull)
+  stream         ProjectReportingStream? @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  siteInspection SiteInspectionReport?   @relation(fields: [siteInspectionReportId], references: [id], onDelete: SetNull)
 
-  @@unique([projectId, boqItemId, reporterScope, periodStart])
+  // Phase 14: uniqueness is two hand-written partial unique indexes (see the Phase 14 migration):
+  // item obligations on (projectId, boqItemId, reporterScope, periodStart, COALESCE(streamId)) and
+  // inspection obligations on (streamId, reporterScope, periodStart).
+  @@index([projectId, boqItemId, reporterScope, periodStart])
+  @@index([streamId, periodStart])
   @@index([projectId, periodStart])
   @@index([status, lateAfter])
   @@map("reporting_obligations")
@@ -2352,4 +2417,209 @@ model ProjectBeneficiary {
 
   @@index([projectId])
   @@map("project_beneficiaries")
+}
+
+// Phase 12: tenant list of professional registration bodies (QSRBN, COREN, ...). Codes are stored as
+// strings on users and certifier snapshots; a referenced body is archived instead of deleted.
+model ProfessionalRegistrationBody {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @db.Uuid
+  code          String
+  fullName      String
+  displayPrefix String
+  exampleNumber String?
+  isArchived    Boolean  @default(false)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("professional_registration_bodies")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 14: reporting streams, site inspections, findings
+// ---------------------------------------------------------------------------
+
+enum ReportingStreamKind {
+  ITEM_REPORTS
+  INSPECTION
+}
+
+enum InspectionVisitType {
+  BASELINE
+  ROUTINE
+  MOBILISATION_CHECK
+  FINAL_EVALUATION
+}
+
+enum InspectionOverallFinding {
+  SATISFACTORY
+  MINOR_ISSUES
+  MAJOR_ISSUES
+}
+
+enum SiteInspectionStatus {
+  SUBMITTED
+  PENDING_APPROVAL
+  APPROVED
+  RETURNED
+}
+
+enum InspectionFindingSeverity {
+  MINOR
+  MAJOR
+  CRITICAL
+}
+
+enum InspectionFindingStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+// A reporting obligation stream (Phase 14). A project with none runs one implicit stream from its
+// own cadence fields (Phase 8 behaviour). roleIds: who owes it; projectContractorId limits it to a
+// package. A cadence change on a live project waits in pendingCadenceJson until the next period.
+model ProjectReportingStream {
+  id                          String               @id @default(uuid()) @db.Uuid
+  projectId                   String               @db.Uuid
+  key                         String
+  label                       String
+  kind                        ReportingStreamKind
+  roleIds                     String[]             @db.Uuid
+  projectContractorId         String?              @db.Uuid
+  reportingCadence            ReportingCadence
+  workWeekDays                Int[]                @default([1, 2, 3, 4, 5, 6])
+  periodStartDayOfWeek        Int                  @default(1)
+  customIntervalDays          Int?
+  quarterAnchorMonth          Int?
+  reportDueTime               String?
+  reportGraceMinutes          Int                  @default(0)
+  cadenceAnchorDate           String?
+  visitType                   InspectionVisitType?
+  submissionDeadlineDays      Int?
+  isActive                    Boolean              @default(true)
+  sortOrder                   Int                  @default(0)
+  pendingCadenceJson          Json?
+  pendingCadenceEffectiveFrom String?
+  createdAt                   DateTime             @default(now())
+  updatedAt                   DateTime             @updatedAt
+
+  project           Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectContractor ProjectContractor?     @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
+  obligations       ReportingObligation[]
+  inspections       SiteInspectionReport[]
+
+  @@unique([projectId, key])
+  @@index([projectId, isActive])
+  @@map("project_reporting_streams")
+}
+
+// Tenant checklist template, versioned: a version used by an inspection is never edited; saving it
+// creates version + 1 with the same code. sectionsJson is ChecklistSectionsSchema.
+model InspectionChecklistTemplate {
+  id           String                @id @default(uuid()) @db.Uuid
+  tenantId     String                @db.Uuid
+  code         String
+  name         String
+  visitTypes   InspectionVisitType[]
+  version      Int                   @default(1)
+  sectionsJson Json
+  isArchived   Boolean               @default(false)
+  createdAt    DateTime              @default(now())
+
+  tenant      Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  inspections SiteInspectionReport[]
+
+  @@unique([tenantId, code, version])
+  @@index([tenantId, isArchived])
+  @@map("inspection_checklist_templates")
+}
+
+// A project-level site visit report built from a checklist template version.
+model SiteInspectionReport {
+  id                          String                   @id @default(uuid()) @db.Uuid
+  clientReportId              String                   @unique @db.Uuid
+  projectId                   String                   @db.Uuid
+  streamId                    String?                  @db.Uuid
+  visitType                   InspectionVisitType
+  templateId                  String                   @db.Uuid
+  templateVersion             Int
+  visitDate                   String // YYYY-MM-DD in the project zone
+  // Reporter: a field session (join code or provisioned account) or a web user. Snapshots for display.
+  reporterFieldSessionId      String?                  @db.Uuid
+  reporterUserId              String?                  @db.Uuid
+  reporterName                String
+  reporterRoleId              String?                  @db.Uuid
+  reporterRoleName            String
+  reporterPersonaType         FieldPersonaType         @default(INDEPENDENT_VERIFIER)
+  reporterProjectContractorId String?                  @db.Uuid
+  // [{ itemKey, value, comment, clientCaptureIds }]
+  answersJson                 Json
+  overallFinding              InspectionOverallFinding
+  summaryText                 String                   @db.Text
+  submissionGeotag            Json?
+  geofenceStatus              GeofenceStatus?
+  status                      SiteInspectionStatus     @default(SUBMITTED)
+  // Reporting period of the stream the inspection answered (the visit date's period).
+  reportingPeriodStart        String?
+  isLate                      Boolean                  @default(false)
+  submissionDeadline          String?
+  confirmedAt                 DateTime
+  approvalChainVersion        Int?
+  currentApprovalStep         Int                      @default(0)
+  approvedAt                  DateTime?
+  returnedNotes               String?
+  // Omission check (inspection mode): required photos missing.
+  aiCheckStatus               WorkdayAiCheckStatus     @default(PENDING)
+  aiCheckEngine               String?
+  aiFlagsJson                 Json                     @default("[]")
+  createdAt                   DateTime                 @default(now())
+  updatedAt                   DateTime                 @updatedAt
+
+  project     Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stream      ProjectReportingStream?     @relation(fields: [streamId], references: [id], onDelete: SetNull)
+  template    InspectionChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  captures    FieldEvidenceLog[]
+  findings    InspectionFinding[]
+  obligations ReportingObligation[]
+
+  @@index([projectId, visitType, visitDate])
+  @@index([projectId, status])
+  @@index([aiCheckStatus, updatedAt])
+  @@map("site_inspection_reports")
+}
+
+// A failed or low-rated checklist item raised against a contractor (monitoring side when null).
+model InspectionFinding {
+  id                   String                    @id @default(uuid()) @db.Uuid
+  projectId            String                    @db.Uuid
+  inspectionId         String                    @db.Uuid
+  checklistItemKey     String
+  projectContractorId  String?                   @db.Uuid
+  description          String                    @db.Text
+  severity             InspectionFindingSeverity @default(MAJOR)
+  status               InspectionFindingStatus   @default(OPEN)
+  resolvedNotes        String?                   @db.Text
+  // FieldEvidenceLog ids of the resolution photos.
+  resolutionCaptureIds String[]                  @db.Uuid
+  raisedByUserId       String?                   @db.Uuid
+  raisedByName         String?
+  resolvedByUserId     String?                   @db.Uuid
+  resolvedByName       String?
+  createdAt            DateTime                  @default(now())
+  resolvedAt           DateTime?
+
+  project           Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  inspection        SiteInspectionReport @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  projectContractor ProjectContractor?   @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([inspectionId])
+  @@index([projectContractorId, status])
+  @@map("inspection_findings")
 }

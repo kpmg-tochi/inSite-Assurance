@@ -2,7 +2,7 @@
 
 | | |
 | :--- | :--- |
-| **Status** | Implemented; Prisma migration, route test run and web/mobile click-through pending (see section 7) |
+| **Status** | Implemented; migrated and route-tested; web click-through and on-device run pending (see section 7) |
 | **Depends on** | Phase 11 (project types, terminology) |
 | **Unblocks** | Phase 13 (milestone-linked payments), Phase 15 (final payment gate) |
 | **Read first** | [Master plan](saas_implementation_plan.md) sections 2, 3 and 6; [Phase 11](phase_11_implementation_plan.md) section 3 |
@@ -76,35 +76,35 @@ Payments today: with tranches on, each `FacilityTranche` has `allocatedAmountNgn
 ## 5. Implementation checklist
 
 ### Step 1: Registration bodies
-- [ ] CRUD under tenant settings (`tenant:manage_settings`); archive instead of delete when referenced. *(route test written, pending migration)*
-- [ ] Seed the six bodies for every tenant (tenant provisioning creates them too). *(route test written, pending migration)*
+- [x] CRUD under tenant settings (`tenant:manage_settings`); archive instead of delete when referenced. *(route test passes)*
+- [x] Seed the six bodies for every tenant (tenant provisioning creates them too). *(route test passes)*
 - [ ] All selects that list licence types read the tenant list. *(web user forms and the mobile picker read the tenant list; typecheck/build only, click-through pending)*
 
 ### Step 2: Credential policy and resolver
 - [x] Shared `CredentialPolicySchema`, `resolveCredentialPolicy(tenantPolicy, projectTypeSnapshot)`, and `credentialFieldRules(policy)` → `{ visible, required, label, helpText }` used by every form (web and mobile) so display and validation cannot drift. *(unit-tested: `server/src/tests/credentials.phase12.test.ts`, `mobile/src/utils/assuranceRegistration.test.ts`)*
-- [ ] Server `assertCertifierCredentials(user, policy)` used by all three certification paths and by the viewer `canAct` reason; returns the snapshot fields (possibly null). *(route test written, pending migration)*
-- [ ] `GET /projects/:id/credential-policy`; tenant settings DTO carries the tenant policy; the mobile baseline pack carries the project's resolved `fieldAssurance` policy. *(route test written, pending migration)* (tenant policy is served by `GET /credentials/settings`, see section 7)
+- [x] Server `assertCertifierCredentials(user, policy)` used by all three certification paths and by the viewer `canAct` reason; returns the snapshot fields (possibly null). *(route test passes)*
+- [x] `GET /projects/:id/credential-policy`; tenant settings DTO carries the tenant policy; the mobile baseline pack carries the project's resolved `fieldAssurance` policy. *(route test passes)* (tenant policy is served by `GET /credentials/settings`, see section 7)
 - [ ] Tenant settings UI: two selects with explanatory copy; project type editor: "Credentials" tab with "use tenant setting" as the first option. *(built; web click-through pending)*
 
 ### Step 3: Apply the policy everywhere
-- [ ] Server: IPC certification, direct milestone verification, retention certification, assurance submission (server rejects a missing number only when `REQUIRED`). *(route test written, pending migration)*
-- [ ] PDF and audit `actorDisplayName`: print "Reg. No." only when present; with `HIDDEN`, print nothing about registration. *(route test written, pending migration)* (the test checks the audit name and that the PDF renders, not the PDF text)
+- [x] Server: IPC certification, direct milestone verification, retention certification, assurance submission (server rejects a missing number only when `REQUIRED`). *(route test passes)*
+- [x] PDF and audit `actorDisplayName`: print "Reg. No." only when present; with `HIDDEN`, print nothing about registration. *(route test passes)* (the test checks the audit name and that the PDF renders, not the PDF text)
 - [ ] Web: profile, user create/edit, certify modal, direct milestone panel, retention certify, workbench cannot-act banner, contractor verification queue (show the number only if present). *(built; typecheck and vite build pass; click-through pending)*
 - [ ] Mobile: `AssuranceCredentialsStep` uses `credentialFieldRules`: hidden, optional (no blocking alert) or required; body picker from the pack. *(rules unit-tested; on-device run pending)*
 - [x] Grep check in section 7: no remaining unconditional licence requirement (`professionalLicense`, `corenLicense`, `hasLicence`).
 
 ### Step 4: Fixed-amount payment milestones
 - [x] Shared: basis and rule enums, Facility step schema fields, `DirectMilestoneSuggestionDto` gains `paymentBasis`, `completionRule`, `completionMet`, `unmetReasons[]`, `fixedReleaseAmountNgn`, `alreadyReleasedNgn`. *(completion and amount maths unit-tested)*
-- [ ] Server direct verification: for fixed basis, compute completion from the verified lines; refuse `SUPPORT_FULL_RELEASE` when not met (422 `MILESTONE_COMPLETION_NOT_MET` with reasons); compute amounts server-side; CPs, chain, segregation and retention unchanged. `dryRun` returns the same computation. *(route test written, pending migration)*
+- [x] Server direct verification: for fixed basis, compute completion from the verified lines; refuse `SUPPORT_FULL_RELEASE` when not met (422 `MILESTONE_COMPLETION_NOT_MET` with reasons); compute amounts server-side; CPs, chain, segregation and retention unchanged. `dryRun` returns the same computation. *(route test passes)*
 - [ ] Facility step UI: per payment milestone basis, rule, fixed amount (defaults to allocated), required % per item for `ALL_ITEMS_COMPLETE`. *(built with one required % per milestone, see section 7; click-through pending)*
 - [ ] Direct milestone panel: shows criteria and progress against them; release amount is read-only for fixed basis. *(built; click-through pending)*
 - [ ] Lender decision window and PDF show basis and criteria met. *(built; click-through pending; PDF rendering route-tested only for status)*
-- [ ] Config validation: fixed basis + IPC mechanism refused. *(project type schema refusal unit-tested; facility, process and type routes: route test written, pending migration)*
+- [x] Config validation: fixed basis + IPC mechanism refused. *(project type schema refusal unit-tested; facility, process and type routes: route test passes)*
 
 ### Step 5: Seed and tests
-- [ ] Seeded programme tenant: policy `OPTIONAL`/`OPTIONAL`; one certifier without a registration; Central project with three fixed payment milestones (e.g. 30% substructure, 40% superstructure, 30% finishes and WASH). *(`server/src/db/seedPhase12.ts` written and typechecks; not run: the DB is not migrated)*
-- [ ] Existing tenants: policy unset → `REQUIRED`, existing tests pass unchanged. *(default unit-tested; existing route suites pending migration)*
-- [ ] Route tests: each certification path with each policy value; PDF/DTO fields null when absent; assurance with `HIDDEN` sends nothing and is accepted; fixed milestone refused when incomplete, released at the fixed amount when complete, holdback with reason, retention withheld; fixed + IPC refused. *(written: `server/src/tests/routes.phase12.test.ts`, in `test:routes`; not run, pending migration)*
+- [x] Seeded programme tenant: policy `OPTIONAL`/`OPTIONAL`; one certifier without a registration; Central project with three fixed payment milestones (e.g. 30% substructure, 40% superstructure, 30% finishes and WASH). *(`server/src/db/seedPhase12.ts` runs on the migrated dev DB)*
+- [x] Existing tenants: policy unset → `REQUIRED`, existing tests pass unchanged. *(default unit-tested; all earlier route suites pass unchanged)*
+- [x] Route tests: each certification path with each policy value; PDF/DTO fields null when absent; assurance with `HIDDEN` sends nothing and is accepted; fixed milestone refused when incomplete, released at the fixed amount when complete, holdback with reason, retention withheld; fixed + IPC refused. *(written: `server/src/tests/routes.phase12.test.ts`, in `test:routes`; passing)*
 - [x] Mobile unit test for `credentialFieldRules`. *(`mobile/src/utils/assuranceRegistration.test.ts`)*
 
 ---
@@ -168,3 +168,5 @@ No hand-written SQL is needed for Phase 12 (no partial indexes or CHECKs); the e
 - `npm --workspace=@insite/mobile run test`: 70/70 pass (includes `assuranceRegistration.test.ts`).
 - Web: `vite build` succeeds; `npm --workspace=@insite/web run build` stops at the Phase 14 typecheck errors above.
 - Route tests (`routes.phase12.test.ts` and all earlier suites): not run, the database is not migrated.
+
+**Integration (after both phases):** one combined migration `20261126090000_phase12_14_credentials_payments_streams_inspections` (licence columns dropped and re-added as text, decision A). Full server suite passes: unit 213/213, routes 275/275 (Phase 12 route test: fixed a wrong expected sort order). Mobile 76/76, lint 0 errors, web build OK. Still unverified: the possible retention split issue on a multi-contractor project when a completed fixed milestone is released again with no new progress (see above).

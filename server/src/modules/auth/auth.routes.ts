@@ -27,6 +27,7 @@ import {
 import { prisma } from "../../config/prisma";
 import { env } from "../../config/env";
 import { AppError } from "../../middleware/error.middleware";
+import { buildMobileInspectionPack } from "../inspections/inspectionPack.service";
 import {
   changeMobileUserPassword,
   changeWebUserPassword,
@@ -44,6 +45,7 @@ import {
   registerWebUser,
 } from "./auth.service";
 import { recordAuditEvent } from "../audit/audit.service";
+import { credentialPolicyForProject, fieldAssuranceRegistration } from "../credentials/credentialPolicy.service";
 import { createMobileNotification } from "../notifications/notifications.service";
 import { markNotificationsActioned } from "../notifications/notificationActions";
 import { assertProjectObjectKey } from "../../integrations/storage.service";
@@ -178,6 +180,12 @@ router.get(
         throw new AppError("Field Agent session is bound to a different project", 403, "PROJECT_MISMATCH");
       }
       const pack = await getProjectBaselinePack(req.fieldAgent!.projectId, req.fieldAgent!.sessionId);
+      // Phase 14: streams this session owes and its checklist templates.
+      pack.inspections = await buildMobileInspectionPack({
+        projectId: req.fieldAgent!.projectId,
+        sessionId: req.fieldAgent!.sessionId,
+        permissions: req.fieldAgent!.permissions,
+      });
       res.json({ success: true, data: pack });
     } catch (error) {
       next(error);
@@ -449,6 +457,15 @@ router.post(
       for (const key of [body.idDocumentUrl, body.selfieFrontUrl, body.selfieLeftUrl, body.selfieRightUrl]) {
         assertProjectObjectKey(key, tenantId, projectId);
       }
+      // Phase 12: the number is required only when the project's fieldAssurance policy is REQUIRED,
+      // kept when OPTIONAL and dropped when HIDDEN.
+      const policy = await credentialPolicyForProject(projectId);
+      const registration = await fieldAssuranceRegistration(prisma, {
+        tenantId,
+        requirement: policy.fieldAssurance,
+        registrationNumber: body.registrationNumber ?? body.corenLicenseNumber ?? null,
+        registrationBodyCode: body.registrationBodyCode ?? null,
+      });
 
       const updated = await prisma.fieldAgentSession.update({
         where: { id: sessionId },
@@ -462,7 +479,8 @@ router.post(
           livenessPassed: false,
           livenessScore: null,
           livenessMetadata: body.selfieSet,
-          corenLicenseNumber: body.corenLicenseNumber,
+          registrationNumber: registration.registrationNumber,
+          registrationBodyCode: registration.registrationBodyCode,
           experienceSummary: body.experienceSummary,
           assuranceStatus: "PENDING_APPROVAL",
           lastSyncAt: new Date(),
@@ -472,7 +490,8 @@ router.post(
           projectId: true,
           assuranceStatus: true,
           livenessPassed: true,
-          corenLicenseNumber: true,
+          registrationNumber: true,
+          registrationBodyCode: true,
         },
       });
 
@@ -486,6 +505,7 @@ router.post(
         payload: {
           idDocumentType: body.idDocumentType,
           captureMethod: body.selfieSet.captureMethod,
+          registrationGiven: Boolean(registration.registrationNumber),
         },
       });
 
@@ -503,9 +523,11 @@ router.post(
         actionType: "NONE",
         requiresAction: false,
         title: "Verification Under Review",
-        message: `Your ${body.idDocumentType} dossier and ${body.corenLicenseNumber} credentials are queued for Independent Monitor review. You can continue capturing field logs offline.`,
+        message: `Your ${body.idDocumentType} dossier${
+          registration.registrationNumber ? ` and registration ${registration.registrationNumber}` : ''
+        } are queued for Independent Monitor review. You can continue capturing field logs offline.`,
         metadata: {
-          corenLicenseNumber: body.corenLicenseNumber,
+          registrationNumber: registration.registrationNumber,
         },
       });
 

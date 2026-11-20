@@ -15,8 +15,8 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
     "test": "npm run test:unit && npm run test:routes",
-    "test:unit": "tsx --test src/tests/rbac.phase1.test.ts src/tests/boq.parser.test.ts src/tests/reconciliation.phase3.test.ts src/tests/geofence.phase6.test.ts src/tests/reportingPeriod.phase8.test.ts src/tests/schedule.phase9.test.ts src/tests/retention.phase10.test.ts",
-    "test:routes": "tsx --test --test-concurrency=1 src/tests/routes.phase2.test.ts src/tests/routes.phase3.test.ts src/tests/routes.phase4.test.ts src/tests/routes.phase5.test.ts src/tests/routes.phase6.test.ts src/tests/process.phase7.test.ts src/tests/routes.phase8.test.ts src/tests/routes.phase9.test.ts src/tests/routes.phase10.test.ts src/tests/routes.phase11.test.ts"
+    "test:unit": "tsx --test src/tests/rbac.phase1.test.ts src/tests/boq.parser.test.ts src/tests/reconciliation.phase3.test.ts src/tests/geofence.phase6.test.ts src/tests/reportingPeriod.phase8.test.ts src/tests/schedule.phase9.test.ts src/tests/retention.phase10.test.ts src/tests/inspections.phase14.test.ts src/tests/credentials.phase12.test.ts",
+    "test:routes": "tsx --test --test-concurrency=1 src/tests/routes.phase2.test.ts src/tests/routes.phase3.test.ts src/tests/routes.phase4.test.ts src/tests/routes.phase5.test.ts src/tests/routes.phase6.test.ts src/tests/process.phase7.test.ts src/tests/routes.phase8.test.ts src/tests/routes.phase9.test.ts src/tests/routes.phase10.test.ts src/tests/routes.phase11.test.ts src/tests/routes.phase14.test.ts src/tests/routes.phase12.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.726.0",

@@ -482,6 +482,39 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     surface: 'WEB',
     unlocksViews: ['Report Approval Queue'],
   },
+  // Phase 14: site inspections
+  {
+    key: 'inspections:submit',
+    name: 'Submit Site Inspection Reports',
+    description: 'Complete a checklist inspection (baseline, routine, mobilisation check, final evaluation) on mobile or web.',
+    category: 'REPORT_APPROVALS',
+    surface: 'BOTH',
+    unlocksViews: ['Mobile Inspection Flow', 'Inspections Tab'],
+  },
+  {
+    key: 'inspections:view',
+    name: 'View Site Inspections',
+    description: 'See inspection reports, their answers and photos, findings and the supervision workload view.',
+    category: 'REPORT_APPROVALS',
+    surface: 'WEB',
+    unlocksViews: ['Inspections Tab', 'Supervisors View'],
+  },
+  {
+    key: 'inspections:manage_templates',
+    name: 'Manage Inspection Checklist Templates',
+    description: 'Create and version the tenant checklist templates used for site inspections.',
+    category: 'REPORT_APPROVALS',
+    surface: 'WEB',
+    unlocksViews: ['Checklist Templates Settings'],
+  },
+  {
+    key: 'inspections:manage_findings',
+    name: 'Raise and Close Inspection Findings',
+    description: 'Raise findings from failed inspection items, and resolve or dismiss them. Contractors resolve their own.',
+    category: 'REPORT_APPROVALS',
+    surface: 'BOTH',
+    unlocksViews: ['Findings Board', 'Mobile Findings'],
+  },
 
   // 7. FINANCIAL_IPC
   {
@@ -712,6 +745,8 @@ export const ReportingCadenceEnum = z.enum([
   // Phase 8
   'MONTHLY',
   'CUSTOM_INTERVAL',
+  // Phase 14: calendar quarters (anchor month configurable)
+  'QUARTERLY',
 ]);
 export type ReportingCadence = z.infer<typeof ReportingCadenceEnum>;
 
@@ -956,6 +991,16 @@ export const AuditActionTypeEnum = z.enum([
   'PROJECT_TYPE_APPLIED',
   'ORGANIZATION_HIERARCHY_CHANGED',
   'TERMINOLOGY_UPDATED',
+  // Phase 14: streams and inspections
+  'INSPECTION_SUBMITTED',
+  'INSPECTION_REVIEWED',
+  'INSPECTION_FINDING_RAISED',
+  'INSPECTION_FINDING_RESOLVED',
+  'REPORTING_STREAMS_SAVED',
+  'CHECKLIST_TEMPLATE_SAVED',
+  // Phase 12: credentials
+  'CREDENTIAL_POLICY_UPDATED',
+  'REGISTRATION_BODY_SAVED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 
@@ -1100,7 +1145,7 @@ export const NEEDS_ASSESSMENT_DOC_TYPE_META: Record<NeedsAssessmentDocType, { la
 export const ApprovalChainTypeEnum = z.enum(['REPORT', 'DISBURSEMENT']);
 export type ApprovalChainType = z.infer<typeof ApprovalChainTypeEnum>;
 
-export const ApprovalSubjectTypeEnum = z.enum(['WORKDAY_REPORT', 'VALUATION_REPORT']);
+export const ApprovalSubjectTypeEnum = z.enum(['WORKDAY_REPORT', 'VALUATION_REPORT', 'SITE_INSPECTION']);
 export type ApprovalSubjectType = z.infer<typeof ApprovalSubjectTypeEnum>;
 
 /**

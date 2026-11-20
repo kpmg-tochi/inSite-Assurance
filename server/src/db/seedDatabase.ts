@@ -20,6 +20,8 @@ import { seedPhase7 } from "./seedPhase7";
 import { seedPhase9 } from "./seedPhase9";
 import { seedPhase10 } from "./seedPhase10";
 import { seedPhase11 } from "./seedPhase11";
+import { seedPhase12 } from "./seedPhase12";
+import { seedPhase14 } from "./seedPhase14";
 import { projectObjectPrefix } from "../integrations/storage.service";
 import { CADENCE_PROJECT_SELECT, cadenceSettingsOf, periodKeyForDate } from "../modules/cadence/cadence.service";
 
@@ -220,6 +222,11 @@ async function runSeed(): Promise<void> {
 
   // Clean existing records in reverse dependency order
   await prisma.pushToken.deleteMany();
+  // Phase 14
+  await prisma.inspectionFinding.deleteMany();
+  await prisma.siteInspectionReport.deleteMany();
+  await prisma.projectReportingStream.deleteMany();
+  await prisma.inspectionChecklistTemplate.deleteMany();
   await prisma.incidentReport.deleteMany();
   await prisma.webNotificationRead.deleteMany();
   await prisma.webNotification.deleteMany();
@@ -273,6 +280,7 @@ async function runSeed(): Promise<void> {
   await prisma.rolePermission.deleteMany();
   await prisma.role.deleteMany();
   await prisma.permission.deleteMany();
+  await prisma.professionalRegistrationBody.deleteMany(); // Phase 12
   await prisma.tenant.deleteMany();
 
   const defaultPasswordHash = await bcrypt.hash("Password123!", 10);
@@ -369,8 +377,8 @@ async function runSeed(): Promise<void> {
       isPlatformSuperAdmin: true,
       roleId: superAdminRole.id,
       organizationId: monitorOrg.id,
-      professionalLicenseType: "ICAN",
-      professionalLicenseNumber: "FCA/019284",
+      professionalRegistrationBodyCode: "ICAN",
+      professionalRegistrationNumber: "FCA/019284",
     },
   });
 
@@ -385,8 +393,8 @@ async function runSeed(): Promise<void> {
       mobileRoleId: monitorInspectorMobileRole.id,
       phoneNumber: "+234 803 555 0142",
       organizationId: monitorOrg.id,
-      professionalLicenseType: "QSRBN",
-      professionalLicenseNumber: "3842",
+      professionalRegistrationBodyCode: "QSRBN",
+      professionalRegistrationNumber: "3842",
     },
   });
 
@@ -428,8 +436,8 @@ async function runSeed(): Promise<void> {
       fullName: "Engr. Ifeoma Eze, FNSE",
       roleId: lenderTechnicalRole.id,
       organizationId: lenderOrg.id,
-      professionalLicenseType: "COREN",
-      professionalLicenseNumber: "R.33017",
+      professionalRegistrationBodyCode: "COREN",
+      professionalRegistrationNumber: "R.33017",
     },
   });
 
@@ -441,8 +449,8 @@ async function runSeed(): Promise<void> {
       fullName: "Chidinma Okafor, CFA",
       roleId: lenderRole.id,
       organizationId: lenderOrg.id,
-      professionalLicenseType: "ICAN",
-      professionalLicenseNumber: "MB/049120",
+      professionalRegistrationBodyCode: "ICAN",
+      professionalRegistrationNumber: "MB/049120",
     },
   });
 
@@ -454,8 +462,8 @@ async function runSeed(): Promise<void> {
       fullName: "Engr. Musa Danladi, MNSE",
       roleId: contractorRole.id,
       organizationId: contractorOrg.id,
-      professionalLicenseType: "COREN",
-      professionalLicenseNumber: "R.49201",
+      professionalRegistrationBodyCode: "COREN",
+      professionalRegistrationNumber: "R.49201",
     },
   });
 
@@ -745,7 +753,8 @@ async function runSeed(): Promise<void> {
       selfieImageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80",
       livenessScore: null,
       livenessPassed: false,
-      corenLicenseNumber: "COREN R.55102",
+      registrationNumber: "R.55102",
+      registrationBodyCode: "COREN",
       experienceSummary: "8 years highway and drainage structural works. Resident Site Engineer for Julius & Sons.",
       reviewedByUserId: monitorUser.id,
       reviewedAt: new Date(Date.now() - 14 * 24 * 3600 * 1000),
@@ -773,7 +782,8 @@ async function runSeed(): Promise<void> {
       selfieImageUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80",
       livenessScore: null,
       livenessPassed: false,
-      corenLicenseNumber: "COREN R.61044",
+      registrationNumber: "R.61044",
+      registrationBodyCode: "COREN",
       experienceSummary: "10 years reinforced concrete box culverts, soil stabilization, and quality control on highway corridors. Project Site Engineer, Julius & Sons Civil Engineering.",
       lastSyncAt: new Date(),
     },
@@ -1678,6 +1688,10 @@ async function runSeed(): Promise<void> {
 
   // Phase 11: a second tenant run as a programme (delivery models, organisation hierarchy, terminology).
   await seedPhase11({ passwordHash: defaultPasswordHash });
+  // Phase 12: registration bodies, programme credential policy and fixed payment milestones.
+  await seedPhase12({ passwordHash: defaultPasswordHash });
+  // Phase 14: checklist templates, reporting streams, inspections, findings and a supervisor over the limit.
+  await seedPhase14();
 
   console.log("✅ Seed complete!");
   console.log(

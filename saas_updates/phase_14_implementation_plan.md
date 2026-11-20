@@ -2,7 +2,7 @@
 
 | | |
 | :--- | :--- |
-| **Status** | Implemented; migration and route test run pending (web click-through and device run pending) |
+| **Status** | Implemented; migrated and route-tested; web click-through and device run pending |
 | **Depends on** | Phase 11 (project types), Phase 8 (cadence, obligations, jobs), Phase 4 (captures, outbox) |
 | **Unblocks** | Phase 15 (final evaluation is an inspection), Phase 16 (visit and baseline KPIs) |
 | **Read first** | [Master plan](saas_implementation_plan.md) sections 2, 3 and 6; [gap analysis](process_flow_gap_analysis.md) G4, G5, G9 |
@@ -66,31 +66,31 @@
 
 ## 5. Implementation checklist
 
-Verification state: the database was not migrated during this phase (Phases 12 and 14 ran side by side; the coordinator generates both migrations at the end), so **no route test of this phase has run yet**. Items marked "route test written, pending migration" are covered by `server/src/tests/routes.phase14.test.ts`. Web and mobile UI: typecheck, lint and build only; click-through and device runs pending.
+Verification state: Phases 12 and 14 ran side by side without migrating; the coordinator then generated one combined migration (`20261126090000_phase12_14_credentials_payments_streams_inspections`, hand-written obligation indexes and CHECK appended) and the full route suite passes (275/275). Web and mobile UI: typecheck, lint and build only; click-through and device runs pending.
 
 ### Step 1: Quarterly cadence and streams (shared and server)
 - [x] `reportingPeriod.ts`: `QUARTERLY` periods (table tests across year end, anchor months, work-weeks). `server/src/tests/inspections.phase14.test.ts` (8 table cases, a tiling check over a year for five anchors, next period, wording).
-- [ ] `cadenceSettingsForDate` and `periodKeyForDate` take a stream (fall back to project fields); pending cadence change (`pendingCadenceJson`) applies per stream. Built as `streamCadenceRow` (a stream as a project-shaped cadence row, its own pending change mapped in) in `modules/cadence/streams.service.ts`. Route test written, pending migration.
-- [ ] Obligation generation iterates streams: `ITEM_REPORTS` as today scoped to the stream's roles; `INSPECTION` creates one obligation per period. Route test written, pending migration.
-- [ ] `fulfilObligation` matches the report's stream by the reporter's role (and contractor scope). Route test written, pending migration.
-- [ ] `brief-dispatch` and `overdue-reports` iterate streams; briefs only for `ITEM_REPORTS` streams. Route test written, pending migration.
-- [ ] Reporting step: streams editor (add, edit, remove while draft; live edits apply from the next period, same rule as cadence changes). Implicit stream shown as "Default". Server route-test written (pending migration); web built (`components/inspections/ReportingStreamsEditor.tsx`), click-through pending.
-- [ ] Phase 8 tests still pass unchanged for projects without streams. Not run (needs the migrated test DB); only a type-level fix in `routes.phase9.test.ts` (`boqItemId!`, the column is now nullable).
+- [x] `cadenceSettingsForDate` and `periodKeyForDate` take a stream (fall back to project fields); pending cadence change (`pendingCadenceJson`) applies per stream. Built as `streamCadenceRow` (a stream as a project-shaped cadence row, its own pending change mapped in) in `modules/cadence/streams.service.ts`. Route test passes.
+- [x] Obligation generation iterates streams: `ITEM_REPORTS` as today scoped to the stream's roles; `INSPECTION` creates one obligation per period. Route test passes.
+- [x] `fulfilObligation` matches the report's stream by the reporter's role (and contractor scope). Route test passes.
+- [x] `brief-dispatch` and `overdue-reports` iterate streams; briefs only for `ITEM_REPORTS` streams. Route test passes.
+- [ ] Reporting step: streams editor (add, edit, remove while draft; live edits apply from the next period, same rule as cadence changes). Implicit stream shown as "Default". Server route-tested; web built (`components/inspections/ReportingStreamsEditor.tsx`), click-through pending.
+- [x] Phase 8 tests still pass unchanged for projects without streams. Phase 8 and 9 suites pass; only a type-level fix in `routes.phase9.test.ts` (`boqItemId!`, the column is now nullable).
 
 ### Step 2: Checklist templates
 - [x] Shared `ChecklistSectionsSchema` and `validateInspectionAnswers(template, answers)` (pure; used by server, web and mobile). Unit-tested in server and mobile.
-- [ ] Tenant settings: template list and editor (sections, items, response types, rules); saving a used template creates a new version. Server route-tested (pending migration: version 2 after use); web Settings → "Inspections & supervisors" built, click-through pending.
-- [ ] Seed four templates (in both tenants): Baseline survey, Routine monitoring visit (six areas), Mobilisation check, Final evaluation (`seedPhase14.ts`). Written; seed not run (needs the migration).
+- [ ] Tenant settings: template list and editor (sections, items, response types, rules); saving a used template creates a new version. Server route-tested (version 2 after use); web Settings → "Inspections & supervisors" built, click-through pending.
+- [x] Seed four templates (in both tenants): Baseline survey, Routine monitoring visit (six areas), Mobilisation check, Final evaluation (`seedPhase14.ts`). Seed runs on the migrated dev DB.
 
 ### Step 3: Site inspection reports (server)
-- [ ] `POST /projects/:id/inspections`: idempotent, answers validated against the stored version, captures linked per item (other projects refused), geofence, late flag, obligation, approval chain. Route test written, pending migration.
-- [ ] Review endpoints mirror workday report review (approve / return with notes). Route test written, pending migration.
-- [ ] Findings: raise from an inspection item, aimed notifications, resolve with captures, dismiss with reason. Route test written, pending migration.
-- [ ] Lists with filters (visit type, finding, stream, late); detail DTO with template, answers, captures and findings. Route test written, pending migration.
-- [ ] The omission check gains an inspection mode (missing required photos; engine `RULES`, off the request path, swept). Route test written, pending migration.
+- [x] `POST /projects/:id/inspections`: idempotent, answers validated against the stored version, captures linked per item (other projects refused), geofence, late flag, obligation, approval chain. Route test passes.
+- [x] Review endpoints mirror workday report review (approve / return with notes). Route test passes.
+- [x] Findings: raise from an inspection item, aimed notifications, resolve with captures, dismiss with reason. Route test passes.
+- [x] Lists with filters (visit type, finding, stream, late); detail DTO with template, answers, captures and findings. Route test passes.
+- [x] The omission check gains an inspection mode (missing required photos; engine `RULES`, off the request path, swept). Route test passes.
 
 ### Step 4: Mobile
-- [ ] Baseline pack carries streams the user owes and the templates their visit types use (`inspections` on the pack, also `GET /projects/:id/inspections/field-pack`). Route test written, pending migration.
+- [x] Baseline pack carries streams the user owes and the templates their visit types use (`inspections` on the pack, also `GET /projects/:id/inspections/field-pack`). Route test passes.
 - [ ] Period card per owed stream (reuse `PeriodCheckInCard`). Card choice unit-tested (`streamPeriodCards`); device run pending.
 - [ ] "Inspection" flow (`screens/InspectionScreen.tsx`): visit type → one screen per section → photos per item → summary and overall finding → confirm. Draft in SQLite (migration 6, `inspection_drafts`). Queued as `SITE_INSPECTION` behind its captures. Draft rules and outbox ordering unit-tested; device run pending.
 - [ ] Contractor sees and resolves findings aimed at it, with photos (`screens/InspectionFindingsScreen.tsx`, outbox kind `FINDING_RESOLUTION`). Device run pending.
@@ -103,11 +103,11 @@ Verification state: the database was not migrated during this phase (Phases 12 a
 
 ### Step 6: Supervision workload
 - [ ] Team step: workload of the supervisors on the team with this project counted, warning above the type's thresholds (`TeamWorkloadNotice`, `GET /projects/:id/supervision/workload`). Maths unit-tested; route and click-through pending.
-- [ ] Tenant "Supervisors" view (Settings → "Inspections & supervisors"; `GET /api/v1/supervision`). Route test written (seeded supervisor over the limit), pending migration; click-through pending.
+- [ ] Tenant "Supervisors" view (Settings → "Inspections & supervisors"; `GET /api/v1/supervision`). Route test passes (seeded supervisor over the limit); click-through pending.
 
 ### Step 7: Seed and tests
-- [ ] Seed both types with streams ("Resident supervision", "M&E visit" quarterly with a 7-day deadline, "Contractor progress"); PRG-211 with an approved baseline survey, a late routine visit and a routine visit with a major finding; PRG-221 with a missed quarterly visit; M&E officer `me.officer@insite.ng` over the Co-Funded limit. Written; not run (needs the migration).
-- [ ] Route tests (`routes.phase14.test.ts`, 17 tests): quarterly obligations per stream; missed quarterly visit; idempotency; answers against the version; captures from another project refused; findings aimed at the right contractor; approval chain on inspections; project without streams unchanged; live stream change pending; mobile pack; omission check; supervisor over the limit. Written and typechecked; pending migration.
+- [x] Seed both types with streams ("Resident supervision", "M&E visit" quarterly with a 7-day deadline, "Contractor progress"); PRG-211 with an approved baseline survey, a late routine visit and a routine visit with a major finding; PRG-221 with a missed quarterly visit; M&E officer `me.officer@insite.ng` over the Co-Funded limit. Seed runs on the migrated dev DB.
+- [x] Route tests (`routes.phase14.test.ts`, 17 tests): quarterly obligations per stream; missed quarterly visit; idempotency; answers against the version; captures from another project refused; findings aimed at the right contractor; approval chain on inspections; project without streams unchanged; live stream change pending; mobile pack; omission check; supervisor over the limit. All 17 pass.
 - [x] Mobile unit tests: answers validation, outbox ordering behind captures (`mobile/src/utils/inspections.test.ts`, 6 tests).
 
 Run at the end of the phase (shared schema built, Prisma client generated, no migration): `npm run typecheck` clean; `npm run lint` 0 errors (75 warnings, none in Phase 14 files); server unit tests 213 pass (includes 25 Phase 14); mobile 76 pass; web build OK.

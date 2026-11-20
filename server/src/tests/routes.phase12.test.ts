@@ -123,7 +123,7 @@ describe('Phase 12: registration bodies and tenant policy', () => {
     assert.equal(res.body.data.profileFieldVisible, true);
     assert.deepEqual(
       res.body.data.registrationBodies.map((b: { code: string }) => b.code).sort(),
-      ['ARCON', 'COREN', 'CORBON', 'ICAN', 'OTHER', 'QSRBN']
+      ['ARCON', 'CORBON', 'COREN', 'ICAN', 'OTHER', 'QSRBN']
     );
     const programme = await request(app).get('/api/v1/credentials/settings').set(await web(PROGRAMME_ADMIN));
     assert.deepEqual(programme.body.data.resolved, { certifier: 'OPTIONAL', fieldAssurance: 'OPTIONAL' });
