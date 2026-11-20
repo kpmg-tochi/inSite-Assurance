@@ -43,6 +43,12 @@ Phases 2 to 4 fix these before any new capability is added.
 | G   | **Roles can be marked as pre-provisioned.** Users in those roles sign in to the mobile app with an account, see all their projects immediately, need no join code and skip identity assurance. Tenant super admins choose which roles.                                   | Owner                           |
 | H   | **Approval chains are stored as relational tables, not JSON**, so steps have referential integrity and history.                                                                                                                                                          | Review recommendation, accepted |
 | I   | **Hardening comes before features.** Phases 2 to 4 are prerequisites for everything after.                                                                                                                                                                               | Review recommendation, accepted |
+| J   | **Programme delivery (Phases 11–16) is configuration, not client code.** The first programme client's answers are provisional and the target is a demo to fine-tune, so every client-specific rule is data on a project type or tenant setting, with today's behaviour as the default. | Owner, 2026-11-20 |
+| K   | **Payments on programme projects are milestone payments** (fixed amount on verified completion, or measured), configurable per payment milestone. | Owner, 2026-11-20 (provisional) |
+| L   | **One tenant per programme authority.** Delivery is owned by the flagship or a subsidiary organisation; subsidiaries are funded by the flagship. Visibility and approvals can follow that hierarchy. | Owner, 2026-11-20 (provisional) |
+| M   | **Contractor mobilisation is measured from the kick-off date** (set in project creation), with a configurable number of days (21 Central, 14 Co-Funded by default). | Owner, 2026-11-20 |
+| N   | **Professional registration is configurable** (required, optional or hidden) for certifiers and for field assurance, and every form, validation, message and PDF follows the setting. | Owner, 2026-11-20 |
+| O   | **The Certificate of Completion is signed by organisation admins holding a configurable permission**, plus the beneficiary. Retention applies to programme contracts. | Owner, 2026-11-20 (provisional) |
 
 ---
 
@@ -59,6 +65,9 @@ Only decisions that change how the platform is used are listed. Each has a defau
 | D-4.2 | 4     | Contractor identity check: build real face liveness (needs a vendor SDK or a custom native build), or describe it honestly as a guided selfie reviewed by a human? | Guided selfie plus human review now; remove all "liveness verified" wording. Real liveness becomes a later, separate item.                                               |
 | D-4.3 | 4     | Should GPS telemetry run in the background (battery cost, store-review scrutiny, extra permissions) or only while the app is open?                                 | Foreground only, plus a ping on every capture and report. UI wording changed to match.                                                                                   |
 | D-8.1 | 8     | Which channel and provider sends reminders to people who have not installed the app yet (email, SMS, both)?                                                        | Email through a provider adapter, with a console adapter in dev. SMS added later.                                                                                        |
+| D-12.1 | 12   | Do programme contracts pay a mobilisation advance that is recovered from later payments?                                                                            | Not built. Fixed and measured payment milestones only.                                                                                                                    |
+| D-12.2 | 12   | Is the fixed payment basis needed with contractor IPC claims, not only direct milestone verification?                                                               | No: fixed basis is refused with IPC claims.                                                                                                                               |
+| D-15.1 | 15   | How does the beneficiary sign the Certificate of Completion: through a secure public link, or on paper uploaded by staff?                                         | Paper copy uploaded and attested by staff; no new public surface.                                                                                                         |
 
 ---
 
@@ -76,6 +85,14 @@ Only decisions that change how the platform is used are listed. Each has a defau
 | 8     | Reporting cadence, late reports, mobilization and attendance alerts         | Implemented; web click-through and on-device testing pending (see its section 7) | 5, 6, 7           | [phase_8](phase_8_implementation_plan.md)   |
 | 9     | Schedule variance and "Catch Project Up"                                    | Implemented; web clicked through; mobile on-device pending (see its section 7)  | 6, 8              | [phase_9](phase_9_implementation_plan.md)   |
 | 10    | Stakeholder handover and retention management                               | Implemented; web clicked through; mobile on-device pending (see its section 7) | 6, 7              | [phase_10](phase_10_implementation_plan.md) |
+| 11    | Delivery models: project types, organisation hierarchy, parties, terminology | Implemented; web click-through and on-device testing pending (see its section 7) | 6, 7              | [phase_11](phase_11_implementation_plan.md) |
+| 12    | Configurable professional credentials and milestone payments                | Not started                                                                      | 11                | [phase_12](phase_12_implementation_plan.md) |
+| 13    | Document register, contract milestones, kick-off and mobilisation compliance | Not started                                                                      | 8, 9, 11, 12      | [phase_13](phase_13_implementation_plan.md) |
+| 14    | Monitoring streams, site inspection checklists, supervision workload       | Not started                                                                      | 4, 8, 11          | [phase_14](phase_14_implementation_plan.md) |
+| 15    | Certificate of Completion and closure governance                            | Not started                                                                      | 10, 11, 12, 13, 14 | [phase_15](phase_15_implementation_plan.md) |
+| 16    | Programme KPIs, configuration reference and end-to-end demo                 | Not started                                                                      | 11–15             | [phase_16](phase_16_implementation_plan.md) |
+
+Phases 11–16 come from the [process flow gap analysis](process_flow_gap_analysis.md) (Central and Co-Funded delivery models). Phase 14 can run in parallel with Phases 12 and 13 once Phase 11 is done.
 
 ```mermaid
 flowchart LR
@@ -93,6 +110,15 @@ flowchart LR
     P8 --> P9["9 Schedule variance"]
     P6 --> P10["10 Handover + retention (done)"]
     P7 --> P10
+    P7 --> P11["11 Project types + org hierarchy"]
+    P11 --> P12["12 Credentials + milestone payments"]
+    P11 --> P13["13 Documents + contract milestones"]
+    P12 --> P13
+    P11 --> P14["14 Streams + inspections"]
+    P10 --> P15["15 CoC + closure"]
+    P13 --> P15
+    P14 --> P15
+    P15 --> P16["16 KPIs + demo"]
 ```
 
 Phases 3 and 4 can run in either order or in parallel sessions; they touch different files apart from one seam (the evidence provider, described in both plans). Phases 5 and 6 are likewise independent of each other.

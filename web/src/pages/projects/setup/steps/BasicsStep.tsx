@@ -1,7 +1,9 @@
-import React, { useMemo, useState } from "react";
-import { formatMoney, PROJECT_CODE_PREFIX_REGEX, type ProjectBasicsStep } from "@insite/shared";
+import React, { useEffect, useMemo, useState } from "react";
+import { formatMoney, PROJECT_CODE_PREFIX_REGEX, type ProjectBasicsStep, type ProjectTypeDto, type RegionDto } from "@insite/shared";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import { useTenantSettingsQuery } from "../../../../queries/organizations/useOrganizationQueries";
+import { useProjectTypesQuery, useRegionsQuery } from "../../../../queries/deliveryModels/useDeliveryModelQueries";
+import { CustomSelect } from "../../../../components/common";
 import {
   extractErrors,
   FieldError,
@@ -15,6 +17,9 @@ import {
   type StepProps,
 } from "../setupContext";
 
+const NO_TYPES: ProjectTypeDto[] = [];
+const NO_REGIONS: RegionDto[] = [];
+
 export interface BasicsValues {
   name: string;
   codePrefix: string;
@@ -22,6 +27,10 @@ export interface BasicsValues {
   lgaLocation: string;
   description: string;
   totalBudget: string;
+  /** Phase 11: "" = no type (only when the tenant has none). */
+  projectTypeId: string;
+  /** Phase 11: "" = no region. */
+  regionId: string;
 }
 
 export const EMPTY_BASICS: BasicsValues = {
@@ -31,6 +40,8 @@ export const EMPTY_BASICS: BasicsValues = {
   lgaLocation: "",
   description: "",
   totalBudget: "",
+  projectTypeId: "",
+  regionId: "",
 };
 
 /** Client-side checks that mirror the server schema, so errors show before a round trip. */
@@ -51,6 +62,8 @@ export function validateBasics(v: BasicsValues): { body: ProjectBasicsStep | nul
       lgaLocation: v.lgaLocation.trim() || null,
       description: v.description.trim() || null,
       totalBudgetNgn: budget!,
+      projectTypeId: v.projectTypeId || null,
+      regionId: v.regionId || null,
     },
     fields,
   };
@@ -73,12 +86,73 @@ export function BasicsForm({
   const settings = useTenantSettingsQuery();
   const currency = settings.data?.defaultCurrency ?? "NGN";
   const budget = parseNumberInput(values.totalBudget);
+  // Phase 11: the delivery model comes first; a tenant with types must pick one.
+  const typesQuery = useProjectTypesQuery(false);
+  const regionsQuery = useRegionsQuery(false);
+  const types = typesQuery.data ?? NO_TYPES;
+  const regions = regionsQuery.data ?? NO_REGIONS;
+  const typeLocked = Boolean(codePrefixLocked);
+  useEffect(() => {
+    if (values.projectTypeId || typeLocked || types.length === 0) return;
+    const preferred = types.find((t) => t.isDefault) ?? types[0];
+    onChange({ ...values, projectTypeId: preferred.id });
+  }, [types, values, typeLocked, onChange]);
+  const regionOptions = useMemo(() => {
+    const top = regions.filter((r) => !r.parentRegionId).sort((a, b) => a.name.localeCompare(b.name));
+    return [
+      { value: "", label: "No region" },
+      ...top.flatMap((r) => [
+        { value: r.id, label: r.name },
+        ...regions
+          .filter((a) => a.parentRegionId === r.id)
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .map((a) => ({ value: a.id, label: `${r.name} › ${a.name}` })),
+      ]),
+    ];
+  }, [regions]);
   const set = (key: keyof BasicsValues) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     onChange({ ...values, [key]: key === "codePrefix" ? e.target.value.toUpperCase() : e.target.value });
 
   return (
     <StepSection title="Project basics" description="What the project is, where it is, and its total budget.">
       {errors.general && <p className="text-xs font-medium text-red-600">{errors.general}</p>}
+      {types.length > 0 && (
+        <div>
+          <p className={labelClass}>
+            Project type <span className="text-red-500">*</span>
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {types.map((t) => {
+              const selected = values.projectTypeId === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  disabled={disabled || typeLocked}
+                  onClick={() => onChange({ ...values, projectTypeId: t.id })}
+                  className={`text-left rounded-xl border p-3 transition disabled:cursor-not-allowed ${
+                    selected ? "border-brand-primary bg-brand-primary/5 ring-2 ring-brand-primary/20" : "border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.colour ?? "#94a3b8" }} />
+                    {t.name}
+                  </span>
+                  {t.description && <span className="mt-1 block text-[11px] text-slate-500">{t.description}</span>}
+                </button>
+              );
+            })}
+          </div>
+          <FieldError
+            message={
+              errors.fields.projectTypeId ??
+              (typeLocked
+                ? "Fixed once the project is active."
+                : "Choosing a type applies its workflow and defaults. Values you already saved are kept.")
+            }
+          />
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="md:col-span-3">
           <label className={labelClass} htmlFor="basics-name">
@@ -117,6 +191,19 @@ export function BasicsForm({
           </label>
           <input id="basics-lga" className={inputClass(Boolean(errors.fields.lgaLocation))} value={values.lgaLocation} onChange={set("lgaLocation")} disabled={disabled} />
         </div>
+        {regions.length > 0 && (
+          <div className="md:col-span-2">
+            <p className={labelClass}>Region</p>
+            <CustomSelect
+              value={values.regionId}
+              onChange={(v) => onChange({ ...values, regionId: v })}
+              options={regionOptions}
+              searchable={regions.length > 8}
+              disabled={disabled}
+            />
+            <FieldError message={errors.fields.regionId} />
+          </div>
+        )}
         <div className="md:col-span-2">
           <label className={labelClass} htmlFor="basics-budget">
             Total budget ({currency}) <span className="text-red-500">*</span>
@@ -161,6 +248,8 @@ export function BasicsStep({ projectId, setup, mode, readOnly }: StepProps) {
       lgaLocation: setup.basics.lgaLocation ?? "",
       description: setup.basics.description ?? "",
       totalBudget: setup.basics.totalBudgetNgn === null ? "" : String(setup.basics.totalBudgetNgn),
+      projectTypeId: setup.basics.projectType?.id ?? "",
+      regionId: setup.basics.region?.id ?? "",
     }),
     [setup.basics]
   );

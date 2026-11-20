@@ -19,6 +19,7 @@ import { seedPhase6Projects } from "./seedPhase6";
 import { seedPhase7 } from "./seedPhase7";
 import { seedPhase9 } from "./seedPhase9";
 import { seedPhase10 } from "./seedPhase10";
+import { seedPhase11 } from "./seedPhase11";
 import { projectObjectPrefix } from "../integrations/storage.service";
 import { CADENCE_PROJECT_SELECT, cadenceSettingsOf, periodKeyForDate } from "../modules/cadence/cadence.service";
 
@@ -241,6 +242,13 @@ async function runSeed(): Promise<void> {
   await prisma.projectStandardSpecification.deleteMany();
   await prisma.projectNeedsAssessmentDocument.deleteMany();
   await prisma.projectProcessConfig.deleteMany();
+  // Phase 11: types reference templates and are referenced by projects; regions and organisations
+  // reference themselves. Clear the pointers first.
+  await prisma.projectBeneficiary.deleteMany();
+  await prisma.project.updateMany({ data: { projectTypeId: null, regionId: null, owningOrganizationId: null } });
+  await prisma.projectType.deleteMany();
+  await prisma.region.updateMany({ data: { parentRegionId: null } });
+  await prisma.region.deleteMany();
   await prisma.workflowTemplate.deleteMany();
   await prisma.monitorQuery.deleteMany();
   await prisma.ipcSupportingDocument.deleteMany();
@@ -260,6 +268,7 @@ async function runSeed(): Promise<void> {
   await prisma.userProjectAssignment.deleteMany();
   await prisma.project.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.organization.updateMany({ data: { parentOrganizationId: null } });
   await prisma.organization.deleteMany();
   await prisma.rolePermission.deleteMany();
   await prisma.role.deleteMany();
@@ -1667,6 +1676,9 @@ async function runSeed(): Promise<void> {
     monitorUserId: monitorUser.id,
   });
 
+  // Phase 11: a second tenant run as a programme (delivery models, organisation hierarchy, terminology).
+  await seedPhase11({ passwordHash: defaultPasswordHash });
+
   console.log("✅ Seed complete!");
   console.log(
     "   • Super Admin Login: admin@insite.ng      / Password123! (Platform & Tenant Super Admin)",
@@ -1682,6 +1694,9 @@ async function runSeed(): Promise<void> {
   );
   console.log(
     "   • Contractor Login:  contractor@insite.ng / Password123! (COREN #R.49201)",
+  );
+  console.log(
+    "   • Programme tenant:  programme.admin@insite.ng (tenant admin); flagship.admin@, north.admin@, south.admin@ insite.ng (Organisation Administrators) / Password123!",
   );
   const seededCodes = await prisma.projectJoinCode.findMany({
     where: { isActive: true },

@@ -1,5 +1,8 @@
 import React, { useState, useMemo } from "react";
-import { ShieldCheck, User, KeyRound, Users, Palette, Building2, Workflow } from "lucide-react";
+import { ShieldCheck, User, KeyRound, Users, Palette, Building2, Workflow, Layers } from "lucide-react";
+import { ProjectTypesTab } from "../../components/deliveryModels/ProjectTypesTab";
+import { RegionsCard } from "../../components/deliveryModels/RegionsCard";
+import { TerminologyCard } from "../../components/deliveryModels/TerminologyCard";
 import { toast } from "sonner";
 import type { FieldSessionRosterDto } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
@@ -47,8 +50,12 @@ export function SettingsPage({ project }: SettingsPageProps) {
   const canManageRoster = hasPermission("mobilization:manage_roster");
   const canViewRoster = hasAnyPermission("sessions:revoke_device", "mobilization:manage_roster");
   const canSeeAccessTab = canReviewCredentials || canViewRoster;
+  // Phase 11: delivery models (project types and regions).
+  const canManageProjectTypes = hasPermission("project_types:manage");
+  const canManageRegions = hasPermission("regions:manage");
+  const canSeeDeliveryTab = canManageProjectTypes || canManageRegions;
 
-  type SettingsTab = "ACCESS" | "ROLES" | "USERS" | "ORGANIZATIONS" | "WORKFLOWS" | "BRANDING" | "ACCOUNT";
+  type SettingsTab = "ACCESS" | "ROLES" | "USERS" | "ORGANIZATIONS" | "WORKFLOWS" | "DELIVERY" | "BRANDING" | "ACCOUNT";
   const [activeTab, setActiveTab] = useState<SettingsTab>(() =>
     canSeeAccessTab
       ? "ACCESS"
@@ -60,6 +67,8 @@ export function SettingsPage({ project }: SettingsPageProps) {
             ? "ORGANIZATIONS"
             : canManageWorkflows
               ? "WORKFLOWS"
+              : canSeeDeliveryTab
+              ? "DELIVERY"
               : canSeeTenantTab
               ? "BRANDING"
               : "ACCOUNT",
@@ -384,6 +393,21 @@ export function SettingsPage({ project }: SettingsPageProps) {
             </button>
           )}
 
+          {canSeeDeliveryTab && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("DELIVERY")}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
+                activeTab === "DELIVERY"
+                  ? "bg-white text-brand-primary shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+              <span>Project types &amp; regions</span>
+            </button>
+          )}
+
           {canSeeTenantTab && (
             <button
               type="button"
@@ -418,11 +442,18 @@ export function SettingsPage({ project }: SettingsPageProps) {
       {activeTab === "USERS" && canManageUsers && <UsersVisibilityTab />}
       {activeTab === "ORGANIZATIONS" && canManageOrganizations && <OrganizationsTab />}
       {activeTab === "WORKFLOWS" && canManageWorkflows && <WorkflowTemplatesTab />}
+      {activeTab === "DELIVERY" && canSeeDeliveryTab && (
+        <div className="space-y-4">
+          {canManageProjectTypes && <ProjectTypesTab />}
+          {canManageRegions && <RegionsCard />}
+        </div>
+      )}
       {activeTab === "BRANDING" && canSeeTenantTab && (
         <div className="space-y-4">
           {canManageBranding && <TenantBrandingTab />}
           {canManageSettings && <WorkspaceSettingsCard />}
           {canManageSettings && <EvidenceRatingsCard />}
+          {canManageSettings && <TerminologyCard />}
         </div>
       )}
 

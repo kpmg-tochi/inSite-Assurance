@@ -21,6 +21,7 @@ import {
   useMarkWebNotificationReadMutation,
   useWebNotificationsQuery,
 } from "../queries/notifications/useWebNotificationsQueries";
+import { useTerm } from "../lib/auth-context";
 
 const CATEGORY_LABELS: Record<WebNotificationCategory, string> = {
   REPORT_RESUBMITTED: "Report resubmitted",
@@ -50,6 +51,7 @@ export default function Notifications({ projectId }: NotificationsProps) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<"ALL" | "UNREAD">("ALL");
   const navigate = useNavigate();
+  const term = useTerm();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const notificationsQuery = useWebNotificationsQuery(projectId, Boolean(projectId));
@@ -122,7 +124,18 @@ export default function Notifications({ projectId }: NotificationsProps) {
     }
   };
 
-  const getCategoryLabel = (category: WebNotificationCategory) => CATEGORY_LABELS[category] ?? "Notification";
+  const getCategoryLabel = (category: WebNotificationCategory) => {
+    switch (category) {
+      case "CONTRACTOR_ONBOARDING":
+        return `${term("contractor")} onboarding`;
+      case "TRANCHE_DISBURSEMENT":
+        return `${term("tranche")} disbursement`;
+      case "RETENTION_RELEASE":
+        return `${term("retention")} release`;
+      default:
+        return CATEGORY_LABELS[category] ?? "Notification";
+    }
+  };
 
   const getCategoryBadgeClass = (category: WebNotificationCategory) => {
     switch (category) {
@@ -244,7 +257,7 @@ export default function Notifications({ projectId }: NotificationsProps) {
                     : "No notifications present for this project."}
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Resubmitted field reports, AI omissions, and IPC flags appear here.
+                  Resubmitted field reports, AI omissions, and {term("ipc", { lower: true })} flags appear here.
                 </p>
               </div>
             ) : (

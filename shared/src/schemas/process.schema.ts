@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ApprovalChainTypeEnum,
   ApprovalDecisionEnum,
+  ApprovalOrganizationScopeEnum,
   DisbursementMechanism,
   DisbursementMechanismEnum,
   MonitorRecommendationEnum,
@@ -124,6 +125,11 @@ export const ApprovalStepConfigSchema = z.object({
   minAmountThresholdNgn: z.number().nonnegative().nullable().optional(),
   /** Certification and release steps. Tenants cannot remove them. */
   isSystemStep: z.boolean().default(false),
+  /**
+   * Phase 11: which organisation the actor must belong to, relative to the project's owner or
+   * funder. Allowed on any step, system steps included. ANY is the Phase 7 behaviour.
+   */
+  organizationScope: ApprovalOrganizationScopeEnum.default('ANY'),
 });
 export type ApprovalStepConfig = z.infer<typeof ApprovalStepConfigSchema>;
 export type ApprovalStepConfigInput = z.input<typeof ApprovalStepConfigSchema>;
@@ -235,6 +241,7 @@ export function defaultReportChain(): ApprovalStepConfig[] {
       requiredRoleId: null,
       minAmountThresholdNgn: null,
       isSystemStep: false,
+      organizationScope: 'ANY',
     },
   ];
 }
@@ -247,6 +254,7 @@ export function defaultDisbursementChain(mechanism: DisbursementMechanism): Appr
       requiredRoleId: null,
       minAmountThresholdNgn: null,
       isSystemStep: true,
+      organizationScope: 'ANY',
     },
     {
       label: 'Disbursement approval',
@@ -254,6 +262,7 @@ export function defaultDisbursementChain(mechanism: DisbursementMechanism): Appr
       requiredRoleId: null,
       minAmountThresholdNgn: null,
       isSystemStep: true,
+      organizationScope: 'ANY',
     },
   ];
 }
@@ -323,6 +332,7 @@ export const ApprovalStepDtoSchema = z.object({
   requiredRoleName: z.string().nullable(),
   minAmountThresholdNgn: z.number().nullable(),
   isSystemStep: z.boolean(),
+  organizationScope: ApprovalOrganizationScopeEnum,
   version: z.number().int(),
 });
 export type ApprovalStepDto = z.infer<typeof ApprovalStepDtoSchema>;

@@ -161,6 +161,15 @@ export async function deleteWorkflowTemplate(webUser: WebJwtPayload, templateId:
   await prisma.$transaction(async (tx) => {
     const existing = await tx.workflowTemplate.findFirst({ where: { id: templateId, tenantId: webUser.tenantId } });
     if (!existing) throw new AppError('Workflow template not found', 404, 'WORKFLOW_TEMPLATE_NOT_FOUND');
+    // Phase 11: a project type references its template; pick another template on the type first.
+    const types = await tx.projectType.findMany({ where: { workflowTemplateId: templateId }, select: { name: true } });
+    if (types.length > 0) {
+      throw new AppError(
+        `This template is used by project type(s): ${types.map((t) => t.name).join(', ')}. Choose another template on them first.`,
+        409,
+        'WORKFLOW_TEMPLATE_IN_USE'
+      );
+    }
     await tx.projectProcessConfig.updateMany({ where: { workflowTemplateId: templateId }, data: { workflowTemplateId: null } });
     await tx.workflowTemplate.delete({ where: { id: templateId } });
     await recordAuditEvent(tx, {

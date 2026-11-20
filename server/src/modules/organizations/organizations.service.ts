@@ -10,6 +10,7 @@ import {
   TenantSettingsDto,
   UpdateOrganizationRequest,
   UpdateTenantSettingsRequest,
+  validateOrganizationParent,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -26,7 +27,8 @@ function actorName(webUser: WebJwtPayload) {
 
 export function serializeOrganization(
   org: OrganizationRow,
-  counts?: { userCount?: number; projectCount?: number }
+  counts?: { userCount?: number; projectCount?: number },
+  parent?: { isArchived: boolean } | null
 ): OrganizationDto {
   return {
     id: org.id,
@@ -36,6 +38,8 @@ export function serializeOrganization(
     contactEmail: org.contactEmail,
     contactPhone: org.contactPhone,
     isArchived: org.isArchived,
+    parentOrganizationId: org.parentOrganizationId,
+    ...(parent ? { parentIsArchived: parent.isArchived } : {}),
     ...(counts?.userCount !== undefined ? { userCount: counts.userCount } : {}),
     ...(counts?.projectCount !== undefined ? { projectCount: counts.projectCount } : {}),
     createdAt: org.createdAt.toISOString(),
@@ -155,15 +159,21 @@ export async function listOrganizations(
     take: 500,
     include: {
       _count: {
-        select: { users: true, monitoredProjects: true, lenderProjects: true, projectContractors: true },
+        select: { users: true, monitoredProjects: true, lenderProjects: true, ownedProjects: true, projectContractors: true },
       },
+      parentOrganization: { select: { isArchived: true } },
     },
   });
   return rows.map((r) =>
-    serializeOrganization(r, {
-      userCount: r._count.users,
-      projectCount: r._count.monitoredProjects + r._count.lenderProjects + r._count.projectContractors,
-    })
+    serializeOrganization(
+      r,
+      {
+        userCount: r._count.users,
+        projectCount:
+          r._count.monitoredProjects + r._count.lenderProjects + r._count.ownedProjects + r._count.projectContractors,
+      },
+      r.parentOrganization
+    )
   );
 }
 
@@ -181,6 +191,7 @@ export async function createOrganization(webUser: WebJwtPayload, input: CreateOr
       if (await findByName(tx, tenantId, input.name)) {
         throw new AppError(`An organisation named "${input.name}" already exists`, 409, 'ORGANIZATION_EXISTS');
       }
+      await assertValidParent(tx, tenantId, null, input.parentOrganizationId ?? null);
       const created = await tx.organization.create({
         data: {
           tenantId,
@@ -189,8 +200,12 @@ export async function createOrganization(webUser: WebJwtPayload, input: CreateOr
           registrationNumber: input.registrationNumber || null,
           contactEmail: input.contactEmail || null,
           contactPhone: input.contactPhone || null,
+          parentOrganizationId: input.parentOrganizationId ?? null,
         },
       });
+      if (created.parentOrganizationId) {
+        await auditHierarchyChange(tx, webUser, created, null);
+      }
       await recordAuditEvent(tx, {
         tenantId,
         projectId: null,
@@ -225,6 +240,13 @@ export async function updateOrganization(
           throw new AppError(`An organisation named "${input.name}" already exists`, 409, 'ORGANIZATION_EXISTS');
         }
       }
+      const parentChanging =
+        input.parentOrganizationId !== undefined && (input.parentOrganizationId ?? null) !== before.parentOrganizationId;
+      if (parentChanging) {
+        // Serialise hierarchy edits in the tenant so two concurrent moves cannot form a loop.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${'org-hierarchy:' + tenantId}))`;
+        await assertValidParent(tx, tenantId, before.id, input.parentOrganizationId ?? null);
+      }
       const data: Prisma.OrganizationUpdateInput = {
         ...(input.name !== undefined ? { name: input.name.trim() } : {}),
         ...(input.categories !== undefined ? { categories: Array.from(new Set(input.categories)) } : {}),
@@ -232,8 +254,14 @@ export async function updateOrganization(
         ...(input.contactEmail !== undefined ? { contactEmail: input.contactEmail || null } : {}),
         ...(input.contactPhone !== undefined ? { contactPhone: input.contactPhone || null } : {}),
         ...(input.isArchived !== undefined ? { isArchived: input.isArchived } : {}),
+        ...(parentChanging
+          ? input.parentOrganizationId
+            ? { parentOrganization: { connect: { id: input.parentOrganizationId } } }
+            : { parentOrganization: { disconnect: true } }
+          : {}),
       };
       const updated = await tx.organization.update({ where: { id: before.id }, data });
+      if (parentChanging) await auditHierarchyChange(tx, webUser, updated, before.parentOrganizationId);
       const changed = (Object.keys(data) as Array<keyof typeof data>).filter(
         (k) => JSON.stringify((before as Record<string, unknown>)[k]) !== JSON.stringify((updated as Record<string, unknown>)[k])
       );
@@ -263,6 +291,38 @@ export async function updateOrganization(
   } catch (error) {
     assertUniqueNameError(error, input.name ?? '');
   }
+}
+
+// ---------------------------------------------------------------------------
+// Hierarchy (Phase 11)
+// ---------------------------------------------------------------------------
+
+/** Refuses self-parenting, cycles, a parent from another tenant and depth beyond five levels. */
+async function assertValidParent(tx: Tx, tenantId: string, organizationId: string | null, parentId: string | null) {
+  if (!parentId) return;
+  const nodes = await tx.organization.findMany({ where: { tenantId }, select: { id: true, parentOrganizationId: true } });
+  const issue = validateOrganizationParent(nodes, organizationId, parentId);
+  if (issue) {
+    throw new AppError(issue.message, issue.code === 'ORGANIZATION_PARENT_NOT_FOUND' ? 404 : 422, issue.code);
+  }
+}
+
+async function auditHierarchyChange(tx: Tx, webUser: WebJwtPayload, org: OrganizationRow, previousParentId: string | null) {
+  const ids = [previousParentId, org.parentOrganizationId].filter((v): v is string => Boolean(v));
+  const names = new Map(
+    (await tx.organization.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })).map((o) => [o.id, o.name])
+  );
+  const label = (id: string | null) => (id ? `"${names.get(id) ?? id}"` : 'no parent');
+  await recordAuditEvent(tx, {
+    tenantId: org.tenantId,
+    projectId: null,
+    actorType: 'WEB_USER',
+    actorId: webUser.userId,
+    actorDisplayName: actorName(webUser),
+    action: 'ORGANIZATION_HIERARCHY_CHANGED',
+    summaryText: `Moved organisation "${org.name}" from ${label(previousParentId)} to ${label(org.parentOrganizationId)}.`,
+    payload: { organizationId: org.id, previousParentOrganizationId: previousParentId, parentOrganizationId: org.parentOrganizationId },
+  });
 }
 
 // ---------------------------------------------------------------------------

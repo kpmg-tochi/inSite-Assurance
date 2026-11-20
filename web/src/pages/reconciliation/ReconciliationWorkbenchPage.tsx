@@ -5,7 +5,7 @@ import { canIpcTransition, type IpcClaimDto, type IpcClaimStatus, type IpcLineIt
 import type { BoqItemRecordDto, ProjectSummaryDto } from "../../api/types";
 import { formatCompactNaira, formatDateShort, formatDateTimeShort, formatNaira } from "../../lib/formatters";
 import { EvidenceOverlayDrawer } from "../../components/EvidenceOverlayDrawer";
-import { useAuth } from "../../lib/auth-context";
+import { useAuth, useTerm } from "../../lib/auth-context";
 import { CustomSelect, type CustomSelectOption, KpiCard } from "../../components/common";
 import Loader from "../../components/Loader";
 import { useIpcDetailsQuery } from "../../queries/reconciliation/useReconciliationQueries";
@@ -61,6 +61,7 @@ const buttonSecondary =
 
 function WithdrawModal({ projectId, ipc, onClose }: { projectId: string; ipc: IpcClaimDto; onClose: () => void }) {
   const withdrawMutation = useWithdrawIpcMutation(projectId);
+  const term = useTerm();
   const [reason, setReason] = useState("");
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +73,7 @@ function WithdrawModal({ projectId, ipc, onClose }: { projectId: string; ipc: Ip
     }
   };
   return (
-    <ModalShell title={`Withdraw IPC #${ipc.ipcNumber}`} subtitle="Frees the tranche for a new claim" onClose={onClose} maxWidth="max-w-lg">
+    <ModalShell title={`Withdraw ${term("ipc")} #${ipc.ipcNumber}`} subtitle={`Frees the ${term("tranche", { lower: true })} for a new claim`} onClose={onClose} maxWidth="max-w-lg">
       <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs">
         <label className="block font-medium text-slate-700">
           Reason
@@ -92,6 +93,7 @@ export function ReconciliationWorkbenchPage({
   boqItems,
 }: ReconciliationWorkbenchPageProps) {
   const { hasPermission, hasAnyPermission, ratingLabels } = useAuth();
+  const term = useTerm();
   const canSubmitIpc = hasPermission("ipc:submit_claim");
   const [modal, setModal] = useState<ModalState>({ kind: "none" });
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
@@ -131,18 +133,18 @@ export function ReconciliationWorkbenchPage({
   const [contractorFilter, setContractorFilter] = useState<string>("ALL");
   const visibleIpcs = contractorFilter === "ALL" ? ipcs : ipcs.filter((i) => i.projectContractorId === contractorFilter);
   const contractorOptions: CustomSelectOption<string>[] = [
-    { value: "ALL", label: "All contractors" },
+    { value: "ALL", label: `All ${term("contractor", { plural: true, lower: true })}` },
     ...project.contractors.map((c) => ({ value: c.id, label: `${c.organizationName} (${c.tradeCode})` })),
   ];
   const ipcOptions: CustomSelectOption<string>[] = useMemo(
     () =>
       visibleIpcs.map((i) => ({
         value: i.id,
-        label: `${showContractor && i.contractorTradeCode ? `${i.contractorTradeCode} ` : ""}IPC #${String(i.ipcNumber).padStart(2, "0")}: ${i.tranche.name}`,
+        label: `${showContractor && i.contractorTradeCode ? `${i.contractorTradeCode} ` : ""}${term("ipc")} #${String(i.ipcNumber).padStart(2, "0")}: ${i.tranche.name}`,
         badge: STATUS_LABEL[i.status],
         description: `${showContractor && i.contractorName ? `${i.contractorName} · ` : ""}${formatCompactNaira(i.totalClaimedAmountNgn)}`,
       })),
-    [visibleIpcs, showContractor],
+    [visibleIpcs, showContractor, term],
   );
 
   const submitModal =
@@ -171,7 +173,7 @@ export function ReconciliationWorkbenchPage({
           <p className="text-xs text-slate-500 mt-1">Submitting a claim runs evidence reconciliation against field evidence for the claim period.</p>
           {canSubmitIpc && !directMode && (
             <button type="button" onClick={() => setModal({ kind: "submit" })} className={`mt-4 ${buttonPrimary}`}>
-              Submit first IPC claim
+              Submit first {term("ipc")} claim
             </button>
           )}
         </div>
@@ -235,7 +237,7 @@ export function ReconciliationWorkbenchPage({
               title={actions.certify.reason ?? undefined}
               className={buttonPrimary}
             >
-              {report ? "Re-certify valuation" : "Certify valuation"}
+              {report ? `Re-certify ${term("valuation", { lower: true })}` : `Certify ${term("valuation", { lower: true })}`}
             </button>
           )}
           {hasPermission("tranche:approve_disbursement") && report && ipc.status === "MONITOR_CERTIFIED" && (
@@ -246,7 +248,7 @@ export function ReconciliationWorkbenchPage({
               title={actions.decide.reason ?? undefined}
               className={buttonPrimary}
             >
-              {tranchesOn ? "Record tranche decision" : "Record release decision"}
+              {tranchesOn ? `Record ${term("tranche", { lower: true })} decision` : "Record release decision"}
             </button>
           )}
           {actions.reverseDecision.allowed && (
@@ -256,7 +258,7 @@ export function ReconciliationWorkbenchPage({
           )}
           {canSubmitIpc && !directMode && (
             <button type="button" onClick={() => setModal({ kind: "submit" })} className={buttonPrimary}>
-              + Submit new IPC
+              + Submit new {term("ipc")}
             </button>
           )}
         </div>
@@ -284,7 +286,7 @@ export function ReconciliationWorkbenchPage({
         <KpiCard
           icon={<Wallet className="w-4 h-4" />}
           iconVariant="slate"
-          title="Contractor claim"
+          title={`${term("contractor")} claim`}
           value={formatNaira(ipc.totalClaimedAmountNgn)}
           subtitle={`${formatDateShort(ipc.periodStart)} – ${formatDateShort(ipc.periodEnd)} · ${ipc.lineItems.length} line item(s)`}
         />
@@ -300,11 +302,11 @@ export function ReconciliationWorkbenchPage({
           icon={<ShieldAlert className="w-4 h-4" />}
           iconVariant="amber"
           title="Recommended holdback"
-          value={report ? formatNaira(report.recommendedHoldbackAmountNgn) : "Pending valuation"}
+          value={report ? formatNaira(report.recommendedHoldbackAmountNgn) : `Pending ${term("valuation", { lower: true })}`}
           valueColorClass="text-amber-700"
           subtitle={
             <span className="text-amber-700 font-medium">
-              {flaggedCount} line(s) rated {ratingLabels.CONTRADICTED.label}, {ratingLabels.UNSUPPORTED.label}{holdPointsOn ? " or with an unmet hold point" : ""}
+              {flaggedCount} line(s) rated {ratingLabels.CONTRADICTED.label}, {ratingLabels.UNSUPPORTED.label}{holdPointsOn ? ` or with an unmet ${term("holdPoint", { lower: true })}` : ""}
             </span>
           }
         />
@@ -318,7 +320,7 @@ export function ReconciliationWorkbenchPage({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <div className="text-xs font-bold text-slate-900">Smart Visit Planner</div>
-                <p className="text-[11px] text-slate-500 mt-0.5">{holdPointsOn ? "Lines lacking independent evidence or with an unmet hold point" : "Lines lacking independent evidence"}</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">{holdPointsOn ? `Lines lacking independent evidence or with an unmet ${term("holdPoint", { lower: true })}` : "Lines lacking independent evidence"}</p>
               </div>
               <button type="button" onClick={() => setModal({ kind: "itinerary" })} className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 shrink-0">
                 <Printer className="w-3.5 h-3.5 text-brand-primary" />
@@ -386,7 +388,7 @@ export function ReconciliationWorkbenchPage({
         )}
 
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm">
-          <div className="text-xs font-bold text-slate-900">Valuation and release</div>
+          <div className="text-xs font-bold text-slate-900">{term("valuation")} and release</div>
           {report ? (
             <div className="mt-3 space-y-2.5 text-xs">
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80">
@@ -423,7 +425,7 @@ export function ReconciliationWorkbenchPage({
                 <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium">
                   {report.approval && !report.approval.completed && report.approval.currentStepOrder !== report.approval.steps.length
                     ? "Going through the disbursement chain before the release decision."
-                    : "Awaiting the lender decision."}
+                    : `Awaiting the ${term("funderParty", { lower: true })} decision.`}
                 </div>
               ) : null}
 
@@ -458,7 +460,7 @@ export function ReconciliationWorkbenchPage({
               )}
             </div>
           ) : (
-            <p className="text-xs text-slate-500 mt-3">Not yet certified by the independent monitor.</p>
+            <p className="text-xs text-slate-500 mt-3">Not yet certified by the {term("monitorParty", { lower: true })}.</p>
           )}
         </div>
       </div>

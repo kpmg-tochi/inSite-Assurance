@@ -214,6 +214,23 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     surface: 'WEB',
     unlocksViews: ['Workflow Templates'],
   },
+  // Phase 11: delivery models
+  {
+    key: 'project_types:manage',
+    name: 'Manage Project Types',
+    description: 'Define delivery models (project types): their workflow template, ownership and party rules, and defaults.',
+    category: 'TENANT_ADMIN',
+    surface: 'WEB',
+    unlocksViews: ['Settings -> Project Types'],
+  },
+  {
+    key: 'regions:manage',
+    name: 'Manage Regions',
+    description: 'Add, rename and archive the regions and areas projects can be placed in.',
+    category: 'TENANT_ADMIN',
+    surface: 'WEB',
+    unlocksViews: ['Settings -> Regions'],
+  },
 
   // 2. PORTFOLIO_PROJECTS
   {
@@ -231,6 +248,23 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     category: 'PORTFOLIO_PROJECTS',
     surface: 'WEB',
     unlocksViews: ['All Projects (Tenant-Wide)'],
+  },
+  {
+    key: 'projects:view_organization_tree',
+    name: 'View Projects Owned by My Organisation Tree',
+    description:
+      "See every project owned by the user's organisation or by any organisation below it in the hierarchy (Phase 11).",
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['All Projects (Organisation Tree)'],
+  },
+  {
+    key: 'projects:view_portfolio',
+    name: 'View Portfolio Dashboard',
+    description: 'Open the portfolio dashboard: a map of every visible project with portfolio KPI cards.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Portfolio Dashboard'],
   },
   {
     key: 'projects:view_executive_matrix',
@@ -917,6 +951,11 @@ export const AuditActionTypeEnum = z.enum([
   'RETENTION_RELEASED',
   'RETENTION_RELEASE_REQUESTED',
   'RETENTION_RELEASE_CANCELLED',
+  // Phase 11: delivery models
+  'PROJECT_TYPE_SAVED',
+  'PROJECT_TYPE_APPLIED',
+  'ORGANIZATION_HIERARCHY_CHANGED',
+  'TERMINOLOGY_UPDATED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 
@@ -1063,6 +1102,37 @@ export type ApprovalChainType = z.infer<typeof ApprovalChainTypeEnum>;
 
 export const ApprovalSubjectTypeEnum = z.enum(['WORKDAY_REPORT', 'VALUATION_REPORT']);
 export type ApprovalSubjectType = z.infer<typeof ApprovalSubjectTypeEnum>;
+
+/**
+ * Phase 11: which organisation an approval step's actor must belong to, relative to the project.
+ * ANY keeps the Phase 7 behaviour (permission and optional role only).
+ */
+export const ApprovalOrganizationScopeEnum = z.enum(['ANY', 'PROJECT_OWNER', 'PROJECT_OWNER_OR_ANCESTOR', 'FUNDER']);
+export type ApprovalOrganizationScope = z.infer<typeof ApprovalOrganizationScopeEnum>;
+
+export const APPROVAL_ORGANIZATION_SCOPE_META: Record<ApprovalOrganizationScope, { label: string; description: string }> = {
+  ANY: { label: 'Any organisation', description: 'Anyone with the permission (and role, if named) may act.' },
+  PROJECT_OWNER: {
+    label: 'Owning organisation',
+    description: "Only people in the project's owning organisation may act.",
+  },
+  PROJECT_OWNER_OR_ANCESTOR: {
+    label: 'Owning organisation or above',
+    description: "People in the owning organisation or any organisation above it (e.g. the flagship) may act.",
+  },
+  FUNDER: { label: 'Funding organisation', description: "Only people in the project's funding organisation may act." },
+};
+
+/** Phase 11: who a project benefits (the handover recipient defaults to the primary one). */
+export const BeneficiaryTypeEnum = z.enum(['SCHOOL', 'COMMUNITY', 'INSTITUTION', 'OTHER']);
+export type BeneficiaryType = z.infer<typeof BeneficiaryTypeEnum>;
+
+export const BENEFICIARY_TYPE_META: Record<BeneficiaryType, { label: string }> = {
+  SCHOOL: { label: 'School' },
+  COMMUNITY: { label: 'Community' },
+  INSTITUTION: { label: 'Institution' },
+  OTHER: { label: 'Other' },
+};
 
 /** REJECT is stored for history but no endpoint accepts it yet (see Phase 7 section 7). */
 export const ApprovalDecisionEnum = z.enum(['APPROVE', 'RETURN', 'REJECT']);

@@ -13,6 +13,7 @@ import {
   MobileTenantBranding,
   SessionContractor,
   resolveRatingLabels,
+  resolveTerminology,
   WebLoginRequest,
   WebRegisterRequest,
   WebUserProfile,
@@ -105,6 +106,7 @@ export function serializeWebUserProfile(user: LoadedWebUser): WebUserProfile {
     professionalLicenseNumber: user.professionalLicenseNumber,
     mustChangePassword: user.mustChangePassword,
     ratingLabels: resolveRatingLabels(user.tenant.evidenceRatingLabels),
+    terminology: resolveTerminology(user.tenant.terminologyLabels),
   };
 }
 
@@ -593,6 +595,7 @@ export function mobileTenantBranding(tenant: {
   name: string;
   brandingConfig: unknown;
   defaultCurrency: string;
+  terminologyLabels: unknown;
 }): MobileTenantBranding {
   const branding = parseTenantBranding(tenant.brandingConfig);
   return {
@@ -600,6 +603,8 @@ export function mobileTenantBranding(tenant: {
     logoUrl: branding.logoUrl ?? null,
     primaryColorHex: branding.primaryColorHex,
     currency: tenant.defaultCurrency,
+    // Phase 11: tenant wording for domain terms.
+    terminology: resolveTerminology(tenant.terminologyLabels),
   };
 }
 
@@ -620,6 +625,7 @@ function buildMobileSessionResponse(
     tenantId: string;
     tenant: {
       evidenceRatingLabels: unknown;
+      terminologyLabels: unknown;
       name: string;
       brandingConfig: unknown;
       defaultCurrency: string;
@@ -773,6 +779,7 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
             select: {
               status: true,
               evidenceRatingLabels: true,
+              terminologyLabels: true,
               name: true,
               brandingConfig: true,
               defaultCurrency: true,
@@ -932,6 +939,7 @@ export async function demoSkipVerificationMobile(
             select: {
               status: true,
               evidenceRatingLabels: true,
+              terminologyLabels: true,
               name: true,
               brandingConfig: true,
               defaultCurrency: true,

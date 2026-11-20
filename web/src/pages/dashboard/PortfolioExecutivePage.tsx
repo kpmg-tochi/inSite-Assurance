@@ -23,7 +23,9 @@ import { usePortfolioExecutiveQuery } from '../../queries/projects/useContractor
 import { formatCompactNaira, formatNaira } from '../../lib/formatters';
 import type { PortfolioProjectHealthItem } from '../../api/types';
 import Loader from '../../components/Loader';
-import { useAuth } from '../../lib/auth-context';
+import { useAuth, useTerm } from '../../lib/auth-context';
+import { DeliveryModelFilters, ProjectTypeChip } from '../../components/projects/DeliveryModelFilters';
+import type { ProjectListFilters } from '@insite/shared';
 import {
   StandardTable,
   TableBadge,
@@ -42,7 +44,17 @@ export function PortfolioExecutivePage({
   onSelectProject,
 }: PortfolioExecutivePageProps) {
   useAuth();
-  const { data: summary, isLoading, refetch } = usePortfolioExecutiveQuery();
+  const term = useTerm();
+  // Phase 11: type / region / owner filters run on the server so the totals follow them.
+  const [deliveryFilters, setDeliveryFilters] = useState<ProjectListFilters>({});
+  const { data: summary, isLoading, refetch } = usePortfolioExecutiveQuery(deliveryFilters);
+  const [ownersSeen, setOwnersSeen] = useState<Array<{ id: string; name: string }>>([]);
+  React.useEffect(() => {
+    const found = (summary?.projects ?? []).map((p) => p.owningOrganization).filter((o): o is { id: string; name: string } => Boolean(o));
+    if (found.some((o) => !ownersSeen.some((s) => s.id === o.id))) {
+      setOwnersSeen((prev) => [...prev, ...found.filter((o) => !prev.some((s) => s.id === o.id))]);
+    }
+  }, [summary, ownersSeen]);
   const [searchTerm, setSearchTerm] = useState('');
   // Phase 7: per-project process settings, to hide tranche and hold-point details a project turned off.
   // One cached request per listed project; until loaded (or if unreadable) the details are shown.
@@ -64,8 +76,9 @@ export function PortfolioExecutivePage({
                 {item.codePrefix}
               </span>
               <span className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-slate-100 text-slate-600">
-                {item.stateLocation}
+                {item.region?.path ?? item.stateLocation}
               </span>
+              <ProjectTypeChip type={item.projectType} />
             </div>
             <div
               className="font-semibold text-slate-900 text-xs mt-0.5 max-w-xs truncate"
@@ -79,7 +92,7 @@ export function PortfolioExecutivePage({
       {
         id: 'counterparties',
         header: 'Counterparties',
-        tooltip: 'Contractor engineering firm and financing Lender',
+        tooltip: `Contractor and ${term('funderParty', { lower: true })}`,
         width: 'w-52',
         cell: (item) => (
           <div className="space-y-0.5">
@@ -94,9 +107,12 @@ export function PortfolioExecutivePage({
             </div>
             <div
               className="text-[11px] text-slate-500 truncate"
-              title={`Lender: ${item.lenderName}`}
+              title={`${term('funderParty')}: ${item.lenderName}`}
             >
-              Lender: {item.lenderName}
+              {term('funderParty')}: {item.lenderName}
+              {item.owningOrganization && item.owningOrganization.name !== item.lenderName && (
+                <span className="block">Owner: {item.owningOrganization.name}</span>
+              )}
             </div>
           </div>
         ),
@@ -139,7 +155,7 @@ export function PortfolioExecutivePage({
               <span>{item.certifiedProgressPct}%</span>
               {item.activeTrancheNumber && (processMap.get(item.projectId)?.enableTranchesAndCps ?? true) && (
                 <span className="text-brand-primary text-[10px]">
-                  Tranche #{item.activeTrancheNumber}
+                  {term('tranche')} #{item.activeTrancheNumber}
                 </span>
               )}
             </div>
@@ -220,7 +236,7 @@ export function PortfolioExecutivePage({
         ),
       },
     ],
-    [onSelectProject, processMap]
+    [onSelectProject, processMap, term]
   );
 
   if (isLoading) {
@@ -274,7 +290,7 @@ export function PortfolioExecutivePage({
             </span>
             <span className="text-xs text-slate-400">·</span>
             <span className="text-xs font-semibold text-slate-500">
-              Lender Credit Desk &amp; Independent Monitoring Committee
+              {term('funderParty')} &amp; {term('monitorParty')} oversight
             </span>
           </div>
           <h1 className="text-lg font-bold text-slate-900 mt-1">
@@ -433,6 +449,8 @@ export function PortfolioExecutivePage({
           </Link>
         </div>
       )}
+
+      <DeliveryModelFilters filters={deliveryFilters} onChange={setDeliveryFilters} owners={ownersSeen} />
 
       {/* 4. Comparative Project Matrix Standard Table */}
       <StandardTable<PortfolioProjectHealthItem>

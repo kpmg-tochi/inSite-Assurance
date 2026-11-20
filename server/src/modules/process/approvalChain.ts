@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import {
   ApprovalActionDto,
   ApprovalChainType,
+  ApprovalOrganizationScope,
   ApprovalProgressDto,
   ApprovalSubjectType,
   SEGREGATED_DISBURSEMENT_PERMISSIONS,
@@ -10,6 +11,7 @@ import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import { hasWebPermission, WebJwtPayload } from '../../middleware/auth.middleware';
 import { ApprovalStepRow, getChainVersionSteps } from './processConfig.service';
+import { organizationAncestorIds } from '../organizations/hierarchy';
 
 /**
  * Approval chain engine (Phase 7). A chain is an ordered list of steps; each step names a
@@ -17,7 +19,10 @@ import { ApprovalStepRow, getChainVersionSteps } from './processConfig.service';
  * - a step with an amount threshold is skipped when the amount is below it (disbursement only);
  * - one user may not act on two consecutive steps of the same item;
  * - segregated permissions (certify, approve, verify direct) must be held through a role, never by
- *   the platform super admin bypass (D-3.1).
+ *   the platform super admin bypass (D-3.1);
+ * - Phase 11: a step's organisation scope limits it to the project owner's organisation, the owner
+ *   or an organisation above it, or the funder. There is no bypass, not even for the platform super
+ *   admin.
  */
 
 type Db = Prisma.TransactionClient | typeof prisma;
@@ -32,14 +37,94 @@ export function nextApplicableStep(steps: ApprovalStepRow[], afterOrder: number,
   return steps.find((s) => s.stepOrder > afterOrder && stepApplies(s, amount)) ?? null;
 }
 
-/** Whether the user holds what a step requires (permission, and the role if one is named). */
-export function holdsStep(webUser: WebJwtPayload, step: Pick<ApprovalStepRow, 'requiredPermissionKey' | 'requiredRoleId'>): boolean {
+/** The project's parties an organisation scope is resolved against (Phase 11). */
+export interface ProjectOrgContext {
+  owningOrganizationId: string | null;
+  /** The owner's ancestors, nearest first. */
+  ownerAncestorIds: string[];
+  funderOrganizationId: string | null;
+}
+
+export async function loadProjectOrgContext(db: Db, projectId: string): Promise<ProjectOrgContext> {
+  const project = await db.project.findUniqueOrThrow({
+    where: { id: projectId },
+    select: { owningOrganizationId: true, lenderOrganizationId: true },
+  });
+  return {
+    owningOrganizationId: project.owningOrganizationId,
+    ownerAncestorIds: project.owningOrganizationId ? await organizationAncestorIds(project.owningOrganizationId, db) : [],
+    funderOrganizationId: project.lenderOrganizationId,
+  };
+}
+
+/** Loads the context only when the step is organisation-scoped; pass the result to the gate. */
+export async function orgContextForStep(
+  db: Db,
+  projectId: string,
+  step: Pick<ApprovalStepRow, 'organizationScope'> | null
+): Promise<ProjectOrgContext | null> {
+  if (!step || step.organizationScope === 'ANY') return null;
+  return loadProjectOrgContext(db, projectId);
+}
+
+/** Whether an organisation satisfies a scope. Fails closed when the context is missing. */
+export function organizationScopeAllows(
+  scope: ApprovalOrganizationScope,
+  organizationId: string,
+  ctx: ProjectOrgContext | null
+): boolean {
+  if (scope === 'ANY') return true;
+  if (!ctx) return false;
+  switch (scope) {
+    case 'PROJECT_OWNER':
+      return ctx.owningOrganizationId !== null && organizationId === ctx.owningOrganizationId;
+    case 'PROJECT_OWNER_OR_ANCESTOR':
+      return (
+        ctx.owningOrganizationId !== null &&
+        (organizationId === ctx.owningOrganizationId || ctx.ownerAncestorIds.includes(organizationId))
+      );
+    case 'FUNDER':
+      return ctx.funderOrganizationId !== null && organizationId === ctx.funderOrganizationId;
+    default:
+      return false;
+  }
+}
+
+function organizationScopeReason(step: Pick<ApprovalStepRow, 'label' | 'organizationScope'>, ctx: ProjectOrgContext | null): string {
+  switch (step.organizationScope) {
+    case 'PROJECT_OWNER':
+      return ctx?.owningOrganizationId
+        ? `"${step.label}" is limited to people in the project's owning organisation.`
+        : `"${step.label}" is limited to the owning organisation, and this project has none yet.`;
+    case 'PROJECT_OWNER_OR_ANCESTOR':
+      return ctx?.owningOrganizationId
+        ? `"${step.label}" is limited to people in the project's owning organisation or an organisation above it.`
+        : `"${step.label}" is limited to the owning organisation, and this project has none yet.`;
+    case 'FUNDER':
+      return ctx?.funderOrganizationId
+        ? `"${step.label}" is limited to people in the project's funding organisation.`
+        : `"${step.label}" is limited to the funding organisation, and this project has none yet.`;
+    default:
+      return `You cannot act on "${step.label}".`;
+  }
+}
+
+/**
+ * Whether the user holds what a step requires: the permission, the role if one is named, and
+ * (Phase 11) membership of the organisation the step's scope names.
+ */
+export function holdsStep(
+  webUser: WebJwtPayload,
+  step: Pick<ApprovalStepRow, 'requiredPermissionKey' | 'requiredRoleId' | 'organizationScope'>,
+  orgContext: ProjectOrgContext | null
+): boolean {
   const key = step.requiredPermissionKey;
   const hasPermission = SEGREGATED_DISBURSEMENT_PERMISSIONS.includes(key)
     ? webUser.permissions.includes(key)
     : hasWebPermission(webUser, key);
   if (!hasPermission) return false;
-  return !step.requiredRoleId || step.requiredRoleId === webUser.roleId;
+  if (step.requiredRoleId && step.requiredRoleId !== webUser.roleId) return false;
+  return organizationScopeAllows(step.organizationScope, webUser.organizationId, orgContext);
 }
 
 type ActionRow = Prisma.ApprovalActionGetPayload<{ include: { actor: { select: { fullName: true } }; step: { select: { label: true } } } }>;
@@ -76,16 +161,21 @@ export function gateForStep(params: {
   /** e.g. the reporter's user id, who may never review their own report. */
   excludedUserId?: string | null;
   excludedReason?: string;
+  /** Phase 11: required for an organisation-scoped step (load it with orgContextForStep). */
+  orgContext: ProjectOrgContext | null;
 }): ActGate {
   const { webUser, step, actions } = params;
   if (!step) return { allowed: false, reason: 'Nothing is waiting for approval.' };
-  if (!holdsStep(webUser, step)) {
+  if (!holdsStep(webUser, { ...step, organizationScope: 'ANY' }, null)) {
     return {
       allowed: false,
       reason: step.requiredRoleId
         ? `"${step.label}" needs a specific role and the ${step.requiredPermissionKey} permission.`
         : `"${step.label}" needs the ${step.requiredPermissionKey} permission.`,
     };
+  }
+  if (!organizationScopeAllows(step.organizationScope, webUser.organizationId, params.orgContext)) {
+    return { allowed: false, reason: organizationScopeReason(step, params.orgContext) };
   }
   if (params.excludedUserId && params.excludedUserId === webUser.userId) {
     return { allowed: false, reason: params.excludedReason ?? 'You cannot act on your own item.' };
@@ -99,7 +189,9 @@ export function gateForStep(params: {
 export function assertMayAct(gate: ActGate, step: ApprovalStepRow | null): void {
   if (gate.allowed) return;
   if (!step) throw new AppError('Nothing is waiting for approval', 409, 'NOT_AWAITING_APPROVAL');
-  const code = gate.reason?.includes('previous step')
+  const code = gate.reason?.includes('is limited to')
+    ? 'NOT_STEP_ORGANIZATION'
+    : gate.reason?.includes('previous step')
     ? 'SAME_USER_CONSECUTIVE_STEPS'
     : gate.reason?.includes('own')
       ? 'SEGREGATION_OF_DUTIES'
@@ -197,6 +289,7 @@ export async function buildApprovalProgress(
       requiredRoleName: null,
       minAmountThresholdNgn: s.minAmountThresholdNgn === null ? null : Number(s.minAmountThresholdNgn),
       isSystemStep: s.isSystemStep,
+      organizationScope: s.organizationScope,
       version: s.version,
       state,
     };
@@ -207,6 +300,7 @@ export async function buildApprovalProgress(
         webUser: params.viewer,
         step: current,
         actions,
+        orgContext: await orgContextForStep(db, params.projectId, current),
         excludedUserId: params.excludedUserId,
         excludedReason: params.excludedReason,
       })

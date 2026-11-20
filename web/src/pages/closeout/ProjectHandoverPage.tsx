@@ -8,6 +8,7 @@ import {
   type HandoverLinkDto,
   type HandoverLinkIssuedDto,
   type HandoverStakeholderType,
+  type ProjectBeneficiaryDto,
   type HandoverSubmissionDto,
 } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
@@ -122,6 +123,7 @@ export function ProjectHandoverPage({ project }: { project: ProjectSummaryDto })
       {createOpen && (
         <CreateLinkModal
           projectId={project.id}
+          primaryBeneficiary={project.primaryBeneficiary ?? null}
           onClose={() => setCreateOpen(false)}
           onIssued={(i) => {
             setIssued(i);
@@ -268,21 +270,32 @@ function LinksTable({
   );
 }
 
+/** Phase 11: the stakeholder type a beneficiary most likely is. */
+function stakeholderTypeFor(b: ProjectBeneficiaryDto | null): HandoverStakeholderType {
+  if (!b) return "COMMUNITY_REPRESENTATIVE";
+  if (b.beneficiaryType === "COMMUNITY") return "COMMUNITY_REPRESENTATIVE";
+  if (b.beneficiaryType === "SCHOOL" || b.beneficiaryType === "INSTITUTION") return "CLIENT_STAFF";
+  return "OTHER";
+}
+
 function CreateLinkModal({
   projectId,
+  primaryBeneficiary,
   onClose,
   onIssued,
 }: {
   projectId: string;
+  /** Phase 11: pre-fills the recipient (still editable). */
+  primaryBeneficiary: ProjectBeneficiaryDto | null;
   onClose: () => void;
   onIssued: (i: HandoverLinkIssuedDto) => void;
 }) {
   const mutation = useCreateHandoverLinkMutation(projectId);
   const [form, setForm] = useState({
-    label: "",
-    recipientName: "",
-    recipientContact: "",
-    stakeholderType: "COMMUNITY_REPRESENTATIVE" as HandoverStakeholderType,
+    label: primaryBeneficiary ? `Handover to ${primaryBeneficiary.name}` : "",
+    recipientName: primaryBeneficiary ? primaryBeneficiary.contactName || primaryBeneficiary.name : "",
+    recipientContact: primaryBeneficiary?.contactEmail ?? "",
+    stakeholderType: stakeholderTypeFor(primaryBeneficiary),
     handoverSummary: "",
     expiresInDays: HANDOVER_LIMITS.defaultExpiryDays as number,
     requiresOtp: true,

@@ -1,3 +1,4 @@
+import type { PortfolioOverviewDto, ProjectListFilters } from '@insite/shared';
 import type {
   ContractorVerificationRecordDto,
   PortfolioExecutiveSummaryDto,
@@ -25,10 +26,18 @@ export const reviewContractorVerification = async (
   return data.data;
 };
 
-export const getPortfolioExecutiveSummary = async () => {
+/** Phase 11: optional type / region / owner filters (totals are computed over the filtered set). */
+export const getPortfolioExecutiveSummary = async (filters: ProjectListFilters = {}) => {
   const { data } = await api.get<ApiEnvelope<PortfolioExecutiveSummaryDto>>(
-    '/projects/portfolio/executive-summary'
+    '/projects/portfolio/executive-summary',
+    { params: filters }
   );
   return data.data;
 };
 
+
+/** Portfolio dashboard: a map point per visible live project plus KPIs (projects:view_portfolio). */
+export const getPortfolioOverview = async (filters: ProjectListFilters = {}) => {
+  const { data } = await api.get<ApiEnvelope<PortfolioOverviewDto>>('/projects/portfolio/overview', { params: filters });
+  return data.data;
+};

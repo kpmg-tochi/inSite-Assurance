@@ -11,7 +11,11 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   resolveRatingLabels,
+  resolveTerm,
+  resolveTerminology,
   SEGREGATED_DISBURSEMENT_PERMISSIONS,
+  type ResolvedTerminology,
+  type TerminologyKey,
   type ChangePasswordRequest,
   type ResolvedRatingLabels,
   type TenantBrandingConfig,
@@ -84,6 +88,8 @@ interface AuthContextValue {
   hasAnyPermission: (...permissionKeys: string[]) => boolean;
   /** Tenant display labels for evidence ratings (defaults until the profile loads). */
   ratingLabels: ResolvedRatingLabels;
+  /** Phase 11: tenant wording for domain terms (defaults until the profile loads). */
+  terminology: ResolvedTerminology;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -197,6 +203,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [user]
   );
 
+  const terminology = useMemo(() => user?.terminology ?? resolveTerminology({}), [user]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -210,6 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         hasPermission,
         hasAnyPermission,
         ratingLabels,
+        terminology,
       }}
     >
       {children}
@@ -223,4 +232,17 @@ export function useAuth(): AuthContextValue {
     throw new Error("useAuth must be used inside an AuthProvider");
   }
   return ctx;
+}
+
+/**
+ * Phase 11: the tenant's word for a domain term. term("funderParty") gives "Lender" or "Funding
+ * authority"; { plural: true } for the plural, { lower: true } mid-sentence (acronyms kept).
+ * Display only: never use the result as an API value.
+ */
+export function useTerm() {
+  const { terminology } = useAuth();
+  return useCallback(
+    (key: TerminologyKey, options: { plural?: boolean; lower?: boolean } = {}) => resolveTerm(terminology, key, options),
+    [terminology]
+  );
 }

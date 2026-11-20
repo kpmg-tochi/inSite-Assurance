@@ -87,9 +87,19 @@ describe('Phase 1 Multi-Tenant SaaS & Normalized RBAC', () => {
     });
     const assignedWhere = buildProjectVisibilityWhere(assignedOnlyUser);
     assert.equal(assignedWhere.tenantId, 'tenant-xyz');
-    assert.deepEqual(assignedWhere.userAssignments, {
-      some: { userId: 'contractor-99' },
+    // Phase 11: the access branch sits under AND (assignment, or the organisation tree).
+    assert.deepEqual(assignedWhere.AND, [{ userAssignments: { some: { userId: 'contractor-99' } } }]);
+
+    const treeUser = makeWebUser({
+      userId: 'org-admin-1',
+      tenantId: 'tenant-xyz',
+      organizationId: 'org-1',
+      permissions: ['projects:view_assigned', 'projects:view_organization_tree'],
     });
+    const treeWhere = buildProjectVisibilityWhere(treeUser);
+    const branch = (treeWhere.AND as Array<{ OR: unknown[] }>)[0];
+    assert.equal(branch.OR.length, 2);
+    assert.deepEqual(branch.OR[0], { userAssignments: { some: { userId: 'org-admin-1' } } });
 
     const tenantWideUser = makeWebUser({
       tenantId: 'tenant-xyz',
@@ -97,7 +107,7 @@ describe('Phase 1 Multi-Tenant SaaS & Normalized RBAC', () => {
     });
     const tenantWhere = buildProjectVisibilityWhere(tenantWideUser);
     assert.equal(tenantWhere.tenantId, 'tenant-xyz');
-    assert.equal(tenantWhere.userAssignments, undefined);
+    assert.equal(tenantWhere.AND, undefined);
 
     const activeOnly = { OR: [{ status: { in: ['ACTIVE'] } }] };
     const platformAdmin = makeWebUser({ isPlatformSuperAdmin: true });

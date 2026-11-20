@@ -16,7 +16,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { InSiteCamera, type CameraCaptureResult } from "../components/camera";
-import { useProfile } from "../context/ProfileContext";
+import { useActiveBranding, useProfile } from "../context/ProfileContext";
+import { resolveTerm } from "@insite/shared";
 import { useSubmitIncidentMutation } from "../queries/incidents/useIncidentMutations";
 import type { RootStackParamList } from "../navigation/types";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -27,6 +28,8 @@ export const SpecialIncidentModal: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { activeProjectId: projectId } = useProfile();
+  // Phase 11: tenant wording for the funding party.
+  const terms = useActiveBranding().terminology;
   // Chainage only means something on a linear corridor project.
   const isCorridor = getLoadedBaselinePack(projectId)?.geofenceMode === "LINEAR_CORRIDOR";
   const onClose = () => navigation.goBack();
@@ -86,7 +89,7 @@ export const SpecialIncidentModal: React.FC = () => {
         props: {
           title: "Incident saved",
           message: isConfidential
-            ? "Saved on this device as a protected disclosure. It will be sent to the Monitor and Lender as soon as there is a connection."
+            ? `Saved on this device as a protected disclosure. It will be sent to the Monitor and ${resolveTerm(terms, "funderParty")} as soon as there is a connection.`
             : "Saved on this device. It will be sent as soon as there is a connection.",
         },
       });
@@ -315,7 +318,7 @@ export const SpecialIncidentModal: React.FC = () => {
             <Text style={styles.submitButtonText}>
               {isSubmitting
                 ? "Transmitting Escalation..."
-                : "Transmit Escalation to Monitor & Lender"}
+                : `Transmit Escalation to Monitor & ${resolveTerm(terms, "funderParty")}`}
             </Text>
           </TouchableOpacity>
         </ScrollView>

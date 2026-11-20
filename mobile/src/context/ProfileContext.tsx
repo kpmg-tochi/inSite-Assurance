@@ -15,6 +15,8 @@ import {
   type MobileChangePasswordResponse,
   type MobileLoginResponse,
   type MobileTenantBranding,
+  resolveTerminology,
+  type ResolvedTerminology,
 } from '@insite/shared';
 import { defaultColors } from '../styles/commonStyles';
 import {
@@ -99,6 +101,8 @@ export interface ActiveBranding {
   primaryColor: string;
   /** ISO 4217 code for money display. */
   currency: string;
+  /** Phase 11: tenant wording for domain terms (defaults when the payload has none). */
+  terminology: ResolvedTerminology;
 }
 
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
@@ -110,6 +114,7 @@ export const NEUTRAL_BRANDING: ActiveBranding = {
   logoUrl: null,
   primaryColor: defaultColors.primary,
   currency: 'NGN',
+  terminology: resolveTerminology({}),
 };
 
 function toActiveBranding(b: MobileTenantBranding | null | undefined): ActiveBranding {
@@ -120,6 +125,7 @@ function toActiveBranding(b: MobileTenantBranding | null | undefined): ActiveBra
     logoUrl: b.logoUrl || null,
     primaryColor: HEX_COLOR.test(b.primaryColorHex) ? b.primaryColorHex : NEUTRAL_BRANDING.primaryColor,
     currency: b.currency || NEUTRAL_BRANDING.currency,
+    terminology: b.terminology ?? NEUTRAL_BRANDING.terminology,
   };
 }
 

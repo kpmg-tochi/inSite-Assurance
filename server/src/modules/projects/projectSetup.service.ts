@@ -20,7 +20,10 @@ import {
   ProjectSetupStepId,
   ProjectSiteStep,
   ProjectTeamStep,
+  partyRulesFor,
+  ProjectBeneficiaryInput,
   ReportingCadence,
+  resolveProjectTypeConfig,
   SetupIssue,
   SetupStepStatus,
   addDays,
@@ -51,6 +54,13 @@ import {
   initialiseProjectProcess,
 } from '../process/processConfig.service';
 import { countStandardsDocs } from '../standards/standards.service';
+import {
+  applyProjectTypeToProject,
+  PROJECT_TYPE_SUMMARY_SELECT,
+  projectTypeSummary,
+  tenantHasActiveProjectTypes,
+} from '../projectTypes/projectTypes.service';
+import { assertRegionUsable, REGION_SUMMARY_SELECT, regionSummary } from '../regions/regions.service';
 import type { ProjectProcessStep } from '@insite/shared';
 
 /**
@@ -109,6 +119,11 @@ const SETUP_INCLUDE = {
   },
   monitorOrganization: { select: { id: true, name: true } },
   lenderOrganization: { select: { id: true, name: true } },
+  // Phase 11
+  owningOrganization: { select: { id: true, name: true } },
+  projectType: { select: PROJECT_TYPE_SUMMARY_SELECT },
+  region: { select: REGION_SUMMARY_SELECT },
+  beneficiaries: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
   tranches: { orderBy: { trancheNumber: 'asc' }, include: { conditionsPrecedent: { orderBy: { referenceCode: 'asc' } } } },
   userAssignments: { select: { userId: true } },
 } satisfies Prisma.ProjectInclude;
@@ -118,7 +133,7 @@ type SetupProjectRow = Prisma.ProjectGetPayload<{ include: typeof SETUP_INCLUDE 
 async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
   const project = await db.project.findUnique({ where: { id: projectId }, include: SETUP_INCLUDE });
   if (!project) throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
-  const [contractors, itemCount, unmappedCount, unassignedContractorCount, holdPointCount, budgetSum, process, standards] =
+  const [contractors, itemCount, unmappedCount, unassignedContractorCount, holdPointCount, budgetSum, process, standards, tenantHasTypes] =
     await Promise.all([
       getProjectContractors(db, projectId),
       db.boqItem.count({ where: { projectId } }),
@@ -128,12 +143,16 @@ async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
       db.boqItem.aggregate({ where: { projectId }, _sum: { budgetedCostNgn: true } }),
       getProjectProcessSettings(projectId, db),
       countStandardsDocs(db, projectId),
+      tenantHasActiveProjectTypes(db, project.tenantId),
     ]);
   return {
     project,
     contractors,
     process,
     standards,
+    tenantHasTypes,
+    /** Phase 11: the project type's rules (from the snapshot), or today's rules without a type. */
+    typeConfig: resolveProjectTypeConfig(project.projectTypeSnapshotJson),
     boq: {
       itemCount,
       unmappedCount,
@@ -179,15 +198,38 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
     description: project.description,
     totalBudgetNgn: budget ?? undefined,
   });
-  out.basics = { issues: basics.success ? [] : zodIssues(basics.error), warnings: [] };
+  const basicsIssues: SetupIssue[] = basics.success ? [] : zodIssues(basics.error);
+  const rules = partyRulesFor(loaded.typeConfig);
+  // Phase 11: a tenant with project types requires one; the type may require a region.
+  if (loaded.tenantHasTypes && !project.projectTypeId) {
+    basicsIssues.push({ code: 'PROJECT_TYPE_REQUIRED', message: 'Choose the project type.', field: 'projectTypeId' });
+  }
+  if (rules.regionRequired && !project.regionId) {
+    basicsIssues.push({ code: 'REGION_REQUIRED', message: 'Choose the region.', field: 'regionId' });
+  }
+  out.basics = { issues: basicsIssues, warnings: [] };
 
-  // Parties
+  // Parties (Phase 11: which parties are required follows the project type)
   const parties: SetupIssue[] = [];
-  if (!project.monitorOrganizationId) {
+  if (rules.owningOrganizationRequired && !project.owningOrganizationId) {
+    parties.push({ code: 'OWNER_REQUIRED', message: 'Choose the owning organisation.', field: 'owningOrganizationId' });
+  }
+  const allowedOwners = loaded.typeConfig?.ownership.allowedOwningOrganizationIds ?? null;
+  if (project.owningOrganizationId && allowedOwners && !allowedOwners.includes(project.owningOrganizationId)) {
+    parties.push({
+      code: 'OWNER_NOT_ALLOWED',
+      message: 'The owning organisation is not one this project type allows.',
+      field: 'owningOrganizationId',
+    });
+  }
+  if (rules.monitorRequired && !project.monitorOrganizationId) {
     parties.push({ code: 'MONITOR_REQUIRED', message: 'Choose the monitor organisation.', field: 'monitorOrganization' });
   }
-  if (!project.lenderOrganizationId) {
-    parties.push({ code: 'LENDER_REQUIRED', message: 'Choose the lender organisation.', field: 'lenderOrganization' });
+  if (rules.funderRequired && !project.lenderOrganizationId) {
+    parties.push({ code: 'LENDER_REQUIRED', message: 'Choose the funding organisation.', field: 'lenderOrganization' });
+  }
+  if (rules.beneficiaryRequired && project.beneficiaries.length === 0) {
+    parties.push({ code: 'BENEFICIARY_REQUIRED', message: 'Add at least one beneficiary.', field: 'beneficiaries' });
   }
   for (const i of contractorModelIssues(
     project.contractorExecutionMode as ContractorExecutionMode | null,
@@ -346,8 +388,32 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
       lgaLocation: project.lgaLocation,
       description: project.description,
       totalBudgetNgn: project.totalBudgetNgn === null ? null : Number(project.totalBudgetNgn),
+      projectType: projectTypeSummary(project),
+      region: regionSummary(project.region),
     },
     parties: {
+      owningOrganization: project.owningOrganization,
+      beneficiaries: project.beneficiaries.map((b) => ({
+        id: b.id,
+        name: b.name,
+        beneficiaryType: b.beneficiaryType,
+        contactName: b.contactName,
+        contactEmail: b.contactEmail,
+        contactPhone: b.contactPhone,
+        address: b.address,
+        isPrimary: b.isPrimary,
+      })),
+      rules: (() => {
+        const r = partyRulesFor(loaded.typeConfig);
+        return {
+          owningOrganizationRequired: r.owningOrganizationRequired,
+          allowedOwningOrganizationIds: loaded.typeConfig?.ownership.allowedOwningOrganizationIds ?? null,
+          monitorRequired: r.monitorRequired,
+          funderRequired: r.funderRequired,
+          beneficiaryRequired: r.beneficiaryRequired,
+          regionRequired: r.regionRequired,
+        };
+      })(),
       monitorOrganization: project.monitorOrganization,
       lenderOrganization: project.lenderOrganization,
       contractorExecutionMode: project.contractorExecutionMode as ContractorExecutionMode | null,
@@ -441,6 +507,11 @@ export async function createProjectDraft(webUser: WebJwtPayload, input: CreatePr
   }
 
   const projectId = await prisma.$transaction(async (tx) => {
+    // Phase 11: a tenant with project types must pick one first.
+    if (!input.projectTypeId && (await tenantHasActiveProjectTypes(tx, tenantId))) {
+      throw new AppError('Choose the project type first.', 422, 'PROJECT_TYPE_REQUIRED');
+    }
+    if (input.regionId) await assertRegionUsable(tx, tenantId, input.regionId, null);
     const [tenant, creatorOrg] = await Promise.all([
       tx.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { timezone: true } }),
       tx.organization.findUnique({ where: { id: webUser.organizationId }, select: { id: true, categories: true } }),
@@ -464,6 +535,7 @@ export async function createProjectDraft(webUser: WebJwtPayload, input: CreatePr
         lgaLocation: input.lgaLocation ?? null,
         description: input.description ?? null,
         totalBudgetNgn: input.totalBudgetNgn,
+        regionId: input.regionId ?? null,
         // Pre-fill the monitor only when the creator's organisation is a monitor.
         monitorOrganizationId: (creatorOrg?.categories as string[] | undefined)?.includes('ADVISORY_MONITOR')
           ? creatorOrg!.id
@@ -474,6 +546,10 @@ export async function createProjectDraft(webUser: WebJwtPayload, input: CreatePr
     await tx.userProjectAssignment.create({ data: { userId: webUser.userId, projectId: project.id } });
     // Phase 7: process settings and both chains, from the tenant's default template if any.
     await initialiseProjectProcess(tx, project);
+    // Phase 11: a project type replaces that with its own template, snapshot and defaults.
+    if (input.projectTypeId) {
+      await applyProjectTypeToProject(tx, project, input.projectTypeId, webUser);
+    }
     await recordAuditEvent(tx, {
       projectId: project.id,
       actorType: 'WEB_USER',
@@ -504,8 +580,14 @@ function diffFields(before: Record<string, unknown>, after: Record<string, unkno
   return Object.keys(after).filter((k) => JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null));
 }
 
-const saveBasics: StepSaver = async ({ tx, project, input }) => {
+const saveBasics: StepSaver = async ({ tx, project, webUser, input }) => {
   const data = input as CreateProjectDraftRequest;
+  // Phase 11: the type (re-applied on a draft, locked once live) and the region.
+  let typeChange: { changed: boolean; prefilled: string[] } = { changed: false, prefilled: [] };
+  if (data.projectTypeId !== undefined) {
+    typeChange = await applyProjectTypeToProject(tx, project, data.projectTypeId, webUser);
+  }
+  if (data.regionId) await assertRegionUsable(tx, project.tenantId, data.regionId, project.regionId);
   if (data.codePrefix !== project.codePrefix) {
     if (project.status !== 'DRAFT') {
       throw new AppError(
@@ -541,8 +623,11 @@ const saveBasics: StepSaver = async ({ tx, project, input }) => {
   if (project.status !== 'DRAFT' && after.totalBudgetNgn < Number(project.disbursedToDateNgn)) {
     throw new AppError('The budget cannot be below the amount already disbursed', 409, 'BUDGET_BELOW_DISBURSED');
   }
-  await tx.project.update({ where: { id: project.id }, data: after });
-  return { changedFields: diffFields(before, after) };
+  const regionId = data.regionId === undefined ? project.regionId : data.regionId;
+  await tx.project.update({ where: { id: project.id }, data: { ...after, regionId } });
+  const changedFields = diffFields({ ...before, regionId: project.regionId }, { ...after, regionId });
+  if (typeChange.changed) changedFields.push('projectTypeId');
+  return { changedFields, payload: typeChange.changed ? { prefilledFromType: typeChange.prefilled } : undefined };
 };
 
 const saveParties: StepSaver = async ({ tx, project, webUser, input }) => {
@@ -569,14 +654,50 @@ const saveParties: StepSaver = async ({ tx, project, webUser, input }) => {
         })
       ).organization
     : null;
-  const lender = data.lenderOrganization
+  // Phase 11: owning organisation (directory entry; the type may limit the choice).
+  const typeConfig = resolveProjectTypeConfig(project.projectTypeSnapshotJson);
+  const owningOrganizationId =
+    data.owningOrganizationId === undefined ? project.owningOrganizationId : data.owningOrganizationId;
+  if (owningOrganizationId && owningOrganizationId !== project.owningOrganizationId) {
+    const owner = await tx.organization.findFirst({
+      where: { id: owningOrganizationId, tenantId: project.tenantId },
+      select: { id: true, name: true, isArchived: true },
+    });
+    if (!owner) throw new AppError('Organisation not found in this workspace', 404, 'ORGANIZATION_NOT_FOUND');
+    if (owner.isArchived) throw new AppError(`"${owner.name}" is archived and cannot be chosen`, 409, 'ORGANIZATION_ARCHIVED');
+    const allowed = typeConfig?.ownership.allowedOwningOrganizationIds ?? null;
+    if (allowed && !allowed.includes(owner.id)) {
+      throw new AppError(`"${owner.name}" cannot own a project of this type.`, 422, 'OWNER_NOT_ALLOWED');
+    }
+  }
+  if (!owningOrganizationId && project.owningOrganizationId && project.status !== 'DRAFT') {
+    // A live project whose chain has owner-scoped steps cannot lose its owner: nobody could act.
+    const scoped = await tx.approvalStep.count({
+      where: { projectId: project.id, isActive: true, organizationScope: { in: ['PROJECT_OWNER', 'PROJECT_OWNER_OR_ANCESTOR'] } },
+    });
+    if (scoped > 0) {
+      throw new AppError('Owner-scoped approval steps need an owning organisation.', 409, 'OWNER_REQUIRED_BY_CHAIN');
+    }
+  }
+  const lenderRef =
+    data.lenderOrganization ??
+    // Phase 11: the type's funder default when the funder is left empty.
+    (typeConfig?.parties.funderDefault === 'OWNER' && owningOrganizationId
+      ? { id: owningOrganizationId }
+      : typeConfig?.parties.funderDefault === 'FIXED' && typeConfig.parties.defaultFunderOrganizationId
+        ? { id: typeConfig.parties.defaultFunderOrganizationId }
+        : null);
+  const lender = lenderRef
     ? (
-        await resolveOrganization(tx, project.tenantId, data.lenderOrganization, 'FINANCIER_LENDER', {
+        await resolveOrganization(tx, project.tenantId, lenderRef, 'FINANCIER_LENDER', {
           allowArchivedId: project.lenderOrganizationId,
           actor,
         })
       ).organization
     : null;
+  const beneficiaryChange = data.beneficiaries
+    ? await syncBeneficiaries(tx, project.id, data.beneficiaries)
+    : { added: 0, removed: 0, updated: 0 };
 
   const sync = await syncProjectContractors(tx, {
     projectId: project.id,
@@ -598,6 +719,7 @@ const saveParties: StepSaver = async ({ tx, project, webUser, input }) => {
   await tx.project.update({
     where: { id: project.id },
     data: {
+      owningOrganizationId,
       monitorOrganizationId: monitor?.id ?? null,
       lenderOrganizationId: lender?.id ?? null,
       contractorExecutionMode: nextMode,
@@ -610,17 +732,20 @@ const saveParties: StepSaver = async ({ tx, project, webUser, input }) => {
 
   const changedFields = diffFields(
     {
+      owningOrganizationId: project.owningOrganizationId,
       monitorOrganizationId: project.monitorOrganizationId,
       lenderOrganizationId: project.lenderOrganizationId,
       contractorExecutionMode: project.contractorExecutionMode,
     },
     {
+      owningOrganizationId,
       monitorOrganizationId: monitor?.id ?? null,
       lenderOrganizationId: lender?.id ?? null,
       contractorExecutionMode: nextMode,
     }
   );
   if (sync.added.length || sync.removed.length || sync.updated.length) changedFields.push('contractors');
+  if (beneficiaryChange.added || beneficiaryChange.removed || beneficiaryChange.updated) changedFields.push('beneficiaries');
   return {
     changedFields,
     payload: {
@@ -629,6 +754,39 @@ const saveParties: StepSaver = async ({ tx, project, webUser, input }) => {
     },
   };
 };
+
+/** Replaces the beneficiary list (Phase 11). The schema guarantees exactly one primary. */
+async function syncBeneficiaries(tx: Tx, projectId: string, inputs: ProjectBeneficiaryInput[]) {
+  const existing = await tx.projectBeneficiary.findMany({ where: { projectId }, select: { id: true } });
+  const known = new Set(existing.map((b) => b.id));
+  for (const b of inputs) {
+    if (b.id && !known.has(b.id)) throw new AppError('Beneficiary not found on this project', 404, 'BENEFICIARY_NOT_FOUND');
+  }
+  const keep = new Set(inputs.map((b) => b.id).filter((v): v is string => Boolean(v)));
+  const removed = existing.filter((b) => !keep.has(b.id)).map((b) => b.id);
+  if (removed.length) await tx.projectBeneficiary.deleteMany({ where: { projectId, id: { in: removed } } });
+  let added = 0;
+  let updated = 0;
+  for (const b of inputs) {
+    const data = {
+      name: b.name,
+      beneficiaryType: b.beneficiaryType,
+      contactName: b.contactName ?? null,
+      contactEmail: b.contactEmail ?? null,
+      contactPhone: b.contactPhone ?? null,
+      address: b.address ?? null,
+      isPrimary: b.isPrimary,
+    };
+    if (b.id) {
+      await tx.projectBeneficiary.update({ where: { id: b.id }, data });
+      updated++;
+    } else {
+      await tx.projectBeneficiary.create({ data: { projectId, ...data } });
+      added++;
+    }
+  }
+  return { added, removed: removed.length, updated };
+}
 
 const saveSite: StepSaver = async ({ tx, project, input }) => {
   const data = input as ProjectSiteStep;

@@ -16,7 +16,8 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Pill } from '../components/common';
 import { PrimaryButton } from '../components/inputs/Buttons';
-import { useProfile } from '../context/ProfileContext';
+import { useActiveBranding, useProfile } from '../context/ProfileContext';
+import { resolveTerm } from '@insite/shared';
 import { useResolveNotificationMutation } from '../queries/notifications/useNotificationQueries';
 import { useSubmitWorkdayReportMutation } from '../queries/wbs/useWbsQueries';
 import { REPORT_LOW_GPS_ACCURACY_METERS } from '@insite/shared';
@@ -55,6 +56,7 @@ export const ConfirmAiSummarySheet: React.FC = () => {
     route.params;
   const isRevision = Boolean(workdayReportId);
   const { activeProjectId: projectId, activeContext } = useProfile();
+  const terms = useActiveBranding().terminology;
   const copy = personaCopy(activeContext?.fieldPersonaType, projectCadenceSettings(activeContext?.projectId).reportingCadence);
   const insets = useSafeAreaInsets();
 
@@ -246,7 +248,7 @@ export const ConfirmAiSummarySheet: React.FC = () => {
                   {holdPointClaimed && <Text style={styles.checkmark}>✓</Text>}
                 </View>
                 <Text style={styles.checkboxLabel}>
-                  Hold point: {wbsItem.holdPointInstruction || 'I confirm this hold point was inspected and met.'}
+                  {resolveTerm(terms, "holdPoint")}: {wbsItem.holdPointInstruction || 'I confirm this hold point was inspected and met.'}
                 </Text>
               </TouchableOpacity>
             )}

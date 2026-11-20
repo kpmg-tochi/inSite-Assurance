@@ -2,12 +2,28 @@ import { PortfolioRetentionItemSchema } from './retention.schema';
 import { z } from 'zod';
 import {
   ConditionPrecedentStatusEnum,
+  ConstructionPhaseEnum,
+  ProjectStatusEnum,
   FieldPersonaTypeEnum,
   PortfolioHealthEnum,
   RoleOnboardingModeEnum,
 } from '../enums';
 import { ProjectGeofenceSchema } from './geofence.schema';
 import { ScheduleVarianceBadgeSchema } from './schedule.schema';
+import { ProjectBeneficiaryDtoSchema, ProjectTypeSummarySchema, RegionSummarySchema } from './deliveryModel.schema';
+
+/**
+ * Phase 11: the delivery-model fields every project list row carries (directory, portfolio map,
+ * executive matrix), for the type chip and the type / region / owner filters.
+ */
+export const ProjectDeliveryModelFieldsSchema = z.object({
+  projectType: ProjectTypeSummarySchema.nullable(),
+  region: RegionSummarySchema.nullable(),
+  owningOrganization: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
+  /** The primary beneficiary (pre-fills the handover link recipient). */
+  primaryBeneficiary: ProjectBeneficiaryDtoSchema.nullable().optional(),
+});
+export type ProjectDeliveryModelFields = z.infer<typeof ProjectDeliveryModelFieldsSchema>;
 
 /**
  * Facility Tranche & Condition Precedent (CP) Schemas (Section 4.A Role 1)
@@ -119,6 +135,7 @@ export const PortfolioProjectHealthItemSchema = z.object({
   scheduleVariance: ScheduleVarianceBadgeSchema.nullable().optional(),
   /** Phase 10: set when the retention module is on for the project. */
   retention: PortfolioRetentionItemSchema.nullable().optional(),
+  ...ProjectDeliveryModelFieldsSchema.shape,
 });
 export type PortfolioProjectHealthItem = z.infer<
   typeof PortfolioProjectHealthItemSchema
@@ -139,3 +156,59 @@ export type PortfolioExecutiveSummaryDto = z.infer<
   typeof PortfolioExecutiveSummaryDtoSchema
 >;
 
+
+// ---------------------------------------------------------------------------
+// Portfolio dashboard (map + KPI cards), permission projects:view_portfolio
+// ---------------------------------------------------------------------------
+
+/** One project on the portfolio map. "point" is the geofence centroid (server-computed). */
+export const PortfolioOverviewProjectSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  codePrefix: z.string(),
+  status: ProjectStatusEnum,
+  constructionPhase: ConstructionPhaseEnum,
+  stateLocation: z.string(),
+  lgaLocation: z.string().nullable(),
+  totalBudgetNgn: z.number(),
+  disbursedToDateNgn: z.number(),
+  certifiedProgressPct: z.number(),
+  portfolioHealth: PortfolioHealthEnum,
+  openConflictCount: z.number().int(),
+  unfulfilledHoldPointCount: z.number().int(),
+  lastFieldCaptureAt: z.string().nullable(),
+  scheduleVariance: ScheduleVarianceBadgeSchema.nullable(),
+  geofence: ProjectGeofenceSchema.nullable(),
+  point: z.object({ latitude: z.number(), longitude: z.number() }).nullable(),
+  ...ProjectDeliveryModelFieldsSchema.shape,
+});
+export type PortfolioOverviewProject = z.infer<typeof PortfolioOverviewProjectSchema>;
+
+/** Days without a field capture after which a live site counts as quiet. */
+export const PORTFOLIO_QUIET_SITE_DAYS = 7;
+
+export const PortfolioOverviewKpisSchema = z.object({
+  projectCount: z.number().int(),
+  totalCommitmentNgn: z.number(),
+  totalDisbursedNgn: z.number(),
+  /** Disbursed / commitment, 0–100. */
+  disbursedPct: z.number(),
+  /** Budget-weighted certified progress, 0–100. */
+  weightedProgressPct: z.number(),
+  healthCounts: z.object({ supported: z.number().int(), partial: z.number().int(), conflict: z.number().int() }),
+  behindScheduleCount: z.number().int(),
+  openConflictLineCount: z.number().int(),
+  unfulfilledHoldPointCount: z.number().int(),
+  /** Live projects in active construction with no capture for PORTFOLIO_QUIET_SITE_DAYS. */
+  quietSiteCount: z.number().int(),
+  /** Projects in handover or their defects liability period. */
+  closeoutCount: z.number().int(),
+  retentionHeldNgn: z.number(),
+});
+export type PortfolioOverviewKpis = z.infer<typeof PortfolioOverviewKpisSchema>;
+
+export const PortfolioOverviewDtoSchema = z.object({
+  kpis: PortfolioOverviewKpisSchema,
+  projects: z.array(PortfolioOverviewProjectSchema),
+});
+export type PortfolioOverviewDto = z.infer<typeof PortfolioOverviewDtoSchema>;

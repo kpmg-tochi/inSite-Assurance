@@ -16,6 +16,7 @@ import {
   RetentionSummaryDto,
   retentionWithheldFor,
   roundNgn2,
+  resolveTerm,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -23,6 +24,7 @@ import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { createWebNotification } from '../notifications/notifications.service';
 import { getProcessConfig } from '../process/processConfig.service';
+import { terminologyForProject } from '../organizations/terminology.service';
 import { serializeValuationReport } from '../../utils/serializers';
 import { releaseGate, reviewGate, startValuationOnChain, valuationProgress } from '../reconciliation/disbursementChain';
 import { assertModuleOn, fmtNgn, projectToday } from './closeoutGate';
@@ -446,7 +448,7 @@ export async function requestRetentionRelease(params: { projectId: string; webUs
       projectId,
       targetPermissionKey: certificationPermissionFor(config.disbursementMechanism),
       category: 'RETENTION_RELEASE',
-      title: `Retention release for ${contractor.organization.name} awaiting certification`,
+      title: `${resolveTerm(await terminologyForProject(projectId, tx), 'retention')} release for ${contractor.organization.name} awaiting certification`,
       description: `${fmtNgn(amount)} (${input.stage === 'FINAL' ? 'final release' : 'release at practical completion'}) needs a licensed certifier.`,
       actionUrl: `/app/projects/${projectId}/retention`,
       metadata: { retentionReleaseRequestId: request.id },

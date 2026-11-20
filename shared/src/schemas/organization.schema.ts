@@ -19,6 +19,10 @@ export const OrganizationDtoSchema = z.object({
   contactEmail: z.string().nullable(),
   contactPhone: z.string().nullable(),
   isArchived: z.boolean(),
+  /** Phase 11: the organisation above this one (flagship → subsidiary), or null for a root. */
+  parentOrganizationId: z.string().uuid().nullable(),
+  /** Phase 11: the parent is archived (allowed, but flagged in the directory). */
+  parentIsArchived: z.boolean().optional(),
   userCount: z.number().int().optional(),
   projectCount: z.number().int().optional(),
   createdAt: z.string(),
@@ -34,6 +38,8 @@ export const CreateOrganizationRequestSchema = z.object({
   registrationNumber: z.string().trim().max(64).nullable().optional(),
   contactEmail: z.string().trim().email().max(200).nullable().optional().or(z.literal('').transform(() => null)),
   contactPhone: z.string().trim().max(32).nullable().optional(),
+  /** Phase 11: parent organisation; null or omitted for a root. Cycles and depth > 5 are refused. */
+  parentOrganizationId: z.string().uuid().nullable().optional(),
 });
 export type CreateOrganizationRequest = z.infer<typeof CreateOrganizationRequestSchema>;
 

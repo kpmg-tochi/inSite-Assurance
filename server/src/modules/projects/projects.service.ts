@@ -2,10 +2,17 @@ import { Prisma, ProjectStatus } from '@prisma/client';
 import {
   ContractorExecutionMode,
   countReconciliationIssues,
+  geofenceCentroid,
+  PORTFOLIO_QUIET_SITE_DAYS,
+  PortfolioOverviewDto,
+  PortfolioOverviewKpis,
+  PortfolioOverviewProject,
   FieldPersonaType,
   GeoCoordinate,
   GeofenceMode,
+  ProjectDeliveryModelFields,
   ProjectGeofenceSchema,
+  ProjectListFilters,
   verifyPointAgainstGeofence,
   calendarDaysUntil,
   zonedCalendarDate,
@@ -33,6 +40,48 @@ import { releaseStagedReportsForSession } from '../workday-reports/workdayReport
 import { scheduleAiOmissionCheck } from '../workday-reports/aiOmissionCheck';
 import { sendPushToFieldSession } from '../../integrations/push.service';
 import { syncParticipantForSession } from '../mobilization/participants.service';
+import { PROJECT_TYPE_SUMMARY_SELECT, projectTypeSummary } from '../projectTypes/projectTypes.service';
+import { REGION_SUMMARY_SELECT, regionSummary } from '../regions/regions.service';
+
+/** Phase 11: relations for the type chip, region and owner on every project list row. */
+const DELIVERY_MODEL_INCLUDE = {
+  projectType: { select: PROJECT_TYPE_SUMMARY_SELECT },
+  region: { select: REGION_SUMMARY_SELECT },
+  owningOrganization: { select: { id: true, name: true } },
+  beneficiaries: { where: { isPrimary: true }, take: 1 },
+} satisfies Prisma.ProjectInclude;
+
+function serializeDeliveryModel(project: Prisma.ProjectGetPayload<{ include: typeof DELIVERY_MODEL_INCLUDE }>): ProjectDeliveryModelFields {
+  return {
+    projectType: projectTypeSummary(project),
+    region: regionSummary(project.region),
+    owningOrganization: project.owningOrganization,
+    primaryBeneficiary: project.beneficiaries[0]
+      ? {
+          id: project.beneficiaries[0].id,
+          name: project.beneficiaries[0].name,
+          beneficiaryType: project.beneficiaries[0].beneficiaryType,
+          contactName: project.beneficiaries[0].contactName,
+          contactEmail: project.beneficiaries[0].contactEmail,
+          contactPhone: project.beneficiaries[0].contactPhone,
+          address: project.beneficiaries[0].address,
+          isPrimary: true,
+        }
+      : null,
+  };
+}
+
+/**
+ * Phase 11 list filters. A region filter includes the region's areas; an owner filter is the exact
+ * owner. Applied on top of the visibility filter, never instead of it.
+ */
+function deliveryModelFilterWhere(filters: ProjectListFilters = {}): Prisma.ProjectWhereInput[] {
+  const out: Prisma.ProjectWhereInput[] = [];
+  if (filters.projectTypeId) out.push({ projectTypeId: filters.projectTypeId });
+  if (filters.regionId) out.push({ OR: [{ regionId: filters.regionId }, { region: { parentRegionId: filters.regionId } }] });
+  if (filters.owningOrganizationId) out.push({ owningOrganizationId: filters.owningOrganizationId });
+  return out;
+}
 
 type JoinCodeWithRole = {
   id: string;
@@ -106,6 +155,7 @@ const PROJECT_CONTRACTORS_INCLUDE = {
 };
 
 const PROJECT_CORE_INCLUDE = {
+  ...DELIVERY_MODEL_INCLUDE,
   monitorOrganization: true,
   lenderOrganization: true,
   contractors: PROJECT_CONTRACTORS_INCLUDE,
@@ -149,6 +199,8 @@ function serializeProjectCore(project: ProjectCoreRow) {
     contractorOrganizationName: headline.name,
     contractorCount: headline.total,
     contractorExecutionMode: project.contractorExecutionMode as ContractorExecutionMode | null,
+    /** Phase 11: type chip, region and owning organisation. */
+    ...serializeDeliveryModel(project),
     contractors: project.contractors.map((c) => ({
       id: c.id,
       organizationId: c.organization.id,
@@ -184,14 +236,15 @@ const LATEST_RATED_IPC_QUERY = {
  */
 export async function listProjectsForUser(
   webUser: WebJwtPayload,
-  statuses: ProjectStatus[] = ['ACTIVE', 'ARCHIVED']
+  statuses: ProjectStatus[] = ['ACTIVE', 'ARCHIVED'],
+  filters: ProjectListFilters = {}
 ) {
   const visibilityWhere = buildProjectVisibilityWhere(webUser, undefined, {
     statuses: statuses.filter((s) => s !== 'DRAFT'),
   });
 
   const projects = await prisma.project.findMany({
-    where: visibilityWhere,
+    where: { AND: [visibilityWhere, ...deliveryModelFilterWhere(filters)] },
     orderBy: { createdAt: 'desc' },
     include: {
       ...PROJECT_CORE_INCLUDE,
@@ -651,11 +704,12 @@ export async function reviewContractorVerification(
 /**
  * Aggregated Portfolio Executive Summary scoped to tenant & user visibility.
  */
-export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
+export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload, filters: ProjectListFilters = {}) {
   const projects = await prisma.project.findMany({
-    where: buildProjectVisibilityWhere(webUser),
+    where: { AND: [buildProjectVisibilityWhere(webUser), ...deliveryModelFilterWhere(filters)] },
     orderBy: { createdAt: 'desc' },
     include: {
+      ...DELIVERY_MODEL_INCLUDE,
       contractors: { ...PROJECT_CONTRACTORS_INCLUDE, include: { organization: { select: { name: true } } } },
       lenderOrganization: { select: { name: true } },
       tranches: {
@@ -765,6 +819,7 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload) {
             openDefectCount: p.defectTickets.length,
           }
         : null,
+      ...serializeDeliveryModel(p),
     };
   });
 
@@ -834,4 +889,96 @@ export async function listDemoProjects() {
       requiresIdentityAssurance: jc.role.requiresIdentityAssurance,
     })),
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Portfolio dashboard (map + KPI cards)
+// ---------------------------------------------------------------------------
+
+const DAY_MS = 24 * 3600 * 1000;
+
+/**
+ * GET /projects/portfolio/overview: every live project the user can see (same visibility rule as
+ * the directory), with a map point per project and portfolio KPIs computed over the filtered set.
+ */
+export async function getPortfolioOverview(webUser: WebJwtPayload, filters: ProjectListFilters = {}): Promise<PortfolioOverviewDto> {
+  const projects = await prisma.project.findMany({
+    where: { AND: [buildProjectVisibilityWhere(webUser), ...deliveryModelFilterWhere(filters)] },
+    orderBy: { name: 'asc' },
+    include: {
+      ...DELIVERY_MODEL_INCLUDE,
+      evidenceLogs: { orderBy: { capturedAtDevice: 'desc' }, take: 1, select: { capturedAtDevice: true } },
+      ipcClaims: LATEST_RATED_IPC_QUERY,
+    },
+  });
+
+  const now = Date.now();
+  const kpis: PortfolioOverviewKpis = {
+    projectCount: projects.length,
+    totalCommitmentNgn: 0,
+    totalDisbursedNgn: 0,
+    disbursedPct: 0,
+    weightedProgressPct: 0,
+    healthCounts: { supported: 0, partial: 0, conflict: 0 },
+    behindScheduleCount: 0,
+    openConflictLineCount: 0,
+    unfulfilledHoldPointCount: 0,
+    quietSiteCount: 0,
+    closeoutCount: 0,
+    retentionHeldNgn: 0,
+  };
+  let weightedProgress = 0;
+
+  const items: PortfolioOverviewProject[] = projects.map((p) => {
+    const budget = Number(p.totalBudgetNgn ?? 0);
+    const disbursed = Number(p.disbursedToDateNgn);
+    const progress = Number(p.certifiedProgressPct);
+    const { openConflictCount, unfulfilledHoldPointCount } = countReconciliationIssues(p.ipcClaims[0]?.lineItems ?? []);
+    const lastCapture = p.evidenceLogs[0]?.capturedAtDevice ?? null;
+    const geofence = p.geofenceGeoJson ? ProjectGeofenceSchema.safeParse(p.geofenceGeoJson).data ?? null : null;
+    const schedule = serializeScheduleBadge(p);
+
+    kpis.totalCommitmentNgn += budget;
+    kpis.totalDisbursedNgn += disbursed;
+    weightedProgress += budget * progress;
+    if (p.portfolioHealth === 'EVIDENCE_SUPPORTED') kpis.healthCounts.supported += 1;
+    else if (p.portfolioHealth === 'EVIDENCE_PARTIAL') kpis.healthCounts.partial += 1;
+    else kpis.healthCounts.conflict += 1;
+    if (p.scheduleStatus === 'BEHIND') kpis.behindScheduleCount += 1;
+    kpis.openConflictLineCount += openConflictCount;
+    kpis.unfulfilledHoldPointCount += unfulfilledHoldPointCount;
+    if (
+      p.constructionPhase === 'ACTIVE_CONSTRUCTION' &&
+      (!lastCapture || now - lastCapture.getTime() > PORTFOLIO_QUIET_SITE_DAYS * DAY_MS)
+    ) {
+      kpis.quietSiteCount += 1;
+    }
+    if (p.constructionPhase === 'HANDOVER_IN_PROGRESS' || p.constructionPhase === 'RETENTION_PERIOD') kpis.closeoutCount += 1;
+    kpis.retentionHeldNgn += Number(p.retentionHeldNgn);
+
+    return {
+      id: p.id,
+      name: p.name,
+      codePrefix: p.codePrefix,
+      status: p.status,
+      constructionPhase: p.constructionPhase,
+      stateLocation: p.stateLocation ?? '',
+      lgaLocation: p.lgaLocation,
+      totalBudgetNgn: budget,
+      disbursedToDateNgn: disbursed,
+      certifiedProgressPct: progress,
+      portfolioHealth: p.portfolioHealth,
+      openConflictCount,
+      unfulfilledHoldPointCount,
+      lastFieldCaptureAt: lastCapture?.toISOString() ?? null,
+      scheduleVariance: schedule,
+      geofence,
+      point: geofence ? geofenceCentroid(geofence) : null,
+      ...serializeDeliveryModel(p),
+    };
+  });
+
+  kpis.disbursedPct = kpis.totalCommitmentNgn > 0 ? Math.round((kpis.totalDisbursedNgn / kpis.totalCommitmentNgn) * 1000) / 10 : 0;
+  kpis.weightedProgressPct = kpis.totalCommitmentNgn > 0 ? Math.round((weightedProgress / kpis.totalCommitmentNgn) * 10) / 10 : 0;
+  return { kpis, projects: items };
 }

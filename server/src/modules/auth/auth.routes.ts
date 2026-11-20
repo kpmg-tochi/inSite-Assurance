@@ -295,7 +295,7 @@ router.get(
                 geofenceMode: true,
                 geofenceGeoJson: true,
                 tenant: {
-                  select: { evidenceRatingLabels: true, name: true, brandingConfig: true, defaultCurrency: true },
+                  select: { evidenceRatingLabels: true, terminologyLabels: true, name: true, brandingConfig: true, defaultCurrency: true },
                 },
               },
             },

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { DeliveryModelFilters, ProjectTypeChip, useDeliveryModelFilters } from "../../components/projects/DeliveryModelFilters";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Building2,
@@ -18,7 +19,7 @@ import {
 } from "lucide-react";
 import type { ProjectSummaryDto } from "../../api/types";
 import { formatCompactNaira } from "../../lib/formatters";
-import { useAuth } from "../../lib/auth-context";
+import { useAuth, useTerm } from "../../lib/auth-context";
 import { useDraftProjectsQuery } from "../../queries/projects/useProjectSetupQueries";
 import { useDeleteDraftMutation } from "../../mutations/projects/useProjectSetupMutations";
 import { ArchiveProjectDialog } from "../../components/projects/ArchiveProjectDialog";
@@ -130,6 +131,7 @@ export function ProjectsDirectoryPage({
   onNewProject,
 }: ProjectsDirectoryPageProps) {
   const { hasPermission } = useAuth();
+  const term = useTerm();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = (searchParams.get("tab") || "").toUpperCase();
@@ -147,6 +149,12 @@ export function ProjectsDirectoryPage({
   const canEditProjects = hasPermission("projects:edit_baseline");
   const [archiving, setArchiving] = useState<ProjectSummaryDto | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  // Phase 11: type, region and owner filters.
+  const deliveryFilters = useDeliveryModelFilters();
+  const owners = useMemo(
+    () => projects.map((p) => p.owningOrganization).filter((o): o is { id: string; name: string } => Boolean(o)),
+    [projects]
+  );
 
   const counts = useMemo(() => {
     const summary = {
@@ -169,6 +177,7 @@ export function ProjectsDirectoryPage({
       if (activeTab !== "ALL" && status !== activeTab) {
         return false;
       }
+      if (!deliveryFilters.matches(project)) return false;
       if (!q) return true;
       return (
         project.name.toLowerCase().includes(q) ||
@@ -179,7 +188,7 @@ export function ProjectsDirectoryPage({
         project.lenderOrganizationName.toLowerCase().includes(q)
       );
     });
-  }, [projects, activeTab, searchQuery]);
+  }, [projects, activeTab, searchQuery, deliveryFilters]);
 
   const tabs: Array<{ id: ProjectStatusTab; label: string; count: number }> = [
     { id: "ALL", label: "All Projects", count: counts.ALL },
@@ -222,6 +231,8 @@ export function ProjectsDirectoryPage({
           </button>
         )}
       </div>
+
+      <DeliveryModelFilters filters={deliveryFilters.filters} onChange={deliveryFilters.setFilters} owners={owners} />
 
       {/* Filter Tabs & Search */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
@@ -352,6 +363,7 @@ export function ProjectsDirectoryPage({
                           <HealthIcon className="w-3 h-3" />
                           {health.label}
                         </span>
+                        <ProjectTypeChip type={project.projectType} />
                         <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-medium">
                           {status === "COMPLETED" ? "Completed" : status === "ARCHIVED" ? (
                             <span className="inline-flex items-center gap-1"><Archive className="w-3 h-3" /> Archived</span>
@@ -418,7 +430,7 @@ export function ProjectsDirectoryPage({
                     <div className="flex items-center gap-1.5 truncate">
                       <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span className="truncate">
-                        {contractorLabel(project)} · {project.lenderOrganizationName || "No lender"}
+                        {contractorLabel(project)} · {project.lenderOrganizationName || `No ${term("funderParty", { lower: true })}`}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

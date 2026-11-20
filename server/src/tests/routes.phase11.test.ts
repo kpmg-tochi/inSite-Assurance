@@ -1,0 +1,511 @@
+/**
+ * Phase 11 route tests: organisation hierarchy, organisation-tree visibility, organisation scope on
+ * approval steps, project types (apply, snapshot isolation, lock after activation), parties rules,
+ * regions, filters and terminology.
+ *
+ * Uses the seeded programme tenant (seedPhase11): flagship "Programme Authority" with subsidiaries
+ * North and South; live projects PRG-102 (Central, flagship), PRG-211 (Co-Funded, North) and
+ * PRG-221 (Co-Funded, South); drafts PRG-101 (Central) and PRG-201 (Co-Funded, South).
+ */
+import { resetTestDatabase } from './helpers/testDb';
+import { after, before, describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import type { Express } from 'express';
+import request from 'supertest';
+
+type PrismaClientType = typeof import('../config/prisma')['prisma'];
+
+let app: Express;
+let prisma: PrismaClientType;
+let chain: typeof import('../modules/process/approvalChain');
+let processConfig: typeof import('../modules/process/processConfig.service');
+
+const PASSWORD = 'Password123!';
+const tokens: Record<string, string> = {};
+const profiles: Record<string, Record<string, unknown>> = {};
+
+const PROGRAMME_ADMIN = 'programme.admin@insite.ng';
+const FLAGSHIP = 'flagship.admin@insite.ng';
+const NORTH = 'north.admin@insite.ng';
+const SOUTH = 'south.admin@insite.ng';
+const MAIN_ADMIN = 'admin@insite.ng';
+
+async function login(email: string) {
+  if (!tokens[email]) {
+    const res = await request(app).post('/api/v1/auth/login').send({ email, password: PASSWORD });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    tokens[email] = res.body.data.accessToken as string;
+    profiles[email] = res.body.data.user;
+  }
+  return { Authorization: `Bearer ${tokens[email]}` };
+}
+
+const ids: Record<string, string> = {};
+
+async function projectId(code: string) {
+  const p = await prisma.project.findFirstOrThrow({ where: { codePrefix: code }, select: { id: true } });
+  return p.id;
+}
+
+async function codesVisibleTo(email: string, query = '') {
+  const res = await request(app).get(`/api/v1/projects${query}`).set(await login(email));
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  return (res.body.data as Array<{ codePrefix: string }>).map((p) => p.codePrefix).filter((c) => c.startsWith('PRG')).sort();
+}
+
+before(async () => {
+  await resetTestDatabase();
+  ({ prisma } = await import('../config/prisma'));
+  const { createApp } = await import('../app');
+  app = createApp();
+  chain = await import('../modules/process/approvalChain');
+  processConfig = await import('../modules/process/processConfig.service');
+  const orgs = await prisma.organization.findMany({
+    where: { name: { in: ['Programme Authority', 'Regional Delivery Entity – North', 'Regional Delivery Entity – South'] } },
+  });
+  ids.flagship = orgs.find((o) => o.name === 'Programme Authority')!.id;
+  ids.north = orgs.find((o) => o.name.endsWith('North'))!.id;
+  ids.south = orgs.find((o) => o.name.endsWith('South'))!.id;
+  const types = await prisma.projectType.findMany();
+  ids.central = types.find((t) => t.code === 'CENTRAL')!.id;
+  ids.coFunded = types.find((t) => t.code === 'CO_FUNDED')!.id;
+  for (const code of ['PRG-101', 'PRG-102', 'PRG-201', 'PRG-211', 'PRG-221']) ids[code] = await projectId(code);
+});
+
+after(async () => {
+  await prisma?.$disconnect();
+});
+
+describe('Phase 11 seed', () => {
+  it('applies the type: snapshot, template, owner and funder defaults, reporting defaults', async () => {
+    const central = await prisma.project.findUniqueOrThrow({
+      where: { id: ids['PRG-101'] },
+      include: { beneficiaries: true, processConfig: true },
+    });
+    assert.equal(central.projectTypeId, ids.central);
+    assert.equal(central.projectTypeVersion, 1);
+    assert.equal(central.owningOrganizationId, ids.flagship, 'default owner from the type');
+    assert.equal(central.lenderOrganizationId, ids.flagship, 'FIXED funder default');
+    assert.equal(central.reportingCadence, 'WEEKLY');
+    assert.equal(central.workdayStartTime, '07:30');
+    assert.equal(central.processConfig?.disbursementMechanism, 'MILESTONE_DIRECT_DISBURSEMENT');
+    assert.equal(central.beneficiaries.filter((b) => b.isPrimary).length, 1);
+
+    const coFunded = await prisma.project.findUniqueOrThrow({ where: { id: ids['PRG-211'] } });
+    assert.equal(coFunded.owningOrganizationId, ids.north);
+    assert.equal(coFunded.lenderOrganizationId, ids.north, 'OWNER funder default: the subsidiary funds its project');
+    assert.equal(coFunded.reportingCadence, 'BI_WEEKLY');
+    const steps = await prisma.approvalStep.findMany({
+      where: { projectId: ids['PRG-211'], chainType: 'DISBURSEMENT', isActive: true },
+      orderBy: { stepOrder: 'asc' },
+    });
+    assert.deepEqual(
+      steps.map((s) => s.organizationScope),
+      ['ANY', 'PROJECT_OWNER', 'PROJECT_OWNER_OR_ANCESTOR']
+    );
+    const applied = await prisma.auditLog.count({ where: { projectId: ids['PRG-211'], action: 'PROJECT_TYPE_APPLIED' } });
+    assert.equal(applied, 1);
+  });
+
+  it('keeps existing projects without a type', async () => {
+    const lkk = await prisma.project.findFirstOrThrow({ where: { codePrefix: 'LKK-402' } });
+    assert.equal(lkk.projectTypeId, null);
+    assert.equal(lkk.owningOrganizationId, null);
+  });
+});
+
+describe('organisation hierarchy', () => {
+  it('refuses cycles, self-parenting and depth beyond five levels, and audits moves', async () => {
+    const h = await login(PROGRAMME_ADMIN);
+    const cycle = await request(app).patch(`/api/v1/organizations/${ids.flagship}`).set(h).send({ parentOrganizationId: ids.north });
+    assert.equal(cycle.status, 422, JSON.stringify(cycle.body));
+    assert.equal(cycle.body.error.code, 'ORGANIZATION_HIERARCHY_CYCLE');
+
+    const self = await request(app).patch(`/api/v1/organizations/${ids.north}`).set(h).send({ parentOrganizationId: ids.north });
+    assert.equal(self.status, 422);
+
+    // flagship(1) → north(2) → L3 → L4 → L5 ok; L6 refused.
+    let parent = ids.north;
+    const created: string[] = [];
+    for (const level of [3, 4, 5]) {
+      const res = await request(app)
+        .post('/api/v1/organizations')
+        .set(h)
+        .send({ name: `Level ${level} unit`, categories: ['OTHER'], parentOrganizationId: parent });
+      assert.equal(res.status, 201, JSON.stringify(res.body));
+      assert.equal(res.body.data.parentOrganizationId, parent);
+      parent = res.body.data.id;
+      created.push(parent);
+    }
+    const tooDeep = await request(app)
+      .post('/api/v1/organizations')
+      .set(h)
+      .send({ name: 'Level 6 unit', categories: ['OTHER'], parentOrganizationId: parent });
+    assert.equal(tooDeep.status, 422);
+    assert.equal(tooDeep.body.error.code, 'ORGANIZATION_HIERARCHY_TOO_DEEP');
+
+    // Moving a subtree under a deep node is refused too (north's subtree is 4 levels high).
+    const moveDeep = await request(app).patch(`/api/v1/organizations/${ids.south}`).set(h).send({ parentOrganizationId: created[2] });
+    // South is a leaf; under level 5 it would be level 6.
+    assert.equal(moveDeep.status, 422);
+
+    const audits = await prisma.auditLog.count({ where: { action: 'ORGANIZATION_HIERARCHY_CHANGED' } });
+    assert.equal(audits, 3);
+
+    const list = await request(app).get('/api/v1/organizations').set(h);
+    const north = (list.body.data as Array<{ id: string; parentOrganizationId: string | null }>).find((o) => o.id === ids.north);
+    assert.equal(north?.parentOrganizationId, ids.flagship);
+
+    // Clean up so later tests see the seeded tree only.
+    for (const id of created.reverse()) await prisma.organization.delete({ where: { id } });
+  });
+});
+
+describe('organisation-tree visibility', () => {
+  it('flagship sees all subsidiaries’ projects; a subsidiary sees its own; a sibling sees neither', async () => {
+    assert.deepEqual(await codesVisibleTo(FLAGSHIP), ['PRG-102', 'PRG-211', 'PRG-221']);
+    assert.deepEqual(await codesVisibleTo(NORTH), ['PRG-211']);
+    assert.deepEqual(await codesVisibleTo(SOUTH), ['PRG-221']);
+  });
+
+  it('the project guard follows the same rule', async () => {
+    const own = await request(app).get(`/api/v1/projects/${ids['PRG-211']}/baseline`).set(await login(NORTH));
+    assert.notEqual(own.status, 403, JSON.stringify(own.body));
+    const sibling = await request(app).get(`/api/v1/projects/${ids['PRG-221']}/baseline`).set(await login(NORTH));
+    assert.equal(sibling.status, 403);
+    const flagship = await request(app).get(`/api/v1/projects/${ids['PRG-221']}/baseline`).set(await login(FLAGSHIP));
+    assert.notEqual(flagship.status, 403);
+  });
+
+  it('the executive matrix and notification lists use the same scope', async () => {
+    const res = await request(app).get('/api/v1/projects/portfolio/executive-summary').set(await login(NORTH));
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual(
+      (res.body.data.projects as Array<{ codePrefix: string }>).map((p) => p.codePrefix),
+      ['PRG-211']
+    );
+    assert.equal(res.body.data.projects[0].owningOrganization.id, ids.north);
+    assert.equal(res.body.data.projects[0].projectType.code, 'CO_FUNDED');
+
+    // Web notifications are per project and go through the project guard.
+    const own = await request(app).get(`/api/v1/projects/${ids['PRG-221']}/web-notifications`).set(await login(SOUTH));
+    assert.equal(own.status, 200, JSON.stringify(own.body));
+    const sibling = await request(app).get(`/api/v1/projects/${ids['PRG-211']}/web-notifications`).set(await login(SOUTH));
+    assert.equal(sibling.status, 403);
+
+    // The audit ledger too.
+    const ledger = await request(app).get(`/api/v1/projects/${ids['PRG-211']}/audit-trail`).set(await login(NORTH));
+    assert.notEqual(ledger.status, 403, JSON.stringify(ledger.body));
+    const foreignLedger = await request(app).get(`/api/v1/projects/${ids['PRG-221']}/audit-trail`).set(await login(NORTH));
+    assert.equal(foreignLedger.status, 403);
+  });
+
+  it('users without the tree permission still see only assigned projects', async () => {
+    // The main-tenant contractor is assigned to two projects and holds no tree permission.
+    const res = await request(app).get('/api/v1/projects').set(await login('contractor@insite.ng'));
+    assert.equal(res.status, 200);
+    assert.ok((res.body.data as unknown[]).length >= 1);
+    assert.ok((res.body.data as Array<{ codePrefix: string }>).every((p) => !p.codePrefix.startsWith('PRG')));
+  });
+});
+
+describe('filters', () => {
+  it('filters by type, region (with its areas) and owner', async () => {
+    assert.deepEqual(await codesVisibleTo(FLAGSHIP, `?projectTypeId=${ids.coFunded}`), ['PRG-211', 'PRG-221']);
+    const north = await prisma.region.findFirstOrThrow({ where: { code: 'N' } });
+    assert.deepEqual(await codesVisibleTo(FLAGSHIP, `?regionId=${north.id}`), ['PRG-102', 'PRG-211']);
+    assert.deepEqual(await codesVisibleTo(FLAGSHIP, `?owningOrganizationId=${ids.south}`), ['PRG-221']);
+  });
+});
+
+describe('organisation scope on approval steps', () => {
+  async function payload(email: string) {
+    await login(email);
+    const u = await prisma.user.findUniqueOrThrow({
+      where: { email },
+      include: { role: { include: { rolePermissions: { include: { permission: true } } } } },
+    });
+    return {
+      tokenType: 'WEB_USER' as const,
+      userId: u.id,
+      email: u.email,
+      fullName: u.fullName,
+      tenantId: u.tenantId,
+      isPlatformSuperAdmin: false,
+      roleId: u.roleId,
+      roleCode: u.role.code,
+      roleName: u.role.name,
+      permissions: [...u.role.rolePermissions.map((rp) => rp.permission.key), 'tranche:approve_disbursement'],
+      organizationId: u.organizationId,
+      mustChangePassword: false,
+    };
+  }
+
+  async function gate(email: string, code: string, stepOrder: number) {
+    const chainRows = await processConfig.getActiveChain(prisma, ids[code], 'DISBURSEMENT');
+    const step = chainRows!.steps.find((s) => s.stepOrder === stepOrder)!;
+    const orgContext = await chain.orgContextForStep(prisma, ids[code], step);
+    return chain.gateForStep({ webUser: await payload(email), step, actions: [], orgContext });
+  }
+
+  it('a subsidiary approver can act on its own project, not on a sibling’s', async () => {
+    // Step 2 of the Co-Funded chain: PROJECT_OWNER.
+    assert.equal((await gate(NORTH, 'PRG-211', 2)).allowed, true);
+    const sibling = await gate(NORTH, 'PRG-221', 2);
+    assert.equal(sibling.allowed, false);
+    assert.match(sibling.reason!, /owning organisation/);
+    // The flagship is not the owner, so PROJECT_OWNER refuses it.
+    assert.equal((await gate(FLAGSHIP, 'PRG-211', 2)).allowed, false);
+  });
+
+  it('a flagship approver with PROJECT_OWNER_OR_ANCESTOR can act on both subsidiaries’ projects', async () => {
+    assert.equal((await gate(FLAGSHIP, 'PRG-211', 3)).allowed, true);
+    assert.equal((await gate(FLAGSHIP, 'PRG-221', 3)).allowed, true);
+    assert.equal((await gate(NORTH, 'PRG-211', 3)).allowed, true);
+    assert.equal((await gate(NORTH, 'PRG-221', 3)).allowed, false);
+  });
+
+  it('a FUNDER-scoped step follows the funding organisation', async () => {
+    // Central: release step 2 is FUNDER (the flagship funds).
+    assert.equal((await gate(FLAGSHIP, 'PRG-102', 2)).allowed, true);
+    assert.equal((await gate(NORTH, 'PRG-102', 2)).allowed, false);
+  });
+
+  it('the chain DTO and template JSON carry the scope', async () => {
+    const res = await request(app).get(`/api/v1/projects/${ids['PRG-211']}/process`).set(await login(PROGRAMME_ADMIN));
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.equal(res.body.data.disbursementChain.steps[1].organizationScope, 'PROJECT_OWNER');
+  });
+});
+
+describe('project types', () => {
+  it('a tenant with types requires one on a new draft', async () => {
+    const res = await request(app)
+      .post('/api/v1/projects')
+      .set(await login(PROGRAMME_ADMIN))
+      .send({ name: 'No type project', codePrefix: 'PRG-901', stateLocation: 'Kano State', totalBudgetNgn: 1000000 });
+    assert.equal(res.status, 422, JSON.stringify(res.body));
+  });
+
+  it('editing a type bumps its version and does not change projects that have it', async () => {
+    const h = await login(PROGRAMME_ADMIN);
+    const before = await prisma.project.findUniqueOrThrow({ where: { id: ids['PRG-211'] } });
+    const current = await request(app).get(`/api/v1/project-types/${ids.coFunded}`).set(h);
+    const body = { ...current.body.data };
+    for (const k of ['id', 'workflowTemplateName', 'version', 'projectCount', 'createdAt', 'updatedAt']) delete body[k];
+    body.config.parties.beneficiaryRequired = false;
+    body.config.reportingDefaults = { reportingCadence: 'MONTHLY', workdayStartTime: '08:00', workdayEndTime: '17:00' };
+    const saved = await request(app).put(`/api/v1/project-types/${ids.coFunded}`).set(h).send(body);
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+    assert.equal(saved.body.data.version, 2);
+
+    const afterEdit = await prisma.project.findUniqueOrThrow({ where: { id: ids['PRG-211'] } });
+    assert.equal(afterEdit.projectTypeVersion, 1);
+    assert.deepEqual(afterEdit.projectTypeSnapshotJson, before.projectTypeSnapshotJson);
+    assert.equal(afterEdit.reportingCadence, 'BI_WEEKLY');
+
+    // A new project gets the new version.
+    const created = await request(app)
+      .post('/api/v1/projects')
+      .set(h)
+      .send({ name: 'Co-funded v2 project', codePrefix: 'PRG-231', stateLocation: 'Lagos State', totalBudgetNgn: 5000000, projectTypeId: ids.coFunded });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    assert.equal(created.body.data.basics.projectType.version, 2);
+    assert.equal(created.body.data.reporting.reportingCadence, 'MONTHLY');
+  });
+
+  it('changing the type re-applies on a draft and is locked on a live project', async () => {
+    const h = await login(PROGRAMME_ADMIN);
+    const setup = await request(app).get(`/api/v1/projects/${ids['PRG-201']}/setup`).set(h);
+    const basics = { ...setup.body.data.basics, regionId: setup.body.data.basics.region.id };
+    delete basics.projectType;
+    delete basics.region;
+    const draft = await request(app)
+      .put(`/api/v1/projects/${ids['PRG-201']}/setup/basics`)
+      .set(h)
+      .send({ ...basics, projectTypeId: ids.central });
+    assert.equal(draft.status, 200, JSON.stringify(draft.body));
+    assert.equal(draft.body.data.basics.projectType.code, 'CENTRAL');
+    // South is not an allowed Central owner: the Parties step now reports it.
+    const parties = draft.body.data.steps.find((s: { stepId: string }) => s.stepId === 'parties');
+    assert.ok(parties.issues.some((i: { code: string }) => i.code === 'OWNER_NOT_ALLOWED'), JSON.stringify(parties.issues));
+    const chainSteps = await prisma.approvalStep.findMany({
+      where: { projectId: ids['PRG-201'], chainType: 'DISBURSEMENT', isActive: true },
+      orderBy: { stepOrder: 'asc' },
+    });
+    assert.deepEqual(chainSteps.map((s) => s.organizationScope), ['ANY', 'FUNDER'], 'Central template applied');
+
+    const liveSetup = await request(app).get(`/api/v1/projects/${ids['PRG-211']}/setup`).set(h);
+    const liveBasics = { ...liveSetup.body.data.basics };
+    delete liveBasics.projectType;
+    delete liveBasics.region;
+    const locked = await request(app)
+      .put(`/api/v1/projects/${ids['PRG-211']}/setup/basics`)
+      .set(h)
+      .send({ ...liveBasics, projectTypeId: ids.central });
+    assert.equal(locked.status, 409);
+    assert.equal(locked.body.error.code, 'PROJECT_TYPE_LOCKED');
+  });
+
+  it('activation readiness honours the type’s party rules', async () => {
+    const h = await login(PROGRAMME_ADMIN);
+    const res = await request(app).get(`/api/v1/projects/${ids['PRG-101']}/setup`).set(h);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.parties.rules.beneficiaryRequired, true);
+    const cleared = await request(app)
+      .put(`/api/v1/projects/${ids['PRG-101']}/setup/parties`)
+      .set(h)
+      .send({
+        owningOrganizationId: ids.flagship,
+        monitorOrganization: { id: res.body.data.parties.monitorOrganization.id },
+        lenderOrganization: { id: ids.flagship },
+        contractorExecutionMode: 'SINGLE_CONTRACTOR',
+        contractors: res.body.data.parties.contractors.map((c: Record<string, unknown>) => ({
+          id: c.id,
+          organization: { id: c.organizationId },
+          tradeCategory: c.tradeCategory,
+          tradeCode: c.tradeCode,
+          isMainContractor: c.isMainContractor,
+        })),
+        beneficiaries: [],
+      });
+    assert.equal(cleared.status, 200, JSON.stringify(cleared.body));
+    const parties = cleared.body.data.steps.find((s: { stepId: string }) => s.stepId === 'parties');
+    assert.ok(parties.issues.some((i: { code: string }) => i.code === 'BENEFICIARY_REQUIRED'));
+  });
+
+  it('a workflow template used by a type cannot be deleted', async () => {
+    const type = await prisma.projectType.findUniqueOrThrow({ where: { id: ids.central } });
+    const res = await request(app).delete(`/api/v1/workflow-templates/${type.workflowTemplateId}`).set(await login(PROGRAMME_ADMIN));
+    assert.equal(res.status, 409, JSON.stringify(res.body));
+  });
+});
+
+describe('regions', () => {
+  it('has two levels only', async () => {
+    const h = await login(PROGRAMME_ADMIN);
+    const kano = await prisma.region.findFirstOrThrow({ where: { code: 'N-KAN' } });
+    const res = await request(app).post('/api/v1/regions').set(h).send({ name: 'Kano Municipal', code: 'N-KAN-MUN', parentRegionId: kano.id });
+    assert.equal(res.status, 422);
+    const ok = await request(app).post('/api/v1/regions').set(h).send({ name: 'Katsina', code: 'n-kat', parentRegionId: kano.parentRegionId });
+    assert.equal(ok.status, 201, JSON.stringify(ok.body));
+    assert.equal(ok.body.data.code, 'N-KAT');
+    const forbidden = await request(app).post('/api/v1/regions').set(await login(NORTH)).send({ name: 'X region', code: 'X' });
+    assert.equal(forbidden.status, 403);
+  });
+});
+
+describe('terminology', () => {
+  it('resolves per tenant on the profile; API values never change', async () => {
+    await login(PROGRAMME_ADMIN);
+    await login(MAIN_ADMIN);
+    const programme = profiles[PROGRAMME_ADMIN].terminology as Record<string, { singular: string }>;
+    const main = profiles[MAIN_ADMIN].terminology as Record<string, { singular: string }>;
+    assert.equal(programme.funderParty.singular, 'Funding authority');
+    assert.equal(programme.tranche.singular, 'Payment milestone');
+    assert.equal(programme.ipc.singular, 'Payment claim');
+    assert.equal(main.funderParty.singular, 'Lender');
+    assert.equal(main.tranche.singular, 'Tranche');
+
+    // DTO field names and canonical values stay as they were.
+    const res = await request(app).get('/api/v1/projects').set(await login(FLAGSHIP));
+    assert.ok('lenderOrganizationName' in res.body.data[0]);
+  });
+
+  it('is edited by tenant admins, validated and audited', async () => {
+    const h = await login(PROGRAMME_ADMIN);
+    const bad = await request(app).put('/api/v1/rbac/tenant/settings/terminology').set(h).send({ labels: { lenderX: { singular: 'x' } } });
+    assert.equal(bad.status, 400);
+    const ok = await request(app)
+      .put('/api/v1/rbac/tenant/settings/terminology')
+      .set(h)
+      .send({ labels: { funderParty: { singular: 'Funding authority' }, retention: { singular: 'Holdback' } } });
+    assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    assert.equal(ok.body.data.resolved.retention.singular, 'Holdback');
+    assert.equal(ok.body.data.resolved.tranche.singular, 'Tranche', 'omitted keys fall back to the default');
+    assert.equal(ok.body.data.resolved.funderParty.plural, 'Funding authority', 'plural defaults to the singular');
+    const audit = await prisma.auditLog.count({ where: { action: 'TERMINOLOGY_UPDATED' } });
+    assert.equal(audit, 1);
+    const forbidden = await request(app).put('/api/v1/rbac/tenant/settings/terminology').set(await login(NORTH)).send({ labels: {} });
+    assert.equal(forbidden.status, 403);
+  });
+});
+
+describe('cross-project web notifications (projectId = all)', () => {
+  it('lists, reads and read-alls only notifications of visible projects', async () => {
+    const { createWebNotification } = await import('../modules/notifications/notifications.service');
+    const northNote = await createWebNotification(prisma, {
+      projectId: ids['PRG-211'],
+      targetPermissionKey: 'ipc:view',
+      category: 'DISBURSEMENT_PENDING_APPROVAL',
+      title: 'North item',
+      description: 'For the north entity',
+    });
+    const southNote = await createWebNotification(prisma, {
+      projectId: ids['PRG-221'],
+      targetPermissionKey: 'ipc:view',
+      category: 'DISBURSEMENT_PENDING_APPROVAL',
+      title: 'South item',
+      description: 'For the south entity',
+    });
+
+    const list = await request(app).get('/api/v1/projects/all/web-notifications').set(await login(NORTH));
+    assert.equal(list.status, 200, JSON.stringify(list.body));
+    const listed = (list.body.data as Array<{ id: string }>).map((n) => n.id);
+    assert.ok(listed.includes(northNote.id));
+    assert.ok(!listed.includes(southNote.id), 'a sibling entity’s notification is not listed');
+
+    const flagship = await request(app).get('/api/v1/projects/all/web-notifications').set(await login(FLAGSHIP));
+    const flagshipIds = (flagship.body.data as Array<{ id: string }>).map((n) => n.id);
+    assert.ok(flagshipIds.includes(northNote.id) && flagshipIds.includes(southNote.id));
+
+    const foreignRead = await request(app)
+      .patch(`/api/v1/projects/all/web-notifications/${southNote.id}/read`)
+      .set(await login(NORTH));
+    assert.equal(foreignRead.status, 404);
+    const ownRead = await request(app)
+      .patch(`/api/v1/projects/all/web-notifications/${northNote.id}/read`)
+      .set(await login(NORTH));
+    assert.equal(ownRead.status, 200, JSON.stringify(ownRead.body));
+    assert.equal(ownRead.body.data.isRead, true);
+
+    const readAll = await request(app).post('/api/v1/projects/all/web-notifications/read-all').set(await login(SOUTH));
+    assert.equal(readAll.status, 200, JSON.stringify(readAll.body));
+    assert.equal(readAll.body.data.count, 1);
+
+    // Other writes on 'all' stay refused.
+    const otherWrite = await request(app).put('/api/v1/projects/all/setup/basics').set(await login(PROGRAMME_ADMIN)).send({});
+    assert.equal(otherWrite.status, 404);
+  });
+});
+
+describe('portfolio dashboard', () => {
+  it('returns map points and KPIs over the visible, filtered projects', async () => {
+    const north = await request(app).get('/api/v1/projects/portfolio/overview').set(await login(NORTH));
+    assert.equal(north.status, 200, JSON.stringify(north.body));
+    assert.deepEqual(
+      (north.body.data.projects as Array<{ codePrefix: string }>).map((p) => p.codePrefix),
+      ['PRG-211']
+    );
+    const pin = north.body.data.projects[0];
+    assert.ok(Math.abs(pin.point.latitude - 11.9964) < 0.001 && Math.abs(pin.point.longitude - 8.5167) < 0.001);
+    assert.equal(pin.projectType.code, 'CO_FUNDED');
+    assert.equal(north.body.data.kpis.projectCount, 1);
+
+    const flagship = await request(app).get('/api/v1/projects/portfolio/overview').set(await login(FLAGSHIP));
+    assert.equal(flagship.body.data.kpis.projectCount, 3);
+    assert.equal(flagship.body.data.kpis.totalCommitmentNgn, 240_000_000 + 70_000_000 + 85_000_000);
+    assert.equal(flagship.body.data.kpis.quietSiteCount, 3, 'no captures yet on the seeded programme projects');
+
+    const filtered = await request(app)
+      .get(`/api/v1/projects/portfolio/overview?projectTypeId=${ids.coFunded}`)
+      .set(await login(FLAGSHIP));
+    assert.equal(filtered.body.data.kpis.projectCount, 2);
+    assert.equal(filtered.body.data.kpis.totalCommitmentNgn, 70_000_000 + 85_000_000);
+  });
+
+  it('needs projects:view_portfolio', async () => {
+    const res = await request(app).get('/api/v1/projects/portfolio/overview').set(await login('contractor@insite.ng'));
+    assert.equal(res.status, 403);
+  });
+});

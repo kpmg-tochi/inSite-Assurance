@@ -370,6 +370,26 @@ enum AuditActionType {
   RETENTION_RELEASED
   RETENTION_RELEASE_REQUESTED
   RETENTION_RELEASE_CANCELLED
+  // Phase 11
+  PROJECT_TYPE_SAVED
+  PROJECT_TYPE_APPLIED
+  ORGANIZATION_HIERARCHY_CHANGED
+  TERMINOLOGY_UPDATED
+}
+
+// Phase 11: which organisation an approval step actor must belong to (ANY = Phase 7 behaviour).
+enum ApprovalOrganizationScope {
+  ANY
+  PROJECT_OWNER
+  PROJECT_OWNER_OR_ANCESTOR
+  FUNDER
+}
+
+enum BeneficiaryType {
+  SCHOOL
+  COMMUNITY
+  INSTITUTION
+  OTHER
 }
 
 // Phase 10: where an ACTIVE project is in its life (ProjectStatus is unchanged).
@@ -514,6 +534,8 @@ model Tenant {
   organizationInputMode          OrgInputMode   @default(BOTH)
   enabledGeofenceModes           GeofenceMode[] @default([RADIAL, LINEAR_CORRIDOR, PERIMETER])
   defaultGeofenceToleranceMeters Int            @default(100)
+  // Phase 11: tenant wording per terminology key ({ key: { singular, plural? } }); keys fixed in shared.
+  terminologyLabels              Json           @default("{}")
   createdAt                      DateTime       @default(now())
   updatedAt                      DateTime       @updatedAt
 
@@ -524,6 +546,8 @@ model Tenant {
   auditLogs         AuditLog[]
   workflowTemplates WorkflowTemplate[]
   outboundMessages  OutboundMessage[]
+  projectTypes      ProjectType[]
+  regions           Region[]
 
   @@map("tenants")
 }
@@ -593,24 +617,30 @@ model RolePermission {
 // may be a contractor on one project and a client on another. Name is unique per tenant
 // (case-insensitive raw index from Phase 2).
 model Organization {
-  id                 String                 @id @default(uuid()) @db.Uuid
-  tenantId           String                 @db.Uuid
-  name               String
-  categories         OrganizationCategory[] @default([])
-  registrationNumber String?
-  contactEmail       String?
-  contactPhone       String?
-  isArchived         Boolean                @default(false)
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
+  id                   String                 @id @default(uuid()) @db.Uuid
+  tenantId             String                 @db.Uuid
+  name                 String
+  categories           OrganizationCategory[] @default([])
+  registrationNumber   String?
+  contactEmail         String?
+  contactPhone         String?
+  isArchived           Boolean                @default(false)
+  // Phase 11: hierarchy (flagship -> subsidiaries), up to 5 levels; cycles refused by the service.
+  parentOrganizationId String?                @db.Uuid
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
 
   tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parentOrganization Organization?       @relation("OrganizationHierarchy", fields: [parentOrganizationId], references: [id], onDelete: Restrict)
+  childOrganizations Organization[]      @relation("OrganizationHierarchy")
   users              User[]
   monitoredProjects  Project[]           @relation("MonitorOrganization")
   lenderProjects     Project[]           @relation("LenderOrganization")
+  ownedProjects      Project[]           @relation("OwningOrganization")
   projectContractors ProjectContractor[]
 
   @@index([tenantId])
+  @@index([parentOrganizationId])
 }
 
 model User {
@@ -756,12 +786,24 @@ model Project {
   lenderOrganizationId    String?                  @db.Uuid
   contractorExecutionMode ContractorExecutionMode?
 
+  // Phase 11: delivery model. The snapshot is the type config when applied (later type edits do not
+  // change it); a project without a type behaves as before Phase 11.
+  owningOrganizationId    String? @db.Uuid
+  projectTypeId           String? @db.Uuid
+  projectTypeVersion      Int?
+  projectTypeSnapshotJson Json?
+  regionId                String? @db.Uuid
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  monitorOrganization Organization?       @relation("MonitorOrganization", fields: [monitorOrganizationId], references: [id])
-  lenderOrganization  Organization?       @relation("LenderOrganization", fields: [lenderOrganizationId], references: [id])
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  monitorOrganization Organization?        @relation("MonitorOrganization", fields: [monitorOrganizationId], references: [id])
+  lenderOrganization  Organization?        @relation("LenderOrganization", fields: [lenderOrganizationId], references: [id])
+  owningOrganization  Organization?        @relation("OwningOrganization", fields: [owningOrganizationId], references: [id])
+  projectType         ProjectType?         @relation(fields: [projectTypeId], references: [id], onDelete: Restrict)
+  region              Region?              @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  beneficiaries       ProjectBeneficiary[]
   contractors         ProjectContractor[]
   boqRevisions        BoqRevision[]
 
@@ -810,6 +852,9 @@ model Project {
   @@index([portfolioHealth])
   @@index([monitorOrganizationId])
   @@index([lenderOrganizationId])
+  @@index([owningOrganizationId])
+  @@index([projectTypeId])
+  @@index([regionId])
 }
 
 // A contractor on a project (Phase 6). In multi-prime each contractor owns its BOQ items and IPCs;
@@ -1777,7 +1822,8 @@ model WorkflowTemplate {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  projectTypes ProjectType[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -1812,18 +1858,20 @@ model ProjectProcessConfig {
 // One step of a project's approval chain. Chains are never edited in place: a change writes a new
 // version (and deactivates the old one), and items in flight keep the version they started on.
 model ApprovalStep {
-  id                    String            @id @default(uuid()) @db.Uuid
-  projectId             String            @db.Uuid
+  id                    String                    @id @default(uuid()) @db.Uuid
+  projectId             String                    @db.Uuid
   chainType             ApprovalChainType
   version               Int
   stepOrder             Int
   label                 String
   requiredPermissionKey String
-  requiredRoleId        String?           @db.Uuid
-  minAmountThresholdNgn Decimal?          @db.Decimal(18, 2)
-  isSystemStep          Boolean           @default(false)
-  isActive              Boolean           @default(true)
-  createdAt             DateTime          @default(now())
+  requiredRoleId        String?                   @db.Uuid
+  minAmountThresholdNgn Decimal?                  @db.Decimal(18, 2)
+  isSystemStep          Boolean                   @default(false)
+  // Phase 11
+  organizationScope     ApprovalOrganizationScope @default(ANY)
+  isActive              Boolean                   @default(true)
+  createdAt             DateTime                  @default(now())
 
   project Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   actions ApprovalAction[]
@@ -2234,4 +2282,74 @@ model RetentionReleaseRequest {
   @@index([projectId, status])
   @@index([projectContractorId])
   @@map("retention_release_requests")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 11: delivery models
+// ---------------------------------------------------------------------------
+
+// A delivery model. References a workflow template (process and chains) and holds the rest in
+// configJson (ProjectTypeConfigSchema). Every save bumps version; projects keep their snapshot.
+model ProjectType {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenantId           String   @db.Uuid
+  code               String
+  name               String
+  description        String?
+  colour             String?
+  workflowTemplateId String   @db.Uuid
+  configJson         Json
+  version            Int      @default(1)
+  isActive           Boolean  @default(true)
+  isDefault          Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  workflowTemplate WorkflowTemplate @relation(fields: [workflowTemplateId], references: [id], onDelete: Restrict)
+  projects         Project[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@map("project_types")
+}
+
+// Tenant regions, two levels (region -> area).
+model Region {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @db.Uuid
+  name           String
+  code           String
+  parentRegionId String?  @db.Uuid
+  isArchived     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parentRegion Region?   @relation("RegionHierarchy", fields: [parentRegionId], references: [id], onDelete: Restrict)
+  areas        Region[]  @relation("RegionHierarchy")
+  projects     Project[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([parentRegionId])
+  @@map("regions")
+}
+
+model ProjectBeneficiary {
+  id              String          @id @default(uuid()) @db.Uuid
+  projectId       String          @db.Uuid
+  name            String
+  beneficiaryType BeneficiaryType
+  contactName     String?
+  contactEmail    String?
+  contactPhone    String?
+  address         String?
+  isPrimary       Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_beneficiaries")
 }

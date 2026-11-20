@@ -7,7 +7,7 @@ import type {
   ValuationReportDto,
 } from "@insite/shared";
 import { CustomSelect, type CustomSelectOption } from "../../../components/common";
-import { useAuth } from "../../../lib/auth-context";
+import { useAuth, useTerm } from "../../../lib/auth-context";
 import { IS_DEMO_MODE } from "../../../config/demoMode";
 import { formatNaira } from "../../../lib/formatters";
 import {
@@ -155,6 +155,7 @@ export function TrancheDecisionModal({
   onClose: () => void;
 }) {
   const decideMutation = useDecideTrancheMutation(projectId);
+  const term = useTerm();
   const [decision, setDecision] = useState<LenderDecisionType>("APPROVE_FULL");
   const [amount, setAmount] = useState("");
   const [creditRef, setCreditRef] = useState(IS_DEMO_MODE ? "IC-CC-2026-Q4-019" : "");
@@ -201,7 +202,7 @@ export function TrancheDecisionModal({
   };
 
   return (
-    <ModalShell title="Tranche disbursement decision" subtitle={subtitle} onClose={onClose} maxWidth="max-w-2xl">
+    <ModalShell title={`${term("tranche")} disbursement decision`} subtitle={subtitle} onClose={onClose} maxWidth="max-w-2xl">
       <form onSubmit={handleSubmit} className="p-5 space-y-4">
         {!decide.allowed && <BlockedNotice>{decide.reason}</BlockedNotice>}
 
@@ -212,13 +213,13 @@ export function TrancheDecisionModal({
           <dd className="text-right font-bold text-emerald-700">{formatNaira(report.recommendedReleaseAmountNgn)}</dd>
           <dt className="text-slate-500">Recommended holdback</dt>
           <dd className="text-right font-bold text-amber-700">{formatNaira(report.recommendedHoldbackAmountNgn)}</dd>
-          <dt className="text-slate-500">{cpsEnabled ? "Tranche unreleased allocation" : "Unreleased allocation"}</dt>
+          <dt className="text-slate-500">{cpsEnabled ? `${term("tranche")} unreleased allocation` : "Unreleased allocation"}</dt>
           <dd className="text-right font-medium">{formatNaira(remaining)}</dd>
           {retentionPct ? (
             <>
-              <dt className="text-slate-500">Retention withheld ({retentionPct}%)</dt>
+              <dt className="text-slate-500">{term("retention")} withheld ({retentionPct}%)</dt>
               <dd className="text-right font-bold text-sky-700">{formatNaira(previewRetention)}</dd>
-              <dt className="text-slate-500">Paid to the contractor</dt>
+              <dt className="text-slate-500">Paid to the {term("contractor", { lower: true })}</dt>
               <dd className="text-right font-bold">{formatNaira(Math.round((previewApproved - previewRetention) * 100) / 100)}</dd>
             </>
           ) : null}
@@ -226,9 +227,9 @@ export function TrancheDecisionModal({
 
         {cpsEnabled && (
           <div className="space-y-2">
-            <div className="text-xs font-semibold text-slate-700">Conditions precedent</div>
+            <div className="text-xs font-semibold text-slate-700">{term("conditionPrecedent", { plural: true })}</div>
             {cps.length === 0 ? (
-              <p className="text-xs text-slate-500">No conditions precedent on this tranche.</p>
+              <p className="text-xs text-slate-500">No {term("conditionPrecedent", { plural: true, lower: true })} on this {term("tranche", { lower: true })}.</p>
             ) : (
               cps.map((cp) => <ConditionRow key={cp.id} projectId={projectId} trancheId={tranche.id} cp={cp} />)
             )}
@@ -246,14 +247,14 @@ export function TrancheDecisionModal({
 
         {cpBlocked && (
           <BlockedNotice>
-            Release is blocked by unmet mandatory conditions precedent: {blocking.map((c) => c.referenceCode).join(", ")}. Mark them satisfied or waive them with a reason, or record HOLD.
+            Release is blocked by unmet mandatory {term("conditionPrecedent", { plural: true, lower: true })}: {blocking.map((c) => c.referenceCode).join(", ")}. Mark them satisfied or waive them with a reason, or record HOLD.
           </BlockedNotice>
         )}
         {fullBlocked && (
           <BlockedNotice>
             {report.recommendedReleaseAmountNgn <= 0
               ? "The monitor recommended no release. Record HOLD."
-              : "The recommended release exceeds the tranche's unreleased allocation. Approve a lower amount instead."}
+              : `The recommended release exceeds the ${term("tranche", { lower: true })}'s unreleased allocation. Approve a lower amount instead.`}
           </BlockedNotice>
         )}
 
@@ -289,6 +290,7 @@ export function LenderDecisionModal({
   cpsEnabled?: boolean;
   onClose: () => void;
 }) {
+  const term = useTerm();
   const report = ipc.valuationReport;
   if (!report) return null;
   return (
@@ -297,7 +299,7 @@ export function LenderDecisionModal({
       tranche={ipc.tranche}
       report={report}
       decide={ipc.actions.decide}
-      subtitle={`${ipc.tranche.name} · valuation revision ${report.revisionNumber}`}
+      subtitle={`${ipc.tranche.name} · ${term("valuation", { lower: true })} revision ${report.revisionNumber}`}
       cpsEnabled={cpsEnabled}
       onClose={onClose}
     />
@@ -305,13 +307,14 @@ export function LenderDecisionModal({
 }
 
 export function ReverseDecisionModal({ projectId, ipc, onClose }: { projectId: string; ipc: IpcClaimDto; onClose: () => void }) {
+  const term = useTerm();
   if (!ipc.activeDecision) return null;
   return (
     <ReverseTrancheDecisionModal
       projectId={projectId}
       decision={ipc.activeDecision}
-      subtitle={`IPC #${ipc.ipcNumber}`}
-      returnsTo="the IPC returns to certified"
+      subtitle={`${term("ipc")} #${ipc.ipcNumber}`}
+      returnsTo={`the ${term("ipc", { lower: true })} returns to certified`}
       onClose={onClose}
     />
   );
@@ -332,6 +335,7 @@ export function ReverseTrancheDecisionModal({
   onClose: () => void;
 }) {
   const reverseMutation = useReverseDecisionMutation(projectId);
+  const term = useTerm();
   const [reason, setReason] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -345,7 +349,7 @@ export function ReverseTrancheDecisionModal({
   };
 
   return (
-    <ModalShell title="Reverse tranche decision" subtitle={subtitle} onClose={onClose} maxWidth="max-w-lg">
+    <ModalShell title={`Reverse ${term("tranche", { lower: true })} decision`} subtitle={subtitle} onClose={onClose} maxWidth="max-w-lg">
       <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs">
         <p className="text-slate-700">
           This records a linked reversal of <strong>{decision.decision}</strong> ({formatNaira(decision.approvedDisbursementAmountNgn)} released).

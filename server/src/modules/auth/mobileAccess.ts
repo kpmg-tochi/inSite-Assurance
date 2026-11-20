@@ -10,6 +10,7 @@ import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { syncParticipantForSession } from '../mobilization/participants.service';
+import { ownedByOrganizationTreeWhere } from '../organizations/hierarchy';
 
 /**
  * Phase 5: provisioned mobile accounts. A signed-in user works in the field under one
@@ -26,7 +27,7 @@ const ROLE_WITH_PERMISSIONS = {
 
 export const MOBILE_USER_INCLUDE = {
   tenant: {
-    select: { status: true, evidenceRatingLabels: true, name: true, brandingConfig: true, defaultCurrency: true },
+    select: { status: true, evidenceRatingLabels: true, terminologyLabels: true, name: true, brandingConfig: true, defaultCurrency: true },
   },
   organization: { select: { name: true } },
   role: ROLE_WITH_PERMISSIONS,
@@ -82,7 +83,12 @@ export function mobileProjectVisibilityWhere(user: MobileUserRow): Prisma.Projec
   if (mainPermissions.includes('projects:view_all_tenant')) {
     return { tenantId: user.tenantId, status: 'ACTIVE', ...contractorGate };
   }
-  return { tenantId: user.tenantId, status: 'ACTIVE', userAssignments: { some: { userId: user.id } }, ...contractorGate };
+  const assigned: Prisma.ProjectWhereInput = { userAssignments: { some: { userId: user.id } } };
+  // Phase 11: same organisation-tree rule as the web (projectAccessBranch).
+  const access = mainPermissions.includes('projects:view_organization_tree')
+    ? { OR: [assigned, ownedByOrganizationTreeWhere(user.organizationId)] }
+    : assigned;
+  return { tenantId: user.tenantId, status: 'ACTIVE', AND: [access], ...contractorGate };
 }
 
 export async function listMobileProjects(user: MobileUserRow): Promise<MobileProjectSummary[]> {

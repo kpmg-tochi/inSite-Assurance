@@ -181,6 +181,7 @@ export async function writeChainVersion(
       requiredRoleId: s.requiredRoleId ?? null,
       minAmountThresholdNgn: s.minAmountThresholdNgn ?? null,
       isSystemStep: s.isSystemStep ?? false,
+      organizationScope: s.organizationScope ?? 'ANY',
       isActive: true,
     })),
   });
@@ -196,7 +197,8 @@ function stepsEqual(rows: ApprovalStepRow[], input: ApprovalStepConfig[]): boole
       r.requiredPermissionKey === s.requiredPermissionKey &&
       (r.requiredRoleId ?? null) === (s.requiredRoleId ?? null) &&
       (r.minAmountThresholdNgn === null ? null : Number(r.minAmountThresholdNgn)) === (s.minAmountThresholdNgn ?? null) &&
-      r.isSystemStep === (s.isSystemStep ?? false)
+      r.isSystemStep === (s.isSystemStep ?? false) &&
+      r.organizationScope === (s.organizationScope ?? 'ANY')
     );
   });
 }
@@ -232,6 +234,7 @@ async function serializeChain(
         requiredRoleName: null,
         minAmountThresholdNgn: s.minAmountThresholdNgn ?? null,
         isSystemStep: s.isSystemStep,
+        organizationScope: s.organizationScope ?? 'ANY',
         version: 0,
       })),
     };
@@ -249,6 +252,7 @@ async function serializeChain(
       requiredRoleName: s.requiredRoleId ? roleName.get(s.requiredRoleId) ?? null : null,
       minAmountThresholdNgn: s.minAmountThresholdNgn === null ? null : Number(s.minAmountThresholdNgn),
       isSystemStep: s.isSystemStep,
+      organizationScope: s.organizationScope,
       version: s.version,
     })),
   };
@@ -397,6 +401,7 @@ export async function applyProcessSettings(
             requiredRoleId: s.requiredRoleId,
             minAmountThresholdNgn: s.minAmountThresholdNgn === null ? null : Number(s.minAmountThresholdNgn),
             isSystemStep: s.isSystemStep,
+            organizationScope: s.organizationScope,
           }))
         : null);
     if (!base) {

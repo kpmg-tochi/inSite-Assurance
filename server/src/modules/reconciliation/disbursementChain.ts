@@ -11,6 +11,8 @@ import {
   gateForStep,
   loadActions,
   nextApplicableStep,
+  orgContextForStep,
+  organizationScopeAllows,
   recordApprovalAction,
 } from '../process/approvalChain';
 
@@ -45,10 +47,20 @@ async function notifyStep(
   tx: Tx,
   params: { projectId: string; step: ApprovalStepRow; stepCount: number; label: string; actionUrl: string; valuationId: string }
 ) {
+  // Phase 11: an owner- or funder-scoped step is announced to that organisation only. (An
+  // "owner or above" step cannot be expressed as one target, so it goes to every holder.)
+  const ctx = await orgContextForStep(tx, params.projectId, params.step);
+  const targetOrganizationId =
+    params.step.organizationScope === 'PROJECT_OWNER'
+      ? ctx?.owningOrganizationId
+      : params.step.organizationScope === 'FUNDER'
+        ? ctx?.funderOrganizationId
+        : null;
   await createWebNotification(tx, {
     projectId: params.projectId,
     targetPermissionKey: params.step.requiredPermissionKey,
     targetRoleId: params.step.requiredRoleId,
+    ...(targetOrganizationId ? { targetOrganizationId } : {}),
     category: 'DISBURSEMENT_PENDING_APPROVAL',
     title: `${params.label} awaiting ${params.step.label}`,
     description: `${params.label} is waiting for "${params.step.label}" (step ${params.step.stepOrder} of ${params.stepCount}).`,
@@ -77,6 +89,11 @@ export async function startValuationOnChain(
   // The certification permission itself is checked by the caller; a role named on the step applies.
   if (certStep.requiredRoleId && certStep.requiredRoleId !== params.certifier.roleId) {
     throw new AppError(`"${certStep.label}" is limited to a specific role on this project`, 403, 'NOT_STEP_APPROVER');
+  }
+  // Phase 11: the certification step may be limited to an organisation too.
+  const certOrg = await orgContextForStep(tx, params.projectId, certStep);
+  if (!organizationScopeAllows(certStep.organizationScope, params.certifier.organizationId, certOrg)) {
+    assertMayAct(gateForStep({ webUser: params.certifier, step: certStep, actions: [], orgContext: certOrg }), certStep);
   }
   await recordApprovalAction(tx, {
     projectId: params.projectId,
@@ -126,7 +143,8 @@ export async function assertAtReleaseStep(
     );
   }
   const actions = await loadActions(tx, 'VALUATION_REPORT', valuation.id);
-  assertMayAct(gateForStep({ webUser, step, actions }), step);
+  const orgContext = await orgContextForStep(tx, valuation.projectId, step);
+  assertMayAct(gateForStep({ webUser, step, actions, orgContext }), step);
   return step;
 }
 
@@ -176,7 +194,8 @@ export async function actOnReviewStep(
     );
   }
   const actions = await loadActions(tx, 'VALUATION_REPORT', valuation.id);
-  assertMayAct(gateForStep({ webUser, step, actions }), step);
+  const orgContext = await orgContextForStep(tx, valuation.projectId, step);
+  assertMayAct(gateForStep({ webUser, step, actions, orgContext }), step);
   await recordApprovalAction(tx, {
     projectId: valuation.projectId,
     chainType: 'DISBURSEMENT',
@@ -239,7 +258,7 @@ export async function reviewGate(
   const step = steps.find((s) => s.stepOrder === valuation.currentApprovalStep) ?? null;
   if (!step || step.isSystemStep) return { allowed: false, reason: 'Nothing is waiting for review.' };
   const actions = await loadActions(db, 'VALUATION_REPORT', valuation.id);
-  return gateForStep({ webUser: viewer, step, actions });
+  return gateForStep({ webUser: viewer, step, actions, orgContext: await orgContextForStep(db, valuation.projectId, step) });
 }
 
 /** The gate for the release decision on a live valuation (chain position and consecutive rule). */
@@ -255,5 +274,5 @@ export async function releaseGate(
     return { allowed: false, reason: step ? `Waiting for "${step.label}" first.` : 'Not on its approval chain.' };
   }
   const actions = await loadActions(db, 'VALUATION_REPORT', valuation.id);
-  return gateForStep({ webUser: viewer, step, actions });
+  return gateForStep({ webUser: viewer, step, actions, orgContext: await orgContextForStep(db, valuation.projectId, step) });
 }

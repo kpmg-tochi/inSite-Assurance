@@ -5,7 +5,7 @@ import { CustomSelect, type CustomSelectOption } from "../../../components/commo
 import { uploadSupportingDocument } from "../../../api/reconciliation/reconciliationApi";
 import { useSubmitIpcMutation } from "../../../mutations/reconciliation/useReconciliationMutations";
 import { formatNaira } from "../../../lib/formatters";
-import { useAuth } from "../../../lib/auth-context";
+import { useAuth, useTerm } from "../../../lib/auth-context";
 import { ModalActions, ModalShell, inputClass } from "./ModalShell";
 
 const DOC_TYPE_OPTIONS: Array<{ value: MediaType; label: string }> = [
@@ -32,6 +32,7 @@ interface Props {
 export function SubmitIpcModal({ project, ipcs, boqItems, onClose, onSubmitted }: Props) {
   const submitMutation = useSubmitIpcMutation(project.id);
   const { user } = useAuth();
+  const term = useTerm();
   // Phase 6: the claim is submitted for the user's own contractor. In multi-prime it may only
   // cover that contractor's items, and the one-open-IPC rule is per contractor.
   const ownContractor = project.contractors.find((c) => c.organizationId === user?.organizationId) ?? null;
@@ -81,7 +82,7 @@ export function SubmitIpcModal({ project, ipcs, boqItems, onClose, onSubmitted }
 
   const trancheOptions: CustomSelectOption<string>[] = availableTranches.map((t) => ({
     value: t.id,
-    label: `Tranche ${t.trancheNumber}: ${t.name}`,
+    label: `${term("tranche")} ${t.trancheNumber}: ${t.name}`,
     badge: formatNaira(t.allocatedAmountNgn - t.releasedAmountNgn),
     description: "Unreleased allocation",
   }));
@@ -139,10 +140,13 @@ export function SubmitIpcModal({ project, ipcs, boqItems, onClose, onSubmitted }
   };
 
   return (
-    <ModalShell title="Submit Interim Payment Certificate (IPC)" subtitle="The IPC number and amounts are assigned by the server" onClose={onClose} maxWidth="max-w-3xl">
+    <ModalShell title="Submit Interim Payment Certificate (IPC)" subtitle={`The ${term("ipc", { lower: true })} number and amounts are assigned by the server`} onClose={onClose} maxWidth="max-w-3xl">
       {availableTranches.length === 0 ? (
         <div className="p-5 space-y-3 text-xs text-slate-600">
-          <p>No tranche is open for a new claim. Each tranche allows one open IPC at a time, and released tranches take no claims.</p>
+          <p>
+            No {term("tranche", { lower: true })} is open for a new claim. Each {term("tranche", { lower: true })} allows one open {term("ipc", { lower: true })} at a time, and released{" "}
+            {term("tranche", { plural: true, lower: true })} take no claims.
+          </p>
           <div className="flex justify-end">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl border border-slate-200 font-semibold">
               Close
@@ -151,7 +155,7 @@ export function SubmitIpcModal({ project, ipcs, boqItems, onClose, onSubmitted }
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <CustomSelect label="Tranche" value={trancheId} onChange={setTrancheId} options={trancheOptions} />
+          <CustomSelect label={term("tranche")} value={trancheId} onChange={setTrancheId} options={trancheOptions} />
 
           <div className="grid grid-cols-2 gap-3">
             <label className="text-xs font-medium text-slate-700">
@@ -165,9 +169,9 @@ export function SubmitIpcModal({ project, ipcs, boqItems, onClose, onSubmitted }
           </div>
 
           <div>
-            <div className="text-xs font-semibold text-slate-700 mb-1.5">BOQ items in this tranche</div>
+            <div className="text-xs font-semibold text-slate-700 mb-1.5">BOQ items in this {term("tranche", { lower: true })}</div>
             {trancheItems.length === 0 ? (
-              <p className="text-xs text-slate-500">No BOQ items mapped to this tranche have work left to claim.</p>
+              <p className="text-xs text-slate-500">No BOQ items mapped to this {term("tranche", { lower: true })} have work left to claim.</p>
             ) : (
               <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-72 overflow-y-auto">
                 {trancheItems.map((b) => {
@@ -183,7 +187,7 @@ export function SubmitIpcModal({ project, ipcs, boqItems, onClose, onSubmitted }
                         </div>
                         <div className="text-[10px] text-slate-400">
                           Certified to date {b.cumulativeCertifiedPct}% · Budget {formatNaira(b.budgetedCostNgn)}
-                          {b.isHoldPoint ? " · Hold point" : ""}
+                          {b.isHoldPoint ? ` · ${term("holdPoint")}` : ""}
                         </div>
                         {value !== "" && (
                           <input
@@ -268,7 +272,7 @@ export function SubmitIpcModal({ project, ipcs, boqItems, onClose, onSubmitted }
 
           <ModalActions
             onCancel={onClose}
-            submitLabel="Submit IPC"
+            submitLabel={`Submit ${term("ipc")}`}
             pendingLabel={uploading ? "Uploading documents..." : "Submitting and reconciling..."}
             isPending={uploading || submitMutation.isPending}
             disabled={!trancheId || trancheItems.length === 0}

@@ -8,6 +8,7 @@ import {
 import { EvidenceBadge, ratingTone } from "../../../components/EvidenceBadge";
 import { QUERY_STATUS_CHIP } from "../../../components/EvidenceOverlayDrawer";
 import { displayCurrencySymbol, formatCompactNaira, formatDateShort } from "../../../lib/formatters";
+import { useTerm } from "../../../lib/auth-context";
 
 export function LineItemsTable({
   ipc,
@@ -21,6 +22,7 @@ export function LineItemsTable({
   /** False when the project turned hold points off (Phase 7). */
   showHoldPoints?: boolean;
 }) {
+  const term = useTerm();
   const columns: TableColumnDef<IpcLineItemDto>[] = [
     {
       id: "wbsCode",
@@ -35,7 +37,7 @@ export function LineItemsTable({
             <div className="flex flex-col gap-1 items-start">
               {showHoldPoints && li.boqItem.isHoldPoint && (
                 <TableBadge variant={li.missingHoldPointFlag ? "danger" : "warning"}>
-                  {li.missingHoldPointFlag ? "Hold point unmet" : "Hold point"}
+                  {li.missingHoldPointFlag ? `${term("holdPoint")} unmet` : term("holdPoint")}
                 </TableBadge>
               )}
               {latestQuery && (
@@ -71,7 +73,7 @@ export function LineItemsTable({
     },
     {
       id: "claim",
-      header: "Contractor Claim",
+      header: `${term("contractor")} Claim`,
       tooltip: "Cumulative percentage claimed and the amount computed by the server",
       align: "right",
       cell: (li) => (
@@ -114,7 +116,7 @@ export function LineItemsTable({
     },
     {
       id: "monitorValuation",
-      header: "Monitor Valuation",
+      header: `Monitor ${term("valuation")}`,
       tooltip: "Cumulative percentage and amount certified by the monitor",
       align: "right",
       cell: (li) =>
@@ -148,7 +150,7 @@ export function LineItemsTable({
 
   return (
     <StandardTable<IpcLineItemDto>
-      title={`IPC #${String(ipc.ipcNumber).padStart(2, "0")}: Claim vs. Field Evidence`}
+      title={`${term("ipc")} #${String(ipc.ipcNumber).padStart(2, "0")}: Claim vs. Field Evidence`}
       subtitle={`${formatDateShort(ipc.periodStart)} to ${formatDateShort(ipc.periodEnd)}`}
       minWidth="min-w-[980px]"
       columns={columns}

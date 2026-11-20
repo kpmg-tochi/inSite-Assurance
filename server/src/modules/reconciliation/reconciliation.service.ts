@@ -16,6 +16,8 @@ import {
   ProvidedEvidenceItem,
   RatingEngine,
   resolveRatingLabels,
+  resolveTerminology,
+  resolveTerm,
   ResolveMonitorQueryRequest,
   RespondMonitorQueryRequest,
   ReverseTrancheDecisionRequest,
@@ -33,6 +35,7 @@ import { generateValuationReportPdfBuffer } from '../../integrations/pdf-report.
 import { assertProjectObjectKey } from '../../integrations/storage.service';
 import { parseTenantBranding } from '../rbac/rbac.service';
 import { recordAuditEvent } from '../audit/audit.service';
+import { terminologyForProject } from '../organizations/terminology.service';
 import { createMobileNotification } from '../notifications/notifications.service';
 import { markNotificationsActioned } from '../notifications/notificationActions';
 import { getEvidenceForBoqItems } from '../evidence/evidenceProvider';
@@ -1285,7 +1288,12 @@ export async function certifyIpcValuationByMonitor(params: {
         valuationId: report.id,
         certifier: webUser,
         recommendedReleaseNgn: comp.recommendedReleaseAmountNgn,
-        label: `IPC #${ipc.ipcNumber} valuation (rev ${comp.revisionNumber})`,
+        // Phase 11: notification wording follows the tenant's terminology.
+        label: `${resolveTerm(await terminologyForProject(projectId, tx), 'ipc')} #${ipc.ipcNumber} ${resolveTerm(
+          await terminologyForProject(projectId, tx),
+          'valuation',
+          { lower: true }
+        )} (rev ${comp.revisionNumber})`,
         actionUrl: `/app/projects/${projectId}/reconciliation?ipcId=${ipcId}`,
       });
 
@@ -1694,10 +1702,11 @@ export async function reviewValuation(params: {
     );
     if (decided) throw new AppError('A decision has already been recorded on this valuation', 409, 'DECISION_ALREADY_RECORDED');
     const isRetention = valuation.source === 'RETENTION_RELEASE';
+    const terms = await terminologyForProject(projectId, tx);
     const label = ipc
-      ? `IPC #${ipc.ipcNumber} valuation (rev ${valuation.revisionNumber})`
+      ? `${resolveTerm(terms, 'ipc')} #${ipc.ipcNumber} ${resolveTerm(terms, 'valuation', { lower: true })} (rev ${valuation.revisionNumber})`
       : isRetention
-        ? 'Retention release'
+        ? `${resolveTerm(terms, 'retention')} release`
         : `Milestone verification (rev ${valuation.revisionNumber})`;
     const actionUrl = ipc
       ? `/app/projects/${projectId}/reconciliation?ipcId=${ipc.id}`
@@ -1904,6 +1913,7 @@ export async function generateIpcValuationPdf(projectId: string, ipcId: string):
   const labels = resolveRatingLabels(ipc.project.tenant.evidenceRatingLabels);
 
   return generateValuationReportPdfBuffer({
+    terminology: resolveTerminology(ipc.project.tenant.terminologyLabels),
     tenantName: ipc.project.tenant.name,
     pdfHeaderTitle: branding.pdfHeaderTitle,
     pdfFooterDisclaimer: branding.pdfFooterDisclaimer,

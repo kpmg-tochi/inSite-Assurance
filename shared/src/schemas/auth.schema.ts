@@ -14,6 +14,7 @@ import { ProjectGeofenceSchema } from "./geofence.schema";
 import { ProjectCadenceSettingsDtoSchema } from "./cadence.schema";
 import { TenantDtoSchema } from "./rbac.schema";
 import { ResolvedRatingLabelsSchema } from "../ratingLabels";
+import { ResolvedTerminologySchema } from "../terminology";
 
 /**
  * Web Portal Authentication (Dynamic Multi-Tenant RBAC)
@@ -73,6 +74,8 @@ export const WebUserProfileSchema = z.object({
   mustChangePassword: z.boolean().default(false),
   /** Tenant display labels for evidence ratings, resolved against the defaults. */
   ratingLabels: ResolvedRatingLabelsSchema,
+  /** Phase 11: tenant wording for domain terms (Lender, Tranche, IPC …), resolved against the defaults. */
+  terminology: ResolvedTerminologySchema,
 });
 export type WebUserProfile = z.infer<typeof WebUserProfileSchema>;
 
@@ -160,6 +163,8 @@ export const MobileTenantBrandingSchema = z.object({
   logoUrl: z.string().nullable(),
   primaryColorHex: z.string(),
   currency: z.string(),
+  /** Phase 11: tenant wording for domain terms; older payloads omit it (defaults apply). */
+  terminology: ResolvedTerminologySchema.optional(),
 });
 export type MobileTenantBranding = z.infer<typeof MobileTenantBrandingSchema>;
 

@@ -1,6 +1,8 @@
+import type { ProjectListFilters } from '@insite/shared';
 import { useQuery } from '@tanstack/react-query';
 import {
   getPortfolioExecutiveSummary,
+  getPortfolioOverview,
   getProjectContractorVerifications,
 } from '../../api/projects/contractorVerificationApi';
 
@@ -15,12 +17,20 @@ export const useContractorVerificationsQuery = (
   });
 };
 
-export const usePortfolioExecutiveQuery = (enabled = true) => {
+export const usePortfolioExecutiveQuery = (filters: ProjectListFilters = {}, enabled = true) => {
   return useQuery({
-    queryKey: ['portfolio-executive-summary'],
-    queryFn: getPortfolioExecutiveSummary,
+    queryKey: ['portfolio-executive-summary', filters],
+    queryFn: () => getPortfolioExecutiveSummary(filters),
     enabled,
     refetchInterval: 30000,
   });
 };
 
+
+export const usePortfolioOverviewQuery = (filters: ProjectListFilters = {}, enabled = true) =>
+  useQuery({
+    queryKey: ['portfolio-overview', filters],
+    queryFn: () => getPortfolioOverview(filters),
+    enabled,
+    refetchInterval: 60_000,
+  });

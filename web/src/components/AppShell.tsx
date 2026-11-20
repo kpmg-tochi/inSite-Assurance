@@ -17,6 +17,7 @@ import {
   CalendarRange,
   Handshake,
   Wrench,
+  Globe2,
 } from "lucide-react";
 import { ProjectPhaseBanner } from "./closeout/ProjectPhaseBanner";
 import { useProjectProcess } from "../queries/process/useProcessQueries";
@@ -59,6 +60,8 @@ export function AppShell({
   const requestLeave = useGuardedAction();
   const location = useLocation();
   const isExecutive = location.pathname.includes("/executive");
+  const isPortfolio = location.pathname.startsWith("/app/portfolio");
+  const isCrossProject = isExecutive || isPortfolio;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [userPopoverOpen, setUserPopoverOpen] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
@@ -199,6 +202,23 @@ export function AppShell({
               <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/55">
                 {workspaceTitleByRole}
               </div>
+            )}
+
+            {hasPermission("projects:view_portfolio") && (
+              <NavLink
+                to="/app/portfolio"
+                title="Portfolio dashboard"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                    isActive
+                      ? "bg-white/15 text-white shadow-sm"
+                      : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`
+                }
+              >
+                <Globe2 className="w-4 h-4 shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">Portfolio</span>}
+              </NavLink>
             )}
 
             <NavLink
@@ -558,13 +578,15 @@ export function AppShell({
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-brand-sky">
-                  {isExecutive
+                  {isCrossProject
                     ? "PORTFOLIO"
                     : selectedProject?.codePrefix || "PORTFOLIO"}
                 </span>
                 <span className="text-white/30">/</span>
                 <h1 className="text-base font-bold text-white tracking-tight">
-                  {isExecutive
+                  {isPortfolio
+                    ? "Portfolio dashboard"
+                    : isExecutive
                     ? "Multi-Project Capital Risk & Governance Matrix"
                     : selectedProject?.name || "Capital Project Assurance"}
                 </h1>
@@ -579,13 +601,17 @@ export function AppShell({
                           : "bg-amber-500/20 text-amber-200 border-amber-400/30"
                   }`}
                 >
-                  {isExecutive
+                  {isPortfolio
+                    ? "Portfolio"
+                    : isExecutive
                     ? "Executive Surveillance"
                     : workspaceTitleByRole}
                 </span>
               </div>
               <p className="text-xs text-slate-300">
-                {isExecutive ? (
+                {isPortfolio ? (
+                  <span>Every live project you can see, on one map, with portfolio KPIs</span>
+                ) : isExecutive ? (
                   <span>
                     Consolidated cross-project risk, disbursement holdbacks,
                     and governance telemetry
@@ -617,7 +643,7 @@ export function AppShell({
                 )}
               </p>
               {/* Phase 10: construction phase and phase-change actions */}
-              {!isExecutive && selectedProject && (
+              {!isCrossProject && selectedProject && (
                 <div className="mt-1.5">
                   <ProjectPhaseBanner projectId={selectedProject.id} projectStatus={selectedProject.status} />
                 </div>

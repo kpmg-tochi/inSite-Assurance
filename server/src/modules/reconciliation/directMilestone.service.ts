@@ -5,6 +5,7 @@ import {
   MilestoneVerificationLine,
   ProfessionalLicenseType,
   resolveRatingLabels,
+  resolveTerminology,
   VerifyDirectMilestoneRequest,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
@@ -426,6 +427,7 @@ export async function generateValuationPdfById(projectId: string, valuationId: s
   });
   const budgetOf = new Map(budgets.map((b) => [b.id, Number(b.budgetedCostNgn)]));
   return generateValuationReportPdfBuffer({
+    terminology: resolveTerminology(v.project.tenant.terminologyLabels),
     tenantName: v.project.tenant.name,
     pdfHeaderTitle: branding.pdfHeaderTitle,
     pdfFooterDisclaimer: branding.pdfFooterDisclaimer,

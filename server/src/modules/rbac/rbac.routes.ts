@@ -9,6 +9,7 @@ import {
   UpdateEvidenceRatingLabelsRequestSchema,
   UpdateTenantBrandingRequestSchema,
   UpdateTenantSettingsRequestSchema,
+  UpdateTerminologyRequestSchema,
 } from '@insite/shared';
 import {
   requirePermission,
@@ -37,6 +38,7 @@ import {
 } from './rbac.service';
 import { getAndVerifyTenantAuditTrail } from '../audit/audit.service';
 import { getTenantSettings, updateTenantSettings } from '../organizations/organizations.service';
+import { getTerminologySettings, updateTerminologySettings } from '../organizations/terminology.service';
 
 const router = Router();
 
@@ -335,6 +337,37 @@ router.put(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       res.json({ success: true, data: await updateEvidenceRatingLabels(req.webUser!, req.body) });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * GET /api/v1/rbac/tenant/settings/terminology (Phase 11)
+ * Tenant wording overrides plus the resolved terms. Every signed-in user already receives the
+ * resolved terms on their profile; this is for the editor.
+ */
+router.get(
+  '/tenant/settings/terminology',
+  requirePermission('tenant:manage_settings'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json({ success: true, data: await getTerminologySettings(req.webUser!.tenantId) });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/** PUT /api/v1/rbac/tenant/settings/terminology: display words only; API values never change. */
+router.put(
+  '/tenant/settings/terminology',
+  requirePermission('tenant:manage_settings'),
+  validateBody(UpdateTerminologyRequestSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json({ success: true, data: await updateTerminologySettings(req.webUser!, req.body) });
     } catch (error) {
       next(error);
     }

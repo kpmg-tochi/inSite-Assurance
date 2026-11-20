@@ -4,6 +4,7 @@ import type {
   FieldPersonaType,
   GeofenceMode,
   PortfolioHealth,
+  ProjectDeliveryModelFields,
   ProjectGeofence,
   ProjectStatus,
   ReportingCadence,
@@ -16,7 +17,8 @@ export interface ApiEnvelope<T> {
 }
 
 /** GET /projects and /projects/:id/baseline. Drafts are not in this list (see /projects/drafts). */
-export interface ProjectSummaryDto {
+/** Phase 11: carries projectType, region, owningOrganization and primaryBeneficiary. */
+export interface ProjectSummaryDto extends ProjectDeliveryModelFields {
   id: string;
   tenantId: string;
   status: ProjectStatus;

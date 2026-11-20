@@ -45,6 +45,13 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
       ]
+    },
+    "extra": {
+      "demoMode": "false",
+      "appVariant": "development",
+      "eas": {
+        "projectId": "62527f17-88d0-497a-b809-5a711cf3400f"
+      }
     }
   }
 }

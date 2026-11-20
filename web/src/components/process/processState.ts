@@ -38,6 +38,7 @@ export function chainFromDto(chain: ApprovalChainDto): ApprovalStepConfig[] {
       requiredRoleId: s.requiredRoleId,
       minAmountThresholdNgn: s.minAmountThresholdNgn,
       isSystemStep: s.isSystemStep,
+      organizationScope: s.organizationScope ?? "ANY",
     }));
 }
 
@@ -56,6 +57,7 @@ function normaliseStep(s: ApprovalStepConfig): ApprovalStepConfig {
     requiredRoleId: s.requiredRoleId ?? null,
     minAmountThresholdNgn: s.minAmountThresholdNgn ?? null,
     isSystemStep: s.isSystemStep,
+    organizationScope: s.organizationScope ?? "ANY",
   };
 }
 

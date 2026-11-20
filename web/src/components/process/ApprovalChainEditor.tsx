@@ -1,7 +1,10 @@
 import React, { useMemo } from "react";
 import { ArrowDown, ArrowUp, Lock, Plus, Trash2 } from "lucide-react";
 import {
+  APPROVAL_ORGANIZATION_SCOPE_META,
+  ApprovalOrganizationScopeEnum,
   MAX_APPROVAL_STEPS,
+  type ApprovalOrganizationScope,
   REPORT_APPROVAL_PERMISSION_KEY,
   SYSTEM_PERMISSIONS_CATALOG,
   type ApprovalChainType,
@@ -21,6 +24,13 @@ const inputCls =
 const PERMISSION_OPTIONS: CustomSelectOption<string>[] = SYSTEM_PERMISSIONS_CATALOG.filter((p) => p.surface !== "MOBILE").map(
   (p) => ({ value: p.key, label: p.name, description: p.key })
 );
+
+/** Phase 11: limit a step to the owner's organisation, the owner or above, or the funder. */
+const SCOPE_OPTIONS: CustomSelectOption<string>[] = ApprovalOrganizationScopeEnum.options.map((scope) => ({
+  value: scope,
+  label: APPROVAL_ORGANIZATION_SCOPE_META[scope].label,
+  description: APPROVAL_ORGANIZATION_SCOPE_META[scope].description,
+}));
 
 export function permissionName(key: string): string {
   return SYSTEM_PERMISSIONS_CATALOG.find((p) => p.key === key)?.name ?? key;
@@ -73,6 +83,7 @@ export function ApprovalChainEditor({
       requiredRoleId: null,
       minAmountThresholdNgn: null,
       isSystemStep: false,
+      organizationScope: "ANY",
     };
     if (isDisbursement && steps.length >= 1 && steps[steps.length - 1].isSystemStep) {
       // Added before the release step.
@@ -171,6 +182,16 @@ export function ApprovalChainEditor({
                       />
                     </div>
                   )}
+                  <div className="md:col-span-6">
+                    <p className="block text-[11px] font-semibold text-slate-600 mb-0.5">Organisation (optional)</p>
+                    <CustomSelect
+                      value={step.organizationScope ?? "ANY"}
+                      onChange={(v) => update(index, { organizationScope: v as ApprovalOrganizationScope })}
+                      options={SCOPE_OPTIONS}
+                      size="sm"
+                      disabled={disabled}
+                    />
+                  </div>
                 </div>
                 <div className="flex shrink-0 flex-col gap-1 pt-5">
                   {fixed ? (

@@ -14,6 +14,12 @@ import { OrganizationRefSchema } from './organization.schema';
 import { FacilityTrancheInputSchema } from './project.schema';
 import { ProjectProcessSettingsDtoSchema, ProjectProcessStepSchema, ProjectStandardsStepSchema } from './process.schema';
 import { ProjectCadenceFieldsSchema, ProjectCadenceSettingsDtoSchema } from './cadence.schema';
+import {
+  ProjectBeneficiaryDtoSchema,
+  ProjectBeneficiaryListSchema,
+  ProjectTypeSummarySchema,
+  RegionSummarySchema,
+} from './deliveryModel.schema';
 
 /**
  * Staged project creation (Phase 6, decision C). A project is created as a DRAFT from the basics
@@ -78,6 +84,10 @@ export const ProjectBasicsStepSchema = z.object({
   lgaLocation: z.string().trim().max(120).nullable().optional(),
   description: z.string().trim().max(1000).nullable().optional(),
   totalBudgetNgn: z.number({ invalid_type_error: 'Enter the total budget' }).positive('Budget must be above zero'),
+  /** Phase 11: the delivery model. Omitted keeps the current type; null removes it (drafts only). */
+  projectTypeId: z.string().uuid().nullable().optional(),
+  /** Phase 11: region or area from the tenant list. Omitted keeps the current value. */
+  regionId: z.string().uuid().nullable().optional(),
 });
 export type ProjectBasicsStep = z.infer<typeof ProjectBasicsStepSchema>;
 
@@ -108,11 +118,15 @@ export const ProjectContractorInputSchema = z.object({
 export type ProjectContractorInput = z.infer<typeof ProjectContractorInputSchema>;
 
 export const ProjectPartiesStepSchema = z.object({
+  /** Phase 11: the organisation accountable for delivery (a directory entry). Omitted keeps it. */
+  owningOrganizationId: z.string().uuid().nullable().optional(),
   monitorOrganization: OrganizationRefSchema.nullable().optional(),
   lenderOrganization: OrganizationRefSchema.nullable().optional(),
   contractorExecutionMode: ContractorExecutionModeEnum.nullable().optional(),
   /** The full contractor list: rows not listed are removed (refused if they have activity). */
   contractors: z.array(ProjectContractorInputSchema).max(50).default([]),
+  /** Phase 11: the full beneficiary list; omitted keeps the current list. */
+  beneficiaries: ProjectBeneficiaryListSchema.optional(),
 });
 export type ProjectPartiesStep = z.infer<typeof ProjectPartiesStepSchema>;
 
@@ -218,9 +232,11 @@ export const PROJECT_STEP_SAVE_SCHEMAS = {
  */
 export const ProjectActivationSchema = z.object({
   basics: ProjectBasicsStepSchema,
+  // Phase 11: whether the monitor and funder are required follows the project type (checked per
+  // step by the server), so they are optional here.
   parties: z.object({
-    monitorOrganizationId: z.string({ required_error: 'Choose the monitor organisation' }).uuid(),
-    lenderOrganizationId: z.string({ required_error: 'Choose the lender organisation' }).uuid(),
+    monitorOrganizationId: z.string().uuid().optional(),
+    lenderOrganizationId: z.string().uuid().optional(),
     contractorExecutionMode: ContractorExecutionModeEnum,
   }),
   site: z.object({
@@ -284,8 +300,23 @@ export const ProjectSetupDtoSchema = z.object({
     lgaLocation: z.string().nullable(),
     description: z.string().nullable(),
     totalBudgetNgn: z.number().nullable(),
+    /** Phase 11 */
+    projectType: ProjectTypeSummarySchema.nullable(),
+    region: RegionSummarySchema.nullable(),
   }),
   parties: z.object({
+    /** Phase 11 */
+    owningOrganization: OrgSummary,
+    beneficiaries: z.array(ProjectBeneficiaryDtoSchema),
+    /** Phase 11: what the project type requires (today's rules without a type). */
+    rules: z.object({
+      owningOrganizationRequired: z.boolean(),
+      allowedOwningOrganizationIds: z.array(z.string().uuid()).nullable(),
+      monitorRequired: z.boolean(),
+      funderRequired: z.boolean(),
+      beneficiaryRequired: z.boolean(),
+      regionRequired: z.boolean(),
+    }),
     monitorOrganization: OrgSummary,
     lenderOrganization: OrgSummary,
     contractorExecutionMode: ContractorExecutionModeEnum.nullable(),
@@ -448,6 +479,7 @@ export type ProjectDraftSummary = z.infer<typeof ProjectDraftSummarySchema>;
 
 /** Tag hint per party input, used to filter the organisation dropdown. */
 export const PARTY_ORGANIZATION_TAG = {
+  owner: 'CLIENT_OWNER',
   monitor: 'ADVISORY_MONITOR',
   lender: 'FINANCIER_LENDER',
   contractor: 'CONTRACTOR',

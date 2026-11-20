@@ -11,6 +11,7 @@ import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { markNotificationActionedById } from './notificationActions';
+import { ALL_PROJECTS_SENTINEL, buildProjectVisibilityWhere } from '../../utils/accessControl';
 
 type PrismaTransactionOrClient = Prisma.TransactionClient | typeof prisma;
 
@@ -253,6 +254,17 @@ function buildWebNotificationFilter(webUser: WebJwtPayload): Prisma.WebNotificat
   };
 }
 
+/**
+ * The project part of a web-notification query. 'all' (the cross-project bell) means every live
+ * or archived project the user can see, through the same visibility rule as the directory.
+ */
+function webNotificationProjectScope(projectId: string, webUser: WebJwtPayload): Prisma.WebNotificationWhereInput {
+  if (projectId === ALL_PROJECTS_SENTINEL) {
+    return { project: buildProjectVisibilityWhere(webUser, undefined, { statuses: ['ACTIVE', 'ARCHIVED'] }) };
+  }
+  return { projectId };
+}
+
 function readsForUser(userId: string) {
   return { where: { userId }, select: { readAt: true }, take: 1 } as const;
 }
@@ -263,7 +275,7 @@ export async function listWebNotifications(params: {
 }): Promise<WebNotificationDto[]> {
   const rows = await prisma.webNotification.findMany({
     where: {
-      projectId: params.projectId,
+      ...webNotificationProjectScope(params.projectId, params.webUser),
       ...buildWebNotificationFilter(params.webUser),
     },
     include: { reads: readsForUser(params.webUser.userId) },
@@ -284,7 +296,7 @@ export async function markWebNotificationRead(params: {
   const existing = await prisma.webNotification.findFirst({
     where: {
       id: params.notificationId,
-      projectId: params.projectId,
+      ...webNotificationProjectScope(params.projectId, params.webUser),
       ...buildWebNotificationFilter(params.webUser),
     },
   });
@@ -311,7 +323,7 @@ export async function markAllWebNotificationsRead(params: {
 }): Promise<{ count: number }> {
   const unread = await prisma.webNotification.findMany({
     where: {
-      projectId: params.projectId,
+      ...webNotificationProjectScope(params.projectId, params.webUser),
       ...buildWebNotificationFilter(params.webUser),
       reads: { none: { userId: params.webUser.userId } },
     },

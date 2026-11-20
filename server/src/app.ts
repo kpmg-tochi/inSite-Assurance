@@ -24,6 +24,8 @@ import { mobilizationRoutes } from "./modules/mobilization/mobilization.routes";
 import { scheduleRoutes } from "./modules/schedule/schedule.routes";
 import { closeoutRoutes } from "./modules/closeout/closeout.routes";
 import { handoverPublicRoutes } from "./modules/closeout/handoverPublic.routes";
+import { projectTypesRoutes } from "./modules/projectTypes/projectTypes.routes";
+import { regionsRoutes } from "./modules/regions/regions.routes";
 import { requestContextMiddleware } from "./utils/requestContext";
 import { localStorageRoutes } from "./modules/storage/localStorage.routes";
 import { storageService } from "./integrations/storage.service";
@@ -103,6 +105,9 @@ export function createApp() {
   app.use("/api/v1/projects", scheduleRoutes);
   app.use("/api/v1/projects", closeoutRoutes);
   app.use("/api/v1/workflow-templates", workflowTemplateRoutes);
+  // Phase 11: delivery models
+  app.use("/api/v1/project-types", projectTypesRoutes);
+  app.use("/api/v1/regions", regionsRoutes);
 
   // Development object storage when S3 is not configured (never in production; see env checks).
   if (!storageService.isCloudConfigured() && env.NODE_ENV !== "production") {

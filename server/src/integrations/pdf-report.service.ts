@@ -3,6 +3,9 @@ import {
   formatDateTimeInZone,
   PROFESSIONAL_LICENSE_META,
   ProfessionalLicenseType,
+  ResolvedTerminology,
+  resolveTerm,
+  TerminologyKey,
 } from "@insite/shared";
 
 export interface ValuationReportPdfInput {
@@ -62,6 +65,8 @@ export interface ValuationReportPdfInput {
   } | null;
   /** Phase 10: a retention release (no claim, no BOQ lines). */
   retentionRelease?: { stage: string; contractorName: string } | null;
+  /** Phase 11: tenant wording for domain terms; omitted uses the defaults (Lender, Tranche, IPC …). */
+  terminology?: ResolvedTerminology;
 }
 
 const moneyFormatter = (currency: string) => (n: number) =>
@@ -77,12 +82,14 @@ export async function generateValuationReportPdfBuffer(
   data: ValuationReportPdfInput,
 ): Promise<Buffer> {
   const money = moneyFormatter(data.currency ?? "NGN");
+  const terms = data.terminology ?? {};
+  const t = (key: TerminologyKey, lower = false) => resolveTerm(terms, key, { lower });
   const direct = data.ipcNumber === null;
   const subject = data.retentionRelease
-    ? `Retention release (${data.retentionRelease.stage === "FINAL" ? "final" : "practical completion"})`
+    ? `${t("retention")} release (${data.retentionRelease.stage === "FINAL" ? "final" : "practical completion"})`
     : direct
       ? "Direct milestone verification"
-      : `IPC #${data.ipcNumber}`;
+      : `${t("ipc")} #${data.ipcNumber}`;
   return new Promise((resolve, reject) => {
     const cert = data.certification;
     const doc = new PDFDocument({
@@ -141,10 +148,10 @@ export async function generateValuationReportPdfBuffer(
       .text(`Project: [${data.projectCodePrefix}] ${data.projectName}`);
     doc.fontSize(10).fillColor("#334155");
     doc.text(`Location: ${data.stateLocation}`);
-    doc.text(`Lender / Guarantor: ${data.lenderName}`);
-    doc.text(`Contractor: ${data.contractorName}`);
-    doc.text(`Independent Monitoring Practice: ${data.monitorOrganizationName}`);
-    doc.text(`Facility Tranche: ${data.trancheName} (${subject})`);
+    doc.text(`${t("funderParty")}: ${data.lenderName}`);
+    doc.text(`${t("contractor")}: ${data.contractorName}`);
+    doc.text(`${t("monitorParty")}: ${data.monitorOrganizationName}`);
+    doc.text(`${t("tranche")}: ${data.trancheName} (${subject})`);
     doc.text(`Evidence rating engine: ${engineText(data.ratingEngine, data.ratingEngineDetail)}`);
 
     doc.moveDown(0.8);
@@ -153,7 +160,7 @@ export async function generateValuationReportPdfBuffer(
     doc
       .fontSize(11)
       .fillColor("#0f172a")
-      .text("1. Tranche Disbursement & Holdback Summary", { underline: true });
+      .text(`1. ${t("tranche")} Disbursement & Holdback Summary`, { underline: true });
     doc.moveDown(0.4);
     doc.fontSize(10).fillColor("#1e293b");
     doc.text(
@@ -161,7 +168,7 @@ export async function generateValuationReportPdfBuffer(
         ? `• Held retention requested for release to ${data.retentionRelease.contractorName}: ${money(data.totalClaimedNgn)}`
         : direct
           ? `• System Claim from Verified Evidence (no contractor claim): ${money(data.totalClaimedNgn)}`
-          : `• Contractor Requested Amount (${subject}): ${money(data.totalClaimedNgn)}`,
+          : `• ${t("contractor")} Requested Amount (${subject}): ${money(data.totalClaimedNgn)}`,
     );
     if (cert) {
       doc.text(`• ${direct ? "Verified" : "Monitor Certified"} Value (revision ${cert.revisionNumber}): ${money(cert.totalCertifiedNgn)}`);
@@ -173,13 +180,13 @@ export async function generateValuationReportPdfBuffer(
     }
     const rd = data.releaseDecision;
     if (rd) {
-      doc.text(`• Lender Decision: ${rd.decision}, approved ${money(rd.approvedNgn)}`);
+      doc.text(`• ${t("funderParty")} Decision: ${rd.decision}, approved ${money(rd.approvedNgn)}`);
       if (rd.retentionWithheldNgn > 0) {
         doc.text(
-          `• Retention Withheld${rd.retentionPercentage !== null ? ` (${rd.retentionPercentage}%)` : ""}: ${money(rd.retentionWithheldNgn)}`,
+          `• ${t("retention")} Withheld${rd.retentionPercentage !== null ? ` (${rd.retentionPercentage}%)` : ""}: ${money(rd.retentionWithheldNgn)}`,
         );
       }
-      doc.text(`• Paid to Contractor: ${money(rd.netReleasedNgn)}`);
+      doc.text(`• Paid to ${t("contractor")}: ${money(rd.netReleasedNgn)}`);
     }
 
     doc.moveDown(0.8);
@@ -201,7 +208,7 @@ export async function generateValuationReportPdfBuffer(
       .text(
         cert?.executiveSummary ??
           data.aiExecutiveSummary ??
-          (direct ? "No verification summary." : "Reconciliation has not run for this IPC."),
+          (direct ? "No verification summary." : `Reconciliation has not run for this ${t("ipc", true)}.`),
         { align: "justify" },
       );
 
@@ -259,7 +266,7 @@ export async function generateValuationReportPdfBuffer(
       );
       doc.text(`Timestamp: ${formatDateTimeInZone(cert.certifiedAtIso, data.timeZone ?? "UTC")}`);
     } else {
-      doc.fontSize(9).fillColor("#334155").text("Not signed: this IPC has not been certified.");
+      doc.fontSize(9).fillColor("#334155").text(`Not signed: this ${t("ipc", true)} has not been certified.`);
     }
 
     doc.end();

@@ -14,6 +14,8 @@ const SAMPLE_BASICS: BasicsValues = {
   lgaLocation: "Kaduna North",
   description: "Sample project for demonstrations.",
   totalBudget: "450000000",
+  projectTypeId: "",
+  regionId: "",
 };
 
 /**

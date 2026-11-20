@@ -4,6 +4,7 @@ export * from './defaultRoles';
 export * from './joinCodes';
 export * from './ipcStateMachine';
 export * from './ratingLabels';
+export * from './terminology';
 
 // Zod Schemas & DTO Types
 export * from './schemas/rbac.schema';
@@ -29,6 +30,8 @@ export * from './schemas/cadence.schema';
 export * from './schemas/schedule.schema';
 export * from './schemas/handover.schema';
 export * from './schemas/retention.schema';
+export * from './schemas/deliveryModel.schema';
+export * from './schemas/projectType.schema';
 
 // Data
 export * from './data/standardsLibrary';
@@ -41,6 +44,7 @@ export * from './utils/reportingPeriod';
 export * from './utils/schedule';
 export * from './utils/retention';
 export * from './utils/handoverText';
+export * from './utils/organizationHierarchy';
 
 // Shared Turf.js Radial & Linear Corridor Chainage Geospatial Utilities
 export * from './geo/geofence';

@@ -6,6 +6,7 @@ import {
   GeoCoordinateSchema,
   IssueJoinCodeRequestSchema,
   ProjectContractorInputSchema,
+  ProjectListFiltersSchema,
   RotateJoinCodeRequestSchema,
   ReviewContractorVerificationRequestSchema,
   UpdateFieldSessionStatusRequestSchema,
@@ -18,6 +19,7 @@ import {
 import { validateBody } from '../../middleware/validate.middleware';
 import {
   getPortfolioExecutiveSummary,
+  getPortfolioOverview,
   getProjectBaselineDetails,
   listContractorVerifications,
   listDemoProjects,
@@ -95,6 +97,22 @@ if (env.DEMO_MODE) {
 }
 
 /**
+ * GET /api/v1/projects/portfolio/overview?projectTypeId=&regionId=&owningOrganizationId=
+ * Portfolio dashboard: a map point per visible live project and KPIs over the filtered set.
+ */
+router.get(
+  '/portfolio/overview',
+  requirePermission('projects:view_portfolio'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.json({ success: true, data: await getPortfolioOverview(req.webUser!, ProjectListFiltersSchema.parse(req.query)) });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
  * GET /api/v1/projects/portfolio/executive-summary
  * Multi-project portfolio executive metrics scoped to tenant & user permissions.
  */
@@ -103,7 +121,7 @@ router.get(
   requirePermission('projects:view_executive_matrix'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const summary = await getPortfolioExecutiveSummary(req.webUser!);
+      const summary = await getPortfolioExecutiveSummary(req.webUser!, ProjectListFiltersSchema.parse(req.query));
       res.json({ success: true, data: summary });
     } catch (error) {
       next(error);
@@ -120,7 +138,7 @@ router.get(
   requireWebAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const projects = await listProjectsForUser(req.webUser!);
+      const projects = await listProjectsForUser(req.webUser!, undefined, ProjectListFiltersSchema.parse(req.query));
       res.json({ success: true, data: projects });
     } catch (error) {
       next(error);

@@ -7,7 +7,7 @@ import type {
   MonitorRecommendation,
 } from "@insite/shared";
 import { CustomSelect, type CustomSelectOption } from "../../../components/common";
-import { useAuth } from "../../../lib/auth-context";
+import { useAuth, useTerm } from "../../../lib/auth-context";
 import { IS_DEMO_MODE } from "../../../config/demoMode";
 import { formatLicenseCredential, formatNaira } from "../../../lib/formatters";
 import {
@@ -47,6 +47,7 @@ export function CertifyValuationModal({
   onClose: () => void;
 }) {
   const { user } = useAuth();
+  const term = useTerm();
   const previewMutation = useCertificationPreviewMutation(projectId);
   const certifyMutation = useCertifyValuationMutation(projectId);
   const hasLicence = Boolean(user?.professionalLicenseType && user?.professionalLicenseNumber);
@@ -111,8 +112,8 @@ export function CertifyValuationModal({
 
   return (
     <ModalShell
-      title="Certify valuation"
-      subtitle={`IPC #${ipc.ipcNumber} · ${ipc.tranche.name}`}
+      title={`Certify ${term("valuation", { lower: true })}`}
+      subtitle={`${term("ipc")} #${ipc.ipcNumber} · ${ipc.tranche.name}`}
       onClose={onClose}
       maxWidth="max-w-2xl"
     >
@@ -215,7 +216,7 @@ export function CertifyValuationModal({
         <label className="flex items-start gap-2 text-xs text-slate-700">
           <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5" />
           <span>
-            I certify that these percentages reflect my independent professional assessment, and I sign this valuation
+            I certify that these percentages reflect my independent professional assessment, and I sign this {term("valuation", { lower: true })}
             with the licence shown above.
           </span>
         </label>

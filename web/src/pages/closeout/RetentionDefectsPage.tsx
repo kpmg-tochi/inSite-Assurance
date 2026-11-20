@@ -11,7 +11,7 @@ import {
   type RetentionReleaseStageValue,
 } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
-import { useAuth } from "../../lib/auth-context";
+import { useAuth, useTerm } from "../../lib/auth-context";
 import { formatNaira } from "../../lib/formatters";
 import Loader from "../../components/Loader";
 import { CustomSelect, KpiCard } from "../../components/common";
@@ -59,6 +59,7 @@ const SEVERITY_BADGE: Record<DefectSeverity, "neutral" | "info" | "warning" | "d
  */
 export function RetentionDefectsPage({ project }: { project: ProjectSummaryDto }) {
   const { hasPermission } = useAuth();
+  const term = useTerm();
   const processQuery = useProjectProcess(project.id);
   const enabled = processQuery.data?.config.enableRetentionModule ?? false;
   const canSeeMoney = [
@@ -75,7 +76,7 @@ export function RetentionDefectsPage({ project }: { project: ProjectSummaryDto }
   if (!enabled) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
-        Retention and defects are not used on this project.
+        {term("retention")} and defects are not used on this project.
       </div>
     );
   }
@@ -84,10 +85,10 @@ export function RetentionDefectsPage({ project }: { project: ProjectSummaryDto }
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-bold text-slate-900">Retention and defects</h1>
+        <h1 className="text-lg font-bold text-slate-900">{term("retention")} and defects</h1>
         <p className="text-xs text-slate-500">
           {project.codePrefix}
-          {s?.retentionPercentage ? ` · ${s.retentionPercentage}% withheld from each release` : " · no retention percentage set"}
+          {s?.retentionPercentage ? ` · ${s.retentionPercentage}% withheld from each release` : ` · no ${term("retention", { lower: true })} percentage set`}
           {s?.retentionDurationMonths ? ` · ${s.retentionDurationMonths}-month defects liability period` : ""}
           {s && s.retentionReleaseAtCompletionPct > 0 ? ` · ${s.retentionReleaseAtCompletionPct}% may be released at practical completion` : ""}
         </p>
@@ -96,8 +97,8 @@ export function RetentionDefectsPage({ project }: { project: ProjectSummaryDto }
       {s && (
         <>
           <div className="grid gap-3 sm:grid-cols-3">
-            <KpiCard title="Retention held" value={formatNaira(s.heldNgn)} icon={<Wallet className="h-4 w-4" />} />
-            <KpiCard title="Retention released" value={formatNaira(s.releasedNgn)} icon={<Landmark className="h-4 w-4" />} iconVariant="emerald" />
+            <KpiCard title={`${term("retention")} held`} value={formatNaira(s.heldNgn)} icon={<Wallet className="h-4 w-4" />} />
+            <KpiCard title={`${term("retention")} released`} value={formatNaira(s.releasedNgn)} icon={<Landmark className="h-4 w-4" />} iconVariant="emerald" />
             <KpiCard
               title="Liability period"
               value={
@@ -135,11 +136,12 @@ function BalancesSection({
   contractors: RetentionContractorBalanceDto[];
   canRequest: boolean;
 }) {
+  const term = useTerm();
   const [requesting, setRequesting] = useState<{ contractor: RetentionContractorBalanceDto; stage: RetentionReleaseStageValue } | null>(null);
   return (
     <section className="rounded-2xl border border-slate-200 bg-white">
       <div className="border-b border-slate-100 px-4 py-3">
-        <h2 className="text-sm font-bold text-slate-900">Per contractor</h2>
+        <h2 className="text-sm font-bold text-slate-900">Per {term("contractor", { lower: true })}</h2>
       </div>
       <div className="divide-y divide-slate-100">
         {contractors.map((c) => (
@@ -148,7 +150,7 @@ function BalancesSection({
               <p className="font-semibold text-slate-900">{c.contractorName}</p>
               <p className="text-[11px] text-slate-500">
                 {c.tradeCode}
-                {c.isMainContractor ? " · main contractor" : ""} · {c.openTicketCount} open defect(s)
+                {c.isMainContractor ? ` · main ${term("contractor", { lower: true })}` : ""} · {c.openTicketCount} open defect(s)
               </p>
             </div>
             <Amount label="Held" value={c.heldNgn} />
@@ -218,6 +220,7 @@ function RequestReleaseModal({
   onClose: () => void;
 }) {
   const mutation = useRequestRetentionReleaseMutation(projectId);
+  const term = useTerm();
   const max = contractor.stages.find((s) => s.stage === stage)?.maxAmountNgn ?? 0;
   const [amount, setAmount] = useState(String(max));
   const [notes, setNotes] = useState("");
@@ -235,11 +238,11 @@ function RequestReleaseModal({
   };
 
   return (
-    <ModalShell title="Request retention release" subtitle={`${contractor.contractorName} · ${STAGE_LABEL[stage]}`} onClose={onClose}>
+    <ModalShell title={`Request ${term("retention", { lower: true })} release`} subtitle={`${contractor.contractorName} · ${STAGE_LABEL[stage]}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3 p-5 text-xs">
         <p className="text-slate-600">
-          A licensed certifier certifies the release next; it then follows the project's disbursement approval chain like any other
-          valuation.
+          A licensed certifier certifies the release next; it then follows the project's disbursement approval chain like any other{" "}
+          {term("valuation", { lower: true })}.
         </p>
         <label className="block space-y-1">
           <span className="font-semibold text-slate-700">Amount (NGN), at most {formatNaira(max)}</span>
@@ -328,6 +331,7 @@ function ActionButton({ onClick, children, primary }: { onClick: () => void; chi
 
 function CertifyModal({ projectId, request, onClose }: { projectId: string; request: RetentionReleaseRequestDto; onClose: () => void }) {
   const mutation = useCertifyRetentionReleaseMutation(projectId);
+  const term = useTerm();
   const [summary, setSummary] = useState("");
   const [ack, setAck] = useState(false);
   const submit = async (e: React.FormEvent) => {
@@ -340,7 +344,7 @@ function CertifyModal({ projectId, request, onClose }: { projectId: string; requ
     }
   };
   return (
-    <ModalShell title="Certify retention release" subtitle={`${formatNaira(request.amountNgn)} · ${request.contractorName}`} onClose={onClose}>
+    <ModalShell title={`Certify ${term("retention", { lower: true })} release`} subtitle={`${formatNaira(request.amountNgn)} · ${request.contractorName}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3 p-5 text-xs">
         <label className="block space-y-1">
           <span className="font-semibold text-slate-700">Certification summary</span>
@@ -348,7 +352,7 @@ function CertifyModal({ projectId, request, onClose }: { projectId: string; requ
         </label>
         <label className="flex items-start gap-2">
           <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5" />
-          <span>I certify this release under my professional licence. My name and licence are recorded on the valuation.</span>
+          <span>I certify this release under my professional licence. My name and licence are recorded on the {term("valuation", { lower: true })}.</span>
         </label>
         <ModalActions onCancel={onClose} submitLabel="Certify" pendingLabel="Certifying…" isPending={mutation.isPending} disabled={!ack || summary.trim().length < 10} />
       </form>
@@ -358,6 +362,7 @@ function CertifyModal({ projectId, request, onClose }: { projectId: string; requ
 
 function DecideModal({ projectId, request, onClose }: { projectId: string; request: RetentionReleaseRequestDto; onClose: () => void }) {
   const mutation = useDecideRetentionReleaseMutation(projectId);
+  const term = useTerm();
   const [decision, setDecision] = useState<LenderDecisionType>("APPROVE_FULL");
   const [amount, setAmount] = useState("");
   const [notes, setNotes] = useState("");
@@ -380,7 +385,7 @@ function DecideModal({ projectId, request, onClose }: { projectId: string; reque
     }
   };
   return (
-    <ModalShell title="Retention release decision" subtitle={`${request.contractorName} · ${STAGE_LABEL[request.stage]}`} onClose={onClose}>
+    <ModalShell title={`${term("retention")} release decision`} subtitle={`${request.contractorName} · ${STAGE_LABEL[request.stage]}`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3 p-5 text-xs">
         <dl className="grid grid-cols-2 gap-y-1 rounded-xl border border-slate-200 bg-slate-50 p-3">
           <dt className="text-slate-500">Certified release</dt>
@@ -530,6 +535,7 @@ function contractorOptions(project: ProjectSummaryDto) {
 
 function RaiseDefectModal({ project, onClose }: { project: ProjectSummaryDto; onClose: () => void }) {
   const mutation = useCreateDefectTicketMutation(project.id);
+  const term = useTerm();
   const multiPrime = project.contractorExecutionMode === "MULTI_PRIME_SEPARATE_IPC";
   const main = project.contractors.find((c) => c.isMainContractor) ?? project.contractors[0];
   const [form, setForm] = useState({
@@ -558,7 +564,7 @@ function RaiseDefectModal({ project, onClose }: { project: ProjectSummaryDto; on
     }
   };
   return (
-    <ModalShell title="Raise a defect" subtitle="The responsible contractor is notified" onClose={onClose}>
+    <ModalShell title="Raise a defect" subtitle={`The responsible ${term("contractor", { lower: true })} is notified`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3 p-5 text-xs">
         <label className="block space-y-1">
           <span className="font-semibold text-slate-700">Title</span>
@@ -569,7 +575,7 @@ function RaiseDefectModal({ project, onClose }: { project: ProjectSummaryDto; on
           <textarea required minLength={3} rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} className={inputClass} maxLength={4000} />
         </label>
         <div className="grid grid-cols-2 gap-3">
-          <CustomSelect label="Responsible contractor" value={form.projectContractorId} onChange={(v) => set("projectContractorId", v)} options={contractorOptions(project)} placeholder="Choose" />
+          <CustomSelect label={`Responsible ${term("contractor", { lower: true })}`} value={form.projectContractorId} onChange={(v) => set("projectContractorId", v)} options={contractorOptions(project)} placeholder="Choose" />
           <CustomSelect
             label="Severity"
             value={form.severity}
@@ -600,6 +606,7 @@ const ACTION_TITLE: Record<TicketAction["kind"], string> = {
 
 function TicketActionModal({ project, action, onClose }: { project: ProjectSummaryDto; action: TicketAction; onClose: () => void }) {
   const mutation = useDefectActionMutation(project.id);
+  const term = useTerm();
   const t = action.ticket;
   const [contractorId, setContractorId] = useState(t.projectContractorId);
   const [dueDate, setDueDate] = useState(t.dueDate ?? "");
@@ -636,7 +643,7 @@ function TicketActionModal({ project, action, onClose }: { project: ProjectSumma
       <form onSubmit={submit} className="space-y-3 p-5 text-xs">
         {action.kind === "assign" && (
           <>
-            <CustomSelect label="Responsible contractor" value={contractorId} onChange={setContractorId} options={contractorOptions(project)} />
+            <CustomSelect label={`Responsible ${term("contractor", { lower: true })}`} value={contractorId} onChange={setContractorId} options={contractorOptions(project)} />
             <label className="block space-y-1">
               <span className="font-semibold text-slate-700">Due date (optional)</span>
               <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />

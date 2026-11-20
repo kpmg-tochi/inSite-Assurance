@@ -17,6 +17,7 @@ import { AboutPage } from "./pages/public/AboutPage";
 import { MobileAppPage } from "./pages/public/MobileAppPage";
 import { PortfolioDashboardPage } from "./pages/dashboard/PortfolioDashboardPage";
 import { PortfolioExecutivePage } from "./pages/dashboard/PortfolioExecutivePage";
+import { PortfolioOverviewPage } from "./pages/dashboard/PortfolioOverviewPage";
 import { ProjectsDirectoryPage } from "./pages/projects/ProjectsDirectoryPage";
 import { NewProjectPage } from "./pages/projects/setup/NewProjectPage";
 import { ProjectSetupShell } from "./pages/projects/setup/ProjectSetupShell";
@@ -243,6 +244,19 @@ function AuthenticatedWorkspace() {
           }
         />
         <Route
+          path="portfolio"
+          element={
+            <RequirePermission anyOf={["projects:view_portfolio"]} backTo={projectHome}>
+              <PortfolioOverviewPage
+                onOpenProject={(projectId) => {
+                  setSelectedProjectId(projectId);
+                  navigate(`/app/projects/${projectId}/dashboard`);
+                }}
+              />
+            </RequirePermission>
+          }
+        />
+        <Route
           path="executive"
           element={
             <RequirePermission anyOf={["projects:view_executive_matrix"]} backTo={projectHome}>
@@ -258,7 +272,11 @@ function AuthenticatedWorkspace() {
 
         {activeProject ? (
           <>
-            <Route index element={<Navigate to={projectHome} replace />} />
+            {/* The portfolio dashboard is the central landing page for people who may see it. */}
+            <Route
+              index
+              element={<Navigate to={hasPermission("projects:view_portfolio") ? "/app/portfolio" : projectHome} replace />}
+            />
             <Route
               path="projects/:projectId/dashboard"
               element={

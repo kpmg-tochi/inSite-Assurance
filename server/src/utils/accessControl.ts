@@ -8,10 +8,26 @@ import {
   hasWebPermission,
   WebJwtPayload,
 } from '../middleware/auth.middleware';
+import { ownedByOrganizationTreeWhere } from '../modules/organizations/hierarchy';
 
 /** Users who may see and work on draft projects they did not create (Phase 6). */
 export function canManageDrafts(webUser: WebJwtPayload): boolean {
   return hasWebPermission(webUser, 'projects:create', 'projects:edit_baseline');
+}
+
+/**
+ * The project-level access rule for a web user of the project's tenant (Phase 11), shared by the
+ * list filter and the project guard so the two cannot drift. A user sees a project if any of:
+ * - they hold `projects:view_all_tenant` (returns null: no restriction);
+ * - they are assigned to it;
+ * - they hold `projects:view_organization_tree` and the project is owned by their organisation or an
+ *   organisation below it.
+ */
+export function projectAccessBranch(webUser: WebJwtPayload): Prisma.ProjectWhereInput | null {
+  if (webUser.isPlatformSuperAdmin || hasWebPermission(webUser, 'projects:view_all_tenant')) return null;
+  const assigned: Prisma.ProjectWhereInput = { userAssignments: { some: { userId: webUser.userId } } };
+  if (!webUser.permissions.includes('projects:view_organization_tree')) return assigned;
+  return { OR: [assigned, ownedByOrganizationTreeWhere(webUser.organizationId)] };
 }
 
 /**
@@ -37,16 +53,9 @@ export function buildProjectVisibilityWhere(
     where.tenantId = webUser.tenantId;
   }
 
-  if (
-    !webUser.isPlatformSuperAdmin &&
-    !hasWebPermission(webUser, 'projects:view_all_tenant')
-  ) {
-    where.userAssignments = {
-      some: {
-        userId: webUser.userId,
-      },
-    };
-  }
+  // Phase 11: assignment, or the organisation tree (see projectAccessBranch).
+  const branch = projectAccessBranch(webUser);
+  if (branch) where.AND = [branch];
 
   const statuses = options.statuses ?? ['ACTIVE'];
   const live = statuses.filter((s) => s !== 'DRAFT');
@@ -125,18 +134,10 @@ export async function assertCallerProjectAccess(params: {
     throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   }
 
-  if (!hasWebPermission(webUser, 'projects:view_all_tenant')) {
-    const assignment = await prisma.userProjectAssignment.findUnique({
-      where: {
-        userId_projectId: {
-          userId: webUser.userId,
-          projectId: params.projectId,
-        },
-      },
-      select: { id: true },
-    });
-
-    if (!assignment) {
+  const branch = projectAccessBranch(webUser);
+  if (branch) {
+    const visible = await prisma.project.count({ where: { AND: [{ id: params.projectId }, branch] } });
+    if (visible === 0) {
       throw new AppError(
         'Access denied: user is not assigned to this project',
         403,
@@ -157,6 +158,8 @@ export async function assertCallerProjectAccess(params: {
  * `projectId === 'all'` is allowed through for web users only; those handlers must scope with
  * buildProjectVisibilityWhere.
  */
+const ALL_PROJECTS_WRITE_RE = /^\/api\/v1\/projects\/all\/web-notifications\/(?:read-all|[0-9a-f-]{36}\/read)$/i;
+
 export function requireProjectAccess(
   req: Request,
   res: Response,
@@ -166,7 +169,11 @@ export function requireProjectAccess(
   const target = projectId === ALL_PROJECTS_SENTINEL ? undefined : projectId;
   authenticateAny(req, target).then(() => {
     if (projectId === ALL_PROJECTS_SENTINEL) {
-      if (!req.webUser || req.method !== 'GET') {
+      const path = (req.originalUrl || '').split('?')[0];
+      // Writes on 'all' are limited to marking cross-project web notifications read (the service
+      // scopes them with buildProjectVisibilityWhere).
+      const allowedWrite = req.method !== 'GET' && ALL_PROJECTS_WRITE_RE.test(path);
+      if (!req.webUser || (req.method !== 'GET' && !allowedWrite)) {
         next(new AppError('Project not found', 404, 'PROJECT_NOT_FOUND'));
         return;
       }

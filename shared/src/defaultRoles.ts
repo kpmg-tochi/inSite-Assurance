@@ -66,6 +66,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'projects:view_assigned',
       'projects:view_all_tenant',
       'projects:view_executive_matrix',
+      'projects:view_portfolio',
       'projects:create',
       'projects:activate',
       'projects:edit_baseline',
@@ -111,6 +112,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'projects:view_assigned',
       'projects:view_all_tenant',
       'projects:view_executive_matrix',
+      'projects:view_portfolio',
       'boq:view',
       'schedule:view_variance',
       'schedule:approve_refactor',
@@ -143,6 +145,31 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'ipc:view',
       'ipc:submit_claim',
       'retention:manage_defects',
+    ],
+  },
+  {
+    // Phase 11: staff of a flagship or subsidiary organisation who oversee the projects their part
+    // of the organisation owns. Sees the organisation tree, not the whole tenant.
+    name: 'Organisation Administrator',
+    code: 'ORGANIZATION_ADMIN',
+    codeSuffix: null,
+    description:
+      'Oversees every project owned by their organisation and the organisations below it in the hierarchy.',
+    surface: 'WEB',
+    fieldPersonaType: 'NONE',
+    assuranceWeight: 1.0,
+    requiresIdentityAssurance: false,
+    permissionKeys: [
+      'projects:view_assigned',
+      'projects:view_organization_tree',
+      'projects:view_executive_matrix',
+      'projects:view_portfolio',
+      'boq:view',
+      'schedule:view_variance',
+      'reports:view_all',
+      'ipc:view',
+      'valuation:export_pdf',
+      'audit:view_ledger',
     ],
   },
   {

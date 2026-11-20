@@ -9,7 +9,7 @@ import type {
 } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../../api/types";
 import type { DirectMilestoneComputation } from "../../../api/reconciliation/reconciliationApi";
-import { useAuth } from "../../../lib/auth-context";
+import { useAuth, useTerm } from "../../../lib/auth-context";
 import { formatDateTimeShort, formatLicenseCredential, formatNaira } from "../../../lib/formatters";
 import { CustomSelect, type CustomSelectOption } from "../../../components/common";
 import Loader from "../../../components/Loader";
@@ -67,6 +67,7 @@ function ItemsStep({
   setRemarks: (next: Record<string, string>) => void;
   holdPointsOn: boolean;
 }) {
+  const term = useTerm();
   return (
     <div className="overflow-x-auto rounded-xl border border-slate-200">
       <table className="min-w-[760px] w-full text-xs">
@@ -95,7 +96,7 @@ function ItemsStep({
                   </div>
                   <div className="text-[11px] text-slate-500">
                     {formatNaira(item.budgetedCostNgn)}
-                    {holdPointsOn && item.isHoldPoint ? " · hold point" : ""}
+                    {holdPointsOn && item.isHoldPoint ? ` · ${term("holdPoint", { lower: true })}` : ""}
                   </div>
                 </td>
                 <td className="px-3 py-2 text-right text-slate-600">{item.previousCertifiedPct}%</td>
@@ -200,6 +201,7 @@ function VerifyMilestoneModal({
   onClose: () => void;
 }) {
   const { user } = useAuth();
+  const term = useTerm();
   const hasLicence = Boolean(user?.professionalLicenseType && user?.professionalLicenseNumber);
   const openTranches = project.tranches.filter((t) => !t.isReleased);
   const [step, setStep] = useState<FlowStep>(openTranches.length === 1 ? "items" : "tranche");
@@ -284,12 +286,12 @@ function VerifyMilestoneModal({
 
   const trancheOptions: CustomSelectOption<string>[] = openTranches.map((t) => ({
     value: t.id,
-    label: `Tranche #${t.trancheNumber}: ${t.name}`,
+    label: `${term("tranche")} #${t.trancheNumber}: ${t.name}`,
     description: `${formatNaira(t.allocatedAmountNgn - t.releasedAmountNgn)} unreleased`,
   }));
 
   const stepLabels: Array<{ id: FlowStep; label: string }> = [
-    ...(tranchesOn || openTranches.length > 1 ? [{ id: "tranche" as const, label: "Tranche" }] : []),
+    ...(tranchesOn || openTranches.length > 1 ? [{ id: "tranche" as const, label: term("tranche") }] : []),
     { id: "items", label: "Items" },
     { id: "summary", label: "Summary" },
     { id: "preview", label: "Preview and sign" },
@@ -298,7 +300,7 @@ function VerifyMilestoneModal({
   return (
     <ModalShell
       title="Verify milestone"
-      subtitle={suggestion ? suggestion.trancheName : "Direct milestone release: no contractor claim"}
+      subtitle={suggestion ? suggestion.trancheName : `Direct milestone release: no ${term("contractor", { lower: true })} claim`}
       onClose={onClose}
       maxWidth="max-w-4xl"
     >
@@ -327,9 +329,9 @@ function VerifyMilestoneModal({
         {step === "tranche" && (
           <div className="space-y-3">
             {openTranches.length === 0 ? (
-              <p className="text-xs text-slate-500">Every tranche has been fully released.</p>
+              <p className="text-xs text-slate-500">Every {term("tranche", { lower: true })} has been fully released.</p>
             ) : (
-              <CustomSelect label="Tranche" value={trancheId} onChange={setTrancheId} options={trancheOptions} placeholder="Choose a tranche" />
+              <CustomSelect label={term("tranche")} value={trancheId} onChange={setTrancheId} options={trancheOptions} placeholder={`Choose a ${term("tranche", { lower: true })}`} />
             )}
             <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
               <button type="button" onClick={onClose} className={buttonSecondary}>
@@ -353,14 +355,14 @@ function VerifyMilestoneModal({
             ) : suggestion ? (
               <>
                 {suggestion.openValuationId && (
-                  <BlockedNotice>A verification on this tranche is still going through approval. Finish or return it before verifying again.</BlockedNotice>
+                  <BlockedNotice>A verification on this {term("tranche", { lower: true })} is still going through approval. Finish or return it before verifying again.</BlockedNotice>
                 )}
                 <p className="text-[11px] text-slate-500">
                   Each input starts at what the counted evidence supports. You can lower it to your own assessment, but not below
                   what is already certified or above the evidence.
                 </p>
                 {suggestion.items.length === 0 ? (
-                  <p className="text-xs text-slate-500">No BOQ items are mapped to this tranche.</p>
+                  <p className="text-xs text-slate-500">No BOQ items are mapped to this {term("tranche", { lower: true })}.</p>
                 ) : (
                   <ItemsStep
                     suggestion={suggestion}
@@ -446,7 +448,7 @@ function VerifyMilestoneModal({
             <label className="flex items-start gap-2 text-xs text-slate-700">
               <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5" />
               <span>
-                I verified this progress independently against field evidence, and I sign this valuation with the licence shown above.
+                I verified this progress independently against field evidence, and I sign this {term("valuation", { lower: true })} with the licence shown above.
               </span>
             </label>
             <div className="flex justify-between gap-2 border-t border-slate-100 pt-3">
@@ -485,6 +487,7 @@ function DirectValuationCard({
   onReverse: () => void;
 }) {
   const { hasPermission } = useAuth();
+  const term = useTerm();
   const [open, setOpen] = useState(highlighted);
   const cardRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -592,7 +595,7 @@ function DirectValuationCard({
               revisionNumber: valuation.revisionNumber,
             }}
           />
-          {cpsEnabled ? null : <p className="text-[10px] text-slate-400">Conditions precedent are off on this project.</p>}
+          {cpsEnabled ? null : <p className="text-[10px] text-slate-400">{term("conditionPrecedent", { plural: true })} are off on this project.</p>}
         </div>
       )}
     </div>
@@ -614,6 +617,7 @@ export function DirectMilestonePanel({
   holdPointsOn: boolean;
 }) {
   const { hasPermission } = useAuth();
+  const term = useTerm();
   const valuationsQuery = useDirectValuationsQuery(project.id);
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [deciding, setDeciding] = useState<DirectMilestoneValuationDto | null>(null);
@@ -632,8 +636,8 @@ export function DirectMilestonePanel({
           <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Direct milestone release</div>
           <div className="text-sm font-bold text-slate-900 mt-0.5">Milestone verifications</div>
           <p className="text-[11px] text-slate-500 mt-0.5">
-            No contractor claim on this project. A licensed verifier certifies progress from counted field evidence; the
-            valuation then goes through the disbursement chain to the release decision.
+            No {term("contractor", { lower: true })} claim on this project. A licensed verifier certifies progress from counted field evidence; the{" "}
+            {term("valuation", { lower: true })} then goes through the disbursement chain to the release decision.
           </p>
         </div>
         {canVerify && (
