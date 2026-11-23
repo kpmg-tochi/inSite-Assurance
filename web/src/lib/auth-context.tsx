@@ -29,6 +29,7 @@ import {
 import { changePassword as changePasswordRequest, getCurrentUser } from "../api/auth/authApi";
 import { useLoginMutation } from "../mutations/auth/useAuthMutations";
 import { loadDemoAccounts } from "../config/useDemoAccounts";
+import { APPLICATION_NAME } from "../config/appName";
 
 const DEFAULT_BRANDING: TenantBrandingConfig = {
   primaryColorHex: "#00338D",
@@ -112,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     resetCache();
     applyTenantBranding(DEFAULT_BRANDING);
-    toast.info("Signed out of InSite Assurance.");
+    toast.info(`Signed out of ${APPLICATION_NAME}.`);
   }, [resetCache]);
 
   const refreshUser = useCallback(async () => {

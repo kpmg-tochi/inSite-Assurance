@@ -1,4 +1,5 @@
 import { AlertTriangle, Printer, Square, X } from "lucide-react";
+import { Overlay } from "../../../components/common/Overlay";
 import type { IpcClaimDto } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../../api/types";
 import { useAuth } from "../../../lib/auth-context";
@@ -28,7 +29,7 @@ export function VisitItineraryModal({
   const targets = ipc.lineItems.filter((li) => li.visitPlannerFlag || (holdPointsOn && li.missingHoldPointFlag));
 
   return (
-    <div className="fixed inset-0 bg-slate-950/45 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+    <Overlay className="flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         <div className="px-6 py-4 bg-brand-navy text-white flex items-center justify-between shrink-0">
           <div>
@@ -143,6 +144,6 @@ export function VisitItineraryModal({
           </button>
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

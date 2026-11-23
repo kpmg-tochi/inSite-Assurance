@@ -24,6 +24,7 @@ import { seedPhase12 } from "./seedPhase12";
 import { seedPhase14 } from "./seedPhase14";
 import { seedPhase13 } from "./seedPhase13";
 import { seedPhase15 } from "./seedPhase15";
+import { seedPhase16 } from "./seedPhase16";
 import { projectObjectPrefix } from "../integrations/storage.service";
 import { CADENCE_PROJECT_SELECT, cadenceSettingsOf, periodKeyForDate } from "../modules/cadence/cadence.service";
 
@@ -225,6 +226,7 @@ async function runSeed(): Promise<void> {
   // Clean existing records in reverse dependency order
   await prisma.pushToken.deleteMany();
   // Phase 15 (signatures restrict their evidence documents, so they go before the register).
+  await prisma.kpiSnapshot.deleteMany(); // Phase 16
   await prisma.closurePackExport.deleteMany();
   await prisma.completionCertificateSignature.deleteMany();
   await prisma.completionCertificate.deleteMany();
@@ -1713,6 +1715,8 @@ async function runSeed(): Promise<void> {
   // Phase 15: closure rules on the types; PRG-103 in its liability period after its CoC and handover,
   // PRG-241 closed with its post-closure evaluation and audit sign-off pending (after 13: merges the config).
   await seedPhase15();
+  // Phase 16: the demo programme (a project at every stage), KPI targets, demo logins and KPI snapshots.
+  await seedPhase16();
 
   console.log("✅ Seed complete!");
   console.log(

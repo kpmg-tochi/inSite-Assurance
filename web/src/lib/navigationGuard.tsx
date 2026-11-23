@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate, type NavigateOptions } from "react-router-dom";
 import { AlertTriangle } from "lucide-react";
+import { Overlay } from "../components/common/Overlay";
 
 /**
  * Leave-page guard for forms with unsaved changes (the project setup wizard). The app uses
@@ -95,7 +96,7 @@ export function NavigationGuardProvider({ children }: { children: React.ReactNod
     <GuardContext.Provider value={{ setGuard, requestLeave }}>
       {children}
       {pending && (
-        <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-slate-900/50 p-4" role="presentation">
+        <Overlay zIndex="z-[1100]" className="flex items-center justify-center p-4" role="presentation">
           <div role="alertdialog" aria-modal="true" aria-labelledby="leave-guard-title" className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl space-y-4">
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-600 shrink-0" />
@@ -136,7 +137,7 @@ export function NavigationGuardProvider({ children }: { children: React.ReactNod
               </button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
     </GuardContext.Provider>
   );

@@ -1,4 +1,3 @@
-import { geofenceModeLabel } from "@insite/shared";
 import { InSiteLogo } from "./InSiteLogo";
 import { useGuardedAction } from "../lib/navigationGuard";
 import React, { useState, useRef, useEffect } from "react";
@@ -23,6 +22,7 @@ import {
   FolderOpen,
   ListChecks,
   Lightbulb,
+  Gauge,
 } from "lucide-react";
 import { CLOSURE_VIEW_PERMISSIONS } from "../pages/closure/ProjectClosurePage";
 import { MILESTONE_VIEW_PERMISSIONS } from "./contracts/contractUi";
@@ -34,6 +34,7 @@ import { useDemoAccounts } from "../config/useDemoAccounts";
 import { IS_DEMO_MODE } from "../config/demoMode";
 import { formatRegistrationCredential, getInitials } from "../lib/formatters";
 import Notifications from "./Notifications";
+import { APPLICATION_NAME } from "../config/appName";
 
 interface AppShellProps {
   projects: ProjectSummaryDto[];
@@ -45,6 +46,36 @@ interface AppShellProps {
 }
 
 /** Phase 10: who sees the Retention and defects tab (same as the server route). */
+/** The "Recent Active Projects" list under the navigation is switched off for now. */
+const SHOW_RECENT_PROJECTS = false;
+
+/** Header page names for the project pages, by the path segment after /app/projects/:id/. */
+const PROJECT_PAGE_NAMES: Record<string, string> = {
+  schedule: "Schedule",
+  inspections: "Inspections",
+  milestones: "Milestones",
+  kickoff: "Kick-off",
+  documents: "Documents",
+  handover: "Handover",
+  retention: "Retention and defects",
+  closure: "Closure",
+  audit: "Audit Ledger",
+  setup: "Project setup",
+  settings: "Project settings",
+  kpis: "Project KPIs",
+};
+
+/** Header page names for the pages that are not about one project, by the segment after /app/. */
+const WORKSPACE_PAGE_NAMES: Record<string, string> = {
+  portfolio: "Portfolio",
+  projects: "All Projects",
+  kpis: "Programme KPIs",
+  lessons: "Lessons learned",
+  executive: "Executive Risk Matrix",
+  settings: "Settings",
+  organizations: "Contractor ratings",
+};
+
 const RETENTION_VIEW_PERMISSIONS = [
   "retention:manage_defects",
   "retention:release_escrow",
@@ -66,9 +97,6 @@ export function AppShell({
   const navigate = useNavigate();
   const requestLeave = useGuardedAction();
   const location = useLocation();
-  const isExecutive = location.pathname.includes("/executive");
-  const isPortfolio = location.pathname.startsWith("/app/portfolio");
-  const isCrossProject = isExecutive || isPortfolio;
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [userPopoverOpen, setUserPopoverOpen] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
@@ -121,6 +149,24 @@ export function AppShell({
       : "BOQ & Hold-Point Rules",
   };
 
+  // Header: the project code only on pages about one project (and only when it is the selected
+  // one, e.g. not a draft in setup), then the page name.
+  const projectRoute = location.pathname.match(/^\/app\/projects\/([^/]+)(?:\/([^/]+))?/);
+  const routeProjectId = projectRoute && projectRoute[1] !== "new" ? projectRoute[1] : null;
+  const headerProject = routeProjectId && selectedProject?.id === routeProjectId ? selectedProject : null;
+  const pageName = (() => {
+    if (routeProjectId) {
+      const section = projectRoute?.[2] ?? "dashboard";
+      if (section === "dashboard") return navLabels.dashboard;
+      if (section === "reconciliation") return navLabels.reconciliation;
+      if (section === "boq") return navLabels.boq;
+      return PROJECT_PAGE_NAMES[section] ?? "Project";
+    }
+    if (location.pathname.startsWith("/app/projects/new")) return "New Project";
+    const section = location.pathname.split("/")[2] ?? "";
+    return WORKSPACE_PAGE_NAMES[section] ?? "";
+  })();
+
   const projectBasePath = selectedProject
     ? `/app/projects/${selectedProject.id}`
     : "/app/projects";
@@ -157,11 +203,10 @@ export function AppShell({
       <aside
         className={`${
           sidebarCollapsed ? "w-[68px]" : "w-64"
-        } transition-all duration-200 kpmg-sidebar-gradient text-slate-200 rounded-2xl p-3 my-3 flex flex-col justify-between shadow-xl shrink-0 relative select-none`}
+        } transition-all duration-200 kpmg-sidebar-gradient text-slate-200 rounded-2xl p-3 my-3 flex flex-col shadow-xl shrink-0 relative select-none min-h-0`}
       >
-        <div>
-          {/* Brand Header + Minimize Toggle */}
-          <div className="flex items-center justify-between px-1.5 py-2 mb-4 border-b border-white/10">
+          {/* Brand Header + Minimize Toggle (pinned to the top) */}
+          <div className="flex items-center justify-between px-1.5 py-2 mb-3 border-b border-white/10 shrink-0">
             <Link
               to="/"
               title="View Public Platform Overview"
@@ -171,7 +216,7 @@ export function AppShell({
                 {user?.tenant?.brandingConfig?.logoUrl ? (
                   <img
                     src={user.tenant.brandingConfig.logoUrl}
-                    alt={user?.tenant?.name || "InSite Assurance"}
+                    alt={user?.tenant?.name || APPLICATION_NAME}
                     className="w-full h-full object-contain"
                   />
                 ) : (
@@ -181,10 +226,10 @@ export function AppShell({
               {!sidebarCollapsed && (
                 <div className="truncate">
                   <div className="text-white font-semibold text-sm leading-tight truncate">
-                    {user?.tenant?.name || "InSite Assurance"}
+                    {user?.tenant?.name || APPLICATION_NAME}
                   </div>
                   <div className="text-[11px] text-white/70 truncate">
-                    {user?.tenant?.brandingConfig?.tagline || "InSite Assurance"}
+                    {user?.tenant?.brandingConfig?.tagline || APPLICATION_NAME}
                   </div>
                 </div>
               )}
@@ -203,7 +248,8 @@ export function AppShell({
             </button>
           </div>
 
-          {/* Primary Navigation (Role-Segregated) */}
+          {/* Scrollable middle: primary navigation (role-segregated) */}
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mr-1.5 pr-1.5 pb-2">
           <div className="space-y-1">
             {!sidebarCollapsed && (
               <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/55">
@@ -225,6 +271,22 @@ export function AppShell({
               >
                 <Globe2 className="w-4 h-4 shrink-0" />
                 {!sidebarCollapsed && <span className="truncate">Portfolio</span>}
+              </NavLink>
+            )}
+
+            {/* Phase 16: programme KPIs */}
+            {hasPermission("kpis:view") && (
+              <NavLink
+                to="/app/kpis"
+                title="Programme KPIs"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                    isActive ? "bg-white/15 text-white shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`
+                }
+              >
+                <Gauge className="w-4 h-4 shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">Programme KPIs</span>}
               </NavLink>
             )}
 
@@ -497,8 +559,8 @@ export function AppShell({
             </NavLink>
           </div>
 
-          {/* Recent Active Projects Tree (Hidden when collapsed) */}
-          {!sidebarCollapsed && recentActiveProjects.length > 0 && (
+          {/* Recent Active Projects Tree (hidden for now; also hidden when collapsed) */}
+          {SHOW_RECENT_PROJECTS && !sidebarCollapsed && recentActiveProjects.length > 0 && (
             <div className="mt-6 space-y-1">
               <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/55">
                 Recent Active Projects
@@ -536,9 +598,9 @@ export function AppShell({
           )}
         </div>
 
-        {/* Bottom User Profile Trigger & Popover Dialog */}
+        {/* Bottom User Profile Trigger & Popover Dialog (pinned to the bottom) */}
         <div
-          className="relative pt-3 border-t border-white/10"
+          className="relative pt-3 border-t border-white/10 shrink-0"
           ref={popoverRef}
         >
           <button
@@ -664,86 +726,28 @@ export function AppShell({
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col gap-3 mt-3 overflow-hidden">
-        {/* Top Header Bar */}
-        <header className="bg-brand-navy rounded-2xl border border-white/10 px-5 py-3 flex items-center justify-between shadow-md shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-brand-sky">
-                  {isCrossProject
-                    ? "PORTFOLIO"
-                    : selectedProject?.codePrefix || "PORTFOLIO"}
+        {/* Top Header Bar: project code (project pages only), page name, actions */}
+        <header className="bg-brand-navy rounded-2xl border border-white/10 px-5 py-2.5 min-h-[52px] flex items-center justify-between gap-4 shadow-md shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            {headerProject && (
+              <>
+                <span className="text-xs font-bold text-brand-sky shrink-0" title={headerProject.name}>
+                  {headerProject.codePrefix}
                 </span>
                 <span className="text-white/30">/</span>
-                <h1 className="text-base font-bold text-white tracking-tight">
-                  {isPortfolio
-                    ? "Portfolio dashboard"
-                    : isExecutive
-                    ? "Multi-Project Capital Risk & Governance Matrix"
-                    : selectedProject?.name || "Capital Project Assurance"}
-                </h1>
-                <span
-                  className={`hidden sm:inline-block ml-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-                    user?.isPlatformSuperAdmin
-                      ? "bg-brand-primary/20 text-white/75 border-brand-primary/30"
-                      : hasPermission("tranche:approve_disbursement")
-                        ? "bg-emerald-500/20 text-emerald-200 border-emerald-400/30"
-                        : hasPermission("ipc:certify_valuation")
-                          ? "bg-brand-primary/20 text-white/75 border-brand-primary/30"
-                          : "bg-amber-500/20 text-amber-200 border-amber-400/30"
-                  }`}
-                >
-                  {isPortfolio
-                    ? "Portfolio"
-                    : isExecutive
-                    ? "Executive Surveillance"
-                    : workspaceTitleByRole}
-                </span>
-              </div>
-              <p className="text-xs text-slate-300">
-                {isPortfolio ? (
-                  <span>Every live project you can see, on one map, with portfolio KPIs</span>
-                ) : isExecutive ? (
-                  <span>
-                    Consolidated cross-project risk, disbursement holdbacks,
-                    and governance telemetry
-                  </span>
-                ) : selectedProject ? (
-                  <>
-                    <span className="text-slate-300 font-medium">
-                      {selectedProject.geofenceMode
-                        ? `${geofenceModeLabel(selectedProject.geofenceMode)} geofence`
-                        : "No geofence"}
-                      {selectedProject.status === "ARCHIVED" && " · Archived (read-only)"}
-                    </span>{" "}
-                    <span className="text-white/30">·</span>{" "}
-                    <span className="text-slate-400">Lender:</span>{" "}
-                    <span className="text-slate-200 font-medium">
-                      {selectedProject.lenderOrganizationName}
-                    </span>{" "}
-                    <span className="text-white/30">·</span>{" "}
-                    <span className="text-slate-400">Contractor:</span>{" "}
-                    <span className="text-slate-200 font-medium">
-                      {selectedProject.contractorOrganizationName}
-                      {selectedProject.contractorCount > 1 && ` +${selectedProject.contractorCount - 1}`}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-slate-300">
-                    Independent Physical-to-Financial Assurance
-                  </span>
-                )}
-              </p>
-              {/* Phase 10: construction phase and phase-change actions */}
-              {!isCrossProject && selectedProject && (
-                <div className="mt-1.5">
-                  <ProjectPhaseBanner projectId={selectedProject.id} projectStatus={selectedProject.status} />
-                </div>
-              )}
-            </div>
+              </>
+            )}
+            <h1 className="text-base font-bold text-white tracking-tight truncate">{pageName}</h1>
+            {headerProject?.status === "ARCHIVED" && (
+              <span className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-white/10 text-white/75 border-white/20">
+                Archived · read-only
+              </span>
+            )}
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 shrink-0">
+            {/* Phase 10: construction phase and phase-change actions */}
+            {headerProject && <ProjectPhaseBanner projectId={headerProject.id} projectStatus={headerProject.status} />}
             <Notifications projectId={selectedProject?.id} />
             {headerActions}
           </div>

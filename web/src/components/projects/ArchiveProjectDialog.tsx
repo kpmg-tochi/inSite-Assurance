@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Archive, X } from "lucide-react";
+import { Overlay } from "../common/Overlay";
 import { useArchiveProjectMutation } from "../../mutations/projects/useProjectSetupMutations";
 
 /**
@@ -39,7 +40,7 @@ export function ArchiveProjectDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/50 p-4" role="presentation" onClick={() => !archive.isPending && onClose()}>
+    <Overlay zIndex="z-[1000]" className="flex items-center justify-center p-4" role="presentation" onClick={() => !archive.isPending && onClose()}>
       <div
         role="dialog"
         aria-modal="true"
@@ -102,6 +103,6 @@ export function ArchiveProjectDialog({
           </button>
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

@@ -1,5 +1,6 @@
 import React from "react";
 import { X } from "lucide-react";
+import { Overlay } from "../../../components/common/Overlay";
 
 /** Common frame for the reconciliation workbench modals. */
 export function ModalShell({
@@ -16,7 +17,7 @@ export function ModalShell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 bg-slate-950/35 backdrop-blur-[1px] z-50 flex items-center justify-center p-4">
+    <Overlay className="flex items-center justify-center p-4">
       <div
         role="dialog"
         aria-modal="true"
@@ -38,7 +39,7 @@ export function ModalShell({
         </div>
         <div className="overflow-y-auto">{children}</div>
       </div>
-    </div>
+    </Overlay>
   );
 }
 

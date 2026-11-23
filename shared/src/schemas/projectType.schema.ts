@@ -14,6 +14,7 @@ import {
   ProjectTypeKickoffConfigSchema,
 } from './contract.schema';
 import { ProjectTypeClosureConfigSchema } from './closure.schema';
+import { ProjectTypeKpiTargetsSchema } from './kpi.schema';
 
 /**
  * Project types (Phase 11): a delivery model ("Central Delivery Model", "Co-Funded Delivery
@@ -92,7 +93,8 @@ export const ProjectTypeConfigSchema = z.object({
   supervision: ProjectTypeSupervisionConfigSchema.default({}),
   /** Phase 15: Certificate of Completion signatories and gates, closure checklists, ratings sharing. */
   closure: ProjectTypeClosureConfigSchema.default({}),
-  kpiTargets: z.unknown().optional(), // Phase 16
+  /** Phase 16: KPI targets and which KPIs are shown (catalogue defaults for missing keys). */
+  kpiTargets: ProjectTypeKpiTargetsSchema.default({}),
 });
 export type ProjectTypeConfig = z.infer<typeof ProjectTypeConfigSchema>;
 export type ProjectTypeConfigInput = z.input<typeof ProjectTypeConfigSchema>;

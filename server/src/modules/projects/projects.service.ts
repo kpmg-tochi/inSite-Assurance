@@ -76,7 +76,7 @@ function serializeDeliveryModel(project: Prisma.ProjectGetPayload<{ include: typ
  * Phase 11 list filters. A region filter includes the region's areas; an owner filter is the exact
  * owner. Applied on top of the visibility filter, never instead of it.
  */
-function deliveryModelFilterWhere(filters: ProjectListFilters = {}): Prisma.ProjectWhereInput[] {
+export function deliveryModelFilterWhere(filters: ProjectListFilters = {}): Prisma.ProjectWhereInput[] {
   const out: Prisma.ProjectWhereInput[] = [];
   if (filters.projectTypeId) out.push({ projectTypeId: filters.projectTypeId });
   if (filters.regionId) out.push({ OR: [{ regionId: filters.regionId }, { region: { parentRegionId: filters.regionId } }] });

@@ -1,3 +1,4 @@
+import { APPLICATION_NAME } from "../../config/appName";
 import React, {
   forwardRef,
   useCallback,
@@ -205,7 +206,7 @@ export const InSiteCamera = forwardRef<InSiteCameraHandle, InSiteCameraProps>(
               Live Camera Access Required
             </Text>
             <Text style={styles.permissionBody}>
-              InSite Assurance requires direct camera access. Gallery uploads
+              {APPLICATION_NAME} requires direct camera access. Gallery uploads
               are disabled to preserve evidentiary integrity.
             </Text>
 

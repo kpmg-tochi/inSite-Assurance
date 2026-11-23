@@ -28,6 +28,11 @@ export function displayCurrencySymbol(): string {
   return currencySymbol(display.currency);
 }
 
+/** The tenant's time zone (Phase 16: KPI periods), or the browser's before the profile loads. */
+export function displayTimeZone(): string {
+  return display.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Lagos';
+}
+
 /** Short zone label for column headers, e.g. "WAT" (was hardcoded). */
 export function displayZoneLabel(): string {
   return display.timeZone ? timeZoneAbbreviation(display.timeZone) : 'local time';

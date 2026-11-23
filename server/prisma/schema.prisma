@@ -611,6 +611,7 @@ model Tenant {
   outboundMessages   OutboundMessage[]
   projectTypes       ProjectType[]
   lessonsLearned     LessonLearned[]
+  kpiSnapshots       KpiSnapshot[] // Phase 16
   regions            Region[]
   // Phase 14
   checklistTemplates InspectionChecklistTemplate[]
@@ -941,6 +942,7 @@ model Project {
   closureChecklistItems  ClosureChecklistItemState[]
   contractorRatings      ContractorPerformanceRating[]
   lessonsLearned         LessonLearned[]
+  kpiSnapshots           KpiSnapshot[] // Phase 16
   closurePackExports     ClosurePackExport[]
 
   @@unique([tenantId, codePrefix])
@@ -3192,4 +3194,30 @@ model ClosurePackExport {
   @@index([projectId, createdAt])
   @@index([status])
   @@map("closure_pack_exports")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 16: programme KPIs
+// ---------------------------------------------------------------------------
+
+/// A project's KPI figures for one period (the current month, recomputed daily by `kpi-snapshot`;
+/// earlier months are backfilled once for period-based KPIs). Only tracked KPIs are stored.
+model KpiSnapshot {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  projectId   String   @db.Uuid
+  kpiKey      String
+  periodStart String // YYYY-MM-DD, first day of the month
+  periodEnd   String // YYYY-MM-DD, inclusive (the computation day for the current month)
+  numerator   Decimal  @db.Decimal(20, 4)
+  denominator Decimal  @db.Decimal(20, 4)
+  value       Decimal? @db.Decimal(20, 4)
+  computedAt  DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, kpiKey, periodStart])
+  @@index([tenantId, periodStart])
+  @@map("kpi_snapshots")
 }

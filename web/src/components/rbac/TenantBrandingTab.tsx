@@ -10,6 +10,7 @@ import {
   useUpdateTenantBrandingMutation,
 } from '../../mutations/rbac/useRbacMutations';
 import Loader from '../Loader';
+import { APPLICATION_NAME } from "../../config/appName";
 
 export function TenantBrandingTab() {
   const { user, refreshUser } = useAuth();
@@ -190,7 +191,7 @@ export function TenantBrandingTab() {
               </div>
               <div className="min-w-0">
                 <div className="text-white font-semibold text-sm truncate">{tenantName || 'Workspace name'}</div>
-                <div className="text-[11px] text-white/70 truncate">{tagline || 'InSite Assurance'}</div>
+                <div className="text-[11px] text-white/70 truncate">{tagline || APPLICATION_NAME}</div>
               </div>
               <span
                 className="ml-auto rounded-lg px-3 py-1.5 text-[11px] font-semibold text-white"

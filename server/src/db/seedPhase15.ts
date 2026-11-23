@@ -94,9 +94,18 @@ async function payloadFor(email: string): Promise<WebJwtPayload> {
 }
 
 /** An approved final evaluation inspection with passing answers (as the mobile app would file it). */
-async function approvedFinalEvaluation(p: { tenantId: string; projectId: string; reporter: WebJwtPayload; visitDate: string }) {
+export async function approvedFinalEvaluation(p: {
+  tenantId: string;
+  projectId: string;
+  reporter: WebJwtPayload;
+  visitDate: string;
+  /** Phase 16 reuses this for baseline surveys. */
+  visitType?: "FINAL_EVALUATION" | "BASELINE";
+  templateCode?: string;
+  summary?: string;
+}) {
   const template = await prisma.inspectionChecklistTemplate.findFirstOrThrow({
-    where: { tenantId: p.tenantId, code: "FINAL_EVALUATION", isArchived: false },
+    where: { tenantId: p.tenantId, code: p.templateCode ?? "FINAL_EVALUATION", isArchived: false },
     orderBy: { version: "desc" },
   });
   const answers = parseSections(template.sectionsJson).flatMap((s) =>
@@ -113,7 +122,7 @@ async function approvedFinalEvaluation(p: { tenantId: string; projectId: string;
     data: {
       clientReportId: crypto.randomUUID(),
       projectId: p.projectId,
-      visitType: "FINAL_EVALUATION",
+      visitType: p.visitType ?? "FINAL_EVALUATION",
       templateId: template.id,
       templateVersion: template.version,
       visitDate: p.visitDate,
@@ -123,7 +132,7 @@ async function approvedFinalEvaluation(p: { tenantId: string; projectId: string;
       reporterRoleName: p.reporter.roleName,
       answersJson: answers as unknown as Prisma.InputJsonValue,
       overallFinding: "SATISFACTORY",
-      summaryText: "Final evaluation: all deliverables in place and functional; finishes good. No outstanding snags at evaluation.",
+      summaryText: p.summary ?? "Final evaluation: all deliverables in place and functional; finishes good. No outstanding snags at evaluation.",
       status: "APPROVED",
       confirmedAt: at,
       approvedAt: addHours(at, 26),
@@ -135,7 +144,7 @@ async function approvedFinalEvaluation(p: { tenantId: string; projectId: string;
 const addHours = (d: Date, h: number) => new Date(d.getTime() + h * 3_600_000);
 
 /** Writes the beneficiary's signed paper copy where an upload would land; returns its object key. */
-async function paperCopy(tenantId: string, projectId: string, label: string) {
+export async function paperCopy(tenantId: string, projectId: string, label: string) {
   const body = Buffer.from(`%PDF-1.4\n% ${label}: Certificate of Completion signed on paper by the beneficiary (seed)\n%%EOF\n`, "utf8");
   const key = `${projectObjectPrefix(tenantId, projectId)}project_document/seed-coc-${crypto.randomUUID()}.pdf`;
   await storageService.putServerObject(key, body, "application/pdf");
@@ -143,7 +152,7 @@ async function paperCopy(tenantId: string, projectId: string, label: string) {
 }
 
 /** An accepted handover response from the head of the institution, reviewed by the monitor. */
-async function acceptedHandover(p: { projectId: string; createdByUserId: string; reviewer: WebJwtPayload; headName: string; snags: number }) {
+export async function acceptedHandover(p: { projectId: string; createdByUserId: string; reviewer: WebJwtPayload; headName: string; snags: number }) {
   const link = await prisma.handoverLink.create({
     data: {
       projectId: p.projectId,

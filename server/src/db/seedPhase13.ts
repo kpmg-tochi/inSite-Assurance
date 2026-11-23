@@ -79,7 +79,7 @@ const CO_FUNDED: ContractMilestoneTemplateInput[] = [
 const KICKOFF = { requiredStakeholderGroups: ["OWNER", "MONITOR", "CONTRACTOR", "BENEFICIARY"] as const, noticeLeadDays: 7 };
 const DOCUMENT_REQUIREMENTS = { beforeActivation: [], beforeMobilisation: ["MOBILISATION_AGREEMENT", "SITE_POSSESSION_FORM"] };
 
-async function payloadFor(email: string): Promise<WebJwtPayload> {
+export async function payloadFor(email: string): Promise<WebJwtPayload> {
   const u = await prisma.user.findUniqueOrThrow({
     where: { email },
     include: { role: { include: { rolePermissions: { include: { permission: { select: { key: true } } } } } } },
@@ -101,7 +101,7 @@ async function payloadFor(email: string): Promise<WebJwtPayload> {
 }
 
 /** A small PDF-like file for the register (written to local storage in development). */
-async function fileDocument(p: {
+export async function fileDocument(p: {
   tenantId: string;
   projectId: string;
   typeCode: string;
@@ -138,7 +138,7 @@ async function fileDocument(p: {
   });
 }
 
-async function signDocument(doc: Awaited<ReturnType<typeof fileDocument>>, user: WebJwtPayload, signedAt: Date) {
+export async function signDocument(doc: Awaited<ReturnType<typeof fileDocument>>, user: WebJwtPayload, signedAt: Date) {
   const statement = defaultSignOffStatement(doc.title, 1);
   await prisma.projectDocumentSignOff.create({
     data: {
@@ -155,7 +155,7 @@ async function signDocument(doc: Awaited<ReturnType<typeof fileDocument>>, user:
 }
 
 /** The kick-off as held on `date` with one attendee per required group (and the notice sent a week before). */
-async function heldKickoff(p: { projectId: string; date: string; minutesDocumentId: string | null; invitees: Array<{ group: string; name: string; email: string | null; userId?: string | null; organizationId?: string | null }> }) {
+export async function heldKickoff(p: { projectId: string; date: string; minutesDocumentId: string | null; invitees: Array<{ group: string; name: string; email: string | null; userId?: string | null; organizationId?: string | null }> }) {
   const at = new Date(`${p.date}T09:00:00.000Z`);
   await prisma.kickoffMeeting.create({
     data: {

@@ -769,6 +769,16 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     surface: 'WEB',
     unlocksViews: ['Lessons Learned Library'],
   },
+  // Phase 16: programme KPIs
+  {
+    key: 'kpis:view',
+    name: 'View Programme KPIs',
+    description:
+      'Open the Programme KPIs page and the KPI card of a project: stage KPIs over the visible projects, with targets per project type.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Programme KPIs'],
+  },
 ];
 
 /**

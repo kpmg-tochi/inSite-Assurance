@@ -23,7 +23,7 @@ const templates = Router();
 
 templates.get(
   '/',
-  requirePermission('inspections:manage_templates', 'inspections:view', 'inspections:submit'),
+  requirePermission('inspections:manage_templates', 'inspections:view', 'inspections:submit', 'project_types:manage'),
   wrap(async (req, res) => {
     res.json({ success: true, data: await listChecklistTemplates(req.webUser!.tenantId, req.query.includeArchived === 'true') });
   })

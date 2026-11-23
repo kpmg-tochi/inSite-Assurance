@@ -6,6 +6,7 @@ import { useDemoAccounts } from "../../config/useDemoAccounts";
 import { InSiteLogo } from "../../components/InSiteLogo";
 import { IS_DEMO_MODE } from "../../config/demoMode";
 import { CustomSelect, type CustomSelectOption } from "../../components/common";
+import { APPLICATION_NAME } from "../../config/appName";
 
 const VOICE_WAVE_BARS = [
   10, 18, 12, 22, 14, 24, 16, 12, 20, 10, 16, 22, 12, 18, 14, 10, 16, 12,
@@ -60,7 +61,7 @@ export function LoginPage() {
     } catch (err: any) {
       setErrorMsg(
         err?.message ||
-          "Unable to connect to InSite Assurance API. Please verify the server is running on port 4000.",
+          `Unable to connect to ${APPLICATION_NAME} API. Please verify the server is running on port 4000.`,
       );
     } finally {
       setIsSubmitting(false);
@@ -83,7 +84,7 @@ export function LoginPage() {
               </div>
               <div className="h-4 w-px bg-white/25" />
               <span className="font-semibold text-base tracking-tight text-white">
-                InSite Assurance
+                {APPLICATION_NAME}
               </span>
             </Link>
             <div className="flex items-center gap-2">
@@ -369,7 +370,7 @@ export function LoginPage() {
 
         {/* Bottom Copyright Footer */}
         <div className="text-[11px] text-slate-400 flex items-center justify-between max-w-md w-full mx-auto pt-4">
-          <span>&copy; 2026 InSite Assurance</span>
+          <span>&copy; 2026 {APPLICATION_NAME}</span>
           <span className="text-slate-400">Pilot</span>
         </div>
       </div>

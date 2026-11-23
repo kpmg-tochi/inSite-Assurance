@@ -2,12 +2,13 @@ import React, { useMemo, useState } from "react";
 import { ArrowLeft, Archive, Pencil, Plus, Star } from "lucide-react";
 import {
   ProjectTypeFunderDefaultEnum,
-  ReportingCadenceEnum,
+  DISBURSEMENT_MECHANISM_META,
   SaveProjectTypeRequestSchema,
   type ProjectTypeConfigInput,
   type ProjectTypeDto,
+  type ProjectTypeKpiTargets,
   type ProjectTypeFunderDefault,
-  type ReportingCadence,
+  type DisbursementMechanism,
   type SaveProjectTypeRequestInput,
   CREDENTIAL_REQUIREMENT_META,
   CREDENTIAL_SUBJECT_META,
@@ -28,6 +29,12 @@ import { useConfirmDialog } from "../process/ConfirmDialog";
 import { useTerm } from "../../lib/auth-context";
 import { ContractRulesEditor, type ContractRules } from "./ContractRulesEditor";
 import { ClosureRulesEditor, type ClosureRules } from "./ClosureRulesEditor";
+import { compactKpiTargets, KpiTargetsEditor } from "./KpiTargetsEditor";
+import { MonitoringRulesEditor, type MonitoringRules } from "./MonitoringRulesEditor";
+import { DocumentRulesEditor, type DocumentRules } from "./DocumentRulesEditor";
+import { CadenceFields } from "./CadenceFields";
+
+type ReportingDefaults = NonNullable<ProjectTypeConfigInput["reportingDefaults"]>;
 
 const inputCls =
   "w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-primary";
@@ -52,19 +59,26 @@ interface Draft {
   funderDefault: ProjectTypeFunderDefault;
   defaultFunderId: string;
   reportingOn: boolean;
-  reportingCadence: ReportingCadence;
-  workdayStartTime: string;
-  workdayEndTime: string;
+  /** Every field of the Reporting step (since Phase 16, not only cadence and hours). */
+  reporting: ReportingDefaults;
   /** Phase 12: registration policy per subject; "" uses the tenant setting. */
   credentialCertifier: CredentialRequirement | "";
   credentialFieldAssurance: CredentialRequirement | "";
   /** Phase 12: payment milestone defaults for new projects of this type. */
   paymentBasis: TranchePaymentBasis;
   paymentCompletionRule: TrancheCompletionRule;
+  /** The disbursement mechanism the type expects ("" = not stated). */
+  paymentMechanism: DisbursementMechanism | "";
   /** Phase 13: contract milestone templates and kick-off rules. */
   contract: ContractRules;
   /** Phase 15: Certificate of Completion and closure rules. */
   closure: ClosureRules;
+  /** Phase 16: KPI targets and which KPIs are shown. */
+  kpiTargets: ProjectTypeKpiTargets;
+  /** Phase 14 (editable since Phase 16): streams, inspection templates, supervision. */
+  monitoring: MonitoringRules;
+  /** Phase 13 (editable since Phase 16): required documents and default cases. */
+  documents: DocumentRules;
   /** Keys added by later phases, kept untouched on save. */
   rest: Record<string, unknown>;
 }
@@ -73,19 +87,20 @@ interface Draft {
 function phase12From(config: unknown) {
   const c = (config ?? {}) as {
     credentials?: { certifier?: CredentialRequirement | null; fieldAssurance?: CredentialRequirement | null };
-    payments?: { defaultBasis?: TranchePaymentBasis; defaultCompletionRule?: TrancheCompletionRule | null };
+    payments?: { defaultBasis?: TranchePaymentBasis; defaultCompletionRule?: TrancheCompletionRule | null; mechanism?: DisbursementMechanism | null };
   };
   return {
     credentialCertifier: c.credentials?.certifier ?? ("" as const),
     credentialFieldAssurance: c.credentials?.fieldAssurance ?? ("" as const),
     paymentBasis: c.payments?.defaultBasis ?? ("MEASURED" as const),
     paymentCompletionRule: c.payments?.defaultCompletionRule ?? ("ALL_ITEMS_COMPLETE" as const),
+    paymentMechanism: c.payments?.mechanism ?? ("" as const),
   };
 }
 
 function draftFrom(t: ProjectTypeDto | null): Draft {
   const c = t?.config;
-  const { ownership, parties, reportingDefaults, contractMilestones, kickoff, closure, ...rest } = (c ?? {}) as ProjectTypeDto["config"];
+  const { ownership, parties, reportingDefaults, contractMilestones, kickoff, closure, kpiTargets, reportingStreams, inspections, supervision, documentRequirements, defaultCases, ...rest } = (c ?? {}) as ProjectTypeDto["config"];
   return {
     id: t?.id ?? null,
     code: t?.code ?? "",
@@ -105,9 +120,7 @@ function draftFrom(t: ProjectTypeDto | null): Draft {
     funderDefault: parties?.funderDefault ?? "NONE",
     defaultFunderId: parties?.defaultFunderOrganizationId ?? "",
     reportingOn: Boolean(reportingDefaults),
-    reportingCadence: reportingDefaults?.reportingCadence ?? "WEEKLY",
-    workdayStartTime: reportingDefaults?.workdayStartTime ?? "08:00",
-    workdayEndTime: reportingDefaults?.workdayEndTime ?? "17:00",
+    reporting: reportingDefaults ? { ...reportingDefaults } : { reportingCadence: "WEEKLY", workdayStartTime: "08:00", workdayEndTime: "17:00" },
     ...phase12From(c),
     contract: {
       milestones: (contractMilestones ?? []).map((m) => ({ ...m })),
@@ -117,6 +130,19 @@ function draftFrom(t: ProjectTypeDto | null): Draft {
       },
     },
     closure: closure ? { ...closure } : {},
+    kpiTargets: { ...(kpiTargets ?? {}) },
+    monitoring: {
+      reportingStreams: (reportingStreams ?? []).map((st) => ({ ...st, roleCodes: [...st.roleCodes] })),
+      inspections: { templateCodeByVisitType: { ...(inspections?.templateCodeByVisitType ?? {}) } },
+      supervision: { ...(supervision ?? {}), supervisorRoleCodes: [...(supervision?.supervisorRoleCodes ?? [])] },
+    },
+    documents: {
+      documentRequirements: {
+        beforeActivation: [...(documentRequirements?.beforeActivation ?? [])],
+        beforeMobilisation: [...(documentRequirements?.beforeMobilisation ?? [])],
+      },
+      defaultCases: { ...(defaultCases ?? {}) },
+    },
     rest: rest as Record<string, unknown>,
   };
 }
@@ -138,7 +164,7 @@ function payloadFrom(d: Draft): SaveProjectTypeRequestInput {
       defaultFunderOrganizationId: d.funderDefault === "FIXED" ? d.defaultFunderId || null : null,
     },
     reportingDefaults: d.reportingOn
-      ? { reportingCadence: d.reportingCadence, workdayStartTime: d.workdayStartTime, workdayEndTime: d.workdayEndTime }
+      ? d.reporting
       : null,
     // Phase 12
     credentials: {
@@ -149,6 +175,7 @@ function payloadFrom(d: Draft): SaveProjectTypeRequestInput {
       ...((d.rest.payments as Record<string, unknown> | undefined) ?? {}),
       defaultBasis: d.paymentBasis,
       defaultCompletionRule: d.paymentBasis === "FIXED_ON_COMPLETION" ? d.paymentCompletionRule : null,
+      mechanism: d.paymentMechanism || null,
     },
     // Phase 13
     contractMilestones: d.contract.milestones.map((m) => ({
@@ -164,6 +191,14 @@ function payloadFrom(d: Draft): SaveProjectTypeRequestInput {
       beforeClose: d.closure.beforeClose?.map((i) => ({ ...i, label: i.label.trim() })),
       beforeArchive: d.closure.beforeArchive?.map((i) => ({ ...i, label: i.label.trim() })),
     },
+    // Phase 16
+    kpiTargets: compactKpiTargets(d.kpiTargets),
+    // Phases 13 and 14 (editors since Phase 16)
+    reportingStreams: d.monitoring.reportingStreams.map((st) => ({ ...st, label: st.label.trim() })),
+    inspections: d.monitoring.inspections,
+    supervision: d.monitoring.supervision,
+    documentRequirements: d.documents.documentRequirements,
+    defaultCases: d.documents.defaultCases,
   };
   return {
     code: d.code,
@@ -259,6 +294,7 @@ export function ProjectTypesTab() {
 
   if (draft) {
     const set = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
+    const setReporting = (patch: Partial<ReportingDefaults>) => set({ reporting: { ...draft.reporting, ...patch } });
     const submit = (e: React.FormEvent) => {
       e.preventDefault();
       const payload = payloadFrom(draft);
@@ -441,6 +477,22 @@ export function ProjectTypesTab() {
                 }))}
               />
             </div>
+            <div>
+              <p className="text-xs font-medium text-slate-700 mb-1">Disbursement mechanism the type expects</p>
+              <CustomSelect
+                value={draft.paymentMechanism}
+                onChange={(v) => set({ paymentMechanism: v as DisbursementMechanism | "" })}
+                options={[
+                  { value: "", label: "Not stated", description: "No check against the payment basis." },
+                  ...(["IPC_CLAIM_REQUIRED", "MILESTONE_DIRECT_DISBURSEMENT"] as const).map((m) => ({
+                    value: m,
+                    label: DISBURSEMENT_MECHANISM_META[m].label,
+                    description: DISBURSEMENT_MECHANISM_META[m].description,
+                  })),
+                ]}
+              />
+              <p className="text-[11px] text-slate-500 mt-1">For checks only: the workflow template sets the mechanism projects use.</p>
+            </div>
             {draft.paymentBasis === "FIXED_ON_COMPLETION" && (
               <div>
                 <p className="text-xs font-medium text-slate-700 mb-1">Completion rule</p>
@@ -460,29 +512,39 @@ export function ProjectTypesTab() {
 
         <ContractRulesEditor value={draft.contract} onChange={(contract) => set({ contract })} />
 
+        <DocumentRulesEditor value={draft.documents} onChange={(documents) => set({ documents })} />
+
+        <MonitoringRulesEditor value={draft.monitoring} onChange={(monitoring) => set({ monitoring })} />
+
         <ClosureRulesEditor value={draft.closure} onChange={(closure) => set({ closure })} />
+
+        <KpiTargetsEditor value={draft.kpiTargets} onChange={(kpiTargets) => set({ kpiTargets })} />
 
         <section className={sectionCls}>
           <h3 className="text-sm font-bold text-slate-900">Reporting defaults</h3>
           <Toggle label="Pre-fill the Reporting step of new projects" checked={draft.reportingOn} onChange={(v) => set({ reportingOn: v })} />
           {draft.reportingOn && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <p className="text-xs font-medium text-slate-700 mb-1">Cadence</p>
-                <CustomSelect
-                  value={draft.reportingCadence}
-                  onChange={(v) => set({ reportingCadence: v as ReportingCadence })}
-                  options={ReportingCadenceEnum.options.filter((c) => c !== "CUSTOM_INTERVAL").map((c) => ({ value: c, label: c.replace("_", " ").toLowerCase() }))}
-                />
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <label className="text-xs font-medium text-slate-700">
+                  Work starts
+                  <input type="time" className={inputCls} value={draft.reporting.workdayStartTime} onChange={(e) => setReporting({ workdayStartTime: e.target.value })} />
+                </label>
+                <label className="text-xs font-medium text-slate-700">
+                  Work ends
+                  <input type="time" className={inputCls} value={draft.reporting.workdayEndTime} onChange={(e) => setReporting({ workdayEndTime: e.target.value })} />
+                </label>
+                {(draft.reporting.reportingCadence === "BI_WEEKLY" || draft.reporting.reportingCadence === "CUSTOM_INTERVAL") && (
+                  <label className="text-xs font-medium text-slate-700">
+                    First period starts on (blank: the project start)
+                    <input type="date" className={inputCls} value={draft.reporting.cadenceAnchorDate ?? ""} onChange={(e) => setReporting({ cadenceAnchorDate: e.target.value || null })} />
+                  </label>
+                )}
               </div>
-              <label className="text-xs font-medium text-slate-700">
-                Work starts
-                <input type="time" className={inputCls} value={draft.workdayStartTime} onChange={(e) => set({ workdayStartTime: e.target.value })} />
-              </label>
-              <label className="text-xs font-medium text-slate-700">
-                Work ends
-                <input type="time" className={inputCls} value={draft.workdayEndTime} onChange={(e) => set({ workdayEndTime: e.target.value })} />
-              </label>
+              <CadenceFields
+                value={{ ...draft.reporting, quarterMonth: draft.reporting.cadenceQuarterAnchorMonth ?? null }}
+                onChange={({ quarterMonth, ...patch }) => setReporting({ ...patch, ...(quarterMonth != null ? { cadenceQuarterAnchorMonth: quarterMonth } : {}) })}
+              />
             </div>
           )}
         </section>

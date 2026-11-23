@@ -20,6 +20,7 @@ import { PortfolioExecutivePage } from "./pages/dashboard/PortfolioExecutivePage
 import { PortfolioOverviewPage } from "./pages/dashboard/PortfolioOverviewPage";
 import { ProjectClosurePage } from "./pages/closure/ProjectClosurePage";
 import { LessonsLibraryPage } from "./pages/lessons/LessonsLibraryPage";
+import { ProgrammeKpisPage } from "./pages/kpis/ProgrammeKpisPage";
 import { OrganizationRatingsPage } from "./pages/organizations/OrganizationRatingsPage";
 import { ProjectsDirectoryPage } from "./pages/projects/ProjectsDirectoryPage";
 import { NewProjectPage } from "./pages/projects/setup/NewProjectPage";
@@ -45,6 +46,7 @@ import { useProjectBoqQuery } from "./queries/boq/useBoqQueries";
 import { useProjectEvidenceQuery } from "./queries/evidence/useEvidenceQueries";
 import { useProjectIpcsQuery } from "./queries/reconciliation/useReconciliationQueries";
 import { useDownloadValuationPdfMutation } from "./mutations/reconciliation/useReconciliationMutations";
+import { APPLICATION_NAME } from "./config/appName";
 
 function ProjectSetupRedirect({ mode }: { mode: "setup" | "settings" }) {
   const match = useMatch(`/app/projects/:projectId/${mode}`);
@@ -165,7 +167,7 @@ function AuthenticatedWorkspace() {
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
         <Loader size="sm" />
         <span className="text-xs text-slate-500 font-medium">
-          Loading InSite Assurance Workspace...
+          Loading {APPLICATION_NAME} Workspace...
         </span>
       </div>
     );
@@ -179,9 +181,16 @@ function AuthenticatedWorkspace() {
     return <ChangePasswordPage />;
   }
 
+  // Project actions only on that project's own pages; "New Project" only on the portfolio and
+  // the project list.
+  const path = location.pathname.replace(/\/+$/, "");
+  const onProjectPage = Boolean(urlProjectId && activeProject?.id === urlProjectId);
+  const onProjectSetup = /^\/app\/projects\/[^/]+\/(setup|settings)(\/|$)/.test(path);
+  const onProjectListPage = path === "/app/portfolio" || path === "/app/projects";
+
   const headerActions = (
     <>
-      {selectedIpc && activeProject && hasPermission("valuation:export_pdf") && (
+      {onProjectPage && selectedIpc && activeProject && hasPermission("valuation:export_pdf") && (
         <button
           type="button"
           disabled={pdfMutation.isPending}
@@ -191,7 +200,7 @@ function AuthenticatedWorkspace() {
           {pdfMutation.isPending ? "Exporting..." : "Export Valuation PDF"}
         </button>
       )}
-      {activeProject && hasPermission("projects:edit_baseline") && (
+      {onProjectPage && !onProjectSetup && activeProject && hasPermission("projects:edit_baseline") && (
         <button
           type="button"
           onClick={() => navigate(`/app/projects/${activeProject.id}/settings/basics`)}
@@ -200,7 +209,7 @@ function AuthenticatedWorkspace() {
           Project settings
         </button>
       )}
-      {hasPermission("projects:create") && (
+      {onProjectListPage && hasPermission("projects:create") && (
         <button
           type="button"
           onClick={() => navigate("/app/projects/new")}
@@ -247,7 +256,6 @@ function AuthenticatedWorkspace() {
               projects={projects}
               selectedProjectId={activeProject?.id ?? null}
               onSelectProject={setSelectedProjectId}
-              onNewProject={() => navigate("/app/projects/new")}
             />
           }
         />
@@ -256,6 +264,20 @@ function AuthenticatedWorkspace() {
           element={
             <RequirePermission anyOf={["projects:view_portfolio"]} backTo={projectHome}>
               <PortfolioOverviewPage
+                onOpenProject={(projectId) => {
+                  setSelectedProjectId(projectId);
+                  navigate(`/app/projects/${projectId}/dashboard`);
+                }}
+              />
+            </RequirePermission>
+          }
+        />
+        {/* Phase 16: programme KPIs over the visible projects */}
+        <Route
+          path="kpis"
+          element={
+            <RequirePermission anyOf={["kpis:view"]} backTo={projectHome}>
+              <ProgrammeKpisPage
                 onOpenProject={(projectId) => {
                   setSelectedProjectId(projectId);
                   navigate(`/app/projects/${projectId}/dashboard`);

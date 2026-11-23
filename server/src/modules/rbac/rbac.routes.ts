@@ -65,7 +65,8 @@ router.get(
  */
 router.get(
   '/roles',
-  requirePermission('roles:create_edit', 'users:invite_manage'),
+  // Phase 16: project type managers pick roles by code (supervisors, streams, Legal, milestone owners).
+  requirePermission('roles:create_edit', 'users:invite_manage', 'project_types:manage'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const roles = await listRolesForTenant(req.webUser!.tenantId);

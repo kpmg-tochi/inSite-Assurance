@@ -1,4 +1,5 @@
 import React from "react";
+import { APPLICATION_NAME } from "../config/appName";
 import { StyleSheet, Text, View } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useNavigation } from "@react-navigation/native";
@@ -28,7 +29,7 @@ export const LandingScreen: React.FC = () => {
 
         {/* App Title */}
         <View style={styles.titleWrap}>
-          <Text style={styles.appTitle}>InSite Assurance</Text>
+          <Text style={styles.appTitle}>{APPLICATION_NAME}</Text>
           <Text style={styles.appSubtitle}>Project Field Verification</Text>
         </View>
       </View>

@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { APPLICATION_NAME } from "../config/appName";
 import { useProfile } from '../context/ProfileContext';
 import { View, Text, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -32,7 +33,7 @@ export const VerificationUnderReviewScreen: React.FC = () => {
   }, [activeContext?.assuranceStatus, navigation]);
   return (
     <GradientHeaderLayout
-      title="InSite Assurance"
+      title={APPLICATION_NAME}
       subtitle="Contractor Identity & Competence"
       contentContainerStyle={styles.body}
     >

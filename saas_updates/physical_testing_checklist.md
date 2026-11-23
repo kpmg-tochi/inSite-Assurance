@@ -151,7 +151,7 @@ SQLCipher and push notifications do not work in Expo Go, so testing needs a deve
 - [ ] **P4-M-23** Presence: keep the app open on site for over an hour. Expected: presence pings appear on the web only for the times the app was open, plus one per capture and report.
 
 ### 3.7 Phase 14: streams, site inspections and findings (device run pending)
-Use the programme tenant (seedPhase14): join PRG-211 with a Monitor Inspector join code (or sign in as a provisioned account in a supervisor role), and a contractor engineer code on a second phone.
+Use the programme tenant (seedPhase14): join PRG-211 with a Monitor Inspector join code (or sign in as a provisioned account in a supervisor role; since Phase 16 the programme tenant's Resident role is provisioned, `resident.supervisor@insite.ng`, and has no join codes), and a contractor engineer code on a second phone.
 - [ ] **P14-M-01** Period cards: the inbox shows one card per stream the person owes ("M&E visit · Quarterly report" for the inspector; "Resident supervision" for a resident), with the right quarter and due date. A project without streams still shows one card.
 - [ ] **P14-M-02** Offline inspection: in flight mode, start a routine inspection, answer every section (one screen per section), take a photo for each item that needs one, close and reopen the app mid-way. Expected: the draft resumes at the same section with its answers and photos.
 - [ ] **P14-M-03** The section "Next" button stays disabled until required answers, fail comments and required photos are there; Confirm needs the overall finding and a summary.
@@ -166,6 +166,21 @@ No mobile code changed in Phase 13; these check the server hook from a real chec
 - [ ] **P13-M-01** PRG-102 (seeded, mobilisation due in 5 days): join with the PRG-102 contractor code (`PRG-102-CON-…`, printed by the seed), walk inside the site boundary and tap Check in. Expected: on the web, Milestones shows "Contractor mobilised on site" Done with the check-in time, and the mobilisation compliance panel shows the contractor on site.
 - [ ] **P13-M-02** Same, but check in outside the boundary (or with a mock location). Expected: the milestone stays open.
 - [ ] **P13-M-03** After a contractor's contract is terminated on the web (PRG-221 default case, decision "Terminate"), the phone of a session joined with that contractor's code. Expected: the session is signed out (revoked) and the old join code no longer works.
+
+### 3.9 Phase 12: registration on the field assurance step (device run pending)
+
+Programme tenant. The field assurance policy is set in Settings → Tenant Settings → Professional registration (a project type can override it). Use a role that requires identity assurance, e.g. the contractor engineer join code `PRG-105-CON-…` printed by the seed.
+- [ ] **P12-M-01** Policy **Required**: join and reach the assurance step. Expected: registration body and number are required; Submit stays disabled without them; the web review shows them.
+- [ ] **P12-M-02** Policy **Optional**: the fields are shown and can be left empty; submitting without them succeeds.
+- [ ] **P12-M-03** Policy **Hidden**: the fields are not shown, and no message mentions a registration.
+- [ ] **P12-M-04** Change the policy while a phone has the assurance step open, then submit. Expected: the server applies the new policy and the phone shows its message (no crash, no stale required field).
+
+### 3.10 Phase 16: demo programme on a device (device run pending)
+
+Fresh seed on the demo day (see `demo_script_programme_delivery.md`).
+- [ ] **P16-M-01** Sign in as `resident.supervisor@insite.ng` (no join code). Expected: PRG-104 and PRG-105 are listed at once (its assigned live projects; archived PRG-242 is not); no identity assurance step.
+- [ ] **P16-M-02** On PRG-105, the inbox shows the resident supervision stream for the current week; submit a report for an item of payment milestone 3. Expected: the web shows it, and the PRG-105 KPI card's "Reports submitted on time" counts it once the obligation is met.
+- [ ] **P16-M-03** Run the Phase 14 inspection flow (P14-M-02 to P14-M-04) on PRG-211 with a Monitor Inspector join code, then check the Programme KPIs "Visits conducted vs planned" figure for Co-Funded.
 
 ---
 

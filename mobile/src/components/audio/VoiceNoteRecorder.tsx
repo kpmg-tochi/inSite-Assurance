@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { APPLICATION_NAME } from "../../config/appName";
 import {
   ActivityIndicator,
   Alert,
@@ -183,7 +184,7 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
       if (!perm.granted) {
         Alert.alert(
           "Microphone Permission Required",
-          "InSite Assurance needs microphone access to record field voice logs.",
+          `${APPLICATION_NAME} needs microphone access to record field voice logs.`,
           [
             { text: "Cancel", style: "cancel" },
             { text: "Open Settings", onPress: () => Linking.openSettings() },

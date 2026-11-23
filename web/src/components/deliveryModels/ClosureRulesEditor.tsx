@@ -212,12 +212,18 @@ function ChecklistList({
           </div>
           <div className="md:col-span-4">
             {item.kind === "DOCUMENT_TYPE" && (
-              <CustomSelect
-                value={item.documentTypeCode ?? ""}
-                onChange={(v) => setItem(i, { documentTypeCode: v || null })}
-                placeholder="Document type"
-                options={docTypes.map((d) => ({ value: d.code, label: d.name }))}
-              />
+              <div className="space-y-1">
+                <CustomSelect
+                  value={item.documentTypeCode ?? ""}
+                  onChange={(v) => setItem(i, { documentTypeCode: v || null })}
+                  placeholder="Document type"
+                  options={docTypes.map((d) => ({ value: d.code, label: d.name }))}
+                />
+                <label className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                  <input type="checkbox" checked={item.requireSignOff ?? true} onChange={(e) => setItem(i, { requireSignOff: e.target.checked })} />
+                  Needs a sign-off on the current version (when the document type requires one)
+                </label>
+              </div>
             )}
             {item.kind === "INSPECTION_VISIT_TYPE" && (
               <CustomSelect

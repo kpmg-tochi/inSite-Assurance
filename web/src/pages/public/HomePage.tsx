@@ -2,6 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Play } from "lucide-react";
 import { PublicLayout } from "../../components/PublicLayout";
+import { APPLICATION_NAME } from "../../config/appName";
 
 const WAVE_BARS = [10, 18, 12, 22, 14, 24, 16, 12, 20, 10, 16, 22, 12, 18, 14];
 
@@ -21,7 +22,7 @@ export function HomePage() {
             </h1>
 
             <p className="text-sm sm:text-base text-white/90 leading-relaxed">
-              <strong>InSite Assurance</strong> gives Nigerian project
+              <strong>{APPLICATION_NAME}</strong> gives Nigerian project
               financiers, infrastructure guarantors, and licensed Independent
               Project Monitors a tamper-resistant field evidence and
               BOQ-to-claim reconciliation workbench.

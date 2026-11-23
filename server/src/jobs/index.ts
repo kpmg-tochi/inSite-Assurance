@@ -3,6 +3,7 @@ import { registerMobilizationJobs } from './mobilizationJobs';
 import { registerScheduleJobs } from './scheduleJobs';
 import { registerCloseoutJobs } from './closeoutJobs';
 import { registerContractJobs } from './contractJobs';
+import { registerKpiJobs } from './kpiJobs';
 import { registeredJobs, runJobOnce, startJobRunner } from './runner';
 
 let registered = false;
@@ -15,6 +16,7 @@ export function registerAllJobs(): void {
   registerScheduleJobs();
   registerCloseoutJobs();
   registerContractJobs(); // Phase 13
+  registerKpiJobs(); // Phase 16
   registered = true;
 }
 

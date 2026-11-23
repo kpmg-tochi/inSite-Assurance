@@ -15,6 +15,7 @@ import { KpiCard } from "../../components/common";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { ScheduleBadge } from "../../components/schedule/ScheduleVarianceBadge";
 import { InspectionOverviewCard } from "../../components/inspections/InspectionOverviewCard";
+import { ProjectKpisCard } from "../../components/kpis/ProjectKpisCard";
 import { NextDeadlinesCard, OpenDefaultCasesCard } from "../../components/contracts/ContractOverviewCards";
 import { DEFAULT_CASE_VIEW_PERMISSIONS, MILESTONE_VIEW_PERMISSIONS } from "../../components/contracts/contractUi";
 
@@ -148,6 +149,9 @@ export function PortfolioDashboardPage({
 
       {/* Phase 14: last inspection per visit type, next due inspection, open findings, baseline */}
       {hasPermission("inspections:view") && <InspectionOverviewCard projectId={project.id} />}
+
+      {/* Phase 16: the project's KPIs against its project type's targets */}
+      {hasPermission("kpis:view") && project.status !== "DRAFT" && <ProjectKpisCard projectId={project.id} />}
 
       {/* 3. Bottom 3-Card Telemetry, Field Log & Tranche Readiness Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">

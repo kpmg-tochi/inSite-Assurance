@@ -30,6 +30,7 @@ import { projectTypesRoutes } from "./modules/projectTypes/projectTypes.routes";
 import { documentsRoutes, documentTypesRoutes } from "./modules/documents/documents.routes";
 import { contractsRoutes } from "./modules/contracts/contracts.routes";
 import { closureTenantRoutes, completionRoutes } from "./modules/completion/completion.routes";
+import { kpiRoutes, projectKpiRoutes } from "./modules/kpis/kpis.routes";
 import { regionsRoutes } from "./modules/regions/regions.routes";
 import { credentialsRoutes, projectCredentialRoutes } from "./modules/credentials/credentials.routes";
 import { requestContextMiddleware } from "./utils/requestContext";
@@ -119,6 +120,9 @@ export function createApp() {
   // Phase 15: Certificate of Completion, closure checklist, ratings, lessons, closure pack
   app.use("/api/v1/projects", completionRoutes);
   app.use("/api/v1/closure", closureTenantRoutes);
+  // Phase 16: programme KPIs
+  app.use("/api/v1/kpis", kpiRoutes);
+  app.use("/api/v1/projects", projectKpiRoutes);
   app.use("/api/v1/inspection-templates", inspectionTemplatesRoutes);
   app.use("/api/v1/supervision", supervisionRoutes);
   app.use("/api/v1/workflow-templates", workflowTemplateRoutes);

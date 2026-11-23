@@ -10,7 +10,7 @@ import {
   type SiteAttendanceAlertDto,
 } from "@insite/shared";
 import { useAuth } from "../lib/auth-context";
-import { KpiCard } from "./common";
+import { KpiCard, Overlay } from "./common";
 import { StandardTable, TableBadge, type TableBadgeVariant, type TableColumnDef } from "./table";
 import {
   useAttendanceAlertsQuery,
@@ -54,7 +54,7 @@ function NoteDialog({
 }) {
   const [notes, setNotes] = useState("");
   return (
-    <div role="dialog" aria-modal="true" aria-label={title} className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+    <Overlay role="dialog" aria-modal="true" aria-label={title} className="flex items-center justify-center p-4">
       <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl space-y-3">
         <p className="text-sm font-bold text-slate-900">{title}</p>
         <label className="block text-xs font-semibold text-slate-700" htmlFor="excuse-note">
@@ -82,7 +82,7 @@ function NoteDialog({
           </button>
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }
 

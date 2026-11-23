@@ -12,6 +12,7 @@ import {
 } from "../../mutations/schedule/useScheduleMutations";
 import { ScheduleVariancePill } from "./ScheduleVarianceBadge";
 import { ScheduleTimeline } from "./ScheduleTimeline";
+import { Overlay } from "../common/Overlay";
 
 type Step = 1 | 2 | 3 | 4;
 const STEP_TITLES: Record<Step, string> = {
@@ -111,7 +112,7 @@ export function CatchUpWizard({ projectId, schedule, onClose }: { projectId: str
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" role="dialog" aria-modal="true" aria-labelledby="catchup-title">
+    <Overlay className="flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="catchup-title">
       <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-start justify-between border-b border-slate-100 px-6 py-4">
           <div>
@@ -362,6 +363,6 @@ export function CatchUpWizard({ projectId, schedule, onClose }: { projectId: str
           )}
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }

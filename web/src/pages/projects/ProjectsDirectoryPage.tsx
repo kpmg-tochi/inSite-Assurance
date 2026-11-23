@@ -1,22 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { DeliveryModelFilters, ProjectTypeChip, useDeliveryModelFilters } from "../../components/projects/DeliveryModelFilters";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import {
-  Building2,
-  CheckCircle2,
-  Clock,
-  FileSpreadsheet,
-  FolderKanban,
-  MapPin,
-  Plus,
-  Search,
-  AlertTriangle,
-  ArrowRight,
-  Archive,
-  MoreHorizontal,
-  Settings2,
-  Trash2,
-} from "lucide-react";
+import { Archive, ArrowRight, ClipboardList, FileSpreadsheet, LayoutDashboard, Settings2, Trash2 } from "lucide-react";
 import type { ProjectSummaryDto } from "../../api/types";
 import { formatCompactNaira } from "../../lib/formatters";
 import { useAuth, useTerm } from "../../lib/auth-context";
@@ -24,68 +9,24 @@ import { useDraftProjectsQuery } from "../../queries/projects/useProjectSetupQue
 import { useDeleteDraftMutation } from "../../mutations/projects/useProjectSetupMutations";
 import { ArchiveProjectDialog } from "../../components/projects/ArchiveProjectDialog";
 import { ScheduleBadge } from "../../components/schedule/ScheduleVarianceBadge";
-
-/** "⋯" menu on a project card: settings and archive (needs projects:edit_baseline). */
-function ProjectCardMenu({
-  project,
-  onSettings,
-  onArchive,
-}: {
-  project: ProjectSummaryDto;
-  onSettings: () => void;
-  onArchive: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-  const item = "w-full flex items-center gap-2 px-3 py-2 text-left text-xs hover:bg-slate-50 focus:bg-slate-50 focus:outline-none";
-  return (
-    <div className="relative shrink-0" ref={ref}>
-      <button
-        type="button"
-        aria-label={`Actions for ${project.codePrefix}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
-      >
-        <MoreHorizontal className="w-4 h-4" />
-      </button>
-      {open && (
-        <div role="menu" className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
-          <button type="button" role="menuitem" className={`${item} text-slate-700`} onClick={() => { setOpen(false); onSettings(); }}>
-            <Settings2 className="w-3.5 h-3.5" /> Project settings
-          </button>
-          {project.status === "ACTIVE" && (
-            <button type="button" role="menuitem" className={`${item} text-rose-600`} onClick={() => { setOpen(false); onArchive(); }}>
-              <Archive className="w-3.5 h-3.5" /> Archive project
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+import {
+  StandardTable,
+  TableActionButton,
+  TableActionMenu,
+  TableBadge,
+  type TableActionItem,
+  type TableBadgeVariant,
+  type TableColumnDef,
+} from "../../components/table";
 
 type ProjectStatusTab = "ALL" | "ACTIVE" | "DRAFT" | "COMPLETED" | "ARCHIVED";
+
+type DraftRow = NonNullable<ReturnType<typeof useDraftProjectsQuery>["data"]>[number];
 
 interface ProjectsDirectoryPageProps {
   projects: ProjectSummaryDto[];
   selectedProjectId: string | null;
   onSelectProject: (projectId: string) => void;
-  onNewProject?: () => void;
 }
 
 /** Drafts come from /projects/drafts; this list holds active and archived projects. */
@@ -95,48 +36,37 @@ function getDerivedProjectStatus(project: ProjectSummaryDto): Exclude<ProjectSta
   return "ACTIVE";
 }
 
+const STATUS_BADGE: Record<Exclude<ProjectStatusTab, "ALL" | "DRAFT">, { label: string; variant: TableBadgeVariant }> = {
+  ACTIVE: { label: "Active", variant: "info" },
+  COMPLETED: { label: "Completed", variant: "success" },
+  ARCHIVED: { label: "Archived", variant: "neutral" },
+};
+
 function contractorLabel(project: ProjectSummaryDto): string {
   const extra = (project.contractorCount ?? 0) - 1;
   const name = project.contractorOrganizationName || "No contractor";
   return extra > 0 ? `${name} +${extra}` : name;
 }
 
-function getHealthBadge(health: ProjectSummaryDto["portfolioHealth"]) {
+function healthBadge(health: ProjectSummaryDto["portfolioHealth"]): { label: string; variant: TableBadgeVariant } {
   switch (health) {
     case "EVIDENCE_SUPPORTED":
-      return {
-        label: "Supported",
-        classes: "bg-emerald-50 text-emerald-700 border-emerald-200",
-        icon: CheckCircle2,
-      };
+      return { label: "Supported", variant: "success" };
     case "EVIDENCE_CONFLICT":
-      return {
-        label: "Conflict Flagged",
-        classes: "bg-red-50 text-red-700 border-red-200",
-        icon: AlertTriangle,
-      };
+      return { label: "Conflict flagged", variant: "danger" };
     default:
-      return {
-        label: "Partial / Review",
-        classes: "bg-amber-50 text-amber-700 border-amber-200",
-        icon: Clock,
-      };
+      return { label: "Partial / review", variant: "warning" };
   }
 }
 
-export function ProjectsDirectoryPage({
-  projects,
-  selectedProjectId,
-  onSelectProject,
-  onNewProject,
-}: ProjectsDirectoryPageProps) {
+export function ProjectsDirectoryPage({ projects, selectedProjectId, onSelectProject }: ProjectsDirectoryPageProps) {
   const { hasPermission } = useAuth();
   const term = useTerm();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = (searchParams.get("tab") || "").toUpperCase();
   const activeTab: ProjectStatusTab = (["ALL", "ACTIVE", "DRAFT", "COMPLETED", "ARCHIVED"] as const).includes(
-    tabParam as ProjectStatusTab
+    tabParam as ProjectStatusTab,
   )
     ? (tabParam as ProjectStatusTab)
     : "ALL";
@@ -144,7 +74,7 @@ export function ProjectsDirectoryPage({
     setSearchParams(tab === "ALL" ? {} : { tab: tab.toLowerCase() }, { replace: true });
   const canSeeDrafts = hasPermission("projects:create") || hasPermission("projects:edit_baseline");
   const draftsQuery = useDraftProjectsQuery(true);
-  const drafts = draftsQuery.data ?? [];
+  const drafts = useMemo(() => draftsQuery.data ?? [], [draftsQuery.data]);
   const deleteDraft = useDeleteDraftMutation();
   const canEditProjects = hasPermission("projects:edit_baseline");
   const [archiving, setArchiving] = useState<ProjectSummaryDto | null>(null);
@@ -153,30 +83,19 @@ export function ProjectsDirectoryPage({
   const deliveryFilters = useDeliveryModelFilters();
   const owners = useMemo(
     () => projects.map((p) => p.owningOrganization).filter((o): o is { id: string; name: string } => Boolean(o)),
-    [projects]
+    [projects],
   );
 
   const counts = useMemo(() => {
-    const summary = {
-      ALL: projects.length,
-      ACTIVE: 0,
-      DRAFT: drafts.length,
-      COMPLETED: 0,
-      ARCHIVED: 0,
-    };
-    for (const p of projects) {
-      summary[getDerivedProjectStatus(p)] += 1;
-    }
+    const summary = { ALL: projects.length, ACTIVE: 0, DRAFT: drafts.length, COMPLETED: 0, ARCHIVED: 0 };
+    for (const p of projects) summary[getDerivedProjectStatus(p)] += 1;
     return summary;
   }, [projects, drafts.length]);
 
   const filteredProjects = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return projects.filter((project) => {
-      const status = getDerivedProjectStatus(project);
-      if (activeTab !== "ALL" && status !== activeTab) {
-        return false;
-      }
+      if (activeTab !== "ALL" && getDerivedProjectStatus(project) !== activeTab) return false;
       if (!deliveryFilters.matches(project)) return false;
       if (!q) return true;
       return (
@@ -190,301 +109,276 @@ export function ProjectsDirectoryPage({
     });
   }, [projects, activeTab, searchQuery, deliveryFilters]);
 
+  const filteredDrafts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return drafts;
+    return drafts.filter((d) => d.name.toLowerCase().includes(q) || d.codePrefix.toLowerCase().includes(q));
+  }, [drafts, searchQuery]);
+
   const tabs: Array<{ id: ProjectStatusTab; label: string; count: number }> = [
-    { id: "ALL", label: "All Projects", count: counts.ALL },
+    { id: "ALL", label: "All", count: counts.ALL },
     { id: "ACTIVE", label: "Active", count: counts.ACTIVE },
     ...(canSeeDrafts || drafts.length > 0 ? [{ id: "DRAFT" as const, label: "Drafts", count: counts.DRAFT }] : []),
     { id: "COMPLETED", label: "Completed", count: counts.COMPLETED },
     ...(counts.ARCHIVED > 0 ? [{ id: "ARCHIVED" as const, label: "Archived", count: counts.ARCHIVED }] : []),
   ];
 
-  const handleOpenProject = (
-    projectId: string,
-    subRoute: "dashboard" | "boq" | "reconciliation" = "dashboard",
-  ) => {
+  const openProject = (projectId: string, subRoute: "dashboard" | "boq" | "reconciliation" = "dashboard") => {
     onSelectProject(projectId);
     navigate(`/app/projects/${projectId}/${subRoute}`);
   };
 
+  const tabFilters = (
+    <>
+      {tabs.map((tab) => {
+        const isSelected = activeTab === tab.id;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition inline-flex items-center gap-1.5 ${
+              isSelected ? "bg-brand-navy text-white shadow-sm" : "bg-slate-100/80 text-slate-600 hover:bg-slate-200/70"
+            }`}
+          >
+            <span>{tab.label}</span>
+            <span
+              className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                isSelected ? "bg-white/20 text-white" : "bg-white text-slate-600"
+              }`}
+            >
+              {tab.count}
+            </span>
+          </button>
+        );
+      })}
+    </>
+  );
+
+  const projectColumns: TableColumnDef<ProjectSummaryDto>[] = [
+    {
+      id: "project",
+      header: "Project",
+      cell: (p) => (
+        <div className="min-w-0 max-w-[320px]">
+          <div className="flex items-center gap-2">
+            <span className="px-1.5 py-0.5 rounded-md bg-brand-navy text-white text-[10px] font-bold tracking-wide shrink-0">
+              {p.codePrefix}
+            </span>
+            <span className="font-semibold text-slate-900 truncate" title={p.name}>
+              {p.name}
+            </span>
+          </div>
+          {p.projectType && (
+            <div className="mt-1">
+              <ProjectTypeChip type={p.projectType} />
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "location",
+      header: "Location",
+      cell: (p) => (
+        <span className="text-slate-600 whitespace-nowrap">
+          {p.stateLocation}
+          {p.lgaLocation ? ` · ${p.lgaLocation}` : ""}
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      cell: (p) => {
+        const s = STATUS_BADGE[getDerivedProjectStatus(p)];
+        return <TableBadge variant={s.variant}>{s.label}</TableBadge>;
+      },
+    },
+    {
+      id: "health",
+      header: "Evidence",
+      tooltip: "Whether field evidence supports the claimed progress",
+      cell: (p) => {
+        const h = healthBadge(p.portfolioHealth);
+        return <TableBadge variant={h.variant}>{h.label}</TableBadge>;
+      },
+    },
+    {
+      id: "parties",
+      header: "Contractor · " + term("funderParty"),
+      cell: (p) => (
+        <div className="text-slate-600 max-w-[240px]">
+          <div className="truncate" title={contractorLabel(p)}>{contractorLabel(p)}</div>
+          <div className="truncate text-[11px] text-slate-400">
+            {p.lenderOrganizationName || `No ${term("funderParty", { lower: true })}`}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "budget",
+      header: "Budget",
+      align: "right",
+      cell: (p) => <span className="font-semibold text-slate-900 whitespace-nowrap">{formatCompactNaira(p.totalBudgetNgn)}</span>,
+    },
+    {
+      id: "progress",
+      header: "Certified",
+      cell: (p) => (
+        <div className="w-28">
+          <div className="text-[11px] font-bold text-slate-800">{p.certifiedProgressPct.toFixed(1)}%</div>
+          <div className="w-full h-1.5 bg-slate-200 rounded-full mt-1 overflow-hidden">
+            <div
+              className="h-full bg-brand-primary rounded-full"
+              style={{ width: `${Math.min(100, Math.max(0, p.certifiedProgressPct))}%` }}
+            />
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "schedule",
+      header: "Schedule",
+      cell: (p) => (p.scheduleVariance ? <ScheduleBadge badge={p.scheduleVariance} size="xs" /> : <span className="text-slate-400">–</span>),
+    },
+    {
+      id: "flags",
+      header: "Flags",
+      cell: (p) => {
+        const overdue = p.overdueMilestoneCount ?? 0;
+        if (overdue === 0 && p.openConflictCount === 0) return <span className="text-slate-400">–</span>;
+        return (
+          <div className="flex flex-wrap gap-1">
+            {overdue > 0 && (
+              <TableBadge variant="danger" title="Contract milestones past their due date">
+                {overdue} overdue
+              </TableBadge>
+            )}
+            {p.openConflictCount > 0 && <TableBadge variant="danger">{p.openConflictCount} conflicts</TableBadge>}
+          </div>
+        );
+      },
+    },
+    {
+      id: "actions",
+      header: <span className="sr-only">Actions</span>,
+      align: "right",
+      cell: (p) => {
+        const actions: TableActionItem[] = [
+          { label: "Open dashboard", icon: <LayoutDashboard className="w-4 h-4" />, onClick: () => openProject(p.id) },
+          { label: `BOQ (${p.totalBoqItems})`, icon: <ClipboardList className="w-4 h-4" />, onClick: () => openProject(p.id, "boq") },
+          { label: "IPC reconciliation", icon: <FileSpreadsheet className="w-4 h-4" />, onClick: () => openProject(p.id, "reconciliation") },
+        ];
+        if (canEditProjects) {
+          actions.push({
+            label: "Project settings",
+            icon: <Settings2 className="w-4 h-4" />,
+            onClick: () => navigate(`/app/projects/${p.id}/settings/basics`),
+          });
+          if (p.status === "ACTIVE") {
+            actions.push({
+              label: "Archive project",
+              icon: <Archive className="w-4 h-4" />,
+              variant: "danger",
+              onClick: () => setArchiving(p),
+            });
+          }
+        }
+        return <TableActionMenu actions={actions} label={`Actions for ${p.codePrefix}`} />;
+      },
+    },
+  ];
+
+  const draftColumns: TableColumnDef<DraftRow>[] = [
+    {
+      id: "project",
+      header: "Project",
+      cell: (d) => (
+        <div className="flex items-center gap-2 min-w-0 max-w-[360px]">
+          <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-bold shrink-0">{d.codePrefix}</span>
+          <span className="font-semibold text-slate-900 truncate" title={d.name}>{d.name}</span>
+        </div>
+      ),
+    },
+    {
+      id: "steps",
+      header: "Required steps",
+      cell: (d) => (
+        <span className="text-slate-600 whitespace-nowrap">
+          {d.completedRequiredSteps} of {d.totalRequiredSteps} done
+        </span>
+      ),
+    },
+    { id: "startedBy", header: "Started by", cell: (d) => <span className="text-slate-600">{d.createdByName ?? "Someone"}</span> },
+    {
+      id: "saved",
+      header: "Last saved",
+      cell: (d) => <span className="text-slate-600 whitespace-nowrap">{new Date(d.updatedAt).toLocaleDateString()}</span>,
+    },
+    {
+      id: "actions",
+      header: <span className="sr-only">Actions</span>,
+      align: "right",
+      cell: (d) => (
+        <div className="flex items-center justify-end gap-2">
+          {d.canDelete && (
+            <TableActionButton
+              variant="danger"
+              icon={<Trash2 className="w-3.5 h-3.5" />}
+              onClick={() => {
+                if (window.confirm(`Delete the draft "${d.name}"? This cannot be undone.`)) deleteDraft.mutate(d.id);
+              }}
+            >
+              Delete
+            </TableActionButton>
+          )}
+          <TableActionButton variant="primary" onClick={() => navigate(`/app/projects/${d.id}/setup/review`)}>
+            <span className="inline-flex items-center gap-1">
+              Resume <ArrowRight className="w-3.5 h-3.5" />
+            </span>
+          </TableActionButton>
+        </div>
+      ),
+    },
+  ];
+
+  const search = { value: searchQuery, onChange: setSearchQuery, placeholder: "Search by name, code, state, contractor..." };
+
   return (
     <div className="space-y-4">
-      {/* Header Banner */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-base font-bold text-slate-900">
-            Capital Projects Directory
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Live, completed and archived projects. Drafts are private to the
-            people setting them up until they are set active.
-          </p>
-        </div>
-
-        {hasPermission("projects:create") && onNewProject && (
-          <button
-            type="button"
-            onClick={onNewProject}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm transition shrink-0"
-          >
-            <Plus className="w-4 h-4" />
-            New Project
-          </button>
-        )}
-      </div>
-
       <DeliveryModelFilters filters={deliveryFilters.filters} onChange={deliveryFilters.setFilters} owners={owners} />
 
-      {/* Filter Tabs & Search */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-        <div className="relative w-full lg:w-72">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by name, code, state, contractor..."
-            className="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-brand-primary"
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {tabs.map((tab) => {
-            const isSelected = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition inline-flex items-center gap-1.5 ${
-                  isSelected
-                    ? "bg-brand-navy text-white shadow-sm"
-                    : "bg-slate-100/80 text-slate-600 hover:bg-slate-200/70"
-                }`}
-              >
-                <span>{tab.label}</span>
-                <span
-                  className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
-                    isSelected
-                      ? "bg-white/20 text-white"
-                      : "bg-white text-slate-600"
-                  }`}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {activeTab === "DRAFT" ? (
-        drafts.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-10 text-center">
-            <FolderKanban className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <div className="text-sm font-semibold text-slate-800">No drafts</div>
-            <p className="text-xs text-slate-500 mt-1">A project you start is saved here until you set it active.</p>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm divide-y divide-slate-100">
-            {drafts.map((d) => (
-              <div key={d.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-bold">{d.codePrefix}</span>
-                    <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[11px] font-semibold">Draft</span>
-                  </div>
-                  <p className="mt-1 text-sm font-bold text-slate-900 truncate">{d.name}</p>
-                  <p className="text-[11px] text-slate-500">
-                    {d.completedRequiredSteps} of {d.totalRequiredSteps} required steps done · started by {d.createdByName ?? "someone"} ·
-                    last saved {new Date(d.updatedAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {d.canDelete && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (window.confirm(`Delete the draft "${d.name}"? This cannot be undone.`)) deleteDraft.mutate(d.id);
-                      }}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 text-[11px] font-semibold text-rose-600 hover:bg-rose-50"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> Delete
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => navigate(`/app/projects/${d.id}/setup/review`)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold"
-                  >
-                    Resume <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )
-      ) : filteredProjects.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-10 text-center">
-          <FolderKanban className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-          <div className="text-sm font-semibold text-slate-800">
-            No matching projects
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Try adjusting your search query or status filter.
-          </p>
-        </div>
+        <StandardTable
+          title="Drafts"
+          subtitle="Drafts are private to the people setting them up until they are set active."
+          search={search}
+          filters={tabFilters}
+          columns={draftColumns}
+          data={filteredDrafts}
+          keyExtractor={(d) => d.id}
+          loading={draftsQuery.isLoading}
+          minWidth="min-w-[760px]"
+          onRowClick={(d) => navigate(`/app/projects/${d.id}/setup/review`)}
+          emptyState={{ title: "No drafts", description: "A project you start is saved here until you set it active." }}
+        />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredProjects.map((project) => {
-            const isCurrent = project.id === selectedProjectId;
-            const health = getHealthBadge(project.portfolioHealth);
-            const HealthIcon = health.icon;
-            const status = getDerivedProjectStatus(project);
-
-            return (
-              <div
-                key={project.id}
-                className={`bg-white rounded-2xl border p-5 shadow-sm transition hover:shadow-md flex flex-col justify-between gap-4 ${
-                  isCurrent
-                    ? "border-brand-primary ring-1 ring-brand-primary/20"
-                    : "border-slate-200/80"
-                }`}
-              >
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="px-2 py-0.5 rounded-md bg-brand-navy text-white text-[11px] font-bold tracking-wide">
-                          {project.codePrefix}
-                        </span>
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] font-semibold ${health.classes}`}
-                        >
-                          <HealthIcon className="w-3 h-3" />
-                          {health.label}
-                        </span>
-                        <ProjectTypeChip type={project.projectType} />
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-medium">
-                          {status === "COMPLETED" ? "Completed" : status === "ARCHIVED" ? (
-                            <span className="inline-flex items-center gap-1"><Archive className="w-3 h-3" /> Archived</span>
-                          ) : "Active"}
-                        </span>
-                      </div>
-                      <h2 className="text-sm font-bold text-slate-900 mt-2 truncate">
-                        {project.name}
-                      </h2>
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate">
-                          {project.stateLocation}
-                          {project.lgaLocation
-                            ? ` · ${project.lgaLocation}`
-                            : ""}
-                        </span>
-                      </div>
-                    </div>
-                    {canEditProjects && (
-                      <ProjectCardMenu
-                        project={project}
-                        onSettings={() => navigate(`/app/projects/${project.id}/settings/basics`)}
-                        onArchive={() => setArchiving(project)}
-                      />
-                    )}
-                  </div>
-
-                  {/* Project Budget & Certified Progress */}
-                  <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <div>
-                      <div className="text-[11px] text-slate-500">
-                        Project Budget
-                      </div>
-                      <div className="text-sm font-bold text-slate-900 mt-0.5">
-                        {formatCompactNaira(project.totalBudgetNgn)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between text-[11px] text-slate-500">
-                        <span>Certified Progress</span>
-                        <span className="font-bold text-slate-800">
-                          {project.certifiedProgressPct.toFixed(1)}%
-                        </span>
-                      </div>
-                      <div className="w-full h-1.5 bg-slate-200 rounded-full mt-2 overflow-hidden">
-                        <div
-                          className="h-full bg-brand-primary rounded-full transition-all"
-                          style={{
-                            width: `${Math.min(100, Math.max(0, project.certifiedProgressPct))}%`,
-                          }}
-                        />
-                      </div>
-                      {project.scheduleVariance && (
-                        <div className="mt-1.5">
-                          <ScheduleBadge badge={project.scheduleVariance} size="xs" />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Counterparties & Counters */}
-                  <div className="flex flex-col gap-2 text-[11px] text-slate-500">
-                    <div className="flex items-center gap-1.5 truncate">
-                      <Building2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                      <span className="truncate">
-                        {contractorLabel(project)} · {project.lenderOrganizationName || `No ${term("funderParty", { lower: true })}`}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span>{project.totalBoqItems} BOQ items</span>
-                      {(project.overdueMilestoneCount ?? 0) > 0 && (
-                        <span className="rounded-full bg-rose-50 px-2 py-0.5 text-rose-700 font-semibold" title="Contract milestones past their due date">
-                          {project.overdueMilestoneCount} overdue
-                        </span>
-                      )}
-                      {project.openConflictCount > 0 && (
-                        <span className="text-red-600 font-semibold">
-                          {project.openConflictCount} conflicts
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleOpenProject(project.id, "boq")}
-                      className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 transition"
-                    >
-                      BOQ ({project.totalBoqItems})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleOpenProject(project.id, "reconciliation")
-                      }
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 transition"
-                    >
-                      <FileSpreadsheet className="w-3 h-3" />
-                      IPC
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleOpenProject(project.id, "dashboard")}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm transition"
-                  >
-                    Open Workspace
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <StandardTable
+          title="Projects"
+          subtitle={`${filteredProjects.length} of ${projects.length} shown`}
+          search={search}
+          filters={tabFilters}
+          columns={projectColumns}
+          data={filteredProjects}
+          keyExtractor={(p) => p.id}
+          selectedId={selectedProjectId}
+          onRowClick={(p) => openProject(p.id)}
+          minWidth="min-w-[1180px]"
+          emptyState={{ title: "No matching projects", description: "Try adjusting your search query or status filter." }}
+        />
       )}
+
       {archiving && (
         <ArchiveProjectDialog
           projectId={archiving.id}

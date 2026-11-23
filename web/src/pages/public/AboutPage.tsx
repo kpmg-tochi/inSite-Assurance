@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { PublicLayout } from "../../components/PublicLayout";
 import { CitationRef, CitationGroup } from "../../components/CitationRef";
+import { APPLICATION_NAME } from "../../config/appName";
 
 const SECTIONS = [
   { id: "executive-summary", title: "1. Executive Summary" },
@@ -70,7 +71,7 @@ export function AboutPage() {
             Validated Platform Specification
           </div>
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold mt-2">
-            InSite Assurance: Field Evidence and Disbursement Reconciliation
+            {APPLICATION_NAME}: Field Evidence and Disbursement Reconciliation
             Platform
           </h1>
         </div>
@@ -93,7 +94,7 @@ export function AboutPage() {
                 Value Proposition
               </div>
               <p className="text-sm font-semibold text-slate-900 mt-1 leading-relaxed">
-                InSite Assurance provides Nigerian project financiers,
+                {APPLICATION_NAME} provides Nigerian project financiers,
                 infrastructure guarantors, and licensed Independent Project
                 Monitors with a tamper-resistant field evidence and BOQ-to-claim
                 reconciliation workbench to verify contractor payment claims
@@ -101,7 +102,7 @@ export function AboutPage() {
               </p>
             </div>
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-              InSite Assurance is an evidence integrity and drawdown
+              {APPLICATION_NAME} is an evidence integrity and drawdown
               reconciliation platform built for capital project financing and
               monitoring in Nigeria. Appointed field personnel (including
               Resident Clerks of Works, visiting Monitor Engineers, and mandated
@@ -122,7 +123,7 @@ export function AboutPage() {
               The software does not legally certify completion percentages.
               Certifying construction drawdowns in Nigeria is a regulated
               professional function carrying statutory legal liability
-              <CitationGroup ids={[8, 22]} />. Instead, InSite Assurance acts as
+              <CitationGroup ids={[8, 22]} />. Instead, {APPLICATION_NAME} acts as
               an Auditor Co-Pilot: the software structures field evidence and
               flags discrepancies, the licensed human Monitor (Quantity Surveyor
               or COREN Engineer) reviews and certifies the valuation, and the
@@ -231,7 +232,7 @@ export function AboutPage() {
             </div>
 
             <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 leading-relaxed">
-              <strong>Scope Boundaries:</strong> InSite Assurance cannot correct
+              <strong>Scope Boundaries:</strong> {APPLICATION_NAME} cannot correct
               systemic public budget funding deficits (such as Nigeria&apos;s
               2025 capital budget recording 17% nine-month execution
               <CitationGroup ids={[4, 6]} />
@@ -676,7 +677,7 @@ export function AboutPage() {
                     </td>
                     <td className="py-3.5 px-4 text-slate-700 align-top">
                       <strong>Target Users and Channels:</strong> Empowering
-                      these professional teams with InSite Assurance eliminates
+                      these professional teams with {APPLICATION_NAME} eliminates
                       manual bottlenecks and differentiates ICT-enabled
                       monitoring bids <CitationRef id={18} />.
                     </td>

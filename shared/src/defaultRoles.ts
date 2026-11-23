@@ -114,6 +114,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'contractors:rate_performance',
       'lessons:manage',
       'lessons:view',
+      'kpis:view', // Phase 16
     ],
   },
   {
@@ -150,6 +151,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'closure:audit_signoff',
       'closure:export_pack',
       'lessons:view',
+      'kpis:view', // Phase 16
     ],
   },
   {
@@ -220,6 +222,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'contractors:rate_performance',
       'lessons:manage',
       'lessons:view',
+      'kpis:view', // Phase 16
     ],
   },
   {

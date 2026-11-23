@@ -2,6 +2,7 @@ import { InSiteLogo } from "./InSiteLogo";
 import React from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useAuth } from "../lib/auth-context";
+import { APPLICATION_NAME } from "../config/appName";
 
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
@@ -17,7 +18,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <div className="h-4 w-px bg-slate-300" />
               <div>
                 <span className="font-bold text-sm text-slate-900 tracking-tight">
-                  InSite Assurance
+                  {APPLICATION_NAME}
                 </span>
                 <span className="hidden sm:inline-block ml-2 text-[10px] font-semibold text-brand-primary bg-brand-primary/5 px-2 py-0.5 rounded border border-brand-primary/25">
                   Pilot
@@ -98,7 +99,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                 <InSiteLogo showText={false} className="h-5" />
               </div>
               <span className="font-semibold text-sm text-white">
-                InSite Assurance — Field Evidence &amp; Disbursement
+                {APPLICATION_NAME} — Field Evidence &amp; Disbursement
                 Reconciliation Platform
               </span>
             </div>

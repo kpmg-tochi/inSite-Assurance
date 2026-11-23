@@ -9,6 +9,7 @@ import {
   type OrganizationDto,
 } from '@insite/shared';
 import { useAuth } from '../../lib/auth-context';
+import { Overlay } from '../common/Overlay';
 import { useOrganizationsQuery } from '../../queries/organizations/useOrganizationQueries';
 import {
   useCreateOrganizationMutation,
@@ -520,8 +521,8 @@ export function OrganizationsTab() {
 
       {/* Archive / restore confirmation */}
       {confirming && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-950/35 flex items-center justify-center p-4"
+        <Overlay
+          className="flex items-center justify-center p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget && !updateMutation.isPending) setConfirming(null);
           }}
@@ -561,7 +562,7 @@ export function OrganizationsTab() {
               </button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
     </div>
   );
