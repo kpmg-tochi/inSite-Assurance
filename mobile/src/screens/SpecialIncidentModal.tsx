@@ -112,7 +112,7 @@ export const SpecialIncidentModal: React.FC = () => {
       <StatusBar style="light" />
 
       <LinearGradient
-        colors={["#881337", "#9F1239", "#1E1B4B"]}
+        colors={["#881337", "#9F1239", "#122F2A"]}
         locations={[0, 0.45, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0.9 }}
@@ -345,7 +345,7 @@ export const SpecialIncidentModal: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1E1B4B",
+    backgroundColor: "#122F2A",
   },
   headerGradient: {
     paddingHorizontal: 20,
@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
   photoButtonText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#00338D",
+    color: "#00715D",
   },
   submitButton: {
     backgroundColor: "#E11D48",

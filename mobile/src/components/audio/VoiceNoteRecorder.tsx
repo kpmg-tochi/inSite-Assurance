@@ -365,7 +365,7 @@ export const VoiceNoteRecorder: React.FC<VoiceNoteRecorderProps> = ({
           amplitudes={amplitudes}
           isRecording={phase === "RECORDING"}
           progressRatio={progressRatio}
-          activeColor={phase === "RECORDING" ? "#DC2626" : "#00338D"}
+          activeColor={phase === "RECORDING" ? "#DC2626" : "#00715D"}
           inactiveColor="#CBD5E1"
         />
       </View>
@@ -476,12 +476,12 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#0C233C",
+    color: "#122F2A",
   },
   timerText: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#0C233C",
+    color: "#122F2A",
     fontVariant: ["tabular-nums"],
   },
   timerMax: {
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: "#00338D",
+    backgroundColor: "#00715D",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
   },
   stopBtn: {
     flex: 1,
-    backgroundColor: "#0C233C",
+    backgroundColor: "#122F2A",
     paddingVertical: 11,
     borderRadius: 10,
     alignItems: "center",
@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
   },
   attachBtn: {
     flex: 1,
-    backgroundColor: "#00338D",
+    backgroundColor: "#00715D",
     paddingVertical: 11,
     borderRadius: 10,
     alignItems: "center",

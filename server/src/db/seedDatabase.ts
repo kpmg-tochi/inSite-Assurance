@@ -20,6 +20,7 @@ import { seedPhase7 } from "./seedPhase7";
 import { seedPhase9 } from "./seedPhase9";
 import { seedPhase10 } from "./seedPhase10";
 import { seedPhase11 } from "./seedPhase11";
+import { seedPhase11Ubec } from "./seedPhase11Ubec";
 import { seedPhase12 } from "./seedPhase12";
 import { seedPhase14 } from "./seedPhase14";
 import { projectObjectPrefix } from "../integrations/storage.service";
@@ -301,18 +302,20 @@ async function runSeed(): Promise<void> {
   }
 
   // 0b. Create Default Multi-Tenant Workspace
+  // SEED_PROFILE=ubec (UBEC demo): neutral pilot workspace in UBEC colours instead of KPMG branding.
+  const ubecProfile = process.env.SEED_PROFILE === "ubec";
   const defaultTenant = await prisma.tenant.create({
     data: {
-      name: "KPMG Nigeria Infrastructure & Capital Advisory",
+      name: ubecProfile ? "UBEC Special Projects" : "KPMG Nigeria Infrastructure & Capital Advisory",
       slug: "kpmg-nigeria",
       status: "ACTIVE",
       defaultCurrency: "NGN",
       timezone: "Africa/Lagos",
       brandingConfig: {
-        logoUrl: "/KPMG-logo.svg",
-        primaryColorHex: "#00338D",
-        navyColorHex: "#0C233C",
-        tagline: "Capital Advisory",
+        logoUrl: ubecProfile ? "/client/ubec-logo.png" : "/KPMG-logo.svg",
+        primaryColorHex: ubecProfile ? "#00715D" : "#00338D",
+        navyColorHex: ubecProfile ? "#122F2A" : "#0C233C",
+        tagline: ubecProfile ? "Special Projects Workspace" : "Capital Advisory",
         pdfHeaderTitle: "InSite Assurance — Disbursement Evidence & Valuation Report",
         pdfFooterDisclaimer:
           "Independent Project Monitoring Certification | Powered by InSite Assurance",
@@ -343,7 +346,7 @@ async function runSeed(): Promise<void> {
   const monitorOrg = await prisma.organization.create({
     data: {
       tenantId: defaultTenant.id,
-      name: "KPMG Infrastructure & Project Monitoring Advisory",
+      name: ubecProfile ? "UBEC Quality Assurance Department" : "KPMG Infrastructure & Project Monitoring Advisory",
       categories: ["ADVISORY_MONITOR"],
       registrationNumber: "RC-114592",
       contactEmail: "monitoring@insite.ng",
@@ -353,7 +356,7 @@ async function runSeed(): Promise<void> {
   const lenderOrg = await prisma.organization.create({
     data: {
       tenantId: defaultTenant.id,
-      name: "InfraCredit Guarantee & Project Finance Desk",
+      name: ubecProfile ? "UBEC Finance & Accounts Department" : "InfraCredit Guarantee & Project Finance Desk",
       categories: ["FINANCIER_LENDER"],
     },
   });
@@ -361,7 +364,7 @@ async function runSeed(): Promise<void> {
   const contractorOrg = await prisma.organization.create({
     data: {
       tenantId: defaultTenant.id,
-      name: "Julius & Sons Civil Engineering Nigeria Ltd",
+      name: ubecProfile ? "Contractor B (Civil & Infrastructure Works)" : "Julius & Sons Civil Engineering Nigeria Ltd",
       categories: ["CONTRACTOR"],
       registrationNumber: "RC-338210",
     },
@@ -755,7 +758,7 @@ async function runSeed(): Promise<void> {
       livenessPassed: false,
       registrationNumber: "R.55102",
       registrationBodyCode: "COREN",
-      experienceSummary: "8 years highway and drainage structural works. Resident Site Engineer for Julius & Sons.",
+      experienceSummary: `8 years highway and drainage structural works. Resident Site Engineer for ${ubecProfile ? "Contractor B" : "Julius & Sons"}.`,
       reviewedByUserId: monitorUser.id,
       reviewedAt: new Date(Date.now() - 14 * 24 * 3600 * 1000),
       lastSyncAt: new Date(),
@@ -784,7 +787,7 @@ async function runSeed(): Promise<void> {
       livenessPassed: false,
       registrationNumber: "R.61044",
       registrationBodyCode: "COREN",
-      experienceSummary: "10 years reinforced concrete box culverts, soil stabilization, and quality control on highway corridors. Project Site Engineer, Julius & Sons Civil Engineering.",
+      experienceSummary: "10 years reinforced concrete box culverts, soil stabilization, and quality control on highway corridors. Project Site Engineer, " + (ubecProfile ? "Contractor B" : "Julius & Sons Civil Engineering") + ".",
       lastSyncAt: new Date(),
     },
   });
@@ -1329,7 +1332,7 @@ async function runSeed(): Promise<void> {
         requiresAction: false,
         title: "Assurance Verification Queued",
         message:
-          "Your COREN and NIN credentials have been queued with KPMG Project Monitoring Desk. Offline field logs remain active.",
+          `Your COREN and NIN credentials have been queued with ${ubecProfile ? "the UBEC Quality Assurance Department" : "KPMG Project Monitoring Desk"}. Offline field logs remain active.`,
         metadata: {} as unknown as Prisma.InputJsonValue,
         createdAt: new Date(nowMs - 1000 * 60 * 60 * 8), // 8h ago
       },
@@ -1356,7 +1359,7 @@ async function runSeed(): Promise<void> {
         requiresAction: false,
         title: "Identity Assurance Approved",
         message:
-          "KPMG Monitor approved your contractor identity and COREN credentials for LKK-402.",
+          `${ubecProfile ? "UBEC Quality Assurance" : "KPMG Monitor"} approved your contractor identity and COREN credentials for LKK-402.`,
         metadata: {} as unknown as Prisma.InputJsonValue,
         createdAt: new Date(nowMs - 1000 * 60 * 60 * 24 * 5), // 5d ago
       },
@@ -1687,7 +1690,12 @@ async function runSeed(): Promise<void> {
   });
 
   // Phase 11: a second tenant run as a programme (delivery models, organisation hierarchy, terminology).
-  await seedPhase11({ passwordHash: defaultPasswordHash });
+  // SEED_PROFILE=ubec (npm run prisma:seed:ubec) seeds the same data with UBEC names and branding.
+  if (process.env.SEED_PROFILE === "ubec") {
+    await seedPhase11Ubec({ passwordHash: defaultPasswordHash });
+  } else {
+    await seedPhase11({ passwordHash: defaultPasswordHash });
+  }
   // Phase 12: registration bodies, programme credential policy and fixed payment milestones.
   await seedPhase12({ passwordHash: defaultPasswordHash });
   // Phase 14: checklist templates, reporting streams, inspections, findings and a supervisor over the limit.

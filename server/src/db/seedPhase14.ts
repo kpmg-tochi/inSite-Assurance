@@ -204,7 +204,7 @@ export async function seedPhase14(): Promise<void> {
   // The M&E officer: an Independent Monitor in the monitoring consultancy who supervises every live
   // programme site (three, above the Co-Funded limit of two, and ~830 km apart).
   const monitorRole = await prisma.role.findFirstOrThrow({ where: { tenantId: programme.id, code: "MONITOR" } });
-  const monitorOrg = await prisma.organization.findFirstOrThrow({ where: { tenantId: programme.id, name: "Programme Monitoring Consultants" } });
+  const monitorOrg = await prisma.organization.findFirstOrThrow({ where: { tenantId: programme.id, name: { in: ["Programme Monitoring Consultants", "UBEC Quality Assurance Department"] } } });
   const passwordHash = (await prisma.user.findUniqueOrThrow({ where: { email: "programme.admin@insite.ng" } })).passwordHash;
   const officer = await prisma.user.create({
     data: {

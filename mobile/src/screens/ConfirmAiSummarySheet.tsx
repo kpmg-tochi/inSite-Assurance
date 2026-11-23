@@ -187,7 +187,7 @@ export const ConfirmAiSummarySheet: React.FC = () => {
     <View style={styles.container}>
       <StatusBar style="light" />
       <LinearGradient
-        colors={['#0891B2', '#1E3A8A', '#312E81', '#1E1B4B']}
+        colors={['#12915C', '#00715D', '#0B4F43', '#122F2A']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}
@@ -305,7 +305,7 @@ export const ConfirmAiSummarySheet: React.FC = () => {
             </View>
             {loadingGps ? (
               <View style={styles.gpsLoadingRow}>
-                <ActivityIndicator size="small" color="#00338D" />
+                <ActivityIndicator size="small" color="#00715D" />
                 <Text style={styles.helperText}>Getting a GPS fix...</Text>
               </View>
             ) : (
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
   wbsTagText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#00338D',
+    color: '#00715D',
   },
   wbsTitle: {
     fontSize: 13,
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: '800',
-    color: '#00338D',
+    color: '#00715D',
   },
   unitInput: {
     width: 100,
@@ -487,8 +487,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   checkboxActive: {
-    backgroundColor: '#00338D',
-    borderColor: '#00338D',
+    backgroundColor: '#00715D',
+    borderColor: '#00715D',
   },
   checkmark: {
     color: '#FFFFFF',
@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   primaryButton: {
-    backgroundColor: '#00338D',
+    backgroundColor: '#00715D',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
   linkActionText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#00338D',
+    color: '#00715D',
   },
   helperText: {
     fontSize: 11,
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
   voiceAttachedText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#00338D',
+    color: '#00715D',
   },
   removeVoiceText: {
     fontSize: 11,

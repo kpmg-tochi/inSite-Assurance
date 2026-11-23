@@ -56,3 +56,7 @@ server/.local-storage/
 # Mobile platform folders
 mobile/android/
 mobile/ios/
+# UI verification (qa/): screenshots and Playwright output are local only
+qa/screenshots/
+qa/screenshots-after/
+qa/.playwright/

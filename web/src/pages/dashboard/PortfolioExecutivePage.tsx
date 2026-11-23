@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import {
   TrendingUp,
   AlertTriangle,
@@ -18,23 +18,26 @@ import {
   Layers,
   Landmark,
   ShieldAlert,
-} from 'lucide-react';
-import { usePortfolioExecutiveQuery } from '../../queries/projects/useContractorVerificationQueries';
-import { formatCompactNaira, formatNaira } from '../../lib/formatters';
-import type { PortfolioProjectHealthItem } from '../../api/types';
-import Loader from '../../components/Loader';
-import { useAuth, useTerm } from '../../lib/auth-context';
-import { DeliveryModelFilters, ProjectTypeChip } from '../../components/projects/DeliveryModelFilters';
-import type { ProjectListFilters } from '@insite/shared';
+} from "lucide-react";
+import { usePortfolioExecutiveQuery } from "../../queries/projects/useContractorVerificationQueries";
+import { formatCompactNaira, formatNaira } from "../../lib/formatters";
+import type { PortfolioProjectHealthItem } from "../../api/types";
+import Loader from "../../components/Loader";
+import { useAuth, useTerm } from "../../lib/auth-context";
+import {
+  DeliveryModelFilters,
+  ProjectTypeChip,
+} from "../../components/projects/DeliveryModelFilters";
+import type { ProjectListFilters } from "@insite/shared";
 import {
   StandardTable,
   TableBadge,
   TableActionButton,
   TableColumnDef,
-} from '../../components/table';
-import { KpiCard } from '../../components/common';
-import { useProjectProcessMap } from '../../queries/process/useProcessQueries';
-import { ScheduleBadge } from '../../components/schedule/ScheduleVarianceBadge';
+} from "../../components/table";
+import { KpiCard } from "../../components/common";
+import { useProjectProcessMap } from "../../queries/process/useProcessQueries";
+import { ScheduleBadge } from "../../components/schedule/ScheduleVarianceBadge";
 
 interface PortfolioExecutivePageProps {
   onSelectProject: (projectId: string) => void;
@@ -46,198 +49,241 @@ export function PortfolioExecutivePage({
   useAuth();
   const term = useTerm();
   // Phase 11: type / region / owner filters run on the server so the totals follow them.
-  const [deliveryFilters, setDeliveryFilters] = useState<ProjectListFilters>({});
-  const { data: summary, isLoading, refetch } = usePortfolioExecutiveQuery(deliveryFilters);
-  const [ownersSeen, setOwnersSeen] = useState<Array<{ id: string; name: string }>>([]);
+  const [deliveryFilters, setDeliveryFilters] = useState<ProjectListFilters>(
+    {},
+  );
+  const {
+    data: summary,
+    isLoading,
+    refetch,
+  } = usePortfolioExecutiveQuery(deliveryFilters);
+  const [ownersSeen, setOwnersSeen] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
   React.useEffect(() => {
-    const found = (summary?.projects ?? []).map((p) => p.owningOrganization).filter((o): o is { id: string; name: string } => Boolean(o));
+    const found = (summary?.projects ?? [])
+      .map((p) => p.owningOrganization)
+      .filter((o): o is { id: string; name: string } => Boolean(o));
     if (found.some((o) => !ownersSeen.some((s) => s.id === o.id))) {
-      setOwnersSeen((prev) => [...prev, ...found.filter((o) => !prev.some((s) => s.id === o.id))]);
+      setOwnersSeen((prev) => [
+        ...prev,
+        ...found.filter((o) => !prev.some((s) => s.id === o.id)),
+      ]);
     }
   }, [summary, ownersSeen]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   // Phase 7: per-project process settings, to hide tranche and hold-point details a project turned off.
   // One cached request per listed project; until loaded (or if unreadable) the details are shown.
-  const projectIds = useMemo(() => (summary?.projects ?? []).map((p) => p.projectId), [summary]);
-  const processMap = useProjectProcessMap(projectIds, projectIds.length > 0);
-  const [healthFilter, setHealthFilter] = useState<'ALL' | 'EVIDENCE_SUPPORTED' | 'EVIDENCE_PARTIAL' | 'EVIDENCE_CONFLICT'>('ALL');
-
-  const portfolioColumns: TableColumnDef<PortfolioProjectHealthItem>[] = useMemo(
-    () => [
-      {
-        id: 'project',
-        header: 'Project & Location',
-        tooltip: 'Project identifier prefix, state location, and official project name',
-        width: 'w-72',
-        cell: (item) => (
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-brand-primary">
-                {item.codePrefix}
-              </span>
-              <span className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-slate-100 text-slate-600">
-                {item.region?.path ?? item.stateLocation}
-              </span>
-              <ProjectTypeChip type={item.projectType} />
-            </div>
-            <div
-              className="font-semibold text-slate-900 text-xs mt-0.5 max-w-xs truncate"
-              title={item.name}
-            >
-              {item.name}
-            </div>
-          </div>
-        ),
-      },
-      {
-        id: 'counterparties',
-        header: 'Counterparties',
-        tooltip: `Contractor and ${term('funderParty', { lower: true })}`,
-        width: 'w-52',
-        cell: (item) => (
-          <div className="space-y-0.5">
-            <div
-              className="font-medium text-slate-800 truncate"
-              title={item.contractorName}
-            >
-              {item.contractorName || 'No contractor'}
-              {item.contractorCount > 1 && (
-                <span className="text-slate-500"> +{item.contractorCount - 1}</span>
-              )}
-            </div>
-            <div
-              className="text-[11px] text-slate-500 truncate"
-              title={`${term('funderParty')}: ${item.lenderName}`}
-            >
-              {term('funderParty')}: {item.lenderName}
-              {item.owningOrganization && item.owningOrganization.name !== item.lenderName && (
-                <span className="block">Owner: {item.owningOrganization.name}</span>
-              )}
-            </div>
-          </div>
-        ),
-      },
-      {
-        id: 'commitmentDrawn',
-        header: 'Commitment & Drawn',
-        tooltip:
-          'Approved total project commitment and cumulative disbursements drawn',
-        align: 'right',
-        width: 'w-44',
-        cell: (item) => (
-          <div className="text-right">
-            <div className="font-bold text-slate-900">
-              {formatNaira(item.totalBudgetNgn)}
-            </div>
-            <div className="text-[11px] text-slate-500 mt-0.5">
-              Drawn: {formatNaira(item.disbursedToDateNgn)}
-            </div>
-          </div>
-        ),
-      },
-      {
-        id: 'schedule',
-        header: 'Schedule',
-        tooltip: 'Variance against the planned schedule on certified progress, in working weeks (updated daily)',
-        width: 'w-32',
-        cell: (item) =>
-          item.scheduleVariance ? <ScheduleBadge badge={item.scheduleVariance} size="xs" /> : <span className="text-[11px] text-slate-400">No schedule</span>,
-      },
-      {
-        id: 'progress',
-        header: 'Certified Progress',
-        tooltip:
-          'Independent Monitor certified physical completion percentage against active milestone tranche',
-        width: 'w-36',
-        cell: (item) => (
-          <div className="w-28 space-y-1">
-            <div className="flex justify-between text-[11px] font-semibold text-slate-700">
-              <span>{item.certifiedProgressPct}%</span>
-              {item.activeTrancheNumber && (processMap.get(item.projectId)?.enableTranchesAndCps ?? true) && (
-                <span className="text-brand-primary text-[10px]">
-                  {term('tranche')} #{item.activeTrancheNumber}
-                </span>
-              )}
-            </div>
-            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-              <div
-                style={{ width: `${item.certifiedProgressPct}%` }}
-                className="bg-brand-primary h-full rounded-full"
-              />
-            </div>
-          </div>
-        ),
-      },
-      {
-        id: 'governance',
-        header: 'Governance Status',
-        tooltip:
-          'Cross-project assurance standing based on field corroboration and Hold-Point adherence',
-        width: 'w-44',
-        cell: (item) => {
-          if (item.portfolioHealth === 'EVIDENCE_SUPPORTED') {
-            return <TableBadge variant="success">Evidence Supported</TableBadge>;
-          }
-          if (item.portfolioHealth === 'EVIDENCE_PARTIAL') {
-            return <TableBadge variant="warning">Under Observation</TableBadge>;
-          }
-          return (
-            <TableBadge variant="danger">
-              {(processMap.get(item.projectId)?.enableHoldPoints ?? true) ? 'Hold-Point Breached' : 'Evidence Conflict'}
-            </TableBadge>
-          );
-        },
-      },
-      {
-        id: 'riskExposure',
-        header: 'Risk Exposure',
-        tooltip:
-          'Active physical-to-financial variance flags and bypassed Hold-Points',
-        width: 'w-40',
-        cell: (item) => (
-          <div className="space-y-0.5">
-            {item.openConflictCount > 0 ? (
-              <div className="text-amber-800 font-semibold text-[11px]">
-                {item.openConflictCount} Open Conflict
-                {item.openConflictCount === 1 ? '' : 's'}
-              </div>
-            ) : (
-              <div className="text-slate-400 text-[11px]">0 Open Conflicts</div>
-            )}
-            {!(processMap.get(item.projectId)?.enableHoldPoints ?? true) ? null : item.unfulfilledHoldPointCount > 0 ? (
-              <div className="text-rose-700 font-semibold text-[10px]">
-                {item.unfulfilledHoldPointCount} Bypassed Hold-Point
-                {item.unfulfilledHoldPointCount === 1 ? '' : 's'}
-              </div>
-            ) : (
-              <div className="text-emerald-700 text-[10px] font-medium">
-                Hold-Points Cleared
-              </div>
-            )}
-          </div>
-        ),
-      },
-      {
-        id: 'actions',
-        header: 'Actions',
-        tooltip: 'Enter individual project assurance workspace',
-        align: 'right',
-        width: 'w-32',
-        cell: (item) => (
-          <div className="flex items-center justify-end">
-            <TableActionButton
-              onClick={() => onSelectProject(item.projectId)}
-              variant="primary"
-              icon={<ArrowRight className="w-3.5 h-3.5" />}
-            >
-              Workspace
-            </TableActionButton>
-          </div>
-        ),
-      },
-    ],
-    [onSelectProject, processMap, term]
+  const projectIds = useMemo(
+    () => (summary?.projects ?? []).map((p) => p.projectId),
+    [summary],
   );
+  const processMap = useProjectProcessMap(projectIds, projectIds.length > 0);
+  const [healthFilter, setHealthFilter] = useState<
+    "ALL" | "EVIDENCE_SUPPORTED" | "EVIDENCE_PARTIAL" | "EVIDENCE_CONFLICT"
+  >("ALL");
+
+  const portfolioColumns: TableColumnDef<PortfolioProjectHealthItem>[] =
+    useMemo(
+      () => [
+        {
+          id: "project",
+          header: "Project & Location",
+          tooltip:
+            "Project identifier prefix, state location, and official project name",
+          width: "w-72",
+          cell: (item) => (
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-brand-primary">
+                  {item.codePrefix}
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-slate-100 text-slate-600">
+                  {item.region?.path ?? item.stateLocation}
+                </span>
+                {/* <ProjectTypeChip type={item.projectType} /> */}
+              </div>
+              <div
+                className="font-semibold text-slate-900 text-xs mt-0.5 max-w-xs truncate"
+                title={item.name}
+              >
+                {item.name}
+              </div>
+            </div>
+          ),
+        },
+        {
+          id: "counterparties",
+          header: "Counterparties",
+          tooltip: `Contractor and ${term("funderParty", { lower: true })}`,
+          width: "w-52",
+          cell: (item) => (
+            <div className="space-y-0.5">
+              <div
+                className="font-medium text-slate-800 truncate"
+                title={item.contractorName}
+              >
+                {item.contractorName || "No contractor"}
+                {item.contractorCount > 1 && (
+                  <span className="text-slate-500">
+                    {" "}
+                    +{item.contractorCount - 1}
+                  </span>
+                )}
+              </div>
+              <div
+                className="text-[11px] text-slate-500 truncate"
+                title={`${term("funderParty")}: ${item.lenderName}`}
+              >
+                {term("funderParty")}: {item.lenderName}
+                {item.owningOrganization &&
+                  item.owningOrganization.name !== item.lenderName && (
+                    <span className="block">
+                      Owner: {item.owningOrganization.name}
+                    </span>
+                  )}
+              </div>
+            </div>
+          ),
+        },
+        {
+          id: "commitmentDrawn",
+          header: "Commitment & Drawn",
+          tooltip:
+            "Approved total project commitment and cumulative disbursements drawn",
+          align: "right",
+          width: "w-44",
+          cell: (item) => (
+            <div className="text-right">
+              <div className="font-bold text-slate-900">
+                {formatNaira(item.totalBudgetNgn)}
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                Drawn: {formatNaira(item.disbursedToDateNgn)}
+              </div>
+            </div>
+          ),
+        },
+        {
+          id: "schedule",
+          header: "Schedule",
+          tooltip:
+            "Variance against the planned schedule on certified progress, in working weeks (updated daily)",
+          width: "w-40",
+          cell: (item) =>
+            item.scheduleVariance ? (
+              <ScheduleBadge badge={item.scheduleVariance} size="xs" />
+            ) : (
+              <span className="text-[11px] text-slate-400">No schedule</span>
+            ),
+        },
+        {
+          id: "progress",
+          header: "Certified Progress",
+          tooltip:
+            "Independent Monitor certified physical completion percentage against active milestone tranche",
+          width: "w-36",
+          cell: (item) => (
+            <div className="w-36 space-y-1">
+              <div className="flex justify-between text-[11px] font-semibold text-slate-700">
+                <span>{item.certifiedProgressPct}%</span>
+                {item.activeTrancheNumber &&
+                  (processMap.get(item.projectId)?.enableTranchesAndCps ??
+                    true) && (
+                    <span className="text-brand-primary text-[10px]">
+                      {term("tranche")} #{item.activeTrancheNumber}
+                    </span>
+                  )}
+              </div>
+              <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  style={{ width: `${item.certifiedProgressPct}%` }}
+                  className="bg-brand-primary h-full rounded-full"
+                />
+              </div>
+            </div>
+          ),
+        },
+        {
+          id: "governance",
+          header: "Governance Status",
+          tooltip:
+            "Cross-project assurance standing based on field corroboration and Hold-Point adherence",
+          width: "w-44",
+          cell: (item) => {
+            if (item.portfolioHealth === "EVIDENCE_SUPPORTED") {
+              return (
+                <TableBadge variant="success">Evidence Supported</TableBadge>
+              );
+            }
+            if (item.portfolioHealth === "EVIDENCE_PARTIAL") {
+              return (
+                <TableBadge variant="warning">Under Observation</TableBadge>
+              );
+            }
+            return (
+              <TableBadge variant="danger">
+                {(processMap.get(item.projectId)?.enableHoldPoints ?? true)
+                  ? "Hold-Point Breached"
+                  : "Evidence Conflict"}
+              </TableBadge>
+            );
+          },
+        },
+        {
+          id: "riskExposure",
+          header: "Risk Exposure",
+          tooltip:
+            "Active physical-to-financial variance flags and bypassed Hold-Points",
+          width: "w-40",
+          cell: (item) => (
+            <div className="space-y-0.5">
+              {item.openConflictCount > 0 ? (
+                <div className="text-amber-800 font-semibold text-[11px]">
+                  {item.openConflictCount} Open Conflict
+                  {item.openConflictCount === 1 ? "" : "s"}
+                </div>
+              ) : (
+                <div className="text-slate-400 text-[11px]">
+                  0 Open Conflicts
+                </div>
+              )}
+              {!(
+                processMap.get(item.projectId)?.enableHoldPoints ?? true
+              ) ? null : item.unfulfilledHoldPointCount > 0 ? (
+                <div className="text-rose-700 font-semibold text-[10px]">
+                  {item.unfulfilledHoldPointCount} Bypassed Hold-Point
+                  {item.unfulfilledHoldPointCount === 1 ? "" : "s"}
+                </div>
+              ) : (
+                <div className="text-emerald-700 text-[10px] font-medium">
+                  Hold-Points Cleared
+                </div>
+              )}
+            </div>
+          ),
+        },
+        {
+          id: "actions",
+          header: "Actions",
+          tooltip: "Enter individual project assurance workspace",
+          align: "right",
+          width: "w-32",
+          cell: (item) => (
+            <div className="flex items-center justify-end">
+              <TableActionButton
+                onClick={() => onSelectProject(item.projectId)}
+                variant="primary"
+                icon={<ArrowRight className="w-3.5 h-3.5" />}
+              >
+                Workspace
+              </TableActionButton>
+            </div>
+          ),
+        },
+      ],
+      [onSelectProject, processMap, term],
+    );
 
   if (isLoading) {
     return (
@@ -258,9 +304,14 @@ export function PortfolioExecutivePage({
     );
   }
 
-  const disbursedPct = summary.totalPortfolioCommitmentNgn > 0
-    ? Math.round((summary.totalDisbursedToDateNgn / summary.totalPortfolioCommitmentNgn) * 100)
-    : 0;
+  const disbursedPct =
+    summary.totalPortfolioCommitmentNgn > 0
+      ? Math.round(
+          (summary.totalDisbursedToDateNgn /
+            summary.totalPortfolioCommitmentNgn) *
+            100,
+        )
+      : 0;
 
   const filteredProjects = summary.projects.filter((p) => {
     const matchesSearch =
@@ -270,7 +321,7 @@ export function PortfolioExecutivePage({
       p.stateLocation.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesHealth =
-      healthFilter === 'ALL' || p.portfolioHealth === healthFilter;
+      healthFilter === "ALL" || p.portfolioHealth === healthFilter;
 
     return matchesSearch && matchesHealth;
   });
@@ -290,14 +341,15 @@ export function PortfolioExecutivePage({
             </span>
             <span className="text-xs text-slate-400">·</span>
             <span className="text-xs font-semibold text-slate-500">
-              {term('funderParty')} &amp; {term('monitorParty')} oversight
+              {term("funderParty")} &amp; {term("monitorParty")} oversight
             </span>
           </div>
           <h1 className="text-lg font-bold text-slate-900 mt-1">
             Multi-Project Capital Risk &amp; Governance Matrix
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Consolidated physical-to-financial reconciliation across all infrastructure projects
+            Consolidated physical-to-financial reconciliation across all
+            infrastructure projects
           </p>
         </div>
 
@@ -368,10 +420,16 @@ export function PortfolioExecutivePage({
           iconVariant="indigo"
           title="Portfolio Governance"
           value={
-            <div className="flex items-center justify-between text-xs font-semibold">
-              <span className="text-emerald-700">{summary.supportedCount} Supported</span>
-              <span className="text-amber-700">{summary.partialCount} Observation</span>
-              <span className="text-rose-700">{summary.conflictCount} Breached</span>
+            <div className="flex items-center justify-between gap-2 text-xs font-semibold">
+              <span className="text-emerald-700">
+                {summary.supportedCount} Supported
+              </span>
+              <span className="text-amber-700">
+                {summary.partialCount} Observation
+              </span>
+              <span className="text-rose-700">
+                {summary.conflictCount} Breached
+              </span>
             </div>
           }
         >
@@ -381,7 +439,8 @@ export function PortfolioExecutivePage({
               style={{
                 width: `${
                   summary.activeProjectsCount > 0
-                    ? (summary.supportedCount / summary.activeProjectsCount) * 100
+                    ? (summary.supportedCount / summary.activeProjectsCount) *
+                      100
                     : 0
                 }%`,
               }}
@@ -403,7 +462,8 @@ export function PortfolioExecutivePage({
               style={{
                 width: `${
                   summary.activeProjectsCount > 0
-                    ? (summary.conflictCount / summary.activeProjectsCount) * 100
+                    ? (summary.conflictCount / summary.activeProjectsCount) *
+                      100
                     : 0
                 }%`,
               }}
@@ -415,7 +475,10 @@ export function PortfolioExecutivePage({
             <span>Hold-Point Alignment</span>
             <span className="font-semibold text-slate-700">
               {summary.activeProjectsCount > 0
-                ? Math.round((summary.supportedCount / summary.activeProjectsCount) * 100)
+                ? Math.round(
+                    (summary.supportedCount / summary.activeProjectsCount) *
+                      100,
+                  )
                 : 0}
               % Clean
             </span>
@@ -432,11 +495,17 @@ export function PortfolioExecutivePage({
             </div>
             <div>
               <div className="text-xs font-bold text-amber-900">
-                {summary.pendingContractorVerificationsCount} Contractor Onboarding Application
-                {summary.pendingContractorVerificationsCount === 1 ? '' : 's'} Pending Sign-Off
+                {summary.pendingContractorVerificationsCount} Contractor
+                Onboarding Application
+                {summary.pendingContractorVerificationsCount === 1
+                  ? ""
+                  : "s"}{" "}
+                Pending Sign-Off
               </div>
               <p className="text-xs text-amber-700 mt-0.5">
-                Contractor engineers submit a photo ID, a guided selfie set and COREN credentials; their reports are held until a reviewer approves them.
+                Contractor engineers submit a photo ID, a guided selfie set and
+                COREN credentials; their reports are held until a reviewer
+                approves them.
               </p>
             </div>
           </div>
@@ -450,7 +519,11 @@ export function PortfolioExecutivePage({
         </div>
       )}
 
-      <DeliveryModelFilters filters={deliveryFilters} onChange={setDeliveryFilters} owners={ownersSeen} />
+      <DeliveryModelFilters
+        filters={deliveryFilters}
+        onChange={setDeliveryFilters}
+        owners={ownersSeen}
+      />
 
       {/* 4. Comparative Project Matrix Standard Table */}
       <StandardTable<PortfolioProjectHealthItem>
@@ -467,7 +540,7 @@ export function PortfolioExecutivePage({
           <div className="flex items-center gap-2">
             <span className="text-xs text-white/70">
               {summary.conflictCount === 0
-                ? 'All Covenants Satisfied'
+                ? "All Covenants Satisfied"
                 : `${summary.conflictCount} Projects Flagged`}
             </span>
           </div>
@@ -475,50 +548,50 @@ export function PortfolioExecutivePage({
         search={{
           value: searchTerm,
           onChange: setSearchTerm,
-          placeholder: 'Search project name, code, contractor, or state...',
+          placeholder: "Search project name, code, contractor, or state...",
         }}
         filters={
           <div className="flex items-center gap-1.5 flex-wrap">
             <button
               type="button"
-              onClick={() => setHealthFilter('ALL')}
+              onClick={() => setHealthFilter("ALL")}
               className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
-                healthFilter === 'ALL'
-                  ? 'bg-brand-navy text-white shadow-2xs'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                healthFilter === "ALL"
+                  ? "bg-brand-navy text-white shadow-2xs"
+                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
               }`}
             >
               All ({summary.projects.length})
             </button>
             <button
               type="button"
-              onClick={() => setHealthFilter('EVIDENCE_SUPPORTED')}
+              onClick={() => setHealthFilter("EVIDENCE_SUPPORTED")}
               className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
-                healthFilter === 'EVIDENCE_SUPPORTED'
-                  ? 'bg-emerald-600 text-white shadow-2xs'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                healthFilter === "EVIDENCE_SUPPORTED"
+                  ? "bg-emerald-600 text-white shadow-2xs"
+                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
               }`}
             >
               Supported ({summary.supportedCount})
             </button>
             <button
               type="button"
-              onClick={() => setHealthFilter('EVIDENCE_PARTIAL')}
+              onClick={() => setHealthFilter("EVIDENCE_PARTIAL")}
               className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
-                healthFilter === 'EVIDENCE_PARTIAL'
-                  ? 'bg-amber-600 text-white shadow-2xs'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                healthFilter === "EVIDENCE_PARTIAL"
+                  ? "bg-amber-600 text-white shadow-2xs"
+                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
               }`}
             >
               Observation ({summary.partialCount})
             </button>
             <button
               type="button"
-              onClick={() => setHealthFilter('EVIDENCE_CONFLICT')}
+              onClick={() => setHealthFilter("EVIDENCE_CONFLICT")}
               className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
-                healthFilter === 'EVIDENCE_CONFLICT'
-                  ? 'bg-rose-600 text-white shadow-2xs'
-                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                healthFilter === "EVIDENCE_CONFLICT"
+                  ? "bg-rose-600 text-white shadow-2xs"
+                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
               }`}
             >
               Breached ({summary.conflictCount})
@@ -530,9 +603,9 @@ export function PortfolioExecutivePage({
         keyExtractor={(item) => item.projectId}
         onRowClick={(item) => onSelectProject(item.projectId)}
         emptyState={{
-          title: 'No projects match your search criteria',
+          title: "No projects match your search criteria",
           description:
-            'Try adjusting your search keyword or health status filter.',
+            "Try adjusting your search keyword or health status filter.",
         }}
       />
 
@@ -547,7 +620,10 @@ export function PortfolioExecutivePage({
             Server-checked geofences
           </div>
           <p className="text-slate-500 leading-relaxed">
-            The server checks every capture and daily report against the project boundary or corridor. Reports must carry a GPS location; mock locations and recycled photos are flagged and not counted as evidence.
+            The server checks every capture and daily report against the project
+            boundary or corridor. Reports must carry a GPS location; mock
+            locations and recycled photos are flagged and not counted as
+            evidence.
           </p>
         </div>
 
@@ -557,7 +633,10 @@ export function PortfolioExecutivePage({
             Pre-Pour Hold-Point Enforcements
           </div>
           <p className="text-slate-500 leading-relaxed">
-            Concrete pours, stone base laying, and transformer plinth installations require Independent Monitor sign-off prior to milestone disbursement. Unverified works generate automatic valuation holdbacks.
+            Concrete pours, stone base laying, and transformer plinth
+            installations require Independent Monitor sign-off prior to
+            milestone disbursement. Unverified works generate automatic
+            valuation holdbacks.
           </p>
         </div>
 
@@ -567,7 +646,9 @@ export function PortfolioExecutivePage({
             Contractor Competence &amp; Identity Assurance
           </div>
           <p className="text-slate-500 leading-relaxed">
-            Contractor field engineers submit a photo ID, a guided selfie set (3 poses) and COREN credentials. Their reports are held by the server until an Independent Monitor reviews and approves them.
+            Contractor field engineers submit a photo ID, a guided selfie set (3
+            poses) and COREN credentials. Their reports are held by the server
+            until an Independent Monitor reviews and approves them.
           </p>
         </div>
       </div>
@@ -576,24 +657,36 @@ export function PortfolioExecutivePage({
 }
 
 const RETENTION_PHASE_LABEL: Record<string, string> = {
-  ACTIVE_CONSTRUCTION: 'Construction',
-  HANDOVER_IN_PROGRESS: 'Handover',
-  RETENTION_PERIOD: 'Defects liability',
-  COMPLETED_CLOSED: 'Closed',
+  ACTIVE_CONSTRUCTION: "Construction",
+  HANDOVER_IN_PROGRESS: "Handover",
+  RETENTION_PERIOD: "Defects liability",
+  COMPLETED_CLOSED: "Closed",
 };
 
 /** Phase 10: projects in handover or their liability period, with retention held and days remaining. */
-function RetentionOverview({ projects }: { projects: PortfolioProjectHealthItem[] }) {
+function RetentionOverview({
+  projects,
+}: {
+  projects: PortfolioProjectHealthItem[];
+}) {
   const rows = projects.filter(
-    (p) => p.retention && (p.retention.phase === 'HANDOVER_IN_PROGRESS' || p.retention.phase === 'RETENTION_PERIOD' || p.retention.heldNgn > 0)
+    (p) =>
+      p.retention &&
+      (p.retention.phase === "HANDOVER_IN_PROGRESS" ||
+        p.retention.phase === "RETENTION_PERIOD" ||
+        p.retention.heldNgn > 0),
   );
   if (rows.length === 0) return null;
   const totalHeld = rows.reduce((s, p) => s + (p.retention?.heldNgn ?? 0), 0);
   return (
     <section className="rounded-2xl border border-slate-200/80 bg-white shadow-2xs">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
-        <h2 className="text-sm font-bold text-slate-900">Projects in retention</h2>
-        <span className="text-xs text-slate-500">Retention held across these projects: {formatNaira(totalHeld)}</span>
+        <h2 className="text-sm font-bold text-slate-900">
+          Projects in retention
+        </h2>
+        <span className="text-xs text-slate-500">
+          Retention held across these projects: {formatNaira(totalHeld)}
+        </span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
@@ -613,18 +706,27 @@ function RetentionOverview({ projects }: { projects: PortfolioProjectHealthItem[
               return (
                 <tr key={p.projectId}>
                   <td className="px-4 py-2">
-                    <Link to={`/app/projects/${p.projectId}/retention`} className="font-semibold text-brand-primary hover:underline">
+                    <Link
+                      to={`/app/projects/${p.projectId}/retention`}
+                      className="font-semibold text-brand-primary hover:underline"
+                    >
                       {p.codePrefix}
-                    </Link>{' '}
+                    </Link>{" "}
                     <span className="text-slate-500">{p.name}</span>
                   </td>
-                  <td className="px-4 py-2">{RETENTION_PHASE_LABEL[r.phase]}</td>
-                  <td className="px-4 py-2 text-right font-semibold">{formatNaira(r.heldNgn)}</td>
-                  <td className="px-4 py-2 text-right">{formatNaira(r.releasedNgn)}</td>
+                  <td className="px-4 py-2">
+                    {RETENTION_PHASE_LABEL[r.phase]}
+                  </td>
+                  <td className="px-4 py-2 text-right font-semibold">
+                    {formatNaira(r.heldNgn)}
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    {formatNaira(r.releasedNgn)}
+                  </td>
                   <td className="px-4 py-2">
                     {r.retentionEndDate
-                      ? `${r.retentionEndDate}${r.daysRemaining !== null ? (r.daysRemaining >= 0 ? ` (${r.daysRemaining} days)` : ' (ended)') : ''}`
-                      : '—'}
+                      ? `${r.retentionEndDate}${r.daysRemaining !== null ? (r.daysRemaining >= 0 ? ` (${r.daysRemaining} days)` : " (ended)") : ""}`
+                      : "—"}
                   </td>
                   <td className="px-4 py-2 text-right">{r.openDefectCount}</td>
                 </tr>

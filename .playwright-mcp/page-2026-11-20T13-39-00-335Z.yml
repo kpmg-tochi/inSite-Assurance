@@ -1,0 +1,55 @@
+- generic [ref=f10e2]:
+  - generic [ref=f10e3]:
+    - complementary [ref=f10e4]:
+      - generic [ref=f10e5]:
+        - generic [ref=f10e6]:
+          - link "Universal Basic Education Commission (UBEC) Universal Basic Education Commission (UBEC) Basic Education Infrastructure Programme" [ref=f10e7] [cursor=pointer]:
+            - /url: /
+            - img "Universal Basic Education Commission (UBEC)" [ref=f10e9]
+            - generic [ref=f10e10]:
+              - generic [ref=f10e11]: Universal Basic Education Commission (UBEC)
+              - generic [ref=f10e12]: Basic Education Infrastructure Programme
+          - button "Minimize sidebar" [ref=f10e13] [cursor=pointer]
+        - generic [ref=f10e17]:
+          - generic [ref=f10e18]: Tenant Super Admin Workspace
+          - link "Portfolio" [ref=f10e19] [cursor=pointer]:
+            - /url: /app/portfolio
+          - link "All Projects" [ref=f10e26] [cursor=pointer]:
+            - /url: /app/projects
+          - link "Site Map & Overview" [ref=f10e30] [cursor=pointer]:
+            - /url: /app/projects
+          - link "Executive Risk Matrix" [ref=f10e34] [cursor=pointer]:
+            - /url: /app/executive
+          - link "IPC Claims & Queries" [ref=f10e38] [cursor=pointer]:
+            - /url: /app/projects
+          - link "BOQ & Hold-Points" [ref=f10e44] [cursor=pointer]:
+            - /url: /app/projects
+          - link "Schedule" [ref=f10e49] [cursor=pointer]:
+            - /url: /app/projects
+          - link "Audit Ledger" [ref=f10e53] [cursor=pointer]:
+            - /url: /app/projects
+          - link "Settings" [ref=f10e58] [cursor=pointer]:
+            - /url: /app/settings
+      - button "HA Hauwa Bello (Programme Administrator) Tenant Super Admin" [ref=f10e64] [cursor=pointer]:
+        - generic [ref=f10e65]: HA
+        - generic [ref=f10e66]:
+          - generic [ref=f10e67]: Hauwa Bello (Programme Administrator)
+          - generic [ref=f10e68]: Tenant Super Admin
+    - generic [ref=f10e69]:
+      - banner [ref=f10e70]:
+        - generic [ref=f10e72]:
+          - generic [ref=f10e73]:
+            - generic [ref=f10e74]: PORTFOLIO
+            - generic [ref=f10e75]: /
+            - heading "Capital Project Assurance" [level=1] [ref=f10e76]
+            - generic [ref=f10e77]: Tenant Super Admin Workspace
+          - paragraph [ref=f10e78]: Independent Physical-to-Financial Assurance
+        - generic [ref=f10e79]:
+          - button "Open governance notifications" [ref=f10e81] [cursor=pointer]
+          - button "+ New Project" [ref=f10e85] [cursor=pointer]
+      - generic [ref=f10e86]: Loading capital projects...
+  - region "Notifications alt+T":
+    - list:
+      - listitem [ref=f10e94]:
+        - button "Close toast" [ref=f10e95] [cursor=pointer]
+        - generic [ref=f10e102]: Signed in as Hauwa Bello (Programme Administrator) (Tenant Super Admin)

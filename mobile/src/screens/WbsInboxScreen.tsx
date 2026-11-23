@@ -380,7 +380,7 @@ export const WbsInboxScreen: React.FC = () => {
             accessibilityRole="button"
             accessibilityLabel={copy.inspectionEntry}
           >
-            <Feather name="clipboard" size={16} color="#1E3A8A" />
+            <Feather name="clipboard" size={16} color="#00715D" />
             <Text style={styles.inspectionEntryText}>{copy.inspectionEntry}</Text>
             <Feather name="chevron-right" size={16} color="#64748B" />
           </TouchableOpacity>
@@ -534,10 +534,10 @@ const styles = StyleSheet.create({
     borderBottomColor: "#E2E8F0",
     backgroundColor: "#FFFFFF",
   },
-  inspectionEntryText: { flex: 1, fontSize: 14, fontWeight: "700", color: "#1E3A8A" },
+  inspectionEntryText: { flex: 1, fontSize: 14, fontWeight: "700", color: "#00715D" },
   container: {
     flex: 1,
-    backgroundColor: "#1E1B4B",
+    backgroundColor: "#122F2A",
   },
   headerGradient: {
     paddingHorizontal: 20,
@@ -560,7 +560,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   headerBrandAccent: {
-    color: "#38BDF8",
+    color: "#FFBF00",
     fontWeight: "700",
   },
   projectPill: {
@@ -625,7 +625,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     backgroundColor: "rgba(255, 255, 255, 0.22)",
     borderWidth: 1.5,
-    borderColor: "#38BDF8",
+    borderColor: "#FFBF00",
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
@@ -644,7 +644,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: "#10B981",
     borderWidth: 1.5,
-    borderColor: "#1E1B4B",
+    borderColor: "#122F2A",
   },
   titleRow: {
     marginTop: 14,
@@ -675,8 +675,8 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255, 255, 255, 0.15)",
   },
   pillBtnActive: {
-    backgroundColor: "#00338D",
-    borderColor: "#38BDF8",
+    backgroundColor: "#00715D",
+    borderColor: "#FFBF00",
   },
   pillBtnText: {
     fontSize: 12,
@@ -763,7 +763,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   wbsCardScheduled: {
-    borderColor: "#00338D",
+    borderColor: "#00715D",
     borderWidth: 1.5,
   },
   wbsCardTop: {
@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
   wbsCode: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#0C233C",
+    color: "#122F2A",
   },
   badgesRow: {
     flexDirection: "row",
@@ -794,8 +794,8 @@ const styles = StyleSheet.create({
     color: "#92400E",
   },
   badgeInfo: {
-    backgroundColor: "#EFF6FF",
-    borderColor: "#BFDBFE",
+    backgroundColor: "#ECFDF5",
+    borderColor: "#A7F3D0",
     borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -804,7 +804,7 @@ const styles = StyleSheet.create({
   badgeInfoText: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#00338D",
+    color: "#00715D",
   },
   badgeDanger: {
     backgroundColor: "#FFF1F2",
@@ -862,7 +862,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   tabBtnActive: {
-    borderBottomColor: "#00338D",
+    borderBottomColor: "#00715D",
   },
   tabBtnText: {
     fontSize: 12,
@@ -870,7 +870,7 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
   tabBtnTextActive: {
-    color: "#00338D",
+    color: "#00715D",
   },
   searchInput: {
     backgroundColor: "#FFFFFF",
@@ -916,14 +916,14 @@ const styles = StyleSheet.create({
   expandPoolBtn: {
     paddingVertical: 10,
     alignItems: "center",
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#ECFDF5",
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#BFDBFE",
+    borderColor: "#A7F3D0",
   },
   expandPoolText: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#00338D",
+    color: "#00715D",
   },
 });

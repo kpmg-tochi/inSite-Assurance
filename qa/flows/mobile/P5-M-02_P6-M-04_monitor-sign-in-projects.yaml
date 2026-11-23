@@ -1,0 +1,33 @@
+appId: com.kpmg.insiteassurance.mobile
+name: "P5-M-02 / P6-M-04 provisioned sign-in lists active projects, no drafts"
+tags:
+  - monitor
+env:
+  EMAIL: monitor@insite.ng
+  PASSWORD: Password123!
+---
+- launchApp:
+    clearState: true
+- runFlow: _support/dev-launcher.yaml
+- runFlow: _support/sign-in.yaml
+- extendedWaitUntil:
+    visible: "Your projects"
+    timeout: 20000
+# Name, role and phone come from the account
+- assertVisible: "QS Tunde Adebayo, FNIQS"
+- assertVisible: "Monitor Inspector \\(Visiting QS / COREN\\) · weight 1.00"
+- assertVisible: "\\+234 803 555 0142"
+- assertNotVisible: ".*[Pp]roject code.*"
+- takeScreenshot: "qa/screenshots/mobile/monitor/projects__loaded"
+- assertVisible: "EDO-410"
+- assertVisible: "ABJ-108"
+- assertVisible: "KAN-210"
+- assertVisible: "KWR-502"
+- assertVisible: "LKK-402"
+- assertVisible: "OGN-305"
+- scrollUntilVisible:
+    element: "OGN-501"
+- takeScreenshot: "qa/screenshots/mobile/monitor/projects__scrolled"
+# P6-M-04: no drafts
+- assertNotVisible: "ENU-501"
+- assertNotVisible: "QAW-.*"

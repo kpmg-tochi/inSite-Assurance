@@ -1,15 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronDown, Play } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useAuth } from "../../lib/auth-context";
 import { useDemoAccounts } from "../../config/useDemoAccounts";
-import { InSiteLogo } from "../../components/InSiteLogo";
 import { IS_DEMO_MODE } from "../../config/demoMode";
 import { CustomSelect, type CustomSelectOption } from "../../components/common";
-
-const VOICE_WAVE_BARS = [
-  10, 18, 12, 22, 14, 24, 16, 12, 20, 10, 16, 22, 12, 18, 14, 10, 16, 12,
-];
 
 export function LoginPage() {
   const { login } = useAuth();
@@ -69,200 +64,50 @@ export function LoginPage() {
 
   return (
     <div className="h-screen w-screen overflow-hidden bg-white grid grid-cols-1 lg:grid-cols-12">
-      {/* Left Full-Height Ribbed KPMG Showcase Panel */}
+      {/* Left Full-Height UBEC Showcase Panel (demo branch) */}
       <div className="hidden lg:flex lg:col-span-7 p-3 h-full overflow-hidden">
-        <div className="w-full h-full kpmg-ribbed-panel rounded-2xl p-8 xl:p-10 flex flex-col justify-between text-white relative overflow-hidden shadow-inner">
-          {/* Top Brand Bar */}
-          <div className="flex items-center justify-between z-10">
-            <Link
-              to="/"
-              className="flex items-center gap-3 hover:opacity-90 transition"
-            >
-              <div className="bg-white rounded-xl px-2.5 py-1.5 flex items-center justify-center shadow-sm">
-                <InSiteLogo />
-              </div>
-              <div className="h-4 w-px bg-white/25" />
-              <span className="font-semibold text-base tracking-tight text-white">
-                InSite Assurance
+        <div className="w-full h-full rounded-2xl relative overflow-hidden shadow-inner text-white">
+          <img
+            src="/client/ubec-login.jpeg"
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-brand-navy/85 via-brand-navy/35 to-brand-navy/90" />
+
+          <div className="relative z-10 h-full p-8 xl:p-10 flex flex-col justify-between">
+            {/* Top Brand Bar */}
+            <div className="flex items-center justify-between">
+              <img
+                src="/client/ubec-logo-full.png"
+                alt="Universal Basic Education Commission (UBEC)"
+                className="h-12 xl:h-14 w-auto"
+              />
+              <span className="text-[11px] font-semibold text-white bg-white/10 backdrop-blur-md px-3 py-1 rounded-full border border-white/20">
+                Powered by InSite Assurance
               </span>
-            </Link>
-            <div className="flex items-center gap-2">
-              <Link
-                to="/"
-                className="text-[11px] font-medium text-white/85 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 transition"
-              >
-                Overview
-              </Link>
-              <Link
-                to="/about"
-                className="text-[11px] font-medium text-white/85 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 transition"
-              >
-                Specification
-              </Link>
-              <Link
-                to="/mobile-app"
-                className="text-[11px] font-medium text-white/85 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 transition"
-              >
-                Mobile App
-              </Link>
-            </div>
-          </div>
-
-          {/* Hero Copy */}
-          <div className="mt-4 max-w-xl z-10">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/75 mb-1.5">
-              Capital Project Governance
-            </div>
-            <h1 className="text-2xl xl:text-3xl font-bold leading-tight tracking-tight">
-              Closing the Physical-to-Financial Assurance Gap.
-            </h1>
-            <p className="text-xs xl:text-sm text-white/85 mt-2 leading-relaxed">
-              Independent geospatial corridor verification, voice-to-BOQ
-              extraction, and automated Interim Payment Certificate
-              reconciliation for infrastructure lenders and monitors.
-            </p>
-          </div>
-
-          {/* Center Overlapping Glassmorphic Cards (Map Preview + Overlapping Voice Note / Extraction Card) */}
-          <div className="relative my-auto py-4 z-10">
-            {/* Card 1: Translucent Live Corridor Map Preview (~70% Opacity + Backdrop Blur + Subtle Border) */}
-            <div className="w-[82%] bg-brand-navy/70 backdrop-blur-md border border-white/20 rounded-2xl p-4 shadow-2xl">
-              <div className="flex items-center justify-between mb-2.5">
-                <div>
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">
-                    Example corridor geofence (illustration)
-                  </div>
-                  <div className="text-xs font-bold text-white mt-0.5">
-                    LKK-402 · Lekki–Epe Dual-Carriageway (KM 0+000 to KM 24+500)
-                  </div>
-                </div>
-                <span className="text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2.5 py-0.5 rounded-full">
-                  98.4% Within Corridor
-                </span>
-              </div>
-
-              {/* Stylized Vector Corridor Map Canvas */}
-              <div className="h-48 xl:h-52 rounded-xl bg-brand-dark/75 border border-white/10 relative overflow-hidden">
-                {/* Subtle Coordinate Grid */}
-                <div
-                  className="absolute inset-0 opacity-20"
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(to right, rgba(148, 163, 184, 0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(148, 163, 184, 0.25) 1px, transparent 1px)",
-                    backgroundSize: "36px 36px",
-                  }}
-                />
-
-                {/* SVG Highway Corridor Buffer & Centerline */}
-                <svg
-                  viewBox="0 0 500 200"
-                  className="w-full h-full relative z-10"
-                  preserveAspectRatio="none"
-                >
-                  {/* Secondary arterial roads */}
-                  <path
-                    d="M 0 150 Q 140 130, 240 105 T 500 50"
-                    fill="none"
-                    stroke="rgba(56, 189, 248, 0.18)"
-                    strokeWidth="34"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M 0 150 Q 140 130, 240 105 T 500 50"
-                    fill="none"
-                    stroke="var(--hex-brand-sky)"
-                    strokeWidth="2.5"
-                    strokeDasharray="7 5"
-                  />
-                </svg>
-
-                {/* Pin 1: KM 12+400 */}
-                <div className="absolute left-[22%] top-[58%] z-20 flex items-center gap-1.5 bg-brand-navy/90 backdrop-blur-sm border border-white/20 px-2 py-1 rounded-lg shadow">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="text-[10px] text-white font-semibold">
-                    KM 12+400 · Tier 1
-                  </span>
-                </div>
-
-                {/* Pin 2: Active KM 14+210 Culvert Hold-Point */}
-                <div className="absolute left-[46%] top-[40%] z-20 flex items-center gap-1.5 bg-brand-primary/95 backdrop-blur-sm border border-brand-primary/30 px-2.5 py-1 rounded-lg shadow-lg">
-                  <span className="w-2.5 h-2.5 rounded-full bg-brand-sky animate-pulse" />
-                  <span className="text-[10px] text-white font-bold">
-                    KM 14+210 · WBS 02.03.1
-                  </span>
-                </div>
-
-                {/* Bottom Telemetry Strip inside Map Preview */}
-                <div className="absolute bottom-2 left-2.5 right-2.5 z-20 flex items-center justify-between text-[10px] text-white/70 bg-brand-navy/75 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/10">
-                  <span>Example GPS fix · ±3.4m</span>
-                  <span>±150m Corridor Buffer</span>
-                </div>
-              </div>
             </div>
 
-            {/* Card 2: Partially Overlapping Voice Note & Whisper Summary Card (~70% Opacity + Backdrop Blur + Subtle Border) */}
-            <div className="lg:absolute lg:right-0 lg:-bottom-3 w-full lg:w-[370px] xl:w-[395px] z-30 bg-brand-navy/70 backdrop-blur-xl border border-white/20 rounded-2xl p-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.45)] space-y-2.5">
-              {/* Top Sub-Card: Submitted Voice Note Player */}
-              <div className="bg-brand-subcard/80 backdrop-blur-md border border-white/15 rounded-xl p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-bold text-white">
-                    Submitted Voice Note (Pidgin / English)
-                  </span>
-                  <span className="text-[11px] text-brand-sky font-semibold">
-                    0:38
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-brand-primary border border-brand-primary/30 flex items-center justify-center shrink-0 shadow">
-                    <Play className="w-3.5 h-3.5 text-white fill-white ml-0.5" />
-                  </div>
-                  <div className="flex-1 flex items-center gap-1 h-7">
-                    {VOICE_WAVE_BARS.map((heightPx, idx) => (
-                      <div
-                        key={idx}
-                        style={{ height: `${heightPx}px` }}
-                        className={`w-1 rounded-full ${
-                          idx < 9 ? "bg-brand-sky" : "bg-white/25"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-[11px] text-slate-300">1.0x</span>
-                </div>
+            {/* Hero Copy */}
+            <div className="max-w-xl">
+              <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#FFBF00] mb-2">
+                <span className="w-6 h-0.5 bg-[#FFBF00] rounded-full" />
+                Basic Education Infrastructure Programme
               </div>
-
-              {/* Bottom Sub-Card: Agent-Confirmed Summary & Whisper Transcript */}
-              <div className="bg-white/85 backdrop-blur-md border border-white/40 rounded-xl p-3 text-slate-900">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-semibold text-slate-600">
-                    Agent-Confirmed Summary
-                  </span>
-                  <span className="text-[11px] font-bold text-emerald-700">
-                    Signed Log
-                  </span>
-                </div>
-                <p className="text-[11px] font-semibold text-slate-900 leading-relaxed">
-                  &ldquo;Cast 12m of box culvert wall at KM 14+210. 40 bags of
-                  Dangote cement and 2 trips of granite used. Blocker: Heavy
-                  rain halted pouring on Cell 2.&rdquo;
-                </p>
-                <div className="border-t border-slate-200/90 my-2" />
-                <p className="text-[10.5px] text-slate-600 leading-relaxed">
-                  <strong className="text-slate-700">Transcript:</strong>{" "}
-                  &ldquo;We dey for chainage fourteen plus two hundred this
-                  afternoon. Contractor don cast twelve meters of the box
-                  culvert wall and use forty bags of Dangote cement...&rdquo;
-                </p>
-              </div>
+              <h1 className="text-3xl xl:text-4xl font-bold leading-tight tracking-tight">
+                Verified progress, from site to payment.
+              </h1>
+              <p className="text-sm text-white/85 mt-3 leading-relaxed">
+                One platform for Direct Intervention and Matching Grounds projects:
+                supervision and M&amp;E visits captured on site, findings tracked to
+                resolution, and milestone payments released only on verified evidence.
+              </p>
             </div>
-          </div>
 
-          {/* Bottom Footer Bar */}
-          <div className="flex items-center justify-between text-[11px] text-white/75 pt-2 border-t border-white/10 z-10">
-            <span>
-              Field evidence and disbursement reconciliation
-            </span>
-            <span>QSRBN · COREN · ICAN</span>
+            {/* Bottom Footer Bar */}
+            <div className="flex items-center justify-between text-[11px] text-white/80 pt-3 border-t border-white/15">
+              <span>Universal Basic Education Commission · Education for Development</span>
+              <span>UBEC · SUBEBs</span>
+            </div>
           </div>
         </div>
       </div>
@@ -271,8 +116,13 @@ export function LoginPage() {
       <div className="col-span-1 lg:col-span-5 h-full flex flex-col justify-between p-8 sm:p-10 xl:p-12 overflow-y-auto bg-white">
         <div className="my-auto max-w-md w-full mx-auto">
           <div>
+            <img
+              src="/client/ubec-logo.png"
+              alt="UBEC"
+              className="h-16 w-auto mb-5"
+            />
             <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-              Sign in to Assurance Portal
+              Sign in to the UBEC Assurance Portal
             </h2>
             <p className="text-xs text-slate-500 mt-1.5">
               Enter your corporate credentials or select a seeded pilot role
@@ -369,7 +219,7 @@ export function LoginPage() {
 
         {/* Bottom Copyright Footer */}
         <div className="text-[11px] text-slate-400 flex items-center justify-between max-w-md w-full mx-auto pt-4">
-          <span>&copy; 2026 InSite Assurance</span>
+          <span>&copy; 2026 UBEC · Powered by InSite Assurance</span>
           <span className="text-slate-400">Pilot</span>
         </div>
       </div>

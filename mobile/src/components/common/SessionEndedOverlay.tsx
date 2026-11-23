@@ -97,7 +97,7 @@ export const SessionEndedOverlay: React.FC = () => {
             <PrimaryButton
               text="Open another project"
               backgroundColor="#FFFFFF"
-              textColor="#00338D"
+              textColor="#00715D"
               style={styles.secondary}
               onPress={() => reset('Projects')}
             />
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#0C233C',
+    color: '#122F2A',
   },
   body: {
     fontSize: 14,

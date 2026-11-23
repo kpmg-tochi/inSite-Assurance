@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   submitBtn: {
-    backgroundColor: '#00338D',
+    backgroundColor: '#00715D',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',

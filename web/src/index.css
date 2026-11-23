@@ -5,23 +5,23 @@
 @layer base {
   :root {
     /* Core KPMG & Platform Brand Palette (RGB channels for Tailwind opacity support) */
-    --color-brand-primary: 0 51 141; /* #00338D — Primary KPMG Blue */
-    --color-brand-hover: 0 38 107; /* #00266B — Primary Hover Blue */
-    --color-brand-medium: 0 94 184; /* #005EB8 — Medium Accent Blue */
-    --color-brand-pacific: 0 145 218; /* #0091DA — Pacific Cyan */
-    --color-brand-sky: 56 189 248; /* #38BDF8 — Corridor Sky Blue */
-    --color-brand-navy: 12 35 60; /* #0C233C — Dark Navy Surface */
-    --color-brand-dark: 7 21 38; /* #071526 — Deep Canvas Dark */
-    --color-brand-subcard: 8 24 43; /* #08182B — Dark Subcard Surface */
+    --color-brand-primary: 0 113 93; /* #00715D — UBEC deep green */
+    --color-brand-hover: 0 90 74; /* #005A4A — UBEC green hover */
+    --color-brand-medium: 18 145 92; /* #12915C — UBEC green */
+    --color-brand-pacific: 18 145 92; /* #12915C — UBEC green */
+    --color-brand-sky: 255 191 0; /* #FFBF00 — UBEC amber */
+    --color-brand-navy: 18 47 42; /* #122F2A — UBEC dark green */
+    --color-brand-dark: 12 32 29; /* #0C201D — UBEC deep canvas */
+    --color-brand-subcard: 15 41 37; /* #0F2925 — UBEC subcard */
     --color-surface-canvas: 248 250 252; /* #F8FAFC — Light Slate Canvas */
 
     /* Hex equivalents for SVG & Leaflet vector paths */
-    --hex-brand-primary: #00338d;
-    --hex-brand-hover: #00266b;
-    --hex-brand-medium: #005eb8;
-    --hex-brand-pacific: #0091da;
-    --hex-brand-sky: #38bdf8;
-    --hex-brand-navy: #0c233c;
+    --hex-brand-primary: #00715d;
+    --hex-brand-hover: #005a4a;
+    --hex-brand-medium: #12915c;
+    --hex-brand-pacific: #12915c;
+    --hex-brand-sky: #ffbf00;
+    --hex-brand-navy: #122f2a;
     --hex-status-verified: #16a34a;
     --hex-status-warning: #d97706;
     --hex-status-danger: #dc2626;

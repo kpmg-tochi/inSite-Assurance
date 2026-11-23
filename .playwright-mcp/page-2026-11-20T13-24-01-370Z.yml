@@ -1,0 +1,363 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e3]:
+    - region "Notifications Alt+T"
+    - generic [ref=f4e4]:
+      - banner [ref=f4e5]:
+        - generic [ref=f4e9]:
+          - generic [ref=f4e10]:
+            - link "info@ubec.gov.ng" [ref=f4e12] [cursor=pointer]:
+              - /url: ""
+            - link "+2349038022457" [ref=f4e14] [cursor=pointer]:
+              - /url: ""
+            - link [ref=f4e16] [cursor=pointer]:
+              - /url: https://nedi.education.gov.ng/
+          - generic [ref=f4e17]:
+            - link "Facebook" [ref=f4e18] [cursor=pointer]:
+              - /url: https://www.facebook.com/ubecabuja.ubec5
+              - img "Facebook" [ref=f4e19]
+            - link "Instagram" [ref=f4e20] [cursor=pointer]:
+              - /url: https://www.instagram.com/ubec_nigeria/
+              - img "Instagram" [ref=f4e21]
+            - link "X" [ref=f4e22] [cursor=pointer]:
+              - /url: https://x.com/UBECnigeria
+              - img "X" [ref=f4e23]
+            - link "LinkedIn" [ref=f4e24] [cursor=pointer]:
+              - /url: https://www.linkedin.com/company/universal-basic-education-commission-ubec/
+              - img "LinkedIn" [ref=f4e25]
+        - navigation [ref=f4e26]:
+          - generic:
+            - link "logo":
+              - /url: /
+              - img "logo"
+          - list [ref=f4e28]:
+            - listitem [ref=f4e29]:
+              - link "Home" [ref=f4e30] [cursor=pointer]:
+                - /url: /
+            - listitem [ref=f4e31]:
+              - generic [ref=f4e32] [cursor=pointer]: About us
+            - listitem [ref=f4e33]:
+              - generic [ref=f4e34] [cursor=pointer]: Departments
+              - generic: ❯
+            - listitem [ref=f4e35]:
+              - link "Zones" [ref=f4e36] [cursor=pointer]:
+                - /url: /zonal-state-offices
+            - listitem [ref=f4e37]:
+              - generic [ref=f4e38] [cursor=pointer]: Media
+            - listitem [ref=f4e39]:
+              - link "Funding" [ref=f4e40] [cursor=pointer]:
+                - /url: /funding
+            - listitem [ref=f4e41]:
+              - generic [ref=f4e42] [cursor=pointer]: Publications
+            - listitem [ref=f4e43]:
+              - generic [ref=f4e44] [cursor=pointer]: Projects
+            - listitem [ref=f4e45]:
+              - link "Guidelines & Standards" [ref=f4e46] [cursor=pointer]:
+                - /url: /guidelines-standards
+            - listitem [ref=f4e47]:
+              - link "DRC" [ref=f4e48] [cursor=pointer]:
+                - /url: /drc
+            - listitem [ref=f4e49]:
+              - link "Smart Initiatives" [ref=f4e50] [cursor=pointer]:
+                - /url: /smart-initiatives
+            - listitem [ref=f4e51]:
+              - generic [ref=f4e52] [cursor=pointer]: Contact
+      - generic [ref=f4e53]:
+        - generic [ref=f4e54]:
+          - generic [ref=f4e56]:
+            - img "Hero slide 1" [ref=f4e58]
+            - generic:
+              - img "Hero slide 2"
+            - generic:
+              - img "Hero slide 3"
+            - generic:
+              - img "Hero slide 5"
+            - generic:
+              - img "Hero slide 6"
+          - generic [ref=f4e60]:
+            - heading "Committed to Quality Education for Every Nigerian Child" [level=1] [ref=f4e61]:
+              - text: Committed to
+              - generic [ref=f4e62]: Quality
+              - text: Education for Every Nigerian Child
+            - paragraph [ref=f4e63]: UBEC coordinates and drives the Universal Basic Education programme across Nigeria from early childhood care to junior secondary school ensuring access and quality for millions of learners nationwide.
+            - link [ref=f4e64] [cursor=pointer]:
+              - /url: /about/about-us
+              - button "Learn More" [ref=f4e65]
+          - generic [ref=f4e68]:
+            - button "Previous slide" [ref=f4e69] [cursor=pointer]: ←
+            - button "Next slide" [ref=f4e70] [cursor=pointer]: →
+          - generic [ref=f4e72]:
+            - button "Go to slide 1" [ref=f4e74] [cursor=pointer]:
+              - generic [ref=f4e75]: "1"
+            - button "Go to slide 2" [ref=f4e77] [cursor=pointer]:
+              - generic [ref=f4e78]: "2"
+            - button "Go to slide 3" [ref=f4e80] [cursor=pointer]:
+              - generic [ref=f4e81]: "3"
+            - button "Go to slide 4" [ref=f4e83] [cursor=pointer]:
+              - generic [ref=f4e84]: "4"
+            - button "Go to slide 5" [ref=f4e86] [cursor=pointer]:
+              - generic [ref=f4e87]: "5"
+        - generic [ref=f4e89]:
+          - generic [ref=f4e90]:
+            - heading "Education For All is The Responsibility of All" [level=2] [ref=f4e92]
+            - generic [ref=f4e93]:
+              - img [ref=f4e95]:
+                - generic [ref=f4e96]: Join Us Today • Join Us Today •
+              - generic [ref=f4e97] [cursor=pointer]
+          - generic [ref=f4e100]:
+            - paragraph [ref=f4e101]: Join us to make education accessible to every child. Our mission is to empower communities, teachers, and students so that learning becomes a reality for all. With your support, we can create classrooms full of opportunity and bright futures.
+            - generic [ref=f4e102]:
+              - generic [ref=f4e103]:
+                - generic [ref=f4e104]: 47,010,008+
+                - generic [ref=f4e105]: Total Enrolment of students
+              - generic [ref=f4e106]:
+                - generic [ref=f4e107]: 171,027+
+                - generic [ref=f4e108]: Total number of schools
+              - generic [ref=f4e109]:
+                - generic [ref=f4e110]: 1,686,535+
+                - generic [ref=f4e111]: Total Number of teachers
+        - generic [ref=f4e113]:
+          - generic [ref=f4e114]:
+            - generic [ref=f4e115]:
+              - img "Education 1"
+            - generic [ref=f4e116]:
+              - generic [ref=f4e117]: Who We Are
+              - heading "Universal Basic Education Commission (UBEC)" [level=2] [ref=f4e118]
+              - paragraph [ref=f4e119]: The Universal Basic Education Commission (UBEC) is a Federal Governments Agency saddled with the responsibility for coordinating all aspects of UBE programme implementation. The Universal Basic Education Programme was introduced in 1999 by the Federal Government of Nigeria as a reform programme aimed at providing greater access to, and ensuring quality of basic education throughout Nigeria.
+              - link [ref=f4e120] [cursor=pointer]:
+                - /url: /about/about-us
+                - button "Discover More" [ref=f4e121]
+          - generic [ref=f4e124]:
+            - generic [ref=f4e125]:
+              - heading "Empowering Every Nigerian Child with Quality Basic Education" [level=2] [ref=f4e126]
+              - paragraph [ref=f4e127]: The Universal Basic Education Commission (UBEC) is Nigeria's federal agency responsible for coordinating and implementing the Universal Basic Education programme, ensuring access to free and compulsory education for every child.
+            - generic [ref=f4e128]:
+              - generic [ref=f4e129]:
+                - heading "Ensure Access to Education" [level=3] [ref=f4e131]
+                - paragraph [ref=f4e132]: Provide free, compulsory, and quality basic education from early childhood through junior secondary level.
+              - generic [ref=f4e133]:
+                - heading "Reduce Illiteracy and Inequality" [level=3] [ref=f4e135]
+                - paragraph [ref=f4e136]: Bridge educational gaps, reduce disparities, and promote equal learning opportunities across Nigeria.
+              - generic [ref=f4e137]:
+                - heading "Strengthen Education Systems" [level=3] [ref=f4e139]
+                - paragraph [ref=f4e140]: Coordinate with states and stakeholders to improve learning outcomes, infrastructure, and overall education delivery.
+        - generic [ref=f4e142]:
+          - generic [ref=f4e143]:
+            - heading "What We Provide" [level=2] [ref=f4e144]
+            - paragraph [ref=f4e145]: Providing structured and inclusive basic education that supports children from early learning through primary and junior secondary levels, ensuring a strong and continuous foundation for lifelong learning.
+          - generic [ref=f4e146]:
+            - generic [ref=f4e147]:
+              - img "Early Child Care Development" [ref=f4e149]
+              - generic [ref=f4e150]:
+                - heading "Early Child Care Development" [level=3] [ref=f4e151]
+                - paragraph [ref=f4e152]: Pre–primary education is the education given to younger learners before the age of entering primary education (6 years). Early childhood education or pre-primary education is defined by the National Policy on Education.
+            - generic [ref=f4e153]:
+              - img "Primary Education" [ref=f4e155]
+              - generic [ref=f4e156]:
+                - heading "Primary Education" [level=3] [ref=f4e157]
+                - paragraph [ref=f4e158]: The Universal Basic Education COMMISSION, UBEC, came as a replacement of the Universal Primary Education and intended to enhance the success of the first nine years of schooling. The UBE involves 6 years of Primary School.
+            - generic [ref=f4e159]:
+              - img "Junior Secondary Education" [ref=f4e161]
+              - generic [ref=f4e162]:
+                - heading "Junior Secondary Education" [level=3] [ref=f4e163]
+                - paragraph [ref=f4e164]: Junior Secondary is a phase of education in state secondary schools for Years 12, 13 and 14, which helps to ensure the bridge between primary and secondary school is safe, strong and consistent for all students.
+        - generic [ref=f4e169]:
+          - generic [ref=f4e170]:
+            - heading "UBEC Resources" [level=2] [ref=f4e171]:
+              - generic [ref=f4e172]: UBEC
+              - generic [ref=f4e173]: Resources
+            - paragraph [ref=f4e174]: Unlocking opportunities through universal, free, and compulsory education for all.
+          - link [ref=f4e175] [cursor=pointer]:
+            - /url: /publications/journals
+            - img "Journals" [ref=f4e178]
+            - heading "Journals" [level=3] [ref=f4e181]
+            - paragraph [ref=f4e182]: Access a collection of scholarly publications and research papers on basic education policies, innovations, and best practices across Nigeria.
+          - link [ref=f4e183] [cursor=pointer]:
+            - /url: /publications/reports
+            - img "Reports" [ref=f4e186]
+            - heading "Reports" [level=3] [ref=f4e189]
+            - paragraph [ref=f4e190]: Explore comprehensive reports detailing UBEC's activities, impact assessments, and progress on national education programs.
+          - link [ref=f4e191] [cursor=pointer]:
+            - /url: /funding
+            - img "Matching Grant" [ref=f4e194]
+            - heading "Matching Grant" [level=3] [ref=f4e197]
+            - paragraph [ref=f4e198]: Learn about the UBEC Matching Grant program, including funding guidelines, allocation details, and how states can access and utilize grants effectively.
+          - link [ref=f4e199] [cursor=pointer]:
+            - /url: /
+            - img "Programmes" [ref=f4e202]
+            - heading "Programmes" [level=3] [ref=f4e205]
+            - paragraph [ref=f4e206]: Active programmes through which the Commission delivers its mandate to improve basic education outcomes across Nigeria.
+          - link [ref=f4e207] [cursor=pointer]:
+            - /url: /
+            - img "Projects" [ref=f4e210]
+            - heading "Projects" [level=3] [ref=f4e213]
+            - paragraph [ref=f4e214]: Browse ongoing and completed UBEC projects aimed at improving access, infrastructure, and quality in basic education.
+          - link [ref=f4e215] [cursor=pointer]:
+            - /url: /publications/tenders
+            - img "Tender" [ref=f4e218]
+            - heading "Tender" [level=3] [ref=f4e221]
+            - paragraph [ref=f4e222]: Download bid documents for ongoing and recent tender notices published by the Universal Basic Education Commission.
+          - link [ref=f4e223] [cursor=pointer]:
+            - /url: /publications/document-library
+            - img "Document Library" [ref=f4e226]
+            - heading "Document Library" [level=3] [ref=f4e229]
+            - paragraph [ref=f4e230]: Access an organized archive of UBEC publications, policy documents, guidelines, and other key reference materials.
+        - generic [ref=f4e232]:
+          - generic [ref=f4e233]:
+            - img "UBEC education"
+          - generic [ref=f4e234]:
+            - generic [ref=f4e235]:
+              - heading "UBEC at a Glance" [level=2] [ref=f4e236]
+              - paragraph [ref=f4e237]: Empowering millions of Nigerian children through quality basic education
+            - generic [ref=f4e238]:
+              - generic [ref=f4e239]:
+                - generic [ref=f4e240]: Schools
+                - generic [ref=f4e241]: 171K+
+              - generic [ref=f4e242]:
+                - generic [ref=f4e243]: Enrolment
+                - generic [ref=f4e244]: 47M+
+              - generic [ref=f4e245]:
+                - generic [ref=f4e246]: Teaching Staff
+                - generic [ref=f4e247]: 1.6M+
+            - generic [ref=f4e248]:
+              - heading "Schools" [level=3] [ref=f4e249]
+              - generic [ref=f4e250]:
+                - generic [ref=f4e251]:
+                  - generic [ref=f4e252]: Public
+                  - generic [ref=f4e253]: 79,775
+                - generic [ref=f4e254]:
+                  - generic [ref=f4e255]: Private
+                  - generic [ref=f4e256]: 91,252
+            - generic [ref=f4e257]:
+              - heading "Enrolment" [level=3] [ref=f4e258]
+              - generic [ref=f4e259]:
+                - generic [ref=f4e260]:
+                  - generic [ref=f4e261]: ECCDE
+                  - generic [ref=f4e262]: 7,234,695
+                - generic [ref=f4e263]:
+                  - generic [ref=f4e264]: Primary
+                  - generic [ref=f4e265]: 31,771,916
+                - generic [ref=f4e266]:
+                  - generic [ref=f4e267]: JSS
+                  - generic [ref=f4e268]: 8,003,397
+            - generic [ref=f4e269]:
+              - heading "Teaching Staff" [level=3] [ref=f4e270]
+              - generic [ref=f4e271]:
+                - generic [ref=f4e272]:
+                  - generic [ref=f4e273]: ECCDE
+                  - generic [ref=f4e274]: 354,651
+                - generic [ref=f4e275]:
+                  - generic [ref=f4e276]: Primary
+                  - generic [ref=f4e277]: 915,593
+                - generic [ref=f4e278]:
+                  - generic [ref=f4e279]: JSS
+                  - generic [ref=f4e280]: 416,291
+        - generic [ref=f4e281]:
+          - heading "Latest News" [level=2] [ref=f4e283]
+          - link [ref=f4e288] [cursor=pointer]:
+            - /url: /media/news
+            - button "View All" [ref=f4e289]
+      - generic [ref=f4e295]:
+        - paragraph [ref=f4e298]: Trusted by Leading Global and Local Partners
+        - generic [ref=f4e300]:
+          - generic [ref=f4e301]:
+            - img "Federal Ministry of Education"
+          - generic [ref=f4e302]:
+            - img "JICA"
+          - generic [ref=f4e303]:
+            - img "National Population Commission"
+          - generic [ref=f4e304]:
+            - img "KOICA – Korea International Cooperation Agency"
+          - generic [ref=f4e305]:
+            - img "World Bank"
+          - generic [ref=f4e306]:
+            - img "UNICEF"
+          - generic [ref=f4e307]:
+            - img "ISBD"
+      - contentinfo [ref=f4e308]:
+        - generic [ref=f4e310]:
+          - generic [ref=f4e311]:
+            - link "UBEC logo" [ref=f4e313] [cursor=pointer]:
+              - /url: /
+              - img "UBEC logo"
+            - paragraph [ref=f4e314]: The Universal Basic Education Commission (UBEC) is a Federal Governments Agency saddled with the responsibility for coordinating all aspects of UBE programme implementation.
+            - generic [ref=f4e315]:
+              - link "Facebook" [ref=f4e316] [cursor=pointer]:
+                - /url: https://www.facebook.com/ubecabuja.ubec5
+                - img "Facebook" [ref=f4e317]
+              - link "Instagram" [ref=f4e318] [cursor=pointer]:
+                - /url: https://www.instagram.com/ubec_nigeria/
+                - img "Instagram" [ref=f4e319]
+              - link "X" [ref=f4e320] [cursor=pointer]:
+                - /url: https://x.com/UBECnigeria
+                - img "X" [ref=f4e321]
+              - link "LinkedIn" [ref=f4e322] [cursor=pointer]:
+                - /url: https://www.linkedin.com/company/universal-basic-education-commission-ubec/
+                - img "LinkedIn" [ref=f4e323]
+          - generic [ref=f4e324]:
+            - heading "Quick Links" [level=3] [ref=f4e325]
+            - list [ref=f4e326]:
+              - listitem [ref=f4e327]:
+                - link "↗ Home" [ref=f4e328] [cursor=pointer]:
+                  - /url: /
+                  - generic [ref=f4e329]: ↗
+                  - text: Home
+              - listitem [ref=f4e330]:
+                - link "↗ About Us" [ref=f4e331] [cursor=pointer]:
+                  - /url: /about-us
+                  - generic [ref=f4e332]: ↗
+                  - text: About Us
+              - listitem [ref=f4e333]:
+                - link "↗ Media" [ref=f4e334] [cursor=pointer]:
+                  - /url: /media/gallery
+                  - generic [ref=f4e335]: ↗
+                  - text: Media
+              - listitem [ref=f4e336]:
+                - link "↗ Funding" [ref=f4e337] [cursor=pointer]:
+                  - /url: /funding
+                  - generic [ref=f4e338]: ↗
+                  - text: Funding
+              - listitem [ref=f4e339]:
+                - link "↗ Publications" [ref=f4e340] [cursor=pointer]:
+                  - /url: /publications/journals
+                  - generic [ref=f4e341]: ↗
+                  - text: Publications
+              - listitem [ref=f4e342]:
+                - link "↗ Contact Us" [ref=f4e343] [cursor=pointer]:
+                  - /url: /contact
+                  - generic [ref=f4e344]: ↗
+                  - text: Contact Us
+              - listitem [ref=f4e345]:
+                - link "↗ FAQs" [ref=f4e346] [cursor=pointer]:
+                  - /url: /contact/faqs
+                  - generic [ref=f4e347]: ↗
+                  - text: FAQs
+              - listitem [ref=f4e348]:
+                - link "↗ NEDI" [ref=f4e349] [cursor=pointer]:
+                  - /url: https://nedi.education.gov.ng/
+                  - generic [ref=f4e350]: ↗
+                  - text: NEDI
+          - generic [ref=f4e351]:
+            - heading "Get In Touch" [level=3] [ref=f4e352]
+            - list [ref=f4e353]:
+              - listitem [ref=f4e354]:
+                - link "+2349038022457" [ref=f4e356] [cursor=pointer]:
+                  - /url: tel:+2349038022457
+              - listitem [ref=f4e357]:
+                - link "+2347016390000" [ref=f4e359] [cursor=pointer]:
+                  - /url: tel:+2347016390000
+              - listitem [ref=f4e360]:
+                - link "info@ubec.gov.ng" [ref=f4e362] [cursor=pointer]:
+                  - /url: mailto:info@ubec.gov.ng
+              - listitem [ref=f4e363]:
+                - generic [ref=f4e365]: "Private Mail Box: 5086"
+              - listitem [ref=f4e366]:
+                - generic [ref=f4e368]: "Postal Code: 900284"
+              - listitem [ref=f4e369]:
+                - generic [ref=f4e371]: UBEC Building, No. 7 Gwani Street, Wuse Zone 4, Abuja, Nigeria
+          - iframe [ref=f4e373]
+        - paragraph [ref=f4e376]:
+          - text: Copyright © 2025
+          - link "UBEC" [ref=f4e377] [cursor=pointer]:
+            - /url: /
+          - text: ", All rights reserved."
+  - generic [ref=f4e379] [cursor=pointer]

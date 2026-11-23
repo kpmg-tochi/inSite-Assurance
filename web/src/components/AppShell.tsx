@@ -47,6 +47,9 @@ const RETENTION_VIEW_PERMISSIONS = [
   "audit:view_ledger",
 ];
 
+/** The sidebar's "Recent Active Projects" list is hidden for now (demo branch). */
+const SHOW_RECENT_PROJECTS = false;
+
 export function AppShell({
   projects,
   selectedProject,
@@ -94,7 +97,8 @@ export function AppShell({
     : `${user?.roleName || "Assurance"} Workspace`;
 
   const isContractorOnly =
-    hasPermission("ipc:submit_claim") && !hasPermission("ipc:certify_valuation");
+    hasPermission("ipc:submit_claim") &&
+    !hasPermission("ipc:certify_valuation");
   const isLenderApprover =
     hasPermission("tranche:approve_disbursement") &&
     !hasPermission("ipc:certify_valuation");
@@ -120,7 +124,10 @@ export function AppShell({
     : "/app/projects";
 
   // Phase 10: the Handover and Retention tabs exist only when the module is on for the project.
-  const closeout = useProjectProcess(selectedProject?.id, selectedProject?.status !== "DRAFT").data?.config;
+  const closeout = useProjectProcess(
+    selectedProject?.id,
+    selectedProject?.status !== "DRAFT",
+  ).data?.config;
 
   const recentActiveProjects = React.useMemo(() => {
     const active = projects.filter((p) => p.certifiedProgressPct < 100);
@@ -151,17 +158,17 @@ export function AppShell({
       <aside
         className={`${
           sidebarCollapsed ? "w-[68px]" : "w-64"
-        } transition-all duration-200 kpmg-sidebar-gradient text-slate-200 rounded-2xl p-3 my-3 flex flex-col justify-between shadow-xl shrink-0 relative select-none`}
+        } transition-all duration-200 kpmg-sidebar-gradient text-slate-200 rounded-2xl p-3 my-3 flex flex-col justify-between shadow-xl shrink-0 relative select-none min-h-0`}
       >
-        <div>
-          {/* Brand Header + Minimize Toggle */}
-          <div className="flex items-center justify-between px-1.5 py-2 mb-4 border-b border-white/10">
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* Brand Header + Minimize Toggle (pinned at the top) */}
+          <div className="shrink-0 flex items-center justify-between px-1.5 py-2 mb-4 border-b border-white/10">
             <Link
               to="/"
               title="View Public Platform Overview"
               className="flex items-center gap-2.5 overflow-hidden hover:opacity-90 transition"
             >
-              <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-1 shrink-0 shadow-sm">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0">
                 {user?.tenant?.brandingConfig?.logoUrl ? (
                   <img
                     src={user.tenant.brandingConfig.logoUrl}
@@ -169,16 +176,20 @@ export function AppShell({
                     className="w-full h-full object-contain"
                   />
                 ) : (
-                  <InSiteLogo showText={false} className="h-full" />
+                  <img
+                    src="/client/ubec-logo.png"
+                    alt="UBEC"
+                    className="h-8 w-8 aspect-square"
+                  />
                 )}
               </div>
               {!sidebarCollapsed && (
                 <div className="truncate">
                   <div className="text-white font-semibold text-sm leading-tight truncate">
-                    {user?.tenant?.name || "InSite Assurance"}
+                    {user?.tenant?.name || "UBEC"}
                   </div>
                   <div className="text-[11px] text-white/70 truncate">
-                    {user?.tenant?.brandingConfig?.tagline || "InSite Assurance"}
+                    {user?.tenant?.brandingConfig?.tagline || "UBEC"}
                   </div>
                 </div>
               )}
@@ -197,8 +208,8 @@ export function AppShell({
             </button>
           </div>
 
-          {/* Primary Navigation (Role-Segregated) */}
-          <div className="space-y-1">
+          {/* Primary Navigation (Role-Segregated; the only part of the sidebar that scrolls) */}
+          <div className="space-y-1 flex-1 min-h-0 overflow-y-auto -mx-1 px-1 pb-2">
             {!sidebarCollapsed && (
               <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/55">
                 {workspaceTitleByRole}
@@ -218,7 +229,9 @@ export function AppShell({
                 }
               >
                 <Globe2 className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Portfolio</span>}
+                {!sidebarCollapsed && (
+                  <span className="truncate">Portfolio</span>
+                )}
               </NavLink>
             )}
 
@@ -241,7 +254,11 @@ export function AppShell({
             </NavLink>
 
             <NavLink
-              to={selectedProject ? `${projectBasePath}/dashboard` : "/app/projects"}
+              to={
+                selectedProject
+                  ? `${projectBasePath}/dashboard`
+                  : "/app/projects"
+              }
               title={navLabels.dashboard}
               className={({ isActive }) =>
                 `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
@@ -278,54 +295,64 @@ export function AppShell({
             )}
 
             {hasPermission("ipc:view") && (
-            <NavLink
-              to={selectedProject ? `${projectBasePath}/reconciliation` : "/app/projects"}
-              title={navLabels.reconciliation}
-              className={({ isActive }) =>
-                `w-full flex items-center justify-between px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                  isActive
-                    ? "bg-white/15 text-white shadow-sm"
-                    : "text-white/80 hover:text-white hover:bg-white/10"
-                }`
-              }
-            >
-              <span className="flex items-center gap-3 truncate">
-                <FileSpreadsheet className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && (
-                  <span className="truncate">{navLabels.reconciliation}</span>
-                )}
-              </span>
-              {!sidebarCollapsed && openConflictBadgeCount > 0 && (
-                <span className="text-xs bg-white text-brand-primary font-bold px-1.5 py-0.5 rounded">
-                  {openConflictBadgeCount}
+              <NavLink
+                to={
+                  selectedProject
+                    ? `${projectBasePath}/reconciliation`
+                    : "/app/projects"
+                }
+                title={navLabels.reconciliation}
+                className={({ isActive }) =>
+                  `w-full flex items-center justify-between px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                    isActive
+                      ? "bg-white/15 text-white shadow-sm"
+                      : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`
+                }
+              >
+                <span className="flex items-center gap-3 truncate">
+                  <FileSpreadsheet className="w-4 h-4 shrink-0" />
+                  {!sidebarCollapsed && (
+                    <span className="truncate">{navLabels.reconciliation}</span>
+                  )}
                 </span>
-              )}
-            </NavLink>
+                {!sidebarCollapsed && openConflictBadgeCount > 0 && (
+                  <span className="text-xs bg-white text-brand-primary font-bold px-1.5 py-0.5 rounded">
+                    {openConflictBadgeCount}
+                  </span>
+                )}
+              </NavLink>
             )}
 
             {hasPermission("boq:view") && (
-            <NavLink
-              to={selectedProject ? `${projectBasePath}/boq` : "/app/projects"}
-              title={navLabels.boq}
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                  isActive
-                    ? "bg-white/15 text-white shadow-sm"
-                    : "text-white/80 hover:text-white hover:bg-white/10"
-                }`
-              }
-            >
-              <ClipboardList className="w-4 h-4 shrink-0" />
-              {!sidebarCollapsed && (
-                <span className="truncate">{navLabels.boq}</span>
-              )}
-            </NavLink>
+              <NavLink
+                to={
+                  selectedProject ? `${projectBasePath}/boq` : "/app/projects"
+                }
+                title={navLabels.boq}
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                    isActive
+                      ? "bg-white/15 text-white shadow-sm"
+                      : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`
+                }
+              >
+                <ClipboardList className="w-4 h-4 shrink-0" />
+                {!sidebarCollapsed && (
+                  <span className="truncate">{navLabels.boq}</span>
+                )}
+              </NavLink>
             )}
 
             {/* Phase 9: schedule and variance */}
             {hasPermission("schedule:view_variance") && (
               <NavLink
-                to={selectedProject ? `${projectBasePath}/schedule` : "/app/projects"}
+                to={
+                  selectedProject
+                    ? `${projectBasePath}/schedule`
+                    : "/app/projects"
+                }
                 title="Schedule"
                 className={({ isActive }) =>
                   `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
@@ -336,62 +363,83 @@ export function AppShell({
                 }
               >
                 <CalendarRange className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Schedule</span>}
+                {!sidebarCollapsed && (
+                  <span className="truncate">Schedule</span>
+                )}
               </NavLink>
             )}
 
             {/* Phase 14: site inspections and findings */}
-            {selectedProject && (hasPermission("inspections:view") || hasPermission("inspections:manage_findings")) && (
-              <NavLink
-                to={`${projectBasePath}/inspections`}
-                title="Inspections"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive
-                      ? "bg-white/15 text-white shadow-sm"
-                      : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <ClipboardCheck className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Inspections</span>}
-              </NavLink>
-            )}
+            {selectedProject &&
+              (hasPermission("inspections:view") ||
+                hasPermission("inspections:manage_findings")) && (
+                <NavLink
+                  to={`${projectBasePath}/inspections`}
+                  title="Inspections"
+                  className={({ isActive }) =>
+                    `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                      isActive
+                        ? "bg-white/15 text-white shadow-sm"
+                        : "text-white/80 hover:text-white hover:bg-white/10"
+                    }`
+                  }
+                >
+                  <ClipboardCheck className="w-4 h-4 shrink-0" />
+                  {!sidebarCollapsed && (
+                    <span className="truncate">Inspections</span>
+                  )}
+                </NavLink>
+              )}
 
             {/* Phase 10: handover and retention, shown only when the module is on for the project */}
-            {selectedProject && closeout?.enableHandoverModule && (hasPermission("handover:manage_links") || hasPermission("handover:review_feedback")) && (
-              <NavLink
-                to={`${projectBasePath}/handover`}
-                title="Handover"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive ? "bg-white/15 text-white shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <Handshake className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Handover</span>}
-              </NavLink>
-            )}
-            {selectedProject && closeout?.enableRetentionModule && RETENTION_VIEW_PERMISSIONS.some((k) => hasPermission(k)) && (
-              <NavLink
-                to={`${projectBasePath}/retention`}
-                title="Retention and defects"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive ? "bg-white/15 text-white shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <Wrench className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Retention and defects</span>}
-              </NavLink>
-            )}
+            {selectedProject &&
+              closeout?.enableHandoverModule &&
+              (hasPermission("handover:manage_links") ||
+                hasPermission("handover:review_feedback")) && (
+                <NavLink
+                  to={`${projectBasePath}/handover`}
+                  title="Handover"
+                  className={({ isActive }) =>
+                    `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                      isActive
+                        ? "bg-white/15 text-white shadow-sm"
+                        : "text-white/80 hover:text-white hover:bg-white/10"
+                    }`
+                  }
+                >
+                  <Handshake className="w-4 h-4 shrink-0" />
+                  {!sidebarCollapsed && (
+                    <span className="truncate">Handover</span>
+                  )}
+                </NavLink>
+              )}
+            {selectedProject &&
+              closeout?.enableRetentionModule &&
+              RETENTION_VIEW_PERMISSIONS.some((k) => hasPermission(k)) && (
+                <NavLink
+                  to={`${projectBasePath}/retention`}
+                  title="Retention and defects"
+                  className={({ isActive }) =>
+                    `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                      isActive
+                        ? "bg-white/15 text-white shadow-sm"
+                        : "text-white/80 hover:text-white hover:bg-white/10"
+                    }`
+                  }
+                >
+                  <Wrench className="w-4 h-4 shrink-0" />
+                  {!sidebarCollapsed && (
+                    <span className="truncate">Retention and defects</span>
+                  )}
+                </NavLink>
+              )}
 
             {/* Audit Ledger gated by audit:view_ledger permission */}
             {hasPermission("audit:view_ledger") && (
               <NavLink
-                to={selectedProject ? `${projectBasePath}/audit` : "/app/projects"}
+                to={
+                  selectedProject ? `${projectBasePath}/audit` : "/app/projects"
+                }
                 title="Audit Ledger"
                 className={({ isActive }) =>
                   `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
@@ -425,48 +473,50 @@ export function AppShell({
             </NavLink>
           </div>
 
-          {/* Recent Active Projects Tree (Hidden when collapsed) */}
-          {!sidebarCollapsed && recentActiveProjects.length > 0 && (
-            <div className="mt-6 space-y-1">
-              <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/55">
-                Recent Active Projects
+          {/* Recent Active Projects Tree (hidden for now; flip SHOW_RECENT_PROJECTS to bring it back) */}
+          {SHOW_RECENT_PROJECTS &&
+            !sidebarCollapsed &&
+            recentActiveProjects.length > 0 && (
+              <div className="mt-6 space-y-1">
+                <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/55">
+                  Recent Active Projects
+                </div>
+                <div className="pl-3 ml-2 border-l border-white/15 space-y-1">
+                  {recentActiveProjects.map((project) => {
+                    const isSelected = selectedProject?.id === project.id;
+                    return (
+                      <button
+                        key={project.id}
+                        type="button"
+                        onClick={() => onSelectProject(project.id)}
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition truncate ${
+                          isSelected
+                            ? "bg-white/15 text-white font-medium"
+                            : "text-white/70 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        <span className="font-semibold mr-1.5">
+                          {project.codePrefix}
+                        </span>
+                        <span>{project.name}</span>
+                      </button>
+                    );
+                  })}
+                  <Link
+                    to="/app/projects"
+                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-white/70 hover:text-white hover:bg-white/10 transition"
+                  >
+                    <span>View All Projects</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </Link>
+                </div>
               </div>
-              <div className="pl-3 ml-2 border-l border-white/15 space-y-1">
-                {recentActiveProjects.map((project) => {
-                  const isSelected = selectedProject?.id === project.id;
-                  return (
-                    <button
-                      key={project.id}
-                      type="button"
-                      onClick={() => onSelectProject(project.id)}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition truncate ${
-                        isSelected
-                          ? "bg-white/15 text-white font-medium"
-                          : "text-white/70 hover:text-white hover:bg-white/10"
-                      }`}
-                    >
-                      <span className="font-semibold mr-1.5">
-                        {project.codePrefix}
-                      </span>
-                      <span>{project.name}</span>
-                    </button>
-                  );
-                })}
-                <Link
-                  to="/app/projects"
-                  className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-white/70 hover:text-white hover:bg-white/10 transition"
-                >
-                  <span>View All Projects</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-            </div>
-          )}
+            )}
         </div>
 
-        {/* Bottom User Profile Trigger & Popover Dialog */}
+        {/* Bottom User Profile Trigger & Popover Dialog (pinned at the bottom) */}
         <div
-          className="relative pt-3 border-t border-white/10"
+          className="relative shrink-0 pt-3 border-t border-white/10"
           ref={popoverRef}
         >
           <button
@@ -536,7 +586,9 @@ export function AppShell({
                 </>
               )}
 
-              <div className={`${IS_DEMO_MODE ? "pt-1 mt-1 border-t border-slate-100" : ""} space-y-0.5`}>
+              <div
+                className={`${IS_DEMO_MODE ? "pt-1 mt-1 border-t border-slate-100" : ""} space-y-0.5`}
+              >
                 <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                   Settings &amp; Info
                 </div>
@@ -607,8 +659,8 @@ export function AppShell({
                   {isPortfolio
                     ? "Portfolio dashboard"
                     : isExecutive
-                    ? "Multi-Project Capital Risk & Governance Matrix"
-                    : selectedProject?.name || "Capital Project Assurance"}
+                      ? "Multi-Project Capital Risk & Governance Matrix"
+                      : selectedProject?.name || "Capital Project Assurance"}
                 </h1>
                 <span
                   className={`hidden sm:inline-block ml-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
@@ -624,17 +676,20 @@ export function AppShell({
                   {isPortfolio
                     ? "Portfolio"
                     : isExecutive
-                    ? "Executive Surveillance"
-                    : workspaceTitleByRole}
+                      ? "Executive Surveillance"
+                      : workspaceTitleByRole}
                 </span>
               </div>
               <p className="text-xs text-slate-300">
                 {isPortfolio ? (
-                  <span>Every live project you can see, on one map, with portfolio KPIs</span>
+                  <span>
+                    Every live project you can see, on one map, with portfolio
+                    KPIs
+                  </span>
                 ) : isExecutive ? (
                   <span>
-                    Consolidated cross-project risk, disbursement holdbacks,
-                    and governance telemetry
+                    Consolidated cross-project risk, disbursement holdbacks, and
+                    governance telemetry
                   </span>
                 ) : selectedProject ? (
                   <>
@@ -642,7 +697,8 @@ export function AppShell({
                       {selectedProject.geofenceMode
                         ? `${geofenceModeLabel(selectedProject.geofenceMode)} geofence`
                         : "No geofence"}
-                      {selectedProject.status === "ARCHIVED" && " · Archived (read-only)"}
+                      {selectedProject.status === "ARCHIVED" &&
+                        " · Archived (read-only)"}
                     </span>{" "}
                     <span className="text-white/30">·</span>{" "}
                     <span className="text-slate-400">Lender:</span>{" "}
@@ -653,7 +709,8 @@ export function AppShell({
                     <span className="text-slate-400">Contractor:</span>{" "}
                     <span className="text-slate-200 font-medium">
                       {selectedProject.contractorOrganizationName}
-                      {selectedProject.contractorCount > 1 && ` +${selectedProject.contractorCount - 1}`}
+                      {selectedProject.contractorCount > 1 &&
+                        ` +${selectedProject.contractorCount - 1}`}
                     </span>
                   </>
                 ) : (
@@ -665,7 +722,10 @@ export function AppShell({
               {/* Phase 10: construction phase and phase-change actions */}
               {!isCrossProject && selectedProject && (
                 <div className="mt-1.5">
-                  <ProjectPhaseBanner projectId={selectedProject.id} projectStatus={selectedProject.status} />
+                  <ProjectPhaseBanner
+                    projectId={selectedProject.id}
+                    projectStatus={selectedProject.status}
+                  />
                 </div>
               )}
             </div>

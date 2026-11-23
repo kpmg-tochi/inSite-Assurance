@@ -230,7 +230,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.2)',
   },
   pillActive: {
-    backgroundColor: '#00338D',
+    backgroundColor: '#00715D',
     borderColor: '#38BDF8',
   },
   pillText: {
@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
   },
   confirmBtn: {
     flex: 1,
-    backgroundColor: '#00338D',
+    backgroundColor: '#00715D',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',

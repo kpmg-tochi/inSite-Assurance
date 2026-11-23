@@ -154,7 +154,7 @@ export default function InspectionScreen() {
   };
 
   const header = (
-    <LinearGradient colors={["#6546FC", "#1E3A8A", "#1E1B4B"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
+    <LinearGradient colors={["#12915C", "#00715D", "#122F2A"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
       <TouchableOpacity onPress={() => navigation.goBack()} activeOpacity={0.7}>
         <Text style={styles.closeText}>‹ Back</Text>
       </TouchableOpacity>
@@ -414,16 +414,16 @@ const styles = StyleSheet.create({
   cardMeta: { fontSize: 12, color: "#64748B", marginTop: 4 },
   row: { flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap" },
   toggle: { borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, minWidth: 44, alignItems: "center" },
-  toggleOn: { backgroundColor: "#6546FC", borderColor: "#6546FC" },
+  toggleOn: { backgroundColor: "#00715D", borderColor: "#00715D" },
   toggleText: { fontSize: 13, fontWeight: "600", color: "#0F172A" },
   toggleTextOn: { color: "#FFFFFF" },
   input: { borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 12, padding: 12, minHeight: 64, marginTop: 10, textAlignVertical: "top", fontSize: 13, backgroundColor: "#FFFFFF" },
   inputSingle: { borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 12, padding: 10, marginTop: 10, fontSize: 14, backgroundColor: "#FFFFFF" },
-  primaryButton: { backgroundColor: "#6546FC", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginTop: 10 },
+  primaryButton: { backgroundColor: "#00715D", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginTop: 10 },
   primaryButtonText: { color: "#FFFFFF", fontWeight: "700", fontSize: 14 },
   secondaryButton: { borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginTop: 10, alignSelf: "flex-start" },
   secondaryButtonText: { color: "#0F172A", fontWeight: "600", fontSize: 13 },
   disabled: { opacity: 0.5 },
-  link: { color: "#6546FC", fontWeight: "700", fontSize: 13, marginTop: 8 },
+  link: { color: "#00715D", fontWeight: "700", fontSize: 13, marginTop: 8 },
   error: { color: "#B91C1C", fontSize: 12, marginTop: 6 },
 });

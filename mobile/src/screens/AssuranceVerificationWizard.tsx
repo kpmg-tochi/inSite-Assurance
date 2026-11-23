@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   demoBar: {
-    backgroundColor: '#0C233C',
+    backgroundColor: '#122F2A',
     paddingTop: 10,
     paddingHorizontal: 16,
     borderTopWidth: 1,

@@ -63,9 +63,12 @@ export async function seedPhase12(p: { passwordHash: string }) {
 
   // People: a monitor without a registration (policy OPTIONAL lets them verify) and an approver.
   const monitorOrg = await prisma.organization.findFirst({
-    where: { tenantId: tenant.id, name: "Programme Monitoring Consultants" },
+    where: { tenantId: tenant.id, name: { in: ["Programme Monitoring Consultants", "UBEC Quality Assurance Department"] } },
   });
-  const flagship = await prisma.organization.findFirst({ where: { tenantId: tenant.id, name: "Programme Authority" } });
+  // Default seed names it "Programme Authority"; the UBEC demo profile (seedPhase11Ubec) renames it.
+  const flagship = await prisma.organization.findFirst({
+    where: { tenantId: tenant.id, name: { in: ["Programme Authority", "Universal Basic Education Commission (UBEC)"] } },
+  });
   const monitorRole = await prisma.role.findFirst({ where: { tenantId: tenant.id, code: "MONITOR" } });
   const lenderRole = await prisma.role.findFirst({ where: { tenantId: tenant.id, code: "LENDER" } });
   if (monitorOrg && monitorRole) {

@@ -1,0 +1,21 @@
+appId: com.kpmg.insiteassurance.mobile
+name: "S-06 / P5-M-01 first launch and landing"
+tags:
+  - signed-out
+---
+- launchApp:
+    clearState: true
+    permissions:
+      all: unset
+- runFlow: _support/dev-launcher.yaml
+- extendedWaitUntil:
+    visible: "Join with a project code"
+    timeout: 60000
+# S-06: no notification or background-location prompt on first launch
+- assertNotVisible: ".*[Aa]llow.*notifications.*"
+- assertNotVisible: ".*location.*all the time.*"
+# P5-M-01: two paths
+- assertVisible: "Sign in"
+- assertVisible: "Join with a project code"
+- assertVisible: "InSite Assurance"
+- takeScreenshot: "qa/screenshots/mobile/signed-out/landing__first-launch"

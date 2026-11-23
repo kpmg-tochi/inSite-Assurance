@@ -52,7 +52,7 @@ const NOTIFICATION_VISUALS: Record<
   },
   BACKLOG_REVIEW_REQUIRED: {
     icon: "layers",
-    accentColor: "#00338D",
+    accentColor: "#00715D",
     iconBg: "#EFF6FF",
     badgeText: "Backlog Review",
     pillVariant: "info",

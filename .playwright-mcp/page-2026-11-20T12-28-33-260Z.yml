@@ -1,0 +1,268 @@
+- generic [ref=f12e2]:
+  - generic [ref=f12e3]:
+    - complementary [ref=f12e4]:
+      - generic [ref=f12e5]:
+        - generic [ref=f12e6]:
+          - link "KPMG Nigeria Infrastructure & Capital Advisory KPMG Nigeria Infrastructure & Capital Advisory Capital Advisory" [ref=f12e7] [cursor=pointer]:
+            - /url: /
+            - img "KPMG Nigeria Infrastructure & Capital Advisory" [ref=f12e9]
+            - generic [ref=f12e10]:
+              - generic [ref=f12e11]: KPMG Nigeria Infrastructure & Capital Advisory
+              - generic [ref=f12e12]: Capital Advisory
+          - button "Minimize sidebar" [ref=f12e13] [cursor=pointer]
+        - generic [ref=f12e17]:
+          - generic [ref=f12e18]: Platform Super Admin Console
+          - link "Portfolio" [ref=f12e19] [cursor=pointer]:
+            - /url: /app/portfolio
+          - link "All Projects" [ref=f12e26] [cursor=pointer]:
+            - /url: /app/projects
+          - link "Site Map & Overview" [ref=f12e30] [cursor=pointer]:
+            - /url: /app/projects/aea31ddd-8c3a-4549-a848-97287c1593e4/dashboard
+          - link "Executive Risk Matrix" [ref=f12e34] [cursor=pointer]:
+            - /url: /app/executive
+          - link "IPC Claims & Queries" [ref=f12e38] [cursor=pointer]:
+            - /url: /app/projects/aea31ddd-8c3a-4549-a848-97287c1593e4/reconciliation
+          - link "BOQ & Hold-Points" [ref=f12e44] [cursor=pointer]:
+            - /url: /app/projects/aea31ddd-8c3a-4549-a848-97287c1593e4/boq
+          - link "Schedule" [ref=f12e49] [cursor=pointer]:
+            - /url: /app/projects/aea31ddd-8c3a-4549-a848-97287c1593e4/schedule
+          - link "Inspections" [ref=f12e53] [cursor=pointer]:
+            - /url: /app/projects/aea31ddd-8c3a-4549-a848-97287c1593e4/inspections
+          - link "Audit Ledger" [ref=f12e59] [cursor=pointer]:
+            - /url: /app/projects/aea31ddd-8c3a-4549-a848-97287c1593e4/audit
+          - link "Settings" [ref=f12e64] [cursor=pointer]:
+            - /url: /app/settings
+        - generic [ref=f12e69]:
+          - generic [ref=f12e70]: Recent Active Projects
+          - generic [ref=f12e71]:
+            - button "KAN-210Kano General Hospital Annex & Utilities" [ref=f12e72] [cursor=pointer]
+            - button "PRG-221Co-Funded — Ikeja Junior Secondary School" [ref=f12e73] [cursor=pointer]
+            - button "PRG-211Co-Funded — Kano Township Primary School" [ref=f12e74] [cursor=pointer]
+            - button "PRG-102Central — Kano Girls' Science College" [ref=f12e75] [cursor=pointer]
+            - link "View All Projects" [ref=f12e76] [cursor=pointer]:
+              - /url: /app/projects
+      - 'button "AN Adaeze Nwosu, FCA Tenant Super Admin · ICAN #FCA/019284" [ref=f12e81] [cursor=pointer]':
+        - generic [ref=f12e82]: AN
+        - generic [ref=f12e83]:
+          - generic [ref=f12e84]: Adaeze Nwosu, FCA
+          - generic [ref=f12e85]: "Tenant Super Admin · ICAN #FCA/019284"
+    - generic [ref=f12e86]:
+      - banner [ref=f12e87]:
+        - generic [ref=f12e89]:
+          - generic [ref=f12e90]:
+            - generic [ref=f12e91]: KAN-210
+            - generic [ref=f12e92]: /
+            - heading "Kano General Hospital Annex & Utilities" [level=1] [ref=f12e93]
+            - generic [ref=f12e94]: Platform Super Admin Console
+          - paragraph [ref=f12e95]:
+            - text: "Radial geofence · Lender: InfraCredit Guarantee & Project Finance Desk · Contractor:"
+            - generic [ref=f12e96]: Julius & Sons Civil Engineering Nigeria Ltd +2
+        - generic [ref=f12e97]:
+          - button "Open governance notifications" [ref=f12e99] [cursor=pointer]
+          - button "Project settings" [ref=f12e103] [cursor=pointer]
+          - button "+ New Project" [ref=f12e104] [cursor=pointer]
+      - generic [ref=f12e106]:
+        - generic [ref=f12e108]:
+          - generic [ref=f12e109]:
+            - heading "Governance & App Settings" [level=2] [ref=f12e110]
+            - generic [ref=f12e111]: Tenant Super Admin
+          - paragraph [ref=f12e112]: Manage mobile field agent credentials, roles & permissions, tenant branding, and your account.
+        - generic [ref=f12e114]:
+          - button "Access & Assurance" [ref=f12e115] [cursor=pointer]
+          - button "Roles & Permissions" [ref=f12e120] [cursor=pointer]
+          - button "Users & Visibility" [ref=f12e125] [cursor=pointer]
+          - button "Organisations" [ref=f12e132] [cursor=pointer]
+          - button "Workflow templates" [ref=f12e138] [cursor=pointer]
+          - button "Project types & regions" [ref=f12e144] [cursor=pointer]
+          - button "Inspections & supervisors" [ref=f12e150] [cursor=pointer]
+          - button "Tenant Settings" [ref=f12e156] [cursor=pointer]
+          - button "Account & Security" [ref=f12e164] [cursor=pointer]
+        - generic [ref=f12e169]:
+          - generic [ref=f12e170]:
+            - generic [ref=f12e171]:
+              - heading "Configurable Tenant Roles & Relational Permissions" [level=3] [ref=f12e176]
+              - paragraph [ref=f12e177]: Rename roles, toggle permissions by governance category, and configure mobile field personas (Independent Verifier vs. Contractor Executor) for client workflows.
+            - button "Create Custom Role" [ref=f12e178] [cursor=pointer]
+          - generic [ref=f12e180]:
+            - generic [ref=f12e181]:
+              - generic [ref=f12e182]:
+                - generic [ref=f12e183]:
+                  - generic [ref=f12e184]:
+                    - generic [ref=f12e185]:
+                      - generic [ref=f12e186]: Contractor Site Engineer
+                      - generic [ref=f12e187]: Default Template
+                    - generic [ref=f12e188]: CONTRACTOR_ENGINEER · Join Suffix -CON
+                  - generic [ref=f12e189]: MOBILE
+                - paragraph [ref=f12e190]: Contractor site engineer submitting self-reported progress logs; requires ID and liveness assurance (weight 0.40).
+                - generic [ref=f12e191]:
+                  - generic [ref=f12e192]:
+                    - generic [ref=f12e193]: Field Persona
+                    - text: Contractor Executor
+                  - generic [ref=f12e194]:
+                    - generic [ref=f12e195]: Weight / Permissions
+                    - generic [ref=f12e196]: 0.4x · 8 perms
+              - generic [ref=f12e197]:
+                - generic [ref=f12e198]: 0 assigned users · ID review required
+                - button "Customize" [ref=f12e200] [cursor=pointer]
+            - generic [ref=f12e204]:
+              - generic [ref=f12e205]:
+                - generic [ref=f12e206]:
+                  - generic [ref=f12e207]:
+                    - generic [ref=f12e208]:
+                      - generic [ref=f12e209]: Independent Monitor
+                      - generic [ref=f12e210]: Default Template
+                    - generic [ref=f12e211]: MONITOR
+                  - generic [ref=f12e212]: WEB
+                - paragraph [ref=f12e213]: Licensed Quantity Surveyor or COREN Engineer certifying physical-to-financial progress and managing site hold-points.
+                - generic [ref=f12e214]:
+                  - generic [ref=f12e215]:
+                    - generic [ref=f12e216]: Field Persona
+                    - text: Web Governance Only
+                  - generic [ref=f12e217]:
+                    - generic [ref=f12e218]: Weight / Permissions
+                    - generic [ref=f12e219]: 1.0x · 37 perms
+              - generic [ref=f12e220]:
+                - generic [ref=f12e221]: 2 assigned users
+                - button "Customize" [ref=f12e223] [cursor=pointer]
+            - generic [ref=f12e227]:
+              - generic [ref=f12e228]:
+                - generic [ref=f12e229]:
+                  - generic [ref=f12e230]:
+                    - generic [ref=f12e231]:
+                      - generic [ref=f12e232]: Independent Resident Clerk of Works
+                      - generic [ref=f12e233]: Default Template
+                    - generic [ref=f12e234]: INDEPENDENT_RESIDENT · Join Suffix -COW
+                  - generic [ref=f12e235]: MOBILE
+                - paragraph [ref=f12e236]: Full-time on-site Resident Clerk of Works or M&E officer overseeing daily quality and compliance (weight 0.85).
+                - generic [ref=f12e237]:
+                  - generic [ref=f12e238]:
+                    - generic [ref=f12e239]: Field Persona
+                    - text: Independent Verifier
+                  - generic [ref=f12e240]:
+                    - generic [ref=f12e241]: Weight / Permissions
+                    - generic [ref=f12e242]: 0.8x · 8 perms
+              - generic [ref=f12e243]:
+                - generic [ref=f12e244]: 0 assigned users
+                - button "Customize" [ref=f12e246] [cursor=pointer]
+            - generic [ref=f12e250]:
+              - generic [ref=f12e251]:
+                - generic [ref=f12e252]:
+                  - generic [ref=f12e253]:
+                    - generic [ref=f12e254]:
+                      - generic [ref=f12e255]: Lender / Guarantor
+                      - generic [ref=f12e256]: Default Template
+                    - generic [ref=f12e257]: LENDER
+                  - generic [ref=f12e258]: WEB
+                - paragraph [ref=f12e259]: Project financier or credit committee officer reviewing certified valuations and approving tranche disbursements.
+                - generic [ref=f12e260]:
+                  - generic [ref=f12e261]:
+                    - generic [ref=f12e262]: Field Persona
+                    - text: Web Governance Only
+                  - generic [ref=f12e263]:
+                    - generic [ref=f12e264]: Weight / Permissions
+                    - generic [ref=f12e265]: 1.0x · 17 perms
+              - generic [ref=f12e266]:
+                - generic [ref=f12e267]: 1 assigned user
+                - button "Customize" [ref=f12e269] [cursor=pointer]
+            - generic [ref=f12e273]:
+              - generic [ref=f12e274]:
+                - generic [ref=f12e275]:
+                  - generic [ref=f12e276]:
+                    - generic [ref=f12e277]:
+                      - generic [ref=f12e278]: Main Contractor
+                      - generic [ref=f12e279]: Default Template
+                    - generic [ref=f12e280]: CONTRACTOR
+                  - generic [ref=f12e281]: WEB
+                - paragraph [ref=f12e282]: Contractor portal for submitting IPC claims, responding to monitor queries, and viewing assigned BOQ baselines.
+                - generic [ref=f12e283]:
+                  - generic [ref=f12e284]:
+                    - generic [ref=f12e285]: Field Persona
+                    - text: Web Governance Only
+                  - generic [ref=f12e286]:
+                    - generic [ref=f12e287]: Weight / Permissions
+                    - generic [ref=f12e288]: 0.4x · 9 perms
+              - generic [ref=f12e289]:
+                - generic [ref=f12e290]: 2 assigned users
+                - button "Customize" [ref=f12e292] [cursor=pointer]
+            - generic [ref=f12e296]:
+              - generic [ref=f12e297]:
+                - generic [ref=f12e298]:
+                  - generic [ref=f12e299]:
+                    - generic [ref=f12e300]:
+                      - generic [ref=f12e301]: Monitor Inspector (Visiting QS / COREN)
+                      - generic [ref=f12e302]: Default Template
+                    - generic [ref=f12e303]: MONITOR_INSPECTOR
+                    - generic [ref=f12e304]: "Pre-provisioned: signs in with account"
+                  - generic [ref=f12e307]: MOBILE
+                - paragraph [ref=f12e308]: Visiting Quantity Surveyor or COREN Engineer from the independent monitoring firm (corroboration weight 1.0).
+                - generic [ref=f12e309]:
+                  - generic [ref=f12e310]:
+                    - generic [ref=f12e311]: Field Persona
+                    - text: Independent Verifier
+                  - generic [ref=f12e312]:
+                    - generic [ref=f12e313]: Weight / Permissions
+                    - generic [ref=f12e314]: 1.0x · 8 perms
+              - generic [ref=f12e315]:
+                - generic [ref=f12e316]: 0 assigned users
+                - button "Customize" [ref=f12e318] [cursor=pointer]
+            - generic [ref=f12e322]:
+              - generic [ref=f12e323]:
+                - generic [ref=f12e324]:
+                  - generic [ref=f12e325]:
+                    - generic [ref=f12e326]:
+                      - generic [ref=f12e327]: Organisation Administrator
+                      - generic [ref=f12e328]: Default Template
+                    - generic [ref=f12e329]: ORGANIZATION_ADMIN
+                  - generic [ref=f12e330]: WEB
+                - paragraph [ref=f12e331]: Oversees every project owned by their organisation and the organisations below it in the hierarchy.
+                - generic [ref=f12e332]:
+                  - generic [ref=f12e333]:
+                    - generic [ref=f12e334]: Field Persona
+                    - text: Web Governance Only
+                  - generic [ref=f12e335]:
+                    - generic [ref=f12e336]: Weight / Permissions
+                    - generic [ref=f12e337]: 1.0x · 11 perms
+              - generic [ref=f12e338]:
+                - generic [ref=f12e339]: 0 assigned users
+                - button "Customize" [ref=f12e341] [cursor=pointer]
+            - generic [ref=f12e345]:
+              - generic [ref=f12e346]:
+                - generic [ref=f12e347]:
+                  - generic [ref=f12e348]:
+                    - generic [ref=f12e349]:
+                      - generic [ref=f12e350]: Tenant Super Admin
+                      - generic [ref=f12e351]: Default Template
+                    - generic [ref=f12e352]: TENANT_SUPER_ADMIN
+                  - generic [ref=f12e353]: WEB
+                - paragraph [ref=f12e354]: "Full tenant governance authority: creates custom roles, assigns permissions, configures branding, and oversees all projects."
+                - generic [ref=f12e355]:
+                  - generic [ref=f12e356]:
+                    - generic [ref=f12e357]: Field Persona
+                    - text: Web Governance Only
+                  - generic [ref=f12e358]:
+                    - generic [ref=f12e359]: Weight / Permissions
+                    - generic [ref=f12e360]: 1.0x · 52 perms
+              - generic [ref=f12e361]:
+                - generic [ref=f12e362]: 1 assigned user
+                - button "Customize" [ref=f12e364] [cursor=pointer]
+            - generic [ref=f12e368]:
+              - generic [ref=f12e369]:
+                - generic [ref=f12e370]:
+                  - generic [ref=f12e371]:
+                    - generic [ref=f12e372]: Lender Technical Officer
+                    - generic [ref=f12e374]: LENDER_TECHNICAL_OFFICER
+                  - generic [ref=f12e375]: WEB
+                - paragraph [ref=f12e376]: Lender-side engineer who may certify valuations and approve releases, but never both on the same IPC.
+                - generic [ref=f12e377]:
+                  - generic [ref=f12e378]:
+                    - generic [ref=f12e379]: Field Persona
+                    - text: Web Governance Only
+                  - generic [ref=f12e380]:
+                    - generic [ref=f12e381]: Weight / Permissions
+                    - generic [ref=f12e382]: 1.0x · 19 perms
+              - generic [ref=f12e383]:
+                - generic [ref=f12e384]: 1 assigned user
+                - generic [ref=f12e385]:
+                  - button "Customize" [ref=f12e386] [cursor=pointer]
+                  - button "Delete custom role" [ref=f12e390] [cursor=pointer]
+  - region "Notifications alt+T"

@@ -1,0 +1,42 @@
+appId: com.kpmg.insiteassurance.mobile
+# Subflow: after clearState the development build opens the Expo dev launcher.
+# Pick the dev server and dismiss the dev-menu intro if it appears.
+---
+- extendedWaitUntil:
+    visible: "Development Build"
+    timeout: 25000
+    optional: true
+- runFlow:
+    when:
+      visible: "Development Build"
+    commands:
+      - tapOn: "http://.*:8081"
+      - extendedWaitUntil:
+          visible: "Continue"
+          timeout: 60000
+          optional: true
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn: "Continue"
+- extendedWaitUntil:
+    visible: "Go home"
+    timeout: 5000
+    optional: true
+- runFlow:
+    when:
+      visible: "Go home"
+    commands:
+      # Hide the floating dev "Tools" button: it overlaps the app's top-right controls.
+      - scrollUntilVisible:
+          element: "Tools button"
+          optional: true
+      - tapOn:
+          text: "Tools button"
+          optional: true
+      - scrollUntilVisible:
+          element: "Go home"
+          direction: UP
+          optional: true
+      - tapOn: "Close"

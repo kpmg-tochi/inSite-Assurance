@@ -42,9 +42,9 @@ const pillColors: Record<
     borderColor: "#FECDD3",
   },
   info: {
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#ECFDF5",
     textColor: defaultColors.primary,
-    borderColor: "#BFDBFE",
+    borderColor: "#A7F3D0",
   },
   gray: {
     backgroundColor: "#F1F5F9",
@@ -53,8 +53,8 @@ const pillColors: Record<
   },
   darkGlass: {
     backgroundColor: "rgba(255, 255, 255, 0.16)",
-    textColor: "#BFDBFE",
-    borderColor: "rgba(147, 197, 253, 0.25)",
+    textColor: "#A7F3D0",
+    borderColor: "rgba(167, 243, 208, 0.25)",
   },
 };
 

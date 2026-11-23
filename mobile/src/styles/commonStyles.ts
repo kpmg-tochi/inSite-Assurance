@@ -22,11 +22,13 @@ export const componentShadow = {
 };
 
 export const defaultColors = {
-  primary: '#00338D',
-  primaryDark: '#0C233C',
+  primary: '#00715D',
+  primaryDark: '#122F2A',
   background: '#F8FAFC',
   border: '#E2E8F0',
-  accent: '#38BDF8',
+  // Demo branch: UBEC palette (ubec.gov.ng). Amber is for small accents only.
+  accent: '#12915C',
+  highlight: '#FFBF00',
   primaryText: '#0F172A',
   secondaryText: '#64748B',
 };

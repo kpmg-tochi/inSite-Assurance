@@ -1,0 +1,24 @@
+appId: com.kpmg.insiteassurance.mobile
+# Subflow: from the landing screen, sign in with EMAIL / PASSWORD and allow
+# foreground location if Android asks.
+---
+- extendedWaitUntil:
+    visible: "Join with a project code"
+    timeout: 60000
+- tapOn: "Sign in"
+- tapOn: "name@organisation.com"
+- inputText: ${EMAIL}
+- tapOn: "Your password"
+- inputText: ${PASSWORD}
+- hideKeyboard
+- tapOn:
+    text: "Sign in"
+    index: 1
+- extendedWaitUntil:
+    visible: "While using the app|Your projects|Choose a new password.*|Change.*password.*"
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "While using the app"
+    commands:
+      - tapOn: "While using the app"

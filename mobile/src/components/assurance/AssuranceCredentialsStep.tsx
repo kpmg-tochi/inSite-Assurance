@@ -169,8 +169,8 @@ const styles = StyleSheet.create({
     borderColor: "#CBD5E1",
   },
   pillActive: {
-    backgroundColor: "#00338D",
-    borderColor: "#00338D",
+    backgroundColor: "#00715D",
+    borderColor: "#00715D",
   },
   pillText: {
     fontSize: 11,

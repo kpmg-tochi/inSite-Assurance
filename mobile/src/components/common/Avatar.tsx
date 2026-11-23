@@ -39,7 +39,7 @@ const Avatar: FC<AvatarProps> = ({
   editable = false,
   size = "md",
   showOnlineDot = false,
-  onlineDotBorderColor = "#1E1B4B",
+  onlineDotBorderColor = "#122F2A",
   onPress,
   style,
   accessibilityLabel,

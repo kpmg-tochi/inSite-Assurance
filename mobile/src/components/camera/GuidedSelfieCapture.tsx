@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   manualBtn: {
-    backgroundColor: '#00338D',
+    backgroundColor: '#00715D',
     paddingHorizontal: 18,
     paddingVertical: 11,
     borderRadius: 9999,

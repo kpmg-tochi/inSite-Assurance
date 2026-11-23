@@ -1,0 +1,30 @@
+- generic [ref=f6e2]:
+  - generic [ref=f6e3]:
+    - generic [ref=f6e7]:
+      - generic [ref=f6e8]:
+        - img "Universal Basic Education Commission (UBEC)" [ref=f6e9]
+        - generic [ref=f6e10]: Powered by InSite Assurance
+      - generic [ref=f6e11]:
+        - generic [ref=f6e12]: Basic Education Infrastructure Programme
+        - heading "Verified progress, from site to payment." [level=1] [ref=f6e14]
+        - paragraph [ref=f6e15]: "One platform for Direct Intervention and Matching Grounds projects: supervision and M&E visits captured on site, findings tracked to resolution, and milestone payments released only on verified evidence."
+      - generic [ref=f6e16]:
+        - generic [ref=f6e17]: Universal Basic Education Commission · Education for Development
+        - generic [ref=f6e18]: UBEC · SUBEBs
+    - generic [ref=f6e19]:
+      - generic [ref=f6e21]:
+        - img "UBEC" [ref=f6e22]
+        - heading "Sign in to the UBEC Assurance Portal" [level=2] [ref=f6e23]
+        - paragraph [ref=f6e24]: Enter your corporate credentials or select a seeded pilot role below.
+        - generic [ref=f6e25]:
+          - generic [ref=f6e26]:
+            - generic [ref=f6e27]: Work Email
+            - textbox [ref=f6e28]
+          - generic [ref=f6e29]:
+            - generic [ref=f6e30]: Password
+            - textbox [ref=f6e31]
+          - button "Sign In to Workspace" [ref=f6e32] [cursor=pointer]
+      - generic [ref=f6e33]:
+        - generic [ref=f6e34]: © 2026 UBEC · Powered by InSite Assurance
+        - generic [ref=f6e35]: Pilot
+  - region "Notifications alt+T"

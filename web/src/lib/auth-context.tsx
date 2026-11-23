@@ -31,8 +31,9 @@ import { useLoginMutation } from "../mutations/auth/useAuthMutations";
 import { loadDemoAccounts } from "../config/useDemoAccounts";
 
 const DEFAULT_BRANDING: TenantBrandingConfig = {
-  primaryColorHex: "#00338D",
-  navyColorHex: "#0C233C",
+  // Demo branch: UBEC palette (ubec.gov.ng) as the signed-out / unbranded default.
+  primaryColorHex: "#00715D",
+  navyColorHex: "#122F2A",
   tagline: "Capital Projects Assurance Platform",
 };
 

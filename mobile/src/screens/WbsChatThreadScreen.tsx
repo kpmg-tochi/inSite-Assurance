@@ -449,7 +449,7 @@ export const WbsChatThreadScreen: React.FC = () => {
     <View style={styles.container}>
       <StatusBar style="light" />
       <LinearGradient
-        colors={["#0891B2", "#1E3A8A", "#312E81", "#1E1B4B"]}
+        colors={["#12915C", "#00715D", "#0B4F43", "#122F2A"]}
         locations={[0, 0.35, 0.75, 1]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0.9 }}
@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
   heldText: { fontSize: 11, fontWeight: "700", color: "#92400E" },
   container: {
     flex: 1,
-    backgroundColor: "#1E1B4B",
+    backgroundColor: "#122F2A",
   },
   headerGradient: {
     paddingHorizontal: 20,
@@ -648,7 +648,7 @@ const styles = StyleSheet.create({
   backButton: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#38BDF8",
+    color: "#FFBF00",
   },
   inZoneBadge: {
     backgroundColor: "#ECFDF5",
@@ -692,7 +692,7 @@ const styles = StyleSheet.create({
   briefBadgeText: {
     fontSize: 10,
     fontWeight: "700",
-    color: "#00338D",
+    color: "#00715D",
     backgroundColor: "#EFF6FF",
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -701,7 +701,7 @@ const styles = StyleSheet.create({
   briefTitle: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#0C233C",
+    color: "#122F2A",
   },
   briefBody: {
     fontSize: 11,
@@ -727,7 +727,7 @@ const styles = StyleSheet.create({
   },
   standardsCode: {
     fontWeight: "700",
-    color: "#1E3A8A",
+    color: "#00715D",
   },
   violationItem: {
     gap: 2,
@@ -760,13 +760,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 14,
     borderWidth: 1.5,
-    borderColor: "#00338D",
+    borderColor: "#00715D",
     gap: 6,
   },
   eodTitle: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#00338D",
+    color: "#00715D",
   },
   eodBody: {
     fontSize: 11,
@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   eodButton: {
-    backgroundColor: "#00338D",
+    backgroundColor: "#00715D",
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: "center",
@@ -824,7 +824,7 @@ const styles = StyleSheet.create({
   },
   chatBubbleMe: {
     alignSelf: "flex-end",
-    backgroundColor: "#00338D",
+    backgroundColor: "#00715D",
   },
   chatBubbleOther: {
     alignSelf: "flex-start",
@@ -902,7 +902,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 10,
-    backgroundColor: "#00338D",
+    backgroundColor: "#00715D",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -912,7 +912,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   quickEodBar: {
-    backgroundColor: "#0C233C",
+    backgroundColor: "#122F2A",
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: "center",

@@ -51,7 +51,7 @@ export const BacklogReviewModal: React.FC = () => {
     <View style={styles.container}>
       <StatusBar style="light" />
       <LinearGradient
-        colors={['#0891B2', '#1E3A8A', '#312E81', '#1E1B4B']}
+        colors={['#12915C', '#00715D', '#0B4F43', '#122F2A']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   itemCardSelected: {
-    borderColor: '#00338D',
+    borderColor: '#00715D',
     borderWidth: 1.5,
     backgroundColor: '#F8FAFC',
   },
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
   wbsPillText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#00338D',
+    color: '#00715D',
   },
   itemDate: {
     fontSize: 10,
@@ -268,16 +268,16 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#00338D',
+    color: '#00715D',
     marginBottom: 3,
   },
   infoText: {
     fontSize: 11,
-    color: '#1E3A8A',
+    color: '#00715D',
     lineHeight: 16,
   },
   primaryButton: {
-    backgroundColor: '#00338D',
+    backgroundColor: '#00715D',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',

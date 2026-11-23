@@ -266,9 +266,9 @@ export const EnterProjectCodeScreen: React.FC = () => {
           activeOpacity={0.75}
         >
           {loadingDemoCodes ? (
-            <ActivityIndicator size="small" color="#00338D" />
+            <ActivityIndicator size="small" color="#00715D" />
           ) : (
-            <Feather name="zap" size={14} color="#00338D" />
+            <Feather name="zap" size={14} color="#00715D" />
           )}
           <Text style={styles.autofillButtonText}>
             {loadingDemoCodes ? "Loading Join Codes..." : "Autofill Demo Code"}
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
     marginBottom: "60%",
   },
   autofillButtonText: {
-    color: "#00338D",
+    color: "#00715D",
     fontSize: 12,
     fontWeight: "700",
   },

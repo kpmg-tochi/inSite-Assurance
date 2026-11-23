@@ -53,7 +53,7 @@ export default function DefectsScreen() {
     <View style={styles.container}>
       <StatusBar style="light" />
       <LinearGradient
-        colors={["#0891B2", "#1E3A8A", "#312E81", "#1E1B4B"]}
+        colors={["#12915C", "#00715D", "#0B4F43", "#122F2A"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}
@@ -275,17 +275,17 @@ const styles = StyleSheet.create({
   cardMeta: { fontSize: 11, color: "#64748B", marginTop: 6 },
   queued: { fontSize: 12, color: "#0369A1", fontWeight: "600", marginTop: 8 },
   actions: { flexDirection: "row", gap: 8, marginTop: 10, flexWrap: "wrap" },
-  primaryButton: { backgroundColor: "#1E3A8A", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
+  primaryButton: { backgroundColor: "#00715D", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
   primaryButtonText: { color: "#FFFFFF", fontWeight: "700", fontSize: 13 },
   secondaryButton: { borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginTop: 10 },
   secondaryButtonText: { color: "#0F172A", fontWeight: "600", fontSize: 13 },
   refresh: { alignSelf: "center", padding: 12 },
-  refreshText: { color: "#1E3A8A", fontWeight: "700", fontSize: 13 },
+  refreshText: { color: "#00715D", fontWeight: "700", fontSize: 13 },
   sheetBackdrop: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(15,23,42,0.45)", justifyContent: "flex-end" },
   sheet: { backgroundColor: "#FFFFFF", borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 32 },
   sheetTitle: { fontSize: 16, fontWeight: "800", color: "#0F172A" },
   toggle: { borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
-  toggleOn: { backgroundColor: "#1E3A8A", borderColor: "#1E3A8A" },
+  toggleOn: { backgroundColor: "#00715D", borderColor: "#00715D" },
   toggleText: { fontSize: 12, fontWeight: "600", color: "#0F172A" },
   toggleTextOn: { color: "#FFFFFF" },
   input: { borderWidth: 1, borderColor: "#CBD5E1", borderRadius: 12, padding: 12, minHeight: 80, marginTop: 12, textAlignVertical: "top", fontSize: 13 },

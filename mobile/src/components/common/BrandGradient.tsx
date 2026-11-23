@@ -15,9 +15,10 @@ export const BrandGradient = () => {
   const { primaryColor } = useActiveBranding();
   const colors = {
     solidBackground: primaryColor,
-    leftGradient: { start: "#00B8F5", stop: "#1E49E2" },
-    rightGradient: { start: "#7213EA", stop: "#00B8F5" },
-    bottomGradientEnd: { start: "#0C233C", stop: "#0C233C" },
+    // Demo branch: UBEC greens instead of the blue/violet glows.
+    leftGradient: { start: "#12915C", stop: "#00715D" },
+    rightGradient: { start: "#0B4F43", stop: "#12915C" },
+    bottomGradientEnd: { start: "#122F2A", stop: "#122F2A" },
   };
 
   return (

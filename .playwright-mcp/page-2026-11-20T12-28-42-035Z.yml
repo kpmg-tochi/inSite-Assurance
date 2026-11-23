@@ -1,0 +1,759 @@
+- generic [ref=f12e2]:
+  - generic [ref=f12e3]:
+    - complementary [ref=f12e4]:
+      - generic [ref=f12e5]:
+        - generic [ref=f12e6]:
+          - link "KPMG Nigeria Infrastructure & Capital Advisory KPMG Nigeria Infrastructure & Capital Advisory Capital Advisory" [ref=f12e7] [cursor=pointer]:
+            - /url: /
+            - img "KPMG Nigeria Infrastructure & Capital Advisory" [ref=f12e9]
+            - generic [ref=f12e10]:
+              - generic [ref=f12e11]: KPMG Nigeria Infrastructure & Capital Advisory
+              - generic [ref=f12e12]: Capital Advisory
+          - button "Minimize sidebar" [ref=f12e13] [cursor=pointer]
+        - generic [ref=f12e17]:
+          - generic [ref=f12e18]: Platform Super Admin Console
+          - link "Portfolio" [ref=f12e19] [cursor=pointer]:
+            - /url: /app/portfolio
+          - link "All Projects" [ref=f12e26] [cursor=pointer]:
+            - /url: /app/projects
+          - link "Site Map & Overview" [ref=f12e30] [cursor=pointer]:
+            - /url: /app/projects/aea31ddd-8c3a-4549-a848-97287c1593e4/dashboard
+          - link "Executive Risk Matrix" [ref=f12e34] [cursor=pointer]:
+            - /url: /app/executive
+          - link "IPC Claims & Queries" [ref=f12e38] [cursor=pointer]:
+            - /url: /app/projects/aea31ddd-8c3a-4549-a848-97287c1593e4/reconciliation
+          - link "BOQ & Hold-Points" [ref=f12e44] [cursor=pointer]:
+            - /url: /app/projects/aea31ddd-8c3a-4549-a848-97287c1593e4/boq
+          - link "Schedule" [ref=f12e49] [cursor=pointer]:
+            - /url: /app/projects/aea31ddd-8c3a-4549-a848-97287c1593e4/schedule
+          - link "Inspections" [ref=f12e53] [cursor=pointer]:
+            - /url: /app/projects/aea31ddd-8c3a-4549-a848-97287c1593e4/inspections
+          - link "Audit Ledger" [ref=f12e59] [cursor=pointer]:
+            - /url: /app/projects/aea31ddd-8c3a-4549-a848-97287c1593e4/audit
+          - link "Settings" [ref=f12e64] [cursor=pointer]:
+            - /url: /app/settings
+        - generic [ref=f12e69]:
+          - generic [ref=f12e70]: Recent Active Projects
+          - generic [ref=f12e71]:
+            - button "KAN-210Kano General Hospital Annex & Utilities" [ref=f12e72] [cursor=pointer]
+            - button "PRG-221Co-Funded — Ikeja Junior Secondary School" [ref=f12e73] [cursor=pointer]
+            - button "PRG-211Co-Funded — Kano Township Primary School" [ref=f12e74] [cursor=pointer]
+            - button "PRG-102Central — Kano Girls' Science College" [ref=f12e75] [cursor=pointer]
+            - link "View All Projects" [ref=f12e76] [cursor=pointer]:
+              - /url: /app/projects
+      - 'button "AN Adaeze Nwosu, FCA Tenant Super Admin · ICAN #FCA/019284" [ref=f12e81] [cursor=pointer]':
+        - generic [ref=f12e82]: AN
+        - generic [ref=f12e83]:
+          - generic [ref=f12e84]: Adaeze Nwosu, FCA
+          - generic [ref=f12e85]: "Tenant Super Admin · ICAN #FCA/019284"
+    - generic [ref=f12e86]:
+      - banner [ref=f12e87]:
+        - generic [ref=f12e89]:
+          - generic [ref=f12e90]:
+            - generic [ref=f12e91]: KAN-210
+            - generic [ref=f12e92]: /
+            - heading "Kano General Hospital Annex & Utilities" [level=1] [ref=f12e93]
+            - generic [ref=f12e94]: Platform Super Admin Console
+          - paragraph [ref=f12e95]:
+            - text: "Radial geofence · Lender: InfraCredit Guarantee & Project Finance Desk · Contractor:"
+            - generic [ref=f12e96]: Julius & Sons Civil Engineering Nigeria Ltd +2
+        - generic [ref=f12e97]:
+          - button "Open governance notifications" [ref=f12e99] [cursor=pointer]
+          - button "Project settings" [ref=f12e103] [cursor=pointer]
+          - button "+ New Project" [ref=f12e104] [cursor=pointer]
+      - generic [ref=f12e106]:
+        - generic [ref=f12e108]:
+          - generic [ref=f12e109]:
+            - heading "Governance & App Settings" [level=2] [ref=f12e110]
+            - generic [ref=f12e111]: Tenant Super Admin
+          - paragraph [ref=f12e112]: Manage mobile field agent credentials, roles & permissions, tenant branding, and your account.
+        - generic [ref=f12e114]:
+          - button "Access & Assurance" [ref=f12e115] [cursor=pointer]
+          - button "Roles & Permissions" [ref=f12e120] [cursor=pointer]
+          - button "Users & Visibility" [ref=f12e125] [cursor=pointer]
+          - button "Organisations" [ref=f12e132] [cursor=pointer]
+          - button "Workflow templates" [ref=f12e138] [cursor=pointer]
+          - button "Project types & regions" [ref=f12e144] [cursor=pointer]
+          - button "Inspections & supervisors" [ref=f12e150] [cursor=pointer]
+          - button "Tenant Settings" [ref=f12e156] [cursor=pointer]
+          - button "Account & Security" [ref=f12e164] [cursor=pointer]
+        - generic [ref=f12e169]:
+          - generic [ref=f12e170]:
+            - generic [ref=f12e171]:
+              - heading "Configurable Tenant Roles & Relational Permissions" [level=3] [ref=f12e176]
+              - paragraph [ref=f12e177]: Rename roles, toggle permissions by governance category, and configure mobile field personas (Independent Verifier vs. Contractor Executor) for client workflows.
+            - button "Create Custom Role" [active] [ref=f12e178] [cursor=pointer]
+          - generic [ref=f12e180]:
+            - generic [ref=f12e181]:
+              - generic [ref=f12e182]:
+                - generic [ref=f12e183]:
+                  - generic [ref=f12e184]:
+                    - generic [ref=f12e185]:
+                      - generic [ref=f12e186]: Contractor Site Engineer
+                      - generic [ref=f12e187]: Default Template
+                    - generic [ref=f12e188]: CONTRACTOR_ENGINEER · Join Suffix -CON
+                  - generic [ref=f12e189]: MOBILE
+                - paragraph [ref=f12e190]: Contractor site engineer submitting self-reported progress logs; requires ID and liveness assurance (weight 0.40).
+                - generic [ref=f12e191]:
+                  - generic [ref=f12e192]:
+                    - generic [ref=f12e193]: Field Persona
+                    - text: Contractor Executor
+                  - generic [ref=f12e194]:
+                    - generic [ref=f12e195]: Weight / Permissions
+                    - generic [ref=f12e196]: 0.4x · 8 perms
+              - generic [ref=f12e197]:
+                - generic [ref=f12e198]: 0 assigned users · ID review required
+                - button "Customize" [ref=f12e200] [cursor=pointer]
+            - generic [ref=f12e204]:
+              - generic [ref=f12e205]:
+                - generic [ref=f12e206]:
+                  - generic [ref=f12e207]:
+                    - generic [ref=f12e208]:
+                      - generic [ref=f12e209]: Independent Monitor
+                      - generic [ref=f12e210]: Default Template
+                    - generic [ref=f12e211]: MONITOR
+                  - generic [ref=f12e212]: WEB
+                - paragraph [ref=f12e213]: Licensed Quantity Surveyor or COREN Engineer certifying physical-to-financial progress and managing site hold-points.
+                - generic [ref=f12e214]:
+                  - generic [ref=f12e215]:
+                    - generic [ref=f12e216]: Field Persona
+                    - text: Web Governance Only
+                  - generic [ref=f12e217]:
+                    - generic [ref=f12e218]: Weight / Permissions
+                    - generic [ref=f12e219]: 1.0x · 37 perms
+              - generic [ref=f12e220]:
+                - generic [ref=f12e221]: 2 assigned users
+                - button "Customize" [ref=f12e223] [cursor=pointer]
+            - generic [ref=f12e227]:
+              - generic [ref=f12e228]:
+                - generic [ref=f12e229]:
+                  - generic [ref=f12e230]:
+                    - generic [ref=f12e231]:
+                      - generic [ref=f12e232]: Independent Resident Clerk of Works
+                      - generic [ref=f12e233]: Default Template
+                    - generic [ref=f12e234]: INDEPENDENT_RESIDENT · Join Suffix -COW
+                  - generic [ref=f12e235]: MOBILE
+                - paragraph [ref=f12e236]: Full-time on-site Resident Clerk of Works or M&E officer overseeing daily quality and compliance (weight 0.85).
+                - generic [ref=f12e237]:
+                  - generic [ref=f12e238]:
+                    - generic [ref=f12e239]: Field Persona
+                    - text: Independent Verifier
+                  - generic [ref=f12e240]:
+                    - generic [ref=f12e241]: Weight / Permissions
+                    - generic [ref=f12e242]: 0.8x · 8 perms
+              - generic [ref=f12e243]:
+                - generic [ref=f12e244]: 0 assigned users
+                - button "Customize" [ref=f12e246] [cursor=pointer]
+            - generic [ref=f12e250]:
+              - generic [ref=f12e251]:
+                - generic [ref=f12e252]:
+                  - generic [ref=f12e253]:
+                    - generic [ref=f12e254]:
+                      - generic [ref=f12e255]: Lender / Guarantor
+                      - generic [ref=f12e256]: Default Template
+                    - generic [ref=f12e257]: LENDER
+                  - generic [ref=f12e258]: WEB
+                - paragraph [ref=f12e259]: Project financier or credit committee officer reviewing certified valuations and approving tranche disbursements.
+                - generic [ref=f12e260]:
+                  - generic [ref=f12e261]:
+                    - generic [ref=f12e262]: Field Persona
+                    - text: Web Governance Only
+                  - generic [ref=f12e263]:
+                    - generic [ref=f12e264]: Weight / Permissions
+                    - generic [ref=f12e265]: 1.0x · 17 perms
+              - generic [ref=f12e266]:
+                - generic [ref=f12e267]: 1 assigned user
+                - button "Customize" [ref=f12e269] [cursor=pointer]
+            - generic [ref=f12e273]:
+              - generic [ref=f12e274]:
+                - generic [ref=f12e275]:
+                  - generic [ref=f12e276]:
+                    - generic [ref=f12e277]:
+                      - generic [ref=f12e278]: Main Contractor
+                      - generic [ref=f12e279]: Default Template
+                    - generic [ref=f12e280]: CONTRACTOR
+                  - generic [ref=f12e281]: WEB
+                - paragraph [ref=f12e282]: Contractor portal for submitting IPC claims, responding to monitor queries, and viewing assigned BOQ baselines.
+                - generic [ref=f12e283]:
+                  - generic [ref=f12e284]:
+                    - generic [ref=f12e285]: Field Persona
+                    - text: Web Governance Only
+                  - generic [ref=f12e286]:
+                    - generic [ref=f12e287]: Weight / Permissions
+                    - generic [ref=f12e288]: 0.4x · 9 perms
+              - generic [ref=f12e289]:
+                - generic [ref=f12e290]: 2 assigned users
+                - button "Customize" [ref=f12e292] [cursor=pointer]
+            - generic [ref=f12e296]:
+              - generic [ref=f12e297]:
+                - generic [ref=f12e298]:
+                  - generic [ref=f12e299]:
+                    - generic [ref=f12e300]:
+                      - generic [ref=f12e301]: Monitor Inspector (Visiting QS / COREN)
+                      - generic [ref=f12e302]: Default Template
+                    - generic [ref=f12e303]: MONITOR_INSPECTOR
+                    - generic [ref=f12e304]: "Pre-provisioned: signs in with account"
+                  - generic [ref=f12e307]: MOBILE
+                - paragraph [ref=f12e308]: Visiting Quantity Surveyor or COREN Engineer from the independent monitoring firm (corroboration weight 1.0).
+                - generic [ref=f12e309]:
+                  - generic [ref=f12e310]:
+                    - generic [ref=f12e311]: Field Persona
+                    - text: Independent Verifier
+                  - generic [ref=f12e312]:
+                    - generic [ref=f12e313]: Weight / Permissions
+                    - generic [ref=f12e314]: 1.0x · 8 perms
+              - generic [ref=f12e315]:
+                - generic [ref=f12e316]: 0 assigned users
+                - button "Customize" [ref=f12e318] [cursor=pointer]
+            - generic [ref=f12e322]:
+              - generic [ref=f12e323]:
+                - generic [ref=f12e324]:
+                  - generic [ref=f12e325]:
+                    - generic [ref=f12e326]:
+                      - generic [ref=f12e327]: Organisation Administrator
+                      - generic [ref=f12e328]: Default Template
+                    - generic [ref=f12e329]: ORGANIZATION_ADMIN
+                  - generic [ref=f12e330]: WEB
+                - paragraph [ref=f12e331]: Oversees every project owned by their organisation and the organisations below it in the hierarchy.
+                - generic [ref=f12e332]:
+                  - generic [ref=f12e333]:
+                    - generic [ref=f12e334]: Field Persona
+                    - text: Web Governance Only
+                  - generic [ref=f12e335]:
+                    - generic [ref=f12e336]: Weight / Permissions
+                    - generic [ref=f12e337]: 1.0x · 11 perms
+              - generic [ref=f12e338]:
+                - generic [ref=f12e339]: 0 assigned users
+                - button "Customize" [ref=f12e341] [cursor=pointer]
+            - generic [ref=f12e345]:
+              - generic [ref=f12e346]:
+                - generic [ref=f12e347]:
+                  - generic [ref=f12e348]:
+                    - generic [ref=f12e349]:
+                      - generic [ref=f12e350]: Tenant Super Admin
+                      - generic [ref=f12e351]: Default Template
+                    - generic [ref=f12e352]: TENANT_SUPER_ADMIN
+                  - generic [ref=f12e353]: WEB
+                - paragraph [ref=f12e354]: "Full tenant governance authority: creates custom roles, assigns permissions, configures branding, and oversees all projects."
+                - generic [ref=f12e355]:
+                  - generic [ref=f12e356]:
+                    - generic [ref=f12e357]: Field Persona
+                    - text: Web Governance Only
+                  - generic [ref=f12e358]:
+                    - generic [ref=f12e359]: Weight / Permissions
+                    - generic [ref=f12e360]: 1.0x · 52 perms
+              - generic [ref=f12e361]:
+                - generic [ref=f12e362]: 1 assigned user
+                - button "Customize" [ref=f12e364] [cursor=pointer]
+            - generic [ref=f12e368]:
+              - generic [ref=f12e369]:
+                - generic [ref=f12e370]:
+                  - generic [ref=f12e371]:
+                    - generic [ref=f12e372]: Lender Technical Officer
+                    - generic [ref=f12e374]: LENDER_TECHNICAL_OFFICER
+                  - generic [ref=f12e375]: WEB
+                - paragraph [ref=f12e376]: Lender-side engineer who may certify valuations and approve releases, but never both on the same IPC.
+                - generic [ref=f12e377]:
+                  - generic [ref=f12e378]:
+                    - generic [ref=f12e379]: Field Persona
+                    - text: Web Governance Only
+                  - generic [ref=f12e380]:
+                    - generic [ref=f12e381]: Weight / Permissions
+                    - generic [ref=f12e382]: 1.0x · 19 perms
+              - generic [ref=f12e383]:
+                - generic [ref=f12e384]: 1 assigned user
+                - generic [ref=f12e385]:
+                  - button "Customize" [ref=f12e386] [cursor=pointer]
+                  - button "Delete custom role" [ref=f12e390] [cursor=pointer]
+          - complementary [ref=f12e919]:
+            - generic [ref=f12e920]:
+              - generic [ref=f12e921]:
+                - generic [ref=f12e922]:
+                  - generic [ref=f12e923]: RBAC Role Builder
+                  - heading "Create New Tenant Role" [level=3] [ref=f12e924]
+                - button "Close" [ref=f12e925] [cursor=pointer]
+              - generic [ref=f12e926]:
+                - generic [ref=f12e927]:
+                  - generic [ref=f12e928]:
+                    - generic [ref=f12e929]: Display Role Name *
+                    - textbox "e.g. M&E Evaluation Lead" [ref=f12e930]
+                  - generic [ref=f12e931]:
+                    - generic [ref=f12e932]: System Code *
+                    - textbox "ME_EVAL_LEAD" [ref=f12e933]
+                  - generic [ref=f12e934]:
+                    - generic [ref=f12e935]: App Surface
+                    - combobox [ref=f12e936]:
+                      - option "WEB (Portal Workspace)" [selected]
+                      - option "MOBILE (Field App Only)"
+                      - option "BOTH (Web Portal & Field App)"
+                  - generic [ref=f12e937]:
+                    - generic [ref=f12e938]: Join Code Suffix (2–4 chars, Mobile/Both)
+                    - textbox "N/A for WEB" [disabled] [ref=f12e939]
+                - generic [ref=f12e940]:
+                  - generic [ref=f12e941]: Role Description
+                  - textbox "Describe responsibilities for this client role..." [ref=f12e942]
+                - generic [ref=f12e943]:
+                  - generic [ref=f12e944]: Selected Permissions (0)
+                  - generic [ref=f12e948]: Select at least one permission below.
+                - generic [ref=f12e949]:
+                  - generic [ref=f12e950]:
+                    - generic [ref=f12e951]:
+                      - generic [ref=f12e952]:
+                        - generic [ref=f12e953]:
+                          - text: Tenant, Roles & Branding
+                          - generic [ref=f12e954]: (0/8)
+                        - generic [ref=f12e955]: Manage client white-label branding, custom roles, user invitations, and workflow templates.
+                      - button "Select All" [ref=f12e956] [cursor=pointer]
+                    - generic [ref=f12e959]:
+                      - generic [ref=f12e960] [cursor=pointer]:
+                        - checkbox "Manage Organisation Directory organizations:manage Add, edit, tag and archive the organisations offered in project and user forms." [ref=f12e961]
+                        - generic [ref=f12e962]:
+                          - generic [ref=f12e963]:
+                            - generic [ref=f12e964]: Manage Organisation Directory
+                            - generic [ref=f12e965]: organizations:manage
+                          - generic [ref=f12e966]: Add, edit, tag and archive the organisations offered in project and user forms.
+                      - generic [ref=f12e967] [cursor=pointer]:
+                        - 'checkbox "Manage Project Types project_types:manage Define delivery models (project types): their workflow template, ownership and party rules, and defaults." [ref=f12e968]'
+                        - generic [ref=f12e969]:
+                          - generic [ref=f12e970]:
+                            - generic [ref=f12e971]: Manage Project Types
+                            - generic [ref=f12e972]: project_types:manage
+                          - generic [ref=f12e973]: "Define delivery models (project types): their workflow template, ownership and party rules, and defaults."
+                      - generic [ref=f12e974] [cursor=pointer]:
+                        - checkbox "Manage Regions regions:manage Add, rename and archive the regions and areas projects can be placed in." [ref=f12e975]
+                        - generic [ref=f12e976]:
+                          - generic [ref=f12e977]:
+                            - generic [ref=f12e978]: Manage Regions
+                            - generic [ref=f12e979]: regions:manage
+                          - generic [ref=f12e980]: Add, rename and archive the regions and areas projects can be placed in.
+                      - generic [ref=f12e981] [cursor=pointer]:
+                        - checkbox "Create & Customize Roles & Permissions roles:create_edit Create custom client roles, rename role labels, and assign categorized permissions." [ref=f12e982]
+                        - generic [ref=f12e983]:
+                          - generic [ref=f12e984]:
+                            - generic [ref=f12e985]: Create & Customize Roles & Permissions
+                            - generic [ref=f12e986]: roles:create_edit
+                          - generic [ref=f12e987]: Create custom client roles, rename role labels, and assign categorized permissions.
+                      - generic [ref=f12e988] [cursor=pointer]:
+                        - checkbox "Configure Project Workflow Templates templates:manage_workflows Define reusable client workflow templates, required steps, and approval chains." [ref=f12e989]
+                        - generic [ref=f12e990]:
+                          - generic [ref=f12e991]:
+                            - generic [ref=f12e992]: Configure Project Workflow Templates
+                            - generic [ref=f12e993]: templates:manage_workflows
+                          - generic [ref=f12e994]: Define reusable client workflow templates, required steps, and approval chains.
+                      - generic [ref=f12e995] [cursor=pointer]:
+                        - checkbox "Manage Tenant White-Label Branding tenant:manage_branding Customize organization logo, primary palette, and PDF valuation report headers." [ref=f12e996]
+                        - generic [ref=f12e997]:
+                          - generic [ref=f12e998]:
+                            - generic [ref=f12e999]: Manage Tenant White-Label Branding
+                            - generic [ref=f12e1000]: tenant:manage_branding
+                          - generic [ref=f12e1001]: Customize organization logo, primary palette, and PDF valuation report headers.
+                      - generic [ref=f12e1002] [cursor=pointer]:
+                        - checkbox "Manage Tenant Settings tenant:manage_settings Change tenant-wide settings such as currency, timezone and security policy." [ref=f12e1003]
+                        - generic [ref=f12e1004]:
+                          - generic [ref=f12e1005]:
+                            - generic [ref=f12e1006]: Manage Tenant Settings
+                            - generic [ref=f12e1007]: tenant:manage_settings
+                          - generic [ref=f12e1008]: Change tenant-wide settings such as currency, timezone and security policy.
+                      - generic [ref=f12e1009] [cursor=pointer]:
+                        - checkbox "Manage Users & Project Assignments users:invite_manage Create tenant users, assign custom roles, and scope user visibility to specific projects." [ref=f12e1010]
+                        - generic [ref=f12e1011]:
+                          - generic [ref=f12e1012]:
+                            - generic [ref=f12e1013]: Manage Users & Project Assignments
+                            - generic [ref=f12e1014]: users:invite_manage
+                          - generic [ref=f12e1015]: Create tenant users, assign custom roles, and scope user visibility to specific projects.
+                  - generic [ref=f12e1016]:
+                    - generic [ref=f12e1017]:
+                      - generic [ref=f12e1018]:
+                        - generic [ref=f12e1019]:
+                          - text: Portfolio & Project Visibility
+                          - generic [ref=f12e1020]: (0/9)
+                        - generic [ref=f12e1021]: Control project creation, baseline editing, cross-tenant visibility, and executive risk views.
+                      - button "Select All" [ref=f12e1022] [cursor=pointer]
+                    - generic [ref=f12e1025]:
+                      - generic [ref=f12e1026] [cursor=pointer]:
+                        - 'checkbox "Activate Draft Projects projects:activate Set a completed draft project live: issues join codes and makes it visible on mobile and in portfolio views." [ref=f12e1027]'
+                        - generic [ref=f12e1028]:
+                          - generic [ref=f12e1029]:
+                            - generic [ref=f12e1030]: Activate Draft Projects
+                            - generic [ref=f12e1031]: projects:activate
+                          - generic [ref=f12e1032]: "Set a completed draft project live: issues join codes and makes it visible on mobile and in portfolio views."
+                      - generic [ref=f12e1033] [cursor=pointer]:
+                        - checkbox "Create & Initialize New Projects projects:create Create new project baselines, geofences, tranches, and initial BOQ schedules." [ref=f12e1034]
+                        - generic [ref=f12e1035]:
+                          - generic [ref=f12e1036]:
+                            - generic [ref=f12e1037]: Create & Initialize New Projects
+                            - generic [ref=f12e1038]: projects:create
+                          - generic [ref=f12e1039]: Create new project baselines, geofences, tranches, and initial BOQ schedules.
+                      - generic [ref=f12e1040] [cursor=pointer]:
+                        - checkbox "Edit Project Baseline, Geofence & Cadence projects:edit_baseline Update project parameters, geofence boundaries, and reporting cadence rules." [ref=f12e1041]
+                        - generic [ref=f12e1042]:
+                          - generic [ref=f12e1043]:
+                            - generic [ref=f12e1044]: Edit Project Baseline, Geofence & Cadence
+                            - generic [ref=f12e1045]: projects:edit_baseline
+                          - generic [ref=f12e1046]: Update project parameters, geofence boundaries, and reporting cadence rules.
+                      - generic [ref=f12e1047] [cursor=pointer]:
+                        - checkbox "Manage Standards & Needs Assessments projects:manage_standards_docs Upload needs assessment documents and manage engineering standards specs." [ref=f12e1048]
+                        - generic [ref=f12e1049]:
+                          - generic [ref=f12e1050]:
+                            - generic [ref=f12e1051]: Manage Standards & Needs Assessments
+                            - generic [ref=f12e1052]: projects:manage_standards_docs
+                          - generic [ref=f12e1053]: Upload needs assessment documents and manage engineering standards specs.
+                      - generic [ref=f12e1054] [cursor=pointer]:
+                        - checkbox "View All Projects Across Tenant projects:view_all_tenant Global visibility across every project belonging to the client tenant." [ref=f12e1055]
+                        - generic [ref=f12e1056]:
+                          - generic [ref=f12e1057]:
+                            - generic [ref=f12e1058]: View All Projects Across Tenant
+                            - generic [ref=f12e1059]: projects:view_all_tenant
+                          - generic [ref=f12e1060]: Global visibility across every project belonging to the client tenant.
+                      - generic [ref=f12e1061] [cursor=pointer]:
+                        - checkbox "View Assigned Projects projects:view_assigned View dashboard, map, and baseline details for projects explicitly assigned to the user." [ref=f12e1062]
+                        - generic [ref=f12e1063]:
+                          - generic [ref=f12e1064]:
+                            - generic [ref=f12e1065]: View Assigned Projects
+                            - generic [ref=f12e1066]: projects:view_assigned
+                          - generic [ref=f12e1067]: View dashboard, map, and baseline details for projects explicitly assigned to the user.
+                      - generic [ref=f12e1068] [cursor=pointer]:
+                        - checkbox "Access Executive Risk Matrix projects:view_executive_matrix View cross-facility financial commitments, holdbacks, and risk standing." [ref=f12e1069]
+                        - generic [ref=f12e1070]:
+                          - generic [ref=f12e1071]:
+                            - generic [ref=f12e1072]: Access Executive Risk Matrix
+                            - generic [ref=f12e1073]: projects:view_executive_matrix
+                          - generic [ref=f12e1074]: View cross-facility financial commitments, holdbacks, and risk standing.
+                      - generic [ref=f12e1075] [cursor=pointer]:
+                        - checkbox "View Projects Owned by My Organisation Tree projects:view_organization_tree See every project owned by the user's organisation or by any organisation below it in the hierarchy (Phase 11)." [ref=f12e1076]
+                        - generic [ref=f12e1077]:
+                          - generic [ref=f12e1078]:
+                            - generic [ref=f12e1079]: View Projects Owned by My Organisation Tree
+                            - generic [ref=f12e1080]: projects:view_organization_tree
+                          - generic [ref=f12e1081]: See every project owned by the user's organisation or by any organisation below it in the hierarchy (Phase 11).
+                      - generic [ref=f12e1082] [cursor=pointer]:
+                        - 'checkbox "View Portfolio Dashboard projects:view_portfolio Open the portfolio dashboard: a map of every visible project with portfolio KPI cards." [ref=f12e1083]'
+                        - generic [ref=f12e1084]:
+                          - generic [ref=f12e1085]:
+                            - generic [ref=f12e1086]: View Portfolio Dashboard
+                            - generic [ref=f12e1087]: projects:view_portfolio
+                          - generic [ref=f12e1088]: "Open the portfolio dashboard: a map of every visible project with portfolio KPI cards."
+                  - generic [ref=f12e1089]:
+                    - generic [ref=f12e1090]:
+                      - generic [ref=f12e1091]:
+                        - generic [ref=f12e1092]:
+                          - text: BOQ, Schedule & Contractors
+                          - generic [ref=f12e1093]: (0/7)
+                        - generic [ref=f12e1094]: Upload BOQs, configure hold-points, assign trade contractors, and analyze/refactor schedules.
+                      - button "Select All" [ref=f12e1095] [cursor=pointer]
+                    - generic [ref=f12e1098]:
+                      - generic [ref=f12e1099] [cursor=pointer]:
+                        - checkbox "Configure Mandatory Visual Hold-Points boq:configure_hold_points Flag or unflag critical WBS items as Mandatory Visual Hold-Points." [ref=f12e1100]
+                        - generic [ref=f12e1101]:
+                          - generic [ref=f12e1102]:
+                            - generic [ref=f12e1103]: Configure Mandatory Visual Hold-Points
+                            - generic [ref=f12e1104]: boq:configure_hold_points
+                          - generic [ref=f12e1105]: Flag or unflag critical WBS items as Mandatory Visual Hold-Points.
+                      - generic [ref=f12e1106] [cursor=pointer]:
+                        - checkbox "Upload BOQ & Edit WBS Mappings boq:upload_edit Import BOQ spreadsheets and confirm AI-suggested tranche mappings." [ref=f12e1107]
+                        - generic [ref=f12e1108]:
+                          - generic [ref=f12e1109]:
+                            - generic [ref=f12e1110]: Upload BOQ & Edit WBS Mappings
+                            - generic [ref=f12e1111]: boq:upload_edit
+                          - generic [ref=f12e1112]: Import BOQ spreadsheets and confirm AI-suggested tranche mappings.
+                      - generic [ref=f12e1113] [cursor=pointer]:
+                        - checkbox "View Bill of Quantities (BOQ) & WBS boq:view Read-only access to baseline BOQ items, quantities, and Hold-Point rules." [ref=f12e1114]
+                        - generic [ref=f12e1115]:
+                          - generic [ref=f12e1116]:
+                            - generic [ref=f12e1117]: View Bill of Quantities (BOQ) & WBS
+                            - generic [ref=f12e1118]: boq:view
+                          - generic [ref=f12e1119]: Read-only access to baseline BOQ items, quantities, and Hold-Point rules.
+                      - generic [ref=f12e1120] [cursor=pointer]:
+                        - checkbox "Manage Contractors & Trade Packages contractors:manage_packages Create/assign multiple trade contractors and review AI BOQ contractor suggestions." [ref=f12e1121]
+                        - generic [ref=f12e1122]:
+                          - generic [ref=f12e1123]:
+                            - generic [ref=f12e1124]: Manage Contractors & Trade Packages
+                            - generic [ref=f12e1125]: contractors:manage_packages
+                          - generic [ref=f12e1126]: Create/assign multiple trade contractors and review AI BOQ contractor suggestions.
+                      - generic [ref=f12e1127] [cursor=pointer]:
+                        - checkbox "Approve Schedule Refactoring schedule:approve_refactor Approve or reject proposed baseline schedule shifts when approval is required." [ref=f12e1128]
+                        - generic [ref=f12e1129]:
+                          - generic [ref=f12e1130]:
+                            - generic [ref=f12e1131]: Approve Schedule Refactoring
+                            - generic [ref=f12e1132]: schedule:approve_refactor
+                          - generic [ref=f12e1133]: Approve or reject proposed baseline schedule shifts when approval is required.
+                      - generic [ref=f12e1134] [cursor=pointer]:
+                        - checkbox "Refactor Schedule (\"Catch Project Up\") schedule:catch_up_refactor Re-baseline downstream WBS dates to absorb delays while preserving daily rates." [ref=f12e1135]
+                        - generic [ref=f12e1136]:
+                          - generic [ref=f12e1137]:
+                            - generic [ref=f12e1138]: Refactor Schedule ("Catch Project Up")
+                            - generic [ref=f12e1139]: schedule:catch_up_refactor
+                          - generic [ref=f12e1140]: Re-baseline downstream WBS dates to absorb delays while preserving daily rates.
+                      - generic [ref=f12e1141] [cursor=pointer]:
+                        - checkbox "View Project Schedule Variance schedule:view_variance Monitor planned vs. actual schedule progress (ahead, on time, behind)." [ref=f12e1142]
+                        - generic [ref=f12e1143]:
+                          - generic [ref=f12e1144]:
+                            - generic [ref=f12e1145]: View Project Schedule Variance
+                            - generic [ref=f12e1146]: schedule:view_variance
+                          - generic [ref=f12e1147]: Monitor planned vs. actual schedule progress (ahead, on time, behind).
+                  - generic [ref=f12e1148]:
+                    - generic [ref=f12e1149]:
+                      - generic [ref=f12e1150]:
+                        - generic [ref=f12e1151]:
+                          - text: Mobilization & Access Assurance
+                          - generic [ref=f12e1152]: (0/4)
+                        - generic [ref=f12e1153]: Pre-register site personnel, configure reminders, review ID/liveness, and revoke device sessions.
+                      - button "Select All" [ref=f12e1154] [cursor=pointer]
+                    - generic [ref=f12e1157]:
+                      - generic [ref=f12e1158] [cursor=pointer]:
+                        - checkbox "Approve/Reject Identity & Credentials assurance:review_credentials Review mobile ID cards, 3D liveness selfies, and regulatory licenses." [ref=f12e1159]
+                        - generic [ref=f12e1160]:
+                          - generic [ref=f12e1161]:
+                            - generic [ref=f12e1162]: Approve/Reject Identity & Credentials
+                            - generic [ref=f12e1163]: assurance:review_credentials
+                          - generic [ref=f12e1164]: Review mobile ID cards, 3D liveness selfies, and regulatory licenses.
+                      - generic [ref=f12e1165] [cursor=pointer]:
+                        - checkbox "Configure Onboarding Reminders mobilization:configure_reminders Set automated countdown reminders before planned site mobilization dates." [ref=f12e1166]
+                        - generic [ref=f12e1167]:
+                          - generic [ref=f12e1168]:
+                            - generic [ref=f12e1169]: Configure Onboarding Reminders
+                            - generic [ref=f12e1170]: mobilization:configure_reminders
+                          - generic [ref=f12e1171]: Set automated countdown reminders before planned site mobilization dates.
+                      - generic [ref=f12e1172] [cursor=pointer]:
+                        - checkbox "Manage Expected Mobilization Roster mobilization:manage_roster Pre-register expected contractors/monitors with planned mobilization dates." [ref=f12e1173]
+                        - generic [ref=f12e1174]:
+                          - generic [ref=f12e1175]:
+                            - generic [ref=f12e1176]: Manage Expected Mobilization Roster
+                            - generic [ref=f12e1177]: mobilization:manage_roster
+                          - generic [ref=f12e1178]: Pre-register expected contractors/monitors with planned mobilization dates.
+                      - generic [ref=f12e1179] [cursor=pointer]:
+                        - checkbox "Revoke or Restore Mobile Device Sessions sessions:revoke_device Manage active mobile field agent sessions and revoke compromised devices." [ref=f12e1180]
+                        - generic [ref=f12e1181]:
+                          - generic [ref=f12e1182]:
+                            - generic [ref=f12e1183]: Revoke or Restore Mobile Device Sessions
+                            - generic [ref=f12e1184]: sessions:revoke_device
+                          - generic [ref=f12e1185]: Manage active mobile field agent sessions and revoke compromised devices.
+                  - generic [ref=f12e1186]:
+                    - generic [ref=f12e1187]:
+                      - generic [ref=f12e1188]:
+                        - generic [ref=f12e1189]:
+                          - text: Field Capture & Site Presence
+                          - generic [ref=f12e1190]: (0/6)
+                        - generic [ref=f12e1191]: Join projects on mobile, submit field reports, perform GPS check-ins, and manage no-show alerts.
+                      - button "Select All" [ref=f12e1192] [cursor=pointer]
+                    - generic [ref=f12e1195]:
+                      - generic [ref=f12e1196] [cursor=pointer]:
+                        - checkbox "Join Project via Mobile Join Code field:join_project Authenticate a mobile field device onto a project via join code." [ref=f12e1197]
+                        - generic [ref=f12e1198]:
+                          - generic [ref=f12e1199]:
+                            - generic [ref=f12e1200]: Join Project via Mobile Join Code
+                            - generic [ref=f12e1201]: field:join_project
+                          - generic [ref=f12e1202]: Authenticate a mobile field device onto a project via join code.
+                      - generic [ref=f12e1203] [cursor=pointer]:
+                        - checkbox "Perform On-Site GPS Check-In field:manual_checkin Submit explicit on-site presence check-ins within project geofence." [ref=f12e1204]
+                        - generic [ref=f12e1205]:
+                          - generic [ref=f12e1206]:
+                            - generic [ref=f12e1207]: Perform On-Site GPS Check-In
+                            - generic [ref=f12e1208]: field:manual_checkin
+                          - generic [ref=f12e1209]: Submit explicit on-site presence check-ins within project geofence.
+                      - generic [ref=f12e1210] [cursor=pointer]:
+                        - checkbox "Submit Special Incident / Whistleblower Alert field:raise_incident Escalate safety emergencies, material failures, or confidential disclosures." [ref=f12e1211]
+                        - generic [ref=f12e1212]:
+                          - generic [ref=f12e1213]:
+                            - generic [ref=f12e1214]: Submit Special Incident / Whistleblower Alert
+                            - generic [ref=f12e1215]: field:raise_incident
+                          - generic [ref=f12e1216]: Escalate safety emergencies, material failures, or confidential disclosures.
+                      - generic [ref=f12e1217] [cursor=pointer]:
+                        - checkbox "Capture Field Evidence & Submit Reports field:submit_report Capture live geotagged photos, voice notes, and submit period/workday reports." [ref=f12e1218]
+                        - generic [ref=f12e1219]:
+                          - generic [ref=f12e1220]:
+                            - generic [ref=f12e1221]: Capture Field Evidence & Submit Reports
+                            - generic [ref=f12e1222]: field:submit_report
+                          - generic [ref=f12e1223]: Capture live geotagged photos, voice notes, and submit period/workday reports.
+                      - generic [ref=f12e1224] [cursor=pointer]:
+                        - checkbox "Manage No-Show & Late Check-In Alerts presence:manage_noshow_alerts Acknowledge or resolve missed check-in and mobilization no-show alerts." [ref=f12e1225]
+                        - generic [ref=f12e1226]:
+                          - generic [ref=f12e1227]:
+                            - generic [ref=f12e1228]: Manage No-Show & Late Check-In Alerts
+                            - generic [ref=f12e1229]: presence:manage_noshow_alerts
+                          - generic [ref=f12e1230]: Acknowledge or resolve missed check-in and mobilization no-show alerts.
+                      - generic [ref=f12e1231] [cursor=pointer]:
+                        - checkbox "View Site Presence & Geotag Telemetry presence:view_telemetry Inspect hourly GPS telemetry, check-in timestamps, and submission geotags." [ref=f12e1232]
+                        - generic [ref=f12e1233]:
+                          - generic [ref=f12e1234]:
+                            - generic [ref=f12e1235]: View Site Presence & Geotag Telemetry
+                            - generic [ref=f12e1236]: presence:view_telemetry
+                          - generic [ref=f12e1237]: Inspect hourly GPS telemetry, check-in timestamps, and submission geotags.
+                  - generic [ref=f12e1238]:
+                    - generic [ref=f12e1239]:
+                      - generic [ref=f12e1240]:
+                        - generic [ref=f12e1241]:
+                          - text: Report Review & Approvals
+                          - generic [ref=f12e1242]: (0/8)
+                        - generic [ref=f12e1243]: Inspect submitted workday/period reports, raise verification queries, and approve completion.
+                      - button "Select All" [ref=f12e1244] [cursor=pointer]
+                    - generic [ref=f12e1247]:
+                      - generic [ref=f12e1248] [cursor=pointer]:
+                        - checkbox "Raise and Close Inspection Findings inspections:manage_findings Raise findings from failed inspection items, and resolve or dismiss them. Contractors resolve their own." [ref=f12e1249]
+                        - generic [ref=f12e1250]:
+                          - generic [ref=f12e1251]:
+                            - generic [ref=f12e1252]: Raise and Close Inspection Findings
+                            - generic [ref=f12e1253]: inspections:manage_findings
+                          - generic [ref=f12e1254]: Raise findings from failed inspection items, and resolve or dismiss them. Contractors resolve their own.
+                      - generic [ref=f12e1255] [cursor=pointer]:
+                        - checkbox "Manage Inspection Checklist Templates inspections:manage_templates Create and version the tenant checklist templates used for site inspections." [ref=f12e1256]
+                        - generic [ref=f12e1257]:
+                          - generic [ref=f12e1258]:
+                            - generic [ref=f12e1259]: Manage Inspection Checklist Templates
+                            - generic [ref=f12e1260]: inspections:manage_templates
+                          - generic [ref=f12e1261]: Create and version the tenant checklist templates used for site inspections.
+                      - generic [ref=f12e1262] [cursor=pointer]:
+                        - checkbox "Submit Site Inspection Reports inspections:submit Complete a checklist inspection (baseline, routine, mobilisation check, final evaluation) on mobile or web." [ref=f12e1263]
+                        - generic [ref=f12e1264]:
+                          - generic [ref=f12e1265]:
+                            - generic [ref=f12e1266]: Submit Site Inspection Reports
+                            - generic [ref=f12e1267]: inspections:submit
+                          - generic [ref=f12e1268]: Complete a checklist inspection (baseline, routine, mobilisation check, final evaluation) on mobile or web.
+                      - generic [ref=f12e1269] [cursor=pointer]:
+                        - checkbox "View Site Inspections inspections:view See inspection reports, their answers and photos, findings and the supervision workload view." [ref=f12e1270]
+                        - generic [ref=f12e1271]:
+                          - generic [ref=f12e1272]:
+                            - generic [ref=f12e1273]: View Site Inspections
+                            - generic [ref=f12e1274]: inspections:view
+                          - generic [ref=f12e1275]: See inspection reports, their answers and photos, findings and the supervision workload view.
+                      - generic [ref=f12e1276] [cursor=pointer]:
+                        - checkbox "Approve Field Reports as Completed reports:approve_completion Sign off submitted field reports when report approval gating is enabled." [ref=f12e1277]
+                        - generic [ref=f12e1278]:
+                          - generic [ref=f12e1279]:
+                            - generic [ref=f12e1280]: Approve Field Reports as Completed
+                            - generic [ref=f12e1281]: reports:approve_completion
+                          - generic [ref=f12e1282]: Sign off submitted field reports when report approval gating is enabled.
+                      - generic [ref=f12e1283] [cursor=pointer]:
+                        - checkbox "Raise Verification Queries on Reports/IPCs reports:raise_query Dispatch clarification queries to field WBS chats or IPC line items." [ref=f12e1284]
+                        - generic [ref=f12e1285]:
+                          - generic [ref=f12e1286]:
+                            - generic [ref=f12e1287]: Raise Verification Queries on Reports/IPCs
+                            - generic [ref=f12e1288]: reports:raise_query
+                          - generic [ref=f12e1289]: Dispatch clarification queries to field WBS chats or IPC line items.
+                      - generic [ref=f12e1290] [cursor=pointer]:
+                        - checkbox "Respond to Queries & Resubmit Evidence reports:respond_query Reply to monitor queries on IPC claims or mobile WBS threads." [ref=f12e1291]
+                        - generic [ref=f12e1292]:
+                          - generic [ref=f12e1293]:
+                            - generic [ref=f12e1294]: Respond to Queries & Resubmit Evidence
+                            - generic [ref=f12e1295]: reports:respond_query
+                          - generic [ref=f12e1296]: Reply to monitor queries on IPC claims or mobile WBS threads.
+                      - generic [ref=f12e1297] [cursor=pointer]:
+                        - checkbox "View Submitted Field Reports reports:view_all Inspect submitted workday/period reports, AI assessments, and evidence." [ref=f12e1298]
+                        - generic [ref=f12e1299]:
+                          - generic [ref=f12e1300]:
+                            - generic [ref=f12e1301]: View Submitted Field Reports
+                            - generic [ref=f12e1302]: reports:view_all
+                          - generic [ref=f12e1303]: Inspect submitted workday/period reports, AI assessments, and evidence.
+                  - generic [ref=f12e1304]:
+                    - generic [ref=f12e1305]:
+                      - generic [ref=f12e1306]:
+                        - generic [ref=f12e1307]:
+                          - text: IPC, Milestones & Drawdowns
+                          - generic [ref=f12e1308]: (0/7)
+                        - generic [ref=f12e1309]: Submit IPC claims, run AI reconciliation, certify valuations, and approve tranche/milestone releases.
+                      - button "Select All" [ref=f12e1310] [cursor=pointer]
+                    - generic [ref=f12e1313]:
+                      - generic [ref=f12e1314] [cursor=pointer]:
+                        - checkbox "Certify Valuation Report ipc:certify_valuation Formally certify line-item completion % and recommend tranche release/holdback." [ref=f12e1315]
+                        - generic [ref=f12e1316]:
+                          - generic [ref=f12e1317]:
+                            - generic [ref=f12e1318]: Certify Valuation Report
+                            - generic [ref=f12e1319]: ipc:certify_valuation
+                          - generic [ref=f12e1320]: Formally certify line-item completion % and recommend tranche release/holdback.
+                      - generic [ref=f12e1321] [cursor=pointer]:
+                        - checkbox "Submit Contractor IPC Drawdown Claims ipc:submit_claim Create and submit Interim Payment Certificate claims for tranches." [ref=f12e1322]
+                        - generic [ref=f12e1323]:
+                          - generic [ref=f12e1324]:
+                            - generic [ref=f12e1325]: Submit Contractor IPC Drawdown Claims
+                            - generic [ref=f12e1326]: ipc:submit_claim
+                          - generic [ref=f12e1327]: Create and submit Interim Payment Certificate claims for tranches.
+                      - generic [ref=f12e1328] [cursor=pointer]:
+                        - checkbox "Run AI Evidence-to-Claim Reconciliation ipc:trigger_ai_reconcile Trigger or re-run AI cross-examination of claims against field evidence." [ref=f12e1329]
+                        - generic [ref=f12e1330]:
+                          - generic [ref=f12e1331]:
+                            - generic [ref=f12e1332]: Run AI Evidence-to-Claim Reconciliation
+                            - generic [ref=f12e1333]: ipc:trigger_ai_reconcile
+                          - generic [ref=f12e1334]: Trigger or re-run AI cross-examination of claims against field evidence.
+                      - generic [ref=f12e1335] [cursor=pointer]:
+                        - checkbox "View IPC Claims & Reconciliation Queue ipc:view View submitted IPCs, evidence strength ratings, and reconciliation tables." [ref=f12e1336]
+                        - generic [ref=f12e1337]:
+                          - generic [ref=f12e1338]:
+                            - generic [ref=f12e1339]: View IPC Claims & Reconciliation Queue
+                            - generic [ref=f12e1340]: ipc:view
+                          - generic [ref=f12e1341]: View submitted IPCs, evidence strength ratings, and reconciliation tables.
+                      - generic [ref=f12e1342] [cursor=pointer]:
+                        - checkbox "Verify Direct Milestone Release (No-IPC Mode) milestone:verify_direct_release Verify milestone completion directly from evidence when IPCs are disabled." [ref=f12e1343]
+                        - generic [ref=f12e1344]:
+                          - generic [ref=f12e1345]:
+                            - generic [ref=f12e1346]: Verify Direct Milestone Release (No-IPC Mode)
+                            - generic [ref=f12e1347]: milestone:verify_direct_release
+                          - generic [ref=f12e1348]: Verify milestone completion directly from evidence when IPCs are disabled.
+                      - generic [ref=f12e1349] [cursor=pointer]:
+                        - checkbox "Approve Tranche / Milestone Disbursement tranche:approve_disbursement Record formal financier/approver release, holdback, or hold decisions." [ref=f12e1350]
+                        - generic [ref=f12e1351]:
+                          - generic [ref=f12e1352]:
+                            - generic [ref=f12e1353]: Approve Tranche / Milestone Disbursement
+                            - generic [ref=f12e1354]: tranche:approve_disbursement
+                          - generic [ref=f12e1355]: Record formal financier/approver release, holdback, or hold decisions.
+                      - generic [ref=f12e1356] [cursor=pointer]:
+                        - checkbox "Export Valuation Report PDF valuation:export_pdf Generate and download branded Disbursement Evidence & Valuation Report PDFs." [ref=f12e1357]
+                        - generic [ref=f12e1358]:
+                          - generic [ref=f12e1359]:
+                            - generic [ref=f12e1360]: Export Valuation Report PDF
+                            - generic [ref=f12e1361]: valuation:export_pdf
+                          - generic [ref=f12e1362]: Generate and download branded Disbursement Evidence & Valuation Report PDFs.
+                  - generic [ref=f12e1363]:
+                    - generic [ref=f12e1364]:
+                      - generic [ref=f12e1365]:
+                        - generic [ref=f12e1366]:
+                          - text: Audit, Handover & Retention
+                          - generic [ref=f12e1367]: (0/6)
+                        - generic [ref=f12e1368]: Inspect cryptographic audit logs, issue stakeholder handover links, and manage retention defects.
+                      - button "Select All" [ref=f12e1369] [cursor=pointer]
+                    - generic [ref=f12e1372]:
+                      - generic [ref=f12e1373] [cursor=pointer]:
+                        - checkbox "Inspect Cryptographic Audit Ledger audit:view_ledger View immutable SHA-256 hash-chained governance events and resolve incidents." [ref=f12e1374]
+                        - generic [ref=f12e1375]:
+                          - generic [ref=f12e1376]:
+                            - generic [ref=f12e1377]: Inspect Cryptographic Audit Ledger
+                            - generic [ref=f12e1378]: audit:view_ledger
+                          - generic [ref=f12e1379]: View immutable SHA-256 hash-chained governance events and resolve incidents.
+                      - generic [ref=f12e1380] [cursor=pointer]:
+                        - checkbox "Generate Stakeholder Handover Links handover:manage_links Create tokenized external stakeholder feedback links for project handover." [ref=f12e1381]
+                        - generic [ref=f12e1382]:
+                          - generic [ref=f12e1383]:
+                            - generic [ref=f12e1384]: Generate Stakeholder Handover Links
+                            - generic [ref=f12e1385]: handover:manage_links
+                          - generic [ref=f12e1386]: Create tokenized external stakeholder feedback links for project handover.
+                      - generic [ref=f12e1387] [cursor=pointer]:
+                        - checkbox "Review Stakeholder Handover Feedback handover:review_feedback Inspect stakeholder sign-offs, uploaded handover reports, and recordings." [ref=f12e1388]
+                        - generic [ref=f12e1389]:
+                          - generic [ref=f12e1390]:
+                            - generic [ref=f12e1391]: Review Stakeholder Handover Feedback
+                            - generic [ref=f12e1392]: handover:review_feedback
+                          - generic [ref=f12e1393]: Inspect stakeholder sign-offs, uploaded handover reports, and recordings.
+                      - generic [ref=f12e1394] [cursor=pointer]:
+                        - checkbox "View Confidential Whistleblower Identity incidents:view_confidential See the reporter identity on confidential whistleblower disclosures. Grant sparingly." [ref=f12e1395]
+                        - generic [ref=f12e1396]:
+                          - generic [ref=f12e1397]:
+                            - generic [ref=f12e1398]: View Confidential Whistleblower Identity
+                            - generic [ref=f12e1399]: incidents:view_confidential
+                          - generic [ref=f12e1400]: See the reporter identity on confidential whistleblower disclosures. Grant sparingly.
+                      - generic [ref=f12e1401] [cursor=pointer]:
+                        - checkbox "Manage Retention Period Defect Tickets retention:manage_defects Log, assign, and verify maintenance/defect tickets during the retention period." [ref=f12e1402]
+                        - generic [ref=f12e1403]:
+                          - generic [ref=f12e1404]:
+                            - generic [ref=f12e1405]: Manage Retention Period Defect Tickets
+                            - generic [ref=f12e1406]: retention:manage_defects
+                          - generic [ref=f12e1407]: Log, assign, and verify maintenance/defect tickets during the retention period.
+                      - generic [ref=f12e1408] [cursor=pointer]:
+                        - checkbox "Approve Final Retention Release retention:release_escrow Release held-back retention funds once retention period & defects clear." [ref=f12e1409]
+                        - generic [ref=f12e1410]:
+                          - generic [ref=f12e1411]:
+                            - generic [ref=f12e1412]: Approve Final Retention Release
+                            - generic [ref=f12e1413]: retention:release_escrow
+                          - generic [ref=f12e1414]: Release held-back retention funds once retention period & defects clear.
+              - generic [ref=f12e1415]:
+                - button "Cancel" [ref=f12e1416] [cursor=pointer]
+                - button "Create Role" [disabled] [ref=f12e1417]
+  - region "Notifications alt+T"

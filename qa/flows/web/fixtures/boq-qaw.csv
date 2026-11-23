@@ -1,0 +1,6 @@
+Item No,Description,Unit,Quantity,Rate,Amount,Hold Point
+1.01,Site clearance and setting out,m2,"12,500",400,"5,000,000",
+1.02,Excavation for foundations,m3,"1,250","8,000","10,000,000",yes
+2.01,Reinforced concrete C30 to columns,m3,500,"30,000","15,000,000",
+2.02,Blockwork walls 225mm,m2,"2,000","5,000","10,000,000",
+3.01,Roofing sheets and trusses,m2,"1,000",,"10,000,000",
