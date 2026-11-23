@@ -105,6 +105,10 @@ export const WebNotificationCategoryEnum = z.enum([
   'CONTRACT_DEFAULT_CASE',
   'PROGRAMME_OF_WORKS',
   'DOCUMENT_SIGN_OFF',
+  // Phase 15
+  'COMPLETION_CERTIFICATE',
+  'CLOSURE',
+  'LESSON_SHARED',
 ]);
 export type WebNotificationCategory = z.infer<typeof WebNotificationCategoryEnum>;
 

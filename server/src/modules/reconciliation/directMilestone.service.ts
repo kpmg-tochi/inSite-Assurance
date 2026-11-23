@@ -26,6 +26,7 @@ import { normalizeUnit } from './reconciliationEngine';
 import { refreshCertifiedProgress } from './reconciliation.service';
 import { releaseGate, reviewGate, startValuationOnChain, valuationProgress } from './disbursementChain';
 import { assertConstructionOngoing } from '../closeout/closeoutGate';
+import { assertFinalPaymentGate } from '../completion/completion.service';
 import { pdfReleaseDecision } from '../closeout/retention.service';
 import { assertCertifierCredentials, credentialPolicyForProject } from '../credentials/credentialPolicy.service';
 
@@ -252,6 +253,8 @@ export async function verifyDirectMilestone(params: {
       await tx.$queryRaw`SELECT id FROM "FacilityTranche" WHERE id = ${input.trancheId}::uuid FOR UPDATE`;
       const tranche = await tx.facilityTranche.findUniqueOrThrow({ where: { id: input.trancheId } });
       if (tranche.isReleased) throw new AppError('This tranche has been fully released', 409, 'TRANCHE_FULLY_RELEASED');
+      // Phase 15: verifying the last payment milestone is a final payment.
+      await assertFinalPaymentGate(tx, projectId, { kind: 'TRANCHE', trancheId: tranche.id });
       const open = await openDirectValuation(tx, tranche.id);
       if (open) {
         throw new AppError(

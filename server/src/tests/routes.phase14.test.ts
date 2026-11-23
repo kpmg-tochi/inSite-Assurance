@@ -644,7 +644,8 @@ describe('Phase 14', () => {
         s.fullName.startsWith('Ngozi Eze')
       );
       assert.ok(officer, 'the seeded M&E officer is a supervisor');
-      assert.equal(officer.activeProjectCount, 3);
+      // PRG-102, PRG-211, PRG-221 and (Phase 15) PRG-103 in its liability period; closed PRG-241 does not count.
+      assert.equal(officer.activeProjectCount, 4);
       assert.equal(officer.overSiteLimit, true);
       assert.equal(officer.overSpread, true);
       assert.ok(officer.spreadKm > 500);

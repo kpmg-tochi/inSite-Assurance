@@ -41,6 +41,11 @@ function invalidateCloseout(queryClient: QueryClient, projectId: string) {
     queryClient.invalidateQueries({ queryKey: key(projectId) });
   }
   queryClient.invalidateQueries({ queryKey: ['projects'] });
+  // Phase 15: phase changes and handover reviews move the certificate view, milestones, the
+  // register (handover certificate) and the closure checklist.
+  for (const key of [['completion', projectId], ['contract-milestones', projectId], ['project-documents', projectId], ['closure-checklist', projectId]]) {
+    queryClient.invalidateQueries({ queryKey: key });
+  }
 }
 
 export const useChangeProjectPhaseMutation = (projectId: string) => {

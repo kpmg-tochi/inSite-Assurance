@@ -2,6 +2,7 @@ import { zonedCalendarDate } from '@insite/shared';
 import { prisma } from '../config/prisma';
 import { sendOverdueDefectReminders } from '../modules/closeout/defects.service';
 import { JobContext, registerJob, runUnit } from './runner';
+import { sweepClosurePacks } from '../modules/completion/closurePack.service';
 
 /**
  * defect-reminders (Phase 10 Step 6): once a day per project in handover or its defects liability
@@ -31,4 +32,12 @@ export async function runDefectReminders({ now }: JobContext): Promise<void> {
 
 export function registerCloseoutJobs(): void {
   registerJob({ name: 'defect-reminders', intervalMs: 60 * 60 * 1000, run: runDefectReminders });
+  // Phase 15: closure packs left queued (e.g. by a restart) run; stuck ones are failed.
+  registerJob({
+    name: 'closure-packs',
+    intervalMs: 5 * 60 * 1000,
+    run: async ({ now }) => {
+      await runUnit('closure-packs', now.toISOString().slice(0, 16), () => sweepClosurePacks(now));
+    },
+  });
 }

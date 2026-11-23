@@ -83,6 +83,7 @@ import {
   pdfReleaseDecision,
 } from '../closeout/retention.service';
 import { assertConstructionOngoing } from '../closeout/closeoutGate';
+import { assertFinalPaymentGate } from '../completion/completion.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -1251,6 +1252,8 @@ export async function certifyIpcValuationByMonitor(params: {
     const result = await prisma.$transaction(async (tx) => {
       const ipc = await lockIpc(tx, projectId, ipcId);
       const next = assertIpcTransition(ipc.status as IpcClaimStatus, 'certify');
+      // Phase 15: certifying the last payment milestone is a final payment.
+      await assertFinalPaymentGate(tx, projectId, { kind: 'TRANCHE', trancheId: ipc.trancheId });
       if ((await countOutstandingQueries(tx, ipcId)) > 0) {
         throw new AppError('Resolve all open queries before certifying', 409, 'QUERIES_OUTSTANDING');
       }
@@ -1418,6 +1421,15 @@ export async function recordLenderTrancheDecision(params: {
       isRetentionRelease && input.decision !== 'HOLD'
         ? await assertRetentionReleaseStillAllowed(tx, projectId, report.id)
         : null;
+    // Phase 15: the final payment (last payment milestone or final retention release) needs an
+    // issued Certificate of Completion when the project type says so; re-checked here.
+    if (input.decision !== 'HOLD') {
+      await assertFinalPaymentGate(
+        tx,
+        projectId,
+        retentionRequest ? { kind: 'RETENTION', stage: retentionRequest.stage } : { kind: 'TRANCHE', trancheId }
+      );
+    }
 
     // D-3.2 unmet mandatory Conditions Precedent block any release (unless CPs are off for the project).
     if (input.decision !== 'HOLD' && config.enableTranchesAndCps && !isRetentionRelease) {

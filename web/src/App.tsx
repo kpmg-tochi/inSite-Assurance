@@ -18,6 +18,9 @@ import { MobileAppPage } from "./pages/public/MobileAppPage";
 import { PortfolioDashboardPage } from "./pages/dashboard/PortfolioDashboardPage";
 import { PortfolioExecutivePage } from "./pages/dashboard/PortfolioExecutivePage";
 import { PortfolioOverviewPage } from "./pages/dashboard/PortfolioOverviewPage";
+import { ProjectClosurePage } from "./pages/closure/ProjectClosurePage";
+import { LessonsLibraryPage } from "./pages/lessons/LessonsLibraryPage";
+import { OrganizationRatingsPage } from "./pages/organizations/OrganizationRatingsPage";
 import { ProjectsDirectoryPage } from "./pages/projects/ProjectsDirectoryPage";
 import { NewProjectPage } from "./pages/projects/setup/NewProjectPage";
 import { ProjectSetupShell } from "./pages/projects/setup/ProjectSetupShell";
@@ -147,7 +150,7 @@ function AuthenticatedWorkspace() {
   const handleSelectProject = (projectId: string) => {
     setSelectedProjectId(projectId);
     const subRouteMatch = location.pathname.match(
-      /\/app\/projects\/[^/]+\/(dashboard|reconciliation|boq|audit|schedule|handover|retention|documents|milestones|kickoff)/,
+      /\/app\/projects\/[^/]+\/(dashboard|reconciliation|boq|audit|schedule|handover|retention|documents|milestones|kickoff|closure)/,
     );
     const subRoute = subRouteMatch?.[1] || "dashboard";
     const safeSubRoute =
@@ -261,6 +264,16 @@ function AuthenticatedWorkspace() {
             </RequirePermission>
           }
         />
+        {/* Phase 15: the lessons-learned library and a contractor's ratings across projects */}
+        <Route
+          path="lessons"
+          element={
+            <RequirePermission anyOf={["lessons:view"]} backTo={projectHome}>
+              <LessonsLibraryPage />
+            </RequirePermission>
+          }
+        />
+        <Route path="organizations/:organizationId/ratings" element={<OrganizationRatingsPage />} />
         <Route
           path="executive"
           element={
@@ -380,6 +393,8 @@ function AuthenticatedWorkspace() {
                 </RequirePermission>
               }
             />
+            {/* Phase 15: closure checklist, ratings, lessons and the closure pack (contractors see shared lessons) */}
+            <Route path="projects/:projectId/closure" element={<ProjectClosurePage project={activeProject} />} />
             <Route
               path="projects/:projectId/audit"
               element={

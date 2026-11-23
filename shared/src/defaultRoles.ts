@@ -107,6 +107,13 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'milestones:manage',
       'kickoff:manage',
       'contracts:raise_default',
+      // Phase 15
+      'completion:draft_certificate',
+      'closure:manage_checklist',
+      'closure:export_pack',
+      'contractors:rate_performance',
+      'lessons:manage',
+      'lessons:view',
     ],
   },
   {
@@ -139,6 +146,10 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'inspections:view',
       // Phase 13
       'documents:view',
+      // Phase 15: the funder signs off the closure audit and can export the pack.
+      'closure:audit_signoff',
+      'closure:export_pack',
+      'lessons:view',
     ],
   },
   {
@@ -200,6 +211,15 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'kickoff:manage',
       'contracts:raise_default',
       'contracts:decide_default',
+      // Phase 15 (Q5): owner-organisation admins sign the Certificate of Completion.
+      'completion:draft_certificate',
+      'completion:sign_certificate',
+      'completion:revoke_certificate',
+      'closure:manage_checklist',
+      'closure:export_pack',
+      'contractors:rate_performance',
+      'lessons:manage',
+      'lessons:view',
     ],
   },
   {

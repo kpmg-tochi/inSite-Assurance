@@ -18,6 +18,9 @@ import { hasWebPermission, WebJwtPayload } from '../../middleware/auth.middlewar
 import { recordAuditEvent } from '../audit/audit.service';
 import { getProcessConfig } from '../process/processConfig.service';
 import { assertAnyCloseoutModuleOn, projectToday } from './closeoutGate';
+import { cocGateReason } from '../completion/completion.service';
+import { closeBlockedReason, ensureClosureChecklist, freezeMetAutomaticItems } from '../completion/closure.service';
+import { recomputeMilestoneDates } from '../contracts/milestones.service';
 
 /**
  * Construction phases (Phase 10 Step 1). A second field next to the DRAFT/ACTIVE/ARCHIVED status:
@@ -52,7 +55,7 @@ async function undecidedCount(db: Db, projectId: string): Promise<number> {
   return ipcs + openDirect;
 }
 
-async function acceptedHandover(db: Db, projectId: string) {
+export async function acceptedHandover(db: Db, projectId: string) {
   return db.handoverSubmission.findFirst({
     where: { projectId, decision: { in: ['ACCEPTED', 'ACCEPTED_WITH_SNAGS'] }, reviewedAt: { not: null } },
     orderBy: { reviewedAt: 'desc' },
@@ -61,7 +64,7 @@ async function acceptedHandover(db: Db, projectId: string) {
 
 async function checkTransition(
   db: Db,
-  project: { id: string; constructionPhase: ConstructionPhase; retentionHeldNgn: Prisma.Decimal; status: string },
+  project: { id: string; constructionPhase: ConstructionPhase; retentionHeldNgn: Prisma.Decimal; status: string; projectTypeSnapshotJson: Prisma.JsonValue },
   config: ProjectProcessConfig,
   to: ConstructionPhase
 ): Promise<Check> {
@@ -74,10 +77,21 @@ async function checkTransition(
     const open = await undecidedCount(db, project.id);
     if (open > 0) return no(`${open} claim(s) or valuation(s) are still waiting for a decision.`, true);
   }
+  // Phase 15: the Certificate of Completion comes before the handover, so its gate is reported first.
+  if (project.constructionPhase === 'HANDOVER_IN_PROGRESS' && to === 'RETENTION_PERIOD') {
+    const reason = await cocGateReason(db, project.id, 'HANDOVER_TO_RETENTION', project.projectTypeSnapshotJson);
+    if (reason) return no(reason);
+  }
   if (project.constructionPhase === 'HANDOVER_IN_PROGRESS' && to === 'RETENTION_PERIOD' && config.enableHandoverModule) {
     if (!(await acceptedHandover(db, project.id))) {
       return no('A stakeholder must accept the works and the submission must be reviewed first.');
     }
+  }
+  if (to === 'COMPLETED_CLOSED') {
+    const reason = await cocGateReason(db, project.id, 'PROJECT_CLOSE', project.projectTypeSnapshotJson);
+    if (reason) return no(reason);
+    const pending = await closeBlockedReason(db, project.id);
+    if (pending) return no(pending);
   }
   if (to === 'COMPLETED_CLOSED' && Number(project.retentionHeldNgn) > 0.005) {
     return no('Retention is still held. Release it before closing the project.');
@@ -95,6 +109,7 @@ const PROJECT_PHASE_SELECT = {
   retentionEndDate: true,
   retentionDurationMonths: true,
   retentionHeldNgn: true,
+  projectTypeSnapshotJson: true,
 } satisfies Prisma.ProjectSelect;
 
 /** GET /projects/:projectId/phase */
@@ -159,8 +174,10 @@ export async function changeProjectPhase(params: { projectId: string; webUser: W
     const data: Prisma.ProjectUpdateInput = { constructionPhase: to, constructionPhaseChangedAt: new Date() };
     if (to === 'RETENTION_PERIOD') {
       const accepted = await acceptedHandover(tx, projectId);
+      // Phase 15: an issued Certificate of Completion has already set the date (kept unless overridden).
       const practical =
         input.practicalCompletionDate ??
+        project.practicalCompletionDate ??
         (accepted?.reviewedAt ? zonedCalendarDate(accepted.reviewedAt, project.timezone) : projectToday(project.timezone));
       if (practical > projectToday(project.timezone)) {
         throw new AppError('Practical completion cannot be in the future.', 422, 'PRACTICAL_COMPLETION_IN_FUTURE');
@@ -175,6 +192,13 @@ export async function changeProjectPhase(params: { projectId: string; webUser: W
       });
     }
     await tx.project.update({ where: { id: projectId }, data });
+    // Phase 15: the closure checklist exists from handover on; closing freezes what is met and
+    // starts the milestones anchored on the close date (e.g. the post-closure evaluation).
+    if (to === 'HANDOVER_IN_PROGRESS') await ensureClosureChecklist(tx, projectId);
+    if (to === 'COMPLETED_CLOSED') {
+      await freezeMetAutomaticItems(tx, projectId, 'BEFORE_CLOSE', webUser.userId);
+      await recomputeMilestoneDates(tx, projectId);
+    }
 
     const after = { ...project, ...data } as typeof project;
     await recordAuditEvent(tx, {

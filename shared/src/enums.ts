@@ -696,6 +696,79 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     surface: 'WEB',
     unlocksViews: ['Retention Release Gate'],
   },
+  // Phase 15: Certificate of Completion and closure governance
+  {
+    key: 'completion:draft_certificate',
+    name: 'Draft Certificates of Completion',
+    description: "Draft the Certificate of Completion (scope and completion date) and record the beneficiary's signed paper copy.",
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'WEB',
+    unlocksViews: ['Handover -> Completion'],
+  },
+  {
+    key: 'completion:sign_certificate',
+    name: 'Sign Certificates of Completion',
+    description: 'Sign a Certificate of Completion in a signatory slot the project type opens to this permission.',
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'WEB',
+    unlocksViews: ['Handover -> Completion'],
+  },
+  {
+    key: 'completion:revoke_certificate',
+    name: 'Revoke Certificates of Completion',
+    description: 'Revoke an issued certificate with a reason, before the handover is accepted.',
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'WEB',
+    unlocksViews: ['Handover -> Completion'],
+  },
+  {
+    key: 'closure:manage_checklist',
+    name: 'Manage the Closure Checklist',
+    description: 'Tick manual closure items and waive items with a reason.',
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'WEB',
+    unlocksViews: ['Closure Tab'],
+  },
+  {
+    key: 'closure:audit_signoff',
+    name: 'Sign Off the Closure Audit',
+    description: 'Record the audit sign-off item of the closure checklist.',
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'WEB',
+    unlocksViews: ['Closure Tab'],
+  },
+  {
+    key: 'closure:export_pack',
+    name: 'Export the Closure Pack',
+    description: 'Build the closure pack (index, documents, certificates, valuations, inspections and the verified audit ledger) for audit.',
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'WEB',
+    unlocksViews: ['Closure Tab'],
+  },
+  {
+    key: 'contractors:rate_performance',
+    name: 'Rate Contractor Performance',
+    description: 'Rate each contractor at completion and after closure, and see contractor ratings across projects.',
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'WEB',
+    unlocksViews: ['Closure Tab', 'Organisation Ratings'],
+  },
+  {
+    key: 'lessons:manage',
+    name: 'Record Lessons Learned',
+    description: 'Write, edit and publish lessons learned on a project.',
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'WEB',
+    unlocksViews: ['Closure Tab'],
+  },
+  {
+    key: 'lessons:view',
+    name: 'Browse Lessons Learned',
+    description: 'Browse the tenant library of published lessons learned.',
+    category: 'AUDIT_CLOSEOUT',
+    surface: 'WEB',
+    unlocksViews: ['Lessons Learned Library'],
+  },
 ];
 
 /**
@@ -1094,6 +1167,18 @@ export const AuditActionTypeEnum = z.enum([
   'CONTRACTOR_REPLACED',
   'PROGRAMME_OF_WORKS_SUBMITTED',
   'PROGRAMME_OF_WORKS_DECIDED',
+  // Phase 15
+  'COC_DRAFTED',
+  'COC_SIGNED',
+  'COC_ISSUED',
+  'COC_REVOKED',
+  'HANDOVER_CERTIFICATE_ISSUED',
+  'CLOSURE_ITEM_COMPLETED',
+  'CLOSURE_ITEM_WAIVED',
+  'CLOSURE_AUDIT_SIGNED',
+  'CONTRACTOR_RATED',
+  'LESSON_PUBLISHED',
+  'CLOSURE_PACK_EXPORTED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 

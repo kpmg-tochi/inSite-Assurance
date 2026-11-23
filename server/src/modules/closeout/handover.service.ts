@@ -19,6 +19,7 @@ import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { sendMessage } from '../../integrations/messaging';
 import { recordAuditEvent } from '../audit/audit.service';
 import { assertModuleOn } from './closeoutGate';
+import { issueHandoverCertificate } from '../completion/handoverCertificate.service';
 
 /**
  * Handover links, authenticated side (Phase 10 Step 2). A link carries a 256-bit random token;
@@ -327,6 +328,8 @@ export async function reviewHandoverSubmission(
       summaryText: `Reviewed the handover submission from ${submission.submitterName} (${submission.decision})${notes ? `: ${notes}` : '.'}`,
       payload: { handoverSubmissionId: submission.id, decision: submission.decision, notes },
     });
+    // Phase 15: an accepted response issues the handover certificate and completes the ceremony.
+    await issueHandoverCertificate(tx, projectId, submission.id, webUser);
   });
   const row = await prisma.handoverSubmission.findUniqueOrThrow({ where: { id: submissionId }, include: SUBMISSION_INCLUDE });
   return (await serializeSubmissions(prisma, [row]))[0];

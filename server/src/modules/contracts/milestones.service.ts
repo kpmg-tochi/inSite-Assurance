@@ -4,6 +4,7 @@ import {
   ContractMilestoneDto,
   ContractMilestoneStatus,
   computeMilestoneDueDates,
+  HANDOVER_CEREMONY_MILESTONE_KEY,
   deriveMilestoneStatus,
   describeMilestoneAnchor,
   MilestoneAnchorDates,
@@ -68,6 +69,10 @@ const PROJECT_ANCHOR_SELECT = {
   contractSignedDate: true,
   kickoffDate: true,
   projectTypeSnapshotJson: true,
+  // Phase 15 anchors
+  constructionPhase: true,
+  constructionPhaseChangedAt: true,
+  completionCertificates: { where: { status: 'ISSUED' }, select: { issuedAt: true }, take: 1 },
 } satisfies Prisma.ProjectSelect;
 
 type AnchorProject = Prisma.ProjectGetPayload<{ select: typeof PROJECT_ANCHOR_SELECT }>;
@@ -78,6 +83,11 @@ export function anchorDatesOf(project: AnchorProject): MilestoneAnchorDates {
     CONTRACT_SIGNED: project.contractSignedDate,
     KICKOFF: project.kickoffDate,
     ACTIVATION: project.activatedAt ? zonedCalendarDate(project.activatedAt, project.timezone) : null,
+    COC_ISSUED: project.completionCertificates[0]?.issuedAt ? zonedCalendarDate(project.completionCertificates[0].issuedAt, project.timezone) : null,
+    PROJECT_CLOSED:
+      project.constructionPhase === 'COMPLETED_CLOSED' && project.constructionPhaseChangedAt
+        ? zonedCalendarDate(project.constructionPhaseChangedAt, project.timezone)
+        : null,
   };
 }
 
@@ -143,9 +153,10 @@ export async function syncContractMilestones(tx: Tx, projectId: string): Promise
       }
     }
   }
-  // Open rows whose template disappeared. Rows of terminated or replacement contractors are kept.
+  // Open rows whose template disappeared. Rows of terminated or replacement contractors are kept,
+  // and so is the handover ceremony the platform creates when a CoC is issued (Phase 15).
   const templateKeys = new Set(templates.map((t) => t.key));
-  const stale = existing.filter((r) => !CLOSED.includes(r.status) && !templateKeys.has(r.key));
+  const stale = existing.filter((r) => !CLOSED.includes(r.status) && !templateKeys.has(r.key) && r.key !== HANDOVER_CEREMONY_MILESTONE_KEY);
   if (stale.length) await tx.projectContractMilestone.deleteMany({ where: { id: { in: stale.map((r) => r.id) } } });
   void wanted;
   await recomputeMilestoneDates(tx, projectId);
@@ -456,6 +467,8 @@ export async function autoCompleteMilestones(
     projectContractorId?: string;
     /** Only rows without a contractor. */
     onlyProjectLevel?: boolean;
+    /** Phase 15: only rows that have a due date (their anchor has happened). */
+    onlyDated?: boolean;
     at: Date;
     notes: string;
     actor?: MilestoneActor;
@@ -466,6 +479,7 @@ export async function autoCompleteMilestones(
       projectId: params.projectId,
       completionMode: params.mode,
       status: { in: OPEN_MILESTONE_STATUSES },
+      ...(params.onlyDated ? { dueDate: { not: null } } : {}),
       ...(params.onlyProjectLevel
         ? { projectContractorId: null }
         : params.projectContractorId
@@ -501,6 +515,32 @@ export async function autoCompleteMilestones(
     }
   }
   await recomputeMilestoneDates(tx, params.projectId);
+  return rows.length;
+}
+
+/**
+ * Phase 15: reopens the done rows of an automatic mode (a revoked Certificate of Completion
+ * reopens what its issue completed). Waived rows stay waived.
+ */
+export async function reopenMilestones(tx: Tx, params: { projectId: string; mode: MilestoneCompletionMode; reason: string; actor: MilestoneActor }) {
+  const rows = await tx.projectContractMilestone.findMany({ where: { projectId: params.projectId, completionMode: params.mode, status: 'DONE' } });
+  for (const row of rows) {
+    await tx.projectContractMilestone.update({
+      where: { id: row.id },
+      data: { status: 'PENDING', completedAt: null, completedByUserId: null, completedNotes: null, lastNotifiedStatus: null, remindedOffsetsDays: [] },
+    });
+  }
+  if (rows.length) {
+    await recordAuditEvent(tx, {
+      projectId: params.projectId,
+      actorType: params.actor.actorType,
+      actorId: params.actor.actorId,
+      actorDisplayName: params.actor.actorDisplayName,
+      action: 'MILESTONE_DATES_RECOMPUTED',
+      summaryText: `Reopened ${rows.length} contract milestone(s): ${params.reason}`,
+      payload: { reason: params.reason, reopened: rows.map((r) => ({ id: r.id, key: r.key, label: r.label })) },
+    });
+  }
   return rows.length;
 }
 

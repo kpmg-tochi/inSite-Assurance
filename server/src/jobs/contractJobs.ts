@@ -145,7 +145,12 @@ async function processProject(project: ProjectRow, now: Date): Promise<string> {
 
 export async function runMilestoneDeadlines({ now }: JobContext): Promise<void> {
   const projects = await prisma.project.findMany({
-    where: { ...LIVE_PROJECT_WHERE, OR: [{ contractMilestones: { some: {} } }, { defaultCases: { some: { status: 'CURE_PERIOD' } } }] },
+    // Phase 15: every phase of an active project (the post-closure evaluation falls after closing).
+    where: {
+      status: LIVE_PROJECT_WHERE.status,
+      tenant: LIVE_PROJECT_WHERE.tenant,
+      OR: [{ contractMilestones: { some: {} } }, { defaultCases: { some: { status: 'CURE_PERIOD' } } }],
+    },
     select: {
       id: true,
       name: true,

@@ -196,6 +196,9 @@ export function requireProjectAccess(
 /** Routes under /projects/:projectId that work on a draft (the wizard and its data). */
 const DRAFT_ROUTE_RE = /^\/api\/v1\/projects\/[^/]+(?:\/(?:setup|activate|contractors|boq|baseline|join-codes|process|standards|needs-assessments|evidence\/presign|media|participants|schedule|reporting-streams|supervision|documents|milestones|programme-of-works)(?:\/|$)|\/?$)/;
 
+/** Writes an archived project still serves (Phase 15: the closure pack export). */
+const ARCHIVED_WRITE_RE = /^\/api\/v1\/projects\/[^/]+\/closure-pack\/?$/;
+
 /**
  * Lifecycle rules for web requests (Phase 6): a draft only serves the setup wizard and its data;
  * an archived project is read-only.
@@ -205,7 +208,8 @@ function lifecycleRefusal(status: ProjectStatus, req: Request): AppError | null 
   if (status === 'DRAFT' && !DRAFT_ROUTE_RE.test(path)) {
     return new AppError('This project is a draft. Finish setup and set it active first.', 409, 'PROJECT_IS_DRAFT');
   }
-  if (status === 'ARCHIVED' && req.method !== 'GET') {
+  // Phase 15: the closure pack can still be exported from an archived project (for audit).
+  if (status === 'ARCHIVED' && req.method !== 'GET' && !ARCHIVED_WRITE_RE.test(path)) {
     return new AppError('This project is archived and read-only', 409, 'PROJECT_ARCHIVED');
   }
   return null;

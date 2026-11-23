@@ -2,7 +2,7 @@
 
 | | |
 | :--- | :--- |
-| **Status** | Not started |
+| **Status** | Implemented; migrated, seeded and route-tested; web partly clicked through (see section 7) |
 | **Depends on** | Phase 10 (construction phases, handover, retention), Phase 11 (project types, ownership), Phase 12 (credentials, fixed payment milestones), Phase 13 (documents, milestones), Phase 14 (final evaluation inspection) |
 | **Unblocks** | Phase 16 |
 | **Read first** | [Master plan](saas_implementation_plan.md) sections 2, 3 and 6; [Phase 10](phase_10_implementation_plan.md) sections 3 and 7; [gap analysis](process_flow_gap_analysis.md) G6 |
@@ -75,43 +75,43 @@
 ## 5. Implementation checklist
 
 ### Step 1: Final evaluation gate
-- [ ] Drafting a CoC requires an approved `FINAL_EVALUATION` inspection when the type says so (422 with the reason and a link target).
+- [x] Drafting a CoC requires an approved `FINAL_EVALUATION` inspection when the type says so (422 with the reason and a link target).
 
 ### Step 2: Certificate of Completion
-- [ ] Draft (`completion:draft_certificate`): number, scope summary pre-filled from project and evaluation, completion date.
-- [ ] Sign (`completion:sign_certificate` + slot rules + organisation scope): one transaction, signature row, audit; the same user cannot fill two slots.
-- [ ] Beneficiary slot `RECORDED_BY_STAFF`: upload the signed paper certificate (document type `COMPLETION_CERTIFICATE`, version note "beneficiary signed copy") and attest.
-- [ ] All slots signed → `ISSUED`: generate the CoC PDF (tenant branding, terminology, signatures with names, roles, organisations, registration only where present and policy allows), store as a register document, set `practicalCompletionDate` if empty, complete or create the "handover ceremony" milestone due CoC + `handoverDueDaysAfterCoc`, notify the owner organisation, monitor and contractor.
-- [ ] Revoke with reason (before handover acceptance only).
-- [ ] Web: "Completion" section on the project closeout tab: status, slots with signer or "awaiting", sign button for eligible users, PDF link.
+- [x] Draft (`completion:draft_certificate`): number, scope summary pre-filled from project and evaluation, completion date.
+- [x] Sign (`completion:sign_certificate` + slot rules + organisation scope): one transaction, signature row, audit; the same user cannot fill two slots.
+- [x] Beneficiary slot `RECORDED_BY_STAFF`: upload the signed paper certificate (document type `COMPLETION_CERTIFICATE`, version note "beneficiary signed copy") and attest.
+- [x] All slots signed → `ISSUED`: generate the CoC PDF (tenant branding, terminology, signatures with names, roles, organisations, registration only where present and policy allows), store as a register document, set `practicalCompletionDate` if empty, complete or create the "handover ceremony" milestone due CoC + `handoverDueDaysAfterCoc`, notify the owner organisation, monitor and contractor.
+- [x] Revoke with reason (before handover acceptance only).
+- [ ] Web: "Completion" section on the project closeout tab: status, slots with signer or "awaiting", sign button for eligible users, PDF link. *(Built on the Handover tab; viewed in the browser with seeded PRG-103; the draft, sign, record-copy and revoke dialogs were not clicked through.)*
 
 ### Step 3: Gates
-- [ ] `checkTransition`: `HANDOVER_TO_RETENTION` and `PROJECT_CLOSE` require an issued CoC when configured; clear reasons in the phase-change UI.
-- [ ] Final payment gate in direct verification / IPC certification for the last payment milestone and in the final retention release (request, certification and decision).
-- [ ] Route tests for every gate on and off.
+- [x] `checkTransition`: `HANDOVER_TO_RETENTION` and `PROJECT_CLOSE` require an issued CoC when configured; clear reasons in the phase-change UI.
+- [x] Final payment gate in direct verification / IPC certification for the last payment milestone and in the final retention release (request, certification and decision).
+- [x] Route tests for every gate on and off.
 
 ### Step 4: Handover certificate
-- [ ] Reviewing an accepted handover submission generates a handover certificate PDF (beneficiary, decision, date, snag count, CoC number) stored as `HANDOVER_CERTIFICATE`; completes the handover ceremony milestone.
-- [ ] If `HANDOVER_LINK` beneficiary signing is chosen later: new link purpose on the existing public router, same token/OTP/rate limits, a page that shows the CoC and records the signature; abuse tests as in Phase 10. Build only when the client confirms (section 3).
+- [x] Reviewing an accepted handover submission generates a handover certificate PDF (beneficiary, decision, date, snag count, CoC number) stored as `HANDOVER_CERTIFICATE`; completes the handover ceremony milestone.
+- [ ] *(Deferred by design: D-15.1 unanswered, default `RECORDED_BY_STAFF` built; `HandoverLink.purpose` added with only `HANDOVER`.)* If `HANDOVER_LINK` beneficiary signing is chosen later: new link purpose on the existing public router, same token/OTP/rate limits, a page that shows the CoC and records the signature; abuse tests as in Phase 10. Build only when the client confirms (section 3).
 
 ### Step 5: Closure checklist
-- [ ] Items generated from the type when the project enters `HANDOVER_IN_PROGRESS`; automatic kinds evaluated live (document present and signed, inspection approved, milestone done, ratings recorded for every contractor, at least one published lesson); manual and audit items completed by permission.
-- [ ] `COMPLETED_CLOSED` refused while a `beforeClose` item is pending; archiving (`ARCHIVED`) refused while a `beforeArchive` item is pending. Waivers with reason.
-- [ ] Post-closure evaluation (Co-Funded): a contract milestone anchored on the close date + 14 days, completed by a `FINAL_EVALUATION`-style inspection or an uploaded report (type-configurable).
-- [ ] Web: "Closure" tab with the two lists, progress, actions.
+- [x] Items generated from the type when the project enters `HANDOVER_IN_PROGRESS`; automatic kinds evaluated live (document present and signed, inspection approved, milestone done, ratings recorded for every contractor, at least one published lesson); manual and audit items completed by permission.
+- [x] `COMPLETED_CLOSED` refused while a `beforeClose` item is pending; archiving (`ARCHIVED`) refused while a `beforeArchive` item is pending. Waivers with reason.
+- [x] Post-closure evaluation (Co-Funded): a contract milestone anchored on the close date + 14 days, completed by a `FINAL_EVALUATION`-style inspection or an uploaded report (type-configurable).
+- [ ] Web: "Closure" tab with the two lists, progress, actions. *(Built at `/app/projects/:id/closure`; viewed in the browser with seeded PRG-241; actions not clicked through.)*
 
 ### Step 6: Contractor ratings and lessons learned
-- [ ] Rate each contractor at completion and (optional) post-closure; one rating per stage per rater.
-- [ ] Organisation detail page: a contractor's ratings across projects (average per criterion, list), hidden from contractor users unless shared.
-- [ ] Lessons: create, edit, publish per project; tenant "Lessons learned" library with filters (project type, region, category, tag) and search; optional share with the contractor (aimed notification).
+- [x] Rate each contractor at completion and (optional) post-closure; one rating per stage per rater.
+- [x] Organisation detail page: a contractor's ratings across projects (average per criterion, list), hidden from contractor users unless shared.
+- [x] Lessons: create, edit, publish per project; tenant "Lessons learned" library with filters (project type, region, category, tag) and search; optional share with the contractor (aimed notification).
 
 ### Step 7: Closure pack export
-- [ ] `POST /projects/:id/closure-pack` (`closure:export_pack`) queues a job; the job builds a ZIP: index PDF (project summary, parties, timeline of phases and milestones, payments and retention, KPIs), all current document versions, CoC and handover certificate, valuation PDFs, inspection reports (PDF summary per inspection), audit ledger extract (CSV with entry hashes and a chain verification result).
-- [ ] Stored as a `CLOSURE_FILE` document; download through the media endpoint; size limits and streaming so large projects do not exhaust memory.
+- [x] `POST /projects/:id/closure-pack` (`closure:export_pack`) queues a job; the job builds a ZIP: index PDF (project summary, parties, timeline of phases and milestones, payments and retention, KPIs), all current document versions, CoC and handover certificate, valuation PDFs, inspection reports (PDF summary per inspection), audit ledger extract (CSV with entry hashes and a chain verification result).
+- [x] Stored as a `CLOSURE_FILE` document; download through the media endpoint; size limits and streaming so large projects do not exhaust memory.
 
 ### Step 8: Seed and tests
-- [ ] Seed: one Central project with an issued CoC, accepted handover and handover certificate, in retention; one Co-Funded project closed with its post-closure evaluation pending (cannot archive), ratings and two published lessons.
-- [ ] Route tests: slot rules and org scope; the same user cannot sign twice; issuance side effects; each gate; revoke rules; closure checklist evaluation; archive gate; rating visibility to contractors; closure pack contains the expected entries and a valid chain check.
+- [x] Seed: one Central project with an issued CoC, accepted handover and handover certificate, in retention; one Co-Funded project closed with its post-closure evaluation pending (cannot archive), ratings and two published lessons.
+- [x] Route tests: slot rules and org scope; the same user cannot sign twice; issuance side effects; each gate; revoke rules; closure checklist evaluation; archive gate; rating visibility to contractors; closure pack contains the expected entries and a valid chain check.
 
 ---
 
@@ -125,4 +125,24 @@
 
 ## 7. Found during implementation
 
-*(empty)*
+**Where things are.** Server `server/src/modules/completion/` (`completion.service.ts` CoC and gates, `handoverCertificate.service.ts`, `closure.service.ts` checklist, `ratings.service.ts`, `lessons.service.ts`, `closurePack.service.ts`, `completion.routes.ts`), PDFs `integrations/closure-pdf.service.ts`, ZIP `utils/zipWriter.ts`, contracts `shared/src/schemas/closure.schema.ts`. Web `components/closure/*`, `pages/closure/ProjectClosurePage.tsx`, `pages/lessons/LessonsLibraryPage.tsx`, `pages/organizations/OrganizationRatingsPage.tsx`, type editor `components/deliveryModels/ClosureRulesEditor.tsx`. Tests `routes.phase15.test.ts` (16) and `closure.phase15.test.ts` (6). Migration `20261128090000_phase15_completion_closure` (hand-written partial unique index `completion_certificates_one_live_per_project`).
+
+**Decisions taken while building (switchable):**
+1. **Final payment = the highest-numbered tranche.** On a project with a single tranche every release on it is "final", so with the gate on, partial measured releases on that tranche also need a CoC. Retention: only stage `FINAL` (request, certification, decision).
+2. **Gate order.** Handover → liability period reports the CoC gate before "a stakeholder must accept the works" (CoC precedes the handover).
+3. **Practical completion.** The liability-period transition now keeps a date the CoC already set (Phase 10 used the handover review date). An explicit date in the request still wins.
+4. **Handover ceremony milestone.** Uses the type's milestone anchored on `COC_ISSUED`; if the type has none, issuing creates `handover-ceremony` (mode `AUTO_HANDOVER_ACCEPTED`), which template syncs never delete. New anchors `COC_ISSUED`, `PROJECT_CLOSED`; new modes `AUTO_COC_ISSUED` (reopened by a revoke), `AUTO_HANDOVER_ACCEPTED`, `AUTO_FINAL_EVALUATION_APPROVED` (only rows that already have a date).
+5. **Generated documents carry genuine sign-offs.** The issued CoC PDF is signed off by its staff signatories; the handover certificate by the reviewer. The beneficiary's paper copy is a separate `COMPLETION_CERTIFICATE` document ("beneficiary signed copy"). A revoke archives the issued PDF.
+6. **Archive gate scope.** `beforeArchive` holds only once the checklist exists (the project entered handover) or the project is closed; a project abandoned earlier can still be archived.
+7. **Closure pack on archived projects.** `POST /closure-pack` is the one write an archived project accepts (`ARCHIVED_WRITE_RE` in `accessControl.ts`); it files a `CLOSURE_FILE` document. Built in-process (setImmediate) with a `closure-packs` job sweeping queued/stuck exports. No new dependency: in-house ZIP writer, no ZIP64, 1 GB cap, files over 30 MB skipped and listed in `manifest.json`.
+8. **Contractors and the Closure tab.** The route is not permission-gated so the "lesson shared" notification works; contractors see only shared, published lessons (ratings 404 unless the type shares them).
+9. **Milestone-deadlines job** now covers active projects in every phase (it skipped projects past handover, so the post-closure evaluation would never be notified). Not covered by a dedicated test.
+
+10. **Where the certificate is shown.** On the Closure tab for everyone with project access (contractors read-only) and also on the Handover tab when that module is on. The Closure tab opens to `completion:*` holders: the default signatories (Organisation Administrators) hold no handover permission and could not reach the Handover tab. Gate messages and certificate notifications point to the Closure tab. Clicked through as `flagship.admin` on PRG-103.
+11. **Rating criteria** are edited in Settings → Tenant Settings ("Contractor rating criteria", `tenant:manage_settings`). Keys are fixed once saved (recorded ratings refer to them); new rows get a key from the label. Clicked through: rename and save.
+
+**Open / not done:**
+- Supervision workload (Phase 14) counts projects in their liability period (seeded PRG-103 raised the M&E officer to 4 sites).
+- Seeded PRG-241 is closed while its liability period runs (nothing held, which Phase 10 allows).
+- No organisation detail page existed; ratings live at `/app/organizations/:id/ratings`, linked from the Closure tab.
+- Web click-through of the dialogs (draft, sign, record copy, revoke, tick/waive, rate, lesson, export) is outstanding.

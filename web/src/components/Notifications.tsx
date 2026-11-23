@@ -48,6 +48,9 @@ const CATEGORY_LABELS: Record<WebNotificationCategory, string> = {
   CONTRACT_DEFAULT_CASE: "Default case",
   PROGRAMME_OF_WORKS: "Programme of works",
   DOCUMENT_SIGN_OFF: "Document sign-off",
+  COMPLETION_CERTIFICATE: "Certificate of Completion",
+  CLOSURE: "Closure",
+  LESSON_SHARED: "Lesson learned",
 };
 
 interface NotificationsProps {

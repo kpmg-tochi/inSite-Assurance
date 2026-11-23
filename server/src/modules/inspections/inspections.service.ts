@@ -44,6 +44,22 @@ import { toCaptureSummary } from '../workday-reports/workdayReports.service';
 import { parseSections } from './checklistTemplates.service';
 import { autoRaiseFindingsForInspection, serializeFinding, FINDING_INCLUDE, findingViewerFor } from './findings.service';
 import { scheduleInspectionOmissionCheck } from '../workday-reports/aiOmissionCheck';
+import { autoCompleteMilestones, SYSTEM_ACTOR, webActor } from '../contracts/milestones.service';
+
+/**
+ * Phase 15: an accepted final evaluation completes the open AUTO_FINAL_EVALUATION_APPROVED
+ * milestones that have a due date (e.g. the post-closure evaluation once the project is closed).
+ */
+async function completeEvaluationMilestones(tx: Prisma.TransactionClient, projectId: string, visitDate: string, webUser: WebJwtPayload | null) {
+  await autoCompleteMilestones(tx, {
+    projectId,
+    mode: 'AUTO_FINAL_EVALUATION_APPROVED',
+    onlyDated: true,
+    at: new Date(),
+    notes: `Final evaluation inspection of ${visitDate} accepted.`,
+    actor: webUser ? webActor(webUser) : SYSTEM_ACTOR,
+  });
+}
 
 /**
  * Site inspection reports (Phase 14). A project-level visit report built from a checklist template
@@ -435,6 +451,9 @@ export async function submitSiteInspection(params: {
         raisedBy: { userId: reporter.userId, name: reporter.name },
         visitType: input.visitType,
       });
+      if (status === 'SUBMITTED' && input.visitType === 'FINAL_EVALUATION') {
+        await completeEvaluationMilestones(tx, projectId, input.visitDate, principal.webUser ?? null);
+      }
       if (status === 'PENDING_APPROVAL' && approvalChainVersion !== null) {
         await notifyInspectionPendingApproval(tx, {
           projectId,
@@ -575,6 +594,7 @@ export async function reviewSiteInspection(params: {
       data: { status: 'APPROVED', currentApprovalStep: 0, approvedAt: new Date() },
     });
     await audit(`Approved the ${label.toLowerCase()} of ${r.visitDate} at the final step "${step!.label}".`);
+    if (r.visitType === 'FINAL_EVALUATION') await completeEvaluationMilestones(tx, projectId, r.visitDate, webUser);
   });
   return getSiteInspection(projectId, inspectionId, { webUser });
 }

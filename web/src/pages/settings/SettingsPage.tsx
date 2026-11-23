@@ -24,6 +24,7 @@ import { RolesPermissionsTab } from "../../components/rbac/RolesPermissionsTab";
 import { UsersVisibilityTab } from "../../components/rbac/UsersVisibilityTab";
 import { TenantBrandingTab } from "../../components/rbac/TenantBrandingTab";
 import { EvidenceRatingsCard } from "../../components/rbac/EvidenceRatingsCard";
+import { RatingCriteriaCard } from "../../components/closure/RatingCriteriaCard";
 import { OrganizationsTab } from "../../components/rbac/OrganizationsTab";
 import { WorkspaceSettingsCard } from "../../components/rbac/WorkspaceSettingsCard";
 import { JoinCodesPanel } from "../../components/JoinCodesPanel";
@@ -488,6 +489,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
           {canManageBranding && <TenantBrandingTab />}
           {canManageSettings && <WorkspaceSettingsCard />}
           {canManageSettings && <EvidenceRatingsCard />}
+          {canManageSettings && <RatingCriteriaCard />}
           {canManageSettings && <TerminologyCard />}
           {canManageSettings && <ProfessionalRegistrationCard />}
         </div>

@@ -21,7 +21,10 @@ import {
   Globe2,
   Flag,
   FolderOpen,
+  ListChecks,
+  Lightbulb,
 } from "lucide-react";
+import { CLOSURE_VIEW_PERMISSIONS } from "../pages/closure/ProjectClosurePage";
 import { MILESTONE_VIEW_PERMISSIONS } from "./contracts/contractUi";
 import { ProjectPhaseBanner } from "./closeout/ProjectPhaseBanner";
 import { useProjectProcess } from "../queries/process/useProcessQueries";
@@ -225,6 +228,22 @@ export function AppShell({
               </NavLink>
             )}
 
+            {/* Phase 15: the tenant library of published lessons */}
+            {hasPermission("lessons:view") && (
+              <NavLink
+                to="/app/lessons"
+                title="Lessons learned"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                    isActive ? "bg-white/15 text-white shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`
+                }
+              >
+                <Lightbulb className="w-4 h-4 shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">Lessons learned</span>}
+              </NavLink>
+            )}
+
             <NavLink
               to="/app/projects"
               end
@@ -422,6 +441,22 @@ export function AppShell({
               >
                 <Wrench className="w-4 h-4 shrink-0" />
                 {!sidebarCollapsed && <span className="truncate">Retention and defects</span>}
+              </NavLink>
+            )}
+
+            {/* Phase 15: closure checklist, ratings, lessons and the closure pack */}
+            {selectedProject && CLOSURE_VIEW_PERMISSIONS.some((k) => hasPermission(k)) && (
+              <NavLink
+                to={`${projectBasePath}/closure`}
+                title="Closure"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                    isActive ? "bg-white/15 text-white shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`
+                }
+              >
+                <ListChecks className="w-4 h-4 shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">Closure</span>}
               </NavLink>
             )}
 

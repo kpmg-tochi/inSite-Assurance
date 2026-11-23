@@ -27,6 +27,7 @@ import { useArchiveProjectTypeMutation, useSaveProjectTypeMutation } from "../..
 import { useConfirmDialog } from "../process/ConfirmDialog";
 import { useTerm } from "../../lib/auth-context";
 import { ContractRulesEditor, type ContractRules } from "./ContractRulesEditor";
+import { ClosureRulesEditor, type ClosureRules } from "./ClosureRulesEditor";
 
 const inputCls =
   "w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-primary";
@@ -62,6 +63,8 @@ interface Draft {
   paymentCompletionRule: TrancheCompletionRule;
   /** Phase 13: contract milestone templates and kick-off rules. */
   contract: ContractRules;
+  /** Phase 15: Certificate of Completion and closure rules. */
+  closure: ClosureRules;
   /** Keys added by later phases, kept untouched on save. */
   rest: Record<string, unknown>;
 }
@@ -82,7 +85,7 @@ function phase12From(config: unknown) {
 
 function draftFrom(t: ProjectTypeDto | null): Draft {
   const c = t?.config;
-  const { ownership, parties, reportingDefaults, contractMilestones, kickoff, ...rest } = (c ?? {}) as ProjectTypeDto["config"];
+  const { ownership, parties, reportingDefaults, contractMilestones, kickoff, closure, ...rest } = (c ?? {}) as ProjectTypeDto["config"];
   return {
     id: t?.id ?? null,
     code: t?.code ?? "",
@@ -113,6 +116,7 @@ function draftFrom(t: ProjectTypeDto | null): Draft {
         noticeLeadDays: kickoff?.noticeLeadDays ?? 7,
       },
     },
+    closure: closure ? { ...closure } : {},
     rest: rest as Record<string, unknown>,
   };
 }
@@ -153,6 +157,13 @@ function payloadFrom(d: Draft): SaveProjectTypeRequestInput {
       anchorMilestoneKey: m.anchor === "MILESTONE" ? m.anchorMilestoneKey ?? null : null,
     })),
     kickoff: d.contract.kickoff,
+    // Phase 15
+    closure: {
+      ...d.closure,
+      cocSignatories: d.closure.cocSignatories?.map((s) => ({ ...s, label: s.label.trim() })),
+      beforeClose: d.closure.beforeClose?.map((i) => ({ ...i, label: i.label.trim() })),
+      beforeArchive: d.closure.beforeArchive?.map((i) => ({ ...i, label: i.label.trim() })),
+    },
   };
   return {
     code: d.code,
@@ -448,6 +459,8 @@ export function ProjectTypesTab() {
         </section>
 
         <ContractRulesEditor value={draft.contract} onChange={(contract) => set({ contract })} />
+
+        <ClosureRulesEditor value={draft.closure} onChange={(closure) => set({ closure })} />
 
         <section className={sectionCls}>
           <h3 className="text-sm font-bold text-slate-900">Reporting defaults</h3>

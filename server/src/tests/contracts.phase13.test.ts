@@ -23,7 +23,7 @@ import {
 } from '@insite/shared';
 
 const MON_FRI = [1, 2, 3, 4, 5];
-const anchors = { CONTRACT_AWARD: '2026-02-20', CONTRACT_SIGNED: '2026-02-25', KICKOFF: '2026-03-02', ACTIVATION: null };
+const anchors = { CONTRACT_AWARD: '2026-02-20', CONTRACT_SIGNED: '2026-02-25', KICKOFF: '2026-03-02', ACTIVATION: null, COC_ISSUED: null, PROJECT_CLOSED: null };
 
 function row(over: Partial<MilestoneDateRow> & Pick<MilestoneDateRow, 'id' | 'key'>): MilestoneDateRow {
   return { projectContractorId: null, anchor: 'KICKOFF', anchorMilestoneKey: null, offsetValue: 0, offsetUnit: 'CALENDAR_DAYS', ...over };

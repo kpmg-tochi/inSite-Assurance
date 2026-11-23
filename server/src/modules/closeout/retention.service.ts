@@ -32,6 +32,7 @@ import {
 import { serializeValuationReport } from '../../utils/serializers';
 import { releaseGate, reviewGate, startValuationOnChain, valuationProgress } from '../reconciliation/disbursementChain';
 import { assertModuleOn, fmtNgn, projectToday } from './closeoutGate';
+import { assertFinalPaymentGate } from '../completion/completion.service';
 
 /**
  * Retention (Phase 10 Steps 5 and 7).
@@ -441,6 +442,8 @@ export async function requestRetentionRelease(params: { projectId: string; webUs
     const ctx = await loadBalanceContext(tx, projectId);
     const contractor = ctx.project.contractors.find((c) => c.id === input.projectContractorId);
     if (!contractor) throw new AppError('Contractor not found on this project', 404, 'CONTRACTOR_NOT_FOUND');
+    // Phase 15: the final retention release is a final payment.
+    await assertFinalPaymentGate(tx, projectId, { kind: 'RETENTION', stage: input.stage });
     const option = stageOption(ctx, contractor.id, input.stage);
     if (!option.allowed) {
       throw new AppError(`Retention cannot be released yet: ${option.unmet.join(' ')}`, 409, 'RETENTION_RELEASE_PRECONDITIONS_UNMET', {
@@ -543,6 +546,7 @@ export async function certifyRetentionRelease(params: {
     if (request.status !== 'PENDING_CERTIFICATION') {
       throw new AppError('This request is not awaiting certification', 409, 'RETENTION_RELEASE_NOT_PENDING');
     }
+    await assertFinalPaymentGate(tx, projectId, { kind: 'RETENTION', stage: request.stage });
     const ctx = await loadBalanceContext(tx, projectId);
     const option = stageOption(ctx, request.projectContractorId, request.stage, request.id);
     const amount = Number(request.amountNgn);

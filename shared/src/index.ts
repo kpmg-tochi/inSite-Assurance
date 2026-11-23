@@ -38,6 +38,8 @@ export * from './schemas/credentials.schema';
 export * from './schemas/milestonePayment.schema';
 // Phase 13
 export * from './schemas/contract.schema';
+// Phase 15
+export * from './schemas/closure.schema';
 
 // Data
 export * from './data/standardsLibrary';

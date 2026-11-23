@@ -431,6 +431,42 @@ class StorageService {
     await fs.writeFile(`${full}.content-type`, contentType, 'utf8');
   }
 
+  /**
+   * Phase 15: stores a file the server produced itself (generated PDFs, closure packs). Works in
+   * both modes. Callers choose a key inside the project namespace.
+   */
+  public async putServerObject(objectKey: string, body: Buffer, contentType: string): Promise<void> {
+    if (!this.s3Client) {
+      await this.putLocalObject(objectKey, body, contentType);
+      return;
+    }
+    await this.s3Client.send(
+      new PutObjectCommand({ Bucket: env.S3_BUCKET_NAME, Key: objectKey, Body: body, ContentType: contentType, ContentLength: body.length })
+    );
+  }
+
+  /** Phase 15: same, streaming from a local file (large closure packs never sit in memory whole). */
+  public async putServerObjectFromFile(objectKey: string, filePath: string, contentType: string): Promise<void> {
+    const stat = await fs.stat(filePath);
+    if (!this.s3Client) {
+      const full = localPathFor(objectKey);
+      await fs.mkdir(path.dirname(full), { recursive: true });
+      await fs.copyFile(filePath, full);
+      await fs.writeFile(`${full}.content-type`, contentType, 'utf8');
+      return;
+    }
+    const { createReadStream } = await import('fs');
+    await this.s3Client.send(
+      new PutObjectCommand({
+        Bucket: env.S3_BUCKET_NAME,
+        Key: objectKey,
+        Body: createReadStream(filePath),
+        ContentType: contentType,
+        ContentLength: stat.size,
+      })
+    );
+  }
+
   /** Local development only: reads a file with its stored content type. */
   public async readLocalObject(objectKey: string): Promise<{ body: Buffer; contentType: string } | null> {
     if (this.s3Client) return null;

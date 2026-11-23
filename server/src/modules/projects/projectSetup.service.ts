@@ -71,6 +71,7 @@ import {
 import { assertRegionUsable, REGION_SUMMARY_SELECT, regionSummary } from '../regions/regions.service';
 import type { ProjectProcessStep } from '@insite/shared';
 import { recomputeAndAudit, requiredAnchorsFor, syncContractMilestones, webActor } from '../contracts/milestones.service';
+import { archiveBlockedReason, freezeMetAutomaticItems } from '../completion/closure.service';
 
 /**
  * Staged project creation (Phase 6, decision C). A project starts as a DRAFT from the basics step,
@@ -1518,6 +1519,10 @@ export async function archiveProject(projectId: string, webUser: WebJwtPayload, 
         project.status === 'DRAFT' ? 'PROJECT_IS_DRAFT' : 'PROJECT_ARCHIVED'
       );
     }
+    // Phase 15: the type's before-archiving closure items (e.g. post-closure evaluation, audit).
+    const blocked = await archiveBlockedReason(tx, projectId);
+    if (blocked) throw new AppError(blocked, 409, 'CLOSURE_ITEMS_PENDING');
+    await freezeMetAutomaticItems(tx, projectId, 'BEFORE_ARCHIVE', webUser.userId);
     const deactivated = await tx.projectJoinCode.updateMany({
       where: { projectId, isActive: true },
       data: { isActive: false },

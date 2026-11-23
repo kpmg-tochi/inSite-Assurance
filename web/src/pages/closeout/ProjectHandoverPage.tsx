@@ -20,6 +20,7 @@ import { useConfirmDialog } from "../../components/process/ConfirmDialog";
 import { ModalActions, ModalShell, inputClass } from "../reconciliation/components/ModalShell";
 import { RichTextView } from "../../components/closeout/RichTextView";
 import { HandoverFileView } from "../../components/closeout/HandoverFileView";
+import { CompletionSection } from "../../components/closure/CompletionSection";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { useHandoverLinksQuery, useHandoverSubmissionsQuery, useProjectPhaseQuery } from "../../queries/closeout/useCloseoutQueries";
 import {
@@ -94,6 +95,9 @@ export function ProjectHandoverPage({ project }: { project: ProjectSummaryDto })
           </button>
         )}
       </div>
+
+      {/* Phase 15: the Certificate of Completion comes before the handover ceremony. */}
+      <CompletionSection projectId={project.id} />
 
       {!inHandover && phaseQuery.data && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">

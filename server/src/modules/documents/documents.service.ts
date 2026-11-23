@@ -489,6 +489,115 @@ export async function archiveProjectDocument(projectId: string, documentId: stri
 }
 
 // ---------------------------------------------------------------------------
+// Phase 15: documents the server produces (certificates, closure packs)
+// ---------------------------------------------------------------------------
+
+export interface GeneratedFile {
+  /** Small files: the bytes. */
+  body?: Buffer;
+  /** Large files: a local file already hashed by the caller. */
+  filePath?: string;
+  byteSize?: number;
+  sha256?: string;
+  mimeType: string;
+  extension: string;
+}
+
+/**
+ * Stores a server-generated file and files it in the register as version 1 of a new document.
+ * `signOffs` records sign-offs by people who genuinely signed what the file shows (e.g. the CoC
+ * signatories), hashed like any other sign-off. Runs inside the caller's transaction; the caller
+ * records the audit entry that explains the document.
+ */
+export async function storeGeneratedDocument(
+  tx: Tx,
+  p: {
+    projectId: string;
+    tenantId: string;
+    typeCode: string;
+    title: string;
+    file: GeneratedFile;
+    uploadedByUserId: string | null;
+    note: string | null;
+    projectContractorId?: string | null;
+    signOffs?: Array<{ userId: string; roleId: string | null; organizationId: string | null; statement: string }>;
+  }
+): Promise<{ documentId: string; objectKey: string; sha256: string; byteSize: number }> {
+  if ((await tx.documentType.count({ where: { tenantId: p.tenantId } })) === 0) await provisionDefaultDocumentTypes(tx, p.tenantId);
+  const type = await tx.documentType.findUnique({ where: { tenantId_code: { tenantId: p.tenantId, code: p.typeCode } } });
+  if (!type) throw new AppError(`The document type ${p.typeCode} is missing for this tenant`, 409, 'DOCUMENT_TYPE_NOT_FOUND');
+  const objectKey = `${projectObjectPrefix(p.tenantId, p.projectId)}project_document/generated-${crypto.randomUUID()}.${p.file.extension}`;
+  let sha256: string;
+  let byteSize: number;
+  if (p.file.body) {
+    sha256 = crypto.createHash('sha256').update(p.file.body).digest('hex');
+    byteSize = p.file.body.length;
+    await storageService.putServerObject(objectKey, p.file.body, p.file.mimeType);
+  } else if (p.file.filePath && p.file.sha256 && p.file.byteSize !== undefined) {
+    sha256 = p.file.sha256;
+    byteSize = p.file.byteSize;
+    await storageService.putServerObjectFromFile(objectKey, p.file.filePath, p.file.mimeType);
+  } else {
+    throw new Error('storeGeneratedDocument: give a body or a hashed file');
+  }
+  const doc = await tx.projectDocument.create({
+    data: {
+      projectId: p.projectId,
+      documentTypeId: type.id,
+      title: p.title,
+      currentVersion: 1,
+      uploadedByUserId: p.uploadedByUserId,
+      projectContractorId: p.projectContractorId ?? null,
+      versions: { create: { version: 1, objectKey, mimeType: p.file.mimeType, byteSize, sha256, uploadedByUserId: p.uploadedByUserId, note: p.note } },
+    },
+  });
+  for (const s of p.signOffs ?? []) {
+    await tx.projectDocumentSignOff.create({
+      data: {
+        documentId: doc.id,
+        version: 1,
+        userId: s.userId,
+        roleId: s.roleId,
+        organizationId: s.organizationId,
+        statement: s.statement,
+        statementHash: signOffStatementHash({ documentId: doc.id, version: 1, versionSha256: sha256, userId: s.userId, statement: s.statement }),
+      },
+    });
+  }
+  return { documentId: doc.id, objectKey, sha256, byteSize };
+}
+
+/**
+ * Phase 15: registers a file the caller uploaded through the presign (type checked here), inside
+ * the caller's transaction. Used for the beneficiary's signed paper certificate.
+ */
+export async function registerUploadedDocumentTx(
+  tx: Tx,
+  p: { projectId: string; tenantId: string; typeCode: string; title: string; objectKey: string; note: string | null; uploadedByUserId: string }
+): Promise<{ documentId: string; sha256: string }> {
+  const file = await inspectUpload(p.projectId, p.tenantId, p.objectKey);
+  if ((await tx.documentType.count({ where: { tenantId: p.tenantId } })) === 0) await provisionDefaultDocumentTypes(tx, p.tenantId);
+  const type = await tx.documentType.findUniqueOrThrow({ where: { tenantId_code: { tenantId: p.tenantId, code: p.typeCode } } });
+  if (!documentMimeAllowed(type, file.mimeType)) {
+    throw new AppError(`${file.mimeType} files are not allowed for "${type.name}"`, 415, 'UNSUPPORTED_MEDIA_TYPE');
+  }
+  if (await tx.projectDocumentVersion.count({ where: { objectKey: file.objectKey } })) {
+    throw new AppError('This file is already in the register', 409, 'OBJECT_ALREADY_REGISTERED');
+  }
+  const doc = await tx.projectDocument.create({
+    data: {
+      projectId: p.projectId,
+      documentTypeId: type.id,
+      title: p.title,
+      currentVersion: 1,
+      uploadedByUserId: p.uploadedByUserId,
+      versions: { create: { version: 1, ...file, uploadedByUserId: p.uploadedByUserId, note: p.note } },
+    },
+  });
+  return { documentId: doc.id, sha256: file.sha256 };
+}
+
+// ---------------------------------------------------------------------------
 // Evidence for milestones and requirements
 // ---------------------------------------------------------------------------
 

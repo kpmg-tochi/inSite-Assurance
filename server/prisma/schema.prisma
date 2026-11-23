@@ -418,6 +418,18 @@ enum AuditActionType {
   CONTRACTOR_REPLACED
   PROGRAMME_OF_WORKS_SUBMITTED
   PROGRAMME_OF_WORKS_DECIDED
+  // Phase 15
+  COC_DRAFTED
+  COC_SIGNED
+  COC_ISSUED
+  COC_REVOKED
+  HANDOVER_CERTIFICATE_ISSUED
+  CLOSURE_ITEM_COMPLETED
+  CLOSURE_ITEM_WAIVED
+  CLOSURE_AUDIT_SIGNED
+  CONTRACTOR_RATED
+  LESSON_PUBLISHED
+  CLOSURE_PACK_EXPORTED
 }
 
 // Phase 11: which organisation an approval step actor must belong to (ANY = Phase 7 behaviour).
@@ -585,6 +597,8 @@ model Tenant {
   terminologyLabels              Json           @default("{}")
   // Phase 12: professional registration policy { certifier?, fieldAssurance? } (REQUIRED | OPTIONAL | HIDDEN).
   credentialPolicyJson           Json           @default("{}")
+  // Phase 15: contractor rating criteria [{ key, label, description }]; empty = the defaults.
+  ratingCriteriaJson             Json           @default("[]")
   createdAt                      DateTime       @default(now())
   updatedAt                      DateTime       @updatedAt
 
@@ -596,6 +610,7 @@ model Tenant {
   workflowTemplates  WorkflowTemplate[]
   outboundMessages   OutboundMessage[]
   projectTypes       ProjectType[]
+  lessonsLearned     LessonLearned[]
   regions            Region[]
   // Phase 14
   checklistTemplates InspectionChecklistTemplate[]
@@ -921,6 +936,12 @@ model Project {
   kickoffMeeting         KickoffMeeting?
   defaultCases           ContractorDefaultCase[]
   programmeSubmissions   ProgrammeOfWorksSubmission[]
+  // Phase 15
+  completionCertificates CompletionCertificate[]
+  closureChecklistItems  ClosureChecklistItemState[]
+  contractorRatings      ContractorPerformanceRating[]
+  lessonsLearned         LessonLearned[]
+  closurePackExports     ClosurePackExport[]
 
   @@unique([tenantId, codePrefix])
   @@index([tenantId])
@@ -958,8 +979,8 @@ model ProjectContractor {
   createdAt                   DateTime       @default(now())
   updatedAt                   DateTime       @updatedAt
 
-  project              Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  organization         Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  project              Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization         Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   boqItems             BoqItem[]
   joinCodes            ProjectJoinCode[]
   fieldSessions        FieldAgentSession[]
@@ -971,12 +992,14 @@ model ProjectContractor {
   reportingStreams     ProjectReportingStream[]
   inspectionFindings   InspectionFinding[]
   // Phase 13
-  replaces             ProjectContractor?           @relation("ContractorReplacement", fields: [replacesProjectContractorId], references: [id], onDelete: SetNull)
-  replacedBy           ProjectContractor[]          @relation("ContractorReplacement")
+  replaces             ProjectContractor?            @relation("ContractorReplacement", fields: [replacesProjectContractorId], references: [id], onDelete: SetNull)
+  replacedBy           ProjectContractor[]           @relation("ContractorReplacement")
   documents            ProjectDocument[]
   contractMilestones   ProjectContractMilestone[]
   defaultCases         ContractorDefaultCase[]
   programmeSubmissions ProgrammeOfWorksSubmission[]
+  // Phase 15
+  performanceRatings   ContractorPerformanceRating[]
 
   @@unique([projectId, organizationId])
   @@unique([projectId, tradeCode])
@@ -2277,6 +2300,9 @@ model ScheduleRevision {
 model HandoverLink {
   id                  String                  @id @default(uuid()) @db.Uuid
   projectId           String                  @db.Uuid
+  // Phase 15: what the link is for. COC_BENEFICIARY_SIGNATURE is added only when D-15.1 chooses
+  // public-link signing of the Certificate of Completion.
+  purpose             HandoverLinkPurpose     @default(HANDOVER)
   tokenHash           String                  @unique
   label               String
   recipientName       String
@@ -2699,6 +2725,9 @@ enum ContractMilestoneAnchor {
   KICKOFF
   ACTIVATION
   MILESTONE
+  // Phase 15
+  COC_ISSUED
+  PROJECT_CLOSED
 }
 
 enum MilestoneOffsetUnit {
@@ -2720,6 +2749,10 @@ enum MilestoneCompletionMode {
   AUTO_KICKOFF_NOTICE_SENT
   AUTO_KICKOFF_QUORUM
   AUTO_SCHEDULE_BASELINE_SET
+  // Phase 15
+  AUTO_COC_ISSUED
+  AUTO_HANDOVER_ACCEPTED
+  AUTO_FINAL_EVALUATION_APPROVED
 }
 
 enum DefaultCaseTrigger {
@@ -2779,15 +2812,19 @@ model ProjectDocument {
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
-  project           Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  documentType      DocumentType              @relation(fields: [documentTypeId], references: [id], onDelete: Restrict)
-  projectContractor ProjectContractor?        @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
-  linkedMilestone   ProjectContractMilestone? @relation(fields: [linkedMilestoneId], references: [id], onDelete: SetNull)
-  versions          ProjectDocumentVersion[]
-  signOffs          ProjectDocumentSignOff[]
-  cpEvidenceFor     ConditionPrecedent[]      @relation("CpEvidenceDocument")
-  kickoffAgendaFor  KickoffMeeting[]          @relation("KickoffAgenda")
-  kickoffMinutesFor KickoffMeeting[]          @relation("KickoffMinutes")
+  project                Project                          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documentType           DocumentType                     @relation(fields: [documentTypeId], references: [id], onDelete: Restrict)
+  projectContractor      ProjectContractor?               @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
+  linkedMilestone        ProjectContractMilestone?        @relation(fields: [linkedMilestoneId], references: [id], onDelete: SetNull)
+  versions               ProjectDocumentVersion[]
+  signOffs               ProjectDocumentSignOff[]
+  cpEvidenceFor          ConditionPrecedent[]             @relation("CpEvidenceDocument")
+  kickoffAgendaFor       KickoffMeeting[]                 @relation("KickoffAgenda")
+  kickoffMinutesFor      KickoffMeeting[]                 @relation("KickoffMinutes")
+  // Phase 15
+  completionCertificates CompletionCertificate[]          @relation("CompletionCertificateDocument")
+  cocEvidenceFor         CompletionCertificateSignature[] @relation("CocSignatureEvidence")
+  closurePacks           ClosurePackExport[]
 
   @@index([projectId, documentTypeId])
   @@index([projectContractorId])
@@ -2964,4 +3001,195 @@ model ProgrammeOfWorksSubmission {
 
   @@index([projectId, status])
   @@map("programme_of_works_submissions")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 15: Certificate of Completion and closure governance
+// ---------------------------------------------------------------------------
+
+enum HandoverLinkPurpose {
+  HANDOVER
+}
+
+enum CompletionCertificateStatus {
+  DRAFT
+  PENDING_SIGNATURES
+  ISSUED
+  REVOKED
+}
+
+enum ClosureChecklistList {
+  BEFORE_CLOSE
+  BEFORE_ARCHIVE
+}
+
+enum ClosureChecklistItemStatus {
+  PENDING
+  DONE
+  WAIVED
+}
+
+enum ContractorRatingStage {
+  COMPLETION
+  POST_CLOSURE
+}
+
+enum LessonStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum ClosurePackStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
+}
+
+/// The Certificate of Completion. At most one non-revoked certificate per project (hand-written
+/// partial unique index completion_certificates_one_live_per_project).
+model CompletionCertificate {
+  id                          String                      @id @default(uuid()) @db.Uuid
+  projectId                   String                      @db.Uuid
+  certificateNumber           String
+  status                      CompletionCertificateStatus @default(DRAFT)
+  scopeSummary                String                      @db.Text
+  // YYYY-MM-DD in the project zone
+  completionDate              String
+  finalEvaluationInspectionId String?                     @db.Uuid
+  // The issued PDF in the register (COMPLETION_CERTIFICATE).
+  documentId                  String?                     @db.Uuid
+  // The signatory slots as configured when drafted.
+  slotsJson                   Json                        @default("[]")
+  issuedAt                    DateTime?
+  revokedAt                   DateTime?
+  revokedReason               String?
+  revokedByUserId             String?                     @db.Uuid
+  createdByUserId             String                      @db.Uuid
+  createdAt                   DateTime                    @default(now())
+  updatedAt                   DateTime                    @updatedAt
+
+  project    Project                          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document   ProjectDocument?                 @relation("CompletionCertificateDocument", fields: [documentId], references: [id], onDelete: SetNull)
+  signatures CompletionCertificateSignature[]
+
+  @@unique([projectId, certificateNumber])
+  @@index([projectId, status])
+  @@map("completion_certificates")
+}
+
+/// One signature in one slot. The beneficiary slot has no user: an officer records the signed paper
+/// copy (evidenceDocumentId) and attests (recordedByUserId).
+model CompletionCertificateSignature {
+  id                 String   @id @default(uuid()) @db.Uuid
+  certificateId      String   @db.Uuid
+  slotKey            String
+  slotLabel          String
+  userId             String?  @db.Uuid
+  roleId             String?  @db.Uuid
+  organizationId     String?  @db.Uuid
+  isBeneficiary      Boolean  @default(false)
+  beneficiaryName    String?
+  beneficiaryRole    String?
+  evidenceDocumentId String?  @db.Uuid
+  recordedByUserId   String?  @db.Uuid
+  // Registration snapshot (only when the type follows the certifier policy and a number exists).
+  registrationText   String?
+  statement          String
+  statementHash      String
+  signedAt           DateTime @default(now())
+
+  certificate      CompletionCertificate @relation(fields: [certificateId], references: [id], onDelete: Cascade)
+  evidenceDocument ProjectDocument?      @relation("CocSignatureEvidence", fields: [evidenceDocumentId], references: [id], onDelete: Restrict)
+
+  @@unique([certificateId, slotKey])
+  @@unique([certificateId, userId])
+  @@map("completion_certificate_signatures")
+}
+
+/// Stored state of a closure checklist item (the item itself comes from the type snapshot).
+model ClosureChecklistItemState {
+  id                String                     @id @default(uuid()) @db.Uuid
+  projectId         String                     @db.Uuid
+  list              ClosureChecklistList
+  itemKey           String
+  status            ClosureChecklistItemStatus @default(PENDING)
+  completedByUserId String?                    @db.Uuid
+  completedAt       DateTime?
+  notes             String?
+  waivedReason      String?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, list, itemKey])
+  @@map("closure_checklist_items")
+}
+
+model ContractorPerformanceRating {
+  id                  String                @id @default(uuid()) @db.Uuid
+  projectId           String                @db.Uuid
+  projectContractorId String                @db.Uuid
+  stage               ContractorRatingStage
+  // [{ key, label, score (1-5), comment }]
+  criteriaJson        Json
+  overallScore        Decimal               @db.Decimal(4, 2)
+  comments            String?
+  ratedByUserId       String                @db.Uuid
+  createdAt           DateTime              @default(now())
+
+  project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectContractor ProjectContractor @relation(fields: [projectContractorId], references: [id], onDelete: Cascade)
+
+  @@unique([projectContractorId, stage, ratedByUserId])
+  @@index([projectId])
+  @@map("contractor_performance_ratings")
+}
+
+model LessonLearned {
+  id                   String       @id @default(uuid()) @db.Uuid
+  tenantId             String       @db.Uuid
+  projectId            String       @db.Uuid
+  category             String
+  title                String
+  description          String       @db.Text
+  recommendation       String       @db.Text
+  stage                String
+  tags                 String[]     @default([])
+  status               LessonStatus @default(DRAFT)
+  sharedWithContractor Boolean      @default(false)
+  createdByUserId      String       @db.Uuid
+  publishedAt          DateTime?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([projectId])
+  @@map("lessons_learned")
+}
+
+model ClosurePackExport {
+  id                String            @id @default(uuid()) @db.Uuid
+  projectId         String            @db.Uuid
+  status            ClosurePackStatus @default(QUEUED)
+  documentId        String?           @db.Uuid
+  byteSize          Int?
+  entryCount        Int?
+  chainVerified     Boolean?
+  requestedByUserId String            @db.Uuid
+  createdAt         DateTime          @default(now())
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  error             String?
+
+  project  Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  document ProjectDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([status])
+  @@map("closure_pack_exports")
 }

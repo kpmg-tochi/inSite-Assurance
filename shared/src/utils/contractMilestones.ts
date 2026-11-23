@@ -22,6 +22,10 @@ export interface MilestoneAnchorDates {
   CONTRACT_SIGNED: string | null;
   KICKOFF: string | null;
   ACTIVATION: string | null;
+  /** Phase 15: issue date of the current Certificate of Completion. */
+  COC_ISSUED: string | null;
+  /** Phase 15: the day the project was closed. */
+  PROJECT_CLOSED: string | null;
 }
 
 export interface MilestoneDateRow {

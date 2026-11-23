@@ -374,6 +374,27 @@ export async function seedPhase11(p: { passwordHash: string }) {
     budget: 85_000_000,
     live: { lat: 6.6018, lng: 3.3515, label: "Junior Secondary School, Ikeja" },
   });
+  // Phase 15 (advanced to handover, retention and closure by seedPhase15).
+  await project({
+    code: "PRG-103",
+    name: "Central — Kano Technical College",
+    typeId: centralType.id,
+    regionId: kano.id,
+    ownerId: null,
+    beneficiary: "Kano Technical College",
+    budget: 150_000_000,
+    live: { lat: 12.0151, lng: 8.5309, label: "Technical College, Kano" },
+  });
+  await project({
+    code: "PRG-241",
+    name: "Co-Funded — Surulere Community Primary School",
+    typeId: coFundedType.id,
+    regionId: lagos.id,
+    ownerId: south.id,
+    beneficiary: "Surulere Community Primary School",
+    budget: 64_000_000,
+    live: { lat: 6.4995, lng: 3.3536, label: "Community Primary School, Surulere" },
+  });
 
   return { tenantId: tenant.id };
 }

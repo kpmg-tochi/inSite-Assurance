@@ -163,9 +163,9 @@ describe('organisation hierarchy', () => {
 
 describe('organisation-tree visibility', () => {
   it('flagship sees all subsidiaries’ projects; a subsidiary sees its own; a sibling sees neither', async () => {
-    assert.deepEqual(await codesVisibleTo(FLAGSHIP), ['PRG-102', 'PRG-211', 'PRG-221']);
+    assert.deepEqual(await codesVisibleTo(FLAGSHIP), ['PRG-102', 'PRG-103', 'PRG-211', 'PRG-221', 'PRG-241']);
     assert.deepEqual(await codesVisibleTo(NORTH), ['PRG-211']);
-    assert.deepEqual(await codesVisibleTo(SOUTH), ['PRG-221']);
+    assert.deepEqual(await codesVisibleTo(SOUTH), ['PRG-221', 'PRG-241']);
   });
 
   it('the project guard follows the same rule', async () => {
@@ -211,10 +211,10 @@ describe('organisation-tree visibility', () => {
 
 describe('filters', () => {
   it('filters by type, region (with its areas) and owner', async () => {
-    assert.deepEqual(await codesVisibleTo(FLAGSHIP, `?projectTypeId=${ids.coFunded}`), ['PRG-211', 'PRG-221']);
+    assert.deepEqual(await codesVisibleTo(FLAGSHIP, `?projectTypeId=${ids.coFunded}`), ['PRG-211', 'PRG-221', 'PRG-241']);
     const north = await prisma.region.findFirstOrThrow({ where: { code: 'N' } });
-    assert.deepEqual(await codesVisibleTo(FLAGSHIP, `?regionId=${north.id}`), ['PRG-102', 'PRG-211']);
-    assert.deepEqual(await codesVisibleTo(FLAGSHIP, `?owningOrganizationId=${ids.south}`), ['PRG-221']);
+    assert.deepEqual(await codesVisibleTo(FLAGSHIP, `?regionId=${north.id}`), ['PRG-102', 'PRG-103', 'PRG-211']);
+    assert.deepEqual(await codesVisibleTo(FLAGSHIP, `?owningOrganizationId=${ids.south}`), ['PRG-221', 'PRG-241']);
   });
 });
 
@@ -498,15 +498,16 @@ describe('portfolio dashboard', () => {
     assert.equal(north.body.data.kpis.projectCount, 1);
 
     const flagship = await request(app).get('/api/v1/projects/portfolio/overview').set(await login(FLAGSHIP));
-    assert.equal(flagship.body.data.kpis.projectCount, 3);
-    assert.equal(flagship.body.data.kpis.totalCommitmentNgn, 240_000_000 + 70_000_000 + 85_000_000);
-    assert.equal(flagship.body.data.kpis.quietSiteCount, 3, 'no captures yet on the seeded programme projects');
+    // Phase 15 added PRG-103 (liability period) and PRG-241 (closed).
+    assert.equal(flagship.body.data.kpis.projectCount, 5);
+    assert.equal(flagship.body.data.kpis.totalCommitmentNgn, 240_000_000 + 70_000_000 + 85_000_000 + 150_000_000 + 64_000_000);
+    assert.equal(flagship.body.data.kpis.quietSiteCount, 3, 'no captures yet on the seeded projects under construction');
 
     const filtered = await request(app)
       .get(`/api/v1/projects/portfolio/overview?projectTypeId=${ids.coFunded}`)
       .set(await login(FLAGSHIP));
-    assert.equal(filtered.body.data.kpis.projectCount, 2);
-    assert.equal(filtered.body.data.kpis.totalCommitmentNgn, 70_000_000 + 85_000_000);
+    assert.equal(filtered.body.data.kpis.projectCount, 3);
+    assert.equal(filtered.body.data.kpis.totalCommitmentNgn, 70_000_000 + 85_000_000 + 64_000_000);
   });
 
   it('needs projects:view_portfolio', async () => {

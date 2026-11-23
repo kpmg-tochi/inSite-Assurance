@@ -227,7 +227,8 @@ export type DocumentDownloadDto = z.infer<typeof DocumentDownloadDtoSchema>;
 // Contract milestones: templates (project type config) and enums
 // ---------------------------------------------------------------------------
 
-export const ContractMilestoneAnchorEnum = z.enum(['CONTRACT_AWARD', 'CONTRACT_SIGNED', 'KICKOFF', 'ACTIVATION', 'MILESTONE']);
+/** Phase 15: COC_ISSUED (the Certificate of Completion's issue date) and PROJECT_CLOSED (the day the project was closed). */
+export const ContractMilestoneAnchorEnum = z.enum(['CONTRACT_AWARD', 'CONTRACT_SIGNED', 'KICKOFF', 'ACTIVATION', 'MILESTONE', 'COC_ISSUED', 'PROJECT_CLOSED']);
 export type ContractMilestoneAnchor = z.infer<typeof ContractMilestoneAnchorEnum>;
 
 export const MilestoneOffsetUnitEnum = z.enum(['CALENDAR_DAYS', 'WORKING_DAYS']);
@@ -246,6 +247,10 @@ export const MilestoneCompletionModeEnum = z.enum([
   'AUTO_KICKOFF_NOTICE_SENT',
   'AUTO_KICKOFF_QUORUM',
   'AUTO_SCHEDULE_BASELINE_SET',
+  // Phase 15
+  'AUTO_COC_ISSUED',
+  'AUTO_HANDOVER_ACCEPTED',
+  'AUTO_FINAL_EVALUATION_APPROVED',
 ]);
 export type MilestoneCompletionMode = z.infer<typeof MilestoneCompletionModeEnum>;
 
@@ -259,6 +264,8 @@ export const CONTRACT_MILESTONE_ANCHOR_META: Record<ContractMilestoneAnchor, { l
   KICKOFF: { label: 'Kick-off' },
   ACTIVATION: { label: 'Activation' },
   MILESTONE: { label: 'Another milestone done' },
+  COC_ISSUED: { label: 'Certificate of Completion issued' },
+  PROJECT_CLOSED: { label: 'Project closed' },
 };
 
 export const MILESTONE_COMPLETION_MODE_META: Record<MilestoneCompletionMode, { label: string; description: string }> = {
@@ -267,6 +274,12 @@ export const MILESTONE_COMPLETION_MODE_META: Record<MilestoneCompletionMode, { l
   AUTO_KICKOFF_NOTICE_SENT: { label: 'Kick-off notice sent', description: 'Completed when the kick-off notice goes out through the platform.' },
   AUTO_KICKOFF_QUORUM: { label: 'Kick-off held', description: 'Completed when the kick-off is recorded as held with quorum (or a waiver).' },
   AUTO_SCHEDULE_BASELINE_SET: { label: 'Programme accepted', description: 'Completed when the schedule baseline is set or a programme of works is accepted.' },
+  AUTO_COC_ISSUED: { label: 'Certificate issued', description: 'Completed when the Certificate of Completion is issued (reopened if it is revoked).' },
+  AUTO_HANDOVER_ACCEPTED: { label: 'Handover accepted', description: 'Completed when an accepted handover response is reviewed (the handover certificate is issued).' },
+  AUTO_FINAL_EVALUATION_APPROVED: {
+    label: 'Evaluation inspection approved',
+    description: 'Completed when a final evaluation inspection is approved while the milestone has a due date (e.g. after closure).',
+  },
 };
 
 export const MILESTONE_KEY_REGEX = /^[a-z][a-z0-9-]{1,47}$/;
