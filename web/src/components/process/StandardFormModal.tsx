@@ -10,7 +10,7 @@ import {
   type StandardLibraryEntry,
 } from "@insite/shared";
 import { CustomSelect } from "../common";
-import { ModalShell, ModalActions, inputClass } from "../../pages/reconciliation/components/ModalShell";
+import { ModalShell, ModalActions, inputClass } from "../common/ModalShell";
 
 export interface StandardFormValue {
   code: string;

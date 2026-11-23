@@ -6,7 +6,6 @@ import {
   CONSTRUCTION_PHASE_LABELS,
   CONSTRUCTION_PHASE_TRANSITIONS,
   ConstructionPhase,
-  OPEN_IPC_STATUSES,
   ProjectPhaseDto,
   ProjectPhaseTransitionDto,
   ProjectProcessConfig,
@@ -40,21 +39,6 @@ interface Check {
   overridable: boolean;
 }
 
-/** IPCs not yet decided and live direct valuations without a decision (retention releases excluded). */
-async function undecidedCount(db: Db, projectId: string): Promise<number> {
-  const [ipcs, valuations] = await Promise.all([
-    db.ipcClaim.count({ where: { projectId, status: { in: OPEN_IPC_STATUSES } } }),
-    db.valuationReport.findMany({
-      where: { projectId, source: 'MILESTONE_DIRECT', supersededAt: null },
-      select: { trancheDecisions: { select: { id: true, reversesDecisionId: true } } },
-    }),
-  ]);
-  const openDirect = valuations.filter(
-    (v) => !v.trancheDecisions.some((d) => !d.reversesDecisionId && !v.trancheDecisions.some((o) => o.reversesDecisionId === d.id))
-  ).length;
-  return ipcs + openDirect;
-}
-
 export async function acceptedHandover(db: Db, projectId: string) {
   return db.handoverSubmission.findFirst({
     where: { projectId, decision: { in: ['ACCEPTED', 'ACCEPTED_WITH_SNAGS'] }, reviewedAt: { not: null } },
@@ -73,10 +57,6 @@ async function checkTransition(
   if (!CONSTRUCTION_PHASE_TRANSITIONS[project.constructionPhase].includes(to)) {
     return no(`A project cannot move from ${CONSTRUCTION_PHASE_LABELS[project.constructionPhase]} to ${CONSTRUCTION_PHASE_LABELS[to]}.`);
   }
-  if (project.constructionPhase === 'ACTIVE_CONSTRUCTION' && to === 'HANDOVER_IN_PROGRESS') {
-    const open = await undecidedCount(db, project.id);
-    if (open > 0) return no(`${open} claim(s) or valuation(s) are still waiting for a decision.`, true);
-  }
   // Phase 15: the Certificate of Completion comes before the handover, so its gate is reported first.
   if (project.constructionPhase === 'HANDOVER_IN_PROGRESS' && to === 'RETENTION_PERIOD') {
     const reason = await cocGateReason(db, project.id, 'HANDOVER_TO_RETENTION', project.projectTypeSnapshotJson);
@@ -94,7 +74,7 @@ async function checkTransition(
     if (pending) return no(pending);
   }
   if (to === 'COMPLETED_CLOSED' && Number(project.retentionHeldNgn) > 0.005) {
-    return no('Retention is still held. Release it before closing the project.');
+    return no('Retention is still held. Record the retention release payment before closing the project.');
   }
   return { allowed: true, reason: null, overridable: false };
 }

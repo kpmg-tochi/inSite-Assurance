@@ -4,13 +4,12 @@ import React, { useState, useRef, useEffect } from "react";
 import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
 import {
   Map,
-  FileSpreadsheet,
+  Wallet,
   ClipboardList,
   ShieldCheck,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
-  BarChart3,
   FolderKanban,
   ArrowRight,
   CalendarRange,
@@ -40,7 +39,6 @@ interface AppShellProps {
   projects: ProjectSummaryDto[];
   selectedProject: ProjectSummaryDto | null;
   onSelectProject: (projectId: string) => void;
-  openConflictBadgeCount: number;
   headerActions?: React.ReactNode;
   children: React.ReactNode;
 }
@@ -58,6 +56,7 @@ const PROJECT_PAGE_NAMES: Record<string, string> = {
   documents: "Documents",
   handover: "Handover",
   retention: "Retention and defects",
+  payments: "Payments",
   closure: "Closure",
   audit: "Audit Ledger",
   setup: "Project setup",
@@ -71,24 +70,16 @@ const WORKSPACE_PAGE_NAMES: Record<string, string> = {
   projects: "All Projects",
   kpis: "Programme KPIs",
   lessons: "Lessons learned",
-  executive: "Executive Risk Matrix",
   settings: "Settings",
   organizations: "Contractor ratings",
 };
 
-const RETENTION_VIEW_PERMISSIONS = [
-  "retention:manage_defects",
-  "retention:release_escrow",
-  "ipc:certify_valuation",
-  "tranche:approve_disbursement",
-  "audit:view_ledger",
-];
+const RETENTION_VIEW_PERMISSIONS = ["retention:manage_defects", "payments:view", "payments:record", "audit:view_ledger"];
 
 export function AppShell({
   projects,
   selectedProject,
   onSelectProject,
-  openConflictBadgeCount,
   headerActions,
   children,
 }: AppShellProps) {
@@ -127,23 +118,8 @@ export function AppShell({
     ? "Platform Super Admin Console"
     : `${user?.roleName || "Assurance"} Workspace`;
 
-  const isContractorOnly =
-    hasPermission("ipc:submit_claim") && !hasPermission("ipc:certify_valuation");
-  const isLenderApprover =
-    hasPermission("tranche:approve_disbursement") &&
-    !hasPermission("ipc:certify_valuation");
-
   const navLabels = {
-    dashboard: isLenderApprover
-      ? "Portfolio & Risk Map"
-      : isContractorOnly
-        ? "Site Map & Overview"
-        : "Geospatial & Portfolio",
-    reconciliation: isLenderApprover
-      ? "Tranche & IPC Review"
-      : isContractorOnly
-        ? "IPC Claims & Queries"
-        : "IPC Reconciliation",
+    dashboard: "Project overview",
     boq: hasPermission("boq:upload_edit")
       ? "BOQ & Hold-Points"
       : "BOQ & Hold-Point Rules",
@@ -158,7 +134,6 @@ export function AppShell({
     if (routeProjectId) {
       const section = projectRoute?.[2] ?? "dashboard";
       if (section === "dashboard") return navLabels.dashboard;
-      if (section === "reconciliation") return navLabels.reconciliation;
       if (section === "boq") return navLabels.boq;
       return PROJECT_PAGE_NAMES[section] ?? "Project";
     }
@@ -341,49 +316,20 @@ export function AppShell({
               )}
             </NavLink>
 
-            {/* Executive Risk Matrix (Multi-Project Cross-Project View) */}
-            {hasPermission("projects:view_executive_matrix") && (
-              <NavLink
-                to="/app/executive"
-                title="Executive Risk Matrix"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive
-                      ? "bg-white/15 text-white shadow-sm"
-                      : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <BarChart3 className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && (
-                  <span className="truncate">Executive Risk Matrix</span>
-                )}
-              </NavLink>
-            )}
-
-            {hasPermission("ipc:view") && (
+            {(hasPermission("payments:view") || hasPermission("payments:record")) && (
             <NavLink
-              to={selectedProject ? `${projectBasePath}/reconciliation` : "/app/projects"}
-              title={navLabels.reconciliation}
+              to={selectedProject ? `${projectBasePath}/payments` : "/app/projects"}
+              title="Payments"
               className={({ isActive }) =>
-                `w-full flex items-center justify-between px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
                   isActive
                     ? "bg-white/15 text-white shadow-sm"
                     : "text-white/80 hover:text-white hover:bg-white/10"
                 }`
               }
             >
-              <span className="flex items-center gap-3 truncate">
-                <FileSpreadsheet className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && (
-                  <span className="truncate">{navLabels.reconciliation}</span>
-                )}
-              </span>
-              {!sidebarCollapsed && openConflictBadgeCount > 0 && (
-                <span className="text-xs bg-white text-brand-primary font-bold px-1.5 py-0.5 rounded">
-                  {openConflictBadgeCount}
-                </span>
-              )}
+              <Wallet className="w-4 h-4 shrink-0" />
+              {!sidebarCollapsed && <span className="truncate">Payments</span>}
             </NavLink>
             )}
 

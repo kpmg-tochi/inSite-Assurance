@@ -2,22 +2,16 @@ import React, { useMemo, useState } from "react";
 import { ArrowLeft, Archive, Pencil, Plus, Star } from "lucide-react";
 import {
   ProjectTypeFunderDefaultEnum,
-  DISBURSEMENT_MECHANISM_META,
   SaveProjectTypeRequestSchema,
   type ProjectTypeConfigInput,
   type ProjectTypeDto,
   type ProjectTypeKpiTargets,
   type ProjectTypeFunderDefault,
-  type DisbursementMechanism,
   type SaveProjectTypeRequestInput,
   CREDENTIAL_REQUIREMENT_META,
   CREDENTIAL_SUBJECT_META,
-  TRANCHE_COMPLETION_RULE_META,
-  TRANCHE_PAYMENT_BASIS_META,
   type CredentialRequirement,
   type CredentialSubject,
-  type TrancheCompletionRule,
-  type TranchePaymentBasis,
 } from "@insite/shared";
 import { StandardTable, TableActionButton, TableBadge, type TableColumnDef } from "../table";
 import { CustomSelect } from "../common";
@@ -64,11 +58,9 @@ interface Draft {
   /** Phase 12: registration policy per subject; "" uses the tenant setting. */
   credentialCertifier: CredentialRequirement | "";
   credentialFieldAssurance: CredentialRequirement | "";
-  /** Phase 12: payment milestone defaults for new projects of this type. */
-  paymentBasis: TranchePaymentBasis;
-  paymentCompletionRule: TrancheCompletionRule;
-  /** The disbursement mechanism the type expects ("" = not stated). */
-  paymentMechanism: DisbursementMechanism | "";
+  /** Redesign R1b: retention defaults for new projects of this type ("" = none). */
+  retentionPct: string;
+  retentionMonths: string;
   /** Phase 13: contract milestone templates and kick-off rules. */
   contract: ContractRules;
   /** Phase 15: Certificate of Completion and closure rules. */
@@ -83,18 +75,17 @@ interface Draft {
   rest: Record<string, unknown>;
 }
 
-/** Phase 12: credentials and payments as stored on the type (read leniently). */
+/** Phase 12 credentials and the R1b payment (retention) defaults as stored on the type (read leniently). */
 function phase12From(config: unknown) {
   const c = (config ?? {}) as {
     credentials?: { certifier?: CredentialRequirement | null; fieldAssurance?: CredentialRequirement | null };
-    payments?: { defaultBasis?: TranchePaymentBasis; defaultCompletionRule?: TrancheCompletionRule | null; mechanism?: DisbursementMechanism | null };
+    payments?: { retentionPercentage?: number | null; retentionDurationMonths?: number | null };
   };
   return {
     credentialCertifier: c.credentials?.certifier ?? ("" as const),
     credentialFieldAssurance: c.credentials?.fieldAssurance ?? ("" as const),
-    paymentBasis: c.payments?.defaultBasis ?? ("MEASURED" as const),
-    paymentCompletionRule: c.payments?.defaultCompletionRule ?? ("ALL_ITEMS_COMPLETE" as const),
-    paymentMechanism: c.payments?.mechanism ?? ("" as const),
+    retentionPct: c.payments?.retentionPercentage != null ? String(c.payments.retentionPercentage) : "",
+    retentionMonths: c.payments?.retentionDurationMonths != null ? String(c.payments.retentionDurationMonths) : "",
   };
 }
 
@@ -172,10 +163,8 @@ function payloadFrom(d: Draft): SaveProjectTypeRequestInput {
       fieldAssurance: d.credentialFieldAssurance || null,
     },
     payments: {
-      ...((d.rest.payments as Record<string, unknown> | undefined) ?? {}),
-      defaultBasis: d.paymentBasis,
-      defaultCompletionRule: d.paymentBasis === "FIXED_ON_COMPLETION" ? d.paymentCompletionRule : null,
-      mechanism: d.paymentMechanism || null,
+      retentionPercentage: d.retentionPct.trim() === "" ? null : Number(d.retentionPct),
+      retentionDurationMonths: d.retentionMonths.trim() === "" ? null : Math.round(Number(d.retentionMonths)),
     },
     // Phase 13
     contractMilestones: d.contract.milestones.map((m) => ({
@@ -458,55 +447,32 @@ export function ProjectTypesTab() {
         </section>
 
         <section className={sectionCls}>
-          <h3 className="text-sm font-bold text-slate-900">{term("tranche", { plural: true })}: payment basis</h3>
+          <h3 className="text-sm font-bold text-slate-900">{term("retention")} defaults</h3>
           <p className="text-[11px] text-slate-500">
-            The default for each new {term("tranche", { lower: true })} of a project of this type; it can be changed per{" "}
-            {term("tranche", { lower: true })} in the Facility step. A fixed amount works with direct milestone verification only, so the
-            workflow template must not use {term("contractor", { lower: true })} claims.
+            Pre-fills the {term("retention", { lower: true })} step of a new project of this type. Payments are made outside the platform and
+            recorded on each project's Payments page; {term("retention", { lower: true })} is held from each recorded payment at this rate.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <p className="text-xs font-medium text-slate-700 mb-1">Payment basis</p>
-              <CustomSelect
-                value={draft.paymentBasis}
-                onChange={(v) => set({ paymentBasis: v as TranchePaymentBasis })}
-                options={(["MEASURED", "FIXED_ON_COMPLETION"] as const).map((b) => ({
-                  value: b,
-                  label: TRANCHE_PAYMENT_BASIS_META[b].label,
-                  description: TRANCHE_PAYMENT_BASIS_META[b].description,
-                }))}
+            <label className="block">
+              <span className="text-xs font-medium text-slate-700">{term("retention")} (%)</span>
+              <input
+                inputMode="decimal"
+                className={inputCls}
+                placeholder="None"
+                value={draft.retentionPct}
+                onChange={(e) => set({ retentionPct: e.target.value })}
               />
-            </div>
-            <div>
-              <p className="text-xs font-medium text-slate-700 mb-1">Disbursement mechanism the type expects</p>
-              <CustomSelect
-                value={draft.paymentMechanism}
-                onChange={(v) => set({ paymentMechanism: v as DisbursementMechanism | "" })}
-                options={[
-                  { value: "", label: "Not stated", description: "No check against the payment basis." },
-                  ...(["IPC_CLAIM_REQUIRED", "MILESTONE_DIRECT_DISBURSEMENT"] as const).map((m) => ({
-                    value: m,
-                    label: DISBURSEMENT_MECHANISM_META[m].label,
-                    description: DISBURSEMENT_MECHANISM_META[m].description,
-                  })),
-                ]}
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-slate-700">Defects liability period (months)</span>
+              <input
+                inputMode="numeric"
+                className={inputCls}
+                placeholder="None"
+                value={draft.retentionMonths}
+                onChange={(e) => set({ retentionMonths: e.target.value })}
               />
-              <p className="text-[11px] text-slate-500 mt-1">For checks only: the workflow template sets the mechanism projects use.</p>
-            </div>
-            {draft.paymentBasis === "FIXED_ON_COMPLETION" && (
-              <div>
-                <p className="text-xs font-medium text-slate-700 mb-1">Completion rule</p>
-                <CustomSelect
-                  value={draft.paymentCompletionRule}
-                  onChange={(v) => set({ paymentCompletionRule: v as TrancheCompletionRule })}
-                  options={(["ALL_ITEMS_COMPLETE", "WEIGHTED_PROGRESS_REACHED"] as const).map((r) => ({
-                    value: r,
-                    label: TRANCHE_COMPLETION_RULE_META[r].label,
-                    description: TRANCHE_COMPLETION_RULE_META[r].description,
-                  }))}
-                />
-              </div>
-            )}
+            </label>
           </div>
         </section>
 

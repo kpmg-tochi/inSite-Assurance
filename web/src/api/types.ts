@@ -3,7 +3,6 @@ import type {
   ContractorExecutionMode,
   FieldPersonaType,
   GeofenceMode,
-  PortfolioHealth,
   ProjectDeliveryModelFields,
   ProjectGeofence,
   ProjectStatus,
@@ -45,7 +44,6 @@ export interface ProjectSummaryDto extends ProjectDeliveryModelFields {
   geofence: ProjectGeofence | null;
   /** Effective tolerance band outside the boundary, in metres. */
   geofenceToleranceMeters: number;
-  portfolioHealth: PortfolioHealth;
   /** Phase 9: variance badge stored by the schedule-variance job; null until computed. */
   scheduleVariance: ScheduleVarianceBadge | null;
   monitorOrganizationName: string;
@@ -65,10 +63,8 @@ export interface ProjectSummaryDto extends ProjectDeliveryModelFields {
   }>;
   activatedAt: string | null;
   archivedAt: string | null;
-  openConflictCount: number;
   /** Phase 13: contract milestones past their due date (absent from servers before Phase 13). */
   overdueMilestoneCount?: number;
-  unfulfilledHoldPointCount: number;
   totalBoqItems: number;
   opaqueLumpSumCount: number;
   lastFieldCaptureAt: string | null;
@@ -86,35 +82,13 @@ export interface ProjectSummaryDto extends ProjectDeliveryModelFields {
     tradeCode?: string | null;
     isActive: boolean;
   }>;
-  tranches: Array<{
-    id: string;
-    trancheNumber: number;
-    name: string;
-    allocatedAmountNgn: number;
-    releasedAmountNgn: number;
-    targetCompletionPct: number;
-    isReleased: boolean;
-    conditionsPrecedent: Array<{
-      id: string;
-      referenceCode: string;
-      description: string;
-      isMandatoryForRelease: boolean;
-      status: 'PENDING' | 'SATISFIED' | 'WAIVED' | 'BREACHED';
-      /** Phase 13: evidence document in the register. */
-      evidenceDocumentId?: string | null;
-      evidenceDocumentTitle?: string | null;
-    }>;
-  }>;
 }
 
 export interface BoqItemRecordDto {
   id: string;
   projectId: string;
-  trancheId: string | null;
   projectContractorId?: string | null;
   lastRevisionId?: string | null;
-  aiSuggestedTrancheId: string | null;
-  trancheMappingConfirmedByMonitor: boolean;
   wbsCode: string;
   section: string;
   description: string;
@@ -127,11 +101,6 @@ export interface BoqItemRecordDto {
   isOpaqueLumpSum: boolean;
   opacityWarningReason: string | null;
   cumulativeCertifiedPct: number;
-  tranche?: {
-    id: string;
-    trancheNumber: number;
-    name: string;
-  } | null;
 }
 
 /** Server contract for GET /projects/:projectId/evidence (Phase 4). */
@@ -161,17 +130,7 @@ export interface AuditTrailResponseDto {
   }>;
 }
 
-// IPC, query, valuation and decision contracts come from @insite/shared (Phase 3).
 export type {
-  IpcClaimDto,
-  IpcLineItemDto,
-  MonitorQueryDto,
-  ValuationReportDto,
-  TrancheDecisionDto,
-  ConditionPrecedentDto,
-  ProvidedEvidenceItem,
-  CertificationComputation,
-  ResolvedRatingLabels,
   ContractorVerificationRecordDto,
   ReviewContractorVerificationRequest,
   PortfolioExecutiveSummaryDto,

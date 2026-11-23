@@ -41,7 +41,7 @@ const CATEGORY_ORDER: PermissionCategory[] = [
   'MOBILIZATION_ASSURANCE',
   'FIELD_PRESENCE',
   'REPORT_APPROVALS',
-  'FINANCIAL_IPC',
+  'PAYMENTS',
   'AUDIT_CLOSEOUT',
 ];
 
@@ -487,7 +487,7 @@ export function RolesPermissionsTab() {
                 <>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Mobile AI &amp; Workflow Persona
+                      Mobile workflow persona
                     </label>
                     <select
                       value={fieldPersonaType}

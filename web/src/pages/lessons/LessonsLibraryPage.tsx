@@ -3,7 +3,7 @@ import { Lightbulb, Search } from "lucide-react";
 import { LESSON_CATEGORY_META, LessonCategoryEnum } from "@insite/shared";
 import Loader from "../../components/Loader";
 import { CustomSelect } from "../../components/common";
-import { inputClass } from "../reconciliation/components/ModalShell";
+import { inputClass } from "../../components/common/ModalShell";
 import { LessonCard } from "../../components/closure/LessonsPanel";
 import { useLessonLibraryQuery } from "../../queries/closure/useClosureQueries";
 import { useProjectTypesQuery, useRegionsQuery } from "../../queries/deliveryModels/useDeliveryModelQueries";

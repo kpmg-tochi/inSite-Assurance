@@ -47,17 +47,10 @@ export function serializeFieldSessionSummary(session: FieldSessionLike, detailed
   };
 }
 
-export function serializeBoqItem(
-  item: Prisma.BoqItemGetPayload<object> & {
-    tranche?: { id: string; trancheNumber: number; name: string } | null;
-  }
-) {
+export function serializeBoqItem(item: Prisma.BoqItemGetPayload<object>) {
   return {
     id: item.id,
     projectId: item.projectId,
-    trancheId: item.trancheId,
-    aiSuggestedTrancheId: item.aiSuggestedTrancheId,
-    trancheMappingConfirmedByMonitor: item.trancheMappingConfirmedByMonitor,
     projectContractorId: item.projectContractorId,
     lastRevisionId: item.lastRevisionId,
     wbsCode: item.wbsCode,
@@ -79,13 +72,6 @@ export function serializeBoqItem(
     isOpaqueLumpSum: item.isOpaqueLumpSum,
     opacityWarningReason: item.opacityWarningReason,
     cumulativeCertifiedPct: Number(item.cumulativeCertifiedPct),
-    ...(item.tranche !== undefined
-      ? {
-          tranche: item.tranche
-            ? { id: item.tranche.id, trancheNumber: item.tranche.trancheNumber, name: item.tranche.name }
-            : null,
-        }
-      : {}),
   };
 }
 
@@ -130,149 +116,5 @@ export function serializeCapture(log: CaptureRow): CaptureDto {
     reporterRoleName: log.reporterRoleName,
     fieldPersonaType: log.fieldPersonaType as FieldPersonaType,
     resubmittedFromClientCaptureId: log.resubmittedFromClientCaptureId ?? null,
-  };
-}
-
-export function serializeConditionPrecedent(
-  cp: Prisma.ConditionPrecedentGetPayload<object> & { evidenceDocument?: { title: string } | null }
-) {
-  return {
-    id: cp.id,
-    referenceCode: cp.referenceCode,
-    description: cp.description,
-    isMandatoryForRelease: cp.isMandatoryForRelease,
-    status: cp.status,
-    verifiedAt: iso(cp.verifiedAt),
-    statusChangedAt: iso(cp.statusChangedAt),
-    waivedByUserId: cp.waivedByUserId,
-    waiverReason: cp.waiverReason,
-    // Phase 13: evidence from the document register (title when the query included it).
-    evidenceDocumentId: cp.evidenceDocumentId,
-    evidenceDocumentTitle: cp.evidenceDocument?.title ?? null,
-  };
-}
-
-export function serializeTranche(
-  t: Prisma.FacilityTrancheGetPayload<object> & {
-    conditionsPrecedent?: Prisma.ConditionPrecedentGetPayload<object>[];
-  }
-) {
-  return {
-    id: t.id,
-    projectId: t.projectId,
-    trancheNumber: t.trancheNumber,
-    name: t.name,
-    allocatedAmountNgn: Number(t.allocatedAmountNgn),
-    releasedAmountNgn: Number(t.releasedAmountNgn),
-    targetCompletionPct: Number(t.targetCompletionPct),
-    isReleased: t.isReleased,
-    // Phase 12
-    paymentBasis: t.paymentBasis,
-    completionRule: t.completionRule,
-    fixedReleaseAmountNgn: t.fixedReleaseAmountNgn === null ? null : Number(t.fixedReleaseAmountNgn),
-    completionRequiredItemPct: Number(t.completionRequiredItemPct),
-    ...(t.conditionsPrecedent
-      ? {
-          conditionsPrecedent: [...t.conditionsPrecedent]
-            .sort((a, b) => a.referenceCode.localeCompare(b.referenceCode))
-            .map(serializeConditionPrecedent),
-        }
-      : {}),
-  };
-}
-
-export function serializeMonitorQuery(q: Prisma.MonitorQueryGetPayload<object>) {
-  return {
-    id: q.id,
-    ipcLineItemId: q.ipcLineItemId,
-    status: q.status,
-    queryReason: q.queryReason,
-    requestedProofTypes: (q.requestedProofTypes as string[]) ?? [],
-    contractorResponseText: q.contractorResponseText,
-    revisedClaimedCumulativePct: num(q.revisedClaimedCumulativePct),
-    attachedDocuments: (q.attachedDocumentsJson as unknown[]) ?? [],
-    resolutionNote: q.resolutionNote,
-    raisedByUserId: q.raisedByUserId,
-    respondedByUserId: q.respondedByUserId,
-    resolvedByUserId: q.resolvedByUserId,
-    createdAt: q.createdAt.toISOString(),
-    respondedAt: iso(q.respondedAt),
-    resolvedAt: iso(q.resolvedAt),
-  };
-}
-
-type DecisionRow = Prisma.TrancheDecisionGetPayload<object>;
-
-/** `allDecisions` lets the serializer tell whether a later reversal cancels this decision. */
-export function serializeTrancheDecision(d: DecisionRow, allDecisions: DecisionRow[] = []) {
-  return {
-    id: d.id,
-    valuationReportId: d.valuationReportId,
-    decision: d.decision,
-    approvedDisbursementAmountNgn: Number(d.approvedDisbursementAmountNgn),
-    heldBackAmountNgn: Number(d.heldBackAmountNgn),
-    // Phase 10: retention withheld from this release; the contractor receives the net amount.
-    retentionWithheldNgn: Number(d.retentionWithheldNgn),
-    netReleasedNgn: Math.round((Number(d.approvedDisbursementAmountNgn) - Number(d.retentionWithheldNgn)) * 100) / 100,
-    creditCommitteeReference: d.creditCommitteeReference,
-    approverNotes: d.approverNotes,
-    decidedByUserId: d.decidedByUserId,
-    reversesDecisionId: d.reversesDecisionId,
-    isReversed: allDecisions.some((o) => o.reversesDecisionId === d.id),
-    cpSnapshot: Array.isArray(d.cpSnapshotJson)
-      ? (d.cpSnapshotJson as Array<{
-          id: string;
-          referenceCode: string;
-          isMandatoryForRelease: boolean;
-          status: 'PENDING' | 'SATISFIED' | 'WAIVED' | 'BREACHED';
-        }>)
-      : [],
-    decidedAt: d.decidedAt.toISOString(),
-  };
-}
-
-export function serializeValuationReport(
-  r: Prisma.ValuationReportGetPayload<object> & { trancheDecisions?: DecisionRow[] },
-  approval: ApprovalProgressDto | null = null
-) {
-  const decisions = [...(r.trancheDecisions ?? [])].sort(
-    (a, b) => a.decidedAt.getTime() - b.decidedAt.getTime()
-  );
-  return {
-    id: r.id,
-    ipcClaimId: r.ipcClaimId,
-    projectId: r.projectId,
-    trancheId: r.trancheId,
-    source: r.source,
-    milestoneVerificationId: r.milestoneVerificationId,
-    approval,
-    revisionNumber: r.revisionNumber,
-    trancheRecommendation: r.trancheRecommendation,
-    totalClaimedNgn: Number(r.totalClaimedNgn),
-    totalCertifiedNgn: Number(r.totalCertifiedNgn),
-    recommendedReleaseAmountNgn: Number(r.recommendedReleaseAmountNgn),
-    recommendedHoldbackAmountNgn: Number(r.recommendedHoldbackAmountNgn),
-    executiveCertificationSummary: r.executiveCertificationSummary,
-    certifiedByUserId: r.certifiedByUserId,
-    certifierFullName: r.certifierFullName,
-    // Phase 12: snapshot as stored (null when no registration was given or the policy was HIDDEN).
-    certifierLicenseType: r.certifierLicenseType,
-    certifierLicenseNumber: r.certifierLicenseNumber,
-    certifierRegistrationBodyName: r.certifierRegistrationBodyName,
-    certifierRegistrationPrefix: r.certifierRegistrationPrefix,
-    certifiedAt: r.certifiedAt.toISOString(),
-    supersededAt: iso(r.supersededAt),
-    decisions: decisions.map((d) => serializeTrancheDecision(d, decisions)),
-  };
-}
-
-export function serializeSupportingDocument(doc: Prisma.IpcSupportingDocumentGetPayload<object>) {
-  return {
-    id: doc.id,
-    boqItemId: doc.boqItemId,
-    title: doc.title,
-    mediaType: doc.mediaType,
-    objectKey: doc.objectKey,
-    uploadedAt: doc.uploadedAt.toISOString(),
   };
 }

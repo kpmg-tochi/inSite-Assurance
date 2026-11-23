@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { DEFAULT_CASE_OUTCOME_META, DefaultCaseOutcomeEnum, type ContractorDefaultCaseDto, type DefaultCaseOutcome } from "@insite/shared";
-import { ModalShell } from "../../pages/reconciliation/components/ModalShell";
+import { ModalShell } from "../common/ModalShell";
 import { ApprovalProgressBar } from "../process/ApprovalProgressBar";
 import { useConfirmDialog } from "../process/ConfirmDialog";
 import Loader from "../Loader";
@@ -115,9 +115,6 @@ function DecisionForm({ projectId, c }: { projectId: string; c: ContractorDefaul
   const [returning, setReturning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const needsDate = outcome === "CURE_PERIOD" || outcome === "EXTENSION_GRANTED";
-  // Termination waits until every active claim of the contractor is paid (lender decision).
-  const blockingClaims = c.terminationBlockedBy;
-  const terminationBlocked = blockingClaims.length > 0;
 
   const decide = async () => {
     if (!outcome) return setError("Choose an outcome.");
@@ -175,8 +172,6 @@ function DecisionForm({ projectId, c }: { projectId: string; c: ContractorDefaul
               type="button"
               role="radio"
               aria-checked={outcome === o}
-              aria-disabled={o === "TERMINATED" && terminationBlocked}
-              disabled={o === "TERMINATED" && terminationBlocked}
               onClick={() => setOutcome(o)}
               className={`text-left rounded-xl border p-3 transition disabled:cursor-not-allowed disabled:opacity-60 ${
                 outcome === o ? (o === "TERMINATED" ? "border-rose-400 bg-rose-50" : "border-brand-primary bg-white") : "border-slate-200 bg-white hover:border-slate-300"
@@ -187,13 +182,6 @@ function DecisionForm({ projectId, c }: { projectId: string; c: ContractorDefaul
             </button>
           ))}
         </div>
-      )}
-      {terminationBlocked && !returning && (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-          Termination is not possible yet: {blockingClaims.length === 1 ? "claim" : "claims"}{" "}
-          {blockingClaims.map((x) => `#${x.ipcNumber} (${x.status.replace(/_/g, " ").toLowerCase()})`).join(", ")}{" "}
-          {blockingClaims.length === 1 ? "is" : "are"} not paid. The lender decides it, or it is withdrawn, first.
-        </p>
       )}
       {needsDate && !returning && (
         <div className="max-w-xs">

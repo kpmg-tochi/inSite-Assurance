@@ -2,7 +2,6 @@ import { Prisma } from '@prisma/client';
 import {
   AppliedStandard,
   NeedsAssessmentDocumentDto,
-  NeedsAssessmentSummaryStatus,
   ProjectStandardDto,
   ProjectStandardInput,
   RegisterNeedsAssessmentRequest,
@@ -13,10 +12,8 @@ import {
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import { WebJwtPayload } from '../../middleware/auth.middleware';
-import { assertProjectObjectKey, storageService } from '../../integrations/storage.service';
-import { azureOpenAiService } from '../../integrations/azure-openai.service';
+import { assertProjectObjectKey } from '../../integrations/storage.service';
 import { recordAuditEvent } from '../audit/audit.service';
-import { extractDocumentText } from '../../integrations/textExtractor';
 
 /**
  * Project standards and needs-assessment documents (Phase 7 Step 3). Managed during the wizard
@@ -59,12 +56,6 @@ function serializeNeeds(d: NeedsRow): NeedsAssessmentDocumentDto {
     objectKey: d.objectKey,
     mimeType: d.mimeType,
     byteSize: d.byteSize,
-    extractedSummaryText: d.extractedSummaryText,
-    keyFindings: asStrings(d.keyFindingsJson),
-    summaryStatus: (['NOT_REQUESTED', 'PENDING', 'DONE', 'UNAVAILABLE'].includes(d.summaryStatus)
-      ? d.summaryStatus
-      : 'PENDING') as NeedsAssessmentSummaryStatus,
-    summaryEngine: d.summaryEngine,
     uploadedByUserId: d.uploadedByUserId,
     uploadedAt: d.uploadedAt.toISOString(),
   };
@@ -222,40 +213,6 @@ export async function listNeedsAssessments(projectId: string): Promise<NeedsAsse
  * provider. A file with no readable text becomes UNAVAILABLE. With no provider (or a failure) the
  * document stays PENDING and can be retried. Text is never invented.
  */
-export async function summariseNeedsAssessment(docId: string): Promise<void> {
-  const doc = await prisma.projectNeedsAssessmentDocument.findUnique({ where: { id: docId } });
-  if (!doc || doc.summaryStatus !== 'PENDING') return;
-  const bytes = await storageService.getObjectBuffer(doc.objectKey).catch(() => null);
-  if (!bytes) return;
-  const extracted = await extractDocumentText(bytes, doc.mimeType).catch((error) => {
-    console.warn('[needsAssessment] text extraction failed', docId, error);
-    return { status: 'NO_TEXT' as const, reason: 'The document could not be read.' };
-  });
-  if (extracted.status !== 'OK') {
-    await prisma.projectNeedsAssessmentDocument.update({
-      where: { id: docId },
-      data: { summaryStatus: 'UNAVAILABLE', summaryEngine: extracted.reason },
-    });
-    return;
-  }
-  if (!azureOpenAiService.isConfigured()) return;
-  const result = await azureOpenAiService.summariseNeedsAssessment({
-    title: doc.title,
-    documentType: doc.documentType,
-    text: extracted.text,
-  });
-  if (!result) return;
-  await prisma.projectNeedsAssessmentDocument.update({
-    where: { id: docId },
-    data: {
-      extractedSummaryText: result.summary,
-      keyFindingsJson: result.keyFindings as unknown as Prisma.InputJsonValue,
-      summaryStatus: 'DONE',
-      summaryEngine: `${result.engine} via ${extracted.engine}`,
-    },
-  });
-}
-
 export async function registerNeedsAssessment(
   projectId: string,
   webUser: WebJwtPayload,
@@ -271,7 +228,6 @@ export async function registerNeedsAssessment(
         objectKey: input.objectKey,
         mimeType: input.mimeType,
         byteSize: input.byteSize,
-        summaryStatus: input.requestAiSummary ? 'PENDING' : 'NOT_REQUESTED',
         uploadedByUserId: webUser.userId,
       },
     });
@@ -286,12 +242,6 @@ export async function registerNeedsAssessment(
     });
     return created;
   });
-  if (input.requestAiSummary) {
-    // After the response; a failure leaves the document PENDING.
-    setImmediate(() => {
-      summariseNeedsAssessment(row.id).catch((error) => console.warn('[needsAssessment] summary failed', row.id, error));
-    });
-  }
   return serializeNeeds(row);
 }
 
@@ -318,14 +268,4 @@ export async function countStandardsDocs(db: Db, projectId: string) {
     db.projectNeedsAssessmentDocument.count({ where: { projectId } }),
   ]);
   return { standardCount, needsAssessmentCount };
-}
-
-/** POST .../needs-assessments/:documentId/summarise: retry a PENDING or UNAVAILABLE summary. */
-export async function retryNeedsAssessmentSummary(projectId: string, documentId: string) {
-  const doc = await prisma.projectNeedsAssessmentDocument.findFirst({ where: { id: documentId, projectId } });
-  if (!doc) throw new AppError('Document not found', 404, 'NEEDS_ASSESSMENT_NOT_FOUND');
-  if (doc.summaryStatus === 'DONE') return serializeNeeds(doc);
-  await prisma.projectNeedsAssessmentDocument.update({ where: { id: doc.id }, data: { summaryStatus: 'PENDING', summaryEngine: null } });
-  await summariseNeedsAssessment(doc.id);
-  return serializeNeeds(await prisma.projectNeedsAssessmentDocument.findUniqueOrThrow({ where: { id: doc.id } }));
 }

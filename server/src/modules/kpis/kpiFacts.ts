@@ -86,8 +86,6 @@ export async function loadKpiFacts(
     owedInspections,
     reportApprovals,
     inspectionApprovals,
-    tranches,
-    decisions,
     certificates,
     closureRows,
     lessons,
@@ -150,17 +148,6 @@ export async function loadKpiFacts(
       where: { projectId: inIds, status: 'APPROVED', approvedAt: { gte: windowStart, lte: windowEnd } },
       select: { projectId: true, confirmedAt: true, approvedAt: true },
     }),
-    prisma.facilityTranche.groupBy({ by: ['projectId'], where: { projectId: inIds }, _count: { _all: true } }),
-    prisma.trancheDecision.findMany({
-      where: {
-        valuationReport: { projectId: inIds },
-        reversesDecisionId: null,
-        decision: { not: 'HOLD' },
-        decidedAt: { gte: windowStart, lte: windowEnd },
-        reversedBy: { is: null },
-      },
-      select: { decidedAt: true, valuationReport: { select: { projectId: true, certifiedAt: true } } },
-    }),
     prisma.completionCertificate.findMany({
       where: { projectId: inIds, status: 'ISSUED' },
       select: { projectId: true, issuedAt: true, completionDate: true },
@@ -181,7 +168,6 @@ export async function loadKpiFacts(
   const certificateOf = new Map(certificates.map((c) => [c.projectId, c]));
   const closureOf = groupBy(closureRows, (r) => r.projectId);
   const lessonsOf = new Map(lessons.map((l) => [l.projectId, l._count._all]));
-  const tranchesSet = new Set(tranches.map((t) => t.projectId));
 
   const obligationCounts = (rows: typeof owedAll) => {
     const out = new Map<string, KpiObligationCounts>();
@@ -208,8 +194,6 @@ export async function loadKpiFacts(
   };
   for (const r of reportApprovals) addDuration(approvalsOf, r.projectId, r.humanConfirmedAt, r.approvedCompletedAt);
   for (const r of inspectionApprovals) addDuration(approvalsOf, r.projectId, r.confirmedAt, r.approvedAt);
-  const paymentsOf = new Map<string, KpiDurationSum>();
-  for (const d of decisions) addDuration(paymentsOf, d.valuationReport.projectId, d.valuationReport.certifiedAt, d.decidedAt);
 
   return projects.map((p) => {
     const zone = p.timezone;
@@ -261,8 +245,6 @@ export async function loadKpiFacts(
       inspectionObligations: owedInspectionsOf.get(p.id) ?? emptyObligations(),
       allObligations: owedAllOf.get(p.id) ?? emptyObligations(),
       approvals: approvalsOf.get(p.id) ?? emptyDuration(),
-      hasTranches: tranchesSet.has(p.id),
-      payments: paymentsOf.get(p.id) ?? emptyDuration(),
       certificate: certificate?.issuedAt
         ? { issuedDate: zonedCalendarDate(certificate.issuedAt, periodZone), completionDate: certificate.completionDate }
         : null,

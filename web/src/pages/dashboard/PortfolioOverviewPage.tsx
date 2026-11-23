@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from "react-leaflet";
-import { Activity, AlertTriangle, Clock, Landmark, MapPinOff, ShieldCheck, Wallet, Wrench } from "lucide-react";
+import { Activity, Clock, Landmark, MapPinOff, Wallet, Wrench } from "lucide-react";
 import {
   PORTFOLIO_QUIET_SITE_DAYS,
-  type PortfolioHealth,
   type PortfolioOverviewProject,
+  type ScheduleStatusValue,
   type ProjectListFilters,
 } from "@insite/shared";
 import { usePortfolioOverviewQuery } from "../../queries/projects/useContractorVerificationQueries";
@@ -16,12 +16,21 @@ import { formatCompactNaira, formatDateTimeShort } from "../../lib/formatters";
 import { useTerm } from "../../lib/auth-context";
 import { NEUTRAL_BOUNDS, type LatLngTuple } from "../../components/geofence/geofenceGeometry";
 
-/** Marker colour per evidence health (same meaning as the directory badges). */
-const HEALTH_STYLE: Record<PortfolioHealth, { color: string; label: string }> = {
-  EVIDENCE_SUPPORTED: { color: "#059669", label: "Evidence supported" },
-  EVIDENCE_PARTIAL: { color: "#d97706", label: "Evidence partial" },
-  EVIDENCE_CONFLICT: { color: "#e11d48", label: "Evidence conflict" },
+/** Marker colour per schedule status (redesign R1b: replaces the IPC evidence health). */
+const STATUS_STYLE: Record<"ON_TRACK" | "BEHIND" | "COMPLETE" | "OTHER", { color: string; label: string }> = {
+  ON_TRACK: { color: "#059669", label: "On or ahead of schedule" },
+  BEHIND: { color: "#e11d48", label: "Behind schedule" },
+  COMPLETE: { color: "#6546fc", label: "Complete" },
+  OTHER: { color: "#94a3b8", label: "Not scheduled yet" },
 };
+
+function statusStyle(p: PortfolioOverviewProject) {
+  const s: ScheduleStatusValue | undefined = p.scheduleVariance?.status;
+  if (s === "ON_TRACK" || s === "AHEAD") return STATUS_STYLE.ON_TRACK;
+  if (s === "BEHIND") return STATUS_STYLE.BEHIND;
+  if (s === "COMPLETE") return STATUS_STYLE.COMPLETE;
+  return STATUS_STYLE.OTHER;
+}
 
 /** Fits the map to the visible pins whenever they change. */
 function FitToPins({ points }: { points: LatLngTuple[] }) {
@@ -106,23 +115,16 @@ export function PortfolioOverviewPage({ onOpenProject }: { onOpenProject: (proje
         <KpiCard
           icon={<Wallet className="w-4 h-4" />}
           iconVariant="emerald"
-          title="Disbursed"
+          title="Paid to date"
           value={formatCompactNaira(kpis.totalDisbursedNgn)}
           subtitle={`${kpis.disbursedPct}% of commitment`}
         />
         <KpiCard
           icon={<Activity className="w-4 h-4" />}
           iconVariant="indigo"
-          title="Certified progress"
+          title="Progress"
           value={`${kpis.weightedProgressPct}%`}
           subtitle="Weighted by budget"
-        />
-        <KpiCard
-          icon={<ShieldCheck className="w-4 h-4" />}
-          iconVariant={kpis.healthCounts.conflict > 0 ? "rose" : "emerald"}
-          title="Evidence health"
-          value={`${kpis.healthCounts.supported} / ${kpis.projectCount}`}
-          subtitle={`${kpis.healthCounts.partial} partial · ${kpis.healthCounts.conflict} conflict`}
         />
         <KpiCard
           icon={<Clock className="w-4 h-4" />}
@@ -130,13 +132,6 @@ export function PortfolioOverviewPage({ onOpenProject }: { onOpenProject: (proje
           title="Behind schedule"
           value={kpis.behindScheduleCount}
           subtitle="Projects past their planned progress"
-        />
-        <KpiCard
-          icon={<AlertTriangle className="w-4 h-4" />}
-          iconVariant={kpis.openConflictLineCount + kpis.unfulfilledHoldPointCount > 0 ? "rose" : "slate"}
-          title="Open issues"
-          value={kpis.openConflictLineCount + kpis.unfulfilledHoldPointCount}
-          subtitle={`${kpis.openConflictLineCount} conflicting lines · ${kpis.unfulfilledHoldPointCount} unmet ${term("holdPoint", { plural: true, lower: true })}`}
         />
         <KpiCard
           icon={<MapPinOff className="w-4 h-4" />}
@@ -164,7 +159,7 @@ export function PortfolioOverviewPage({ onOpenProject }: { onOpenProject: (proje
               />
               <FitToPins points={points} />
               {pinned.map((p) => {
-                const style = HEALTH_STYLE[p.portfolioHealth];
+                const style = statusStyle(p);
                 const isSelected = p.id === selectedId;
                 return (
                   <CircleMarker
@@ -177,7 +172,7 @@ export function PortfolioOverviewPage({ onOpenProject }: { onOpenProject: (proje
                     <Tooltip direction="top" offset={[0, -6]}>
                       <span className="font-semibold">{p.codePrefix}</span> · {p.name}
                       <br />
-                      {style.label} · {p.certifiedProgressPct}% certified
+                      {style.label} · {p.certifiedProgressPct}% done
                     </Tooltip>
                   </CircleMarker>
                 );
@@ -185,7 +180,7 @@ export function PortfolioOverviewPage({ onOpenProject }: { onOpenProject: (proje
             </MapContainer>
           </div>
           <div className="flex flex-wrap items-center gap-4 border-t border-slate-100 px-4 py-2 text-[11px] text-slate-600">
-            {Object.values(HEALTH_STYLE).map((s) => (
+            {Object.values(STATUS_STYLE).map((s) => (
               <span key={s.label} className="inline-flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
                 {s.label}
@@ -215,13 +210,13 @@ export function PortfolioOverviewPage({ onOpenProject }: { onOpenProject: (proje
                         onClick={() => setSelectedId(p.id)}
                         className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-start gap-2"
                       >
-                        <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: HEALTH_STYLE[p.portfolioHealth].color }} />
+                        <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: statusStyle(p).color }} />
                         <span className="min-w-0">
                           <span className="block text-xs font-semibold text-slate-900 truncate">
                             {p.codePrefix} · {p.name}
                           </span>
                           <span className="block text-[11px] text-slate-500 truncate">
-                            {p.region?.path ?? p.stateLocation} · {p.certifiedProgressPct}% certified
+                            {p.region?.path ?? p.stateLocation} · {p.certifiedProgressPct}% done
                           </span>
                         </span>
                       </button>
@@ -238,8 +233,7 @@ export function PortfolioOverviewPage({ onOpenProject }: { onOpenProject: (proje
 }
 
 function ProjectDetail({ project: p, onOpen, onBack }: { project: PortfolioOverviewProject; onOpen: () => void; onBack: () => void }) {
-  const term = useTerm();
-  const style = HEALTH_STYLE[p.portfolioHealth];
+  const style = statusStyle(p);
   return (
     <div className="p-4 space-y-3 overflow-y-auto">
       <button type="button" onClick={onBack} className="text-[11px] font-semibold text-slate-500 hover:text-slate-800">
@@ -262,7 +256,7 @@ function ProjectDetail({ project: p, onOpen, onBack }: { project: PortfolioOverv
           <dd className="font-semibold text-slate-900">{formatCompactNaira(p.totalBudgetNgn)}</dd>
         </div>
         <div>
-          <dt className="text-slate-500">Disbursed</dt>
+          <dt className="text-slate-500">Paid</dt>
           <dd className="font-semibold text-slate-900">{formatCompactNaira(p.disbursedToDateNgn)}</dd>
         </div>
         <div>
@@ -286,12 +280,6 @@ function ProjectDetail({ project: p, onOpen, onBack }: { project: PortfolioOverv
         <div>
           <dt className="text-slate-500">Owner</dt>
           <dd className="text-slate-900">{p.owningOrganization?.name ?? "Not set"}</dd>
-        </div>
-        <div>
-          <dt className="text-slate-500">Open issues</dt>
-          <dd className="text-slate-900">
-            {p.openConflictCount} conflicts · {p.unfulfilledHoldPointCount} {term("holdPoint", { plural: true, lower: true })}
-          </dd>
         </div>
       </dl>
       <button

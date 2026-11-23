@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { FieldPersonaType, SEGREGATED_DISBURSEMENT_PERMISSIONS } from '@insite/shared';
+import { FieldPersonaType } from '@insite/shared';
 import { env } from '../config/env';
 import { prisma } from '../config/prisma';
 import { AppError } from './error.middleware';
@@ -131,8 +131,7 @@ export function signMobileUserToken(claims: Omit<MobileUserTokenClaims, 'tokenTy
 
 /**
  * True if the user holds at least one of `requiredPermissions`. A platform super admin passes
- * every check except the segregated disbursement permissions (D-3.1), which must be held
- * explicitly through a role.
+ * every check.
  */
 export function hasWebPermission(
   webUser: WebJwtPayload | undefined,
@@ -143,7 +142,7 @@ export function hasWebPermission(
   return requiredPermissions.some(
     (perm) =>
       webUser.permissions.includes(perm) ||
-      (webUser.isPlatformSuperAdmin && !SEGREGATED_DISBURSEMENT_PERMISSIONS.includes(perm))
+      webUser.isPlatformSuperAdmin
   );
 }
 

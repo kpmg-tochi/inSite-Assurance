@@ -33,10 +33,7 @@ process.env.NODE_ENV = 'test';
 process.env.DEMO_MODE = 'false';
 process.env.ENABLE_DEMO_ENDPOINTS = 'false';
 process.env.S3_ENDPOINT = '';
-// Route tests must never call the AI provider; reconciliation tests stub the rater explicitly.
-process.env.AZURE_OPENAI_ENDPOINT = '';
-process.env.AZURE_OPENAI_API_KEY = '';
-// Nor the speech provider or push service; uploads go to a throwaway folder.
+// Route tests must never call the speech provider or push service; uploads go to a throwaway folder.
 process.env.WHISPER_API_KEY = '';
 process.env.PUSH_PROVIDER = 'none';
 process.env.AI_CHECK_SWEEP_INTERVAL_SECONDS = '0';

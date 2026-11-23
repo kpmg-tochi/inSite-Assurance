@@ -31,21 +31,12 @@ export const useProjectStandardsQuery = (projectId: string | null | undefined, e
     enabled: Boolean(projectId) && enabled,
   });
 
-export const NEEDS_ASSESSMENT_POLL_MS = 30_000;
-export const NEEDS_ASSESSMENT_MAX_POLLS = 10;
 
 export const useNeedsAssessmentsQuery = (projectId: string | null | undefined, enabled = true) =>
   useQuery({
     queryKey: needsAssessmentsKey(projectId),
     queryFn: () => listNeedsAssessments(projectId!),
     enabled: Boolean(projectId) && enabled,
-    // A requested summary is filled in after the upload; poll gently while one is pending, at most
-    // NEEDS_ASSESSMENT_MAX_POLLS times (about 5 minutes). After that the page offers a manual refresh.
-    refetchInterval: (query) =>
-      query.state.data?.some((d) => d.summaryStatus === 'PENDING') &&
-      query.state.dataUpdateCount <= NEEDS_ASSESSMENT_MAX_POLLS
-        ? NEEDS_ASSESSMENT_POLL_MS
-        : false,
   });
 
 /**

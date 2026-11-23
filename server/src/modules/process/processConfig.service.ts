@@ -3,9 +3,7 @@ import {
   ApprovalChainDto,
   ApprovalChainType,
   ApprovalStepConfig,
-  certificationPermissionFor,
   DEFAULT_PROJECT_PROCESS_CONFIG,
-  defaultDisbursementChain,
   defaultReportChain,
   defaultContractDefaultChain,
   resolveProjectTypeConfig,
@@ -38,8 +36,6 @@ const CONFIG_SELECT = {
   workflowTemplateId: true,
   needsAssessmentMode: true,
   standardsSpecificationMode: true,
-  disbursementMechanism: true,
-  enableTranchesAndCps: true,
   enableHoldPoints: true,
   allowContractorFieldReporting: true,
   enableContractorIdentityAssurance: true,
@@ -120,7 +116,8 @@ export async function getActiveChain(
 
 function defaultChainFor(chainType: ApprovalChainType, config: ProjectProcessConfig): ApprovalStepConfig[] {
   if (chainType === 'CONTRACT_DEFAULT') return defaultContractDefaultChain({ hasOwner: false });
-  return chainType === 'REPORT' ? defaultReportChain() : defaultDisbursementChain(config.disbursementMechanism);
+  void config;
+  return defaultReportChain();
 }
 
 /**
@@ -152,17 +149,6 @@ export async function ensureChain(
   return writeChainVersion(tx, projectId, chainType, await projectDefaultChainFor(tx, projectId, chainType, config), config);
 }
 
-/** The disbursement chain's certification step follows the project's disbursement mechanism. */
-function normaliseChain(
-  chainType: ApprovalChainType,
-  steps: ApprovalStepConfig[],
-  config: ProjectProcessConfig
-): ApprovalStepConfig[] {
-  if (chainType !== 'DISBURSEMENT' || steps.length === 0) return steps;
-  const [first, ...rest] = steps;
-  return [{ ...first, requiredPermissionKey: certificationPermissionFor(config.disbursementMechanism) }, ...rest];
-}
-
 /**
  * Writes a new chain version and retires the previous one. Never edits steps in place: items in
  * flight keep pointing at the version they started on.
@@ -171,10 +157,9 @@ export async function writeChainVersion(
   tx: Tx,
   projectId: string,
   chainType: ApprovalChainType,
-  input: ApprovalStepConfig[],
-  config: ProjectProcessConfig
+  steps: ApprovalStepConfig[],
+  _config: ProjectProcessConfig
 ): Promise<{ version: number; steps: ApprovalStepRow[] }> {
-  const steps = normaliseChain(chainType, input, config);
   const issues = validateApprovalChain(chainType, steps);
   if (issues.length > 0) {
     throw new AppError(issues[0].message, 422, 'INVALID_APPROVAL_CHAIN', { chainType, issues });
@@ -284,26 +269,16 @@ async function activeContractorCodeCount(db: Db, projectId: string): Promise<num
   });
 }
 
-async function disbursementLocked(db: Db, projectId: string): Promise<boolean> {
-  const [ipcs, valuations] = await Promise.all([
-    db.ipcClaim.count({ where: { projectId } }),
-    db.valuationReport.count({ where: { projectId } }),
-  ]);
-  return ipcs + valuations > 0;
-}
-
 export async function getProjectProcessSettings(projectId: string, db: Db = prisma): Promise<ProjectProcessSettingsDto> {
   const row = await db.projectProcessConfig.findUnique({ where: { projectId }, select: CONFIG_SELECT });
   const config = configFromRow(row);
   const template = row?.workflowTemplateId
     ? await db.workflowTemplate.findUnique({ where: { id: row.workflowTemplateId }, select: { id: true, name: true } })
     : null;
-  const [reportChain, disbursementChain, contractDefaultChain, codeCount, locked] = await Promise.all([
+  const [reportChain, contractDefaultChain, codeCount] = await Promise.all([
     serializeChain(db, projectId, 'REPORT', config),
-    serializeChain(db, projectId, 'DISBURSEMENT', config),
     serializeChain(db, projectId, 'CONTRACT_DEFAULT', config),
     activeContractorCodeCount(db, projectId),
-    disbursementLocked(db, projectId),
   ]);
   return {
     projectId,
@@ -311,10 +286,8 @@ export async function getProjectProcessSettings(projectId: string, db: Db = pris
     workflowTemplateId: template?.id ?? null,
     workflowTemplateName: template?.name ?? null,
     reportChain,
-    disbursementChain,
     contractDefaultChain,
     activeContractorJoinCodeCount: codeCount,
-    disbursementMechanismLocked: locked,
   };
 }
 
@@ -325,7 +298,6 @@ export async function getProjectProcessSettings(projectId: string, db: Db = pris
 export interface ProcessSettingsInput {
   config: ProjectProcessConfig;
   reportChain?: ApprovalStepConfig[];
-  disbursementChain?: ApprovalStepConfig[];
   /** Phase 13: written only when given (the default is created on first use). */
   contractDefaultChain?: ApprovalStepConfig[];
   /** Set when copying a template; undefined keeps the current provenance, null clears it. */
@@ -340,7 +312,6 @@ export interface ProcessSettingsInput {
  * Effects on live projects:
  * - contractor field reporting off: contractor-executor join codes are deactivated, which needs
  *   `confirmDeactivateContractorCodes`; back on: missing contractor codes are issued again.
- * - disbursement mechanism: locked once an IPC or valuation exists.
  * - chain edits write a new version; items in flight finish on theirs.
  */
 export async function applyProcessSettings(
@@ -354,25 +325,6 @@ export async function applyProcessSettings(
   const next = ProjectProcessConfigSchema.parse(input.config);
 
   const changedFields: string[] = (Object.keys(next) as Array<keyof ProjectProcessConfig>).filter((k) => before[k] !== next[k]);
-
-  if (before.disbursementMechanism !== next.disbursementMechanism && (await disbursementLocked(tx, projectId))) {
-    throw new AppError(
-      'The disbursement mechanism cannot change once an IPC or valuation exists on this project.',
-      409,
-      'DISBURSEMENT_MECHANISM_LOCKED'
-    );
-  }
-  // Phase 12 (D-12.2): fixed-amount payment milestones work with direct verification only.
-  if (next.disbursementMechanism === 'IPC_CLAIM_REQUIRED') {
-    const fixed = await tx.facilityTranche.count({ where: { projectId, paymentBasis: 'FIXED_ON_COMPLETION' } });
-    if (fixed > 0) {
-      throw new AppError(
-        `${fixed} payment milestone(s) pay a fixed amount on completion, which works with direct milestone verification only. Switch them to measured value first.`,
-        409,
-        'FIXED_BASIS_WITH_IPC'
-      );
-    }
-  }
 
   let deactivatedJoinCodes = 0;
   let issuedJoinCodes: string[] = [];
@@ -422,10 +374,10 @@ export async function applyProcessSettings(
     issuedJoinCodes = (await issueMissingJoinCodes(tx, project, roles)).map((jc) => jc.code);
   }
 
-  // Chains: write a new version only when the steps actually change. A mechanism change swaps the
-  // certification step's permission, which is a change.
-  for (const chainType of ['REPORT', 'DISBURSEMENT'] as const) {
-    const wanted = chainType === 'REPORT' ? input.reportChain : input.disbursementChain;
+  // The report chain: write a new version only when the steps actually change.
+  {
+    const chainType = 'REPORT' as const;
+    const wanted = input.reportChain;
     const current = await getActiveChain(tx, projectId, chainType);
     const base =
       wanted ??
@@ -441,12 +393,9 @@ export async function applyProcessSettings(
         : null);
     if (!base) {
       await writeChainVersion(tx, projectId, chainType, defaultChainFor(chainType, next), next);
-      continue;
-    }
-    const normalised = normaliseChain(chainType, base, next);
-    if (!current || !stepsEqual(current.steps, normalised)) {
-      await writeChainVersion(tx, projectId, chainType, normalised, next);
-      changedFields.push(chainType === 'REPORT' ? 'reportChain' : 'disbursementChain');
+    } else if (!current || !stepsEqual(current.steps, base)) {
+      await writeChainVersion(tx, projectId, chainType, base, next);
+      changedFields.push('reportChain');
     }
   }
 
@@ -461,7 +410,7 @@ export async function applyProcessSettings(
   return { changedFields, deactivatedJoinCodes, issuedJoinCodes };
 }
 
-/** Creates the config row and both chains for a new draft, from the tenant's default template if any. */
+/** Creates the config row and the report chain for a new draft, from the tenant's default template if any. */
 export async function initialiseProjectProcess(
   tx: Tx,
   project: { id: string; tenantId: string; codePrefix: string; status: string; setupState: unknown }
@@ -475,7 +424,6 @@ export async function initialiseProjectProcess(
     await applyProcessSettings(tx, project, {
       config: parsed.data.process,
       reportChain: parsed.data.reportChain,
-      disbursementChain: parsed.data.disbursementChain,
       workflowTemplateId: template.id,
     });
     return;
@@ -498,7 +446,6 @@ export async function applyTemplateConfig(
   return applyProcessSettings(tx, project, {
     config: cfg.process,
     reportChain: cfg.reportChain,
-    disbursementChain: cfg.disbursementChain,
     workflowTemplateId: template.id,
     confirmDeactivateContractorCodes,
   });
@@ -540,7 +487,7 @@ async function auditSettingsChange(
   });
 }
 
-/** PUT /projects/:projectId/process: the switches. Chains keep their steps (mechanism swap aside). */
+/** PUT /projects/:projectId/process: the switches. Chains keep their steps. */
 export async function updateProjectProcessConfig(
   projectId: string,
   webUser: WebJwtPayload,
@@ -566,11 +513,7 @@ export async function replaceProjectChain(
     const config = await getProcessConfig(projectId, tx);
     const result = await applyProcessSettings(tx, project, {
       config,
-      ...(chainType === 'REPORT'
-        ? { reportChain: steps }
-        : chainType === 'DISBURSEMENT'
-          ? { disbursementChain: steps }
-          : { contractDefaultChain: steps }),
+      ...(chainType === 'REPORT' ? { reportChain: steps } : { contractDefaultChain: steps }),
     });
     await auditSettingsChange(tx, projectId, webUser, result, { chainType });
   });

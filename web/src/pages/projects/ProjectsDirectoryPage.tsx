@@ -48,17 +48,6 @@ function contractorLabel(project: ProjectSummaryDto): string {
   return extra > 0 ? `${name} +${extra}` : name;
 }
 
-function healthBadge(health: ProjectSummaryDto["portfolioHealth"]): { label: string; variant: TableBadgeVariant } {
-  switch (health) {
-    case "EVIDENCE_SUPPORTED":
-      return { label: "Supported", variant: "success" };
-    case "EVIDENCE_CONFLICT":
-      return { label: "Conflict flagged", variant: "danger" };
-    default:
-      return { label: "Partial / review", variant: "warning" };
-  }
-}
-
 export function ProjectsDirectoryPage({ projects, selectedProjectId, onSelectProject }: ProjectsDirectoryPageProps) {
   const { hasPermission } = useAuth();
   const term = useTerm();
@@ -123,7 +112,7 @@ export function ProjectsDirectoryPage({ projects, selectedProjectId, onSelectPro
     ...(counts.ARCHIVED > 0 ? [{ id: "ARCHIVED" as const, label: "Archived", count: counts.ARCHIVED }] : []),
   ];
 
-  const openProject = (projectId: string, subRoute: "dashboard" | "boq" | "reconciliation" = "dashboard") => {
+  const openProject = (projectId: string, subRoute: "dashboard" | "boq" | "payments" = "dashboard") => {
     onSelectProject(projectId);
     navigate(`/app/projects/${projectId}/${subRoute}`);
   };
@@ -196,15 +185,6 @@ export function ProjectsDirectoryPage({ projects, selectedProjectId, onSelectPro
       },
     },
     {
-      id: "health",
-      header: "Evidence",
-      tooltip: "Whether field evidence supports the claimed progress",
-      cell: (p) => {
-        const h = healthBadge(p.portfolioHealth);
-        return <TableBadge variant={h.variant}>{h.label}</TableBadge>;
-      },
-    },
-    {
       id: "parties",
       header: "Contractor · " + term("funderParty"),
       cell: (p) => (
@@ -224,7 +204,7 @@ export function ProjectsDirectoryPage({ projects, selectedProjectId, onSelectPro
     },
     {
       id: "progress",
-      header: "Certified",
+      header: "Progress",
       cell: (p) => (
         <div className="w-28">
           <div className="text-[11px] font-bold text-slate-800">{p.certifiedProgressPct.toFixed(1)}%</div>
@@ -247,7 +227,7 @@ export function ProjectsDirectoryPage({ projects, selectedProjectId, onSelectPro
       header: "Flags",
       cell: (p) => {
         const overdue = p.overdueMilestoneCount ?? 0;
-        if (overdue === 0 && p.openConflictCount === 0) return <span className="text-slate-400">–</span>;
+        if (overdue === 0) return <span className="text-slate-400">–</span>;
         return (
           <div className="flex flex-wrap gap-1">
             {overdue > 0 && (
@@ -255,7 +235,6 @@ export function ProjectsDirectoryPage({ projects, selectedProjectId, onSelectPro
                 {overdue} overdue
               </TableBadge>
             )}
-            {p.openConflictCount > 0 && <TableBadge variant="danger">{p.openConflictCount} conflicts</TableBadge>}
           </div>
         );
       },
@@ -268,7 +247,9 @@ export function ProjectsDirectoryPage({ projects, selectedProjectId, onSelectPro
         const actions: TableActionItem[] = [
           { label: "Open dashboard", icon: <LayoutDashboard className="w-4 h-4" />, onClick: () => openProject(p.id) },
           { label: `BOQ (${p.totalBoqItems})`, icon: <ClipboardList className="w-4 h-4" />, onClick: () => openProject(p.id, "boq") },
-          { label: "IPC reconciliation", icon: <FileSpreadsheet className="w-4 h-4" />, onClick: () => openProject(p.id, "reconciliation") },
+          ...(hasPermission("payments:view") || hasPermission("payments:record")
+            ? [{ label: "Payments", icon: <FileSpreadsheet className="w-4 h-4" />, onClick: () => openProject(p.id, "payments") }]
+            : []),
         ];
         if (canEditProjects) {
           actions.push({

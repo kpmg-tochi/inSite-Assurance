@@ -22,8 +22,8 @@
 | Subsidiary admin, North | `north.admin@insite.ng` | Visibility contrast (sees North only) |
 | Subsidiary admin, South | `south.admin@insite.ng` | Co-Funded owner; default case decision |
 | South M&E (second signatory) | `south.me@insite.ng` | Co-Funded CoC |
-| Funding authority | `programme.funder@insite.ng` | Releases Central payment milestones |
-| Monitor | `programme.monitor@insite.ng` | Verifies milestones, inspections, handover review |
+| Funding authority | `programme.funder@insite.ng` | Records payments made outside the platform |
+| Monitor | `programme.monitor@insite.ng` | Inspections, report approval, handover review |
 | M&E officer | `me.officer@insite.ng` | Supervision workload (over the site limit) |
 | Resident Supervisor (mobile, provisioned) | `resident.supervisor@insite.ng` | Mobile sign-in without a join code |
 | Legal officer | `legal.officer@insite.ng` | Default case review |
@@ -37,7 +37,7 @@
 | Draft, kick-off planned | PRG-101 (kick-off in 9 days, agenda filed) | PRG-201 (draft) |
 | Mobilising | PRG-102 (on time, due in ~5 days) | PRG-221 (overdue, default case at the decision step) |
 | Under construction, M&E | PRG-105 (ahead of schedule) | PRG-211 (weekly supervision, late visit, open finding) |
-| Payment milestone | PRG-105 (milestone 2 verified, awaiting release) | – |
+| Payments | PRG-105 (one interim payment recorded, 5% retention held) | – |
 | Completion | PRG-104 (CoC signed once, waiting for the flagship and the beneficiary) | – |
 | Liability period | PRG-103 (two open defects) | – |
 | Closed | – | PRG-241 (post-closure evaluation and audit pending) |
@@ -79,13 +79,13 @@
 
 **Optional mobile:** sign in on the phone as `resident.supervisor@`. **Say:** "Supervisors are provisioned: no join code, and they see all their sites at once."
 
-### A4. Payment milestone (process slide: Payments)
+### A4. Payments (process slide: Payments)
 
-**Login:** `programme.funder@`. **Open:** PRG-105 → Tranche & IPC Review.
+**Login:** `programme.funder@`. **Open:** PRG-105 → Payments.
 
-**Say:** "Central contracts pay a fixed amount per milestone, and only when the milestone is complete. The monitor verified milestone 2 from site evidence, and the funding authority releases it."
+**Say:** "Payments are made through your own finance process, outside the platform. Finance records each one here, so progress, retention and the closure checks stay complete. Later the ERP can feed these records directly."
 
-**Click:** the pending release of Payment milestone 2 → approve in full. Point out milestone 1, released 9 days after verification (that is the payment turnaround KPI).
+**Click:** Record payment → Interim payment, today, NGN 20,000,000, reference PV-DEMO-01. Point out the 5% retention held automatically and the net amount. Then record a **Final payment** of any amount: it is accepted but flagged "Final payment recorded before the Certificate of Completion was issued", and a notification goes to the payments team. Void it with a reason to show that entries are corrected, never deleted.
 
 ### A5. Completion (process slide: Completion and handover)
 
@@ -101,7 +101,7 @@
 
 **Login:** `sahel.contractor@`. **Open:** PRG-103 → Retention and defects.
 
-**Say:** "Snags from the handover became defect tickets for the contractor. Retention is released only after the period ends and the defects are closed."
+**Say:** "Snags from the handover became defect tickets for the contractor. Retention is released by recording a retention-release payment; one recorded before the period ends or with defects still open is flagged."
 
 ---
 
@@ -133,7 +133,7 @@
 
 **Say:** "Closed, rated and two lessons published. Archiving waits for the post-closure evaluation two weeks after closing, and for an audit sign-off that cannot be waived."
 
-**Open:** PRG-242 → Closure. **Say:** "This one is archived. The closure pack is one ZIP for the auditor: index, every document and certificate, valuations, inspections, the audit ledger and a check that the ledger chain is intact."
+**Open:** PRG-242 → Closure. **Say:** "This one is archived. The closure pack is one ZIP for the auditor: index, every document and certificate, the payment record, inspections, the audit ledger and a check that the ledger chain is intact."
 
 **Click:** download the closure pack.
 
@@ -150,7 +150,7 @@
 - Mobilisation: "Contractors mobilised on time" says targets vary. Central is 90% and Co-Funded 85%, with the per-model breakdown underneath.
 - Click a tile → the contributing projects. Click a project to open it.
 - Filter by Co-Funded and by South.
-- "Not tracked" versus 0%: filter by Co-Funded and point at payment turnaround ("no Co-Funded project has payment milestones, so it isn't counted as zero").
+- "Not tracked" versus 0%: point at a KPI with nothing to count yet (for example audits done after closure on a type with no closed projects): it shows "not tracked", never 0%.
 - Export CSV.
 - Log in as `north.admin@`: the same page shows only North's project.
 
@@ -162,8 +162,8 @@ Change each setting, show the effect, and say whether it applies at once or to n
 
 | Setting | Where (as `programme.admin@`) | Change | Show | Applies |
 | :--- | :--- | :--- | :--- | :--- |
-| **Terminology** | Settings → Tenant Settings → Terminology | "Payment milestone" → "Stage payment" | PRG-105 → Tranche & IPC Review; mobile labels too | At once |
-| **Registration policy** | Settings → Tenant Settings → Professional registration | Certifier: Optional → Required | As `programme.monitor@` (no registration on file), open the PRG-105 milestone verification form: the registration is now marked required, and the monitor cannot certify until one is on their profile. Set it back afterwards. | At once |
+| **Terminology** | Settings → Tenant Settings → Terminology | "Retention" → "Retention money" | PRG-105 → Payments and Retention and defects; mobile labels too | At once |
+| **Registration policy** | Settings → Tenant Settings → Professional registration | Certifier: Optional → Required | As `programme.monitor@` (no registration on file), open a Certificate of Completion signature: the registration is now marked required. Set it back afterwards. (Registrations are removed in redesign R1d.) | At once |
 | **Mobilisation days** | Settings → Project types → Central → Contract rules → "Contractor mobilised on site" | 21 → 28 days | Save (new version). Create a new Central draft, set a kick-off date, and see the deadline at +28. PRG-102 keeps +21. | New projects (existing projects keep their version) |
 | **CoC signatories** | Settings → Project types → Co-Funded → Closure rules | Add a third slot, e.g. "Programme Authority M&E", scope "Owning organisation or above" | Save. A new Co-Funded project's certificate shows three staff slots. | New projects |
 | **KPI targets** (optional) | Settings → Project types → Co-Funded → KPI targets | Mobilised on time 85 → 95 | Programme KPIs: the Co-Funded figure turns from met to missed | At once |
@@ -179,4 +179,4 @@ Change each setting, show the effect, and say whether it applies at once or to n
 | KPI trends show "Trend after two months of snapshots" | Snapshots missing (reset without the seed) | Re-run the seed. |
 | A deadline looks a day off | Seeded the day before | Re-seed on the demo day. |
 | The beneficiary code never arrives | Console email adapter | Read the code from the API log. |
-| Releasing PRG-105 milestone 2 is refused | Already released in an earlier rehearsal | Re-seed. |
+| PRG-105 shows extra payments | Recorded in an earlier rehearsal | Void them, or re-seed. |

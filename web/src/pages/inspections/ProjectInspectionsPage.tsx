@@ -204,7 +204,7 @@ function InspectionDetail({ projectId, inspectionId, onClose }: { projectId: str
       {r.aiFlags.length > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           <p className="font-semibold inline-flex items-center gap-1">
-            <AlertTriangle className="w-3.5 h-3.5" /> Omission check ({r.aiCheckEngine ?? "rules"})
+            <AlertTriangle className="w-3.5 h-3.5" /> Missing-photo check
           </p>
           <ul className="mt-1 list-disc pl-5">
             {r.aiFlags.map((f) => (

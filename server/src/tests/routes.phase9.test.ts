@@ -22,7 +22,7 @@ let prisma: PrismaClientType;
 let signFieldAgentToken: typeof import('../middleware/auth.middleware')['signFieldAgentToken'];
 let jobs: typeof import('../jobs');
 let briefs: typeof import('../modules/morning-briefs/morningBrief.service');
-let reconciliation: typeof import('../modules/reconciliation/reconciliation.service');
+let schedule: typeof import('../modules/schedule/schedule.service');
 
 const PASSWORD = 'Password123!';
 const WEEK = [1, 2, 3, 4, 5, 6];
@@ -95,7 +95,7 @@ before(async () => {
   jobs = await import('../jobs');
   jobs.registerAllJobs();
   briefs = await import('../modules/morning-briefs/morningBrief.service');
-  reconciliation = await import('../modules/reconciliation/reconciliation.service');
+  schedule = await import('../modules/schedule/schedule.service');
   const { createApp } = await import('../app');
   app = createApp();
 
@@ -367,19 +367,20 @@ describe('Phase 9', () => {
       const schedule = await request(app).get(url()).set(await web(LENDER));
       const row = schedule.body.data.items.find((i: { id: string }) => i.id === ids.items.I2);
       assert.equal(row.reportedProgressPct, 50);
-      assert.equal(row.certifiedProgressPct, 0);
-      assert.equal(row.status, 'BEHIND', 'certified progress drives the badge');
+      // Redesign R1b: a counted report is the item's progress (no separate certification).
+      assert.equal(row.certifiedProgressPct, 50);
+      assert.equal(row.status, 'BEHIND', 'progress drives the badge');
       assert.equal(row.reportedVarianceLabel, '1 week behind');
       const project = await prisma.project.findUniqueOrThrow({ where: { id: ids.project } });
       assert.equal(project.actualStartDate, today);
     });
 
-    it('sets and clears the completion date with certification', async () => {
+    it('sets and clears the completion date with progress', async () => {
       await prisma.boqItem.update({ where: { id: ids.items.I4 }, data: { cumulativeCertifiedPct: 100 } });
-      await prisma.$transaction((tx) => reconciliation.refreshCertifiedProgress(tx, ids.project));
+      await prisma.$transaction((tx) => schedule.syncActualCompletionDates(tx, ids.project));
       assert.equal((await prisma.boqItem.findUniqueOrThrow({ where: { id: ids.items.I4 } })).actualCompletionDate, today);
       await prisma.boqItem.update({ where: { id: ids.items.I4 }, data: { cumulativeCertifiedPct: 0 } });
-      await prisma.$transaction((tx) => reconciliation.refreshCertifiedProgress(tx, ids.project));
+      await prisma.$transaction((tx) => schedule.syncActualCompletionDates(tx, ids.project));
       assert.equal((await prisma.boqItem.findUniqueOrThrow({ where: { id: ids.items.I4 } })).actualCompletionDate, null);
     });
 

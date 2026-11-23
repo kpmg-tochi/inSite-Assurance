@@ -1,16 +1,13 @@
 import { NextFunction, Request, RequestHandler, Response, Router } from 'express';
 import {
   AssignDefectTicketRequestSchema,
-  CertifyRetentionReleaseRequestSchema,
   ChangeProjectPhaseRequestSchema,
   ConvertSnagsRequestSchema,
   CreateDefectTicketRequestSchema,
   CreateHandoverLinkRequestSchema,
-  LenderTrancheDecisionRequestSchema,
   RectifyDefectTicketRequestSchema,
   ReissueHandoverLinkRequestSchema,
   RejectDefectTicketRequestSchema,
-  RequestRetentionReleaseRequestSchema,
   ReviewHandoverSubmissionRequestSchema,
   VerifyDefectTicketRequestSchema,
 } from '@insite/shared';
@@ -22,7 +19,6 @@ import {
 } from '../../middleware/auth.middleware';
 import { AppError } from '../../middleware/error.middleware';
 import { validateBody } from '../../middleware/validate.middleware';
-import { recordLenderTrancheDecision } from '../reconciliation/reconciliation.service';
 import { changeProjectPhase, getProjectPhase } from './projectPhase.service';
 import {
   createHandoverLink,
@@ -43,13 +39,7 @@ import {
   rejectDefectTicket,
   verifyDefectTicket,
 } from './defects.service';
-import {
-  cancelRetentionRelease,
-  certifyRetentionRelease,
-  getRetentionSummary,
-  requestRetentionRelease,
-  retentionValuationTranche,
-} from './retention.service';
+import { getRetentionSummary } from './retention.service';
 
 /**
  * Phase 10 project routes: construction phase, handover links and review, defect tickets and
@@ -168,7 +158,7 @@ function requireFieldDefectPermission(req: Request) {
   }
 }
 
-const defectReaders = requireAnyAuthWithWebPermission('retention:manage_defects', 'retention:release_escrow', 'handover:review_feedback');
+const defectReaders = requireAnyAuthWithWebPermission('retention:manage_defects', 'payments:view', 'handover:review_feedback');
 const defectWriters = requireAnyAuthWithWebPermission('retention:manage_defects');
 
 router.get(
@@ -249,63 +239,9 @@ router.post(
 
 router.get(
   '/:projectId/retention',
-  requirePermission('retention:manage_defects', 'retention:release_escrow', 'ipc:certify_valuation', 'tranche:approve_disbursement', 'audit:view_ledger'),
+  requirePermission('retention:manage_defects', 'payments:view', 'payments:record', 'audit:view_ledger'),
   wrap(async (req, res) => {
     res.json({ success: true, data: await getRetentionSummary(p(req, 'projectId'), req.webUser!) });
-  })
-);
-
-router.post(
-  '/:projectId/retention/release-request',
-  requirePermission('retention:release_escrow'),
-  validateBody(RequestRetentionReleaseRequestSchema),
-  wrap(async (req, res) => {
-    res.status(201).json({ success: true, data: await requestRetentionRelease({ projectId: p(req, 'projectId'), webUser: req.webUser!, input: req.body }) });
-  })
-);
-
-router.post(
-  '/:projectId/retention/release-requests/:requestId/cancel',
-  requirePermission('retention:release_escrow'),
-  wrap(async (req, res) => {
-    res.json({
-      success: true,
-      data: await cancelRetentionRelease({ projectId: p(req, 'projectId'), requestId: p(req, 'requestId'), webUser: req.webUser! }),
-    });
-  })
-);
-
-/** The certification step; the certification permission is checked by the service (never by bypass). */
-router.post(
-  '/:projectId/retention/release-requests/:requestId/certify',
-  requireWebAuth,
-  validateBody(CertifyRetentionReleaseRequestSchema),
-  wrap(async (req, res) => {
-    res.json({
-      success: true,
-      data: await certifyRetentionRelease({
-        projectId: p(req, 'projectId'),
-        requestId: p(req, 'requestId'),
-        webUser: req.webUser!,
-        input: req.body,
-      }),
-    });
-  })
-);
-
-/** The release step of a RETENTION_RELEASE valuation (same rules as any lender decision). */
-router.post(
-  '/:projectId/retention/valuations/:valuationId/decision',
-  requirePermission('tranche:approve_disbursement'),
-  (req: Request, _res: Response, next: NextFunction) => {
-    req.body = { ...(req.body ?? {}), valuationReportId: p(req, 'valuationId') };
-    next();
-  },
-  validateBody(LenderTrancheDecisionRequestSchema),
-  wrap(async (req, res) => {
-    const projectId = p(req, 'projectId');
-    const trancheId = await retentionValuationTranche(projectId, p(req, 'valuationId'));
-    res.json({ success: true, data: await recordLenderTrancheDecision({ projectId, trancheId, webUser: req.webUser!, input: req.body }) });
   })
 );
 

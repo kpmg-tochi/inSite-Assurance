@@ -95,26 +95,6 @@ export async function assertCocGate(db: Db, projectId: string, gate: ClosureGate
   if (reason) throw new AppError(reason, 409, 'COC_REQUIRED', { gate });
 }
 
-/** The final payment milestone is the highest-numbered tranche of the project. */
-export async function isFinalPaymentTranche(db: Db, projectId: string, trancheId: string): Promise<boolean> {
-  const last = await db.facilityTranche.findFirst({ where: { projectId }, orderBy: { trancheNumber: 'desc' }, select: { id: true } });
-  return last?.id === trancheId;
-}
-
-/**
- * The final payment gate: a valuation on the last payment milestone, or a FINAL retention release.
- * Checked when it is requested or certified and again at the decision.
- */
-export async function assertFinalPaymentGate(
-  db: Db,
-  projectId: string,
-  subject: { kind: 'TRANCHE'; trancheId: string } | { kind: 'RETENTION'; stage: 'COMPLETION' | 'FINAL' }
-) {
-  const isFinal = subject.kind === 'RETENTION' ? subject.stage === 'FINAL' : await isFinalPaymentTranche(db, projectId, subject.trancheId);
-  if (!isFinal) return;
-  await assertCocGate(db, projectId, 'FINAL_PAYMENT');
-}
-
 // ---------------------------------------------------------------------------
 // Final evaluation
 // ---------------------------------------------------------------------------

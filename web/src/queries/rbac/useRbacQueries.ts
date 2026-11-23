@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import {
   getAllTenants,
   getCurrentTenant,
-  getEvidenceRatingLabels,
   getMobileDevices,
   getPermissionsCatalog,
   getProjectFieldSessions,
@@ -59,13 +58,6 @@ export const useProjectFieldSessionsQuery = (
     queryFn: () => getProjectFieldSessions(projectId),
     enabled: Boolean(projectId) && enabled,
     staleTime: 30 * 1000,
-  });
-
-export const useEvidenceRatingLabelsQuery = (enabled = true) =>
-  useQuery({
-    queryKey: ['rbac', 'rating-labels'],
-    queryFn: getEvidenceRatingLabels,
-    enabled,
   });
 
 export const useMobileDevicesQuery = (enabled = true) =>

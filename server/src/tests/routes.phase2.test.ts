@@ -26,9 +26,8 @@ const ids = {
   abj: '',
   unassignedA: '',
   projectB: '',
-  lkkIpc: '',
-  lkkTranche: '',
-  abjTranche: '',
+  abjBoq: '',
+  abjPayment: '',
   lkkBoq: '',
   lkkFieldSession: '',
   tenantBAdminEmail: 'admin@tenant-b.test',
@@ -107,9 +106,8 @@ before(async () => {
   const abj = await prisma.project.findFirstOrThrow({ where: { tenantId: tenantA.id, codePrefix: 'ABJ-108' } });
   ids.lkk = lkk.id;
   ids.abj = abj.id;
-  ids.lkkIpc = (await prisma.ipcClaim.findFirstOrThrow({ where: { projectId: lkk.id } })).id;
-  ids.lkkTranche = (await prisma.facilityTranche.findFirstOrThrow({ where: { projectId: lkk.id } })).id;
-  ids.abjTranche = (await prisma.facilityTranche.findFirstOrThrow({ where: { projectId: abj.id } })).id;
+  ids.abjBoq = (await prisma.boqItem.findFirstOrThrow({ where: { projectId: abj.id } })).id;
+  ids.abjPayment = (await prisma.projectPayment.findFirstOrThrow({ where: { projectId: abj.id } })).id;
   ids.lkkBoq = (await prisma.boqItem.findFirstOrThrow({ where: { projectId: lkk.id } })).id;
   ids.lkkFieldSession = (
     await prisma.fieldAgentSession.findFirstOrThrow({
@@ -351,48 +349,24 @@ describe('Phase 2 route security', { concurrency: false }, () => {
   });
 
   describe('ownership of IDs in bodies (Step 3)', () => {
-    it('rejects a tranche from another project when submitting an IPC', async () => {
-      const contractor = await login('contractor@insite.ng');
-      const res = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/ipcs`)
-        .set(bearer(contractor))
-        .send({
-          trancheId: ids.abjTranche,
-          periodStart: new Date(Date.now() - 86_400_000).toISOString(),
-          periodEnd: new Date().toISOString(),
-          lineItems: [{ boqItemId: ids.lkkBoq, claimedCumulativePct: 10 }],
-        });
-      assert.equal(res.status, 404, JSON.stringify(res.body));
-      assert.equal(res.body.error.code, 'TRANCHE_NOT_FOUND');
-    });
-
-    it('rejects a line item that is not in the IPC when raising a query', async () => {
-      const monitor = await login('monitor@insite.ng');
-      const res = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/ipcs/${ids.lkkIpc}/queries`)
-        .set(bearer(monitor))
-        .send({ ipcLineItemId: crypto.randomUUID(), queryReason: 'Show me the proof please' });
-      assert.equal(res.status, 404);
-    });
-
-    it('rejects a tranche decision whose URL tranche belongs to another project', async () => {
+    it('rejects voiding a payment that belongs to another project', async () => {
       const lender = await login('lender@insite.ng');
       const res = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/tranches/${ids.abjTranche}/decision`)
+        .post(`/api/v1/projects/${ids.lkk}/payments/${ids.abjPayment}/void`)
         .set(bearer(lender))
-        .send({
-          valuationReportId: crypto.randomUUID(),
-          decision: 'HOLD',
-        });
-      assert.equal(res.status, 404);
+        .send({ reason: 'Wrong project, should never be found' });
+      assert.equal(res.status, 404, JSON.stringify(res.body));
+      assert.equal(res.body.error.code, 'PAYMENT_NOT_FOUND');
+      const untouched = await prisma.projectPayment.findUniqueOrThrow({ where: { id: ids.abjPayment } });
+      assert.equal(untouched.voidedAt, null);
     });
 
-    it('rejects mapping a BOQ item to another project tranche', async () => {
+    it('rejects confirming a hold point on another project item', async () => {
       const monitor = await login('monitor@insite.ng');
       const res = await request(app)
         .patch(`/api/v1/projects/${ids.lkk}/boq/mappings`)
         .set(bearer(monitor))
-        .send({ updates: [{ boqItemId: ids.lkkBoq, trancheId: ids.abjTranche, isHoldPoint: false }] });
+        .send({ updates: [{ boqItemId: ids.abjBoq, isHoldPoint: false }] });
       assert.equal(res.status, 404);
     });
 

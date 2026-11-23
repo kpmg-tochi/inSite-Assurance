@@ -126,11 +126,11 @@ export function TenantBrandingTab() {
             <div className="flex items-center gap-2">
               <Palette className="w-4 h-4 text-brand-primary" />
               <h3 className="text-sm font-bold text-slate-900">
-                Tenant White-Label Branding &amp; Valuation PDF Identity
+                Workspace Branding &amp; PDF Identity
               </h3>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Customize portal colors, sidebar workspace branding, and Valuation Report PDF headers
+              Customize portal colors, sidebar workspace branding, and the headers of generated PDFs (certificates, closure packs)
               for <span className="font-semibold text-slate-700">{tenant?.name}</span>.
             </p>
           </div>
@@ -247,20 +247,20 @@ export function TenantBrandingTab() {
 
           <div className="md:col-span-2">
             <label className="block font-semibold text-slate-700 mb-1">
-              Valuation Report PDF Header Title
+              PDF Header Title
             </label>
             <input
               type="text"
               value={pdfHeaderTitle}
               onChange={(e) => setPdfHeaderTitle(e.target.value)}
-              placeholder="e.g. Capital Projects Assurance Valuation Certificate"
+              placeholder="e.g. Programme Delivery Monitoring"
               className="w-full rounded-xl border border-slate-200 px-3 py-2"
             />
           </div>
 
           <div className="md:col-span-2">
             <label className="block font-semibold text-slate-700 mb-1">
-              Valuation Report PDF Footer Disclaimer
+              PDF Footer Disclaimer
             </label>
             <textarea
               rows={2}

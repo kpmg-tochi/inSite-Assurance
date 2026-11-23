@@ -14,7 +14,6 @@ import {
   MobileTenantBranding,
   SessionContractor,
   resolveCredentialPolicy,
-  resolveRatingLabels,
   resolveTerminology,
   WebLoginRequest,
   WebRegisterRequest,
@@ -110,7 +109,6 @@ export function serializeWebUserProfile(user: LoadedWebUser): WebUserProfile {
     // Phase 12: the tenant-level certifier policy (project types may override it per project).
     certifierRegistrationRequirement: resolveCredentialPolicy(user.tenant.credentialPolicyJson).certifier,
     mustChangePassword: user.mustChangePassword,
-    ratingLabels: resolveRatingLabels(user.tenant.evidenceRatingLabels),
     terminology: resolveTerminology(user.tenant.terminologyLabels),
   };
 }
@@ -348,7 +346,6 @@ function serializeMobileAccount(user: MobileUserRow, mobileDeviceId: string): Mo
     mustChangePassword: user.mustChangePassword,
     mobileDeviceId,
     mobileRole: roleSummary(role),
-    ratingLabels: resolveRatingLabels(user.tenant.evidenceRatingLabels),
     tenantBranding: mobileTenantBranding(user.tenant),
   };
 }
@@ -657,7 +654,6 @@ function buildMobileSessionResponse(
     id: string;
     tenantId: string;
     tenant: {
-      evidenceRatingLabels: unknown;
       terminologyLabels: unknown;
       name: string;
       brandingConfig: unknown;
@@ -740,7 +736,6 @@ function buildMobileSessionResponse(
       registrationNumber: session.registrationNumber ?? undefined,
       registrationBodyCode: session.registrationBodyCode ?? undefined,
       livenessPassed: session.livenessPassed,
-      ratingLabels: resolveRatingLabels(project.tenant.evidenceRatingLabels),
       contractor: serializeSessionContractor(contractor),
       tenantBranding: mobileTenantBranding(project.tenant),
     },
@@ -813,7 +808,6 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
           tenant: {
             select: {
               status: true,
-              evidenceRatingLabels: true,
               terminologyLabels: true,
               name: true,
               brandingConfig: true,
@@ -824,9 +818,6 @@ export async function joinProjectMobile(input: JoinProjectMobileRequest) {
           },
           boqItems: {
             orderBy: { wbsCode: 'asc' },
-          },
-          tranches: {
-            orderBy: { trancheNumber: 'asc' },
           },
         },
       },
@@ -988,7 +979,6 @@ export async function demoSkipVerificationMobile(
           tenant: {
             select: {
               status: true,
-              evidenceRatingLabels: true,
               terminologyLabels: true,
               name: true,
               brandingConfig: true,
@@ -999,9 +989,6 @@ export async function demoSkipVerificationMobile(
           },
           boqItems: {
             orderBy: { wbsCode: 'asc' },
-          },
-          tranches: {
-            orderBy: { trancheNumber: 'asc' },
           },
         },
       },

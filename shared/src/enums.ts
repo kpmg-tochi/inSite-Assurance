@@ -112,7 +112,7 @@ export const PermissionCategoryEnum = z.enum([
   'MOBILIZATION_ASSURANCE',
   'FIELD_PRESENCE',
   'REPORT_APPROVALS',
-  'FINANCIAL_IPC',
+  'PAYMENTS',
   'AUDIT_CLOSEOUT',
 ]);
 export type PermissionCategory = z.infer<typeof PermissionCategoryEnum>;
@@ -145,9 +145,9 @@ export const PERMISSION_CATEGORY_META: Record<
     label: 'Report Review & Approvals',
     description: 'Inspect submitted workday/period reports, raise verification queries, and approve completion.',
   },
-  FINANCIAL_IPC: {
-    label: 'IPC, Milestones & Drawdowns',
-    description: 'Submit IPC claims, run AI reconciliation, certify valuations, and approve tranche/milestone releases.',
+  PAYMENTS: {
+    label: 'Payments & Retention',
+    description: 'View and record contractor payments made outside the platform, and track retention held and released.',
   },
   AUDIT_CLOSEOUT: {
     label: 'Audit, Handover & Retention',
@@ -589,62 +589,22 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     unlocksViews: ['Findings Board', 'Mobile Findings'],
   },
 
-  // 7. FINANCIAL_IPC
+  // 7. PAYMENTS (redesign R1b: payments are made outside the platform and recorded here)
   {
-    key: 'ipc:view',
-    name: 'View IPC Claims & Reconciliation Queue',
-    description: 'View submitted IPCs, evidence strength ratings, and reconciliation tables.',
-    category: 'FINANCIAL_IPC',
+    key: 'payments:view',
+    name: 'View Payments & Retention',
+    description: 'See the payment record, retention held and released, and payment exceptions.',
+    category: 'PAYMENTS',
     surface: 'WEB',
-    unlocksViews: ['IPC Reconciliation Workbench'],
+    unlocksViews: ['Payments'],
   },
   {
-    key: 'ipc:submit_claim',
-    name: 'Submit Contractor IPC Drawdown Claims',
-    description: 'Create and submit Interim Payment Certificate claims for tranches.',
-    category: 'FINANCIAL_IPC',
+    key: 'payments:record',
+    name: 'Record & Void Payments',
+    description: 'Record interim, final and retention-release payments made outside the platform, and void a wrong entry with a reason.',
+    category: 'PAYMENTS',
     surface: 'WEB',
-    unlocksViews: ['+ Submit New IPC Claim'],
-  },
-  {
-    key: 'ipc:trigger_ai_reconcile',
-    name: 'Run AI Evidence-to-Claim Reconciliation',
-    description: 'Trigger or re-run AI cross-examination of claims against field evidence.',
-    category: 'FINANCIAL_IPC',
-    surface: 'WEB',
-    unlocksViews: ['Re-Run Reconciliation', 'Smart Visit Planner'],
-  },
-  {
-    key: 'ipc:certify_valuation',
-    name: 'Certify Valuation Report',
-    description: 'Formally certify line-item completion % and recommend tranche release/holdback.',
-    category: 'FINANCIAL_IPC',
-    surface: 'WEB',
-    unlocksViews: ['Certify Valuation Modal'],
-  },
-  {
-    key: 'tranche:approve_disbursement',
-    name: 'Approve Tranche / Milestone Disbursement',
-    description: 'Record formal financier/approver release, holdback, or hold decisions.',
-    category: 'FINANCIAL_IPC',
-    surface: 'WEB',
-    unlocksViews: ['Tranche Disbursement Modal'],
-  },
-  {
-    key: 'milestone:verify_direct_release',
-    name: 'Verify Direct Milestone Release (No-IPC Mode)',
-    description: 'Verify milestone completion directly from evidence when IPCs are disabled.',
-    category: 'FINANCIAL_IPC',
-    surface: 'WEB',
-    unlocksViews: ['Direct Milestone Release'],
-  },
-  {
-    key: 'valuation:export_pdf',
-    name: 'Export Valuation Report PDF',
-    description: 'Generate and download branded Disbursement Evidence & Valuation Report PDFs.',
-    category: 'FINANCIAL_IPC',
-    surface: 'WEB',
-    unlocksViews: ['Export Valuation PDF'],
+    unlocksViews: ['Payments -> Record payment'],
   },
 
   // 8. AUDIT_CLOSEOUT
@@ -687,14 +647,6 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     category: 'AUDIT_CLOSEOUT',
     surface: 'BOTH',
     unlocksViews: ['Retention & Defects Console'],
-  },
-  {
-    key: 'retention:release_escrow',
-    name: 'Approve Final Retention Release',
-    description: 'Release held-back retention funds once retention period & defects clear.',
-    category: 'AUDIT_CLOSEOUT',
-    surface: 'WEB',
-    unlocksViews: ['Retention Release Gate'],
   },
   // Phase 15: Certificate of Completion and closure governance
   {
@@ -907,60 +859,6 @@ export const ReportingCadenceEnum = z.enum([
 export type ReportingCadence = z.infer<typeof ReportingCadenceEnum>;
 
 /**
- * 5. AI Evidence Strength Ratings
- */
-export const EvidenceStrengthRatingEnum = z.enum([
-  'SUPPORTED',
-  'PARTIALLY_SUPPORTED',
-  'UNSUPPORTED',
-  'CONTRADICTED',
-]);
-export type EvidenceStrengthRating = z.infer<typeof EvidenceStrengthRatingEnum>;
-
-export type EvidenceRatingColorToken = 'emerald' | 'amber' | 'slate' | 'rose';
-
-/**
- * The only source of default labels, descriptions and colours for evidence ratings (decision B).
- * Tenants may override `label` and `description` (see `resolveRatingLabels`); the colour and the
- * canonical meaning are fixed.
- */
-export const EVIDENCE_RATING_META: Record<
-  EvidenceStrengthRating,
-  { label: string; colorToken: EvidenceRatingColorToken; description: string }
-> = {
-  SUPPORTED: {
-    label: 'Supported',
-    colorToken: 'emerald',
-    description: 'Corroborated by geofence-verified field evidence, fulfilled hold points, and independent logs.',
-  },
-  PARTIALLY_SUPPORTED: {
-    label: 'Partially Supported',
-    colorToken: 'amber',
-    description: 'Partial quantity alignment or relies exclusively on contractor self-reported evidence.',
-  },
-  UNSUPPORTED: {
-    label: 'Unsupported',
-    colorToken: 'slate',
-    description: 'Insufficient field logs, missing mandatory Hold-Point pre-pour photos, or unverified quantities.',
-  },
-  CONTRADICTED: {
-    label: 'Contradicted',
-    colorToken: 'rose',
-    description: 'Direct conflict between IPC claim and site evidence, failed capture integrity, or out-of-corridor proof.',
-  },
-};
-
-/**
- * 6. Portfolio Geospatial Health Pins
- */
-export const PortfolioHealthEnum = z.enum([
-  'EVIDENCE_SUPPORTED',
-  'EVIDENCE_PARTIAL',
-  'EVIDENCE_CONFLICT',
-]);
-export type PortfolioHealth = z.infer<typeof PortfolioHealthEnum>;
-
-/**
  * 7. Field Evidence Log Lifecycle States
  */
 /** Server state of one registered capture (photo, voice note or document). */
@@ -980,48 +878,12 @@ export const MediaTypeEnum = z.enum([
   'LAB_CUBE_TEST_CERT',
   'MILL_CERTIFICATE',
   'BOQ_SPREADSHEET',
-  'VALUATION_REPORT_PDF',
   'IDENTITY_DOCUMENT',
   'IDENTITY_SELFIE',
   // Phase 7: needs-assessment documents and standards reference files.
   'PROJECT_DOCUMENT',
 ]);
 export type MediaType = z.infer<typeof MediaTypeEnum>;
-
-/**
- * 9. IPC Claim & Facility Tranche Governance Statuses
- */
-export const IpcClaimStatusEnum = z.enum([
-  'SUBMITTED',
-  'AI_RECONCILED',
-  'QUERIED_BY_MONITOR',
-  'MONITOR_CERTIFIED',
-  'LENDER_DECIDED',
-  'REJECTED_WITHDRAWN',
-]);
-export type IpcClaimStatus = z.infer<typeof IpcClaimStatusEnum>;
-
-export const MonitorRecommendationEnum = z.enum([
-  'SUPPORT_FULL_RELEASE',
-  'SUPPORT_WITH_HOLDBACK',
-  'HOLD',
-]);
-export type MonitorRecommendation = z.infer<typeof MonitorRecommendationEnum>;
-
-export const LenderDecisionTypeEnum = z.enum([
-  'APPROVE_FULL',
-  'APPROVE_WITH_HOLDBACK',
-  'HOLD',
-]);
-export type LenderDecisionType = z.infer<typeof LenderDecisionTypeEnum>;
-
-export const ConditionPrecedentStatusEnum = z.enum([
-  'PENDING',
-  'SATISFIED',
-  'WAIVED',
-  'BREACHED',
-]);
-export type ConditionPrecedentStatus = z.infer<typeof ConditionPrecedentStatusEnum>;
 
 export const QueryStatusEnum = z.enum([
   'OPEN',
@@ -1061,12 +923,9 @@ export const AuditActionTypeEnum = z.enum([
   'EVIDENCE_EXTRACTED',
   'EVIDENCE_CONFIRMED',
   'EVIDENCE_FLAGGED_INTEGRITY',
-  'IPC_SUBMITTED',
-  'AI_RECONCILIATION_COMPLETED',
+  // Field-report queries (raised by a monitor, answered by the reporter)
   'MONITOR_QUERY_RAISED',
   'CONTRACTOR_QUERY_RESPONDED',
-  'VALUATION_REPORT_CERTIFIED',
-  'LENDER_TRANCHE_DECIDED',
   'INCIDENT_REPORT_SUBMITTED',
   'INCIDENT_STATUS_UPDATED',
   'PUSH_TOKEN_REGISTERED',
@@ -1076,11 +935,6 @@ export const AuditActionTypeEnum = z.enum([
   'USER_DEACTIVATED',
   'JOIN_CODE_ROTATED',
   'LOGIN_FAILED_LOCKOUT',
-  'CP_STATUS_CHANGED',
-  'CP_WAIVED',
-  'MONITOR_QUERY_RESOLVED',
-  'IPC_WITHDRAWN',
-  'TRANCHE_DECISION_REVERSED',
   'TENANT_SETTINGS_UPDATED',
   'CAPTURE_REGISTERED',
   'CAPTURE_FLAGGED_INTEGRITY',
@@ -1113,7 +967,6 @@ export const AuditActionTypeEnum = z.enum([
   'WORKDAY_REPORT_RETURNED',
   'STANDARDS_VIOLATION_FLAGGED',
   'APPROVAL_STEP_ACTIONED',
-  'DIRECT_MILESTONE_VERIFIED',
   // Phase 8: cadence, mobilization, attendance
   'REPORT_SUBMITTED_LATE',
   'REPORT_MISSED',
@@ -1140,8 +993,6 @@ export const AuditActionTypeEnum = z.enum([
   'DEFECT_TICKET_UPDATED',
   'DEFECT_TICKET_CLOSED',
   'RETENTION_RELEASED',
-  'RETENTION_RELEASE_REQUESTED',
-  'RETENTION_RELEASE_CANCELLED',
   // Phase 11: delivery models
   'PROJECT_TYPE_SAVED',
   'PROJECT_TYPE_APPLIED',
@@ -1189,6 +1040,9 @@ export const AuditActionTypeEnum = z.enum([
   'CONTRACTOR_RATED',
   'LESSON_PUBLISHED',
   'CLOSURE_PACK_EXPORTED',
+  // Redesign R1b
+  'PAYMENT_RECORDED',
+  'PAYMENT_VOIDED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 
@@ -1276,26 +1130,6 @@ export const DOCUMENT_MODE_META: Record<NeedsAssessmentMode, { label: string }> 
   DISABLED: { label: 'Off' },
 };
 
-/**
- * How money is released on a project:
- * - IPC_CLAIM_REQUIRED: the contractor submits an IPC; the monitor certifies it (Phase 3).
- * - MILESTONE_DIRECT_DISBURSEMENT: no contractor claim; a licensed verifier certifies progress
- *   directly against field evidence and the system builds the claim.
- */
-export const DisbursementMechanismEnum = z.enum(['IPC_CLAIM_REQUIRED', 'MILESTONE_DIRECT_DISBURSEMENT']);
-export type DisbursementMechanism = z.infer<typeof DisbursementMechanismEnum>;
-
-export const DISBURSEMENT_MECHANISM_META: Record<DisbursementMechanism, { label: string; description: string }> = {
-  IPC_CLAIM_REQUIRED: {
-    label: 'Contractor IPC claims',
-    description: 'The contractor submits an IPC; the monitor certifies it against evidence before release.',
-  },
-  MILESTONE_DIRECT_DISBURSEMENT: {
-    label: 'Direct milestone release',
-    description: 'No contractor claim. A licensed verifier certifies progress from field evidence, then release.',
-  },
-};
-
 export const StandardCategoryEnum = z.enum([
   'MATERIAL_QUALITY',
   'EXECUTION_METHOD',
@@ -1331,10 +1165,10 @@ export const NEEDS_ASSESSMENT_DOC_TYPE_META: Record<NeedsAssessmentDocType, { la
 };
 
 /** Phase 13 adds CONTRACT_DEFAULT (contractor default cases). */
-export const ApprovalChainTypeEnum = z.enum(['REPORT', 'DISBURSEMENT', 'CONTRACT_DEFAULT']);
+export const ApprovalChainTypeEnum = z.enum(['REPORT', 'CONTRACT_DEFAULT']);
 export type ApprovalChainType = z.infer<typeof ApprovalChainTypeEnum>;
 
-export const ApprovalSubjectTypeEnum = z.enum(['WORKDAY_REPORT', 'VALUATION_REPORT', 'SITE_INSPECTION', 'CONTRACT_DEFAULT_CASE']);
+export const ApprovalSubjectTypeEnum = z.enum(['WORKDAY_REPORT', 'SITE_INSPECTION', 'CONTRACT_DEFAULT_CASE']);
 export type ApprovalSubjectType = z.infer<typeof ApprovalSubjectTypeEnum>;
 
 /**
@@ -1376,6 +1210,3 @@ export type ApprovalDecision = z.infer<typeof ApprovalDecisionEnum>;
 export const BriefPersonaEnum = z.enum(['CONTRACTOR_EXECUTOR', 'INDEPENDENT_VERIFIER']);
 export type BriefPersona = z.infer<typeof BriefPersonaEnum>;
 
-/** How a valuation came about: a contractor IPC, or a verifier's direct milestone verification. */
-export const ValuationSourceEnum = z.enum(['IPC_CLAIM', 'MILESTONE_DIRECT', 'RETENTION_RELEASE']);
-export type ValuationSource = z.infer<typeof ValuationSourceEnum>;

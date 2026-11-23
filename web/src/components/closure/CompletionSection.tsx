@@ -15,7 +15,7 @@ import {
 import Loader from "../Loader";
 import { useAuth } from "../../lib/auth-context";
 import { useConfirmDialog } from "../process/ConfirmDialog";
-import { ModalActions, ModalShell, inputClass } from "../../pages/reconciliation/components/ModalShell";
+import { ModalActions, ModalShell, inputClass } from "../common/ModalShell";
 import { StatusChip } from "../contracts/contractUi";
 import { useProjectCompletionQuery } from "../../queries/closure/useClosureQueries";
 import {

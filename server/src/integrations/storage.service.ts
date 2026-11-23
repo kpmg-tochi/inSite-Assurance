@@ -50,7 +50,6 @@ export const MEDIA_UPLOAD_POLICY: Record<MediaType, { mimeTypes: string[]; maxBy
     ],
     maxBytes: 10 * MB,
   },
-  VALUATION_REPORT_PDF: { mimeTypes: ['application/pdf'], maxBytes: 20 * MB },
   IDENTITY_DOCUMENT: { mimeTypes: DOC_TYPES, maxBytes: 15 * MB },
   IDENTITY_SELFIE: { mimeTypes: IMAGE_TYPES, maxBytes: 15 * MB },
   // Phase 7: needs assessments and standards reference documents.

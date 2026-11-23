@@ -6,7 +6,6 @@ import {
   CreateTenantUserRequestSchema,
   RevokeMobileDeviceRequestSchema,
   UpdateRoleRequestSchema,
-  UpdateEvidenceRatingLabelsRequestSchema,
   UpdateTenantBrandingRequestSchema,
   UpdateTenantSettingsRequestSchema,
   UpdateTerminologyRequestSchema,
@@ -23,7 +22,6 @@ import {
   createTenantWithDefaults,
   createUserInTenant,
   deleteRoleForTenant,
-  getEvidenceRatingLabels,
   getRoleOnboardingImpact,
   getTenantDetails,
   listMobileDevicesForTenant,
@@ -32,7 +30,6 @@ import {
   listAllTenants,
   listRolesForTenant,
   listUsersForTenant,
-  updateEvidenceRatingLabels,
   updateRoleForTenant,
   updateTenantBranding,
 } from './rbac.service';
@@ -311,38 +308,6 @@ router.put(
   }
 );
 
-/**
- * GET /api/v1/rbac/tenant/settings/rating-labels
- * Tenant overrides plus the resolved label, description and fixed colour per canonical rating.
- */
-router.get(
-  '/tenant/settings/rating-labels',
-  requirePermission('tenant:manage_settings'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      res.json({ success: true, data: await getEvidenceRatingLabels(req.webUser!.tenantId) });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * PUT /api/v1/rbac/tenant/settings/rating-labels
- * Display label and description only; canonical values never change (decision B).
- */
-router.put(
-  '/tenant/settings/rating-labels',
-  requirePermission('tenant:manage_settings'),
-  validateBody(UpdateEvidenceRatingLabelsRequestSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      res.json({ success: true, data: await updateEvidenceRatingLabels(req.webUser!, req.body) });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
 
 /**
  * GET /api/v1/rbac/tenant/settings/terminology (Phase 11)

@@ -10,6 +10,7 @@ import {
   resolveTerm,
   resolveTerminology,
   zonedCalendarDate,
+  PAYMENT_KIND_LABELS,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -18,14 +19,13 @@ import { recordAuditEvent, verifyAuditChain } from '../audit/audit.service';
 import { storeGeneratedDocument } from '../documents/documents.service';
 import { storageService } from '../../integrations/storage.service';
 import { generateClosureIndexPdf, generateInspectionSummaryPdf } from '../../integrations/closure-pdf.service';
-import { generateValuationPdfById } from '../reconciliation/directMilestone.service';
 import { parseSections } from '../inspections/checklistTemplates.service';
 import { ZipFileWriter } from '../../utils/zipWriter';
 import { brandingFor } from './completion.service';
 
 /**
  * Phase 15 Step 7: the closure pack. POST queues an export; the export builds a ZIP on disk one
- * entry at a time (index PDF, manifest, every current document version, certificates, valuation
+ * entry at a time (index PDF, manifest, every current document version, certificates, payment
  * PDFs, inspection summaries, the audit ledger as CSV with a chain verification), stores it as a
  * CLOSURE_FILE register document and records CLOSURE_PACK_EXPORTED. Download goes through the
  * document register (contractors never see CLOSURE_FILE). Large files are skipped and listed in the
@@ -200,7 +200,6 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
       region: { select: { name: true } },
       beneficiaries: { select: { name: true, isPrimary: true } },
       contractors: { include: { organization: { select: { name: true } } }, orderBy: [{ isMainContractor: 'desc' }, { createdAt: 'asc' }] },
-      tranches: { orderBy: { trancheNumber: 'asc' } },
     },
   });
   const currency = project.tenant.defaultCurrency;
@@ -241,19 +240,19 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
     void name;
   }
 
-  // 2. Valuation PDFs (current revisions).
-  const valuations = await prisma.valuationReport.findMany({
-    where: { projectId, supersededAt: null },
-    include: { tranche: { select: { trancheNumber: true } }, trancheDecisions: true },
-    orderBy: { certifiedAt: 'asc' },
-  });
-  for (const v of valuations) {
-    const p = `valuations/${v.source.toLowerCase()}-${resolveTerm(terms, 'tranche', { lower: true })}${v.tranche.trancheNumber}-${day(v.certifiedAt)}-${v.id.slice(0, 8)}.pdf`;
-    try {
-      add(p, await generateValuationPdfById(projectId, v.id), `valuation ${v.id}`);
-    } catch (error) {
-      skip(p, `valuation ${v.id}`, `Could not render: ${error instanceof Error ? error.message : String(error)}`);
+  // 2. Payment record (payments are made outside the platform and recorded; redesign R1b).
+  const paymentRows = await prisma.projectPayment.findMany({ where: { projectId }, orderBy: [{ paidOn: 'asc' }, { createdAt: 'asc' }] });
+  {
+    const head = ['paidOn', 'kind', 'reference', 'grossAmountNgn', 'retentionHeldNgn', 'netAmountNgn', 'exceptions', 'recordedBy', 'voided', 'voidReason'];
+    const rows = [head.join(',')];
+    for (const r of paymentRows) {
+      rows.push(
+        [r.paidOn, r.kind, r.reference, Number(r.grossAmountNgn), Number(r.retentionHeldNgn), Number(r.netAmountNgn), JSON.stringify(r.exceptionsJson), r.recordedByName, r.voidedAt ? 'yes' : 'no', r.voidReason ?? '']
+          .map(csvCell)
+          .join(',')
+      );
     }
+    add('payments/payment-record.csv', Buffer.from(rows.join('\r\n') + '\r\n', 'utf8'), 'payment record');
   }
 
   // 3. Inspection summaries.
@@ -322,9 +321,8 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
   add('audit/chain-verification.json', Buffer.from(JSON.stringify(verification, null, 2), 'utf8'), 'audit ledger');
 
   // 5. Index PDF (after the rest, so it can list the contents) and the manifest.
-  const [milestones, decisions, defects, findingsOpen, ratings, coc] = await Promise.all([
+  const [milestones, defects, findingsOpen, ratings, coc] = await Promise.all([
     prisma.projectContractMilestone.findMany({ where: { projectId }, orderBy: [{ sortOrder: 'asc' }] }),
-    prisma.trancheDecision.findMany({ where: { valuationReport: { projectId } }, select: { decision: true, approvedDisbursementAmountNgn: true, retentionWithheldNgn: true, reversesDecisionId: true, id: true, valuationReportId: true, decidedAt: true } }).catch(() => []),
     prisma.retentionDefectTicket.groupBy({ by: ['status'], where: { projectId }, _count: true }),
     prisma.inspectionFinding.count({ where: { projectId, status: { not: 'RESOLVED' } } }).catch(() => 0),
     prisma.contractorPerformanceRating.findMany({ where: { projectId }, select: { overallScore: true } }),
@@ -338,16 +336,10 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
     event: `Milestone "${m.label}"${m.projectContractorId ? ' (contractor)' : ''}: ${m.status.toLowerCase()}${m.dueDate ? `, due ${m.dueDate}` : ''}`,
   }));
   const timeline = [...phaseEvents, ...milestoneEvents].sort((a, b) => a.date.localeCompare(b.date));
-  const activeDecisions = decisions.filter((d) => !d.reversesDecisionId && !decisions.some((o) => o.reversesDecisionId === d.id));
-  const payments = valuations.map((v) => {
-    const d = activeDecisions.find((x) => x.valuationReportId === v.id);
-    return {
-      label: `${resolveTerm(terms, 'tranche')} ${v.tranche.trancheNumber} — ${v.source.replace(/_/g, ' ').toLowerCase()} of ${day(v.certifiedAt)}`,
-      detail: `Certified ${money(v.totalCertifiedNgn, currency)}; recommended ${money(v.recommendedReleaseAmountNgn, currency)}; ${
-        d ? `decision ${d.decision}, approved ${money(d.approvedDisbursementAmountNgn, currency)}, retention withheld ${money(d.retentionWithheldNgn, currency)}` : 'no decision'
-      }.`,
-    };
-  });
+  const payments = paymentRows.map((r) => ({
+    label: `${PAYMENT_KIND_LABELS[r.kind]} ${r.reference} of ${r.paidOn}${r.voidedAt ? ' (void)' : ''}`,
+    detail: `Gross ${money(r.grossAmountNgn, currency)}; retention held ${money(r.retentionHeldNgn, currency)}; net ${money(r.netAmountNgn, currency)}.`,
+  }));
   const defectCount = (s: string[]) => defects.filter((d) => s.includes(d.status)).reduce((n, d) => n + d._count, 0);
   const avgRating = ratings.length ? (ratings.reduce((n, r) => n + Number(r.overallScore), 0) / ratings.length).toFixed(2) : null;
   const contents = [
@@ -355,7 +347,7 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
     { path: 'manifest.json', description: 'Every file with its SHA-256, and files left out with the reason.' },
     { path: 'certificates/', description: 'Certificate of Completion and handover certificate.' },
     { path: 'documents/<type>/', description: 'Current version of every document in the register.' },
-    { path: 'valuations/', description: 'Valuation reports (current revisions).' },
+    { path: 'payments/payment-record.csv', description: 'Every recorded payment, voided ones included.' },
     { path: 'inspections/', description: 'One summary per site inspection.' },
     { path: 'audit/audit-ledger.csv', description: 'The project audit ledger with entry hashes.' },
     { path: 'audit/chain-verification.json', description: 'Result of the hash chain verification.' },
@@ -393,8 +385,8 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
       ['Liability period', project.retentionStartDate ? `${project.retentionStartDate} to ${project.retentionEndDate ?? '—'}` : '—'],
     ],
     kpis: [
-      ['Certified progress', `${Number(project.certifiedProgressPct)}%`],
-      ['Disbursed to date (net of retention)', money(project.disbursedToDateNgn, currency)],
+      ['Progress', `${Number(project.certifiedProgressPct)}%`],
+      ['Paid to date (net of retention)', money(project.disbursedToDateNgn, currency)],
       ['Schedule', project.scheduleVarianceWorkdays !== null ? `${project.scheduleStatus ?? ''} (${project.scheduleVarianceWorkdays} working days)` : '—'],
       ['Contract milestones done', `${milestones.filter((m) => m.status === 'DONE' || m.status === 'WAIVED').length} of ${milestones.length}`],
       ['Site inspections', String(inspections.length)],

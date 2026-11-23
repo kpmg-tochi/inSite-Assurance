@@ -26,6 +26,7 @@ import { seedPhase13 } from "./seedPhase13";
 import { seedPhase15 } from "./seedPhase15";
 import { seedPhase16 } from "./seedPhase16";
 import { projectObjectPrefix } from "../integrations/storage.service";
+import { seedDaysAgo, seedRecordedPayment } from "./seedPayments";
 import { CADENCE_PROJECT_SELECT, cadenceSettingsOf, periodKeyForDate } from "../modules/cadence/cadence.service";
 
 /** Phase 8: the reporting period fields of a seeded report on a work day. */
@@ -256,14 +257,11 @@ async function runSeed(): Promise<void> {
   await prisma.mobileNotification.deleteMany();
   await prisma.approvalAction.deleteMany();
   await prisma.approvalStep.deleteMany();
-  // Phase 10 (release requests restrict deleting valuations; tickets restrict deleting contractors).
-  await prisma.retentionReleaseRequest.deleteMany();
+  // Redesign R1b: the payment record. Phase 10: tickets restrict deleting contractors.
+  await prisma.projectPayment.deleteMany();
   await prisma.retentionDefectTicket.deleteMany();
   await prisma.handoverSubmission.deleteMany();
   await prisma.handoverLink.deleteMany();
-  await prisma.trancheDecision.deleteMany();
-  await prisma.valuationReport.deleteMany();
-  await prisma.milestoneVerification.deleteMany();
   await prisma.projectStandardSpecification.deleteMany();
   await prisma.projectNeedsAssessmentDocument.deleteMany();
   await prisma.projectProcessConfig.deleteMany();
@@ -275,16 +273,10 @@ async function runSeed(): Promise<void> {
   await prisma.region.updateMany({ data: { parentRegionId: null } });
   await prisma.region.deleteMany();
   await prisma.workflowTemplate.deleteMany();
-  await prisma.monitorQuery.deleteMany();
-  await prisma.ipcSupportingDocument.deleteMany();
-  await prisma.ipcLineItem.deleteMany();
-  await prisma.ipcClaim.deleteMany();
   await prisma.evidenceMedia.deleteMany();
   await prisma.fieldEvidenceLog.deleteMany();
   await prisma.boqItem.deleteMany();
   await prisma.boqRevision.deleteMany();
-  await prisma.conditionPrecedent.deleteMany();
-  await prisma.facilityTranche.deleteMany();
   await prisma.fieldAgentSession.deleteMany();
   await prisma.mobileDevice.deleteMany();
   await prisma.projectJoinCode.deleteMany();
@@ -416,12 +408,10 @@ async function runSeed(): Promise<void> {
     },
   });
 
-  // Second lender-side user (D-3.1 demo). A custom role holding both certify and approve, so the
-  // demo can show that whoever certifies a valuation cannot record the decision on it.
+  // Second funder-side user: a custom role with the funder permissions plus raising report queries.
   const dualPermissionKeys = [
     ...new Set([
       ...DEFAULT_TENANT_ROLES.find((r) => r.code === "LENDER")!.permissionKeys,
-      "ipc:certify_valuation",
       "reports:raise_query",
     ]),
   ];
@@ -435,7 +425,7 @@ async function runSeed(): Promise<void> {
       name: "Lender Technical Officer",
       code: "LENDER_TECHNICAL_OFFICER",
       description:
-        "Lender-side engineer who may certify valuations and approve releases, but never both on the same IPC.",
+        "Funder-side engineer who records payments and raises queries on field reports.",
       surface: "WEB",
       fieldPersonaType: "NONE",
       assuranceWeight: 1.0,
@@ -512,12 +502,10 @@ async function runSeed(): Promise<void> {
       description:
         "6.5km industrial access dual-carriageway including reinforced concrete box culverts, storm drainage channels, crushed stone base, and 50mm asphaltic wearing course.",
       totalBudgetNgn: 6850000000,
-      disbursedToDateNgn: 1712500000,
       certifiedProgressPct: 28.5,
       reportingCadence: "DAILY",
       geofenceMode: "LINEAR_CORRIDOR",
       geofenceGeoJson: lkkCorridorGeofence as unknown as Prisma.InputJsonValue,
-      portfolioHealth: "EVIDENCE_CONFLICT",
       monitorOrganizationId: monitorOrg.id,
       lenderOrganizationId: lenderOrg.id,
       // Phase 6: live, single contractor.
@@ -557,86 +545,22 @@ async function runSeed(): Promise<void> {
     },
   });
 
-  // Tranches for LKK-402
-  const lkkTranche1 = await prisma.facilityTranche.create({
-    data: {
-      projectId: lkkProject.id,
-      trancheNumber: 1,
-      name: "Tranche 1 — Mobilization, Site Clearance & Earthworks",
-      allocatedAmountNgn: 1712500000,
-      releasedAmountNgn: 1712500000,
-      targetCompletionPct: 25,
-      isReleased: true,
-      conditionsPrecedent: {
-        create: [
-          {
-            referenceCode: "CP-01",
-            description:
-              "Executed Advance Payment Guarantee (APG) from Tier-1 Commercial Bank",
-            isMandatoryForRelease: true,
-            status: "SATISFIED",
-          },
-          {
-            referenceCode: "CP-02",
-            description:
-              "Lagos State Ministry of Environment EIA Approval Certificate",
-            isMandatoryForRelease: true,
-            status: "SATISFIED",
-          },
-        ],
-      },
-    },
-  });
-
-  const lkkTranche2 = await prisma.facilityTranche.create({
-    data: {
-      projectId: lkkProject.id,
-      trancheNumber: 2,
-      name: "Tranche 2 — Reinforced Box Culverts, Line Drains & Stone Base",
-      allocatedAmountNgn: 2740000000,
-      releasedAmountNgn: 0,
-      targetCompletionPct: 65,
-      isReleased: false,
-      conditionsPrecedent: {
-        create: [
-          {
-            referenceCode: "CP-03",
-            description:
-              "Independent Monitor (QSRBN/COREN) Certification of Tranche 1 Utilisation",
-            isMandatoryForRelease: true,
-            status: "SATISFIED",
-          },
-          {
-            referenceCode: "CP-04",
-            description:
-              "28-Day Concrete Cube Crushing Test Certificates for Culverts KM 12–KM 15 (>= 25 N/mm2)",
-            isMandatoryForRelease: true,
-            status: "PENDING",
-          },
-        ],
-      },
-    },
-  });
-
-  await prisma.facilityTranche.create({
-    data: {
-      projectId: lkkProject.id,
-      trancheNumber: 3,
-      name: "Tranche 3 — Asphaltic Binder, Wearing Course & Street Lighting",
-      allocatedAmountNgn: 2397500000,
-      releasedAmountNgn: 0,
-      targetCompletionPct: 100,
-      isReleased: false,
-    },
+  // Redesign R1b: payments are made outside the platform and recorded. LKK-402 has one interim
+  // payment recorded (the old tranche 1 release).
+  await seedRecordedPayment({
+    projectId: lkkProject.id,
+    kind: "INTERIM",
+    paidOn: seedDaysAgo(40),
+    grossAmountNgn: 1712500000,
+    reference: "PV/LKK-402/001",
+    description: "Mobilisation, site clearance and earthworks",
+    recordedByName: "Seed finance officer",
   });
 
   // BOQ Items for LKK-402
-  const boqEarthworks = await prisma.boqItem.create({
+  await prisma.boqItem.create({
     data: {
       projectId: lkkProject.id,
-      trancheId: lkkTranche1.id,
-      aiSuggestedTrancheId: lkkTranche1.id,
-      trancheMappingConfirmedByMonitor: true,
       wbsCode: "01.02.1",
       section: "BILL NO. 1 — SITE CLEARANCE & EARTHWORKS",
       description:
@@ -653,9 +577,6 @@ async function runSeed(): Promise<void> {
   const boqCulvertReinforcement = await prisma.boqItem.create({
     data: {
       projectId: lkkProject.id,
-      trancheId: lkkTranche2.id,
-      aiSuggestedTrancheId: lkkTranche2.id,
-      trancheMappingConfirmedByMonitor: true,
       wbsCode: "02.01.1",
       section: "BILL NO. 2 — DRAINAGE & BOX CULVERTS",
       description:
@@ -674,9 +595,6 @@ async function runSeed(): Promise<void> {
   const boqCulvertConcrete = await prisma.boqItem.create({
     data: {
       projectId: lkkProject.id,
-      trancheId: lkkTranche2.id,
-      aiSuggestedTrancheId: lkkTranche2.id,
-      trancheMappingConfirmedByMonitor: true,
       wbsCode: "02.01.2",
       section: "BILL NO. 2 — DRAINAGE & BOX CULVERTS",
       description:
@@ -695,9 +613,6 @@ async function runSeed(): Promise<void> {
   const boqStoneBase = await prisma.boqItem.create({
     data: {
       projectId: lkkProject.id,
-      trancheId: lkkTranche2.id,
-      aiSuggestedTrancheId: lkkTranche2.id,
-      trancheMappingConfirmedByMonitor: true,
       wbsCode: "03.01.1",
       section: "BILL NO. 3 — PAVEMENT & STONE BASE",
       description:
@@ -711,12 +626,9 @@ async function runSeed(): Promise<void> {
     },
   });
 
-  const boqOpaqueLumpSum = await prisma.boqItem.create({
+  await prisma.boqItem.create({
     data: {
       projectId: lkkProject.id,
-      trancheId: lkkTranche2.id,
-      aiSuggestedTrancheId: lkkTranche2.id,
-      trancheMappingConfirmedByMonitor: false,
       wbsCode: "04.09.1",
       section: "BILL NO. 4 — AUXILIARY & UTILITY RELOCATION WORKS",
       description:
@@ -845,7 +757,7 @@ async function runSeed(): Promise<void> {
     ],
   });
 
-  const conEvidenceReport = await seedReportWithCaptures({
+  await seedReportWithCaptures({
     tenantId: lkkProject.tenantId,
     projectId: lkkProject.id,
     session: conSession,
@@ -865,131 +777,6 @@ async function runSeed(): Promise<void> {
         capturedAt: hoursAgo(10),
       },
     ],
-  });
-
-  // Active IPC Claim #2 on LKK-402 showing all 4 Evidence Strength Ratings
-  const lkkIpc2 = await prisma.ipcClaim.create({
-    data: {
-      projectId: lkkProject.id,
-      trancheId: lkkTranche2.id,
-      projectContractorId: lkkContractorId,
-      ipcNumber: 2,
-      periodStart: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30),
-      periodEnd: new Date(),
-      contractorCoverNote:
-        "Interim Payment Certificate #2 covering completed earthworks balance, box culvert reinforcement and concrete works up to KM 16+000, stone base course, and utility relocation.",
-      // Sum of the four line amounts below. Server-assigned numbering starts after this.
-      totalClaimedAmountNgn: 1263400000,
-      // An open monitor query exists on this IPC, so the consistent state is QUERIED_BY_MONITOR.
-      status: "QUERIED_BY_MONITOR",
-      submittedByUserId: contractorUser.id,
-      aiExecutiveSummary:
-        "Reconciliation flagged 2 critical discrepancies: (1) Contractor claims 85% completion on Culvert Concrete (02.01.2), but Independent Resident CoW logs confirm only 52% poured and Cell 2 at KM 14+210 is delayed by flooding (CONTRADICTED); (2) Contractor claims 50% (₦340M) on Opaque Lump Sum (04.09.1) with zero field logs or itemized breakdown (UNSUPPORTED).",
-    },
-  });
-
-  // Line Item 2: Culvert Reinforcement (PARTIALLY_SUPPORTED — missing pre-pour hold point photo for KM 15+400)
-  await prisma.ipcLineItem.create({
-    data: {
-      ipcClaimId: lkkIpc2.id,
-      boqItemId: boqCulvertReinforcement.id,
-      previousCertifiedPct: 45,
-      contractorClaimedPct: 80,
-      contractorClaimedNgn: 162400000,
-      aiEvidenceRating: "PARTIALLY_SUPPORTED",
-      aiRationale:
-        "Steel waybills and reinforcement tying verified at KM 14+200 (up to 65%), but Mandatory Hold-Point pre-pour inspection photo for KM 15+400 culvert cell is missing.",
-      visitPlannerFlag: true,
-      visitPlannerReason:
-        "Mandatory Hold-Point pre-pour reinforcement inspection required at KM 15+400 before concrete placement.",
-      missingHoldPointFlag: true,
-      highestCorroboratingRoleName: residentCowMobileRole.name,
-      highestCorroboratingWeight: residentCowMobileRole.assuranceWeight,
-      corroboratingEvidenceLogIds: [
-        cowEvidenceReport.id,
-      ] as unknown as Prisma.InputJsonValue,
-    },
-  });
-
-  // Line Item 3: Culvert Concrete (CONTRADICTED)
-  const contradictedLineItem = await prisma.ipcLineItem.create({
-    data: {
-      ipcClaimId: lkkIpc2.id,
-      boqItemId: boqCulvertConcrete.id,
-      previousCertifiedPct: 35,
-      contractorClaimedPct: 85,
-      contractorClaimedNgn: 409500000,
-      aiEvidenceRating: "CONTRADICTED",
-      aiRationale:
-        "Contractor claims 85% completion (3,570 m3), directly contradicted by Resident Clerk of Works voice/photo log at KM 14+210 showing Cell 2 unpoured due to flooding and cumulative verified pour at ~52%.",
-      visitPlannerFlag: true,
-      visitPlannerReason:
-        "₦196.5M variance between Contractor IPC claim (85%) and Independent Resident CoW field log (~52%) at KM 14+210.",
-      missingHoldPointFlag: true,
-      highestCorroboratingRoleName: residentCowMobileRole.name,
-      highestCorroboratingWeight: residentCowMobileRole.assuranceWeight,
-      corroboratingEvidenceLogIds: [
-        cowEvidenceReport.id,
-      ] as unknown as Prisma.InputJsonValue,
-    },
-  });
-
-  // Line Item 4: Stone Base (PARTIALLY_SUPPORTED — Contractor self-report only)
-  await prisma.ipcLineItem.create({
-    data: {
-      ipcClaimId: lkkIpc2.id,
-      boqItemId: boqStoneBase.id,
-      previousCertifiedPct: 10,
-      contractorClaimedPct: 35,
-      contractorClaimedNgn: 351500000,
-      aiEvidenceRating: "PARTIALLY_SUPPORTED",
-      aiRationale:
-        "Claim of 35% (₦351.5M drawdown) relies exclusively on Contractor Site Engineer self-reported logs at KM 16+210 without independent Monitor or Resident CoW corroboration.",
-      visitPlannerFlag: true,
-      visitPlannerReason:
-        "High-value claim (₦351.5M) backed solely by Contractor Site Engineer self-report; requires Monitor physical verification at KM 15+800–KM 16+400.",
-      missingHoldPointFlag: false,
-      highestCorroboratingRoleName: contractorEngineerMobileRole.name,
-      highestCorroboratingWeight: contractorEngineerMobileRole.assuranceWeight,
-      corroboratingEvidenceLogIds: [
-        conEvidenceReport.id,
-      ] as unknown as Prisma.InputJsonValue,
-    },
-  });
-
-  // Line Item 5: Opaque Lump Sum (UNSUPPORTED)
-  await prisma.ipcLineItem.create({
-    data: {
-      ipcClaimId: lkkIpc2.id,
-      boqItemId: boqOpaqueLumpSum.id,
-      previousCertifiedPct: 0,
-      contractorClaimedPct: 50,
-      contractorClaimedNgn: 340000000,
-      aiEvidenceRating: "UNSUPPORTED",
-      aiRationale:
-        "Zero geotagged field evidence logs or third-party utility invoices attached to support ₦340M (50%) drawdown on unbundled Provisional Lump Sum item.",
-      visitPlannerFlag: true,
-      visitPlannerReason:
-        "Unbundled ₦340M Lump Sum claim with zero supporting field logs or third-party utility clearance certificates.",
-      missingHoldPointFlag: false,
-      highestCorroboratingRoleName: null,
-      highestCorroboratingWeight: null,
-    },
-  });
-
-  // Monitor Query on the Contradicted Culvert Concrete Line Item
-  await prisma.monitorQuery.create({
-    data: {
-      ipcLineItemId: contradictedLineItem.id,
-      raisedByUserId: monitorUser.id,
-      status: "OPEN",
-      queryReason:
-        "IPC #2 claims 85% completion on Box Culvert Concrete (02.01.2), whereas Resident Clerk of Works geotagged evidence at KM 14+210 confirms Cell 2 has not been poured and cumulative progress is 52%. Please submit revised measurement sheets and 28-day cube test certificates.",
-      requestedProofTypes: [
-        "LAB_CUBE_TEST_CERT",
-        "SITE_PHOTO",
-      ] as unknown as Prisma.InputJsonValue,
-    },
   });
 
   // Record Hash-Chained Audit Trail for LKK-402
@@ -1017,29 +804,6 @@ async function runSeed(): Promise<void> {
       chainage: cowGeoCheck.chainageFormatted,
       quantities: [{ item: "Cement", qty: 40, unit: "bags" }],
     },
-  });
-
-  await recordAuditEvent(prisma, {
-    projectId: lkkProject.id,
-    actorType: "WEB_USER",
-    actorId: contractorUser.id,
-    actorDisplayName: `${contractorUser.fullName} (Contractor)`,
-    action: "IPC_SUBMITTED",
-    summaryText:
-      "Submitted Interim Payment Certificate (IPC) #2 requesting ₦1,263,400,000 across 4 BOQ items.",
-    payload: { ipcNumber: 2, totalClaimedAmountNgn: 1263400000 },
-  });
-
-  await recordAuditEvent(prisma, {
-    projectId: lkkProject.id,
-    actorType: "AI_SYSTEM",
-    // Seeded ratings are demo fixtures; no rating engine ran, so none is named.
-    actorId: "SEED_FIXTURE",
-    actorDisplayName: "Demo seed data (no rating engine ran)",
-    action: "AI_RECONCILIATION_COMPLETED",
-    summaryText:
-      "Demo fixture ratings for IPC #2: 0 Supported, 2 Partially Supported, 1 Unsupported, 1 Contradicted.",
-    payload: { ipcId: lkkIpc2.id, conflictCount: 2, ratingEngine: null },
   });
 
   // Mobile Notifications on LKK-402 (mix of recent unread actionable/passive + older read items)
@@ -1286,17 +1050,6 @@ async function runSeed(): Promise<void> {
         } as unknown as Prisma.InputJsonValue,
         createdAt: new Date(nowMs - 1000 * 60 * 14),
       },
-      {
-        projectId: lkkProject.id,
-        targetPermissionKey: "ipc:trigger_ai_reconcile",
-        category: "CONFLICT_FLAG",
-        title: "Pre-Pour Hold-Point Contradiction",
-        description:
-          "WBS 02.01.2 IPC #2 claim of 85% contradicts Resident CoW field log at KM 14+210.",
-        actionUrl: `/app/projects/${lkkProject.id}/reconciliation`,
-        metadata: { wbsCode: "02.01.2", ipcNumber: 2 } as unknown as Prisma.InputJsonValue,
-        createdAt: new Date(nowMs - 1000 * 60 * 60 * 10),
-      },
     ],
   });
 
@@ -1432,13 +1185,11 @@ async function runSeed(): Promise<void> {
       description:
         "15MWp ground-mounted solar PV plant, inverter skids, 33/11kV step-up transformer substation, and perimeter civil works.",
       totalBudgetNgn: 4200000000,
-      disbursedToDateNgn: 2100000000,
       certifiedProgressPct: 68.0,
       // Daily: the seeded PV-module reports are three days apart (one report per item and period).
       reportingCadence: "DAILY",
       geofenceMode: "RADIAL",
       geofenceGeoJson: abjRadialGeofence as unknown as Prisma.InputJsonValue,
-      portfolioHealth: "EVIDENCE_SUPPORTED",
       monitorOrganizationId: monitorOrg.id,
       lenderOrganizationId: lenderOrg.id,
       status: "ACTIVE",
@@ -1495,24 +1246,19 @@ async function runSeed(): Promise<void> {
     ],
   });
 
-  const abjTranche1 = await prisma.facilityTranche.create({
-    data: {
-      projectId: abjProject.id,
-      trancheNumber: 1,
-      name: "Tranche 1 — Civil Foundations, Piling & Transformer Plinths",
-      allocatedAmountNgn: 2100000000,
-      releasedAmountNgn: 2100000000,
-      targetCompletionPct: 50,
-      isReleased: true,
-    },
+  await seedRecordedPayment({
+    projectId: abjProject.id,
+    kind: "INTERIM",
+    paidOn: seedDaysAgo(60),
+    grossAmountNgn: 2100000000,
+    reference: "PV/ABJ-108/001",
+    description: "Civil foundations, piling and transformer plinths",
+    recordedByName: "Seed finance officer",
   });
 
   await prisma.boqItem.create({
     data: {
       projectId: abjProject.id,
-      trancheId: abjTranche1.id,
-      aiSuggestedTrancheId: abjTranche1.id,
-      trancheMappingConfirmedByMonitor: true,
       wbsCode: "01.01.1",
       section: "BILL NO. 1 — SUBSTATION CIVIL & TRANSFORMER PLINTHS",
       description:
@@ -1528,44 +1274,9 @@ async function runSeed(): Promise<void> {
     },
   });
 
-  // Tranche 2 is open with no IPC yet: the demo path for a full claim-to-release cycle.
-  // CP-A2 is pending, so a release is blocked until it is satisfied or waived (D-3.2).
-  const abjTranche2 = await prisma.facilityTranche.create({
-    data: {
-      projectId: abjProject.id,
-      trancheNumber: 2,
-      name: "Tranche 2 — PV Modules, Inverters & Step-Up Transformer",
-      allocatedAmountNgn: 2100000000,
-      releasedAmountNgn: 0,
-      targetCompletionPct: 100,
-      isReleased: false,
-      conditionsPrecedent: {
-        create: [
-          {
-            referenceCode: "CP-A1",
-            description: "Insurance certificate (Contractor's All Risks) for PV plant works",
-            isMandatoryForRelease: true,
-            status: "SATISFIED",
-            verifiedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 20),
-            statusChangedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 20),
-          },
-          {
-            referenceCode: "CP-A2",
-            description: "Executed grid interconnection agreement with the distribution company",
-            isMandatoryForRelease: true,
-            status: "PENDING",
-          },
-        ],
-      },
-    },
-  });
-
   const abjPvModules = await prisma.boqItem.create({
     data: {
       projectId: abjProject.id,
-      trancheId: abjTranche2.id,
-      aiSuggestedTrancheId: abjTranche2.id,
-      trancheMappingConfirmedByMonitor: true,
       wbsCode: "02.01.1",
       section: "BILL NO. 2 — PV GENERATION",
       description: "Supply and install monocrystalline PV modules on fixed-tilt mounting structures",
@@ -1581,9 +1292,6 @@ async function runSeed(): Promise<void> {
   const abjTransformer = await prisma.boqItem.create({
     data: {
       projectId: abjProject.id,
-      trancheId: abjTranche2.id,
-      aiSuggestedTrancheId: abjTranche2.id,
-      trancheMappingConfirmedByMonitor: true,
       wbsCode: "02.02.1",
       section: "BILL NO. 2 — SUBSTATION EQUIPMENT",
       description: "Supply, install and test 33/11kV 20MVA step-up transformer",
@@ -1729,7 +1437,7 @@ async function runSeed(): Promise<void> {
     "   • Lender Login:      lender@insite.ng     / Password123! (ICAN #MB/049120)",
   );
   console.log(
-    "   • Lender Tech:       lto@insite.ng        / Password123! (certify + approve; D-3.1 demo)",
+    "   • Lender Tech:       lto@insite.ng        / Password123! (funder officer; records payments, raises report queries)",
   );
   console.log(
     "   • Contractor Login:  contractor@insite.ng / Password123! (COREN #R.49201)",

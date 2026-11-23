@@ -39,7 +39,7 @@ import {
   recordApprovalAction,
 } from '../process/approvalChain';
 import { dispatchReportQueryBundle } from '../wbs-chat/wbsChat.service';
-import { azureOpenAiService } from '../../integrations/azure-openai.service';
+import { extractFieldNoteByRules } from './reportRules';
 import { whisperService } from '../../integrations/whisper.service';
 import { storageService } from '../../integrations/storage.service';
 import { recordAuditEvent } from '../audit/audit.service';
@@ -51,7 +51,7 @@ import { evaluateProjectGeofence, GEOFENCE_CONTEXT_SELECT } from '../../utils/ge
 import { verifyDeviceSignature } from '../../utils/deviceSignature';
 import { serializeCapture } from '../../utils/serializers';
 import { scheduleAiOmissionCheck } from './aiOmissionCheck';
-import { recordItemActualStart } from '../schedule/schedule.service';
+import { recordCountedReport } from '../progress/progress.service';
 import {
   CADENCE_PROJECT_SELECT,
   cadenceSettingsForDate,
@@ -526,7 +526,7 @@ export async function submitWorkdayReport(params: {
       });
       await linkCaptures(tx, report.id, input.wbsItemId, captures.map((c) => c.id));
       // Phase 9: the first counted report on an item marks its actual start.
-      if (isCountedStatus(report.status)) await recordItemActualStart(tx, projectId, input.wbsItemId, input.workdayDate);
+      if (isCountedStatus(report.status)) await recordCountedReport(tx, projectId, input.wbsItemId, input.workdayDate);
       await recordReportPing(tx, { projectId, sessionId: fieldAgent.sessionId, wbsItemId: input.wbsItemId, geotag });
       const obligationId = await fulfilObligation(tx, {
         projectId,
@@ -811,7 +811,7 @@ export async function revalidateWorkdayReport(params: {
         },
       });
       await linkCaptures(tx, report.id, prev.wbsItemId, captures.map((c) => c.id));
-      if (isCountedStatus(report.status)) await recordItemActualStart(tx, projectId, prev.wbsItemId, report.workdayDate);
+      if (isCountedStatus(report.status)) await recordCountedReport(tx, projectId, prev.wbsItemId, report.workdayDate);
       await recordReportPing(tx, { projectId, sessionId: fieldAgent.sessionId, wbsItemId: prev.wbsItemId, geotag });
       if (report.status === 'PENDING_APPROVAL' && report.approvalChainVersion !== null) {
         await notifyPendingApproval(tx, {
@@ -936,7 +936,7 @@ export async function releaseStagedReportsForSession(
         aiCheckStatus: checks ? 'PENDING' : 'SKIPPED',
       },
     });
-    if (isCountedStatus(accepted.status)) await recordItemActualStart(tx, params.projectId, r.wbsItemId, r.workdayDate);
+    if (isCountedStatus(accepted.status)) await recordCountedReport(tx, params.projectId, r.wbsItemId, r.workdayDate);
   }
   return checks ? staged.map((r) => r.id) : [];
 }
@@ -1059,7 +1059,7 @@ export async function reviewWorkdayReport(params: {
       where: { id: report.id },
       data: { status: 'APPROVED_COMPLETED', currentApprovalStep: 0, approvedCompletedAt: new Date() },
     });
-    await recordItemActualStart(tx, projectId, report.wbsItemId, report.workdayDate);
+    await recordCountedReport(tx, projectId, report.wbsItemId, report.workdayDate);
     await recordAuditEvent(tx, {
       projectId,
       actorType: 'WEB_USER',
@@ -1110,8 +1110,8 @@ export async function listProjectWorkdayReports(params: {
  * POST /projects/:projectId/workday-reports/suggest
  *
  * Optional assist for the summary sheet. Transcribes the reporter's own voice captures if a speech
- * provider is configured, then suggests a summary and quantity. Never stored as evidence. With no
- * provider, transcripts stay PENDING and no text is invented.
+ * provider is configured, then restates the transcripts and notes as a starting summary (rules only,
+ * no AI). Never stored as evidence. With no provider, transcripts stay PENDING and no text is invented.
  */
 export async function suggestWorkdaySummary(params: {
   projectId: string;
@@ -1119,7 +1119,7 @@ export async function suggestWorkdaySummary(params: {
   input: SuggestWorkdaySummaryRequest;
 }): Promise<SuggestWorkdaySummaryResponse> {
   const { projectId, fieldAgent, input } = params;
-  const boqItem = await loadBoqItemInProject(prisma, projectId, input.wbsItemId);
+  await loadBoqItemInProject(prisma, projectId, input.wbsItemId);
 
   const captures = input.clientCaptureIds.length
     ? await prisma.fieldEvidenceLog.findMany({
@@ -1178,10 +1178,8 @@ export async function suggestWorkdaySummary(params: {
     };
   }
 
-  const { extraction, engine } = await azureOpenAiService.extractFieldNoteFromTranscript({
-    rawTranscriptOrNote: text,
-    projectBoqItems: [{ wbsCode: boqItem.wbsCode, description: boqItem.description, unit: boqItem.unit }],
-  });
+  const extraction = extractFieldNoteByRules(text);
+  const engine = 'RULES' as const;
   const usedSimulated = transcripts.some((t) => t.engine === 'SIMULATED_DEMO');
   return {
     transcripts,

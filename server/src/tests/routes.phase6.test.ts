@@ -1,6 +1,6 @@
 /**
  * Phase 6 route-level tests: organisation directory and input mode, the staged project wizard and
- * its lifecycle, draft exclusion, contractor model and multi-prime IPC scoping, per-contractor join
+ * its lifecycle, draft exclusion, contractor model and multi-prime scoping, per-contractor join
  * codes, geofence settings, and BOQ revisions.
  *
  * Runs against a disposable database rebuilt from migrations (see helpers/testDb.ts).
@@ -19,7 +19,6 @@ let prisma: PrismaClientType;
 let runJobOnce: typeof import('../jobs')['runJobOnce'];
 
 const PASSWORD = 'Password123!';
-const DAY = 24 * 3600 * 1000;
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 const tokens: Record<string, string> = {};
 
@@ -200,12 +199,10 @@ describe('Phase 6', { concurrency: false }, () => {
       assert.equal((await step('site', { geofence: crossing })).status, 400);
       assert.equal((await step('site', { geofence: PERIMETER, timezone: 'Mars/Olympus' })).status, 400);
       assert.equal((await step('reporting', { reportingCadence: 'DAILY', workdayStartTime: '17:00', workdayEndTime: '08:00' })).status, 400);
-      const over = await step('facility', {
-        tranches: [{ trancheNumber: 1, name: 'Tranche 1', allocatedAmountNgn: 600_000_000, targetCompletionPct: 100 }],
-      });
-      assert.equal(over.status, 422);
-      assert.equal(over.body.error.code, 'TRANCHES_EXCEED_BUDGET');
-      assert.equal((await step('boq', { items: [{ boqItemId: crypto.randomUUID(), trancheId: null, isHoldPoint: false }] })).status, 404);
+      const retention = await step('facility', { retention: { retentionPercentage: 5, retentionDurationMonths: null, retentionReleaseAtCompletionPct: 0 } });
+      assert.equal(retention.status, 422);
+      assert.equal(retention.body.error.code, 'RETENTION_DURATION_REQUIRED');
+      assert.equal((await step('boq', { items: [{ boqItemId: crypto.randomUUID(), isHoldPoint: false }] })).status, 404);
       assert.equal((await step('nonsense', {})).status, 404);
     });
 
@@ -220,7 +217,6 @@ describe('Phase 6', { concurrency: false }, () => {
         'parties:CONTRACTOR_MODEL_REQUIRED',
         'parties:CONTRACTOR_REQUIRED',
         'site:GEOFENCE_REQUIRED',
-        'facility:TRANCHE_REQUIRED',
         'boq:BOQ_REQUIRED',
         'reporting:STEP_NOT_SAVED',
       ]) {
@@ -293,9 +289,9 @@ describe('Phase 6', { concurrency: false }, () => {
       assert.equal(lenderDrafts.body.data.length, 0);
 
       // Non-setup routes refuse a draft.
-      const ipcs = await request(app).get(`/api/v1/projects/${ids.draft}/ipcs`).set(await as('monitor@insite.ng'));
-      assert.equal(ipcs.status, 409);
-      assert.equal(ipcs.body.error.code, 'PROJECT_IS_DRAFT');
+      const payments = await request(app).get(`/api/v1/projects/${ids.draft}/payments`).set(await as('monitor@insite.ng'));
+      assert.equal(payments.status, 409);
+      assert.equal(payments.body.error.code, 'PROJECT_IS_DRAFT');
 
       // Mobile: not listed, and field routes refuse it even for an assigned provisioned account.
       const mobile = await mobileToken('monitor@insite.ng', 'device-p6-draft');
@@ -328,31 +324,19 @@ describe('Phase 6', { concurrency: false }, () => {
       assert.equal(site.body.data.site.effectiveToleranceMeters, 40);
       assert.equal(site.body.data.site.geofence.perimeterCoordinates.length, 5, 'ring stored closed');
 
+      // Redesign R1b: the "facility" step holds the retention settings only.
       const facility = await step('facility', {
-        tranches: [
-          {
-            trancheNumber: 1,
-            name: 'Tranche 1 — Whole works',
-            allocatedAmountNgn: 450_000_000,
-            targetCompletionPct: 100,
-            conditionsPrecedent: [{ referenceCode: 'CP-01', description: 'Signed facility agreement', status: 'SATISFIED' }],
-          },
-        ],
+        retention: { retentionPercentage: 5, retentionDurationMonths: 12, retentionReleaseAtCompletionPct: 50 },
       });
       assert.equal(facility.status, 200, JSON.stringify(facility.body));
-      const facilityStep = facility.body.data.steps.find((s: { stepId: string }) => s.stepId === 'facility');
-      assert.ok(facilityStep.warnings.some((w: { code: string }) => w.code === 'TRANCHES_BELOW_BUDGET'));
-      const trancheId = facility.body.data.facility.tranches[0].id;
-      assert.equal(facility.body.data.facility.tranches[0].conditionsPrecedent[0].status, 'PENDING', 'setup never sets CP status');
+      assert.equal(facility.body.data.facility.retention.retentionPercentage, 5);
+      assert.equal(facility.body.data.facility.tranches, undefined);
 
       const items = await prisma.boqItem.findMany({ where: { projectId: ids.draft } });
-      // Uploading does not map items to tranches by itself.
-      assert.ok(items.every((i) => i.trancheId === null));
       const boq = await step('boq', {
-        items: items.map((i) => ({ boqItemId: i.id, trancheId, isHoldPoint: false })),
+        items: items.map((i) => ({ boqItemId: i.id, isHoldPoint: false })),
       });
       assert.equal(boq.status, 200, JSON.stringify(boq.body));
-      assert.equal(boq.body.data.boq.unmappedCount, 0);
 
       const reporting = await step('reporting', { reportingCadence: 'WEEKLY', workdayStartTime: '07:30', workdayEndTime: '16:30' });
       assert.equal(reporting.status, 200);
@@ -456,58 +440,6 @@ describe('Phase 6', { concurrency: false }, () => {
 
   // -------------------------------------------------------------------------
   describe('multi-prime contractors', () => {
-    const claim = async (email: string, wbsCode: string, trancheNumber = 1) => {
-      const item = await prisma.boqItem.findFirstOrThrow({ where: { projectId: ids.kan, wbsCode } });
-      const tranche = await prisma.facilityTranche.findFirstOrThrow({ where: { projectId: ids.kan, trancheNumber } });
-      return request(app)
-        .post(`/api/v1/projects/${ids.kan}/ipcs`)
-        .set(await as(email))
-        .send({
-          trancheId: tranche.id,
-          periodStart: new Date(Date.now() - 7 * DAY).toISOString(),
-          periodEnd: new Date().toISOString(),
-          lineItems: [{ boqItemId: item.id, claimedCumulativePct: 20 }],
-        });
-    };
-    let civIpcId = '';
-
-    it('a contractor claims its own items; IPC numbers run per contractor', async () => {
-      const civ = await claim('contractor@insite.ng', '01.01');
-      assert.equal(civ.status, 201, JSON.stringify(civ.body));
-      assert.equal(civ.body.data.ipcNumber, 1);
-      assert.equal(civ.body.data.contractorTradeCode, 'CIV');
-      civIpcId = civ.body.data.id;
-
-      // Another contractor's open IPC on the same tranche does not block this one.
-      const elec = await claim('electrical@insite.ng', '02.01');
-      assert.equal(elec.status, 201, JSON.stringify(elec.body));
-      assert.equal(elec.body.data.ipcNumber, 1);
-      assert.equal(elec.body.data.contractorName, 'Voltaic Power Systems Ltd');
-    });
-
-    it("a contractor cannot claim another contractor's item", async () => {
-      // Tranche 2 (no open IPC for Voltaic there yet); 03.02 belongs to the MEP package.
-      const res = await claim('electrical@insite.ng', '03.02', 2);
-      assert.equal(res.status, 422, JSON.stringify(res.body));
-      assert.equal(res.body.error.code, 'BOQ_ITEM_NOT_IN_PACKAGE');
-    });
-
-    it('one open IPC per tranche per contractor', async () => {
-      const res = await claim('contractor@insite.ng', '01.02');
-      assert.equal(res.status, 409);
-      assert.equal(res.body.error.code, 'TRANCHE_HAS_OPEN_IPC');
-    });
-
-    it("a contractor sees only its own IPCs; the monitor sees all", async () => {
-      const elecList = await request(app).get(`/api/v1/projects/${ids.kan}/ipcs`).set(await as('electrical@insite.ng'));
-      assert.equal(elecList.status, 200);
-      assert.deepEqual(elecList.body.data.map((i: { contractorTradeCode: string }) => i.contractorTradeCode), ['ELEC']);
-      const other = await request(app).get(`/api/v1/projects/${ids.kan}/ipcs/${civIpcId}`).set(await as('electrical@insite.ng'));
-      assert.equal(other.status, 404);
-      const monitorList = await request(app).get(`/api/v1/projects/${ids.kan}/ipcs`).set(await as('monitor@insite.ng'));
-      assert.equal(monitorList.body.data.length, 2);
-    });
-
     it('issues one contractor code per package with its trade code, and scopes the mobile BOQ', async () => {
       const codes = await prisma.projectJoinCode.findMany({
         where: { projectId: ids.kan, isActive: true, projectContractorId: { not: null } },
@@ -546,54 +478,8 @@ describe('Phase 6', { concurrency: false }, () => {
         });
       assert.equal(res.status, 200, JSON.stringify(res.body));
       assert.equal(await prisma.projectJoinCode.count({ where: { projectContractorId: mep.id, isActive: true } }), 0);
-
-      const civ = await prisma.projectContractor.findFirstOrThrow({ where: { projectId: ids.kan, tradeCode: 'CIV' } });
-      const remove = await request(app).delete(`/api/v1/projects/${ids.kan}/contractors/${civ.id}`).set(await as('monitor@insite.ng'));
-      assert.equal(remove.status, 409, 'a contractor with IPC claims cannot be removed');
-      assert.equal(remove.body.error.code, 'CONTRACTOR_HAS_ACTIVITY');
     });
 
-    it('the contractor model cannot change once an IPC exists', async () => {
-      const setup = await request(app).get(`/api/v1/projects/${ids.kan}/setup`).set(await as('monitor@insite.ng'));
-      const res = await request(app)
-        .put(`/api/v1/projects/${ids.kan}/setup/parties`)
-        .set(await as('monitor@insite.ng'))
-        .send({
-          monitorOrganization: { id: setup.body.data.parties.monitorOrganization.id },
-          lenderOrganization: { id: setup.body.data.parties.lenderOrganization.id },
-          contractorExecutionMode: 'MAIN_PLUS_SUBS_UNIFIED_IPC',
-          contractors: setup.body.data.parties.contractors.map((c: Record<string, unknown>) => ({
-            id: c.id,
-            organization: { id: c.organizationId },
-            tradeCategory: c.tradeCategory,
-            tradeCode: c.tradeCode,
-            isMainContractor: c.isMainContractor,
-            allowFieldReporting: c.allowFieldReporting,
-          })),
-        });
-      assert.equal(res.status, 409, JSON.stringify(res.body));
-      assert.equal(res.body.error.code, 'CONTRACTOR_MODEL_LOCKED');
-    });
-
-    it('the unified and single models only let the main contractor submit', async () => {
-      // On LKK-402 (single contractor) the Voltaic user is not a contractor at all.
-      const lkk = await prisma.project.findUniqueOrThrow({ where: { id: ids.lkk } });
-      const electrical = await prisma.user.findUniqueOrThrow({ where: { email: 'electrical@insite.ng' } });
-      await prisma.userProjectAssignment.create({ data: { userId: electrical.id, projectId: lkk.id } });
-      const item = await prisma.boqItem.findFirstOrThrow({ where: { projectId: ids.lkk, trancheId: { not: null } } });
-      const tranche = { id: item.trancheId! };
-      const res = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/ipcs`)
-        .set(await as('electrical@insite.ng'))
-        .send({
-          trancheId: tranche.id,
-          periodStart: new Date(Date.now() - 7 * DAY).toISOString(),
-          periodEnd: new Date().toISOString(),
-          lineItems: [{ boqItemId: item.id, claimedCumulativePct: 99 }],
-        });
-      assert.equal(res.status, 403, JSON.stringify(res.body));
-      assert.equal(res.body.error.code, 'NOT_A_PROJECT_CONTRACTOR');
-    });
   });
 
   // -------------------------------------------------------------------------
@@ -619,7 +505,7 @@ describe('Phase 6', { concurrency: false }, () => {
 
   // -------------------------------------------------------------------------
   describe('BOQ revisions after activation', () => {
-    it('requires a reason and never goes below certified progress', async () => {
+    it('requires a reason and never goes below the progress done', async () => {
       const certified = await prisma.boqItem.findFirstOrThrow({
         where: { projectId: ids.lkk, cumulativeCertifiedPct: { gt: 0 } },
         orderBy: { cumulativeCertifiedPct: 'desc' },
@@ -661,7 +547,6 @@ describe('Phase 6', { concurrency: false }, () => {
       assert.equal(removal.status, 409);
       assert.equal(removal.body.error.code, 'BOQ_ITEM_HAS_PROGRESS');
 
-      const before = Number(certified.cumulativeCertifiedPct) * Number(certified.totalQuantity);
       const grow = await upload({
         items: [asInput({ totalQuantity: Number(certified.totalQuantity) * 2 })],
         mode: 'MERGE',
@@ -670,8 +555,10 @@ describe('Phase 6', { concurrency: false }, () => {
       assert.equal(grow.status, 201, JSON.stringify(grow.body));
       assert.equal(grow.body.data.revisionNumber, 1);
       const after = await prisma.boqItem.findUniqueOrThrow({ where: { id: certified.id } });
-      // The certified quantity is kept, so the percentage halves.
-      assert.ok(Math.abs(Number(after.cumulativeCertifiedPct) * Number(after.totalQuantity) - before) < 1);
+      // Redesign R1b: progress is recomputed from the counted reports against the new quantity.
+      const { getReportedProgressByItem } = await import('../modules/evidence/evidenceProvider');
+      const expected = (await getReportedProgressByItem(ids.lkk, [{ id: after.id, totalQuantity: Number(after.totalQuantity) }])).get(after.id) ?? 0;
+      assert.ok(Math.abs(Number(after.cumulativeCertifiedPct) - Math.round(expected * 100) / 100) < 0.01);
       assert.ok(after.lastRevisionId);
       assert.ok(await prisma.auditLog.findFirst({ where: { projectId: ids.lkk, action: 'BOQ_REVISED' } }));
       const revisions = await request(app).get(`/api/v1/projects/${ids.lkk}/boq/revisions`).set(await as('monitor@insite.ng'));

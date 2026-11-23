@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { FileText, Film, Volume2 } from "lucide-react";
 import type { HandoverFileDto } from "@insite/shared";
-import { getMediaUrl } from "../../api/reconciliation/reconciliationApi";
+import { getMediaUrl } from "../../api/evidence/mediaApi";
 import { CapturePhoto } from "../evidence/CaptureMedia";
 
 /**

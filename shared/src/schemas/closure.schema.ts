@@ -74,7 +74,7 @@ export const CLOSURE_GATE_META: Record<ClosureGate, { label: string; description
   FINAL_PAYMENT: {
     label: 'Final payment',
     description:
-      'The last payment milestone and the final retention release cannot be certified, requested or released without an issued certificate.',
+      'A final payment or retention release recorded without an issued certificate is flagged as an exception (payments are made outside the platform).',
   },
   PROJECT_CLOSE: { label: 'Closure', description: 'The project cannot be closed without an issued certificate.' },
 };

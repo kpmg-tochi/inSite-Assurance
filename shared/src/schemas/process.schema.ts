@@ -3,15 +3,11 @@ import {
   ApprovalChainTypeEnum,
   ApprovalDecisionEnum,
   ApprovalOrganizationScopeEnum,
-  DisbursementMechanism,
-  DisbursementMechanismEnum,
-  MonitorRecommendationEnum,
   NeedsAssessmentModeEnum,
   StandardsSpecificationModeEnum,
   SYSTEM_PERMISSIONS_CATALOG,
   type ApprovalChainType,
 } from '../enums';
-import { TrancheCompletionRuleEnum, TranchePaymentBasisEnum } from './milestonePayment.schema';
 
 /**
  * Process engine (Phase 7): per-project process configuration, workflow templates and approval
@@ -26,8 +22,6 @@ import { TrancheCompletionRuleEnum, TranchePaymentBasisEnum } from './milestoneP
 export const ProjectProcessConfigSchema = z.object({
   needsAssessmentMode: NeedsAssessmentModeEnum,
   standardsSpecificationMode: StandardsSpecificationModeEnum,
-  disbursementMechanism: DisbursementMechanismEnum,
-  enableTranchesAndCps: z.boolean(),
   enableHoldPoints: z.boolean(),
   allowContractorFieldReporting: z.boolean(),
   enableContractorIdentityAssurance: z.boolean(),
@@ -43,8 +37,6 @@ export type ProjectProcessConfig = z.infer<typeof ProjectProcessConfigSchema>;
 export const DEFAULT_PROJECT_PROCESS_CONFIG: ProjectProcessConfig = {
   needsAssessmentMode: 'OPTIONAL_AT_CREATION',
   standardsSpecificationMode: 'OPTIONAL_AT_CREATION',
-  disbursementMechanism: 'IPC_CLAIM_REQUIRED',
-  enableTranchesAndCps: true,
   enableHoldPoints: true,
   allowContractorFieldReporting: true,
   enableContractorIdentityAssurance: true,
@@ -56,16 +48,12 @@ export const DEFAULT_PROJECT_PROCESS_CONFIG: ProjectProcessConfig = {
 };
 
 export const PROCESS_TOGGLE_META: Record<
-  Exclude<keyof ProjectProcessConfig, 'needsAssessmentMode' | 'standardsSpecificationMode' | 'disbursementMechanism'>,
+  Exclude<keyof ProjectProcessConfig, 'needsAssessmentMode' | 'standardsSpecificationMode'>,
   { label: string; description: string }
 > = {
-  enableTranchesAndCps: {
-    label: 'Tranches and conditions precedent',
-    description: 'Off: the project is one implicit tranche and conditions precedent are not checked.',
-  },
   enableHoldPoints: {
     label: 'Hold points',
-    description: 'Off: hold-point flags are ignored by reconciliation and hidden.',
+    description: 'Off: hold-point flags are ignored and hidden.',
   },
   allowContractorFieldReporting: {
     label: 'Contractor field reporting',
@@ -93,7 +81,7 @@ export const PROCESS_TOGGLE_META: Record<
   },
   enableRetentionModule: {
     label: 'Retention and defects',
-    description: 'Withhold a percentage of every release, track defects in the liability period and release retention when they clear.',
+    description: 'Hold a percentage of every recorded payment, track defects in the liability period and record the retention release when they clear.',
   },
 };
 
@@ -101,18 +89,11 @@ export const PROCESS_TOGGLE_META: Record<
 // Approval chains
 // ---------------------------------------------------------------------------
 
-export const CERTIFICATION_PERMISSION_KEYS = ['ipc:certify_valuation', 'milestone:verify_direct_release'] as const;
-export const RELEASE_PERMISSION_KEY = 'tranche:approve_disbursement';
 export const REPORT_APPROVAL_PERMISSION_KEY = 'reports:approve_completion';
 /** Phase 13: the last step of the contract default chain. */
 export const DEFAULT_DECISION_PERMISSION_KEY = 'contracts:decide_default';
 export const DEFAULT_REVIEW_PERMISSION_KEY = 'contracts:raise_default';
 export const MAX_APPROVAL_STEPS = 8;
-
-/** The certification step's permission for a disbursement mechanism. */
-export function certificationPermissionFor(mechanism: DisbursementMechanism): string {
-  return mechanism === 'MILESTONE_DIRECT_DISBURSEMENT' ? 'milestone:verify_direct_release' : 'ipc:certify_valuation';
-}
 
 const KNOWN_PERMISSION_KEYS = new Set(SYSTEM_PERMISSIONS_CATALOG.map((p) => p.key));
 
@@ -125,9 +106,9 @@ export const ApprovalStepConfigSchema = z.object({
     .refine((k) => KNOWN_PERMISSION_KEYS.has(k), 'Choose a permission from the catalogue'),
   /** Optionally also require one specific role. */
   requiredRoleId: z.string().uuid().nullable().optional(),
-  /** Disbursement only: the step is skipped when the recommended release is below this amount. */
+  /** Legacy column; no chain accepts an amount threshold any more. */
   minAmountThresholdNgn: z.number().nonnegative().nullable().optional(),
-  /** Certification and release steps. Tenants cannot remove them. */
+  /** Steps the platform requires (e.g. the default-case decision). Tenants cannot remove them. */
   isSystemStep: z.boolean().default(false),
   /**
    * Phase 11: which organisation the actor must belong to, relative to the project's owner or
@@ -147,10 +128,9 @@ export interface ChainIssue {
 /**
  * The one chain validator (server, web and templates).
  * - Every chain: 1 to 8 steps, contiguous step orders, known permissions.
- * - Report chain: no system steps, no amount thresholds.
- * - Disbursement chain: the first step is the certification step and the last is the release step
- *   (`tranche:approve_disbursement`); both are system steps and appear once. Tenants add review
- *   steps between them; thresholds go on those added steps only.
+ * - No chain accepts amount thresholds.
+ * - Report chain: no system steps.
+ * - Contract default chain: review steps, then the decision step (system step).
  */
 export function validateApprovalChain(
   chainType: ApprovalChainType,
@@ -171,6 +151,9 @@ export function validateApprovalChain(
     if (!KNOWN_PERMISSION_KEYS.has(s.requiredPermissionKey)) {
       issues.push({ code: 'UNKNOWN_PERMISSION', message: `Unknown permission "${s.requiredPermissionKey}".`, stepIndex: i });
     }
+    if (s.minAmountThresholdNgn != null) {
+      issues.push({ code: 'THRESHOLD_NOT_ALLOWED', message: 'Approval steps do not take amount thresholds.', stepIndex: i });
+    }
   });
 
   if (chainType === 'REPORT') {
@@ -178,69 +161,28 @@ export function validateApprovalChain(
       if (s.isSystemStep) {
         issues.push({ code: 'SYSTEM_STEP_NOT_ALLOWED', message: 'The report chain has no system steps.', stepIndex: i });
       }
-      if (s.minAmountThresholdNgn != null) {
-        issues.push({ code: 'THRESHOLD_NOT_ALLOWED', message: 'Amount thresholds apply to disbursement steps only.', stepIndex: i });
-      }
     });
     return issues;
   }
 
-  if (chainType === 'CONTRACT_DEFAULT') {
-    // Phase 13: review steps, then the decision step (system step, contracts:decide_default).
-    const lastIndex = steps.length - 1;
-    steps.forEach((s, i) => {
-      if (s.minAmountThresholdNgn != null) {
-        issues.push({ code: 'THRESHOLD_NOT_ALLOWED', message: 'Amount thresholds apply to disbursement steps only.', stepIndex: i });
-      }
-      if (i !== lastIndex && s.isSystemStep) {
-        issues.push({ code: 'SYSTEM_STEP_POSITION', message: 'Only the last step (the decision) is a system step.', stepIndex: i });
-      }
-      if (i !== lastIndex && s.requiredPermissionKey === DEFAULT_DECISION_PERMISSION_KEY) {
-        issues.push({ code: 'DECISION_STEP_POSITION', message: 'The decision can only be the last step.', stepIndex: i });
-      }
-    });
-    const last = steps[lastIndex];
-    if (!last.isSystemStep || last.requiredPermissionKey !== DEFAULT_DECISION_PERMISSION_KEY) {
-      issues.push({
-        code: 'DECISION_STEP_REQUIRED',
-        message: 'The last step must be the decision step (decide default cases).',
-        stepIndex: lastIndex,
-      });
-    }
-    return issues;
-  }
-
-  const first = steps[0];
-  const last = steps[steps.length - 1];
-  if (steps.length < 2) {
-    issues.push({ code: 'DISBURSEMENT_CHAIN_TOO_SHORT', message: 'The disbursement chain needs a certification step and a release step.' });
-  }
-  if (!first.isSystemStep || !(CERTIFICATION_PERMISSION_KEYS as readonly string[]).includes(first.requiredPermissionKey)) {
-    issues.push({
-      code: 'CERTIFICATION_STEP_REQUIRED',
-      message: 'The first step must be the certification step (certify valuation or verify milestone).',
-      stepIndex: 0,
-    });
-  }
-  if (!last.isSystemStep || last.requiredPermissionKey !== RELEASE_PERMISSION_KEY) {
-    issues.push({
-      code: 'RELEASE_STEP_REQUIRED',
-      message: 'The last step must be the release step (approve disbursement).',
-      stepIndex: steps.length - 1,
-    });
-  }
+  // CONTRACT_DEFAULT (Phase 13): review steps, then the decision step (system step, contracts:decide_default).
+  const lastIndex = steps.length - 1;
   steps.forEach((s, i) => {
-    const isEnd = i === 0 || i === steps.length - 1;
-    if (!isEnd && s.isSystemStep) {
-      issues.push({ code: 'SYSTEM_STEP_POSITION', message: 'Only the first and last steps are system steps.', stepIndex: i });
+    if (i !== lastIndex && s.isSystemStep) {
+      issues.push({ code: 'SYSTEM_STEP_POSITION', message: 'Only the last step (the decision) is a system step.', stepIndex: i });
     }
-    if (!isEnd && s.requiredPermissionKey === RELEASE_PERMISSION_KEY) {
-      issues.push({ code: 'RELEASE_STEP_POSITION', message: 'Release can only be the last step.', stepIndex: i });
-    }
-    if (isEnd && s.minAmountThresholdNgn != null) {
-      issues.push({ code: 'THRESHOLD_ON_SYSTEM_STEP', message: 'Certification and release always run; thresholds go on added steps.', stepIndex: i });
+    if (i !== lastIndex && s.requiredPermissionKey === DEFAULT_DECISION_PERMISSION_KEY) {
+      issues.push({ code: 'DECISION_STEP_POSITION', message: 'The decision can only be the last step.', stepIndex: i });
     }
   });
+  const last = steps[lastIndex];
+  if (!last.isSystemStep || last.requiredPermissionKey !== DEFAULT_DECISION_PERMISSION_KEY) {
+    issues.push({
+      code: 'DECISION_STEP_REQUIRED',
+      message: 'The last step must be the decision step (decide default cases).',
+      stepIndex: lastIndex,
+    });
+  }
   return issues;
 }
 
@@ -260,7 +202,6 @@ function chainSchema(chainType: ApprovalChainType) {
 }
 
 export const ReportApprovalChainSchema = chainSchema('REPORT');
-export const DisbursementApprovalChainSchema = chainSchema('DISBURSEMENT');
 export const ContractDefaultApprovalChainSchema = chainSchema('CONTRACT_DEFAULT');
 
 /**
@@ -301,50 +242,14 @@ export function defaultReportChain(): ApprovalStepConfig[] {
   ];
 }
 
-export function defaultDisbursementChain(mechanism: DisbursementMechanism): ApprovalStepConfig[] {
-  return [
-    {
-      label: mechanism === 'MILESTONE_DIRECT_DISBURSEMENT' ? 'Milestone verification' : 'Valuation certification',
-      requiredPermissionKey: certificationPermissionFor(mechanism),
-      requiredRoleId: null,
-      minAmountThresholdNgn: null,
-      isSystemStep: true,
-      organizationScope: 'ANY',
-    },
-    {
-      label: 'Disbursement approval',
-      requiredPermissionKey: RELEASE_PERMISSION_KEY,
-      requiredRoleId: null,
-      minAmountThresholdNgn: null,
-      isSystemStep: true,
-      organizationScope: 'ANY',
-    },
-  ];
-}
-
 // ---------------------------------------------------------------------------
 // Workflow templates
 // ---------------------------------------------------------------------------
 
-export const WorkflowTemplateConfigSchema = z
-  .object({
-    process: ProjectProcessConfigSchema,
-    reportChain: ReportApprovalChainSchema,
-    disbursementChain: DisbursementApprovalChainSchema,
-  })
-  .superRefine((v, ctx) => {
-    const cert = v.disbursementChain[0];
-    if (cert && cert.requiredPermissionKey !== certificationPermissionFor(v.process.disbursementMechanism)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['disbursementChain', 0, 'requiredPermissionKey'],
-        message:
-          v.process.disbursementMechanism === 'MILESTONE_DIRECT_DISBURSEMENT'
-            ? 'With direct milestone release, the first step is milestone verification.'
-            : 'With IPC claims, the first step is valuation certification.',
-      });
-    }
-  });
+export const WorkflowTemplateConfigSchema = z.object({
+  process: ProjectProcessConfigSchema,
+  reportChain: ReportApprovalChainSchema,
+});
 export type WorkflowTemplateConfig = z.infer<typeof WorkflowTemplateConfigSchema>;
 
 export const SaveWorkflowTemplateRequestSchema = z.object({
@@ -405,13 +310,10 @@ export const ProjectProcessSettingsDtoSchema = z.object({
   workflowTemplateId: z.string().uuid().nullable(),
   workflowTemplateName: z.string().nullable(),
   reportChain: ApprovalChainDtoSchema,
-  disbursementChain: ApprovalChainDtoSchema,
   /** Phase 13: the contractor default chain (edited through PUT .../process/chains/CONTRACT_DEFAULT). */
   contractDefaultChain: ApprovalChainDtoSchema,
   /** Active contractor-executor join codes (shown when turning contractor reporting off). */
   activeContractorJoinCodeCount: z.number().int(),
-  /** The disbursement mechanism cannot change once a valuation or IPC exists. */
-  disbursementMechanismLocked: z.boolean(),
 });
 export type ProjectProcessSettingsDto = z.infer<typeof ProjectProcessSettingsDtoSchema>;
 
@@ -432,7 +334,6 @@ export const ProjectProcessStepSchema = z.object({
   workflowTemplateId: z.string().uuid().nullable().optional(),
   config: ProjectProcessConfigSchema,
   reportChain: ReportApprovalChainSchema,
-  disbursementChain: DisbursementApprovalChainSchema,
   confirmDeactivateContractorCodes: z.boolean().optional(),
 });
 export type ProjectProcessStep = z.infer<typeof ProjectProcessStepSchema>;
@@ -442,7 +343,7 @@ export const ProjectStandardsStepSchema = z.object({}).passthrough();
 export type ProjectStandardsStep = z.infer<typeof ProjectStandardsStepSchema>;
 
 // ---------------------------------------------------------------------------
-// Approval progress (reports and valuations)
+// Approval progress
 // ---------------------------------------------------------------------------
 
 export const ApprovalActionDtoSchema = z.object({
@@ -458,7 +359,7 @@ export const ApprovalActionDtoSchema = z.object({
 export type ApprovalActionDto = z.infer<typeof ApprovalActionDtoSchema>;
 
 export const ApprovalProgressStepSchema = ApprovalStepDtoSchema.extend({
-  /** DONE: approved; CURRENT: waiting on it; SKIPPED: below its amount threshold; PENDING: later. */
+  /** DONE: approved; CURRENT: waiting on it; SKIPPED: not run (legacy); PENDING: later. */
   state: z.enum(['DONE', 'CURRENT', 'SKIPPED', 'PENDING']),
 });
 export type ApprovalProgressStep = z.infer<typeof ApprovalProgressStepSchema>;
@@ -488,117 +389,3 @@ export const ReviewWorkdayReportRequestSchema = z
     path: ['notes'],
   });
 export type ReviewWorkdayReportRequest = z.infer<typeof ReviewWorkdayReportRequestSchema>;
-
-/** POST /valuations/:valuationId/review: an added disbursement step between certification and release. */
-export const ReviewValuationRequestSchema = z
-  .object({
-    decision: z.enum(['APPROVE', 'RETURN']),
-    notes: z.string().trim().max(1500).nullable().optional(),
-  })
-  .refine((v) => v.decision !== 'RETURN' || (v.notes ?? '').length >= 5, {
-    message: 'Say why the valuation is returned (at least 5 characters)',
-    path: ['notes'],
-  });
-export type ReviewValuationRequest = z.infer<typeof ReviewValuationRequestSchema>;
-
-// ---------------------------------------------------------------------------
-// Direct milestone release
-// ---------------------------------------------------------------------------
-
-/**
- * POST /projects/:projectId/milestones/direct-verify. No totals are accepted from the client
- * (Phase 3 rules): the server builds the system claim from evidence and computes every amount.
- */
-export const VerifyDirectMilestoneRequestSchema = z
-  .object({
-    trancheId: z.string().uuid(),
-    verificationSummary: z.string().trim().min(10).max(5000),
-    lineVerifications: z
-      .array(
-        z.object({
-          boqItemId: z.string().uuid(),
-          verifiedCumulativePct: z.number().min(0).max(100),
-          remarks: z.string().trim().max(1000).nullable().optional(),
-        })
-      )
-      .min(1)
-      .max(1000),
-    trancheRecommendation: MonitorRecommendationEnum,
-    /** SUPPORT_WITH_HOLDBACK only: the amount to release now, bounded by the total verified. */
-    holdbackReleaseAmountNgn: z.number().nonnegative().optional(),
-    /** Phase 12: why part of a fixed payment milestone is held back (required by the server for the fixed basis). */
-    holdbackReason: z.string().trim().max(1500).nullable().optional(),
-    certifierDigitalSignatureAck: z.literal(true),
-    /** Compute and return the amounts without saving. */
-    dryRun: z.boolean().optional(),
-  })
-  .superRefine((v, ctx) => {
-    if (v.trancheRecommendation === 'SUPPORT_WITH_HOLDBACK' && v.holdbackReleaseAmountNgn === undefined) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['holdbackReleaseAmountNgn'], message: 'Enter the amount to release now' });
-    }
-    if (v.trancheRecommendation !== 'SUPPORT_WITH_HOLDBACK' && v.holdbackReleaseAmountNgn !== undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['holdbackReleaseAmountNgn'],
-        message: 'The release amount is computed by the server for this recommendation',
-      });
-    }
-    const ids = v.lineVerifications.map((l) => l.boqItemId);
-    if (new Set(ids).size !== ids.length) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['lineVerifications'], message: 'Each item may be verified only once' });
-    }
-  });
-export type VerifyDirectMilestoneRequest = z.infer<typeof VerifyDirectMilestoneRequestSchema>;
-
-export const DirectMilestoneItemSuggestionSchema = z.object({
-  boqItemId: z.string().uuid(),
-  wbsCode: z.string(),
-  description: z.string(),
-  unit: z.string(),
-  totalQuantity: z.number(),
-  budgetedCostNgn: z.number(),
-  previousCertifiedPct: z.number(),
-  /** Sum of evidenced quantities in the BOQ unit (counted reports only). */
-  evidenceQuantity: z.number(),
-  evidenceReportCount: z.number().int(),
-  /** Cumulative percentage the evidence supports, capped at 100. */
-  evidenceDerivedPct: z.number(),
-  /** The most that can be verified: the system claim (never below the previous certified %). */
-  maxVerifiablePct: z.number(),
-  isHoldPoint: z.boolean(),
-});
-export type DirectMilestoneItemSuggestion = z.infer<typeof DirectMilestoneItemSuggestionSchema>;
-
-export const DirectMilestoneSuggestionDtoSchema = z.object({
-  trancheId: z.string().uuid(),
-  trancheName: z.string(),
-  items: z.array(DirectMilestoneItemSuggestionSchema),
-  /** A verification on this tranche still going through the chain blocks a new one. */
-  openValuationId: z.string().uuid().nullable(),
-  /** Phase 12: how the payment milestone pays and whether its completion rule is met today. */
-  paymentBasis: TranchePaymentBasisEnum,
-  completionRule: TrancheCompletionRuleEnum.nullable(),
-  completionRequiredItemPct: z.number(),
-  targetCompletionPct: z.number(),
-  /** Evaluated on the most each item can be verified at now (null for the measured basis). */
-  completionMet: z.boolean().nullable(),
-  unmetReasons: z.array(z.string()),
-  weightedProgressPct: z.number(),
-  /** Fixed basis: the amount paid on completion (null for the measured basis). */
-  fixedReleaseAmountNgn: z.number().nullable(),
-  alreadyReleasedNgn: z.number(),
-});
-export type DirectMilestoneSuggestionDto = z.infer<typeof DirectMilestoneSuggestionDtoSchema>;
-
-export const MilestoneVerificationLineSchema = z.object({
-  boqItemId: z.string().uuid(),
-  wbsCode: z.string(),
-  description: z.string(),
-  previousCertifiedPct: z.number(),
-  systemClaimPct: z.number(),
-  systemClaimNgn: z.number(),
-  verifiedCumulativePct: z.number(),
-  verifiedAmountNgn: z.number(),
-  remarks: z.string().nullable(),
-});
-export type MilestoneVerificationLine = z.infer<typeof MilestoneVerificationLineSchema>;

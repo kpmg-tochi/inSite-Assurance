@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { TRADE_CODE_REGEX, type OrganizationRef } from "@insite/shared";
-import { ModalShell } from "../../pages/reconciliation/components/ModalShell";
+import { ModalShell } from "../common/ModalShell";
 import { OrganizationInput } from "../organizations/OrganizationInput";
 import { useReplaceContractorMutation } from "../../mutations/contracts/useContractMutations";
 import { parseNumberInput } from "../../pages/projects/setup/setupContext";

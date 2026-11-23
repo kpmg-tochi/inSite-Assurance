@@ -92,7 +92,7 @@ export function BriefPreview({
             <p className="text-[11px] text-slate-400">No project standard applies to this item.</p>
           )}
           <p className="text-[10px] text-slate-400">
-            {brief.generatedByAi ? "Written by the AI provider" : "Written from the template (AI provider unavailable)"} for the{" "}
+            Written from the template for the{" "}
             {PERSONA_LABEL[brief.targetPersona].toLowerCase()}.
           </p>
         </div>

@@ -215,12 +215,10 @@ before(async () => {
     })
   ).id;
   ids.sub = (await prisma.projectContractor.create({ data: { projectId: project.id, organizationId: ids.subOrg, tradeCategory: 'Roofing', tradeCode: 'ROF' } })).id;
-  const tranche = await prisma.facilityTranche.create({ data: { projectId: project.id, trancheNumber: 1, name: 'Whole project', allocatedAmountNgn: 1_000_000, targetCompletionPct: 100 } });
   for (const [n, pc] of [[1, ids.main], [2, ids.sub]] as const) {
     const item = await prisma.boqItem.create({
       data: {
         projectId: project.id,
-        trancheId: tranche.id,
         projectContractorId: pc,
         wbsCode: `0${n}.01`,
         section: 'BILL 1',
@@ -456,21 +454,8 @@ describe('Phase 13', () => {
   });
 
   it('default case: review, organisation-scoped decision, termination side effects', async () => {
-    // An open claim and a live session of the contractor before the decision.
-    const contractorUser = await prisma.user.findUniqueOrThrow({ where: { email: 'contractor@insite.ng' } });
-    const tranche = await prisma.facilityTranche.findFirstOrThrow({ where: { projectId: ids.project } });
-    const ipc = await prisma.ipcClaim.create({
-      data: {
-        projectId: ids.project,
-        trancheId: tranche.id,
-        projectContractorId: ids.main,
-        ipcNumber: 1,
-        periodStart: new Date(),
-        periodEnd: new Date(),
-        totalClaimedAmountNgn: 1000,
-        submittedByUserId: contractorUser.id,
-      },
-    });
+    // A live session of the contractor before the decision. Redesign R1b: payments are outside the
+    // platform, so nothing blocks termination.
     await prisma.boqItem.update({ where: { id: ids.items[0] }, data: { cumulativeCertifiedPct: 40 } });
 
     const act = (email: string, body: Record<string, unknown>) =>
@@ -486,21 +471,7 @@ describe('Phase 13', () => {
     assert.equal(noPermission.status, 403);
     const view = await request(app).get(url(`/default-cases/${ids.mainCase}`)).set(await web('p13.exec@insite.ng'));
     assert.equal(view.body.data.approval.canAct, true);
-    assert.deepEqual(view.body.data.terminationBlockedBy.map((x: { ipcNumber: number }) => x.ipcNumber), [1]);
-
-    // An active claim blocks termination until it is paid (lender decision), certified or not.
-    for (const status of ['SUBMITTED', 'MONITOR_CERTIFIED'] as const) {
-      await prisma.ipcClaim.update({ where: { id: ipc.id }, data: { status } });
-      const blocked = await act('p13.exec@insite.ng', { decision: 'APPROVE', outcome: 'TERMINATED', notes: 'Failed to mobilise' });
-      assert.equal(blocked.status, 409, status);
-      assert.equal(blocked.body.error.code, 'ACTIVE_CLAIMS_BLOCK_TERMINATION');
-      assert.equal(blocked.body.error.details.claims[0].ipcNumber, 1);
-    }
-    assert.equal((await prisma.projectContractor.findUniqueOrThrow({ where: { id: ids.main } })).contractStatus, 'ACTIVE');
-    assert.equal(await prisma.approvalAction.count({ where: { subjectId: ids.mainCase, stepOrder: 2 } }), 0, 'nothing recorded');
-    await prisma.ipcClaim.update({ where: { id: ipc.id }, data: { status: 'LENDER_DECIDED' } });
-    const paid = await request(app).get(url(`/default-cases/${ids.mainCase}`)).set(await web('p13.exec@insite.ng'));
-    assert.deepEqual(paid.body.data.terminationBlockedBy, []);
+    assert.equal(view.body.data.terminationBlockedBy, undefined);
     const decided = await act('p13.exec@insite.ng', { decision: 'APPROVE', outcome: 'TERMINATED', notes: 'Failed to mobilise' });
     assert.equal(decided.status, 200, JSON.stringify(decided.body));
     assert.equal(decided.body.data.status, 'TERMINATED');
@@ -509,7 +480,6 @@ describe('Phase 13', () => {
     assert.equal(pc.contractStatus, 'TERMINATED');
     assert.equal(await prisma.projectJoinCode.count({ where: { projectContractorId: ids.main, isActive: true } }), 0);
     assert.equal((await prisma.fieldAgentSession.findUniqueOrThrow({ where: { id: ids.mainSession } })).isActive, false);
-    assert.equal((await prisma.ipcClaim.findUniqueOrThrow({ where: { id: ipc.id } })).status, 'LENDER_DECIDED', 'the paid claim stays as history');
     assert.equal(find(await milestones(), 'mobilised', ids.main).status, 'WAIVED');
     assert.equal(await auditCount('CONTRACTOR_TERMINATED'), 1);
     // A revoked session can no longer report.
@@ -530,7 +500,6 @@ describe('Phase 13', () => {
     const item = await prisma.boqItem.findUniqueOrThrow({ where: { id: ids.items[0] } });
     assert.equal(item.projectContractorId, ids.replacement);
     assert.equal(Number(item.cumulativeCertifiedPct), 40);
-    assert.equal(await prisma.ipcClaim.count({ where: { projectContractorId: ids.main } }), 1, 'claims stay with the terminated contractor');
     const replacement = await prisma.projectContractor.findUniqueOrThrow({ where: { id: ids.replacement } });
     assert.equal(replacement.isMainContractor, true);
     assert.equal(replacement.replacesProjectContractorId, ids.main);
@@ -596,25 +565,6 @@ describe('Phase 13', () => {
     // A live project's dated items do not move through a programme.
     const dated = await request(app).post(url('/programme-of-works')).set(sub).send(body);
     assert.equal(dated.body.error.code, 'ITEM_ALREADY_DATED');
-  });
-
-  it('CP evidence is a register document of the same project', async () => {
-    const tranche = await prisma.facilityTranche.findFirstOrThrow({ where: { projectId: ids.project } });
-    const cp = await prisma.conditionPrecedent.create({ data: { trancheId: tranche.id, referenceCode: 'CP-01', description: 'Soil report approved' } });
-    const path = url(`/tranches/${tranche.id}/conditions/${cp.id}/status`);
-    const h = await web('monitor@insite.ng');
-    const elsewhere = await prisma.projectDocument.create({
-      data: {
-        projectId: ids.other,
-        documentTypeId: (await prisma.documentType.findFirstOrThrow({ where: { tenantId: ids.tenant, code: 'OTHER' } })).id,
-        title: 'Other project file',
-        versions: { create: { version: 1, objectKey: `other-${crypto.randomUUID()}`, mimeType: 'application/pdf', byteSize: 1, sha256: 'x' } },
-      },
-    });
-    assert.equal((await request(app).patch(path).set(h).send({ status: 'SATISFIED', evidenceDocumentId: elsewhere.id })).status, 404);
-    const ok = await request(app).patch(path).set(h).send({ status: 'SATISFIED', evidenceDocumentId: ids.cpDoc });
-    assert.equal(ok.status, 200, JSON.stringify(ok.body));
-    assert.equal((await prisma.conditionPrecedent.findUniqueOrThrow({ where: { id: cp.id } })).evidenceDocumentId, ids.cpDoc);
   });
 
   it('the contract default chain is the third chain: shown with a default, validated when replaced', async () => {

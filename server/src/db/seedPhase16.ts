@@ -6,8 +6,7 @@ import { createProjectDraft, saveProjectSetupStep, archiveProject } from "../mod
 import { issueMissingJoinCodes } from "../modules/projects/joinCodes.service";
 import { recomputeMilestoneDates, completeMilestone } from "../modules/contracts/milestones.service";
 import { saveKickoffMeeting } from "../modules/contracts/kickoff.service";
-import { verifyDirectMilestone } from "../modules/reconciliation/directMilestone.service";
-import { recordLenderTrancheDecision } from "../modules/reconciliation/reconciliation.service";
+import { recordPayment } from "../modules/payments/payments.service";
 import { changeProjectPhase } from "../modules/closeout/projectPhase.service";
 import { createHandoverLink } from "../modules/closeout/handover.service";
 import { createTicketsFromSnags } from "../modules/closeout/defects.service";
@@ -33,7 +32,7 @@ import { acceptedHandover, approvedFinalEvaluation, paperCopy } from "./seedPhas
  * | Mobilising on time                              | PRG-102 (Central, North)    |
  * | Mobilisation overdue with a default case        | PRG-221 (Co-Funded, South)  |
  * | Active: weekly supervision, late visit, finding | PRG-211 (Co-Funded, North)  |
- * | Fixed payment milestone awaiting release        | PRG-105 (Central, North)    | new
+ * | Interim payment recorded, works ~80% done      | PRG-105 (Central, North)    | new
  * | CoC pending a signature                         | PRG-104 (Central, South)    | new
  * | In retention with a defect                      | PRG-103 (Central, North)    | defect added
  * | Closed, post-closure evaluation pending         | PRG-241 (Co-Funded, South)  |
@@ -43,21 +42,19 @@ import { acceptedHandover, approvedFinalEvaluation, paperCopy } from "./seedPhas
  * demo logins for every persona (a provisioned Resident Supervisor and a contractor are added), a
  * beneficiary handover link on PRG-104, and KPI snapshots for the current and five earlier months.
  * Everything goes through the real services; the only shortcuts are dates of seeded history
- * (milestones done earlier, the first release on PRG-105 moved back so its turnaround is visible).
+ * (milestones done earlier). Redesign R1b: payments are made outside the platform and recorded.
  */
 
 const CENTRAL_TARGETS = ProjectTypeKpiTargetsSchema.parse({
   contractors_mobilised_on_time: { target: 90 },
   reports_on_time: { target: 85 },
   visits_conducted: { target: 90 },
-  payment_turnaround_days: { target: 14 },
   financial_utilisation: { target: null },
 });
 const CO_FUNDED_TARGETS = ProjectTypeKpiTargetsSchema.parse({
   contractors_mobilised_on_time: { target: 85 },
   reports_on_time: { target: 80 },
   visits_conducted: { target: 85 },
-  payment_turnaround_days: { target: 21 },
   approval_turnaround_days: { target: 7 },
   financial_utilisation: { target: null },
 });
@@ -295,7 +292,7 @@ export async function seedPhase16() {
   const snagged = await prisma.handoverSubmission.findFirstOrThrow({ where: { projectId: prg103.id }, orderBy: { submittedAt: "desc" } });
   await createTicketsFromSnags(prg103.id, snagged.id, monitor, { severity: "MEDIUM", dueDate: addDays(today, 14) });
 
-  // ---- PRG-105 (Central, North): one payment milestone released, the next awaiting release -----
+  // ---- PRG-105 (Central, North): bills 1 and 2 done, one interim payment recorded ------------------
   const prg105 = await liveProject({
     code: "PRG-105",
     name: "Central — Kano Day Secondary School",
@@ -308,49 +305,30 @@ export async function seedPhase16() {
     state: "Kano State",
   });
   const contractor105 = await pastContract(prg105.id, "PA/CEN/2026/105", 120, [flagshipAdmin, monitor]);
-  const tranches105 = [];
   for (const [n, name, share, items] of [
-    [1, "Payment milestone 1 — Substructure", 0.3, [["01.01", "Excavation and foundations", "m3", 380], ["01.02", "Ground floor slab", "m2", 1100]]],
-    [2, "Payment milestone 2 — Superstructure", 0.4, [["02.01", "Columns, beams and block walls", "m2", 2400], ["02.02", "Roof structure and roofing", "m2", 1250]]],
-    [3, "Payment milestone 3 — Finishes and WASH", 0.3, [["03.01", "Plastering, painting and fittings", "m2", 4800], ["03.02", "Toilet block and borehole", "item", 1]]],
+    [1, "Substructure", 0.3, [["01.01", "Excavation and foundations", "m3", 380], ["01.02", "Ground floor slab", "m2", 1100]]],
+    [2, "Superstructure", 0.4, [["02.01", "Columns, beams and block walls", "m2", 2400], ["02.02", "Roof structure and roofing", "m2", 1250]]],
+    [3, "Finishes and WASH", 0.3, [["03.01", "Plastering, painting and fittings", "m2", 4800], ["03.02", "Toilet block and borehole", "item", 1]]],
   ] as const) {
     const allocated = Math.round(210_000_000 * share * 100) / 100;
-    const tranche = await prisma.facilityTranche.create({
-      data: {
-        projectId: prg105.id,
-        trancheNumber: n,
-        name,
-        allocatedAmountNgn: allocated,
-        targetCompletionPct: 100,
-        paymentBasis: "FIXED_ON_COMPLETION",
-        completionRule: "ALL_ITEMS_COMPLETE",
-        completionRequiredItemPct: 100,
-        conditionsPrecedent: {
-          create: [{ referenceCode: `CP-0${n}`, description: `Monitor's visit report for milestone ${n} on file`, isMandatoryForRelease: true, status: n < 3 ? "SATISFIED" : "PENDING" }],
-        },
-      },
-    });
     for (const [wbsCode, description, unit, qty] of items) {
       const budget = Math.round((allocated / items.length) * 100) / 100;
       await prisma.boqItem.create({
         data: {
           projectId: prg105.id,
-          trancheId: tranche.id,
-          trancheMappingConfirmedByMonitor: true,
           projectContractorId: contractor105.id,
           wbsCode,
-          section: name.split(" — ")[1].toUpperCase(),
+          section: name.toUpperCase(),
           description,
           unit,
           totalQuantity: qty,
           rateNgn: Math.round((budget / qty) * 100) / 100,
           budgetedCostNgn: budget,
-          // Milestones 1 and 2 were measured complete on earlier monitoring visits.
+          // Bills 1 and 2 were measured complete on earlier monitoring visits.
           cumulativeCertifiedPct: n < 3 ? 100 : 35,
         },
       });
     }
-    tranches105.push(tranche);
   }
   await prisma.project.update({ where: { id: prg105.id }, data: { certifiedProgressPct: 80.5 } });
   // A schedule baseline (the project is a little ahead) so the schedule KPI has a badge to count.
@@ -359,43 +337,26 @@ export async function seedPhase16() {
     [-59, -15],
     [-14, 80],
   ];
-  const items105 = await prisma.boqItem.findMany({ where: { projectId: prg105.id }, include: { tranche: { select: { trancheNumber: true } } } });
+  const items105 = await prisma.boqItem.findMany({ where: { projectId: prg105.id }, select: { id: true, wbsCode: true } });
   await saveScheduleBaseline(prg105.id, monitor, {
     plannedStartDate: addDays(today, -98),
     plannedEndDate: addDays(today, 80),
     items: items105.map((i) => {
-      const [start, end] = windows[(i.tranche?.trancheNumber ?? 3) - 1];
+      const [start, end] = windows[Number(i.wbsCode.slice(0, 2)) - 1];
       return { boqItemId: i.id, plannedStartDate: addDays(today, start), plannedEndDate: addDays(today, end) };
     }),
     dependencies: [],
   });
   await refreshScheduleBadge(prg105.id, new Date());
-  const verify = async (trancheId: string, summary: string) => {
-    const lines = await prisma.boqItem.findMany({ where: { trancheId }, select: { id: true } });
-    return verifyDirectMilestone({
-      projectId: prg105.id,
-      webUser: monitor,
-      input: {
-        trancheId,
-        verificationSummary: summary,
-        lineVerifications: lines.map((l) => ({ boqItemId: l.id, verifiedCumulativePct: 100 })),
-        trancheRecommendation: "SUPPORT_FULL_RELEASE",
-        certifierDigitalSignatureAck: true,
-      },
-    });
-  };
-  await verify(tranches105[0].id, "Substructure complete: foundations and ground slab inspected and measured on site.");
-  const first = await prisma.valuationReport.findFirstOrThrow({ where: { trancheId: tranches105[0].id }, orderBy: { certifiedAt: "desc" } });
-  await recordLenderTrancheDecision({
-    projectId: prg105.id,
-    trancheId: tranches105[0].id,
-    webUser: funder,
-    input: { valuationReportId: first.id, decision: "APPROVE_FULL", approverNotes: "Released in full against the verified substructure milestone." },
+  // One interim payment recorded by the funding authority (made outside the platform); retention
+  // is held at the project's percentage.
+  await recordPayment(prg105.id, funder, {
+    kind: "INTERIM",
+    paidOn: zonedCalendarDate(daysAgo(12), "Africa/Lagos"),
+    grossAmountNgn: 63_000_000,
+    reference: "PA/PV/2026/0105-01",
+    description: "Substructure",
   });
-  // Seeded history: the first milestone was verified 21 days ago and released 9 days later.
-  await prisma.valuationReport.update({ where: { id: first.id }, data: { certifiedAt: daysAgo(21) } });
-  await prisma.trancheDecision.updateMany({ where: { valuationReportId: first.id }, data: { decidedAt: daysAgo(12) } });
-  await verify(tranches105[1].id, "Superstructure complete: frame, walls and roof inspected; all items at 100%.");
 
   // ---- PRG-104 (Central, South): Certificate of Completion waiting for a signature --------------
   const prg104 = await liveProject({
@@ -519,9 +480,9 @@ export async function seedPhase16() {
     ["Programme administrator", "programme.admin@insite.ng"],
     ["Flagship admin (Programme Authority)", "flagship.admin@insite.ng"],
     ["Subsidiary admins (North, South)", "north.admin@insite.ng, south.admin@insite.ng (second South signatory: south.me@)"],
-    ["Funding authority (releases payments)", "programme.funder@insite.ng"],
+    ["Funding authority (records payments)", "programme.funder@insite.ng"],
     ["M&E officer (web, over the site limit)", "me.officer@insite.ng"],
-    ["Monitor (verifies milestones)", "programme.monitor@insite.ng"],
+    ["Monitor (no registration on file)", "programme.monitor@insite.ng"],
     ["Resident Supervisor (mobile, provisioned)", "resident.supervisor@insite.ng"],
     ["Legal officer (default cases)", "legal.officer@insite.ng"],
     ["Contractor (Sahel Build)", "sahel.contractor@insite.ng"],

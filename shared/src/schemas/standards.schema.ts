@@ -51,17 +51,8 @@ export const RegisterNeedsAssessmentRequestSchema = z.object({
   objectKey: z.string().min(1).max(500),
   mimeType: z.string().min(3).max(120),
   byteSize: z.number().int().positive().max(50 * 1024 * 1024),
-  /** Ask the AI provider for a summary. Stored as pending when no provider is configured. */
-  requestAiSummary: z.boolean().default(true),
 });
 export type RegisterNeedsAssessmentRequest = z.infer<typeof RegisterNeedsAssessmentRequestSchema>;
-
-/**
- * PENDING: waiting for the AI provider (none configured, or it failed; retry later).
- * UNAVAILABLE: the file has no readable text (scanned PDF, image, unsupported format).
- */
-export const NeedsAssessmentSummaryStatusEnum = z.enum(['NOT_REQUESTED', 'PENDING', 'DONE', 'UNAVAILABLE']);
-export type NeedsAssessmentSummaryStatus = z.infer<typeof NeedsAssessmentSummaryStatusEnum>;
 
 export const NeedsAssessmentDocumentDtoSchema = z.object({
   id: z.string().uuid(),
@@ -71,11 +62,6 @@ export const NeedsAssessmentDocumentDtoSchema = z.object({
   objectKey: z.string(),
   mimeType: z.string(),
   byteSize: z.number().int(),
-  /** Null until summarised. Never invented when the provider is unavailable. */
-  extractedSummaryText: z.string().nullable(),
-  keyFindings: z.array(z.string()),
-  summaryStatus: NeedsAssessmentSummaryStatusEnum,
-  summaryEngine: z.string().nullable(),
   uploadedByUserId: z.string().uuid(),
   uploadedAt: z.string(),
 });

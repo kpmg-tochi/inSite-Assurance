@@ -4,7 +4,6 @@ import {
   ContractorDefaultCaseDto,
   DefaultCaseStatus,
   OPEN_DEFAULT_CASE_STATUSES,
-  OPEN_IPC_STATUSES,
   RaiseDefaultCaseRequest,
   ReplaceContractorRequest,
   ReplaceContractorResponse,
@@ -49,24 +48,6 @@ type CaseRow = Prisma.ContractorDefaultCaseGetPayload<{ include: typeof CASE_INC
 
 type Db = Tx | typeof prisma;
 
-/**
- * The contractor's claims that are still active: submitted, reconciled, queried, or certified and
- * waiting for the lender (not yet paid). Multi-prime claims carry the contractor; in the single
- * and unified models claims carry none and belong to the main contractor.
- */
-export async function activeClaimsOf(db: Db, projectId: string, projectContractorId: string) {
-  const pc = await db.projectContractor.findUniqueOrThrow({ where: { id: projectContractorId }, select: { isMainContractor: true } });
-  return db.ipcClaim.findMany({
-    where: {
-      projectId,
-      status: { in: OPEN_IPC_STATUSES },
-      OR: [{ projectContractorId }, ...(pc.isMainContractor ? [{ projectContractorId: null }] : [])],
-    },
-    orderBy: { ipcNumber: 'asc' },
-    select: { id: true, ipcNumber: true, status: true },
-  });
-}
-
 async function serializeCase(c: CaseRow, viewer: WebJwtPayload | null): Promise<ContractorDefaultCaseDto> {
   const steps = await getChainVersionSteps(prisma, c.projectId, 'CONTRACT_DEFAULT', c.chainVersion);
   const isOpen = OPEN_DEFAULT_CASE_STATUSES.includes(c.status as DefaultCaseStatus);
@@ -107,9 +88,6 @@ async function serializeCase(c: CaseRow, viewer: WebJwtPayload | null): Promise<
     decidedAt: c.decidedAt?.toISOString() ?? null,
     isOpen,
     atDecisionStep: isOpen && c.status !== 'CURE_PERIOD' && c.currentStepOrder !== null && c.currentStepOrder === lastOrder,
-    terminationBlockedBy: isOpen
-      ? (await activeClaimsOf(prisma, c.projectId, c.projectContractorId)).map((x) => ({ ipcId: x.id, ipcNumber: x.ipcNumber, status: x.status }))
-      : [],
     approval,
   };
 }
@@ -292,17 +270,6 @@ export async function actOnDefaultCase(projectId: string, caseId: string, webUse
     if ((input.outcome === 'CURE_PERIOD' || input.outcome === 'EXTENSION_GRANTED') && input.newDueDate! <= today) {
       throw new AppError('The new date must be after today', 422, 'NEW_DATE_NOT_IN_FUTURE');
     }
-    if (input.outcome === 'TERMINATED') {
-      const active = await activeClaimsOf(tx, projectId, c.projectContractorId);
-      if (active.length) {
-        throw new AppError(
-          `The contract cannot be terminated while claim(s) ${active.map((x) => `#${x.ipcNumber}`).join(', ')} are unpaid. Decide or withdraw them first, or choose another outcome.`,
-          409,
-          'ACTIVE_CLAIMS_BLOCK_TERMINATION',
-          { claims: active.map((x) => ({ ipcId: x.id, ipcNumber: x.ipcNumber, status: x.status })) }
-        );
-      }
-    }
     if (input.outcome === 'EXTENSION_GRANTED' && !c.milestoneId) {
       throw new AppError('An extension moves a milestone; this case has none. Choose a cure period instead.', 422, 'EXTENSION_NEEDS_MILESTONE');
     }
@@ -418,11 +385,6 @@ export async function terminateContractor(
     where: { id: params.projectContractorId },
     include: { organization: { select: { name: true } } },
   });
-  // Active claims block termination (checked at the decision); re-checked here as a guard.
-  const active = await activeClaimsOf(tx, params.projectId, pc.id);
-  if (active.length) {
-    throw new AppError('The contract cannot be terminated while a claim is unpaid.', 409, 'ACTIVE_CLAIMS_BLOCK_TERMINATION');
-  }
   await tx.projectContractor.update({
     where: { id: pc.id },
     data: { contractStatus: 'TERMINATED', terminatedAt: now, terminationCaseId: params.caseId },

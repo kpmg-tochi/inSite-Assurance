@@ -13,7 +13,6 @@ import {
   defaultContractDefaultChain,
   deriveMilestoneStatus,
   describeMilestoneAnchor,
-  evaluateMilestoneCompletion,
   kickoffQuorumMet,
   MilestoneDateRow,
   milestoneDaysLeft,
@@ -119,15 +118,6 @@ describe('Phase 13: contract milestone dates', () => {
     const [r, d] = defaultContractDefaultChain({ hasOwner: false });
     assert.ok(validateApprovalChain('CONTRACT_DEFAULT', [d, r]).some((i) => i.code === 'SYSTEM_STEP_POSITION'));
     assert.ok(validateApprovalChain('CONTRACT_DEFAULT', [r, { ...d, minAmountThresholdNgn: 5 }]).some((i) => i.code === 'THRESHOLD_NOT_ALLOWED'));
-  });
-
-  it('CONTRACT_MILESTONE_DONE payment rule ignores items and follows the milestone', () => {
-    const base = { rule: 'CONTRACT_MILESTONE_DONE' as const, targetCompletionPct: 100, items: [] };
-    assert.equal(evaluateMilestoneCompletion({ ...base, contractMilestone: { label: 'Contract signed', done: true } }).met, true);
-    const pending = evaluateMilestoneCompletion({ ...base, contractMilestone: { label: 'Contract signed', done: false } });
-    assert.equal(pending.met, false);
-    assert.match(pending.unmetReasons[0], /Contract signed/);
-    assert.equal(evaluateMilestoneCompletion({ ...base, contractMilestone: null }).met, false);
   });
 
   it('kick-off quorum: one attendee per required group', () => {

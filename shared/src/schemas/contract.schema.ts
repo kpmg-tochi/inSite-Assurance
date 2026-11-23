@@ -161,7 +161,6 @@ export const ProjectDocumentDtoSchema = z.object({
   projectContractorId: Uuid.nullable(),
   contractorName: z.string().nullable(),
   linkedMilestoneId: Uuid.nullable(),
-  linkedConditionPrecedentId: Uuid.nullable(),
   isArchived: z.boolean(),
   createdAt: z.string(),
   /** Sign-offs on the current version. */
@@ -193,7 +192,6 @@ export const RegisterProjectDocumentRequestSchema = z.object({
   /** Ties the document to one contractor (its users then see it if the type is shared). */
   projectContractorId: Uuid.nullable().optional(),
   linkedMilestoneId: Uuid.nullable().optional(),
-  linkedConditionPrecedentId: Uuid.nullable().optional(),
 });
 export type RegisterProjectDocumentRequest = z.infer<typeof RegisterProjectDocumentRequestSchema>;
 
@@ -684,11 +682,6 @@ export const ContractorDefaultCaseDtoSchema = z.object({
   isOpen: z.boolean(),
   /** The step being waited on is the decision step. */
   atDecisionStep: z.boolean(),
-  /**
-   * The contractor's claims that are still active (submitted, reconciled, queried or certified and
-   * not yet paid). While any exist the contract cannot be terminated.
-   */
-  terminationBlockedBy: z.array(z.object({ ipcId: Uuid, ipcNumber: z.number().int(), status: z.string() })),
   approval: ApprovalProgressDtoSchema,
 });
 export type ContractorDefaultCaseDto = z.infer<typeof ContractorDefaultCaseDtoSchema>;

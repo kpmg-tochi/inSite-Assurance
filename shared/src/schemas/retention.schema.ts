@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { ConstructionPhaseEnum } from '../enums';
 import { CALENDAR_DATE_REGEX } from '../utils/time';
-import { ValuationReportDtoSchema } from './ipc.schema';
 
 /**
  * Phase 10: construction phases, retention (holding back part of each release until the defects
- * liability period ends) and defect tickets.
+ * liability period ends) and defect tickets. Redesign R1b: retention is held against recorded
+ * payments and released by recording a RETENTION_RELEASE payment (payment.schema.ts).
  */
 
 const CalendarDate = z.string().regex(CALENDAR_DATE_REGEX, 'Use YYYY-MM-DD');
@@ -206,72 +206,8 @@ export const DefectTicketDtoSchema = z.object({
 export type DefectTicketDto = z.infer<typeof DefectTicketDtoSchema>;
 
 // ---------------------------------------------------------------------------
-// Retention balances and release
+// Retention balance
 // ---------------------------------------------------------------------------
-
-export const RetentionReleaseStageEnum = z.enum(['COMPLETION', 'FINAL']);
-export type RetentionReleaseStageValue = z.infer<typeof RetentionReleaseStageEnum>;
-
-export const RetentionReleaseRequestStatusEnum = z.enum(['PENDING_CERTIFICATION', 'CERTIFIED', 'CANCELLED']);
-export type RetentionReleaseRequestStatus = z.infer<typeof RetentionReleaseRequestStatusEnum>;
-
-export const RequestRetentionReleaseRequestSchema = z.object({
-  projectContractorId: z.string().uuid(),
-  stage: RetentionReleaseStageEnum,
-  /** Defaults to the most the stage allows. */
-  amountNgn: z.number().positive().optional(),
-  notes: z.string().trim().max(2000).optional(),
-});
-export type RequestRetentionReleaseRequest = z.infer<typeof RequestRetentionReleaseRequestSchema>;
-
-export const CertifyRetentionReleaseRequestSchema = z.object({
-  executiveCertificationSummary: z.string().trim().min(10).max(4000),
-  certifierDigitalSignatureAck: z.literal(true),
-});
-export type CertifyRetentionReleaseRequest = z.infer<typeof CertifyRetentionReleaseRequestSchema>;
-
-export const RetentionStageOptionDtoSchema = z.object({
-  stage: RetentionReleaseStageEnum,
-  allowed: z.boolean(),
-  maxAmountNgn: z.number(),
-  /** Preconditions not met yet, in plain language. */
-  unmet: z.array(z.string()),
-});
-export type RetentionStageOptionDto = z.infer<typeof RetentionStageOptionDtoSchema>;
-
-export const RetentionContractorBalanceDtoSchema = z.object({
-  projectContractorId: z.string().uuid(),
-  contractorName: z.string(),
-  tradeCode: z.string(),
-  isMainContractor: z.boolean(),
-  /** Everything withheld so far (held + released). */
-  withheldTotalNgn: z.number(),
-  heldNgn: z.number(),
-  releasedNgn: z.number(),
-  /** Requested or certified, not yet decided. */
-  pendingReleaseNgn: z.number(),
-  openTicketCount: z.number().int(),
-  stages: z.array(RetentionStageOptionDtoSchema),
-});
-export type RetentionContractorBalanceDto = z.infer<typeof RetentionContractorBalanceDtoSchema>;
-
-export const RetentionReleaseRequestDtoSchema = z.object({
-  id: z.string().uuid(),
-  projectContractorId: z.string().uuid(),
-  contractorName: z.string(),
-  stage: RetentionReleaseStageEnum,
-  amountNgn: z.number(),
-  status: RetentionReleaseRequestStatusEnum,
-  notes: z.string().nullable(),
-  requestedByName: z.string().nullable(),
-  requestedAt: z.string(),
-  certifiedAt: z.string().nullable(),
-  valuation: ValuationReportDtoSchema.nullable(),
-  /** Display state for the whole release, including the decision. */
-  outcome: z.enum(['AWAITING_CERTIFICATION', 'IN_APPROVAL', 'RELEASED', 'HELD', 'RETURNED', 'CANCELLED']),
-  actions: z.object({ certify: gate, cancel: gate, review: gate, decide: gate, reverseDecision: gate }),
-});
-export type RetentionReleaseRequestDto = z.infer<typeof RetentionReleaseRequestDtoSchema>;
 
 export const RetentionSummaryDtoSchema = z.object({
   projectId: z.string().uuid(),
@@ -286,10 +222,8 @@ export const RetentionSummaryDtoSchema = z.object({
   daysRemaining: z.number().int().nullable(),
   heldNgn: z.number(),
   releasedNgn: z.number(),
-  contractors: z.array(RetentionContractorBalanceDtoSchema),
-  requests: z.array(RetentionReleaseRequestDtoSchema),
-  /** The caller holds retention:release_escrow. */
-  canRequestRelease: z.boolean(),
+  balanceNgn: z.number(),
+  openDefectCount: z.number().int(),
 });
 export type RetentionSummaryDto = z.infer<typeof RetentionSummaryDtoSchema>;
 

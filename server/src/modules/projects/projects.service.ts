@@ -2,7 +2,6 @@ import { overdueMilestoneCounts } from '../contracts/milestones.service';
 import { Prisma, ProjectStatus } from '@prisma/client';
 import {
   ContractorExecutionMode,
-  countReconciliationIssues,
   geofenceCentroid,
   PORTFOLIO_QUIET_SITE_DAYS,
   PortfolioOverviewDto,
@@ -31,7 +30,7 @@ import {
   buildProjectVisibilityWhere,
 } from '../../utils/accessControl';
 import { recordAuditEvent } from '../audit/audit.service';
-import { serializeBoqItem, serializeTranche } from '../../utils/serializers';
+import { serializeBoqItem } from '../../utils/serializers';
 import { contractorHeadline } from './contractors.service';
 import { serializeScheduleBadge } from '../schedule/schedule.service';
 import { effectiveToleranceMeters } from '../../utils/geofenceEvaluation';
@@ -191,7 +190,6 @@ function serializeProjectCore(project: ProjectCoreRow) {
     geofenceMode: project.geofenceMode as GeofenceMode | null,
     geofence: project.geofenceGeoJson,
     geofenceToleranceMeters: effectiveToleranceMeters(project, project.tenant),
-    portfolioHealth: project.portfolioHealth,
     /** Phase 9: stored by the schedule-variance job; null until computed. */
     scheduleVariance: serializeScheduleBadge(project),
     monitorOrganizationName: project.monitorOrganization?.name ?? '',
@@ -219,19 +217,6 @@ function serializeProjectCore(project: ProjectCoreRow) {
 }
 
 /**
- * The IPC that project-level conflict and hold-point counts are taken from: the latest one that
- * has not been withdrawn. Counting itself is `countReconciliationIssues` in @insite/shared.
- */
-const LATEST_RATED_IPC_QUERY = {
-  where: { status: { not: 'REJECTED_WITHDRAWN' as const } },
-  orderBy: { ipcNumber: 'desc' as const },
-  take: 1,
-  include: {
-    lineItems: { select: { aiEvidenceRating: true, missingHoldPointFlag: true } },
-  },
-};
-
-/**
  * The project directory: active and archived projects (drafts are listed separately, see
  * listDraftProjects in projectSetup.service).
  */
@@ -250,10 +235,6 @@ export async function listProjectsForUser(
     include: {
       ...PROJECT_CORE_INCLUDE,
       joinCodes: { include: JOIN_CODE_LIST_INCLUDE },
-      tranches: {
-        orderBy: { trancheNumber: 'asc' },
-        include: { conditionsPrecedent: true },
-      },
       boqItems: {
         select: {
           id: true,
@@ -267,7 +248,6 @@ export async function listProjectsForUser(
         take: 1,
         select: { capturedAtDevice: true },
       },
-      ipcClaims: LATEST_RATED_IPC_QUERY,
     },
   });
 
@@ -275,20 +255,13 @@ export async function listProjectsForUser(
   const overdue = await overdueMilestoneCounts(projects);
 
   return projects.map((project) => {
-    const { openConflictCount, unfulfilledHoldPointCount } = countReconciliationIssues(
-      project.ipcClaims[0]?.lineItems ?? []
-    );
-
     return {
       ...serializeProjectCore(project),
-      openConflictCount,
-      unfulfilledHoldPointCount,
       totalBoqItems: project.boqItems.length,
       opaqueLumpSumCount: project.boqItems.filter((b) => b.isOpaqueLumpSum).length,
       lastFieldCaptureAt:
         project.evidenceLogs[0]?.capturedAtDevice.toISOString() ?? null,
       joinCodes: visibleJoinCodesFor(project.joinCodes, webUser),
-      tranches: project.tranches.map(serializeTranche),
       overdueMilestoneCount: overdue.get(project.id) ?? 0,
     };
   });
@@ -304,10 +277,6 @@ export async function getProjectBaselineDetails(
     include: {
       ...PROJECT_CORE_INCLUDE,
       joinCodes: { include: JOIN_CODE_LIST_INCLUDE },
-      tranches: {
-        orderBy: { trancheNumber: 'asc' },
-        include: { conditionsPrecedent: true },
-      },
       boqItems: {
         orderBy: { wbsCode: 'asc' },
       },
@@ -333,7 +302,6 @@ export async function getProjectBaselineDetails(
   return {
     ...serializeProjectCore(project),
     joinCodes: fieldAgent ? [] : visibleJoinCodesFor(project.joinCodes, webUser),
-    tranches: project.tranches.map(serializeTranche),
     boqItems: boqItems.map((b) => serializeBoqItem(b)),
   };
 }
@@ -731,26 +699,6 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload, filte
       ...DELIVERY_MODEL_INCLUDE,
       contractors: { ...PROJECT_CONTRACTORS_INCLUDE, include: { organization: { select: { name: true } } } },
       lenderOrganization: { select: { name: true } },
-      tranches: {
-        orderBy: { trancheNumber: 'asc' },
-        select: { trancheNumber: true, isReleased: true },
-      },
-      boqItems: {
-        select: { id: true, isHoldPoint: true, cumulativeCertifiedPct: true },
-      },
-      ipcClaims: {
-        ...LATEST_RATED_IPC_QUERY,
-        include: {
-          lineItems: {
-            select: {
-              aiEvidenceRating: true,
-              missingHoldPointFlag: true,
-              contractorClaimedNgn: true,
-              monitorCertifiedNgn: true,
-            },
-          },
-        },
-      },
       fieldSessions: {
         where: {
           assuranceStatus: 'PENDING_APPROVAL',
@@ -768,10 +716,6 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload, filte
 
   let totalPortfolioCommitmentNgn = 0;
   let totalDisbursedToDateNgn = 0;
-  let totalRecommendedHoldbackNgn = 0;
-  let supportedCount = 0;
-  let partialCount = 0;
-  let conflictCount = 0;
   let pendingContractorVerificationsCount = 0;
 
   const projectItems = projects.map((p) => {
@@ -780,34 +724,8 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload, filte
     totalPortfolioCommitmentNgn += budget;
     totalDisbursedToDateNgn += disbursed;
 
-    const latestIpc = p.ipcClaims[0] || null;
-    const { openConflictCount: openConflicts, unfulfilledHoldPointCount: unfulfilledHoldPoints } =
-      countReconciliationIssues(latestIpc?.lineItems ?? []);
-    let holdbackNgn = 0;
-
-    if (latestIpc) {
-      for (const li of latestIpc.lineItems) {
-        const claimed = Number(li.contractorClaimedNgn);
-        const certified =
-          li.monitorCertifiedNgn !== null
-            ? Number(li.monitorCertifiedNgn)
-            : claimed;
-        if (claimed > certified) {
-          holdbackNgn += claimed - certified;
-        }
-      }
-    }
-    totalRecommendedHoldbackNgn += holdbackNgn;
-
-    if (p.portfolioHealth === 'EVIDENCE_SUPPORTED') supportedCount += 1;
-    else if (p.portfolioHealth === 'EVIDENCE_PARTIAL') partialCount += 1;
-    else conflictCount += 1;
-
     const pendingContractors = p.fieldSessions.length;
     pendingContractorVerificationsCount += pendingContractors;
-
-    const activeTranche =
-      p.tranches.find((t) => !t.isReleased) || p.tranches[0] || null;
 
     return {
       projectId: p.id,
@@ -820,10 +738,6 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload, filte
       totalBudgetNgn: budget,
       disbursedToDateNgn: disbursed,
       certifiedProgressPct: Number(p.certifiedProgressPct),
-      activeTrancheNumber: activeTranche?.trancheNumber || null,
-      portfolioHealth: p.portfolioHealth,
-      openConflictCount: openConflicts,
-      unfulfilledHoldPointCount: unfulfilledHoldPoints,
       pendingContractorCount: pendingContractors,
       scheduleVariance: serializeScheduleBadge(p),
       retention: p.processConfig?.enableRetentionModule
@@ -845,11 +759,7 @@ export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload, filte
   return {
     totalPortfolioCommitmentNgn,
     totalDisbursedToDateNgn,
-    totalRecommendedHoldbackNgn,
     activeProjectsCount: projects.length,
-    supportedCount,
-    partialCount,
-    conflictCount,
     pendingContractorVerificationsCount,
     projects: projectItems,
   };
@@ -869,7 +779,6 @@ export async function listDemoProjects() {
       stateLocation: true,
       lgaLocation: true,
       geofenceMode: true,
-      portfolioHealth: true,
       joinCodes: {
         where: { isActive: true },
         orderBy: { code: 'asc' },
@@ -897,7 +806,6 @@ export async function listDemoProjects() {
     stateLocation: p.stateLocation ?? '',
     lgaLocation: p.lgaLocation,
     geofenceMode: p.geofenceMode as GeofenceMode,
-    portfolioHealth: p.portfolioHealth,
     joinCodes: p.joinCodes.map((jc) => ({
       code: jc.code,
       roleId: jc.role.id,
@@ -927,7 +835,6 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
     include: {
       ...DELIVERY_MODEL_INCLUDE,
       evidenceLogs: { orderBy: { capturedAtDevice: 'desc' }, take: 1, select: { capturedAtDevice: true } },
-      ipcClaims: LATEST_RATED_IPC_QUERY,
     },
   });
 
@@ -938,10 +845,7 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
     totalDisbursedNgn: 0,
     disbursedPct: 0,
     weightedProgressPct: 0,
-    healthCounts: { supported: 0, partial: 0, conflict: 0 },
     behindScheduleCount: 0,
-    openConflictLineCount: 0,
-    unfulfilledHoldPointCount: 0,
     quietSiteCount: 0,
     closeoutCount: 0,
     retentionHeldNgn: 0,
@@ -952,7 +856,6 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
     const budget = Number(p.totalBudgetNgn ?? 0);
     const disbursed = Number(p.disbursedToDateNgn);
     const progress = Number(p.certifiedProgressPct);
-    const { openConflictCount, unfulfilledHoldPointCount } = countReconciliationIssues(p.ipcClaims[0]?.lineItems ?? []);
     const lastCapture = p.evidenceLogs[0]?.capturedAtDevice ?? null;
     const geofence = p.geofenceGeoJson ? ProjectGeofenceSchema.safeParse(p.geofenceGeoJson).data ?? null : null;
     const schedule = serializeScheduleBadge(p);
@@ -960,12 +863,7 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
     kpis.totalCommitmentNgn += budget;
     kpis.totalDisbursedNgn += disbursed;
     weightedProgress += budget * progress;
-    if (p.portfolioHealth === 'EVIDENCE_SUPPORTED') kpis.healthCounts.supported += 1;
-    else if (p.portfolioHealth === 'EVIDENCE_PARTIAL') kpis.healthCounts.partial += 1;
-    else kpis.healthCounts.conflict += 1;
     if (p.scheduleStatus === 'BEHIND') kpis.behindScheduleCount += 1;
-    kpis.openConflictLineCount += openConflictCount;
-    kpis.unfulfilledHoldPointCount += unfulfilledHoldPointCount;
     if (
       p.constructionPhase === 'ACTIVE_CONSTRUCTION' &&
       (!lastCapture || now - lastCapture.getTime() > PORTFOLIO_QUIET_SITE_DAYS * DAY_MS)
@@ -986,9 +884,6 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
       totalBudgetNgn: budget,
       disbursedToDateNgn: disbursed,
       certifiedProgressPct: progress,
-      portfolioHealth: p.portfolioHealth,
-      openConflictCount,
-      unfulfilledHoldPointCount,
       lastFieldCaptureAt: lastCapture?.toISOString() ?? null,
       scheduleVariance: schedule,
       geofence,

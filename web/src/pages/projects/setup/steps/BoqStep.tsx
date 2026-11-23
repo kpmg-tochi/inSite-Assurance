@@ -29,7 +29,7 @@ import {
   type StepProps,
 } from "../setupContext";
 
-type Mapping = Required<Pick<ProjectBoqItemMapping, "boqItemId" | "trancheId" | "isHoldPoint">> & {
+type Mapping = Required<Pick<ProjectBoqItemMapping, "boqItemId" | "isHoldPoint">> & {
   holdPointInstruction: string | null;
   isOpaqueLumpSum: boolean;
   projectContractorId: string | null;
@@ -37,7 +37,6 @@ type Mapping = Required<Pick<ProjectBoqItemMapping, "boqItemId" | "trancheId" | 
 
 const toMapping = (i: BoqItemRecordDto): Mapping => ({
   boqItemId: i.id,
-  trancheId: i.trancheId,
   isHoldPoint: i.isHoldPoint,
   holdPointInstruction: i.holdPointInstruction,
   isOpaqueLumpSum: i.isOpaqueLumpSum,
@@ -64,7 +63,6 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
   const boqQuery = useProjectBoqQuery(projectId);
   const revisions = useBoqRevisionsQuery(projectId, isLive);
   const items = useMemo(() => boqQuery.data ?? [], [boqQuery.data]);
-  const tranches = setup.facility.tranches;
   const contractors = setup.parties.contractors;
   const multiPrime = setup.parties.contractorExecutionMode === "MULTI_PRIME_SEPARATE_IPC";
   const showContractorColumn = contractors.length > 1;
@@ -115,7 +113,7 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
     if (!preview) return;
     const valid: BoqItemInput[] = preview.rows
       .filter((r) => r.item)
-      .map((r) => ({ ...r.item!, holdPointInstruction: null, trancheId: null }));
+      .map((r) => ({ ...r.item!, holdPointInstruction: null }));
     await commitMutation.mutateAsync({ items: valid, mode: "REPLACE", ...(isLive ? { reason: reason.trim() } : {}) });
     setPreview(null);
     setFileName(null);
@@ -124,12 +122,6 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
   };
 
   // ---- Bulk actions --------------------------------------------------------
-  const unmappedWithSuggestion = items.filter((i) => !current(i.id)?.trancheId && i.aiSuggestedTrancheId);
-  const acceptSuggestedTranches = () => {
-    // Only items with a suggestion; anything without one stays unmapped and blocks activation.
-    for (const i of unmappedWithSuggestion) setMapping(i.id, { trancheId: i.aiSuggestedTrancheId });
-  };
-
   const suggest = useSuggestContractorsMutation(projectId);
   const [suggestion, setSuggestion] = useState<ContractorSuggestionResponse | null>(null);
   const [packageTargets, setPackageTargets] = useState<Record<string, string>>({});
@@ -155,7 +147,6 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
     setSuggestion(null);
   };
 
-  const unmapped = items.filter((i) => !current(i.id)?.trancheId).length;
   const unassigned = items.filter((i) => !current(i.id)?.projectContractorId).length;
   const total = items.reduce((s, i) => s + i.budgetedCostNgn, 0);
 
@@ -165,7 +156,7 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
         title={isLive ? "Revise the bill of quantities" : "Upload the bill of quantities"}
         description={
           isLive
-            ? "An upload creates a revision with a reason. Items with certified progress keep at least the certified quantity and rate, and cannot be removed."
+            ? "An upload creates a revision with a reason. Items with progress keep at least the quantity done and their rate, and cannot be removed."
             : "Upload an .xlsx or .csv. The server reads it and shows every row with any problems before anything is saved. A new upload replaces the draft BOQ."
         }
       >
@@ -280,20 +271,11 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
 
       <StepSection
         title="Items"
-        description={`${items.length} item(s), ${formatMoney(total, { currency })}. Every item must be mapped to a tranche${multiPrime ? " and assigned to a contractor" : ""} before activation.`}
+        description={`${items.length} item(s), ${formatMoney(total, { currency })}.${multiPrime ? " Every item must be assigned to a contractor before activation." : ""}`}
         actions={
           !readOnly &&
           items.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={acceptSuggestedTranches}
-                disabled={unmappedWithSuggestion.length === 0}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-                title="Maps unmapped items that have a suggested tranche. Items without a suggestion stay unmapped."
-              >
-                Accept {unmappedWithSuggestion.length} suggested tranche(s)
-              </button>
               {showContractorColumn && (
                 <button
                   type="button"
@@ -309,9 +291,6 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
         }
       >
         <div className="flex flex-wrap gap-2 text-xs">
-          <span className={`rounded-lg px-3 py-1 font-semibold ${unmapped ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800"}`}>
-            {unmapped} not mapped to a tranche
-          </span>
           {multiPrime && (
             <span className={`rounded-lg px-3 py-1 font-semibold ${unassigned ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800"}`}>
               {unassigned} without a contractor
@@ -327,7 +306,7 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
               <div>
                 <p className="text-xs font-bold text-slate-900">Suggested packages</p>
                 <p className="text-[11px] text-slate-500">
-                  {suggestion.engine === "AZURE_OPENAI" ? `AI suggestion (${suggestion.engineDetail ?? "model"})` : "Section and keyword rules"}. Nothing is
+                  Section and keyword rules. Nothing is
                   saved until you apply and save.
                 </p>
               </div>
@@ -382,7 +361,6 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
                   <th className="px-3 py-2 text-right">Amount</th>
                   <th className="px-3 py-2">Lump sum</th>
                   {holdPointsOn && <th className="px-3 py-2">Hold point</th>}
-                  <th className="px-3 py-2">Tranche</th>
                   {showContractorColumn && <th className="px-3 py-2">Contractor</th>}
                 </tr>
               </thead>
@@ -390,7 +368,6 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
                 {items.map((i) => {
                   const m = current(i.id);
                   if (!m) return null;
-                  const suggested = tranches.find((t) => t.id === i.aiSuggestedTrancheId);
                   return (
                     <tr key={i.id} className="border-t border-slate-100 align-top">
                       <td className="px-3 py-2 font-mono">{i.wbsCode}</td>
@@ -398,7 +375,7 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
                         <p>{i.description}</p>
                         <p className="text-[11px] text-slate-400">
                           {i.totalQuantity.toLocaleString()} {i.unit}
-                          {i.cumulativeCertifiedPct > 0 && ` · ${i.cumulativeCertifiedPct}% certified`}
+                          {i.cumulativeCertifiedPct > 0 && ` · ${i.cumulativeCertifiedPct}% done`}
                         </p>
                         {i.opacityWarningReason && <p className="text-[11px] text-amber-700">{i.opacityWarningReason}</p>}
                       </td>
@@ -432,22 +409,6 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
                           />
                         )}
                       </td>}
-                      <td className="px-3 py-2 min-w-[160px]">
-                        <select
-                          className={inputClass(!m.trancheId)}
-                          value={m.trancheId ?? ""}
-                          onChange={(e) => setMapping(i.id, { trancheId: e.target.value || null })}
-                          disabled={readOnly}
-                        >
-                          <option value="">Not mapped</option>
-                          {tranches.map((t) => (
-                            <option key={t.id} value={t.id}>
-                              {t.trancheNumber}. {t.name}
-                            </option>
-                          ))}
-                        </select>
-                        {!m.trancheId && suggested && <p className="mt-1 text-[11px] text-slate-500">Suggested: {suggested.trancheNumber}</p>}
-                      </td>
                       {showContractorColumn && (
                         <td className="px-3 py-2 min-w-[160px]">
                           <select
@@ -471,9 +432,6 @@ export function BoqStep({ projectId, setup, readOnly }: StepProps) {
               </tbody>
             </table>
           </div>
-        )}
-        {tranches.length === 0 && items.length > 0 && (
-          <p className="text-[11px] text-amber-700">Add tranches in the Facility step to map items.</p>
         )}
       </StepSection>
     </div>

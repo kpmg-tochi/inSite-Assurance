@@ -12,7 +12,7 @@ import { useDocumentTypesQuery } from "../../queries/contracts/useContractQuerie
 import { useSaveDocumentTypeMutation } from "../../mutations/contracts/useContractMutations";
 import { StandardTable, TableActionButton, TableBadge, type TableColumnDef } from "../table";
 import { CustomSelect } from "../common";
-import { ModalShell } from "../../pages/reconciliation/components/ModalShell";
+import { ModalShell } from "../common/ModalShell";
 import { primaryButton, secondaryButton, smallInput } from "../contracts/contractUi";
 
 /**

@@ -32,7 +32,7 @@ import {
 } from "../setupContext";
 
 /**
- * "Workflow and process" (Phase 7): template, process switches and both approval chains. Phase 13
+ * "Workflow and process" (Phase 7): template, process switches and the report approval chain. Phase 13
  * adds the contractor default chain, saved through its own chains endpoint (it is not in the step body).
  */
 export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
@@ -41,7 +41,6 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
     () => ({
       config: { ...process.config },
       reportChain: chainFromDto(process.reportChain),
-      disbursementChain: chainFromDto(process.disbursementChain),
     }),
     [process]
   );
@@ -52,7 +51,7 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
   const save = useSaveSetupStepMutation(projectId);
   const templatesQuery = useWorkflowTemplatesQuery(!readOnly);
   const roles = useRoleOptions(
-    process.contractDefaultChain ? [process.reportChain, process.disbursementChain, process.contractDefaultChain] : [process.reportChain, process.disbursementChain]
+    process.contractDefaultChain ? [process.reportChain, process.contractDefaultChain] : [process.reportChain]
   );
   // Phase 13: the contract default chain. A project without one shows the default (saved only if edited).
   const initialDefaultChain = useMemo<ApprovalStepConfig[]>(
@@ -94,13 +93,7 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
     setTemplateNote(null);
     const template = templatesQuery.data?.find((t) => t.id === id);
     if (!template) return;
-    const next = draftFromTemplate(template.config);
-    if (process.disbursementMechanismLocked && next.config.disbursementMechanism !== draft.config.disbursementMechanism) {
-      setTemplateNote(
-        "This template uses a different disbursement mechanism, which is locked on this project. Saving will be refused unless you pick another template."
-      );
-    }
-    setDraft(next);
+    setDraft(draftFromTemplate(template.config));
   };
 
   const send = async (silent: boolean | undefined, confirm: boolean) => {
@@ -108,7 +101,6 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
       workflowTemplateId: templateId,
       config: draft.config,
       reportChain: draft.reportChain,
-      disbursementChain: draft.disbursementChain,
       ...(confirm ? { confirmDeactivateContractorCodes: true } : {}),
     };
     await save.mutateAsync({ stepId: "process", body, silent });
@@ -212,13 +204,12 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
           issues={issues}
           roles={roles}
           disabled={readOnly}
-          mechanismLocked={process.disbursementMechanismLocked}
           chainNote={
             mode === "settings" ? (
               <div className="flex items-start gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 p-3 text-[11px] text-brand-navy">
                 <Info className="w-4 h-4 shrink-0 text-brand-primary" />
                 <span>
-                  Chain and setting changes apply to new items only. Reports and valuations already in approval finish on the
+                  Chain and setting changes apply to new items only. Reports already in approval finish on the
                   chain they started with.
                 </span>
               </div>

@@ -7,7 +7,7 @@ import {
   CheckCircle2,
   X,
   MessageSquarePlus,
-  Sparkles,
+  ListChecks,
   FileWarning,
   Layers,
 } from "lucide-react";
@@ -582,7 +582,7 @@ export function SitePresencePanel({
               )}
             </div>
 
-            {/* Signed Report Summary + AI Evaluation */}
+            {/* Signed report summary + rules checks */}
             <div className="rounded-xl border border-slate-200 p-4 space-y-2.5">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-bold text-slate-800">
@@ -641,15 +641,10 @@ export function SitePresencePanel({
 
               {selectedReport.aiReasoning && (
                 <div className="mt-2 pt-2.5 border-t border-slate-100 flex items-start gap-2 text-[11px] text-slate-600">
-                  <Sparkles className="w-3.5 h-3.5 text-brand-primary shrink-0 mt-0.5" />
+                  <ListChecks className="w-3.5 h-3.5 text-brand-primary shrink-0 mt-0.5" />
                   <div>
                     <span className="font-semibold text-slate-800">
-                      {selectedReport.aiCheckEngine === "AZURE_OPENAI"
-                        ? "AI omission check"
-                        : selectedReport.aiCheckEngine === "RULES"
-                          ? "Rules omission check"
-                          : "Omission check"}
-                      :{" "}
+                      Missing-evidence check:{" "}
                     </span>
                     {selectedReport.aiReasoning}
                   </div>
@@ -707,7 +702,7 @@ export function SitePresencePanel({
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-800">
                         {q.source === "AI_OMISSION_CHECK"
-                          ? "AI Omission Check"
+                          ? "Missing-Evidence Check"
                           : q.source === "AI_STANDARDS_CHECK"
                             ? "Standards Check"
                             : `Monitor Query (${q.raisedByName || "Monitor"})`}

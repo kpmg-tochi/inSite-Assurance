@@ -156,53 +156,21 @@ export async function seedPhase6Projects(p: {
       allowFieldReporting: true,
     },
   });
-  const kanT1 = await prisma.facilityTranche.create({
-    data: {
-      projectId: kan.id,
-      trancheNumber: 1,
-      name: "Tranche 1 — Structure, first fix and services rough-in",
-      allocatedAmountNgn: 1900000000,
-      targetCompletionPct: 60,
-      conditionsPrecedent: {
-        create: [
-          {
-            referenceCode: "CP-01",
-            description: "Approved building permit and environmental clearance on file",
-            isMandatoryForRelease: true,
-            status: "SATISFIED",
-            verifiedAt: daysAgo(35),
-          },
-        ],
-      },
-    },
-  });
-  const kanT2 = await prisma.facilityTranche.create({
-    data: {
-      projectId: kan.id,
-      trancheNumber: 2,
-      name: "Tranche 2 — Finishes, second fix and commissioning",
-      allocatedAmountNgn: 1300000000,
-      targetCompletionPct: 100,
-    },
-  });
   const kanItems: Array<{
     wbs: string; section: string; desc: string; unit: string; qty: number; rate: number;
-    tranche: string; contractor: string; hold?: boolean;
+    contractor: string; hold?: boolean;
   }> = [
-    { wbs: "01.01", section: "BILL 1 — SUBSTRUCTURE", desc: "Reinforced concrete pad foundations and ground beams", unit: "m3", qty: 420, rate: 1_450_000, tranche: kanT1.id, contractor: civ.id, hold: true },
-    { wbs: "01.02", section: "BILL 1 — SUPERSTRUCTURE", desc: "Reinforced concrete frame, columns, beams and suspended slabs", unit: "m3", qty: 610, rate: 1_520_000, tranche: kanT1.id, contractor: civ.id },
-    { wbs: "02.01", section: "BILL 2 — ELECTRICAL", desc: "Supply and install 500kVA transformer and main distribution board", unit: "item", qty: 1, rate: 185_000_000, tranche: kanT1.id, contractor: elec.id },
-    { wbs: "02.02", section: "BILL 2 — ELECTRICAL", desc: "Conduit, cabling and wiring for lighting and power circuits", unit: "m", qty: 18_000, rate: 22_500, tranche: kanT2.id, contractor: elec.id },
-    { wbs: "03.01", section: "BILL 3 — MECHANICAL & PLUMBING", desc: "Cold and hot water supply pipework including pumps", unit: "m", qty: 6_400, rate: 38_000, tranche: kanT1.id, contractor: mep.id },
-    { wbs: "03.02", section: "BILL 3 — MECHANICAL & PLUMBING", desc: "Medical gas pipeline and outlets to wards", unit: "item", qty: 1, rate: 160_000_000, tranche: kanT2.id, contractor: mep.id },
+    { wbs: "01.01", section: "BILL 1 — SUBSTRUCTURE", desc: "Reinforced concrete pad foundations and ground beams", unit: "m3", qty: 420, rate: 1_450_000, contractor: civ.id, hold: true },
+    { wbs: "01.02", section: "BILL 1 — SUPERSTRUCTURE", desc: "Reinforced concrete frame, columns, beams and suspended slabs", unit: "m3", qty: 610, rate: 1_520_000, contractor: civ.id },
+    { wbs: "02.01", section: "BILL 2 — ELECTRICAL", desc: "Supply and install 500kVA transformer and main distribution board", unit: "item", qty: 1, rate: 185_000_000, contractor: elec.id },
+    { wbs: "02.02", section: "BILL 2 — ELECTRICAL", desc: "Conduit, cabling and wiring for lighting and power circuits", unit: "m", qty: 18_000, rate: 22_500, contractor: elec.id },
+    { wbs: "03.01", section: "BILL 3 — MECHANICAL & PLUMBING", desc: "Cold and hot water supply pipework including pumps", unit: "m", qty: 6_400, rate: 38_000, contractor: mep.id },
+    { wbs: "03.02", section: "BILL 3 — MECHANICAL & PLUMBING", desc: "Medical gas pipeline and outlets to wards", unit: "item", qty: 1, rate: 160_000_000, contractor: mep.id },
   ];
   for (const i of kanItems) {
     await prisma.boqItem.create({
       data: {
         projectId: kan.id,
-        trancheId: i.tranche,
-        aiSuggestedTrancheId: i.tranche,
-        trancheMappingConfirmedByMonitor: true,
         projectContractorId: i.contractor,
         wbsCode: i.wbs,
         section: i.section,
@@ -291,15 +259,6 @@ export async function seedPhase6Projects(p: {
       isMainContractor: true,
     },
   });
-  const ognT1 = await prisma.facilityTranche.create({
-    data: {
-      projectId: ogn.id,
-      trancheNumber: 1,
-      name: "Tranche 1 — Roads, drainage and water reticulation",
-      allocatedAmountNgn: 1850000000,
-      targetCompletionPct: 100,
-    },
-  });
   for (const [wbs, desc, unit, qty, rate] of [
     ["01.01", "Estate road sub-base and 40mm asphalt surfacing", "m2", 24_000, 38_000],
     ["01.02", "Precast concrete U-drains along estate roads", "m", 3_200, 95_000],
@@ -308,8 +267,6 @@ export async function seedPhase6Projects(p: {
     await prisma.boqItem.create({
       data: {
         projectId: ogn.id,
-        trancheId: ognT1.id,
-        trancheMappingConfirmedByMonitor: true,
         projectContractorId: ognContractor.id,
         wbsCode: wbs,
         section: "BILL 1 — ESTATE INFRASTRUCTURE",

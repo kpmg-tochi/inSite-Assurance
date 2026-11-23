@@ -36,8 +36,6 @@ const ids = {
   ownerOrg: '',
   otherOrg: '',
   main: '',
-  tranche1: '',
-  tranche2: '',
   item1: '',
   item2: '',
   template: '',
@@ -76,18 +74,17 @@ async function upload(email: string, projectId = ids.project) {
   return presign.body.data.objectKey as string;
 }
 
-async function directVerify(trancheId: string) {
-  return request(app)
-    .post(url('/milestones/direct-verify'))
-    .set(await web('monitor@insite.ng'))
-    .send({
-      trancheId,
-      verificationSummary: 'Verification of the works against the evidence on file.',
-      lineVerifications: [{ boqItemId: trancheId === ids.tranche1 ? ids.item1 : ids.item2, verifiedCumulativePct: 0 }],
-      trancheRecommendation: 'SUPPORT_FULL_RELEASE',
-      certifierDigitalSignatureAck: true,
-      dryRun: true,
-    });
+/**
+ * Redesign R1b: payments are made outside the platform and recorded. The FINAL_PAYMENT gate no
+ * longer refuses; a final payment recorded without an issued certificate is flagged instead.
+ */
+async function recordPaymentOf(kind: 'INTERIM' | 'FINAL' | 'RETENTION_RELEASE', projectId = ids.project, amount = 10_000) {
+  const res = await request(app)
+    .post(url('/payments', projectId))
+    .set(await web('lender@insite.ng'))
+    .send({ kind, paidOn: today, grossAmountNgn: amount, reference: `PV-${kind}-${crypto.randomUUID().slice(0, 6)}` });
+  assert.equal(res.status, 201, JSON.stringify(res.body));
+  return res.body.data.exceptions as string[];
 }
 
 /** An accepted handover response, reviewed through the real route (issues the handover certificate). */
@@ -225,7 +222,6 @@ before(async () => {
         projectTypeSnapshotJson: (snap ?? undefined) as never,
         processConfig: {
           create: {
-            disbursementMechanism: 'MILESTONE_DIRECT_DISBURSEMENT',
             enableHandoverModule: true,
             enableRetentionModule: true,
             enableAiOmissionCheck: false,
@@ -248,11 +244,9 @@ before(async () => {
   ids.project = p.id;
   ids.main = main.id;
   for (const n of [1, 2]) {
-    const t = await prisma.facilityTranche.create({ data: { projectId: p.id, trancheNumber: n, name: `Milestone ${n}`, allocatedAmountNgn: 500_000, targetCompletionPct: 100 } });
     const item = await prisma.boqItem.create({
       data: {
         projectId: p.id,
-        trancheId: t.id,
         projectContractorId: main.id,
         wbsCode: `0${n}.01`,
         section: 'BILL 1',
@@ -263,8 +257,8 @@ before(async () => {
         budgetedCostNgn: 500_000,
       },
     });
-    if (n === 1) [ids.tranche1, ids.item1] = [t.id, item.id];
-    else [ids.tranche2, ids.item2] = [t.id, item.id];
+    if (n === 1) ids.item1 = item.id;
+    else ids.item2 = item.id;
   }
   await prisma.$transaction((tx) => syncContractMilestones(tx, p.id));
 
@@ -283,8 +277,6 @@ before(async () => {
       retentionHeldNgn: 50_000,
     },
   });
-  await prisma.projectContractor.update({ where: { id: r.main.id }, data: { retentionHeldNgn: 50_000 } });
-  await prisma.facilityTranche.create({ data: { projectId: r.p.id, trancheNumber: 1, name: 'Whole project', allocatedAmountNgn: 1_000_000, targetCompletionPct: 100 } });
 });
 
 after(async () => {
@@ -344,11 +336,8 @@ describe('Phase 15', () => {
     assert.equal(move.status, 409);
     assert.match(move.body.error.message, /Certificate of Completion/);
 
-    const final = await directVerify(ids.tranche2);
-    assert.equal(final.status, 409, JSON.stringify(final.body));
-    assert.equal(final.body.error.code, 'COC_REQUIRED');
-    const notFinal = await directVerify(ids.tranche1);
-    assert.notEqual(notFinal.body.error?.code, 'COC_REQUIRED', JSON.stringify(notFinal.body));
+    assert.deepEqual(await recordPaymentOf('FINAL'), ['FINAL_BEFORE_COC']);
+    assert.deepEqual(await recordPaymentOf('INTERIM'), []);
   });
 
   it('slot rules: permission, organisation scope, one slot per person, no edits once signing starts', async () => {
@@ -418,8 +407,7 @@ describe('Phase 15', () => {
   });
 
   it('with the certificate the gates open (final payment, liability period only waits on the handover)', async () => {
-    const final = await directVerify(ids.tranche2);
-    assert.notEqual(final.body.error?.code, 'COC_REQUIRED', JSON.stringify(final.body));
+    assert.deepEqual(await recordPaymentOf('FINAL'), []);
     const p = await request(app).get(url('/phase')).set(await web('monitor@insite.ng'));
     const toRetention = p.body.data.transitions.find((t: { to: string }) => t.to === 'RETENTION_PERIOD');
     assert.equal(toRetention.allowed, false);
@@ -436,7 +424,7 @@ describe('Phase 15', () => {
     assert.equal(res.body.data.handoverCeremony.dueDate, null, 'the ceremony has no date without a certificate');
     const old = await prisma.projectDocument.findUniqueOrThrow({ where: { id: res.body.data.revoked[0].documentId } });
     assert.equal(old.isArchived, true);
-    assert.equal((await directVerify(ids.tranche2)).body.error?.code, 'COC_REQUIRED');
+    assert.deepEqual(await recordPaymentOf('FINAL'), ['FINAL_BEFORE_COC']);
 
     const draft = await request(app).post(url('/completion/certificate')).set(await web('monitor@insite.ng')).send({ completionDate: today, scopeSummary: 'Blocks A and B of the school, all external works and the borehole.' });
     assert.equal(draft.status, 201, JSON.stringify(draft.body));
@@ -478,13 +466,12 @@ describe('Phase 15', () => {
     assert.equal(close.status, 200, JSON.stringify(close.body));
   });
 
-  it('final payment gate on the final retention release (request) and off for the completion stage', async () => {
-    const h = await web('lender@insite.ng');
-    const final = await request(app).post(url('/retention/release-request', ids.retention)).set(h).send({ projectContractorId: (await prisma.projectContractor.findFirstOrThrow({ where: { projectId: ids.retention } })).id, stage: 'FINAL' });
-    assert.equal(final.status, 409, JSON.stringify(final.body));
-    assert.equal(final.body.error.code, 'COC_REQUIRED');
-    const atCompletion = await request(app).post(url('/retention/release-request', ids.retention)).set(h).send({ projectContractorId: (await prisma.projectContractor.findFirstOrThrow({ where: { projectId: ids.retention } })).id, stage: 'COMPLETION' });
-    assert.notEqual(atCompletion.body.error?.code, 'COC_REQUIRED', JSON.stringify(atCompletion.body));
+  it('a retention release without an issued certificate is recorded and flagged', async () => {
+    // The liability period ended 10 days ago and no defect is open: only the certificate is missing.
+    assert.deepEqual(await recordPaymentOf('RETENTION_RELEASE', ids.retention, 20_000), ['RETENTION_RELEASE_BEFORE_COC']);
+    const project = await prisma.project.findUniqueOrThrow({ where: { id: ids.retention } });
+    assert.equal(Number(project.retentionHeldNgn), 30_000);
+    assert.equal(Number(project.retentionReleasedNgn), 20_000);
   });
 
   it('closure checklist: items evaluated live; closing waits on the pending items', async () => {

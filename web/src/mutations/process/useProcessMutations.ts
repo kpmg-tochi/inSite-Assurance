@@ -16,7 +16,7 @@ import {
   updateProjectStandard,
   updateWorkflowTemplate,
 } from '../../api/process/processApi';
-import { getMediaUrl, uploadSupportingDocument } from '../../api/reconciliation/reconciliationApi';
+import { getMediaUrl, uploadSupportingDocument } from '../../api/evidence/mediaApi';
 import {
   needsAssessmentsKey,
   projectStandardsKey,
@@ -109,7 +109,6 @@ export const useUploadNeedsAssessmentMutation = (projectId: string) => {
       file: File;
       title: string;
       documentType: NeedsAssessmentDocType;
-      requestAiSummary: boolean;
     }) => {
       const objectKey = await uploadSupportingDocument({ projectId, file: args.file, mediaType: 'PROJECT_DOCUMENT' });
       return registerNeedsAssessment(projectId, {
@@ -118,17 +117,12 @@ export const useUploadNeedsAssessmentMutation = (projectId: string) => {
         objectKey,
         mimeType: args.file.type || 'application/octet-stream',
         byteSize: args.file.size,
-        requestAiSummary: args.requestAiSummary,
       });
     },
     onSuccess: (doc) => {
       queryClient.invalidateQueries({ queryKey: needsAssessmentsKey(projectId) });
       queryClient.invalidateQueries({ queryKey: projectSetupKey(projectId) });
-      toast.success(
-        doc.summaryStatus === 'PENDING'
-          ? `"${doc.title}" uploaded. The summary is pending.`
-          : `"${doc.title}" uploaded.`
-      );
+      toast.success(`"${doc.title}" uploaded.`);
     },
     onError: (err) => toast.error(errorMessage(err, 'Could not upload the document.')),
   });

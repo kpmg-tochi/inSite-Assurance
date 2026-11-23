@@ -17,17 +17,6 @@ export interface DefaultRoleDefinition {
   permissionKeys: string[];
 }
 
-/**
- * D-3.1: permissions that must be held explicitly. The Tenant Super Admin default role does not
- * receive them, and the platform super admin bypass does not apply to them.
- */
-export const SEGREGATED_DISBURSEMENT_PERMISSIONS: string[] = [
-  'ipc:certify_valuation',
-  'tranche:approve_disbursement',
-  // Phase 7: direct milestone verification is a certification, so it is segregated the same way.
-  'milestone:verify_direct_release',
-];
-
 const FIELD_BASE_PERMISSIONS = [
   'boq:view',
   'field:join_project',
@@ -47,17 +36,14 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
     fieldPersonaType: 'NONE',
     assuranceWeight: 1.0,
     requiresIdentityAssurance: false,
-    // D-3.1 segregation of duties: governance does not include certifying or approving.
-    permissionKeys: SYSTEM_PERMISSIONS_CATALOG.map((p) => p.key).filter(
-      (key) => !SEGREGATED_DISBURSEMENT_PERMISSIONS.includes(key)
-    ),
+    permissionKeys: SYSTEM_PERMISSIONS_CATALOG.map((p) => p.key),
   },
   {
     name: 'Independent Monitor',
     code: 'MONITOR',
     codeSuffix: null,
     description:
-      'Licensed Quantity Surveyor or COREN Engineer certifying physical-to-financial progress and managing site hold-points.',
+      'Monitoring and evaluation lead: sets up projects, reviews field reports, runs inspections and drives completion.',
     surface: 'WEB',
     fieldPersonaType: 'NONE',
     assuranceWeight: 1.0,
@@ -86,12 +72,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'reports:view_all',
       'reports:raise_query',
       'reports:approve_completion',
-      'ipc:view',
-      'ipc:submit_claim',
-      'ipc:trigger_ai_reconcile',
-      'ipc:certify_valuation',
-      'milestone:verify_direct_release',
-      'valuation:export_pdf',
+      'payments:view',
       'audit:view_ledger',
       'handover:manage_links',
       'handover:review_feedback',
@@ -118,11 +99,11 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
     ],
   },
   {
-    name: 'Lender / Guarantor',
+    name: 'Funder / Finance Officer',
     code: 'LENDER',
     codeSuffix: null,
     description:
-      'Project financier or credit committee officer reviewing certified valuations and approving tranche disbursements.',
+      'Funding organisation or finance officer: records payments made outside the platform and tracks retention.',
     surface: 'WEB',
     fieldPersonaType: 'NONE',
     assuranceWeight: 1.0,
@@ -138,12 +119,10 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'assurance:review_credentials',
       'presence:view_telemetry',
       'reports:view_all',
-      'ipc:view',
-      'tranche:approve_disbursement',
-      'valuation:export_pdf',
+      'payments:view',
+      'payments:record',
       'audit:view_ledger',
       'handover:review_feedback',
-      'retention:release_escrow',
       'inspections:view',
       // Phase 13
       'documents:view',
@@ -159,7 +138,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
     code: 'CONTRACTOR',
     codeSuffix: null,
     description:
-      'Contractor portal for submitting IPC claims, responding to monitor queries, and viewing assigned BOQ baselines.',
+      'Contractor portal for responding to monitor queries and viewing assigned BOQ baselines.',
     surface: 'WEB',
     fieldPersonaType: 'NONE',
     assuranceWeight: 0.4,
@@ -169,8 +148,6 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'boq:view',
       'mobilization:manage_roster',
       'reports:respond_query',
-      'ipc:view',
-      'ipc:submit_claim',
       'retention:manage_defects',
       // Phase 14: sees and resolves inspection findings aimed at its organisation.
       'inspections:view',
@@ -201,8 +178,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'boq:view',
       'schedule:view_variance',
       'reports:view_all',
-      'ipc:view',
-      'valuation:export_pdf',
+      'payments:view',
       'audit:view_ledger',
       'inspections:view',
       // Phase 13: the owner's executives decide contractor default cases.

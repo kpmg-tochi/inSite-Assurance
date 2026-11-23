@@ -1,6 +1,5 @@
 import type {
   AssignDefectTicketRequest,
-  CertifyRetentionReleaseRequest,
   ChangeProjectPhaseRequest,
   ConvertSnagsInput,
   CreateDefectTicketInput,
@@ -9,14 +8,10 @@ import type {
   HandoverLinkDto,
   HandoverLinkIssuedDto,
   HandoverSubmissionDto,
-  LenderTrancheDecisionRequest,
   ProjectPhaseDto,
   RectifyDefectTicketInput,
   RejectDefectTicketRequest,
-  RequestRetentionReleaseRequest,
-  RetentionReleaseRequestDto,
   RetentionSummaryDto,
-  TrancheDecisionDto,
   VerifyDefectTicketInput,
 } from '@insite/shared';
 import { api } from '../../config/apiConfig';
@@ -106,37 +101,5 @@ export const actOnDefectTicket = async (projectId: string, ticketId: string, act
 
 export const getRetentionSummary = async (projectId: string) => {
   const { data } = await api.get<ApiEnvelope<RetentionSummaryDto>>(`/projects/${projectId}/retention`);
-  return data.data;
-};
-
-export const requestRetentionRelease = async (projectId: string, body: RequestRetentionReleaseRequest) => {
-  const { data } = await api.post<ApiEnvelope<RetentionReleaseRequestDto>>(`/projects/${projectId}/retention/release-request`, body);
-  return data.data;
-};
-
-export const certifyRetentionRelease = async (projectId: string, requestId: string, body: CertifyRetentionReleaseRequest) => {
-  const { data } = await api.post<ApiEnvelope<RetentionReleaseRequestDto>>(
-    `/projects/${projectId}/retention/release-requests/${requestId}/certify`,
-    body
-  );
-  return data.data;
-};
-
-export const cancelRetentionRelease = async (projectId: string, requestId: string) => {
-  const { data } = await api.post<ApiEnvelope<RetentionReleaseRequestDto>>(
-    `/projects/${projectId}/retention/release-requests/${requestId}/cancel`
-  );
-  return data.data;
-};
-
-export const decideRetentionRelease = async (
-  projectId: string,
-  valuationId: string,
-  body: Omit<LenderTrancheDecisionRequest, 'valuationReportId'>
-) => {
-  const { data } = await api.post<ApiEnvelope<TrancheDecisionDto>>(
-    `/projects/${projectId}/retention/valuations/${valuationId}/decision`,
-    body
-  );
   return data.data;
 };

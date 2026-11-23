@@ -139,8 +139,7 @@ export async function deleteRegistrationBody(webUser: WebJwtPayload, bodyId: str
     const body = await tx.professionalRegistrationBody.findFirst({ where: { id: bodyId, tenantId } });
     if (!body) throw new AppError('Registration body not found', 404, 'REGISTRATION_BODY_NOT_FOUND');
     const used = await tx.user.count({ where: { tenantId, professionalRegistrationBodyCode: body.code } });
-    const snapshotted = await tx.valuationReport.count({ where: { project: { tenantId }, certifierLicenseType: body.code } });
-    const referenced = used + snapshotted > 0;
+    const referenced = used > 0;
     if (referenced) await tx.professionalRegistrationBody.update({ where: { id: body.id }, data: { isArchived: true } });
     else await tx.professionalRegistrationBody.delete({ where: { id: body.id } });
     await recordAuditEvent(tx, {

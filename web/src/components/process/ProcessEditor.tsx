@@ -1,7 +1,7 @@
 import React from "react";
 import { ProcessConfigEditor } from "./ProcessConfigEditor";
 import { ApprovalChainEditor, type RoleOption } from "./ApprovalChainEditor";
-import { withMechanism, type ProcessDraft, type ProcessIssues } from "./processState";
+import type { ProcessDraft, ProcessIssues } from "./processState";
 
 function Block({ title, description, children }: { title: string; description?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -16,7 +16,7 @@ function Block({ title, description, children }: { title: string; description?: 
 }
 
 /**
- * The process switches and both approval chains. Shared by the wizard's "Workflow and process"
+ * The process switches and the report approval chain. Shared by the wizard's "Workflow and process"
  * step, project settings and the workflow-template editor.
  */
 export function ProcessEditor({
@@ -25,7 +25,6 @@ export function ProcessEditor({
   issues,
   roles,
   disabled,
-  mechanismLocked,
   chainNote,
 }: {
   draft: ProcessDraft;
@@ -33,7 +32,6 @@ export function ProcessEditor({
   issues: ProcessIssues;
   roles: RoleOption[];
   disabled?: boolean;
-  mechanismLocked?: boolean;
   /** Shown above the chains (e.g. "applies to new items only"). */
   chainNote?: React.ReactNode;
 }) {
@@ -42,9 +40,7 @@ export function ProcessEditor({
       <ProcessConfigEditor
         value={draft.config}
         onChange={(config) => onChange({ ...draft, config })}
-        onMechanismChange={(m) => onChange(withMechanism(draft, m))}
         disabled={disabled}
-        mechanismLocked={mechanismLocked}
       />
 
       {chainNote}
@@ -67,19 +63,6 @@ export function ProcessEditor({
         />
       </Block>
 
-      <Block
-        title="Disbursement approval chain"
-        description="Certification comes first and release comes last; both are fixed. Add review steps between them, optionally only above an amount."
-      >
-        <ApprovalChainEditor
-          chainType="DISBURSEMENT"
-          steps={draft.disbursementChain}
-          onChange={(disbursementChain) => onChange({ ...draft, disbursementChain })}
-          disabled={disabled}
-          roles={roles}
-          issues={issues.disbursement}
-        />
-      </Block>
     </div>
   );
 }

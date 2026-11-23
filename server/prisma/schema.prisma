@@ -55,22 +55,8 @@ enum PermissionCategory {
   MOBILIZATION_ASSURANCE
   FIELD_PRESENCE
   REPORT_APPROVALS
-  FINANCIAL_IPC
+  PAYMENTS
   AUDIT_CLOSEOUT
-}
-
-// Phase 12: how a payment milestone (tranche) pays.
-enum TranchePaymentBasis {
-  MEASURED
-  FIXED_ON_COMPLETION
-}
-
-// Phase 12: when a fixed payment milestone counts as complete (Phase 13 adds CONTRACT_MILESTONE_DONE).
-enum TrancheCompletionRule {
-  ALL_ITEMS_COMPLETE
-  WEIGHTED_PROGRESS_REACHED
-  // Phase 13
-  CONTRACT_MILESTONE_DONE
 }
 
 // FieldPersonaType replaces static IndependenceTier enum on Role & FieldAgentSession
@@ -121,19 +107,6 @@ enum ReportingCadence {
   QUARTERLY
 }
 
-enum PortfolioHealth {
-  EVIDENCE_SUPPORTED
-  EVIDENCE_PARTIAL
-  EVIDENCE_CONFLICT
-}
-
-enum EvidenceStrengthRating {
-  SUPPORTED
-  PARTIALLY_SUPPORTED
-  UNSUPPORTED
-  CONTRADICTED
-}
-
 enum EvidenceLogStatus {
   REGISTERED
   FLAGGED_INTEGRITY
@@ -155,11 +128,6 @@ enum DocumentRequirementMode {
   DISABLED
 }
 
-enum DisbursementMechanism {
-  IPC_CLAIM_REQUIRED
-  MILESTONE_DIRECT_DISBURSEMENT
-}
-
 enum StandardCategory {
   MATERIAL_QUALITY
   EXECUTION_METHOD
@@ -178,14 +146,12 @@ enum NeedsAssessmentDocType {
 
 enum ApprovalChainType {
   REPORT
-  DISBURSEMENT
   // Phase 13
   CONTRACT_DEFAULT
 }
 
 enum ApprovalSubjectType {
   WORKDAY_REPORT
-  VALUATION_REPORT
   // Phase 14
   SITE_INSPECTION
   // Phase 13
@@ -209,13 +175,6 @@ enum ReportQuerySource {
   AI_STANDARDS_CHECK
 }
 
-enum ValuationSource {
-  IPC_CLAIM
-  MILESTONE_DIRECT
-  // Phase 10: release of held retention (no IPC, no milestone verification)
-  RETENTION_RELEASE
-}
-
 enum WorkdayAiCheckStatus {
   PENDING
   RUNNING
@@ -231,38 +190,9 @@ enum MediaType {
   LAB_CUBE_TEST_CERT
   MILL_CERTIFICATE
   BOQ_SPREADSHEET
-  VALUATION_REPORT_PDF
   IDENTITY_DOCUMENT
   IDENTITY_SELFIE
   PROJECT_DOCUMENT
-}
-
-enum ConditionPrecedentStatus {
-  PENDING
-  SATISFIED
-  WAIVED
-  BREACHED
-}
-
-enum IpcClaimStatus {
-  SUBMITTED
-  AI_RECONCILED
-  QUERIED_BY_MONITOR
-  MONITOR_CERTIFIED
-  LENDER_DECIDED
-  REJECTED_WITHDRAWN
-}
-
-enum MonitorRecommendation {
-  SUPPORT_FULL_RELEASE
-  SUPPORT_WITH_HOLDBACK
-  HOLD
-}
-
-enum LenderDecisionType {
-  APPROVE_FULL
-  APPROVE_WITH_HOLDBACK
-  HOLD
 }
 
 enum QueryStatus {
@@ -303,12 +233,9 @@ enum AuditActionType {
   EVIDENCE_EXTRACTED
   EVIDENCE_CONFIRMED
   EVIDENCE_FLAGGED_INTEGRITY
-  IPC_SUBMITTED
-  AI_RECONCILIATION_COMPLETED
+  // Field-report queries (raised by a monitor, answered by the reporter)
   MONITOR_QUERY_RAISED
   CONTRACTOR_QUERY_RESPONDED
-  VALUATION_REPORT_CERTIFIED
-  LENDER_TRANCHE_DECIDED
   INCIDENT_REPORT_SUBMITTED
   INCIDENT_STATUS_UPDATED
   PUSH_TOKEN_REGISTERED
@@ -318,11 +245,6 @@ enum AuditActionType {
   USER_DEACTIVATED
   JOIN_CODE_ROTATED
   LOGIN_FAILED_LOCKOUT
-  CP_STATUS_CHANGED
-  CP_WAIVED
-  MONITOR_QUERY_RESOLVED
-  IPC_WITHDRAWN
-  TRANCHE_DECISION_REVERSED
   TENANT_SETTINGS_UPDATED
   CAPTURE_REGISTERED
   CAPTURE_FLAGGED_INTEGRITY
@@ -354,7 +276,6 @@ enum AuditActionType {
   WORKDAY_REPORT_RETURNED
   STANDARDS_VIOLATION_FLAGGED
   APPROVAL_STEP_ACTIONED
-  DIRECT_MILESTONE_VERIFIED
   // Phase 8
   REPORT_SUBMITTED_LATE
   REPORT_MISSED
@@ -381,8 +302,6 @@ enum AuditActionType {
   DEFECT_TICKET_UPDATED
   DEFECT_TICKET_CLOSED
   RETENTION_RELEASED
-  RETENTION_RELEASE_REQUESTED
-  RETENTION_RELEASE_CANCELLED
   // Phase 11
   PROJECT_TYPE_SAVED
   PROJECT_TYPE_APPLIED
@@ -430,6 +349,9 @@ enum AuditActionType {
   CONTRACTOR_RATED
   LESSON_PUBLISHED
   CLOSURE_PACK_EXPORTED
+  // Redesign R1b: payments are made outside the platform and recorded here
+  PAYMENT_RECORDED
+  PAYMENT_VOIDED
 }
 
 // Phase 11: which organisation an approval step actor must belong to (ANY = Phase 7 behaviour).
@@ -481,17 +403,6 @@ enum DefectTicketStatus {
   RECTIFIED_PENDING_VERIFICATION
   VERIFIED_CLOSED
   REJECTED_NOT_A_DEFECT
-}
-
-enum RetentionReleaseStage {
-  COMPLETION
-  FINAL
-}
-
-enum RetentionReleaseRequestStatus {
-  PENDING_CERTIFICATION
-  CERTIFIED
-  CANCELLED
 }
 
 // Phase 8: cadence, mobilization, attendance, jobs and outbound messages
@@ -587,8 +498,6 @@ model Tenant {
   defaultCurrency                String         @default("NGN")
   timezone                       String         @default("Africa/Lagos")
   brandingConfig                 Json           @default("{}")
-  // Display label and description per canonical EvidenceStrengthRating (decision B).
-  evidenceRatingLabels           Json           @default("{}")
   // Phase 6 settings
   organizationInputMode          OrgInputMode   @default(BOTH)
   enabledGeofenceModes           GeofenceMode[] @default([RADIAL, LINEAR_CORRIDOR, PERIMETER])
@@ -745,17 +654,9 @@ model User {
   fieldSessions              FieldAgentSession[]
   organization               Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   projectAssignments         UserProjectAssignment[]
-  certifiedReports           ValuationReport[]            @relation("CertifiedByMonitor")
-  trancheDecisions           TrancheDecision[]            @relation("DecidedByLender")
-  submittedIpcClaims         IpcClaim[]                   @relation("SubmittedIpcClaims")
-  waivedConditions           ConditionPrecedent[]         @relation("WaivedConditions")
-  raisedMonitorQueries       MonitorQuery[]               @relation("RaisedMonitorQueries")
-  respondedMonitorQueries    MonitorQuery[]               @relation("RespondedMonitorQueries")
-  resolvedMonitorQueries     MonitorQuery[]               @relation("ResolvedMonitorQueries")
   pushTokens                 PushToken[]
   raisedReportQueries        ReportQuery[]                @relation("RaisedReportQueries")
   approvalActions            ApprovalAction[]
-  milestoneVerifications     MilestoneVerification[]
   expectedParticipations     ExpectedProjectParticipant[]
   initiatedScheduleRevisions ScheduleRevision[]           @relation("ScheduleRevisionInitiator")
   approvedScheduleRevisions  ScheduleRevision[]           @relation("ScheduleRevisionApprover")
@@ -810,7 +711,6 @@ model Project {
   geofenceGeoJson         Json? // ProjectGeofence: radial, linear corridor or perimeter
   // Tolerance band outside the boundary; null uses Tenant.defaultGeofenceToleranceMeters.
   geofenceToleranceMeters Int?
-  portfolioHealth         PortfolioHealth  @default(EVIDENCE_PARTIAL)
 
   // Phase 8: cadence. ISO weekdays (1 = Monday). reportDueTime null = workdayEndTime.
   workWeekDays                    Int[]   @default([1, 2, 3, 4, 5, 6])
@@ -892,10 +792,8 @@ model Project {
   userAssignments        UserProjectAssignment[]
   joinCodes              ProjectJoinCode[]
   fieldSessions          FieldAgentSession[]
-  tranches               FacilityTranche[]
   boqItems               BoqItem[]
   evidenceLogs           FieldEvidenceLog[]
-  ipcClaims              IpcClaim[]
   auditLogs              AuditLog[]
   incidentReports        IncidentReport[]
   workdayReports         WorkdayReport[]
@@ -912,8 +810,6 @@ model Project {
   approvalActions        ApprovalAction[]
   standards              ProjectStandardSpecification[]
   needsAssessments       ProjectNeedsAssessmentDocument[]
-  valuationReports       ValuationReport[]
-  milestoneVerifications MilestoneVerification[]
   // Phase 8
   reportingObligations   ReportingObligation[]
   expectedParticipants   ExpectedProjectParticipant[]
@@ -926,7 +822,6 @@ model Project {
   handoverLinks          HandoverLink[]
   handoverSubmissions    HandoverSubmission[]
   defectTickets          RetentionDefectTicket[]
-  retentionReleases      RetentionReleaseRequest[]
   // Phase 14
   reportingStreams       ProjectReportingStream[]
   siteInspections        SiteInspectionReport[]
@@ -939,6 +834,7 @@ model Project {
   programmeSubmissions   ProgrammeOfWorksSubmission[]
   // Phase 15
   completionCertificates CompletionCertificate[]
+  payments               ProjectPayment[]
   closureChecklistItems  ClosureChecklistItemState[]
   contractorRatings      ContractorPerformanceRating[]
   lessonsLearned         LessonLearned[]
@@ -948,7 +844,6 @@ model Project {
   @@unique([tenantId, codePrefix])
   @@index([tenantId])
   @@index([tenantId, status])
-  @@index([portfolioHealth])
   @@index([monitorOrganizationId])
   @@index([lenderOrganizationId])
   @@index([owningOrganizationId])
@@ -969,9 +864,6 @@ model ProjectContractor {
   allowFieldReporting         Boolean        @default(true)
   plannedMobilizationDate     DateTime?      @db.Date
   plannedCompletionDate       DateTime?      @db.Date
-  // Phase 10: retention per contractor (the project holds the sums).
-  retentionHeldNgn            Decimal        @default(0) @db.Decimal(18, 2)
-  retentionReleasedNgn        Decimal        @default(0) @db.Decimal(18, 2)
   // Phase 13: contract state. A terminated contractor keeps its history (IPCs, certified progress,
   // retention); a replacement points back to it.
   contractStatus              ContractStatus @default(ACTIVE)
@@ -986,10 +878,8 @@ model ProjectContractor {
   boqItems             BoqItem[]
   joinCodes            ProjectJoinCode[]
   fieldSessions        FieldAgentSession[]
-  ipcClaims            IpcClaim[]
   expectedParticipants ExpectedProjectParticipant[]
   defectTickets        RetentionDefectTicket[]
-  retentionReleases    RetentionReleaseRequest[]
   // Phase 14
   reportingStreams     ProjectReportingStream[]
   inspectionFindings   InspectionFinding[]
@@ -1159,69 +1049,13 @@ model MobileDevice {
   @@map("mobile_devices")
 }
 
-model FacilityTranche {
-  id                             String                 @id @default(uuid()) @db.Uuid
-  projectId                      String                 @db.Uuid
-  trancheNumber                  Int
-  name                           String // e.g., "Tranche 2 — Substructure & Box Culverts"
-  allocatedAmountNgn             Decimal                @db.Decimal(18, 2)
-  releasedAmountNgn              Decimal                @default(0) @db.Decimal(18, 2)
-  targetCompletionPct            Decimal                @db.Decimal(5, 2)
-  isReleased                     Boolean                @default(false)
-  // Phase 12: payment basis. Fixed: pays fixedReleaseAmountNgn (null = allocated) once completionRule is met.
-  paymentBasis                   TranchePaymentBasis    @default(MEASURED)
-  completionRule                 TrancheCompletionRule?
-  fixedReleaseAmountNgn          Decimal?               @db.Decimal(18, 2)
-  // ALL_ITEMS_COMPLETE: the percentage every mapped item must reach.
-  completionRequiredItemPct      Decimal                @default(100) @db.Decimal(5, 2)
-  // Phase 13: CONTRACT_MILESTONE_DONE names a contract milestone by key.
-  completionContractMilestoneKey String?
-  createdAt                      DateTime               @default(now())
-  updatedAt                      DateTime               @updatedAt
-
-  project                Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  conditionsPrecedent    ConditionPrecedent[]
-  boqItems               BoqItem[]
-  ipcClaims              IpcClaim[]
-  valuationReports       ValuationReport[]
-  milestoneVerifications MilestoneVerification[]
-
-  @@unique([projectId, trancheNumber])
-}
-
-model ConditionPrecedent {
-  id                    String                   @id @default(uuid()) @db.Uuid
-  trancheId             String                   @db.Uuid
-  referenceCode         String // e.g., "CP-01"
-  description           String
-  isMandatoryForRelease Boolean                  @default(true)
-  status                ConditionPrecedentStatus @default(PENDING)
-  // Phase 13: replaces evidenceDocumentUrl (decision A: no backfill).
-  evidenceDocumentId    String?                  @db.Uuid
-  verifiedAt            DateTime?
-  waivedByUserId        String?                  @db.Uuid
-  waiverReason          String?
-  statusChangedAt       DateTime?
-  createdAt             DateTime                 @default(now())
-  updatedAt             DateTime                 @updatedAt
-
-  tranche          FacilityTranche  @relation(fields: [trancheId], references: [id], onDelete: Cascade)
-  waivedByUser     User?            @relation("WaivedConditions", fields: [waivedByUserId], references: [id], onDelete: SetNull)
-  evidenceDocument ProjectDocument? @relation("CpEvidenceDocument", fields: [evidenceDocumentId], references: [id], onDelete: SetNull)
-
-  @@index([trancheId])
-}
-
 model BoqItem {
-  id                               String  @id @default(uuid()) @db.Uuid
-  projectId                        String  @db.Uuid
-  trancheId                        String? @db.Uuid
-  aiSuggestedTrancheId             String? @db.Uuid
-  trancheMappingConfirmedByMonitor Boolean @default(false)
+  id                  String  @id @default(uuid()) @db.Uuid
+  projectId           String  @db.Uuid
   // Contractor package (Phase 6); required for every item in multi-prime before activation.
-  projectContractorId              String? @db.Uuid
+  projectContractorId String? @db.Uuid
   // Last post-activation BOQ revision that changed this item.
-  lastRevisionId                   String? @db.Uuid
+  lastRevisionId      String? @db.Uuid
 
   wbsCode         String // e.g., "02.03.1"
   section         String // e.g., "BILL NO. 2 — DRAINAGE & CULVERTS"
@@ -1255,11 +1089,9 @@ model BoqItem {
   updatedAt DateTime @updatedAt
 
   project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tranche              FacilityTranche?          @relation(fields: [trancheId], references: [id], onDelete: SetNull)
   projectContractor    ProjectContractor?        @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
   lastRevision         BoqRevision?              @relation(fields: [lastRevisionId], references: [id], onDelete: SetNull)
   evidenceLogs         FieldEvidenceLog[]
-  ipcLineItems         IpcLineItem[]
   incidentReports      IncidentReport[]
   workdayReports       WorkdayReport[]
   morningBriefs        MorningDeliverableBrief[]
@@ -1270,7 +1102,6 @@ model BoqItem {
   successorLinks       BoqItemDependency[]       @relation("DependencyPredecessor")
 
   @@unique([projectId, wbsCode])
-  @@index([projectId, trancheId])
   @@index([projectId, projectContractorId])
 }
 
@@ -1373,217 +1204,6 @@ model EvidenceMedia {
   @@index([evidenceLogId])
   @@index([tenantId, sha256FileHash])
   @@index([tenantId, mediaType])
-}
-
-model IpcClaim {
-  id                    String         @id @default(uuid()) @db.Uuid
-  projectId             String         @db.Uuid
-  trancheId             String         @db.Uuid
-  // The contractor that submitted it (Phase 6). IPC numbers run per contractor.
-  projectContractorId   String?        @db.Uuid
-  ipcNumber             Int
-  periodStart           DateTime
-  periodEnd             DateTime
-  contractorCoverNote   String?
-  totalClaimedAmountNgn Decimal        @db.Decimal(18, 2)
-  totalCertifiedNgn     Decimal?       @db.Decimal(18, 2)
-  status                IpcClaimStatus @default(SUBMITTED)
-  aiExecutiveSummary    String?
-  submittedByUserId     String         @db.Uuid
-  // AZURE_OPENAI or RULES_ENGINE; null until reconciliation has run.
-  ratingEngine          String?
-  ratingEngineDetail    String?
-  reconciledAt          DateTime?
-  submittedAt           DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-
-  project             Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tranche             FacilityTranche         @relation(fields: [trancheId], references: [id], onDelete: Restrict)
-  projectContractor   ProjectContractor?      @relation(fields: [projectContractorId], references: [id], onDelete: Restrict)
-  submittedByUser     User                    @relation("SubmittedIpcClaims", fields: [submittedByUserId], references: [id])
-  lineItems           IpcLineItem[]
-  supportingDocuments IpcSupportingDocument[]
-  valuationReports    ValuationReport[]
-
-  @@unique([projectId, projectContractorId, ipcNumber])
-  @@index([projectId, status])
-  @@index([trancheId, status])
-  @@index([projectContractorId])
-}
-
-model IpcLineItem {
-  id         String @id @default(uuid()) @db.Uuid
-  ipcClaimId String @db.Uuid
-  boqItemId  String @db.Uuid
-
-  previousCertifiedPct Decimal @default(0) @db.Decimal(5, 2)
-  contractorClaimedPct Decimal @db.Decimal(5, 2)
-  contractorClaimedNgn Decimal @db.Decimal(18, 2)
-  contractorRemarks    String?
-
-  // AI Auditor Co-Pilot Output (Never legally certifies completion %)
-  aiEvidenceRating             EvidenceStrengthRating @default(UNSUPPORTED)
-  aiRationale                  String?
-  visitPlannerFlag             Boolean                @default(false)
-  visitPlannerReason           String?
-  missingHoldPointFlag         Boolean                @default(false)
-  highestCorroboratingRoleName String?
-  highestCorroboratingWeight   Float?
-  corroboratingEvidenceLogIds  Json                   @default("[]")
-  evidenceQuantityTotal        Decimal?               @db.Decimal(18, 3)
-  evidenceCoveragePct          Decimal?               @db.Decimal(9, 2)
-  ratingEngine                 String?
-  ruleCapsApplied              Json                   @default("[]")
-
-  // Human Monitor (QS / COREN) Certified Valuation
-  monitorCertifiedPct Decimal? @db.Decimal(5, 2)
-  monitorCertifiedNgn Decimal? @db.Decimal(18, 2)
-  monitorRemarks      String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  ipcClaim IpcClaim       @relation(fields: [ipcClaimId], references: [id], onDelete: Cascade)
-  boqItem  BoqItem        @relation(fields: [boqItemId], references: [id], onDelete: Restrict)
-  queries  MonitorQuery[]
-
-  @@unique([ipcClaimId, boqItemId])
-}
-
-model IpcSupportingDocument {
-  id         String    @id @default(uuid()) @db.Uuid
-  ipcClaimId String    @db.Uuid
-  boqItemId  String?   @db.Uuid
-  title      String
-  mediaType  MediaType
-  objectKey  String
-  fileUrl    String?
-  uploadedAt DateTime  @default(now())
-
-  ipcClaim IpcClaim @relation(fields: [ipcClaimId], references: [id], onDelete: Cascade)
-
-  @@index([ipcClaimId])
-}
-
-model MonitorQuery {
-  id                          String      @id @default(uuid()) @db.Uuid
-  ipcLineItemId               String      @db.Uuid
-  status                      QueryStatus @default(OPEN)
-  queryReason                 String
-  requestedProofTypes         Json        @default("[]")
-  contractorResponseText      String?
-  revisedClaimedCumulativePct Decimal?    @db.Decimal(5, 2)
-  attachedDocumentsJson       Json        @default("[]")
-  raisedByUserId              String?     @db.Uuid
-  respondedByUserId           String?     @db.Uuid
-  resolvedByUserId            String?     @db.Uuid
-  resolutionNote              String?
-  createdAt                   DateTime    @default(now())
-  respondedAt                 DateTime?
-  resolvedAt                  DateTime?
-
-  ipcLineItem     IpcLineItem @relation(fields: [ipcLineItemId], references: [id], onDelete: Cascade)
-  raisedByUser    User?       @relation("RaisedMonitorQueries", fields: [raisedByUserId], references: [id], onDelete: SetNull)
-  respondedByUser User?       @relation("RespondedMonitorQueries", fields: [respondedByUserId], references: [id], onDelete: SetNull)
-  resolvedByUser  User?       @relation("ResolvedMonitorQueries", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
-
-  @@index([ipcLineItemId, status])
-}
-
-// One certification. Phase 7: either of an IPC (source IPC_CLAIM, ipcClaimId set) or of a direct
-// milestone verification (source MILESTONE_DIRECT, ipcClaimId null). A CHECK constraint
-// (ValuationReport_source_ipc_check, raw SQL) keeps ipcClaimId set exactly when source = IPC_CLAIM.
-model ValuationReport {
-  id                            String                @id @default(uuid()) @db.Uuid
-  projectId                     String                @db.Uuid
-  trancheId                     String                @db.Uuid
-  source                        ValuationSource       @default(IPC_CLAIM)
-  ipcClaimId                    String?               @db.Uuid
-  milestoneVerificationId       String?               @unique @db.Uuid
-  // Disbursement chain this valuation runs on (null for valuations made before chains existed).
-  approvalChainVersion          Int?
-  // Step order being waited on; 0 once the valuation was returned.
-  currentApprovalStep           Int                   @default(0)
-  revisionNumber                Int                   @default(1)
-  certifiedByUserId             String                @db.Uuid
-  trancheRecommendation         MonitorRecommendation
-  recommendedReleaseAmountNgn   Decimal               @db.Decimal(18, 2)
-  recommendedHoldbackAmountNgn  Decimal               @db.Decimal(18, 2)
-  executiveCertificationSummary String
-  // Snapshots copied from the certifying User at certification time, never from the request.
-  certifierFullName             String
-  // Phase 12: registration snapshot (body code, number, body name and prefix as they were). All null
-  // when the certifier gave none (policy OPTIONAL) or the policy was HIDDEN.
-  certifierLicenseType          String?
-  certifierLicenseNumber        String?
-  certifierRegistrationBodyName String?
-  certifierRegistrationPrefix   String?
-  totalClaimedNgn               Decimal               @db.Decimal(18, 2)
-  totalCertifiedNgn             Decimal               @db.Decimal(18, 2)
-  reportPdfObjectKey            String?
-  reportPdfUrl                  String?
-  certifiedAt                   DateTime              @default(now())
-  supersededAt                  DateTime?
-
-  project               Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tranche               FacilityTranche          @relation(fields: [trancheId], references: [id], onDelete: Restrict)
-  ipcClaim              IpcClaim?                @relation(fields: [ipcClaimId], references: [id], onDelete: Cascade)
-  milestoneVerification MilestoneVerification?   @relation(fields: [milestoneVerificationId], references: [id], onDelete: Restrict)
-  retentionRelease      RetentionReleaseRequest?
-  certifiedByUser       User                     @relation("CertifiedByMonitor", fields: [certifiedByUserId], references: [id])
-  trancheDecisions      TrancheDecision[]
-
-  @@unique([ipcClaimId, revisionNumber])
-  @@index([projectId, source])
-  @@index([trancheId])
-}
-
-// A verifier's direct milestone verification (Phase 7, no contractor claim). The system claim is
-// built from evidence; lineVerificationsJson holds the per-item figures the server computed.
-model MilestoneVerification {
-  id                    String   @id @default(uuid()) @db.Uuid
-  projectId             String   @db.Uuid
-  trancheId             String   @db.Uuid
-  verifiedByUserId      String   @db.Uuid
-  verificationSummary   String   @db.Text
-  lineVerificationsJson Json     @default("[]")
-  // Phase 12: the payment terms as verified (MilestonePaymentTermsSchema); null before Phase 12.
-  paymentTermsJson      Json?
-  createdAt             DateTime @default(now())
-
-  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tranche         FacilityTranche  @relation(fields: [trancheId], references: [id], onDelete: Restrict)
-  verifiedByUser  User             @relation(fields: [verifiedByUserId], references: [id])
-  valuationReport ValuationReport?
-
-  @@index([projectId, trancheId])
-  @@map("milestone_verifications")
-}
-
-model TrancheDecision {
-  id                            String             @id @default(uuid()) @db.Uuid
-  valuationReportId             String             @db.Uuid
-  decidedByUserId               String             @db.Uuid
-  decision                      LenderDecisionType
-  approvedDisbursementAmountNgn Decimal            @db.Decimal(18, 2)
-  heldBackAmountNgn             Decimal            @db.Decimal(18, 2)
-  creditCommitteeReference      String?
-  approverNotes                 String?
-  // Set on a reversal record: the decision it cancels. Reversal amounts are negative.
-  reversesDecisionId            String?            @unique @db.Uuid
-  cpSnapshotJson                Json               @default("[]")
-  // Phase 10: retention withheld from this release (negative on a reversal) and its split per
-  // ProjectContractor: [{ projectContractorId, amountNgn }].
-  retentionWithheldNgn          Decimal            @default(0) @db.Decimal(18, 2)
-  retentionAllocationJson       Json               @default("[]")
-  decidedAt                     DateTime           @default(now())
-
-  valuationReport  ValuationReport  @relation(fields: [valuationReportId], references: [id], onDelete: Cascade)
-  decidedByUser    User             @relation("DecidedByLender", fields: [decidedByUserId], references: [id])
-  reversesDecision TrancheDecision? @relation("DecisionReversal", fields: [reversesDecisionId], references: [id], onDelete: Restrict)
-  reversedBy       TrancheDecision? @relation("DecisionReversal")
-
-  @@index([valuationReportId])
 }
 
 model AuditLog {
@@ -1853,7 +1473,6 @@ model ReportQuery {
   projectId                  String            @db.Uuid
   boqItemId                  String            @db.Uuid
   workdayReportId            String?           @db.Uuid
-  ipcLineItemId              String?           @db.Uuid
   raisedByUserId             String?           @db.Uuid
   source                     ReportQuerySource @default(MONITOR)
   status                     String            @default("OPEN") // OPEN | RESUBMITTED | RESOLVED
@@ -1977,8 +1596,6 @@ model ProjectProcessConfig {
   workflowTemplateId                String?                 @db.Uuid
   needsAssessmentMode               DocumentRequirementMode @default(OPTIONAL_AT_CREATION)
   standardsSpecificationMode        DocumentRequirementMode @default(OPTIONAL_AT_CREATION)
-  disbursementMechanism             DisbursementMechanism   @default(IPC_CLAIM_REQUIRED)
-  enableTranchesAndCps              Boolean                 @default(true)
   enableHoldPoints                  Boolean                 @default(true)
   allowContractorFieldReporting     Boolean                 @default(true)
   enableContractorIdentityAssurance Boolean                 @default(true)
@@ -2065,21 +1682,15 @@ model ProjectStandardSpecification {
 }
 
 model ProjectNeedsAssessmentDocument {
-  id                   String                 @id @default(uuid()) @db.Uuid
-  projectId            String                 @db.Uuid
-  title                String
-  documentType         NeedsAssessmentDocType
-  objectKey            String
-  mimeType             String
-  byteSize             Int
-  // Null until summarised; never invented when no AI provider is available.
-  extractedSummaryText String?                @db.Text
-  keyFindingsJson      Json                   @default("[]")
-  // NOT_REQUESTED | PENDING | DONE
-  summaryStatus        String                 @default("NOT_REQUESTED")
-  summaryEngine        String?
-  uploadedByUserId     String                 @db.Uuid
-  uploadedAt           DateTime               @default(now())
+  id               String                 @id @default(uuid()) @db.Uuid
+  projectId        String                 @db.Uuid
+  title            String
+  documentType     NeedsAssessmentDocType
+  objectKey        String
+  mimeType         String
+  byteSize         Int
+  uploadedByUserId String                 @db.Uuid
+  uploadedAt       DateTime               @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -2409,32 +2020,6 @@ model RetentionDefectTicket {
   @@index([projectId, status])
   @@index([projectContractorId, status])
   @@map("retention_defect_tickets")
-}
-
-// A request to release held retention for one contractor. Initiated with retention:release_escrow;
-// a licensed monitor's certification creates the RETENTION_RELEASE valuation, which then runs
-// through the disbursement chain like any other valuation.
-model RetentionReleaseRequest {
-  id                  String                        @id @default(uuid()) @db.Uuid
-  projectId           String                        @db.Uuid
-  projectContractorId String                        @db.Uuid
-  stage               RetentionReleaseStage
-  amountNgn           Decimal                       @db.Decimal(18, 2)
-  status              RetentionReleaseRequestStatus @default(PENDING_CERTIFICATION)
-  notes               String?
-  requestedByUserId   String                        @db.Uuid
-  requestedAt         DateTime                      @default(now())
-  certifiedAt         DateTime?
-  cancelledAt         DateTime?
-  valuationReportId   String?                       @unique @db.Uuid
-
-  project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectContractor ProjectContractor @relation(fields: [projectContractorId], references: [id], onDelete: Restrict)
-  valuationReport   ValuationReport?  @relation(fields: [valuationReportId], references: [id], onDelete: Restrict)
-
-  @@index([projectId, status])
-  @@index([projectContractorId])
-  @@map("retention_release_requests")
 }
 
 // ---------------------------------------------------------------------------
@@ -2800,19 +2385,18 @@ model DocumentType {
 }
 
 model ProjectDocument {
-  id                         String   @id @default(uuid()) @db.Uuid
-  projectId                  String   @db.Uuid
-  documentTypeId             String   @db.Uuid
-  title                      String
-  currentVersion             Int      @default(1)
-  uploadedByUserId           String?  @db.Uuid
-  projectContractorId        String?  @db.Uuid
-  linkedMilestoneId          String?  @db.Uuid
-  linkedConditionPrecedentId String?  @db.Uuid
-  isArchived                 Boolean  @default(false)
-  archivedReason             String?
-  createdAt                  DateTime @default(now())
-  updatedAt                  DateTime @updatedAt
+  id                  String   @id @default(uuid()) @db.Uuid
+  projectId           String   @db.Uuid
+  documentTypeId      String   @db.Uuid
+  title               String
+  currentVersion      Int      @default(1)
+  uploadedByUserId    String?  @db.Uuid
+  projectContractorId String?  @db.Uuid
+  linkedMilestoneId   String?  @db.Uuid
+  isArchived          Boolean  @default(false)
+  archivedReason      String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   project                Project                          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   documentType           DocumentType                     @relation(fields: [documentTypeId], references: [id], onDelete: Restrict)
@@ -2820,7 +2404,6 @@ model ProjectDocument {
   linkedMilestone        ProjectContractMilestone?        @relation(fields: [linkedMilestoneId], references: [id], onDelete: SetNull)
   versions               ProjectDocumentVersion[]
   signOffs               ProjectDocumentSignOff[]
-  cpEvidenceFor          ConditionPrecedent[]             @relation("CpEvidenceDocument")
   kickoffAgendaFor       KickoffMeeting[]                 @relation("KickoffAgenda")
   kickoffMinutesFor      KickoffMeeting[]                 @relation("KickoffMinutes")
   // Phase 15
@@ -3220,4 +2803,54 @@ model KpiSnapshot {
   @@unique([projectId, kpiKey, periodStart])
   @@index([tenantId, periodStart])
   @@map("kpi_snapshots")
+}
+
+// ---------------------------------------------------------------------------
+// Redesign R1b: payment record. Payments are made outside the platform (later fed by an ERP);
+// the platform records them, holds retention against them and flags exceptions (e.g. a final
+// payment before the Certificate of Completion). A wrong entry is voided with a reason, never deleted.
+// ---------------------------------------------------------------------------
+
+enum PaymentKind {
+  INTERIM
+  FINAL
+  RETENTION_RELEASE
+}
+
+enum PaymentSource {
+  MANUAL
+  ERP
+}
+
+model ProjectPayment {
+  id                      String        @id @default(uuid()) @db.Uuid
+  projectId               String        @db.Uuid
+  kind                    PaymentKind
+  // YYYY-MM-DD in the project zone.
+  paidOn                  String
+  grossAmountNgn          Decimal       @db.Decimal(18, 2)
+  // Held back from this payment (0 for a retention release).
+  retentionHeldNgn        Decimal       @default(0) @db.Decimal(18, 2)
+  netAmountNgn            Decimal       @db.Decimal(18, 2)
+  // Set when the held amount differs from gross x the project's retention percentage.
+  retentionOverrideReason String?
+  reference               String
+  description             String?
+  source                  PaymentSource @default(MANUAL)
+  // ERP document id; unique per project so an ERP feed can retry safely.
+  externalReference       String?
+  // Exception codes computed when recorded (e.g. FINAL_BEFORE_COC).
+  exceptionsJson          Json          @default("[]")
+  recordedByUserId        String?       @db.Uuid
+  recordedByName          String
+  createdAt               DateTime      @default(now())
+  voidedAt                DateTime?
+  voidedByName            String?
+  voidReason              String?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, externalReference])
+  @@index([projectId, paidOn])
+  @@map("project_payments")
 }

@@ -21,14 +21,14 @@ import { issueMissingJoinCodes } from "../modules/projects/joinCodes.service";
  * - Regions North and South, each with two areas.
  * - Workflow templates and project types "Central Delivery Model" (owned and funded by the
  *   flagship) and "Co-Funded Delivery Model" (owned and funded by a subsidiary), with
- *   organisation-scoped approval steps.
- * - Terminology: funder "Funding authority", tranche "Payment milestone", ipc "Payment claim".
+ *   organisation-scoped approval steps (default cases).
+ * - Terminology: funder "Funding authority".
  * - One draft of each type, plus a live Co-Funded project per subsidiary and a live Central
  *   project, so organisation-tree visibility can be shown.
  * - An "Organisation Administrator" per organisation (flagship, North, South).
  *
  * Projects are created through the real setup services, so type application, snapshots and
- * audit entries are genuine. Live projects are then switched on directly (no BOQ or tranches).
+ * audit entries are genuine. Live projects are then switched on directly (no BOQ).
  */
 
 export const PROGRAMME_TENANT_SLUG = "programme-authority";
@@ -72,12 +72,10 @@ export async function seedPhase11(p: { passwordHash: string }) {
       brandingConfig: {
         primaryColorHex: "#1D4ED8",
         tagline: "Schools Infrastructure Programme",
-        pdfHeaderTitle: "Programme Authority — Payment Evidence & Valuation Report",
+        pdfHeaderTitle: "Programme Authority — Monitoring Report",
       } as unknown as Prisma.InputJsonValue,
       terminologyLabels: {
         funderParty: { singular: "Funding authority", plural: "Funding authorities" },
-        tranche: { singular: "Payment milestone", plural: "Payment milestones" },
-        ipc: { singular: "Payment claim", plural: "Payment claims" },
       } as unknown as Prisma.InputJsonValue,
     },
   });
@@ -148,62 +146,24 @@ export async function seedPhase11(p: { passwordHash: string }) {
   }
   const adminPayload = webPayload(admin, adminRole, await permsOf(adminRole.id));
 
-  // Workflow templates: direct milestone release (decision K), with organisation-scoped steps.
+  // Workflow templates (redesign R1b: payments happen outside the platform; no disbursement chain).
   const centralTemplateConfig: WorkflowTemplateConfig = {
     process: {
       ...DEFAULT_PROJECT_PROCESS_CONFIG,
-      disbursementMechanism: "MILESTONE_DIRECT_DISBURSEMENT",
       requireReportApproval: true,
       enableHandoverModule: true,
       enableRetentionModule: true,
     },
     reportChain: defaultReportChain(),
-    disbursementChain: [
-      {
-        label: "Milestone verification",
-        requiredPermissionKey: "milestone:verify_direct_release",
-        requiredRoleId: null,
-        minAmountThresholdNgn: null,
-        isSystemStep: true,
-        organizationScope: "ANY",
-      },
-      {
-        label: "Funding authority release",
-        requiredPermissionKey: "tranche:approve_disbursement",
-        requiredRoleId: null,
-        minAmountThresholdNgn: null,
-        isSystemStep: true,
-        organizationScope: "FUNDER",
-      },
-    ],
   };
   const coFundedTemplateConfig: WorkflowTemplateConfig = {
     ...centralTemplateConfig,
-    disbursementChain: [
-      centralTemplateConfig.disbursementChain[0],
-      {
-        label: "Delivery entity review",
-        requiredPermissionKey: "ipc:view",
-        requiredRoleId: null,
-        minAmountThresholdNgn: null,
-        isSystemStep: false,
-        organizationScope: "PROJECT_OWNER",
-      },
-      {
-        label: "Release (delivery entity or Programme Authority)",
-        requiredPermissionKey: "tranche:approve_disbursement",
-        requiredRoleId: null,
-        minAmountThresholdNgn: null,
-        isSystemStep: true,
-        organizationScope: "PROJECT_OWNER_OR_ANCESTOR",
-      },
-    ],
   };
   const centralTemplate = await prisma.workflowTemplate.create({
     data: {
       tenantId: tenant.id,
       name: "Central delivery process",
-      description: "Milestone payments verified from evidence; the Programme Authority releases as funder.",
+      description: "Report approval, handover and retention for Central Delivery Model projects.",
       configJson: centralTemplateConfig as unknown as Prisma.InputJsonValue,
     },
   });
@@ -211,7 +171,7 @@ export async function seedPhase11(p: { passwordHash: string }) {
     data: {
       tenantId: tenant.id,
       name: "Co-funded delivery process",
-      description: "Milestone payments reviewed by the owning delivery entity, released by it or the Programme Authority.",
+      description: "Report approval, handover and retention for Co-Funded Delivery Model projects.",
       configJson: coFundedTemplateConfig as unknown as Prisma.InputJsonValue,
     },
   });

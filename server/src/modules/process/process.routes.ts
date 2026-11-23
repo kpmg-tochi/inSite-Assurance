@@ -32,7 +32,6 @@ import {
   listNeedsAssessments,
   listProjectStandards,
   registerNeedsAssessment,
-  retryNeedsAssessmentSummary,
   updateProjectStandard,
 } from '../standards/standards.service';
 
@@ -193,15 +192,6 @@ router.post(
   validateBody(RegisterNeedsAssessmentRequestSchema),
   wrap(async (req, res) => {
     res.status(201).json({ success: true, data: await registerNeedsAssessment(p(req, 'projectId'), req.webUser!, req.body) });
-  })
-);
-
-/** Retry a summary that is PENDING (no provider earlier) or UNAVAILABLE. */
-router.post(
-  '/:projectId/needs-assessments/:documentId/summarise',
-  requirePermission('projects:manage_standards_docs'),
-  wrap(async (req, res) => {
-    res.json({ success: true, data: await retryNeedsAssessmentSummary(p(req, 'projectId'), p(req, 'documentId')) });
   })
 );
 

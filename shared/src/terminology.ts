@@ -2,18 +2,13 @@ import { z } from 'zod';
 
 /**
  * Tenant terminology (Phase 11). The words the UI, PDFs and messages use for a few domain terms can
- * be changed per tenant ("Lender" → "Funding authority", "Tranche" → "Payment milestone"). Same rule
- * as evidence rating labels (decision B): keys are fixed here, values are tenant text, and canonical
- * values, enum names, API fields and AI prompts never change.
+ * be changed per tenant ("Funder" → "Funding authority"). Keys are fixed here, values are tenant
+ * text, and canonical values, enum names and API fields never change.
  */
 
 export const TERMINOLOGY_DEFAULTS = {
-  funderParty: { singular: 'Lender', plural: 'Lenders' },
+  funderParty: { singular: 'Funder', plural: 'Funders' },
   monitorParty: { singular: 'Independent monitor', plural: 'Independent monitors' },
-  tranche: { singular: 'Tranche', plural: 'Tranches' },
-  conditionPrecedent: { singular: 'Condition precedent', plural: 'Conditions precedent' },
-  ipc: { singular: 'IPC', plural: 'IPCs' },
-  valuation: { singular: 'Valuation', plural: 'Valuations' },
   contractor: { singular: 'Contractor', plural: 'Contractors' },
   beneficiary: { singular: 'Beneficiary', plural: 'Beneficiaries' },
   holdPoint: { singular: 'Hold point', plural: 'Hold points' },
@@ -25,16 +20,12 @@ export const TERMINOLOGY_KEYS = Object.keys(TERMINOLOGY_DEFAULTS) as Terminology
 
 /** What each key means, for the settings editor. */
 export const TERMINOLOGY_KEY_META: Record<TerminologyKey, { label: string; description: string }> = {
-  funderParty: { label: 'Funding party', description: 'The organisation that funds the project and approves releases.' },
+  funderParty: { label: 'Funding party', description: 'The organisation that funds the project.' },
   monitorParty: { label: 'Monitoring party', description: 'The independent organisation that monitors and certifies progress.' },
-  tranche: { label: 'Tranche', description: 'A slice of the funding released against progress.' },
-  conditionPrecedent: { label: 'Condition precedent', description: 'A condition that must be met before a release.' },
-  ipc: { label: 'Interim payment certificate', description: "The contractor's payment claim." },
-  valuation: { label: 'Valuation', description: 'The certified value of work done.' },
   contractor: { label: 'Contractor', description: 'The firm that builds the works.' },
   beneficiary: { label: 'Beneficiary', description: 'Who the project is for (a school, a community).' },
   holdPoint: { label: 'Hold point', description: 'A stage that must be inspected before work continues.' },
-  retention: { label: 'Retention', description: 'The part of each payment withheld until defects are cleared.' },
+  retention: { label: 'Retention', description: 'The part of each payment held back until defects are cleared.' },
 };
 
 export const TERM_MAX_LENGTH = 40;
@@ -105,7 +96,7 @@ export function resolveTerminology(raw: unknown): ResolvedTerminology {
   ) as ResolvedTerminology;
 }
 
-/** Lower-cases the first letter for use mid-sentence, leaving acronyms ("IPC") alone. */
+/** Lower-cases the first letter for use mid-sentence, leaving acronyms ("M&E") alone. */
 export function termMidSentence(term: string): string {
   const firstWord = term.split(/\s+/)[0] ?? '';
   if (firstWord.length > 1 && firstWord === firstWord.toUpperCase()) return term;

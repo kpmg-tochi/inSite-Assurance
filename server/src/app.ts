@@ -10,7 +10,6 @@ import { organizationsRoutes } from "./modules/organizations/organizations.route
 import { projectsRoutes } from "./modules/projects/projects.routes";
 import { boqRoutes } from "./modules/boq/boq.routes";
 import { evidenceRoutes } from "./modules/evidence/evidence.routes";
-import { reconciliationRoutes } from "./modules/reconciliation/reconciliation.routes";
 import { auditRoutes } from "./modules/audit/audit.routes";
 import { incidentRoutes } from "./modules/incidents/incident.routes";
 import { telemetryRoutes } from "./modules/telemetry/telemetry.routes";
@@ -23,6 +22,7 @@ import { processRoutes, workflowTemplateRoutes } from "./modules/process/process
 import { mobilizationRoutes } from "./modules/mobilization/mobilization.routes";
 import { scheduleRoutes } from "./modules/schedule/schedule.routes";
 import { closeoutRoutes } from "./modules/closeout/closeout.routes";
+import { paymentsRoutes } from "./modules/payments/payments.routes";
 import { inspectionsRoutes } from "./modules/inspections/inspections.routes";
 import { inspectionTemplatesRoutes, supervisionRoutes } from "./modules/inspections/inspectionTemplates.routes";
 import { handoverPublicRoutes } from "./modules/closeout/handoverPublic.routes";
@@ -36,7 +36,6 @@ import { credentialsRoutes, projectCredentialRoutes } from "./modules/credential
 import { requestContextMiddleware } from "./utils/requestContext";
 import { localStorageRoutes } from "./modules/storage/localStorage.routes";
 import { storageService } from "./integrations/storage.service";
-import { azureOpenAiService } from "./integrations/azure-openai.service";
 import { whisperService } from "./integrations/whisper.service";
 
 export function createApp() {
@@ -75,9 +74,6 @@ export function createApp() {
       version: "0.4.0",
       demoMode: env.DEMO_MODE,
       integrations: {
-        azureOpenAiGpt4o: azureOpenAiService.isConfigured()
-          ? "LIVE_AZURE_OPENAI"
-          : "RULES_ONLY",
         standaloneWhisper: whisperService.isConfigured()
           ? "LIVE_STANDALONE_WHISPER"
           : env.DEMO_MODE
@@ -98,7 +94,6 @@ export function createApp() {
   app.use("/api/v1/projects", projectsRoutes);
   app.use("/api/v1/projects", boqRoutes);
   app.use("/api/v1/projects", evidenceRoutes);
-  app.use("/api/v1/projects", reconciliationRoutes);
   app.use("/api/v1/projects", auditRoutes);
   app.use("/api/v1/projects", incidentRoutes);
   app.use("/api/v1/projects", telemetryRoutes);
@@ -111,6 +106,7 @@ export function createApp() {
   app.use("/api/v1/projects", mobilizationRoutes);
   app.use("/api/v1/projects", scheduleRoutes);
   app.use("/api/v1/projects", closeoutRoutes);
+  app.use("/api/v1/projects", paymentsRoutes);
   // Phase 14: reporting streams, inspections, findings, supervision
   app.use("/api/v1/projects", inspectionsRoutes);
   // Phase 13

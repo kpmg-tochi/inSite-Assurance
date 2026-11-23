@@ -14,7 +14,6 @@ import { ProjectGeofenceSchema } from "./geofence.schema";
 import { ProjectCadenceSettingsDtoSchema } from "./cadence.schema";
 import { MobileInspectionPackSchema } from "./inspection.schema";
 import { TenantDtoSchema } from "./rbac.schema";
-import { ResolvedRatingLabelsSchema } from "../ratingLabels";
 import { ResolvedTerminologySchema } from "../terminology";
 
 /**
@@ -76,8 +75,6 @@ export const WebUserProfileSchema = z.object({
   /** Phase 12: the tenant-level certifier policy (a project type may override it per project). */
   certifierRegistrationRequirement: CredentialRequirementEnum.default('REQUIRED'),
   mustChangePassword: z.boolean().default(false),
-  /** Tenant display labels for evidence ratings, resolved against the defaults. */
-  ratingLabels: ResolvedRatingLabelsSchema,
   /** Phase 11: tenant wording for domain terms (Lender, Tranche, IPC …), resolved against the defaults. */
   terminology: ResolvedTerminologySchema,
 });
@@ -215,7 +212,6 @@ export const FieldAgentSessionProfileSchema = z.object({
   registrationNumber: z.string().optional(),
   registrationBodyCode: z.string().optional(),
   livenessPassed: z.boolean().optional(),
-  ratingLabels: ResolvedRatingLabelsSchema.optional(),
   contractor: SessionContractorSchema.nullable().optional(),
   tenantBranding: MobileTenantBrandingSchema.optional(),
 });
@@ -294,7 +290,6 @@ export const DemoProjectWorkspaceSchema = z.object({
   stateLocation: z.string(),
   lgaLocation: z.string().nullable().optional(),
   geofenceMode: GeofenceModeEnum,
-  portfolioHealth: z.string(),
   joinCodes: z.array(DemoProjectJoinCodeSchema),
 });
 export type DemoProjectWorkspaceDto = z.infer<typeof DemoProjectWorkspaceSchema>;
@@ -359,7 +354,6 @@ export const MobileAccountProfileSchema = z.object({
   /** The MobileDevice row this token is bound to. */
   mobileDeviceId: z.string().uuid(),
   mobileRole: MobileRoleSummarySchema,
-  ratingLabels: ResolvedRatingLabelsSchema,
   tenantBranding: MobileTenantBrandingSchema.optional(),
 });
 export type MobileAccountProfile = z.infer<typeof MobileAccountProfileSchema>;

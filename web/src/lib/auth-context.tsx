@@ -10,14 +10,11 @@ import React, {
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  resolveRatingLabels,
   resolveTerm,
   resolveTerminology,
-  SEGREGATED_DISBURSEMENT_PERMISSIONS,
   type ResolvedTerminology,
   type TerminologyKey,
   type ChangePasswordRequest,
-  type ResolvedRatingLabels,
   type TenantBrandingConfig,
   type WebUserProfile,
 } from "@insite/shared";
@@ -88,7 +85,6 @@ interface AuthContextValue {
   hasPermission: (permissionKey: string) => boolean;
   hasAnyPermission: (...permissionKeys: string[]) => boolean;
   /** Tenant display labels for evidence ratings (defaults until the profile loads). */
-  ratingLabels: ResolvedRatingLabels;
   /** Phase 11: tenant wording for domain terms (defaults until the profile loads). */
   terminology: ResolvedTerminology;
 }
@@ -183,13 +179,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     toast.success("Password updated. Other sessions for this account have been signed out.");
   };
 
-  // Mirrors the server: the platform super admin passes every check except the segregated
-  // disbursement permissions (D-3.1), which must be held through a role.
+  // Mirrors the server: the platform super admin passes every check.
   const hasPermission = useCallback(
     (permissionKey: string): boolean => {
       if (!user) return false;
       if (user.permissions.includes(permissionKey)) return true;
-      return user.isPlatformSuperAdmin && !SEGREGATED_DISBURSEMENT_PERMISSIONS.includes(permissionKey);
+      return user.isPlatformSuperAdmin;
     },
     [user]
   );
@@ -197,11 +192,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const hasAnyPermission = useCallback(
     (...permissionKeys: string[]): boolean => permissionKeys.some((key) => hasPermission(key)),
     [hasPermission]
-  );
-
-  const ratingLabels = useMemo(
-    () => user?.ratingLabels ?? resolveRatingLabels({}),
-    [user]
   );
 
   const terminology = useMemo(() => user?.terminology ?? resolveTerminology({}), [user]);
@@ -218,7 +208,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshUser,
         hasPermission,
         hasAnyPermission,
-        ratingLabels,
         terminology,
       }}
     >

@@ -3,7 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, Circle, Pencil } from "lucide-react";
 import {
   CONTRACTOR_EXECUTION_MODE_META,
-  DISBURSEMENT_MECHANISM_META,
   DOCUMENT_MODE_META,
   formatMoney,
   geofenceModeLabel,
@@ -42,17 +41,17 @@ function summaryFor(stepId: string, s: ProjectSetupDto, currency: string): strin
         `Time zone ${s.site.timezone}`,
       ];
     case "facility": {
-      const total = s.facility.tranches.reduce((t, x) => t + x.allocatedAmountNgn, 0);
+      const r = s.facility.retention;
+      if (!s.process.config.enableRetentionModule) return ["Retention off"];
       return [
-        `${s.facility.tranches.length} tranche(s), ${formatMoney(total, { currency })}`,
-        `${s.facility.tranches.reduce((t, x) => t + x.conditionsPrecedent.length, 0)} condition(s) precedent`,
+        r.retentionPercentage ? `${r.retentionPercentage}% held from each payment` : "No retention percentage set",
+        r.retentionDurationMonths ? `${r.retentionDurationMonths}-month defects liability period` : "No liability period set",
       ];
     }
     case "boq":
       return [
         `${s.boq.itemCount} item(s), ${formatMoney(s.boq.totalBudgetedCostNgn, { currency })}`,
         ...(s.process.config.enableHoldPoints ? [`${s.boq.holdPointCount} hold point(s)`] : []),
-        `${s.boq.unmappedCount} not mapped to a tranche`,
       ];
     case "reporting":
       return [`${s.reporting.reportingCadence.replace("_", " ").toLowerCase()} reports`, `${s.reporting.workdayStartTime}–${s.reporting.workdayEndTime}`];
@@ -60,11 +59,9 @@ function summaryFor(stepId: string, s: ProjectSetupDto, currency: string): strin
       const p = s.process;
       return [
         p.workflowTemplateName ? `Template: ${p.workflowTemplateName}` : "No template applied",
-        DISBURSEMENT_MECHANISM_META[p.config.disbursementMechanism].label,
         p.config.requireReportApproval
           ? `Report approval: ${p.reportChain.steps.length} step(s)`
           : "Report approval off",
-        `Disbursement chain: ${p.disbursementChain.steps.length} step(s)`,
       ];
     }
     case "standards":

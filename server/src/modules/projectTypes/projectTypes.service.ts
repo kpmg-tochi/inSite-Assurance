@@ -1,6 +1,5 @@
 import { Prisma } from '@prisma/client';
 import {
-  paymentBasisMechanismConflict,
   ProjectReportingStepSchema,
   ProjectTypeConfig,
   ProjectTypeConfigSchema,
@@ -99,21 +98,6 @@ export async function tenantHasActiveProjectTypes(db: Db, tenantId: string): Pro
   return (await db.projectType.count({ where: { tenantId, isActive: true } })) > 0;
 }
 
-/**
- * Phase 12: refuses a workflow template whose disbursement mechanism contradicts the type's payment
- * configuration (fixed-amount payment milestones need direct verification, D-12.2; a stated
- * mechanism must match the template's).
- */
-export function templateConflictsWithType(template: WorkflowTemplateConfig, config: ProjectTypeConfig): string | null {
-  const mechanism = template.process.disbursementMechanism;
-  const basisConflict = paymentBasisMechanismConflict(mechanism, config.payments.defaultBasis);
-  if (basisConflict) return `${basisConflict} The chosen workflow template uses contractor IPC claims.`;
-  if (config.payments.mechanism && config.payments.mechanism !== mechanism) {
-    return 'The payment settings expect a different disbursement mechanism from the chosen workflow template.';
-  }
-  return null;
-}
-
 async function assertOrganizationsInTenant(tx: Tx, tenantId: string, config: ProjectTypeConfig) {
   const ids = [
     ...(config.ownership.allowedOwningOrganizationIds ?? []),
@@ -140,8 +124,6 @@ async function saveType(webUser: WebJwtPayload, input: SaveProjectTypeRequest, t
       if (!templateConfig.success) {
         throw new AppError('This workflow template is not valid any more. Edit and save it first.', 422, 'INVALID_WORKFLOW_TEMPLATE');
       }
-      const conflict = templateConflictsWithType(templateConfig.data, input.config);
-      if (conflict) throw new AppError(conflict, 422, 'TEMPLATE_CONFLICTS_WITH_PROJECT_TYPE');
       await assertOrganizationsInTenant(tx, tenantId, input.config);
       if (input.isDefault) {
         await tx.projectType.updateMany({ where: { tenantId, isDefault: true }, data: { isDefault: false } });
@@ -320,6 +302,17 @@ export async function applyProjectTypeToProject(
     const r = ProjectReportingStepSchema.parse(config.reportingDefaults);
     Object.assign(data, r);
     prefilled.push('reporting');
+  }
+  // Redesign R1b: retention defaults, unless the retention step was saved already.
+  if (!stepSaved(project.setupState, 'facility')) {
+    if (config.payments.retentionPercentage !== null) {
+      data.retentionPercentage = config.payments.retentionPercentage;
+      prefilled.push('retentionPercentage');
+    }
+    if (config.payments.retentionDurationMonths !== null) {
+      data.retentionDurationMonths = config.payments.retentionDurationMonths;
+      prefilled.push('retentionDurationMonths');
+    }
   }
   await tx.project.update({ where: { id: project.id }, data });
   // Phase 13: contract milestones from the type (one per contractor where the template says so).

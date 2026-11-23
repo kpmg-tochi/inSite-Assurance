@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { ArrowLeft, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import {
-  DISBURSEMENT_MECHANISM_META,
   SaveWorkflowTemplateRequestSchema,
   type SaveWorkflowTemplateRequest,
   type WorkflowTemplateDto,
@@ -51,7 +50,7 @@ function TemplateEditor({
       name,
       description: description.trim() || null,
       isDefault,
-      config: { process: draft.config, reportChain: draft.reportChain, disbursementChain: draft.disbursementChain },
+      config: { process: draft.config, reportChain: draft.reportChain },
     });
     if (!parsed.success) {
       const first = parsed.error.issues[0];
@@ -143,20 +142,12 @@ export function WorkflowTemplatesTab() {
       ),
     },
     {
-      id: "mechanism",
-      header: "Release",
-      width: "w-48",
-      cell: (t) => <span className="text-[11px] text-slate-700">{DISBURSEMENT_MECHANISM_META[t.config.process.disbursementMechanism].label}</span>,
-    },
-    {
       id: "chains",
       header: "Chains",
       width: "w-48",
       cell: (t) => (
         <span className="text-[11px] text-slate-600">
           {t.config.process.requireReportApproval ? `Reports: ${t.config.reportChain.length} step(s)` : "Report approval off"}
-          <br />
-          Disbursement: {t.config.disbursementChain.length} step(s)
         </span>
       ),
     },

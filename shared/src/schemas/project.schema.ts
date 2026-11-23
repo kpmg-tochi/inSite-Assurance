@@ -1,12 +1,9 @@
 import { PortfolioRetentionItemSchema } from './retention.schema';
-import { TranchePaymentInputSchema } from './milestonePayment.schema';
 import { z } from 'zod';
 import {
-  ConditionPrecedentStatusEnum,
   ConstructionPhaseEnum,
   ProjectStatusEnum,
   FieldPersonaTypeEnum,
-  PortfolioHealthEnum,
   RoleOnboardingModeEnum,
 } from '../enums';
 import { ProjectGeofenceSchema } from './geofence.schema';
@@ -25,30 +22,6 @@ export const ProjectDeliveryModelFieldsSchema = z.object({
   primaryBeneficiary: ProjectBeneficiaryDtoSchema.nullable().optional(),
 });
 export type ProjectDeliveryModelFields = z.infer<typeof ProjectDeliveryModelFieldsSchema>;
-
-/**
- * Facility Tranche & Condition Precedent (CP) Schemas (Section 4.A Role 1)
- */
-export const ConditionPrecedentInputSchema = z.object({
-  id: z.string().uuid().optional(),
-  referenceCode: z.string().min(1).max(32), // e.g., "CP-01"
-  description: z.string().min(4).max(500),  // e.g., "Approved Environmental Impact Assessment & Geotechnical Soil Report"
-  isMandatoryForRelease: z.boolean().default(true),
-  status: ConditionPrecedentStatusEnum.default('PENDING'),
-  /** Phase 13: replaces evidenceDocumentUrl; set through the CP status action, not setup. */
-  evidenceDocumentId: z.string().uuid().nullable().optional(),
-});
-export type ConditionPrecedentInput = z.infer<typeof ConditionPrecedentInputSchema>;
-
-export const FacilityTrancheInputSchema = z.object({
-  id: z.string().uuid().optional(),
-  trancheNumber: z.number().int().min(1),
-  name: z.string().min(2).max(120), // e.g., "Tranche 2 — Substructure & Drainage Culverts"
-  allocatedAmountNgn: z.number().positive(),
-  targetCompletionPct: z.number().min(0).max(100),
-  conditionsPrecedent: z.array(ConditionPrecedentInputSchema).default([]),
-}).merge(TranchePaymentInputSchema); // Phase 12: payment basis and completion rule
-export type FacilityTrancheInput = z.infer<typeof FacilityTrancheInputSchema>;
 
 // Project creation is staged (Phase 6): see projectSetup.schema.ts for the draft and step schemas.
 
@@ -94,7 +67,7 @@ export const RotateJoinCodeRequestSchema = z.object({
 export type RotateJoinCodeRequest = z.infer<typeof RotateJoinCodeRequestSchema>;
 
 /**
- * Portfolio Map Summary Item (Used by Lender National Geospatial Portfolio Map)
+ * Portfolio map summary item
  */
 export const PortfolioProjectPinSchema = z.object({
   id: z.string().uuid(),
@@ -104,16 +77,13 @@ export const PortfolioProjectPinSchema = z.object({
   totalBudgetNgn: z.number(),
   disbursedToDateNgn: z.number(),
   certifiedProgressPct: z.number(),
-  portfolioHealth: PortfolioHealthEnum,
   geofence: ProjectGeofenceSchema,
-  openConflictCount: z.number().int(),
-  unfulfilledHoldPointCount: z.number().int(),
   lastFieldCaptureAt: z.string().datetime().nullable(),
 });
 export type PortfolioProjectPin = z.infer<typeof PortfolioProjectPinSchema>;
 
 /**
- * Portfolio Executive Summary for Lenders & Senior Risk Monitors
+ * Portfolio executive summary
  */
 export const PortfolioProjectHealthItemSchema = z.object({
   projectId: z.string().uuid(),
@@ -128,10 +98,6 @@ export const PortfolioProjectHealthItemSchema = z.object({
   totalBudgetNgn: z.number(),
   disbursedToDateNgn: z.number(),
   certifiedProgressPct: z.number(),
-  activeTrancheNumber: z.number().nullable().optional(),
-  portfolioHealth: PortfolioHealthEnum,
-  openConflictCount: z.number(),
-  unfulfilledHoldPointCount: z.number(),
   pendingContractorCount: z.number(),
   /** Phase 9: stored by the schedule-variance job; null without a baseline. */
   scheduleVariance: ScheduleVarianceBadgeSchema.nullable().optional(),
@@ -146,11 +112,7 @@ export type PortfolioProjectHealthItem = z.infer<
 export const PortfolioExecutiveSummaryDtoSchema = z.object({
   totalPortfolioCommitmentNgn: z.number(),
   totalDisbursedToDateNgn: z.number(),
-  totalRecommendedHoldbackNgn: z.number(),
   activeProjectsCount: z.number(),
-  supportedCount: z.number(),
-  partialCount: z.number(),
-  conflictCount: z.number(),
   pendingContractorVerificationsCount: z.number(),
   projects: z.array(PortfolioProjectHealthItemSchema),
 });
@@ -175,9 +137,6 @@ export const PortfolioOverviewProjectSchema = z.object({
   totalBudgetNgn: z.number(),
   disbursedToDateNgn: z.number(),
   certifiedProgressPct: z.number(),
-  portfolioHealth: PortfolioHealthEnum,
-  openConflictCount: z.number().int(),
-  unfulfilledHoldPointCount: z.number().int(),
   lastFieldCaptureAt: z.string().nullable(),
   scheduleVariance: ScheduleVarianceBadgeSchema.nullable(),
   geofence: ProjectGeofenceSchema.nullable(),
@@ -193,14 +152,11 @@ export const PortfolioOverviewKpisSchema = z.object({
   projectCount: z.number().int(),
   totalCommitmentNgn: z.number(),
   totalDisbursedNgn: z.number(),
-  /** Disbursed / commitment, 0–100. */
+  /** Paid (net, from the payment record) / commitment, 0–100. */
   disbursedPct: z.number(),
   /** Budget-weighted certified progress, 0–100. */
   weightedProgressPct: z.number(),
-  healthCounts: z.object({ supported: z.number().int(), partial: z.number().int(), conflict: z.number().int() }),
   behindScheduleCount: z.number().int(),
-  openConflictLineCount: z.number().int(),
-  unfulfilledHoldPointCount: z.number().int(),
   /** Live projects in active construction with no capture for PORTFOLIO_QUIET_SITE_DAYS. */
   quietSiteCount: z.number().int(),
   /** Projects in handover or their defects liability period. */

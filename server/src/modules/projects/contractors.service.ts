@@ -12,7 +12,7 @@ import { resolveOrganization } from '../organizations/organizations.service';
 
 /**
  * Project contractors (Phase 6, decision D). A project has one or more `ProjectContractor` rows;
- * the contractor model decides who submits IPCs and which BOQ items a contractor owns.
+ * the contractor model decides which BOQ items a contractor owns.
  */
 
 type Tx = Prisma.TransactionClient;
@@ -20,7 +20,7 @@ type Db = Tx | typeof prisma;
 
 export const CONTRACTOR_INCLUDE = {
   organization: { select: { id: true, name: true } },
-  _count: { select: { boqItems: true, fieldSessions: true, ipcClaims: true } },
+  _count: { select: { boqItems: true, fieldSessions: true } },
 } satisfies Prisma.ProjectContractorInclude;
 
 export type ContractorRow = Prisma.ProjectContractorGetPayload<{ include: typeof CONTRACTOR_INCLUDE }>;
@@ -41,7 +41,7 @@ export function serializeContractor(c: ContractorRow): ProjectContractorDto {
     plannedMobilizationDate: isoDate(c.plannedMobilizationDate),
     plannedCompletionDate: isoDate(c.plannedCompletionDate),
     boqItemCount: c._count.boqItems,
-    hasActivity: c._count.fieldSessions > 0 || c._count.ipcClaims > 0,
+    hasActivity: c._count.fieldSessions > 0,
     contractStatus: c.contractStatus,
     terminatedAt: c.terminatedAt?.toISOString() ?? null,
     replacesProjectContractorId: c.replacesProjectContractorId,
@@ -186,7 +186,7 @@ export async function syncProjectContractors(
   if (!params.partial) {
     for (const c of existing) {
       if (keptIds.has(c.id)) continue;
-      if (c._count.fieldSessions > 0 || c._count.ipcClaims > 0) {
+      if (c._count.fieldSessions > 0) {
         throw new AppError(
           `${c.organization.name} has field sessions or IPC claims on this project and cannot be removed.`,
           409,
@@ -224,7 +224,7 @@ export async function syncProjectContractors(
     };
     if (r.input.id) {
       const before = byId.get(r.input.id)!;
-      if (before.organizationId !== r.organizationId && (before._count.fieldSessions > 0 || before._count.ipcClaims > 0)) {
+      if (before.organizationId !== r.organizationId && before._count.fieldSessions > 0) {
         throw new AppError(
           `${before.organization.name} has activity on this project; its organisation cannot be changed.`,
           409,

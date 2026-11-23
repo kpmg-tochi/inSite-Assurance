@@ -36,7 +36,7 @@ export const useUpdateBoqMappingsMutation = (projectId: string) => {
       queryClient.invalidateQueries({ queryKey: ['boq', projectId] });
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       queryClient.invalidateQueries({ queryKey: ['audit-trail', projectId] });
-      toast.success('BOQ tranche mappings and Hold-Point rules updated.');
+      toast.success('Hold-point rules updated.');
     },
     onError: (err: any) => {
       toast.error(err?.message || 'Failed to update BOQ mappings.');

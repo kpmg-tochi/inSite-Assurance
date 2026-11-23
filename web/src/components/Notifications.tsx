@@ -4,7 +4,6 @@ import {
   Bell,
   AlertTriangle,
   UserCheck,
-  Coins,
   FileQuestion,
   FileCheck2,
   Sparkles,
@@ -13,7 +12,6 @@ import {
   ExternalLink,
   ShieldAlert,
   ClipboardCheck,
-  Landmark,
 } from "lucide-react";
 import { formatElapsedTime, type WebNotificationCategory, type WebNotificationDto } from "@insite/shared";
 import {
@@ -25,14 +23,11 @@ import { useTerm } from "../lib/auth-context";
 
 const CATEGORY_LABELS: Record<WebNotificationCategory, string> = {
   REPORT_RESUBMITTED: "Report resubmitted",
-  CONFLICT_FLAG: "Evidence conflict",
   CONTRACTOR_ONBOARDING: "Contractor onboarding",
-  TRANCHE_DISBURSEMENT: "Tranche disbursement",
   MONITOR_QUERY: "Monitor query",
-  AI_OMISSION_FLAG: "Omission check",
+  AI_OMISSION_FLAG: "Missing evidence",
   STANDARDS_VIOLATION_FLAGGED: "Standards violation",
   REPORT_PENDING_APPROVAL: "Report awaiting approval",
-  DISBURSEMENT_PENDING_APPROVAL: "Disbursement awaiting approval",
   REPORT_MISSED: "Missed report",
   ATTENDANCE_ALERT: "Attendance alert",
   SCHEDULE_BEHIND: "Behind schedule",
@@ -40,7 +35,6 @@ const CATEGORY_LABELS: Record<WebNotificationCategory, string> = {
   SCHEDULE_REVISION_DECIDED: "Schedule revision decided",
   HANDOVER_SUBMITTED: "Handover response",
   DEFECT_TICKET: "Defect",
-  RETENTION_RELEASE: "Retention release",
   INSPECTION_PENDING_APPROVAL: "Inspection awaiting approval",
   INSPECTION_FINDING: "Inspection finding",
   INSPECTION_MISSED: "Missed inspection",
@@ -51,6 +45,7 @@ const CATEGORY_LABELS: Record<WebNotificationCategory, string> = {
   COMPLETION_CERTIFICATE: "Certificate of Completion",
   CLOSURE: "Closure",
   LESSON_SHARED: "Lesson learned",
+  PAYMENT_EXCEPTION: "Payment exception",
 };
 
 interface NotificationsProps {
@@ -115,20 +110,16 @@ export default function Notifications({ projectId }: NotificationsProps) {
         return <FileCheck2 className="w-4 h-4 text-emerald-600" />;
       case "AI_OMISSION_FLAG":
         return <Sparkles className="w-4 h-4 text-amber-600" />;
-      case "CONFLICT_FLAG":
-        return <AlertTriangle className="w-4 h-4 text-rose-600" />;
+      case "PAYMENT_EXCEPTION":
+        return <AlertTriangle className="w-4 h-4 text-amber-600" />;
       case "CONTRACTOR_ONBOARDING":
         return <UserCheck className="w-4 h-4 text-brand-primary" />;
-      case "TRANCHE_DISBURSEMENT":
-        return <Coins className="w-4 h-4 text-emerald-600" />;
       case "MONITOR_QUERY":
         return <FileQuestion className="w-4 h-4 text-brand-primary" />;
       case "STANDARDS_VIOLATION_FLAGGED":
         return <ShieldAlert className="w-4 h-4 text-rose-600" />;
       case "REPORT_PENDING_APPROVAL":
         return <ClipboardCheck className="w-4 h-4 text-amber-600" />;
-      case "DISBURSEMENT_PENDING_APPROVAL":
-        return <Landmark className="w-4 h-4 text-amber-600" />;
       default:
         return <Bell className="w-4 h-4 text-slate-500" />;
     }
@@ -138,10 +129,6 @@ export default function Notifications({ projectId }: NotificationsProps) {
     switch (category) {
       case "CONTRACTOR_ONBOARDING":
         return `${term("contractor")} onboarding`;
-      case "TRANCHE_DISBURSEMENT":
-        return `${term("tranche")} disbursement`;
-      case "RETENTION_RELEASE":
-        return `${term("retention")} release`;
       default:
         return CATEGORY_LABELS[category] ?? "Notification";
     }
@@ -153,18 +140,15 @@ export default function Notifications({ projectId }: NotificationsProps) {
         return "bg-emerald-50 text-emerald-800 border-emerald-200";
       case "AI_OMISSION_FLAG":
         return "bg-amber-50 text-amber-800 border-amber-200";
-      case "CONFLICT_FLAG":
-        return "bg-rose-50 text-rose-800 border-rose-200";
+      case "PAYMENT_EXCEPTION":
+        return "bg-amber-50 text-amber-800 border-amber-200";
       case "CONTRACTOR_ONBOARDING":
         return "bg-brand-primary/5 text-brand-primary border-brand-primary/25";
-      case "TRANCHE_DISBURSEMENT":
-        return "bg-emerald-50 text-emerald-800 border-emerald-200";
       case "MONITOR_QUERY":
         return "bg-brand-sky/10 text-brand-medium border-brand-sky/30";
       case "STANDARDS_VIOLATION_FLAGGED":
         return "bg-rose-50 text-rose-800 border-rose-200";
       case "REPORT_PENDING_APPROVAL":
-      case "DISBURSEMENT_PENDING_APPROVAL":
         return "bg-amber-50 text-amber-800 border-amber-200";
       default:
         return "bg-slate-50 text-slate-700 border-slate-200";
@@ -267,7 +251,7 @@ export default function Notifications({ projectId }: NotificationsProps) {
                     : "No notifications present for this project."}
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Resubmitted field reports, AI omissions, and {term("ipc", { lower: true })} flags appear here.
+                  Resubmitted field reports, missing-evidence flags and payment exceptions appear here.
                 </p>
               </div>
             ) : (

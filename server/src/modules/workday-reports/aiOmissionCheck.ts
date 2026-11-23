@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { ChecklistSectionsSchema, StandardsViolationItem, validateInspectionAnswers, WorkdayAiCheckStatus } from '@insite/shared';
 import { prisma } from '../../config/prisma';
-import { azureOpenAiService } from '../../integrations/azure-openai.service';
+import { evaluateOmissionsByRules } from './reportRules';
 import { dispatchReportQueryBundle } from '../wbs-chat/wbsChat.service';
 import { createWebNotification } from '../notifications/notifications.service';
 import { recordAuditEvent } from '../audit/audit.service';
@@ -11,12 +11,13 @@ import { evaluateStandardsByRules } from '../standards/standardsRules';
 
 /**
  * Post-submission report checks (Phase 4, extended in Phase 7). Run after the submit response has
- * been sent, never in the request path, so a slow model cannot make the device time out and retry.
+ * been sent, never in the request path.
  *
  * According to the project's process configuration:
  * - the omission check (hold-point and checklist proof), and
- * - the standards check against the standards that apply to the item: AI when available, the
- *   rule-based evaluator otherwise; when neither can decide, `standardsCompliancePassed` stays null.
+ * - the standards check against the standards that apply to the item.
+ * Both are deterministic rules (the platform runs no AI models). When the standards rules cannot
+ * decide, `standardsCompliancePassed` stays null.
  *
  * State: PENDING -> RUNNING -> DONE | FAILED. SKIPPED for staged reports (set back to PENDING when
  * the server releases them). A sweep picks up anything the in-process scheduler missed.
@@ -92,17 +93,6 @@ async function runStandardsCheck(report: ReportForCheck): Promise<StandardsOutco
     isMandatory: s.isMandatory,
   }));
 
-  const ai = await azureOpenAiService.evaluateReportAgainstStandards({
-    wbsCode: report.boqItem.wbsCode,
-    wbsDescription: report.boqItem.description,
-    unit: report.unitOfMeasure || report.boqItem.unit,
-    reportedQuantity: Number(report.reportedQuantity),
-    standards: ruleStandards,
-    reportText,
-    captureTypes,
-  });
-  if (ai) return { passed: ai.passed, violations: ai.violations, reasoning: ai.reasoning, engine: ai.engine };
-
   const rules = evaluateStandardsByRules(ruleStandards, {
     text: reportText,
     captureMediaTypes: captureTypes,
@@ -149,22 +139,20 @@ export async function runAiOmissionCheck(reportId: string): Promise<WorkdayAiChe
               where: { projectId: report.projectId, boqItemId: report.wbsItemId, workdayDate: report.workdayDate },
               select: { reportingChecklist: true },
             }));
-          return azureOpenAiService.evaluateWorkdayReportOmissions({
+          const result = evaluateOmissionsByRules({
             wbsCode: report.boqItem.wbsCode,
-            wbsDescription: report.boqItem.description,
-            unit: report.unitOfMeasure || report.boqItem.unit,
             summaryText: report.summaryText,
             reportedQuantity: Number(report.reportedQuantity),
             isHoldPoint: holdPoint,
             holdPointInstruction: holdPoint ? report.boqItem.holdPointInstruction : null,
             isHoldPointClaimed: holdPoint && report.isHoldPointClaimed,
-            morningChecklist: Array.isArray(brief?.reportingChecklist) ? (brief.reportingChecklist as string[]) : [],
+            checklist: Array.isArray(brief?.reportingChecklist) ? (brief.reportingChecklist as string[]) : [],
             captures: report.captures
               .filter((c) => c.integrityPassed)
-              .map((c) => ({ mediaType: c.mediaAttachments[0]?.mediaType ?? 'UNKNOWN', caption: c.caption })),
-            textNotes: textNotesOf(report),
+              .map((c) => ({ mediaType: c.mediaAttachments[0]?.mediaType ?? 'UNKNOWN' })),
             delaysOrBlockers: report.delaysOrBlockers,
           });
+          return { ...result, engine: 'RULES' as const };
         })()
       : null;
 
@@ -173,7 +161,7 @@ export async function runAiOmissionCheck(reportId: string): Promise<WorkdayAiChe
       : { passed: null, violations: [], reasoning: null, engine: null };
 
     const engines = [omission?.engine, standards.engine].filter((e): e is string => Boolean(e));
-    const reasoning = [omission?.aiReasoning, standards.reasoning].filter((r): r is string => Boolean(r)).join(' ');
+    const reasoning = [omission?.reasoning, standards.reasoning].filter((r): r is string => Boolean(r)).join(' ');
 
     await prisma.$transaction(async (tx) => {
       await tx.workdayReport.update({
@@ -220,8 +208,8 @@ export async function runAiOmissionCheck(reportId: string): Promise<WorkdayAiChe
         await recordAuditEvent(tx, {
           projectId: report.projectId,
           actorType: 'AI_SYSTEM',
-          actorId: standards.engine === 'AZURE_OPENAI' ? 'AZURE_OPENAI:standards-check' : 'RULES_ENGINE:standards-check',
-          actorDisplayName: standards.engine === 'AZURE_OPENAI' ? 'Azure OpenAI standards check' : 'Rules engine standards check',
+          actorId: 'RULES_ENGINE:standards-check',
+          actorDisplayName: 'Standards rules check',
           action: 'STANDARDS_VIOLATION_FLAGGED',
           summaryText: `WBS ${report.boqItem.wbsCode} report for ${report.workdayDate} failed the standards check (${codes.join(', ')}).`,
           payload: { workdayReportId: report.id, engine: standards.engine, violations: standards.violations },

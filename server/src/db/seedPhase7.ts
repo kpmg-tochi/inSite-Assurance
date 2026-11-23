@@ -11,7 +11,7 @@ import { seedStarterTemplates } from "../modules/process/workflowTemplates.servi
  * Phase 7 seed:
  * - the three starter workflow templates;
  * - default process rows and chains for every seeded live project (Phase 3 / 4 behaviour);
- * - EDO-410, an M&E-only project with direct milestone release and report approval, with two
+ * - EDO-410, an M&E-only project with report approval, with two
  *   standards from the starter library, so two projects in one tenant run different processes.
  */
 
@@ -43,7 +43,7 @@ export async function seedPhase7(p: {
   }
 
   // ------------------------------------------------------------------------
-  // EDO-410: M&E-only oversight with direct milestone release
+  // EDO-410: M&E-only oversight
   // ------------------------------------------------------------------------
   const geofence: RadialGeofence = {
     mode: "RADIAL",
@@ -93,34 +93,6 @@ export async function seedPhase7(p: {
       allowFieldReporting: false,
     },
   });
-  const tranche = await prisma.facilityTranche.create({
-    data: {
-      projectId: edo.id,
-      trancheNumber: 1,
-      name: "Milestone 1 — Structure and roofing",
-      allocatedAmountNgn: 250_000_000,
-      targetCompletionPct: 60,
-      conditionsPrecedent: {
-        create: {
-          referenceCode: "CP-01",
-          description: "Community needs assessment accepted by the grant committee",
-          isMandatoryForRelease: true,
-          status: "SATISFIED",
-          verifiedAt: daysAgo(3),
-          statusChangedAt: daysAgo(3),
-        },
-      },
-    },
-  });
-  await prisma.facilityTranche.create({
-    data: {
-      projectId: edo.id,
-      trancheNumber: 2,
-      name: "Milestone 2 — Finishes and equipment",
-      allocatedAmountNgn: 170_000_000,
-      targetCompletionPct: 100,
-    },
-  });
   for (const [wbs, desc, unit, qty, rate] of [
     ["01.01", "Reinforced concrete column and beam repairs", "m3", 60, 1_250_000],
     ["01.02", "Sandcrete blockwork walls (225mm)", "m2", 1_800, 45_000],
@@ -129,8 +101,6 @@ export async function seedPhase7(p: {
     await prisma.boqItem.create({
       data: {
         projectId: edo.id,
-        trancheId: tranche.id,
-        trancheMappingConfirmedByMonitor: true,
         projectContractorId: contractor.id,
         wbsCode: wbs,
         section: "BILL 1 — STRUCTURE AND ROOFING",
@@ -163,7 +133,7 @@ export async function seedPhase7(p: {
   });
 
   const meTemplate = await prisma.workflowTemplate.findFirstOrThrow({
-    where: { tenantId: p.tenantId, name: "M&E-only oversight with direct milestone release" },
+    where: { tenantId: p.tenantId, name: "M&E-only oversight" },
   });
   await prisma.$transaction(async (tx) => {
     await applyTemplateConfig(
@@ -197,7 +167,6 @@ export async function seedPhase7(p: {
       objectKey: `${projectObjectPrefix(p.tenantId, edo.id)}project_document/seed-needs-assessment.pdf`,
       mimeType: "application/pdf",
       byteSize: 1,
-      summaryStatus: "NOT_REQUESTED",
       uploadedByUserId: p.monitorUserId,
     },
   });
@@ -208,7 +177,7 @@ export async function seedPhase7(p: {
     actorId: p.monitorUserId,
     actorDisplayName: "Seed",
     action: "PROJECT_ACTIVATED",
-    summaryText: "Seeded M&E-only project EDO-410 (direct milestone release, report approval on).",
+    summaryText: "Seeded M&E-only project EDO-410 (report approval on).",
     payload: { codePrefix: "EDO-410", workflowTemplate: meTemplate.name },
   });
 

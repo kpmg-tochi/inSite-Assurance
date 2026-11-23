@@ -9,7 +9,7 @@ import {
 } from '@insite/shared';
 import type { ProjectSummaryDto } from '../api/types';
 import { formatDateTimeShort } from '../lib/formatters';
-import { formatReporterRoleBadge } from './EvidenceBadge';
+import { formatReporterRoleBadge } from './reporterRole';
 import { GeofenceShapeLayers } from './geofence/GeofenceShapeLayers';
 import { paddedGeofenceBounds, type LatLngTuple } from './geofence/geofenceGeometry';
 import { describeGeofenceStatus } from './geofence/geofenceStatus';
@@ -276,13 +276,9 @@ export function LiveGeospatialMap({
           </div>
           <div className="my-1">
             <div className="text-lg font-bold text-amber-400">
-              {project.unfulfilledHoldPointCount} Hold-Point
-              {project.unfulfilledHoldPointCount === 1 ? '' : 's'}
+              {evidenceLogs.length} capture{evidenceLogs.length === 1 ? '' : 's'}
             </div>
-            <div className="text-[11px] text-white/70">
-              {project.openConflictCount} IPC Line Conflict
-              {project.openConflictCount === 1 ? '' : 's'}
-            </div>
+            <div className="text-[11px] text-white/70">Checked for location and duplicates</div>
           </div>
           <div className="text-[10px] text-white/60">
             {evidenceLogs.length === 0

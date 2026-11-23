@@ -4,7 +4,7 @@ import { CONSTRUCTION_PHASE_LABELS, type ConstructionPhase, type ProjectPhaseTra
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { useProjectPhaseQuery } from "../../queries/closeout/useCloseoutQueries";
 import { useChangeProjectPhaseMutation } from "../../mutations/closeout/useCloseoutMutations";
-import { ModalShell, ModalActions, BlockedNotice, inputClass } from "../../pages/reconciliation/components/ModalShell";
+import { ModalShell, ModalActions, BlockedNotice, inputClass } from "../common/ModalShell";
 
 const PHASE_STYLE: Record<ConstructionPhase, string> = {
   ACTIVE_CONSTRUCTION: "bg-slate-100 text-slate-700 border-slate-200",

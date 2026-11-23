@@ -1,7 +1,7 @@
 /**
  * Phase 4 route-level tests: capture registration, integrity screening with real image bytes,
  * device signatures, idempotent reports, the assurance gate, staged release, honest AI fallbacks,
- * telemetry and chat idempotency, and the evidence provider feeding reconciliation.
+ * telemetry and chat idempotency, and counted reports driving progress (redesign R1b).
  *
  * Runs against a disposable database rebuilt from migrations (see helpers/testDb.ts). Uploads use
  * the local-disk storage mode (no S3), through the same presign -> PUT -> register flow as devices.
@@ -24,7 +24,6 @@ let shared: Shared;
 let signFieldAgentToken: typeof import('../middleware/auth.middleware')['signFieldAgentToken'];
 let aiCheck: typeof import('../modules/workday-reports/aiOmissionCheck');
 let provider: typeof import('../modules/evidence/evidenceProvider');
-let engine: typeof import('../modules/reconciliation/reconciliationEngine');
 
 const PASSWORD = 'Password123!';
 const scheduled: string[] = [];
@@ -221,7 +220,6 @@ before(async () => {
   ({ signFieldAgentToken } = await import('../middleware/auth.middleware'));
   aiCheck = await import('../modules/workday-reports/aiOmissionCheck');
   provider = await import('../modules/evidence/evidenceProvider');
-  engine = await import('../modules/reconciliation/reconciliationEngine');
   const { createApp } = await import('../app');
   app = createApp();
   aiCheck.setAiOmissionCheckScheduler((id) => scheduled.push(id));
@@ -577,8 +575,11 @@ describe('Phase 4 field evidence pipeline', () => {
       assert.equal(staged.body.data.aiCheckStatus, 'SKIPPED');
       assert.equal(scheduled.length, before);
 
-      const notEvidence = await provider.getEvidenceForBoqItems(ids.lkk, [ids.stoneBase], new Date());
-      assert.ok(!notEvidence.some((e) => e.id === staged.body.data.id), 'staged reports are not evidence');
+      // A staged report does not count: the item's reported progress is unchanged.
+      const stone = await prisma.boqItem.findUniqueOrThrow({ where: { id: ids.stoneBase } });
+      const progressOf = async () =>
+        (await provider.getReportedProgressByItem(ids.lkk, [{ id: stone.id, totalQuantity: Number(stone.totalQuantity) }])).get(stone.id) ?? 0;
+      const beforeRelease = await progressOf();
 
       const review = await request(app)
         .post(`/api/v1/projects/${ids.lkk}/contractor-verifications/${ids.lkkPending}/review`)
@@ -592,8 +593,9 @@ describe('Phase 4 field evidence pipeline', () => {
       assert.ok(released.releasedAt);
       assert.equal(released.aiCheckStatus, 'PENDING');
       assert.ok(scheduled.includes(released.id));
-      const evidence = await provider.getEvidenceForBoqItems(ids.lkk, [ids.stoneBase], new Date());
-      assert.ok(evidence.some((e) => e.id === released.id));
+      // Released, it counts (the item's progress is the larger of the contractor and verifier sums).
+      assert.ok(provider.countedReportStatuses(false).includes(released.status as 'CONFIRMED'));
+      assert.ok((await progressOf()) >= beforeRelease);
     });
 
     it('keeps a rejected session signed in so the device can read the reason', async () => {
@@ -949,8 +951,8 @@ describe('Phase 4 field evidence pipeline', () => {
     });
   });
 
-  describe('evidence provider feeds reconciliation', () => {
-    it('a confirmed mobile-style report with captures changes the rating of a line', async () => {
+  describe('counted reports drive progress (redesign R1b)', () => {
+    it('a confirmed mobile-style report moves the item and project progress', async () => {
       const boq = await prisma.boqItem.create({
         data: {
           projectId: ids.abj,
@@ -963,28 +965,6 @@ describe('Phase 4 field evidence pipeline', () => {
           budgetedCostNgn: 1000000,
         },
       });
-      const line = {
-        ipcLineItemId: 'line-test',
-        boqItemId: boq.id,
-        wbsCode: boq.wbsCode,
-        description: boq.description,
-        unit: 'nr',
-        totalQuantity: 100,
-        budgetedCostNgn: 1000000,
-        isHoldPoint: false,
-        isOpaqueLumpSum: false,
-        previousCertifiedPct: 0,
-        contractorClaimedPct: 40,
-        contractorClaimedNgn: 400000,
-        contractorRemarks: null,
-      };
-      const period = { start: new Date(Date.now() - 86_400_000), end: new Date(Date.now() + 60_000) };
-      const rate = async () => {
-        const evidence = await provider.getEvidenceForBoqItems(ids.abj, [boq.id], period.end);
-        return engine.rulesEngineRate(line, engine.computeLineFacts(line, evidence, period)).rating;
-      };
-
-      assert.equal(await rate(), 'UNSUPPORTED');
 
       const photo = await registerCapture({
         sessionId: ids.abjCow,
@@ -1009,12 +989,13 @@ describe('Phase 4 field evidence pipeline', () => {
         );
       assert.equal(submit.status, 201, JSON.stringify(submit.body));
 
-      const evidence = await provider.getEvidenceForBoqItems(ids.abj, [boq.id], period.end);
-      assert.equal(evidence.length, 1);
-      assert.equal(evidence[0].source, 'WORKDAY_REPORT');
-      assert.equal(evidence[0].media.length, 1);
-      assert.equal(evidence[0].isWithinGeofence, true);
-      assert.equal(await rate(), 'SUPPORTED');
+      const item = await prisma.boqItem.findUniqueOrThrow({ where: { id: boq.id } });
+      assert.equal(Number(item.cumulativeCertifiedPct), 40);
+      assert.ok(item.actualStartDate);
+      // The project figure was recomputed in the same transaction (a refresh now changes nothing).
+      const projectAfter = await prisma.project.findUniqueOrThrow({ where: { id: ids.abj } });
+      const { refreshProjectProgress } = await import('../modules/progress/progress.service');
+      assert.equal(await prisma.$transaction((tx) => refreshProjectProgress(tx, ids.abj)), Number(projectAfter.certifiedProgressPct));
     });
   });
 });

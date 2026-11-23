@@ -6,7 +6,6 @@ import {
   MobileLoginRequestSchema,
   RegisterDeviceKeyRequestSchema,
   RegisterPushTokenSchema,
-  resolveRatingLabels,
   SubmitAssuranceVerificationRequestSchema,
   WebLoginRequestSchema,
   WebRegisterRequestSchema,
@@ -303,7 +302,7 @@ router.get(
                 geofenceMode: true,
                 geofenceGeoJson: true,
                 tenant: {
-                  select: { evidenceRatingLabels: true, terminologyLabels: true, name: true, brandingConfig: true, defaultCurrency: true },
+                  select: { terminologyLabels: true, name: true, brandingConfig: true, defaultCurrency: true },
                 },
               },
             },
@@ -342,7 +341,6 @@ router.get(
                   rejectionReason: liveSession.rejectionReason,
                   devicePublicKeyId: liveSession.devicePublicKeyId,
                   reviewedAt: liveSession.reviewedAt,
-                  ratingLabels: resolveRatingLabels(liveSession.project.tenant.evidenceRatingLabels),
                   contractor: serializeSessionContractor(liveSession.projectContractor),
                   tenantBranding: mobileTenantBranding(liveSession.project.tenant),
                   project: {

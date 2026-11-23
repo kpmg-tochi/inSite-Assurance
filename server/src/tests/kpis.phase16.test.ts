@@ -45,8 +45,6 @@ function facts(over: Partial<KpiProjectFacts> = {}, config: ProjectTypeConfigInp
     inspectionObligations: { due: 0, onTime: 0, done: 0 },
     allObligations: { due: 0, onTime: 0, done: 0 },
     approvals: { totalDays: 0, count: 0 },
-    hasTranches: false,
-    payments: { totalDays: 0, count: 0 },
     certificate: null,
     finalEvaluationFinding: null,
     closureItemStatus: new Map(),
@@ -90,7 +88,7 @@ describe('Phase 16: KPI catalogue', () => {
 
   it('computes values and statuses', () => {
     const pct = KPI_BY_KEY.reports_on_time;
-    const days = KPI_BY_KEY.payment_turnaround_days;
+    const days = KPI_BY_KEY.approval_turnaround_days;
     assert.equal(kpiValue(pct, 2, 3), 66.7);
     assert.equal(kpiValue(pct, 0, 0), null);
     assert.equal(kpiValue(days, 30, 4), 7.5);
@@ -213,15 +211,10 @@ describe('Phase 16: KPI functions', () => {
     assert.deepEqual(run('reports_on_time', facts({ hasObligations: true })), { numerator: 0, denominator: 0 });
   });
 
-  it('approval and payment turnaround', () => {
+  it('approval turnaround', () => {
     assert.equal(run('approval_turnaround_days', facts()), null);
     assert.deepEqual(run('approval_turnaround_days', facts({ requireReportApproval: true })), { numerator: 0, denominator: 0 });
     assert.deepEqual(run('approval_turnaround_days', facts({ approvals: { totalDays: 9, count: 3 } })), { numerator: 9, denominator: 3 });
-    assert.equal(run('payment_turnaround_days', facts({ payments: { totalDays: 5, count: 1 } })), null); // no tranches
-    assert.deepEqual(run('payment_turnaround_days', facts({ hasTranches: true, payments: { totalDays: 20, count: 2 } })), {
-      numerator: 20,
-      denominator: 2,
-    });
   });
 
   it('financial utilisation needs a budget', () => {

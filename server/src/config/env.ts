@@ -39,16 +39,6 @@ const EnvSchema = z.object({
     .default(DEFAULT_DEV_JWT_SECRET),
   JWT_EXPIRES_IN: z.string().default('7d'),
 
-  // Company Azure OpenAI Sandbox (gpt-4.1 for Reasoning, Vision, Extraction & Reconciliation)
-  AZURE_OPENAI_ENDPOINT: z.string().optional().default(''),
-  AZURE_OPENAI_API_KEY: z.string().optional().default(''),
-  AZURE_OPENAI_API_VERSION: z.string().default('2024-10-21'),
-  AZURE_OPENAI_GPT_DEPLOYMENT: z.string().default('gpt-4.1'),
-  AzureOpenAI__MaxTokensPerRequest: z.coerce.number().default(12000),
-  AzureOpenAI__MaxOutputTokens: z.coerce.number().default(6000),
-  AzureOpenAI__MaxRetries: z.coerce.number().default(2),
-  AzureOpenAI__TimeoutSeconds: z.coerce.number().default(180),
-
   // Standalone Whisper Speech-to-Text Integration (Personal OpenAI API account)
   WHISPER_API_KEY: z.string().optional().default(''),
   WHISPER_BASE_URL: z.string().optional().default(''),

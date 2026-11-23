@@ -6,7 +6,7 @@ import {
   type ClosureChecklistList,
   type ProjectClosureChecklistDto,
 } from "@insite/shared";
-import { ModalActions, ModalShell, inputClass } from "../../pages/reconciliation/components/ModalShell";
+import { ModalActions, ModalShell, inputClass } from "../common/ModalShell";
 import { useCompleteClosureItemMutation, useWaiveClosureItemMutation } from "../../mutations/closure/useClosureMutations";
 
 const LIST_META: Record<ClosureChecklistList, { title: string; gate: string }> = {

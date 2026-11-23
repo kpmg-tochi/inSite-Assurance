@@ -59,10 +59,9 @@ export function ApprovalChainEditor({
   roles: RoleOption[];
   issues: ChainIssue[];
 }) {
-  const isDisbursement = chainType === "DISBURSEMENT";
   const isContractDefault = chainType === "CONTRACT_DEFAULT";
   /** Chains whose last step is a fixed system step: new steps go before it. */
-  const endsWithSystemStep = isDisbursement || isContractDefault;
+  const endsWithSystemStep = isContractDefault;
   const roleOptions = useMemo<CustomSelectOption<string>[]>(
     () => [{ value: "", label: "Any role with the permission" }, ...roles.map((r) => ({ value: r.id, label: r.name }))],
     [roles]
@@ -83,8 +82,8 @@ export function ApprovalChainEditor({
 
   const add = () => {
     const step: ApprovalStepConfig = {
-      label: isDisbursement ? "Additional review" : isContractDefault ? "Review" : `Approval step ${steps.length + 1}`,
-      requiredPermissionKey: isDisbursement ? "ipc:view" : isContractDefault ? DEFAULT_REVIEW_PERMISSION_KEY : REPORT_APPROVAL_PERMISSION_KEY,
+      label: isContractDefault ? "Review" : `Approval step ${steps.length + 1}`,
+      requiredPermissionKey: isContractDefault ? DEFAULT_REVIEW_PERMISSION_KEY : REPORT_APPROVAL_PERMISSION_KEY,
       requiredRoleId: null,
       minAmountThresholdNgn: null,
       isSystemStep: false,
@@ -151,7 +150,7 @@ export function ApprovalChainEditor({
                       />
                     )}
                   </div>
-                  <div className={isDisbursement && !fixed ? "md:col-span-2" : "md:col-span-4"}>
+                  <div className="md:col-span-4">
                     <p className="block text-[11px] font-semibold text-slate-600 mb-0.5">Role (optional)</p>
                     <CustomSelect
                       value={step.requiredRoleId ?? ""}
@@ -166,27 +165,6 @@ export function ApprovalChainEditor({
                       searchable={roles.length > 8}
                     />
                   </div>
-                  {isDisbursement && !fixed && (
-                    <div className="md:col-span-2">
-                      <label className="block text-[11px] font-semibold text-slate-600 mb-0.5" htmlFor={`${chainType}-threshold-${index}`}>
-                        Only from (NGN)
-                      </label>
-                      <input
-                        id={`${chainType}-threshold-${index}`}
-                        className={inputCls}
-                        inputMode="decimal"
-                        placeholder="Always"
-                        disabled={disabled}
-                        value={step.minAmountThresholdNgn ?? ""}
-                        onChange={(e) => {
-                          const raw = e.target.value.replace(/[,\s]/g, "");
-                          const n = raw === "" ? null : Number(raw);
-                          update(index, { minAmountThresholdNgn: n === null || !Number.isFinite(n) || n < 0 ? null : n });
-                        }}
-                        title="The step is skipped when the recommended release is below this amount."
-                      />
-                    </div>
-                  )}
                   <div className="md:col-span-6">
                     <p className="block text-[11px] font-semibold text-slate-600 mb-0.5">Organisation (optional)</p>
                     <CustomSelect
@@ -240,7 +218,7 @@ export function ApprovalChainEditor({
           onClick={add}
           className="inline-flex items-center gap-1 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
         >
-          <Plus className="w-3.5 h-3.5" /> {isDisbursement ? "Add a review step before release" : isContractDefault ? "Add a review step before the decision" : "Add a step"}
+          <Plus className="w-3.5 h-3.5" /> {isContractDefault ? "Add a review step before the decision" : "Add a step"}
         </button>
       )}
     </div>

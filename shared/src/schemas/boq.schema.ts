@@ -13,7 +13,6 @@ export const BoqItemInputSchema = z.object({
   budgetedCostNgn: z.number().nonnegative(),
   isHoldPoint: z.boolean().default(false),
   holdPointInstruction: z.string().max(400).nullable().optional(), // e.g., "Photograph reinforcement & blinding prior to concrete pour"
-  trancheId: z.string().uuid().nullable().optional(),
 });
 export type BoqItemInput = z.infer<typeof BoqItemInputSchema>;
 
@@ -22,8 +21,7 @@ export const BoqItemDtoSchema = BoqItemInputSchema.extend({
   projectId: z.string().uuid(),
   isOpaqueLumpSum: z.boolean(),
   opacityWarningReason: z.string().nullable(),
-  aiSuggestedTrancheId: z.string().uuid().nullable(),
-  trancheMappingConfirmedByMonitor: z.boolean(),
+  /** Progress from counted reports (legacy name; redesign R1b, modules/progress). */
   cumulativeCertifiedPct: z.number().min(0).max(100),
   /** Contractor package (Phase 6). */
   projectContractorId: z.string().uuid().nullable().optional(),
@@ -39,33 +37,13 @@ export const BoqItemDtoSchema = BoqItemInputSchema.extend({
 export type BoqItemDto = z.infer<typeof BoqItemDtoSchema>;
 
 /**
- * AI BOQ Hygiene & Tranche Mapping Output Schema (Used with Azure OpenAI GPT-4o Structured Outputs)
- */
-export const AiBoqItemAnalysisSchema = z.object({
-  wbsCode: z.string(),
-  isOpaqueLumpSum: z.boolean(),
-  opacityWarningReason: z.string().nullable(),
-  recommendedIsHoldPoint: z.boolean(),
-  recommendedHoldPointInstruction: z.string().nullable(),
-  suggestedTrancheNumber: z.number().int().nullable(),
-  mappingRationale: z.string(),
-});
-export type AiBoqItemAnalysis = z.infer<typeof AiBoqItemAnalysisSchema>;
-
-export const AiBoqBatchAnalysisResponseSchema = z.object({
-  items: z.array(AiBoqItemAnalysisSchema),
-});
-export type AiBoqBatchAnalysisResponse = z.infer<typeof AiBoqBatchAnalysisResponseSchema>;
-
-/**
- * Monitor BOQ-to-Tranche & Hold-Point Confirmation Request
+ * Monitor hold-point confirmation request
  */
 export const UpdateBoqMappingsRequestSchema = z.object({
   updates: z
     .array(
       z.object({
         boqItemId: z.string().uuid(),
-        trancheId: z.string().uuid().nullable(),
         isHoldPoint: z.boolean(),
         holdPointInstruction: z.string().max(400).nullable().optional(),
       })

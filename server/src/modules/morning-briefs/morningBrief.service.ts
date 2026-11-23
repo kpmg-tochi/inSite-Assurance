@@ -9,7 +9,7 @@ import {
   windowOverlaps,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
-import { azureOpenAiService } from '../../integrations/azure-openai.service';
+import { buildBrief } from './briefPersona';
 import { AppError } from '../../middleware/error.middleware';
 import type { FieldAgentJwtPayload, WebJwtPayload } from '../../middleware/auth.middleware';
 import { getProcessConfig } from '../process/processConfig.service';
@@ -157,7 +157,7 @@ export async function generateOrGetMorningBriefForBoqItem(params: {
   const appliedStandards = toAppliedStandards(await getApplicableStandards(projectId, boqItem.wbsCode));
   const isHoldPoint = config.enableHoldPoints && boqItem.isHoldPoint;
 
-  const generated = await azureOpenAiService.generateMorningDeliverableBrief({
+  const generated = buildBrief({
     projectName: project.name,
     wbsCode: boqItem.wbsCode,
     description: boqItem.description,
@@ -182,7 +182,7 @@ export async function generateOrGetMorningBriefForBoqItem(params: {
     expectedDeliverable: generated.expectedDeliverable,
     reportingChecklist: generated.reportingChecklist,
     dailyTargetQuantity: dailyTarget,
-    generatedByAi: generated.generatedByAi,
+    generatedByAi: false,
     appliedStandardsJson: appliedStandards as unknown as Prisma.InputJsonValue,
   };
   const saved = await prisma.morningDeliverableBrief.upsert({

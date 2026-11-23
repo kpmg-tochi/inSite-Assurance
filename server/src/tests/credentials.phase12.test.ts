@@ -1,21 +1,17 @@
 /**
  * Phase 12 unit tests (no database): credential policy resolution and field rules, registration
- * display, payment milestone completion and amount maths, and config validation.
+ * display, and config validation (redesign R1b: payment milestones removed).
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   credentialFieldRules,
-  evaluateMilestoneCompletion,
-  fixedMilestoneDue,
   formatRegistration,
   formatRegistrationShort,
-  paymentBasisMechanismConflict,
   ProjectTypeConfigSchema,
   registrationProfileFieldVisible,
   resolveCredentialPolicy,
   resolveCredentialPolicyWithSource,
-  trancheReleaseTarget,
 } from '@insite/shared';
 
 const snapshot = (credentials: unknown) => ({ config: { credentials } });
@@ -81,55 +77,16 @@ describe('Phase 12: credential policy resolution', () => {
   });
 });
 
-describe('Phase 12: payment milestone maths', () => {
-  const items = [
-    { boqItemId: 'a', wbsCode: '01', budgetedCostNgn: 100, verifiedCumulativePct: 100 },
-    { boqItemId: 'b', wbsCode: '02', budgetedCostNgn: 300, verifiedCumulativePct: 60 },
-  ];
-
-  it('ALL_ITEMS_COMPLETE needs every item at the required percentage', () => {
-    const r = evaluateMilestoneCompletion({ rule: 'ALL_ITEMS_COMPLETE', targetCompletionPct: 100, items });
-    assert.equal(r.met, false);
-    assert.deepEqual(r.itemsBelowRequired, ['02']);
-    assert.equal(r.unmetReasons.length, 1);
-    assert.equal(r.weightedProgressPct, 70);
-    const lower = evaluateMilestoneCompletion({ rule: 'ALL_ITEMS_COMPLETE', requiredItemPct: 60, targetCompletionPct: 100, items });
-    assert.equal(lower.met, true);
-    // No rule means ALL_ITEMS_COMPLETE.
-    assert.equal(evaluateMilestoneCompletion({ rule: null, targetCompletionPct: 0, items }).met, false);
-  });
-
-  it('WEIGHTED_PROGRESS_REACHED compares budget-weighted progress with the target', () => {
-    assert.equal(evaluateMilestoneCompletion({ rule: 'WEIGHTED_PROGRESS_REACHED', targetCompletionPct: 70, items }).met, true);
-    const r = evaluateMilestoneCompletion({ rule: 'WEIGHTED_PROGRESS_REACHED', targetCompletionPct: 75, items });
-    assert.equal(r.met, false);
-    assert.match(r.unmetReasons[0], /70%/);
-  });
-
-  it('a milestone with no items is never complete', () => {
-    assert.equal(evaluateMilestoneCompletion({ rule: 'WEIGHTED_PROGRESS_REACHED', targetCompletionPct: 0, items: [] }).met, false);
-  });
-
-  it('the fixed amount due is the fixed (or allocated) amount less what was released', () => {
-    assert.deepEqual(fixedMilestoneDue({ fixedReleaseAmountNgn: null, allocatedAmountNgn: 72_000_000, releasedAmountNgn: 0 }), {
-      fixedReleaseAmountNgn: 72_000_000,
-      alreadyReleasedNgn: 0,
-      dueNgn: 72_000_000,
-    });
-    assert.equal(fixedMilestoneDue({ fixedReleaseAmountNgn: 50, allocatedAmountNgn: 80, releasedAmountNgn: 20 }).dueNgn, 30);
-    assert.equal(fixedMilestoneDue({ fixedReleaseAmountNgn: 50, allocatedAmountNgn: 80, releasedAmountNgn: 60 }).dueNgn, 0);
-    assert.equal(trancheReleaseTarget({ paymentBasis: 'FIXED_ON_COMPLETION', fixedReleaseAmountNgn: 50, allocatedAmountNgn: 80 }), 50);
-    assert.equal(trancheReleaseTarget({ paymentBasis: 'MEASURED', fixedReleaseAmountNgn: 50, allocatedAmountNgn: 80 }), 80);
-  });
-
-  it('fixed basis with contractor IPC claims is refused (D-12.2)', () => {
-    assert.ok(paymentBasisMechanismConflict('IPC_CLAIM_REQUIRED', 'FIXED_ON_COMPLETION'));
-    assert.equal(paymentBasisMechanismConflict('MILESTONE_DIRECT_DISBURSEMENT', 'FIXED_ON_COMPLETION'), null);
-    assert.equal(paymentBasisMechanismConflict('IPC_CLAIM_REQUIRED', 'MEASURED'), null);
-    const bad = ProjectTypeConfigSchema.safeParse({ payments: { defaultBasis: 'FIXED_ON_COMPLETION', mechanism: 'IPC_CLAIM_REQUIRED' } });
-    assert.equal(bad.success, false);
+describe('Redesign R1b: project type payment defaults', () => {
+  it('a type holds retention defaults only (payment milestones are gone)', () => {
     const ok = ProjectTypeConfigSchema.parse({});
-    assert.deepEqual(ok.payments, { defaultBasis: 'MEASURED', defaultCompletionRule: null, mechanism: null });
+    assert.deepEqual(ok.payments, { retentionPercentage: null, retentionDurationMonths: null });
     assert.deepEqual(ok.credentials, {});
+    const set = ProjectTypeConfigSchema.parse({ payments: { retentionPercentage: 5, retentionDurationMonths: 12 } });
+    assert.deepEqual(set.payments, { retentionPercentage: 5, retentionDurationMonths: 12 });
+    // An old snapshot with the Phase 12 keys still parses; the old keys are dropped.
+    const legacy = ProjectTypeConfigSchema.parse({ payments: { defaultBasis: 'FIXED_ON_COMPLETION', mechanism: 'IPC_CLAIM_REQUIRED' } });
+    assert.deepEqual(legacy.payments, { retentionPercentage: null, retentionDurationMonths: null });
+    assert.equal(ProjectTypeConfigSchema.safeParse({ payments: { retentionPercentage: 50 } }).success, false);
   });
 });

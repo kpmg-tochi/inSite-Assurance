@@ -14,7 +14,7 @@ import Loader from "../Loader";
 type Draft = Record<TerminologyKey, { singular: string; plural: string }>;
 
 /**
- * Phase 11: tenant wording for domain terms. Display only: stored values, API fields and AI prompts
+ * Phase 11: tenant wording for domain terms. Display only: stored values and API fields
  * keep the canonical names. Empty fields use the default word.
  */
 export function TerminologyCard() {
@@ -105,12 +105,9 @@ export function TerminologyCard() {
       <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 text-xs text-slate-700 space-y-1">
         <p className="font-semibold text-slate-800">Preview</p>
         <p>
-          {word("contractor")} submits {word("ipc")} #3 against {word("tranche")} 2. The {word("monitorParty")} certifies the{" "}
-          {word("valuation").toLowerCase()}, and the {word("funderParty")} approves the release, less {word("retention").toLowerCase()}.
-        </p>
-        <p>
-          {word("conditionPrecedent", true)} and {word("holdPoint", true).toLowerCase()} must be met before {word("tranche", true).toLowerCase()} are
-          released to {word("beneficiary", true).toLowerCase()}.
+          The {word("monitorParty")} inspects the {word("contractor").toLowerCase()}'s work at each {word("holdPoint").toLowerCase()}. The{" "}
+          {word("funderParty")} records each payment, less {word("retention").toLowerCase()}, and the works are handed over to the{" "}
+          {word("beneficiary").toLowerCase()}.
         </p>
       </div>
 

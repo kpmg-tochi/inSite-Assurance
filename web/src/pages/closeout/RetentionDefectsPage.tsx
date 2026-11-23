@@ -1,14 +1,11 @@
 import React, { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { CalendarClock, Landmark, Plus, ShieldCheck, Wallet } from "lucide-react";
 import {
   DEFECT_STATUS_LABELS,
   type DefectSeverity,
   type DefectStatus,
   type DefectTicketDto,
-  type LenderDecisionType,
-  type RetentionContractorBalanceDto,
-  type RetentionReleaseRequestDto,
-  type RetentionReleaseStageValue,
 } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth, useTerm } from "../../lib/auth-context";
@@ -17,37 +14,10 @@ import Loader from "../../components/Loader";
 import { CustomSelect, KpiCard } from "../../components/common";
 import { TableBadge } from "../../components/table/StandardTable";
 import { CapturePhoto } from "../../components/evidence/CaptureMedia";
-import { BlockedNotice, ModalActions, ModalShell, inputClass } from "../reconciliation/components/ModalShell";
-import {
-  CertifierRegistrationBox,
-  signatureRegistrationSuffix,
-  useCertifierRegistration,
-} from "../../components/credentials/CertifierRegistration";
+import { BlockedNotice, ModalActions, ModalShell, inputClass } from "../../components/common/ModalShell";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { useDefectTicketsQuery, useRetentionSummaryQuery } from "../../queries/closeout/useCloseoutQueries";
-import {
-  useCancelRetentionReleaseMutation,
-  useCertifyRetentionReleaseMutation,
-  useCreateDefectTicketMutation,
-  useDecideRetentionReleaseMutation,
-  useDefectActionMutation,
-  useRequestRetentionReleaseMutation,
-} from "../../mutations/closeout/useCloseoutMutations";
-import { useReviewValuationMutation } from "../../mutations/reconciliation/useReconciliationMutations";
-
-const STAGE_LABEL: Record<RetentionReleaseStageValue, string> = {
-  COMPLETION: "At practical completion",
-  FINAL: "Final release",
-};
-
-const OUTCOME_BADGE: Record<RetentionReleaseRequestDto["outcome"], { variant: "success" | "warning" | "danger" | "neutral" | "info"; label: string }> = {
-  AWAITING_CERTIFICATION: { variant: "warning", label: "Awaiting certification" },
-  IN_APPROVAL: { variant: "info", label: "In approval" },
-  RELEASED: { variant: "success", label: "Released" },
-  HELD: { variant: "neutral", label: "Held" },
-  RETURNED: { variant: "danger", label: "Returned" },
-  CANCELLED: { variant: "neutral", label: "Cancelled" },
-};
+import { useCreateDefectTicketMutation, useDefectActionMutation } from "../../mutations/closeout/useCloseoutMutations";
 
 const BOARD: DefectStatus[] = ["OPEN", "ASSIGNED", "RECTIFIED_PENDING_VERIFICATION", "VERIFIED_CLOSED", "REJECTED_NOT_A_DEFECT"];
 const SEVERITY_BADGE: Record<DefectSeverity, "neutral" | "info" | "warning" | "danger"> = {
@@ -58,22 +28,17 @@ const SEVERITY_BADGE: Record<DefectSeverity, "neutral" | "info" | "warning" | "d
 };
 
 /**
- * Project "Retention and defects" tab (Phase 10 Step 8): held, released and remaining retention
- * per contractor, the liability-period countdown, release requests through the disbursement chain
- * (with the unmet preconditions listed when a release is not possible yet), and the defect board.
+ * Project "Retention and defects" tab (Phase 10, reworked in redesign R1b): retention held and
+ * released (from the payment record), the liability-period countdown, and the defect board.
+ * Retention is released by recording a retention-release payment on the Payments page.
  */
 export function RetentionDefectsPage({ project }: { project: ProjectSummaryDto }) {
   const { hasPermission } = useAuth();
   const term = useTerm();
   const processQuery = useProjectProcess(project.id);
   const enabled = processQuery.data?.config.enableRetentionModule ?? false;
-  const canSeeMoney = [
-    "retention:manage_defects",
-    "retention:release_escrow",
-    "ipc:certify_valuation",
-    "tranche:approve_disbursement",
-    "audit:view_ledger",
-  ].some((k) => hasPermission(k));
+  const canSeeMoney = ["retention:manage_defects", "payments:view", "payments:record", "audit:view_ledger"].some((k) => hasPermission(k));
+  const canSeePayments = hasPermission("payments:view") || hasPermission("payments:record");
   const summaryQuery = useRetentionSummaryQuery(project.id, enabled && canSeeMoney);
   const ticketsQuery = useDefectTicketsQuery(project.id, enabled);
 
@@ -93,7 +58,7 @@ export function RetentionDefectsPage({ project }: { project: ProjectSummaryDto }
         <h1 className="text-lg font-bold text-slate-900">{term("retention")} and defects</h1>
         <p className="text-xs text-slate-500">
           {project.codePrefix}
-          {s?.retentionPercentage ? ` · ${s.retentionPercentage}% withheld from each release` : ` · no ${term("retention", { lower: true })} percentage set`}
+          {s?.retentionPercentage ? ` · ${s.retentionPercentage}% held from each payment` : ` · no ${term("retention", { lower: true })} percentage set`}
           {s?.retentionDurationMonths ? ` · ${s.retentionDurationMonths}-month defects liability period` : ""}
           {s && s.retentionReleaseAtCompletionPct > 0 ? ` · ${s.retentionReleaseAtCompletionPct}% may be released at practical completion` : ""}
         </p>
@@ -118,8 +83,20 @@ export function RetentionDefectsPage({ project }: { project: ProjectSummaryDto }
               iconVariant="amber"
             />
           </div>
-          <BalancesSection project={project} contractors={s.contractors} canRequest={s.canRequestRelease} />
-          <ReleaseRequests project={project} requests={s.requests} />
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-600 flex flex-wrap items-center justify-between gap-3">
+            <span>
+              {formatNaira(s.balanceNgn)} still held{s.openDefectCount > 0 ? ` · ${s.openDefectCount} open defect(s)` : ""}. Payments are made
+              outside the platform: record the {term("retention", { lower: true })} release as a payment when it is paid.
+            </span>
+            {canSeePayments && (
+              <Link
+                to={`/app/projects/${project.id}/payments`}
+                className="px-3 py-1.5 rounded-xl bg-brand-primary hover:bg-brand-hover text-white font-semibold"
+              >
+                Open payments
+              </Link>
+            )}
+          </div>
         </>
       )}
 
@@ -128,310 +105,6 @@ export function RetentionDefectsPage({ project }: { project: ProjectSummaryDto }
   );
 }
 
-// ---------------------------------------------------------------------------
-// Balances and release requests
-// ---------------------------------------------------------------------------
-
-function BalancesSection({
-  project,
-  contractors,
-  canRequest,
-}: {
-  project: ProjectSummaryDto;
-  contractors: RetentionContractorBalanceDto[];
-  canRequest: boolean;
-}) {
-  const term = useTerm();
-  const [requesting, setRequesting] = useState<{ contractor: RetentionContractorBalanceDto; stage: RetentionReleaseStageValue } | null>(null);
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-100 px-4 py-3">
-        <h2 className="text-sm font-bold text-slate-900">Per {term("contractor", { lower: true })}</h2>
-      </div>
-      <div className="divide-y divide-slate-100">
-        {contractors.map((c) => (
-          <div key={c.projectContractorId} className="grid gap-3 px-4 py-3 text-xs md:grid-cols-[1.5fr_1fr_1fr_1fr_2fr]">
-            <div>
-              <p className="font-semibold text-slate-900">{c.contractorName}</p>
-              <p className="text-[11px] text-slate-500">
-                {c.tradeCode}
-                {c.isMainContractor ? ` · main ${term("contractor", { lower: true })}` : ""} · {c.openTicketCount} open defect(s)
-              </p>
-            </div>
-            <Amount label="Held" value={c.heldNgn} />
-            <Amount label="Released" value={c.releasedNgn} />
-            <Amount label="Pending release" value={c.pendingReleaseNgn} />
-            <div className="space-y-2">
-              {c.stages.map((stage) => (
-                <div key={stage.stage} className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-slate-700">{STAGE_LABEL[stage.stage]}</p>
-                    {stage.allowed ? (
-                      <p className="text-[11px] text-slate-500">Up to {formatNaira(stage.maxAmountNgn)}</p>
-                    ) : (
-                      <ul className="list-disc pl-4 text-[11px] text-slate-500">
-                        {stage.unmet.map((u) => (
-                          <li key={u}>{u}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                  {canRequest && (
-                    <button
-                      type="button"
-                      disabled={!stage.allowed}
-                      onClick={() => setRequesting({ contractor: c, stage: stage.stage })}
-                      className="shrink-0 rounded-lg bg-brand-primary px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-brand-hover disabled:opacity-40"
-                    >
-                      Request release
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      {requesting && (
-        <RequestReleaseModal
-          projectId={project.id}
-          contractor={requesting.contractor}
-          stage={requesting.stage}
-          onClose={() => setRequesting(null)}
-        />
-      )}
-    </section>
-  );
-}
-
-function Amount({ label, value }: { label: string; value: number }) {
-  return (
-    <div>
-      <p className="text-[11px] text-slate-500">{label}</p>
-      <p className="font-semibold text-slate-900">{formatNaira(value)}</p>
-    </div>
-  );
-}
-
-function RequestReleaseModal({
-  projectId,
-  contractor,
-  stage,
-  onClose,
-}: {
-  projectId: string;
-  contractor: RetentionContractorBalanceDto;
-  stage: RetentionReleaseStageValue;
-  onClose: () => void;
-}) {
-  const mutation = useRequestRetentionReleaseMutation(projectId);
-  const term = useTerm();
-  const max = contractor.stages.find((s) => s.stage === stage)?.maxAmountNgn ?? 0;
-  const [amount, setAmount] = useState(String(max));
-  const [notes, setNotes] = useState("");
-  const value = Number(amount);
-  const bad = !(value > 0) || value > max;
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await mutation.mutateAsync({ projectContractorId: contractor.projectContractorId, stage, amountNgn: value, notes: notes.trim() || undefined });
-      onClose();
-    } catch {
-      // toasted by the mutation hook
-    }
-  };
-
-  return (
-    <ModalShell title={`Request ${term("retention", { lower: true })} release`} subtitle={`${contractor.contractorName} · ${STAGE_LABEL[stage]}`} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3 p-5 text-xs">
-        <p className="text-slate-600">
-          A certifier certifies the release next; it then follows the project's disbursement approval chain like any other{" "}
-          {term("valuation", { lower: true })}.
-        </p>
-        <label className="block space-y-1">
-          <span className="font-semibold text-slate-700">Amount (NGN), at most {formatNaira(max)}</span>
-          <input type="number" min={0.01} max={max} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
-        </label>
-        <label className="block space-y-1">
-          <span className="font-semibold text-slate-700">Notes (optional)</span>
-          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} maxLength={2000} />
-        </label>
-        <ModalActions onCancel={onClose} submitLabel="Request release" pendingLabel="Requesting…" isPending={mutation.isPending} disabled={bad} />
-      </form>
-    </ModalShell>
-  );
-}
-
-function ReleaseRequests({ project, requests }: { project: ProjectSummaryDto; requests: RetentionReleaseRequestDto[] }) {
-  const cancel = useCancelRetentionReleaseMutation(project.id);
-  const review = useReviewValuationMutation(project.id);
-  const [certifying, setCertifying] = useState<RetentionReleaseRequestDto | null>(null);
-  const [deciding, setDeciding] = useState<RetentionReleaseRequestDto | null>(null);
-  if (requests.length === 0) return null;
-
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-100 px-4 py-3">
-        <h2 className="text-sm font-bold text-slate-900">Release requests</h2>
-      </div>
-      <ul className="divide-y divide-slate-100">
-        {requests.map((r) => {
-          const badge = OUTCOME_BADGE[r.outcome];
-          const step = r.valuation?.approval?.steps.find((s) => s.stepOrder === r.valuation?.approval?.currentStepOrder);
-          return (
-            <li key={r.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-xs">
-              <div className="min-w-[220px] flex-1">
-                <p className="font-semibold text-slate-900">
-                  {formatNaira(r.amountNgn)} · {r.contractorName}
-                </p>
-                <p className="text-[11px] text-slate-500">
-                  {STAGE_LABEL[r.stage]} · requested by {r.requestedByName ?? "—"} on {new Date(r.requestedAt).toLocaleDateString("en-GB")}
-                  {r.valuation ? ` · certified by ${r.valuation.certifierFullName}` : ""}
-                  {r.outcome === "IN_APPROVAL" && step ? ` · waiting for "${step.label}"` : ""}
-                </p>
-              </div>
-              <TableBadge variant={badge.variant}>{badge.label}</TableBadge>
-              <div className="flex flex-wrap gap-2">
-                {r.actions.certify.allowed && (
-                  <ActionButton onClick={() => setCertifying(r)} primary>
-                    Certify
-                  </ActionButton>
-                )}
-                {r.actions.review.allowed && r.valuation && (
-                  <ActionButton onClick={() => review.mutate({ valuationId: r.valuation!.id, decision: "APPROVE", notes: null })}>Approve step</ActionButton>
-                )}
-                {r.actions.decide.allowed && (
-                  <ActionButton onClick={() => setDeciding(r)} primary>
-                    Record decision
-                  </ActionButton>
-                )}
-                {r.actions.cancel.allowed && <ActionButton onClick={() => cancel.mutate(r.id)}>Cancel</ActionButton>}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-      {certifying && <CertifyModal projectId={project.id} request={certifying} onClose={() => setCertifying(null)} />}
-      {deciding && <DecideModal projectId={project.id} request={deciding} onClose={() => setDeciding(null)} />}
-    </section>
-  );
-}
-
-function ActionButton({ onClick, children, primary }: { onClick: () => void; children: React.ReactNode; primary?: boolean }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={
-        primary
-          ? "rounded-lg bg-brand-primary px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-brand-hover"
-          : "rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-      }
-    >
-      {children}
-    </button>
-  );
-}
-
-function CertifyModal({ projectId, request, onClose }: { projectId: string; request: RetentionReleaseRequestDto; onClose: () => void }) {
-  const mutation = useCertifyRetentionReleaseMutation(projectId);
-  const term = useTerm();
-  // Phase 12: the project's registration policy decides whether a registration is needed.
-  const { blocked: registrationBlocked, registration } = useCertifierRegistration(projectId);
-  const [summary, setSummary] = useState("");
-  const [ack, setAck] = useState(false);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await mutation.mutateAsync({ requestId: request.id, body: { executiveCertificationSummary: summary.trim(), certifierDigitalSignatureAck: true } });
-      onClose();
-    } catch {
-      // toasted by the mutation hook
-    }
-  };
-  return (
-    <ModalShell title={`Certify ${term("retention", { lower: true })} release`} subtitle={`${formatNaira(request.amountNgn)} · ${request.contractorName}`} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3 p-5 text-xs">
-        <CertifierRegistrationBox projectId={projectId} />
-        <label className="block space-y-1">
-          <span className="font-semibold text-slate-700">Certification summary</span>
-          <textarea rows={4} required minLength={10} value={summary} onChange={(e) => setSummary(e.target.value)} className={inputClass} maxLength={4000} />
-        </label>
-        <label className="flex items-start gap-2">
-          <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5" />
-          <span>
-            I certify this release{signatureRegistrationSuffix(registration)}. My name
-            {registration ? " and registration are" : " is"} recorded on the {term("valuation", { lower: true })}.
-          </span>
-        </label>
-        <ModalActions onCancel={onClose} submitLabel="Certify" pendingLabel="Certifying…" isPending={mutation.isPending} disabled={!ack || summary.trim().length < 10 || registrationBlocked} />
-      </form>
-    </ModalShell>
-  );
-}
-
-function DecideModal({ projectId, request, onClose }: { projectId: string; request: RetentionReleaseRequestDto; onClose: () => void }) {
-  const mutation = useDecideRetentionReleaseMutation(projectId);
-  const term = useTerm();
-  const [decision, setDecision] = useState<LenderDecisionType>("APPROVE_FULL");
-  const [amount, setAmount] = useState("");
-  const [notes, setNotes] = useState("");
-  const value = Number(amount);
-  const bad = decision === "APPROVE_WITH_HOLDBACK" && (!(value > 0) || value > request.amountNgn);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await mutation.mutateAsync({
-        valuationId: request.valuation!.id,
-        body: {
-          decision,
-          ...(decision === "APPROVE_WITH_HOLDBACK" ? { approvedDisbursementAmountNgn: value } : {}),
-          approverNotes: notes.trim() || undefined,
-        },
-      });
-      onClose();
-    } catch {
-      // toasted by the mutation hook
-    }
-  };
-  return (
-    <ModalShell title={`${term("retention")} release decision`} subtitle={`${request.contractorName} · ${STAGE_LABEL[request.stage]}`} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3 p-5 text-xs">
-        <dl className="grid grid-cols-2 gap-y-1 rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <dt className="text-slate-500">Certified release</dt>
-          <dd className="text-right font-bold text-emerald-700">{formatNaira(request.amountNgn)}</dd>
-          <dt className="text-slate-500">Certified by</dt>
-          <dd className="text-right">{request.valuation?.certifierFullName}</dd>
-        </dl>
-        <CustomSelect
-          label="Decision"
-          value={decision}
-          onChange={setDecision}
-          options={[
-            { value: "APPROVE_FULL", label: "Release the certified amount" },
-            { value: "APPROVE_WITH_HOLDBACK", label: "Release a lower amount" },
-            { value: "HOLD", label: "Hold", description: "Release nothing now" },
-          ]}
-        />
-        {decision === "APPROVE_WITH_HOLDBACK" && (
-          <label className="block space-y-1">
-            <span className="font-semibold text-slate-700">Amount (NGN)</span>
-            <input type="number" min={0.01} max={request.amountNgn} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} />
-          </label>
-        )}
-        <label className="block space-y-1">
-          <span className="font-semibold text-slate-700">Notes (optional)</span>
-          <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} maxLength={1500} />
-        </label>
-        <ModalActions onCancel={onClose} submitLabel="Record decision" pendingLabel="Recording…" isPending={mutation.isPending} disabled={bad} />
-      </form>
-    </ModalShell>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Defect board
 // ---------------------------------------------------------------------------
 
 type TicketAction = { ticket: DefectTicketDto; kind: "assign" | "rectify" | "verify" | "reject" };

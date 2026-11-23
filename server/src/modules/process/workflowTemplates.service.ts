@@ -1,7 +1,6 @@
 import { Prisma } from '@prisma/client';
 import {
   DEFAULT_PROJECT_PROCESS_CONFIG,
-  defaultDisbursementChain,
   defaultReportChain,
   SaveWorkflowTemplateRequest,
   WorkflowTemplateConfig,
@@ -36,45 +35,40 @@ function serializeTemplate(t: TemplateRow): WorkflowTemplateDto {
 export function starterTemplates(): Array<{ name: string; description: string; isDefault: boolean; config: WorkflowTemplateConfig }> {
   return [
     {
-      name: 'Standard institutional project finance',
-      description:
-        'Contractor IPC claims certified by the independent monitor, hold points on, standards optional, contractor and monitor field reporting.',
+      name: 'Standard monitoring',
+      description: 'Contractor and monitor field reporting, hold points on, standards optional.',
       isDefault: true,
       config: {
         process: { ...DEFAULT_PROJECT_PROCESS_CONFIG },
         reportChain: defaultReportChain(),
-        disbursementChain: defaultDisbursementChain('IPC_CLAIM_REQUIRED'),
       },
     },
     {
-      name: 'M&E-only oversight with direct milestone release',
+      name: 'M&E-only oversight',
       description:
-        'Independent verifiers report; contractors do not. Reports need approval. A licensed verifier certifies milestones directly from evidence, with no contractor claim. Needs assessment and standards are required before activation.',
+        'Independent verifiers report; contractors do not. Reports need approval. Needs assessment and standards are required before activation.',
       isDefault: false,
       config: {
         process: {
           ...DEFAULT_PROJECT_PROCESS_CONFIG,
           needsAssessmentMode: 'REQUIRED_AT_CREATION',
           standardsSpecificationMode: 'REQUIRED_AT_CREATION',
-          disbursementMechanism: 'MILESTONE_DIRECT_DISBURSEMENT',
           allowContractorFieldReporting: false,
           requireReportApproval: true,
         },
         reportChain: defaultReportChain(),
-        disbursementChain: defaultDisbursementChain('MILESTONE_DIRECT_DISBURSEMENT'),
       },
     },
     {
-      name: 'Rapid CapEx / lightweight monitoring',
-      description: 'Direct milestone release with the minimal chain (verify, then release). Standards optional.',
+      name: 'Lightweight monitoring',
+      description: 'Verifier reporting only, no report approval, standards optional.',
       isDefault: false,
       config: {
         process: {
           ...DEFAULT_PROJECT_PROCESS_CONFIG,
-          disbursementMechanism: 'MILESTONE_DIRECT_DISBURSEMENT',
+          allowContractorFieldReporting: false,
         },
         reportChain: defaultReportChain(),
-        disbursementChain: defaultDisbursementChain('MILESTONE_DIRECT_DISBURSEMENT'),
       },
     },
   ];

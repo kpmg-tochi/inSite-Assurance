@@ -7,7 +7,7 @@ import {
   type ProjectRatingsDto,
 } from "@insite/shared";
 import Loader from "../Loader";
-import { ModalActions, ModalShell, inputClass } from "../../pages/reconciliation/components/ModalShell";
+import { ModalActions, ModalShell, inputClass } from "../common/ModalShell";
 import { useProjectRatingsQuery } from "../../queries/closure/useClosureQueries";
 import { useRateContractorMutation } from "../../mutations/closure/useClosureMutations";
 

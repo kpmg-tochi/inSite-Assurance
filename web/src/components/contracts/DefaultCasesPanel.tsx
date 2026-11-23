@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Gavel, Plus } from "lucide-react";
 import type { ContractorDefaultCaseDto } from "@insite/shared";
-import { ModalShell } from "../../pages/reconciliation/components/ModalShell";
+import { ModalShell } from "../common/ModalShell";
 import { CustomSelect } from "../common";
 import Loader from "../Loader";
 import { useAuth } from "../../lib/auth-context";

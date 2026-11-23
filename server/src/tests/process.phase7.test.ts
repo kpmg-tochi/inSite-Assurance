@@ -1,9 +1,9 @@
 /**
  * Phase 7 tests: process configuration and templates, persona-aware briefs, the standards check,
- * report approval chains, the disbursement chain and direct milestone release.
+ * and report approval chains (redesign R1b removed the disbursement chain and direct milestone release).
  *
  * Runs against a disposable database rebuilt from migrations (see helpers/testDb.ts). EDO-410 is
- * the seeded M&E-only project (direct milestone release, report approval on); LKK-402 runs the
+ * the seeded M&E-only project (report approval on); LKK-402 runs the
  * default Phase 3 process.
  */
 import { resetTestDatabase } from './helpers/testDb';
@@ -22,7 +22,6 @@ let shared: Shared;
 let signFieldAgentToken: typeof import('../middleware/auth.middleware')['signFieldAgentToken'];
 let aiCheck: typeof import('../modules/workday-reports/aiOmissionCheck');
 let provider: typeof import('../modules/evidence/evidenceProvider');
-let ai: typeof import('../integrations/azure-openai.service')['azureOpenAiService'];
 let rules: typeof import('../modules/standards/standardsRules');
 let persona: typeof import('../modules/morning-briefs/briefPersona');
 
@@ -34,8 +33,6 @@ const ids = {
   tenant: '',
   edo: '',
   lkk: '',
-  edoT1: '',
-  edoT2: '',
   edoColumns: '',
   edoBlockwork: '',
   edoRoofing: '',
@@ -117,7 +114,6 @@ before(async () => {
   ({ signFieldAgentToken } = await import('../middleware/auth.middleware'));
   aiCheck = await import('../modules/workday-reports/aiOmissionCheck');
   provider = await import('../modules/evidence/evidenceProvider');
-  ({ azureOpenAiService: ai } = await import('../integrations/azure-openai.service'));
   rules = await import('../modules/standards/standardsRules');
   persona = await import('../modules/morning-briefs/briefPersona');
   const { createApp } = await import('../app');
@@ -130,9 +126,6 @@ before(async () => {
     prisma.project.findFirstOrThrow({ where: { tenantId: tenant.id, codePrefix: code } }).then((p) => p.id);
   ids.edo = await project('EDO-410');
   ids.lkk = await project('LKK-402');
-  const tranches = await prisma.facilityTranche.findMany({ where: { projectId: ids.edo }, orderBy: { trancheNumber: 'asc' } });
-  ids.edoT1 = tranches[0].id;
-  ids.edoT2 = tranches[1].id;
   const item = (wbs: string) => prisma.boqItem.findFirstOrThrow({ where: { projectId: ids.edo, wbsCode: wbs } }).then((b) => b.id);
   ids.edoColumns = await item('01.01');
   ids.edoBlockwork = await item('01.02');
@@ -149,8 +142,6 @@ before(async () => {
 
 after(async () => {
   aiCheck?.setAiOmissionCheckScheduler(null);
-  ai?.setBriefModelOverride(null);
-  ai?.setStandardsModelOverride(null);
   await prisma?.$disconnect();
 });
 
@@ -159,7 +150,7 @@ describe('Phase 7', { concurrency: false }, () => {
   describe('process configuration and chains', () => {
     it('defaults to the Phase 3 / Phase 4 behaviour', () => {
       const d = shared.DEFAULT_PROJECT_PROCESS_CONFIG;
-      assert.equal(shared.ProjectProcessConfigSchema.parse(d).disbursementMechanism, 'IPC_CLAIM_REQUIRED');
+      assert.equal('disbursementMechanism' in shared.ProjectProcessConfigSchema.parse(d), false, 'redesign R1b: no disbursement');
       assert.equal(d.requireReportApproval, false);
       assert.equal(d.enableHoldPoints, true);
       assert.equal(d.allowContractorFieldReporting, true);
@@ -167,21 +158,17 @@ describe('Phase 7', { concurrency: false }, () => {
 
     it('accepts the default chains and rejects the wrong shapes', () => {
       assert.deepEqual(shared.validateApprovalChain('REPORT', shared.defaultReportChain()), []);
-      assert.deepEqual(shared.validateApprovalChain('DISBURSEMENT', shared.defaultDisbursementChain('IPC_CLAIM_REQUIRED')), []);
-      const [cert, release] = shared.defaultDisbursementChain('IPC_CLAIM_REQUIRED');
-      const review = { label: 'Credit review', requiredPermissionKey: 'audit:view_ledger', isSystemStep: false, minAmountThresholdNgn: 1000 };
-      assert.deepEqual(shared.validateApprovalChain('DISBURSEMENT', [cert, review, release]), []);
+      const [approve] = shared.defaultReportChain();
+      const review = { label: 'Second review', requiredPermissionKey: 'audit:view_ledger', isSystemStep: false };
+      assert.deepEqual(shared.validateApprovalChain('REPORT', [approve, review]), []);
 
-      const codes = (steps: Parameters<typeof shared.validateApprovalChain>[1], t: 'REPORT' | 'DISBURSEMENT' = 'DISBURSEMENT') =>
-        shared.validateApprovalChain(t, steps).map((i) => i.code);
-      assert.ok(codes([release]).includes('CERTIFICATION_STEP_REQUIRED'));
-      assert.ok(codes([cert, review]).includes('RELEASE_STEP_REQUIRED'));
-      assert.ok(codes([review, cert, release]).includes('CERTIFICATION_STEP_REQUIRED'));
-      assert.ok(codes([{ ...cert, minAmountThresholdNgn: 5 }, release]).includes('THRESHOLD_ON_SYSTEM_STEP'));
-      assert.ok(codes([{ ...cert, stepOrder: 1 }, { ...release, stepOrder: 3 }]).includes('STEPS_NOT_CONTIGUOUS'));
-      assert.ok(codes([], 'REPORT').includes('CHAIN_EMPTY'));
-      assert.ok(codes([cert], 'REPORT').includes('SYSTEM_STEP_NOT_ALLOWED'));
-      assert.ok(codes([{ ...review, requiredPermissionKey: 'nope:nope' }], 'REPORT').includes('UNKNOWN_PERMISSION'));
+      const codes = (steps: Parameters<typeof shared.validateApprovalChain>[1]) =>
+        shared.validateApprovalChain('REPORT', steps).map((i) => i.code);
+      assert.ok(codes([{ ...approve, minAmountThresholdNgn: 5 }]).includes('THRESHOLD_NOT_ALLOWED'));
+      assert.ok(codes([{ ...approve, stepOrder: 1 }, { ...review, stepOrder: 3 }]).includes('STEPS_NOT_CONTIGUOUS'));
+      assert.ok(codes([]).includes('CHAIN_EMPTY'));
+      assert.ok(codes([{ ...approve, isSystemStep: true }]).includes('SYSTEM_STEP_NOT_ALLOWED'));
+      assert.ok(codes([{ ...review, requiredPermissionKey: 'nope:nope' }]).includes('UNKNOWN_PERMISSION'));
     });
 
     it('seeds three templates and gives every project its own rows', async () => {
@@ -190,11 +177,11 @@ describe('Phase 7', { concurrency: false }, () => {
       assert.equal(res.body.data.length, 3);
       const edo = await request(app).get(`/api/v1/projects/${ids.edo}/process`).set(await web('verifier@insite.ng'));
       assert.equal(edo.status, 200, JSON.stringify(edo.body));
-      assert.equal(edo.body.data.config.disbursementMechanism, 'MILESTONE_DIRECT_DISBURSEMENT');
       assert.equal(edo.body.data.config.requireReportApproval, true);
-      assert.equal(edo.body.data.disbursementChain.steps[0].requiredPermissionKey, 'milestone:verify_direct_release');
+      assert.equal(edo.body.data.config.allowContractorFieldReporting, false);
+      assert.equal(edo.body.data.disbursementChain, undefined);
       const lkk = await request(app).get(`/api/v1/projects/${ids.lkk}/process`).set(await web('monitor@insite.ng'));
-      assert.equal(lkk.body.data.config.disbursementMechanism, 'IPC_CLAIM_REQUIRED');
+      assert.equal(lkk.body.data.config.requireReportApproval, false);
     });
 
     it('copies a template into a draft; later template edits do not change the project', async () => {
@@ -208,16 +195,16 @@ describe('Phase 7', { concurrency: false }, () => {
       assert.equal(created.status, 201, JSON.stringify(created.body));
       const draftId = created.body.data.projectId as string;
       // A new draft gets the tenant default template.
-      assert.equal(created.body.data.process.config.disbursementMechanism, 'IPC_CLAIM_REQUIRED');
+      assert.equal(created.body.data.process.config.allowContractorFieldReporting, true);
 
       const templates = (await request(app).get('/api/v1/workflow-templates').set(admin)).body.data as Array<{ id: string; name: string; config: unknown }>;
-      const rapid = templates.find((t) => t.name.startsWith('Rapid'))!;
+      const rapid = templates.find((t) => t.name.startsWith('Lightweight'))!;
       const applied = await request(app).post(`/api/v1/projects/${draftId}/process/apply-template`).set(admin).send({ templateId: rapid.id });
       assert.equal(applied.status, 200, JSON.stringify(applied.body));
-      assert.equal(applied.body.data.config.disbursementMechanism, 'MILESTONE_DIRECT_DISBURSEMENT');
+      assert.equal(applied.body.data.config.allowContractorFieldReporting, false);
       assert.equal(applied.body.data.workflowTemplateId, rapid.id);
       const rows = await prisma.approvalStep.count({ where: { projectId: draftId, isActive: true } });
-      assert.equal(rows, 3); // report (1) + disbursement (2)
+      assert.equal(rows, 1); // the report chain
 
       const edited = await request(app)
         .put(`/api/v1/workflow-templates/${rapid.id}`)
@@ -238,10 +225,15 @@ describe('Phase 7', { concurrency: false }, () => {
 
     it('chain edits write a new version and refuse invalid chains', async () => {
       const admin = await web('admin@insite.ng');
-      const bad = await request(app)
+      const gone = await request(app)
         .put(`/api/v1/projects/${ids.lkk}/process/chains/DISBURSEMENT`)
         .set(admin)
-        .send({ steps: [{ label: 'Only release', requiredPermissionKey: 'tranche:approve_disbursement', isSystemStep: true }] });
+        .send({ steps: [{ label: 'QS approval', requiredPermissionKey: 'reports:approve_completion' }] });
+      assert.equal(gone.status, 404, 'redesign R1b: the disbursement chain no longer exists');
+      const bad = await request(app)
+        .put(`/api/v1/projects/${ids.lkk}/process/chains/REPORT`)
+        .set(admin)
+        .send({ steps: [{ label: 'System step', requiredPermissionKey: 'reports:approve_completion', isSystemStep: true }] });
       assert.equal(bad.status, 422, JSON.stringify(bad.body));
 
       const before = (await request(app).get(`/api/v1/projects/${ids.lkk}/process`).set(admin)).body.data;
@@ -254,15 +246,6 @@ describe('Phase 7', { concurrency: false }, () => {
       assert.ok(await prisma.approvalStep.findFirst({ where: { projectId: ids.lkk, chainType: 'REPORT', version: before.reportChain.version, isActive: false } }));
     });
 
-    it('refuses a mechanism change once valuations or IPCs exist', async () => {
-      const lkk = (await request(app).get(`/api/v1/projects/${ids.lkk}/process`).set(await web('admin@insite.ng'))).body.data;
-      const res = await request(app)
-        .put(`/api/v1/projects/${ids.lkk}/process`)
-        .set(await web('admin@insite.ng'))
-        .send({ config: { ...lkk.config, disbursementMechanism: 'MILESTONE_DIRECT_DISBURSEMENT' } });
-      assert.equal(res.status, 409, JSON.stringify(res.body));
-      assert.equal(res.body.error.code, 'DISBURSEMENT_MECHANISM_LOCKED');
-    });
   });
 
   // -------------------------------------------------------------------------
@@ -276,32 +259,17 @@ describe('Phase 7', { concurrency: false }, () => {
       assert.equal(persona.containsExecutionInstruction(no), false);
     });
 
-    it('a verifier brief never tells the inspector to build: regenerates once, then falls back', async () => {
-      const calls: string[] = [];
-      ai.setBriefModelOverride(async (system) => {
-        calls.push(system);
-        return {
-          headline: 'WBS 01.01 target',
-          expectedDeliverable: 'Pour 5 m3 of column concrete and install the formwork.',
-          reportingChecklist: ['Excavate the footing.', 'Record bags of cement.'],
-        };
-      });
-      try {
-        const res = await request(app)
-          .post(`/api/v1/projects/${ids.edo}/boq/${ids.edoColumns}/morning-brief`)
-          .set(field(ids.edoSession))
-          .send({});
-        assert.equal(res.status, 201, JSON.stringify(res.body));
-        assert.equal(calls.length, 2);
-        assert.match(calls[1], /previous answer/);
-        const brief = res.body.data;
-        assert.equal(brief.targetPersona, 'INDEPENDENT_VERIFIER');
-        assert.equal(brief.generatedByAi, false);
-        assert.equal(persona.containsExecutionInstruction(brief), false);
-        assert.deepEqual(brief.appliedStandards.map((s: { code: string }) => s.code), ['CONC-SLUMP']);
-      } finally {
-        ai.setBriefModelOverride(null);
-      }
+    it('a verifier brief never tells the inspector to build', async () => {
+      const res = await request(app)
+        .post(`/api/v1/projects/${ids.edo}/boq/${ids.edoColumns}/morning-brief`)
+        .set(field(ids.edoSession))
+        .send({});
+      assert.equal(res.status, 201, JSON.stringify(res.body));
+      const brief = res.body.data;
+      assert.equal(brief.targetPersona, 'INDEPENDENT_VERIFIER');
+      assert.equal(brief.generatedByAi, false);
+      assert.equal(persona.containsExecutionInstruction(brief), false);
+      assert.deepEqual(brief.appliedStandards.map((s: { code: string }) => s.code), ['CONC-SLUMP']);
     });
 
     it('a contractor brief lists its standards; the two personas are cached separately', async () => {
@@ -384,45 +352,18 @@ describe('Phase 7', { concurrency: false }, () => {
       assert.ok(await prisma.webNotification.findFirst({ where: { projectId: ids.edo, category: 'STANDARDS_VIOLATION_FLAGGED' } }));
       assert.ok(await prisma.auditLog.findFirst({ where: { projectId: ids.edo, action: 'STANDARDS_VIOLATION_FLAGGED' } }));
     });
-
-    it('uses the provider when available', async () => {
-      ai.setStandardsModelOverride(async (params) => ({
-        passed: false,
-        engine: 'AZURE_OPENAI',
-        reasoning: 'stub',
-        violations: [
-          {
-            standardCode: params.standards[0].code,
-            standardTitle: params.standards[0].title,
-            severity: 'CRITICAL',
-            violationSummary: 'Block strength not recorded.',
-            requiredRectification: 'Attach the block test certificate.',
-          },
-        ],
-      }));
-      try {
-        const report = await submit(ids.edoSession, ids.edo, reportBody(ids.edoBlockwork, { summaryText: 'Blockwork rising on the east wing.', reportedQuantity: 40 }));
-        await aiCheck.runAiOmissionCheck(report.id);
-        const row = await prisma.workdayReport.findUniqueOrThrow({ where: { id: report.id } });
-        assert.equal(row.standardsCompliancePassed, false);
-        assert.match(row.aiCheckEngine ?? '', /AZURE_OPENAI/);
-        const list = await request(app).get(`/api/v1/projects/${ids.edo}/workday-reports`).set(await web('verifier@insite.ng'));
-        const dto = list.body.data.find((r: { id: string }) => r.id === report.id);
-        assert.equal(dto.standardsViolations[0].standardCode, 'BLOCK-NIS87');
-      } finally {
-        ai.setStandardsModelOverride(null);
-      }
-    });
   });
 
   // -------------------------------------------------------------------------
   describe('report approval', () => {
-    it('approves at the single default step; only approved reports count as evidence', async () => {
+    it('approves at the single default step; only approved reports count towards progress', async () => {
       const report = await submit(ids.edoSession, ids.edo, reportBody(ids.edoBlockwork, { summaryText: 'Blockwork 900 m2 in place, checked.', reportedQuantity: 900 }));
       assert.equal(report.status, 'PENDING_APPROVAL');
       assert.equal(report.currentApprovalStep, 1);
-      const evidenceBefore = await provider.getEvidenceForBoqItems(ids.edo, [ids.edoBlockwork], new Date());
-      assert.ok(!evidenceBefore.some((e) => e.id === report.id));
+      const blockwork = await prisma.boqItem.findUniqueOrThrow({ where: { id: ids.edoBlockwork } });
+      const progressOf = async () =>
+        (await provider.getReportedProgressByItem(ids.edo, [{ id: blockwork.id, totalQuantity: Number(blockwork.totalQuantity) }])).get(blockwork.id) ?? 0;
+      const before = await progressOf();
 
       const wrong = await request(app)
         .post(`/api/v1/projects/${ids.edo}/workday-reports/${report.id}/review`)
@@ -438,8 +379,9 @@ describe('Phase 7', { concurrency: false }, () => {
       assert.equal(ok.status, 200, JSON.stringify(ok.body));
       assert.equal(ok.body.data.status, 'APPROVED_COMPLETED');
       assert.equal(ok.body.data.approval.completed, true);
-      const evidenceAfter = await provider.getEvidenceForBoqItems(ids.edo, [ids.edoBlockwork], new Date());
-      assert.ok(evidenceAfter.some((e) => e.id === report.id));
+      assert.ok((await progressOf()) > before, 'the approved report counts');
+      const item = await prisma.boqItem.findUniqueOrThrow({ where: { id: ids.edoBlockwork } });
+      assert.equal(Number(item.cumulativeCertifiedPct), Math.round((await progressOf()) * 100) / 100, 'progress refreshed on approval');
     });
 
     it('a two-step chain advances, refuses the same user on consecutive steps, and completes', async () => {
@@ -522,193 +464,6 @@ describe('Phase 7', { concurrency: false }, () => {
       assert.equal(stale.status, 409);
     });
   });
-
-  // -------------------------------------------------------------------------
-  describe('direct milestone release and the disbursement chain', () => {
-    it('is refused in the wrong mode either way', async () => {
-      const direct = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/milestones/direct-verify`)
-        .set(await web('monitor@insite.ng'))
-        .send({
-          trancheId: crypto.randomUUID(),
-          verificationSummary: 'Verified progress on site.',
-          lineVerifications: [{ boqItemId: ids.lkkItem, verifiedCumulativePct: 10 }],
-          trancheRecommendation: 'SUPPORT_FULL_RELEASE',
-          certifierDigitalSignatureAck: true,
-        });
-      assert.equal(direct.status, 409, JSON.stringify(direct.body));
-      assert.equal(direct.body.error.code, 'DISBURSEMENT_MODE_IS_IPC');
-
-      const ipc = await request(app)
-        .post(`/api/v1/projects/${ids.edo}/ipcs`)
-        .set(await web('admin@insite.ng'))
-        .send({
-          trancheId: ids.edoT1,
-          periodStart: '2025-01-01T00:00:00.000Z',
-          periodEnd: '2025-02-01T00:00:00.000Z',
-          lineItems: [{ boqItemId: ids.edoBlockwork, claimedCumulativePct: 10 }],
-          supportingDocuments: [],
-        });
-      assert.equal(ipc.status, 409, JSON.stringify(ipc.body));
-      assert.equal(ipc.body.error.code, 'DISBURSEMENT_MODE_IS_DIRECT');
-    });
-
-    it('runs a full cycle with no IPC: suggestion, bounds, CP block, segregation, release', async () => {
-      const verifier = await web('verifier@insite.ng');
-      const lender = await web('lender@insite.ng');
-      const suggestion = await request(app)
-        .get(`/api/v1/projects/${ids.edo}/milestones/direct-verify/suggestion?trancheId=${ids.edoT1}`)
-        .set(verifier);
-      assert.equal(suggestion.status, 200, JSON.stringify(suggestion.body));
-      const block = suggestion.body.data.items.find((i: { boqItemId: string }) => i.boqItemId === ids.edoBlockwork);
-      // 900 m2 approved of 1,800 m2 (the 40 m2 report is still pending approval and does not count).
-      assert.equal(block.evidenceQuantity, 900);
-      assert.equal(block.maxVerifiablePct, 50);
-
-      const body = (pct: number) => ({
-        trancheId: ids.edoT1,
-        verificationSummary: 'Blockwork verified against approved inspection reports.',
-        lineVerifications: [{ boqItemId: ids.edoBlockwork, verifiedCumulativePct: pct }],
-        trancheRecommendation: 'SUPPORT_FULL_RELEASE',
-        certifierDigitalSignatureAck: true,
-      });
-      const tooHigh = await request(app).post(`/api/v1/projects/${ids.edo}/milestones/direct-verify`).set(verifier).send(body(60));
-      assert.equal(tooHigh.status, 422, JSON.stringify(tooHigh.body));
-      assert.equal(tooHigh.body.error.code, 'VERIFIED_PCT_OUT_OF_BOUNDS');
-      const totals = await request(app)
-        .post(`/api/v1/projects/${ids.edo}/milestones/direct-verify`)
-        .set(verifier)
-        .send({ ...body(40), totalCertifiedNgn: 1 });
-      assert.equal(totals.status, 201, 'unknown client totals are stripped, never trusted');
-      const valuation = totals.body.data.valuation;
-      assert.equal(valuation.source, 'MILESTONE_DIRECT');
-      assert.equal(valuation.ipcClaimId, null);
-      assert.equal(valuation.totalCertifiedNgn, 0.4 * 1_800 * 45_000);
-      assert.equal(valuation.approval.currentStepOrder, 2);
-
-      const again = await request(app).post(`/api/v1/projects/${ids.edo}/milestones/direct-verify`).set(verifier).send(body(45));
-      assert.equal(again.status, 409);
-      assert.equal(again.body.error.code, 'TRANCHE_HAS_OPEN_VERIFICATION');
-
-      const byVerifier = await request(app)
-        .post(`/api/v1/projects/${ids.edo}/tranches/${ids.edoT1}/decision`)
-        .set(verifier)
-        .send({ valuationReportId: valuation.id, decision: 'APPROVE_FULL' });
-      assert.equal(byVerifier.status, 403);
-
-      await prisma.conditionPrecedent.updateMany({ where: { trancheId: ids.edoT1 }, data: { status: 'PENDING' } });
-      const blocked = await request(app)
-        .post(`/api/v1/projects/${ids.edo}/tranches/${ids.edoT1}/decision`)
-        .set(lender)
-        .send({ valuationReportId: valuation.id, decision: 'APPROVE_FULL' });
-      assert.equal(blocked.status, 409, JSON.stringify(blocked.body));
-      assert.equal(blocked.body.error.code, 'CONDITIONS_PRECEDENT_UNMET');
-      await prisma.conditionPrecedent.updateMany({ where: { trancheId: ids.edoT1 }, data: { status: 'SATISFIED' } });
-
-      const released = await request(app)
-        .post(`/api/v1/projects/${ids.edo}/tranches/${ids.edoT1}/decision`)
-        .set(lender)
-        .send({ valuationReportId: valuation.id, decision: 'APPROVE_FULL' });
-      assert.equal(released.status, 200, JSON.stringify(released.body));
-      assert.equal(released.body.data.approvedDisbursementAmountNgn, 0.4 * 1_800 * 45_000);
-      const tranche = await prisma.facilityTranche.findUniqueOrThrow({ where: { id: ids.edoT1 } });
-      assert.equal(Number(tranche.releasedAmountNgn), 0.4 * 1_800 * 45_000);
-
-      const pdf = await request(app)
-        .get(`/api/v1/projects/${ids.edo}/valuations/${valuation.id}/valuation-report.pdf`)
-        .set(verifier);
-      assert.equal(pdf.status, 200);
-      assert.equal(pdf.headers['content-type'], 'application/pdf');
-    });
-
-    it('a third step with a threshold: runs above it, is skipped below it, and a return supersedes', async () => {
-      const admin = await web('admin@insite.ng');
-      const verifier = await web('verifier@insite.ng');
-      const lender = await web('lender@insite.ng');
-      const set = await request(app)
-        .put(`/api/v1/projects/${ids.edo}/process/chains/DISBURSEMENT`)
-        .set(admin)
-        .send({
-          steps: [
-            { label: 'Milestone verification', requiredPermissionKey: 'milestone:verify_direct_release', isSystemStep: true },
-            { label: 'Programme director review', requiredPermissionKey: 'projects:view_executive_matrix', minAmountThresholdNgn: 5_000_000 },
-            { label: 'Disbursement approval', requiredPermissionKey: 'tranche:approve_disbursement', isSystemStep: true },
-          ],
-        });
-      assert.equal(set.status, 200, JSON.stringify(set.body));
-
-      // Move the roofing item to tranche 2 with approved evidence of 95 m2 (10%).
-      await prisma.boqItem.update({ where: { id: ids.edoRoofing }, data: { trancheId: ids.edoT2 } });
-      const big = await request(app)
-        .post(`/api/v1/projects/${ids.edo}/milestones/direct-verify`)
-        .set(verifier)
-        .send({
-          trancheId: ids.edoT1,
-          verificationSummary: 'Further blockwork verified.',
-          lineVerifications: [{ boqItemId: ids.edoBlockwork, verifiedCumulativePct: 50 }],
-          trancheRecommendation: 'SUPPORT_FULL_RELEASE',
-          certifierDigitalSignatureAck: true,
-        });
-      assert.equal(big.status, 201, JSON.stringify(big.body));
-      const v = big.body.data.valuation;
-      assert.equal(v.approval.currentStepOrder, 2);
-      const early = await request(app)
-        .post(`/api/v1/projects/${ids.edo}/tranches/${ids.edoT1}/decision`)
-        .set(lender)
-        .send({ valuationReportId: v.id, decision: 'APPROVE_FULL' });
-      assert.equal(early.status, 409);
-      assert.equal(early.body.error.code, 'VALUATION_AWAITING_APPROVAL_STEP');
-
-      const reviewed = await request(app)
-        .post(`/api/v1/projects/${ids.edo}/valuations/${v.id}/review`)
-        .set(admin)
-        .send({ decision: 'RETURN', notes: 'Recheck the east wing area.' });
-      assert.equal(reviewed.status, 200, JSON.stringify(reviewed.body));
-      const returned = await prisma.valuationReport.findUniqueOrThrow({ where: { id: v.id } });
-      assert.ok(returned.supersededAt);
-      const block = await prisma.boqItem.findUniqueOrThrow({ where: { id: ids.edoBlockwork } });
-      assert.equal(Number(block.cumulativeCertifiedPct), 40);
-
-      const second = await request(app)
-        .post(`/api/v1/projects/${ids.edo}/milestones/direct-verify`)
-        .set(verifier)
-        .send({
-          trancheId: ids.edoT1,
-          verificationSummary: 'East wing rechecked; blockwork verified.',
-          lineVerifications: [{ boqItemId: ids.edoBlockwork, verifiedCumulativePct: 50 }],
-          trancheRecommendation: 'SUPPORT_FULL_RELEASE',
-          certifierDigitalSignatureAck: true,
-        });
-      assert.equal(second.status, 201, JSON.stringify(second.body));
-      const v2 = second.body.data.valuation;
-      const approve = await request(app).post(`/api/v1/projects/${ids.edo}/valuations/${v2.id}/review`).set(admin).send({ decision: 'APPROVE' });
-      assert.equal(approve.status, 200, JSON.stringify(approve.body));
-      const decided = await request(app)
-        .post(`/api/v1/projects/${ids.edo}/tranches/${ids.edoT1}/decision`)
-        .set(lender)
-        .send({ valuationReportId: v2.id, decision: 'APPROVE_FULL' });
-      assert.equal(decided.status, 200, JSON.stringify(decided.body));
-
-      // Below the threshold: approve a small roofing report and verify 10% (NGN 9.31m > 5m? no: use 5%).
-      const small = await submit(ids.edoSession, ids.edo, reportBody(ids.edoRoofing, { reportedQuantity: 40 }));
-      await request(app).post(`/api/v1/projects/${ids.edo}/workday-reports/${small.id}/review`).set(verifier).send({ decision: 'APPROVE' });
-      await request(app).post(`/api/v1/projects/${ids.edo}/workday-reports/${small.id}/review`).set(admin).send({ decision: 'APPROVE' });
-      const low = await request(app)
-        .post(`/api/v1/projects/${ids.edo}/milestones/direct-verify`)
-        .set(verifier)
-        .send({
-          trancheId: ids.edoT2,
-          verificationSummary: 'Roofing started; small quantity verified.',
-          lineVerifications: [{ boqItemId: ids.edoRoofing, verifiedCumulativePct: 4 }],
-          trancheRecommendation: 'SUPPORT_FULL_RELEASE',
-          certifierDigitalSignatureAck: true,
-        });
-      assert.equal(low.status, 201, JSON.stringify(low.body));
-      // NGN 3.724m is below the 5m threshold: the review step is skipped, straight to release.
-      assert.equal(low.body.data.valuation.approval.currentStepOrder, 3);
-      assert.equal(low.body.data.valuation.approval.steps[1].state, 'SKIPPED');
-    });
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -739,25 +494,6 @@ async function pdfWithText(text: string): Promise<Buffer> {
   });
 }
 
-async function docxWithText(text: string): Promise<Buffer> {
-  // jszip ships with mammoth; a minimal .docx is three XML parts.
-  const JSZip = (await import('jszip')).default;
-  const zip = new JSZip();
-  zip.file(
-    '[Content_Types].xml',
-    '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
-  );
-  zip.file(
-    '_rels/.rels',
-    '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>'
-  );
-  zip.file(
-    'word/document.xml',
-    `<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`
-  );
-  return zip.generateAsync({ type: 'nodebuffer' });
-}
-
 describe('Phase 7 gap closure', { concurrency: false }, () => {
   const ogn = { id: '', contractorSession: '', holdItem: '' };
   const OGN_POINT = { latitude: 6.951, longitude: 3.4 };
@@ -770,25 +506,6 @@ describe('Phase 7 gap closure', { concurrency: false }, () => {
     await prisma.boqItem.update({
       where: { id: ogn.holdItem },
       data: { isHoldPoint: true, holdPointInstruction: 'Inspect sub-base before asphalt' },
-    });
-  });
-
-  describe('text extraction', () => {
-    it('reads plain text, PDF and .docx; images and legacy .doc never get invented text', async () => {
-      const { extractDocumentText } = await import('../integrations/textExtractor');
-      assert.equal((await extractDocumentText(Buffer.from(SAMPLE), 'text/plain')).status, 'OK');
-      const pdf = await extractDocumentText(await pdfWithText(SAMPLE), 'application/pdf');
-      assert.equal(pdf.status, 'OK', JSON.stringify(pdf));
-      assert.match(pdf.status === 'OK' ? pdf.text : '', /maternity ward/);
-      const docx = await extractDocumentText(
-        await docxWithText(SAMPLE),
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      );
-      assert.equal(docx.status, 'OK', JSON.stringify(docx));
-      assert.match(docx.status === 'OK' ? docx.text : '', /solar backup/);
-      assert.equal((await extractDocumentText(Buffer.from([0xff, 0xd8]), 'image/jpeg')).status, 'NO_TEXT');
-      assert.equal((await extractDocumentText(Buffer.from('x'), 'application/msword')).status, 'UNSUPPORTED');
-      assert.equal((await extractDocumentText(await pdfWithText(''), 'application/pdf')).status, 'NO_TEXT');
     });
   });
 
@@ -831,33 +548,20 @@ describe('Phase 7 gap closure', { concurrency: false }, () => {
       assert.ok(await prisma.auditLog.findFirst({ where: { projectId: ids.edo, action: 'PROJECT_STANDARD_DELETED' } }));
     });
 
-    it('stores documents; with no AI provider a readable file stays PENDING and an image is UNAVAILABLE', async () => {
+    it('stores a needs-assessment document and deletes it', async () => {
       const verifier = await web('verifier@insite.ng');
-      const register = async (bytes: Buffer, mimeType: string) => {
-        const objectKey = await webUpload(ids.edo, verifier, bytes, mimeType);
-        const res = await request(app).post(`/api/v1/projects/${ids.edo}/needs-assessments`).set(verifier).send({
-          title: `Assessment ${mimeType}`,
-          documentType: 'FEASIBILITY_STUDY',
-          objectKey,
-          mimeType,
-          byteSize: bytes.length,
-          requestAiSummary: true,
-        });
-        assert.equal(res.status, 201, JSON.stringify(res.body));
-        return res.body.data.id as string;
-      };
-      const pdfId = await register(await pdfWithText(SAMPLE), 'application/pdf');
-      const pngId = await register(Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'), 'image/png');
-
-      const pdf = await request(app).post(`/api/v1/projects/${ids.edo}/needs-assessments/${pdfId}/summarise`).set(verifier);
-      assert.equal(pdf.status, 200, JSON.stringify(pdf.body));
-      assert.equal(pdf.body.data.summaryStatus, 'PENDING');
-      assert.equal(pdf.body.data.extractedSummaryText, null);
-      const png = await request(app).post(`/api/v1/projects/${ids.edo}/needs-assessments/${pngId}/summarise`).set(verifier);
-      assert.equal(png.body.data.summaryStatus, 'UNAVAILABLE');
-      assert.equal(png.body.data.extractedSummaryText, null);
-
-      const removed = await request(app).delete(`/api/v1/projects/${ids.edo}/needs-assessments/${pngId}`).set(verifier);
+      const bytes = await pdfWithText(SAMPLE);
+      const objectKey = await webUpload(ids.edo, verifier, bytes, 'application/pdf');
+      const res = await request(app).post(`/api/v1/projects/${ids.edo}/needs-assessments`).set(verifier).send({
+        title: 'Assessment PDF',
+        documentType: 'FEASIBILITY_STUDY',
+        objectKey,
+        mimeType: 'application/pdf',
+        byteSize: bytes.length,
+      });
+      assert.equal(res.status, 201, JSON.stringify(res.body));
+      assert.equal(res.body.data.title, 'Assessment PDF');
+      const removed = await request(app).delete(`/api/v1/projects/${ids.edo}/needs-assessments/${res.body.data.id}`).set(verifier);
       assert.equal(removed.status, 200);
     });
   });
@@ -931,48 +635,6 @@ describe('Phase 7 gap closure', { concurrency: false }, () => {
         .send({ targetPersona: 'CONTRACTOR_EXECUTOR' });
       assert.equal(after.body.data.isHoldPoint, false);
       assert.equal(after.body.data.holdPointInstruction, null);
-    });
-
-    it('tranches and CPs off: a draft needs no tranche, and release skips unmet conditions precedent', async () => {
-      const admin = await web('admin@insite.ng');
-      const created = await request(app).post('/api/v1/projects').set(admin).send({
-        name: 'No Tranche Clinic',
-        codePrefix: 'NTR-702',
-        stateLocation: 'Kwara State',
-        totalBudgetNgn: 50_000_000,
-      });
-      assert.equal(created.status, 201, JSON.stringify(created.body));
-      const draftId = created.body.data.projectId as string;
-      const facilityIssues = (setup: { steps: Array<{ stepId: string; issues: Array<{ code: string }> }> }) =>
-        setup.steps.find((s) => s.stepId === 'facility')!.issues.map((i) => i.code);
-      assert.ok(facilityIssues(created.body.data).includes('TRANCHE_REQUIRED'));
-      const cfg = created.body.data.process.config;
-      const off = await request(app).put(`/api/v1/projects/${draftId}/process`).set(admin).send({ config: { ...cfg, enableTranchesAndCps: false } });
-      assert.equal(off.status, 200, JSON.stringify(off.body));
-      const setup = await request(app).get(`/api/v1/projects/${draftId}/setup`).set(admin);
-      assert.ok(!facilityIssues(setup.body.data).includes('TRANCHE_REQUIRED'));
-
-      // EDO-410 tranche 2 has a verification waiting at the release step (earlier test).
-      const pending = await prisma.valuationReport.findFirstOrThrow({
-        where: { trancheId: ids.edoT2, supersededAt: null },
-        orderBy: { certifiedAt: 'desc' },
-      });
-      await prisma.conditionPrecedent.create({
-        data: { trancheId: ids.edoT2, referenceCode: 'CP-09', description: 'Equipment warranty lodged', isMandatoryForRelease: true },
-      });
-      const lender = await web('lender@insite.ng');
-      const blocked = await request(app)
-        .post(`/api/v1/projects/${ids.edo}/tranches/${ids.edoT2}/decision`)
-        .set(lender)
-        .send({ valuationReportId: pending.id, decision: 'APPROVE_FULL' });
-      assert.equal(blocked.status, 409, JSON.stringify(blocked.body));
-      const edoCfg = (await request(app).get(`/api/v1/projects/${ids.edo}/process`).set(admin)).body.data.config;
-      await request(app).put(`/api/v1/projects/${ids.edo}/process`).set(admin).send({ config: { ...edoCfg, enableTranchesAndCps: false } });
-      const released = await request(app)
-        .post(`/api/v1/projects/${ids.edo}/tranches/${ids.edoT2}/decision`)
-        .set(lender)
-        .send({ valuationReportId: pending.id, decision: 'APPROVE_FULL' });
-      assert.equal(released.status, 200, JSON.stringify(released.body));
     });
 
     it('a provisioned contractor account does not see a project with contractor reporting off', async () => {

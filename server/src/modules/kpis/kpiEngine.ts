@@ -71,8 +71,6 @@ export interface KpiProjectFacts {
   inspectionObligations: KpiObligationCounts;
   allObligations: KpiObligationCounts;
   approvals: KpiDurationSum;
-  hasTranches: boolean;
-  payments: KpiDurationSum;
   /** The live (issued) Certificate of Completion. */
   certificate: { issuedDate: string; completionDate: string } | null;
   /** Overall finding of the latest approved final evaluation. */
@@ -178,10 +176,6 @@ export const KPI_FUNCTIONS: Record<KpiKey, KpiFn> = {
     return { numerator: f.approvals.totalDays, denominator: f.approvals.count };
   },
   // Payments ----------------------------------------------------------------------------------
-  payment_turnaround_days: (f) => {
-    if (!f.hasTranches) return null;
-    return { numerator: f.payments.totalDays, denominator: f.payments.count };
-  },
   financial_utilisation: (f) => {
     if (!(f.budgetNgn > 0)) return null;
     return { numerator: f.disbursedNgn, denominator: f.budgetNgn };

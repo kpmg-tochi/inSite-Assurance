@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { Prisma } from '@prisma/client';
 import { ZodError } from 'zod';
-import { IpcTransitionError } from '@insite/shared';
 
 export class AppError extends Error {
   public readonly statusCode: number;
@@ -34,11 +33,6 @@ export function errorHandler(
 ): void {
   if (err instanceof AppError) {
     send(res, err.statusCode, err.code, err.message, err.details ? { details: err.details } : undefined);
-    return;
-  }
-
-  if (err instanceof IpcTransitionError) {
-    send(res, 409, err.code, err.message, { from: err.from, action: err.action });
     return;
   }
 

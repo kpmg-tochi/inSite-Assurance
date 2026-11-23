@@ -56,7 +56,7 @@ const NOTIFICATION_VISUALS: Record<
     iconBg: "#EFF6FF",
     badgeText: "Backlog Review",
     pillVariant: "info",
-    ctaLabel: "Review AI Summary",
+    ctaLabel: "Review Summary",
   },
   REPORT_QUERY: {
     icon: "message-square",

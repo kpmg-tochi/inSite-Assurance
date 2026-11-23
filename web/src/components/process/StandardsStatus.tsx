@@ -53,7 +53,7 @@ export function StandardsCheckCard({
       </div>
       {passed === null && (
         <p className="text-[11px] text-slate-500">
-          Not checked: the check is off, no standard applies to this item, or neither the AI provider nor the rules could decide.
+          Not checked: the check is off, no standard applies to this item, or the rules could not decide.
         </p>
       )}
       {passed === true && <p className="text-[11px] text-slate-600">The report shows the applicable standards were met.</p>}

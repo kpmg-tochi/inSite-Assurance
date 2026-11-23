@@ -1,5 +1,4 @@
 import React, { useMemo, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { BookOpen, ExternalLink, FileUp, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   DOCUMENT_MODE_META,
@@ -24,8 +23,6 @@ import {
   type StandardFormValue,
 } from "../../../../components/process/StandardFormModal";
 import {
-  NEEDS_ASSESSMENT_MAX_POLLS,
-  needsAssessmentsKey,
   useNeedsAssessmentsQuery,
   useProjectStandardsQuery,
 } from "../../../../queries/process/useProcessQueries";
@@ -84,7 +81,6 @@ export function StandardsStep({ projectId, setup, readOnly }: StepProps) {
   const [file, setFile] = useState<File | null>(null);
   const [docTitle, setDocTitle] = useState("");
   const [docType, setDocType] = useState<NeedsAssessmentDocType>("COMMUNITY_NEEDS_ASSESSMENT");
-  const [requestSummary, setRequestSummary] = useState(true);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const dirty = Boolean(stepStatus && !stepStatus.saved && setup.status === "DRAFT");
@@ -102,11 +98,6 @@ export function StandardsStep({ projectId, setup, readOnly }: StepProps) {
 
   const standards = useMemo(() => standardsQuery.data ?? [], [standardsQuery.data]);
   const docs = docsQuery.data ?? [];
-  // Polling stops after NEEDS_ASSESSMENT_MAX_POLLS updates; then a pending summary offers a manual refresh.
-  // (Read from the cache: the hook result does not expose the update count; this re-renders with each update.)
-  const queryClient = useQueryClient();
-  const pollingStopped =
-    (queryClient.getQueryState(needsAssessmentsKey(projectId))?.dataUpdateCount ?? 0) > NEEDS_ASSESSMENT_MAX_POLLS;
   const wbsSuggestions = useMemo(() => {
     const codes = new Set<string>();
     for (const item of boqQuery.data ?? []) codes.add(item.wbsCode);
@@ -187,52 +178,13 @@ export function StandardsStep({ projectId, setup, readOnly }: StepProps) {
     if (docTitle.trim().length < 3) return setUploadError("Give the document a title (at least 3 characters).");
     setUploadError(null);
     try {
-      await uploadDoc.mutateAsync({ file, title: docTitle.trim(), documentType: docType, requestAiSummary: requestSummary });
+      await uploadDoc.mutateAsync({ file, title: docTitle.trim(), documentType: docType });
       setFile(null);
       setDocTitle("");
       if (fileRef.current) fileRef.current.value = "";
     } catch {
       // Toast from the mutation hook.
     }
-  };
-
-  const summaryCell = (d: NeedsAssessmentDocumentDto) => {
-    if (d.summaryStatus === "DONE" && d.extractedSummaryText) {
-      return (
-        <div className="text-[11px] text-slate-600 max-w-md">
-          <p className="line-clamp-3">{d.extractedSummaryText}</p>
-          {d.keyFindings.length > 0 && (
-            <ul className="mt-1 list-disc pl-4 text-slate-500">
-              {d.keyFindings.slice(0, 3).map((f, i) => (
-                <li key={i}>{f}</li>
-              ))}
-            </ul>
-          )}
-          {d.summaryEngine && <p className="mt-0.5 text-[10px] text-slate-400">Summary by {d.summaryEngine}</p>}
-        </div>
-      );
-    }
-    if (d.summaryStatus === "PENDING") {
-      return pollingStopped ? (
-        <span className="inline-flex items-center gap-1.5">
-          <TableBadge variant="warning">Summary pending</TableBadge>
-          <button
-            type="button"
-            onClick={() => docsQuery.refetch()}
-            disabled={docsQuery.isFetching}
-            className="text-[11px] font-semibold text-brand-primary hover:underline disabled:opacity-50"
-          >
-            {docsQuery.isFetching ? "Checking…" : "Refresh to check"}
-          </button>
-        </span>
-      ) : (
-        <TableBadge variant="warning">Summary pending</TableBadge>
-      );
-    }
-    if (d.summaryStatus === "UNAVAILABLE") {
-      return <TableBadge variant="neutral">No readable text (scanned or image file)</TableBadge>;
-    }
-    return <span className="text-[11px] text-slate-400">No summary requested</span>;
   };
 
   const docColumns: TableColumnDef<NeedsAssessmentDocumentDto>[] = [
@@ -249,7 +201,6 @@ export function StandardsStep({ projectId, setup, readOnly }: StepProps) {
         </div>
       ),
     },
-    { id: "summary", header: "Summary", cell: summaryCell },
     {
       id: "actions",
       header: "",
@@ -389,10 +340,7 @@ export function StandardsStep({ projectId, setup, readOnly }: StepProps) {
                 />
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <label className="flex items-center gap-2 text-xs text-slate-700">
-                  <input type="checkbox" className="h-4 w-4 accent-brand-primary" checked={requestSummary} onChange={(e) => setRequestSummary(e.target.checked)} />
-                  Ask for an AI summary (PDF and Word text is read; scanned or image files have no readable text)
-                </label>
+                <span className="text-[11px] text-slate-500">PDF, Word or image, up to 25 MB.</span>
                 <button
                   type="submit"
                   disabled={uploadDoc.isPending || !file}

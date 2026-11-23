@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Volume2 } from "lucide-react";
-import { getMediaUrl } from "../../api/reconciliation/reconciliationApi";
+import { getMediaUrl } from "../../api/evidence/mediaApi";
 
 /**
  * Evidence media for human review. Files are private: each view asks the API for a signed URL

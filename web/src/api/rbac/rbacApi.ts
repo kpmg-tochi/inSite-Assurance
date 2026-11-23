@@ -3,17 +3,14 @@ import type {
   CreateRoleRequest,
   CreateTenantRequest,
   CreateTenantUserRequest,
-  EvidenceRatingLabels,
   FieldSessionRosterDto,
   MobileDeviceDto,
   PermissionDto,
-  ResolvedRatingLabels,
   RoleDto,
   RoleOnboardingImpactDto,
   TenantDto,
   TenantUserDto,
   UpdateFieldSessionStatusRequest,
-  UpdateEvidenceRatingLabelsRequest,
   UpdateRoleRequest,
   UpdateTenantBrandingRequest,
 } from '@insite/shared';
@@ -79,26 +76,6 @@ export const assignUserProjects = async (
 
 export const getCurrentTenant = async () => {
   const { data } = await api.get<ApiEnvelope<TenantDto>>('/rbac/tenant');
-  return data.data;
-};
-
-export interface EvidenceRatingLabelsResponse {
-  labels: EvidenceRatingLabels;
-  resolved: ResolvedRatingLabels;
-}
-
-export const getEvidenceRatingLabels = async () => {
-  const { data } = await api.get<ApiEnvelope<EvidenceRatingLabelsResponse>>(
-    '/rbac/tenant/settings/rating-labels'
-  );
-  return data.data;
-};
-
-export const updateEvidenceRatingLabels = async (payload: UpdateEvidenceRatingLabelsRequest) => {
-  const { data } = await api.put<ApiEnvelope<EvidenceRatingLabelsResponse>>(
-    '/rbac/tenant/settings/rating-labels',
-    payload
-  );
   return data.data;
 };
 

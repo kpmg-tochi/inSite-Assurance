@@ -17,7 +17,7 @@ import Loader from "../../components/Loader";
 import { StandardTable, TableActionMenu, TableBadge, type TableColumnDef } from "../../components/table/StandardTable";
 import { CustomSelect } from "../../components/common";
 import { useConfirmDialog } from "../../components/process/ConfirmDialog";
-import { ModalActions, ModalShell, inputClass } from "../reconciliation/components/ModalShell";
+import { ModalActions, ModalShell, inputClass } from "../../components/common/ModalShell";
 import { RichTextView } from "../../components/closeout/RichTextView";
 import { HandoverFileView } from "../../components/closeout/HandoverFileView";
 import { CompletionSection } from "../../components/closure/CompletionSection";

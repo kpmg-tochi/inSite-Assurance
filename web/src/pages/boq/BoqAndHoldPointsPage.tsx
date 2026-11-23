@@ -3,7 +3,7 @@ import { ClipboardList, ShieldCheck, AlertTriangle, X } from "lucide-react";
 import { toast } from "sonner";
 import type { BoqItemRecordDto, ProjectSummaryDto } from "../../api/types";
 import { displayCurrencySymbol, formatCompactNaira, formatNaira } from "../../lib/formatters";
-import { formatReporterRoleBadge } from "../../components/EvidenceBadge";
+import { formatReporterRoleBadge } from "../../components/reporterRole";
 import { useAuth } from "../../lib/auth-context";
 import {
   useUpdateBoqMappingsMutation,
@@ -35,8 +35,8 @@ export function BoqAndHoldPointsPage({
   const canViewAllJoinCodes =
     hasPermission("mobilization:manage_roster") ||
     hasPermission("projects:edit_baseline");
-  const isContractorView =
-    hasPermission("ipc:submit_claim") && !hasPermission("ipc:certify_valuation");
+  // Contractors read the BOQ; they cannot edit it or its hold points.
+  const isContractorView = !hasPermission("boq:upload_edit") && !hasPermission("boq:configure_hold_points");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -45,7 +45,6 @@ export function BoqAndHoldPointsPage({
 
   // Phase 7: modules the project's process turned off are hidden.
   const processQuery = useProjectProcess(project.id);
-  const tranchesOn = processQuery.data?.config.enableTranchesAndCps ?? true;
   const holdPointsOn = processQuery.data?.config.enableHoldPoints ?? true;
   const contractorReportingOn = processQuery.data?.config.allowContractorFieldReporting ?? true;
 
@@ -72,11 +71,6 @@ export function BoqAndHoldPointsPage({
         updates: [
           {
             boqItemId: item.id,
-            trancheId:
-              item.trancheId ||
-              item.aiSuggestedTrancheId ||
-              project.tranches[0]?.id ||
-              null,
             isHoldPoint: !item.isHoldPoint,
             holdPointInstruction: !item.isHoldPoint
               ? "Requires Independent Monitor geotagged verification prior to concrete pour / cover-up."
@@ -90,26 +84,6 @@ export function BoqAndHoldPointsPage({
     }
   };
 
-  const handleConfirmAllTrancheMappings = async () => {
-    if (!canUploadBoq || boqItems.length === 0) return;
-    try {
-      const fallbackTrancheId = project.tranches[0]?.id || null;
-      await updateMappingsMutation.mutateAsync({
-        updates: boqItems.map((item) => ({
-          boqItemId: item.id,
-          trancheId:
-            item.trancheId || item.aiSuggestedTrancheId || fallbackTrancheId,
-          isHoldPoint: item.isHoldPoint,
-          holdPointInstruction: item.holdPointInstruction || null,
-        })),
-      });
-      toast.success(
-        "All AI-suggested Tranche & Hold-Point mappings confirmed.",
-      );
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to confirm mappings.");
-    }
-  };
 
   const handleSpreadsheetUpload = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -152,7 +126,7 @@ export function BoqAndHoldPointsPage({
 
   const [searchTerm, setSearchTerm] = useState("");
   const [boqFilter, setBoqFilter] = useState<
-    "ALL" | "HOLD_POINTS" | "OPAQUE" | "MAPPED"
+    "ALL" | "HOLD_POINTS" | "OPAQUE"
   >("ALL");
 
   const filteredBoqItems = useMemo(() => {
@@ -165,8 +139,7 @@ export function BoqAndHoldPointsPage({
       const matchesFilter =
         boqFilter === "ALL" ||
         (boqFilter === "HOLD_POINTS" && item.isHoldPoint) ||
-        (boqFilter === "OPAQUE" && item.isOpaqueLumpSum) ||
-        (boqFilter === "MAPPED" && item.trancheMappingConfirmedByMonitor);
+        (boqFilter === "OPAQUE" && item.isOpaqueLumpSum);
 
       return matchesSearch && matchesFilter;
     });
@@ -235,19 +208,6 @@ export function BoqAndHoldPointsPage({
         </span>
       ),
     },
-    ...(tranchesOn ? [{
-      id: "tranche",
-      header: "Mapped Tranche",
-      tooltip: "Project disbursement tranche fed by this BOQ work item",
-      cell: (item) =>
-        item.tranche ? (
-          <TableBadge variant="info">
-            {`Tranche #${item.tranche.trancheNumber}`}
-          </TableBadge>
-        ) : (
-          <TableBadge variant="neutral">Unmapped</TableBadge>
-        ),
-    } as TableColumnDef<BoqItemRecordDto>] : []),
     {
       id: "governance",
       header: "Governance",
@@ -316,8 +276,8 @@ export function BoqAndHoldPointsPage({
           <div className="text-sm sm:text-base font-bold text-slate-900 mt-0.5">
             {isContractorView
               ? "Approved Bill of Quantities & Pre-Pour Hold-Point Checklist"
-              : tranchesOn && holdPointsOn
-                ? "Bill of Quantities (BOQ), Tranche Mappings & Hold-Point Rules"
+              : holdPointsOn
+                ? "Bill of Quantities (BOQ) & Hold-Point Rules"
                 : "Bill of Quantities (BOQ)"}
           </div>
         </div>
@@ -339,14 +299,7 @@ export function BoqAndHoldPointsPage({
             >
               Import BOQ (.xlsx / .csv)
             </button>
-            {tranchesOn && <button
-              type="button"
-              disabled={isUpdating}
-              onClick={handleConfirmAllTrancheMappings}
-              className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm transition disabled:opacity-50"
-            >
-              Confirm All Tranche Mappings
-            </button>}
+            
           </div>
         )}
       </div>
@@ -486,14 +439,7 @@ export function BoqAndHoldPointsPage({
               >
                 Import BOQ (.xlsx / .csv)
               </button>
-              {tranchesOn && <button
-                type="button"
-                disabled={isUpdating}
-                onClick={handleConfirmAllTrancheMappings}
-                className="px-3.5 py-1.5 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-2xs transition disabled:opacity-50"
-              >
-                Confirm All Tranche Mappings
-              </button>}
+              
             </div>
           ) : undefined
         }
@@ -537,17 +483,7 @@ export function BoqAndHoldPointsPage({
             >
               Opaque Lump Sums ({opaqueCount})
             </button>
-            {tranchesOn && <button
-              type="button"
-              onClick={() => setBoqFilter("MAPPED")}
-              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
-                boqFilter === "MAPPED"
-                  ? "bg-emerald-600 text-white shadow-2xs"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
-              }`}
-            >
-              Confirmed Mappings
-            </button>}
+            
           </div>
         }
         columns={boqColumns}
@@ -638,7 +574,7 @@ export function BoqAndHoldPointsPage({
               </div>
               <div className="bg-white rounded-xl p-3 border border-slate-200">
                 <div className="text-[11px] text-slate-400">
-                  Cumulative Certified
+                  Progress
                 </div>
                 <div className="text-sm font-bold text-emerald-700 mt-0.5">
                   {activeDrawerItem.cumulativeCertifiedPct}%
@@ -646,24 +582,6 @@ export function BoqAndHoldPointsPage({
               </div>
             </div>
 
-            {/* Tranche Mapping Card */}
-            {tranchesOn && <div className="bg-slate-50 rounded-xl p-3.5 border border-slate-200/80 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Mapped Project Tranche
-                </span>
-                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  {activeDrawerItem.trancheMappingConfirmedByMonitor
-                    ? "Monitor Confirmed"
-                    : "AI Suggested"}
-                </span>
-              </div>
-              <div className="font-semibold text-slate-900">
-                {activeDrawerItem.tranche
-                  ? `Tranche #${activeDrawerItem.tranche.trancheNumber}: ${activeDrawerItem.tranche.name}`
-                  : "Unmapped — Pending Tranche Assignment"}
-              </div>
-            </div>}
 
             {/* Mandatory Hold-Point Rule Card */}
             {holdPointsOn && <div

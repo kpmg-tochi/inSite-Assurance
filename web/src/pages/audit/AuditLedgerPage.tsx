@@ -78,7 +78,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
             upperActor.includes("CONTRACTOR"))) ||
         (roleFilter === "FIELD_AGENT" && upperActor.includes("FIELD_AGENT")) ||
         (roleFilter === "SYSTEM" &&
-          (upperActor.includes("SYSTEM") || upperActor.includes("AI")));
+          (upperActor.includes("SYSTEM") || upperActor.includes("RULES")));
 
       return matchesSearch && matchesRole;
     });
@@ -101,7 +101,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
       id: "actor",
       header: "Actor & Role",
       tooltip:
-        "Authenticated portal user, mobile field reporter, or AI reconciliation service that committed the event",
+        "Authenticated portal user, mobile field reporter, or system process that committed the event",
       width: "w-56",
         cell: (entry) => {
         const upperActor = entry.actorType.toUpperCase();
@@ -341,7 +341,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
                   : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
               }`}
             >
-              System / AI
+              System
             </button>
           </div>
         }

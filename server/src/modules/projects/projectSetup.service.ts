@@ -29,11 +29,6 @@ import {
   addDays,
   nextPeriodStart,
   zonedCalendarDate,
-  DEFAULT_COMPLETION_RULE,
-  DEFAULT_REQUIRED_ITEM_PCT,
-  paymentBasisMechanismConflict,
-  TrancheCompletionRule,
-  TranchePaymentBasis,
   ProjectContractStep,
   CONTRACT_MILESTONE_ANCHOR_META,
 } from '@insite/shared';
@@ -57,7 +52,6 @@ import { issueMissingJoinCodes, reconcileContractorJoinCodes } from './joinCodes
 import { cadenceSettingsOf, serializeCadenceSettings } from '../cadence/cadence.service';
 import {
   applyProcessSettings,
-  getProcessConfig,
   getProjectProcessSettings,
   initialiseProjectProcess,
 } from '../process/processConfig.service';
@@ -134,7 +128,6 @@ const SETUP_INCLUDE = {
   projectType: { select: PROJECT_TYPE_SUMMARY_SELECT },
   region: { select: REGION_SUMMARY_SELECT },
   beneficiaries: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
-  tranches: { orderBy: { trancheNumber: 'asc' }, include: { conditionsPrecedent: { orderBy: { referenceCode: 'asc' } } } },
   userAssignments: { select: { userId: true } },
 } satisfies Prisma.ProjectInclude;
 
@@ -145,11 +138,10 @@ async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
   if (!project) throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   const typeConfigForLoad = resolveProjectTypeConfig(project.projectTypeSnapshotJson);
   const beforeActivationCodes = typeConfigForLoad?.documentRequirements.beforeActivation ?? [];
-  const [contractors, itemCount, unmappedCount, unassignedContractorCount, holdPointCount, budgetSum, process, standards, tenantHasTypes, presentDocTypes] =
+  const [contractors, itemCount, unassignedContractorCount, holdPointCount, budgetSum, process, standards, tenantHasTypes, presentDocTypes] =
     await Promise.all([
       getProjectContractors(db, projectId),
       db.boqItem.count({ where: { projectId } }),
-      db.boqItem.count({ where: { projectId, trancheId: null } }),
       db.boqItem.count({ where: { projectId, projectContractorId: null } }),
       db.boqItem.count({ where: { projectId, isHoldPoint: true } }),
       db.boqItem.aggregate({ where: { projectId }, _sum: { budgetedCostNgn: true } }),
@@ -181,7 +173,6 @@ async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
     },
     boq: {
       itemCount,
-      unmappedCount,
       unassignedContractorCount,
       holdPointCount,
       totalBudgetedCostNgn: Number(budgetSum._sum.budgetedCostNgn ?? 0),
@@ -308,53 +299,18 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
   }
   out.site = { issues: site, warnings: [] };
 
-  // Facility
+  // Retention (route "facility"): retention needs a liability period when a percentage is set.
   const facility: SetupIssue[] = [];
-  const facilityWarnings: SetupIssue[] = [];
-  if (project.tranches.length === 0) {
-    // Phase 7: with tranches off, activation creates one implicit tranche for the whole budget.
-    if (config.enableTranchesAndCps) {
-      facility.push({ code: 'TRANCHE_REQUIRED', message: 'Add at least one tranche.', field: 'tranches' });
-    }
-  } else if (budget !== null) {
-    const sum = project.tranches.reduce((s, t) => s + Number(t.allocatedAmountNgn), 0);
-    if (sum > budget + 0.005) {
-      facility.push({
-        code: 'TRANCHES_EXCEED_BUDGET',
-        message: 'Tranche allocations add up to more than the project budget.',
-        field: 'tranches',
-      });
-    } else if (sum < budget - 0.005) {
-      facilityWarnings.push({
-        code: 'TRANCHES_BELOW_BUDGET',
-        message: 'Tranche allocations add up to less than the project budget.',
-        field: 'tranches',
-      });
-    }
+  if (config.enableRetentionModule && project.retentionPercentage !== null && Number(project.retentionPercentage) > 0 && !project.retentionDurationMonths) {
+    facility.push({ code: 'RETENTION_DURATION_REQUIRED', message: 'Set the defects liability period for retention.', field: 'retention' });
   }
-  // Phase 12 (D-12.2): fixed-amount payment milestones need direct milestone verification.
-  if (config.disbursementMechanism === 'IPC_CLAIM_REQUIRED' && project.tranches.some((t) => t.paymentBasis === 'FIXED_ON_COMPLETION')) {
-    facility.push({
-      code: 'FIXED_BASIS_WITH_IPC',
-      message: 'Fixed-amount payment milestones work with direct milestone verification only. Switch them to measured value or change the disbursement mechanism.',
-      field: 'tranches',
-    });
-  }
-  out.facility = { issues: facility, warnings: facilityWarnings };
+  out.facility = { issues: facility, warnings: [] };
 
   // BOQ
   const boqIssues: SetupIssue[] = [];
   if (boq.itemCount === 0) {
     boqIssues.push({ code: 'BOQ_REQUIRED', message: 'Upload the bill of quantities.', field: 'items' });
   } else {
-    // With tranches off, unmapped items are mapped to the implicit tranche at activation.
-    if (boq.unmappedCount > 0 && (config.enableTranchesAndCps || project.tranches.length > 1)) {
-      boqIssues.push({
-        code: 'BOQ_ITEMS_UNMAPPED',
-        message: `${boq.unmappedCount} BOQ item(s) are not mapped to a tranche.`,
-        field: 'items',
-      });
-    }
     if (project.contractorExecutionMode === 'MULTI_PRIME_SEPARATE_IPC' && boq.unassignedContractorCount > 0) {
       boqIssues.push({
         code: 'BOQ_ITEMS_UNASSIGNED',
@@ -489,35 +445,11 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
       enabledGeofenceModes: enabledModes(project),
     },
     facility: {
-      tranches: project.tranches.map((t) => ({
-        id: t.id,
-        trancheNumber: t.trancheNumber,
-        name: t.name,
-        allocatedAmountNgn: Number(t.allocatedAmountNgn),
-        targetCompletionPct: Number(t.targetCompletionPct),
-        isReleased: t.isReleased,
-        paymentBasis: t.paymentBasis,
-        completionRule: t.completionRule,
-        fixedReleaseAmountNgn: t.fixedReleaseAmountNgn === null ? null : Number(t.fixedReleaseAmountNgn),
-        completionRequiredItemPct: Number(t.completionRequiredItemPct),
-        completionContractMilestoneKey: t.completionContractMilestoneKey,
-        conditionsPrecedent: t.conditionsPrecedent.map((cp) => ({
-          id: cp.id,
-          referenceCode: cp.referenceCode,
-          description: cp.description,
-          isMandatoryForRelease: cp.isMandatoryForRelease,
-          status: cp.status,
-        })),
-      })),
       retention: {
         retentionPercentage: project.retentionPercentage === null ? null : Number(project.retentionPercentage),
         retentionDurationMonths: project.retentionDurationMonths,
         retentionReleaseAtCompletionPct: Number(project.retentionReleaseAtCompletionPct),
         heldNgn: Number(project.retentionHeldNgn),
-      },
-      paymentDefaults: {
-        defaultBasis: loaded.typeConfig?.payments.defaultBasis ?? 'MEASURED',
-        defaultCompletionRule: loaded.typeConfig?.payments.defaultCompletionRule ?? null,
       },
     },
     boq,
@@ -714,17 +646,6 @@ const saveParties: StepSaver = async ({ tx, project, webUser, input }) => {
   const actor = { actorId: webUser.userId, actorDisplayName: actorName(webUser) };
   const nextMode = (data.contractorExecutionMode ?? null) as ContractorExecutionMode | null;
 
-  if (nextMode !== project.contractorExecutionMode && project.status !== 'DRAFT') {
-    const ipcCount = await tx.ipcClaim.count({ where: { projectId: project.id } });
-    if (ipcCount > 0) {
-      throw new AppError(
-        'The contractor model cannot change after an IPC has been submitted on this project.',
-        409,
-        'CONTRACTOR_MODEL_LOCKED'
-      );
-    }
-  }
-
   const monitor = data.monitorOrganization
     ? (
         await resolveOrganization(tx, project.tenantId, data.monitorOrganization, 'ADVISORY_MONITOR', {
@@ -905,162 +826,11 @@ const saveSite: StepSaver = async ({ tx, project, input }) => {
   return { changedFields: diffFields(before, after) };
 };
 
-/**
- * Phase 12: the stored payment terms of a tranche from the form. Omitted fields keep the stored
- * value (or, for a new tranche, the project type's default); the measured basis clears the rest.
- */
-function trancheTermsFor(
-  t: ProjectFacilityStep['tranches'][number],
-  before: { paymentBasis: TranchePaymentBasis; completionRule: TrancheCompletionRule | null; fixedReleaseAmountNgn: Prisma.Decimal | null; completionRequiredItemPct: Prisma.Decimal; completionContractMilestoneKey: string | null } | null,
-  defaults: { defaultBasis: TranchePaymentBasis; defaultCompletionRule: TrancheCompletionRule | null } | null
-) {
-  const paymentBasis: TranchePaymentBasis = t.paymentBasis ?? before?.paymentBasis ?? defaults?.defaultBasis ?? 'MEASURED';
-  const completionRequiredItemPct = t.completionRequiredItemPct ?? (before ? Number(before.completionRequiredItemPct) : DEFAULT_REQUIRED_ITEM_PCT);
-  if (paymentBasis === 'MEASURED') {
-    return { paymentBasis, completionRule: null, fixedReleaseAmountNgn: null, completionRequiredItemPct, completionContractMilestoneKey: null };
-  }
-  const completionRule: TrancheCompletionRule =
-    (t.completionRule !== undefined ? t.completionRule : before?.completionRule) ?? defaults?.defaultCompletionRule ?? DEFAULT_COMPLETION_RULE;
-  const fixedReleaseAmountNgn =
-    t.fixedReleaseAmountNgn !== undefined
-      ? t.fixedReleaseAmountNgn
-      : before?.fixedReleaseAmountNgn !== null && before?.fixedReleaseAmountNgn !== undefined
-        ? Number(before.fixedReleaseAmountNgn)
-        : null;
-  // Phase 13: CONTRACT_MILESTONE_DONE names the contract milestone that completes it.
-  const completionContractMilestoneKey =
-    completionRule === 'CONTRACT_MILESTONE_DONE'
-      ? (t.completionContractMilestoneKey !== undefined ? t.completionContractMilestoneKey : before?.completionContractMilestoneKey) ?? null
-      : null;
-  return { paymentBasis, completionRule, fixedReleaseAmountNgn, completionRequiredItemPct, completionContractMilestoneKey };
-}
-
 const saveFacility: StepSaver = async ({ tx, project, input }) => {
   const data = input as ProjectFacilityStep;
-  const budget = project.totalBudgetNgn === null ? null : Number(project.totalBudgetNgn);
-  const sum = data.tranches.reduce((s, t) => s + t.allocatedAmountNgn, 0);
-  if (budget !== null && sum > budget + 0.005) {
-    throw new AppError('Tranche allocations add up to more than the project budget.', 422, 'TRANCHES_EXCEED_BUDGET');
-  }
-  const numbers = data.tranches.map((t) => t.trancheNumber);
-  if (new Set(numbers).size !== numbers.length) {
-    throw new AppError('Each tranche needs its own number.', 422, 'DUPLICATE_TRANCHE_NUMBER');
-  }
-
-  const existing = await tx.facilityTranche.findMany({
-    where: { projectId: project.id },
-    include: { conditionsPrecedent: true, _count: { select: { ipcClaims: true } } },
-  });
-  const byId = new Map(existing.map((t) => [t.id, t]));
-  const keep = new Set(data.tranches.map((t) => t.id).filter((v): v is string => Boolean(v)));
-  for (const t of data.tranches) {
-    if (t.id && !byId.has(t.id)) throw new AppError('Tranche not found on this project', 404, 'TRANCHE_NOT_FOUND');
-  }
-
-  for (const t of existing) {
-    if (keep.has(t.id)) continue;
-    if (t._count.ipcClaims > 0 || t.isReleased || Number(t.releasedAmountNgn) > 0) {
-      throw new AppError(`${t.name} has IPC claims or releases and cannot be removed.`, 409, 'TRANCHE_IN_USE');
-    }
-    await tx.facilityTranche.delete({ where: { id: t.id } });
-  }
-  // Free tranche numbers before renumbering kept tranches.
-  for (const t of existing) {
-    if (keep.has(t.id)) {
-      await tx.facilityTranche.update({ where: { id: t.id }, data: { trancheNumber: -1 * (1 + existing.indexOf(t)) } });
-    }
-  }
-
-  // Phase 12: payment basis per payment milestone. New ones default to the project type's basis.
-  const paymentDefaults = resolveProjectTypeConfig(project.projectTypeSnapshotJson)?.payments;
-  const mechanism = (await getProcessConfig(project.id, tx)).disbursementMechanism;
-  for (const t of data.tranches) {
-    const before = t.id ? byId.get(t.id)! : null;
-    const terms = trancheTermsFor(t, before, paymentDefaults ?? null);
-    const conflict = paymentBasisMechanismConflict(mechanism, terms.paymentBasis);
-    if (conflict) throw new AppError(`${t.name}: ${conflict}`, 409, 'FIXED_BASIS_WITH_IPC');
-    if (terms.completionRule === 'CONTRACT_MILESTONE_DONE') {
-      if (!terms.completionContractMilestoneKey) {
-        throw new AppError(`${t.name}: choose the contract milestone that completes it.`, 422, 'CONTRACT_MILESTONE_KEY_REQUIRED');
-      }
-      const known =
-        (resolveProjectTypeConfig(project.projectTypeSnapshotJson)?.contractMilestones ?? []).some((m) => m.key === terms.completionContractMilestoneKey) ||
-        (await tx.projectContractMilestone.count({ where: { projectId: project.id, key: terms.completionContractMilestoneKey } })) > 0;
-      if (!known) {
-        throw new AppError(`${t.name}: this project has no contract milestone "${terms.completionContractMilestoneKey}".`, 422, 'CONTRACT_MILESTONE_KEY_UNKNOWN');
-      }
-    }
-    if (terms.fixedReleaseAmountNgn !== null && terms.fixedReleaseAmountNgn > t.allocatedAmountNgn + 0.005) {
-      throw new AppError(`${t.name}: the fixed amount cannot exceed the allocation.`, 422, 'FIXED_AMOUNT_EXCEEDS_ALLOCATION');
-    }
-    if (before && Number(before.releasedAmountNgn) > 0) {
-      if (before.paymentBasis !== terms.paymentBasis) {
-        throw new AppError(`${t.name}: the payment basis cannot change once money has been released.`, 409, 'TRANCHE_BASIS_LOCKED');
-      }
-      if (terms.fixedReleaseAmountNgn !== null && terms.fixedReleaseAmountNgn < Number(before.releasedAmountNgn) - 0.005) {
-        throw new AppError(`${t.name}: the fixed amount cannot be below the amount already released.`, 409, 'TRANCHE_BELOW_RELEASED');
-      }
-    }
-    const base = {
-      trancheNumber: t.trancheNumber,
-      name: t.name,
-      allocatedAmountNgn: t.allocatedAmountNgn,
-      targetCompletionPct: t.targetCompletionPct,
-      ...terms,
-    };
-    if (t.id && before) {
-      if (t.allocatedAmountNgn < Number(before.releasedAmountNgn)) {
-        throw new AppError(`${t.name}: the allocation cannot be below the amount already released.`, 409, 'TRANCHE_BELOW_RELEASED');
-      }
-      await tx.facilityTranche.update({ where: { id: t.id }, data: base });
-      const cpById = new Map(before.conditionsPrecedent.map((c) => [c.id, c]));
-      const keepCp = new Set(t.conditionsPrecedent.map((c) => c.id).filter((v): v is string => Boolean(v)));
-      for (const cp of before.conditionsPrecedent) {
-        if (!keepCp.has(cp.id)) await tx.conditionPrecedent.delete({ where: { id: cp.id } });
-      }
-      for (const cp of t.conditionsPrecedent) {
-        if (cp.id && cpById.has(cp.id)) {
-          // Status is managed through the CP actions (Phase 3), never through setup.
-          await tx.conditionPrecedent.update({
-            where: { id: cp.id },
-            data: {
-              referenceCode: cp.referenceCode,
-              description: cp.description,
-              isMandatoryForRelease: cp.isMandatoryForRelease,
-            },
-          });
-        } else {
-          await tx.conditionPrecedent.create({
-            data: {
-              trancheId: t.id,
-              referenceCode: cp.referenceCode,
-              description: cp.description,
-              isMandatoryForRelease: cp.isMandatoryForRelease,
-              status: 'PENDING',
-            },
-          });
-        }
-      }
-    } else {
-      await tx.facilityTranche.create({
-        data: {
-          projectId: project.id,
-          ...base,
-          conditionsPrecedent: {
-            create: t.conditionsPrecedent.map((cp) => ({
-              referenceCode: cp.referenceCode,
-              description: cp.description,
-              isMandatoryForRelease: cp.isMandatoryForRelease,
-              status: 'PENDING' as const,
-            })),
-          },
-        },
-      });
-    }
-  }
-  // Phase 10: retention settings. A new percentage applies to later releases only; a new duration
+  // Phase 10: retention settings. A new percentage applies to later payments only; a new duration
   // moves the end of a liability period that has already started.
-  const changedFields = ['tranches'];
+  const changedFields: string[] = [];
   let retentionPayload: Record<string, unknown> | undefined;
   if (data.retention) {
     const r = data.retention;
@@ -1088,44 +858,31 @@ const saveFacility: StepSaver = async ({ tx, project, input }) => {
   }
   return {
     changedFields,
-    payload: { trancheCount: data.tranches.length, allocatedTotalNgn: sum, retention: retentionPayload ?? null },
+    payload: { retention: retentionPayload ?? null },
   };
 };
 
 const saveBoq: StepSaver = async ({ tx, project, input }) => {
   const data = input as ProjectBoqStep;
   if (data.items.length === 0) return { changedFields: [] };
-  const [tranches, contractors, items] = await Promise.all([
-    tx.facilityTranche.findMany({ where: { projectId: project.id }, select: { id: true } }),
+  const [contractors, items] = await Promise.all([
     tx.projectContractor.findMany({ where: { projectId: project.id }, select: { id: true } }),
     tx.boqItem.findMany({
       where: { projectId: project.id, id: { in: data.items.map((i) => i.boqItemId) } },
-      select: { id: true, projectContractorId: true, _count: { select: { ipcLineItems: true } } },
+      select: { id: true },
     }),
   ]);
-  const trancheIds = new Set(tranches.map((t) => t.id));
   const contractorIds = new Set(contractors.map((c) => c.id));
   const itemById = new Map(items.map((i) => [i.id, i]));
   for (const u of data.items) {
     const item = itemById.get(u.boqItemId);
     if (!item) throw new AppError('BOQ item not found', 404, 'BOQ_ITEM_NOT_FOUND');
-    if (u.trancheId && !trancheIds.has(u.trancheId)) throw new AppError('Tranche not found', 404, 'TRANCHE_NOT_FOUND');
     if (u.projectContractorId && !contractorIds.has(u.projectContractorId)) {
       throw new AppError('Contractor not found on this project', 404, 'CONTRACTOR_NOT_FOUND');
-    }
-    if (
-      u.projectContractorId !== undefined &&
-      (u.projectContractorId ?? null) !== item.projectContractorId &&
-      item._count.ipcLineItems > 0 &&
-      project.contractorExecutionMode === 'MULTI_PRIME_SEPARATE_IPC'
-    ) {
-      throw new AppError('An item that has been claimed cannot move to another contractor.', 409, 'BOQ_ITEM_CLAIMED');
     }
     await tx.boqItem.update({
       where: { id: u.boqItemId },
       data: {
-        trancheId: u.trancheId,
-        trancheMappingConfirmedByMonitor: u.trancheId !== null,
         isHoldPoint: u.isHoldPoint,
         ...(u.holdPointInstruction !== undefined ? { holdPointInstruction: u.holdPointInstruction } : {}),
         ...(u.isOpaqueLumpSum !== undefined ? { isOpaqueLumpSum: u.isOpaqueLumpSum } : {}),
@@ -1239,7 +996,6 @@ const saveProcess: StepSaver = async ({ tx, project, input }) => {
   const result = await applyProcessSettings(tx, project, {
     config: data.config,
     reportChain: data.reportChain,
-    disbursementChain: data.disbursementChain,
     workflowTemplateId: data.workflowTemplateId,
     confirmDeactivateContractorCodes: data.confirmDeactivateContractorCodes,
   });
@@ -1434,26 +1190,6 @@ export async function activateProject(projectId: string, webUser: WebJwtPayload)
       throw new AppError('The project cannot be activated yet', 422, 'PROJECT_INCOMPLETE', { issues });
     }
 
-    // Phase 7: tranches off means one implicit tranche covering the whole budget and every item.
-    if (!loaded.process.config.enableTranchesAndCps) {
-      let implicit = project.tranches[0] ?? null;
-      if (!implicit) {
-        implicit = await tx.facilityTranche.create({
-          data: {
-            projectId,
-            trancheNumber: 1,
-            name: 'Whole project',
-            allocatedAmountNgn: project.totalBudgetNgn ?? 0,
-            targetCompletionPct: 100,
-          },
-          include: { conditionsPrecedent: true },
-        });
-      }
-      if (project.tranches.length <= 1) {
-        await tx.boqItem.updateMany({ where: { projectId, trancheId: null }, data: { trancheId: implicit.id } });
-      }
-    }
-
     // Join codes for the chosen roles (all join-code mobile roles when none were chosen).
     const state = parseSetupState(project.setupState);
     const roles = await tx.role.findMany({
@@ -1486,7 +1222,6 @@ export async function activateProject(projectId: string, webUser: WebJwtPayload)
         geofenceMode: project.geofenceMode,
         contractorExecutionMode: project.contractorExecutionMode,
         contractorCount: loaded.contractors.length,
-        trancheCount: project.tranches.length,
         boqItemCount: loaded.boq.itemCount,
         issuedJoinCodes: issued.map((jc) => jc.code),
       },
@@ -1567,7 +1302,6 @@ export async function deleteDraftProject(projectId: string, webUser: WebJwtPaylo
         _count: {
           select: {
             fieldSessions: true,
-            ipcClaims: true,
             evidenceLogs: true,
             workdayReports: true,
             incidentReports: true,

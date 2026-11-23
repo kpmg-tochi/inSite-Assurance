@@ -391,7 +391,7 @@ export function PartiesStep({ projectId, setup, readOnly }: StepProps) {
         <FieldError message={errors.fields.beneficiaries} />
       </StepSection>
 
-      <StepSection title="Contractor model" description={`Who submits payment claims (${term("ipc", { plural: true })}), and for which BOQ items.`}>
+      <StepSection title="Contractor model" description="Who delivers which BOQ items.">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3" role="radiogroup" aria-label="Contractor model">
           {MODES.map((m) => {
             const selected = mode === m;
@@ -422,7 +422,7 @@ export function PartiesStep({ projectId, setup, readOnly }: StepProps) {
           multiPrime
             ? "Each contractor owns a package of BOQ items, identified by its trade code."
             : unified
-              ? `Mark the main contractor; only the main contractor submits ${term("ipc", { plural: true })}.`
+              ? "Mark the main contractor; the others report against its programme."
               : "One contractor delivers the project."
         }
         actions={

@@ -115,12 +115,12 @@ export function LoginPage() {
               Capital Project Governance
             </div>
             <h1 className="text-2xl xl:text-3xl font-bold leading-tight tracking-tight">
-              Closing the Physical-to-Financial Assurance Gap.
+              Every site visit, on record.
             </h1>
             <p className="text-xs xl:text-sm text-white/85 mt-2 leading-relaxed">
-              Independent geospatial corridor verification, voice-to-BOQ
-              extraction, and automated Interim Payment Certificate
-              reconciliation for infrastructure lenders and monitors.
+              Scheduled monitoring visits, geotagged photo evidence and
+              clear deadlines from contract award to handover, for
+              programme authorities and their monitoring teams.
             </p>
           </div>
 
@@ -261,7 +261,7 @@ export function LoginPage() {
           {/* Bottom Footer Bar */}
           <div className="flex items-center justify-between text-[11px] text-white/75 pt-2 border-t border-white/10 z-10">
             <span>
-              Field evidence and disbursement reconciliation
+              Project monitoring and delivery
             </span>
             <span>QSRBN · COREN · ICAN</span>
           </div>

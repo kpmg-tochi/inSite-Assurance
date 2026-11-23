@@ -5,15 +5,15 @@ import { provisionDefaultRegistrationBodies } from "../modules/credentials/regis
 import { PROGRAMME_TENANT_SLUG } from "./seedPhase11";
 
 /**
- * Phase 12 seed: configurable professional registration and fixed-amount payment milestones.
+ * Phase 12 seed: configurable professional registration (redesign R1b removed payment milestones).
  * - Every tenant gets the six default registration bodies (tenant provisioning does the same).
  * - Programme tenant: registration OPTIONAL for certifiers and field assurance, on the tenant and on
- *   both project types; both types default new payment milestones to FIXED_ON_COMPLETION with
- *   direct milestone release. Type versions stay 1; project snapshots get the same config.
+ *   both project types; both types default new projects to 5% retention over 12 months. Type
+ *   versions stay 1; project snapshots get the same config.
  * - A programme monitor with no registration on the profile (programme.monitor@insite.ng) and a
- *   funding-authority approver (programme.funder@insite.ng), both on the live Central project.
- * - Central project PRG-102: three fixed payment milestones (30% substructure, 40% superstructure,
- *   30% finishes and WASH) with BOQ items mapped to each, 5% retention.
+ *   funding-authority finance officer (programme.funder@insite.ng), both on the live Central project.
+ * - Central project PRG-102: a BOQ in three bills (substructure, superstructure, finishes and
+ *   WASH), 5% retention.
  * Other tenants keep no policy, so they behave as before (REQUIRED).
  */
 export async function seedPhase12(p: { passwordHash: string }) {
@@ -35,11 +35,7 @@ export async function seedPhase12(p: { passwordHash: string }) {
     const config = ProjectTypeConfigSchema.parse({
       ...(type.configJson as Record<string, unknown>),
       credentials: { certifier: "OPTIONAL", fieldAssurance: "OPTIONAL" },
-      payments: {
-        defaultBasis: "FIXED_ON_COMPLETION",
-        defaultCompletionRule: "ALL_ITEMS_COMPLETE",
-        mechanism: "MILESTONE_DIRECT_DISBURSEMENT",
-      },
+      payments: { retentionPercentage: 5, retentionDurationMonths: 12 },
     });
     await prisma.projectType.update({
       where: { id: type.id },
@@ -61,7 +57,7 @@ export async function seedPhase12(p: { passwordHash: string }) {
   const central = await prisma.project.findFirst({ where: { tenantId: tenant.id, codePrefix: "PRG-102" } });
   if (!central) return;
 
-  // People: a monitor without a registration (policy OPTIONAL lets them verify) and an approver.
+  // People: a monitor without a registration (policy OPTIONAL) and a finance officer.
   const monitorOrg = await prisma.organization.findFirst({
     where: { tenantId: tenant.id, name: "Programme Monitoring Consultants" },
   });
@@ -89,7 +85,7 @@ export async function seedPhase12(p: { passwordHash: string }) {
         tenantId: tenant.id,
         email: "programme.funder@insite.ng",
         passwordHash: p.passwordHash,
-        fullName: "Ibrahim Sule (Funding authority approver)",
+        fullName: "Ibrahim Sule (Funding authority finance officer)",
         roleId: lenderRole.id,
         organizationId: flagship.id,
       },
@@ -97,7 +93,7 @@ export async function seedPhase12(p: { passwordHash: string }) {
     await prisma.userProjectAssignment.create({ data: { userId: funder.id, projectId: central.id } });
   }
 
-  // Central project: three fixed payment milestones with mapped BOQ items, 5% retention.
+  // Central project: a BOQ in three bills, 5% retention.
   const budget = Number(central.totalBudgetNgn ?? 240_000_000);
   await prisma.project.update({
     where: { id: central.id },
@@ -107,7 +103,7 @@ export async function seedPhase12(p: { passwordHash: string }) {
   const milestones = [
     {
       n: 1,
-      name: "Payment milestone 1 — Substructure",
+      name: "Substructure",
       share: 0.3,
       section: "BILL NO. 1 — SUBSTRUCTURE",
       items: [
@@ -118,7 +114,7 @@ export async function seedPhase12(p: { passwordHash: string }) {
     },
     {
       n: 2,
-      name: "Payment milestone 2 — Superstructure",
+      name: "Superstructure",
       share: 0.4,
       section: "BILL NO. 2 — SUPERSTRUCTURE",
       items: [
@@ -129,7 +125,7 @@ export async function seedPhase12(p: { passwordHash: string }) {
     },
     {
       n: 3,
-      name: "Payment milestone 3 — Finishes and WASH",
+      name: "Finishes and WASH",
       share: 0.3,
       section: "BILL NO. 3 — FINISHES AND WASH",
       items: [
@@ -141,36 +137,11 @@ export async function seedPhase12(p: { passwordHash: string }) {
   ] as const;
   for (const m of milestones) {
     const allocated = Math.round(budget * m.share * 100) / 100;
-    const tranche = await prisma.facilityTranche.create({
-      data: {
-        projectId: central.id,
-        trancheNumber: m.n,
-        name: m.name,
-        allocatedAmountNgn: allocated,
-        targetCompletionPct: 100,
-        paymentBasis: "FIXED_ON_COMPLETION",
-        completionRule: "ALL_ITEMS_COMPLETE",
-        fixedReleaseAmountNgn: null, // the allocated amount
-        completionRequiredItemPct: 100,
-        conditionsPrecedent: {
-          create: [
-            {
-              referenceCode: `CP-${String(m.n).padStart(2, "0")}`,
-              description: `Monitor's site visit report for ${m.name.split(" — ")[1].toLowerCase()} on file`,
-              isMandatoryForRelease: true,
-              status: m.n === 1 ? "SATISFIED" : "PENDING",
-            },
-          ],
-        },
-      },
-    });
     const itemBudget = Math.round((allocated / m.items.length) * 100) / 100;
     for (const [wbsCode, description, unit, qty] of m.items) {
       await prisma.boqItem.create({
         data: {
           projectId: central.id,
-          trancheId: tranche.id,
-          trancheMappingConfirmedByMonitor: true,
           projectContractorId: contractor?.id ?? null,
           wbsCode,
           section: m.section,

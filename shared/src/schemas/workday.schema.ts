@@ -189,7 +189,7 @@ export const SuggestWorkdaySummaryRequestSchema = z.object({
 });
 export type SuggestWorkdaySummaryRequest = z.infer<typeof SuggestWorkdaySummaryRequestSchema>;
 
-export const SuggestionEngineEnum = z.enum(['AZURE_OPENAI', 'RULES', 'SIMULATED_DEMO']);
+export const SuggestionEngineEnum = z.enum(['RULES', 'SIMULATED_DEMO']);
 export type SuggestionEngine = z.infer<typeof SuggestionEngineEnum>;
 
 export const SuggestWorkdaySummaryResponseSchema = z.object({

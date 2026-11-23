@@ -76,15 +76,12 @@ export type MobileNotificationDto = z.infer<typeof MobileNotificationDtoSchema>;
 
 export const WebNotificationCategoryEnum = z.enum([
   'REPORT_RESUBMITTED',
-  'CONFLICT_FLAG',
   'CONTRACTOR_ONBOARDING',
-  'TRANCHE_DISBURSEMENT',
   'MONITOR_QUERY',
   'AI_OMISSION_FLAG',
   // Phase 7
   'STANDARDS_VIOLATION_FLAGGED',
   'REPORT_PENDING_APPROVAL',
-  'DISBURSEMENT_PENDING_APPROVAL',
   // Phase 8
   'REPORT_MISSED',
   'ATTENDANCE_ALERT',
@@ -95,7 +92,6 @@ export const WebNotificationCategoryEnum = z.enum([
   // Phase 10
   'HANDOVER_SUBMITTED',
   'DEFECT_TICKET',
-  'RETENTION_RELEASE',
   // Phase 14
   'INSPECTION_PENDING_APPROVAL',
   'INSPECTION_FINDING',
@@ -109,6 +105,8 @@ export const WebNotificationCategoryEnum = z.enum([
   'COMPLETION_CERTIFICATE',
   'CLOSURE',
   'LESSON_SHARED',
+  // Redesign R1b: a payment recorded with an exception (e.g. final payment before the CoC)
+  'PAYMENT_EXCEPTION',
 ]);
 export type WebNotificationCategory = z.infer<typeof WebNotificationCategoryEnum>;
 

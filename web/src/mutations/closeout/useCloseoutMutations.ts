@@ -1,26 +1,19 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type {
-  CertifyRetentionReleaseRequest,
   ChangeProjectPhaseRequest,
   ConvertSnagsInput,
   CreateDefectTicketInput,
   CreateHandoverLinkInput,
-  LenderTrancheDecisionRequest,
-  RequestRetentionReleaseRequest,
 } from '@insite/shared';
 import { CONSTRUCTION_PHASE_LABELS } from '@insite/shared';
 import {
   actOnDefectTicket,
-  cancelRetentionRelease,
-  certifyRetentionRelease,
   changeProjectPhase,
   convertSnagsToDefects,
   createDefectTicket,
   createHandoverLink,
-  decideRetentionRelease,
   reissueHandoverLink,
-  requestRetentionRelease,
   reviewHandoverSubmission,
   revokeHandoverLink,
   type DefectAction,
@@ -162,54 +155,5 @@ export const useDefectActionMutation = (projectId: string) => {
       toast.success(`${ticket.reference} ${verb}.`);
     },
     onError: (err) => toast.error(errorMessage(err, 'Could not update the defect.')),
-  });
-};
-
-export const useRequestRetentionReleaseMutation = (projectId: string) => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (body: RequestRetentionReleaseRequest) => requestRetentionRelease(projectId, body),
-    onSuccess: () => {
-      invalidateCloseout(queryClient, projectId);
-      toast.success('Release requested. A certifier must certify it next.');
-    },
-    onError: (err) => toast.error(errorMessage(err, 'Could not request the release.')),
-  });
-};
-
-export const useCertifyRetentionReleaseMutation = (projectId: string) => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (args: { requestId: string; body: CertifyRetentionReleaseRequest }) => certifyRetentionRelease(projectId, args.requestId, args.body),
-    onSuccess: () => {
-      invalidateCloseout(queryClient, projectId);
-      toast.success('Release certified. It now follows the disbursement approval chain.');
-    },
-    onError: (err) => toast.error(errorMessage(err, 'Could not certify the release.')),
-  });
-};
-
-export const useCancelRetentionReleaseMutation = (projectId: string) => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (requestId: string) => cancelRetentionRelease(projectId, requestId),
-    onSuccess: () => {
-      invalidateCloseout(queryClient, projectId);
-      toast.success('Release request cancelled.');
-    },
-    onError: (err) => toast.error(errorMessage(err, 'Could not cancel the request.')),
-  });
-};
-
-export const useDecideRetentionReleaseMutation = (projectId: string) => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (args: { valuationId: string; body: Omit<LenderTrancheDecisionRequest, 'valuationReportId'> }) =>
-      decideRetentionRelease(projectId, args.valuationId, args.body),
-    onSuccess: (decision) => {
-      invalidateCloseout(queryClient, projectId);
-      toast.success(decision.decision === 'HOLD' ? 'Release held.' : 'Retention released.');
-    },
-    onError: (err) => toast.error(errorMessage(err, 'Could not record the decision.')),
   });
 };

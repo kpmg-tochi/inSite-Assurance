@@ -6,7 +6,7 @@ import {
   ProjectTypeSupervisionConfigSchema,
 } from './inspection.schema';
 import { ProjectTypeCredentialsConfigSchema } from './credentials.schema';
-import { ProjectTypePaymentsConfigSchema } from './milestonePayment.schema';
+import { ProjectTypePaymentsConfigSchema } from './payment.schema';
 import {
   ContractMilestoneTemplateListSchema,
   ProjectTypeDefaultCasesConfigSchema,
@@ -75,8 +75,8 @@ export const ProjectTypeConfigSchema = z.object({
   // Reserved, filled by later phases (kept as-is until then).
   /** Phase 12: registration policy per subject; an omitted subject uses the tenant setting. */
   credentials: ProjectTypeCredentialsConfigSchema.default({}),
-  /** Phase 12: payment milestone defaults for new tranches, and the mechanism the type expects. */
-  payments: ProjectTypePaymentsConfigSchema.default({}),
+  /** Redesign R1b: retention defaults for new projects (payments are recorded, not made, here). */
+  payments: ProjectTypePaymentsConfigSchema,
   /** Phase 13: dated obligations created on the project when the type is applied. */
   contractMilestones: ContractMilestoneTemplateListSchema.default([]),
   /** Phase 13: documents needed before activation and before mobilisation. */

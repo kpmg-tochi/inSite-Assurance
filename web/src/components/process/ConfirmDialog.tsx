@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from "react";
-import { ModalShell } from "../../pages/reconciliation/components/ModalShell";
+import { ModalShell } from "../common/ModalShell";
 
 interface ConfirmRequest {
   title: string;

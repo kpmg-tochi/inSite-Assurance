@@ -134,7 +134,6 @@ function serializeBase(d: DocumentRow, people: Awaited<ReturnType<typeof peopleF
     projectContractorId: d.projectContractorId,
     contractorName: d.projectContractor?.organization.name ?? null,
     linkedMilestoneId: d.linkedMilestoneId,
-    linkedConditionPrecedentId: d.linkedConditionPrecedentId,
     isArchived: d.isArchived,
     createdAt: d.createdAt.toISOString(),
     signOffCount: currentSignOffs.length,
@@ -322,10 +321,6 @@ export async function registerProjectDocument(
     const m = await prisma.projectContractMilestone.count({ where: { id: input.linkedMilestoneId, projectId } });
     if (!m) throw new AppError('Milestone not found on this project', 404, 'MILESTONE_NOT_FOUND');
   }
-  if (input.linkedConditionPrecedentId) {
-    const cp = await prisma.conditionPrecedent.count({ where: { id: input.linkedConditionPrecedentId, tranche: { projectId } } });
-    if (!cp) throw new AppError('Condition precedent not found on this project', 404, 'CP_NOT_FOUND');
-  }
 
   const file = await inspectUpload(projectId, project.tenantId, input.objectKey);
   if (!documentMimeAllowed(type, file.mimeType)) {
@@ -343,7 +338,6 @@ export async function registerProjectDocument(
           uploadedByUserId: webUser.userId,
           projectContractorId,
           linkedMilestoneId: input.linkedMilestoneId ?? null,
-          linkedConditionPrecedentId: input.linkedConditionPrecedentId ?? null,
           versions: { create: { version: 1, ...file, uploadedByUserId: webUser.userId, note: input.note ?? null } },
         },
       });

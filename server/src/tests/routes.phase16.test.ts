@@ -92,10 +92,9 @@ describe('Phase 16: programme KPI dashboard', () => {
     const untracked = d.kpis.filter((k) => k.status === 'NOT_TRACKED').map((k) => k.key);
     assert.deepEqual(untracked, []);
     // Seeded facts behind a few of them.
-    const payment = kpi(d, 'payment_turnaround_days');
-    assert.equal(payment.value, 9);
-    assert.equal(payment.target, 14); // only Central projects have payment milestones
-    assert.equal(payment.status, 'MET');
+    // Redesign R1b: financial utilisation reads the recorded payments (disbursedToDateNgn).
+    const utilisation = kpi(d, 'financial_utilisation');
+    assert.ok(utilisation.numerator > 0, 'PRG-105 has a recorded interim payment');
     assert.equal(kpi(d, 'lessons_documented').value, 100);
     assert.equal(kpi(d, 'audited_post_closure').numerator, 1); // PRG-242 signed off, PRG-241 pending
     assert.equal(kpi(d, 'audited_post_closure').denominator, 2);
@@ -120,9 +119,6 @@ describe('Phase 16: programme KPI dashboard', () => {
     assert.deepEqual(co.projects.map((p) => p.codePrefix).sort(), ['PRG-211', 'PRG-221', 'PRG-241', 'PRG-242']);
     assert.equal(kpi(co, 'contractors_mobilised_on_time').target, 85);
     assert.equal(kpi(co, 'contractors_mobilised_on_time').targetVaries, false);
-    // No Co-Funded project has payment milestones: not tracked, not 0%.
-    assert.equal(kpi(co, 'payment_turnaround_days').status, 'NOT_TRACKED');
-    assert.equal(kpi(co, 'payment_turnaround_days').value, null);
 
     const southRegion = await dashboard('programme.admin@insite.ng', { regionId: ids.regionSouth });
     assert.deepEqual(southRegion.projects.map((p) => p.codePrefix).sort(), ['PRG-104', 'PRG-221', 'PRG-241', 'PRG-242']);
@@ -142,7 +138,6 @@ describe('Phase 16: programme KPI dashboard', () => {
   it('never reports an untracked KPI as 0: the project has no cell for it', async () => {
     const d = await dashboard('programme.admin@insite.ng');
     const prg211 = row(d, 'PRG-211');
-    assert.equal('payment_turnaround_days' in prg211.values, false); // no payment milestones
     assert.equal('lessons_documented' in prg211.values, false); // not closed
     assert.ok('visits_conducted' in prg211.values);
   });
@@ -197,7 +192,9 @@ describe('Phase 16: project KPIs', () => {
       .set(await web('programme.funder@insite.ng'));
     assert.equal(res.status, 200, JSON.stringify(res.body));
     const byKey = new Map((res.body.data.kpis as Array<{ key: string; value: number | null; status: string }>).map((k) => [k.key, k]));
-    assert.equal(byKey.get('payment_turnaround_days')?.value, 9);
+    const paid = await prisma.project.findUniqueOrThrow({ where: { id: ids.prg105 } });
+    assert.equal(Number(paid.disbursedToDateNgn), 59_850_000, 'NGN 63m recorded, 5% retention held');
+    assert.equal(byKey.get('financial_utilisation')?.value, Math.round((59_850_000 / 210_000_000) * 1000) / 10);
     assert.equal(byKey.get('projects_on_schedule')?.status, 'MET');
     assert.equal(byKey.get('lessons_documented')?.status, 'NOT_TRACKED');
   });

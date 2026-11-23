@@ -522,9 +522,8 @@ export async function recordItemActualStart(tx: Tx, projectId: string, boqItemId
 }
 
 /**
- * Keeps actualCompletionDate in step with certification: set (today, project zone) when an item
- * reaches 100% certified, cleared if a returned valuation puts it back below 100. Called from
- * refreshCertifiedProgress, which every certification path runs.
+ * Keeps actualCompletionDate in step with progress: set (today, project zone) when an item reaches
+ * 100%, cleared if it falls back below 100. Called from refreshProjectProgress (modules/progress).
  */
 export async function syncActualCompletionDates(tx: Tx, projectId: string, now: Date = new Date()) {
   const project = await tx.project.findUnique({ where: { id: projectId }, select: { timezone: true } });

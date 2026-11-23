@@ -5,7 +5,6 @@ import {
   ApprovalOrganizationScope,
   ApprovalProgressDto,
   ApprovalSubjectType,
-  SEGREGATED_DISBURSEMENT_PERMISSIONS,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -119,9 +118,7 @@ export function holdsStep(
   orgContext: ProjectOrgContext | null
 ): boolean {
   const key = step.requiredPermissionKey;
-  const hasPermission = SEGREGATED_DISBURSEMENT_PERMISSIONS.includes(key)
-    ? webUser.permissions.includes(key)
-    : hasWebPermission(webUser, key);
+  const hasPermission = hasWebPermission(webUser, key);
   if (!hasPermission) return false;
   if (step.requiredRoleId && step.requiredRoleId !== webUser.roleId) return false;
   return organizationScopeAllows(step.organizationScope, webUser.organizationId, orgContext);

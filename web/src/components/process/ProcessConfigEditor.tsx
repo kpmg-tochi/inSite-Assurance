@@ -1,12 +1,8 @@
 import React from "react";
-import { Lock } from "lucide-react";
 import {
-  DISBURSEMENT_MECHANISM_META,
-  DisbursementMechanismEnum,
   DOCUMENT_MODE_META,
   NeedsAssessmentModeEnum,
   PROCESS_TOGGLE_META,
-  type DisbursementMechanism,
   type NeedsAssessmentMode,
   type ProjectProcessConfig,
 } from "@insite/shared";
@@ -49,20 +45,15 @@ function ModeGroup({
   );
 }
 
-/** Document modes, disbursement mechanism and the on/off switches of a project process. */
+/** Document modes and the on/off switches of a project process. */
 export function ProcessConfigEditor({
   value,
   onChange,
-  onMechanismChange,
   disabled,
-  mechanismLocked,
 }: {
   value: ProjectProcessConfig;
   onChange: (next: ProjectProcessConfig) => void;
-  /** The mechanism also changes the certification step of the chain. */
-  onMechanismChange: (m: DisbursementMechanism) => void;
   disabled?: boolean;
-  mechanismLocked?: boolean;
 }) {
   return (
     <div className="space-y-5">
@@ -79,35 +70,6 @@ export function ProcessConfigEditor({
           onChange={(m) => onChange({ ...value, needsAssessmentMode: m })}
           disabled={disabled}
         />
-      </div>
-
-      <div>
-        <p className="block text-xs font-semibold text-slate-700 mb-1">How money is released</p>
-        {mechanismLocked && (
-          <p className="mb-2 inline-flex items-center gap-1 text-[11px] text-slate-500">
-            <Lock className="w-3 h-3" /> Locked: an IPC or valuation already exists on this project.
-          </p>
-        )}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="radiogroup" aria-label="Disbursement mechanism">
-          {DisbursementMechanismEnum.options.map((m) => (
-            <button
-              key={m}
-              type="button"
-              role="radio"
-              aria-checked={value.disbursementMechanism === m}
-              disabled={disabled || mechanismLocked}
-              onClick={() => onMechanismChange(m)}
-              className={`text-left rounded-xl border p-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary disabled:cursor-not-allowed ${
-                value.disbursementMechanism === m
-                  ? "border-brand-primary bg-brand-primary/5"
-                  : "border-slate-200 hover:border-slate-300 disabled:opacity-60"
-              }`}
-            >
-              <p className="text-xs font-bold text-slate-900">{DISBURSEMENT_MECHANISM_META[m].label}</p>
-              <p className="mt-1 text-[11px] text-slate-500">{DISBURSEMENT_MECHANISM_META[m].description}</p>
-            </button>
-          ))}
-        </div>
       </div>
 
       <div>

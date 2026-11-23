@@ -12,7 +12,7 @@ import {
 import Loader from "../Loader";
 import { CustomSelect } from "../common";
 import { useAuth } from "../../lib/auth-context";
-import { ModalActions, ModalShell, inputClass } from "../../pages/reconciliation/components/ModalShell";
+import { ModalActions, ModalShell, inputClass } from "../common/ModalShell";
 import { StatusChip } from "../contracts/contractUi";
 import { useProjectLessonsQuery } from "../../queries/closure/useClosureQueries";
 import { usePublishLessonMutation, useSaveLessonMutation } from "../../mutations/closure/useClosureMutations";

@@ -11,8 +11,6 @@ import { TRADE_CODE_REGEX } from '../joinCodes';
 import { isValidTimeZone } from '../utils/time';
 import { GeofenceToleranceMetersSchema, ProjectGeofenceSchema } from './geofence.schema';
 import { OrganizationRefSchema } from './organization.schema';
-import { FacilityTrancheInputSchema } from './project.schema';
-import { TrancheCompletionRuleEnum, TranchePaymentBasisEnum } from './milestonePayment.schema';
 import { ProjectProcessSettingsDtoSchema, ProjectProcessStepSchema, ProjectStandardsStepSchema } from './process.schema';
 import { ProjectCadenceFieldsSchema, ProjectCadenceSettingsDtoSchema } from './cadence.schema';
 import {
@@ -49,12 +47,13 @@ export interface ProjectSetupStepDefinition {
 
 export const PROJECT_SETUP_STEPS: ProjectSetupStepDefinition[] = [
   { id: 'basics', title: 'Basics', route: 'basics', required: true, order: 10, description: 'Name, code, location and budget' },
-  { id: 'parties', title: 'Parties', route: 'parties', required: true, order: 20, description: 'Monitor, lender and contractors' },
+  { id: 'parties', title: 'Parties', route: 'parties', required: true, order: 20, description: 'Monitor, funder and contractor' },
   // Phase 13. Required (server-computed) when the project type has contract milestones or documents needed before activation.
   { id: 'contract', title: 'Contract and kick-off', route: 'contract', required: false, order: 25, description: 'Contract dates, sum and planned kick-off' },
   { id: 'site', title: 'Site', route: 'site', required: true, order: 30, description: 'Geofence, tolerance and time zone' },
-  { id: 'facility', title: 'Facility', route: 'facility', required: true, order: 40, description: 'Tranches and conditions precedent' },
-  { id: 'boq', title: 'Bill of quantities', route: 'boq', required: true, order: 50, description: 'BOQ items, hold points, tranches and packages' },
+  // Redesign R1b: tranches and conditions precedent are gone; the step keeps the retention settings.
+  { id: 'facility', title: 'Retention', route: 'facility', required: false, order: 40, description: 'Retention percentage and defects liability period' },
+  { id: 'boq', title: 'Bill of quantities', route: 'boq', required: true, order: 50, description: 'BOQ items, hold points and packages' },
   { id: 'reporting', title: 'Reporting', route: 'reporting', required: true, order: 60, description: 'Cadence and working day' },
   // Phase 9. After Reporting, which sets the work-week the schedule counts in; optional for activation.
   // Dates and dependencies are saved through the schedule endpoints.
@@ -148,11 +147,10 @@ export type ProjectSiteStep = z.infer<typeof ProjectSiteStepSchema>;
 export type ProjectSiteStepInput = z.input<typeof ProjectSiteStepSchema>;
 
 // ---------------------------------------------------------------------------
-// Step 4: facility
+// Step 4: retention (route "facility")
 // ---------------------------------------------------------------------------
 
 export const ProjectFacilityStepSchema = z.object({
-  tranches: z.array(FacilityTrancheInputSchema).max(50).default([]),
   /** Phase 10: retention settings; omitted = unchanged. Shown only with the retention module on. */
   retention: RetentionSettingsSchema.optional(),
 });
@@ -164,7 +162,6 @@ export type ProjectFacilityStep = z.infer<typeof ProjectFacilityStepSchema>;
 
 export const ProjectBoqItemMappingSchema = z.object({
   boqItemId: z.string().uuid(),
-  trancheId: z.string().uuid().nullable(),
   isHoldPoint: z.boolean(),
   holdPointInstruction: z.string().max(400).nullable().optional(),
   isOpaqueLumpSum: z.boolean().optional(),
@@ -233,7 +230,7 @@ export const PROJECT_STEP_SAVE_SCHEMAS = {
 
 /**
  * Activation requirements for the steps whose data lives on the project row. The server adds the
- * cross-record checks (tranche sum within budget, BOQ items mapped, contractor packages).
+ * cross-record checks (BOQ present, contractor packages).
  */
 export const ProjectActivationSchema = z.object({
   basics: ProjectBasicsStepSchema,
@@ -268,7 +265,7 @@ export const SetupStepStatusSchema = z.object({
   /** No issues. */
   complete: z.boolean(),
   issues: z.array(SetupIssueSchema),
-  /** Allowed, but worth a look (e.g. tranches add up to less than the budget). */
+  /** Allowed, but worth a look (e.g. the BOQ total is above the budget). */
   warnings: z.array(SetupIssueSchema).default([]),
 });
 export type SetupStepStatus = z.infer<typeof SetupStepStatusSchema>;
@@ -341,48 +338,16 @@ export const ProjectSetupDtoSchema = z.object({
     enabledGeofenceModes: z.array(GeofenceModeEnum),
   }),
   facility: z.object({
-    tranches: z.array(
-      z.object({
-        id: z.string().uuid(),
-        trancheNumber: z.number().int(),
-        name: z.string(),
-        allocatedAmountNgn: z.number(),
-        targetCompletionPct: z.number(),
-        isReleased: z.boolean(),
-        /** Phase 12 */
-        paymentBasis: TranchePaymentBasisEnum,
-        completionRule: TrancheCompletionRuleEnum.nullable(),
-        fixedReleaseAmountNgn: z.number().nullable(),
-        completionRequiredItemPct: z.number(),
-        /** Phase 13: CONTRACT_MILESTONE_DONE */
-        completionContractMilestoneKey: z.string().nullable().optional(),
-        conditionsPrecedent: z.array(
-          z.object({
-            id: z.string().uuid(),
-            referenceCode: z.string(),
-            description: z.string(),
-            isMandatoryForRelease: z.boolean(),
-            status: z.string(),
-          })
-        ),
-      })
-    ),
     retention: z.object({
       retentionPercentage: z.number().nullable(),
       retentionDurationMonths: z.number().int().nullable(),
       retentionReleaseAtCompletionPct: z.number(),
-      /** Retention already withheld; the percentage applies to later releases only. */
+      /** Retention already held; the percentage applies to later payments only. */
       heldNgn: z.number(),
-    }),
-    /** Phase 12: defaults for a new payment milestone (from the project type, else measured). */
-    paymentDefaults: z.object({
-      defaultBasis: TranchePaymentBasisEnum,
-      defaultCompletionRule: TrancheCompletionRuleEnum.nullable(),
     }),
   }),
   boq: z.object({
     itemCount: z.number().int(),
-    unmappedCount: z.number().int(),
     unassignedContractorCount: z.number().int(),
     holdPointCount: z.number().int(),
     totalBudgetedCostNgn: z.number(),
@@ -479,7 +444,7 @@ export const ContractorPackageSuggestionSchema = z.object({
 export type ContractorPackageSuggestion = z.infer<typeof ContractorPackageSuggestionSchema>;
 
 export const ContractorSuggestionResponseSchema = z.object({
-  engine: z.enum(['AZURE_OPENAI', 'RULES_ENGINE']),
+  engine: z.enum(['RULES_ENGINE']),
   engineDetail: z.string().nullable(),
   packages: z.array(ContractorPackageSuggestionSchema),
 });

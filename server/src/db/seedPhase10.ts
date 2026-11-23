@@ -4,15 +4,17 @@ import { prisma } from "../config/prisma";
 import { recordAuditEvent } from "../modules/audit/audit.service";
 import { applyTemplateConfig } from "../modules/process/processConfig.service";
 import { handoverUrl, newHandoverToken } from "../modules/closeout/handover.service";
+import { seedRecordedPayment } from "./seedPayments";
 
 /**
  * Phase 10 seed (dates relative to today):
  * - OGN-501 in handover, with a pending stakeholder link (code required). The seed prints the link
  *   once; only its hash is stored.
  * - KWR-502 in its defects liability period: practical completion two months ago, 12-month period,
- *   5% retention held, and two defect tickets (one assigned and overdue, one fixed and waiting for
+ *   5% retention held on its recorded payment (redesign R1b), and two defect tickets (one assigned and overdue, one fixed and waiting for
  *   verification).
- * Both have the handover and retention modules on and are assigned to the verifier, the lender and
+ * Both have one recorded interim payment with 5% retention held (payments are made outside the
+ * platform and recorded). Both have the handover and retention modules on and are assigned to the verifier, the lender and
  * the contractor user (its organisation is the liable contractor).
  */
 
@@ -41,7 +43,8 @@ export async function seedPhase10(p: {
     lgaLocation: string;
     center: { latitude: number; longitude: number };
     budget: number;
-    disbursed: number;
+    /** Gross amount of the one recorded interim payment; 5% retention is held on it. */
+    paidGross: number;
     progress: number;
     extra: Prisma.ProjectUncheckedCreateInput extends infer T ? Partial<T> : never;
   }) {
@@ -59,7 +62,6 @@ export async function seedPhase10(p: {
         lgaLocation: data.lgaLocation,
         description: "Phase 10 fixture: end of project life (handover, retention and defects).",
         totalBudgetNgn: data.budget,
-        disbursedToDateNgn: data.disbursed,
         certifiedProgressPct: data.progress,
         reportingCadence: "WEEKLY",
         timezone: "Africa/Lagos",
@@ -89,21 +91,19 @@ export async function seedPhase10(p: {
         isMainContractor: true,
       },
     });
-    const tranche = await prisma.facilityTranche.create({
-      data: {
-        projectId: project.id,
-        trancheNumber: 1,
-        name: "Tranche 1 — Main works",
-        allocatedAmountNgn: data.budget,
-        releasedAmountNgn: data.disbursed,
-        targetCompletionPct: 100,
-      },
+    await seedRecordedPayment({
+      projectId: project.id,
+      kind: "INTERIM",
+      paidOn: zonedCalendarDate(daysAgo(70), "Africa/Lagos"),
+      grossAmountNgn: data.paidGross,
+      retentionHeldNgn: Math.round(data.paidGross * 5) / 100,
+      reference: `PV/${data.codePrefix}/001`,
+      description: "Main works",
+      recordedByName: "Seed finance officer",
     });
     await prisma.boqItem.create({
       data: {
         projectId: project.id,
-        trancheId: tranche.id,
-        trancheMappingConfirmedByMonitor: true,
         projectContractorId: contractor.id,
         wbsCode: "01.01",
         section: "BILL 1 — MAIN WORKS",
@@ -146,7 +146,7 @@ export async function seedPhase10(p: {
     lgaLocation: "Yewa South",
     center: { latitude: 6.889, longitude: 3.0145 },
     budget: 180_000_000,
-    disbursed: 171_000_000,
+    paidGross: 180_000_000,
     progress: 100,
     extra: { constructionPhase: "HANDOVER_IN_PROGRESS", constructionPhaseChangedAt: daysAgo(3) },
   });
@@ -180,7 +180,6 @@ export async function seedPhase10(p: {
   // KWR-502: in its defects liability period, retention held, two tickets
   // ------------------------------------------------------------------------
   const practical = zonedCalendarDate(daysAgo(61), "Africa/Lagos");
-  const held = 12_500_000;
   const kwara = await createProject({
     codePrefix: "KWR-502",
     name: "Kwara Feeder Road — Oke-Oyi to Alapa",
@@ -188,7 +187,7 @@ export async function seedPhase10(p: {
     lgaLocation: "Ilorin East",
     center: { latitude: 8.5844, longitude: 4.7395 },
     budget: 250_000_000,
-    disbursed: 237_500_000,
+    paidGross: 250_000_000,
     progress: 100,
     extra: {
       constructionPhase: "RETENTION_PERIOD",
@@ -196,18 +195,7 @@ export async function seedPhase10(p: {
       practicalCompletionDate: practical,
       retentionStartDate: practical,
       retentionEndDate: addCalendarMonths(practical, 12),
-      retentionHeldNgn: held,
     },
-  });
-  await prisma.projectContractor.update({ where: { id: kwara.contractor.id }, data: { retentionHeldNgn: held } });
-  await recordAuditEvent(prisma, {
-    projectId: kwara.project.id,
-    actorType: "SYSTEM",
-    actorId: "retention",
-    actorDisplayName: "Seed",
-    action: "RETENTION_WITHHELD",
-    summaryText: "Seeded opening retention balance of NGN 12,500,000.00 (5% of NGN 250,000,000.00 released).",
-    payload: { retentionWithheldNgn: held, allocation: [{ projectContractorId: kwara.contractor.id, amountNgn: held }] },
   });
   await prisma.retentionDefectTicket.create({
     data: {

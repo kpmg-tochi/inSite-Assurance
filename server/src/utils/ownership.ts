@@ -20,50 +20,6 @@ function assertUuid(id: string | undefined | null, entity: string, code: string)
   return id;
 }
 
-export async function loadIpcInProject(db: Db, projectId: string, ipcId: string) {
-  assertUuid(ipcId, 'IPC claim', 'IPC_NOT_FOUND');
-  const ipc = await db.ipcClaim.findFirst({ where: { id: ipcId, projectId } });
-  if (!ipc) throw notFound('IPC claim', 'IPC_NOT_FOUND');
-  return ipc;
-}
-
-export async function loadLineItemInIpc(db: Db, ipcId: string, lineItemId: string) {
-  assertUuid(lineItemId, 'IPC line item', 'IPC_LINE_ITEM_NOT_FOUND');
-  const line = await db.ipcLineItem.findFirst({
-    where: { id: lineItemId, ipcClaimId: ipcId },
-    include: { boqItem: true },
-  });
-  if (!line) throw notFound('IPC line item', 'IPC_LINE_ITEM_NOT_FOUND');
-  return line;
-}
-
-export async function loadQueryInIpc(db: Db, ipcId: string, queryId: string) {
-  assertUuid(queryId, 'Monitor query', 'QUERY_NOT_FOUND');
-  const query = await db.monitorQuery.findFirst({
-    where: { id: queryId, ipcLineItem: { ipcClaimId: ipcId } },
-    include: { ipcLineItem: { include: { boqItem: true } } },
-  });
-  if (!query) throw notFound('Monitor query', 'QUERY_NOT_FOUND');
-  return query;
-}
-
-export async function loadValuationReportInProject(db: Db, projectId: string, reportId: string) {
-  assertUuid(reportId, 'Valuation report', 'VALUATION_REPORT_NOT_FOUND');
-  const report = await db.valuationReport.findFirst({
-    where: { id: reportId, projectId },
-    include: { ipcClaim: true },
-  });
-  if (!report) throw notFound('Valuation report', 'VALUATION_REPORT_NOT_FOUND');
-  return report;
-}
-
-export async function loadTrancheInProject(db: Db, projectId: string, trancheId: string) {
-  assertUuid(trancheId, 'Tranche', 'TRANCHE_NOT_FOUND');
-  const tranche = await db.facilityTranche.findFirst({ where: { id: trancheId, projectId } });
-  if (!tranche) throw notFound('Tranche', 'TRANCHE_NOT_FOUND');
-  return tranche;
-}
-
 export async function loadBoqItemInProject(db: Db, projectId: string, boqItemId: string) {
   assertUuid(boqItemId, 'BOQ item', 'BOQ_ITEM_NOT_FOUND');
   const item = await db.boqItem.findFirst({ where: { id: boqItemId, projectId } });
@@ -83,11 +39,4 @@ export async function loadReportQueryInProject(db: Db, projectId: string, queryI
   const query = await db.reportQuery.findFirst({ where: { id: queryId, projectId } });
   if (!query) throw notFound('Report query', 'REPORT_QUERY_NOT_FOUND');
   return query;
-}
-
-export async function loadConditionInTranche(db: Db, trancheId: string, conditionId: string) {
-  assertUuid(conditionId, 'Condition precedent', 'CONDITION_NOT_FOUND');
-  const cp = await db.conditionPrecedent.findFirst({ where: { id: conditionId, trancheId } });
-  if (!cp) throw notFound('Condition precedent', 'CONDITION_NOT_FOUND');
-  return cp;
 }

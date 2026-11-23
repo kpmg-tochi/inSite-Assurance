@@ -30,7 +30,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | Organisation hierarchy (parent organisation) | Settings → Organisations | None (flat) | Up to 5 levels. Lets a flagship see and approve for its subsidiaries; cycles are refused. | G10 |
 | Regions and areas | Settings → Project types, regions & documents → Regions | None | Two levels (region → area). Used by project filters, the portfolio map and KPIs. A region filter includes its areas. | G10 |
-| Terminology | Settings → Tenant Settings → Terminology | Lender, Independent monitor, Tranche, Condition precedent, IPC, Valuation, Contractor, Beneficiary, Hold point, Retention | Display labels only (singular and plural), on web and mobile. API fields, audit text and AI prompts keep the canonical names. Demo tenant: funder = "Funding authority", tranche = "Payment milestone", IPC = "Payment claim". | G1 |
+| Terminology | Settings → Tenant Settings → Terminology | Funder, Independent monitor, Contractor, Beneficiary, Hold point, Retention | Display labels only (singular and plural), on web and mobile. API fields and audit text keep the canonical names. Demo tenant: funder = "Funding authority". (Redesign R1b removed Tranche, Condition precedent, IPC and Valuation.) | G1 |
 | Professional registration policy | Settings → Tenant Settings → Professional registration | `REQUIRED` for certifiers and for field assurance (platform default) | `REQUIRED`, `OPTIONAL` or `HIDDEN`. Every form, validation, message and PDF follows it. A project type can override it. Permissions and segregation of duties never depend on it. Demo tenant: `OPTIONAL`. | G12 |
 | Registration bodies | Settings → Tenant Settings → Professional registration | QSRBN, COREN, ARCON, CORBON, ICAN, Other | The bodies users and certifiers choose from. The body name and prefix are copied onto each certification, so PDFs print as signed. | G12 |
 | Document types | Settings → Project types, regions & documents → Document types | 18 types (contract, award and acceptance letters, kick-off pack, minutes, mobilisation agreement and plan, letter of introduction, site possession, supervisor assignment, CoC, handover certificate, final evaluation, closure file and others) | Per type: sign-off required, allowed files, and whether contractors can see it. Milestones, checklists and KPIs refer to types by code. | G3 |
@@ -71,15 +71,14 @@ Set in Settings → Project types, regions & documents → Project types. One ty
 | Custom period length, quarter start month, first period date | – ; January; project start | Shown for the cadences that use them. | G4 |
 | Work hours, report due time, grace | 08:00–17:00; end of the working day; 0 min | When a report becomes due and late. | G4 |
 
-### 3.4 Credentials and payments (Phase 12)
+### 3.4 Credentials (Phase 12) and payments (redesign R1b)
 
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
-| Certifier registration | Use the workspace setting | `REQUIRED` / `OPTIONAL` / `HIDDEN` for whoever certifies IPCs, verifies milestones or certifies retention. | G12 |
+| Certifier registration | Use the workspace setting | `REQUIRED` / `OPTIONAL` / `HIDDEN` for whoever signs certificates. Removed in redesign R1d. | G12 |
 | Field assurance registration | Use the workspace setting | The same, for field staff completing identity assurance. | G12 |
-| Disbursement mechanism the type expects | Not stated | For checks only: a fixed payment basis with "contractor IPC claims" is refused. The workflow template sets the mechanism projects actually use. | Decision K |
-| Payment basis for new tranches | `MEASURED` (verified % × budget) | `FIXED_ON_COMPLETION` pays a fixed amount (default: the allocation) only when the milestone is complete. Fixed basis works with direct milestone verification only and is refused with contractor claims. Each tranche can be changed in the Facility step. | Decision K |
-| Completion rule (fixed basis) | All items complete | Or: weighted progress reached. Per tranche, a required item % and an optional contract milestone ("milestone done") can be added. | Decision K |
+| Retention percentage | None | Pre-fills the Retention step of a new project. Recorded payments hold this percentage back (another amount needs a reason). Payments are made outside the platform and recorded on the project's Payments page. | Decision Q |
+| Defects liability period (months) | None | Pre-fills the Retention step. The retention release is flagged when recorded before the period ends. | Decision P1 |
 
 ### 3.5 Contract milestones and kick-off (Phase 13)
 
@@ -118,7 +117,7 @@ Edited in the type editor's closure rules section.
 | Beneficiary signature | Recorded by staff | Staff upload the signed paper copy and attest (D-15.1). A public signing link is not built. | G6 |
 | CoC signatures follow the certifier registration policy | Off | Staff signatures print their registration. | G6, G12 |
 | Final evaluation before the CoC | Off | A CoC can only be drafted after an approved final evaluation inspection. | G6 |
-| Gates needing an issued CoC | None | Liability period (handover → retention), final payment (last tranche or final retention release), closure. | G6 |
+| Gates needing an issued CoC | None | Liability period (handover → retention) and closure are refused without it. Final payment: a FINAL payment or retention release recorded without it is flagged as an exception (payments are made outside the platform). | G6 |
 | Handover due after the CoC | 7 days | Dates the handover ceremony milestone. | G6 |
 | Before-closing checklist | None | Items: document filed (and, per item, whether its current version must be signed), inspection approved, milestone done, contractors rated, lessons published, audit sign-off, manual. Each must be met or waived before closing. | G6 |
 | Before-archiving checklist | None | The same item kinds, needed before archiving. Demo (Co-Funded): post-closure evaluation 14 days after closing, and an audit sign-off that cannot be waived. | G6 |
@@ -133,7 +132,7 @@ Edited in the type editor's "KPI targets" section. **Changes apply to every proj
 | Target per KPI | Catalogue default (section 6) | "At least" for percentages, "at most" for durations. Blank means no target, and the KPI is shown without a status colour. Met = on target; near = within 10%; missed = further. | G8 |
 | Shown | On | Off hides the KPI for projects of the type. A KPI hidden on every type in view drops off the page. | G8 |
 
-Demo values: Central (mobilisation 90%, reports 85%, visits 90%, payment turnaround 14 days); Co-Funded (mobilisation 85%, reports 80%, visits 85%, payment 21 days, approval 7 days). Financial utilisation has no target.
+Demo values: Central (mobilisation 90%, reports 85%, visits 90%); Co-Funded (mobilisation 85%, reports 80%, visits 85%, approval 7 days). Financial utilisation has no target.
 
 ---
 
@@ -143,15 +142,14 @@ Phases 11–15 **added no new process switches**. The switches from Phases 7 and
 
 | Switch | Default | Demo programme | Effect |
 | :--- | :--- | :--- | :--- |
-| Disbursement mechanism | IPC claims | Direct milestone release | Milestones verified from evidence; no contractor claims. Needed for the fixed payment basis. |
 | Report approval | Off | On | Reports and inspections go through the report chain. Feeds the approval turnaround KPI. |
-| Handover module / retention module | Off | On | Handover links, handover certificate, liability period, defects and retention release. |
+| Handover module / retention module | Off | On | Handover links, handover certificate, liability period, defects, and retention held on recorded payments. |
 
 Approval chain additions:
 
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
-| Step organisation scope (Phase 11) | `ANY` | `PROJECT_OWNER`, `PROJECT_OWNER_OR_ANCESTOR` or `FUNDER`: the actor must belong to that organisation. Applies to everyone, including the platform super admin. Demo: Central release by the funder; Co-Funded review by the owner, release by the owner or the flagship. | G10 |
+| Step organisation scope (Phase 11) | `ANY` | `PROJECT_OWNER`, `PROJECT_OWNER_OR_ANCESTOR` or `FUNDER`: the actor must belong to that organisation. Applies to everyone, including the platform super admin. Demo: report and default-case steps limited to the owner. | G10 |
 | Contract default chain (Phase 13) | Legal review, then the executive decision | Built from the type's Legal role; the final step needs `contracts:decide_default`. | G7 |
 
 ---
@@ -164,7 +162,8 @@ Approval chain additions:
 | Owning organisation, region, beneficiaries (one primary) | Basics / Parties steps | Visibility, filters, approvals and the handover recipient. | G10 |
 | Contract reference, award, signed and kick-off dates | Contract step | Anchor the contract milestones. Every change recomputes due dates and is audited. | G2 |
 | Reporting streams, quarterly anchor month | Reporting step | Per-project streams (replace the type's on a draft). The quarterly cadence uses calendar quarters from the anchor month (default January). | G4 |
-| Tranche payment basis and completion rule | Facility step | Per tranche (section 3.4). | Decision K |
+| Retention percentage and liability period | Retention step (route `facility`) | Held from each recorded payment; changes apply to later payments. | Decision Q |
+| Payments | Project → Payments | Record interim, final and retention-release payments made outside the platform; void a wrong entry with a reason. Exceptions are flagged, not blocked. | Decision Q |
 
 ---
 
@@ -213,8 +212,7 @@ The catalogue is fixed in code; tenants set targets and visibility only (section
 | M&E | Visits conducted vs planned | Inspection obligations submitted / owed | Yes | ≥ 90% |
 | M&E | Reports submitted on time | Obligations submitted on time / owed | Yes | ≥ 85% |
 | M&E | Average approval turnaround | Days from submission to final approval | Yes | ≤ 5 days |
-| Payments | Payment turnaround | Days from verification to the release decision | Yes | ≤ 14 days |
-| Payments | Financial utilisation | Disbursed / budget (weighted by budget) | No | none |
+| Payments | Financial utilisation | Paid to date (net, from the payment record) / budget (weighted by budget) | No | none |
 | Closure | Verified on time and to specification | CoC completion date ≤ planned end, no major issues in the final evaluation | Yes | ≥ 80% |
 | Closure | Handed over on time after the CoC | Handover milestone done by its due date | Yes | ≥ 90% |
 | Closure | Full closure documentation | Every document item of the closure checklists filed (liability period or closed) | No | ≥ 100% |

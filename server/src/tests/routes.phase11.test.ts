@@ -88,7 +88,7 @@ describe('Phase 11 seed', () => {
     assert.equal(central.lenderOrganizationId, ids.flagship, 'FIXED funder default');
     assert.equal(central.reportingCadence, 'WEEKLY');
     assert.equal(central.workdayStartTime, '07:30');
-    assert.equal(central.processConfig?.disbursementMechanism, 'MILESTONE_DIRECT_DISBURSEMENT');
+    assert.equal(central.processConfig?.requireReportApproval, true, 'template switches copied');
     assert.equal(central.beneficiaries.filter((b) => b.isPrimary).length, 1);
 
     const coFunded = await prisma.project.findUniqueOrThrow({ where: { id: ids['PRG-211'] } });
@@ -96,12 +96,13 @@ describe('Phase 11 seed', () => {
     assert.equal(coFunded.lenderOrganizationId, ids.north, 'OWNER funder default: the subsidiary funds its project');
     assert.equal(coFunded.reportingCadence, 'BI_WEEKLY');
     const steps = await prisma.approvalStep.findMany({
-      where: { projectId: ids['PRG-211'], chainType: 'DISBURSEMENT', isActive: true },
+      where: { projectId: ids['PRG-211'], chainType: 'REPORT', isActive: true },
       orderBy: { stepOrder: 'asc' },
     });
     assert.deepEqual(
       steps.map((s) => s.organizationScope),
-      ['ANY', 'PROJECT_OWNER', 'PROJECT_OWNER_OR_ANCESTOR']
+      ['ANY'],
+      'the template report chain is copied'
     );
     const applied = await prisma.auditLog.count({ where: { projectId: ids['PRG-211'], action: 'PROJECT_TYPE_APPLIED' } });
     assert.equal(applied, 1);
@@ -235,21 +236,55 @@ describe('organisation scope on approval steps', () => {
       roleId: u.roleId,
       roleCode: u.role.code,
       roleName: u.role.name,
-      permissions: [...u.role.rolePermissions.map((rp) => rp.permission.key), 'tranche:approve_disbursement'],
+      permissions: [...u.role.rolePermissions.map((rp) => rp.permission.key), 'reports:approve_completion'],
       organizationId: u.organizationId,
       mustChangePassword: false,
     };
   }
 
+  // Redesign R1b: the disbursement chain is gone; organisation scopes are exercised on a report
+  // chain written for these projects (step 1 ANY, 2 PROJECT_OWNER, 3 PROJECT_OWNER_OR_ANCESTOR;
+  // PRG-102: step 2 FUNDER).
+  const step = (label: string, organizationScope: 'ANY' | 'PROJECT_OWNER' | 'PROJECT_OWNER_OR_ANCESTOR' | 'FUNDER') => ({
+    label,
+    requiredPermissionKey: 'reports:approve_completion',
+    requiredRoleId: null,
+    minAmountThresholdNgn: null,
+    isSystemStep: false,
+    organizationScope,
+  });
+  before(async () => {
+    for (const code of ['PRG-211', 'PRG-221']) {
+      await prisma.$transaction(async (tx) =>
+        processConfig.writeChainVersion(
+          tx,
+          ids[code],
+          'REPORT',
+          [step('Monitor approval', 'ANY'), step('Delivery entity review', 'PROJECT_OWNER'), step('Programme review', 'PROJECT_OWNER_OR_ANCESTOR')],
+          await processConfig.getProcessConfig(ids[code], tx)
+        )
+      );
+    }
+    await prisma.$transaction(async (tx) =>
+      processConfig.writeChainVersion(
+        tx,
+        ids['PRG-102'],
+        'REPORT',
+        [step('Monitor approval', 'ANY'), step('Funding authority review', 'FUNDER')],
+        await processConfig.getProcessConfig(ids['PRG-102'], tx)
+      )
+    );
+  });
+
   async function gate(email: string, code: string, stepOrder: number) {
-    const chainRows = await processConfig.getActiveChain(prisma, ids[code], 'DISBURSEMENT');
+    const chainRows = await processConfig.getActiveChain(prisma, ids[code], 'REPORT');
     const step = chainRows!.steps.find((s) => s.stepOrder === stepOrder)!;
     const orgContext = await chain.orgContextForStep(prisma, ids[code], step);
     return chain.gateForStep({ webUser: await payload(email), step, actions: [], orgContext });
   }
 
   it('a subsidiary approver can act on its own project, not on a sibling’s', async () => {
-    // Step 2 of the Co-Funded chain: PROJECT_OWNER.
+    // Step 2: PROJECT_OWNER.
     assert.equal((await gate(NORTH, 'PRG-211', 2)).allowed, true);
     const sibling = await gate(NORTH, 'PRG-221', 2);
     assert.equal(sibling.allowed, false);
@@ -266,7 +301,7 @@ describe('organisation scope on approval steps', () => {
   });
 
   it('a FUNDER-scoped step follows the funding organisation', async () => {
-    // Central: release step 2 is FUNDER (the flagship funds).
+    // Central: step 2 is FUNDER (the flagship funds).
     assert.equal((await gate(FLAGSHIP, 'PRG-102', 2)).allowed, true);
     assert.equal((await gate(NORTH, 'PRG-102', 2)).allowed, false);
   });
@@ -274,7 +309,7 @@ describe('organisation scope on approval steps', () => {
   it('the chain DTO and template JSON carry the scope', async () => {
     const res = await request(app).get(`/api/v1/projects/${ids['PRG-211']}/process`).set(await login(PROGRAMME_ADMIN));
     assert.equal(res.status, 200, JSON.stringify(res.body));
-    assert.equal(res.body.data.disbursementChain.steps[1].organizationScope, 'PROJECT_OWNER');
+    assert.equal(res.body.data.reportChain.steps[1].organizationScope, 'PROJECT_OWNER');
   });
 });
 
@@ -329,11 +364,8 @@ describe('project types', () => {
     // South is not an allowed Central owner: the Parties step now reports it.
     const parties = draft.body.data.steps.find((s: { stepId: string }) => s.stepId === 'parties');
     assert.ok(parties.issues.some((i: { code: string }) => i.code === 'OWNER_NOT_ALLOWED'), JSON.stringify(parties.issues));
-    const chainSteps = await prisma.approvalStep.findMany({
-      where: { projectId: ids['PRG-201'], chainType: 'DISBURSEMENT', isActive: true },
-      orderBy: { stepOrder: 'asc' },
-    });
-    assert.deepEqual(chainSteps.map((s) => s.organizationScope), ['ANY', 'FUNDER'], 'Central template applied');
+    const config201 = await prisma.projectProcessConfig.findUniqueOrThrow({ where: { projectId: ids['PRG-201'] } });
+    assert.equal(config201.enableHandoverModule, true, 'Central template applied');
 
     const liveSetup = await request(app).get(`/api/v1/projects/${ids['PRG-211']}/setup`).set(h);
     const liveBasics = { ...liveSetup.body.data.basics };
@@ -402,10 +434,8 @@ describe('terminology', () => {
     const programme = profiles[PROGRAMME_ADMIN].terminology as Record<string, { singular: string }>;
     const main = profiles[MAIN_ADMIN].terminology as Record<string, { singular: string }>;
     assert.equal(programme.funderParty.singular, 'Funding authority');
-    assert.equal(programme.tranche.singular, 'Payment milestone');
-    assert.equal(programme.ipc.singular, 'Payment claim');
-    assert.equal(main.funderParty.singular, 'Lender');
-    assert.equal(main.tranche.singular, 'Tranche');
+    assert.equal(main.funderParty.singular, 'Funder');
+    assert.equal(main.contractor.singular, 'Contractor');
 
     // DTO field names and canonical values stay as they were.
     const res = await request(app).get('/api/v1/projects').set(await login(FLAGSHIP));
@@ -422,7 +452,7 @@ describe('terminology', () => {
       .send({ labels: { funderParty: { singular: 'Funding authority' }, retention: { singular: 'Holdback' } } });
     assert.equal(ok.status, 200, JSON.stringify(ok.body));
     assert.equal(ok.body.data.resolved.retention.singular, 'Holdback');
-    assert.equal(ok.body.data.resolved.tranche.singular, 'Tranche', 'omitted keys fall back to the default');
+    assert.equal(ok.body.data.resolved.contractor.singular, 'Contractor', 'omitted keys fall back to the default');
     assert.equal(ok.body.data.resolved.funderParty.plural, 'Funding authority', 'plural defaults to the singular');
     const audit = await prisma.auditLog.count({ where: { action: 'TERMINOLOGY_UPDATED' } });
     assert.equal(audit, 1);
@@ -436,15 +466,15 @@ describe('cross-project web notifications (projectId = all)', () => {
     const { createWebNotification } = await import('../modules/notifications/notifications.service');
     const northNote = await createWebNotification(prisma, {
       projectId: ids['PRG-211'],
-      targetPermissionKey: 'ipc:view',
-      category: 'DISBURSEMENT_PENDING_APPROVAL',
+      targetPermissionKey: 'reports:view_all',
+      category: 'REPORT_PENDING_APPROVAL',
       title: 'North item',
       description: 'For the north entity',
     });
     const southNote = await createWebNotification(prisma, {
       projectId: ids['PRG-221'],
-      targetPermissionKey: 'ipc:view',
-      category: 'DISBURSEMENT_PENDING_APPROVAL',
+      targetPermissionKey: 'reports:view_all',
+      category: 'REPORT_PENDING_APPROVAL',
       title: 'South item',
       description: 'For the south entity',
     });

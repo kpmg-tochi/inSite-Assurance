@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { documentMimeAllowed, type ProjectDocumentDetailDto } from "@insite/shared";
-import { ModalShell } from "../../pages/reconciliation/components/ModalShell";
+import { ModalShell } from "../common/ModalShell";
 import { CustomSelect } from "../common";
 import { useDocumentTypesQuery } from "../../queries/contracts/useContractQueries";
 import { useProjectsQuery } from "../../queries/projects/useProjectsQueries";
@@ -21,7 +21,6 @@ export function DocumentUploadDialog({
   defaultContractorId,
   defaultTitle,
   linkedMilestoneId,
-  linkedConditionPrecedentId,
   newVersionOf,
 }: {
   projectId: string;
@@ -33,7 +32,6 @@ export function DocumentUploadDialog({
   defaultContractorId?: string | null;
   defaultTitle?: string;
   linkedMilestoneId?: string | null;
-  linkedConditionPrecedentId?: string | null;
   newVersionOf?: { id: string; title: string; currentVersion: number; allowedMimeTypes?: string[] };
 }) {
   const typesQuery = useDocumentTypesQuery(false, !newVersionOf);
@@ -88,7 +86,6 @@ export function DocumentUploadDialog({
             note: note.trim() || null,
             projectContractorId: contractorId || null,
             linkedMilestoneId: linkedMilestoneId ?? null,
-            linkedConditionPrecedentId: linkedConditionPrecedentId ?? null,
           },
         });
         onUploaded?.(doc);

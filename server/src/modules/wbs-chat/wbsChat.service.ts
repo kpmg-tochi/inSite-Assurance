@@ -27,7 +27,6 @@ export function serializeReportQuery(row: {
   projectId: string;
   boqItemId: string;
   workdayReportId: string | null;
-  ipcLineItemId: string | null;
   source: string;
   status: string;
   monitorComment: string | null;
@@ -44,7 +43,6 @@ export function serializeReportQuery(row: {
     projectId: row.projectId,
     boqItemId: row.boqItemId,
     workdayReportId: row.workdayReportId,
-    ipcLineItemId: row.ipcLineItemId,
     source: row.source as ReportQuerySource,
     status: row.status as ReportQueryStatus,
     monitorComment: row.monitorComment,
@@ -140,7 +138,6 @@ export async function dispatchReportQueryBundle(
     boqItemId: string;
     wbsCode: string;
     workdayReportId?: string | null;
-    ipcLineItemId?: string | null;
     fieldSessionId?: string | null;
     source: ReportQuerySource;
     monitorComment?: string | null;
@@ -157,7 +154,6 @@ export async function dispatchReportQueryBundle(
       projectId: params.projectId,
       boqItemId: params.boqItemId,
       workdayReportId: params.workdayReportId ?? null,
-      ipcLineItemId: params.ipcLineItemId ?? null,
       raisedByUserId: params.raisedByUserId ?? null,
       source: params.source,
       status: 'OPEN',

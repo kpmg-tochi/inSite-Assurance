@@ -1,141 +1,64 @@
 import React from "react";
-import { Wallet, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Wallet, CheckCircle2, CalendarClock } from "lucide-react";
 import { geofenceModeLabel, type CaptureListItemDto } from "@insite/shared";
-import type { IpcClaimDto, ProjectSummaryDto } from "../../api/types";
-import {
-  formatCompactNaira,
-  formatDateTimeShort,
-  formatNaira,
-} from "../../lib/formatters";
+import type { ProjectSummaryDto } from "../../api/types";
+import { formatCompactNaira, formatDateTimeShort, formatNaira } from "../../lib/formatters";
 import { LiveGeospatialMap } from "../../components/LiveGeospatialMap";
-import { formatReporterRoleBadge } from "../../components/EvidenceBadge";
-import { useAuth } from "../../lib/auth-context";
+import { formatReporterRoleBadge } from "../../components/reporterRole";
+import { useAuth, useTerm } from "../../lib/auth-context";
 import ContractorVerificationQueue from "../../components/ContractorVerificationQueue";
 import { KpiCard } from "../../components/common";
-import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { ScheduleBadge } from "../../components/schedule/ScheduleVarianceBadge";
 import { InspectionOverviewCard } from "../../components/inspections/InspectionOverviewCard";
 import { ProjectKpisCard } from "../../components/kpis/ProjectKpisCard";
 import { NextDeadlinesCard, OpenDefaultCasesCard } from "../../components/contracts/ContractOverviewCards";
 import { DEFAULT_CASE_VIEW_PERMISSIONS, MILESTONE_VIEW_PERMISSIONS } from "../../components/contracts/contractUi";
+import { useProjectPaymentsQuery } from "../../queries/payments/usePaymentsQueries";
 
 interface PortfolioDashboardPageProps {
   project: ProjectSummaryDto;
   evidenceLogs: CaptureListItemDto[];
-  latestIpc: IpcClaimDto | null;
-  onNavigateToReconciliation: () => void;
 }
 
-export function PortfolioDashboardPage({
-  project,
-  evidenceLogs,
-  latestIpc,
-  onNavigateToReconciliation,
-}: PortfolioDashboardPageProps) {
+/** The project overview: map, headline figures, deadlines, inspections, KPIs and recent capture. */
+export function PortfolioDashboardPage({ project, evidenceLogs }: PortfolioDashboardPageProps) {
   const { hasPermission, hasAnyPermission } = useAuth();
-  // Phase 7: hide modules the project's process turned off.
-  const processQuery = useProjectProcess(project.id);
-  const tranchesOn = processQuery.data?.config.enableTranchesAndCps ?? true;
-  const holdPointsOn = processQuery.data?.config.enableHoldPoints ?? true;
-
-  const activeTranche =
-    project.tranches.find((t) => !t.isReleased) || project.tranches[0] || null;
-
-  const satisfiedCpCount = activeTranche
-    ? activeTranche.conditionsPrecedent.filter(
-        (cp) => cp.status === "SATISFIED" || cp.status === "WAIVED",
-      ).length
-    : 0;
-  const totalCpCount = activeTranche
-    ? activeTranche.conditionsPrecedent.length
-    : 0;
+  const term = useTerm();
+  const canSeePayments = hasPermission("payments:view") || hasPermission("payments:record");
+  const payments = useProjectPaymentsQuery(project.id, canSeePayments);
 
   // Newest capture that is part of a submitted report.
   const latestConfirmedLog = evidenceLogs.find((c) => c.workdayReportId !== null) || null;
   const signedCount = evidenceLogs.filter((c) => c.signatureVerified === true).length;
-
-  const isContractorOnly =
-    hasPermission("ipc:submit_claim") && !hasPermission("ipc:certify_valuation");
-  const isLenderApprover =
-    hasPermission("tranche:approve_disbursement") &&
-    !hasPermission("ipc:certify_valuation");
-
-  const actionButtonLabel = isLenderApprover
-    ? "Review Tranche Release"
-    : isContractorOnly
-      ? "Manage IPC Claims"
-      : "Review IPC";
+  const paidPct = project.totalBudgetNgn > 0 ? ((project.disbursedToDateNgn / project.totalBudgetNgn) * 100).toFixed(1) : "0.0";
 
   return (
     <div className="space-y-3">
-      {/* 1. Top ~50% Viewport Live Geospatial Map */}
       <LiveGeospatialMap project={project} evidenceLogs={evidenceLogs} />
 
-      {/* 2. Minimal 3-Column Standard KPI Card Strip */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <KpiCard
           icon={<Wallet className="w-4 h-4" />}
           iconVariant="blue"
-          title={
-            isContractorOnly
-              ? "Contract Value & Drawdowns"
-              : "Project Commitment"
-          }
+          title="Budget"
           value={formatCompactNaira(project.totalBudgetNgn)}
-          subtitle={`${formatCompactNaira(project.disbursedToDateNgn)} Disbursed (${
-            project.totalBudgetNgn > 0
-              ? (
-                  (project.disbursedToDateNgn / project.totalBudgetNgn) *
-                  100
-                ).toFixed(1)
-              : "0.0"
-          }%)`}
+          subtitle={`${formatCompactNaira(project.disbursedToDateNgn)} paid (${paidPct}%)`}
         />
-
         <KpiCard
           icon={<CheckCircle2 className="w-4 h-4" />}
           iconVariant="emerald"
-          title="Verified Progress"
+          title="Progress"
           value={`${project.certifiedProgressPct.toFixed(1)}%`}
           badge={<ScheduleBadge badge={project.scheduleVariance} size="xs" />}
-          subtitle={
-            latestIpc
-              ? `Latest Claim: IPC #${String(latestIpc.ipcNumber).padStart(
-                  2,
-                  "0",
-                )} (${formatCompactNaira(latestIpc.totalClaimedAmountNgn)})`
-              : "Baseline established"
-          }
+          subtitle="From approved field reports"
         />
-
         <KpiCard
-          icon={<AlertTriangle className="w-4 h-4" />}
+          icon={<CalendarClock className="w-4 h-4" />}
           iconVariant="amber"
-          title={
-            isContractorOnly
-              ? "Open Monitor Queries"
-              : "Reconciliation Alerts"
-          }
-          value={`${project.openConflictCount} ${
-            isContractorOnly ? "Open Query" : "Conflict"
-          }${project.openConflictCount === 1 ? "" : "s"}`}
-          subtitle={
-            holdPointsOn ? (
-              <span className="text-amber-700 font-medium">
-                {project.unfulfilledHoldPointCount} Unfulfilled Hold-Point
-                {project.unfulfilledHoldPointCount === 1 ? "" : "s"}
-              </span>
-            ) : undefined
-          }
-          action={
-            <button
-              type="button"
-              onClick={onNavigateToReconciliation}
-              className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-brand-primary transition"
-            >
-              {actionButtonLabel}
-            </button>
-          }
+          title="Overdue contract milestones"
+          value={project.overdueMilestoneCount ?? 0}
+          subtitle="Kick-off, mobilisation and other contract deadlines"
         />
       </div>
 
@@ -275,72 +198,38 @@ export function PortfolioDashboardPage({
           </div>
         </div>
 
-        {/* Card C: Tranche Readiness & CPs */}
+        {/* Card C: payments (recorded; made outside the platform) */}
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
-              <div className="text-xs font-bold text-slate-900">
-                {tranchesOn ? "Active Project Tranche Readiness" : "Release Readiness"}
-              </div>
-              {activeTranche && tranchesOn && (
-                <span className="text-[10px] font-bold text-brand-primary bg-brand-primary/5 px-2 py-0.5 rounded">
-                  Tranche #{activeTranche.trancheNumber}
-                </span>
+              <div className="text-xs font-bold text-slate-900">Payments</div>
+              {canSeePayments && (
+                <Link to={`/app/projects/${project.id}/payments`} className="text-[11px] font-semibold text-brand-primary hover:underline">
+                  Open
+                </Link>
               )}
             </div>
-            {activeTranche ? (
-              <div className="mt-2.5 space-y-2.5">
-                <div>
-                  <div className="text-xs font-semibold text-slate-800">
-                    {activeTranche.name}
-                  </div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">
-                    Allocation: {formatNaira(activeTranche.allocatedAmountNgn)}{" "}
-                    · Target: {activeTranche.targetCompletionPct}%
-                  </div>
+            {!canSeePayments ? (
+              <p className="text-xs text-slate-400 mt-4">Payment details are visible to finance and monitoring staff.</p>
+            ) : payments.data ? (
+              <div className="mt-2.5 space-y-2 text-xs">
+                <div className="flex justify-between py-1 border-b border-slate-100">
+                  <span className="text-slate-500">Paid to date</span>
+                  <span className="font-semibold text-slate-800">{formatNaira(payments.data.paidGrossNgn)}</span>
                 </div>
-                {tranchesOn && <div className="space-y-1.5">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-500">
-                      Conditions Precedent Satisfied
-                    </span>
-                    <span className="font-semibold text-slate-800">
-                      {satisfiedCpCount} / {totalCpCount} CPs
-                    </span>
-                  </div>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                    <div
-                      style={{
-                        width: `${
-                          totalCpCount > 0
-                            ? Math.round(
-                                (satisfiedCpCount / totalCpCount) * 100,
-                              )
-                            : 100
-                        }%`,
-                      }}
-                      className="h-full bg-brand-primary rounded-full"
-                    />
-                  </div>
-                </div>}
-                <div className="pt-1 flex items-center justify-between text-[11px]">
-                  <span className="text-slate-500">
-                    Holdback Recommendation
-                  </span>
-                  <span className="font-semibold text-amber-700">
-                    {latestIpc?.valuationReport
-                      ? formatCompactNaira(
-                          latestIpc.valuationReport
-                            .recommendedHoldbackAmountNgn,
-                        )
-                      : "Pending Valuation"}
+                <div className="flex justify-between py-1 border-b border-slate-100">
+                  <span className="text-slate-500">{term("retention")} held now</span>
+                  <span className="font-semibold text-slate-800">{formatNaira(payments.data.retentionBalanceNgn)}</span>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-slate-500">Exceptions</span>
+                  <span className={`font-semibold ${payments.data.exceptionCount > 0 ? "text-amber-700" : "text-slate-800"}`}>
+                    {payments.data.exceptionCount}
                   </span>
                 </div>
               </div>
             ) : (
-              <p className="text-xs text-slate-400 mt-4">
-                No project tranches configured.
-              </p>
+              <p className="text-xs text-slate-400 mt-4">Loading…</p>
             )}
           </div>
         </div>

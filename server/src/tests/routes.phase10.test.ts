@@ -25,7 +25,6 @@ let jobs: typeof import('../jobs');
 const PASSWORD = 'Password123!';
 const MONITOR = 'monitor@insite.ng'; // licensed certifier, edit_baseline, handover links, manage defects
 const LENDER = 'lender@insite.ng'; // approve disbursement, release escrow, review handover feedback
-const LTO = 'lto@insite.ng'; // certify + approve (segregation of duties demo)
 const CONTRACTOR = 'contractor@insite.ng'; // contractor org of OGN-501 / KWR-502, manage defects
 
 const tokens: Record<string, string> = {};
@@ -37,7 +36,6 @@ const ids = {
   kan: '',
   kwrMain: '',
   kwrOther: '',
-  kwrTranche2: '',
   kwrTicket1: '',
   kwrTicket2: '',
   kwrTicket3: '',
@@ -65,37 +63,6 @@ function lastCode(to: string): string {
   const msg = [...consoleOutbox].reverse().find((m) => m.to === to && m.rendered.subject.includes('Your code'));
   assert.ok(msg, `no code email to ${to}`);
   return /(\d{6})/.exec(msg!.rendered.subject)![1];
-}
-
-/** A pre-chain direct valuation (Phase 3 rules) ready for a lender decision. */
-async function directValuation(projectIdValue: string, trancheId: string, recommended: number, lines: Array<{ boqItemId: string; verifiedAmountNgn: number }> = []) {
-  const verification = await prisma.milestoneVerification.create({
-    data: {
-      projectId: projectIdValue,
-      trancheId,
-      verifiedByUserId: ids.monitorUser,
-      verificationSummary: 'Test fixture verification',
-      lineVerificationsJson: lines,
-    },
-  });
-  return prisma.valuationReport.create({
-    data: {
-      projectId: projectIdValue,
-      trancheId,
-      source: 'MILESTONE_DIRECT',
-      milestoneVerificationId: verification.id,
-      certifiedByUserId: ids.monitorUser,
-      trancheRecommendation: 'SUPPORT_FULL_RELEASE',
-      recommendedReleaseAmountNgn: recommended,
-      recommendedHoldbackAmountNgn: 0,
-      totalClaimedNgn: recommended,
-      totalCertifiedNgn: recommended,
-      executiveCertificationSummary: 'Test fixture valuation',
-      certifierFullName: 'Monitor',
-      certifierLicenseType: 'QSRBN',
-      certifierLicenseNumber: 'T-1',
-    },
-  });
 }
 
 /** A join-code field session on a project (the origin CHECK needs a join code). */
@@ -184,11 +151,6 @@ before(async () => {
       data: { projectId: ids.kwr, organizationId: org.id, tradeCategory: 'Electrical', tradeCode: 'ELE' },
     })
   ).id;
-  ids.kwrTranche2 = (
-    await prisma.facilityTranche.create({
-      data: { projectId: ids.kwr, trancheNumber: 2, name: 'Tranche 2 — Final account', allocatedAmountNgn: 50_000_000, targetCompletionPct: 100 },
-    })
-  ).id;
 });
 
 after(async () => {
@@ -204,11 +166,6 @@ describe('Phase 10: module switches', () => {
       const res = await request(app).get(`/api/v1/projects/${ids.abj}${path}`).set(path === '/retention' ? lender : monitor);
       assert.equal(res.status, 404, `${path}: ${JSON.stringify(res.body)}`);
     }
-    const release = await request(app)
-      .post(`/api/v1/projects/${ids.abj}/retention/release-request`)
-      .set(lender)
-      .send({ projectContractorId: crypto.randomUUID(), stage: 'FINAL' });
-    assert.equal(release.status, 404);
     const link = await request(app).post(`/api/v1/projects/${ids.abj}/handover/links`).set(monitor).send({
       label: 'x1',
       recipientName: 'Someone',
@@ -543,87 +500,6 @@ describe('Phase 10: public handover endpoints', () => {
   });
 });
 
-describe('Phase 10: retention accrual', () => {
-  const decisionUrl = () => `/api/v1/projects/${ids.kwr}/tranches/${ids.kwrTranche2}/decision`;
-
-  it('withholds retention on three releases and reverses it with a reversal', async () => {
-    const lender = await web(LENDER);
-    const v1 = await directValuation(ids.kwr, ids.kwrTranche2, 10_000_000);
-    const d1 = await request(app).post(decisionUrl()).set(lender).send({ valuationReportId: v1.id, decision: 'APPROVE_FULL' });
-    assert.equal(d1.status, 200, JSON.stringify(d1.body));
-    assert.equal(d1.body.data.retentionWithheldNgn, 500_000);
-    assert.equal(d1.body.data.netReleasedNgn, 9_500_000);
-
-    const v2 = await directValuation(ids.kwr, ids.kwrTranche2, 3_333_333.33);
-    const d2 = await request(app).post(decisionUrl()).set(lender).send({ valuationReportId: v2.id, decision: 'APPROVE_FULL' });
-    assert.equal(d2.body.data.retentionWithheldNgn, 166_666.67);
-
-    const v3 = await directValuation(ids.kwr, ids.kwrTranche2, 2_000_000);
-    const d3 = await request(app)
-      .post(decisionUrl())
-      .set(lender)
-      .send({ valuationReportId: v3.id, decision: 'APPROVE_WITH_HOLDBACK', approvedDisbursementAmountNgn: 1_000_000.01 });
-    assert.equal(d3.status, 200, JSON.stringify(d3.body));
-    assert.equal(d3.body.data.retentionWithheldNgn, 50_000);
-    assert.equal(d3.body.data.netReleasedNgn, 950_000.01);
-
-    let project = await prisma.project.findUniqueOrThrow({ where: { id: ids.kwr } });
-    assert.equal(num(project.retentionHeldNgn), 13_216_666.67);
-    assert.equal(num(project.disbursedToDateNgn), 251_116_666.67);
-
-    const reversed = await request(app)
-      .post(`/api/v1/projects/${ids.kwr}/tranche-decisions/${d2.body.data.id}/reverse`)
-      .set(lender)
-      .send({ reason: 'Valuation 2 raised against the wrong account.' });
-    assert.equal(reversed.status, 201, JSON.stringify(reversed.body));
-    assert.equal(reversed.body.data.retentionWithheldNgn, -166_666.67);
-
-    project = await prisma.project.findUniqueOrThrow({ where: { id: ids.kwr } });
-    const main = await prisma.projectContractor.findUniqueOrThrow({ where: { id: ids.kwrMain } });
-    const tranche = await prisma.facilityTranche.findUniqueOrThrow({ where: { id: ids.kwrTranche2 } });
-    assert.equal(num(project.retentionHeldNgn), 13_050_000);
-    assert.equal(num(main.retentionHeldNgn), 13_050_000);
-    assert.equal(num(project.disbursedToDateNgn), 247_950_000.01);
-    assert.equal(num(tranche.releasedAmountNgn), 11_000_000.01, 'the tranche records the full approved amount');
-    assert.equal(await prisma.auditLog.count({ where: { projectId: ids.kwr, action: 'RETENTION_WITHHELD' } }), 1 + 3);
-
-    const pdf = await request(app).get(`/api/v1/projects/${ids.kwr}/valuations/${v1.id}/valuation-report.pdf`).set(lender);
-    assert.equal(pdf.status, 200);
-  });
-
-  it('splits retention per contractor in multi-prime', async () => {
-    await prisma.projectProcessConfig.update({ where: { projectId: ids.kan }, data: { enableRetentionModule: true } });
-    await prisma.project.update({ where: { id: ids.kan }, data: { retentionPercentage: 10, retentionDurationMonths: 12 } });
-    const items = await prisma.boqItem.findMany({ where: { projectId: ids.kan, projectContractorId: { not: null } }, orderBy: { wbsCode: 'asc' } });
-    const a = items[0];
-    const b = items.find((i) => i.projectContractorId !== a.projectContractorId)!;
-    assert.ok(b, 'KAN-210 has items of two contractors');
-    const tranche = await prisma.facilityTranche.create({
-      data: { projectId: ids.kan, trancheNumber: 99, name: 'Test tranche', allocatedAmountNgn: 10_000_000, targetCompletionPct: 100 },
-    });
-    const v = await directValuation(ids.kan, tranche.id, 1_000_000, [
-      { boqItemId: a.id, verifiedAmountNgn: 600_000 },
-      { boqItemId: b.id, verifiedAmountNgn: 400_000 },
-    ]);
-    const before = await prisma.project.findUniqueOrThrow({ where: { id: ids.kan } });
-    const res = await request(app)
-      .post(`/api/v1/projects/${ids.kan}/tranches/${tranche.id}/decision`)
-      .set(await web(LENDER))
-      .send({ valuationReportId: v.id, decision: 'APPROVE_FULL' });
-    assert.equal(res.status, 200, JSON.stringify(res.body));
-    assert.equal(res.body.data.retentionWithheldNgn, 100_000);
-    const [ca, cb] = await Promise.all([
-      prisma.projectContractor.findUniqueOrThrow({ where: { id: a.projectContractorId! } }),
-      prisma.projectContractor.findUniqueOrThrow({ where: { id: b.projectContractorId! } }),
-    ]);
-    assert.equal(num(ca.retentionHeldNgn), 60_000);
-    assert.equal(num(cb.retentionHeldNgn), 40_000);
-    const after = await prisma.project.findUniqueOrThrow({ where: { id: ids.kan } });
-    assert.equal(num(after.retentionHeldNgn), 100_000);
-    assert.equal(num(after.disbursedToDateNgn) - num(before.disbursedToDateNgn), 900_000);
-  });
-});
-
 describe('Phase 10: defect tickets', () => {
   it('contractors see and update only their own tickets', async () => {
     const monitor = await web(MONITOR);
@@ -710,116 +586,20 @@ describe('Phase 10: defect tickets', () => {
   });
 });
 
-describe('Phase 10: retention release', () => {
-  const base = () => `/api/v1/projects/${ids.kwr}/retention`;
-
-  it('releases half at practical completion through the chain, with segregation of duties', async () => {
-    const lender = await web(LENDER);
-    const lto = await web(LTO);
-    const early = await request(app).post(`${base()}/release-request`).set(lender).send({ projectContractorId: ids.kwrMain, stage: 'FINAL' });
-    assert.equal(early.status, 409, 'before the end date');
-    assert.equal(early.body.error.code, 'RETENTION_RELEASE_PRECONDITIONS_UNMET');
-
-    const req1 = await request(app).post(`${base()}/release-request`).set(lender).send({ projectContractorId: ids.kwrMain, stage: 'COMPLETION' });
-    assert.equal(req1.status, 201, JSON.stringify(req1.body));
-    assert.equal(req1.body.data.amountNgn, 6_525_000);
-    const dup = await request(app).post(`${base()}/release-request`).set(lender).send({ projectContractorId: ids.kwrMain, stage: 'COMPLETION' });
-    assert.equal(dup.status, 409);
-
-    const byLender = await request(app).post(`${base()}/release-requests/${req1.body.data.id}/certify`).set(lender).send({
-      executiveCertificationSummary: 'Practical completion reached; half of retention due.',
-      certifierDigitalSignatureAck: true,
-    });
-    assert.equal(byLender.status, 403);
-    const certified = await request(app).post(`${base()}/release-requests/${req1.body.data.id}/certify`).set(lto).send({
-      executiveCertificationSummary: 'Practical completion reached; half of retention due.',
-      certifierDigitalSignatureAck: true,
-    });
-    assert.equal(certified.status, 200, JSON.stringify(certified.body));
-    const valuation = certified.body.data.valuation;
-    assert.equal(valuation.source, 'RETENTION_RELEASE');
-    assert.equal(valuation.approval.currentStepOrder, 2);
-
-    const self = await request(app).post(`${base()}/valuations/${valuation.id}/decision`).set(lto).send({ decision: 'APPROVE_FULL' });
-    assert.equal(self.status, 403);
-    assert.equal(self.body.error.code, 'SEGREGATION_OF_DUTIES');
-    const released = await request(app).post(`${base()}/valuations/${valuation.id}/decision`).set(lender).send({ decision: 'APPROVE_FULL' });
-    assert.equal(released.status, 200, JSON.stringify(released.body));
-    assert.equal(released.body.data.retentionWithheldNgn, 0);
-
-    const project = await prisma.project.findUniqueOrThrow({ where: { id: ids.kwr } });
-    assert.equal(num(project.retentionHeldNgn), 6_525_000);
-    assert.equal(num(project.retentionReleasedNgn), 6_525_000);
-    assert.equal(num(project.disbursedToDateNgn), 254_475_000.01);
-    const tranche = await prisma.facilityTranche.findUniqueOrThrow({ where: { id: ids.kwrTranche2 } });
-    assert.equal(num(tranche.releasedAmountNgn), 11_000_000.01, 'retention releases never touch a tranche');
-    const summary = await request(app).get(base()).set(lender);
-    const main = summary.body.data.contractors.find((c: { projectContractorId: string }) => c.projectContractorId === ids.kwrMain);
-    assert.equal(main.stages.find((s: { stage: string }) => s.stage === 'COMPLETION').allowed, false);
-  });
-
-  it('final release needs the period to end and no open ticket, re-checked at release', async () => {
-    const lender = await web(LENDER);
-    const monitor = await web(MONITOR);
-    await prisma.project.update({ where: { id: ids.kwr }, data: { retentionEndDate: '2020-01-01' } });
-    const req2 = await request(app).post(`${base()}/release-request`).set(lender).send({ projectContractorId: ids.kwrMain, stage: 'FINAL' });
-    assert.equal(req2.status, 201, JSON.stringify(req2.body));
-    assert.equal(req2.body.data.amountNgn, 6_525_000);
-    const certified = await request(app).post(`${base()}/release-requests/${req2.body.data.id}/certify`).set(monitor).send({
-      executiveCertificationSummary: 'Liability period over; defects closed.',
-      certifierDigitalSignatureAck: true,
-    });
-    assert.equal(certified.status, 200, JSON.stringify(certified.body));
-
-    const late = await request(app).post(`/api/v1/projects/${ids.kwr}/defects`).set(monitor).send({
-      title: 'Drain blocked',
-      description: 'Side drain blocked with silt near km 2.',
-    });
-    assert.equal(late.status, 201);
-    const blocked = await request(app).post(`${base()}/valuations/${certified.body.data.valuation.id}/decision`).set(lender).send({ decision: 'APPROVE_FULL' });
-    assert.equal(blocked.status, 409);
-    assert.equal(blocked.body.error.code, 'RETENTION_RELEASE_PRECONDITIONS_UNMET');
-    const rejected = await request(app)
-      .post(`/api/v1/projects/${ids.kwr}/defects/${late.body.data.id}/reject`)
-      .set(monitor)
-      .send({ reason: 'Routine maintenance, not a defect.' });
-    assert.equal(rejected.body.data.status, 'REJECTED_NOT_A_DEFECT');
-
-    const released = await request(app).post(`${base()}/valuations/${certified.body.data.valuation.id}/decision`).set(lender).send({ decision: 'APPROVE_FULL' });
-    assert.equal(released.status, 200, JSON.stringify(released.body));
-    const project = await prisma.project.findUniqueOrThrow({ where: { id: ids.kwr } });
-    assert.equal(num(project.retentionHeldNgn), 0);
-    assert.equal(num(project.retentionReleasedNgn), 13_050_000);
-    assert.equal(await prisma.auditLog.count({ where: { projectId: ids.kwr, action: 'RETENTION_RELEASED' } }), 2);
-
-    const closed = await request(app).post(`/api/v1/projects/${ids.kwr}/phase`).set(monitor).send({ to: 'COMPLETED_CLOSED' });
-    assert.equal(closed.status, 200, JSON.stringify(closed.body));
-    assert.equal(closed.body.data.phase, 'COMPLETED_CLOSED');
-  });
-});
-
 describe('Phase 10: retention settings', () => {
   it('saves retention on the facility step and requires a liability period', async () => {
     const monitor = await web(MONITOR);
     const setup = await request(app).get(`/api/v1/projects/${ids.ogn}/setup`).set(monitor);
     assert.equal(setup.status, 200);
-    const tranches = setup.body.data.facility.tranches.map((t: Record<string, unknown>) => ({
-      id: t.id,
-      trancheNumber: t.trancheNumber,
-      name: t.name,
-      allocatedAmountNgn: t.allocatedAmountNgn,
-      targetCompletionPct: t.targetCompletionPct,
-      conditionsPrecedent: [],
-    }));
     const missing = await request(app)
       .put(`/api/v1/projects/${ids.ogn}/setup/facility`)
       .set(monitor)
-      .send({ tranches, retention: { retentionPercentage: 7.5, retentionDurationMonths: null } });
+      .send({ retention: { retentionPercentage: 7.5, retentionDurationMonths: null } });
     assert.equal(missing.status, 422, JSON.stringify(missing.body));
     const saved = await request(app)
       .put(`/api/v1/projects/${ids.ogn}/setup/facility`)
       .set(monitor)
-      .send({ tranches, retention: { retentionPercentage: 7.5, retentionDurationMonths: 6, retentionReleaseAtCompletionPct: 0 } });
+      .send({ retention: { retentionPercentage: 7.5, retentionDurationMonths: 6, retentionReleaseAtCompletionPct: 0 } });
     assert.equal(saved.status, 200, JSON.stringify(saved.body));
     const project = await prisma.project.findUniqueOrThrow({ where: { id: ids.ogn } });
     assert.equal(num(project.retentionPercentage), 7.5);

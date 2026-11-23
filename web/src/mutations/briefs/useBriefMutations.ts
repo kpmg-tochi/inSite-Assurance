@@ -11,7 +11,6 @@ export const useGenerateMorningBriefMutation = (projectId: string) => {
       generateMorningBrief(projectId, args.boqItemId, args.persona),
     onSuccess: (brief) => {
       queryClient.invalidateQueries({ queryKey: morningBriefsKey(projectId, brief.targetPersona) });
-      if (!brief.generatedByAi) toast.info('Brief prepared from the template (AI provider unavailable).');
     },
     onError: (err) => toast.error((err as { message?: string })?.message || 'Could not prepare the brief.'),
   });

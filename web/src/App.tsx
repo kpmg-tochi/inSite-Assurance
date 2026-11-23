@@ -5,7 +5,6 @@ import {
   Routes,
   useLocation,
   useMatch,
-  useSearchParams,
 } from "react-router-dom";
 import { useAuth } from "./lib/auth-context";
 import { useGuardedNavigate } from "./lib/navigationGuard";
@@ -16,7 +15,6 @@ import { HomePage } from "./pages/public/HomePage";
 import { AboutPage } from "./pages/public/AboutPage";
 import { MobileAppPage } from "./pages/public/MobileAppPage";
 import { PortfolioDashboardPage } from "./pages/dashboard/PortfolioDashboardPage";
-import { PortfolioExecutivePage } from "./pages/dashboard/PortfolioExecutivePage";
 import { PortfolioOverviewPage } from "./pages/dashboard/PortfolioOverviewPage";
 import { ProjectClosurePage } from "./pages/closure/ProjectClosurePage";
 import { LessonsLibraryPage } from "./pages/lessons/LessonsLibraryPage";
@@ -25,7 +23,7 @@ import { OrganizationRatingsPage } from "./pages/organizations/OrganizationRatin
 import { ProjectsDirectoryPage } from "./pages/projects/ProjectsDirectoryPage";
 import { NewProjectPage } from "./pages/projects/setup/NewProjectPage";
 import { ProjectSetupShell } from "./pages/projects/setup/ProjectSetupShell";
-import { ReconciliationWorkbenchPage } from "./pages/reconciliation/ReconciliationWorkbenchPage";
+import { ProjectPaymentsPage } from "./pages/payments/ProjectPaymentsPage";
 import { BoqAndHoldPointsPage } from "./pages/boq/BoqAndHoldPointsPage";
 import { AuditLedgerPage } from "./pages/audit/AuditLedgerPage";
 import { ProjectSchedulePage } from "./pages/schedule/ProjectSchedulePage";
@@ -44,8 +42,6 @@ import { Toaster } from "sonner";
 import { useProjectsQuery } from "./queries/projects/useProjectsQueries";
 import { useProjectBoqQuery } from "./queries/boq/useBoqQueries";
 import { useProjectEvidenceQuery } from "./queries/evidence/useEvidenceQueries";
-import { useProjectIpcsQuery } from "./queries/reconciliation/useReconciliationQueries";
-import { useDownloadValuationPdfMutation } from "./mutations/reconciliation/useReconciliationMutations";
 import { APPLICATION_NAME } from "./config/appName";
 
 function ProjectSetupRedirect({ mode }: { mode: "setup" | "settings" }) {
@@ -65,11 +61,9 @@ function AuthenticatedWorkspace() {
   const { user, isLoading: authLoading, hasPermission } = useAuth();
   const canViewBoq = hasPermission("boq:view");
   const canViewReports = hasPermission("reports:view_all");
-  const canViewIpcs = hasPermission("ipc:view");
   // Asks to save first when the setup wizard has unsaved changes (Phase 6).
   const navigate = useGuardedNavigate();
   const location = useLocation();
-  const [searchParams, setSearchParams] = useSearchParams();
   const projectMatch = useMatch("/app/projects/:projectId/*");
   const urlProjectId =
     projectMatch?.params.projectId && projectMatch.params.projectId !== "new"
@@ -79,7 +73,6 @@ function AuthenticatedWorkspace() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     null,
   );
-  const [selectedIpcId, setSelectedIpcId] = useState<string | null>(null);
 
   const projectsQuery = useProjectsQuery(Boolean(user));
   const projects = projectsQuery.data || [];
@@ -111,48 +104,10 @@ function AuthenticatedWorkspace() {
     activeProject?.id,
     Boolean(user && activeProject?.id && canViewReports),
   );
-  const ipcsQuery = useProjectIpcsQuery(
-    activeProject?.id,
-    Boolean(user && activeProject?.id && canViewIpcs),
-  );
-
-  const ipcs = ipcsQuery.data || [];
-  const urlIpcId = searchParams.get("ipc");
-
-  useEffect(() => {
-    if (ipcs.length > 0) {
-      if (urlIpcId && ipcs.some((i) => i.id === urlIpcId)) {
-        if (selectedIpcId !== urlIpcId) {
-          setSelectedIpcId(urlIpcId);
-        }
-        return;
-      }
-      const stillValid = ipcs.some((i) => i.id === selectedIpcId);
-      if (!stillValid) {
-        setSelectedIpcId(ipcs[0].id);
-      }
-    } else {
-      setSelectedIpcId(null);
-    }
-  }, [ipcs, selectedIpcId, urlIpcId]);
-
-  const selectedIpc =
-    ipcs.find((i) => i.id === selectedIpcId) || ipcs[0] || null;
-  const pdfMutation = useDownloadValuationPdfMutation(activeProject?.id);
-
-  const handleSelectIpc = (ipcId: string) => {
-    setSelectedIpcId(ipcId);
-    if (location.pathname.includes("/reconciliation")) {
-      const next = new URLSearchParams(searchParams);
-      next.set("ipc", ipcId);
-      setSearchParams(next, { replace: true });
-    }
-  };
-
   const handleSelectProject = (projectId: string) => {
     setSelectedProjectId(projectId);
     const subRouteMatch = location.pathname.match(
-      /\/app\/projects\/[^/]+\/(dashboard|reconciliation|boq|audit|schedule|handover|retention|documents|milestones|kickoff|closure)/,
+      /\/app\/projects\/[^/]+\/(dashboard|payments|boq|audit|schedule|handover|retention|documents|milestones|kickoff|closure|inspections)/,
     );
     const subRoute = subRouteMatch?.[1] || "dashboard";
     const safeSubRoute =
@@ -190,16 +145,6 @@ function AuthenticatedWorkspace() {
 
   const headerActions = (
     <>
-      {onProjectPage && selectedIpc && activeProject && hasPermission("valuation:export_pdf") && (
-        <button
-          type="button"
-          disabled={pdfMutation.isPending}
-          onClick={() => pdfMutation.mutate(selectedIpc.id)}
-          className="px-3.5 py-2 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition shadow-sm backdrop-blur-sm"
-        >
-          {pdfMutation.isPending ? "Exporting..." : "Export Valuation PDF"}
-        </button>
-      )}
       {onProjectPage && !onProjectSetup && activeProject && hasPermission("projects:edit_baseline") && (
         <button
           type="button"
@@ -230,7 +175,6 @@ function AuthenticatedWorkspace() {
       projects={projects}
       selectedProject={activeProject}
       onSelectProject={handleSelectProject}
-      openConflictBadgeCount={activeProject?.openConflictCount ?? 0}
       headerActions={headerActions}
     >
       <Routes>
@@ -296,19 +240,7 @@ function AuthenticatedWorkspace() {
           }
         />
         <Route path="organizations/:organizationId/ratings" element={<OrganizationRatingsPage />} />
-        <Route
-          path="executive"
-          element={
-            <RequirePermission anyOf={["projects:view_executive_matrix"]} backTo={projectHome}>
-              <PortfolioExecutivePage
-                onSelectProject={(projectId) => {
-                  setSelectedProjectId(projectId);
-                  navigate(`/app/projects/${projectId}/dashboard`);
-                }}
-              />
-            </RequirePermission>
-          }
-        />
+        <Route path="executive" element={<Navigate to="/app/portfolio" replace />} />
 
         {activeProject ? (
           <>
@@ -323,24 +255,14 @@ function AuthenticatedWorkspace() {
                 <PortfolioDashboardPage
                   project={activeProject}
                   evidenceLogs={evidenceQuery.data || []}
-                  latestIpc={selectedIpc}
-                  onNavigateToReconciliation={() =>
-                    navigate(`/app/projects/${activeProject.id}/reconciliation`)
-                  }
                 />
               }
             />
             <Route
-              path="projects/:projectId/reconciliation"
+              path="projects/:projectId/payments"
               element={
-                <RequirePermission anyOf={["ipc:view"]} backTo={projectHome}>
-                  <ReconciliationWorkbenchPage
-                    project={activeProject}
-                    ipcs={ipcs}
-                    selectedIpc={selectedIpc}
-                    onSelectIpc={handleSelectIpc}
-                    boqItems={boqQuery.data || []}
-                  />
+                <RequirePermission anyOf={["payments:view", "payments:record"]} backTo={projectHome}>
+                  <ProjectPaymentsPage project={activeProject} />
                 </RequirePermission>
               }
             />
@@ -375,7 +297,7 @@ function AuthenticatedWorkspace() {
               path="projects/:projectId/retention"
               element={
                 <RequirePermission
-                  anyOf={["retention:manage_defects", "retention:release_escrow", "ipc:certify_valuation", "tranche:approve_disbursement", "audit:view_ledger"]}
+                  anyOf={["retention:manage_defects", "payments:view", "payments:record", "audit:view_ledger"]}
                   backTo={projectHome}
                 >
                   <RetentionDefectsPage project={activeProject} />
@@ -428,15 +350,6 @@ function AuthenticatedWorkspace() {
 
             {/* Legacy non-scoped route redirects */}
             <Route path="dashboard" element={<Navigate to={projectHome} replace />} />
-            <Route
-              path="reconciliation"
-              element={
-                <Navigate
-                  to={`/app/projects/${activeProject.id}/reconciliation${location.search}`}
-                  replace
-                />
-              }
-            />
             <Route
               path="boq"
               element={<Navigate to={`/app/projects/${activeProject.id}/boq`} replace />}
@@ -525,14 +438,6 @@ export function App() {
         <Route
           path="/dashboard"
           element={<Navigate to="/app/dashboard" replace />}
-        />
-        <Route
-          path="/executive"
-          element={<Navigate to="/app/executive" replace />}
-        />
-        <Route
-          path="/reconciliation"
-          element={<Navigate to="/app/reconciliation" replace />}
         />
         <Route path="/boq" element={<Navigate to="/app/boq" replace />} />
         <Route path="/audit" element={<Navigate to="/app/audit" replace />} />

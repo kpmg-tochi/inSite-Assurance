@@ -27,7 +27,7 @@ const ROLE_WITH_PERMISSIONS = {
 
 export const MOBILE_USER_INCLUDE = {
   tenant: {
-    select: { status: true, evidenceRatingLabels: true, terminologyLabels: true, name: true, brandingConfig: true, defaultCurrency: true },
+    select: { status: true, terminologyLabels: true, name: true, brandingConfig: true, defaultCurrency: true },
   },
   organization: { select: { name: true } },
   role: ROLE_WITH_PERMISSIONS,

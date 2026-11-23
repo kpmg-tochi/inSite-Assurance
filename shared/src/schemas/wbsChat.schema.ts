@@ -29,7 +29,6 @@ export const ReportQueryDtoSchema = z.object({
   projectId: z.string().uuid(),
   boqItemId: z.string().uuid(),
   workdayReportId: z.string().uuid().nullable().optional(),
-  ipcLineItemId: z.string().uuid().nullable().optional(),
   source: ReportQuerySourceEnum,
   status: ReportQueryStatusEnum,
   monitorComment: z.string().nullable().optional(),
