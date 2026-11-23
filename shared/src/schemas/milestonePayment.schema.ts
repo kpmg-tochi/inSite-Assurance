@@ -10,8 +10,8 @@ import { DisbursementMechanismEnum, type DisbursementMechanism } from '../enums'
 export const TranchePaymentBasisEnum = z.enum(['MEASURED', 'FIXED_ON_COMPLETION']);
 export type TranchePaymentBasis = z.infer<typeof TranchePaymentBasisEnum>;
 
-/** Phase 13 adds CONTRACT_MILESTONE_DONE. */
-export const TrancheCompletionRuleEnum = z.enum(['ALL_ITEMS_COMPLETE', 'WEIGHTED_PROGRESS_REACHED']);
+/** Phase 13 adds CONTRACT_MILESTONE_DONE (e.g. an advance paid once the contract is signed). */
+export const TrancheCompletionRuleEnum = z.enum(['ALL_ITEMS_COMPLETE', 'WEIGHTED_PROGRESS_REACHED', 'CONTRACT_MILESTONE_DONE']);
 export type TrancheCompletionRule = z.infer<typeof TrancheCompletionRuleEnum>;
 
 export const TRANCHE_PAYMENT_BASIS_META: Record<TranchePaymentBasis, { label: string; description: string }> = {
@@ -33,6 +33,10 @@ export const TRANCHE_COMPLETION_RULE_META: Record<TrancheCompletionRule, { label
   WEIGHTED_PROGRESS_REACHED: {
     label: 'Weighted progress reached',
     description: 'Budget-weighted verified progress of its items reaches the target completion percentage.',
+  },
+  CONTRACT_MILESTONE_DONE: {
+    label: 'Contract milestone done',
+    description: 'A named contract milestone (e.g. contract signed) is done or waived. Items are not judged.',
   },
 };
 
@@ -73,6 +77,8 @@ export const TranchePaymentInputSchema = z.object({
   fixedReleaseAmountNgn: z.number().positive().nullable().optional(),
   /** ALL_ITEMS_COMPLETE: the percentage every mapped item must reach (default 100). */
   completionRequiredItemPct: z.number().min(1).max(100).optional(),
+  /** Phase 13, CONTRACT_MILESTONE_DONE: the key of the contract milestone that completes it. */
+  completionContractMilestoneKey: z.string().trim().max(48).nullable().optional(),
 });
 export type TranchePaymentInput = z.infer<typeof TranchePaymentInputSchema>;
 
@@ -104,6 +110,11 @@ export function evaluateMilestoneCompletion(params: {
   requiredItemPct?: number | null;
   targetCompletionPct: number;
   items: MilestoneCompletionItem[];
+  /**
+   * Phase 13, CONTRACT_MILESTONE_DONE: the contract milestone the rule names; null when the key
+   * matches no milestone on the project (never met).
+   */
+  contractMilestone?: { label: string; done: boolean } | null;
 }): MilestoneCompletionResult {
   const rule = params.rule ?? DEFAULT_COMPLETION_RULE;
   const items = params.items;
@@ -113,6 +124,14 @@ export function evaluateMilestoneCompletion(params: {
       ? items.reduce((s, i) => s + Math.max(0, i.budgetedCostNgn) * Math.min(100, Math.max(0, i.verifiedCumulativePct)), 0) / budget
       : 0;
   const weightedProgressPct = round2(weighted);
+  if (rule === 'CONTRACT_MILESTONE_DONE') {
+    const m = params.contractMilestone ?? null;
+    const unmet = !m
+      ? 'The contract milestone this payment milestone waits for is not on the project.'
+      : `The contract milestone "${m.label}" is not done yet.`;
+    const met = Boolean(m?.done);
+    return { met, weightedProgressPct, itemsBelowRequired: [], unmetReasons: met ? [] : [unmet] };
+  }
   if (items.length === 0) {
     return { met: false, weightedProgressPct: 0, itemsBelowRequired: [], unmetReasons: ['No bill of quantities items are mapped to this payment milestone.'] };
   }

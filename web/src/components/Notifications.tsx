@@ -44,6 +44,10 @@ const CATEGORY_LABELS: Record<WebNotificationCategory, string> = {
   INSPECTION_PENDING_APPROVAL: "Inspection awaiting approval",
   INSPECTION_FINDING: "Inspection finding",
   INSPECTION_MISSED: "Missed inspection",
+  CONTRACT_MILESTONE: "Contract milestone",
+  CONTRACT_DEFAULT_CASE: "Default case",
+  PROGRAMME_OF_WORKS: "Programme of works",
+  DOCUMENT_SIGN_OFF: "Document sign-off",
 };
 
 interface NotificationsProps {

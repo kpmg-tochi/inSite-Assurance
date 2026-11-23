@@ -2,7 +2,7 @@
 
 | | |
 | :--- | :--- |
-| **Status** | Not started |
+| **Status** | Implemented; migrated, seeded and route-tested; web click-through and on-device run pending (see section 7) |
 | **Depends on** | Phase 11 (project types, ownership, beneficiaries), Phase 12 (payment milestone completion rules), Phase 8 (job runner, messaging, mobilisation), Phase 9 (schedule baseline) |
 | **Unblocks** | Phase 15 (CoC and closure use documents and milestones), Phase 16 (mobilisation KPIs) |
 | **Read first** | [Master plan](saas_implementation_plan.md) sections 2, 3 and 6; [gap analysis](process_flow_gap_analysis.md) G2, G3, G7, G11 |
@@ -75,56 +75,54 @@
 
 ## 5. Implementation checklist
 
+Ticked = verified by tests (`server/src/tests/contracts.phase13.test.ts`, `routes.phase13.test.ts`) or by the seed run. Web items are built (typecheck, build, lint pass) but **not clicked through**; they stay unticked until then.
+
 ### Step 1: Document register
-- [ ] Shared schemas and DTOs; `documentTypeRules` helper (mime, sign-off).
-- [ ] Server `modules/documents/`: upload (reuses presign + multipart; server reads size, type and SHA-256 from storage), new version, list with filters, download through the media endpoint (permission + project + contractor visibility), sign-off (refuses a second sign-off by the same user on the same version), archive.
-- [ ] CP evidence picks a register document.
-- [ ] Document types managed in tenant settings.
-- [ ] Web: project "Documents" tab (table by type, versions drawer, sign-off list, upload with progress); reusable `DocumentPicker` for other screens.
+- [x] Shared schemas and DTOs (`shared/src/schemas/contract.schema.ts`); `documentMimeAllowed`, `defaultSignOffStatement`.
+- [x] Server `modules/documents/`: upload (reuses `/evidence/presign` with `PROJECT_DOCUMENT`; the server reads size, type and SHA-256 from storage), new version, list with filters, download (`/documents/:id/download`) and the media endpoint both apply permission + project + contractor visibility, sign-off (second sign-off by the same user on the same version refused; superseded versions refused), archive.
+- [x] CP evidence picks a register document (`evidenceDocumentId` on the CP status action; other projects' documents refused).
+- [ ] Document types managed in tenant settings (API `/api/v1/document-types` done; web card not clicked through).
+- [ ] Web: project "Documents" tab and reusable `DocumentPicker` (built, not clicked through).
 
 ### Step 2: Contract step and milestone generation
-- [ ] New setup step `contract` (order 25, required when the type has milestones): fields in section 4; validation award ≤ signed ≤ kick-off.
-- [ ] Shared pure `computeMilestoneDueDates(templates, anchors, workWeek)` (table tests: calendar vs working days, negative offsets, chained milestones, a missing anchor leaves the date null).
-- [ ] Applying the project type (Phase 11) creates milestone rows from the snapshot; `perContractor` templates create one row per contractor and follow contractor add/remove while a draft.
-- [ ] Changing an anchor recomputes pending rows; audited.
+- [x] New setup step `contract` (order 25, required when the type has milestones or documents before activation); award ≤ signed ≤ kick-off, also against stored values.
+- [x] Shared pure `computeMilestoneDueDates` with table tests (calendar vs working days, negative offsets, chained milestones, missing anchor → null, cycles).
+- [x] Applying the project type creates milestone rows from the snapshot; `perContractor` templates create one row per contractor and follow contractor add/remove.
+- [x] Changing an anchor recomputes open rows; audited (`MILESTONE_DATES_RECOMPUTED`); live projects need `milestones:manage` and a reason.
 
 ### Step 3: Milestone tracking and notifications
-- [ ] `POST .../milestones/:id/complete` checks required documents present and signed where needed; `.../waive`.
-- [ ] Job `milestone-deadlines` (hourly, one `JobRun` per project-day): `PENDING → DUE` on the due date, `→ OVERDUE` after it; notifications to the responsible role within the responsible organisation scope; reminders using the project's reminder offsets (Phase 8 pattern); register in `registerAllJobs()`.
-- [ ] Web: project "Milestones" tab: ordered checklist with anchor, due date, days left / overdue, evidence, actions; a compact "Next deadlines" card on the project overview; overdue count on the directory row.
-- [ ] Optional activation gate: `documentRequirements.beforeActivation` checked by activation readiness.
+- [x] `POST .../milestones/:id/complete` checks required documents present and signed; `.../waive`.
+- [x] Job `milestone-deadlines` (hourly, one `JobRun` per project-day): `PENDING → DUE → OVERDUE`, one notification per state to the responsible role within the responsible organisation, reminders on the project's reminder offsets; registered in `registerAllJobs()`.
+- [ ] Web: "Milestones" tab, "Next deadlines" card, overdue count on the directory row (`overdueMilestoneCount` served and tested through the seed; UI not clicked through).
+- [x] Optional activation gate: `documentRequirements.beforeActivation` is a contract-step issue.
 
 ### Step 4: Kick-off meeting
-- [ ] Create / edit the meeting; invitees by stakeholder group (pre-filled from parties, beneficiaries and assigned users).
-- [ ] "Send notice": one email per invitee with date, location and the briefing pack link (authenticated or, for externals, the agenda as attachment); records `outboundMessageId`; refuses if fewer than `noticeLeadDays` remain unless waived.
-- [ ] "Record meeting held": attendance per invitee, computed quorum, minutes document, sign-off requests to attendees with accounts.
-- [ ] Auto-completes the kick-off milestones (`AUTO_KICKOFF_QUORUM`); sets `kickoffHeldAt`. If the meeting is held on a different day from the planned date, ask whether to move the anchor (default yes) and recompute.
+- [x] Create / edit the meeting; invitees by stakeholder group, pre-filled from parties, beneficiaries and assigned users.
+- [x] "Send notice": one email per invitee with an address; `outboundMessageId` recorded; refused inside the lead time unless waived with a reason. (Externals get the agenda title, not an attachment: see 7.2.)
+- [x] "Record meeting held": attendance, computed quorum (or waiver), minutes document, sign-off request emails to attendees with accounts.
+- [x] Auto-completes `AUTO_KICKOFF_QUORUM` (and `AUTO_KICKOFF_NOTICE_SENT`); sets `kickoffHeldAt`; held on another day moves the anchor (default yes) and recomputes.
 
 ### Step 5: Contractor mobilisation compliance
-- [ ] `AUTO_CONTRACTOR_ON_SITE` completion from the first in-geofence check-in (hook in `firstCheckIn` path; idempotent).
-- [ ] Mobilisation compliance panel on the existing mobilisation page: per contractor, deadline, days left, check-in status, documents still missing from `beforeMobilisation`.
-- [ ] Phase 12 hook: completion rule `CONTRACT_MILESTONE_DONE` for a payment milestone (e.g. an advance tied to signed contract), available but unused by the seed.
+- [x] `AUTO_CONTRACTOR_ON_SITE` completion from the first in-geofence check-in (telemetry hook; idempotent; only the checking-in contractor's row).
+- [ ] Mobilisation compliance panel (API `/mobilisation-compliance` tested; web panel not clicked through).
+- [x] Phase 12 hook: completion rule `CONTRACT_MILESTONE_DONE` with `completionContractMilestoneKey` (unit-tested; not used by the seed).
 
 ### Step 6: Default cases and termination
-- [ ] Overdue mobilisation milestone opens a case automatically (once per milestone) and notifies the role(s) holding `contracts:raise_default` and the Legal role named in the project type; manual raise for other defaults.
-- [ ] Case moves through the `CONTRACT_DEFAULT` chain (reuse engine, versioning, `RETURN`). Final decision: `CURE_PERIOD` (new due date), `EXTENSION_GRANTED` (moves the milestone's due date, audited), `TERMINATED`, or `CLOSED` (no action).
-- [ ] Termination (one transaction): contractor `TERMINATED`; its join codes deactivated; its field sessions revoked; open IPCs closed as withdrawn; direct verifications and briefs exclude its items; its open defect tickets stay open for the record.
-- [ ] Replacement: add a contractor with `replacesProjectContractorId`; move uncertified BOQ items to it (certified % stays history); new mobilisation milestone generated from the type with anchor `MILESTONE:<termination>` or a new kick-off.
-- [ ] Web: "Default cases" panel on the contractor card and project overview; chain editor gains the third chain type.
+- [x] Overdue mobilisation milestone opens a case once and notifies `contracts:raise_default` and the type's Legal role; manual raise for other defaults (one running case per contractor).
+- [x] Case moves through the `CONTRACT_DEFAULT` chain (engine, versioning, `RETURN`, organisation scope). Outcomes `CURE_PERIOD` (lapses back to the decision step), `EXTENSION_GRANTED` (moves the milestone, audited), `TERMINATED`, `CLOSED`.
+- [x] Termination (one transaction): refused while any claim of the contractor is unpaid; then contractor `TERMINATED`; join codes deactivated; field sessions revoked; briefs and direct verifications exclude its items; open milestones waived; claims and defect tickets untouched.
+- [x] Replacement: new contractor with `replacesProjectContractorId`; items not fully certified move (certified % stays); new per-contractor milestones counted from the replacement day.
+- [ ] Web: "Default cases" panel and the third chain in the chain editor (API tested; UI not clicked through).
 
 ### Step 7: Programme of works
-- [ ] Contractor web users with `schedule:propose_programme` submit item dates and dependencies (same validation as the baseline). One pending submission per contractor.
-- [ ] Monitor accepts (writes the baseline through the existing service, auto-completes the milestone) or returns with notes.
-- [ ] Before activation only, or after activation for items still undated; dated live items keep moving only through Phase 9 revisions.
+- [x] Contractor web users with `schedule:propose_programme` submit item dates and dependencies (baseline validation; each dependency ends at a proposed item); one pending submission per contractor; only their package's items. Web form with dependencies clicked through.
+- [x] Monitor accepts (writes the baseline through the schedule service, completes the milestone) or returns with notes.
+- [x] Before activation any item; after activation only undated items (`ITEM_ALREADY_DATED`).
 
 ### Step 8: Seed and tests
-- [ ] Seed both types' milestone templates:
-  - Central: acceptance letter (award + 3 days), kick-off notice (kick-off − 7), kick-off held (kick-off), minutes signed (kick-off + 7), letter of introduction (kick-off + 7), supervisor assignment (kick-off + 7), mobilisation documents complete (kick-off + 14), contractor mobilised (kick-off + 21).
-  - Co-Funded: as Central, plus programme of works and mobilisation plan (kick-off + 0), minutes approved and uploaded (kick-off + 3 working days); contractor mobilised (kick-off + 14).
-- [ ] Seed one Central project mid-mobilisation (kick-off held, minutes signed, mobilisation due in 5 days) and one Co-Funded project with an overdue mobilisation and an open default case at the second chain step.
-- [ ] Route tests: due-date maths; anchor move recompute; completion refused without required signed documents; job transitions and one notification per state; quorum; auto mobilisation completion from a check-in; default case chain with org scope; termination side effects; replacement keeps history; contractor document visibility; programme of works accept writes the baseline.
-
----
+- [x] Seed both types' milestone templates (Central and Co-Funded as listed; see 7.2 for the extra `kickoff-notice` mode).
+- [x] Seed PRG-102 mid-mobilisation (kick-off held 16 days ago, minutes filed and signed, mobilisation due in 5 days) and PRG-221 with an overdue mobilisation and an open default case at the second chain step.
+- [x] Route tests: all listed scenarios (`routes.phase13.test.ts`, 12 tests) plus unit tests (`contracts.phase13.test.ts`, 9 tests).
 
 ## 6. Definition of done
 
@@ -136,4 +134,65 @@
 
 ## 7. Found during implementation
 
-*(empty)*
+### 7.1 Migration (for the coordinator)
+
+`server/prisma/migrations/20261127090000_phase13_documents_milestones_kickoff` (generated with `prisma migrate diff` after the Phase 12/14 migration, then deployed). It drops `ConditionPrecedent.evidenceDocumentUrl` (decision A) and adds `evidenceDocumentId`. Hand-written SQL appended (keep it in every regenerated migration):
+
+```sql
+-- One milestone per project, key and contractor (project-level rows have a NULL contractor).
+CREATE UNIQUE INDEX "contract_milestones_project_key_contractor_key"
+  ON "project_contract_milestones" ("projectId", "key",
+    COALESCE("projectContractorId", '00000000-0000-0000-0000-000000000000'::uuid));
+```
+
+### 7.2 Decisions and deviations
+
+1. **Uploads.** There is no authenticated multipart upload (Phase 10's multipart is the public handover router only). Documents use the existing single presigned PUT (`/evidence/presign`, `PROJECT_DOCUMENT`, 25 MB cap). The register only accepts keys under `.../project_document/`. Follow-up if documents above 25 MB are needed.
+2. **Extra completion mode `AUTO_KICKOFF_NOTICE_SENT`**, so "kick-off notice sent" completes from the platform notice. A notice sent outside the platform is recorded by filing `KICKOFF_NOTICE_RECEIPT` and waiving the milestone with a reason.
+3. **Template fields.** `responsibleScope` covers the Phase 11 scopes plus `MONITOR` and `CONTRACTOR`; it is stored as `responsibleOrganizationScope`. Two config keys were added beside the planned ones: `kickoff` (required groups, notice lead days) and `defaultCases` (`legalRoleCode`, `autoOpenOnOverdueMobilisation`, default on).
+4. **`anchorDateOverride`** (new column) replaces the planned `MILESTONE:<termination>` anchor. A replacement contractor's per-contractor milestones count from the replacement day with the template's offset. An extension sets the override to the new date with offset 0.
+5. **Chained milestones** count from the day the referenced milestone was done (a waived one from its due date). Until then they have no date.
+6. **Status** is stored by the job (for notifications) and derived for today on every read, so the API is right between ticks. Reminders fire on the exact reminder-offset day. A tick that misses the day does not catch up.
+7. **Notifications** go to the responsible role (else `milestones:manage`) within the responsible organisation (owner, funder, monitor or contractor organisation). `PROJECT_OWNER_OR_ANCESTOR` notifies the owner organisation only.
+8. **Kick-off.**
+   - There is one meeting per project. Rescheduling clears the notice, which must then be sent again.
+   - The messaging adapters have no attachments. Invitees with an account get a link to the project documents; externals get the agenda title and "available on request".
+   - Kick-off routes work on live projects only, because messaging only sends for live projects.
+   - Sign-off requests to attendees are emails; there is no per-user web notification target.
+9. **Sign-offs** are allowed on any document type. `requiresSignOff` drives "awaiting sign-off" and milestone checks. Hash: `sha256(documentId|version|versionSha256|userId|statement)`.
+10. **Contractor side** is decided by organisation, as for defects. Its uploads are forced to its own contractor, and it can change only what it uploaded.
+11. **Default chain.**
+    - The default is created on first use: "Legal review" (`contracts:raise_default`, role = the type's Legal role), then "Executive decision" (`contracts:decide_default`, system step, `PROJECT_OWNER` when the project has an owner, else `ANY`).
+    - Workflow templates do not carry this chain.
+    - Edits go through `PUT .../process/chains/CONTRACT_DEFAULT`. `ProjectProcessSettingsDto.contractDefaultChain` is new; `ProjectProcessStepSchema` was not extended.
+12. **Cure period.** If the milestone is done within the period, the case closes as cured. If the period ends without a cure, the job moves the case back to the decision step (`cureLapsedAt`) and notifies the decision step.
+13. **Active claims block termination** (owner decision, 2026-11-23).
+    - While the contractor has a claim that is submitted, reconciled, queried or certified and not yet decided by the lender (`OPEN_IPC_STATUSES`), the "terminate" outcome is refused (409 `ACTIVE_CLAIMS_BLOCK_TERMINATION`, `details.claims`) and nothing is recorded.
+    - The case DTO lists the blocking claims (`terminationBlockedBy`); the web disables "Terminate" and says which claims must be paid or withdrawn first. The other outcomes stay available.
+    - Termination no longer withdraws claims. Paid claims stay as history.
+    - In single and unified models, claims have no contractor and belong to the main contractor, so they block the main contractor's termination.
+    - Open milestones of the contractor are waived ("Contract terminated").
+    - IPC submission by a terminated contractor is refused (409 `CONTRACTOR_TERMINATED`).
+14. **Direct verification.** Items of a terminated contractor are excluded. A fixed-amount milestone with an item rule cannot complete while such items are below 100% (reason given), so it cannot pay without them.
+15. **Replacement.**
+    - Items below 100% certified move (certified % is kept); fully certified items stay with the terminated contractor.
+    - The main-contractor flag moves to the replacement.
+    - Model rules (`contractorModelIssues`) and join codes ignore terminated contractors.
+16. **Permissions granted.**
+    - Monitor: `documents:view|upload`, `milestones:manage`, `kickoff:manage`, `contracts:raise_default`.
+    - Organisation Administrator: those plus `milestones:waive` and `contracts:decide_default`.
+    - Lender: `documents:view`.
+    - Contractor: `documents:view|upload`, `schedule:propose_programme`.
+    - The tenant super admin gets everything (none of these are segregated).
+    - Read endpoints for milestones, kick-off, compliance and cases need only web project access. The web shows the pages to holders of the Phase 13 permissions.
+17. **Draft routes.** `DRAFT_ROUTE_RE` also allows `documents`, `milestones` and `programme-of-works`.
+18. **Seed.**
+    - The programme types' config and project snapshots are written without a version bump (as Phase 14).
+    - Programme tenant: a custom "Legal Officer" role and `legal.officer@insite.ng`.
+    - Document files are written only to local storage, when S3 is not configured.
+    - The Phase 11 read-all test now counts South's visible unread notifications instead of a fixed 1: the seeded PRG-221 case notifies South's executives.
+19. **Project-type editor.** Settings → "Project types, regions & documents" → a type now edits contract milestones (label, key, anchor or another milestone, days and counting, how it is done, required documents and sign-off permission, responsible role and organisation, one per contractor, order) and the kick-off rules (quorum groups, notice lead days). Validation is the shared schema (duplicate keys, unknown or circular anchors). `documentRequirements` and `defaultCases` still have no fields: they are kept on save and set through the API or the seed.
+    Verified in the browser: added a milestone counted from another milestone and changed the notice lead days; saved as version 2 with the new milestone, and the other config (streams, document requirements) kept.
+20. **Programme of works dependencies.** The web form has a "Starts after" column (predecessor: any item of the project; lag in working days). The server requires every dependency to end at an item of the proposal (422 `DEPENDENCY_OUTSIDE_PROGRAMME`); predecessors need dates (baseline rule). Submissions show item names to contractors too (from the BOQ; the schedule is not readable for them).
+    Verified in the browser: KAN-210, contractor proposed 01.01 and 01.02 with "01.02 after 01.01 + 1 working day"; the monitor accepted, and the baseline holds the link.
+21. **Web assumptions to check in the click-through.** Kick-off times are entered in the browser's time zone and sent as UTC. The programme form lists the contractor's own items from `GET /boq` (needs `boq:view`).

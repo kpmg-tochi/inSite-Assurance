@@ -21,6 +21,7 @@ import {
   ProjectTypeSummarySchema,
   RegionSummarySchema,
 } from './deliveryModel.schema';
+import { ContractStatusEnum, ProjectContractDetailsDtoSchema, ProjectContractStepSchema } from './contract.schema';
 
 /**
  * Staged project creation (Phase 6, decision C). A project is created as a DRAFT from the basics
@@ -49,6 +50,8 @@ export interface ProjectSetupStepDefinition {
 export const PROJECT_SETUP_STEPS: ProjectSetupStepDefinition[] = [
   { id: 'basics', title: 'Basics', route: 'basics', required: true, order: 10, description: 'Name, code, location and budget' },
   { id: 'parties', title: 'Parties', route: 'parties', required: true, order: 20, description: 'Monitor, lender and contractors' },
+  // Phase 13. Required (server-computed) when the project type has contract milestones or documents needed before activation.
+  { id: 'contract', title: 'Contract and kick-off', route: 'contract', required: false, order: 25, description: 'Contract dates, sum and planned kick-off' },
   { id: 'site', title: 'Site', route: 'site', required: true, order: 30, description: 'Geofence, tolerance and time zone' },
   { id: 'facility', title: 'Facility', route: 'facility', required: true, order: 40, description: 'Tranches and conditions precedent' },
   { id: 'boq', title: 'Bill of quantities', route: 'boq', required: true, order: 50, description: 'BOQ items, hold points, tranches and packages' },
@@ -64,7 +67,7 @@ export const PROJECT_SETUP_STEPS: ProjectSetupStepDefinition[] = [
   { id: 'review', title: 'Review', route: 'review', required: false, order: 1000, description: 'Check and set the project active' },
 ];
 
-export const ProjectSetupStepIdEnum = z.enum(['basics', 'parties', 'site', 'facility', 'boq', 'reporting', 'schedule', 'process', 'standards', 'team']);
+export const ProjectSetupStepIdEnum = z.enum(['basics', 'parties', 'contract', 'site', 'facility', 'boq', 'reporting', 'schedule', 'process', 'standards', 'team']);
 export type ProjectSetupStepId = z.infer<typeof ProjectSetupStepIdEnum>;
 
 const TimeOfDay = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Use 24-hour HH:MM');
@@ -213,6 +216,7 @@ export type ProjectTeamStep = z.infer<typeof ProjectTeamStepSchema>;
 export const PROJECT_STEP_SAVE_SCHEMAS = {
   basics: ProjectBasicsStepSchema,
   parties: ProjectPartiesStepSchema,
+  contract: ProjectContractStepSchema,
   site: ProjectSiteStepSchema,
   facility: ProjectFacilityStepSchema,
   boq: ProjectBoqStepSchema,
@@ -284,6 +288,10 @@ export const ProjectContractorDtoSchema = z.object({
   boqItemCount: z.number().int(),
   /** Sessions or IPC claims exist; the contractor cannot be removed. */
   hasActivity: z.boolean(),
+  /** Phase 13: contract state; a terminated contractor keeps its history. */
+  contractStatus: ContractStatusEnum,
+  terminatedAt: z.string().nullable(),
+  replacesProjectContractorId: z.string().uuid().nullable(),
 });
 export type ProjectContractorDto = z.infer<typeof ProjectContractorDtoSchema>;
 
@@ -346,6 +354,8 @@ export const ProjectSetupDtoSchema = z.object({
         completionRule: TrancheCompletionRuleEnum.nullable(),
         fixedReleaseAmountNgn: z.number().nullable(),
         completionRequiredItemPct: z.number(),
+        /** Phase 13: CONTRACT_MILESTONE_DONE */
+        completionContractMilestoneKey: z.string().nullable().optional(),
         conditionsPrecedent: z.array(
           z.object({
             id: z.string().uuid(),
@@ -377,6 +387,8 @@ export const ProjectSetupDtoSchema = z.object({
     holdPointCount: z.number().int(),
     totalBudgetedCostNgn: z.number(),
   }),
+  /** Phase 13 */
+  contract: ProjectContractDetailsDtoSchema,
   reporting: ProjectCadenceSettingsDtoSchema.extend({
     /** Project-level mobilization reminder schedule (days before the planned date). */
     reminderOffsetsDays: z.array(z.number().int()),

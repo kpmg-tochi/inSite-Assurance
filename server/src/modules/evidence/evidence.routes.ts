@@ -9,6 +9,7 @@ import { validateBody } from '../../middleware/validate.middleware';
 import { assertProjectObjectKey, isHandoverObjectKey, storageService } from '../../integrations/storage.service';
 import { prisma } from '../../config/prisma';
 import { listProjectCaptures } from './evidence.service';
+import { assertDocumentObjectReadable } from '../documents/documents.service';
 
 const router = guardProjectRoutes(Router());
 
@@ -95,6 +96,8 @@ router.get(
       );
       const tenantId = await projectTenantId(projectId);
       let attachmentName: string | undefined;
+      // Phase 13: a register document's file follows the document rules (permission, contractor side).
+      if (await assertDocumentObjectReadable(projectId, key, req.webUser)) attachmentName = key.split('/').pop() ?? 'download';
       if (isHandoverObjectKey(key, tenantId, projectId)) {
         // Phase 10: stakeholder uploads are for handover reviewers only, and anything that is not an
         // image, audio or video is served as a download.

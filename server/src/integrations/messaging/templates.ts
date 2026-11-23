@@ -163,10 +163,82 @@ export function handoverCode(ctx: TemplateContext, d: HandoverCodeData): Rendere
   return { subject, text, html, pushBody: 'Your one-time code has arrived.' };
 }
 
+/** Phase 13: kick-off meeting notice. */
+export interface KickoffNoticeData {
+  recipientName: string;
+  projectName: string;
+  projectCode: string;
+  /** "Tuesday 3 March 2026, 10:00 (Africa/Lagos)" */
+  whenText: string;
+  location: string | null;
+  virtualLink: string | null;
+  agendaTitle: string | null;
+  /** Account holders: link to the project's documents. Others: null (pack available on request). */
+  documentsUrl: string | null;
+}
+
+export function kickoffNotice(ctx: TemplateContext, d: KickoffNoticeData): RenderedMessage {
+  const subject = `${d.projectCode}: kick-off meeting on ${d.whenText}`;
+  const where = [d.location, d.virtualLink ? `Online: ${d.virtualLink}` : null].filter(Boolean).join(' · ') || 'To be confirmed';
+  const pack = d.agendaTitle
+    ? d.documentsUrl
+      ? `The briefing pack ("${d.agendaTitle}") is in the project documents: ${d.documentsUrl}`
+      : `The briefing pack ("${d.agendaTitle}") is available from the project team on request.`
+    : null;
+  const text = [
+    `Hello ${d.recipientName},`,
+    '',
+    `You are invited to the kick-off meeting for ${d.projectName} (${d.projectCode}).`,
+    '',
+    `When: ${d.whenText}`,
+    `Where: ${where}`,
+    ...(pack ? ['', pack] : []),
+    '',
+    ctx.tenantName,
+  ].join('\n');
+  const html = layout(ctx, 'Kick-off meeting', [
+    `Hello ${esc(d.recipientName)},`,
+    `You are invited to the kick-off meeting for <strong>${esc(d.projectName)}</strong> (${esc(d.projectCode)}).`,
+    `<strong>When:</strong> ${esc(d.whenText)}<br/><strong>Where:</strong> ${esc(where)}`,
+    ...(pack ? [esc(pack)] : []),
+  ]);
+  return { subject, text, html, pushBody: `Kick-off meeting for ${d.projectName} on ${d.whenText}.` };
+}
+
+/** Phase 13: asks an attendee with an account to sign off the kick-off minutes. */
+export interface MinutesSignOffData {
+  recipientName: string;
+  projectName: string;
+  projectCode: string;
+  minutesTitle: string;
+  documentsUrl: string;
+}
+
+export function minutesSignOff(ctx: TemplateContext, d: MinutesSignOffData): RenderedMessage {
+  const subject = `${d.projectCode}: please sign off the kick-off minutes`;
+  const text = [
+    `Hello ${d.recipientName},`,
+    '',
+    `The minutes of the ${d.projectName} kick-off meeting ("${d.minutesTitle}") are ready. Please read and sign them off:`,
+    d.documentsUrl,
+    '',
+    ctx.tenantName,
+  ].join('\n');
+  const html = layout(ctx, 'Please sign off the kick-off minutes', [
+    `Hello ${esc(d.recipientName)},`,
+    `The minutes of the <strong>${esc(d.projectName)}</strong> kick-off meeting ("${esc(d.minutesTitle)}") are ready. Please read and sign them off.`,
+    `<a href="${esc(d.documentsUrl)}" style="display:inline-block;background:${esc(ctx.brandColor)};color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold">Open the minutes</a>`,
+  ]);
+  return { subject, text, html, pushBody: `Please sign off the ${d.projectName} kick-off minutes.` };
+}
+
 export const TEMPLATES = {
   MOBILIZATION_REMINDER: mobilizationReminder,
   HANDOVER_LINK: handoverLink,
   HANDOVER_CODE: handoverCode,
+  // Phase 13
+  KICKOFF_NOTICE: kickoffNotice,
+  MINUTES_SIGN_OFF: minutesSignOff,
 } as const;
 
 export type TemplateKey = keyof typeof TEMPLATES;

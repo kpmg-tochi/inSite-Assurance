@@ -10,6 +10,7 @@ import { ScheduleTimeline } from "../../components/schedule/ScheduleTimeline";
 import { ScheduleVariancePill } from "../../components/schedule/ScheduleVarianceBadge";
 import { CatchUpWizard } from "../../components/schedule/CatchUpWizard";
 import { RevisionHistory } from "../../components/schedule/RevisionHistory";
+import { ProgrammeOfWorksPanel } from "../../components/schedule/ProgrammeOfWorksPanel";
 
 /**
  * Project schedule (Phase 9): planned, original and actual dates per BOQ item, variance in working
@@ -19,16 +20,24 @@ import { RevisionHistory } from "../../components/schedule/RevisionHistory";
 export function ProjectSchedulePage({ project }: { project: ProjectSummaryDto }) {
   const { hasPermission } = useAuth();
   const [searchParams] = useSearchParams();
-  const scheduleQuery = useProjectScheduleQuery(project.id);
-  const revisionsQuery = useScheduleRevisionsQuery(project.id);
+  const canViewVariance = hasPermission("schedule:view_variance");
+  const scheduleQuery = useProjectScheduleQuery(project.id, canViewVariance);
+  const revisionsQuery = useScheduleRevisionsQuery(project.id, canViewVariance);
   const [wizardOpen, setWizardOpen] = useState(false);
   const schedule = scheduleQuery.data;
 
-  if (scheduleQuery.isLoading) return <Loader />;
+  // Phase 13: contractors propose the programme of works; monitors accept or return it.
+  const programme = <ProgrammeOfWorksPanel project={project} schedule={schedule ?? null} />;
+
+  if (canViewVariance && scheduleQuery.isLoading) return <Loader />;
+  if (!canViewVariance) return <div className="space-y-5">{programme}</div>;
   if (scheduleQuery.isError || !schedule) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
-        Could not load the schedule. {(scheduleQuery.error as Error | null)?.message}
+      <div className="space-y-5">
+        <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
+          Could not load the schedule. {(scheduleQuery.error as Error | null)?.message}
+        </div>
+        {programme}
       </div>
     );
   }
@@ -40,6 +49,7 @@ export function ProjectSchedulePage({ project }: { project: ProjectSummaryDto })
 
   if (!s.hasBaseline) {
     return (
+      <div className="space-y-5">
       <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center space-y-2">
         <CalendarRange className="mx-auto h-8 w-8 text-slate-300" />
         <p className="text-sm font-bold text-slate-900">No schedule yet</p>
@@ -52,6 +62,8 @@ export function ProjectSchedulePage({ project }: { project: ProjectSummaryDto })
             Set the schedule
           </Link>
         )}
+      </div>
+      {programme}
       </div>
     );
   }
@@ -153,6 +165,8 @@ export function ProjectSchedulePage({ project }: { project: ProjectSummaryDto })
           <RevisionHistory projectId={project.id} revisions={revisionsQuery.data ?? []} initiallyOpenId={searchParams.get("revision")} />
         )}
       </section>
+
+      {programme}
 
       {wizardOpen && <CatchUpWizard projectId={project.id} schedule={schedule} onClose={() => setWizardOpen(false)} />}
     </div>

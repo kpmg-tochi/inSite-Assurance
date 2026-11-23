@@ -1,8 +1,15 @@
 import React, { useMemo, useState } from "react";
 import { Info } from "lucide-react";
-import type { ProjectProcessStep } from "@insite/shared";
+import {
+  defaultContractDefaultChain,
+  validateApprovalChain,
+  type ApprovalStepConfig,
+  type ProjectProcessStep,
+} from "@insite/shared";
 import { CustomSelect, type CustomSelectOption } from "../../../../components/common";
 import { ProcessEditor } from "../../../../components/process/ProcessEditor";
+import { ApprovalChainEditor } from "../../../../components/process/ApprovalChainEditor";
+import { useSaveContractDefaultChainMutation } from "../../../../mutations/contracts/useContractMutations";
 import { useConfirmDialog } from "../../../../components/process/ConfirmDialog";
 import { useRoleOptions } from "../../../../components/process/useRoleOptions";
 import {
@@ -24,7 +31,10 @@ import {
   type StepProps,
 } from "../setupContext";
 
-/** "Workflow and process" (Phase 7): template, process switches and both approval chains. */
+/**
+ * "Workflow and process" (Phase 7): template, process switches and both approval chains. Phase 13
+ * adds the contractor default chain, saved through its own chains endpoint (it is not in the step body).
+ */
 export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
   const process = setup.process;
   const initial = useMemo<ProcessDraft>(
@@ -41,12 +51,30 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
   const [templateNote, setTemplateNote] = useState<string | null>(null);
   const save = useSaveSetupStepMutation(projectId);
   const templatesQuery = useWorkflowTemplatesQuery(!readOnly);
-  const roles = useRoleOptions([process.reportChain, process.disbursementChain]);
+  const roles = useRoleOptions(
+    process.contractDefaultChain ? [process.reportChain, process.disbursementChain, process.contractDefaultChain] : [process.reportChain, process.disbursementChain]
+  );
+  // Phase 13: the contract default chain. A project without one shows the default (saved only if edited).
+  const initialDefaultChain = useMemo<ApprovalStepConfig[]>(
+    () =>
+      process.contractDefaultChain?.steps.length
+        ? chainFromDto(process.contractDefaultChain)
+        : defaultContractDefaultChain({ hasOwner: Boolean(setup.parties.owningOrganization) }),
+    [process.contractDefaultChain, setup.parties.owningOrganization]
+  );
+  const [defaultChain, setDefaultChain] = useState<ApprovalStepConfig[]>(initialDefaultChain);
+  const defaultChainIssues = [
+    ...validateApprovalChain("CONTRACT_DEFAULT", defaultChain),
+    ...defaultChain.flatMap((s, i) => (s.label.trim().length < 2 ? [{ code: "LABEL", message: "Name every step.", stepIndex: i }] : [])),
+  ];
+  const defaultChainDirty = JSON.stringify(defaultChain) !== JSON.stringify(initialDefaultChain);
+  const saveDefaultChain = useSaveContractDefaultChainMutation(projectId);
   const { ask, dialog } = useConfirmDialog();
   const issues = validateProcessDraft(draft);
   const savedOnce = setup.steps.find((s) => s.stepId === "process")?.saved ?? false;
-  const dirty =
+  const processDirty =
     !sameDraft(draft, initial) || templateId !== process.workflowTemplateId || (!savedOnce && setup.status === "DRAFT");
+  const dirty = processDirty || defaultChainDirty;
 
   const templateOptions = useMemo<CustomSelectOption<string>[]>(
     () => [
@@ -88,10 +116,11 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
 
   useRegisterStep(dirty, async (opts) => {
     if (!dirty) return true;
-    if (issues.count > 0) {
+    if (issues.count > 0 || defaultChainIssues.length > 0) {
       setErrors({ fields: {}, general: "Fix the approval chain issues shown below before saving." });
       return false;
     }
+    if (!processDirty) return saveDefaultChainOnly(opts?.silent);
     let confirm = false;
     const turningOff =
       setup.status === "ACTIVE" && process.config.allowContractorFieldReporting && !draft.config.allowContractorFieldReporting;
@@ -106,6 +135,7 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
     }
     try {
       await send(opts?.silent, confirm);
+      if (defaultChainDirty) await saveDefaultChain.mutateAsync({ steps: defaultChain, silent: true });
       setErrors(NO_ERRORS);
       return true;
     } catch (err) {
@@ -121,6 +151,7 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
         if (!ok) return false;
         try {
           await send(opts?.silent, true);
+          if (defaultChainDirty) await saveDefaultChain.mutateAsync({ steps: defaultChain, silent: true });
           setErrors(NO_ERRORS);
           return true;
         } catch (retryErr) {
@@ -132,6 +163,17 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
       return false;
     }
   });
+
+  async function saveDefaultChainOnly(silent?: boolean) {
+    try {
+      await saveDefaultChain.mutateAsync({ steps: defaultChain, silent });
+      setErrors(NO_ERRORS);
+      return true;
+    } catch (err) {
+      setErrors(extractErrors(err));
+      return false;
+    }
+  }
 
   return (
     <>
@@ -183,6 +225,25 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
             ) : null
           }
         />
+
+        <div className="space-y-3 pt-2">
+          <div>
+            <h3 className="text-xs font-bold text-slate-900">Contractor default case chain</h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              A default case (for example an overdue mobilisation) goes through these steps. The last step decides the outcome: cure
+              period, extension, termination or closure. It is fixed; add review steps before it.
+              {!process.contractDefaultChain?.steps.length ? " Not saved for this project yet: the default is shown." : ""}
+            </p>
+          </div>
+          <ApprovalChainEditor
+            chainType="CONTRACT_DEFAULT"
+            steps={defaultChain}
+            onChange={setDefaultChain}
+            disabled={readOnly}
+            roles={roles}
+            issues={defaultChainIssues}
+          />
+        </div>
       </StepSection>
     </>
   );

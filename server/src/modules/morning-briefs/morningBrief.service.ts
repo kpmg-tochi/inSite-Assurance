@@ -285,7 +285,8 @@ export async function dispatchTargets(projectId: string, key: { periodStart: str
   const config = await getProcessConfig(projectId);
   const [boqItems, dependencies] = await Promise.all([
     prisma.boqItem.findMany({
-      where: { projectId },
+      // Phase 13: items of a terminated contractor get no briefs until they move to a replacement.
+      where: { projectId, OR: [{ projectContractorId: null }, { projectContractor: { contractStatus: 'ACTIVE' } }] },
       orderBy: { wbsCode: 'asc' },
       select: {
         id: true,

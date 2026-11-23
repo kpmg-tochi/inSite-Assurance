@@ -42,6 +42,9 @@ export function serializeContractor(c: ContractorRow): ProjectContractorDto {
     plannedCompletionDate: isoDate(c.plannedCompletionDate),
     boqItemCount: c._count.boqItems,
     hasActivity: c._count.fieldSessions > 0 || c._count.ipcClaims > 0,
+    contractStatus: c.contractStatus,
+    terminatedAt: c.terminatedAt?.toISOString() ?? null,
+    replacesProjectContractorId: c.replacesProjectContractorId,
   };
 }
 
@@ -89,8 +92,10 @@ export async function contractorForWebUser(
 /** Model rules checked whenever the contractor list or model changes. Returns issue messages. */
 export function contractorModelIssues(
   mode: ContractorExecutionMode | null,
-  contractors: Array<{ isMainContractor: boolean }>
+  allContractors: Array<{ isMainContractor: boolean; contractStatus?: string }>
 ): Array<{ code: string; message: string }> {
+  // Phase 13: a terminated contractor stays for the record but does not count for the model.
+  const contractors = allContractors.filter((c) => c.contractStatus !== 'TERMINATED');
   const issues: Array<{ code: string; message: string }> = [];
   if (!mode) issues.push({ code: 'CONTRACTOR_MODEL_REQUIRED', message: 'Choose the contractor model.' });
   if (contractors.length === 0) {

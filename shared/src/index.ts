@@ -36,6 +36,8 @@ export * from './schemas/projectType.schema';
 export * from './schemas/inspection.schema';
 export * from './schemas/credentials.schema';
 export * from './schemas/milestonePayment.schema';
+// Phase 13
+export * from './schemas/contract.schema';
 
 // Data
 export * from './data/standardsLibrary';
@@ -51,6 +53,8 @@ export * from './utils/handoverText';
 export * from './utils/organizationHierarchy';
 // Phase 14
 export * from './utils/inspectionChecklist';
+// Phase 13
+export * from './utils/contractMilestones';
 
 // Shared Turf.js Radial & Linear Corridor Chainage Geospatial Utilities
 export * from './geo/geofence';

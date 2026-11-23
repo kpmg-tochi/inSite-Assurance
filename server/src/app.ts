@@ -27,6 +27,8 @@ import { inspectionsRoutes } from "./modules/inspections/inspections.routes";
 import { inspectionTemplatesRoutes, supervisionRoutes } from "./modules/inspections/inspectionTemplates.routes";
 import { handoverPublicRoutes } from "./modules/closeout/handoverPublic.routes";
 import { projectTypesRoutes } from "./modules/projectTypes/projectTypes.routes";
+import { documentsRoutes, documentTypesRoutes } from "./modules/documents/documents.routes";
+import { contractsRoutes } from "./modules/contracts/contracts.routes";
 import { regionsRoutes } from "./modules/regions/regions.routes";
 import { credentialsRoutes, projectCredentialRoutes } from "./modules/credentials/credentials.routes";
 import { requestContextMiddleware } from "./utils/requestContext";
@@ -109,6 +111,10 @@ export function createApp() {
   app.use("/api/v1/projects", closeoutRoutes);
   // Phase 14: reporting streams, inspections, findings, supervision
   app.use("/api/v1/projects", inspectionsRoutes);
+  // Phase 13
+  app.use("/api/v1/projects", documentsRoutes);
+  app.use("/api/v1/projects", contractsRoutes);
+  app.use("/api/v1/document-types", documentTypesRoutes);
   app.use("/api/v1/inspection-templates", inspectionTemplatesRoutes);
   app.use("/api/v1/supervision", supervisionRoutes);
   app.use("/api/v1/workflow-templates", workflowTemplateRoutes);

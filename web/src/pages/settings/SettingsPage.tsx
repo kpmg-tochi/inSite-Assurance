@@ -5,6 +5,7 @@ import { ClipboardCheck } from "lucide-react";
 import { ChecklistTemplatesCard } from "../../components/inspections/ChecklistTemplatesCard";
 import { SupervisorsCard } from "../../components/inspections/SupervisorsCard";
 import { RegionsCard } from "../../components/deliveryModels/RegionsCard";
+import { DocumentTypesCard } from "../../components/documents/DocumentTypesCard";
 import { TerminologyCard } from "../../components/deliveryModels/TerminologyCard";
 import { ProfessionalRegistrationCard } from "../../components/credentials/ProfessionalRegistrationCard";
 import { toast } from "sonner";
@@ -57,7 +58,9 @@ export function SettingsPage({ project }: SettingsPageProps) {
   // Phase 11: delivery models (project types and regions).
   const canManageProjectTypes = hasPermission("project_types:manage");
   const canManageRegions = hasPermission("regions:manage");
-  const canSeeDeliveryTab = canManageProjectTypes || canManageRegions;
+  // Phase 13: tenant document types sit with the delivery-model settings.
+  const canManageDocumentTypes = hasPermission("documents:manage_types");
+  const canSeeDeliveryTab = canManageProjectTypes || canManageRegions || canManageDocumentTypes;
 
   // Phase 14: checklist templates and the supervisors view.
   const canManageChecklists = hasPermission("inspections:manage_templates");
@@ -414,7 +417,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
               }`}
             >
               <Layers className="w-4 h-4" />
-              <span>Project types &amp; regions</span>
+              <span>Project types, regions &amp; documents</span>
             </button>
           )}
 
@@ -471,6 +474,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
         <div className="space-y-4">
           {canManageProjectTypes && <ProjectTypesTab />}
           {canManageRegions && <RegionsCard />}
+          {canManageDocumentTypes && <DocumentTypesCard />}
         </div>
       )}
       {activeTab === "INSPECTIONS" && canSeeInspectionsTab && (

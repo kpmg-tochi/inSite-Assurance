@@ -54,6 +54,7 @@ import {
   loadTrancheInProject,
   loadValuationReportInProject,
 } from '../../utils/ownership';
+import { assertProjectDocument } from '../documents/documents.service';
 import {
   serializeMonitorQuery,
   serializeSupportingDocument,
@@ -177,7 +178,7 @@ async function ratingLabelsForProject(db: Tx | typeof prisma, projectId: string)
 }
 
 /** Project health follows the latest IPC that has not been withdrawn. */
-async function refreshProjectHealth(tx: Tx, projectId: string) {
+export async function refreshProjectHealth(tx: Tx, projectId: string) {
   const latest = await tx.ipcClaim.findFirst({
     where: { projectId, status: { not: 'REJECTED_WITHDRAWN' } },
     orderBy: { ipcNumber: 'desc' },
@@ -744,6 +745,9 @@ export async function submitContractorIpcClaim(params: {
         403,
         'NOT_A_PROJECT_CONTRACTOR'
       );
+    }
+    if (submitter.contractStatus === 'TERMINATED') {
+      throw new AppError('Your contract on this project has been terminated.', 409, 'CONTRACTOR_TERMINATED');
     }
     if (!multiPrime && !submitter.isMainContractor) {
       throw new AppError(
@@ -1815,17 +1819,26 @@ export async function updateConditionPrecedentStatus(params: {
     await loadTrancheInProject(tx, projectId, trancheId);
     await lockTranche(tx, trancheId);
     const cp = await loadConditionInTranche(tx, trancheId, conditionId);
-    if (cp.status === input.status) return serializeTranche(await lockTranche(tx, trancheId));
+    // Phase 13: evidence is a document from the project register.
+    const evidenceChanged =
+      input.evidenceDocumentId !== undefined && (input.evidenceDocumentId ?? null) !== cp.evidenceDocumentId;
+    if (input.evidenceDocumentId) await assertProjectDocument(tx, projectId, input.evidenceDocumentId);
+    if (cp.status === input.status && !evidenceChanged) return serializeTranche(await lockTranche(tx, trancheId));
 
     const now = new Date();
     await tx.conditionPrecedent.update({
       where: { id: cp.id },
       data: {
-        status: input.status,
-        statusChangedAt: now,
-        verifiedAt: input.status === 'SATISFIED' ? now : cp.verifiedAt,
-        waivedByUserId: null,
-        waiverReason: null,
+        ...(cp.status !== input.status
+          ? {
+              status: input.status,
+              statusChangedAt: now,
+              verifiedAt: input.status === 'SATISFIED' ? now : cp.verifiedAt,
+              waivedByUserId: null,
+              waiverReason: null,
+            }
+          : {}),
+        ...(evidenceChanged ? { evidenceDocumentId: input.evidenceDocumentId ?? null } : {}),
       },
     });
     await recordAuditEvent(tx, {
@@ -1842,6 +1855,7 @@ export async function updateConditionPrecedentStatus(params: {
         previousStatus: cp.status,
         status: input.status,
         note: input.note ?? null,
+        evidenceDocumentId: evidenceChanged ? input.evidenceDocumentId ?? null : cp.evidenceDocumentId,
       },
     });
     return serializeTranche(

@@ -66,6 +66,8 @@ export interface ProjectSummaryDto extends ProjectDeliveryModelFields {
   activatedAt: string | null;
   archivedAt: string | null;
   openConflictCount: number;
+  /** Phase 13: contract milestones past their due date (absent from servers before Phase 13). */
+  overdueMilestoneCount?: number;
   unfulfilledHoldPointCount: number;
   totalBoqItems: number;
   opaqueLumpSumCount: number;
@@ -98,6 +100,9 @@ export interface ProjectSummaryDto extends ProjectDeliveryModelFields {
       description: string;
       isMandatoryForRelease: boolean;
       status: 'PENDING' | 'SATISFIED' | 'WAIVED' | 'BREACHED';
+      /** Phase 13: evidence document in the register. */
+      evidenceDocumentId?: string | null;
+      evidenceDocumentTitle?: string | null;
     }>;
   }>;
 }

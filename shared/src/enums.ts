@@ -364,6 +364,79 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     surface: 'WEB',
     unlocksViews: ['Schedule Change Approvals'],
   },
+  // Phase 13
+  {
+    key: 'schedule:propose_programme',
+    name: 'Propose Programme of Works',
+    description: "Submit the contractor's programme of works (item dates and dependencies) for the monitor to accept.",
+    category: 'BOQ_SCHEDULE',
+    surface: 'WEB',
+    unlocksViews: ['Programme of Works'],
+  },
+  {
+    key: 'documents:view',
+    name: 'View Project Documents',
+    description: 'Open the project document register, its versions and sign-offs. Contractors see their own and shared types only.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Documents Tab'],
+  },
+  {
+    key: 'documents:upload',
+    name: 'Upload Project Documents',
+    description: 'Add documents and new versions to the project register, and archive them.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Documents Tab'],
+  },
+  {
+    key: 'documents:manage_types',
+    name: 'Manage Document Types',
+    description: 'Configure the tenant document types: sign-off, allowed file types and contractor visibility.',
+    category: 'TENANT_ADMIN',
+    surface: 'WEB',
+    unlocksViews: ['Document Types Settings'],
+  },
+  {
+    key: 'milestones:manage',
+    name: 'Manage Contract Milestones',
+    description: 'Complete contract milestones and move the anchor dates (contract award, kick-off) they are computed from.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Milestones Tab'],
+  },
+  {
+    key: 'milestones:waive',
+    name: 'Waive Contract Milestones',
+    description: 'Waive a contract milestone with a recorded reason.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Milestones Tab'],
+  },
+  {
+    key: 'kickoff:manage',
+    name: 'Manage the Kick-off Meeting',
+    description: 'Schedule the kick-off meeting, send the notice, and record attendance, quorum and minutes.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Kick-off Meeting'],
+  },
+  {
+    key: 'contracts:raise_default',
+    name: 'Raise and Review Contractor Default Cases',
+    description: 'Open a default case against a contractor and act on its review steps.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Default Cases'],
+  },
+  {
+    key: 'contracts:decide_default',
+    name: 'Decide Contractor Default Cases',
+    description: 'Make the final decision on a default case: cure period, extension, termination or closure.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Default Cases'],
+  },
 
   // 4. MOBILIZATION_ASSURANCE
   {
@@ -1001,6 +1074,26 @@ export const AuditActionTypeEnum = z.enum([
   // Phase 12: credentials
   'CREDENTIAL_POLICY_UPDATED',
   'REGISTRATION_BODY_SAVED',
+  // Phase 13: documents, contract milestones, kick-off, default cases
+  'DOCUMENT_UPLOADED',
+  'DOCUMENT_VERSIONED',
+  'DOCUMENT_SIGNED',
+  'DOCUMENT_ARCHIVED',
+  'DOCUMENT_TYPE_SAVED',
+  'CONTRACT_DETAILS_SAVED',
+  'MILESTONE_COMPLETED',
+  'MILESTONE_WAIVED',
+  'MILESTONE_DATES_RECOMPUTED',
+  'KICKOFF_SCHEDULED',
+  'KICKOFF_NOTICE_SENT',
+  'KICKOFF_HELD',
+  'DEFAULT_CASE_OPENED',
+  'DEFAULT_CASE_REVIEWED',
+  'DEFAULT_CASE_DECIDED',
+  'CONTRACTOR_TERMINATED',
+  'CONTRACTOR_REPLACED',
+  'PROGRAMME_OF_WORKS_SUBMITTED',
+  'PROGRAMME_OF_WORKS_DECIDED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 
@@ -1142,10 +1235,11 @@ export const NEEDS_ASSESSMENT_DOC_TYPE_META: Record<NeedsAssessmentDocType, { la
   TECHNICAL_BASELINE: { label: 'Technical baseline' },
 };
 
-export const ApprovalChainTypeEnum = z.enum(['REPORT', 'DISBURSEMENT']);
+/** Phase 13 adds CONTRACT_DEFAULT (contractor default cases). */
+export const ApprovalChainTypeEnum = z.enum(['REPORT', 'DISBURSEMENT', 'CONTRACT_DEFAULT']);
 export type ApprovalChainType = z.infer<typeof ApprovalChainTypeEnum>;
 
-export const ApprovalSubjectTypeEnum = z.enum(['WORKDAY_REPORT', 'VALUATION_REPORT', 'SITE_INSPECTION']);
+export const ApprovalSubjectTypeEnum = z.enum(['WORKDAY_REPORT', 'VALUATION_REPORT', 'SITE_INSPECTION', 'CONTRACT_DEFAULT_CASE']);
 export type ApprovalSubjectType = z.infer<typeof ApprovalSubjectTypeEnum>;
 
 /**

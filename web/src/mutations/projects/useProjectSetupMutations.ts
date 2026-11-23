@@ -48,6 +48,11 @@ export const useSaveSetupStepMutation = (projectId: string) => {
         queryClient.invalidateQueries({ queryKey: ['project-baseline', projectId] });
       }
       if (args.stepId === 'boq') queryClient.invalidateQueries({ queryKey: ['boq', projectId] });
+      // Phase 13: contract dates, contractors and the project type shape the contract milestones.
+      if (args.stepId === 'contract' || args.stepId === 'parties' || args.stepId === 'basics') {
+        queryClient.invalidateQueries({ queryKey: ['contract-milestones', projectId] });
+        queryClient.invalidateQueries({ queryKey: ['mobilisation-compliance', projectId] });
+      }
       if (args.stepId === 'process') {
         queryClient.invalidateQueries({ queryKey: ['project-process', projectId] });
         queryClient.invalidateQueries({ queryKey: ['morning-briefs', projectId] });

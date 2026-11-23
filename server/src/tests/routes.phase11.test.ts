@@ -469,9 +469,14 @@ describe('cross-project web notifications (projectId = all)', () => {
     assert.equal(ownRead.status, 200, JSON.stringify(ownRead.body));
     assert.equal(ownRead.body.data.isRead, true);
 
+    // Read-all marks exactly the unread notifications South can see (the south item, plus seeded
+    // Phase 13 default-case notifications on PRG-221), never the north one.
+    const southList = await request(app).get('/api/v1/projects/all/web-notifications').set(await login(SOUTH));
+    const southUnread = (southList.body.data as Array<{ id: string; isRead: boolean }>).filter((n) => !n.isRead);
+    assert.ok(southUnread.some((n) => n.id === southNote.id) && !southUnread.some((n) => n.id === northNote.id));
     const readAll = await request(app).post('/api/v1/projects/all/web-notifications/read-all').set(await login(SOUTH));
     assert.equal(readAll.status, 200, JSON.stringify(readAll.body));
-    assert.equal(readAll.body.data.count, 1);
+    assert.equal(readAll.body.data.count, southUnread.length);
 
     // Other writes on 'all' stay refused.
     const otherWrite = await request(app).put('/api/v1/projects/all/setup/basics').set(await login(PROGRAMME_ADMIN)).send({});

@@ -101,6 +101,12 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'inspections:view',
       'inspections:manage_templates',
       'inspections:manage_findings',
+      // Phase 13
+      'documents:view',
+      'documents:upload',
+      'milestones:manage',
+      'kickoff:manage',
+      'contracts:raise_default',
     ],
   },
   {
@@ -131,6 +137,8 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'handover:review_feedback',
       'retention:release_escrow',
       'inspections:view',
+      // Phase 13
+      'documents:view',
     ],
   },
   {
@@ -154,6 +162,10 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       // Phase 14: sees and resolves inspection findings aimed at its organisation.
       'inspections:view',
       'inspections:manage_findings',
+      // Phase 13: its documents, and the programme of works it proposes.
+      'documents:view',
+      'documents:upload',
+      'schedule:propose_programme',
     ],
   },
   {
@@ -180,6 +192,14 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'valuation:export_pdf',
       'audit:view_ledger',
       'inspections:view',
+      // Phase 13: the owner's executives decide contractor default cases.
+      'documents:view',
+      'documents:upload',
+      'milestones:manage',
+      'milestones:waive',
+      'kickoff:manage',
+      'contracts:raise_default',
+      'contracts:decide_default',
     ],
   },
   {

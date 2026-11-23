@@ -35,7 +35,8 @@ export const ConditionPrecedentInputSchema = z.object({
   description: z.string().min(4).max(500),  // e.g., "Approved Environmental Impact Assessment & Geotechnical Soil Report"
   isMandatoryForRelease: z.boolean().default(true),
   status: ConditionPrecedentStatusEnum.default('PENDING'),
-  evidenceDocumentUrl: z.string().url().nullable().optional(),
+  /** Phase 13: replaces evidenceDocumentUrl; set through the CP status action, not setup. */
+  evidenceDocumentId: z.string().uuid().nullable().optional(),
 });
 export type ConditionPrecedentInput = z.infer<typeof ConditionPrecedentInputSchema>;
 

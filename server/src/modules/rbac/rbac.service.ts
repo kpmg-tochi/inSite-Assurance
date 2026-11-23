@@ -1,3 +1,4 @@
+import { provisionDefaultDocumentTypes } from '../documents/documentTypes.service';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import {
@@ -1204,6 +1205,8 @@ export async function createTenantWithDefaults(webUser: WebJwtPayload, input: Cr
     await seedStarterTemplates(tx, tenant.id);
     // Phase 12: the default registration bodies.
     await provisionDefaultRegistrationBodies(tx, tenant.id);
+    // Phase 13: the default document types.
+    await provisionDefaultDocumentTypes(tx, tenant.id);
 
     let adminUserId: string | null = null;
     if (input.adminEmail && input.adminPassword && input.adminFullName) {

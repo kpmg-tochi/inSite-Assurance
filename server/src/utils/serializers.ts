@@ -133,7 +133,9 @@ export function serializeCapture(log: CaptureRow): CaptureDto {
   };
 }
 
-export function serializeConditionPrecedent(cp: Prisma.ConditionPrecedentGetPayload<object>) {
+export function serializeConditionPrecedent(
+  cp: Prisma.ConditionPrecedentGetPayload<object> & { evidenceDocument?: { title: string } | null }
+) {
   return {
     id: cp.id,
     referenceCode: cp.referenceCode,
@@ -144,6 +146,9 @@ export function serializeConditionPrecedent(cp: Prisma.ConditionPrecedentGetPayl
     statusChangedAt: iso(cp.statusChangedAt),
     waivedByUserId: cp.waivedByUserId,
     waiverReason: cp.waiverReason,
+    // Phase 13: evidence from the document register (title when the query included it).
+    evidenceDocumentId: cp.evidenceDocumentId,
+    evidenceDocumentTitle: cp.evidenceDocument?.title ?? null,
   };
 }
 

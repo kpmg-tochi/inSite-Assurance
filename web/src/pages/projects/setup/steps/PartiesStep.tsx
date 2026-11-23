@@ -14,7 +14,10 @@ import { OrganizationInput } from "../../../../components/organizations/Organiza
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import { useOrganizationsQuery, useTenantSettingsQuery } from "../../../../queries/organizations/useOrganizationQueries";
 import { CustomSelect } from "../../../../components/common";
-import { useTerm } from "../../../../lib/auth-context";
+import { Link } from "react-router-dom";
+import { useAuth, useTerm } from "../../../../lib/auth-context";
+import { useDefaultCasesQuery } from "../../../../queries/contracts/useContractQueries";
+import { DEFAULT_CASE_VIEW_PERMISSIONS, StatusChip } from "../../../../components/contracts/contractUi";
 import {
   extractErrors,
   FieldError,
@@ -40,6 +43,9 @@ interface ContractorRow {
   allowFieldReporting: boolean;
   plannedMobilizationDate: string;
   hasActivity: boolean;
+  /** Phase 13: a terminated contractor is read-only; a replacement names whom it replaces. */
+  terminated: boolean;
+  replacesProjectContractorId: string | null;
 }
 
 /** Phase 11: a beneficiary row (exactly one primary when there are any). */
@@ -64,6 +70,10 @@ export function PartiesStep({ projectId, setup, readOnly }: StepProps) {
   const settings = useTenantSettingsQuery();
   const currency = settings.data?.defaultCurrency ?? "NGN";
   const term = useTerm();
+  const { hasAnyPermission } = useAuth();
+  // Phase 13: open default cases per contractor (live projects only).
+  const casesQuery = useDefaultCasesQuery(projectId, { openOnly: true }, setup.status !== "DRAFT" && hasAnyPermission(...DEFAULT_CASE_VIEW_PERMISSIONS));
+  const openCaseFor = (contractorId?: string) => (contractorId ? casesQuery.data?.find((c) => c.projectContractorId === contractorId) : undefined);
   const rules = setup.parties.rules;
   const orgsQuery = useOrganizationsQuery({});
   const ownerOptions = useMemo(() => {
@@ -105,6 +115,8 @@ export function PartiesStep({ projectId, setup, readOnly }: StepProps) {
         allowFieldReporting: c.allowFieldReporting,
         plannedMobilizationDate: c.plannedMobilizationDate ?? "",
         hasActivity: c.hasActivity,
+        terminated: c.contractStatus === "TERMINATED",
+        replacesProjectContractorId: c.replacesProjectContractorId,
       })),
     }),
     [setup.parties]
@@ -146,6 +158,8 @@ export function PartiesStep({ projectId, setup, readOnly }: StepProps) {
           allowFieldReporting: true,
           plannedMobilizationDate: "",
           hasActivity: false,
+          terminated: false,
+          replacesProjectContractorId: null,
         },
       ],
     }));
@@ -431,7 +445,22 @@ export function PartiesStep({ projectId, setup, readOnly }: StepProps) {
         )}
         <div className="space-y-3">
           {state.contractors.map((c, i) => (
-            <div key={c.key} className="rounded-xl border border-slate-200 p-3 grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+            <div key={c.key} className={`rounded-xl border p-3 grid grid-cols-1 md:grid-cols-12 gap-3 items-start ${c.terminated ? "border-rose-200 bg-rose-50/30" : "border-slate-200"}`}>
+              {(c.terminated || c.replacesProjectContractorId || openCaseFor(c.id)) && (
+                <div className="md:col-span-12 flex flex-wrap items-center gap-2 text-[11px]">
+                  {c.terminated && <StatusChip label="Terminated" cls="bg-rose-50 text-rose-700 border-rose-200" title="Read-only: its history stays on the project" />}
+                  {c.replacesProjectContractorId && (
+                    <span className="text-slate-600">
+                      Replaces {state.contractors.find((x) => x.id === c.replacesProjectContractorId)?.organizationName ?? "a terminated contractor"}
+                    </span>
+                  )}
+                  {openCaseFor(c.id) && (
+                    <Link to={`/app/projects/${projectId}/milestones?case=${openCaseFor(c.id)!.id}`} className="font-semibold text-rose-700 hover:underline">
+                      Open default case
+                    </Link>
+                  )}
+                </div>
+              )}
               <div className="md:col-span-4">
                 <OrganizationInput
                   label="Contractor"
@@ -440,7 +469,7 @@ export function PartiesStep({ projectId, setup, readOnly }: StepProps) {
                   selectedName={c.organizationName}
                   onChange={(v) => setRow(c.key, { organization: v, organizationName: null })}
                   error={errors.fields[`contractors.${i}.organization`]}
-                  disabled={readOnly || c.hasActivity}
+                  disabled={readOnly || c.hasActivity || c.terminated}
                 />
               </div>
               <div className="md:col-span-3">
@@ -450,7 +479,7 @@ export function PartiesStep({ projectId, setup, readOnly }: StepProps) {
                   value={c.tradeCategory}
                   placeholder="e.g. Electrical works"
                   onChange={(e) => setRow(c.key, { tradeCategory: e.target.value })}
-                  disabled={readOnly}
+                  disabled={readOnly || c.terminated}
                 />
                 <FieldError message={errors.fields[`contractors.${i}.tradeCategory`]} />
               </div>
@@ -462,7 +491,7 @@ export function PartiesStep({ projectId, setup, readOnly }: StepProps) {
                   maxLength={6}
                   placeholder="ELEC"
                   onChange={(e) => setRow(c.key, { tradeCode: e.target.value.toUpperCase() })}
-                  disabled={readOnly}
+                  disabled={readOnly || c.terminated}
                 />
                 <FieldError message={errors.fields[`contractors.${i}.tradeCode`]} />
               </div>
@@ -474,7 +503,7 @@ export function PartiesStep({ projectId, setup, readOnly }: StepProps) {
                     className={inputClass(Boolean(errors.fields[`contractors.${i}.allocatedBudgetNgn`]))}
                     value={c.allocatedBudget}
                     onChange={(e) => setRow(c.key, { allocatedBudget: e.target.value })}
-                    disabled={readOnly}
+                    disabled={readOnly || c.terminated}
                   />
                   <FieldError message={errors.fields[`contractors.${i}.allocatedBudgetNgn`]} />
                 </div>
@@ -487,7 +516,7 @@ export function PartiesStep({ projectId, setup, readOnly }: StepProps) {
                       name="main-contractor"
                       checked={c.isMainContractor}
                       onChange={() => setRow(c.key, { isMainContractor: true })}
-                      disabled={readOnly}
+                      disabled={readOnly || c.terminated}
                     />
                     Main contractor
                   </label>
@@ -497,7 +526,7 @@ export function PartiesStep({ projectId, setup, readOnly }: StepProps) {
                     type="checkbox"
                     checked={c.allowFieldReporting}
                     onChange={(e) => setRow(c.key, { allowFieldReporting: e.target.checked })}
-                    disabled={readOnly}
+                    disabled={readOnly || c.terminated}
                   />
                   Field reporting
                 </label>
@@ -505,8 +534,8 @@ export function PartiesStep({ projectId, setup, readOnly }: StepProps) {
                   <button
                     type="button"
                     onClick={() => removeRow(c.key)}
-                    disabled={c.hasActivity}
-                    title={c.hasActivity ? "This contractor has field sessions or claims and cannot be removed" : "Remove"}
+                    disabled={c.hasActivity || c.terminated}
+                    title={c.terminated ? "A terminated contractor stays on record" : c.hasActivity ? "This contractor has field sessions or claims and cannot be removed" : "Remove"}
                     className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-rose-600 hover:underline disabled:opacity-40 disabled:no-underline"
                   >
                     <Trash2 className="w-3.5 h-3.5" /> Remove
@@ -530,6 +559,6 @@ function strip(s: { owner: string; beneficiaries: BeneficiaryRow[]; monitor: unk
     monitor: s.monitor,
     lender: s.lender,
     mode: s.mode,
-    contractors: s.contractors.map(({ key: _k, organizationName: _n, hasActivity: _h, ...rest }) => rest),
+    contractors: s.contractors.map(({ key: _k, organizationName: _n, hasActivity: _h, terminated: _t, replacesProjectContractorId: _r, ...rest }) => rest),
   };
 }

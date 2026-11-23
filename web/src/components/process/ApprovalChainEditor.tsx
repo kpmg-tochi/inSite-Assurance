@@ -5,6 +5,7 @@ import {
   ApprovalOrganizationScopeEnum,
   MAX_APPROVAL_STEPS,
   type ApprovalOrganizationScope,
+  DEFAULT_REVIEW_PERMISSION_KEY,
   REPORT_APPROVAL_PERMISSION_KEY,
   SYSTEM_PERMISSIONS_CATALOG,
   type ApprovalChainType,
@@ -39,7 +40,8 @@ export function permissionName(key: string): string {
 /**
  * An ordered, editable approval chain. The disbursement chain's first (certification) and last
  * (release) steps are system steps: fixed in place, permission fixed, no threshold. Tenants add
- * review steps between them; only added disbursement steps take an amount threshold.
+ * review steps between them; only added disbursement steps take an amount threshold. Phase 13: the
+ * contract default chain ends with a fixed decision step; review steps are added before it.
  */
 export function ApprovalChainEditor({
   chainType,
@@ -58,6 +60,9 @@ export function ApprovalChainEditor({
   issues: ChainIssue[];
 }) {
   const isDisbursement = chainType === "DISBURSEMENT";
+  const isContractDefault = chainType === "CONTRACT_DEFAULT";
+  /** Chains whose last step is a fixed system step: new steps go before it. */
+  const endsWithSystemStep = isDisbursement || isContractDefault;
   const roleOptions = useMemo<CustomSelectOption<string>[]>(
     () => [{ value: "", label: "Any role with the permission" }, ...roles.map((r) => ({ value: r.id, label: r.name }))],
     [roles]
@@ -78,15 +83,15 @@ export function ApprovalChainEditor({
 
   const add = () => {
     const step: ApprovalStepConfig = {
-      label: isDisbursement ? "Additional review" : `Approval step ${steps.length + 1}`,
-      requiredPermissionKey: isDisbursement ? "ipc:view" : REPORT_APPROVAL_PERMISSION_KEY,
+      label: isDisbursement ? "Additional review" : isContractDefault ? "Review" : `Approval step ${steps.length + 1}`,
+      requiredPermissionKey: isDisbursement ? "ipc:view" : isContractDefault ? DEFAULT_REVIEW_PERMISSION_KEY : REPORT_APPROVAL_PERMISSION_KEY,
       requiredRoleId: null,
       minAmountThresholdNgn: null,
       isSystemStep: false,
       organizationScope: "ANY",
     };
-    if (isDisbursement && steps.length >= 1 && steps[steps.length - 1].isSystemStep) {
-      // Added before the release step.
+    if (endsWithSystemStep && steps.length >= 1 && steps[steps.length - 1].isSystemStep) {
+      // Added before the release (or decision) step.
       onChange([...steps.slice(0, -1), step, steps[steps.length - 1]]);
     } else {
       onChange([...steps, step]);
@@ -195,7 +200,7 @@ export function ApprovalChainEditor({
                 </div>
                 <div className="flex shrink-0 flex-col gap-1 pt-5">
                   {fixed ? (
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400" title="Certification and release steps cannot be removed or moved.">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400" title={isContractDefault ? "The decision step cannot be removed or moved." : "Certification and release steps cannot be removed or moved."}>
                       Fixed
                     </span>
                   ) : (
@@ -235,7 +240,7 @@ export function ApprovalChainEditor({
           onClick={add}
           className="inline-flex items-center gap-1 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
         >
-          <Plus className="w-3.5 h-3.5" /> {isDisbursement ? "Add a review step before release" : "Add a step"}
+          <Plus className="w-3.5 h-3.5" /> {isDisbursement ? "Add a review step before release" : isContractDefault ? "Add a review step before the decision" : "Add a step"}
         </button>
       )}
     </div>

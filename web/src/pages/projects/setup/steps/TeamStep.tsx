@@ -3,6 +3,7 @@ import { Search, Smartphone } from "lucide-react";
 import { useTeamOptionsQuery } from "../../../../queries/projects/useProjectSetupQueries";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import { ExpectedParticipantsPanel } from "../../../../components/projects/ExpectedParticipantsPanel";
+import { MobilisationCompliancePanel } from "../../../../components/contracts/MobilisationCompliancePanel";
 import { useAuth } from "../../../../lib/auth-context";
 import { TeamWorkloadNotice } from "../../../../components/inspections/SupervisorsCard";
 import {
@@ -151,6 +152,9 @@ export function TeamStep({ projectId, setup, readOnly, mode }: StepProps) {
           />
         </StepSection>
       )}
+
+      {/* Phase 13: contractor mobilisation deadlines, check-ins and missing documents (live projects). */}
+      {canSeeRoster && setup.status !== "DRAFT" && <MobilisationCompliancePanel projectId={projectId} />}
     </div>
   );
 }

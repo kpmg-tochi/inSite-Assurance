@@ -7,6 +7,12 @@ import {
 } from './inspection.schema';
 import { ProjectTypeCredentialsConfigSchema } from './credentials.schema';
 import { ProjectTypePaymentsConfigSchema } from './milestonePayment.schema';
+import {
+  ContractMilestoneTemplateListSchema,
+  ProjectTypeDefaultCasesConfigSchema,
+  ProjectTypeDocumentRequirementsSchema,
+  ProjectTypeKickoffConfigSchema,
+} from './contract.schema';
 
 /**
  * Project types (Phase 11): a delivery model ("Central Delivery Model", "Co-Funded Delivery
@@ -69,8 +75,14 @@ export const ProjectTypeConfigSchema = z.object({
   credentials: ProjectTypeCredentialsConfigSchema.default({}),
   /** Phase 12: payment milestone defaults for new tranches, and the mechanism the type expects. */
   payments: ProjectTypePaymentsConfigSchema.default({}),
-  contractMilestones: z.unknown().optional(), // Phase 13
-  documentRequirements: z.unknown().optional(), // Phase 13
+  /** Phase 13: dated obligations created on the project when the type is applied. */
+  contractMilestones: ContractMilestoneTemplateListSchema.default([]),
+  /** Phase 13: documents needed before activation and before mobilisation. */
+  documentRequirements: ProjectTypeDocumentRequirementsSchema.default({}),
+  /** Phase 13: kick-off quorum groups and notice lead time. */
+  kickoff: ProjectTypeKickoffConfigSchema.default({}),
+  /** Phase 13: contractor default cases (Legal role, automatic opening). */
+  defaultCases: ProjectTypeDefaultCasesConfigSchema.default({}),
   /** Phase 14: streams created on a project when the type is applied (roles by code). */
   reportingStreams: z.array(ProjectTypeReportingStreamSchema).max(10).default([]),
   /** Phase 14: checklist template per visit type. */

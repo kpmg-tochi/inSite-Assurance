@@ -1,3 +1,4 @@
+import { overdueMilestoneCounts } from '../contracts/milestones.service';
 import { Prisma, ProjectStatus } from '@prisma/client';
 import {
   ContractorExecutionMode,
@@ -270,6 +271,9 @@ export async function listProjectsForUser(
     },
   });
 
+  // Phase 13: overdue contract milestones per project (directory badge).
+  const overdue = await overdueMilestoneCounts(projects);
+
   return projects.map((project) => {
     const { openConflictCount, unfulfilledHoldPointCount } = countReconciliationIssues(
       project.ipcClaims[0]?.lineItems ?? []
@@ -285,6 +289,7 @@ export async function listProjectsForUser(
         project.evidenceLogs[0]?.capturedAtDevice.toISOString() ?? null,
       joinCodes: visibleJoinCodesFor(project.joinCodes, webUser),
       tranches: project.tranches.map(serializeTranche),
+      overdueMilestoneCount: overdue.get(project.id) ?? 0,
     };
   });
 }

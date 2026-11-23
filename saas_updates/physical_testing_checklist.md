@@ -159,6 +159,14 @@ Use the programme tenant (seedPhase14): join PRG-211 with a Monitor Inspector jo
 - [ ] **P14-M-05** Contractor phone: a push "Inspection finding to fix" arrives; the warning icon opens Findings; mark it resolved with a photo offline, then online. Expected: the web finding shows Resolved with the photo; a contractor of another package never sees it.
 - [ ] **P14-M-06** Upload more than 7 days after the visit date (set the visit in an earlier week by using an older draft). Expected: the web marks the inspection late and the quarter's obligation LATE.
 
+### 3.8 Phase 13: contractor mobilisation (device run pending)
+
+No mobile code changed in Phase 13; these check the server hook from a real check-in.
+
+- [ ] **P13-M-01** PRG-102 (seeded, mobilisation due in 5 days): join with the PRG-102 contractor code (`PRG-102-CON-…`, printed by the seed), walk inside the site boundary and tap Check in. Expected: on the web, Milestones shows "Contractor mobilised on site" Done with the check-in time, and the mobilisation compliance panel shows the contractor on site.
+- [ ] **P13-M-02** Same, but check in outside the boundary (or with a mock location). Expected: the milestone stays open.
+- [ ] **P13-M-03** After a contractor's contract is terminated on the web (PRG-221 default case, decision "Terminate"), the phone of a session joined with that contractor's code. Expected: the session is signed out (revoked) and the old join code no longer works.
+
 ---
 
 ## 4. Not ready to test yet

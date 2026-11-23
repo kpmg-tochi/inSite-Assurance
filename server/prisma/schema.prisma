@@ -69,6 +69,8 @@ enum TranchePaymentBasis {
 enum TrancheCompletionRule {
   ALL_ITEMS_COMPLETE
   WEIGHTED_PROGRESS_REACHED
+  // Phase 13
+  CONTRACT_MILESTONE_DONE
 }
 
 // FieldPersonaType replaces static IndependenceTier enum on Role & FieldAgentSession
@@ -177,6 +179,8 @@ enum NeedsAssessmentDocType {
 enum ApprovalChainType {
   REPORT
   DISBURSEMENT
+  // Phase 13
+  CONTRACT_DEFAULT
 }
 
 enum ApprovalSubjectType {
@@ -184,6 +188,8 @@ enum ApprovalSubjectType {
   VALUATION_REPORT
   // Phase 14
   SITE_INSPECTION
+  // Phase 13
+  CONTRACT_DEFAULT_CASE
 }
 
 enum ApprovalDecision {
@@ -392,6 +398,26 @@ enum AuditActionType {
   // Phase 12
   CREDENTIAL_POLICY_UPDATED
   REGISTRATION_BODY_SAVED
+  // Phase 13
+  DOCUMENT_UPLOADED
+  DOCUMENT_VERSIONED
+  DOCUMENT_SIGNED
+  DOCUMENT_ARCHIVED
+  DOCUMENT_TYPE_SAVED
+  CONTRACT_DETAILS_SAVED
+  MILESTONE_COMPLETED
+  MILESTONE_WAIVED
+  MILESTONE_DATES_RECOMPUTED
+  KICKOFF_SCHEDULED
+  KICKOFF_NOTICE_SENT
+  KICKOFF_HELD
+  DEFAULT_CASE_OPENED
+  DEFAULT_CASE_REVIEWED
+  DEFAULT_CASE_DECIDED
+  CONTRACTOR_TERMINATED
+  CONTRACTOR_REPLACED
+  PROGRAMME_OF_WORKS_SUBMITTED
+  PROGRAMME_OF_WORKS_DECIDED
 }
 
 // Phase 11: which organisation an approval step actor must belong to (ANY = Phase 7 behaviour).
@@ -573,6 +599,8 @@ model Tenant {
   regions            Region[]
   // Phase 14
   checklistTemplates InspectionChecklistTemplate[]
+  // Phase 13
+  documentTypes      DocumentType[]
   registrationBodies ProfessionalRegistrationBody[]
 
   @@map("tenants")
@@ -823,6 +851,15 @@ model Project {
   projectTypeSnapshotJson Json?
   regionId                String? @db.Uuid
 
+  // Phase 13: contract details (dates YYYY-MM-DD in the project zone). kickoffDate is the planned
+  // kick-off; contract milestones count from these anchors.
+  contractReference  String?
+  contractAwardDate  String?
+  contractSignedDate String?
+  contractSumNgn     Decimal?  @db.Decimal(18, 2)
+  kickoffDate        String?
+  kickoffHeldAt      DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -878,6 +915,12 @@ model Project {
   reportingStreams       ProjectReportingStream[]
   siteInspections        SiteInspectionReport[]
   inspectionFindings     InspectionFinding[]
+  // Phase 13
+  documents              ProjectDocument[]
+  contractMilestones     ProjectContractMilestone[]
+  kickoffMeeting         KickoffMeeting?
+  defaultCases           ContractorDefaultCase[]
+  programmeSubmissions   ProgrammeOfWorksSubmission[]
 
   @@unique([tenantId, codePrefix])
   @@index([tenantId])
@@ -893,21 +936,27 @@ model Project {
 // A contractor on a project (Phase 6). In multi-prime each contractor owns its BOQ items and IPCs;
 // in the unified model the main contractor submits IPCs and the others report from site only.
 model ProjectContractor {
-  id                      String    @id @default(uuid()) @db.Uuid
-  projectId               String    @db.Uuid
-  organizationId          String    @db.Uuid
-  tradeCategory           String
-  tradeCode               String
-  isMainContractor        Boolean   @default(false)
-  allocatedBudgetNgn      Decimal?  @db.Decimal(18, 2)
-  allowFieldReporting     Boolean   @default(true)
-  plannedMobilizationDate DateTime? @db.Date
-  plannedCompletionDate   DateTime? @db.Date
+  id                          String         @id @default(uuid()) @db.Uuid
+  projectId                   String         @db.Uuid
+  organizationId              String         @db.Uuid
+  tradeCategory               String
+  tradeCode                   String
+  isMainContractor            Boolean        @default(false)
+  allocatedBudgetNgn          Decimal?       @db.Decimal(18, 2)
+  allowFieldReporting         Boolean        @default(true)
+  plannedMobilizationDate     DateTime?      @db.Date
+  plannedCompletionDate       DateTime?      @db.Date
   // Phase 10: retention per contractor (the project holds the sums).
-  retentionHeldNgn        Decimal   @default(0) @db.Decimal(18, 2)
-  retentionReleasedNgn    Decimal   @default(0) @db.Decimal(18, 2)
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
+  retentionHeldNgn            Decimal        @default(0) @db.Decimal(18, 2)
+  retentionReleasedNgn        Decimal        @default(0) @db.Decimal(18, 2)
+  // Phase 13: contract state. A terminated contractor keeps its history (IPCs, certified progress,
+  // retention); a replacement points back to it.
+  contractStatus              ContractStatus @default(ACTIVE)
+  terminatedAt                DateTime?
+  terminationCaseId           String?        @db.Uuid
+  replacesProjectContractorId String?        @db.Uuid
+  createdAt                   DateTime       @default(now())
+  updatedAt                   DateTime       @updatedAt
 
   project              Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   organization         Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
@@ -921,6 +970,13 @@ model ProjectContractor {
   // Phase 14
   reportingStreams     ProjectReportingStream[]
   inspectionFindings   InspectionFinding[]
+  // Phase 13
+  replaces             ProjectContractor?           @relation("ContractorReplacement", fields: [replacesProjectContractorId], references: [id], onDelete: SetNull)
+  replacedBy           ProjectContractor[]          @relation("ContractorReplacement")
+  documents            ProjectDocument[]
+  contractMilestones   ProjectContractMilestone[]
+  defaultCases         ContractorDefaultCase[]
+  programmeSubmissions ProgrammeOfWorksSubmission[]
 
   @@unique([projectId, organizationId])
   @@unique([projectId, tradeCode])
@@ -1079,22 +1135,24 @@ model MobileDevice {
 }
 
 model FacilityTranche {
-  id                        String                 @id @default(uuid()) @db.Uuid
-  projectId                 String                 @db.Uuid
-  trancheNumber             Int
-  name                      String // e.g., "Tranche 2 — Substructure & Box Culverts"
-  allocatedAmountNgn        Decimal                @db.Decimal(18, 2)
-  releasedAmountNgn         Decimal                @default(0) @db.Decimal(18, 2)
-  targetCompletionPct       Decimal                @db.Decimal(5, 2)
-  isReleased                Boolean                @default(false)
+  id                             String                 @id @default(uuid()) @db.Uuid
+  projectId                      String                 @db.Uuid
+  trancheNumber                  Int
+  name                           String // e.g., "Tranche 2 — Substructure & Box Culverts"
+  allocatedAmountNgn             Decimal                @db.Decimal(18, 2)
+  releasedAmountNgn              Decimal                @default(0) @db.Decimal(18, 2)
+  targetCompletionPct            Decimal                @db.Decimal(5, 2)
+  isReleased                     Boolean                @default(false)
   // Phase 12: payment basis. Fixed: pays fixedReleaseAmountNgn (null = allocated) once completionRule is met.
-  paymentBasis              TranchePaymentBasis    @default(MEASURED)
-  completionRule            TrancheCompletionRule?
-  fixedReleaseAmountNgn     Decimal?               @db.Decimal(18, 2)
+  paymentBasis                   TranchePaymentBasis    @default(MEASURED)
+  completionRule                 TrancheCompletionRule?
+  fixedReleaseAmountNgn          Decimal?               @db.Decimal(18, 2)
   // ALL_ITEMS_COMPLETE: the percentage every mapped item must reach.
-  completionRequiredItemPct Decimal                @default(100) @db.Decimal(5, 2)
-  createdAt                 DateTime               @default(now())
-  updatedAt                 DateTime               @updatedAt
+  completionRequiredItemPct      Decimal                @default(100) @db.Decimal(5, 2)
+  // Phase 13: CONTRACT_MILESTONE_DONE names a contract milestone by key.
+  completionContractMilestoneKey String?
+  createdAt                      DateTime               @default(now())
+  updatedAt                      DateTime               @updatedAt
 
   project                Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
   conditionsPrecedent    ConditionPrecedent[]
@@ -1113,7 +1171,8 @@ model ConditionPrecedent {
   description           String
   isMandatoryForRelease Boolean                  @default(true)
   status                ConditionPrecedentStatus @default(PENDING)
-  evidenceDocumentUrl   String?
+  // Phase 13: replaces evidenceDocumentUrl (decision A: no backfill).
+  evidenceDocumentId    String?                  @db.Uuid
   verifiedAt            DateTime?
   waivedByUserId        String?                  @db.Uuid
   waiverReason          String?
@@ -1121,8 +1180,9 @@ model ConditionPrecedent {
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
 
-  tranche      FacilityTranche @relation(fields: [trancheId], references: [id], onDelete: Cascade)
-  waivedByUser User?           @relation("WaivedConditions", fields: [waivedByUserId], references: [id], onDelete: SetNull)
+  tranche          FacilityTranche  @relation(fields: [trancheId], references: [id], onDelete: Cascade)
+  waivedByUser     User?            @relation("WaivedConditions", fields: [waivedByUserId], references: [id], onDelete: SetNull)
+  evidenceDocument ProjectDocument? @relation("CpEvidenceDocument", fields: [evidenceDocumentId], references: [id], onDelete: SetNull)
 
   @@index([trancheId])
 }
@@ -1251,10 +1311,10 @@ model FieldEvidenceLog {
   capturedAtDevice DateTime
   syncedAtServer   DateTime @default(now())
 
-  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  boqItem          BoqItem?          @relation(fields: [boqItemId], references: [id], onDelete: SetNull)
-  fieldSession     FieldAgentSession @relation(fields: [fieldSessionId], references: [id], onDelete: Restrict)
-  workdayReport    WorkdayReport?    @relation(fields: [workdayReportId], references: [id], onDelete: SetNull)
+  project          Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  boqItem          BoqItem?              @relation(fields: [boqItemId], references: [id], onDelete: SetNull)
+  fieldSession     FieldAgentSession     @relation(fields: [fieldSessionId], references: [id], onDelete: Restrict)
+  workdayReport    WorkdayReport?        @relation(fields: [workdayReportId], references: [id], onDelete: SetNull)
   siteInspection   SiteInspectionReport? @relation(fields: [siteInspectionReportId], references: [id], onDelete: SetNull)
   mediaAttachments EvidenceMedia[]
   chatMessages     WbsChatMessage[]
@@ -2009,26 +2069,26 @@ model ProjectNeedsAssessmentDocument {
 // One report owed for one WBS item and reporting period by one reporter scope:
 // "contractor:<projectContractorId>", "contractor:project" (no packages) or "verifier".
 model ReportingObligation {
-  id              String                    @id @default(uuid()) @db.Uuid
-  projectId       String                    @db.Uuid
+  id                     String                    @id @default(uuid()) @db.Uuid
+  projectId              String                    @db.Uuid
   // Phase 14: null for an INSPECTION stream obligation (one per period).
-  boqItemId       String?                   @db.Uuid
+  boqItemId              String?                   @db.Uuid
   // Phase 14: null = the project's implicit stream.
-  streamId        String?                   @db.Uuid
-  siteInspectionReportId String?            @db.Uuid
-  reporterScope   String
-  periodStart     String
-  periodEnd       String
-  dueAt           DateTime
+  streamId               String?                   @db.Uuid
+  siteInspectionReportId String?                   @db.Uuid
+  reporterScope          String
+  periodStart            String
+  periodEnd              String
+  dueAt                  DateTime
   // dueAt plus the project's grace when the obligation was created.
-  lateAfter       DateTime
-  status          ReportingObligationStatus @default(PENDING)
-  workdayReportId String?                   @db.Uuid
-  alertedAt       DateTime?
-  excusedNote     String?
-  excusedByUserId String?                   @db.Uuid
-  createdAt       DateTime                  @default(now())
-  updatedAt       DateTime                  @updatedAt
+  lateAfter              DateTime
+  status                 ReportingObligationStatus @default(PENDING)
+  workdayReportId        String?                   @db.Uuid
+  alertedAt              DateTime?
+  excusedNote            String?
+  excusedByUserId        String?                   @db.Uuid
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
 
   project        Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
   boqItem        BoqItem?                @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
@@ -2622,4 +2682,286 @@ model InspectionFinding {
   @@index([inspectionId])
   @@index([projectContractorId, status])
   @@map("inspection_findings")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 13: document register, contract milestones, kick-off, default cases, programme of works
+// ---------------------------------------------------------------------------
+
+enum ContractStatus {
+  ACTIVE
+  TERMINATED
+}
+
+enum ContractMilestoneAnchor {
+  CONTRACT_AWARD
+  CONTRACT_SIGNED
+  KICKOFF
+  ACTIVATION
+  MILESTONE
+}
+
+enum MilestoneOffsetUnit {
+  CALENDAR_DAYS
+  WORKING_DAYS
+}
+
+enum ContractMilestoneStatus {
+  PENDING
+  DUE
+  OVERDUE
+  DONE
+  WAIVED
+}
+
+enum MilestoneCompletionMode {
+  MANUAL
+  AUTO_CONTRACTOR_ON_SITE
+  AUTO_KICKOFF_NOTICE_SENT
+  AUTO_KICKOFF_QUORUM
+  AUTO_SCHEDULE_BASELINE_SET
+}
+
+enum DefaultCaseTrigger {
+  MILESTONE_OVERDUE
+  MANUAL
+}
+
+enum DefaultCaseStatus {
+  OPEN
+  IN_REVIEW
+  CURE_PERIOD
+  EXTENSION_GRANTED
+  TERMINATED
+  CLOSED
+}
+
+enum ProgrammeOfWorksStatus {
+  PENDING
+  ACCEPTED
+  RETURNED
+}
+
+/// Tenant document types (seeded from DEFAULT_DOCUMENT_TYPES with every tenant).
+model DocumentType {
+  id                   String   @id @default(uuid()) @db.Uuid
+  tenantId             String   @db.Uuid
+  code                 String
+  name                 String
+  description          String?
+  visibleToContractors Boolean  @default(false)
+  requiresSignOff      Boolean  @default(false)
+  signOffPermissionKey String?
+  allowedMimeTypes     String[] @default([])
+  isArchived           Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  documents ProjectDocument[]
+
+  @@unique([tenantId, code])
+  @@map("document_types")
+}
+
+model ProjectDocument {
+  id                         String   @id @default(uuid()) @db.Uuid
+  projectId                  String   @db.Uuid
+  documentTypeId             String   @db.Uuid
+  title                      String
+  currentVersion             Int      @default(1)
+  uploadedByUserId           String?  @db.Uuid
+  projectContractorId        String?  @db.Uuid
+  linkedMilestoneId          String?  @db.Uuid
+  linkedConditionPrecedentId String?  @db.Uuid
+  isArchived                 Boolean  @default(false)
+  archivedReason             String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  project           Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documentType      DocumentType              @relation(fields: [documentTypeId], references: [id], onDelete: Restrict)
+  projectContractor ProjectContractor?        @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
+  linkedMilestone   ProjectContractMilestone? @relation(fields: [linkedMilestoneId], references: [id], onDelete: SetNull)
+  versions          ProjectDocumentVersion[]
+  signOffs          ProjectDocumentSignOff[]
+  cpEvidenceFor     ConditionPrecedent[]      @relation("CpEvidenceDocument")
+  kickoffAgendaFor  KickoffMeeting[]          @relation("KickoffAgenda")
+  kickoffMinutesFor KickoffMeeting[]          @relation("KickoffMinutes")
+
+  @@index([projectId, documentTypeId])
+  @@index([projectContractorId])
+  @@map("project_documents")
+}
+
+model ProjectDocumentVersion {
+  id               String   @id @default(uuid()) @db.Uuid
+  documentId       String   @db.Uuid
+  version          Int
+  objectKey        String   @unique
+  mimeType         String
+  byteSize         Int
+  sha256           String
+  uploadedByUserId String?  @db.Uuid
+  uploadedAt       DateTime @default(now())
+  note             String?
+
+  document ProjectDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+  @@map("project_document_versions")
+}
+
+/// An authenticated acknowledgement of one document version (not a qualified e-signature).
+model ProjectDocumentSignOff {
+  id             String   @id @default(uuid()) @db.Uuid
+  documentId     String   @db.Uuid
+  version        Int
+  userId         String   @db.Uuid
+  roleId         String?  @db.Uuid
+  organizationId String?  @db.Uuid
+  statement      String
+  statementHash  String
+  signedAt       DateTime @default(now())
+
+  document ProjectDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version, userId])
+  @@map("project_document_sign_offs")
+}
+
+/// Dated obligations from the project type's templates. One row per contractor for per-contractor
+/// templates; (projectId, key, COALESCE(projectContractorId)) is unique (hand-written index).
+model ProjectContractMilestone {
+  id                           String                   @id @default(uuid()) @db.Uuid
+  projectId                    String                   @db.Uuid
+  projectContractorId          String?                  @db.Uuid
+  key                          String
+  label                        String
+  description                  String?
+  anchor                       ContractMilestoneAnchor
+  anchorMilestoneKey           String?
+  offsetValue                  Int
+  offsetUnit                   MilestoneOffsetUnit      @default(CALENDAR_DAYS)
+  // Replacement contractors count from this date instead of the anchor.
+  anchorDateOverride           String?
+  dueDate                      String?
+  status                       ContractMilestoneStatus  @default(PENDING)
+  completionMode               MilestoneCompletionMode  @default(MANUAL)
+  requiredDocumentTypeCodes    String[]                 @default([])
+  requiresSignOffPermissionKey String?
+  responsibleRoleId            String?                  @db.Uuid
+  responsibleOrganizationScope String                   @default("ANY")
+  completedAt                  DateTime?
+  completedByUserId            String?                  @db.Uuid
+  completedNotes               String?
+  waivedReason                 String?
+  // Notifications (milestone-deadlines job): last status notified and reminder offsets sent for
+  // the current due date; both reset when the due date moves.
+  lastNotifiedAt               DateTime?
+  lastNotifiedStatus           ContractMilestoneStatus?
+  remindedOffsetsDays          Int[]                    @default([])
+  sortOrder                    Int                      @default(0)
+  createdAt                    DateTime                 @default(now())
+  updatedAt                    DateTime                 @updatedAt
+
+  project           Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectContractor ProjectContractor?      @relation(fields: [projectContractorId], references: [id], onDelete: Cascade)
+  documents         ProjectDocument[]
+  defaultCases      ContractorDefaultCase[]
+
+  @@index([projectId, status])
+  @@index([projectContractorId])
+  @@map("project_contract_milestones")
+}
+
+model KickoffMeeting {
+  id                 String    @id @default(uuid()) @db.Uuid
+  projectId          String    @unique @db.Uuid
+  scheduledAt        DateTime
+  location           String?
+  virtualLink        String?
+  agendaDocumentId   String?   @db.Uuid
+  minutesDocumentId  String?   @db.Uuid
+  noticeSentAt       DateTime?
+  noticeWaivedReason String?
+  heldAt             DateTime?
+  quorumMet          Boolean?
+  quorumWaivedReason String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  agendaDocument  ProjectDocument? @relation("KickoffAgenda", fields: [agendaDocumentId], references: [id], onDelete: SetNull)
+  minutesDocument ProjectDocument? @relation("KickoffMinutes", fields: [minutesDocumentId], references: [id], onDelete: SetNull)
+  invitees        KickoffInvitee[]
+
+  @@map("kickoff_meetings")
+}
+
+model KickoffInvitee {
+  id                String   @id @default(uuid()) @db.Uuid
+  meetingId         String   @db.Uuid
+  stakeholderGroup  String
+  name              String
+  email             String?
+  phone             String?
+  organizationId    String?  @db.Uuid
+  userId            String?  @db.Uuid
+  outboundMessageId String?  @db.Uuid
+  attended          Boolean?
+  createdAt         DateTime @default(now())
+
+  meeting KickoffMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+  @@map("kickoff_invitees")
+}
+
+model ContractorDefaultCase {
+  id                  String             @id @default(uuid()) @db.Uuid
+  projectId           String             @db.Uuid
+  projectContractorId String             @db.Uuid
+  trigger             DefaultCaseTrigger
+  milestoneId         String?            @db.Uuid
+  status              DefaultCaseStatus  @default(OPEN)
+  summary             String
+  outcomeNotes        String?
+  newDueDate          String?
+  // Set when a cure period ended without a cure and the case came back for a decision.
+  cureLapsedAt        DateTime?
+  chainVersion        Int
+  currentStepOrder    Int?
+  openedByUserId      String?            @db.Uuid
+  openedAt            DateTime           @default(now())
+  decidedAt           DateTime?
+  decidedByUserId     String?            @db.Uuid
+
+  project           Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectContractor ProjectContractor         @relation(fields: [projectContractorId], references: [id], onDelete: Cascade)
+  milestone         ProjectContractMilestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([projectContractorId])
+  @@index([milestoneId])
+  @@map("contractor_default_cases")
+}
+
+model ProgrammeOfWorksSubmission {
+  id                  String                 @id @default(uuid()) @db.Uuid
+  projectId           String                 @db.Uuid
+  projectContractorId String?                @db.Uuid
+  submittedByUserId   String                 @db.Uuid
+  proposalJson        Json
+  status              ProgrammeOfWorksStatus @default(PENDING)
+  decidedByUserId     String?                @db.Uuid
+  decisionNotes       String?
+  createdAt           DateTime               @default(now())
+  decidedAt           DateTime?
+
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectContractor ProjectContractor? @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@map("programme_of_works_submissions")
 }

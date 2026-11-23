@@ -19,6 +19,7 @@ import {
 import { BlockedNotice, ModalActions, ModalShell, inputClass } from "./ModalShell";
 import { retentionWithheldFor, type MilestonePaymentTerms } from "@insite/shared";
 import { PaymentTermsBox } from "../../../components/payments/PaymentTermsBox";
+import { DocumentPicker } from "../../../components/documents/DocumentPicker";
 import { useProjectProcess } from "../../../queries/process/useProcessQueries";
 import { useProjectsQuery } from "../../../queries/projects/useProjectsQueries";
 
@@ -52,6 +53,9 @@ export interface DecisionTranche {
   conditionsPrecedent?: Array<
     Pick<ConditionPrecedentDto, "id" | "referenceCode" | "description" | "isMandatoryForRelease" | "status"> & {
       waiverReason?: string | null;
+      /** Phase 13: evidence document in the register. */
+      evidenceDocumentId?: string | null;
+      evidenceDocumentTitle?: string | null;
     }
   >;
 }
@@ -64,6 +68,10 @@ function ConditionRow({ projectId, trancheId, cp }: { projectId: string; tranche
   const statusMutation = useUpdateConditionStatusMutation(projectId);
   const [waiving, setWaiving] = useState(false);
   const [reason, setReason] = useState("");
+  // Phase 13: "Mark satisfied" picks (or uploads) an evidence document from the register.
+  const [satisfying, setSatisfying] = useState(false);
+  const [evidenceId, setEvidenceId] = useState<string | null>(cp.evidenceDocumentId ?? null);
+  const [evidenceTitle, setEvidenceTitle] = useState<string | null>(cp.evidenceDocumentTitle ?? null);
   const open = cp.status === "PENDING" || cp.status === "BREACHED";
   const canWaive = hasPermission("tranche:approve_disbursement");
   const canSetStatus = canWaive || hasPermission("ipc:certify_valuation");
@@ -79,17 +87,18 @@ function ConditionRow({ projectId, trancheId, cp }: { projectId: string; tranche
           <div className="text-[11px] text-slate-400">
             {cp.isMandatoryForRelease ? "Mandatory for release" : "Advisory"}
             {cp.waiverReason ? ` · Waived: ${cp.waiverReason}` : ""}
+            {cp.evidenceDocumentTitle ? ` · Evidence: ${cp.evidenceDocumentTitle}` : ""}
           </div>
         </div>
         <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0 ${CP_CHIP[cp.status]}`}>{cp.status}</span>
       </div>
-      {open && (canWaive || canSetStatus) && !waiving && (
+      {open && (canWaive || canSetStatus) && !waiving && !satisfying && (
         <div className="flex gap-2">
           {canSetStatus && (
             <button
               type="button"
               disabled={statusMutation.isPending}
-              onClick={() => statusMutation.mutate({ trancheId, conditionId: cp.id, body: { status: "SATISFIED" } })}
+              onClick={() => setSatisfying(true)}
               className="px-2 py-0.5 rounded border border-emerald-300 bg-white text-emerald-800 text-[11px] font-semibold"
             >
               Mark satisfied
@@ -100,6 +109,37 @@ function ConditionRow({ projectId, trancheId, cp }: { projectId: string; tranche
               Waive
             </button>
           )}
+        </div>
+      )}
+      {satisfying && (
+        <div className="space-y-1.5">
+          <DocumentPicker
+            projectId={projectId}
+            typeCode="CP_EVIDENCE"
+            label="Evidence document (optional)"
+            value={evidenceId}
+            currentTitle={evidenceTitle}
+            onChange={(id, title) => {
+              setEvidenceId(id);
+              setEvidenceTitle(title);
+            }}
+          />
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setSatisfying(false)} className="text-[11px] text-slate-600">Cancel</button>
+            <button
+              type="button"
+              disabled={statusMutation.isPending}
+              onClick={() =>
+                statusMutation.mutate(
+                  { trancheId, conditionId: cp.id, body: { status: "SATISFIED", evidenceDocumentId: evidenceId } },
+                  { onSuccess: () => setSatisfying(false) },
+                )
+              }
+              className="px-2.5 py-1 rounded-lg bg-brand-primary text-white text-[11px] font-semibold disabled:opacity-50"
+            >
+              Confirm satisfied
+            </button>
+          </div>
         </div>
       )}
       {waiving && (

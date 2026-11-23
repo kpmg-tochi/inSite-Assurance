@@ -11,6 +11,7 @@ import { recordAuditEvent } from '../audit/audit.service';
 import { evaluateProjectGeofence } from '../../utils/geofenceEvaluation';
 import { verifyDeviceSignature } from '../../utils/deviceSignature';
 import { markParticipantsOnSite } from '../mobilization/participants.service';
+import { recordContractorOnSite } from '../contracts/milestones.service';
 
 const CHUNK_SIZE = 200;
 
@@ -149,9 +150,10 @@ async function recordCheckIns(params: {
   timeZone: string;
 }) {
   const manual = params.fresh.filter((r) => r.pingSource === 'MANUAL_CHECKIN');
-  const inGeofence = params.fresh.some(
+  const insidePings = params.fresh.filter(
     (r) => !r.isMocked && (r.geofenceStatus === 'INSIDE' || r.geofenceStatus === 'WITHIN_TOLERANCE' || (r.geofenceStatus == null && r.isWithinGeofence === true))
   );
+  const inGeofence = insidePings.length > 0;
   if (manual.length === 0 && !inGeofence) return;
   await prisma.$transaction(async (tx) => {
     for (const ping of manual) {
@@ -177,7 +179,12 @@ async function recordCheckIns(params: {
         },
       });
     }
-    if (inGeofence) await markParticipantsOnSite(tx, params.fieldSessionId);
+    if (inGeofence) {
+      await markParticipantsOnSite(tx, params.fieldSessionId);
+      // Phase 13: the contractor's first check-in inside the site completes its mobilisation milestone.
+      const first = insidePings.map((r) => new Date(r.capturedAtDevice)).sort((a, b) => a.getTime() - b.getTime())[0];
+      await recordContractorOnSite(tx, params.fieldSessionId, first);
+    }
   });
 }
 

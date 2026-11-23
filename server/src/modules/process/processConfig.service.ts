@@ -7,6 +7,8 @@ import {
   DEFAULT_PROJECT_PROCESS_CONFIG,
   defaultDisbursementChain,
   defaultReportChain,
+  defaultContractDefaultChain,
+  resolveProjectTypeConfig,
   ProjectProcessConfig,
   ProjectProcessConfigSchema,
   ProjectProcessSettingsDto,
@@ -117,7 +119,25 @@ export async function getActiveChain(
 }
 
 function defaultChainFor(chainType: ApprovalChainType, config: ProjectProcessConfig): ApprovalStepConfig[] {
+  if (chainType === 'CONTRACT_DEFAULT') return defaultContractDefaultChain({ hasOwner: false });
   return chainType === 'REPORT' ? defaultReportChain() : defaultDisbursementChain(config.disbursementMechanism);
+}
+
+/**
+ * Phase 13: the default contract default chain for a project. The decision step is limited to the
+ * owning organisation when there is one; the review step names the project type's Legal role.
+ */
+async function projectDefaultChainFor(db: Db, projectId: string, chainType: ApprovalChainType, config: ProjectProcessConfig) {
+  if (chainType !== 'CONTRACT_DEFAULT') return defaultChainFor(chainType, config);
+  const project = await db.project.findUniqueOrThrow({
+    where: { id: projectId },
+    select: { tenantId: true, owningOrganizationId: true, projectTypeSnapshotJson: true },
+  });
+  const legalCode = resolveProjectTypeConfig(project.projectTypeSnapshotJson)?.defaultCases.legalRoleCode ?? null;
+  const legal = legalCode
+    ? await db.role.findFirst({ where: { tenantId: project.tenantId, code: legalCode }, select: { id: true } })
+    : null;
+  return defaultContractDefaultChain({ hasOwner: Boolean(project.owningOrganizationId), legalRoleId: legal?.id ?? null });
 }
 
 /** The current chain, creating the default as version 1 when the project has none. */
@@ -129,7 +149,7 @@ export async function ensureChain(
   const existing = await getActiveChain(tx, projectId, chainType);
   if (existing) return existing;
   const config = await getProcessConfig(projectId, tx);
-  return writeChainVersion(tx, projectId, chainType, defaultChainFor(chainType, config), config);
+  return writeChainVersion(tx, projectId, chainType, await projectDefaultChainFor(tx, projectId, chainType, config), config);
 }
 
 /** The disbursement chain's certification step follows the project's disbursement mechanism. */
@@ -224,7 +244,7 @@ async function serializeChain(
     return {
       chainType,
       version: 0,
-      steps: defaultChainFor(chainType, config).map((s, i) => ({
+      steps: (await projectDefaultChainFor(db, projectId, chainType, config)).map((s, i) => ({
         id: '00000000-0000-0000-0000-000000000000',
         chainType,
         stepOrder: i + 1,
@@ -278,9 +298,10 @@ export async function getProjectProcessSettings(projectId: string, db: Db = pris
   const template = row?.workflowTemplateId
     ? await db.workflowTemplate.findUnique({ where: { id: row.workflowTemplateId }, select: { id: true, name: true } })
     : null;
-  const [reportChain, disbursementChain, codeCount, locked] = await Promise.all([
+  const [reportChain, disbursementChain, contractDefaultChain, codeCount, locked] = await Promise.all([
     serializeChain(db, projectId, 'REPORT', config),
     serializeChain(db, projectId, 'DISBURSEMENT', config),
+    serializeChain(db, projectId, 'CONTRACT_DEFAULT', config),
     activeContractorCodeCount(db, projectId),
     disbursementLocked(db, projectId),
   ]);
@@ -291,6 +312,7 @@ export async function getProjectProcessSettings(projectId: string, db: Db = pris
     workflowTemplateName: template?.name ?? null,
     reportChain,
     disbursementChain,
+    contractDefaultChain,
     activeContractorJoinCodeCount: codeCount,
     disbursementMechanismLocked: locked,
   };
@@ -304,6 +326,8 @@ export interface ProcessSettingsInput {
   config: ProjectProcessConfig;
   reportChain?: ApprovalStepConfig[];
   disbursementChain?: ApprovalStepConfig[];
+  /** Phase 13: written only when given (the default is created on first use). */
+  contractDefaultChain?: ApprovalStepConfig[];
   /** Set when copying a template; undefined keeps the current provenance, null clears it. */
   workflowTemplateId?: string | null;
   confirmDeactivateContractorCodes?: boolean;
@@ -426,6 +450,14 @@ export async function applyProcessSettings(
     }
   }
 
+  if (input.contractDefaultChain) {
+    const current = await getActiveChain(tx, projectId, 'CONTRACT_DEFAULT');
+    if (!current || !stepsEqual(current.steps, input.contractDefaultChain)) {
+      await writeChainVersion(tx, projectId, 'CONTRACT_DEFAULT', input.contractDefaultChain, next);
+      changedFields.push('contractDefaultChain');
+    }
+  }
+
   return { changedFields, deactivatedJoinCodes, issuedJoinCodes };
 }
 
@@ -534,7 +566,11 @@ export async function replaceProjectChain(
     const config = await getProcessConfig(projectId, tx);
     const result = await applyProcessSettings(tx, project, {
       config,
-      ...(chainType === 'REPORT' ? { reportChain: steps } : { disbursementChain: steps }),
+      ...(chainType === 'REPORT'
+        ? { reportChain: steps }
+        : chainType === 'DISBURSEMENT'
+          ? { disbursementChain: steps }
+          : { contractDefaultChain: steps }),
     });
     await auditSettingsChange(tx, projectId, webUser, result, { chainType });
   });

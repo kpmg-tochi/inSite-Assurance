@@ -116,7 +116,8 @@ export async function issueMissingJoinCodes(
     roles = roles.filter((r) => r.fieldPersonaType !== 'CONTRACTOR_EXECUTOR');
   }
   const contractors = await tx.projectContractor.findMany({
-    where: { projectId: project.id },
+    // Phase 13: a terminated contractor gets no codes.
+    where: { projectId: project.id, contractStatus: 'ACTIVE' },
     select: { id: true, tradeCode: true, allowFieldReporting: true },
     orderBy: [{ isMainContractor: 'desc' }, { createdAt: 'asc' }],
   });
@@ -153,7 +154,11 @@ export async function reconcileContractorJoinCodes(
   project: { id: string; tenantId: string; codePrefix: string }
 ) {
   await tx.projectJoinCode.updateMany({
-    where: { projectId: project.id, isActive: true, projectContractor: { allowFieldReporting: false } },
+    where: {
+      projectId: project.id,
+      isActive: true,
+      projectContractor: { OR: [{ allowFieldReporting: false }, { contractStatus: 'TERMINATED' }] },
+    },
     data: { isActive: false },
   });
   const roles = await tx.role.findMany({

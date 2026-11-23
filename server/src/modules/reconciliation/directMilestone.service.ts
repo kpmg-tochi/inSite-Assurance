@@ -60,7 +60,11 @@ async function assertDirectMode(projectId: string) {
 
 /** Evidence-derived cumulative percentage per BOQ item of a tranche (counted reports only). */
 async function evidenceForTranche(db: Tx | typeof prisma, projectId: string, trancheId: string) {
-  const items = await db.boqItem.findMany({ where: { projectId, trancheId }, orderBy: { wbsCode: 'asc' } });
+  // Phase 13: items of a terminated contractor are not verified until they move to a replacement.
+  const items = await db.boqItem.findMany({
+    where: { projectId, trancheId, OR: [{ projectContractorId: null }, { projectContractor: { contractStatus: 'ACTIVE' } }] },
+    orderBy: { wbsCode: 'asc' },
+  });
   const evidence = await getEvidenceForBoqItems(projectId, items.map((i) => i.id), new Date(), db);
   return items.map((item) => {
     const unit = normalizeUnit(item.unit);
@@ -100,6 +104,7 @@ async function openDirectValuation(db: Tx | typeof prisma, trancheId: string) {
 type TrancheTermsRow = {
   paymentBasis: string;
   completionRule: string | null;
+  completionContractMilestoneKey: string | null;
   completionRequiredItemPct: Prisma.Decimal;
   targetCompletionPct: Prisma.Decimal;
   fixedReleaseAmountNgn: Prisma.Decimal | null;
@@ -113,11 +118,39 @@ type EvidenceRow = Awaited<ReturnType<typeof evidenceForTranche>>[number];
  * Phase 12: the payment terms of a tranche evaluated against per-item verified percentages. The
  * measured basis does not judge completion.
  */
-function paymentTermsFor(tranche: TrancheTermsRow, rows: EvidenceRow[], verifiedPct: (row: EvidenceRow) => number): MilestonePaymentTerms {
+/**
+ * Phase 13: what the completion of a payment milestone also depends on: the contract milestone its
+ * rule names (CONTRACT_MILESTONE_DONE), and items of a terminated contractor not fully certified
+ * (they cannot be verified until moved to a replacement, so an item rule cannot be met).
+ */
+interface TermsExtras {
+  contractMilestone: { label: string; done: boolean } | null;
+  blockedWbsCodes: string[];
+}
+
+async function termsExtrasFor(db: Tx | typeof prisma, projectId: string, tranche: { id: string; completionRule: string | null; completionContractMilestoneKey: string | null }): Promise<TermsExtras> {
+  let contractMilestone: TermsExtras['contractMilestone'] = null;
+  if (tranche.completionRule === 'CONTRACT_MILESTONE_DONE' && tranche.completionContractMilestoneKey) {
+    const rows = await db.projectContractMilestone.findMany({
+      where: { projectId, key: tranche.completionContractMilestoneKey },
+      select: { label: true, status: true },
+    });
+    // Per-contractor milestones: done when every contractor's row is done or waived.
+    if (rows.length) contractMilestone = { label: rows[0].label, done: rows.every((r) => r.status === 'DONE' || r.status === 'WAIVED') };
+  }
+  const blocked = await db.boqItem.findMany({
+    where: { projectId, trancheId: tranche.id, projectContractor: { contractStatus: 'TERMINATED' }, cumulativeCertifiedPct: { lt: 100 } },
+    select: { wbsCode: true },
+  });
+  return { contractMilestone, blockedWbsCodes: blocked.map((b) => b.wbsCode) };
+}
+
+function paymentTermsFor(tranche: TrancheTermsRow, rows: EvidenceRow[], verifiedPct: (row: EvidenceRow) => number, extras: TermsExtras): MilestonePaymentTerms {
   const fixed = tranche.paymentBasis === 'FIXED_ON_COMPLETION';
   const completionRule = fixed ? ((tranche.completionRule ?? 'ALL_ITEMS_COMPLETE') as MilestonePaymentTerms['completionRule']) : null;
-  const completion = evaluateMilestoneCompletion({
+  const evaluated = evaluateMilestoneCompletion({
     rule: completionRule,
+    contractMilestone: extras.contractMilestone,
     requiredItemPct: Number(tranche.completionRequiredItemPct),
     targetCompletionPct: Number(tranche.targetCompletionPct),
     items: rows.map((r) => ({
@@ -127,6 +160,18 @@ function paymentTermsFor(tranche: TrancheTermsRow, rows: EvidenceRow[], verified
       verifiedCumulativePct: verifiedPct(r),
     })),
   });
+  const itemRule = completionRule === 'ALL_ITEMS_COMPLETE' || completionRule === 'WEIGHTED_PROGRESS_REACHED';
+  const completion =
+    itemRule && extras.blockedWbsCodes.length
+      ? {
+          ...evaluated,
+          met: false,
+          unmetReasons: [
+            ...evaluated.unmetReasons,
+            `Items of a terminated contractor are not fully certified (${extras.blockedWbsCodes.join(', ')}); move them to the replacement first.`,
+          ],
+        }
+      : evaluated;
   const due = fixedMilestoneDue({
     fixedReleaseAmountNgn: tranche.fixedReleaseAmountNgn === null ? null : Number(tranche.fixedReleaseAmountNgn),
     allocatedAmountNgn: Number(tranche.allocatedAmountNgn),
@@ -150,7 +195,7 @@ export async function getDirectMilestoneSuggestion(projectId: string, trancheId:
   const tranche = await loadTrancheInProject(prisma, projectId, trancheId);
   const [rows, open] = await Promise.all([evidenceForTranche(prisma, projectId, trancheId), openDirectValuation(prisma, trancheId)]);
   // Completion as it would stand if every item were verified at the most the evidence supports.
-  const terms = paymentTermsFor(tranche, rows, (r) => r.maxVerifiablePct);
+  const terms = paymentTermsFor(tranche, rows, (r) => r.maxVerifiablePct, await termsExtrasFor(prisma, projectId, tranche));
   return {
     trancheId,
     trancheName: tranche.name,
@@ -266,7 +311,7 @@ export async function verifyDirectMilestone(params: {
 
       // Phase 12: payment terms judged on the verified lines (unlisted items keep their certified %).
       const verifiedById = new Map(lines.map((l) => [l.boqItemId, l.verifiedCumulativePct]));
-      const paymentTerms = paymentTermsFor(tranche, rows, (r) => verifiedById.get(r.item.id) ?? r.previousCertifiedPct);
+      const paymentTerms = paymentTermsFor(tranche, rows, (r) => verifiedById.get(r.item.id) ?? r.previousCertifiedPct, await termsExtrasFor(tx, projectId, tranche));
       const fixedBasis = paymentTerms.paymentBasis === 'FIXED_ON_COMPLETION';
       // Fixed basis: nothing is payable before the completion rule is met (checked first, so the
       // verifier is told why rather than that nothing moved).

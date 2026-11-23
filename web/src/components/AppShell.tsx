@@ -19,7 +19,10 @@ import {
   Handshake,
   Wrench,
   Globe2,
+  Flag,
+  FolderOpen,
 } from "lucide-react";
+import { MILESTONE_VIEW_PERMISSIONS } from "./contracts/contractUi";
 import { ProjectPhaseBanner } from "./closeout/ProjectPhaseBanner";
 import { useProjectProcess } from "../queries/process/useProcessQueries";
 import type { ProjectSummaryDto } from "../api/types";
@@ -55,7 +58,7 @@ export function AppShell({
   headerActions,
   children,
 }: AppShellProps) {
-  const { user, quickSwitchDemoAccount, logout, hasPermission } = useAuth();
+  const { user, quickSwitchDemoAccount, logout, hasPermission, hasAnyPermission } = useAuth();
   const demoAccounts = useDemoAccounts()?.accounts ?? [];
   const navigate = useNavigate();
   const requestLeave = useGuardedAction();
@@ -323,7 +326,7 @@ export function AppShell({
             )}
 
             {/* Phase 9: schedule and variance */}
-            {hasPermission("schedule:view_variance") && (
+            {(hasPermission("schedule:view_variance") || hasPermission("schedule:propose_programme")) && (
               <NavLink
                 to={selectedProject ? `${projectBasePath}/schedule` : "/app/projects"}
                 title="Schedule"
@@ -355,6 +358,40 @@ export function AppShell({
               >
                 <ClipboardCheck className="w-4 h-4 shrink-0" />
                 {!sidebarCollapsed && <span className="truncate">Inspections</span>}
+              </NavLink>
+            )}
+
+            {/* Phase 13: contract milestones (kick-off inside) and the document register */}
+            {selectedProject && hasAnyPermission(...MILESTONE_VIEW_PERMISSIONS) && (
+              <NavLink
+                to={`${projectBasePath}/milestones`}
+                title="Milestones"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                    isActive || location.pathname.startsWith(`${projectBasePath}/kickoff`)
+                      ? "bg-white/15 text-white shadow-sm"
+                      : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`
+                }
+              >
+                <Flag className="w-4 h-4 shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">Milestones</span>}
+              </NavLink>
+            )}
+            {selectedProject && (hasPermission("documents:view") || hasPermission("documents:upload")) && (
+              <NavLink
+                to={`${projectBasePath}/documents`}
+                title="Documents"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                    isActive
+                      ? "bg-white/15 text-white shadow-sm"
+                      : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`
+                }
+              >
+                <FolderOpen className="w-4 h-4 shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">Documents</span>}
               </NavLink>
             )}
 

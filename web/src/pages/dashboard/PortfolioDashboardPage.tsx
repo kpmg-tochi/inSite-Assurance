@@ -15,6 +15,8 @@ import { KpiCard } from "../../components/common";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { ScheduleBadge } from "../../components/schedule/ScheduleVarianceBadge";
 import { InspectionOverviewCard } from "../../components/inspections/InspectionOverviewCard";
+import { NextDeadlinesCard, OpenDefaultCasesCard } from "../../components/contracts/ContractOverviewCards";
+import { DEFAULT_CASE_VIEW_PERMISSIONS, MILESTONE_VIEW_PERMISSIONS } from "../../components/contracts/contractUi";
 
 interface PortfolioDashboardPageProps {
   project: ProjectSummaryDto;
@@ -29,7 +31,7 @@ export function PortfolioDashboardPage({
   latestIpc,
   onNavigateToReconciliation,
 }: PortfolioDashboardPageProps) {
-  const { hasPermission } = useAuth();
+  const { hasPermission, hasAnyPermission } = useAuth();
   // Phase 7: hide modules the project's process turned off.
   const processQuery = useProjectProcess(project.id);
   const tranchesOn = processQuery.data?.config.enableTranchesAndCps ?? true;
@@ -135,6 +137,14 @@ export function PortfolioDashboardPage({
           }
         />
       </div>
+
+      {/* Phase 13: next contract deadlines and open default cases */}
+      {(hasAnyPermission(...MILESTONE_VIEW_PERMISSIONS) || hasAnyPermission(...DEFAULT_CASE_VIEW_PERMISSIONS)) && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 empty:hidden">
+          {hasAnyPermission(...MILESTONE_VIEW_PERMISSIONS) && <NextDeadlinesCard projectId={project.id} />}
+          {hasAnyPermission(...DEFAULT_CASE_VIEW_PERMISSIONS) && <OpenDefaultCasesCard projectId={project.id} />}
+        </div>
+      )}
 
       {/* Phase 14: last inspection per visit type, next due inspection, open findings, baseline */}
       {hasPermission("inspections:view") && <InspectionOverviewCard projectId={project.id} />}

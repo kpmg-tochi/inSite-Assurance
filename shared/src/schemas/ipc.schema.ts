@@ -111,6 +111,8 @@ export const UpdateConditionPrecedentStatusRequestSchema = z.object({
   // WAIVED has its own endpoint because it needs a reason and a narrower permission.
   status: z.enum(['PENDING', 'SATISFIED', 'BREACHED']),
   note: z.string().trim().max(1000).optional(),
+  /** Phase 13: a document from the project register as evidence; null clears it, omitted keeps it. */
+  evidenceDocumentId: z.string().uuid().nullable().optional(),
 });
 export type UpdateConditionPrecedentStatusRequest = z.infer<
   typeof UpdateConditionPrecedentStatusRequestSchema
@@ -203,8 +205,11 @@ export const ConditionPrecedentDtoSchema = z.object({
   statusChangedAt: z.string().datetime().nullable(),
   waivedByUserId: z.string().uuid().nullable(),
   waiverReason: z.string().nullable(),
+  /** Phase 13: evidence document in the register. */
+  evidenceDocumentId: z.string().uuid().nullable().optional(),
+  evidenceDocumentTitle: z.string().nullable().optional(),
 });
-export type ConditionPrecedentDto = z.infer<typeof ConditionPrecedentDtoSchema>;
+export type ConditionPrecedentDto= z.infer<typeof ConditionPrecedentDtoSchema>;
 
 export const TrancheDtoSchema = z.object({
   id: z.string().uuid(),

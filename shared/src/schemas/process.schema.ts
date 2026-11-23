@@ -104,6 +104,9 @@ export const PROCESS_TOGGLE_META: Record<
 export const CERTIFICATION_PERMISSION_KEYS = ['ipc:certify_valuation', 'milestone:verify_direct_release'] as const;
 export const RELEASE_PERMISSION_KEY = 'tranche:approve_disbursement';
 export const REPORT_APPROVAL_PERMISSION_KEY = 'reports:approve_completion';
+/** Phase 13: the last step of the contract default chain. */
+export const DEFAULT_DECISION_PERMISSION_KEY = 'contracts:decide_default';
+export const DEFAULT_REVIEW_PERMISSION_KEY = 'contracts:raise_default';
 export const MAX_APPROVAL_STEPS = 8;
 
 /** The certification step's permission for a disbursement mechanism. */
@@ -182,6 +185,31 @@ export function validateApprovalChain(
     return issues;
   }
 
+  if (chainType === 'CONTRACT_DEFAULT') {
+    // Phase 13: review steps, then the decision step (system step, contracts:decide_default).
+    const lastIndex = steps.length - 1;
+    steps.forEach((s, i) => {
+      if (s.minAmountThresholdNgn != null) {
+        issues.push({ code: 'THRESHOLD_NOT_ALLOWED', message: 'Amount thresholds apply to disbursement steps only.', stepIndex: i });
+      }
+      if (i !== lastIndex && s.isSystemStep) {
+        issues.push({ code: 'SYSTEM_STEP_POSITION', message: 'Only the last step (the decision) is a system step.', stepIndex: i });
+      }
+      if (i !== lastIndex && s.requiredPermissionKey === DEFAULT_DECISION_PERMISSION_KEY) {
+        issues.push({ code: 'DECISION_STEP_POSITION', message: 'The decision can only be the last step.', stepIndex: i });
+      }
+    });
+    const last = steps[lastIndex];
+    if (!last.isSystemStep || last.requiredPermissionKey !== DEFAULT_DECISION_PERMISSION_KEY) {
+      issues.push({
+        code: 'DECISION_STEP_REQUIRED',
+        message: 'The last step must be the decision step (decide default cases).',
+        stepIndex: lastIndex,
+      });
+    }
+    return issues;
+  }
+
   const first = steps[0];
   const last = steps[steps.length - 1];
   if (steps.length < 2) {
@@ -233,6 +261,32 @@ function chainSchema(chainType: ApprovalChainType) {
 
 export const ReportApprovalChainSchema = chainSchema('REPORT');
 export const DisbursementApprovalChainSchema = chainSchema('DISBURSEMENT');
+export const ContractDefaultApprovalChainSchema = chainSchema('CONTRACT_DEFAULT');
+
+/**
+ * Phase 13: the contractor default chain a project gets on first use. The decision step is limited
+ * to the owning organisation when the project has one (e.g. the Chief Executive of the owner).
+ */
+export function defaultContractDefaultChain(opts: { hasOwner: boolean; legalRoleId?: string | null }): ApprovalStepConfig[] {
+  return [
+    {
+      label: 'Legal review',
+      requiredPermissionKey: DEFAULT_REVIEW_PERMISSION_KEY,
+      requiredRoleId: opts.legalRoleId ?? null,
+      minAmountThresholdNgn: null,
+      isSystemStep: false,
+      organizationScope: 'ANY',
+    },
+    {
+      label: 'Executive decision',
+      requiredPermissionKey: DEFAULT_DECISION_PERMISSION_KEY,
+      requiredRoleId: null,
+      minAmountThresholdNgn: null,
+      isSystemStep: true,
+      organizationScope: opts.hasOwner ? 'PROJECT_OWNER' : 'ANY',
+    },
+  ];
+}
 
 export function defaultReportChain(): ApprovalStepConfig[] {
   return [
@@ -352,6 +406,8 @@ export const ProjectProcessSettingsDtoSchema = z.object({
   workflowTemplateName: z.string().nullable(),
   reportChain: ApprovalChainDtoSchema,
   disbursementChain: ApprovalChainDtoSchema,
+  /** Phase 13: the contractor default chain (edited through PUT .../process/chains/CONTRACT_DEFAULT). */
+  contractDefaultChain: ApprovalChainDtoSchema,
   /** Active contractor-executor join codes (shown when turning contractor reporting off). */
   activeContractorJoinCodeCount: z.number().int(),
   /** The disbursement mechanism cannot change once a valuation or IPC exists. */

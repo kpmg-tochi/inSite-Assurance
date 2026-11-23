@@ -3,6 +3,7 @@ import { PROJECT_SETUP_STEPS, type ProjectSetupStepDefinition } from "@insite/sh
 import type { StepProps } from "./setupContext";
 import { BasicsStep } from "./steps/BasicsStep";
 import { PartiesStep } from "./steps/PartiesStep";
+import { ContractStep } from "./steps/ContractStep";
 import { SiteStep } from "./steps/SiteStep";
 import { FacilityStep } from "./steps/FacilityStep";
 import { BoqStep } from "./steps/BoqStep";
@@ -26,6 +27,7 @@ export interface RegisteredStep extends ProjectSetupStepDefinition {
 const COMPONENTS: Record<string, React.ComponentType<StepProps>> = {
   basics: BasicsStep,
   parties: PartiesStep,
+  contract: ContractStep,
   site: SiteStep,
   facility: FacilityStep,
   boq: BoqStep,

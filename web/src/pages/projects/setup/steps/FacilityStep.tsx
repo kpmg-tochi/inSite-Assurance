@@ -11,6 +11,7 @@ import {
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import { useTenantSettingsQuery } from "../../../../queries/organizations/useOrganizationQueries";
 import { useTerm } from "../../../../lib/auth-context";
+import { useMilestonesQuery } from "../../../../queries/contracts/useContractQueries";
 import {
   extractErrors,
   FieldError,
@@ -46,6 +47,8 @@ interface TrancheRow {
   /** Fixed amount; empty = the allocation. */
   fixedAmount: string;
   requiredItemPct: string;
+  /** Phase 13, CONTRACT_MILESTONE_DONE: the contract milestone key that completes it. */
+  milestoneKey: string;
 }
 
 let seq = 0;
@@ -69,6 +72,7 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
         rule: t.completionRule ?? "ALL_ITEMS_COMPLETE",
         fixedAmount: t.fixedReleaseAmountNgn === null ? "" : String(t.fixedReleaseAmountNgn),
         requiredItemPct: String(t.completionRequiredItemPct),
+        milestoneKey: t.completionContractMilestoneKey ?? "",
         cps: t.conditionsPrecedent.map((cp) => ({
           key: cp.id,
           id: cp.id,
@@ -86,6 +90,13 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
   const directMode = setup.process.config.disbursementMechanism === "MILESTONE_DIRECT_DISBURSEMENT";
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
   const save = useSaveSetupStepMutation(projectId);
+  // Phase 13: contract milestone keys for the CONTRACT_MILESTONE_DONE rule (project and per-contractor rows share keys).
+  const milestonesQuery = useMilestonesQuery(projectId, directMode);
+  const milestoneKeyOptions = useMemo(() => {
+    const byKey = new Map<string, string>();
+    for (const m of milestonesQuery.data?.milestones ?? []) if (!byKey.has(m.key)) byKey.set(m.key, m.label);
+    return [...byKey.entries()].map(([key, label]) => ({ key, label }));
+  }, [milestonesQuery.data]);
   const strip = (r: TrancheRow[]) => r.map(({ key: _k, cps, ...t }) => ({ ...t, cps: cps.map(({ key: _c, ...c }) => c) }));
   // Phase 10: retention settings, shown and saved only with the retention module on.
   const retentionOn = setup.process.config.enableRetentionModule;
@@ -125,6 +136,7 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
         if (fixed !== null && amt !== null && fixed > amt + 0.005) fields[`tranches.${i}.fixedReleaseAmountNgn`] = "At most the allocation";
         const req = parseNumberInput(r.requiredItemPct);
         if (r.rule === "ALL_ITEMS_COMPLETE" && (req === null || req < 1 || req > 100)) fields[`tranches.${i}.completionRequiredItemPct`] = "1 to 100";
+        if (r.rule === "CONTRACT_MILESTONE_DONE" && !r.milestoneKey) fields[`tranches.${i}.completionContractMilestoneKey`] = "Choose the contract milestone";
         if (!directMode) fields[`tranches.${i}.paymentBasis`] = "A fixed amount needs direct milestone verification (see the Process step).";
       }
       r.cps.forEach((cp, j) => {
@@ -157,6 +169,7 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
         completionRule: r.basis === "FIXED_ON_COMPLETION" ? r.rule : null,
         fixedReleaseAmountNgn: r.basis === "FIXED_ON_COMPLETION" && r.fixedAmount.trim() !== "" ? parseNumberInput(r.fixedAmount) : null,
         ...(r.basis === "FIXED_ON_COMPLETION" ? { completionRequiredItemPct: parseNumberInput(r.requiredItemPct) ?? 100 } : {}),
+        completionContractMilestoneKey: r.basis === "FIXED_ON_COMPLETION" && r.rule === "CONTRACT_MILESTONE_DONE" ? r.milestoneKey : null,
         conditionsPrecedent: r.cps.map((cp) => ({
           ...(cp.id ? { id: cp.id } : {}),
           referenceCode: cp.referenceCode.trim(),
@@ -207,6 +220,7 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
                   rule: paymentDefaults.defaultCompletionRule ?? "ALL_ITEMS_COMPLETE",
                   fixedAmount: "",
                   requiredItemPct: "100",
+                  milestoneKey: "",
                 },
               ])
             }
@@ -287,7 +301,7 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
                   <div className="md:col-span-3">
                     <label className={labelClass}>Completion rule</label>
                     <select className={inputClass(false)} value={r.rule} onChange={(e) => update(r.key, { rule: e.target.value as TrancheCompletionRule })} disabled={readOnly}>
-                      {(["ALL_ITEMS_COMPLETE", "WEIGHTED_PROGRESS_REACHED"] as const).map((rule) => (
+                      {(["ALL_ITEMS_COMPLETE", "WEIGHTED_PROGRESS_REACHED", "CONTRACT_MILESTONE_DONE"] as const).map((rule) => (
                         <option key={rule} value={rule}>
                           {TRANCHE_COMPLETION_RULE_META[rule].label}
                         </option>
@@ -299,6 +313,27 @@ export function FacilityStep({ projectId, setup, readOnly }: StepProps) {
                         : TRANCHE_COMPLETION_RULE_META[r.rule].description}
                     </p>
                   </div>
+                  {r.rule === "CONTRACT_MILESTONE_DONE" && (
+                    <div className="md:col-span-2">
+                      <label className={labelClass}>Contract milestone</label>
+                      <select
+                        className={inputClass(Boolean(errors.fields[`tranches.${i}.completionContractMilestoneKey`]))}
+                        value={r.milestoneKey}
+                        onChange={(e) => update(r.key, { milestoneKey: e.target.value })}
+                        disabled={readOnly}
+                      >
+                        <option value="">Choose…</option>
+                        {r.milestoneKey && !milestoneKeyOptions.some((o) => o.key === r.milestoneKey) && <option value={r.milestoneKey}>{r.milestoneKey}</option>}
+                        {milestoneKeyOptions.map((o) => (
+                          <option key={o.key} value={o.key}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                      {milestoneKeyOptions.length === 0 && <p className="text-[11px] text-slate-500 mt-1">No contract milestones on this project yet.</p>}
+                      <FieldError message={errors.fields[`tranches.${i}.completionContractMilestoneKey`]} />
+                    </div>
+                  )}
                   {r.rule === "ALL_ITEMS_COMPLETE" && (
                     <div className="md:col-span-2">
                       <label className={labelClass}>Each item at least (%)</label>

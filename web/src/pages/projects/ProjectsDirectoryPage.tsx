@@ -435,6 +435,11 @@ export function ProjectsDirectoryPage({
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span>{project.totalBoqItems} BOQ items</span>
+                      {(project.overdueMilestoneCount ?? 0) > 0 && (
+                        <span className="rounded-full bg-rose-50 px-2 py-0.5 text-rose-700 font-semibold" title="Contract milestones past their due date">
+                          {project.overdueMilestoneCount} overdue
+                        </span>
+                      )}
                       {project.openConflictCount > 0 && (
                         <span className="text-red-600 font-semibold">
                           {project.openConflictCount} conflicts

@@ -21,6 +21,7 @@ import type { WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { getReportedProgressByItem } from '../evidence/evidenceProvider';
 import { markStepSaved } from '../projects/projectSetup.service';
+import { autoCompleteMilestones, webActor } from '../contracts/milestones.service';
 import { listScheduleRevisions } from './scheduleRevision.service';
 
 type Tx = Prisma.TransactionClient;
@@ -333,7 +334,17 @@ export async function getProjectSchedule(
  * Every save writes SCHEDULE_BASELINE_SET; the payload says whether it was the first.
  */
 export async function saveScheduleBaseline(projectId: string, webUser: WebJwtPayload, input: SaveScheduleBaselineRequest) {
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => applyScheduleBaseline(tx, projectId, webUser, input));
+  await refreshScheduleBadge(projectId);
+  return getProjectSchedule(projectId, webUser);
+}
+
+/**
+ * Saves the baseline inside the caller's transaction (Phase 13: also used when a programme of works
+ * is accepted). Completes the project-level AUTO_SCHEDULE_BASELINE_SET contract milestones.
+ */
+export async function applyScheduleBaseline(tx: Tx, projectId: string, webUser: WebJwtPayload, input: SaveScheduleBaselineRequest) {
+  {
     await tx.$queryRaw`SELECT id FROM "Project" WHERE id = ${projectId}::uuid FOR UPDATE`;
     const ctx = await loadScheduleContext(tx, projectId);
     const { project, items } = ctx;
@@ -461,9 +472,15 @@ export async function saveScheduleBaseline(projectId: string, webUser: WebJwtPay
       },
     });
     await markStepSaved(tx, projectId, 'schedule', webUser.userId);
-  });
-  await refreshScheduleBadge(projectId);
-  return getProjectSchedule(projectId, webUser);
+    await autoCompleteMilestones(tx, {
+      projectId,
+      mode: 'AUTO_SCHEDULE_BASELINE_SET',
+      onlyProjectLevel: true,
+      at: new Date(),
+      notes: `Schedule baseline set: ${input.plannedStartDate} to ${input.plannedEndDate}.`,
+      actor: webActor(webUser),
+    });
+  }
 }
 
 /** Suggested item dates between the given project dates (nothing is saved). */

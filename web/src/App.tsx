@@ -28,6 +28,10 @@ import { ProjectSchedulePage } from "./pages/schedule/ProjectSchedulePage";
 import { ProjectHandoverPage } from "./pages/closeout/ProjectHandoverPage";
 import { RetentionDefectsPage } from "./pages/closeout/RetentionDefectsPage";
 import { ProjectInspectionsPage } from "./pages/inspections/ProjectInspectionsPage";
+import { ProjectDocumentsPage } from "./pages/documents/ProjectDocumentsPage";
+import { ProjectMilestonesPage } from "./pages/milestones/ProjectMilestonesPage";
+import { ProjectKickoffPage } from "./pages/milestones/ProjectKickoffPage";
+import { MILESTONE_VIEW_PERMISSIONS } from "./components/contracts/contractUi";
 import PublicHandoverPage from "./pages/handover/PublicHandoverPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { ChangePasswordPage } from "./pages/auth/ChangePasswordPage";
@@ -143,7 +147,7 @@ function AuthenticatedWorkspace() {
   const handleSelectProject = (projectId: string) => {
     setSelectedProjectId(projectId);
     const subRouteMatch = location.pathname.match(
-      /\/app\/projects\/[^/]+\/(dashboard|reconciliation|boq|audit|schedule|handover|retention)/,
+      /\/app\/projects\/[^/]+\/(dashboard|reconciliation|boq|audit|schedule|handover|retention|documents|milestones|kickoff)/,
     );
     const subRoute = subRouteMatch?.[1] || "dashboard";
     const safeSubRoute =
@@ -319,7 +323,7 @@ function AuthenticatedWorkspace() {
             <Route
               path="projects/:projectId/schedule"
               element={
-                <RequirePermission anyOf={["schedule:view_variance"]} backTo={projectHome}>
+                <RequirePermission anyOf={["schedule:view_variance", "schedule:propose_programme"]} backTo={projectHome}>
                   <ProjectSchedulePage project={activeProject} />
                 </RequirePermission>
               }
@@ -348,6 +352,31 @@ function AuthenticatedWorkspace() {
               element={
                 <RequirePermission anyOf={["inspections:view", "inspections:manage_findings"]} backTo={projectHome}>
                   <ProjectInspectionsPage project={activeProject} />
+                </RequirePermission>
+              }
+            />
+            {/* Phase 13: document register, contract milestones and the kick-off meeting */}
+            <Route
+              path="projects/:projectId/documents"
+              element={
+                <RequirePermission anyOf={["documents:view", "documents:upload"]} backTo={projectHome}>
+                  <ProjectDocumentsPage project={activeProject} />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="projects/:projectId/milestones"
+              element={
+                <RequirePermission anyOf={MILESTONE_VIEW_PERMISSIONS} backTo={projectHome}>
+                  <ProjectMilestonesPage project={activeProject} />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="projects/:projectId/kickoff"
+              element={
+                <RequirePermission anyOf={MILESTONE_VIEW_PERMISSIONS} backTo={projectHome}>
+                  <ProjectKickoffPage project={activeProject} />
                 </RequirePermission>
               }
             />

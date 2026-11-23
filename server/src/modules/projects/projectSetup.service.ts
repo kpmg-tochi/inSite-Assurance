@@ -34,6 +34,8 @@ import {
   paymentBasisMechanismConflict,
   TrancheCompletionRule,
   TranchePaymentBasis,
+  ProjectContractStep,
+  CONTRACT_MILESTONE_ANCHOR_META,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -68,6 +70,7 @@ import {
 } from '../projectTypes/projectTypes.service';
 import { assertRegionUsable, REGION_SUMMARY_SELECT, regionSummary } from '../regions/regions.service';
 import type { ProjectProcessStep } from '@insite/shared';
+import { recomputeAndAudit, requiredAnchorsFor, syncContractMilestones, webActor } from '../contracts/milestones.service';
 
 /**
  * Staged project creation (Phase 6, decision C). A project starts as a DRAFT from the basics step,
@@ -139,7 +142,9 @@ type SetupProjectRow = Prisma.ProjectGetPayload<{ include: typeof SETUP_INCLUDE 
 async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
   const project = await db.project.findUnique({ where: { id: projectId }, include: SETUP_INCLUDE });
   if (!project) throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
-  const [contractors, itemCount, unmappedCount, unassignedContractorCount, holdPointCount, budgetSum, process, standards, tenantHasTypes] =
+  const typeConfigForLoad = resolveProjectTypeConfig(project.projectTypeSnapshotJson);
+  const beforeActivationCodes = typeConfigForLoad?.documentRequirements.beforeActivation ?? [];
+  const [contractors, itemCount, unmappedCount, unassignedContractorCount, holdPointCount, budgetSum, process, standards, tenantHasTypes, presentDocTypes] =
     await Promise.all([
       getProjectContractors(db, projectId),
       db.boqItem.count({ where: { projectId } }),
@@ -150,6 +155,13 @@ async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
       getProjectProcessSettings(projectId, db),
       countStandardsDocs(db, projectId),
       tenantHasActiveProjectTypes(db, project.tenantId),
+      // Phase 13: document types already in the register (for the activation gate).
+      beforeActivationCodes.length
+        ? db.projectDocument.findMany({
+            where: { projectId, isArchived: false, documentType: { code: { in: beforeActivationCodes } } },
+            select: { documentType: { select: { code: true, name: true } } },
+          })
+        : Promise.resolve([] as Array<{ documentType: { code: string; name: string } }>),
     ]);
   return {
     project,
@@ -158,7 +170,14 @@ async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
     standards,
     tenantHasTypes,
     /** Phase 11: the project type's rules (from the snapshot), or today's rules without a type. */
-    typeConfig: resolveProjectTypeConfig(project.projectTypeSnapshotJson),
+    typeConfig: typeConfigForLoad,
+    /** Phase 13 */
+    contract: {
+      requiredAnchors: requiredAnchorsFor(project.projectTypeSnapshotJson),
+      milestoneTemplateCount: typeConfigForLoad?.contractMilestones.length ?? 0,
+      beforeActivationCodes,
+      presentDocTypeCodes: new Set(presentDocTypes.map((d) => d.documentType.code)),
+    },
     boq: {
       itemCount,
       unmappedCount,
@@ -254,6 +273,30 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
   }
   out.parties = { issues: parties, warnings: partyWarnings };
 
+  // Contract (Phase 13): the anchors the type's milestones count from, and documents needed before activation.
+  const contractIssues: SetupIssue[] = [];
+  const anchorField = { CONTRACT_AWARD: 'contractAwardDate', CONTRACT_SIGNED: 'contractSignedDate', KICKOFF: 'kickoffDate' } as const;
+  for (const anchor of loaded.contract.requiredAnchors) {
+    const field = anchorField[anchor as keyof typeof anchorField];
+    if (field && !project[field]) {
+      contractIssues.push({
+        code: 'CONTRACT_DATE_REQUIRED',
+        message: `Enter the ${CONTRACT_MILESTONE_ANCHOR_META[anchor].label.toLowerCase()} date: contract milestones count from it.`,
+        field,
+      });
+    }
+  }
+  for (const code of loaded.contract.beforeActivationCodes) {
+    if (!loaded.contract.presentDocTypeCodes.has(code)) {
+      contractIssues.push({
+        code: 'DOCUMENT_REQUIRED_BEFORE_ACTIVATION',
+        message: `File the ${code.replace(/_/g, ' ').toLowerCase()} in the project documents.`,
+        field: 'documents',
+      });
+    }
+  }
+  out.contract = { issues: contractIssues, warnings: [] };
+
   // Site
   const site: SetupIssue[] = [];
   if (!project.geofenceGeoJson) {
@@ -346,6 +389,8 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
 
 /** Whether a step is required for this project (the standards step follows the process modes). */
 function stepRequired(step: { id: string; required: boolean }, loaded: LoadedSetup): boolean {
+  // Phase 13: the contract step is required when the type has milestones or documents before activation.
+  if (step.id === 'contract') return loaded.contract.milestoneTemplateCount > 0 || loaded.contract.beforeActivationCodes.length > 0;
   if (step.id !== 'standards') return step.required;
   const c = loaded.process.config;
   return c.standardsSpecificationMode === 'REQUIRED_AT_CREATION' || c.needsAssessmentMode === 'REQUIRED_AT_CREATION';
@@ -454,6 +499,7 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
         completionRule: t.completionRule,
         fixedReleaseAmountNgn: t.fixedReleaseAmountNgn === null ? null : Number(t.fixedReleaseAmountNgn),
         completionRequiredItemPct: Number(t.completionRequiredItemPct),
+        completionContractMilestoneKey: t.completionContractMilestoneKey,
         conditionsPrecedent: t.conditionsPrecedent.map((cp) => ({
           id: cp.id,
           referenceCode: cp.referenceCode,
@@ -474,6 +520,16 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
       },
     },
     boq,
+    contract: {
+      contractReference: project.contractReference,
+      contractAwardDate: project.contractAwardDate,
+      contractSignedDate: project.contractSignedDate,
+      contractSumNgn: project.contractSumNgn === null ? null : Number(project.contractSumNgn),
+      kickoffDate: project.kickoffDate,
+      kickoffHeldAt: project.kickoffHeldAt?.toISOString() ?? null,
+      requiredAnchors: loaded.contract.requiredAnchors,
+      milestoneTemplateCount: loaded.contract.milestoneTemplateCount,
+    },
     reporting: {
       ...serializeCadenceSettings(project),
       reportingCadence: project.reportingCadence as ReportingCadence,
@@ -751,6 +807,8 @@ const saveParties: StepSaver = async ({ tx, project, webUser, input }) => {
     await reconcileContractorJoinCodes(tx, project);
   }
   await auditContractorChanges(tx, { projectId: project.id, webUser, result: sync });
+  // Phase 13: per-contractor milestones follow the contractor list.
+  if (sync.added.length || sync.removed.length) await syncContractMilestones(tx, project.id);
 
   const changedFields = diffFields(
     {
@@ -852,13 +910,13 @@ const saveSite: StepSaver = async ({ tx, project, input }) => {
  */
 function trancheTermsFor(
   t: ProjectFacilityStep['tranches'][number],
-  before: { paymentBasis: TranchePaymentBasis; completionRule: TrancheCompletionRule | null; fixedReleaseAmountNgn: Prisma.Decimal | null; completionRequiredItemPct: Prisma.Decimal } | null,
+  before: { paymentBasis: TranchePaymentBasis; completionRule: TrancheCompletionRule | null; fixedReleaseAmountNgn: Prisma.Decimal | null; completionRequiredItemPct: Prisma.Decimal; completionContractMilestoneKey: string | null } | null,
   defaults: { defaultBasis: TranchePaymentBasis; defaultCompletionRule: TrancheCompletionRule | null } | null
 ) {
   const paymentBasis: TranchePaymentBasis = t.paymentBasis ?? before?.paymentBasis ?? defaults?.defaultBasis ?? 'MEASURED';
   const completionRequiredItemPct = t.completionRequiredItemPct ?? (before ? Number(before.completionRequiredItemPct) : DEFAULT_REQUIRED_ITEM_PCT);
   if (paymentBasis === 'MEASURED') {
-    return { paymentBasis, completionRule: null, fixedReleaseAmountNgn: null, completionRequiredItemPct };
+    return { paymentBasis, completionRule: null, fixedReleaseAmountNgn: null, completionRequiredItemPct, completionContractMilestoneKey: null };
   }
   const completionRule: TrancheCompletionRule =
     (t.completionRule !== undefined ? t.completionRule : before?.completionRule) ?? defaults?.defaultCompletionRule ?? DEFAULT_COMPLETION_RULE;
@@ -868,7 +926,12 @@ function trancheTermsFor(
       : before?.fixedReleaseAmountNgn !== null && before?.fixedReleaseAmountNgn !== undefined
         ? Number(before.fixedReleaseAmountNgn)
         : null;
-  return { paymentBasis, completionRule, fixedReleaseAmountNgn, completionRequiredItemPct };
+  // Phase 13: CONTRACT_MILESTONE_DONE names the contract milestone that completes it.
+  const completionContractMilestoneKey =
+    completionRule === 'CONTRACT_MILESTONE_DONE'
+      ? (t.completionContractMilestoneKey !== undefined ? t.completionContractMilestoneKey : before?.completionContractMilestoneKey) ?? null
+      : null;
+  return { paymentBasis, completionRule, fixedReleaseAmountNgn, completionRequiredItemPct, completionContractMilestoneKey };
 }
 
 const saveFacility: StepSaver = async ({ tx, project, input }) => {
@@ -915,6 +978,17 @@ const saveFacility: StepSaver = async ({ tx, project, input }) => {
     const terms = trancheTermsFor(t, before, paymentDefaults ?? null);
     const conflict = paymentBasisMechanismConflict(mechanism, terms.paymentBasis);
     if (conflict) throw new AppError(`${t.name}: ${conflict}`, 409, 'FIXED_BASIS_WITH_IPC');
+    if (terms.completionRule === 'CONTRACT_MILESTONE_DONE') {
+      if (!terms.completionContractMilestoneKey) {
+        throw new AppError(`${t.name}: choose the contract milestone that completes it.`, 422, 'CONTRACT_MILESTONE_KEY_REQUIRED');
+      }
+      const known =
+        (resolveProjectTypeConfig(project.projectTypeSnapshotJson)?.contractMilestones ?? []).some((m) => m.key === terms.completionContractMilestoneKey) ||
+        (await tx.projectContractMilestone.count({ where: { projectId: project.id, key: terms.completionContractMilestoneKey } })) > 0;
+      if (!known) {
+        throw new AppError(`${t.name}: this project has no contract milestone "${terms.completionContractMilestoneKey}".`, 422, 'CONTRACT_MILESTONE_KEY_UNKNOWN');
+      }
+    }
     if (terms.fixedReleaseAmountNgn !== null && terms.fixedReleaseAmountNgn > t.allocatedAmountNgn + 0.005) {
       throw new AppError(`${t.name}: the fixed amount cannot exceed the allocation.`, 422, 'FIXED_AMOUNT_EXCEEDS_ALLOCATION');
     }
@@ -1174,12 +1248,67 @@ const saveProcess: StepSaver = async ({ tx, project, input }) => {
   };
 };
 
+/**
+ * Phase 13: contract details and the planned kick-off. Dates are anchors of the contract milestones:
+ * a change recomputes open milestones. On a live project a date change needs milestones:manage and
+ * a reason, and is audited.
+ */
+const saveContract: StepSaver = async ({ tx, project, webUser, input }) => {
+  const data = input as ProjectContractStep;
+  const before = {
+    contractReference: project.contractReference,
+    contractAwardDate: project.contractAwardDate,
+    contractSignedDate: project.contractSignedDate,
+    contractSumNgn: project.contractSumNgn === null ? null : Number(project.contractSumNgn),
+    kickoffDate: project.kickoffDate,
+  };
+  const pick = <K extends keyof typeof before>(k: K) => (data[k] === undefined ? before[k] : (data[k] as (typeof before)[K]));
+  const after = {
+    contractReference: pick('contractReference'),
+    contractAwardDate: pick('contractAwardDate'),
+    contractSignedDate: pick('contractSignedDate'),
+    contractSumNgn: pick('contractSumNgn'),
+    kickoffDate: pick('kickoffDate'),
+  };
+  // The merged values must still be in order (the schema checks only what was sent).
+  if (after.contractAwardDate && after.contractSignedDate && after.contractAwardDate > after.contractSignedDate) {
+    throw new AppError('The contract cannot be signed before it is awarded', 422, 'CONTRACT_DATES_OUT_OF_ORDER');
+  }
+  const kickoff = after.kickoffDate;
+  if (kickoff && [after.contractAwardDate, after.contractSignedDate].some((d) => d && d > kickoff)) {
+    throw new AppError('The kick-off cannot be before the contract is awarded or signed', 422, 'CONTRACT_DATES_OUT_OF_ORDER');
+  }
+  const changedFields = diffFields(before, after);
+  const anchorsChanged = changedFields.some((f) => f === 'contractAwardDate' || f === 'contractSignedDate' || f === 'kickoffDate');
+  if (project.status !== 'DRAFT' && anchorsChanged) {
+    if (!hasWebPermission(webUser, 'milestones:manage')) {
+      throw new AppError('Moving contract dates on a live project requires milestones:manage', 403, 'FORBIDDEN_PERMISSION');
+    }
+    if (!data.changeReason) {
+      throw new AppError('Say why the contract dates move: the milestone due dates follow them.', 409, 'CHANGE_REASON_REQUIRED');
+    }
+  }
+  await tx.project.update({ where: { id: project.id }, data: after });
+  let movedCount = 0;
+  if (anchorsChanged) {
+    const moved = await recomputeAndAudit(
+      tx,
+      project.id,
+      webActor(webUser),
+      data.changeReason ?? `contract dates changed (${changedFields.join(', ')}).`
+    );
+    movedCount = moved.length;
+  }
+  return { changedFields, payload: { ...after, changeReason: data.changeReason ?? null, movedMilestones: movedCount } };
+};
+
 /** Phase 7: standards and documents are saved through their own endpoints; saving marks the step reviewed. */
 const saveStandards: StepSaver = async () => ({ changedFields: [] });
 
 const STEP_SAVERS: Record<ProjectSetupStepId, StepSaver> = {
   basics: saveBasics,
   parties: saveParties,
+  contract: saveContract,
   site: saveSite,
   facility: saveFacility,
   boq: saveBoq,
@@ -1342,6 +1471,8 @@ export async function activateProject(projectId: string, webUser: WebJwtPayload)
       where: { id: projectId },
       data: { status: 'ACTIVE', activatedAt, activatedByUserId: webUser.userId },
     });
+    // Phase 13: milestones counted from activation get their dates now.
+    await syncContractMilestones(tx, projectId);
     await recordAuditEvent(tx, {
       projectId,
       actorType: 'WEB_USER',

@@ -17,6 +17,7 @@ import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { applyTemplateConfig } from '../process/processConfig.service';
 import { createStreamsFromProjectType } from '../cadence/streams.service';
+import { syncContractMilestones } from '../contracts/milestones.service';
 
 /**
  * Project types (Phase 11). A type references a workflow template and holds the rest of a delivery
@@ -259,6 +260,8 @@ export async function applyProjectTypeToProject(
       where: { id: project.id },
       data: { projectTypeId: null, projectTypeVersion: null, projectTypeSnapshotJson: Prisma.DbNull },
     });
+    // Phase 13: open contract milestones from the old type go.
+    await syncContractMilestones(tx, project.id);
     await recordAuditEvent(tx, {
       projectId: project.id,
       ...actor,
@@ -319,6 +322,9 @@ export async function applyProjectTypeToProject(
     prefilled.push('reporting');
   }
   await tx.project.update({ where: { id: project.id }, data });
+  // Phase 13: contract milestones from the type (one per contractor where the template says so).
+  const milestones = await syncContractMilestones(tx, project.id);
+  if (milestones.created) prefilled.push('contractMilestones');
   // Phase 14: the type's reporting streams replace the draft's.
   if (config.reportingStreams.length > 0) {
     const created = await createStreamsFromProjectType(tx, { projectId: project.id, tenantId: project.tenantId, streams: config.reportingStreams });

@@ -26,6 +26,7 @@ import { useOrganizationsQuery } from "../../queries/organizations/useOrganizati
 import { useArchiveProjectTypeMutation, useSaveProjectTypeMutation } from "../../mutations/deliveryModels/useDeliveryModelMutations";
 import { useConfirmDialog } from "../process/ConfirmDialog";
 import { useTerm } from "../../lib/auth-context";
+import { ContractRulesEditor, type ContractRules } from "./ContractRulesEditor";
 
 const inputCls =
   "w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-primary";
@@ -59,6 +60,8 @@ interface Draft {
   /** Phase 12: payment milestone defaults for new projects of this type. */
   paymentBasis: TranchePaymentBasis;
   paymentCompletionRule: TrancheCompletionRule;
+  /** Phase 13: contract milestone templates and kick-off rules. */
+  contract: ContractRules;
   /** Keys added by later phases, kept untouched on save. */
   rest: Record<string, unknown>;
 }
@@ -79,7 +82,7 @@ function phase12From(config: unknown) {
 
 function draftFrom(t: ProjectTypeDto | null): Draft {
   const c = t?.config;
-  const { ownership, parties, reportingDefaults, ...rest } = (c ?? {}) as ProjectTypeDto["config"];
+  const { ownership, parties, reportingDefaults, contractMilestones, kickoff, ...rest } = (c ?? {}) as ProjectTypeDto["config"];
   return {
     id: t?.id ?? null,
     code: t?.code ?? "",
@@ -103,6 +106,13 @@ function draftFrom(t: ProjectTypeDto | null): Draft {
     workdayStartTime: reportingDefaults?.workdayStartTime ?? "08:00",
     workdayEndTime: reportingDefaults?.workdayEndTime ?? "17:00",
     ...phase12From(c),
+    contract: {
+      milestones: (contractMilestones ?? []).map((m) => ({ ...m })),
+      kickoff: {
+        requiredStakeholderGroups: [...(kickoff?.requiredStakeholderGroups ?? [])],
+        noticeLeadDays: kickoff?.noticeLeadDays ?? 7,
+      },
+    },
     rest: rest as Record<string, unknown>,
   };
 }
@@ -136,6 +146,13 @@ function payloadFrom(d: Draft): SaveProjectTypeRequestInput {
       defaultBasis: d.paymentBasis,
       defaultCompletionRule: d.paymentBasis === "FIXED_ON_COMPLETION" ? d.paymentCompletionRule : null,
     },
+    // Phase 13
+    contractMilestones: d.contract.milestones.map((m) => ({
+      ...m,
+      label: m.label.trim(),
+      anchorMilestoneKey: m.anchor === "MILESTONE" ? m.anchorMilestoneKey ?? null : null,
+    })),
+    kickoff: d.contract.kickoff,
   };
   return {
     code: d.code,
@@ -236,7 +253,15 @@ export function ProjectTypesTab() {
       const payload = payloadFrom(draft);
       const parsed = SaveProjectTypeRequestSchema.safeParse(payload);
       if (!parsed.success) {
-        setErrors(parsed.error.issues.map((i) => `${i.path.join(".") || "type"}: ${i.message}`));
+        setErrors(
+          parsed.error.issues.map((i) => {
+            const [, key, index, field] = i.path;
+            if (key === "contractMilestones" && typeof index === "number") {
+              return `Milestone ${index + 1}${field ? ` (${String(field)})` : ""}: ${i.message}`;
+            }
+            return `${i.path.join(".") || "type"}: ${i.message}`;
+          })
+        );
         return;
       }
       setErrors([]);
@@ -421,6 +446,8 @@ export function ProjectTypesTab() {
             )}
           </div>
         </section>
+
+        <ContractRulesEditor value={draft.contract} onChange={(contract) => set({ contract })} />
 
         <section className={sectionCls}>
           <h3 className="text-sm font-bold text-slate-900">Reporting defaults</h3>

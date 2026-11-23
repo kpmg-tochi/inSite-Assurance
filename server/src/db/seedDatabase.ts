@@ -22,6 +22,7 @@ import { seedPhase10 } from "./seedPhase10";
 import { seedPhase11 } from "./seedPhase11";
 import { seedPhase12 } from "./seedPhase12";
 import { seedPhase14 } from "./seedPhase14";
+import { seedPhase13 } from "./seedPhase13";
 import { projectObjectPrefix } from "../integrations/storage.service";
 import { CADENCE_PROJECT_SELECT, cadenceSettingsOf, periodKeyForDate } from "../modules/cadence/cadence.service";
 
@@ -222,6 +223,13 @@ async function runSeed(): Promise<void> {
 
   // Clean existing records in reverse dependency order
   await prisma.pushToken.deleteMany();
+  // Phase 13 (documents before their types; CP evidence and kick-off links are SetNull).
+  await prisma.programmeOfWorksSubmission.deleteMany();
+  await prisma.contractorDefaultCase.deleteMany();
+  await prisma.kickoffMeeting.deleteMany();
+  await prisma.projectDocument.deleteMany();
+  await prisma.projectContractMilestone.deleteMany();
+  await prisma.documentType.deleteMany();
   // Phase 14
   await prisma.inspectionFinding.deleteMany();
   await prisma.siteInspectionReport.deleteMany();
@@ -1692,6 +1700,8 @@ async function runSeed(): Promise<void> {
   await seedPhase12({ passwordHash: defaultPasswordHash });
   // Phase 14: checklist templates, reporting streams, inspections, findings and a supervisor over the limit.
   await seedPhase14();
+  // Phase 13: document types, contract milestones, kick-off records and a default case (after 14: it merges the type config).
+  await seedPhase13();
 
   console.log("✅ Seed complete!");
   console.log(
