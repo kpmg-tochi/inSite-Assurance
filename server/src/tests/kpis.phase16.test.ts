@@ -16,7 +16,7 @@ import {
   resolveKpiTargets,
   type ProjectTypeConfigInput,
 } from '@insite/shared';
-import { computeProjectKpis, KPI_FUNCTIONS, KpiMilestoneFact, KpiProjectFacts, milestonesOnTime, sumCounts } from '../modules/kpis/kpiEngine';
+import { computeProjectKpis, KPI_FUNCTIONS, KpiMilestoneFact, KpiProjectFacts, milestonesOnTime, sumCounts, KpiVisitFact } from '../modules/kpis/kpiEngine';
 import { monthEnd, recentMonthStarts } from '../modules/kpis/kpiFacts';
 
 const TODAY = '2026-11-20';
@@ -37,13 +37,12 @@ function facts(over: Partial<KpiProjectFacts> = {}, config: ProjectTypeConfigInp
     kickoff: null,
     milestones: [],
     hasSupervisor: false,
+    hasVisitLead: false,
     documentTypeCodes: new Set(),
-    activeStreamCount: 0,
-    inspectionStreamVisitTypes: [],
     hasApprovedBaseline: false,
-    hasObligations: false,
-    inspectionObligations: { due: 0, onTime: 0, done: 0 },
-    allObligations: { due: 0, onTime: 0, done: 0 },
+    visits: [],
+    hasVisits: false,
+    sprints: [],
     approvals: { totalDays: 0, count: 0 },
     certificate: null,
     finalEvaluationFinding: null,
@@ -186,29 +185,57 @@ describe('Phase 16: KPI functions', () => {
     assert.equal(run('mobilisation_documents_complete', facts({}, {})), null);
   });
 
-  it('monitoring framework, baseline, visits and reports', () => {
-    assert.equal(run('monitoring_framework_established', facts()), null);
-    const streams = { reportingStreams: [{ key: 'weekly', label: 'Weekly', kind: 'ITEM_REPORTS' as const, roleCodes: ['MONITOR'], reportingCadence: 'WEEKLY' as const }] };
-    assert.deepEqual(run('monitoring_framework_established', facts({}, streams)), { numerator: 0, denominator: 1 });
-    assert.deepEqual(run('monitoring_framework_established', facts({ activeStreamCount: 2 })), { numerator: 1, denominator: 1 });
-
+  it('redesign R4e: the monitoring framework KPI is gone; baseline, visits and reports follow visits', () => {
+    assert.ok(!KpiKeyEnum.options.includes('monitoring_framework_established' as never));
+    const plan = { monitoring: { visitPlan: [{ key: 'baseline', visitKind: 'BASELINE' as const, kind: 'ONCE_AFTER_START' as const }] } };
     assert.equal(run('baseline_uploaded', facts()), null);
-    assert.deepEqual(run('baseline_uploaded', facts({ inspectionStreamVisitTypes: ['BASELINE'] })), { numerator: 0, denominator: 1 });
-    assert.deepEqual(run('baseline_uploaded', facts({ hasApprovedBaseline: true }, { inspections: { templateCodeByVisitType: { BASELINE: 'B' } } })), {
-      numerator: 1,
-      denominator: 1,
-    });
+    assert.deepEqual(run('baseline_uploaded', facts({}, plan)), { numerator: 0, denominator: 1 });
+    assert.deepEqual(run('baseline_uploaded', facts({ hasApprovedBaseline: true }, plan)), { numerator: 1, denominator: 1 });
 
+    const v = (over: Partial<KpiVisitFact>): KpiVisitFact => ({
+      visitKind: 'ROUTINE',
+      status: 'APPROVED',
+      origin: 'PLAN',
+      plannedDate: '2026-11-05',
+      submissionDeadline: '2026-11-12',
+      submitted: true,
+      submittedOnTime: true,
+      ...over,
+    });
     assert.equal(run('visits_conducted', facts()), null);
-    const owed = facts({ inspectionStreamVisitTypes: ['ROUTINE'], inspectionObligations: { due: 4, onTime: 2, done: 3 } });
-    assert.deepEqual(run('visits_conducted', owed), { numerator: 3, denominator: 4 });
+    const visits = [
+      v({}),
+      v({ status: 'SUBMITTED', submittedOnTime: false }),
+      v({ status: 'MISSED', submitted: false, submittedOnTime: false }),
+      v({ status: 'PLANNED', submitted: false, submittedOnTime: false, plannedDate: '2026-11-25', submissionDeadline: '2026-12-02' }),
+      // Unscheduled visits are reported apart, never added to the numerator (D-R4.33).
+      v({ origin: 'UNSCHEDULED' }),
+      v({ plannedDate: '2026-10-20', submissionDeadline: '2026-10-27' }),
+    ];
+    assert.deepEqual(run('visits_conducted', facts({ hasVisits: true, visits })), { numerator: 2, denominator: 3 });
 
+    // Deadlines in November that have passed (or were met): 3 planned + the unscheduled one.
     assert.equal(run('reports_on_time', facts()), null);
-    assert.deepEqual(run('reports_on_time', facts({ hasObligations: true, allObligations: { due: 10, onTime: 7, done: 9 } })), {
-      numerator: 7,
-      denominator: 10,
-    });
-    assert.deepEqual(run('reports_on_time', facts({ hasObligations: true })), { numerator: 0, denominator: 0 });
+    assert.deepEqual(run('reports_on_time', facts({ hasVisits: true, visits })), { numerator: 2, denominator: 4 });
+    assert.deepEqual(run('reports_on_time', facts({ hasVisits: true })), { numerator: 0, denominator: 0 });
+  });
+
+  it('redesign R4e: sprints verified on time', () => {
+    assert.equal(run('sprints_verified_on_time', facts()), null);
+    const sprints = [
+      { endDate: '2026-10-28', firstVerifiedDate: '2026-11-03' }, // due 11-04: on time
+      { endDate: '2026-11-01', firstVerifiedDate: '2026-11-12' }, // due 11-08: late
+      { endDate: '2026-11-05', firstVerifiedDate: null }, // due 11-12: overdue
+      { endDate: '2026-11-18', firstVerifiedDate: null }, // due 11-25: not due yet
+      { endDate: '2026-12-10', firstVerifiedDate: null }, // due in December
+    ];
+    assert.deepEqual(run('sprints_verified_on_time', facts({ sprints })), { numerator: 1, denominator: 3 });
+  });
+
+  it('redesign R4e: a lead officer on a published visit counts as supervised', () => {
+    const plan = { monitoring: { visitPlan: [{ key: 'routine', visitKind: 'ROUTINE' as const, kind: 'EVERY_N_WEEKS_DURING_CONSTRUCTION' as const }] } };
+    assert.deepEqual(run('supervisors_assigned', facts({}, plan)), { numerator: 0, denominator: 1 });
+    assert.deepEqual(run('supervisors_assigned', facts({ hasVisitLead: true }, plan)), { numerator: 1, denominator: 1 });
   });
 
   it('approval turnaround', () => {

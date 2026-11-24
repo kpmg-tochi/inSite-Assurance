@@ -16,8 +16,6 @@ import { WebJwtPayload } from "../middleware/auth.middleware";
 import { parseSections } from "../modules/inspections/checklistTemplates.service";
 import { reviewSiteInspection, submitSiteInspection } from "../modules/inspections/inspections.service";
 import { setInspectionCheckScheduler } from "../modules/workday-reports/aiOmissionCheck";
-import { createInspectionObligation, createStreamsFromProjectType, STREAM_SELECT, streamCadenceRow } from "../modules/cadence/streams.service";
-import { CADENCE_PROJECT_SELECT, cadenceSettingsForDate, periodKeyForDate } from "../modules/cadence/cadence.service";
 import { PROGRAMME_TENANT_SLUG } from "./seedPhase11";
 
 /**
@@ -234,24 +232,9 @@ export async function seedPhase14(): Promise<void> {
   });
   await prisma.userProjectAssignment.createMany({ data: liveProjects.map((p) => ({ userId: officer.id, projectId: p.id })), skipDuplicates: true });
 
-  // Streams, inspections and supervision on both project types. Seed only: written into the
-  // types' config (and the projects' snapshots) without a version bump, as if the types had been
-  // created with them; editing a type through the service bumps its version.
-  const streams: ProjectTypeConfig["reportingStreams"] = ProjectTypeConfigSchema.parse({
-    reportingStreams: [
-      { key: "resident-supervision", label: "Resident supervision", kind: "ITEM_REPORTS", roleCodes: ["INDEPENDENT_RESIDENT"], reportingCadence: "WEEKLY" },
-      {
-        key: "me-visit",
-        label: "M&E visit",
-        kind: "INSPECTION",
-        roleCodes: ["MONITOR", "MONITOR_INSPECTOR"],
-        reportingCadence: "QUARTERLY",
-        visitType: "ROUTINE",
-        submissionDeadlineDays: 7,
-      },
-      { key: "resident-progress", label: "Resident supervisor progress", kind: "ITEM_REPORTS", roleCodes: ["INDEPENDENT_RESIDENT"], reportingCadence: "WEEKLY" },
-    ],
-  }).reportingStreams;
+  // Inspections and supervision on both project types. Seed only: written into the types' config
+  // (and the projects' snapshots) without a version bump, as if the types had been created with them;
+  // editing a type through the service bumps its version. Redesign R4f: reporting streams are gone.
   const inspections = {
     templateCodeByVisitType: { BASELINE: "BASELINE_SURVEY", ROUTINE: "ROUTINE_VISIT", MOBILISATION_CHECK: "MOBILISATION_CHECK", FINAL_EVALUATION: "FINAL_EVALUATION" },
   };
@@ -261,7 +244,6 @@ export async function seedPhase14(): Promise<void> {
   for (const type of types) {
     const config = ProjectTypeConfigSchema.parse({
       ...ProjectTypeConfigSchema.parse(type.configJson),
-      reportingStreams: streams,
       inspections,
       // Co-Funded: a low site limit so the seeded M&E officer (three live sites) is over it.
       supervision:
@@ -273,8 +255,7 @@ export async function seedPhase14(): Promise<void> {
     configs.set(type.id, config);
   }
 
-  // The seeded projects were created before the types had streams: give their snapshots the same
-  // config (same version) and create their streams, as applying the type now would.
+  // The seeded projects were created before: give their snapshots the same config (same version).
   const projects = await prisma.project.findMany({
     where: { tenantId: programme.id },
     select: { id: true, projectTypeId: true, projectTypeSnapshotJson: true },
@@ -283,25 +264,13 @@ export async function seedPhase14(): Promise<void> {
     const config = p.projectTypeId ? configs.get(p.projectTypeId) : null;
     if (!config || !p.projectTypeSnapshotJson) continue;
     const snapshot = { ...(p.projectTypeSnapshotJson as unknown as ProjectTypeSnapshot), config };
-    await prisma.$transaction(async (tx) => {
-      await tx.project.update({ where: { id: p.id }, data: { projectTypeSnapshotJson: snapshot as unknown as Prisma.InputJsonValue } });
-      await createStreamsFromProjectType(tx, { projectId: p.id, tenantId: programme.id, streams: config.reportingStreams });
-    });
+    await prisma.project.update({ where: { id: p.id }, data: { projectTypeSnapshotJson: snapshot as unknown as Prisma.InputJsonValue } });
   }
 
   const byCode = new Map(liveProjects.map((p) => [p.codePrefix, p.id]));
   const officerPayload = await payloadFor("me.officer@insite.ng");
   const now = new Date();
   const today = zonedCalendarDate(now, "Africa/Lagos");
-
-  /** Creates the M&E visit obligation of the quarter that contains `date`. */
-  async function meObligation(projectId: string, date: string) {
-    const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: CADENCE_PROJECT_SELECT });
-    const stream = await prisma.projectReportingStream.findFirstOrThrow({ where: { projectId, key: "me-visit" }, select: STREAM_SELECT });
-    const key = periodKeyForDate(cadenceSettingsForDate(streamCadenceRow(project, stream), date), date);
-    await createInspectionObligation(stream, key);
-    return key;
-  }
 
   // Inspections are web submissions here; their omission check runs later in the server sweep.
   setInspectionCheckScheduler(() => undefined);
@@ -354,7 +323,6 @@ export async function seedPhase14(): Promise<void> {
     }
 
     // A routine visit 40 days ago, uploaded today: late (7-day deadline).
-    await meObligation(prg211, addDays(today, -40));
     await submit({
       clientReportId: "14000000-0000-4000-8000-000000000002",
       visitType: "ROUTINE",
@@ -366,7 +334,6 @@ export async function seedPhase14(): Promise<void> {
     });
 
     // A routine visit two days ago with a major finding (PPE), raised to the contractor.
-    await meObligation(prg211, addDays(today, -2));
     await submit({
       clientReportId: "14000000-0000-4000-8000-000000000003",
       visitType: "ROUTINE",
@@ -380,16 +347,6 @@ export async function seedPhase14(): Promise<void> {
       summaryText: "Routine M&E visit: roof framing in progress. Unsafe work at height and under-gauge roofing sheets.",
     });
 
-    // PRG-221: last quarter's M&E visit never happened (missed and flagged).
-    const prg221 = byCode.get("PRG-221");
-    if (prg221) {
-      const lastQuarter = addDays((await meObligation(prg221, today)).periodStart, -1);
-      const missed = await meObligation(prg221, lastQuarter);
-      await prisma.reportingObligation.updateMany({
-        where: { projectId: prg221, boqItemId: null, periodStart: missed.periodStart },
-        data: { status: "MISSED", alertedAt: now },
-      });
-    }
   } finally {
     setInspectionCheckScheduler(null);
   }

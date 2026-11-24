@@ -1,12 +1,8 @@
 import React, { useMemo } from "react";
-import { Plus, Trash2 } from "lucide-react";
 import {
   INSPECTION_VISIT_TYPE_LABELS,
   InspectionVisitTypeEnum,
-  REPORTING_STREAM_KIND_LABELS,
-  type InspectionVisitType,
   type ProjectTypeConfigInput,
-  type ReportingStreamKind,
   VISIT_KIND_META,
   VisitKindEnum,
 } from "@insite/shared";
@@ -14,18 +10,15 @@ import { CustomSelect } from "../common";
 import { useTenantRolesQuery } from "../../queries/rbac/useRbacQueries";
 import { useChecklistTemplatesQuery } from "../../queries/inspections/useInspectionQueries";
 import { useFormLibraryQuery } from "../../queries/forms/useFormQueries";
-import { CadenceFields } from "./CadenceFields";
 
 /**
- * Phase 14 settings of a project type, editable since Phase 16: the reporting streams created on
- * each new project (roles by code), the legacy checklist template per visit type, and who counts as a
- * supervisor with the workload warning limits. Redesign R3: the visit form template per visit kind. Like the type's other rules, projects keep the
+ * Phase 14 settings of a project type, editable since Phase 16: the legacy checklist template per
+ * visit type (until R5), and who counts as a supervisor with the workload warning limits (redesign
+ * R4f removed reporting streams: visits replace them). Redesign R3: the visit form template per visit kind. Like the type's other rules, projects keep the
  * version they were created with.
  */
 
-type StreamInput = NonNullable<ProjectTypeConfigInput["reportingStreams"]>[number];
 export interface MonitoringRules {
-  reportingStreams: StreamInput[];
   inspections: NonNullable<ProjectTypeConfigInput["inspections"]>;
   supervision: NonNullable<ProjectTypeConfigInput["supervision"]>;
   /** Redesign R3. */
@@ -35,15 +28,6 @@ export interface MonitoringRules {
 const inputCls = "w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-primary";
 const sectionCls = "rounded-2xl border border-slate-200 bg-white p-4 space-y-3";
 const label = "text-xs font-medium text-slate-700 mb-1 block";
-
-function slug(text: string, taken: string[]): string {
-  let base = text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
-  if (!/^[a-z]/.test(base)) base = `stream-${base}`.replace(/-+$/, "");
-  if (base.length < 2) base = "stream";
-  let key = base;
-  for (let n = 2; taken.includes(key); n += 1) key = `${base}-${n}`;
-  return key;
-}
 
 /** Role chips by code: codes that no longer exist in the tenant are kept and marked. */
 export function RoleCodePicker({
@@ -96,118 +80,16 @@ export function MonitoringRulesEditor({ value, onChange }: { value: MonitoringRu
   const { data: library } = useFormLibraryQuery();
   const formTemplates = (library?.templates ?? []).filter((t) => !t.isArchived);
   const formByKind = value.visitForms.templateCodeByVisitKind;
-  const fieldRoles = useMemo(() => roles.filter((r) => r.surface !== "WEB").map((r) => ({ code: r.code, name: r.name })), [roles]);
   const allRoles = useMemo(() => roles.map((r) => ({ code: r.code, name: r.name })), [roles]);
-  const streams = value.reportingStreams;
   const set = (patch: Partial<MonitoringRules>) => onChange({ ...value, ...patch });
-  const setStream = (i: number, patch: Partial<StreamInput>) => set({ reportingStreams: streams.map((s, j) => (j === i ? { ...s, ...patch } : s)) });
   const templateByType = value.inspections.templateCodeByVisitType ?? {};
   const supervision = value.supervision;
 
   return (
     <section className={sectionCls}>
       <div>
-        <h3 className="text-sm font-bold text-slate-900">Monitoring: streams, inspections and supervision</h3>
-        <p className="text-[11px] text-slate-500">
-          Streams are created on each new project of this type (they can be changed per project in the Reporting step). With no stream,
-          projects report on the Reporting defaults below.
-        </p>
-      </div>
-
-      <div className="space-y-3">
-        {streams.map((s, i) => (
-          <div key={i} className="rounded-xl border border-slate-200 p-3 space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <label className={label}>
-                Name
-                <input
-                  className={inputCls}
-                  value={s.label}
-                  placeholder="e.g. Resident supervision"
-                  onChange={(e) => setStream(i, { label: e.target.value })}
-                  // The key is filled from the name once; after that it stays as saved.
-                  onBlur={() => !s.key && s.label.trim() && setStream(i, { key: slug(s.label, streams.filter((_, j) => j !== i).map((x) => x.key)) })}
-                />
-              </label>
-              <div>
-                <span className={label}>Kind</span>
-                <CustomSelect
-                  value={s.kind}
-                  onChange={(v) =>
-                    setStream(i, {
-                      kind: v as ReportingStreamKind,
-                      visitType: v === "INSPECTION" ? s.visitType ?? "ROUTINE" : null,
-                      submissionDeadlineDays: v === "INSPECTION" ? s.submissionDeadlineDays ?? 7 : null,
-                    })
-                  }
-                  options={Object.entries(REPORTING_STREAM_KIND_LABELS).map(([k, l]) => ({ value: k, label: l }))}
-                />
-              </div>
-              {s.kind === "INSPECTION" && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <span className={label}>Visit type</span>
-                    <CustomSelect
-                      value={s.visitType ?? "ROUTINE"}
-                      onChange={(v) => setStream(i, { visitType: v as InspectionVisitType })}
-                      options={InspectionVisitTypeEnum.options.map((v) => ({ value: v, label: INSPECTION_VISIT_TYPE_LABELS[v] }))}
-                    />
-                  </div>
-                  <label className={label}>
-                    Upload within (days)
-                    <input
-                      type="number"
-                      min={0}
-                      max={90}
-                      className={inputCls}
-                      value={s.submissionDeadlineDays ?? ""}
-                      onChange={(e) => setStream(i, { submissionDeadlineDays: e.target.value ? Number(e.target.value) : null })}
-                    />
-                  </label>
-                </div>
-              )}
-            </div>
-            <CadenceFields
-              value={{ ...s, quarterMonth: s.quarterAnchorMonth ?? null }}
-              onChange={({ quarterMonth, ...patch }) => setStream(i, { ...patch, ...(quarterMonth !== undefined ? { quarterAnchorMonth: quarterMonth } : {}) })}
-              maxCustomDays={366}
-              maxGraceMinutes={7 * 24 * 60}
-            />
-            <fieldset>
-              <legend className={label}>Owed by (roles)</legend>
-              <RoleCodePicker value={s.roleCodes} onChange={(roleCodes) => setStream(i, { roleCodes })} roles={fieldRoles} emptyHint="No mobile roles in this workspace." />
-            </fieldset>
-            <div className="flex justify-between items-center gap-3 text-[11px] text-slate-500">
-              <label className="flex items-center gap-2">
-                Key
-                <input
-                  className="w-48 rounded-lg border border-slate-300 px-2 py-1 text-[11px] text-slate-900"
-                  value={s.key}
-                  placeholder="e.g. resident-supervision"
-                  onChange={(e) => setStream(i, { key: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })}
-                />
-              </label>
-              <button type="button" onClick={() => set({ reportingStreams: streams.filter((_, j) => j !== i) })} className="inline-flex items-center gap-1 text-rose-600 hover:text-rose-700">
-                <Trash2 className="w-3.5 h-3.5" /> Remove
-              </button>
-            </div>
-          </div>
-        ))}
-        <button
-          type="button"
-          disabled={streams.length >= 10}
-          onClick={() =>
-            set({
-              reportingStreams: [
-                ...streams,
-                { key: "", label: "", kind: "ITEM_REPORTS", roleCodes: [], reportingCadence: "WEEKLY" },
-              ],
-            })
-          }
-          className="inline-flex items-center gap-1 rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-400 disabled:opacity-50"
-        >
-          <Plus className="w-3.5 h-3.5" /> Add stream
-        </button>
+        <h3 className="text-sm font-bold text-slate-900">Monitoring: visit forms, inspections and supervision</h3>
+        <p className="text-[11px] text-slate-500">The visit plan and deadlines are in the next section.</p>
       </div>
 
       <div className="border-t border-slate-100 pt-3 space-y-2">

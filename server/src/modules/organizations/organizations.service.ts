@@ -340,6 +340,7 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
     enabledGeofenceModes: enabled.length ? enabled : ALL_GEOFENCE_MODES,
     defaultGeofenceToleranceMeters: t.defaultGeofenceToleranceMeters,
     defaultGeofenceRadiusMeters: t.defaultGeofenceRadiusMeters,
+    visitRescheduleToleranceWorkdays: t.visitRescheduleToleranceWorkdays,
     defaultCurrency: t.defaultCurrency,
     timezone: t.timezone,
   };
@@ -356,6 +357,7 @@ export async function updateTenantSettings(webUser: WebJwtPayload, input: Update
         ? { defaultGeofenceToleranceMeters: input.defaultGeofenceToleranceMeters }
         : {}),
       ...(input.defaultGeofenceRadiusMeters !== undefined ? { defaultGeofenceRadiusMeters: input.defaultGeofenceRadiusMeters } : {}),
+      ...(input.visitRescheduleToleranceWorkdays !== undefined ? { visitRescheduleToleranceWorkdays: input.visitRescheduleToleranceWorkdays } : {}),
       ...(input.defaultCurrency ? { defaultCurrency: input.defaultCurrency } : {}),
       ...(input.timezone ? { timezone: input.timezone } : {}),
     };

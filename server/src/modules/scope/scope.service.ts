@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import {
   CreateFacilityUnitRequest,
   CreateScopeLineRequest,
+  addDays,
   deriveSprintStatus,
   FacilityArchetype,
   FacilityUnitDto,
@@ -26,6 +27,8 @@ import { AppError } from '../../middleware/error.middleware';
 import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { refreshProjectProgress } from '../progress/progress.service';
+import { proposeVisitsFromType, realignProposedVisitSprints } from '../visits/visitPlan.service';
+import { monitoringConfigOf, webVisitActor } from '../visits/visitCore';
 import { markStepSaved } from '../projects/projectSetup.service';
 import { loadBoqItemInProject, loadFacilityUnitInProject, loadSprintInProject } from '../../utils/ownership';
 
@@ -113,9 +116,10 @@ function facilitySummary(u: UnitRow) {
 export async function getProjectScope(projectId: string): Promise<ProjectScopeDto> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { id: true, status: true, timezone: true, totalBudgetNgn: true },
+    select: { id: true, status: true, timezone: true, totalBudgetNgn: true, projectTypeSnapshotJson: true },
   });
   if (!project) throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
+  const verificationDays = monitoringConfigOf(project.projectTypeSnapshotJson).sprintVerificationDays;
   const [sprints, units, lines, defects] = await Promise.all([
     prisma.projectSprint.findMany({ where: { projectId }, orderBy: { number: 'asc' } }),
     prisma.facilityUnit.findMany({
@@ -159,7 +163,10 @@ export async function getProjectScope(projectId: string): Promise<ProjectScopeDt
     startDate: s.startDate,
     endDate: s.endDate,
     deliverables: s.deliverables,
-    status: deriveSprintStatus(s, today),
+    status: deriveSprintStatus(s, today, verificationDays),
+    verificationOutcome: s.verificationOutcome,
+    verifiedAt: s.verifiedAt?.toISOString() ?? null,
+    verificationDueDate: addDays(s.endDate, verificationDays),
     unitCount: unitsActiveInSprint(unitDtos, s.number).length,
     referencedByUnits: units.some((u) => u.startSprintId === s.id || u.endSprintId === s.id),
   }));
@@ -369,6 +376,11 @@ export async function saveSprints(projectId: string, webUser: WebJwtPayload, inp
       changed: changes,
       removed: removed.map((s) => ({ id: s.id, number: s.number, name: s.name, startDate: s.startDate, endDate: s.endDate })),
     });
+    // Redesign R4 (D-R4.12): sprint-driven visit plan rules follow the new sprints (proposed visits only).
+    if (ctx.project.status === 'ACTIVE') {
+      await realignProposedVisitSprints(tx, projectId);
+      await proposeVisitsFromType(tx, projectId, { trigger: 'SPRINTS_SAVED', actor: webVisitActor(webUser) });
+    }
   });
   return getProjectScope(projectId);
 }

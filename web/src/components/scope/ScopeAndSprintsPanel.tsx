@@ -4,6 +4,7 @@ import {
   addDays,
   FACILITY_ARCHETYPE_META,
   lineAmount,
+  SPRINT_VERIFICATION_OUTCOME_LABELS,
   UNITS_OF_MEASURE,
   unitNeedsQuantity,
   validateSprints,
@@ -31,6 +32,8 @@ import { useConfirmDialog } from "../process/ConfirmDialog";
 import { primaryButton, secondaryButton, smallInput } from "../contracts/contractUi";
 import Loader from "../Loader";
 import { ScopeWorkbookToolbar } from "./ScopeWorkbookToolbar";
+import { SprintVerifyDialog } from "./SprintVerifyDialog";
+import { useAuth } from "../../lib/auth-context";
 
 /**
  * Redesign R2b: scope and sprints of one project (spec section 5). Used by the setup step
@@ -38,11 +41,15 @@ import { ScopeWorkbookToolbar } from "./ScopeWorkbookToolbar";
  * Sprints → facility units (grouped by facility) → BoQ lines. Amounts are computed by the server.
  */
 
-const SPRINT_STATUS: Record<SprintStatus, { label: string; variant: "info" | "success" | "neutral" }> = {
+const SPRINT_STATUS: Record<SprintStatus, { label: string; variant: "info" | "success" | "neutral" | "warning" | "danger" }> = {
   UPCOMING: { label: "Upcoming", variant: "neutral" },
   ACTIVE: { label: "Active", variant: "info" },
-  ENDED: { label: "Ended", variant: "success" },
+  ENDED: { label: "Ended", variant: "neutral" },
+  // Redesign R4e: ended and not verified within the verification period; verified (outcome shown).
+  LATE: { label: "Late", variant: "warning" },
+  VERIFIED: { label: "Verified", variant: "success" },
 };
+const OUTCOME_VARIANT = { MET: "success", PARTLY_MET: "warning", NOT_MET: "danger" } as const;
 
 const UOM_OPTIONS = UNITS_OF_MEASURE.map((u) => ({ value: u.code as string, label: `${u.code} · ${u.label}` }));
 
@@ -58,6 +65,8 @@ export interface ScopeAndSprintsPanelProps {
 
 export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPanelProps) {
   const q = useProjectScopeQuery(projectId);
+  const { hasPermission } = useAuth();
+  const [verifying, setVerifying] = useState<string | null>(null);
   const facilitiesQ = useFacilitiesQuery(false, !readOnly);
   const deleteUnit = useDeleteFacilityUnitMutation(projectId);
   const deleteLine = useDeleteScopeLineMutation(projectId);
@@ -114,7 +123,12 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
       id: "status",
       header: "Status",
       width: "w-24",
-      cell: (s) => <TableBadge variant={SPRINT_STATUS[s.status].variant}>{SPRINT_STATUS[s.status].label}</TableBadge>,
+      cell: (s) =>
+        s.status === "VERIFIED" && s.verificationOutcome ? (
+          <TableBadge variant={OUTCOME_VARIANT[s.verificationOutcome]}>{SPRINT_VERIFICATION_OUTCOME_LABELS[s.verificationOutcome]}</TableBadge>
+        ) : (
+          <TableBadge variant={SPRINT_STATUS[s.status].variant}>{SPRINT_STATUS[s.status].label}</TableBadge>
+        ),
     },
     { id: "units", header: "Units", width: "w-16", align: "center", cell: (s) => <span className="text-xs tabular-nums">{s.unitCount}</span> },
     {
@@ -122,11 +136,28 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
       header: "Deliverables",
       cell: (s) => <span className="text-[11px] text-slate-600 line-clamp-2">{s.deliverables || "–"}</span>,
     },
+    // Redesign R4e: verification on live projects (D-R4.31).
+    ...(live && hasPermission("sprints:verify")
+      ? [
+          {
+            id: "verify",
+            header: "",
+            width: "w-24",
+            cell: (s: ProjectSprintDto) =>
+              s.status === "UPCOMING" ? null : (
+                <button type="button" className="text-xs font-semibold text-brand-primary hover:underline" onClick={() => setVerifying(s.id)}>
+                  {s.verificationOutcome ? "Re-verify" : "Verify"}
+                </button>
+              ),
+          } as TableColumnDef<ProjectSprintDto>,
+        ]
+      : []),
   ];
 
   return (
     <div className="space-y-4">
       {dialog}
+      {verifying && <SprintVerifyDialog projectId={projectId} sprintId={verifying} onClose={() => setVerifying(null)} />}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1 min-w-[280px]">
           <Stat label="Sprints" value={String(scope.totals.sprintCount)} />

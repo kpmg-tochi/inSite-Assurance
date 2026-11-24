@@ -1,27 +1,21 @@
 import { InspectionVisitTypeEnum, MobileInspectionPack, resolveProjectTypeConfig } from '@insite/shared';
 import { prisma } from '../../config/prisma';
-import { CADENCE_PROJECT_SELECT } from '../cadence/cadence.service';
-import { streamSettingsForPack, streamsOwedBy } from '../cadence/streams.service';
 import { resolveTemplateForVisit } from './checklistTemplates.service';
 
 /**
- * Phase 14: the part of the mobile baseline pack about streams and inspections: the streams this
- * session owes (with the settings in force, for period cards) and the checklist templates of the
- * visit types it can inspect, so an inspection can be completed offline.
+ * Phase 14: the part of the mobile baseline pack about inspections: the checklist templates of the
+ * visit types it can inspect, so an inspection can be completed offline. Redesign R4f removed
+ * reporting streams (visits replace them), so `streams` is always empty; R5 removes the pack.
  */
 export async function buildMobileInspectionPack(params: {
   projectId: string;
   sessionId: string;
   permissions: string[];
 }): Promise<MobileInspectionPack> {
-  const [project, session] = await Promise.all([
-    prisma.project.findUniqueOrThrow({
-      where: { id: params.projectId },
-      select: { ...CADENCE_PROJECT_SELECT, tenantId: true, projectTypeSnapshotJson: true },
-    }),
-    prisma.fieldAgentSession.findUniqueOrThrow({ where: { id: params.sessionId }, select: { roleId: true } }),
-  ]);
-  const streams = await streamsOwedBy(prisma, params.projectId, { roleId: session.roleId, projectContractorId: null });
+  const project = await prisma.project.findUniqueOrThrow({
+    where: { id: params.projectId },
+    select: { tenantId: true, projectTypeSnapshotJson: true },
+  });
   const canSubmitInspections = params.permissions.includes('inspections:submit');
   const typeConfig = resolveProjectTypeConfig(project.projectTypeSnapshotJson);
   const templates: MobileInspectionPack['templates'] = [];
@@ -36,15 +30,7 @@ export async function buildMobileInspectionPack(params: {
     }
   }
   return {
-    streams: streams.map((s) => ({
-      id: s.id,
-      key: s.key,
-      label: s.label,
-      kind: s.kind,
-      visitType: s.visitType,
-      submissionDeadlineDays: s.submissionDeadlineDays,
-      cadence: streamSettingsForPack(project, s),
-    })),
+    streams: [],
     templates,
     templateIdByVisitType,
     canSubmitInspections,

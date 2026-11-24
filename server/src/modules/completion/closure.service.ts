@@ -7,7 +7,7 @@ import {
   ClosureChecklistItemTemplate,
   ClosureChecklistList,
   CONTRACTOR_RATING_STAGE_META,
-  INSPECTION_VISIT_TYPE_LABELS,
+  VISIT_KIND_META,
   ProjectClosureChecklistDto,
   resolveProjectTypeConfig,
 } from '@insite/shared';
@@ -74,7 +74,14 @@ async function evaluateItems(db: Db, projectId: string, items: ClosureChecklistI
   const [evidence, inspections, milestones, contractors, ratings, lessons] = await Promise.all([
     registerEvidence(db, projectId, codes),
     needsInspections
-      ? db.siteInspectionReport.findMany({ where: { projectId, status: { in: ['APPROVED', 'SUBMITTED'] } }, select: { visitType: true, visitDate: true } })
+      ? Promise.all([
+          // Redesign R4d: accepted visits; legacy Phase 14 inspections still count until R5.
+          db.visit.findMany({ where: { projectId, status: 'APPROVED' }, select: { visitKind: true, plannedDate: true } }),
+          db.siteInspectionReport.findMany({ where: { projectId, status: { in: ['APPROVED', 'SUBMITTED'] } }, select: { visitType: true, visitDate: true } }),
+        ]).then(([visits, legacy]) => [
+          ...visits.map((v) => ({ visitType: v.visitKind as string, visitDate: v.plannedDate })),
+          ...legacy.map((i) => ({ visitType: i.visitType as string, visitDate: i.visitDate })),
+        ])
       : [],
     milestoneKeys.length ? db.projectContractMilestone.findMany({ where: { projectId, key: { in: milestoneKeys } }, select: { key: true, status: true, dueDate: true } }) : [],
     needsRatings ? db.projectContractor.findMany({ where: { projectId }, select: { id: true } }) : [],
@@ -104,8 +111,8 @@ async function evaluateItems(db: Db, projectId: string, items: ClosureChecklistI
       }
       case 'INSPECTION_VISIT_TYPE': {
         const found = inspections.filter((i) => i.visitType === item.inspectionVisitType).sort((a, b) => b.visitDate.localeCompare(a.visitDate));
-        const label = INSPECTION_VISIT_TYPE_LABELS[item.inspectionVisitType!].toLowerCase();
-        out.set(item.key, { met: found.length > 0, detail: found.length ? `Approved ${label} of ${found[0].visitDate}.` : `No approved ${label}.` });
+        const label = VISIT_KIND_META[item.inspectionVisitType!].label.toLowerCase();
+        out.set(item.key, { met: found.length > 0, detail: found.length ? `Accepted ${label} of ${found[0].visitDate}.` : `No accepted ${label}.` });
         break;
       }
       case 'CONTRACT_MILESTONE': {

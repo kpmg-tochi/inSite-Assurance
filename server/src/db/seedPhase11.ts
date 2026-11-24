@@ -176,7 +176,6 @@ export async function seedPhase11(p: { passwordHash: string }) {
   });
 
   // Project types.
-  const reportingDefaults = { reportingCadence: "WEEKLY" as const, workdayStartTime: "07:30", workdayEndTime: "16:30" };
   const central: SaveProjectTypeRequestInput = {
     code: "CENTRAL",
     name: "Central Delivery Model",
@@ -199,7 +198,6 @@ export async function seedPhase11(p: { passwordHash: string }) {
         funderDefault: "FIXED",
         defaultFunderOrganizationId: flagship.id,
       },
-      reportingDefaults,
     },
   };
   const coFunded: SaveProjectTypeRequestInput = {
@@ -224,7 +222,6 @@ export async function seedPhase11(p: { passwordHash: string }) {
         funderDefault: "OWNER",
         defaultFunderOrganizationId: null,
       },
-      reportingDefaults: { ...reportingDefaults, reportingCadence: "BI_WEEKLY" },
     },
   };
   const centralType = await createProjectType(adminPayload, SaveProjectTypeRequestSchema.parse(central));

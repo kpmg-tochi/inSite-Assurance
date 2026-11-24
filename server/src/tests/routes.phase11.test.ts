@@ -111,7 +111,7 @@ after(async () => {
 });
 
 describe('Phase 11 seed', () => {
-  it('applies the type: snapshot, template, owner and funder defaults, reporting defaults', async () => {
+  it('applies the type: snapshot, template, owner and funder defaults (R4f: no reporting defaults)', async () => {
     const central = await prisma.project.findUniqueOrThrow({
       where: { id: ids['PRG-101'] },
       include: { beneficiaries: true, processConfig: true },
@@ -120,15 +120,13 @@ describe('Phase 11 seed', () => {
     assert.equal(central.projectTypeVersion, 1);
     assert.equal(central.owningOrganizationId, ids.flagship, 'default owner from the type');
     assert.equal(central.lenderOrganizationId, ids.flagship, 'FIXED funder default');
-    assert.equal(central.reportingCadence, 'WEEKLY');
-    assert.equal(central.workdayStartTime, '07:30');
+    assert.equal('reportingDefaults' in (central.projectTypeSnapshotJson as Record<string, unknown>), false, 'removed in R4f');
     assert.equal(central.processConfig?.requireReportApproval, true, 'template switches copied');
     assert.equal(central.beneficiaries.filter((b) => b.isPrimary).length, 1);
 
     const coFunded = await prisma.project.findUniqueOrThrow({ where: { id: ids['PRG-211'] } });
     assert.equal(coFunded.owningOrganizationId, ids.north);
     assert.equal(coFunded.lenderOrganizationId, ids.north, 'OWNER funder default: the subsidiary funds its project');
-    assert.equal(coFunded.reportingCadence, 'BI_WEEKLY');
     const steps = await prisma.approvalStep.findMany({
       where: { projectId: ids['PRG-211'], chainType: 'REPORT', isActive: true },
       orderBy: { stepOrder: 'asc' },
@@ -363,7 +361,6 @@ describe('project types', () => {
     const body = { ...current.body.data };
     for (const k of ['id', 'workflowTemplateName', 'version', 'projectCount', 'createdAt', 'updatedAt']) delete body[k];
     body.config.parties.beneficiaryRequired = false;
-    body.config.reportingDefaults = { reportingCadence: 'MONTHLY', workdayStartTime: '08:00', workdayEndTime: '17:00' };
     const saved = await request(app).put(`/api/v1/project-types/${ids.coFunded}`).set(h).send(body);
     assert.equal(saved.status, 200, JSON.stringify(saved.body));
     assert.equal(saved.body.data.version, 2);
@@ -371,7 +368,7 @@ describe('project types', () => {
     const afterEdit = await prisma.project.findUniqueOrThrow({ where: { id: ids['PRG-211'] } });
     assert.equal(afterEdit.projectTypeVersion, 1);
     assert.deepEqual(afterEdit.projectTypeSnapshotJson, before.projectTypeSnapshotJson);
-    assert.equal(afterEdit.reportingCadence, 'BI_WEEKLY');
+    assert.equal(afterEdit.reportingCadence, before.reportingCadence);
 
     // A new project gets the new version.
     const created = await request(app)
@@ -380,7 +377,6 @@ describe('project types', () => {
       .send({ name: 'Co-funded v2 project', codePrefix: 'PRG-231', stateLocation: 'Lagos State', totalBudgetNgn: 5000000, projectTypeId: ids.coFunded });
     assert.equal(created.status, 201, JSON.stringify(created.body));
     assert.equal(created.body.data.basics.projectType.version, 2);
-    assert.equal(created.body.data.reporting.reportingCadence, 'MONTHLY');
   });
 
   it('changing the type re-applies on a draft and is locked on a live project', async () => {

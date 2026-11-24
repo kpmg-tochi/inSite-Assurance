@@ -12,6 +12,10 @@ import { boqRoutes } from "./modules/boq/boq.routes";
 import { facilitiesRoutes } from "./modules/facilities/facilities.routes";
 import { formLibraryRoutes } from "./modules/forms/formLibrary.routes";
 import { visitFormRoutes } from "./modules/forms/visitForm.routes";
+import { visitsRoutes } from "./modules/visits/visits.routes";
+import { visitPlannerRoutes } from "./modules/visits/visitPlanner.routes";
+import { siteLogRoutes } from "./modules/site-log/siteLog.routes";
+import { findingsRoutes } from "./modules/findings/findings.routes";
 import { scopeRoutes, scopeWorkbookRoutes } from "./modules/scope/scope.routes";
 import { evidenceRoutes } from "./modules/evidence/evidence.routes";
 import { auditRoutes } from "./modules/audit/audit.routes";
@@ -21,7 +25,6 @@ import { notificationsRoutes } from "./modules/notifications/notifications.route
 import { wbsChatRoutes } from "./modules/wbs-chat/wbsChat.routes";
 import { capturesRoutes } from "./modules/evidence/captures.routes";
 import { processRoutes, workflowTemplateRoutes } from "./modules/process/process.routes";
-import { cadenceRoutes } from "./modules/cadence/cadence.routes";
 import { closeoutRoutes } from "./modules/closeout/closeout.routes";
 import { paymentsRoutes } from "./modules/payments/payments.routes";
 import { inspectionsRoutes } from "./modules/inspections/inspections.routes";
@@ -91,6 +94,10 @@ export function createApp() {
   app.use("/api/v1/projects", boqRoutes);
   app.use("/api/v1/projects", scopeRoutes); // Redesign R2b
   app.use("/api/v1/projects", visitFormRoutes); // Redesign R3c
+  app.use("/api/v1/projects", visitsRoutes); // Redesign R4
+  app.use("/api/v1/projects", siteLogRoutes); // Redesign R4c
+  app.use("/api/v1/projects", findingsRoutes); // Redesign R4d
+  app.use("/api/v1/visits", visitPlannerRoutes); // Redesign R4
   app.use("/api/v1/projects", evidenceRoutes);
   app.use("/api/v1/projects", auditRoutes);
   app.use("/api/v1/projects", incidentRoutes);
@@ -99,7 +106,6 @@ export function createApp() {
   app.use("/api/v1/projects", wbsChatRoutes);
   app.use("/api/v1/projects", capturesRoutes);
   app.use("/api/v1/projects", processRoutes);
-  app.use("/api/v1/projects", cadenceRoutes);
   app.use("/api/v1/projects", closeoutRoutes);
   app.use("/api/v1/projects", paymentsRoutes);
   // Phase 14: reporting streams, inspections, findings, supervision

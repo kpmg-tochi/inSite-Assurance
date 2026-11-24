@@ -67,6 +67,10 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'inspections:submit',
       'inspections:view',
       'inspections:manage_findings',
+      // Redesign R4
+      'visits:view',
+      'visits:plan',
+      'sprints:verify',
       // Phase 13
       'documents:view',
       'documents:upload',
@@ -103,6 +107,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'audit:view_ledger',
       'handover:review_feedback',
       'inspections:view',
+      'visits:view', // R4
       // Phase 13
       'documents:view',
       // Phase 15: the funder signs off the closure audit and can export the pack.
@@ -132,6 +137,9 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'payments:view',
       'audit:view_ledger',
       'inspections:view',
+      // Redesign R4
+      'visits:view',
+      'findings:receive_escalations',
       // Phase 13: the owner's executives decide contractor default cases.
       'documents:view',
       'documents:upload',
@@ -161,7 +169,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
     fieldPersonaType: 'INDEPENDENT_VERIFIER',
     assuranceWeight: 1.0,
     // Phase 10: verifiers check and close defect rectification during the liability period.
-    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'retention:manage_defects', 'inspections:submit', 'inspections:manage_findings'],
+    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'retention:manage_defects', 'inspections:submit', 'inspections:manage_findings', 'visits:view', 'visits:submit'],
   },
   {
     name: 'Independent Resident Clerk of Works',
@@ -171,6 +179,6 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
     surface: 'MOBILE',
     fieldPersonaType: 'INDEPENDENT_VERIFIER',
     assuranceWeight: 0.85,
-    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'retention:manage_defects', 'inspections:submit', 'inspections:manage_findings'],
+    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'retention:manage_defects', 'inspections:submit', 'inspections:manage_findings', 'visits:view', 'visits:submit'],
   },
 ];

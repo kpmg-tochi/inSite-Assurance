@@ -10,15 +10,15 @@ import {
   CONTRACTOR_RATING_STAGE_META,
   ContractorRatingStageEnum,
   DEFAULT_COC_SIGNATORIES,
-  INSPECTION_VISIT_TYPE_LABELS,
-  InspectionVisitTypeEnum,
+  VISIT_KIND_META,
+  VisitKindEnum,
   type ClosureChecklistItemKind,
   type ClosureChecklistItemTemplateInput,
   type ClosureGate,
   type CocSignatoryScope,
   type CocSignatorySlotInput,
   type ContractorRatingStage,
-  type InspectionVisitType,
+  type VisitKind,
   type ProjectTypeClosureConfigInput,
 } from "@insite/shared";
 import { CustomSelect } from "../common";
@@ -220,10 +220,10 @@ function ChecklistList({
             )}
             {item.kind === "INSPECTION_VISIT_TYPE" && (
               <CustomSelect
-                value={(item.inspectionVisitType ?? "") as InspectionVisitType}
+                value={(item.inspectionVisitType ?? "") as VisitKind}
                 onChange={(v) => setItem(i, { inspectionVisitType: v })}
-                placeholder="Visit type"
-                options={InspectionVisitTypeEnum.options.map((v) => ({ value: v, label: INSPECTION_VISIT_TYPE_LABELS[v] }))}
+                placeholder="Visit kind"
+                options={VisitKindEnum.options.map((v) => ({ value: v, label: VISIT_KIND_META[v].label }))}
               />
             )}
             {item.kind === "CONTRACT_MILESTONE" && (

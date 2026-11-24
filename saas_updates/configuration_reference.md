@@ -32,7 +32,8 @@
 | Regions and areas | Settings → Project types, regions & documents → Regions | None | Two levels (region → area). Used by project filters, the portfolio map and KPIs. A region filter includes its areas. | G10 |
 | Terminology | Settings → Tenant Settings → Terminology | Funder, Independent monitor, Contractor, Beneficiary, Hold point, Retention | Display labels only (singular and plural), on web and mobile. API fields and audit text keep the canonical names. Demo tenant: funder = "Funding authority". (Redesign R1b removed Tranche, Condition precedent, IPC and Valuation.) | G1 |
 | Document types | Settings → Project types, regions & documents → Document types | 18 types (contract, award and acceptance letters, kick-off pack, minutes, mobilisation agreement and plan, letter of introduction, site possession, supervisor assignment, CoC, handover certificate, final evaluation, closure file and others) | Per type: sign-off required, allowed files, and whether contractors can see it. Milestones, checklists and KPIs refer to types by code. | G3 |
-| Inspection checklist templates (legacy) | Not editable since redesign R3e | The demo has Baseline survey, Routine visit, Mobilisation check and Final evaluation. A workspace created after R3 has none. | Phase 14 inspections still run on the seeded templates until R4 replaces them with visits. Authoring moved to the form library. | G5 |
+| Inspection checklist templates (legacy) | Not editable since redesign R3e | The demo has Baseline survey, Routine visit, Mobilisation check and Final evaluation. A workspace created after R3 has none. | Only the old mobile app still submits Phase 14 inspections (until R5). Visits (redesign R4) use the form library. | G5 |
+| Visit move tolerance (redesign R4) | Settings → Tenant Settings → Workspace settings | 2 working days (0–10) | An officer may move a visit this many working days either side of its original date, inside the same sprint, without asking; further moves are proposed to the manager. Measured from the original date, so repeated small moves cannot walk a visit away. | Q-H, P5 |
 | Contractor rating criteria | Settings → Tenant Settings → Rating criteria | Time, Quality, Health & safety, Responsiveness, Documentation | Criteria scored 1–5 at completion and after closure. | G6 |
 | Site boundaries (redesign) | Settings → Tenant Settings → Workspace settings | Radial and perimeter enabled; default radius 150 m; tolerance 100 m | Which boundary types projects may use (linear corridors were removed). The default radius pre-fills a new radial boundary and the boundary made from a workbook's GPS point; each project sets its own radius and may override the tolerance on its Site step. | G5 |
 | Facility catalogue (redesign R2) | Settings → Forms & facilities → Facilities (`facilities:manage`) | 50 facilities: 19 building works (Classroom, Toilet, Hostel…), 22 supply & installation (pupils' furniture, science kit, computers…), 4 utilities (Borehole, Overhead tank, Generator, Solar power), 5 external works (Fence, Drainage, Football pitch…) | Scope lines are tagged with facilities through facility units. Per facility: code (locked once a unit uses it), name, plural (R3: only when the plain plural is wrong; set by default for Staff quarters, Solar power, Landscaping, Drainage), category, archetype (decides whether units carry a planned quantity and the default sub-form). A retired facility stays on the projects that use it and leaves the pickers and the workbook. | Decision Y |
@@ -88,14 +89,19 @@ Set in Settings → Project types, regions & documents → Project types. One ty
 | Monitor / funder / beneficiary / region required | Monitor and funder on; beneficiary and region off | The Parties and Basics steps refuse to continue without them. | G10 |
 | Funder default | `NONE` | `OWNER`: the owner funds the project (Co-Funded). `FIXED`: a named organisation (Central: the flagship). | G10 |
 
-### 3.3 Reporting defaults
+### 3.3 Visit plan and deadlines (redesign R4, type key `monitoring`)
+
+Replaces the Phase 8 reporting defaults and the Phase 14 reporting streams (both removed in R4f). Like every type rule except KPI targets, a project keeps the version it was created with.
 
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
-| Reporting defaults | Off | Pre-fills the Reporting step of new projects; values already saved are kept. Demo: Central weekly, Co-Funded bi-weekly. | G4 |
-| Cadence, working days, period start day | Weekly; Mon–Sat; Monday | Daily, weekly, every two weeks, monthly, quarterly, custom period, or no periods (inspections only). | G4 |
-| Custom period length, quarter start month, first period date | – ; January; project start | Shown for the cadences that use them. | G4 |
-| Work hours, report due time, grace | 08:00–17:00; end of the working day; 0 min | When a report becomes due and late. | G4 |
+| Visit plan rules (visit kind, when, interval, sprints, offsets) | None (demo: mobilisation checks every 2 weeks until the contractor is on site; baseline 5 working days after the later of activation and kick-off; routine every 2 weeks during construction; quarterly M&E 5 working days into each quarter's last month; final evaluation 5 working days after the completion notice; Co-Funded: post-closure evaluation on its closure milestone, else 180 days after closing) | Activation proposes the visits (all of them, through the last sprint); a live sprint change regenerates the proposed sprint-driven ones; the completion notice proposes the final evaluation, closing the post-closure one. The M&E manager assigns officers and publishes them. Dates fall on working days. | P3, Q-H |
+| Submit within | 7 days | The submission deadline is the visit date plus this many calendar days; later is late, and with nothing submitted the visit becomes missed. | Spec 8.1 |
+| Remind unconfirmed | 2 days before | Officers who have not confirmed get one reminder. | Spec 8.1 |
+| Escalate findings after | 14 days | An open finding is escalated once to holders of `findings:receive_escalations`. | Confirm |
+| Warn after no visit for | 4 weeks | Planner warning only. | Spec 8.1 |
+| Verify sprints within | 7 days | After a sprint ends it should be verified within this many days; then it shows Late and, with a unit below 100%, the schedule badge turns behind. | Confirm |
+| Email the contractor the open findings | On | After each accepted visit with open or newly resolved findings, the contractor organisation's contact email gets a summary (no comments, no photos). | Spec 6.5 |
 
 ### 3.4 Payments (redesign R1b)
 
@@ -118,7 +124,7 @@ Edited in the type editor's contract rules section.
 | Kick-off quorum groups | None | At least one attendee per group (demo: owner, monitor, contractor, beneficiary), or a waiver reason. | G2 |
 | Kick-off notice lead time | 7 days | The notice must go out this many days ahead, or the shortfall is waived with a reason. | G2 |
 
-### 3.6 Documents, default cases, streams, inspections and supervision (Phases 13–14)
+### 3.6 Documents, default cases, inspections and supervision (Phases 13–14)
 
 Edited in the type editor's "Required documents and contractor default" and "Monitoring: streams, inspections and supervision" sections (the latter also holds "Visit forms", redesign R3).
 
@@ -128,7 +134,6 @@ Edited in the type editor's "Required documents and contractor default" and "Mon
 | Documents needed before mobilisation | None | Shown on the mobilisation compliance panel per contractor. Counted by the "full mobilisation documentation" KPI. Demo: mobilisation agreement and site possession form. | G3 |
 | Legal role | None | The Legal role: told about new default cases, and names the review step. Demo: `LEGAL_OFFICER`. | G7 |
 | Open a default case when mobilisation is overdue | On | An overdue contractor-on-site milestone opens a default case once. The case runs Legal review, then the executive decision (`contracts:decide_default`). | G7 |
-| Reporting streams (name, key, kind, roles, cadence fields, visit type, upload deadline) | None | Streams created on each new project (roles by code). With any active stream, only streams are owed. Item-report streams owe per-item reports; inspection streams owe one visit per period, late after the due time + grace + submission deadline. Demo: weekly resident supervision plus inspection visits. On a project, streams are edited in the Reporting step. | G4 |
 | Visit forms (redesign R3) | Default (the template whose code is the visit kind) | The visit form template per visit kind. Only a live template of that kind can be chosen. Projects keep the choice they were created with; the latest version of the template is used when a form is built. Demo: code = kind for every kind. | Decision Y |
 | Legacy inspection checklists (Phase 14) | None | The checklist template per visit type for Phase 14 inspections (removed in R4). | G5 |
 | Supervisor roles | None | Roles whose users count as supervisors (workload view, "supervisor assigned" KPI). | G9 |
@@ -184,10 +189,12 @@ Approval chain additions:
 
 | Setting | Where | Effect | Control |
 | :--- | :--- | :--- | :--- |
-| Project type | Basics step (drafts only) | Applies the type: copies the template, snapshots the config, pre-fills parties and reporting. Locked once live. | G1 |
+| Project type | Basics step (drafts only) | Applies the type: copies the template, snapshots the config, pre-fills parties and retention. Locked once live. | G1 |
 | Owning organisation, region, beneficiaries (one primary) | Basics / Parties steps | Visibility, filters, approvals and the handover recipient. | G10 |
 | Contract reference, award, signed and kick-off dates | Contract step | Anchor the contract milestones. Every change recomputes due dates and is audited. | G2 |
-| Reporting streams, quarterly anchor month | Reporting step | Per-project streams (replace the type's on a draft). The quarterly cadence uses calendar quarters from the anchor month (default January). | G4 |
+| Visit officers, working days (redesign R4) | Visits step (route `visits`, replaces the Reporting step) | The default officers given to proposed visits (the first is the lead; someone not on the project is assigned to it) and the project's working days (visit dates, the move tolerance and deadlines count them). The step previews the visits the type will propose. | D-R4.39 |
+| Visits (redesign R4) | Project → Visits; tenant → Visit planner | Create, generate, publish, move, reassign and cancel visits; accept or reject officers' date proposals; review submissions; findings and the site log. | P3, P5 |
+| Sprint verification (redesign R4) | Scope & sprints → Verify | Met, partly met or not met once a sprint has started (early needs a note). Drives the sprint status (Late, Verified), the schedule badge and the on-time KPI. | Decision V |
 | Scope & sprints (redesign R2) | Scope & sprints step (route `scope`, replaces the BOQ step) and the project page Scope & sprints | Sprints (name, dates, deliverables; any length, gaps allowed, no overlaps; numbered by date), facility units (a facility, a label such as "Ground floor male toilet", start and end sprint, planned quantity for supply items) and BoQ lines (item no., unit, description, unit of measure, quantity, rate; amount = quantity × rate, computed by the server). Lines take their planned dates from their unit's sprints; the project's planned start and end follow the first and last sprint. To activate: at least one sprint and one line, every line on a unit, every unit with both sprints. On a live project every change is audited; units and lines with field evidence cannot be removed, nor a sprint a unit starts or ends in. | Decision R |
 | Needs-assessment workbook (redesign R2) | Scope & sprints → Download workbook / Import workbook | Excel workbook with the workspace's live lists (facilities, units of measure, regions, delivery models), pre-filled from the project. Import is for drafts: preview first (lines by facility and sprint, row errors, warnings such as the total being above the budget), then confirm; confirm replaces the draft's sprints, units and lines and fills only the project fields that are empty (a primary school beneficiary, region, LGA, site address, budget, delivery model, a radial site boundary of the workspace default radius from the GPS point, strategic justification, assumptions). A blank workbook (the workspace's lists only) downloads from Settings → Facilities; a project's own workbook also downloads from the needs-assessment section of the Standards step. Live projects change scope on the page instead. | Decision Y |
 | Retention percentage and liability period | Retention step (route `facility`) | Held from each recorded payment; changes apply to later payments. | Decision Q |
@@ -202,6 +209,11 @@ Default roles: **TSA** Tenant Super Admin, **MON** Independent Monitor, **LEN** 
 | Phase | Permission | What it allows |
 | :--- | :--- | :--- |
 | 11 | `project_types:manage` | Define delivery models. |
+| R4 | `visits:view` | See visits, the planner, submissions, findings on visits and the site log (MON, LEN, OA, field roles). |
+| R4 | `visits:plan` | Create, generate, publish, move, reassign and cancel visits; decide date proposals (MON, TSA). |
+| R4 | `visits:submit` | Field roles: respond to their visits, check in and submit (Monitor Inspector, Independent Resident). |
+| R4 | `sprints:verify` | Verify sprints (MON, TSA). |
+| R4 | `findings:receive_escalations` | Notified of escalated findings (TSA, OA). |
 | 11 | `regions:manage` | Manage regions and areas. |
 | 11 | `projects:view_organization_tree` | See projects owned by the user's organisation or below it. |
 | 11 | `projects:view_portfolio` | Portfolio dashboard (map and portfolio KPI cards). |
@@ -236,22 +248,22 @@ The catalogue is fixed in code; tenants set targets and visibility only (section
 | Kick-off | Kick-off notices sent on time | Kick-off notice milestone done by its due date | Yes | ≥ 90% |
 | Kick-off | Kick-off attendance | Invitees attended / invited | Yes | ≥ 80% |
 | Kick-off | Meetings documented and signed | Minutes filed and signed (counted from 7 days after the meeting) | Yes | ≥ 90% |
-| Mobilisation | Projects with a supervisor assigned | Assigned users in the type's supervisor roles | No | ≥ 100% |
+| Mobilisation | Projects with a supervisor assigned | Assigned users in the type's supervisor roles, or a lead officer on a published visit | No | ≥ 100% |
 | Mobilisation | Letters of introduction on time | Milestones needing a letter of introduction | Yes | ≥ 90% |
 | Mobilisation | Contractors mobilised on time | Contractor-on-site milestones | Yes | ≥ 90% |
 | Mobilisation | Full mobilisation documentation | The type's before-mobilisation documents filed (projects under construction) | No | ≥ 100% |
-| M&E | Monitoring framework established | An active reporting stream (projects under construction) | No | ≥ 100% |
-| M&E | Sites with baseline data | An approved baseline inspection | No | ≥ 100% |
-| M&E | Visits conducted vs planned | Inspection obligations submitted / owed | Yes | ≥ 90% |
-| M&E | Reports submitted on time | Obligations submitted on time / owed | Yes | ≥ 85% |
-| M&E | Average approval turnaround | Days from submission to final approval | Yes | ≤ 5 days |
+| M&E | Sites with baseline data | An accepted baseline visit (projects whose plan has one) | No | ≥ 100% |
+| M&E | Visits conducted vs planned | Planned visits dated in the period: submitted / (submitted + missed); unscheduled visits are not counted | Yes | ≥ 90% |
+| M&E | Reports submitted on time | Visits whose deadline fell in the period, submitted by it | Yes | ≥ 85% |
+| M&E | Average approval turnaround | Days from submission to final approval (visits, legacy reports and inspections) | Yes | ≤ 5 days |
+| M&E | Sprints verified on time | Sprints verified by their end date + the verification period | Yes | ≥ 90% |
 | Payments | Financial utilisation | Paid to date (net, from the payment record) / budget (weighted by budget) | No | none |
 | Closure | Verified on time and to specification | CoC completion date ≤ planned end, no major issues in the final evaluation | Yes | ≥ 80% |
 | Closure | Handed over on time after the CoC | Handover milestone done by its due date | Yes | ≥ 90% |
 | Closure | Full closure documentation | Every document item of the closure checklists filed (liability period or closed) | No | ≥ 100% |
 | Closure | Lessons learned documented | Closed projects with a published lesson | No | ≥ 100% |
 | Closure | Audited after closure | Audit sign-off item done (closed projects whose checklists include one) | No | ≥ 100% |
-| Schedule | Projects on schedule | Schedule badge on track or complete (redesign R2d: computed from sprints) | No | ≥ 80% |
+| Schedule | Projects on schedule | Schedule badge on track or complete (computed from sprints and, since R4, their verification) | No | ≥ 80% |
 
 Period-based KPIs count what fell due, was held, issued or decided in the chosen period (month, quarter or custom). The others show today's value. A daily job stores each project's figures for the monthly trend lines.
 

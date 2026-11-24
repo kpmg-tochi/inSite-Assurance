@@ -8,6 +8,7 @@ import {
   RESUBMITTED_AFTER_SESSION_END_FLAG,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
+import { scheduleCaptureTranscription } from './transcription';
 import { AppError } from '../../middleware/error.middleware';
 import { FieldAgentJwtPayload } from '../../middleware/auth.middleware';
 import { assertProjectObjectKey, isHandoverObjectKey, MEDIA_UPLOAD_POLICY, storageService } from '../../integrations/storage.service';
@@ -244,6 +245,8 @@ export async function registerCapture(params: {
 
       return log;
     });
+    // Redesign R4c: voice notes are transcribed once registered (off the request path).
+    if (input.mediaType === 'VOICE_NOTE') scheduleCaptureTranscription(created.id);
     return { capture: serializeCapture(created), created: true };
   } catch (error) {
     // Concurrent retry of the same capture: return the row the other request created.

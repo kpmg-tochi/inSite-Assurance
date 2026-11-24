@@ -9,7 +9,6 @@ import { formatReporterRoleBadge } from "../../components/reporterRole";
 import { useAuth, useTerm } from "../../lib/auth-context";
 import { KpiCard } from "../../components/common";
 import { ScheduleBadge } from "../../components/schedule/ScheduleVarianceBadge";
-import { InspectionOverviewCard } from "../../components/inspections/InspectionOverviewCard";
 import { ProjectKpisCard } from "../../components/kpis/ProjectKpisCard";
 import { NextDeadlinesCard, OpenDefaultCasesCard } from "../../components/contracts/ContractOverviewCards";
 import { DEFAULT_CASE_VIEW_PERMISSIONS, MILESTONE_VIEW_PERMISSIONS } from "../../components/contracts/contractUi";
@@ -68,9 +67,6 @@ export function PortfolioDashboardPage({ project, evidenceLogs }: PortfolioDashb
           {hasAnyPermission(...DEFAULT_CASE_VIEW_PERMISSIONS) && <OpenDefaultCasesCard projectId={project.id} />}
         </div>
       )}
-
-      {/* Phase 14: last inspection per visit type, next due inspection, open findings, baseline */}
-      {hasPermission("inspections:view") && <InspectionOverviewCard projectId={project.id} />}
 
       {/* Phase 16: the project's KPIs against its project type's targets */}
       {hasPermission("kpis:view") && project.status !== "DRAFT" && <ProjectKpisCard projectId={project.id} />}

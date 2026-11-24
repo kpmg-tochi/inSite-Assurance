@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { FieldPersonaTypeEnum, GeofenceStatusEnum, ReportingCadenceEnum } from '../enums';
+import { FieldPersonaTypeEnum, GeofenceStatusEnum } from '../enums';
 import { CALENDAR_DATE_REGEX } from '../utils/time';
-import { ProjectCadenceSettingsDtoSchema, ReportingPeriodDtoSchema } from './cadence.schema';
+import { ProjectCadenceSettingsDtoSchema } from './cadence.schema';
 import { ApprovalProgressDtoSchema } from './process.schema';
 import { SubmissionGeotagInputSchema, SubmissionGeotagSchema, WorkdayReportCaptureSummarySchema } from './workday.schema';
 
@@ -12,8 +12,6 @@ import { SubmissionGeotagInputSchema, SubmissionGeotagSchema, WorkdayReportCaptu
 
 const Uuid = z.string().uuid();
 const CalendarDate = z.string().regex(CALENDAR_DATE_REGEX, 'Use YYYY-MM-DD');
-const TimeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM (24-hour)');
-const IsoWeekday = z.number().int().min(1).max(7);
 /** Stable keys for streams, sections and checklist items: lower-case letters, digits, "_" and "-". */
 export const CHECKLIST_KEY_REGEX = /^[a-z0-9][a-z0-9_-]{0,47}$/;
 const Key = z.string().trim().regex(CHECKLIST_KEY_REGEX, 'Use 1 to 48 lower-case letters, digits, "-" or "_"');
@@ -133,122 +131,9 @@ export const REPORTING_STREAM_KIND_LABELS: Record<ReportingStreamKind, string> =
   INSPECTION: 'Site inspection (one per period)',
 };
 
-const streamCadenceShape = {
-  reportingCadence: ReportingCadenceEnum,
-  workWeekDays: z
-    .array(IsoWeekday)
-    .min(1)
-    .max(7)
-    .transform((d) => [...new Set(d)].sort((a, b) => a - b))
-    .default([1, 2, 3, 4, 5, 6]),
-  periodStartDayOfWeek: IsoWeekday.default(1),
-  customIntervalDays: z.number().int().min(1).max(366).nullable().default(null),
-  quarterAnchorMonth: z.number().int().min(1).max(12).nullable().default(null),
-  reportDueTime: TimeOfDay.nullable().default(null),
-  reportGraceMinutes: z.number().int().min(0).max(7 * 24 * 60).default(0),
-  /** INSPECTION: days after the visit date the report must be uploaded (process: 7). */
-  submissionDeadlineDays: z.number().int().min(0).max(90).nullable().default(null),
-  visitType: InspectionVisitTypeEnum.nullable().default(null),
-};
-
-function refineStream(
-  v: { kind: ReportingStreamKind; visitType: unknown; reportingCadence: string; customIntervalDays: number | null },
-  ctx: z.RefinementCtx
-): void {
-  if (v.kind === 'INSPECTION' && !v.visitType) {
-    ctx.addIssue({ code: 'custom', message: 'An inspection stream needs a visit type', path: ['visitType'] });
-  }
-  if (v.reportingCadence === 'CUSTOM_INTERVAL' && !(v.customIntervalDays && v.customIntervalDays >= 1)) {
-    ctx.addIssue({ code: 'custom', message: 'Set how many days a custom period lasts', path: ['customIntervalDays'] });
-  }
-}
-
-export const ReportingStreamInputSchema = z
-  .object({
-    /** Present when editing an existing stream. */
-    id: Uuid.nullable().optional(),
-    key: Key,
-    label: z.string().trim().min(2).max(120),
-    kind: ReportingStreamKindEnum,
-    /** Roles that owe the stream (a user or session owes it when its role is listed). */
-    roleIds: z.array(Uuid).min(1, 'Pick at least one role').max(20),
-    /** Optional: limit the stream to one contractor package. */
-    projectContractorId: Uuid.nullable().default(null),
-    cadenceAnchorDate: CalendarDate.nullable().default(null),
-    isActive: z.boolean().default(true),
-    sortOrder: z.number().int().min(0).max(100).default(0),
-    ...streamCadenceShape,
-  })
-  .superRefine(refineStream);
-export type ReportingStreamInput = z.infer<typeof ReportingStreamInputSchema>;
-export type ReportingStreamInputRaw = z.input<typeof ReportingStreamInputSchema>;
-
-export const SaveReportingStreamsRequestSchema = z
-  .object({ streams: z.array(ReportingStreamInputSchema).max(10) })
-  .superRefine((v, ctx) => {
-    const keys = new Set<string>();
-    v.streams.forEach((s, i) => {
-      if (keys.has(s.key)) ctx.addIssue({ code: 'custom', message: `Stream key "${s.key}" is used twice`, path: ['streams', i, 'key'] });
-      keys.add(s.key);
-    });
-  });
-export type SaveReportingStreamsRequest = z.infer<typeof SaveReportingStreamsRequestSchema>;
-
-export const ReportingStreamDtoSchema = z.object({
-  id: Uuid,
-  key: z.string(),
-  label: z.string(),
-  kind: ReportingStreamKindEnum,
-  roleIds: z.array(Uuid),
-  roleNames: z.array(z.string()),
-  projectContractorId: Uuid.nullable(),
-  projectContractorName: z.string().nullable(),
-  reportingCadence: ReportingCadenceEnum,
-  workWeekDays: z.array(z.number().int()),
-  periodStartDayOfWeek: z.number().int(),
-  customIntervalDays: z.number().int().nullable(),
-  quarterAnchorMonth: z.number().int().nullable(),
-  reportDueTime: z.string().nullable(),
-  reportGraceMinutes: z.number().int(),
-  cadenceAnchorDate: z.string().nullable(),
-  visitType: InspectionVisitTypeEnum.nullable(),
-  submissionDeadlineDays: z.number().int().nullable(),
-  isActive: z.boolean(),
-  sortOrder: z.number().int(),
-  /** A cadence change on a live project waiting for the stream's next period. */
-  pendingChange: z.object({ effectiveFrom: z.string() }).nullable(),
-  /** Settings in force today and the period they give (null without periods). */
-  settings: ProjectCadenceSettingsDtoSchema,
-  currentPeriod: ReportingPeriodDtoSchema.nullable(),
-});
-export type ReportingStreamDto = z.infer<typeof ReportingStreamDtoSchema>;
-
-/** GET /projects/:id/reporting-streams. With no streams the project runs one implicit "Default" stream. */
-export const ProjectReportingStreamsDtoSchema = z.object({
-  usesImplicitDefault: z.boolean(),
-  /** The implicit stream: the project cadence, owed by verifiers and contractors as before Phase 14. */
-  defaultStream: z.object({ label: z.string(), settings: ProjectCadenceSettingsDtoSchema }),
-  streams: z.array(ReportingStreamDtoSchema),
-  /** Roles of the workspace a stream can name (for the editor). */
-  roleOptions: z.array(z.object({ id: Uuid, name: z.string(), code: z.string(), fieldPersonaType: FieldPersonaTypeEnum })),
-});
-export type ProjectReportingStreamsDto = z.infer<typeof ProjectReportingStreamsDtoSchema>;
-
 // ---------------------------------------------------------------------------
 // Project type config (Phase 14 keys)
 // ---------------------------------------------------------------------------
-
-/** A stream on a project type: roles by code (role ids are per tenant and resolved when applied). */
-export const ProjectTypeReportingStreamSchema = z
-  .object({
-    key: Key,
-    label: z.string().trim().min(2).max(120),
-    kind: ReportingStreamKindEnum,
-    roleCodes: z.array(z.string().trim().min(1).max(64)).min(1).max(20),
-    ...streamCadenceShape,
-  })
-  .superRefine(refineStream);
-export type ProjectTypeReportingStream = z.infer<typeof ProjectTypeReportingStreamSchema>;
 
 export const ProjectTypeInspectionsConfigSchema = z.object({
   /** Template code per visit type; the latest version of that template is used. */
@@ -324,12 +209,33 @@ export type InspectionFindingSeverity = z.infer<typeof InspectionFindingSeverity
 export const InspectionFindingStatusEnum = z.enum(['OPEN', 'RESOLVED', 'DISMISSED']);
 export type InspectionFindingStatus = z.infer<typeof InspectionFindingStatusEnum>;
 
+/**
+ * A finding (Phase 14, generalised in redesign R4d): raised from a Phase 14 inspection (legacy, until
+ * R5) or from a visit submission. The same DTO serves /findings and the /inspection-findings alias.
+ */
 export const InspectionFindingDtoSchema = z.object({
   id: Uuid,
   projectId: Uuid,
-  inspectionId: Uuid,
-  inspectionVisitType: InspectionVisitTypeEnum,
+  source: z.enum(['INSPECTION', 'VISIT']),
+  /** Phase 14 inspection findings only. */
+  inspectionId: Uuid.nullable(),
+  inspectionVisitType: InspectionVisitTypeEnum.nullable(),
+  /** The inspection or visit date. */
   inspectionVisitDate: z.string(),
+  /** Visit findings (R4). */
+  visitId: Uuid.nullable(),
+  visitSubmissionId: Uuid.nullable(),
+  visitKind: z.string().nullable(),
+  facilityId: Uuid.nullable(),
+  facilityName: z.string().nullable(),
+  facilityUnitId: Uuid.nullable(),
+  unitLabel: z.string().nullable(),
+  questionKey: z.string().nullable(),
+  /** The question as shown (visit findings) or the checklist item label. */
+  title: z.string(),
+  recheckCount: z.number().int(),
+  lastRecheckedAt: z.string().nullable(),
+  escalatedAt: z.string().nullable(),
   checklistItemKey: z.string(),
   checklistItemLabel: z.string(),
   projectContractorId: Uuid.nullable(),
@@ -428,33 +334,6 @@ export const SiteInspectionDtoSchema = SiteInspectionSummaryDtoSchema.extend({
   returnedNotes: z.string().nullable(),
 });
 export type SiteInspectionDto = z.infer<typeof SiteInspectionDtoSchema>;
-
-export const InspectionOverviewDtoSchema = z.object({
-  lastByVisitType: z.record(
-    InspectionVisitTypeEnum,
-    z.object({ id: Uuid, visitDate: z.string(), status: SiteInspectionStatusEnum, overallFinding: InspectionOverallFindingEnum }).nullable()
-  ),
-  nextDue: z
-    .object({
-      streamId: Uuid,
-      streamLabel: z.string(),
-      visitType: InspectionVisitTypeEnum.nullable(),
-      periodStart: z.string(),
-      periodEnd: z.string(),
-      dueAt: z.string(),
-      status: z.string(),
-    })
-    .nullable(),
-  openFindings: z.number().int(),
-  missedInspections: z.number().int(),
-  /** Has an approved (or accepted, when approval is off) BASELINE inspection. */
-  baselineComplete: z.boolean(),
-});
-export type InspectionOverviewDto = z.infer<typeof InspectionOverviewDtoSchema>;
-
-// ---------------------------------------------------------------------------
-// Mobile pack
-// ---------------------------------------------------------------------------
 
 export const MobileStreamSchema = z.object({
   id: Uuid,

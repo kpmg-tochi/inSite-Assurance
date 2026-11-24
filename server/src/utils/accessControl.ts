@@ -194,7 +194,7 @@ export function requireProjectAccess(
 }
 
 /** Routes under /projects/:projectId that work on a draft (the wizard and its data). */
-const DRAFT_ROUTE_RE = /^\/api\/v1\/projects\/[^/]+(?:\/(?:setup|activate|contractors|boq|scope|baseline|process|standards|needs-assessments|evidence\/presign|media|reporting-streams|supervision|documents|milestones|visit-form)(?:\/|$)|\/?$)/;
+const DRAFT_ROUTE_RE = /^\/api\/v1\/projects\/[^/]+(?:\/(?:setup|activate|contractors|boq|scope|baseline|process|standards|needs-assessments|evidence\/presign|media|reporting-streams|supervision|documents|milestones|visit-form|visit-plan|visit-officers)(?:\/|$)|\/?$)/;
 
 /** Writes an archived project still serves (Phase 15: the closure pack export). */
 const ARCHIVED_WRITE_RE = /^\/api\/v1\/projects\/[^/]+\/closure-pack\/?$/;
@@ -218,9 +218,12 @@ function lifecycleRefusal(status: ProjectStatus, req: Request): AppError | null 
 /**
  * Phase 10: once construction has ended (defects liability period, or closed), field sessions may
  * still read, but may only write for defect work: defect actions, the captures that evidence them
- * (presign, register, and the capture's location ping) and notification reads.
+ * (presign, register, and the capture's location ping) and notification reads. Redesign R4 (D-R4.40):
+ * visits continue after construction (final evaluation, post-closure evaluation), with their site
+ * log and findings.
  */
-const FIELD_DEFECT_WORK_RE = /^\/api\/v1\/projects\/[^/]+\/(?:defects|captures|evidence\/presign|notifications)(?:\/|$)/;
+const FIELD_DEFECT_WORK_RE =
+  /^\/api\/v1\/projects\/[^/]+\/(?:defects|captures|evidence\/presign|notifications|visits|site-log|findings|inspection-findings)(?:\/|$)/;
 
 function fieldPhaseRefusal(phase: ConstructionPhase, req: Request): AppError | null {
   if (phase !== 'RETENTION_PERIOD' && phase !== 'COMPLETED_CLOSED') return null;

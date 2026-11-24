@@ -16,8 +16,7 @@ import {
 import Drawer from "../../components/Drawer";
 import Loader from "../../components/Loader";
 import { WorkdayReportsPanel } from "../../components/WorkdayReportsPanel";
-import { ReportingCadencePanel } from "../../components/ReportingCadencePanel";
-import { ShieldCheck, X, FileText, User, Calendar, Tag } from "lucide-react";
+import { ShieldCheck, X, FileText, User, Tag } from "lucide-react";
 
 type AuditLedgerEntry = AuditTrailResponseDto["entries"][number];
 
@@ -225,7 +224,6 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
 
       {activeTab === "presence" ? (
         <div className="space-y-5">
-          <ReportingCadencePanel projectId={project.id} />
           <WorkdayReportsPanel
             projectId={project.id}
             initialReportId={initialReportId}

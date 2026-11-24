@@ -1,5 +1,5 @@
 import { Prisma, PrismaClient } from '@prisma/client';
-import { ScheduleStatusValue, ScheduleVarianceBadge, SCHEDULE_STATUS_META, sprintScheduleStatus, zonedCalendarDate } from '@insite/shared';
+import { resolveProjectTypeConfig, ScheduleStatusValue, ScheduleVarianceBadge, SCHEDULE_STATUS_META, sprintScheduleStatus, zonedCalendarDate } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 
@@ -36,10 +36,10 @@ export async function refreshScheduleBadge(
   now: Date = new Date(),
   db: Db = prisma
 ): Promise<{ status: ScheduleStatusValue; behindUnitCount: number; scheduleBehindAlertedAt: Date | null }> {
-  const project = await db.project.findUnique({ where: { id: projectId }, select: { id: true, timezone: true } });
+  const project = await db.project.findUnique({ where: { id: projectId }, select: { id: true, timezone: true, projectTypeSnapshotJson: true } });
   if (!project) throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   const [sprints, units, lines] = await Promise.all([
-    db.projectSprint.findMany({ where: { projectId }, select: { number: true, startDate: true, endDate: true } }),
+    db.projectSprint.findMany({ where: { projectId }, select: { number: true, startDate: true, endDate: true, verificationOutcome: true } }),
     db.facilityUnit.findMany({ where: { projectId }, select: { id: true, endSprint: { select: { number: true } } } }),
     db.boqItem.findMany({ where: { projectId }, select: { facilityUnitId: true, cumulativeCertifiedPct: true } }),
   ]);
@@ -47,6 +47,8 @@ export async function refreshScheduleBadge(
   const { status, behindUnitCount } = sprintScheduleStatus({
     today: projectToday(project, now),
     sprints,
+    // Redesign R4e: verification decides; unverified sprints get the type's verification period.
+    verificationDays: resolveProjectTypeConfig(project.projectTypeSnapshotJson)?.monitoring.sprintVerificationDays ?? 7,
     units: units.map((u) => ({ endSprintNumber: u.endSprint?.number ?? null, complete: !incompleteUnits.has(u.id) })),
     lineCount: lines.length,
     allLinesComplete: lines.every((l) => Number(l.cumulativeCertifiedPct) >= 100),

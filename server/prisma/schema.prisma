@@ -138,6 +138,8 @@ enum ApprovalSubjectType {
   SITE_INSPECTION
   // Phase 13
   CONTRACT_DEFAULT_CASE
+  // Redesign R4
+  VISIT_SUBMISSION
 }
 
 enum ApprovalDecision {
@@ -243,7 +245,6 @@ enum AuditActionType {
   // Phase 8
   REPORT_SUBMITTED_LATE
   REPORT_MISSED
-  REPORTING_OBLIGATION_EXCUSED
   // Phase 10 (R1d: the response is recorded by staff, no public link)
   HANDOVER_RECORDED
   HANDOVER_REVIEWED
@@ -263,7 +264,6 @@ enum AuditActionType {
   INSPECTION_REVIEWED
   INSPECTION_FINDING_RAISED
   INSPECTION_FINDING_RESOLVED
-  REPORTING_STREAMS_SAVED
   CHECKLIST_TEMPLATE_SAVED
   // Phase 13
   DOCUMENT_UPLOADED
@@ -304,6 +304,25 @@ enum AuditActionType {
   SCOPE_IMPORTED
   // Redesign R3: form library
   FORM_COMPONENT_SAVED
+  // Redesign R4: visits
+  VISITS_GENERATED
+  VISIT_CREATED
+  VISIT_PUBLISHED
+  VISIT_UPDATED
+  VISIT_CANCELLED
+  VISIT_FORM_REBUILT
+  VISIT_OFFICERS_SAVED
+  VISIT_RESPONDED
+  VISIT_DATE_DECIDED
+  VISIT_CHECKED_IN
+  VISIT_SUBMITTED
+  VISIT_MISSED
+  SITE_LOG_ADDED
+  SITE_LOG_HIDDEN
+  VISIT_REVIEWED
+  FINDING_ESCALATED
+  FINDINGS_SUMMARY_SENT
+  SPRINT_VERIFIED
 }
 
 // Phase 11: which organisation an approval step actor must belong to (ANY = Phase 7 behaviour).
@@ -358,13 +377,6 @@ enum DefectTicketStatus {
 }
 
 // Phase 8: cadence, jobs and outbound messages (roster and attendance removed in redesign R1e)
-enum ReportingObligationStatus {
-  PENDING
-  SUBMITTED
-  LATE
-  MISSED
-  EXCUSED
-}
 
 enum JobRunStatus {
   RUNNING
@@ -393,6 +405,12 @@ enum MobileNotificationType {
   DEFECT_UPDATE
   // Phase 14
   INSPECTION_FINDING
+  // Redesign R4
+  VISIT_ASSIGNED
+  VISIT_CHANGED
+  VISIT_REMINDER
+  VISIT_RETURNED
+  VISIT_APPROVED
 }
 
 enum NotificationActionType {
@@ -404,6 +422,8 @@ enum NotificationActionType {
   OPEN_DEFECTS
   // Phase 14
   OPEN_INSPECTION_FINDINGS
+  // Redesign R4
+  OPEN_VISIT
 }
 
 // ============================================================================
@@ -415,25 +435,27 @@ enum NotificationActionType {
 // ============================================================================
 
 model Tenant {
-  id                             String         @id @default(uuid()) @db.Uuid
-  name                           String
-  slug                           String         @unique
-  status                         TenantStatus   @default(ACTIVE)
-  defaultCurrency                String         @default("NGN")
-  timezone                       String         @default("Africa/Lagos")
-  brandingConfig                 Json           @default("{}")
+  id                               String         @id @default(uuid()) @db.Uuid
+  name                             String
+  slug                             String         @unique
+  status                           TenantStatus   @default(ACTIVE)
+  defaultCurrency                  String         @default("NGN")
+  timezone                         String         @default("Africa/Lagos")
+  brandingConfig                   Json           @default("{}")
   // Phase 6 settings
-  organizationInputMode          OrgInputMode   @default(BOTH)
-  enabledGeofenceModes           GeofenceMode[] @default([RADIAL, PERIMETER])
-  defaultGeofenceToleranceMeters Int            @default(100)
+  organizationInputMode            OrgInputMode   @default(BOTH)
+  enabledGeofenceModes             GeofenceMode[] @default([RADIAL, PERIMETER])
+  defaultGeofenceToleranceMeters   Int            @default(100)
   // Redesign: pre-fills a new radial boundary and the workbook GPS boundary; projects set their own radius.
-  defaultGeofenceRadiusMeters    Int            @default(150)
+  defaultGeofenceRadiusMeters      Int            @default(150)
+  // Redesign R4 (D-R4.15): ± working days an officer may move a visit from its original date.
+  visitRescheduleToleranceWorkdays Int            @default(2)
   // Phase 11: tenant wording per terminology key ({ key: { singular, plural? } }); keys fixed in shared.
-  terminologyLabels              Json           @default("{}")
+  terminologyLabels                Json           @default("{}")
   // Phase 15: contractor rating criteria [{ key, label, description }]; empty = the defaults.
-  ratingCriteriaJson             Json           @default("[]")
-  createdAt                      DateTime       @default(now())
-  updatedAt                      DateTime       @updatedAt
+  ratingCriteriaJson               Json           @default("[]")
+  createdAt                        DateTime       @default(now())
+  updatedAt                        DateTime       @updatedAt
 
   organizations      Organization[]
   roles              Role[]
@@ -579,6 +601,7 @@ model User {
   pushTokens          PushToken[]
   raisedReportQueries ReportQuery[]           @relation("RaisedReportQueries")
   approvalActions     ApprovalAction[]
+  visitAssignments    VisitAssignee[] // Redesign R4
 
   @@index([tenantId])
   @@index([organizationId])
@@ -685,12 +708,14 @@ model Project {
 
   // Phase 13: contract details (dates YYYY-MM-DD in the project zone). kickoffDate is the planned
   // kick-off; contract milestones count from these anchors.
-  contractReference  String?
-  contractAwardDate  String?
-  contractSignedDate String?
-  contractSumNgn     Decimal?  @db.Decimal(18, 2)
-  kickoffDate        String?
-  kickoffHeldAt      DateTime?
+  contractReference      String?
+  contractAwardDate      String?
+  contractSignedDate     String?
+  contractSumNgn         Decimal?  @db.Decimal(18, 2)
+  kickoffDate            String?
+  kickoffHeldAt          DateTime?
+  // Redesign R4 (D-R4.39): officers given to generated visits; the first is the lead.
+  defaultVisitOfficerIds String[]  @db.Uuid
 
   // Redesign R2c: needs-assessment details (filled from the workbook's Project sheet; the Needs
   // Assessment module uses them too).
@@ -729,13 +754,11 @@ model Project {
   standards              ProjectStandardSpecification[]
   needsAssessments       ProjectNeedsAssessmentDocument[]
   // Phase 8
-  reportingObligations   ReportingObligation[]
   outboundMessages       OutboundMessage[]
   // Phase 10
   handoverSubmissions    HandoverSubmission[]
   defectTickets          RetentionDefectTicket[]
   // Phase 14
-  reportingStreams       ProjectReportingStream[]
   siteInspections        SiteInspectionReport[]
   inspectionFindings     InspectionFinding[]
   // Phase 13
@@ -755,6 +778,9 @@ model Project {
   sprints                ProjectSprint[]
   facilityUnits          FacilityUnit[]
   visitFormSnapshots     VisitFormSnapshot[] // Redesign R3
+  visits                 Visit[] // Redesign R4
+  visitSubmissions       VisitSubmission[]
+  siteLogEntries         SiteLogEntry[]
 
   @@unique([tenantId, codePrefix])
   @@index([tenantId])
@@ -788,7 +814,6 @@ model ProjectContractor {
   organization       Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   defectTickets      RetentionDefectTicket[]
   // Phase 14
-  reportingStreams   ProjectReportingStream[]
   inspectionFindings InspectionFinding[]
   // Phase 13
   documents          ProjectDocument[]
@@ -910,16 +935,14 @@ model BoqItem {
   rateNgn         Decimal @db.Decimal(18, 2)
   budgetedCostNgn Decimal @db.Decimal(18, 2)
 
-  isHoldPoint            Boolean  @default(false)
+  isHoldPoint            Boolean @default(false)
   // Manual override only (Phase 9): PLAN_A makes an item owed every period. Otherwise the
   // planned window decides. PLAN_A | FALLBACK_BACKLOG | UNBLOCKED_POOL
-  planningTier           String   @default("UNBLOCKED_POOL")
-  dailyTargetQuantity    Decimal? @db.Decimal(14, 3)
-  expectedDeliverable    String?
+  planningTier           String  @default("UNBLOCKED_POOL")
   holdPointInstruction   String?
-  isOpaqueLumpSum        Boolean  @default(false)
+  isOpaqueLumpSum        Boolean @default(false)
   opacityWarningReason   String?
-  cumulativeCertifiedPct Decimal  @default(0) @db.Decimal(5, 2)
+  cumulativeCertifiedPct Decimal @default(0) @db.Decimal(5, 2)
 
   // Phase 9: schedule (YYYY-MM-DD in the project zone). The original window is kept for good once
   // the project is live; revisions only move the planned window.
@@ -931,15 +954,14 @@ model BoqItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project              Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  lastRevision         BoqRevision?          @relation(fields: [lastRevisionId], references: [id], onDelete: SetNull)
-  facilityUnit         FacilityUnit?         @relation(fields: [facilityUnitId], references: [id], onDelete: SetNull)
-  evidenceLogs         FieldEvidenceLog[]
-  incidentReports      IncidentReport[]
-  workdayReports       WorkdayReport[]
-  reportQueries        ReportQuery[]
-  wbsChatMessages      WbsChatMessage[]
-  reportingObligations ReportingObligation[]
+  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lastRevision    BoqRevision?       @relation(fields: [lastRevisionId], references: [id], onDelete: SetNull)
+  facilityUnit    FacilityUnit?      @relation(fields: [facilityUnitId], references: [id], onDelete: SetNull)
+  evidenceLogs    FieldEvidenceLog[]
+  incidentReports IncidentReport[]
+  workdayReports  WorkdayReport[]
+  reportQueries   ReportQuery[]
+  wbsChatMessages WbsChatMessage[]
 
   @@unique([projectId, wbsCode])
   @@index([facilityUnitId])
@@ -995,6 +1017,10 @@ model FieldEvidenceLog {
   // Phase 14: a photo for one checklist item of a site inspection.
   siteInspectionReportId         String?  @db.Uuid
   checklistItemKey               String?
+  // Redesign R4c: a photo or voice note answering one visit form question (answer path), and its unit.
+  visitSubmissionId              String?  @db.Uuid
+  visitAnswerPath                String?
+  facilityUnitId                 String?  @db.Uuid
 
   // Voice notes: NOT_APPLICABLE | PENDING | DONE | FAILED
   transcriptionStatus String  @default("NOT_APPLICABLE")
@@ -1009,6 +1035,8 @@ model FieldEvidenceLog {
   fieldSession     FieldAgentSession     @relation(fields: [fieldSessionId], references: [id], onDelete: Restrict)
   workdayReport    WorkdayReport?        @relation(fields: [workdayReportId], references: [id], onDelete: SetNull)
   siteInspection   SiteInspectionReport? @relation(fields: [siteInspectionReportId], references: [id], onDelete: SetNull)
+  visitSubmission  VisitSubmission?      @relation(fields: [visitSubmissionId], references: [id], onDelete: SetNull)
+  siteLogEntry     SiteLogEntry?
   mediaAttachments EvidenceMedia[]
   chatMessages     WbsChatMessage[]
 
@@ -1016,6 +1044,7 @@ model FieldEvidenceLog {
   @@index([projectId, boqItemId])
   @@index([workdayReportId])
   @@index([siteInspectionReportId])
+  @@index([visitSubmissionId])
   @@index([fieldSessionId, capturedAtDevice])
 }
 
@@ -1167,15 +1196,14 @@ model WorkdayReport {
   createdAt                 DateTime             @default(now())
   updatedAt                 DateTime             @updatedAt
 
-  project         Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  reporterSession FieldAgentSession     @relation(fields: [reporterSessionId], references: [id], onDelete: Cascade)
-  boqItem         BoqItem               @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
-  parentReport    WorkdayReport?        @relation("WorkdayReportRevisions", fields: [parentReportId], references: [id], onDelete: SetNull)
-  revisions       WorkdayReport[]       @relation("WorkdayReportRevisions")
+  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reporterSession FieldAgentSession  @relation(fields: [reporterSessionId], references: [id], onDelete: Cascade)
+  boqItem         BoqItem            @relation(fields: [wbsItemId], references: [id], onDelete: Cascade)
+  parentReport    WorkdayReport?     @relation("WorkdayReportRevisions", fields: [parentReportId], references: [id], onDelete: SetNull)
+  revisions       WorkdayReport[]    @relation("WorkdayReportRevisions")
   queries         ReportQuery[]
   chatMessages    WbsChatMessage[]
   captures        FieldEvidenceLog[]
-  obligations     ReportingObligation[]
 
   @@index([projectId, wbsItemId, workdayDate])
   @@index([projectId, reportingPeriodStart])
@@ -1460,43 +1488,6 @@ model ProjectNeedsAssessmentDocument {
 
 // One report owed for one WBS item and reporting period by one reporter scope:
 // "contractor:<projectContractorId>", "contractor:project" (no packages) or "verifier".
-model ReportingObligation {
-  id                     String                    @id @default(uuid()) @db.Uuid
-  projectId              String                    @db.Uuid
-  // Phase 14: null for an INSPECTION stream obligation (one per period).
-  boqItemId              String?                   @db.Uuid
-  // Phase 14: null = the project's implicit stream.
-  streamId               String?                   @db.Uuid
-  siteInspectionReportId String?                   @db.Uuid
-  reporterScope          String
-  periodStart            String
-  periodEnd              String
-  dueAt                  DateTime
-  // dueAt plus the project's grace when the obligation was created.
-  lateAfter              DateTime
-  status                 ReportingObligationStatus @default(PENDING)
-  workdayReportId        String?                   @db.Uuid
-  alertedAt              DateTime?
-  excusedNote            String?
-  excusedByUserId        String?                   @db.Uuid
-  createdAt              DateTime                  @default(now())
-  updatedAt              DateTime                  @updatedAt
-
-  project        Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  boqItem        BoqItem?                @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
-  workdayReport  WorkdayReport?          @relation(fields: [workdayReportId], references: [id], onDelete: SetNull)
-  stream         ProjectReportingStream? @relation(fields: [streamId], references: [id], onDelete: Cascade)
-  siteInspection SiteInspectionReport?   @relation(fields: [siteInspectionReportId], references: [id], onDelete: SetNull)
-
-  // Phase 14: uniqueness is two hand-written partial unique indexes (see the Phase 14 migration):
-  // item obligations on (projectId, boqItemId, reporterScope, periodStart, COALESCE(streamId)) and
-  // inspection obligations on (streamId, reporterScope, periodStart).
-  @@index([projectId, boqItemId, reporterScope, periodStart])
-  @@index([streamId, periodStart])
-  @@index([projectId, periodStart])
-  @@index([status, lateAfter])
-  @@map("reporting_obligations")
-}
 
 // One claimed unit of scheduled work. The unique (jobName, scopeKey) makes each unit run once
 // across API instances; a FAILED unit may be claimed again.
@@ -1694,11 +1685,6 @@ model ProjectBeneficiary {
 // Phase 14: reporting streams, site inspections, findings
 // ---------------------------------------------------------------------------
 
-enum ReportingStreamKind {
-  ITEM_REPORTS
-  INSPECTION
-}
-
 enum InspectionVisitType {
   BASELINE
   ROUTINE
@@ -1734,40 +1720,6 @@ enum InspectionFindingStatus {
 // A reporting obligation stream (Phase 14). A project with none runs one implicit stream from its
 // own cadence fields (Phase 8 behaviour). roleIds: who owes it; projectContractorId limits it to a
 // package. A cadence change on a live project waits in pendingCadenceJson until the next period.
-model ProjectReportingStream {
-  id                          String               @id @default(uuid()) @db.Uuid
-  projectId                   String               @db.Uuid
-  key                         String
-  label                       String
-  kind                        ReportingStreamKind
-  roleIds                     String[]             @db.Uuid
-  projectContractorId         String?              @db.Uuid
-  reportingCadence            ReportingCadence
-  workWeekDays                Int[]                @default([1, 2, 3, 4, 5, 6])
-  periodStartDayOfWeek        Int                  @default(1)
-  customIntervalDays          Int?
-  quarterAnchorMonth          Int?
-  reportDueTime               String?
-  reportGraceMinutes          Int                  @default(0)
-  cadenceAnchorDate           String?
-  visitType                   InspectionVisitType?
-  submissionDeadlineDays      Int?
-  isActive                    Boolean              @default(true)
-  sortOrder                   Int                  @default(0)
-  pendingCadenceJson          Json?
-  pendingCadenceEffectiveFrom String?
-  createdAt                   DateTime             @default(now())
-  updatedAt                   DateTime             @updatedAt
-
-  project           Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectContractor ProjectContractor?     @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
-  obligations       ReportingObligation[]
-  inspections       SiteInspectionReport[]
-
-  @@unique([projectId, key])
-  @@index([projectId, isActive])
-  @@map("project_reporting_streams")
-}
 
 // Tenant checklist template, versioned: a version used by an inspection is never edited; saving it
 // creates version + 1 with the same code. sectionsJson is ChecklistSectionsSchema.
@@ -1831,12 +1783,10 @@ model SiteInspectionReport {
   createdAt                   DateTime                 @default(now())
   updatedAt                   DateTime                 @updatedAt
 
-  project     Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  stream      ProjectReportingStream?     @relation(fields: [streamId], references: [id], onDelete: SetNull)
-  template    InspectionChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
-  captures    FieldEvidenceLog[]
-  findings    InspectionFinding[]
-  obligations ReportingObligation[]
+  project  Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  template InspectionChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  captures FieldEvidenceLog[]
+  findings InspectionFinding[]
 
   @@index([projectId, visitType, visitDate])
   @@index([projectId, status])
@@ -1846,30 +1796,44 @@ model SiteInspectionReport {
 
 // A failed or low-rated checklist item raised against a contractor (monitoring side when null).
 model InspectionFinding {
-  id                   String                    @id @default(uuid()) @db.Uuid
-  projectId            String                    @db.Uuid
-  inspectionId         String                    @db.Uuid
-  checklistItemKey     String
-  projectContractorId  String?                   @db.Uuid
-  description          String                    @db.Text
-  severity             InspectionFindingSeverity @default(MAJOR)
-  status               InspectionFindingStatus   @default(OPEN)
-  resolvedNotes        String?                   @db.Text
+  id                        String                    @id @default(uuid()) @db.Uuid
+  projectId                 String                    @db.Uuid
+  // Redesign R4d: a finding comes from a Phase 14 inspection or a visit submission (hand-written CHECK
+  // inspection_findings_source_check). For visit findings checklistItemKey holds the field key.
+  inspectionId              String?                   @db.Uuid
+  checklistItemKey          String
+  visitId                   String?                   @db.Uuid
+  visitSubmissionId         String?                   @db.Uuid
+  facilityId                String?                   @db.Uuid
+  facilityUnitId            String?                   @db.Uuid
+  // The answer path (s:/f:...) and the question as shown.
+  questionKey               String?
+  title                     String?
+  recheckCount              Int                       @default(0)
+  lastRecheckedSubmissionId String?                   @db.Uuid
+  lastRecheckedAt           DateTime?
+  escalatedAt               DateTime?
+  projectContractorId       String?                   @db.Uuid
+  description               String                    @db.Text
+  severity                  InspectionFindingSeverity @default(MAJOR)
+  status                    InspectionFindingStatus   @default(OPEN)
+  resolvedNotes             String?                   @db.Text
   // FieldEvidenceLog ids of the resolution photos.
-  resolutionCaptureIds String[]                  @db.Uuid
-  raisedByUserId       String?                   @db.Uuid
-  raisedByName         String?
-  resolvedByUserId     String?                   @db.Uuid
-  resolvedByName       String?
-  createdAt            DateTime                  @default(now())
-  resolvedAt           DateTime?
+  resolutionCaptureIds      String[]                  @db.Uuid
+  raisedByUserId            String?                   @db.Uuid
+  raisedByName              String?
+  resolvedByUserId          String?                   @db.Uuid
+  resolvedByName            String?
+  createdAt                 DateTime                  @default(now())
+  resolvedAt                DateTime?
 
-  project           Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  inspection        SiteInspectionReport @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
-  projectContractor ProjectContractor?   @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
+  project           Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  inspection        SiteInspectionReport? @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  projectContractor ProjectContractor?    @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
 
   @@index([projectId, status])
   @@index([inspectionId])
+  @@index([visitId])
   @@index([projectContractorId, status])
   @@map("inspection_findings")
 }
@@ -2190,6 +2154,8 @@ model CompletionCertificate {
   // YYYY-MM-DD in the project zone
   completionDate              String
   finalEvaluationInspectionId String?                     @db.Uuid
+  // Redesign R4d: the accepted final evaluation visit the certificate was drafted on.
+  finalEvaluationVisitId      String?                     @db.Uuid
   // The issued PDF in the register (COMPLETION_CERTIFICATE).
   documentId                  String?                     @db.Uuid
   // The signatory slots as configured when drafted.
@@ -2440,21 +2406,29 @@ model Facility {
 // A named period of the project with deliverables (D-R2.4). Numbers follow date order (1…n);
 // overlaps are refused; status is derived from the dates (R4 adds verification).
 model ProjectSprint {
-  id           String   @id @default(uuid()) @db.Uuid
-  projectId    String   @db.Uuid
-  number       Int
-  name         String
+  id                       String                     @id @default(uuid()) @db.Uuid
+  projectId                String                     @db.Uuid
+  number                   Int
+  name                     String
   // YYYY-MM-DD in the project zone, both days included.
-  startDate    String
-  endDate      String
-  deliverables String   @default("") @db.Text
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  startDate                String
+  endDate                  String
+  deliverables             String                     @default("") @db.Text
+  // Redesign R4e (D-R4.31): the M&E verification of the sprint once it has started (normally after it ends).
+  verificationOutcome      SprintVerificationOutcome?
+  verifiedAt               DateTime?
+  verifiedByUserId         String?                    @db.Uuid
+  verificationNotes        String?                    @db.Text
+  firstVerifiedAt          DateTime?
+  verificationDueAlertedAt DateTime?
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
 
   project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
   startingUnits      FacilityUnit[]      @relation("UnitStartSprint")
   endingUnits        FacilityUnit[]      @relation("UnitEndSprint")
   visitFormSnapshots VisitFormSnapshot[]
+  visits             Visit[]
 
   @@unique([projectId, number])
   @@map("project_sprints")
@@ -2463,19 +2437,23 @@ model ProjectSprint {
 // One physical instance of a catalogue facility on a project ("Ground floor male toilet"). Supply
 // units carry a planned quantity. Its scope lines take their planned window from its sprints.
 model FacilityUnit {
-  id              String   @id @default(uuid()) @db.Uuid
-  projectId       String   @db.Uuid
-  facilityId      String   @db.Uuid
+  id                   String   @id @default(uuid()) @db.Uuid
+  projectId            String   @db.Uuid
+  facilityId           String   @db.Uuid
   // The workbook "Unit ID", unique per project (e.g. U01).
-  code            String
-  label           String
-  plannedQuantity Decimal? @db.Decimal(14, 3)
-  quantityUnit    String?
-  startSprintId   String?  @db.Uuid
-  endSprintId     String?  @db.Uuid
-  sortOrder       Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  code                 String
+  label                String
+  plannedQuantity      Decimal? @db.Decimal(14, 3)
+  quantityUnit         String?
+  // Redesign R4d (D-R4.26): progress observed by the latest accepted visit (null = none yet).
+  progressPct          Decimal? @db.Decimal(5, 2)
+  progressAsOf         String?
+  progressSubmissionId String?  @db.Uuid
+  startSprintId        String?  @db.Uuid
+  endSprintId          String?  @db.Uuid
+  sortOrder            Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   facility    Facility       @relation(fields: [facilityId], references: [id], onDelete: Restrict)
@@ -2600,8 +2578,295 @@ model VisitFormSnapshot {
   project  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   sprint   ProjectSprint?    @relation(fields: [sprintId], references: [id], onDelete: SetNull)
   template VisitFormTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  visits   Visit[]
 
   @@index([projectId])
   @@index([templateId])
   @@map("visit_form_snapshots")
+}
+
+// ---------------------------------------------------------------------------
+// Redesign R4: scheduled visits (spec 8). A visit is proposed from the type plan (or created by
+// hand), published to its officers with a frozen form (VisitFormSnapshot), answered from the field
+// app (VisitSubmission, R4c) and accepted through the REPORT approval chain (R4d).
+// ---------------------------------------------------------------------------
+
+enum VisitStatus {
+  PROPOSED
+  PLANNED
+  IN_PROGRESS
+  SUBMITTED
+  RETURNED
+  APPROVED
+  MISSED
+  CANCELLED
+}
+
+enum VisitConfirmation {
+  UNCONFIRMED
+  CONFIRMED
+  DECLINED
+}
+
+enum VisitOrigin {
+  PLAN
+  MANUAL
+  UNSCHEDULED
+}
+
+model Visit {
+  id                    String            @id @default(uuid()) @db.Uuid
+  projectId             String            @db.Uuid
+  visitKind             VisitKind
+  status                VisitStatus       @default(PROPOSED)
+  origin                VisitOrigin       @default(MANUAL)
+  // "<rule key>:<date>" for plan visits, so regeneration never duplicates (D-R4.11).
+  generatorKey          String?
+  // YYYY-MM-DD in the project zone. The original never changes once published (D-R4.4).
+  originalPlannedDate   String
+  plannedDate           String
+  sprintId              String?           @db.Uuid
+  confirmation          VisitConfirmation @default(UNCONFIRMED)
+  confirmedAt           DateTime?
+  // The frozen form (null while PROPOSED); formHash = its contentSha256 (register: formSnapshotId + formHash).
+  formSnapshotId        String?           @db.Uuid
+  formHash              String?
+  formAssembledAt       DateTime?
+  // AD_HOC: the facilities to check.
+  pickedFacilityIds     String[]          @db.Uuid
+  // planned date + the type's submissionDeadlineDays (YYYY-MM-DD).
+  submissionDeadline    String?
+  // Applied officer moves and accepted proposals.
+  rescheduleCount       Int               @default(0)
+  publishedAt           DateTime?
+  publishedByUserId     String?           @db.Uuid
+  cancelledAt           DateTime?
+  cancelledReason       String?
+  cancelledByUserId     String?           @db.Uuid
+  missedAt              DateTime?
+  createdByUserId       String?           @db.Uuid
+  // Unscheduled visits from the field app (idempotent).
+  clientVisitId         String?           @unique @db.Uuid
+  // R4c check-in (D-R4.19): recorded and flagged, never refused over GPS.
+  checkInAt             DateTime?
+  checkInGeotag         Json?
+  checkInGeofenceStatus GeofenceStatus?
+  checkInByUserId       String?           @db.Uuid
+  clientCheckInId       String?           @unique @db.Uuid
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprint       ProjectSprint?     @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  formSnapshot VisitFormSnapshot? @relation(fields: [formSnapshotId], references: [id], onDelete: Restrict)
+  assignees    VisitAssignee[]
+  dateChanges  VisitDateChange[]
+  responses    VisitResponse[]
+  submissions  VisitSubmission[]
+  comments     VisitComment[]
+
+  @@unique([projectId, generatorKey])
+  @@index([projectId, plannedDate])
+  @@index([status, plannedDate])
+  @@map("visits")
+}
+
+model VisitAssignee {
+  id        String   @id @default(uuid()) @db.Uuid
+  visitId   String   @db.Uuid
+  userId    String   @db.Uuid
+  isLead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  visit Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([visitId, userId])
+  @@index([userId])
+  @@map("visit_assignees")
+}
+
+// Redesign R4b (D-R4.4, D-R4.14): every change of a visit's date. One PENDING proposal per visit
+// (hand-written partial unique index visit_date_changes_one_pending_per_visit).
+enum VisitDateChangeKind {
+  MANAGER_MOVE
+  OFFICER_MOVE
+  OFFICER_PROPOSAL
+}
+
+enum VisitDateChangeStatus {
+  APPLIED
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+model VisitDateChange {
+  id              String                @id @default(uuid()) @db.Uuid
+  visitId         String                @db.Uuid
+  kind            VisitDateChangeKind
+  status          VisitDateChangeStatus
+  fromDate        String
+  toDate          String
+  comment         String?
+  byUserId        String?               @db.Uuid
+  byName          String
+  // Officer responses from the phone's outbox (idempotent).
+  clientActionId  String?               @unique @db.Uuid
+  decidedByUserId String?               @db.Uuid
+  decidedByName   String?
+  decidedAt       DateTime?
+  decisionNote    String?
+  createdAt       DateTime              @default(now())
+
+  visit Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@index([visitId, createdAt])
+  @@map("visit_date_changes")
+}
+
+// Redesign R4b (D-R4.14): every officer response, idempotent on the phone's clientActionId.
+enum VisitResponseAction {
+  CONFIRM
+  MOVE
+  PROPOSE
+  DECLINE
+}
+
+model VisitResponse {
+  id             String              @id @default(uuid()) @db.Uuid
+  visitId        String              @db.Uuid
+  clientActionId String              @unique @db.Uuid
+  action         VisitResponseAction
+  userId         String              @db.Uuid
+  userName       String
+  date           String?
+  comment        String?
+  dateChangeId   String?             @db.Uuid
+  createdAt      DateTime            @default(now())
+
+  visit Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@index([visitId, createdAt])
+  @@map("visit_responses")
+}
+
+// Redesign R4c (D-R4.1, D-R4.20): what an officer sent for a visit. A returned submission is followed
+// by a resubmission; at most one is live (PENDING_APPROVAL or APPROVED), hand-written partial unique
+// index visit_submissions_one_live_per_visit.
+enum VisitSubmissionStatus {
+  PENDING_APPROVAL
+  RETURNED
+  APPROVED
+}
+
+enum VisitOverallFinding {
+  SATISFACTORY
+  MINOR_ISSUES
+  MAJOR_ISSUES
+}
+
+model VisitSubmission {
+  id                   String                @id @default(uuid()) @db.Uuid
+  clientSubmissionId   String                @unique @db.Uuid
+  visitId              String                @db.Uuid
+  projectId            String                @db.Uuid
+  revisionNumber       Int                   @default(1)
+  submittedByUserId    String                @db.Uuid
+  fieldSessionId       String                @db.Uuid
+  reporterName         String
+  reporterRoleName     String
+  // The frozen form answered (register: formSnapshotId + formHash).
+  formSnapshotId       String                @db.Uuid
+  formHash             String
+  answersJson          Json
+  overallFinding       VisitOverallFinding
+  summaryText          String                @db.Text
+  submissionGeotag     Json?
+  geofenceStatus       GeofenceStatus?
+  // Photo gaps and other non-blocking flags from validation.
+  integrityFlags       Json                  @default("[]")
+  // Device time of the officer's confirmation; receivedAt is when the server got it.
+  confirmedAt          DateTime
+  receivedAt           DateTime              @default(now())
+  isLate               Boolean               @default(false)
+  status               VisitSubmissionStatus @default(PENDING_APPROVAL)
+  approvalChainVersion Int?
+  currentApprovalStep  Int                   @default(0)
+  approvedAt           DateTime?
+  returnedAt           DateTime?
+  returnedNotes        String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  visit        Visit              @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  captures     FieldEvidenceLog[]
+  siteLogItems SiteLogEntry[]
+  comments     VisitComment[]
+
+  @@index([visitId])
+  @@index([projectId, status])
+  @@map("visit_submissions")
+}
+
+model VisitComment {
+  id           String   @id @default(uuid()) @db.Uuid
+  visitId      String   @db.Uuid
+  submissionId String?  @db.Uuid
+  authorUserId String?  @db.Uuid
+  authorName   String
+  text         String   @db.Text
+  createdAt    DateTime @default(now())
+
+  visit      Visit            @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  submission VisitSubmission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+
+  @@index([visitId, createdAt])
+  @@map("visit_comments")
+}
+
+// Redesign R4c (D-R4.27, decision X): the officer's site log. Photos and voice notes name a
+// registered capture (which carries the geotag); notes may carry their own. Never deleted; an author
+// may hide a note (audited).
+enum SiteLogKind {
+  PHOTO
+  VOICE
+  NOTE
+}
+
+model SiteLogEntry {
+  id                   String          @id @default(uuid()) @db.Uuid
+  clientEntryId        String          @unique @db.Uuid
+  projectId            String          @db.Uuid
+  authorUserId         String          @db.Uuid
+  authorName           String
+  fieldSessionId       String          @db.Uuid
+  kind                 SiteLogKind
+  captureId            String?         @unique @db.Uuid
+  text                 String?         @db.Text
+  latitude             Float?
+  longitude            Float?
+  accuracyMeters       Float?
+  geofenceStatus       GeofenceStatus?
+  capturedAtDevice     DateTime
+  attachedSubmissionId String?         @db.Uuid
+  hiddenAt             DateTime?
+  createdAt            DateTime        @default(now())
+
+  project            Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  capture            FieldEvidenceLog? @relation(fields: [captureId], references: [id], onDelete: Restrict)
+  attachedSubmission VisitSubmission?  @relation(fields: [attachedSubmissionId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, capturedAtDevice])
+  @@index([authorUserId])
+  @@map("site_log_entries")
+}
+
+// Redesign R4e (D-R4.31)
+enum SprintVerificationOutcome {
+  MET
+  PARTLY_MET
+  NOT_MET
 }

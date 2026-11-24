@@ -314,7 +314,8 @@ describe('Redesign R3c: visit form preview and snapshots', () => {
     const outside = await preview(P_MONITOR, ids.prg105, { visitKind: 'AD_HOC', visitDate: today(), pickedFacilityIds: [borehole.id] });
     assert.equal(outside.status, 422);
     assert.equal(outside.body.error.code, 'FACILITY_NOT_IN_SCOPE');
-    assert.equal(await prisma.visitFormSnapshot.count(), 0, 'a preview stores nothing');
+    // R4: the seed published visits (their snapshots are the only ones stored).
+    assert.equal(await prisma.visitFormSnapshot.count(), await prisma.visit.count({ where: { formSnapshotId: { not: null } } }), 'a preview stores nothing');
   });
 
   it('Routine carries over earlier-sprint units below 100% (LKK-402)', async () => {
@@ -342,6 +343,8 @@ describe('Redesign R3c: visit form preview and snapshots', () => {
 
   it('a stored snapshot marks its versions used: the next save versions them and the snapshot never changes', async () => {
     const { freezeVisitFormSnapshot, hashVisitFormSnapshot } = await import('../modules/forms/visitForm.service');
+    // R4: seeded published visits already use some versions; count the ones this test adds.
+    const seededRoutine = await prisma.visitFormSnapshot.count({ where: { visitKind: { in: ['ROUTINE', 'QUARTERLY_ME'] } } }); // the templates that list PROGRESS
     const frozen = await prisma.$transaction((tx) => freezeVisitFormSnapshot(tx, { projectId: ids.prg105, visitKind: 'ROUTINE', visitDate: today() }));
     const row = await prisma.visitFormSnapshot.findUniqueOrThrow({ where: { id: frozen.id } });
     assert.equal(row.contentSha256, hashVisitFormSnapshot(frozen.snapshot));
@@ -349,7 +352,7 @@ describe('Redesign R3c: visit form preview and snapshots', () => {
 
     const lib = await request(app).get('/api/v1/form-library').set(await web(P_MONITOR));
     const progress = lib.body.data.sections.find((s: { code: string }) => s.code === 'PROGRESS');
-    assert.equal(progress.usageCount, 1);
+    assert.equal(progress.usageCount, 1 + seededRoutine);
     const saved = await request(app)
       .put('/api/v1/form-library/sections/PROGRESS')
       .set(await web(P_MONITOR))
@@ -359,7 +362,7 @@ describe('Redesign R3c: visit form preview and snapshots', () => {
     const versions = await request(app).get('/api/v1/form-library/sections/PROGRESS/versions').set(await web(P_MONITOR));
     assert.deepEqual(versions.body.data.map((v: { version: number; usageCount: number }) => [v.version, v.usageCount]), [
       [2, 0],
-      [1, 1],
+      [1, 1 + seededRoutine],
     ]);
     const routineTpl = lib.body.data.templates.find((t: { code: string }) => t.code === 'ROUTINE');
     const tplSaved = await request(app)

@@ -54,12 +54,9 @@ import { recordCountedReport } from '../progress/progress.service';
 import {
   CADENCE_PROJECT_SELECT,
   cadenceSettingsForDate,
-  fulfilObligation,
   lateness,
   periodKeyForDate,
-  reporterScopeFor,
 } from '../cadence/cadence.service';
-import { itemStreamForReporter, streamCadenceRow } from '../cadence/streams.service';
 
 /** Report statuses that count as evidence (and so mark an item's actual start). */
 const isCountedStatus = (status: string) => status === 'CONFIRMED' || status === 'APPROVED_COMPLETED';
@@ -407,14 +404,9 @@ export async function submitWorkdayReport(params: {
     throw new AppError('This WBS item is not a hold point', 400, 'HOLD_POINT_NOT_APPLICABLE');
   }
   assertReportingDay(input, project.timezone);
-  // Phase 8: the report belongs to the reporting period containing its work day. Phase 14: of the
-  // ITEM_REPORTS stream the reporter's role owes, when the project has streams.
-  const stream = await itemStreamForReporter(prisma, projectId, {
-    roleId: fieldAgent.roleId,
-    projectContractorId: null,
-  });
-  const cadenceRow = stream ? streamCadenceRow(project, stream) : project;
-  const period = periodKeyForDate(cadenceSettingsForDate(cadenceRow, input.workdayDate), input.workdayDate);
+  // Phase 8: the report belongs to the reporting period containing its work day (redesign R4f:
+  // streams and obligations are gone; the project cadence still dates reports until R5).
+  const period = periodKeyForDate(cadenceSettingsForDate(project, input.workdayDate), input.workdayDate);
   const late = lateness(period, new Date(input.confirmedAt));
   await assertNoReportForPeriod({
     projectId,
@@ -494,15 +486,6 @@ export async function submitWorkdayReport(params: {
       await linkCaptures(tx, report.id, input.wbsItemId, captures.map((c) => c.id));
       // Phase 9: the first counted report on an item marks its actual start.
       if (isCountedStatus(report.status)) await recordCountedReport(tx, projectId, input.wbsItemId, input.workdayDate);
-      const obligationId = await fulfilObligation(tx, {
-        projectId,
-        boqItemId: input.wbsItemId,
-        scope: reporterScopeFor(fieldAgent.fieldPersonaType, null),
-        periodStart: period.periodStart,
-        reportId: report.id,
-        isLate: late.isLate,
-        streamId: stream?.id ?? null,
-      });
       if (late.isLate) {
         await recordAuditEvent(tx, {
           projectId,
@@ -511,7 +494,7 @@ export async function submitWorkdayReport(params: {
           actorDisplayName: `${fieldAgent.agentFullName} (${fieldAgent.roleName})`,
           action: 'REPORT_SUBMITTED_LATE',
           summaryText: `WBS ${boqItem.wbsCode} report for ${period.periodStart} to ${period.periodEnd} arrived ${late.lateByMinutes} min after its due time. Accepted and flagged late.`,
-          payload: { workdayReportId: report.id, obligationId, dueAt: period.dueAt.toISOString(), lateByMinutes: late.lateByMinutes },
+          payload: { workdayReportId: report.id, dueAt: period.dueAt.toISOString(), lateByMinutes: late.lateByMinutes },
         });
       }
       if (report.status === 'PENDING_APPROVAL' && report.approvalChainVersion !== null) {

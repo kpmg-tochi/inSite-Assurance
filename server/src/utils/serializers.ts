@@ -7,9 +7,6 @@ import { hasWebPermission, WebJwtPayload } from '../middleware/auth.middleware';
  * fields explicitly so new columns (hashes, secrets, document URLs) are not leaked by default.
  */
 
-const num = (v: Prisma.Decimal | number | null | undefined): number | null =>
-  v === null || v === undefined ? null : Number(v);
-
 const iso = (d: Date | null | undefined): string | null => (d ? d.toISOString() : null);
 
 /** Field-session data in responses is limited unless the caller manages field assurance. */
@@ -65,8 +62,6 @@ export function serializeBoqItem(item: Prisma.BoqItemGetPayload<object>) {
     actualStartDate: item.actualStartDate,
     actualCompletionDate: item.actualCompletionDate,
     planningTier: item.planningTier,
-    dailyTargetQuantity: num(item.dailyTargetQuantity),
-    expectedDeliverable: item.expectedDeliverable,
     holdPointInstruction: item.holdPointInstruction,
     isOpaqueLumpSum: item.isOpaqueLumpSum,
     opacityWarningReason: item.opacityWarningReason,

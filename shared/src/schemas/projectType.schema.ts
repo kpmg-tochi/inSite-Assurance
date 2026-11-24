@@ -1,10 +1,5 @@
 import { z } from 'zod';
-import { ProjectReportingStepSchema } from './projectSetup.schema';
-import {
-  ProjectTypeInspectionsConfigSchema,
-  ProjectTypeReportingStreamSchema,
-  ProjectTypeSupervisionConfigSchema,
-} from './inspection.schema';
+import { ProjectTypeInspectionsConfigSchema, ProjectTypeSupervisionConfigSchema } from './inspection.schema';
 import { ProjectTypePaymentsConfigSchema } from './payment.schema';
 import {
   ContractMilestoneTemplateListSchema,
@@ -15,6 +10,7 @@ import {
 import { ProjectTypeClosureConfigSchema } from './closure.schema';
 import { ProjectTypeKpiTargetsSchema } from './kpi.schema';
 import { ProjectTypeVisitFormsConfigSchema } from './form.schema';
+import { ProjectTypeMonitoringConfigSchema } from './visit.schema';
 
 /**
  * Project types (Phase 11): a delivery model ("Central Delivery Model", "Co-Funded Delivery
@@ -70,8 +66,6 @@ export type ProjectTypePartiesConfig = z.infer<typeof ProjectTypePartiesConfigSc
 export const ProjectTypeConfigSchema = z.object({
   ownership: ProjectTypeOwnershipConfigSchema.default({}),
   parties: ProjectTypePartiesConfigSchema.default({}),
-  /** Pre-fills the Reporting step of a new project (values already saved are kept). */
-  reportingDefaults: ProjectReportingStepSchema.nullable().default(null),
   // Reserved, filled by later phases (kept as-is until then).
   /** Redesign R1b: retention defaults for new projects (payments are recorded, not made, here). */
   payments: ProjectTypePaymentsConfigSchema,
@@ -83,8 +77,6 @@ export const ProjectTypeConfigSchema = z.object({
   kickoff: ProjectTypeKickoffConfigSchema.default({}),
   /** Phase 13: contractor default cases (Legal role, automatic opening). */
   defaultCases: ProjectTypeDefaultCasesConfigSchema.default({}),
-  /** Phase 14: streams created on a project when the type is applied (roles by code). */
-  reportingStreams: z.array(ProjectTypeReportingStreamSchema).max(10).default([]),
   /** Phase 14: checklist template per visit type. */
   inspections: ProjectTypeInspectionsConfigSchema.default({}),
   /** Phase 14: who counts as a supervisor and the workload warning thresholds. */
@@ -95,6 +87,8 @@ export const ProjectTypeConfigSchema = z.object({
   kpiTargets: ProjectTypeKpiTargetsSchema.default({}),
   /** Redesign R3: visit form template code per visit kind (form library). */
   visitForms: ProjectTypeVisitFormsConfigSchema.default({}),
+  /** Redesign R4: the visit plan, deadlines, escalation and the contractor findings email. */
+  monitoring: ProjectTypeMonitoringConfigSchema.default({}),
 });
 export type ProjectTypeConfig = z.infer<typeof ProjectTypeConfigSchema>;
 export type ProjectTypeConfigInput = z.input<typeof ProjectTypeConfigSchema>;

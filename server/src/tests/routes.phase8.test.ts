@@ -1,7 +1,9 @@
 /**
- * Phase 8 route and job tests: cadence-aware obligations, late and missed reports, and the job
- * runner's single-run guarantees. Redesign R1e removed briefs, telemetry, the participant roster,
- * attendance alerts and check-in; the last test checks their endpoints and jobs are gone.
+ * Phase 8 route and job tests: cadence-aware report periods, late reports, and the job runner's
+ * single-run guarantees. Redesign R1e removed briefs, telemetry, the participant roster, attendance
+ * alerts and check-in; R4f removed reporting obligations, the cadence overview, the reporting setup
+ * step and the reporting-obligations/overdue-reports jobs (visits replace them). The last test
+ * checks their endpoints and jobs are gone.
  *
  * Uses a project created here ("CAD-801": weekly, Monday to Saturday, due 17:00 Lagos) so the
  * calendar is under test control. Jobs are run with an explicit `now`; report dates are in 2025
@@ -21,8 +23,6 @@ type PrismaClientType = typeof import('../config/prisma')['prisma'];
 let app: Express;
 let prisma: PrismaClientType;
 let jobs: typeof import('../jobs');
-let cadenceJobs: typeof import('../jobs/cadenceJobs');
-let messaging: typeof import('../integrations/messaging');
 
 const PASSWORD = 'Password123!';
 const tokens: Record<string, string> = {};
@@ -82,8 +82,6 @@ before(async () => {
   ({ prisma } = await import('../config/prisma'));
   jobs = await import('../jobs');
   jobs.registerAllJobs();
-  cadenceJobs = await import('../jobs/cadenceJobs');
-  messaging = await import('../integrations/messaging');
   const { createApp } = await import('../app');
   app = createApp();
 
@@ -146,47 +144,22 @@ after(async () => {
 });
 
 describe('Phase 8', () => {
-  describe('cadence: obligations, late and missed reports', () => {
-    const monday = new Date('2025-03-03T07:30:00Z'); // 08:30 Lagos
-
-
-    it('creates one set of obligations per period even with two runners at once', async () => {
-      // Before the period opens nothing is created.
-      await jobs.runJobOnce('reporting-obligations', new Date('2025-03-03T06:00:00Z'));
-      assert.equal(await prisma.reportingObligation.count({ where: { projectId: ids.project } }), 0);
-
+  describe('cadence: report periods and late reports', () => {
+    it('runs a job unit once per scope even with two runners at once', async () => {
       // Two "instances": both through the lock, and both bypassing it (the JobRun claim still holds).
+      const monday = new Date('2025-03-03T07:30:00Z'); // 08:30 Lagos
+      const { runScheduleVariance } = await import('../jobs/scheduleJobs');
       await Promise.all([
-        jobs.runJobOnce('reporting-obligations', monday),
-        jobs.runJobOnce('reporting-obligations', monday),
-        cadenceJobs.runObligationDispatch({ now: monday }),
-        cadenceJobs.runObligationDispatch({ now: monday }),
+        jobs.runJobOnce('schedule-variance', monday),
+        jobs.runJobOnce('schedule-variance', monday),
+        runScheduleVariance({ now: monday }),
+        runScheduleVariance({ now: monday }),
       ]);
-      const obligations = await prisma.reportingObligation.findMany({ where: { projectId: ids.project } });
-      assert.equal(obligations.length, 3, 'one verifier obligation per scheduled item');
-      for (const o of obligations) {
-        assert.equal(o.reporterScope, 'verifier');
-        assert.equal(o.status, 'PENDING');
-        assert.equal(o.periodStart, '2025-03-03');
-        assert.equal(o.periodEnd, '2025-03-08');
-        assert.equal(o.dueAt.toISOString(), '2025-03-08T16:00:00.000Z');
-      }
-      const runs = await prisma.jobRun.count({ where: { jobName: 'reporting-obligations', scopeKey: { startsWith: ids.project } } });
+      const runs = await prisma.jobRun.count({ where: { jobName: 'schedule-variance', scopeKey: `${ids.project}:2025-03-03` } });
       assert.equal(runs, 1);
-
-      // A later tick in the same period does nothing new.
-      await jobs.runJobOnce('reporting-obligations', new Date('2025-03-05T10:00:00Z'));
-      assert.equal(await prisma.reportingObligation.count({ where: { projectId: ids.project } }), 3);
     });
 
-    it('returns the current period and its obligations on the overview', async () => {
-      const res = await request(app).get(`/api/v1/projects/${ids.project}/cadence`).set(await web('monitor@insite.ng'));
-      assert.equal(res.status, 200, JSON.stringify(res.body));
-      assert.ok('opensAt' in (res.body.data.currentPeriod ?? { opensAt: null }));
-      assert.equal(res.body.data.counts.openAttendanceAlerts, undefined);
-    });
-
-    it('accepts an on-time report, flags a Sunday report late, and marks the missing one missed once', async () => {
+    it('accepts an on-time report, refuses a second one in the period, and flags a Sunday report late', async () => {
       const onTime = await request(app)
         .post(`/api/v1/projects/${ids.project}/workday-reports`)
         .set(await field(ids.session))
@@ -204,26 +177,7 @@ describe('Phase 8', () => {
       assert.equal(again.status, 409);
       assert.equal(again.body.error.code, 'REPORT_ALREADY_SUBMITTED');
 
-      // After Saturday 17:00 the two unreported obligations are missed.
-      const afterDue = new Date('2025-03-08T16:30:00Z');
-      await jobs.runJobOnce('overdue-reports', afterDue);
-      const status = async (i: number) =>
-        (await prisma.reportingObligation.findFirstOrThrow({ where: { projectId: ids.project, boqItemId: ids.items[i] } })).status;
-      assert.equal(await status(0), 'SUBMITTED');
-      assert.equal(await status(1), 'MISSED');
-      assert.equal(await status(2), 'MISSED');
-      assert.equal(await auditCount('REPORT_MISSED'), 2);
-      const webNotes = await prisma.webNotification.count({ where: { projectId: ids.project, category: 'REPORT_MISSED' } });
-      assert.equal(webNotes, 1, 'one web notification per period and reporter scope');
-      const mobileNotes = await prisma.mobileNotification.count({ where: { projectId: ids.project, type: 'REPORT_OVERDUE', fieldSessionId: ids.session } });
-      assert.equal(mobileNotes, 1);
-
-      // Running again (or on another instance) changes nothing.
-      await Promise.all([jobs.runJobOnce('overdue-reports', afterDue), cadenceJobs.runOverdueReports({ now: afterDue })]);
-      assert.equal(await auditCount('REPORT_MISSED'), 2);
-      assert.equal(await prisma.webNotification.count({ where: { projectId: ids.project, category: 'REPORT_MISSED' } }), 1);
-
-      // A Sunday report belongs to the same week: accepted, late, and the obligation becomes LATE.
+      // A Sunday report belongs to the same week: accepted and flagged late.
       const sunday = await request(app)
         .post(`/api/v1/projects/${ids.project}/workday-reports`)
         .set(await field(ids.session))
@@ -232,49 +186,12 @@ describe('Phase 8', () => {
       assert.equal(sunday.body.data.isLateSubmission, true);
       assert.equal(sunday.body.data.lateByMinutes, 20 * 60);
       assert.equal(sunday.body.data.reportingPeriodStart, '2025-03-03');
-      assert.equal(await status(1), 'LATE');
       assert.equal(await auditCount('REPORT_SUBMITTED_LATE'), 1);
-    });
-
-    it('excuses a missed report only with a note, and lists due and overdue obligations', async () => {
-      const monitor = await web('monitor@insite.ng');
-      const missed = await prisma.reportingObligation.findFirstOrThrow({ where: { projectId: ids.project, boqItemId: ids.items[2] } });
-      const url = `/api/v1/projects/${ids.project}/reporting-obligations/${missed.id}/excuse`;
-      const noNote = await request(app).post(url).set(monitor).send({ notes: '' });
-      assert.equal(noNote.status, 400);
-      const ok = await request(app).post(url).set(monitor).send({ notes: 'Site closed for a public holiday.' });
-      assert.equal(ok.status, 200, JSON.stringify(ok.body));
-      assert.equal(ok.body.data.status, 'EXCUSED');
-      assert.equal(await auditCount('REPORTING_OBLIGATION_EXCUSED'), 1);
-
-      const due = await request(app).get(`/api/v1/projects/${ids.project}/reporting-obligations?view=due`).set(monitor);
-      assert.equal(due.status, 200);
-      assert.deepEqual(due.body.data.map((o: { status: string }) => o.status).sort(), ['LATE']);
-    });
-
-    it('applies a cadence change on a live project from the next period', async () => {
-      const admin = await web('admin@insite.ng');
-      const res = await request(app)
-        .put(`/api/v1/projects/${ids.project}/setup/reporting`)
-        .set(admin)
-        .send({ reportingCadence: 'DAILY', workdayStartTime: '08:00', workdayEndTime: '17:00' });
-      assert.ok([200, 201].includes(res.status), JSON.stringify(res.body));
-      const row = await prisma.project.findUniqueOrThrow({ where: { id: ids.project } });
-      assert.equal(row.reportingCadence, 'WEEKLY', 'the running period keeps its shape');
-      assert.ok(row.pendingCadenceEffectiveFrom, 'the change waits for the next period');
-      // Undo: saving the current shape clears the pending change.
-      const undo = await request(app)
-        .put(`/api/v1/projects/${ids.project}/setup/reporting`)
-        .set(admin)
-        .send({ reportingCadence: 'WEEKLY', workdayStartTime: '08:00', workdayEndTime: '17:00' });
-      assert.ok([200, 201].includes(undo.status), JSON.stringify(undo.body));
-      const cleared = await prisma.project.findUniqueOrThrow({ where: { id: ids.project } });
-      assert.equal(cleared.pendingCadenceEffectiveFrom, null);
     });
   });
 
-  describe('redesign R1e', () => {
-    it('has no brief, telemetry, roster, attendance or check-in endpoints, and no jobs for them', async () => {
+  describe('redesign R1e and R4f', () => {
+    it('has no brief, telemetry, roster, attendance, check-in, cadence or obligation endpoints, and no jobs for them', async () => {
       const monitor = await web('monitor@insite.ng');
       const base = `/api/v1/projects/${ids.project}`;
       const field = await fieldAuth(prisma, ids.session);
@@ -288,13 +205,19 @@ describe('Phase 8', () => {
         ['get', `${base}/attendance-alerts`, monitor],
         ['get', `${base}/check-in/today`, field],
         ['get', '/api/v1/projects/portfolio/executive-summary', monitor],
+        ['get', `${base}/cadence`, monitor],
+        ['get', `${base}/reporting-obligations`, monitor],
+        ['post', `${base}/reporting-obligations/${crypto.randomUUID()}/excuse`, monitor],
+        ['put', `${base}/setup/reporting`, monitor],
       ] as const) {
         const res = await (request(app) as unknown as Record<string, (u: string) => request.Test>)[method](url).set(auth).send({});
         assert.ok([404, 400].includes(res.status), `${method} ${url} answered ${res.status}`);
       }
       const names = jobs.registeredJobs().map((j) => j.name);
-      for (const gone of ['brief-dispatch', 'attendance-check', 'mobilization-reminders']) assert.ok(!names.includes(gone), gone);
-      assert.ok(names.includes('reporting-obligations'));
+      for (const gone of ['brief-dispatch', 'attendance-check', 'mobilization-reminders', 'reporting-obligations', 'overdue-reports']) {
+        assert.ok(!names.includes(gone), gone);
+      }
+      assert.ok(names.includes('schedule-variance'));
     });
   });
 });

@@ -1,6 +1,5 @@
 import { Prisma } from '@prisma/client';
 import {
-  ProjectReportingStepSchema,
   ProjectTypeConfig,
   ProjectTypeConfigSchema,
   ProjectTypeDto,
@@ -20,7 +19,6 @@ import { recordAuditEvent } from '../audit/audit.service';
 import { liveTemplateKinds } from '../forms/formLibrary.service';
 import { ensureFormLibrary } from '../forms/formLibraryProvisioning';
 import { applyTemplateConfig } from '../process/processConfig.service';
-import { createStreamsFromProjectType } from '../cadence/streams.service';
 import { syncContractMilestones } from '../contracts/milestones.service';
 
 /**
@@ -326,11 +324,6 @@ export async function applyProjectTypeToProject(
       prefilled.push('lenderOrganizationId');
     }
   }
-  if (config.reportingDefaults && !stepSaved(project.setupState, 'reporting')) {
-    const r = ProjectReportingStepSchema.parse(config.reportingDefaults);
-    Object.assign(data, r);
-    prefilled.push('reporting');
-  }
   // Redesign R1b: retention defaults, unless the retention step was saved already.
   if (!stepSaved(project.setupState, 'facility')) {
     if (config.payments.retentionPercentage !== null) {
@@ -346,11 +339,6 @@ export async function applyProjectTypeToProject(
   // Phase 13: contract milestones from the type (one per contractor where the template says so).
   const milestones = await syncContractMilestones(tx, project.id);
   if (milestones.created) prefilled.push('contractMilestones');
-  // Phase 14: the type's reporting streams replace the draft's.
-  if (config.reportingStreams.length > 0) {
-    const created = await createStreamsFromProjectType(tx, { projectId: project.id, tenantId: project.tenantId, streams: config.reportingStreams });
-    if (created.length) prefilled.push('reportingStreams');
-  }
 
   await recordAuditEvent(tx, {
     projectId: project.id,

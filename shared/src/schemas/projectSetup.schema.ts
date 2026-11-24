@@ -53,16 +53,17 @@ export const PROJECT_SETUP_STEPS: ProjectSetupStepDefinition[] = [
   { id: 'facility', title: 'Retention', route: 'facility', required: false, order: 40, description: 'Retention percentage and defects liability period' },
   // Redesign R2b: facility units, scope lines and sprints (replaces the BOQ step).
   { id: 'scope', title: 'Scope & sprints', route: 'scope', required: true, order: 50, description: 'Sprints, facility units and BoQ lines' },
-  { id: 'reporting', title: 'Reporting', route: 'reporting', required: true, order: 60, description: 'Cadence and working day' },
   // Phase 7. Valid defaults, so not required; the standards step becomes required when the process
   // configuration sets standards or needs assessments to REQUIRED_AT_CREATION (server-computed).
   { id: 'process', title: 'Workflow and process', route: 'process', required: false, order: 62, description: 'Template, process switches and approval chains' },
   { id: 'standards', title: 'Standards and needs assessment', route: 'standards', required: false, order: 64, description: 'Project standards and needs-assessment documents' },
+  // Redesign R4 (D-R4.39): the visit officers, working days and a preview of the visit plan.
+  { id: 'visits', title: 'Visits', route: 'visits', required: false, order: 66, description: 'Visit officers, working days and the visit plan' },
   { id: 'team', title: 'Team', route: 'team', required: false, order: 70, description: 'Web users and mobile users' },
   { id: 'review', title: 'Review', route: 'review', required: false, order: 1000, description: 'Check and set the project active' },
 ];
 
-export const ProjectSetupStepIdEnum = z.enum(['basics', 'parties', 'contract', 'site', 'facility', 'scope', 'reporting', 'process', 'standards', 'team']);
+export const ProjectSetupStepIdEnum = z.enum(['basics', 'parties', 'contract', 'site', 'facility', 'scope', 'process', 'standards', 'visits', 'team']);
 export type ProjectSetupStepId = z.infer<typeof ProjectSetupStepIdEnum>;
 
 const TimeOfDay = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Use 24-hour HH:MM');
@@ -184,6 +185,16 @@ export const ProjectReportingStepSchema = z
 export type ProjectReportingStep = z.infer<typeof ProjectReportingStepSchema>;
 
 // ---------------------------------------------------------------------------
+// Redesign R4: visits (officers are saved through /visit-officers; the step saves the working days)
+// ---------------------------------------------------------------------------
+
+export const ProjectVisitsStepSchema = z.object({
+  /** ISO weekdays (1 = Monday). Visit dates, the officers' move tolerance and deadlines count these. */
+  workWeekDays: z.array(z.number().int().min(1).max(7)).min(1, 'Pick at least one working day').max(7),
+});
+export type ProjectVisitsStep = z.infer<typeof ProjectVisitsStepSchema>;
+
+// ---------------------------------------------------------------------------
 // Step 7: team
 // ---------------------------------------------------------------------------
 
@@ -201,9 +212,9 @@ export const PROJECT_STEP_SAVE_SCHEMAS = {
   site: ProjectSiteStepSchema,
   facility: ProjectFacilityStepSchema,
   scope: ProjectScopeStepSchema,
-  reporting: ProjectReportingStepSchema,
   process: ProjectProcessStepSchema,
   standards: ProjectStandardsStepSchema,
+  visits: ProjectVisitsStepSchema,
   team: ProjectTeamStepSchema,
 } as const;
 
@@ -227,7 +238,6 @@ export const ProjectActivationSchema = z.object({
     geofence: ProjectGeofenceSchema,
     timezone: z.string().refine(isValidTimeZone, 'Choose a valid IANA time zone'),
   }),
-  reporting: ProjectReportingStepSchema,
 });
 
 export const SetupIssueSchema = z.object({
@@ -347,6 +357,11 @@ export const ProjectSetupDtoSchema = z.object({
   }),
   team: z.object({
     userIds: z.array(z.string().uuid()),
+  }),
+  /** Redesign R4 */
+  visits: z.object({
+    workWeekDays: z.array(z.number().int()),
+    defaultOfficerIds: z.array(z.string().uuid()),
   }),
   /** Phase 7 */
   process: ProjectProcessSettingsDtoSchema,

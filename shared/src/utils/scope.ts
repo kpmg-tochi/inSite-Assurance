@@ -1,5 +1,6 @@
 import { FACILITY_ARCHETYPE_META, type FacilityArchetype } from '../schemas/facility.schema';
 import type { SprintStatus } from '../schemas/scope.schema';
+import { addDays } from './reportingPeriod';
 
 /**
  * Redesign R2b: pure scope rules shared by the server, the web page and the workbook importer.
@@ -117,11 +118,20 @@ export function validateUnits(units: UnitLike[], opts: { requireSprints?: boolea
   return issues;
 }
 
-/** UPCOMING before its start, ACTIVE from start to end (inclusive), ENDED after its end. */
-export function deriveSprintStatus(sprint: { startDate: string; endDate: string }, today: string): SprintStatus {
+/**
+ * UPCOMING before its start, ACTIVE from start to end (inclusive), then ENDED. Redesign R4e: VERIFIED
+ * once it has a verification outcome; LATE when it ended more than `verificationDays` ago unverified.
+ */
+export function deriveSprintStatus(
+  sprint: { startDate: string; endDate: string; verificationOutcome?: string | null },
+  today: string,
+  verificationDays?: number
+): SprintStatus {
   if (today < sprint.startDate) return 'UPCOMING';
-  if (today > sprint.endDate) return 'ENDED';
-  return 'ACTIVE';
+  if (sprint.verificationOutcome) return 'VERIFIED';
+  if (today <= sprint.endDate) return 'ACTIVE';
+  if (verificationDays !== undefined && today > addDays(sprint.endDate, verificationDays)) return 'LATE';
+  return 'ENDED';
 }
 
 /** Units whose start–end sprint range covers the sprint with this number. */
@@ -163,7 +173,10 @@ export function nextUnitCode(existing: string[]): string {
 
 export interface SprintBadgeInput {
   today: string;
-  sprints: Array<{ number: number; startDate: string; endDate: string }>;
+  /** Redesign R4e: each sprint's current verification outcome (null/absent = not verified). */
+  sprints: Array<{ number: number; startDate: string; endDate: string; verificationOutcome?: 'MET' | 'PARTLY_MET' | 'NOT_MET' | null }>;
+  /** Days after a sprint ends before an unverified sprint counts by its units (default 0). */
+  verificationDays?: number;
   /** Each unit's end sprint number and whether all its lines are at 100%. */
   units: Array<{ endSprintNumber: number | null; complete: boolean }>;
   lineCount: number;
@@ -172,16 +185,25 @@ export interface SprintBadgeInput {
 }
 
 /**
- * The project schedule badge from sprints (D-R2.15): UNSCHEDULED with no sprints, COMPLETE when every
- * line is at 100%, NOT_STARTED before sprint 1, BEHIND when a unit whose end sprint has ended still
- * has a line below 100%, ON_TRACK otherwise. R4 replaces "lines at 100%" with sprint verification.
+ * The project schedule badge from sprints (D-R2.15, redesign R4e D-R4.32):
+ * - UNSCHEDULED with no sprints;
+ * - COMPLETE when every sprint is verified MET (a project with no verification yet: every line at 100%);
+ * - NOT_STARTED before sprint 1;
+ * - BEHIND when an ended sprint's current outcome is PARTLY_MET or NOT_MET, or an unverified sprint
+ *   that ended more than `verificationDays` ago still has a unit below 100% (the R2 rule as fallback);
+ * - ON_TRACK otherwise. Re-verifying a sprint MET after catching up clears BEHIND.
  */
 export function sprintScheduleStatus(input: SprintBadgeInput): { status: 'UNSCHEDULED' | 'COMPLETE' | 'NOT_STARTED' | 'BEHIND' | 'ON_TRACK'; behindUnitCount: number } {
   if (input.sprints.length === 0) return { status: 'UNSCHEDULED', behindUnitCount: 0 };
-  if (input.lineCount > 0 && input.allLinesComplete) return { status: 'COMPLETE', behindUnitCount: 0 };
+  const anyVerified = input.sprints.some((s) => s.verificationOutcome);
+  if (anyVerified && input.sprints.every((s) => s.verificationOutcome === 'MET')) return { status: 'COMPLETE', behindUnitCount: 0 };
+  if (!anyVerified && input.lineCount > 0 && input.allLinesComplete) return { status: 'COMPLETE', behindUnitCount: 0 };
   const ordered = [...input.sprints].sort((a, b) => a.number - b.number);
   if (input.today < ordered[0].startDate) return { status: 'NOT_STARTED', behindUnitCount: 0 };
-  const ended = new Set(ordered.filter((s) => s.endDate < input.today).map((s) => s.number));
-  const behindUnitCount = input.units.filter((u) => u.endSprintNumber !== null && ended.has(u.endSprintNumber) && !u.complete).length;
-  return { status: behindUnitCount > 0 ? 'BEHIND' : 'ON_TRACK', behindUnitCount };
+  const days = input.verificationDays ?? 0;
+  const ended = ordered.filter((s) => s.endDate < input.today);
+  const failed = ended.filter((s) => s.verificationOutcome === 'PARTLY_MET' || s.verificationOutcome === 'NOT_MET').map((s) => s.number);
+  const overdue = new Set(ended.filter((s) => !s.verificationOutcome && addDays(s.endDate, days) < input.today).map((s) => s.number));
+  const behindUnitCount = input.units.filter((u) => u.endSprintNumber !== null && overdue.has(u.endSprintNumber) && !u.complete).length;
+  return { status: failed.length > 0 || behindUnitCount > 0 ? 'BEHIND' : 'ON_TRACK', behindUnitCount };
 }

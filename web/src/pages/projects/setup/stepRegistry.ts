@@ -7,10 +7,10 @@ import { ContractStep } from "./steps/ContractStep";
 import { SiteStep } from "./steps/SiteStep";
 import { FacilityStep } from "./steps/FacilityStep";
 import { ScopeStep } from "./steps/ScopeStep";
-import { ReportingStep } from "./steps/ReportingStep";
 import { ProcessStep } from "./steps/ProcessStep";
 import { StandardsStep } from "./steps/StandardsStep";
 import { TeamStep } from "./steps/TeamStep";
+import { VisitsStep } from "./steps/VisitsStep";
 import { ReviewStep } from "./steps/ReviewStep";
 
 /**
@@ -30,9 +30,9 @@ const COMPONENTS: Record<string, React.ComponentType<StepProps>> = {
   site: SiteStep,
   facility: FacilityStep,
   scope: ScopeStep,
-  reporting: ReportingStep,
   process: ProcessStep,
   standards: StandardsStep,
+  visits: VisitsStep,
   team: TeamStep,
   review: ReviewStep,
 };

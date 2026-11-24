@@ -219,7 +219,8 @@ describe('Phase 16: project KPIs', () => {
     const paid = await prisma.project.findUniqueOrThrow({ where: { id: ids.prg105 } });
     assert.equal(Number(paid.disbursedToDateNgn), 59_850_000, 'NGN 63m recorded, 5% retention held');
     assert.equal(byKey.get('financial_utilisation')?.value, Math.round((59_850_000 / 210_000_000) * 1000) / 10);
-    assert.equal(byKey.get('projects_on_schedule')?.status, 'MET');
+    // Redesign R4 seed: PRG-105's sprint 1 was verified partly met, so the project is behind.
+    assert.equal(byKey.get('projects_on_schedule')?.status, 'MISSED');
     assert.equal(byKey.get('lessons_documented')?.status, 'NOT_TRACKED');
   });
 

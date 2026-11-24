@@ -77,6 +77,42 @@ const NOTIFICATION_VISUALS: Record<
     pillVariant: "warning",
     ctaLabel: "Open findings",
   },
+  // Redesign R4: visit notifications (the visit screens come with R5).
+  VISIT_ASSIGNED: {
+    icon: "calendar",
+    accentColor: "#4338CA",
+    iconBg: "#E0E7FF",
+    badgeText: "Visit",
+    pillVariant: "info",
+  },
+  VISIT_CHANGED: {
+    icon: "calendar",
+    accentColor: "#4338CA",
+    iconBg: "#E0E7FF",
+    badgeText: "Visit changed",
+    pillVariant: "info",
+  },
+  VISIT_REMINDER: {
+    icon: "bell",
+    accentColor: "#B45309",
+    iconBg: "#FEF3C7",
+    badgeText: "Confirm visit",
+    pillVariant: "warning",
+  },
+  VISIT_RETURNED: {
+    icon: "corner-up-left",
+    accentColor: "#B45309",
+    iconBg: "#FEF3C7",
+    badgeText: "Returned",
+    pillVariant: "warning",
+  },
+  VISIT_APPROVED: {
+    icon: "check-circle",
+    accentColor: "#047857",
+    iconBg: "#D1FAE5",
+    badgeText: "Accepted",
+    pillVariant: "info",
+  },
 };
 
 export interface NotificationCardProps {

@@ -1,6 +1,6 @@
 /**
  * Phase 14 unit tests (pure, no database): QUARTERLY reporting periods, checklist answer rules,
- * checklist template validation, stream config validation and supervision workload maths.
+ * checklist template validation and supervision workload maths.
  * Calendar notes: 2026-11-16 is a Monday, 2026-03-29 and 2026-05-31 are Sundays, 2027-01-31 is a
  * Sunday.
  */
@@ -16,7 +16,6 @@ import {
   nextPeriodStart,
   periodNoun,
   ProjectTypeConfigSchema,
-  ReportingStreamInputSchema,
   validateInspectionAnswers,
   type CadenceSettings,
   type ChecklistSection,
@@ -231,7 +230,7 @@ describe('Phase 14: validateInspectionAnswers', () => {
   });
 });
 
-describe('Phase 14: templates, streams and type config', () => {
+describe('Phase 14: templates and type config', () => {
   it('item keys are unique across the whole template', () => {
     const r = ChecklistSectionsSchema.safeParse([
       { key: 'a', title: 'Section A', items: [{ key: 'x', label: 'Item x', responseType: 'TEXT' }] },
@@ -240,22 +239,16 @@ describe('Phase 14: templates, streams and type config', () => {
     assert.equal(r.success, false);
   });
 
-  it('an INSPECTION stream needs a visit type; defaults fill the rest', () => {
-    const base = { key: 'me-visit', label: 'M&E visit', kind: 'INSPECTION', roleIds: [PHOTO], reportingCadence: 'QUARTERLY' };
-    assert.equal(ReportingStreamInputSchema.safeParse(base).success, false);
-    const ok = ReportingStreamInputSchema.parse({ ...base, visitType: 'ROUTINE', submissionDeadlineDays: 7 });
-    assert.equal(ok.reportGraceMinutes, 0);
-    assert.deepEqual(ok.workWeekDays, [1, 2, 3, 4, 5, 6]);
-  });
-
-  it('a project type saved before Phase 14 parses with empty streams, inspections and supervision', () => {
+  it('a project type saved before Phase 14 parses with empty inspections and supervision; R4f strips removed stream keys', () => {
     const config = ProjectTypeConfigSchema.parse({});
-    assert.deepEqual(config.reportingStreams, []);
+    const old = ProjectTypeConfigSchema.parse({ reportingStreams: [{ key: 'x' }], reportingDefaults: {} }) as Record<string, unknown>;
+    assert.equal('reportingStreams' in old, false);
+    assert.equal('reportingDefaults' in old, false);
     assert.deepEqual(config.inspections.templateCodeByVisitType, {});
     assert.deepEqual(config.supervision, { supervisorRoleCodes: [], maxSitesPerSupervisor: null, maxSpreadKm: null });
   });
 
-  it('upload deadline: visit date plus the stream days', () => {
+  it('upload deadline: visit date plus the deadline days', () => {
     assert.equal(inspectionSubmissionDeadline('2026-12-28', 7), '2027-01-04');
     assert.equal(inspectionSubmissionDeadline('2026-12-28', null), null);
   });

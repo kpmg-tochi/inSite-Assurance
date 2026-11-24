@@ -96,7 +96,7 @@ function FindingCard({ finding: f, queued, onResolve }: { finding: InspectionFin
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Text style={styles.reference}>
-          {INSPECTION_VISIT_TYPE_LABELS[f.inspectionVisitType]} · {f.inspectionVisitDate}
+          {f.inspectionVisitType ? INSPECTION_VISIT_TYPE_LABELS[f.inspectionVisitType] : "Visit"} · {f.inspectionVisitDate}
         </Text>
         <Pill variant={f.status === "OPEN" ? SEVERITY_VARIANT[f.severity] : "positive"} text={f.status === "OPEN" ? f.severity : f.status} />
       </View>

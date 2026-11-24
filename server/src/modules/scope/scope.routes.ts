@@ -7,6 +7,7 @@ import {
   ScopeImportPreviewRequestSchema,
   UpdateFacilityUnitRequestSchema,
   UpdateScopeLineRequestSchema,
+  VerifySprintRequestSchema,
 } from '@insite/shared';
 import { guardProjectRoutes } from '../../utils/accessControl';
 import { requireAnyAuthWithWebPermission, requirePermission, requireWebAuth } from '../../middleware/auth.middleware';
@@ -21,6 +22,7 @@ import {
   updateFacilityUnit,
   updateScopeLine,
 } from './scope.service';
+import { getSprintVerification, verifySprint } from './sprintVerification.service';
 import { buildProjectScopeWorkbook, buildTenantScopeWorkbook, confirmScopeImport, previewScopeImport } from './scopeImport.service';
 
 /**
@@ -47,6 +49,24 @@ router.put(
   validateBody(SaveSprintsRequestSchema),
   wrap(async (req, res) => {
     res.json({ success: true, data: await saveSprints(p(req, 'projectId'), req.webUser!, req.body) });
+  })
+);
+
+// Redesign R4e (D-R4.31): sprint verification.
+router.get(
+  '/:projectId/scope/sprints/:sprintId/verification',
+  requirePermission('boq:view', 'sprints:verify'),
+  wrap(async (req, res) => {
+    res.json({ success: true, data: await getSprintVerification(p(req, 'projectId'), p(req, 'sprintId'), req.webUser!) });
+  })
+);
+
+router.post(
+  '/:projectId/scope/sprints/:sprintId/verification',
+  requirePermission('sprints:verify'),
+  validateBody(VerifySprintRequestSchema),
+  wrap(async (req, res) => {
+    res.json({ success: true, data: await verifySprint(p(req, 'projectId'), p(req, 'sprintId'), req.webUser!, req.body) });
   })
 );
 

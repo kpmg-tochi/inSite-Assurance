@@ -77,6 +77,8 @@ export const TenantSettingsDtoSchema = z.object({
   defaultGeofenceToleranceMeters: z.number().int(),
   /** Pre-fills new radial site boundaries (each project sets its own radius). */
   defaultGeofenceRadiusMeters: z.number().int(),
+  /** Redesign R4 (D-R4.15): working days an officer may move a visit from its original date. */
+  visitRescheduleToleranceWorkdays: z.number().int(),
   defaultCurrency: z.string(),
   timezone: z.string(),
 });
@@ -87,6 +89,7 @@ export const UpdateTenantSettingsRequestSchema = z.object({
   enabledGeofenceModes: z.array(GeofenceModeEnum).min(1, 'Enable at least one geofence mode').optional(),
   defaultGeofenceToleranceMeters: GeofenceToleranceMetersSchema.optional(),
   defaultGeofenceRadiusMeters: GeofenceRadiusMetersSchema.optional(),
+  visitRescheduleToleranceWorkdays: z.number().int('Enter a whole number').min(0, 'From 0 to 10').max(10, 'From 0 to 10').optional(),
   defaultCurrency: z
     .string()
     .trim()

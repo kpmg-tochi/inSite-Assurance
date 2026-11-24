@@ -232,14 +232,6 @@ describe('Phase 7', { concurrency: false }, () => {
   });
 
   // -------------------------------------------------------------------------
-  describe('reporting personas (briefs removed in R1e)', () => {
-    it('only the verifier owes reports (no contractor login)', async () => {
-      const { reportingPersonasForProject } = await import('../modules/cadence/obligationDispatch');
-      assert.deepEqual(await reportingPersonasForProject(ids.edo), ['INDEPENDENT_VERIFIER']);
-    });
-  });
-
-  // -------------------------------------------------------------------------
   describe('standards check', () => {
     it('rule-based evaluator flags an out-of-tolerance value and a missing test', () => {
       const standards = [

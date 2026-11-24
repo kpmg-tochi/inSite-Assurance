@@ -20,6 +20,8 @@ import { assertAnyCloseoutModuleOn, projectToday } from './closeoutGate';
 import { cocGateReason } from '../completion/completion.service';
 import { closeBlockedReason, ensureClosureChecklist, freezeMetAutomaticItems } from '../completion/closure.service';
 import { recomputeMilestoneDates } from '../contracts/milestones.service';
+import { proposeVisitsFromType } from '../visits/visitPlan.service';
+import { webVisitActor } from '../visits/visitCore';
 
 /**
  * Construction phases (Phase 10 Step 1). A second field next to the DRAFT/ACTIVE/ARCHIVED status:
@@ -165,11 +167,6 @@ export async function changeProjectPhase(params: { projectId: string; webUser: W
       data.practicalCompletionDate = practical;
       data.retentionStartDate = practical;
       data.retentionEndDate = addCalendarMonths(practical, project.retentionDurationMonths ?? 0);
-      // Reporting stops: outstanding obligations are excused rather than marked missed.
-      await tx.reportingObligation.updateMany({
-        where: { projectId, status: 'PENDING' },
-        data: { status: 'EXCUSED', excusedNote: 'Construction ended: the project entered its defects liability period.', excusedByUserId: webUser.userId },
-      });
     }
     await tx.project.update({ where: { id: projectId }, data });
     // Phase 15: the closure checklist exists from handover on; closing freezes what is met and
@@ -179,6 +176,9 @@ export async function changeProjectPhase(params: { projectId: string; webUser: W
       await freezeMetAutomaticItems(tx, projectId, 'BEFORE_CLOSE', webUser.userId);
       await recomputeMilestoneDates(tx, projectId);
     }
+    // Redesign R4 (D-R4.12): the completion notice proposes the final evaluation; closing, the post-closure one.
+    if (to === 'HANDOVER_IN_PROGRESS') await proposeVisitsFromType(tx, projectId, { trigger: 'COMPLETION_NOTICE', actor: webVisitActor(webUser) });
+    if (to === 'COMPLETED_CLOSED') await proposeVisitsFromType(tx, projectId, { trigger: 'PROJECT_CLOSED', actor: webVisitActor(webUser) });
 
     const after = { ...project, ...data } as typeof project;
     await recordAuditEvent(tx, {

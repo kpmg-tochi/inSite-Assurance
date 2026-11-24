@@ -46,7 +46,8 @@ export function normalizeUnitOfMeasure(raw: string | null | undefined): UnitOfMe
 // DTOs
 // ---------------------------------------------------------------------------
 
-export const SprintStatusEnum = z.enum(['UPCOMING', 'ACTIVE', 'ENDED']);
+/** Redesign R4e: ENDED within the verification period, LATE after it unverified, VERIFIED once verified. */
+export const SprintStatusEnum = z.enum(['UPCOMING', 'ACTIVE', 'ENDED', 'LATE', 'VERIFIED']);
 export type SprintStatus = z.infer<typeof SprintStatusEnum>;
 
 export const ProjectSprintDtoSchema = z.object({
@@ -57,6 +58,11 @@ export const ProjectSprintDtoSchema = z.object({
   endDate: z.string(),
   deliverables: z.string(),
   status: SprintStatusEnum,
+  /** Redesign R4e: the M&E verification (D-R4.31). */
+  verificationOutcome: z.enum(['MET', 'PARTLY_MET', 'NOT_MET']).nullable(),
+  verifiedAt: z.string().nullable(),
+  /** End date + the type's sprintVerificationDays. */
+  verificationDueDate: z.string(),
   /** Facility units whose start–end range covers this sprint. */
   unitCount: z.number().int(),
   /** Units that start or end in this sprint (the sprint cannot be removed on a live project). */

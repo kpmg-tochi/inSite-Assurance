@@ -248,6 +248,38 @@ function recheckField(r: RecheckInput): VisitFormSnapshotField {
   };
 }
 
+function recheckBlock(rechecks: RecheckInput[]): VisitFormSnapshotBlock {
+  return {
+    key: 'r',
+    kind: 'RECHECK',
+    title: 'Re-check open findings',
+    description: 'Was each finding resolved? A photo is needed when it was, a comment when it was not.',
+    sectionCode: null,
+    facility: null,
+    units: [],
+    fields: rechecks.map(recheckField),
+  };
+}
+
+/**
+ * Redesign R4: the same frozen form with its re-check block replaced (open findings changed). Every
+ * other block stays exactly as frozen, so a library edit never reaches a published visit this way.
+ */
+export function withRechecks(snapshot: VisitFormSnapshot, rechecks: RecheckInput[], builtAt?: string): VisitFormSnapshot {
+  const blocks = snapshot.blocks.filter((b) => b.kind !== 'RECHECK');
+  if (rechecks.length > 0) blocks.push(recheckBlock(rechecks));
+  const fieldCount = blocks.reduce((n, b) => n + b.fields.length, 0);
+  if (fieldCount > MAX_SNAPSHOT_FIELDS) {
+    throw new VisitFormAssemblyError('FORM_TOO_LARGE', `This form would have ${fieldCount} questions; the limit is ${MAX_SNAPSHOT_FIELDS}.`);
+  }
+  return { ...snapshot, builtAt: builtAt ?? snapshot.builtAt, blocks };
+}
+
+/** Whether two snapshots are the same form apart from their re-check items (R4 stale-form check). */
+export function sameFormApartFromRechecks(a: VisitFormSnapshot, b: VisitFormSnapshot): boolean {
+  return canonicalVisitFormSnapshot(withRechecks(a, [])) === canonicalVisitFormSnapshot(withRechecks(b, []));
+}
+
 /**
  * Builds the frozen visit form. Blocks follow the template: each SECTION block is the section's
  * fields; the FACILITIES slot expands to one block per facility with units in the visit (facility
@@ -355,18 +387,7 @@ export function assembleVisitForm(input: AssembleVisitFormInput): { snapshot: Vi
   }
 
   const rechecks = input.rechecks ?? [];
-  if (rechecks.length > 0) {
-    blocks.push({
-      key: 'r',
-      kind: 'RECHECK',
-      title: 'Re-check open findings',
-      description: 'Was each finding resolved? A photo is needed when it was, a comment when it was not.',
-      sectionCode: null,
-      facility: null,
-      units: [],
-      fields: rechecks.map(recheckField),
-    });
-  }
+  if (rechecks.length > 0) blocks.push(recheckBlock(rechecks));
 
   const fieldCount = blocks.reduce((n, b) => n + b.fields.length, 0);
   if (fieldCount > MAX_SNAPSHOT_FIELDS) {

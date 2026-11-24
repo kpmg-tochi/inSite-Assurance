@@ -302,7 +302,7 @@ describe('Phase 15', () => {
     const res = await request(app).post(url('/completion/certificate')).set(await web('monitor@insite.ng')).send({ completionDate: today });
     assert.equal(res.status, 422, JSON.stringify(res.body));
     assert.equal(res.body.error.code, 'FINAL_EVALUATION_REQUIRED');
-    assert.equal(res.body.error.details.linkTo, `/app/projects/${ids.project}/inspections`);
+    assert.equal(res.body.error.details.linkTo, `/app/projects/${ids.project}/visits`, 'R4d: the gate links to visits');
 
     const inspection = await request(app)
       .post(url('/inspections'))

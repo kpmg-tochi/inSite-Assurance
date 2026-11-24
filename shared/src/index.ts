@@ -43,6 +43,9 @@ export * from './utils/scope';
 export * from './schemas/form.schema';
 export * from './utils/visitForm';
 export * from './data/defaultFormLibrary';
+// Redesign R4
+export * from './schemas/visit.schema';
+export * from './utils/visitPlan';
 
 // Data
 export * from './data/standardsLibrary';

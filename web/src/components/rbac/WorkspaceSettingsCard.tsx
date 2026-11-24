@@ -59,6 +59,7 @@ export function WorkspaceSettingsCard() {
   const [geofenceModes, setGeofenceModes] = useState<GeofenceMode[]>([]);
   const [tolerance, setTolerance] = useState('100');
   const [radius, setRadius] = useState('150');
+  const [visitTolerance, setVisitTolerance] = useState('2');
   const [currency, setCurrency] = useState('');
   const [timezone, setTimezone] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -69,6 +70,7 @@ export function WorkspaceSettingsCard() {
     setGeofenceModes(data.enabledGeofenceModes);
     setTolerance(String(data.defaultGeofenceToleranceMeters));
     setRadius(String(data.defaultGeofenceRadiusMeters));
+    setVisitTolerance(String(data.visitRescheduleToleranceWorkdays));
     setCurrency(data.defaultCurrency);
     setTimezone(data.timezone);
     setErrors({});
@@ -97,6 +99,10 @@ export function WorkspaceSettingsCard() {
     if (radius.trim() === '' || !Number.isInteger(radiusNum) || radiusNum < 20 || radiusNum > 50000) {
       local.defaultGeofenceRadiusMeters = 'Enter a whole number from 20 to 50,000';
     }
+    const visitToleranceNum = Number(visitTolerance);
+    if (visitTolerance.trim() === '' || !Number.isInteger(visitToleranceNum) || visitToleranceNum < 0 || visitToleranceNum > 10) {
+      local.visitRescheduleToleranceWorkdays = 'Enter a whole number from 0 to 10';
+    }
     if (!/^[A-Za-z]{3}$/.test(currency.trim())) local.defaultCurrency = 'Use a 3-letter ISO 4217 code, e.g. NGN';
     if (!timezone.trim()) local.timezone = 'Choose a time zone';
     if (Object.keys(local).length) {
@@ -111,6 +117,7 @@ export function WorkspaceSettingsCard() {
         enabledGeofenceModes: GeofenceModeEnum.options.filter((m) => geofenceModes.includes(m)),
         defaultGeofenceToleranceMeters: toleranceNum,
         defaultGeofenceRadiusMeters: radiusNum,
+        visitRescheduleToleranceWorkdays: visitToleranceNum,
         defaultCurrency: currency.trim().toUpperCase(),
         timezone: timezone.trim(),
       });
@@ -255,6 +262,31 @@ export function WorkspaceSettingsCard() {
           </p>
           {errors.defaultGeofenceRadiusMeters && (
             <p className="text-[11px] text-rose-600 mt-1">{errors.defaultGeofenceRadiusMeters}</p>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor="ws-visit-tolerance" className="block font-semibold text-slate-700 mb-1">
+            Visit move tolerance (working days)
+          </label>
+          <input
+            id="ws-visit-tolerance"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={10}
+            step={1}
+            value={visitTolerance}
+            aria-invalid={Boolean(errors.visitRescheduleToleranceWorkdays)}
+            aria-describedby="ws-visit-tolerance-hint"
+            onChange={(e) => setVisitTolerance(e.target.value)}
+            className={inputClass(Boolean(errors.visitRescheduleToleranceWorkdays))}
+          />
+          <p id="ws-visit-tolerance-hint" className="text-[11px] text-slate-500 mt-1">
+            0 to 10. An officer may move a visit this many working days either side of its original date, within the same sprint, without asking. Further moves are proposed to the manager.
+          </p>
+          {errors.visitRescheduleToleranceWorkdays && (
+            <p className="text-[11px] text-rose-600 mt-1">{errors.visitRescheduleToleranceWorkdays}</p>
           )}
         </div>
 

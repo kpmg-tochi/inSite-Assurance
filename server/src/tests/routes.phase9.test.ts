@@ -1,11 +1,10 @@
 /**
  * Phase 9 route and job tests after redesign R2d: the baseline, earned-schedule variance,
  * dependencies and "Catch Project Up" revisions are gone. What remains: actual dates from counted
- * reports, obligation item selection by planned window (windows now follow sprints), and the
- * schedule-variance job storing a badge computed from sprints (D-R2.15).
+ * reports, planned windows that follow sprints, and the schedule-variance job storing a badge
+ * computed from sprints (D-R2.15). Obligation item selection went with reporting obligations in R4f.
  *
- * SCH-901 gets sprints relative to today (Lagos); SCH-903 uses fixed 2025 dates for obligation
- * selection (2025-03-03 is a Monday). The seed gives LKK-402 an ended sprint with incomplete units
+ * SCH-901 gets sprints relative to today (Lagos). The seed gives LKK-402 an ended sprint with incomplete units
  * (behind) and ABJ-108 a finished sprint 1 (on track).
  */
 import { resetTestDatabase } from './helpers/testDb';
@@ -22,7 +21,6 @@ type PrismaClientType = typeof import('../config/prisma')['prisma'];
 let app: Express;
 let prisma: PrismaClientType;
 let jobs: typeof import('../jobs');
-let dispatch: typeof import('../modules/cadence/obligationDispatch');
 let schedule: typeof import('../modules/schedule/schedule.service');
 let scope: typeof import('../modules/scope/scope.service');
 
@@ -32,10 +30,8 @@ const tokens: Record<string, string> = {};
 const ids = {
   tenant: '',
   project: '',
-  briefProject: '',
   items: {} as Record<string, string>,
   units: {} as Record<string, string>,
-  briefItems: {} as Record<string, string>,
   session: '',
 };
 let today = '';
@@ -76,7 +72,6 @@ before(async () => {
   ({ prisma } = await import('../config/prisma'));
   jobs = await import('../jobs');
   jobs.registerAllJobs();
-  dispatch = await import('../modules/cadence/obligationDispatch');
   schedule = await import('../modules/schedule/schedule.service');
   scope = await import('../modules/scope/scope.service');
   const { createApp } = await import('../app');
@@ -206,7 +201,10 @@ describe('Phase 9 after redesign R2d', () => {
 
     it('BEHIND when a unit whose end sprint has ended still has a line below 100%', async () => {
       await prisma.boqItem.update({ where: { id: ids.items.I1 }, data: { cumulativeCertifiedPct: 90 } });
-      const r = await schedule.refreshScheduleBadge(ids.project, new Date());
+      // Redesign R4e (D-R4.32): an unverified sprint gets its verification period (7 days) first.
+      const within = await schedule.refreshScheduleBadge(ids.project, new Date());
+      assert.deepEqual([within.status, within.behindUnitCount], ['ON_TRACK', 0]);
+      const r = await schedule.refreshScheduleBadge(ids.project, day(8));
       assert.deepEqual([r.status, r.behindUnitCount], ['BEHIND', 1]);
       await prisma.boqItem.update({ where: { id: ids.items.I1 }, data: { cumulativeCertifiedPct: 100 } });
     });
@@ -235,51 +233,6 @@ describe('Phase 9 after redesign R2d', () => {
       assert.equal(exec.status, 200);
       const execLkk = exec.body.data.projects.find((p: { codePrefix: string }) => p.codePrefix === 'LKK-402');
       assert.equal(execLkk.scheduleVariance.status, 'BEHIND');
-    });
-  });
-
-  describe('obligations follow planned windows', () => {
-    before(async () => {
-      const project = await prisma.project.create({
-        data: {
-          tenantId: ids.tenant,
-          name: 'Brief Selection Yard',
-          codePrefix: 'SCH-903',
-          stateLocation: 'Edo State',
-          status: 'ACTIVE',
-          activatedAt: new Date('2025-01-01T00:00:00Z'),
-          reportingCadence: 'WEEKLY',
-          workWeekDays: WEEK,
-          timezone: 'Africa/Lagos',
-        },
-      });
-      ids.briefProject = project.id;
-      const make = (code: string, extra: Record<string, unknown>) => createItem(project.id, code, extra);
-      ids.briefItems.inWindow = await make('05.01', { plannedStartDate: '2025-03-03', plannedEndDate: '2025-03-14' });
-      ids.briefItems.overdue = await make('05.02', { plannedStartDate: '2025-02-10', plannedEndDate: '2025-02-20' });
-      ids.briefItems.later = await make('05.03', { plannedStartDate: '2025-04-01', plannedEndDate: '2025-04-10' });
-      ids.briefItems.holdPoint = await make('05.05', { isHoldPoint: true });
-      ids.briefItems.done = await make('05.06', { plannedStartDate: '2025-01-06', plannedEndDate: '2025-01-10', cumulativeCertifiedPct: 100 });
-      ids.briefItems.override = await make('05.07', { planningTier: 'PLAN_A', plannedStartDate: '2025-06-02', plannedEndDate: '2025-06-06' });
-    });
-
-    it('owes items in the period, overdue items and the manual override (R1e: no fallbacks)', async () => {
-      const name = (id: string) => Object.entries(ids.briefItems).find(([, v]) => v === id)![0];
-      const items = await dispatch.scheduledItemsForPeriod(ids.briefProject, { periodStart: '2025-03-03', periodEnd: '2025-03-08' });
-      assert.deepEqual(items.map((t) => name(t.id)).sort(), ['inWindow', 'overdue', 'override']);
-
-      const created = await dispatch.dispatchObligationsForProject(ids.briefProject, '2025-03-04', ['INDEPENDENT_VERIFIER']);
-      assert.equal(created, 3);
-      const obligations = await prisma.reportingObligation.findMany({ where: { projectId: ids.briefProject } });
-      assert.deepEqual(obligations.map((o) => name(o.boqItemId!)).sort(), ['inWindow', 'overdue', 'override']);
-      assert.equal(await dispatch.dispatchObligationsForProject(ids.briefProject, '2025-03-05', ['INDEPENDENT_VERIFIER']), 0, 'idempotent');
-    });
-
-    it('a done item is no longer owed', async () => {
-      await prisma.boqItem.update({ where: { id: ids.briefItems.inWindow }, data: { cumulativeCertifiedPct: 100 } });
-      const items = await dispatch.scheduledItemsForPeriod(ids.briefProject, { periodStart: '2025-03-10', periodEnd: '2025-03-15' });
-      assert.ok(!items.some((t) => t.id === ids.briefItems.inWindow));
-      assert.ok(items.some((t) => t.id === ids.briefItems.override));
     });
   });
 

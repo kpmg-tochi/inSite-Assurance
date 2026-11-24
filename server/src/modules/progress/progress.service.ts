@@ -7,26 +7,30 @@ type Tx = Prisma.TransactionClient;
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
- * Project progress (redesign R1b). With IPC certification gone, an item's progress
- * (`BoqItem.cumulativeCertifiedPct`, the legacy column name) is the progress shown by its counted
- * reports: confirmed, or approved when report approval is on. The project's progress is the
- * budget-weighted average. Items reaching 100% get their actual completion date. R2–R4 replace the
- * source with the visit forms' progress answers.
+ * Project progress (redesign R1b, R4d). A scope line's progress (`BoqItem.cumulativeCertifiedPct`, the
+ * legacy column name) is its facility unit's progress as observed by the latest accepted visit
+ * (`FacilityUnit.progressPct`, D-R4.26) when the unit has one; otherwise the progress shown by its
+ * counted workday reports (legacy projects and the old app until R5). The project's progress is the
+ * budget-weighted average. Lines reaching 100% get their actual completion date.
  */
 export async function refreshProjectProgress(tx: Tx, projectId: string): Promise<number> {
   const items = await tx.boqItem.findMany({
     where: { projectId },
-    select: { id: true, totalQuantity: true, budgetedCostNgn: true, cumulativeCertifiedPct: true },
+    select: { id: true, totalQuantity: true, budgetedCostNgn: true, cumulativeCertifiedPct: true, facilityUnit: { select: { progressPct: true } } },
   });
-  const reported = await getReportedProgressByItem(
-    projectId,
-    items.map((i) => ({ id: i.id, totalQuantity: Number(i.totalQuantity) })),
-    tx
-  );
+  const fromReports = items.filter((i) => i.facilityUnit?.progressPct == null);
+  const reported = fromReports.length
+    ? await getReportedProgressByItem(
+        projectId,
+        fromReports.map((i) => ({ id: i.id, totalQuantity: Number(i.totalQuantity) })),
+        tx
+      )
+    : new Map<string, number>();
   let weighted = 0;
   let totalBudget = 0;
   for (const item of items) {
-    const pct = round2(reported.get(item.id) ?? 0);
+    const unitPct = item.facilityUnit?.progressPct;
+    const pct = round2(unitPct != null ? Number(unitPct) : (reported.get(item.id) ?? 0));
     if (pct !== Number(item.cumulativeCertifiedPct)) {
       await tx.boqItem.update({ where: { id: item.id }, data: { cumulativeCertifiedPct: pct } });
     }

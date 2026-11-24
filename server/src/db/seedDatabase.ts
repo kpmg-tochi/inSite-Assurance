@@ -26,6 +26,7 @@ import { seedPhase15 } from "./seedPhase15";
 import { seedPhase16 } from "./seedPhase16";
 import { seedR2 } from "./seedR2";
 import { seedR3 } from "./seedR3";
+import { seedR4 } from "./seedR4";
 import { projectObjectPrefix } from "../integrations/storage.service";
 import { seedDaysAgo, seedRecordedPayment } from "./seedPayments";
 import { CADENCE_PROJECT_SELECT, cadenceSettingsOf, periodKeyForDate } from "../modules/cadence/cadence.service";
@@ -237,6 +238,14 @@ async function runSeed(): Promise<void> {
   await prisma.projectDocument.deleteMany();
   await prisma.projectContractMilestone.deleteMany();
   await prisma.documentType.deleteMany();
+  // Redesign R4 (site log entries restrict their capture; visits restrict their form snapshot)
+  await prisma.siteLogEntry.deleteMany();
+  await prisma.visitComment.deleteMany();
+  await prisma.visitResponse.deleteMany();
+  await prisma.visitDateChange.deleteMany();
+  await prisma.visitSubmission.deleteMany();
+  await prisma.visitAssignee.deleteMany();
+  await prisma.visit.deleteMany();
   // Redesign R3 (snapshots restrict their template; facility sub-forms restrict their facility)
   await prisma.visitFormSnapshot.deleteMany();
   await prisma.facilitySubForm.deleteMany();
@@ -250,7 +259,6 @@ async function runSeed(): Promise<void> {
   // Phase 14
   await prisma.inspectionFinding.deleteMany();
   await prisma.siteInspectionReport.deleteMany();
-  await prisma.projectReportingStream.deleteMany();
   await prisma.inspectionChecklistTemplate.deleteMany();
   await prisma.incidentReport.deleteMany();
   await prisma.webNotificationRead.deleteMany();
@@ -1266,6 +1274,8 @@ async function runSeed(): Promise<void> {
   await seedR2();
   // Redesign R3: form library for every tenant, visit forms on the programme types, a customised Toilet.
   await seedR3();
+  // Redesign R4: visit plans on the programme types, visits, a sprint verification (table in its header).
+  await seedR4();
 
   console.log("✅ Seed complete!");
   console.log(

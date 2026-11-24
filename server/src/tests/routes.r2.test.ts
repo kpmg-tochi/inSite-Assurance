@@ -341,7 +341,7 @@ describe('Redesign R2b: scope on a live project (PRG-105)', () => {
     assert.equal(res.status, 200, JSON.stringify(res.body));
     const d = res.body.data;
     assert.equal(d.sprints.length, 3);
-    assert.deepEqual(d.sprints.map((s: { status: string }) => s.status), ['ENDED', 'ENDED', 'ACTIVE']);
+    assert.deepEqual(d.sprints.map((s: { status: string }) => s.status), ['VERIFIED', 'LATE', 'ACTIVE'], 'R4 seed: sprint 1 verified; sprint 2 ended unverified past the verification period');
     assert.equal(d.units.length, 2);
     assert.equal(d.totals.unassignedLineCount, 0);
     assert.equal(d.importAllowed, false);

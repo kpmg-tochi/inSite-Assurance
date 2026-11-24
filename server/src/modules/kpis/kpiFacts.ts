@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { addDays, KpiPeriod, resolveProjectTypeConfig, zonedCalendarDate } from '@insite/shared';
 import { prisma } from '../../config/prisma';
-import type { KpiDurationSum, KpiObligationCounts, KpiProjectFacts } from './kpiEngine';
+import type { KpiDurationSum, KpiProjectFacts, KpiVisitFact } from './kpiEngine';
 
 /**
  * Loads the facts the KPI engine needs for a set of projects: one batched query per source, never
@@ -45,7 +45,6 @@ function groupBy<T>(rows: T[], key: (r: T) => string): Map<string, T[]> {
   return out;
 }
 
-const emptyObligations = (): KpiObligationCounts => ({ due: 0, onTime: 0, done: 0 });
 const emptyDuration = (): KpiDurationSum => ({ totalDays: 0, count: 0 });
 
 export async function loadKpiFacts(
@@ -65,27 +64,25 @@ export async function loadKpiFacts(
     const day = zonedCalendarDate(d, periodZone);
     return day >= period.from && day <= period.to;
   };
-  const owedWhere = (extra: Prisma.ReportingObligationWhereInput): Prisma.ReportingObligationWhereInput => ({
-    projectId: inIds,
-    periodStart: { gte: period.from, lte: period.to },
-    status: { not: 'EXCUSED' },
-    OR: [{ status: { not: 'PENDING' } }, { lateAfter: { lt: now } }],
-    ...extra,
-  });
+  // Visits dated in the period or due in it (deadlines are at most 60 days after the visit).
+  const visitFrom = addDays(period.from, -60);
 
   const [
     meetings,
     milestones,
     assignments,
     documents,
-    streams,
+    visitRows,
+    visitsEver,
+    visitLeads,
+    sprintRows,
     baselines,
+    baselineVisits,
     finalEvaluations,
-    obligationsEver,
-    owedAll,
-    owedInspections,
+    finalEvaluationVisits,
     reportApprovals,
     inspectionApprovals,
+    visitApprovals,
     certificates,
     closureRows,
     lessons,
@@ -114,26 +111,39 @@ export async function loadKpiFacts(
       distinct: ['projectId', 'documentTypeId'],
       select: { projectId: true, documentType: { select: { code: true } } },
     }),
-    prisma.projectReportingStream.findMany({
-      where: { projectId: inIds, isActive: true },
-      select: { projectId: true, kind: true, visitType: true },
+    prisma.visit.findMany({
+      where: { projectId: inIds, status: { notIn: ['PROPOSED', 'CANCELLED'] }, plannedDate: { gte: visitFrom, lte: period.to } },
+      select: {
+        projectId: true,
+        visitKind: true,
+        status: true,
+        origin: true,
+        plannedDate: true,
+        submissionDeadline: true,
+        submissions: { select: { isLate: true } },
+      },
     }),
+    prisma.visit.groupBy({ by: ['projectId'], where: { projectId: inIds, status: { notIn: ['PROPOSED', 'CANCELLED'] } }, _count: { _all: true } }),
+    prisma.visitAssignee.findMany({
+      where: { isLead: true, visit: { projectId: inIds, status: { in: ['PLANNED', 'IN_PROGRESS', 'RETURNED'] } } },
+      select: { visit: { select: { projectId: true } } },
+    }),
+    prisma.projectSprint.findMany({ where: { projectId: inIds }, select: { projectId: true, endDate: true, firstVerifiedAt: true } }),
     prisma.siteInspectionReport.groupBy({
       by: ['projectId'],
       where: { projectId: inIds, visitType: 'BASELINE', status: 'APPROVED' },
       _count: { _all: true },
     }),
+    prisma.visit.groupBy({ by: ['projectId'], where: { projectId: inIds, visitKind: 'BASELINE', status: 'APPROVED' }, _count: { _all: true } }),
     prisma.siteInspectionReport.findMany({
       where: { projectId: inIds, visitType: 'FINAL_EVALUATION', status: 'APPROVED' },
       orderBy: { approvedAt: 'desc' },
       select: { projectId: true, overallFinding: true },
     }),
-    prisma.reportingObligation.groupBy({ by: ['projectId'], where: { projectId: inIds }, _count: { _all: true } }),
-    prisma.reportingObligation.groupBy({ by: ['projectId', 'status'], where: owedWhere({}), _count: { _all: true } }),
-    prisma.reportingObligation.groupBy({
-      by: ['projectId', 'status'],
-      where: owedWhere({ boqItemId: null, stream: { kind: 'INSPECTION' } }),
-      _count: { _all: true },
+    prisma.visitSubmission.findMany({
+      where: { projectId: inIds, status: 'APPROVED', visit: { visitKind: 'FINAL_EVALUATION' } },
+      orderBy: { approvedAt: 'desc' },
+      select: { projectId: true, overallFinding: true },
     }),
     prisma.workdayReport.findMany({
       where: {
@@ -148,6 +158,10 @@ export async function loadKpiFacts(
       where: { projectId: inIds, status: 'APPROVED', approvedAt: { gte: windowStart, lte: windowEnd } },
       select: { projectId: true, confirmedAt: true, approvedAt: true },
     }),
+    prisma.visitSubmission.findMany({
+      where: { projectId: inIds, status: 'APPROVED', approvalChainVersion: { not: null }, approvedAt: { gte: windowStart, lte: windowEnd } },
+      select: { projectId: true, receivedAt: true, approvedAt: true },
+    }),
     prisma.completionCertificate.findMany({
       where: { projectId: inIds, status: 'ISSUED' },
       select: { projectId: true, issuedAt: true, completionDate: true },
@@ -160,29 +174,19 @@ export async function loadKpiFacts(
   const milestonesOf = groupBy(milestones, (m) => m.projectId);
   const assignmentsOf = groupBy(assignments, (a) => a.projectId);
   const documentsOf = groupBy(documents, (d) => d.projectId);
-  const streamsOf = groupBy(streams, (s) => s.projectId);
-  const baselineSet = new Set(baselines.map((b) => b.projectId));
+  const visitsOf = groupBy(visitRows, (v) => v.projectId);
+  const visitsEverSet = new Set(visitsEver.map((v) => v.projectId));
+  const leadSet = new Set(visitLeads.map((l) => l.visit.projectId));
+  const sprintsOf = groupBy(sprintRows, (s) => s.projectId);
+  const baselineSet = new Set([...baselines.map((b) => b.projectId), ...baselineVisits.map((b) => b.projectId)]);
   const finalFindingOf = new Map<string, string>();
+  // Accepted final evaluation visits first, then legacy inspections (until R5).
+  for (const e of finalEvaluationVisits) if (!finalFindingOf.has(e.projectId)) finalFindingOf.set(e.projectId, e.overallFinding);
   for (const e of finalEvaluations) if (!finalFindingOf.has(e.projectId)) finalFindingOf.set(e.projectId, e.overallFinding);
-  const everSet = new Set(obligationsEver.map((o) => o.projectId));
   const certificateOf = new Map(certificates.map((c) => [c.projectId, c]));
   const closureOf = groupBy(closureRows, (r) => r.projectId);
   const lessonsOf = new Map(lessons.map((l) => [l.projectId, l._count._all]));
 
-  const obligationCounts = (rows: typeof owedAll) => {
-    const out = new Map<string, KpiObligationCounts>();
-    for (const r of rows) {
-      const c = out.get(r.projectId) ?? emptyObligations();
-      const n = r._count._all;
-      c.due += n;
-      if (r.status === 'SUBMITTED') c.onTime += n;
-      if (r.status === 'SUBMITTED' || r.status === 'LATE') c.done += n;
-      out.set(r.projectId, c);
-    }
-    return out;
-  };
-  const owedAllOf = obligationCounts(owedAll);
-  const owedInspectionsOf = obligationCounts(owedInspections);
 
   const approvalsOf = new Map<string, KpiDurationSum>();
   const addDuration = (map: Map<string, KpiDurationSum>, projectId: string, from: Date | null, to: Date | null) => {
@@ -194,6 +198,7 @@ export async function loadKpiFacts(
   };
   for (const r of reportApprovals) addDuration(approvalsOf, r.projectId, r.humanConfirmedAt, r.approvedCompletedAt);
   for (const r of inspectionApprovals) addDuration(approvalsOf, r.projectId, r.confirmedAt, r.approvedAt);
+  for (const r of visitApprovals) addDuration(approvalsOf, r.projectId, r.receivedAt, r.approvedAt);
 
   return projects.map((p) => {
     const zone = p.timezone;
@@ -237,13 +242,22 @@ export async function loadKpiFacts(
       hasSupervisor: (assignmentsOf.get(p.id) ?? []).some(
         (a) => supervisorCodes.has(a.user.role.code) || (a.user.mobileRole ? supervisorCodes.has(a.user.mobileRole.code) : false)
       ),
+      hasVisitLead: leadSet.has(p.id),
       documentTypeCodes: new Set((documentsOf.get(p.id) ?? []).map((d) => d.documentType.code)),
-      activeStreamCount: (streamsOf.get(p.id) ?? []).length,
-      inspectionStreamVisitTypes: (streamsOf.get(p.id) ?? []).filter((s) => s.kind === 'INSPECTION' && s.visitType).map((s) => s.visitType!),
       hasApprovedBaseline: baselineSet.has(p.id),
-      hasObligations: everSet.has(p.id),
-      inspectionObligations: owedInspectionsOf.get(p.id) ?? emptyObligations(),
-      allObligations: owedAllOf.get(p.id) ?? emptyObligations(),
+      visits: (visitsOf.get(p.id) ?? []).map(
+        (v): KpiVisitFact => ({
+          visitKind: v.visitKind,
+          status: v.status,
+          origin: v.origin,
+          plannedDate: v.plannedDate,
+          submissionDeadline: v.submissionDeadline,
+          submitted: v.submissions.length > 0,
+          submittedOnTime: v.submissions.some((s) => !s.isLate),
+        })
+      ),
+      hasVisits: visitsEverSet.has(p.id),
+      sprints: (sprintsOf.get(p.id) ?? []).map((s) => ({ endDate: s.endDate, firstVerifiedDate: s.firstVerifiedAt ? zonedCalendarDate(s.firstVerifiedAt, zone) : null })),
       approvals: approvalsOf.get(p.id) ?? emptyDuration(),
       certificate: certificate?.issuedAt
         ? { issuedDate: zonedCalendarDate(certificate.issuedAt, periodZone), completionDate: certificate.completionDate }

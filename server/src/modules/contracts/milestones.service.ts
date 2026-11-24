@@ -475,6 +475,9 @@ export async function autoCompleteMilestones(
     onlyProjectLevel?: boolean;
     /** Phase 15: only rows that have a due date (their anchor has happened). */
     onlyDated?: boolean;
+    /** Redesign R4d: only rows with (or without) these anchors (final vs post-closure evaluation). */
+    anchorIn?: ContractMilestoneAnchor[];
+    anchorNotIn?: ContractMilestoneAnchor[];
     at: Date;
     notes: string;
     actor?: MilestoneActor;
@@ -486,6 +489,7 @@ export async function autoCompleteMilestones(
       completionMode: params.mode,
       status: { in: OPEN_MILESTONE_STATUSES },
       ...(params.onlyDated ? { dueDate: { not: null } } : {}),
+      ...(params.anchorIn ? { anchor: { in: params.anchorIn } } : params.anchorNotIn ? { anchor: { notIn: params.anchorNotIn } } : {}),
       ...(params.onlyProjectLevel
         ? { projectContractorId: null }
         : params.projectContractorId

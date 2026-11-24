@@ -4,6 +4,7 @@ import {
   ProjectTypeFunderDefaultEnum,
   SaveProjectTypeRequestSchema,
   type ProjectTypeConfigInput,
+  type ProjectTypeMonitoringConfigInput,
   type ProjectTypeDto,
   type ProjectTypeKpiTargets,
   type ProjectTypeFunderDefault,
@@ -21,10 +22,9 @@ import { ContractRulesEditor, type ContractRules } from "./ContractRulesEditor";
 import { ClosureRulesEditor, type ClosureRules } from "./ClosureRulesEditor";
 import { compactKpiTargets, KpiTargetsEditor } from "./KpiTargetsEditor";
 import { MonitoringRulesEditor, type MonitoringRules } from "./MonitoringRulesEditor";
+import { MonitoringPlanEditor } from "./MonitoringPlanEditor";
 import { DocumentRulesEditor, type DocumentRules } from "./DocumentRulesEditor";
-import { CadenceFields } from "./CadenceFields";
 
-type ReportingDefaults = NonNullable<ProjectTypeConfigInput["reportingDefaults"]>;
 
 const inputCls =
   "w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-primary";
@@ -48,9 +48,6 @@ interface Draft {
   regionRequired: boolean;
   funderDefault: ProjectTypeFunderDefault;
   defaultFunderId: string;
-  reportingOn: boolean;
-  /** Every field of the Reporting step (since Phase 16, not only cadence and hours). */
-  reporting: ReportingDefaults;
   /** Redesign R1b: retention defaults for new projects of this type ("" = none). */
   retentionPct: string;
   retentionMonths: string;
@@ -64,6 +61,8 @@ interface Draft {
   monitoring: MonitoringRules;
   /** Phase 13 (editable since Phase 16): required documents and default cases. */
   documents: DocumentRules;
+  /** Redesign R4: the config key `monitoring` (visit plan, deadlines, escalation). */
+  visitPlan: ProjectTypeMonitoringConfigInput;
   /** Keys added by later phases, kept untouched on save. */
   rest: Record<string, unknown>;
 }
@@ -81,7 +80,7 @@ function paymentsFrom(config: unknown) {
 
 function draftFrom(t: ProjectTypeDto | null): Draft {
   const c = t?.config;
-  const { ownership, parties, reportingDefaults, contractMilestones, kickoff, closure, kpiTargets, reportingStreams, inspections, supervision, visitForms, documentRequirements, defaultCases, ...rest } = (c ?? {}) as ProjectTypeDto["config"];
+  const { ownership, parties, contractMilestones, kickoff, closure, kpiTargets, inspections, supervision, visitForms, documentRequirements, defaultCases, monitoring, ...rest } = (c ?? {}) as ProjectTypeDto["config"];
   return {
     id: t?.id ?? null,
     code: t?.code ?? "",
@@ -100,8 +99,6 @@ function draftFrom(t: ProjectTypeDto | null): Draft {
     regionRequired: parties?.regionRequired ?? false,
     funderDefault: parties?.funderDefault ?? "NONE",
     defaultFunderId: parties?.defaultFunderOrganizationId ?? "",
-    reportingOn: Boolean(reportingDefaults),
-    reporting: reportingDefaults ? { ...reportingDefaults } : { reportingCadence: "WEEKLY", workdayStartTime: "08:00", workdayEndTime: "17:00" },
     ...paymentsFrom(c),
     contract: {
       milestones: (contractMilestones ?? []).map((m) => ({ ...m })),
@@ -113,7 +110,6 @@ function draftFrom(t: ProjectTypeDto | null): Draft {
     closure: closure ? { ...closure } : {},
     kpiTargets: { ...(kpiTargets ?? {}) },
     monitoring: {
-      reportingStreams: (reportingStreams ?? []).map((st) => ({ ...st, roleCodes: [...st.roleCodes] })),
       inspections: { templateCodeByVisitType: { ...(inspections?.templateCodeByVisitType ?? {}) } },
       supervision: { ...(supervision ?? {}), supervisorRoleCodes: [...(supervision?.supervisorRoleCodes ?? [])] },
       visitForms: { templateCodeByVisitKind: { ...(visitForms?.templateCodeByVisitKind ?? {}) } },
@@ -125,6 +121,7 @@ function draftFrom(t: ProjectTypeDto | null): Draft {
       },
       defaultCases: { ...(defaultCases ?? {}) },
     },
+    visitPlan: monitoring ? { ...monitoring, visitPlan: (monitoring.visitPlan ?? []).map((r) => ({ ...r })) } : {},
     rest: rest as Record<string, unknown>,
   };
 }
@@ -145,9 +142,6 @@ function payloadFrom(d: Draft): SaveProjectTypeRequestInput {
       funderDefault: d.funderDefault,
       defaultFunderOrganizationId: d.funderDefault === "FIXED" ? d.defaultFunderId || null : null,
     },
-    reportingDefaults: d.reportingOn
-      ? d.reporting
-      : null,
     payments: {
       retentionPercentage: d.retentionPct.trim() === "" ? null : Number(d.retentionPct),
       retentionDurationMonths: d.retentionMonths.trim() === "" ? null : Math.round(Number(d.retentionMonths)),
@@ -169,13 +163,14 @@ function payloadFrom(d: Draft): SaveProjectTypeRequestInput {
     // Phase 16
     kpiTargets: compactKpiTargets(d.kpiTargets),
     // Phases 13 and 14 (editors since Phase 16)
-    reportingStreams: d.monitoring.reportingStreams.map((st) => ({ ...st, label: st.label.trim() })),
     inspections: d.monitoring.inspections,
     supervision: d.monitoring.supervision,
     // Redesign R3
     visitForms: d.monitoring.visitForms,
     documentRequirements: d.documents.documentRequirements,
     defaultCases: d.documents.defaultCases,
+    // Redesign R4
+    monitoring: d.visitPlan,
   };
   return {
     code: d.code,
@@ -271,7 +266,6 @@ export function ProjectTypesTab() {
 
   if (draft) {
     const set = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
-    const setReporting = (patch: Partial<ReportingDefaults>) => set({ reporting: { ...draft.reporting, ...patch } });
     const submit = (e: React.FormEvent) => {
       e.preventDefault();
       const payload = payloadFrom(draft);
@@ -438,38 +432,12 @@ export function ProjectTypesTab() {
 
         <MonitoringRulesEditor value={draft.monitoring} onChange={(monitoring) => set({ monitoring })} />
 
+        <MonitoringPlanEditor value={draft.visitPlan} onChange={(visitPlan) => set({ visitPlan })} />
+
         <ClosureRulesEditor value={draft.closure} onChange={(closure) => set({ closure })} />
 
         <KpiTargetsEditor value={draft.kpiTargets} onChange={(kpiTargets) => set({ kpiTargets })} />
 
-        <section className={sectionCls}>
-          <h3 className="text-sm font-bold text-slate-900">Reporting defaults</h3>
-          <Toggle label="Pre-fill the Reporting step of new projects" checked={draft.reportingOn} onChange={(v) => set({ reportingOn: v })} />
-          {draft.reportingOn && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <label className="text-xs font-medium text-slate-700">
-                  Work starts
-                  <input type="time" className={inputCls} value={draft.reporting.workdayStartTime} onChange={(e) => setReporting({ workdayStartTime: e.target.value })} />
-                </label>
-                <label className="text-xs font-medium text-slate-700">
-                  Work ends
-                  <input type="time" className={inputCls} value={draft.reporting.workdayEndTime} onChange={(e) => setReporting({ workdayEndTime: e.target.value })} />
-                </label>
-                {(draft.reporting.reportingCadence === "BI_WEEKLY" || draft.reporting.reportingCadence === "CUSTOM_INTERVAL") && (
-                  <label className="text-xs font-medium text-slate-700">
-                    First period starts on (blank: the project start)
-                    <input type="date" className={inputCls} value={draft.reporting.cadenceAnchorDate ?? ""} onChange={(e) => setReporting({ cadenceAnchorDate: e.target.value || null })} />
-                  </label>
-                )}
-              </div>
-              <CadenceFields
-                value={{ ...draft.reporting, quarterMonth: draft.reporting.cadenceQuarterAnchorMonth ?? null }}
-                onChange={({ quarterMonth, ...patch }) => setReporting({ ...patch, ...(quarterMonth != null ? { cadenceQuarterAnchorMonth: quarterMonth } : {}) })}
-              />
-            </div>
-          )}
-        </section>
 
         {errors.length > 0 && (
           <ul className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 list-disc pl-6">

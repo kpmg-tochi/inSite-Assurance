@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { InspectionVisitTypeEnum } from './inspection.schema';
+import { VisitKindEnum } from './form.schema';
 import { DOCUMENT_TYPE_CODE_REGEX, MILESTONE_KEY_REGEX } from './contract.schema';
 
 /**
@@ -100,7 +100,7 @@ export const AUTOMATIC_CLOSURE_ITEM_KINDS: ClosureChecklistItemKind[] = [
 
 export const CLOSURE_ITEM_KIND_META: Record<ClosureChecklistItemKind, { label: string; description: string }> = {
   DOCUMENT_TYPE: { label: 'Document in the register', description: 'Done when a document of the type is filed (and signed, if required).' },
-  INSPECTION_VISIT_TYPE: { label: 'Inspection approved', description: 'Done when an inspection of the visit type is approved.' },
+  INSPECTION_VISIT_TYPE: { label: 'Visit accepted', description: 'Done when a visit of the kind is accepted.' },
   CONTRACT_MILESTONE: { label: 'Contract milestone done', description: 'Done when the contract milestone is done or waived.' },
   CONTRACTOR_RATINGS: { label: 'Contractors rated', description: 'Done when every contractor on the project has a rating at the stage.' },
   LESSONS_LEARNED: { label: 'Lessons published', description: 'Done when the project has at least one published lesson.' },
@@ -128,8 +128,8 @@ export const ClosureChecklistItemTemplateSchema = z
     documentTypeCode: z.string().trim().regex(DOCUMENT_TYPE_CODE_REGEX).nullable().default(null),
     /** DOCUMENT_TYPE: needs a sign-off on the current version when the document type requires one. */
     requireSignOff: z.boolean().default(true),
-    /** INSPECTION_VISIT_TYPE */
-    inspectionVisitType: InspectionVisitTypeEnum.nullable().default(null),
+    /** INSPECTION_VISIT_TYPE (key kept): a visit kind (redesign R4d; the Phase 14 types are a subset). */
+    inspectionVisitType: VisitKindEnum.nullable().default(null),
     /** CONTRACT_MILESTONE */
     milestoneKey: z.string().trim().regex(MILESTONE_KEY_REGEX).nullable().default(null),
     /** CONTRACTOR_RATINGS */
@@ -292,6 +292,8 @@ export const CompletionCertificateDtoSchema = z.object({
   scopeSummary: z.string(),
   completionDate: z.string(),
   finalEvaluationInspectionId: Uuid.nullable(),
+  /** Redesign R4d: the accepted final evaluation visit the certificate was drafted on. */
+  finalEvaluationVisitId: Uuid.nullable(),
   documentId: Uuid.nullable(),
   issuedAt: z.string().nullable(),
   revokedAt: z.string().nullable(),
@@ -314,7 +316,10 @@ export const ProjectCompletionDtoSchema = z.object({
   }),
   finalEvaluation: z.object({
     required: z.boolean(),
+    /** Legacy Phase 14 inspection (until R5). */
     inspectionId: Uuid.nullable(),
+    /** Redesign R4d: the accepted final evaluation visit. */
+    visitId: Uuid.nullable(),
     visitDate: z.string().nullable(),
     approvedAt: z.string().nullable(),
   }),

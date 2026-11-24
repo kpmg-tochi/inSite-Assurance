@@ -28,7 +28,8 @@ import { ProjectScopePage } from "./pages/scope/ProjectScopePage";
 import { AuditLedgerPage } from "./pages/audit/AuditLedgerPage";
 import { ProjectHandoverPage } from "./pages/closeout/ProjectHandoverPage";
 import { RetentionDefectsPage } from "./pages/closeout/RetentionDefectsPage";
-import { ProjectInspectionsPage } from "./pages/inspections/ProjectInspectionsPage";
+import { ProjectVisitsPage } from "./pages/visits/ProjectVisitsPage";
+import { VisitPlannerPage } from "./pages/visits/VisitPlannerPage";
 import { ProjectDocumentsPage } from "./pages/documents/ProjectDocumentsPage";
 import { ProjectMilestonesPage } from "./pages/milestones/ProjectMilestonesPage";
 import { ProjectKickoffPage } from "./pages/milestones/ProjectKickoffPage";
@@ -105,7 +106,7 @@ function AuthenticatedWorkspace() {
   const handleSelectProject = (projectId: string) => {
     setSelectedProjectId(projectId);
     const subRouteMatch = location.pathname.match(
-      /\/app\/projects\/[^/]+\/(dashboard|payments|scope|audit|schedule|handover|retention|documents|milestones|kickoff|closure|inspections)/,
+      /\/app\/projects\/[^/]+\/(dashboard|payments|scope|audit|schedule|handover|retention|documents|milestones|kickoff|closure|inspections|visits)/,
     );
     const subRoute = subRouteMatch?.[1] || "dashboard";
     const safeSubRoute =
@@ -214,6 +215,15 @@ function AuthenticatedWorkspace() {
             </RequirePermission>
           }
         />
+        {/* Redesign R4: the visit planner across the visible projects */}
+        <Route
+          path="visits"
+          element={
+            <RequirePermission anyOf={["visits:view"]} backTo={projectHome}>
+              <VisitPlannerPage />
+            </RequirePermission>
+          }
+        />
         {/* Phase 16: programme KPIs over the visible projects */}
         <Route
           path="kpis"
@@ -295,14 +305,17 @@ function AuthenticatedWorkspace() {
                 </RequirePermission>
               }
             />
+            {/* Redesign R4: the project's visits, findings and site log */}
             <Route
-              path="projects/:projectId/inspections"
+              path="projects/:projectId/visits"
               element={
-                <RequirePermission anyOf={["inspections:view", "inspections:manage_findings"]} backTo={projectHome}>
-                  <ProjectInspectionsPage project={activeProject} />
+                <RequirePermission anyOf={["visits:view"]} backTo={projectHome}>
+                  <ProjectVisitsPage project={activeProject} />
                 </RequirePermission>
               }
             />
+            {/* Redesign R4f: inspections are replaced by visits. */}
+            <Route path="projects/:projectId/inspections" element={<Navigate to={`/app/projects/${activeProject.id}/visits`} replace />} />
             {/* Phase 13: document register, contract milestones and the kick-off meeting */}
             <Route
               path="projects/:projectId/documents"

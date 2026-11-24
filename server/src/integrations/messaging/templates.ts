@@ -1,3 +1,5 @@
+import type { FindingsSummaryEmailData } from '@insite/shared';
+
 /**
  * Message templates as plain functions (Phase 8 Step 4). No template editor. Each gets the tenant
  * name and branding colour; values from people (names, project names) are escaped for HTML.
@@ -107,10 +109,44 @@ export function minutesSignOff(ctx: TemplateContext, d: MinutesSignOffData): Ren
   return { subject, text, html, pushBody: `Please sign off the ${d.projectName} kick-off minutes.` };
 }
 
+// ---------------------------------------------------------------------------
+// Redesign R4d (D-R4.29): open findings summary to the contractor after each accepted visit. No
+// internal comments and no photos (there is no public link to them).
+// ---------------------------------------------------------------------------
+
+export function findingsSummary(ctx: TemplateContext, d: FindingsSummaryEmailData): RenderedMessage {
+  const subject = `${d.projectCode}: findings after the ${d.visitLabel.toLowerCase()} of ${d.visitDate}`;
+  const where = (f: { facility: string | null; unit: string | null }) => [f.facility, f.unit].filter(Boolean).join(', ') || 'Project';
+  const openLines = d.open.map(
+    (f) => `${where(f)}: ${f.title} (${f.severity.toLowerCase()}, raised ${f.raisedDate}${f.timesRechecked ? `, re-checked ${f.timesRechecked} time(s)` : ''}). ${f.description}`
+  );
+  const resolvedLines = d.resolved.map((f) => `${where(f)}: ${f.title}`);
+  const intro = `The monitoring team visited ${d.projectName} (${d.projectCode}) on ${d.visitDate} (${d.visitLabel.toLowerCase()}).`;
+  const text = [
+    intro,
+    '',
+    d.open.length ? `Open findings to correct (${d.open.length}):` : 'There are no open findings.',
+    ...openLines.map((l) => `- ${l}`),
+    ...(d.resolved.length ? ['', `Resolved on this visit (${d.resolved.length}):`, ...resolvedLines.map((l) => `- ${l}`)] : []),
+    '',
+    'The next visits will check the open findings again.',
+  ].join('\n');
+  const list = (lines: string[]) => `<ul style="margin:0;padding-left:20px">${lines.map((l) => `<li style="margin:0 0 6px">${esc(l)}</li>`).join('')}</ul>`;
+  const html = layout(ctx, subject, [
+    esc(intro),
+    d.open.length ? `<strong>Open findings to correct (${d.open.length})</strong>${list(openLines)}` : 'There are no open findings.',
+    ...(d.resolved.length ? [`<strong>Resolved on this visit (${d.resolved.length})</strong>${list(resolvedLines)}`] : []),
+    'The next visits will check the open findings again.',
+  ]);
+  return { subject, text, html };
+}
+
 export const TEMPLATES = {
   // Phase 13
   KICKOFF_NOTICE: kickoffNotice,
   MINUTES_SIGN_OFF: minutesSignOff,
+  // Redesign R4d
+  FINDINGS_SUMMARY: findingsSummary,
 } as const;
 
 export type TemplateKey = keyof typeof TEMPLATES;

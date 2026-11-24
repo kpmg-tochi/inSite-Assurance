@@ -464,6 +464,48 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     unlocksViews: ['Findings Board', 'Mobile Findings'],
   },
 
+  // Redesign R4: visits, sprint verification, finding escalation
+  {
+    key: 'visits:view',
+    name: 'View Visits',
+    description: 'See the visit plan and planner, visit forms, submissions, comments and the site log.',
+    category: 'REPORT_APPROVALS',
+    surface: 'BOTH',
+    unlocksViews: ['Visits Tab', 'Visit Planner'],
+  },
+  {
+    key: 'visits:plan',
+    name: 'Plan Visits',
+    description: 'Create, generate, publish, move, reassign and cancel visits, and accept or reject date proposals from officers.',
+    category: 'REPORT_APPROVALS',
+    surface: 'WEB',
+    unlocksViews: ['Visit Planner editing'],
+  },
+  {
+    key: 'visits:submit',
+    name: 'Carry Out Visits',
+    description: 'Respond to assigned visits (confirm, move, propose, decline), check in and submit visit forms from the field app.',
+    category: 'REPORT_APPROVALS',
+    surface: 'MOBILE',
+    unlocksViews: ['Mobile Visits'],
+  },
+  {
+    key: 'sprints:verify',
+    name: 'Verify Sprints',
+    description: 'Record whether an ended sprint was met, partly met or not met.',
+    category: 'REPORT_APPROVALS',
+    surface: 'WEB',
+    unlocksViews: ['Scope & sprints verification'],
+  },
+  {
+    key: 'findings:receive_escalations',
+    name: 'Receive Finding Escalations',
+    description: 'Be notified when a finding stays open past the escalation period.',
+    category: 'REPORT_APPROVALS',
+    surface: 'WEB',
+    unlocksViews: ['Notifications'],
+  },
+
   // 7. PAYMENTS (redesign R1b: payments are made outside the platform and recorded here)
   {
     key: 'payments:view',
@@ -823,7 +865,6 @@ export const AuditActionTypeEnum = z.enum([
   // Phase 8: cadence
   'REPORT_SUBMITTED_LATE',
   'REPORT_MISSED',
-  'REPORTING_OBLIGATION_EXCUSED',
   // Phase 10: handover, retention and defects
   'HANDOVER_RECORDED',
   'HANDOVER_REVIEWED',
@@ -843,7 +884,6 @@ export const AuditActionTypeEnum = z.enum([
   'INSPECTION_REVIEWED',
   'INSPECTION_FINDING_RAISED',
   'INSPECTION_FINDING_RESOLVED',
-  'REPORTING_STREAMS_SAVED',
   'CHECKLIST_TEMPLATE_SAVED',
   // Phase 13: documents, contract milestones, kick-off, default cases
   'DOCUMENT_UPLOADED',
@@ -884,6 +924,25 @@ export const AuditActionTypeEnum = z.enum([
   'SCOPE_IMPORTED',
   // Redesign R3
   'FORM_COMPONENT_SAVED',
+  // Redesign R4: visits
+  'VISITS_GENERATED',
+  'VISIT_CREATED',
+  'VISIT_PUBLISHED',
+  'VISIT_UPDATED',
+  'VISIT_CANCELLED',
+  'VISIT_FORM_REBUILT',
+  'VISIT_OFFICERS_SAVED',
+  'VISIT_RESPONDED',
+  'VISIT_DATE_DECIDED',
+  'VISIT_CHECKED_IN',
+  'VISIT_SUBMITTED',
+  'VISIT_MISSED',
+  'SITE_LOG_ADDED',
+  'SITE_LOG_HIDDEN',
+  'VISIT_REVIEWED',
+  'FINDING_ESCALATED',
+  'FINDINGS_SUMMARY_SENT',
+  'SPRINT_VERIFIED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 
@@ -1009,7 +1068,7 @@ export const NEEDS_ASSESSMENT_DOC_TYPE_META: Record<NeedsAssessmentDocType, { la
 export const ApprovalChainTypeEnum = z.enum(['REPORT', 'CONTRACT_DEFAULT']);
 export type ApprovalChainType = z.infer<typeof ApprovalChainTypeEnum>;
 
-export const ApprovalSubjectTypeEnum = z.enum(['WORKDAY_REPORT', 'SITE_INSPECTION', 'CONTRACT_DEFAULT_CASE']);
+export const ApprovalSubjectTypeEnum = z.enum(['WORKDAY_REPORT', 'SITE_INSPECTION', 'CONTRACT_DEFAULT_CASE', 'VISIT_SUBMISSION']);
 export type ApprovalSubjectType = z.infer<typeof ApprovalSubjectTypeEnum>;
 
 /**

@@ -1,12 +1,12 @@
 /**
- * Phase 14 route and job tests: reporting streams (quarterly inspection stream beside a weekly item
- * stream), a missed quarterly visit, site inspections (idempotency, answers against the template
- * version, captures from another project refused, late uploads), findings aimed at the right
- * contractor, the report approval chain on inspections, the mobile pack and supervision workload.
- * A project without streams keeps the Phase 8 behaviour.
+ * Phase 14 route tests: site inspections (idempotency, answers against the template version,
+ * captures from another project refused), findings aimed at the right contractor, the report
+ * approval chain on inspections, the mobile pack and supervision workload. Redesign R4f removed
+ * reporting streams, reporting obligations, missed-visit tracking and the inspection overview
+ * (visits replace them): inspections carry no stream, no reporting period and, without a stream's
+ * upload deadline, are never late. The first describe checks the removed endpoints and jobs are gone.
  *
- * Uses projects created here so the calendar is under test control. Calendar: 2025-03-31 is a
- * Monday, 2025-04-01 a Tuesday, 2025-06-30 a Monday, 2025-07-01 a Tuesday, 2025-09-30 a Tuesday.
+ * Uses a project created here so the calendar is under test control.
  */
 import { resetTestDatabase } from './helpers/testDb';
 import { createFieldSession, fieldAuth } from './helpers/fieldAuth';
@@ -28,7 +28,6 @@ const tokens: Record<string, string> = {};
 const ids = {
   tenant: '',
   project: '',
-  plain: '',
   other: '',
   items: [] as string[],
   inspectorRole: '',
@@ -38,8 +37,6 @@ const ids = {
   resident: '',
   otherSession: '',
   mainContractor: '',
-  weeklyStream: '',
-  quarterlyStream: '',
   template: { id: '', version: 1 },
 };
 let sitePoint = { latitude: 0, longitude: 0 };
@@ -154,7 +151,6 @@ before(async () => {
   sitePoint = g.center ?? { latitude: 6.3176, longitude: 5.6145 };
 
   ids.project = await liveProject('INS-1401', 'Inspection Test School');
-  ids.plain = await liveProject('INS-1402', 'No Streams School');
   ids.other = edo.id;
 
   const role = (code: string) => prisma.role.findFirstOrThrow({ where: { tenantId: tenant.id, code } });
@@ -200,140 +196,42 @@ describe('Phase 14', () => {
     assert.equal(await prisma.permission.count({ where: { key: 'inspections:manage_templates' } }), 0);
   });
 
-  describe('reporting streams', () => {
-    it('saves a weekly item stream and a quarterly inspection stream; quarterly periods are calendar quarters', async () => {
-      const res = await request(app)
-        .put(`/api/v1/projects/${ids.project}/reporting-streams`)
-        .set(await web('monitor@insite.ng'))
-        .send({
-          streams: [
-            { key: 'resident', label: 'Resident supervision', kind: 'ITEM_REPORTS', roleIds: [ids.residentRole], reportingCadence: 'WEEKLY' },
-            {
-              key: 'me-visit',
-              label: 'M&E visit',
-              kind: 'INSPECTION',
-              roleIds: [ids.inspectorRole],
-              reportingCadence: 'QUARTERLY',
-              visitType: 'ROUTINE',
-              submissionDeadlineDays: 7,
-            },
-          ],
-        });
-      assert.equal(res.status, 200, JSON.stringify(res.body));
-      assert.equal(res.body.data.usesImplicitDefault, false);
-      const streams = res.body.data.streams as Array<{ id: string; key: string; settings: { reportingCadence: string } }>;
-      ids.weeklyStream = streams.find((s) => s.key === 'resident')!.id;
-      ids.quarterlyStream = streams.find((s) => s.key === 'me-visit')!.id;
-      assert.equal(await prisma.auditLog.count({ where: { projectId: ids.project, action: 'REPORTING_STREAMS_SAVED' } }), 1);
-
-      const bad = await request(app)
-        .put(`/api/v1/projects/${ids.project}/reporting-streams`)
-        .set(await web('monitor@insite.ng'))
-        .send({ streams: [{ key: 'x', label: 'No visit type', kind: 'INSPECTION', roleIds: [ids.inspectorRole], reportingCadence: 'QUARTERLY' }] });
-      assert.equal(bad.status, 400);
-    });
-
-    it('dispatch creates item obligations per stream and one inspection obligation per quarter', async () => {
-      await jobs.runJobOnce('reporting-obligations', new Date('2025-04-01T07:30:00Z'));
-      const obligations = await prisma.reportingObligation.findMany({ where: { projectId: ids.project } });
-      const items = obligations.filter((o) => o.boqItemId);
-      assert.equal(items.length, 2, 'one verifier obligation per scheduled item');
-      assert.ok(items.every((o) => o.streamId === ids.weeklyStream && o.reporterScope === 'verifier' && o.periodStart === '2025-03-31'));
-      const inspection = obligations.filter((o) => !o.boqItemId);
-      assert.equal(inspection.length, 1);
-      assert.equal(inspection[0].streamId, ids.quarterlyStream);
-      assert.equal(inspection[0].reporterScope, 'inspection');
-      assert.equal(inspection[0].periodStart, '2025-04-01');
-      assert.equal(inspection[0].periodEnd, '2025-06-30');
-      assert.equal(inspection[0].dueAt.toISOString(), '2025-06-30T16:00:00.000Z');
-      assert.equal(inspection[0].lateAfter.toISOString(), '2025-07-07T16:00:00.000Z', 'late after the 7-day upload deadline');
-      // INSPECTION streams get no briefs; dispatching again creates nothing new.
-      await jobs.runJobOnce('reporting-obligations', new Date('2025-04-02T07:30:00Z'));
-      assert.equal(await prisma.reportingObligation.count({ where: { projectId: ids.project } }), 3);
-    });
-
-    it('a resident report fulfils the weekly stream obligation', async () => {
-      const confirmedAt = '2025-04-01T15:00:00.000Z';
-      const res = await request(app)
-        .post(`/api/v1/projects/${ids.project}/workday-reports`)
-        .set(await field(ids.resident))
-        .send({
-          clientReportId: crypto.randomUUID(),
-          wbsItemId: ids.items[0],
-          workdayDate: '2025-04-01',
-          reporterTimezone: 'Africa/Lagos',
-          summaryText: 'Blockwork to lintel level on the east wall.',
-          reportedQuantity: 5,
-          unitOfMeasure: 'm2',
-          isHoldPointClaimed: false,
-          clientCaptureIds: [],
-          textNotes: [],
-          submissionGeotag: { ...sitePoint, accuracyMeters: 5, isMocked: false, capturedAt: confirmedAt },
-          confirmedAt,
-          confirmedAsFinal: true,
-        });
-      assert.equal(res.status, 201, JSON.stringify(res.body));
-      const o = await prisma.reportingObligation.findFirstOrThrow({ where: { projectId: ids.project, boqItemId: ids.items[0] } });
-      assert.equal(o.status, 'SUBMITTED');
-      assert.equal(o.workdayReportId, res.body.data.id);
-    });
-
-    it('a project without streams is unchanged: implicit stream, obligations without a stream', async () => {
-      const view = await request(app).get(`/api/v1/projects/${ids.plain}/reporting-streams`).set(await web('monitor@insite.ng'));
-      assert.equal(view.status, 200);
-      assert.equal(view.body.data.usesImplicitDefault, true);
-      assert.equal(view.body.data.defaultStream.label, 'Default');
-      // A resident account works on the project, so verifier obligations are owed.
-      await session({ projectId: ids.plain, roleId: ids.residentRole, name: 'Plain Resident' });
-      await jobs.runJobOnce('reporting-obligations', new Date('2025-04-07T07:30:00Z'));
-      // Earlier dispatch ticks in this file already produced the previous week's rows; check this week only.
-      const obligations = await prisma.reportingObligation.findMany({ where: { projectId: ids.plain, periodStart: '2025-04-07' } });
-      assert.equal(obligations.length, 2, JSON.stringify(obligations.map((o) => [o.reporterScope, o.boqItemId, o.periodStart])));
-      assert.ok(obligations.every((o) => o.streamId === null && o.boqItemId !== null));
-      const all = await prisma.reportingObligation.findMany({ where: { projectId: ids.plain } });
-      assert.ok(all.every((o) => o.streamId === null && o.boqItemId !== null));
-    });
-
-    it('a live shape change waits for the stream’s next period', async () => {
-      const current = await request(app).get(`/api/v1/projects/${ids.project}/reporting-streams`).set(await web('monitor@insite.ng'));
-      const streams = (current.body.data.streams as Array<Record<string, unknown>>).map((s) => ({
-        id: s.id,
-        key: s.key,
-        label: s.label,
-        kind: s.kind,
-        roleIds: s.roleIds,
-        reportingCadence: s.reportingCadence,
-        visitType: s.visitType,
-        submissionDeadlineDays: s.submissionDeadlineDays,
-        quarterAnchorMonth: s.key === 'me-visit' ? 2 : s.quarterAnchorMonth,
-      }));
-      const res = await request(app).put(`/api/v1/projects/${ids.project}/reporting-streams`).set(await web('monitor@insite.ng')).send({ streams });
-      assert.equal(res.status, 200, JSON.stringify(res.body));
-      const me = (res.body.data.streams as Array<{ key: string; pendingChange: { effectiveFrom: string } | null; quarterAnchorMonth: number | null }>).find((s) => s.key === 'me-visit')!;
-      assert.ok(me.pendingChange, 'the anchor change is pending');
-      assert.equal(me.quarterAnchorMonth, null, 'the running quarter keeps its shape');
-      // Put it back so the rest of the file keeps calendar quarters.
-      const back = streams.map((s) => (s.key === 'me-visit' ? { ...s, quarterAnchorMonth: null } : s));
-      const reverted = await request(app).put(`/api/v1/projects/${ids.project}/reporting-streams`).set(await web('monitor@insite.ng')).send({ streams: back });
-      assert.equal(reverted.status, 200);
-      assert.equal((reverted.body.data.streams as Array<{ key: string; pendingChange: unknown }>).find((s) => s.key === 'me-visit')!.pendingChange, null);
+  describe('redesign R4f', () => {
+    it('reporting streams, obligations, the cadence overview and the inspection overview are gone', async () => {
+      const monitor = await web('monitor@insite.ng');
+      const base = `/api/v1/projects/${ids.project}`;
+      for (const [method, url] of [
+        ['get', `${base}/reporting-streams`],
+        ['put', `${base}/reporting-streams`],
+        ['get', `${base}/reporting-obligations`],
+        ['get', `${base}/cadence`],
+      ] as const) {
+        const res = await (request(app) as unknown as Record<string, (u: string) => request.Test>)[method](url).set(monitor).send({ streams: [] });
+        assert.equal(res.status, 404, `${method} ${url} answered ${res.status}`);
+      }
+      // The overview route is gone; the path falls through to GET /inspections/:id, which answers 404 for a non-UUID id.
+      const overview = await request(app).get(`${base}/inspections/overview`).set(monitor);
+      assert.equal(overview.status, 404);
+      const names = jobs.registeredJobs().map((j) => j.name);
+      for (const gone of ['reporting-obligations', 'overdue-reports']) assert.ok(!names.includes(gone), gone);
     });
   });
 
   describe('site inspections', () => {
     let firstId = '';
 
-    it('the mobile pack carries the streams the session owes and its templates', async () => {
+    it('the mobile pack carries the templates (no streams since R4f)', async () => {
       const res = await request(app).get(`/api/v1/projects/${ids.project}/inspections/field-pack`).set(await field(ids.inspector));
       assert.equal(res.status, 200, JSON.stringify(res.body));
-      assert.deepEqual(res.body.data.streams.map((s: { key: string }) => s.key), ['me-visit']);
+      assert.deepEqual(res.body.data.streams, []);
       assert.equal(res.body.data.canSubmitInspections, true);
       assert.ok(res.body.data.templateIdByVisitType.ROUTINE, 'a routine template is offered');
       const resident = await request(app).get(`/api/v1/projects/${ids.project}/inspections/field-pack`).set(await field(ids.resident));
-      assert.deepEqual(resident.body.data.streams.map((s: { key: string }) => s.key), ['resident']);
+      assert.equal(resident.status, 200, JSON.stringify(resident.body));
+      assert.deepEqual(resident.body.data.streams, []);
     });
 
-    it('is idempotent on clientReportId and fulfils the quarter', async () => {
+    it('is idempotent on clientReportId; no stream or reporting period (R4f)', async () => {
       const photo = await capture(ids.project, ids.inspector);
       const body = inspectionBody({
         answers: [
@@ -347,7 +245,8 @@ describe('Phase 14', () => {
       firstId = first.body.data.id;
       assert.equal(first.body.data.status, 'SUBMITTED');
       assert.equal(first.body.data.isLate, false);
-      assert.equal(first.body.data.streamId, ids.quarterlyStream);
+      assert.equal(first.body.data.streamId, null);
+      assert.equal(first.body.data.submissionDeadline, null);
       assert.equal(first.body.data.answers.find((a: { itemKey: string }) => a.itemKey === 'site-photo').captures.length, 1);
       const again = await request(app).post(`/api/v1/projects/${ids.project}/inspections`).set(await field(ids.inspector)).send(body);
       assert.equal(again.status, 200);
@@ -356,9 +255,8 @@ describe('Phase 14', () => {
       assert.equal(stolen.status, 409);
       assert.equal(stolen.body.error.code, 'REPORT_ID_CONFLICT');
       assert.equal(await prisma.siteInspectionReport.count({ where: { projectId: ids.project } }), 1);
-      const o = await prisma.reportingObligation.findFirstOrThrow({ where: { projectId: ids.project, boqItemId: null, periodStart: '2025-04-01' } });
-      assert.equal(o.status, 'SUBMITTED');
-      assert.equal(o.siteInspectionReportId, firstId);
+      const row = await prisma.siteInspectionReport.findUniqueOrThrow({ where: { id: firstId } });
+      assert.equal(row.reportingPeriodStart, null);
       assert.equal(await prisma.auditLog.count({ where: { projectId: ids.project, action: 'INSPECTION_SUBMITTED' } }), 1);
     });
 
@@ -423,19 +321,7 @@ describe('Phase 14', () => {
       assert.equal(unregistered.body.error.code, 'CAPTURES_NOT_REGISTERED');
     });
 
-    it('a missed quarterly visit becomes MISSED; a late upload still meets it, flagged late', async () => {
-      await jobs.runJobOnce('reporting-obligations', new Date('2025-07-01T07:30:00Z'));
-      const q3 = await prisma.reportingObligation.findFirstOrThrow({ where: { projectId: ids.project, boqItemId: null, periodStart: '2025-07-01' } });
-      assert.equal(q3.status, 'PENDING');
-      await jobs.runJobOnce('overdue-reports', new Date('2025-10-08T08:00:00Z'));
-      const missed = await prisma.reportingObligation.findUniqueOrThrow({ where: { id: q3.id } });
-      assert.equal(missed.status, 'MISSED');
-      const audit = await prisma.auditLog.findFirst({ where: { projectId: ids.project, action: 'REPORT_MISSED', summaryText: { contains: 'M&E visit' } } });
-      assert.ok(audit, 'the missed visit is audited');
-      const note = await prisma.webNotification.findFirst({ where: { projectId: ids.project, category: 'INSPECTION_MISSED' } });
-      assert.ok(note);
-      assert.equal(note.targetPermissionKey, 'inspections:view');
-
+    it('an upload long after the visit is accepted and not flagged late (no stream deadline since R4f)', async () => {
       const late = await request(app)
         .post(`/api/v1/projects/${ids.project}/inspections`)
         .set(await field(ids.inspector))
@@ -447,10 +333,9 @@ describe('Phase 14', () => {
           })
         );
       assert.equal(late.status, 201, JSON.stringify(late.body));
-      assert.equal(late.body.data.isLate, true);
-      assert.equal(late.body.data.submissionDeadline, '2025-10-06');
-      const met = await prisma.reportingObligation.findUniqueOrThrow({ where: { id: q3.id } });
-      assert.equal(met.status, 'LATE');
+      assert.equal(late.body.data.isLate, false);
+      assert.equal(late.body.data.submissionDeadline, null);
+      assert.equal(late.body.data.streamId, null);
     });
   });
 
@@ -580,18 +465,15 @@ describe('Phase 14', () => {
       assert.equal(back.body.data.returnedNotes, 'Add the progress percentage');
     });
 
-    it('lists filter by visit type, finding and lateness; the overview counts open findings and misses', async () => {
+    it('lists filter by finding and lateness', async () => {
       const monitor = await web('monitor@insite.ng');
       const late = await request(app).get(`/api/v1/projects/${ids.project}/inspections?late=true`).set(monitor);
       assert.equal(late.status, 200);
-      assert.ok(late.body.data.length >= 1 && late.body.data.every((i: { isLate: boolean }) => i.isLate));
+      assert.equal(late.body.data.length, 0, 'nothing is late without a stream deadline (R4f)');
+      const all = await request(app).get(`/api/v1/projects/${ids.project}/inspections`).set(monitor);
+      assert.ok(all.body.data.length >= 1);
       const major = await request(app).get(`/api/v1/projects/${ids.project}/inspections?overallFinding=MAJOR_ISSUES`).set(monitor);
       assert.equal(major.body.data.length, 1);
-      const overview = await request(app).get(`/api/v1/projects/${ids.project}/inspections/overview`).set(monitor);
-      assert.equal(overview.status, 200);
-      assert.equal(overview.body.data.openFindings, 1);
-      assert.equal(overview.body.data.baselineComplete, false);
-      assert.ok(overview.body.data.lastByVisitType.ROUTINE);
     });
   });
 

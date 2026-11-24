@@ -141,14 +141,23 @@ export function CompletionSection({ projectId }: { projectId: string }) {
 
 function FinalEvaluationLine({ projectId, completion }: { projectId: string; completion: ProjectCompletionDto }) {
   const f = completion.finalEvaluation;
-  if (f.inspectionId) {
-    return <p className="text-xs text-emerald-700">Final evaluation of {f.visitDate} approved.</p>;
+  if (f.visitId || f.inspectionId) {
+    return (
+      <p className="text-xs text-emerald-700">
+        Final evaluation of {f.visitDate} accepted.{" "}
+        {f.visitId && (
+          <Link to={`/app/projects/${projectId}/visits?visitId=${f.visitId}`} className="font-semibold text-brand-primary hover:underline">
+            Open the visit
+          </Link>
+        )}
+      </p>
+    );
   }
   return (
     <p className={`text-xs ${f.required ? "text-amber-800" : "text-slate-500"}`}>
-      {f.required ? "An approved final evaluation inspection is needed before the certificate can be drafted. " : "No approved final evaluation yet. "}
-      <Link to={`/app/projects/${projectId}/inspections`} className="font-semibold text-brand-primary hover:underline">
-        Inspections
+      {f.required ? "An accepted final evaluation visit is needed before the certificate can be drafted. " : "No accepted final evaluation yet. "}
+      <Link to={`/app/projects/${projectId}/visits`} className="font-semibold text-brand-primary hover:underline">
+        Visits
       </Link>
     </p>
   );

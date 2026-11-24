@@ -262,6 +262,76 @@ export async function freezeVisitFormSnapshot(
   return { id: row.id, snapshot, contentSha256: built.contentSha256, warnings: built.warnings };
 }
 
+/**
+ * Redesign R4c: the inputs for an Ad hoc form pinned to the component versions the phone used
+ * (D-R3.24, R3 note 12). Starts from the current bundle (scope, units, sprints) and swaps in the named
+ * template, section and sub-form versions; facilities point at the pinned sub-form for their own
+ * override or archetype. Refuses ids that are not the tenant's or not of the right kind.
+ */
+export async function buildPinnedAdHocBundle(
+  db: Db,
+  projectId: string,
+  components: { templateId: string; sectionIds: string[]; subFormIds: string[] }
+): Promise<VisitFormLibraryBundle> {
+  const bundle = await buildVisitFormLibraryBundle(db, projectId);
+  const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, select: { tenantId: true } });
+  const [template, sections, subForms] = await Promise.all([
+    db.visitFormTemplate.findFirst({ where: { id: components.templateId, tenantId: project.tenantId } }),
+    db.formSection.findMany({ where: { id: { in: components.sectionIds }, tenantId: project.tenantId } }),
+    db.facilitySubForm.findMany({ where: { id: { in: components.subFormIds }, tenantId: project.tenantId } }),
+  ]);
+  if (!template || template.visitKind !== 'AD_HOC') throw new AppError('The form template is not an Ad hoc template of this workspace', 409, 'FORM_SNAPSHOT_STALE');
+  if (sections.length !== new Set(components.sectionIds).size || subForms.length !== new Set(components.subFormIds).size) {
+    throw new AppError('A form component the phone used is not in this workspace', 409, 'FORM_SNAPSHOT_STALE');
+  }
+  const bySubject = new Map(subForms.map((s) => [s.subjectKey, s]));
+  return {
+    ...bundle,
+    templates: [
+      ...bundle.templates.filter((t) => t.visitKind !== 'AD_HOC'),
+      { id: template.id, code: template.code, version: template.version, name: template.name, visitKind: 'AD_HOC', blocks: parseLayout(template.layoutJson) },
+    ],
+    sections: sections
+      .sort((a, b) => a.code.localeCompare(b.code))
+      .map((s) => ({ id: s.id, code: s.code, version: s.version, title: s.title, description: s.description, fields: parseFields(s.fieldsJson) })),
+    subForms: subForms
+      .sort((a, b) => a.subjectKey.localeCompare(b.subjectKey))
+      .map((s) => ({ id: s.id, subjectKey: s.subjectKey, version: s.version, fields: parseFields(s.fieldsJson) })),
+    facilities: bundle.facilities.map((f) => ({
+      ...f,
+      subFormId: (bySubject.get(`FACILITY:${f.id}`) ?? bySubject.get(`ARCHETYPE:${f.archetype}`))?.id ?? null,
+    })),
+  };
+}
+
+/** Stores an already-assembled snapshot (R4c Ad hoc visits built on the phone and re-assembled here). */
+export async function storeVisitFormSnapshot(
+  tx: Prisma.TransactionClient,
+  input: { tenantId: string; projectId: string; snapshot: VisitFormSnapshot; builtAt: Date; builtByUserId: string | null }
+): Promise<{ id: string; contentSha256: string }> {
+  await lockFormLibrary(tx, input.tenantId);
+  const { snapshot } = input;
+  const contentSha256 = hashVisitFormSnapshot(snapshot);
+  const row = await tx.visitFormSnapshot.create({
+    data: {
+      tenantId: input.tenantId,
+      projectId: input.projectId,
+      visitKind: snapshot.context.visitKind,
+      visitDate: snapshot.context.visitDate,
+      sprintId: snapshot.context.sprint?.id ?? null,
+      templateId: snapshot.sources.template.id,
+      sectionIds: snapshot.sources.sections.map((s) => s.id),
+      subFormIds: [...new Set(snapshot.sources.subForms.map((s) => s.id))],
+      snapshotJson: snapshot as unknown as Prisma.InputJsonValue,
+      contentSha256,
+      schemaVersion: VISIT_FORM_SNAPSHOT_SCHEMA_VERSION,
+      builtAt: input.builtAt,
+      builtByUserId: input.builtByUserId,
+    },
+  });
+  return { id: row.id, contentSha256 };
+}
+
 /** A stored snapshot, parsed. */
 export async function getVisitFormSnapshot(db: Db, snapshotId: string): Promise<{ id: string; snapshot: VisitFormSnapshot; contentSha256: string }> {
   const row = await db.visitFormSnapshot.findUnique({ where: { id: snapshotId } });
@@ -272,10 +342,15 @@ export async function getVisitFormSnapshot(db: Db, snapshotId: string): Promise<
 }
 
 /**
- * For R4's "rebuild form": deletes a replaced snapshot. Nothing references snapshots in R3; R4 must
- * add its `Visit.formSnapshotId` check here before deleting.
+ * Deletes a replaced snapshot (R4 "rebuild form") unless a visit still points at it or a submission
+ * answered it.
  */
 export async function deleteSnapshotIfUnused(tx: Prisma.TransactionClient, snapshotId: string): Promise<boolean> {
+  const [visits, submissions] = await Promise.all([
+    tx.visit.count({ where: { formSnapshotId: snapshotId } }),
+    tx.visitSubmission.count({ where: { formSnapshotId: snapshotId } }),
+  ]);
+  if (visits > 0 || submissions > 0) return false;
   const deleted = await tx.visitFormSnapshot.deleteMany({ where: { id: snapshotId } });
   return deleted.count > 0;
 }

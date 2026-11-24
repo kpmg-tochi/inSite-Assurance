@@ -34,7 +34,6 @@ const CATEGORY_LABELS: Record<WebNotificationCategory, string> = {
   DEFECT_TICKET: "Defect",
   INSPECTION_PENDING_APPROVAL: "Inspection awaiting approval",
   INSPECTION_FINDING: "Inspection finding",
-  INSPECTION_MISSED: "Missed inspection",
   CONTRACT_MILESTONE: "Contract milestone",
   CONTRACT_DEFAULT_CASE: "Default case",
   DOCUMENT_SIGN_OFF: "Document sign-off",
@@ -42,6 +41,14 @@ const CATEGORY_LABELS: Record<WebNotificationCategory, string> = {
   CLOSURE: "Closure",
   LESSON_SHARED: "Lesson learned",
   PAYMENT_EXCEPTION: "Payment exception",
+  // Redesign R4
+  VISIT_RESCHEDULED: "Visit moved",
+  VISIT_DATE_PROPOSED: "New visit date proposed",
+  VISIT_DECLINED: "Visit declined",
+  VISIT_PENDING_APPROVAL: "Visit awaiting approval",
+  VISIT_MISSED: "Missed visit",
+  FINDING_ESCALATED: "Finding escalated",
+  SPRINT_VERIFICATION_DUE: "Sprint to verify",
 };
 
 interface NotificationsProps {

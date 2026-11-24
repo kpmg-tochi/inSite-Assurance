@@ -29,13 +29,23 @@ export interface KpiKickoffFact {
   attended: number;
 }
 
-export interface KpiObligationCounts {
-  /** Owed and past their late time, or no longer pending (excused excluded). */
-  due: number;
-  /** SUBMITTED (on time). */
-  onTime: number;
-  /** SUBMITTED or LATE. */
-  done: number;
+/** Redesign R4e: a visit as the KPIs see it (proposed and cancelled visits are not loaded). */
+export interface KpiVisitFact {
+  visitKind: string;
+  status: string;
+  origin: string;
+  plannedDate: string;
+  submissionDeadline: string | null;
+  /** A submission was made (any status). */
+  submitted: boolean;
+  /** A submission was confirmed by the deadline. */
+  submittedOnTime: boolean;
+}
+
+export interface KpiSprintFact {
+  endDate: string;
+  /** Day (project zone) of the first verification, if any. */
+  firstVerifiedDate: string | null;
 }
 
 export interface KpiDurationSum {
@@ -59,21 +69,21 @@ export interface KpiProjectFacts {
   kickoff: KpiKickoffFact | null;
   milestones: KpiMilestoneFact[];
   hasSupervisor: boolean;
+  /** Redesign R4e: a lead officer on a published visit that is not closed. */
+  hasVisitLead: boolean;
   /** Codes of document types with a non-archived document in the register. */
   documentTypeCodes: Set<string>;
-  activeStreamCount: number;
-  /** Visit types of the project's active inspection streams. */
-  inspectionStreamVisitTypes: string[];
+  /** An accepted baseline visit, or a legacy approved baseline inspection. */
   hasApprovedBaseline: boolean;
-  /** Any obligation was ever generated (the project reports on a cadence). */
-  hasObligations: boolean;
-  /** Obligations whose period starts in the KPI period. */
-  inspectionObligations: KpiObligationCounts;
-  allObligations: KpiObligationCounts;
+  /** Published visits dated or due near the KPI period. */
+  visits: KpiVisitFact[];
+  /** The project has any published visit (it is monitored by visits). */
+  hasVisits: boolean;
+  sprints: KpiSprintFact[];
   approvals: KpiDurationSum;
   /** The live (issued) Certificate of Completion. */
   certificate: { issuedDate: string; completionDate: string } | null;
-  /** Overall finding of the latest approved final evaluation. */
+  /** Overall finding of the latest accepted final evaluation visit (or legacy inspection). */
   finalEvaluationFinding: string | null;
   /** Stored closure checklist rows (key → status). */
   closureItemStatus: Map<string, string>;
@@ -140,8 +150,9 @@ export const KPI_FUNCTIONS: Record<KpiKey, KpiFn> = {
   },
   // Mobilisation ------------------------------------------------------------------------------
   supervisors_assigned: (f) => {
-    if (!f.typeConfig?.supervision.supervisorRoleCodes.length || !LIVE(f)) return null;
-    return one(f.hasSupervisor);
+    const tracked = Boolean(f.typeConfig?.supervision.supervisorRoleCodes.length) || (f.typeConfig?.monitoring.visitPlan.length ?? 0) > 0;
+    if (!tracked || !LIVE(f)) return null;
+    return one(f.hasSupervisor || f.hasVisitLead);
   },
   introduction_letters_on_time: (f, period) =>
     milestonesOnTime(f, period, (m) => m.requiredDocumentTypeCodes.includes('LETTER_OF_INTRODUCTION')),
@@ -152,28 +163,56 @@ export const KPI_FUNCTIONS: Record<KpiKey, KpiFn> = {
     return one(codes.every((c) => f.documentTypeCodes.has(c)));
   },
   // Monitoring and evaluation -----------------------------------------------------------------
-  monitoring_framework_established: (f) => {
-    const expected = (f.typeConfig?.reportingStreams.length ?? 0) > 0 || f.activeStreamCount > 0;
-    if (!expected || !UNDER_CONSTRUCTION(f)) return null;
-    return one(f.activeStreamCount > 0);
-  },
   baseline_uploaded: (f) => {
-    const usesBaseline =
-      f.inspectionStreamVisitTypes.includes('BASELINE') || Boolean(f.typeConfig?.inspections.templateCodeByVisitType.BASELINE);
+    const usesBaseline = Boolean(f.typeConfig?.monitoring.visitPlan.some((r) => r.visitKind === 'BASELINE'));
     if (!usesBaseline || !LIVE(f)) return null;
     return one(f.hasApprovedBaseline);
   },
-  visits_conducted: (f) => {
-    if (f.inspectionStreamVisitTypes.length === 0) return null;
-    return { numerator: f.inspectionObligations.done, denominator: f.inspectionObligations.due };
+  // D-R4.33: planned visits (not unscheduled) dated in the period, conducted ÷ resolved (submitted or missed).
+  visits_conducted: (f, period) => {
+    if (!f.hasVisits && !(f.typeConfig?.monitoring.visitPlan.length ?? 0)) return null;
+    let numerator = 0;
+    let denominator = 0;
+    for (const v of f.visits) {
+      if (v.origin === 'UNSCHEDULED' || !inPeriod(v.plannedDate, period)) continue;
+      const conducted = v.submitted || ['SUBMITTED', 'APPROVED', 'RETURNED'].includes(v.status);
+      if (!conducted && v.status !== 'MISSED') continue; // not due yet
+      denominator += 1;
+      if (conducted) numerator += 1;
+    }
+    return { numerator, denominator };
   },
-  reports_on_time: (f) => {
-    if (!f.hasObligations) return null;
-    return { numerator: f.allObligations.onTime, denominator: f.allObligations.due };
+  // D-R4.33: visits whose deadline fell in the period, submitted by it.
+  reports_on_time: (f, period) => {
+    if (!f.hasVisits && !(f.typeConfig?.monitoring.visitPlan.length ?? 0)) return null;
+    let numerator = 0;
+    let denominator = 0;
+    for (const v of f.visits) {
+      if (!v.submissionDeadline || !inPeriod(v.submissionDeadline, period)) continue;
+      if (!v.submitted && v.submissionDeadline >= f.today) continue; // still open
+      denominator += 1;
+      if (v.submittedOnTime) numerator += 1;
+    }
+    return { numerator, denominator };
   },
   approval_turnaround_days: (f) => {
     if (!f.requireReportApproval && f.approvals.count === 0) return null;
     return { numerator: f.approvals.totalDays, denominator: f.approvals.count };
+  },
+  // D-R4.34: sprints whose verification fell due in the period (end + verification days), verified by then.
+  sprints_verified_on_time: (f, period) => {
+    if (f.sprints.length === 0) return null;
+    const days = f.typeConfig?.monitoring.sprintVerificationDays ?? 7;
+    let numerator = 0;
+    let denominator = 0;
+    for (const s of f.sprints) {
+      const due = addDays(s.endDate, days);
+      if (!inPeriod(due, period)) continue;
+      if (!s.firstVerifiedDate && due >= f.today) continue; // not due yet
+      denominator += 1;
+      if (s.firstVerifiedDate && s.firstVerifiedDate <= due) numerator += 1;
+    }
+    return { numerator, denominator };
   },
   // Payments ----------------------------------------------------------------------------------
   financial_utilisation: (f) => {

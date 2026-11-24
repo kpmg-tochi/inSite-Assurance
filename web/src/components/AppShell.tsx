@@ -12,7 +12,6 @@ import {
   Settings,
   FolderKanban,
   ArrowRight,
-  ClipboardCheck,
   Handshake,
   Wrench,
   Globe2,
@@ -21,6 +20,7 @@ import {
   ListChecks,
   Lightbulb,
   Gauge,
+  CalendarDays,
 } from "lucide-react";
 import { CLOSURE_VIEW_PERMISSIONS } from "../pages/closure/ProjectClosurePage";
 import { MILESTONE_VIEW_PERMISSIONS } from "./contracts/contractUi";
@@ -48,7 +48,7 @@ const SHOW_RECENT_PROJECTS = false;
 
 /** Header page names for the project pages, by the path segment after /app/projects/:id/. */
 const PROJECT_PAGE_NAMES: Record<string, string> = {
-  inspections: "Inspections",
+  visits: "Visits",
   milestones: "Milestones",
   kickoff: "Kick-off",
   documents: "Documents",
@@ -64,6 +64,7 @@ const PROJECT_PAGE_NAMES: Record<string, string> = {
 
 /** Header page names for the pages that are not about one project, by the segment after /app/. */
 const WORKSPACE_PAGE_NAMES: Record<string, string> = {
+  visits: "Visit planner",
   portfolio: "Portfolio",
   projects: "All Projects",
   kpis: "Programme KPIs",
@@ -241,6 +242,23 @@ export function AppShell({
               </NavLink>
             )}
 
+            {/* Redesign R4: the visit planner */}
+            {hasPermission("visits:view") && (
+              <NavLink
+                to="/app/visits"
+                end
+                title="Visit planner"
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
+                    isActive ? "bg-white/15 text-white shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
+                  }`
+                }
+              >
+                <CalendarDays className="w-4 h-4 shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">Visit planner</span>}
+              </NavLink>
+            )}
+
             {/* Phase 16: programme KPIs */}
             {hasPermission("kpis:view") && (
               <NavLink
@@ -345,11 +363,11 @@ export function AppShell({
             )}
 
 
-            {/* Phase 14: site inspections and findings */}
-            {selectedProject && (hasPermission("inspections:view") || hasPermission("inspections:manage_findings")) && (
+            {/* Redesign R4: visits, findings and the site log */}
+            {selectedProject && hasPermission("visits:view") && (
               <NavLink
-                to={`${projectBasePath}/inspections`}
-                title="Inspections"
+                to={`${projectBasePath}/visits`}
+                title="Visits"
                 className={({ isActive }) =>
                   `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
                     isActive
@@ -358,10 +376,11 @@ export function AppShell({
                   }`
                 }
               >
-                <ClipboardCheck className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Inspections</span>}
+                <CalendarDays className="w-4 h-4 shrink-0" />
+                {!sidebarCollapsed && <span className="truncate">Visits</span>}
               </NavLink>
             )}
+
 
             {/* Phase 13: contract milestones (kick-off inside) and the document register */}
             {selectedProject && hasAnyPermission(...MILESTONE_VIEW_PERMISSIONS) && (

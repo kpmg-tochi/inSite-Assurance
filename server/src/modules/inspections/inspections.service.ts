@@ -5,7 +5,6 @@ import {
   ChecklistSections,
   InspectionAiFlag,
   InspectionAnswer,
-  InspectionOverviewDto,
   InspectionVisitType,
   InspectionVisitTypeEnum,
   INSPECTION_VISIT_TYPE_LABELS,
@@ -38,11 +37,10 @@ import {
 } from '../process/approvalChain';
 import { createMobileNotification, createWebNotification } from '../notifications/notifications.service';
 import { evaluateProjectGeofence, GEOFENCE_CONTEXT_SELECT } from '../../utils/geofenceEvaluation';
-import { CADENCE_PROJECT_SELECT, cadenceSettingsForDate, periodKeyForDate } from '../cadence/cadence.service';
-import { fulfilInspectionObligation, inspectionStreamFor, streamCadenceRow } from '../cadence/streams.service';
+import { CADENCE_PROJECT_SELECT } from '../cadence/cadence.service';
 import { toCaptureSummary } from '../workday-reports/workdayReports.service';
 import { parseSections } from './checklistTemplates.service';
-import { autoRaiseFindingsForInspection, serializeFinding, FINDING_INCLUDE, findingViewerFor } from './findings.service';
+import { autoRaiseFindingsForInspection, serializeFinding, FINDING_INCLUDE, findingViewerFor } from '../findings/findings.service';
 import { scheduleInspectionOmissionCheck } from '../workday-reports/aiOmissionCheck';
 import { autoCompleteMilestones, SYSTEM_ACTOR, webActor } from '../contracts/milestones.service';
 
@@ -76,7 +74,6 @@ export type InspectionPrincipal = { webUser: WebJwtPayload; fieldAgent?: undefin
 
 const INSPECTION_INCLUDE = {
   template: { select: { code: true, name: true, sectionsJson: true } },
-  stream: { select: { label: true } },
   captures: { include: { mediaAttachments: true }, orderBy: { capturedAtDevice: 'asc' } },
   findings: { include: FINDING_INCLUDE, orderBy: { createdAt: 'asc' } },
 } satisfies Prisma.SiteInspectionReportInclude;
@@ -106,7 +103,7 @@ function summaryOf(r: InspectionRow): SiteInspectionSummaryDto {
     clientReportId: r.clientReportId,
     projectId: r.projectId,
     streamId: r.streamId,
-    streamLabel: r.stream?.label ?? null,
+    streamLabel: null,
     visitType: r.visitType,
     templateId: r.templateId,
     templateCode: r.template.code,
@@ -179,6 +176,10 @@ export async function serializeInspection(r: InspectionRow, principal: Inspectio
 }
 
 async function loadInspection(db: Tx | typeof prisma, projectId: string, inspectionId: string): Promise<InspectionRow> {
+  // A non-UUID id (e.g. the removed /inspections/overview path) is simply not found.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(inspectionId)) {
+    throw new AppError('Inspection not found', 404, 'INSPECTION_NOT_FOUND');
+  }
   const row = await db.siteInspectionReport.findFirst({ where: { id: inspectionId, projectId }, include: INSPECTION_INCLUDE });
   if (!row) throw new AppError('Inspection not found', 404, 'INSPECTION_NOT_FOUND');
   return row;
@@ -365,14 +366,8 @@ export async function submitSiteInspection(params: {
   const captures = await loadInspectionCaptures(projectId, reporter, input.answers);
   const geotag = evaluateGeotag(input.submissionGeotag, project);
 
-  // The stream the visit answers, its period (of the visit date) and the upload deadline.
-  const stream = await inspectionStreamFor(prisma, projectId, {
-    visitType: input.visitType,
-    roleId: reporter.roleId,
-    projectContractorId: reporter.projectContractorId,
-  });
-  const period = stream ? periodKeyForDate(cadenceSettingsForDate(streamCadenceRow(project, stream), input.visitDate), input.visitDate) : null;
-  const deadline = inspectionSubmissionDeadline(input.visitDate, stream?.submissionDeadlineDays);
+  // Redesign R4f: reporting streams are gone (visits replace them); the default upload deadline applies.
+  const deadline = inspectionSubmissionDeadline(input.visitDate, undefined);
   const isLate = deadline !== null && confirmedDay > deadline;
 
   const config = await getProcessConfig(projectId);
@@ -395,7 +390,7 @@ export async function submitSiteInspection(params: {
         data: {
           clientReportId: input.clientReportId,
           projectId,
-          streamId: stream?.id ?? null,
+          streamId: null,
           visitType: input.visitType,
           templateId: template.id,
           templateVersion: template.version,
@@ -413,7 +408,7 @@ export async function submitSiteInspection(params: {
           submissionGeotag: (geotag ?? undefined) as unknown as Prisma.InputJsonValue | undefined,
           geofenceStatus: geotag?.geofenceStatus ?? null,
           status,
-          reportingPeriodStart: period?.hasObligations ? period.periodStart : null,
+          reportingPeriodStart: null,
           isLate,
           submissionDeadline: deadline,
           confirmedAt,
@@ -429,10 +424,6 @@ export async function submitSiteInspection(params: {
         });
         if (linked.count !== 1) throw new AppError('A capture is already linked to another report', 409, 'CAPTURE_ALREADY_LINKED');
       }
-      const obligationId =
-        stream && period?.hasObligations
-          ? await fulfilInspectionObligation(tx, { streamId: stream.id, periodStart: period.periodStart, inspectionId: report.id, isLate })
-          : null;
       const findings = await autoRaiseFindingsForInspection(tx, {
         projectId,
         inspectionId: report.id,
@@ -472,8 +463,6 @@ export async function submitSiteInspection(params: {
           visitType: input.visitType,
           templateId: template.id,
           templateVersion: template.version,
-          streamId: stream?.id ?? null,
-          obligationId,
           isLate,
           findingIds: findings,
           missingPhotoItemKeys: check.missingPhotoItemKeys,
@@ -622,50 +611,6 @@ export async function listSiteInspections(params: {
     take: 200,
   });
   return rows.map(summaryOf);
-}
-
-/** Accepted inspections: approved, or submitted on a project without report approval. */
-const ACCEPTED: SiteInspectionStatus[] = ['APPROVED', 'SUBMITTED'];
-
-export async function getInspectionOverview(projectId: string, now = new Date()): Promise<InspectionOverviewDto> {
-  const [latest, openFindings, missedInspections, baseline, nextDue] = await Promise.all([
-    Promise.all(
-      InspectionVisitTypeEnum.options.map(async (visitType) => {
-        const r = await prisma.siteInspectionReport.findFirst({
-          where: { projectId, visitType, status: { not: 'RETURNED' } },
-          orderBy: [{ visitDate: 'desc' }, { createdAt: 'desc' }],
-          select: { id: true, visitDate: true, status: true, overallFinding: true },
-        });
-        return [visitType, r] as const;
-      })
-    ),
-    prisma.inspectionFinding.count({ where: { projectId, status: 'OPEN' } }),
-    prisma.reportingObligation.count({ where: { projectId, boqItemId: null, status: 'MISSED' } }),
-    prisma.siteInspectionReport.count({ where: { projectId, visitType: 'BASELINE', status: { in: ACCEPTED } } }),
-    prisma.reportingObligation.findFirst({
-      where: { projectId, boqItemId: null, status: { in: ['PENDING', 'MISSED'] }, streamId: { not: null } },
-      orderBy: { dueAt: 'asc' },
-      include: { stream: { select: { label: true, visitType: true } } },
-    }),
-  ]);
-  void now;
-  return {
-    lastByVisitType: Object.fromEntries(latest) as InspectionOverviewDto['lastByVisitType'],
-    nextDue: nextDue?.streamId
-      ? {
-          streamId: nextDue.streamId,
-          streamLabel: nextDue.stream?.label ?? 'Site inspection',
-          visitType: nextDue.stream?.visitType ?? null,
-          periodStart: nextDue.periodStart,
-          periodEnd: nextDue.periodEnd,
-          dueAt: nextDue.lateAfter.toISOString(),
-          status: nextDue.status,
-        }
-      : null,
-    openFindings,
-    missedInspections,
-    baselineComplete: baseline > 0,
-  };
 }
 
 /** Whether a project's type names a visit type template; used by the mobile pack. */

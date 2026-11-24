@@ -1,12 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import {
-  DismissInspectionFindingRequestSchema,
   InspectionVisitTypeEnum,
   RaiseInspectionFindingRequestSchema,
   resolveProjectTypeConfig,
-  ResolveInspectionFindingRequestSchema,
   ReviewSiteInspectionRequestSchema,
-  SaveReportingStreamsRequestSchema,
   SubmitSiteInspectionRequestSchema,
 } from '@insite/shared';
 import { guardProjectRoutes, projectIdForFieldWrite } from '../../utils/accessControl';
@@ -21,22 +18,20 @@ import {
 import { validateBody } from '../../middleware/validate.middleware';
 import { AppError } from '../../middleware/error.middleware';
 import { prisma } from '../../config/prisma';
-import { getProjectReportingStreams, saveProjectReportingStreams } from '../cadence/streams.service';
 import {
-  getInspectionOverview,
   getSiteInspection,
   InspectionPrincipal,
   listSiteInspections,
   reviewSiteInspection,
   submitSiteInspection,
 } from './inspections.service';
-import { dismissInspectionFinding, listInspectionFindings, raiseInspectionFinding, resolveInspectionFinding } from './findings.service';
+import { raiseInspectionFinding } from '../findings/findings.service';
 import { getSupervisorWorkloads } from './supervision.service';
 import { buildMobileInspectionPack } from './inspectionPack.service';
 import { resolveTemplateForVisit } from './checklistTemplates.service';
 
 /**
- * Phase 14 project routes: reporting streams, site inspections, inspection findings and the
+ * Phase 14 project routes (legacy until R5): site inspections and the
  * supervision workload of a project's team. Mounted at /api/v1/projects (project guard applies).
  */
 const router = guardProjectRoutes(Router());
@@ -48,27 +43,6 @@ const wrap =
   (fn: (req: Request, res: Response) => Promise<void>) =>
   (req: Request, res: Response, next: NextFunction) =>
     fn(req, res).catch(next);
-
-// ---------------------------------------------------------------------------
-// Reporting streams
-// ---------------------------------------------------------------------------
-
-router.get(
-  '/:projectId/reporting-streams',
-  requireAnyAuthWithWebPermission('reports:view_all', 'projects:edit_baseline', 'inspections:view'),
-  wrap(async (req, res) => {
-    res.json({ success: true, data: await getProjectReportingStreams(String(req.params.projectId)) });
-  })
-);
-
-router.put(
-  '/:projectId/reporting-streams',
-  requirePermission('projects:edit_baseline'),
-  validateBody(SaveReportingStreamsRequestSchema),
-  wrap(async (req, res) => {
-    res.json({ success: true, data: await saveProjectReportingStreams(String(req.params.projectId), req.webUser!, req.body) });
-  })
-);
 
 // ---------------------------------------------------------------------------
 // Site inspections
@@ -93,13 +67,6 @@ router.get(
   })
 );
 
-router.get(
-  '/:projectId/inspections/overview',
-  requirePermission('inspections:view'),
-  wrap(async (req, res) => {
-    res.json({ success: true, data: await getInspectionOverview(String(req.params.projectId)) });
-  })
-);
 
 /** The checklist template this project uses for a visit type (web submission form). */
 router.get(
@@ -198,49 +165,7 @@ router.post(
 // Findings
 // ---------------------------------------------------------------------------
 
-router.get(
-  '/:projectId/inspection-findings',
-  requireAnyAuthWithWebPermission('inspections:view', 'inspections:manage_findings'),
-  wrap(async (req, res) => {
-    const data = await listInspectionFindings({
-      projectId: String(req.params.projectId),
-      principal: principalOf(req),
-      status: typeof req.query.status === 'string' ? req.query.status : undefined,
-      inspectionId: typeof req.query.inspectionId === 'string' ? req.query.inspectionId : undefined,
-    });
-    res.json({ success: true, data });
-  })
-);
-
-router.post(
-  '/:projectId/inspection-findings/:findingId/resolve',
-  requireAnyAuth,
-  validateBody(ResolveInspectionFindingRequestSchema),
-  wrap(async (req, res) => {
-    const data = await resolveInspectionFinding({
-      projectId: req.fieldAgent ? projectIdForFieldWrite(req) : String(req.params.projectId),
-      findingId: String(req.params.findingId),
-      principal: principalOf(req),
-      input: req.body,
-    });
-    res.json({ success: true, data });
-  })
-);
-
-router.post(
-  '/:projectId/inspection-findings/:findingId/dismiss',
-  requirePermission('inspections:manage_findings'),
-  validateBody(DismissInspectionFindingRequestSchema),
-  wrap(async (req, res) => {
-    const data = await dismissInspectionFinding({
-      projectId: String(req.params.projectId),
-      findingId: String(req.params.findingId),
-      webUser: req.webUser!,
-      input: req.body,
-    });
-    res.json({ success: true, data });
-  })
-);
+// Findings: moved to modules/findings/findings.routes.ts (redesign R4d; /inspection-findings is an alias).
 
 // ---------------------------------------------------------------------------
 // Supervision workload (team step)

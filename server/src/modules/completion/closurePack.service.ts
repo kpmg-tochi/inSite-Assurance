@@ -13,6 +13,10 @@ import {
   resolveTerminology,
   zonedCalendarDate,
   PAYMENT_KIND_LABELS,
+  VISIT_KIND_META,
+  VisitFormAnswer,
+  VisitFormSnapshotSchema,
+  VisitKind,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -296,6 +300,49 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
         findings: i.findings.map((f) => ({ severity: f.severity, title: f.description.slice(0, 160), status: f.status })),
       }),
       `inspection ${i.id}`
+    );
+  }
+
+  // 3b. Redesign R4d: visit summaries (the latest submission of every submitted visit).
+  const submissions = await prisma.visitSubmission.findMany({
+    where: { projectId, status: { in: ['APPROVED', 'PENDING_APPROVAL'] } },
+    include: { visit: { select: { id: true, visitKind: true, plannedDate: true, status: true } } },
+    orderBy: { visit: { plannedDate: 'asc' } },
+  });
+  for (const s of submissions) {
+    const snapshotRow = await prisma.visitFormSnapshot.findUnique({ where: { id: s.formSnapshotId }, select: { snapshotJson: true } });
+    const parsed = VisitFormSnapshotSchema.safeParse(snapshotRow?.snapshotJson);
+    const answers = new Map(((Array.isArray(s.answersJson) ? s.answersJson : []) as VisitFormAnswer[]).map((a) => [a.path, a]));
+    const items = parsed.success
+      ? parsed.data.blocks.flatMap((b) =>
+          b.fields.map((f) => {
+            const a = answers.get(f.path);
+            const value = a ? (Array.isArray(a.value) ? a.value.join(', ') : a.value === null || a.value === undefined ? `${a.captures?.length ?? 0} capture(s)` : String(a.value)) : 'not answered';
+            return { section: b.title, label: f.label, value, comment: a?.comment ?? null };
+          })
+        )
+      : [];
+    const findings = await prisma.inspectionFinding.findMany({ where: { visitSubmissionId: s.id }, select: { description: true, severity: true, status: true } });
+    const label = VISIT_KIND_META[s.visit.visitKind as VisitKind].label;
+    add(
+      `visits/${s.visit.plannedDate}-${s.visit.visitKind.toLowerCase()}-${s.visit.id.slice(0, 8)}.pdf`,
+      await generateInspectionSummaryPdf({
+        branding,
+        projectLabel: `[${project.codePrefix}] ${project.name}`,
+        title: `${label} of ${s.visit.plannedDate}`,
+        fields: [
+          ['Officer', `${s.reporterName} (${s.reporterRoleName})`],
+          ['Form', parsed.success ? `${parsed.data.sources.template.name} v${parsed.data.sources.template.version}` : '—'],
+          ['Overall finding', s.overallFinding.replace('_', ' ').toLowerCase()],
+          ['Status', s.status === 'APPROVED' ? 'accepted' : 'awaiting approval'],
+          ['Geofence', s.geofenceStatus ?? '—'],
+          ['Late', s.isLate ? 'yes' : 'no'],
+        ],
+        summary: s.summaryText,
+        items,
+        findings: findings.map((f) => ({ severity: f.severity, title: f.description.slice(0, 160), status: f.status })),
+      }),
+      `visit ${s.visit.id}`
     );
   }
 

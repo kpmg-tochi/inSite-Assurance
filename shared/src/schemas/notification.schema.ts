@@ -10,6 +10,12 @@ export const MobileNotificationTypeEnum = z.enum([
   'DEFECT_UPDATE',
   // Phase 14
   'INSPECTION_FINDING',
+  // Redesign R4
+  'VISIT_ASSIGNED',
+  'VISIT_CHANGED',
+  'VISIT_REMINDER',
+  'VISIT_RETURNED',
+  'VISIT_APPROVED',
 ]);
 export type MobileNotificationType = z.infer<typeof MobileNotificationTypeEnum>;
 
@@ -22,6 +28,8 @@ export const NotificationActionTypeEnum = z.enum([
   'OPEN_DEFECTS',
   // Phase 14
   'OPEN_INSPECTION_FINDINGS',
+  // Redesign R4
+  'OPEN_VISIT',
 ]);
 export type NotificationActionType = z.infer<typeof NotificationActionTypeEnum>;
 
@@ -42,6 +50,9 @@ export const MobileNotificationMetadataSchema = z
     defectTicketId: z.string().uuid().optional(),
     /** Phase 14: the inspection finding an INSPECTION_FINDING is about. */
     inspectionFindingId: z.string().uuid().optional(),
+    /** Redesign R4: the visit a VISIT_* notification is about (action OPEN_VISIT). */
+    visitId: z.string().uuid().optional(),
+    visitSubmissionId: z.string().uuid().optional(),
   })
   .passthrough();
 export type MobileNotificationMetadata = z.infer<
@@ -86,7 +97,6 @@ export const WebNotificationCategoryEnum = z.enum([
   // Phase 14
   'INSPECTION_PENDING_APPROVAL',
   'INSPECTION_FINDING',
-  'INSPECTION_MISSED',
   // Phase 13
   'CONTRACT_MILESTONE',
   'CONTRACT_DEFAULT_CASE',
@@ -97,6 +107,14 @@ export const WebNotificationCategoryEnum = z.enum([
   'LESSON_SHARED',
   // Redesign R1b: a payment recorded with an exception (e.g. final payment before the CoC)
   'PAYMENT_EXCEPTION',
+  // Redesign R4
+  'VISIT_RESCHEDULED',
+  'VISIT_DATE_PROPOSED',
+  'VISIT_DECLINED',
+  'VISIT_PENDING_APPROVAL',
+  'VISIT_MISSED',
+  'FINDING_ESCALATED',
+  'SPRINT_VERIFICATION_DUE',
 ]);
 export type WebNotificationCategory = z.infer<typeof WebNotificationCategoryEnum>;
 

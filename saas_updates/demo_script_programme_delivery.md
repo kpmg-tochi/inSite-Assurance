@@ -83,13 +83,23 @@
 
 **Open:** PRG-102 → Milestones.
 
-**Say:** "Central contracts allow 21 days from kick-off to mobilise. The contractor counts as on site the first time someone checks in inside the geofence, so nobody ticks a box. The letter of introduction and the mobilisation documents are tracked the same way."
+**Say:** "Central contracts allow 21 days from kick-off to mobilise. Officers visit every two weeks until the contractor is on site: the first accepted mobilisation check that says so completes the milestone, dated on the visit, and cancels the later checks. The letter of introduction and the mobilisation documents are tracked alongside."
+
+**Show:** PRG-102 → Visits: the proposed mobilisation checks (one in the demo window, published to `resident.supervisor@`).
 
 **Show:** the mobilisation compliance panel (documents still missing, days left).
 
 ### A3. Monitoring and evaluation (process slide: M&E)
 
-**Open:** PRG-105 → Dashboard: schedule badge (on track: computed from sprints; a project falls behind when a facility unit due by an ended sprint is not complete), KPI card, inspections card. **Then:** Scope & sprints: sprint 3 active, the classroom block and the toilet block with their lines.
+**Open:** PRG-105 → Dashboard: schedule badge (from sprint verification: an ended sprint verified partly met or not met, or left unverified past the verification period with a unit below 100%, puts the project behind), KPI card. **Then:** Scope & sprints: sprint statuses (Late, Verified), **Verify** on an ended sprint shows, per facility, the latest accepted visit's answers, unit progress and open findings.
+
+### A3a. Visits (redesign R4)
+
+**Login:** `programme.monitor@` (M&E manager). **Open:** Visit planner (left navigation): officers × days for the week; drag a visit to another day (asks for a note). Side panel: a date proposal waiting (accept it) and a declined visit (reassign it). **Then:** PRG-105 → Visits: the plan with confirmations, the warnings, **Generate from plan**, publish a proposed visit. Open a submitted visit: answers by section with photos per unit, check-in location, **Approve** or **Return**.
+
+**Say:** "Each visit's form is frozen when it is published, so the officer answers exactly what was planned. Open findings are added as re-check items to every visit that has not started. An accepted visit updates unit progress, raises findings from the form's rules, and emails the contractor the open findings."
+
+**Show:** Visits → Findings (open, resolved, dismissed; re-check count, escalated) and Site log.
 
 **Optional mobile:** sign in on the phone as `resident.supervisor@`. **Say:** "Field staff sign in with their own account and see all their sites at once. Contractors and beneficiaries have no login."
 
@@ -151,9 +161,9 @@
 
 ### B3. Supervision and inspections (process slide: M&E)
 
-**Login:** `programme.monitor@`. **Open:** PRG-211 → Inspections.
+**Login:** `programme.monitor@`. **Open:** PRG-211 → Visits.
 
-**Show:** the approved baseline survey, the late routine visit, the major finding aimed at the contractor. Then, as `programme.admin@`, Settings → Inspections & supervisors: the M&E officer (`me.officer@`) supervises more sites than the Co-Funded limit of 2. The system warns and never blocks. As `sahel.contractor@`, the same finding is waiting for the contractor to resolve.
+**Show:** the accepted baseline, the late routine visit, the major finding open past escalation (Findings tab). On PRG-221, the missed quarterly M&E visit. Then, as `programme.admin@`, Settings → Inspections & supervisors: the M&E officer (`me.officer@`) supervises more sites than the Co-Funded limit of 2. The system warns and never blocks. The contractor has no login: it gets the findings by email after each accepted visit.
 
 ### B4. Closure (process slide: Closure)
 

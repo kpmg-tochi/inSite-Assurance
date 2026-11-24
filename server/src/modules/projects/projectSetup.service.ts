@@ -13,20 +13,18 @@ import {
   ProjectGeofence,
   ProjectGeofenceSchema,
   ProjectPartiesStep,
-  ProjectReportingStep,
   ProjectSetupDto,
   ProjectSetupStepId,
   ProjectSiteStep,
   ProjectTeamStep,
+  ProjectVisitsStep,
   partyRulesFor,
   ProjectBeneficiaryInput,
   ReportingCadence,
   resolveProjectTypeConfig,
   SetupIssue,
   SetupStepStatus,
-  addDays,
-  nextPeriodStart,
-  zonedCalendarDate,
+
   ProjectContractStep,
   CONTRACT_MILESTONE_ANCHOR_META,
   FacilityArchetype,
@@ -48,7 +46,7 @@ import {
   serializeContractor,
   syncProjectContractors,
 } from './contractors.service';
-import { cadenceSettingsOf, serializeCadenceSettings } from '../cadence/cadence.service';
+import { serializeCadenceSettings } from '../cadence/cadence.service';
 import {
   applyProcessSettings,
   getProjectProcessSettings,
@@ -64,6 +62,8 @@ import {
 import { assertRegionUsable, REGION_SUMMARY_SELECT, regionSummary } from '../regions/regions.service';
 import type { ProjectProcessStep } from '@insite/shared';
 import { recomputeAndAudit, requiredAnchorsFor, syncContractMilestones, webActor } from '../contracts/milestones.service';
+import { proposeVisitsFromType } from '../visits/visitPlan.service';
+import { webVisitActor } from '../visits/visitCore';
 import { archiveBlockedReason, freezeMetAutomaticItems } from '../completion/closure.service';
 
 /**
@@ -352,6 +352,13 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
   // Reporting: always has valid defaults; the step must still be reviewed (saved) once.
   out.reporting = { issues: [], warnings: [] };
   out.team = { issues: [], warnings: [] };
+  // Redesign R4: optional; warns when nobody is set to carry out the proposed visits.
+  out.visits = {
+    issues: [],
+    warnings: project.defaultVisitOfficerIds.length
+      ? []
+      : [{ code: 'NO_VISIT_OFFICER', message: 'No visit officer is set: proposed visits need an officer before they are published.', field: 'officers' }],
+  };
 
   // Process: valid by construction (validated on save).
   out.process = { issues: [], warnings: [] };
@@ -500,6 +507,10 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
     },
     team: {
       userIds: project.userAssignments.map((a) => a.userId),
+    },
+    visits: {
+      workWeekDays: project.workWeekDays,
+      defaultOfficerIds: project.defaultVisitOfficerIds,
     },
     process: loaded.process,
     standards: loaded.standards,
@@ -885,42 +896,6 @@ const saveFacility: StepSaver = async ({ tx, project, input }) => {
 /** Redesign R2b: scope data is saved through /scope (or the workbook); saving marks the step reviewed. */
 const saveScope: StepSaver = async () => ({ changedFields: [] });
 
-/** Fields that change the shape of reporting periods (Phase 8). */
-const PERIOD_SHAPE_FIELDS = ['reportingCadence', 'workWeekDays', 'periodStartDayOfWeek', 'customIntervalDays', 'cadenceAnchorDate', 'cadenceQuarterAnchorMonth'] as const;
-
-/**
- * Saves cadence settings. On a live project a change to the period shape waits until the next
- * period starts (Phase 8: open obligations and the running period keep their shape); a change to
- * times or grace only applies at once (existing obligations keep their due time).
- */
-const saveReporting: StepSaver = async ({ tx, project, input }) => {
-  const data = Object.fromEntries(
-    Object.entries(input as ProjectReportingStep).filter(([, v]) => v !== undefined)
-  ) as ProjectReportingStep;
-  const current = serializeCadenceSettings(project);
-  const before: Record<string, unknown> = { ...current };
-  const changedFields = diffFields(before, data);
-  const shapeChanged = PERIOD_SHAPE_FIELDS.some(
-    (k) => data[k] !== undefined && JSON.stringify(data[k] ?? null) !== JSON.stringify(current[k] ?? null)
-  );
-  if (project.status === 'ACTIVE' && shapeChanged) {
-    const today = zonedCalendarDate(new Date(), project.timezone);
-    const effectiveFrom = nextPeriodStart(cadenceSettingsOf(project), new Date()) ?? addDays(today, 1);
-    const pending = { ...current, ...data };
-    delete (pending as Record<string, unknown>).timezone;
-    await tx.project.update({
-      where: { id: project.id },
-      data: { pendingCadenceJson: pending as unknown as Prisma.InputJsonValue, pendingCadenceEffectiveFrom: effectiveFrom },
-    });
-    return { changedFields, payload: { pendingCadenceEffectiveFrom: effectiveFrom } };
-  }
-  await tx.project.update({
-    where: { id: project.id },
-    data: { ...data, pendingCadenceJson: Prisma.DbNull, pendingCadenceEffectiveFrom: null },
-  });
-  return { changedFields };
-};
-
 const saveTeam: StepSaver = async ({ tx, project, webUser, input }) => {
   const data = input as ProjectTeamStep;
   const wanted = new Set(data.userIds);
@@ -1028,6 +1003,15 @@ const saveContract: StepSaver = async ({ tx, project, webUser, input }) => {
 /** Phase 7: standards and documents are saved through their own endpoints; saving marks the step reviewed. */
 const saveStandards: StepSaver = async () => ({ changedFields: [] });
 
+/** Redesign R4: the visits step saves the working days (officers have their own endpoint). */
+const saveVisits: StepSaver = async ({ tx, project, input }) => {
+  const data = input as ProjectVisitsStep;
+  const workWeekDays = [...new Set(data.workWeekDays)].sort((a, b) => a - b);
+  const changedFields = JSON.stringify(workWeekDays) === JSON.stringify(project.workWeekDays) ? [] : ['workWeekDays'];
+  if (changedFields.length) await tx.project.update({ where: { id: project.id }, data: { workWeekDays } });
+  return { changedFields };
+};
+
 const STEP_SAVERS: Record<ProjectSetupStepId, StepSaver> = {
   basics: saveBasics,
   parties: saveParties,
@@ -1035,9 +1019,9 @@ const STEP_SAVERS: Record<ProjectSetupStepId, StepSaver> = {
   site: saveSite,
   facility: saveFacility,
   scope: saveScope,
-  reporting: saveReporting,
   process: saveProcess,
   standards: saveStandards,
+  visits: saveVisits,
   team: saveTeam,
 };
 
@@ -1160,6 +1144,8 @@ export async function activateProject(projectId: string, webUser: WebJwtPayload)
     });
     // Phase 13: milestones counted from activation get their dates now.
     await syncContractMilestones(tx, projectId);
+    // Redesign R4 (D-R4.12): the type's visit plan proposes the project's visits.
+    await proposeVisitsFromType(tx, projectId, { trigger: 'ACTIVATION', actor: webVisitActor(webUser), now: activatedAt });
     await recordAuditEvent(tx, {
       projectId,
       actorType: 'WEB_USER',

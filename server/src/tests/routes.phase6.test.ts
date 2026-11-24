@@ -16,7 +16,6 @@ type PrismaClientType = typeof import('../config/prisma')['prisma'];
 
 let app: Express;
 let prisma: PrismaClientType;
-let runJobOnce: typeof import('../jobs')['runJobOnce'];
 
 const PASSWORD = 'Password123!';
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
@@ -78,7 +77,6 @@ before(async () => {
   const { createApp } = await import('../app');
   const jobs = await import('../jobs');
   jobs.registerAllJobs();
-  ({ runJobOnce } = jobs);
   app = createApp();
 
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: 'kpmg-nigeria' } });
@@ -210,12 +208,13 @@ describe('Phase 6', { concurrency: false }, () => {
       const crossing = { ...PERIMETER, perimeterCoordinates: [[3.39, 6.95], [3.4, 6.96], [3.4, 6.95], [3.39, 6.96]] };
       assert.equal((await step('site', { geofence: crossing })).status, 400);
       assert.equal((await step('site', { geofence: PERIMETER, timezone: 'Mars/Olympus' })).status, 400);
-      assert.equal((await step('reporting', { reportingCadence: 'DAILY', workdayStartTime: '17:00', workdayEndTime: '08:00' })).status, 400);
       const retention = await step('facility', { retention: { retentionPercentage: 5, retentionDurationMonths: null, retentionReleaseAtCompletionPct: 0 } });
       assert.equal(retention.status, 422);
       assert.equal(retention.body.error.code, 'RETENTION_DURATION_REQUIRED');
       // Redesign R2b: the BOQ step is now "Scope & sprints".
       assert.equal((await step('boq', {})).status, 404);
+      // Redesign R4f: the reporting step is gone (visits replace reporting obligations).
+      assert.equal((await step('reporting', { reportingCadence: 'DAILY', workdayStartTime: '07:00', workdayEndTime: '16:00' })).status, 404);
       assert.equal((await step('nonsense', {})).status, 404);
     });
 
@@ -231,11 +230,10 @@ describe('Phase 6', { concurrency: false }, () => {
         'site:GEOFENCE_REQUIRED',
         'scope:SPRINT_REQUIRED',
         'scope:SCOPE_REQUIRED',
-        'reporting:STEP_NOT_SAVED',
       ]) {
         assert.ok(codes.includes(expected), `missing ${expected} in ${codes.join(', ')}`);
       }
-      assert.ok(!codes.some((c: string) => c.startsWith('basics:') || c.startsWith('team:')));
+      assert.ok(!codes.some((c: string) => c.startsWith('basics:') || c.startsWith('team:') || c.startsWith('reporting:')));
       // R1d: there is no contractor model to choose any more.
       assert.ok(!codes.includes('parties:CONTRACTOR_MODEL_REQUIRED'));
     });
@@ -325,9 +323,6 @@ describe('Phase 6', { concurrency: false }, () => {
       assert.ok(!mobile.projects.some((p) => p.codePrefix === 'ENU-501'));
       const field = await request(app).get(`/api/v1/projects/${ids.draft}/notifications`).set(bearer(mobile.accessToken));
       assert.ok([403, 404].includes(field.status), String(field.status));
-
-      await runJobOnce('reporting-obligations');
-      assert.equal(await prisma.reportingObligation.count({ where: { projectId: ids.draft } }), 0);
     });
 
     it('saves every step and activates once', async () => {
@@ -369,10 +364,9 @@ describe('Phase 6', { concurrency: false }, () => {
       const scopeStep = await step('scope', {});
       assert.equal(scopeStep.status, 200, JSON.stringify(scopeStep.body));
       assert.equal(scopeStep.body.data.steps.find((x: { stepId: string }) => x.stepId === 'scope').complete, true);
-
-      const reporting = await step('reporting', { reportingCadence: 'WEEKLY', workdayStartTime: '07:30', workdayEndTime: '16:30' });
-      assert.equal(reporting.status, 200);
-      assert.equal(reporting.body.data.canActivate, true, JSON.stringify(reporting.body.data.steps));
+      // R4f: activation no longer needs a reporting save.
+      assert.equal(scopeStep.body.data.canActivate, true, JSON.stringify(scopeStep.body.data.steps));
+      assert.ok(!scopeStep.body.data.steps.some((x: { stepId: string }) => x.stepId === 'reporting'));
 
       const lender = await prisma.user.findUniqueOrThrow({ where: { email: 'lender@insite.ng' } });
       const team = await step('team', { userIds: [lender.id] });
@@ -403,7 +397,7 @@ describe('Phase 6', { concurrency: false }, () => {
       assert.equal(prefix.body.error.code, 'CODE_PREFIX_LOCKED');
       const ok = await step('basics', { ...basics, name: 'Phase 6 Test Clinic (renamed)' });
       assert.equal(ok.status, 200);
-      const lenderEdit = await step('reporting', { reportingCadence: 'DAILY', workdayStartTime: '07:00', workdayEndTime: '16:00' }, 'lender@insite.ng');
+      const lenderEdit = await step('basics', { ...basics, name: 'Lender rename' }, 'lender@insite.ng');
       assert.ok([403, 404].includes(lenderEdit.status));
     });
 
@@ -447,9 +441,9 @@ describe('Phase 6', { concurrency: false }, () => {
       const list = await request(app).get('/api/v1/projects').set(await as('monitor@insite.ng'));
       assert.equal(list.body.data.find((p: { id: string }) => p.id === ids.draft)?.status, 'ARCHIVED');
       const write = await request(app)
-        .put(`/api/v1/projects/${ids.draft}/setup/reporting`)
+        .put(`/api/v1/projects/${ids.draft}/setup/basics`)
         .set(await as('monitor@insite.ng'))
-        .send({ reportingCadence: 'DAILY', workdayStartTime: '07:00', workdayEndTime: '16:00' });
+        .send({ name: 'Archived rename', codePrefix: 'TST-601', stateLocation: 'Ogun State', totalBudgetNgn: 500_000_000 });
       assert.equal(write.status, 409);
       assert.equal(write.body.error.code, 'PROJECT_ARCHIVED');
       const again = await request(app).post(`/api/v1/projects/${ids.draft}/archive`).set(await as('monitor@insite.ng')).send({});
