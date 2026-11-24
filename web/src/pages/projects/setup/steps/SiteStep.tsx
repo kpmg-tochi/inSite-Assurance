@@ -70,13 +70,17 @@ export function SiteStep({ projectId, setup, readOnly }: StepProps) {
 
   return (
     <div className="space-y-5">
-      <StepSection title="Site geofence" description="Field captures and reports are checked against this boundary.">
+      <StepSection
+        title="Site geofence"
+        description={`Field captures and reports are checked against this boundary. A new radial boundary starts at the workspace default radius (${setup.site.tenantDefaultRadiusMeters} m); set this project's own radius below.`}
+      >
         <GeofenceEditor
           value={state.geofence}
           onChange={(geofence) => setState((s) => ({ ...s, geofence }))}
           enabledModes={setup.site.enabledGeofenceModes}
           lockedMode={setup.site.geofenceMode}
           toleranceMeters={Number.isFinite(toleranceValue) ? toleranceValue : 0}
+          defaultRadiusMeters={setup.site.tenantDefaultRadiusMeters}
           disabled={readOnly}
           error={geofenceError}
         />

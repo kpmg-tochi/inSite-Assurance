@@ -89,7 +89,6 @@ export interface CompletionCertificatePdfInput {
       name: string;
       roleName: string | null;
       organizationName: string | null;
-      registration: string | null;
       signedAtIso: string;
       statement: string;
       statementHash: string;
@@ -137,7 +136,6 @@ export function generateCompletionCertificatePdf(input: CompletionCertificatePdf
       const s = slot.signed;
       doc.fontSize(9).fillColor('#334155');
       doc.text(`${s.name}${s.roleName ? `, ${s.roleName}` : ''}${s.organizationName ? ` (${s.organizationName})` : ''}`);
-      if (s.registration) doc.text(`Professional registration: ${s.registration}`);
       doc.text(`Signed ${formatDateTimeInZone(s.signedAtIso, b.timeZone)}${s.recordedBy ? `; paper signature recorded by ${s.recordedBy}` : ''}`);
       doc.fontSize(8).fillColor('#64748b').text(`“${s.statement}”`);
       doc.fontSize(7).fillColor('#94a3b8').text(`Statement hash ${s.statementHash}`);

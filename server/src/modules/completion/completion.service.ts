@@ -18,7 +18,6 @@ import {
   UpdateCompletionCertificateRequest,
   defaultBeneficiaryAttestation,
   defaultCocStatement,
-  formatRegistration,
   resolveProjectTypeConfig,
   resolveTerminology,
   resolveTerm,
@@ -30,7 +29,6 @@ import { hasWebPermission, WebJwtPayload } from '../../middleware/auth.middlewar
 import { recordAuditEvent } from '../audit/audit.service';
 import { createWebNotification } from '../notifications/notifications.service';
 import { loadProjectOrgContext, organizationScopeAllows, ProjectOrgContext } from '../process/approvalChain';
-import { assertCertifierCredentials, credentialPolicyForProject } from '../credentials/credentialPolicy.service';
 import { registerUploadedDocumentTx, storeGeneratedDocument } from '../documents/documents.service';
 import {
   autoCompleteMilestones,
@@ -205,7 +203,6 @@ async function serializeCertificates(db: Db, rows: CertRow[], webUser: WebJwtPay
               signerName: sig.isBeneficiary ? sig.beneficiaryName ?? 'Beneficiary' : (sig.userId && userName.get(sig.userId)) || 'Unknown user',
               roleName: sig.roleId ? roleName.get(sig.roleId) ?? null : null,
               organizationName: sig.organizationId ? orgName.get(sig.organizationId) ?? null : null,
-              registration: sig.registrationText,
               isBeneficiary: sig.isBeneficiary,
               beneficiaryRole: sig.beneficiaryRole,
               evidenceDocumentId: sig.evidenceDocumentId,
@@ -310,7 +307,6 @@ export async function getProjectCompletion(projectId: string, webUser: WebJwtPay
       requireCocFor: resolveProjectTypeConfig(project.projectTypeSnapshotJson) ? config.requireCocFor : [],
       handoverDueDaysAfterCoc: config.handoverDueDaysAfterCoc,
       beneficiarySignatureMode: config.beneficiarySignatureMode,
-      cocSignatureUsesCertifierPolicy: config.cocSignatureUsesCertifierPolicy,
     },
     finalEvaluation: {
       required: config.requireFinalEvaluationBeforeCoc,
@@ -455,22 +451,6 @@ export async function signCompletionCertificate(projectId: string, webUser: WebJ
         const code = refusal.startsWith('You already signed') ? 'COC_ALREADY_SIGNED_ANOTHER_SLOT' : refusal.includes('already signed') ? 'COC_SLOT_SIGNED' : 'COC_CANNOT_SIGN';
         throw new AppError(refusal, code === 'COC_CANNOT_SIGN' ? 403 : 409, code);
       }
-      const project = await tx.project.findUniqueOrThrow({ where: { id: projectId }, select: { projectTypeSnapshotJson: true } });
-      const config = closureConfigOf(project.projectTypeSnapshotJson);
-      let registrationText: string | null = null;
-      if (config.cocSignatureUsesCertifierPolicy) {
-        const creds = await assertCertifierCredentials(tx, {
-          userId: webUser.userId,
-          tenantId: webUser.tenantId,
-          requirement: (await credentialPolicyForProject(projectId, tx)).certifier,
-          verb: 'signing the certificate',
-        });
-        registrationText = formatRegistration({
-          bodyCode: creds.snapshot.certifierLicenseType,
-          prefix: creds.snapshot.certifierRegistrationPrefix,
-          number: creds.snapshot.certifierLicenseNumber,
-        });
-      }
       const statement = input.statement ?? defaultCocStatement(cert.certificateNumber, slot.label);
       const statementHash = staffStatementHash(cert, slot.key, webUser.userId, statement);
       await tx.completionCertificateSignature.create({
@@ -481,7 +461,6 @@ export async function signCompletionCertificate(projectId: string, webUser: WebJ
           userId: webUser.userId,
           roleId: webUser.roleId,
           organizationId: webUser.organizationId,
-          registrationText,
           statement,
           statementHash,
         },
@@ -493,7 +472,7 @@ export async function signCompletionCertificate(projectId: string, webUser: WebJ
         actorDisplayName: actorName(webUser),
         action: 'COC_SIGNED',
         summaryText: `Signed Certificate of Completion ${cert.certificateNumber} as "${slot.label}".`,
-        payload: { certificateId: cert.id, slotKey: slot.key, statementHash, registration: registrationText },
+        payload: { certificateId: cert.id, slotKey: slot.key, statementHash },
       });
       await afterSignature(tx, projectId, cert.id, webUser);
     });
@@ -608,7 +587,7 @@ export async function renderCertificatePdf(db: Db, projectId: string, cert: Cert
         lenderOrganization: { select: { name: true } },
         monitorOrganization: { select: { name: true } },
         beneficiaries: { where: { isPrimary: true }, select: { name: true }, take: 1 },
-        contractors: { orderBy: [{ isMainContractor: 'desc' }, { createdAt: 'asc' }], select: { contractStatus: true, organization: { select: { name: true } } } },
+        contractors: { orderBy: [{ createdAt: 'asc' }], select: { contractStatus: true, organization: { select: { name: true } } } },
       },
     }),
     brandingFor(db, projectId),
@@ -650,7 +629,6 @@ export async function renderCertificatePdf(db: Db, projectId: string, cert: Cert
             name: s.signature.signerName,
             roleName: s.signature.isBeneficiary ? s.signature.beneficiaryRole : s.signature.roleName,
             organizationName: s.signature.isBeneficiary ? project.beneficiaries[0]?.name ?? null : s.signature.organizationName,
-            registration: s.signature.registration,
             signedAtIso: s.signature.signedAt,
             statement: s.signature.statement,
             statementHash: s.signature.statementHash,

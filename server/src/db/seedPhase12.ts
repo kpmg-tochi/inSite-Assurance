@@ -1,40 +1,27 @@
 import { Prisma } from "@prisma/client";
-import { ProjectTypeConfigSchema, TenantCredentialPolicy } from "@insite/shared";
+import { ProjectTypeConfigSchema } from "@insite/shared";
 import { prisma } from "../config/prisma";
-import { provisionDefaultRegistrationBodies } from "../modules/credentials/registrationBodies.service";
 import { PROGRAMME_TENANT_SLUG } from "./seedPhase11";
 
 /**
- * Phase 12 seed: configurable professional registration (redesign R1b removed payment milestones).
- * - Every tenant gets the six default registration bodies (tenant provisioning does the same).
- * - Programme tenant: registration OPTIONAL for certifiers and field assurance, on the tenant and on
- *   both project types; both types default new projects to 5% retention over 12 months. Type
+ * Phase 12 seed (redesign R1b removed payment milestones, R1d removed professional registration):
+ * - Programme tenant: both project types default new projects to 5% retention over 12 months. Type
  *   versions stay 1; project snapshots get the same config.
- * - A programme monitor with no registration on the profile (programme.monitor@insite.ng) and a
- *   funding-authority finance officer (programme.funder@insite.ng), both on the live Central project.
+ * - A programme monitor (programme.monitor@insite.ng) and a funding-authority finance officer
+ *   (programme.funder@insite.ng), both on the live Central project.
  * - Central project PRG-102: a BOQ in three bills (substructure, superstructure, finishes and
  *   WASH), 5% retention.
- * Other tenants keep no policy, so they behave as before (REQUIRED).
  */
 export async function seedPhase12(p: { passwordHash: string }) {
-  const tenants = await prisma.tenant.findMany({ select: { id: true } });
-  for (const t of tenants) await provisionDefaultRegistrationBodies(prisma, t.id);
-
   const tenant = await prisma.tenant.findUnique({ where: { slug: PROGRAMME_TENANT_SLUG } });
   if (!tenant) return;
-  const policy: TenantCredentialPolicy = { certifier: "OPTIONAL", fieldAssurance: "OPTIONAL" };
-  await prisma.tenant.update({
-    where: { id: tenant.id },
-    data: { credentialPolicyJson: policy as unknown as Prisma.InputJsonValue },
-  });
 
-  // Project types: credentials and payments. A seed write in place (version unchanged), as if the
+  // Project types: payments. A seed write in place (version unchanged), as if the
   // Phase 11 seed had created the types with these settings; project snapshots are refreshed too.
   const types = await prisma.projectType.findMany({ where: { tenantId: tenant.id } });
   for (const type of types) {
     const config = ProjectTypeConfigSchema.parse({
       ...(type.configJson as Record<string, unknown>),
-      credentials: { certifier: "OPTIONAL", fieldAssurance: "OPTIONAL" },
       payments: { retentionPercentage: 5, retentionDurationMonths: 12 },
     });
     await prisma.projectType.update({
@@ -57,7 +44,7 @@ export async function seedPhase12(p: { passwordHash: string }) {
   const central = await prisma.project.findFirst({ where: { tenantId: tenant.id, codePrefix: "PRG-102" } });
   if (!central) return;
 
-  // People: a monitor without a registration (policy OPTIONAL) and a finance officer.
+  // People: a monitor and a finance officer.
   const monitorOrg = await prisma.organization.findFirst({
     where: { tenantId: tenant.id, name: "Programme Monitoring Consultants" },
   });
@@ -70,11 +57,9 @@ export async function seedPhase12(p: { passwordHash: string }) {
         tenantId: tenant.id,
         email: "programme.monitor@insite.ng",
         passwordHash: p.passwordHash,
-        fullName: "Ngozi Eze (Programme Monitor, no registration on file)",
+        fullName: "Ngozi Eze (Programme Monitor)",
         roleId: monitorRole.id,
         organizationId: monitorOrg.id,
-        professionalRegistrationBodyCode: null,
-        professionalRegistrationNumber: null,
       },
     });
     await prisma.userProjectAssignment.create({ data: { userId: monitor.id, projectId: central.id } });
@@ -99,7 +84,6 @@ export async function seedPhase12(p: { passwordHash: string }) {
     where: { id: central.id },
     data: { retentionPercentage: 5, retentionDurationMonths: 12 },
   });
-  const contractor = await prisma.projectContractor.findFirst({ where: { projectId: central.id, isMainContractor: true } });
   const milestones = [
     {
       n: 1,
@@ -142,7 +126,6 @@ export async function seedPhase12(p: { passwordHash: string }) {
       await prisma.boqItem.create({
         data: {
           projectId: central.id,
-          projectContractorId: contractor?.id ?? null,
           wbsCode,
           section: m.section,
           description,

@@ -6,7 +6,6 @@ import {
   DefectCaptureDto,
   DefectTicketDto,
   OPEN_DEFECT_STATUSES,
-  RectifyDefectTicketRequest,
   RejectDefectTicketRequest,
   sanitizeHandoverLine,
   sanitizeHandoverText,
@@ -18,28 +17,15 @@ import { FieldAgentJwtPayload, hasWebPermission, WebJwtPayload } from '../../mid
 import { sendPushToFieldSession } from '../../integrations/push.service';
 import { recordAuditEvent } from '../audit/audit.service';
 import { createMobileNotification, createWebNotification } from '../notifications/notifications.service';
-import { getProcessConfig } from '../process/processConfig.service';
-import { contractorForWebUser } from '../projects/contractors.service';
 import { assertModuleOn, projectToday } from './closeoutGate';
 
 /**
- * Defect tickets for the defects liability period (Phase 10 Step 6).
- *
- * Two sides, told apart by organisation (never by role code): a web user whose organisation is a
- * contractor on the project, or a field session of the CONTRACTOR_EXECUTOR persona, is the liable
- * party and sees and updates only its own tickets (mark rectified). Everyone else with
- * retention:manage_defects is on the monitoring side: raise, assign, verify and close or reopen,
- * reject as not a defect. Rectification and verification photos are Phase 4 captures, linked by
- * their clientCaptureId.
- *
- * Field evidence follows the project's reporting set-up. When contractors report from site, the
- * contractor's repair photos come with "mark fixed". When only the monitoring side reports
- * (allowContractorFieldReporting off), the verifier captures the evidence: a verifier may close a
- * ticket straight from Open/Assigned after seeing the repair on site, and closing needs their photos.
- *
- * Notifications are aimed: contractor-facing ones reach only the liable contractor (its
- * organisation's web users, and field sessions joined through that contractor's join codes);
- * monitoring-side ones are hidden from every contractor on the project.
+ * Defect tickets for the defects liability period (Phase 10 Step 6), staff-only since redesign R1c/R1d
+ * (decision P2: the contractor has no login). Staff with retention:manage_defects raise tickets
+ * against the project's contractor (one per project, decision T), mark them as passed to the
+ * contractor (outside the platform), close them with an officer's site photos (from the field app),
+ * reopen a ticket awaiting verification, or reject one as not a defect. Photos are Phase 4 captures,
+ * linked by their clientCaptureId.
  */
 
 type Tx = Prisma.TransactionClient;
@@ -47,60 +33,35 @@ type Db = Tx | typeof prisma;
 
 const MANAGE = 'retention:manage_defects';
 
-export type DefectViewer =
-  | { kind: 'monitor'; label: string; userId: string | null; canAct: boolean; channel: 'web' | 'field' }
-  | { kind: 'contractor'; contractorId: string; label: string; userId: string | null; canAct: boolean; channel: 'web' | 'field' };
+/** Who is acting on a defect: a staff web user or an officer's field session. */
+export interface DefectViewer {
+  label: string;
+  userId: string | null;
+  canAct: boolean;
+  channel: 'web' | 'field';
+}
 
-export async function defectViewerFor(
-  projectId: string,
-  principal: { webUser?: WebJwtPayload; fieldAgent?: FieldAgentJwtPayload }
-): Promise<DefectViewer> {
+export function defectViewerFor(principal: { webUser?: WebJwtPayload; fieldAgent?: FieldAgentJwtPayload }): DefectViewer {
   if (principal.webUser) {
     const u = principal.webUser;
-    const canAct = u.permissions.includes(MANAGE) || u.isPlatformSuperAdmin;
-    const own = await contractorForWebUser(prisma, projectId, u);
-    const label = `${u.fullName} (${u.roleName})`;
-    if (own) return { kind: 'contractor', contractorId: own.id, label, userId: u.userId, canAct, channel: 'web' };
-    return { kind: 'monitor', label, userId: u.userId, canAct, channel: 'web' };
+    return { label: `${u.fullName} (${u.roleName})`, userId: u.userId, canAct: hasWebPermission(u, MANAGE), channel: 'web' };
   }
   const f = principal.fieldAgent!;
-  const canAct = f.permissions.includes(MANAGE);
-  const label = `${f.agentFullName} (${f.roleName}, field)`;
-  if (f.fieldPersonaType === 'CONTRACTOR_EXECUTOR') {
-    const session = await prisma.fieldAgentSession.findUniqueOrThrow({
-      where: { id: f.sessionId },
-      select: { projectContractorId: true },
-    });
-    const contractorId = session.projectContractorId ?? (await mainContractorId(prisma, projectId));
-    if (!contractorId) throw new AppError('This project has no contractor', 409, 'NO_CONTRACTOR');
-    return { kind: 'contractor', contractorId, label, userId: f.userId, canAct, channel: 'field' };
-  }
-  return { kind: 'monitor', label, userId: f.userId, canAct, channel: 'field' };
+  return { label: `${f.agentFullName} (${f.roleName}, field)`, userId: f.userId, canAct: f.permissions.includes(MANAGE), channel: 'field' };
 }
 
-async function mainContractorId(db: Db, projectId: string): Promise<string | null> {
-  const main = await db.projectContractor.findFirst({
+/**
+ * The liable contractor: the project's contractor (one per project, decision T). On a project that
+ * still has several from before R1d, the earliest one still under contract.
+ */
+export async function liableContractorId(db: Db, projectId: string): Promise<string> {
+  const contractor = await db.projectContractor.findFirst({
     where: { projectId },
-    orderBy: [{ isMainContractor: 'desc' }, { createdAt: 'asc' }],
+    orderBy: [{ contractStatus: 'asc' }, { createdAt: 'asc' }],
     select: { id: true },
   });
-  return main?.id ?? null;
-}
-
-/** The liable contractor: the named one (must be on the project), or the main contractor in the unified model. */
-export async function liableContractorId(db: Db, projectId: string, requested: string | null | undefined): Promise<string> {
-  if (requested) {
-    const c = await db.projectContractor.findFirst({ where: { id: requested, projectId }, select: { id: true } });
-    if (!c) throw new AppError('Contractor not found on this project', 404, 'CONTRACTOR_NOT_FOUND');
-    return c.id;
-  }
-  const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, select: { contractorExecutionMode: true } });
-  if (project.contractorExecutionMode === 'MULTI_PRIME_SEPARATE_IPC') {
-    throw new AppError('Choose the contractor responsible for this defect', 422, 'CONTRACTOR_REQUIRED');
-  }
-  const main = await mainContractorId(db, projectId);
-  if (!main) throw new AppError('This project has no contractor', 409, 'NO_CONTRACTOR');
-  return main;
+  if (!contractor) throw new AppError('This project has no contractor', 409, 'NO_CONTRACTOR');
+  return contractor.id;
 }
 
 async function assertDefectPhase(db: Db, projectId: string) {
@@ -108,12 +69,6 @@ async function assertDefectPhase(db: Db, projectId: string) {
   if (project.constructionPhase !== 'HANDOVER_IN_PROGRESS' && project.constructionPhase !== 'RETENTION_PERIOD') {
     throw new AppError('Defect tickets are raised during handover and the defects liability period.', 409, 'PROJECT_PHASE_NOT_DEFECTS');
   }
-}
-
-/** True when only the monitoring side reports from site, so it captures the repair evidence. */
-async function monitorCapturesEvidence(projectId: string, db: Db = prisma): Promise<boolean> {
-  const config = await getProcessConfig(projectId, db === prisma ? undefined : db);
-  return !config.allowContractorFieldReporting;
 }
 
 async function nextTicketNumber(tx: Tx, projectId: string): Promise<number> {
@@ -150,31 +105,12 @@ export async function flushDefectPushes(pushes: PushQueue) {
   }
 }
 
-/**
- * Field sessions of the liable contractor: CONTRACTOR_EXECUTOR sessions whose join code bound them
- * to this contractor, plus project-wide contractor sessions when it is the main contractor.
- */
-async function contractorSessionIds(db: Db, projectId: string, contractorId: string): Promise<string[]> {
-  const contractor = await db.projectContractor.findUniqueOrThrow({ where: { id: contractorId }, select: { isMainContractor: true } });
-  const sessions = await db.fieldAgentSession.findMany({
-    where: {
-      projectId,
-      isActive: true,
-      fieldPersonaType: 'CONTRACTOR_EXECUTOR',
-      OR: [{ projectContractorId: contractorId }, ...(contractor.isMainContractor ? [{ projectContractorId: null }] : [])],
-    },
-    select: { id: true },
-  });
-  return sessions.map((s) => s.id);
-}
-
-/** Field sessions on the monitoring side whose role may verify defects. */
+/** Field sessions whose role may verify defects. */
 async function verifierSessionIds(db: Db, projectId: string): Promise<string[]> {
   const sessions = await db.fieldAgentSession.findMany({
     where: {
       projectId,
       isActive: true,
-      fieldPersonaType: { not: 'CONTRACTOR_EXECUTOR' },
       role: { rolePermissions: { some: { permission: { key: MANAGE } } } },
     },
     select: { id: true },
@@ -197,28 +133,7 @@ async function notifySessions(tx: Tx, pushes: PushQueue, projectId: string, sess
   }
 }
 
-/** Contractor-facing: only the liable contractor's web users and its field sessions. */
-async function notifyContractor(
-  tx: Tx,
-  pushes: PushQueue,
-  params: { projectId: string; contractorId: string; ticketId: string; title: string; description: string }
-) {
-  const contractor = await tx.projectContractor.findUniqueOrThrow({ where: { id: params.contractorId }, select: { organizationId: true } });
-  await createWebNotification(tx, {
-    projectId: params.projectId,
-    targetPermissionKey: MANAGE,
-    targetOrganizationId: contractor.organizationId,
-    category: 'DEFECT_TICKET',
-    title: params.title,
-    description: params.description,
-    actionUrl: `/app/projects/${params.projectId}/retention?ticket=${params.ticketId}`,
-    metadata: { defectTicketId: params.ticketId },
-  });
-  const sessions = await contractorSessionIds(tx, params.projectId, params.contractorId);
-  await notifySessions(tx, pushes, params.projectId, sessions, params.title, params.description, params.ticketId);
-}
-
-/** Monitoring side: hidden from every contractor on the project; optionally the verifiers' devices too. */
+/** Staff with retention:manage_defects; optionally the verifiers' devices too. */
 async function notifyMonitors(
   tx: Tx,
   pushes: PushQueue,
@@ -227,7 +142,6 @@ async function notifyMonitors(
   await createWebNotification(tx, {
     projectId: params.projectId,
     targetPermissionKey: MANAGE,
-    hideFromProjectContractors: true,
     category: 'DEFECT_TICKET',
     title: params.title,
     description: params.description,
@@ -255,10 +169,9 @@ async function serializeTickets(
   db: Db,
   rows: TicketRow[],
   viewer: DefectViewer,
-  today: string,
-  monitorEvidence: boolean
+  today: string
 ): Promise<DefectTicketDto[]> {
-  const captureIds = rows.flatMap((r) => [...ids(r.rectificationCaptureIds), ...ids(r.verificationCaptureIds)]);
+  const captureIds = rows.flatMap((r) => ids(r.verificationCaptureIds));
   const [captures, items, users] = await Promise.all([
     captureIds.length
       ? db.fieldEvidenceLog.findMany({
@@ -298,8 +211,7 @@ async function serializeTickets(
 
   return rows.map((t) => {
     const open = OPEN_DEFECT_STATUSES.includes(t.status);
-    const monitorSide = viewer.kind === 'monitor' && viewer.canAct;
-    const ownTicket = viewer.kind === 'contractor' && viewer.contractorId === t.projectContractorId && viewer.canAct;
+    const staff = viewer.canAct;
     const gate = (checks: Array<[boolean, string]>) => {
       const failed = checks.find(([ok]) => !ok);
       return { allowed: !failed, reason: failed ? failed[1] : null };
@@ -307,8 +219,6 @@ async function serializeTickets(
     const awaiting = t.status === 'RECTIFIED_PENDING_VERIFICATION';
     const openOrAssigned = t.status === 'OPEN' || t.status === 'ASSIGNED';
     const item = t.boqItemId ? itemById.get(t.boqItemId) : null;
-    // Snag photos are stakeholder uploads; only the monitoring side sees them.
-    const snagPhotoKeys = viewer.kind === 'monitor' ? ids(t.snagPhotoKeys) : [];
     return {
       id: t.id,
       projectId: t.projectId,
@@ -325,37 +235,28 @@ async function serializeTickets(
       boqItemId: t.boqItemId,
       boqItemLabel: item ? `${item.wbsCode} ${item.description}` : null,
       sourceHandoverSubmissionId: t.sourceHandoverSubmissionId,
-      snagPhotoKeys,
       raisedByName: nameById.get(t.raisedByUserId) ?? null,
-      rectificationNotes: t.rectificationNotes,
-      rectificationCaptures: toCaptures(ids(t.rectificationCaptureIds)),
-      rectifiedAt: t.rectifiedAt?.toISOString() ?? null,
       verificationNotes: t.verificationNotes,
       verificationCaptures: toCaptures(ids(t.verificationCaptureIds)),
       verifiedByName: t.verifiedByLabel ?? (t.verifiedByUserId ? nameById.get(t.verifiedByUserId) ?? null : null),
       verifiedAt: t.verifiedAt?.toISOString() ?? null,
       resolutionReason: t.resolutionReason,
       reopenCount: t.reopenCount,
-      evidenceCapturedBy: monitorEvidence ? 'MONITOR' : 'CONTRACTOR',
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
       actions: {
         assign: gate([
-          [monitorSide, 'Only the monitoring side assigns defects.'],
+          [staff, 'You cannot manage defects on this project.'],
           [openOrAssigned, 'Only an open ticket can be assigned.'],
         ]),
-        rectify: gate([
-          [ownTicket, 'Only the responsible contractor marks a defect as fixed.'],
-          [openOrAssigned, 'Only an open ticket can be marked as fixed.'],
-        ]),
         verify: gate([
-          [monitorSide, 'Only the monitoring side verifies repairs.'],
-          [awaiting || (monitorEvidence && openOrAssigned), 'Nothing is waiting for verification.'],
-          // With monitor-captured evidence, closing needs site photos: that happens in the field app.
-          [!(monitorEvidence && openOrAssigned && viewer.channel === 'web'), 'Close it from the field app with photos of the repair.'],
+          [staff, 'You cannot manage defects on this project.'],
+          [awaiting || openOrAssigned, 'Nothing is waiting for verification.'],
+          // Closing needs the officer's site photos: that happens in the field app.
+          [!(openOrAssigned && viewer.channel === 'web'), 'Close it from the field app with photos of the repair.'],
         ]),
         reject: gate([
-          [monitorSide, 'Only the monitoring side can reject a ticket.'],
+          [staff, 'You cannot manage defects on this project.'],
           [openOrAssigned, 'Only an open ticket can be rejected.'],
         ]),
       },
@@ -363,10 +264,9 @@ async function serializeTickets(
   });
 }
 
-async function loadVisibleTicket(db: Db, projectId: string, ticketId: string, viewer: DefectViewer) {
+async function loadTicket(db: Db, projectId: string, ticketId: string) {
   const ticket = await db.retentionDefectTicket.findFirst({ where: { id: ticketId, projectId }, include: TICKET_INCLUDE });
-  // A contractor never learns that another contractor's ticket exists.
-  if (!ticket || (viewer.kind === 'contractor' && ticket.projectContractorId !== viewer.contractorId)) {
+  if (!ticket) {
     throw new AppError('Defect ticket not found', 404, 'DEFECT_TICKET_NOT_FOUND');
   }
   return ticket;
@@ -381,26 +281,26 @@ async function todayFor(db: Db, projectId: string) {
 export async function listDefectTickets(projectId: string, viewer: DefectViewer): Promise<DefectTicketDto[]> {
   await assertModuleOn(projectId, 'retention');
   const rows = await prisma.retentionDefectTicket.findMany({
-    where: { projectId, ...(viewer.kind === 'contractor' ? { projectContractorId: viewer.contractorId } : {}) },
+    where: { projectId },
     include: TICKET_INCLUDE,
     orderBy: [{ ticketNumber: 'desc' }],
   });
-  return serializeTickets(prisma, rows, viewer, await todayFor(prisma, projectId), await monitorCapturesEvidence(projectId));
+  return serializeTickets(prisma, rows, viewer, await todayFor(prisma, projectId));
 }
 
 export async function getDefectTicket(projectId: string, ticketId: string, viewer: DefectViewer): Promise<DefectTicketDto> {
   await assertModuleOn(projectId, 'retention');
-  const row = await loadVisibleTicket(prisma, projectId, ticketId, viewer);
-  return (await serializeTickets(prisma, [row], viewer, await todayFor(prisma, projectId), await monitorCapturesEvidence(projectId)))[0];
+  const row = await loadTicket(prisma, projectId, ticketId);
+  return (await serializeTickets(prisma, [row], viewer, await todayFor(prisma, projectId)))[0];
 }
 
 // ---------------------------------------------------------------------------
 // Transitions
 // ---------------------------------------------------------------------------
 
-function requireMonitorSide(viewer: DefectViewer) {
-  if (viewer.kind !== 'monitor' || !viewer.canAct) {
-    throw new AppError('Only the monitoring side can do this', 403, 'FORBIDDEN_DEFECT_ACTION');
+function requireStaff(viewer: DefectViewer) {
+  if (!viewer.canAct) {
+    throw new AppError(`Access requires permission(s): ${MANAGE}`, 403, 'FORBIDDEN_DEFECT_ACTION');
   }
 }
 
@@ -432,7 +332,7 @@ export async function createTicketInTx(
     location?: string | null;
     dueDate?: string | null;
     assign: boolean;
-    source?: { submissionId: string; snagIndex: number; photoKeys: string[] };
+    source?: { submissionId: string; snagIndex: number };
   }
 ) {
   const ticketNumber = await nextTicketNumber(tx, params.projectId);
@@ -452,7 +352,6 @@ export async function createTicketInTx(
       raisedByUserId: params.raisedByUserId,
       sourceHandoverSubmissionId: params.source?.submissionId ?? null,
       sourceSnagIndex: params.source?.snagIndex ?? null,
-      snagPhotoKeys: (params.source?.photoKeys ?? []) as Prisma.InputJsonValue,
     },
     include: TICKET_INCLUDE,
   });
@@ -462,7 +361,7 @@ export async function createTicketInTx(
     params.viewer,
     'DEFECT_TICKET_RAISED',
     `Raised ${reference(ticketNumber)} "${ticket.title}" (${ticket.severity}) against ${ticket.projectContractor.organization.name}` +
-      (params.source ? ' from a stakeholder handover snag.' : '.'),
+      (params.source ? ' from a handover snag.' : '.'),
     {
       defectTicketId: ticket.id,
       reference: reference(ticketNumber),
@@ -473,26 +372,17 @@ export async function createTicketInTx(
       sourceSnagIndex: params.source?.snagIndex ?? null,
     }
   );
-  if (params.assign) {
-    await notifyContractor(tx, pushes, {
-      projectId: params.projectId,
-      contractorId: ticket.projectContractorId,
-      ticketId: ticket.id,
-      title: `${reference(ticketNumber)} assigned: ${ticket.title}`,
-      description: `A defect was assigned to ${ticket.projectContractor.organization.name}${ticket.dueDate ? `, due ${ticket.dueDate}` : ''}.`,
-    });
-  }
   return ticket;
 }
 
 /** POST /projects/:projectId/defects */
 export async function createDefectTicket(projectId: string, viewer: DefectViewer, input: CreateDefectTicketRequest) {
   await assertModuleOn(projectId, 'retention');
-  requireMonitorSide(viewer);
+  requireStaff(viewer);
   const pushes: PushQueue = [];
   const id = await prisma.$transaction(async (tx) => {
     await assertDefectPhase(tx, projectId);
-    const contractorId = await liableContractorId(tx, projectId, input.projectContractorId);
+    const contractorId = await liableContractorId(tx, projectId);
     if (input.boqItemId) {
       const item = await tx.boqItem.findFirst({ where: { id: input.boqItemId, projectId }, select: { id: true } });
       if (!item) throw new AppError('BOQ item not found', 404, 'BOQ_ITEM_NOT_FOUND');
@@ -516,115 +406,54 @@ export async function createDefectTicket(projectId: string, viewer: DefectViewer
   return getDefectTicket(projectId, id, viewer);
 }
 
-/** POST /projects/:projectId/defects/:ticketId/assign */
+/** POST /projects/:projectId/defects/:ticketId/assign: the ticket was passed to the contractor (outside the platform). */
 export async function assignDefectTicket(projectId: string, ticketId: string, viewer: DefectViewer, input: AssignDefectTicketRequest) {
   await assertModuleOn(projectId, 'retention');
-  requireMonitorSide(viewer);
-  const pushes: PushQueue = [];
+  requireStaff(viewer);
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "retention_defect_tickets" WHERE id = ${ticketId}::uuid FOR UPDATE`;
-    const ticket = await loadVisibleTicket(tx, projectId, ticketId, viewer);
+    const ticket = await loadTicket(tx, projectId, ticketId);
     if (ticket.status !== 'OPEN' && ticket.status !== 'ASSIGNED') {
       throw new AppError('Only an open ticket can be assigned', 409, 'DEFECT_TICKET_NOT_OPEN');
     }
-    const contractorId = await liableContractorId(tx, projectId, input.projectContractorId);
     const updated = await tx.retentionDefectTicket.update({
       where: { id: ticket.id },
       data: {
-        projectContractorId: contractorId,
         status: 'ASSIGNED',
         assignedAt: new Date(),
         ...(input.dueDate !== undefined ? { dueDate: input.dueDate } : {}),
       },
       include: TICKET_INCLUDE,
     });
-    await audit(tx, projectId, viewer, 'DEFECT_TICKET_UPDATED', `Assigned ${reference(ticket.ticketNumber)} to ${updated.projectContractor.organization.name}.`, {
+    await audit(tx, projectId, viewer, 'DEFECT_TICKET_UPDATED', `Passed ${reference(ticket.ticketNumber)} to ${updated.projectContractor.organization.name}.`, {
       defectTicketId: ticket.id,
       from: ticket.status,
       to: 'ASSIGNED',
-      projectContractorId: contractorId,
-      previousProjectContractorId: ticket.projectContractorId,
+      projectContractorId: ticket.projectContractorId,
       dueDate: updated.dueDate,
     });
-    await notifyContractor(tx, pushes, {
-      projectId,
-      contractorId,
-      ticketId: ticket.id,
-      title: `${reference(ticket.ticketNumber)} assigned: ${ticket.title}`,
-      description: `A defect was assigned to ${updated.projectContractor.organization.name}${updated.dueDate ? `, due ${updated.dueDate}` : ''}.`,
-    });
   });
-  await flushDefectPushes(pushes);
-  return getDefectTicket(projectId, ticketId, viewer);
-}
-
-/** POST /projects/:projectId/defects/:ticketId/rectify: the liable contractor reports the repair. */
-export async function rectifyDefectTicket(projectId: string, ticketId: string, viewer: DefectViewer, input: RectifyDefectTicketRequest) {
-  await assertModuleOn(projectId, 'retention');
-  if (viewer.kind !== 'contractor' || !viewer.canAct) {
-    throw new AppError('Only the responsible contractor marks a defect as fixed', 403, 'FORBIDDEN_DEFECT_ACTION');
-  }
-  const pushes: PushQueue = [];
-  await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "retention_defect_tickets" WHERE id = ${ticketId}::uuid FOR UPDATE`;
-    const ticket = await loadVisibleTicket(tx, projectId, ticketId, viewer);
-    if (ticket.status !== 'OPEN' && ticket.status !== 'ASSIGNED') {
-      throw new AppError('Only an open ticket can be marked as fixed', 409, 'DEFECT_TICKET_NOT_OPEN');
-    }
-    await assertCapturesInProject(tx, projectId, input.captureIds);
-    await tx.retentionDefectTicket.update({
-      where: { id: ticket.id },
-      data: {
-        status: 'RECTIFIED_PENDING_VERIFICATION',
-        rectificationCaptureIds: [...new Set(input.captureIds)],
-        rectificationNotes: input.notes ? sanitizeHandoverText(input.notes, 2000) : null,
-        rectifiedAt: new Date(),
-        rectifiedByLabel: viewer.label,
-      },
-    });
-    await audit(tx, projectId, viewer, 'DEFECT_TICKET_UPDATED', `Marked ${reference(ticket.ticketNumber)} as fixed (${input.captureIds.length} photo(s)); awaiting verification.`, {
-      defectTicketId: ticket.id,
-      from: ticket.status,
-      to: 'RECTIFIED_PENDING_VERIFICATION',
-      captureIds: input.captureIds,
-    });
-    await notifyMonitors(tx, pushes, {
-      projectId,
-      ticketId: ticket.id,
-      title: `${reference(ticket.ticketNumber)} fixed: verify the repair`,
-      description: `${ticket.projectContractor.organization.name} reports "${ticket.title}" as fixed.`,
-      toVerifierDevices: true,
-    });
-  });
-  await flushDefectPushes(pushes);
   return getDefectTicket(projectId, ticketId, viewer);
 }
 
 /**
- * POST /projects/:projectId/defects/:ticketId/verify: close, or reopen with a reason. When the
- * monitoring side captures the evidence (contractor field reporting off), a verifier may also close
- * an Open/Assigned ticket after seeing the repair, and closing needs their photos.
+ * POST /projects/:projectId/defects/:ticketId/verify: close with the officer's site photos, or reopen
+ * a ticket awaiting verification (legacy contractor-reported repairs) with a reason.
  */
 export async function verifyDefectTicket(projectId: string, ticketId: string, viewer: DefectViewer, input: VerifyDefectTicketRequest) {
   await assertModuleOn(projectId, 'retention');
-  requireMonitorSide(viewer);
-  const monitorEvidence = await monitorCapturesEvidence(projectId);
-  const pushes: PushQueue = [];
+  requireStaff(viewer);
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "retention_defect_tickets" WHERE id = ${ticketId}::uuid FOR UPDATE`;
-    const ticket = await loadVisibleTicket(tx, projectId, ticketId, viewer);
+    const ticket = await loadTicket(tx, projectId, ticketId);
     const close = input.decision === 'CLOSE';
     const awaiting = ticket.status === 'RECTIFIED_PENDING_VERIFICATION';
-    const directClose = monitorEvidence && close && (ticket.status === 'OPEN' || ticket.status === 'ASSIGNED');
-    if (!awaiting && !directClose) {
+    const openOrAssigned = ticket.status === 'OPEN' || ticket.status === 'ASSIGNED';
+    if (!awaiting && !(close && openOrAssigned)) {
       throw new AppError('Nothing is waiting for verification on this ticket', 409, 'DEFECT_TICKET_NOT_RECTIFIED');
     }
-    if (close && monitorEvidence && input.captureIds.length === 0) {
-      throw new AppError(
-        'Only the monitoring side reports from site on this project, so closing a defect needs your photos of the repair.',
-        422,
-        'VERIFICATION_EVIDENCE_REQUIRED'
-      );
+    if (close && input.captureIds.length === 0) {
+      throw new AppError('Closing a defect needs your photos of the repair.', 422, 'VERIFICATION_EVIDENCE_REQUIRED');
     }
     await assertCapturesInProject(tx, projectId, input.captureIds);
     await tx.retentionDefectTicket.update({
@@ -651,7 +480,7 @@ export async function verifyDefectTicket(projectId: string, ticketId: string, vi
       viewer,
       close ? 'DEFECT_TICKET_CLOSED' : 'DEFECT_TICKET_UPDATED',
       close
-        ? `Verified the repair and closed ${reference(ticket.ticketNumber)}${directClose ? ' (repair seen on site; evidence captured by the monitoring side)' : ''}.`
+        ? `Verified the repair on site and closed ${reference(ticket.ticketNumber)} (${input.captureIds.length} photo(s)).`
         : `Reopened ${reference(ticket.ticketNumber)}: ${input.notes}`,
       {
         defectTicketId: ticket.id,
@@ -659,29 +488,19 @@ export async function verifyDefectTicket(projectId: string, ticketId: string, vi
         to: close ? 'VERIFIED_CLOSED' : 'ASSIGNED',
         captureIds: input.captureIds,
         notes: input.notes || null,
-        evidenceCapturedBy: monitorEvidence ? 'MONITOR' : 'CONTRACTOR',
       }
     );
-    await notifyContractor(tx, pushes, {
-      projectId,
-      contractorId: ticket.projectContractorId,
-      ticketId: ticket.id,
-      title: close ? `${reference(ticket.ticketNumber)} closed` : `${reference(ticket.ticketNumber)} reopened`,
-      description: close ? `The repair of "${ticket.title}" was verified.` : `The repair of "${ticket.title}" was not accepted: ${input.notes}`,
-    });
   });
-  await flushDefectPushes(pushes);
   return getDefectTicket(projectId, ticketId, viewer);
 }
 
 /** POST /projects/:projectId/defects/:ticketId/reject: not a defect, with a reason. */
 export async function rejectDefectTicket(projectId: string, ticketId: string, viewer: DefectViewer, input: RejectDefectTicketRequest) {
   await assertModuleOn(projectId, 'retention');
-  requireMonitorSide(viewer);
-  const pushes: PushQueue = [];
+  requireStaff(viewer);
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "retention_defect_tickets" WHERE id = ${ticketId}::uuid FOR UPDATE`;
-    const ticket = await loadVisibleTicket(tx, projectId, ticketId, viewer);
+    const ticket = await loadTicket(tx, projectId, ticketId);
     if (ticket.status !== 'OPEN' && ticket.status !== 'ASSIGNED') {
       throw new AppError('Only an open ticket can be rejected', 409, 'DEFECT_TICKET_NOT_OPEN');
     }
@@ -695,20 +514,12 @@ export async function rejectDefectTicket(projectId: string, ticketId: string, vi
       to: 'REJECTED_NOT_A_DEFECT',
       reason: input.reason,
     });
-    await notifyContractor(tx, pushes, {
-      projectId,
-      contractorId: ticket.projectContractorId,
-      ticketId: ticket.id,
-      title: `${reference(ticket.ticketNumber)} closed as not a defect`,
-      description: `"${ticket.title}" needs no repair: ${input.reason}`,
-    });
   });
-  await flushDefectPushes(pushes);
   return getDefectTicket(projectId, ticketId, viewer);
 }
 
 /**
- * Turns a handover submission's snags into tickets in one action (Phase 10 Step 2). Snags that
+ * Turns a handover response's snags into tickets in one action (Phase 10 Step 2). Snags that
  * already have a ticket are skipped, so the action can be repeated safely.
  */
 export async function createTicketsFromSnags(
@@ -719,18 +530,15 @@ export async function createTicketsFromSnags(
 ): Promise<{ created: number; skipped: number }> {
   await assertModuleOn(projectId, 'handover');
   await assertModuleOn(projectId, 'retention');
-  if (!hasWebPermission(webUser, MANAGE)) {
-    throw new AppError(`Access requires permission(s): ${MANAGE}`, 403, 'FORBIDDEN_PERMISSION');
-  }
-  const viewer = await defectViewerFor(projectId, { webUser });
-  requireMonitorSide(viewer);
+  const viewer = defectViewerFor({ webUser });
+  requireStaff(viewer);
   const pushes: PushQueue = [];
   const result = await prisma.$transaction(async (tx) => {
     await assertDefectPhase(tx, projectId);
     const submission = await tx.handoverSubmission.findFirst({ where: { id: submissionId, projectId } });
     if (!submission) throw new AppError('Handover submission not found', 404, 'HANDOVER_SUBMISSION_NOT_FOUND');
     const snags = Array.isArray(submission.snagsJson)
-      ? (submission.snagsJson as Array<{ title: string; location: string | null; description: string | null; photos: Array<{ objectKey: string }> }>)
+      ? (submission.snagsJson as Array<{ title: string; location: string | null; description: string | null }>)
       : [];
     const wanted = input.snagIndexes ?? snags.map((_, i) => i);
     for (const i of wanted) {
@@ -741,7 +549,7 @@ export async function createTicketsFromSnags(
       select: { sourceSnagIndex: true },
     });
     const done = new Set(existing.map((e) => e.sourceSnagIndex));
-    const contractorId = await liableContractorId(tx, projectId, input.projectContractorId);
+    const contractorId = await liableContractorId(tx, projectId);
     let created = 0;
     for (const i of [...new Set(wanted)]) {
       if (done.has(i)) continue;
@@ -757,7 +565,7 @@ export async function createTicketsFromSnags(
         location: snag.location,
         dueDate: input.dueDate ?? null,
         assign: true,
-        source: { submissionId: submission.id, snagIndex: i, photoKeys: snag.photos.map((p) => p.objectKey) },
+        source: { submissionId: submission.id, snagIndex: i },
       });
       created += 1;
     }
@@ -767,47 +575,28 @@ export async function createTicketsFromSnags(
   return result;
 }
 
-/**
- * defect-reminders job body for one project: a monitoring-side summary of every overdue ticket,
- * and one reminder per liable contractor about its own overdue tickets only.
- */
+/** defect-reminders job body for one project: a staff summary of every overdue ticket. */
 export async function sendOverdueDefectReminders(projectId: string, codePrefix: string, today: string, now: Date): Promise<number> {
   const overdue = await prisma.retentionDefectTicket.findMany({
     where: { projectId, status: { in: ['OPEN', 'ASSIGNED'] }, dueDate: { lt: today } },
-    select: { id: true, ticketNumber: true, projectContractorId: true },
+    select: { id: true, ticketNumber: true },
     orderBy: { dueDate: 'asc' },
   });
   if (overdue.length === 0) return 0;
-  const refs = (list: typeof overdue) => {
-    const shown = list.slice(0, 5).map((t) => reference(t.ticketNumber));
-    return `${shown.join(', ')}${list.length > shown.length ? ` and ${list.length - shown.length} more` : ''}`;
-  };
-  const pushes: PushQueue = [];
+  const shown = overdue.slice(0, 5).map((t) => reference(t.ticketNumber));
+  const refs = `${shown.join(', ')}${overdue.length > shown.length ? ` and ${overdue.length - shown.length} more` : ''}`;
   await prisma.$transaction(async (tx) => {
     await createWebNotification(tx, {
       projectId,
       targetPermissionKey: MANAGE,
-      hideFromProjectContractors: true,
       category: 'DEFECT_TICKET',
       title: `${codePrefix}: ${overdue.length} defect(s) overdue`,
-      description: `${refs(overdue)} are past their due date and not yet fixed.`,
+      description: `${refs} are past their due date and not yet fixed.`,
       actionUrl: `/app/projects/${projectId}/retention`,
       metadata: { overdueCount: overdue.length, day: today },
       createdAt: now,
     });
-    const byContractor = new Map<string, typeof overdue>();
-    for (const t of overdue) byContractor.set(t.projectContractorId, [...(byContractor.get(t.projectContractorId) ?? []), t]);
-    for (const [contractorId, list] of byContractor) {
-      await notifyContractor(tx, pushes, {
-        projectId,
-        contractorId,
-        ticketId: list[0].id,
-        title: `${codePrefix}: ${list.length} of your defect(s) overdue`,
-        description: `${refs(list)} are past their due date. Fix them and mark them as fixed.`,
-      });
-    }
   });
-  await flushDefectPushes(pushes);
   return overdue.length;
 }
 

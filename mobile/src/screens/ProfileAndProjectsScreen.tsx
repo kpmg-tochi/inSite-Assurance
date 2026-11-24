@@ -13,8 +13,8 @@ import { StatusBar } from "expo-status-bar";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { DemoProjectWorkspaceDto, FieldProjectContext } from "@insite/shared";
-import { EmptyStateCard, GradientHeaderLayout, InSiteLoader } from "../components/common";
+import type { FieldProjectContext } from "@insite/shared";
+import { EmptyStateCard, GradientHeaderLayout } from "../components/common";
 import { BackButton, IconButton } from "../components/inputs/Buttons";
 import Avatar from "../components/common/Avatar";
 import Pill from "../components/common/Pill";
@@ -24,21 +24,14 @@ import { borderRadius, defaultColors } from "../styles/commonStyles";
 import { sessionEndedFor } from "../config/sessionState";
 import { outboxCountsByProject } from "../storage/outbox/outboxStore";
 import { subscribeToSyncStatus } from "../storage/outbox/outboxProcessor";
-import { useDemoProjectsQuery } from "../queries/projects/useProjectsQueries";
-import { useDemoSkipVerificationMutation } from "../queries/auth/useAuthMutations";
+import { requestPushPermissionInContext } from "../services/pushNotificationService";
 import { formatMobileErrorMessage } from "../utils/errorFormatter";
 
 type Counts = Map<string, { pending: number; dead: number }>;
 
-/** "Lekki Electrical Ltd · ELEC" (the trade code identifies the package on multi-contractor projects). */
-function contractorLabel(c: NonNullable<FieldProjectContext["contractor"]>): string {
-  return `${c.organizationName} · ${c.tradeCode}${c.isMainContractor ? " (main contractor)" : ""}`;
-}
-
 /**
- * Every project on this device (Phase 5): projects assigned to the signed-in account and projects
- * joined with a code. Tap to switch; switching never discards queued work, and each project's
- * unsent items are shown.
+ * The signed-in account's projects (Phase 5; provisioned accounts only since R1d). Tap to switch;
+ * switching never discards queued work, and each project's unsent items are shown.
  */
 export const ProfileAndProjectsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -53,8 +46,7 @@ export const ProfileAndProjectsScreen = () => {
     switchProject,
     refreshProjects,
     signOut,
-    addJoinSession,
-    state,
+    pushIdentities,
   } = useProfile();
 
   const [counts, setCounts] = useState<Counts>(new Map());
@@ -89,10 +81,9 @@ export const ProfileAndProjectsScreen = () => {
     setSwitchingId(project.projectId);
     try {
       if (project.projectId !== activeProjectId) await switchProject(project.projectId);
-      const needsAssurance =
-        project.requiresIdentityAssurance &&
-        (project.assuranceStatus === "NOT_SUBMITTED" || project.assuranceStatus === "REJECTED");
-      navigation.reset({ index: 0, routes: [{ name: needsAssurance ? "AssuranceWizard" : "WbsInbox" }] });
+      // Asked here, in context, never at launch (the join-code and identity screens that used to ask are gone).
+      void requestPushPermissionInContext(pushIdentities);
+      navigation.reset({ index: 0, routes: [{ name: "WbsInbox" }] });
     } finally {
       setSwitchingId(null);
     }
@@ -101,18 +92,14 @@ export const ProfileAndProjectsScreen = () => {
   const totalPending = [...counts.values()].reduce((n, c) => n + c.pending + c.dead, 0);
 
   const onSignOut = () => {
-    const provisionedPending = projects
-      .filter((p) => p.origin === "PROVISIONED_ACCOUNT")
-      .reduce((n, p) => n + (counts.get(p.projectId)?.pending ?? 0) + (counts.get(p.projectId)?.dead ?? 0), 0);
     const doSignOut = async () => {
       await signOut();
-      const remaining = state.joinSessions.length;
-      navigation.reset({ index: 0, routes: [{ name: remaining > 0 ? "Projects" : "Landing" }] });
+      navigation.reset({ index: 0, routes: [{ name: "Landing" }] });
     };
     Alert.alert(
       "Sign out?",
-      provisionedPending > 0
-        ? `${provisionedPending} item(s) for your account's projects have not been sent. They stay on this phone and are sent after you sign in again, but nothing is sent while you are signed out.`
+      totalPending > 0
+        ? `${totalPending} item(s) for your projects have not been sent. They stay on this phone and are sent after you sign in again, but nothing is sent while you are signed out.`
         : "You can sign in again at any time.",
       [
         { text: "Cancel", style: "cancel" },
@@ -121,49 +108,12 @@ export const ProfileAndProjectsScreen = () => {
     );
   };
 
-  // ---- Demo workspaces (demo builds only): adds a join session for a seeded project. ----
-  // Inline so non-demo builds compile the demo section out (see config/demoMode.ts).
-  const demo = process.env.EXPO_PUBLIC_DEMO_MODE === "true";
-  const {
-    data: demoProjects = [],
-    isLoading: loadingDemo,
-    error: demoErrorObj,
-    refetch: loadDemo,
-  } = useDemoProjectsQuery(demo);
-  const demoMutation = useDemoSkipVerificationMutation();
-  const onDemoJoin = async (project: DemoProjectWorkspaceDto) => {
-    const code =
-      project.joinCodes.find((jc) => jc.fieldPersonaType === "CONTRACTOR_EXECUTOR") ?? project.joinCodes[0];
-    if (!code) {
-      Toast.show({
-        type: "error",
-        props: { title: "No join code", message: `${project.codePrefix} has no active join code.` },
-      });
-      return;
-    }
-    try {
-      const result = await demoMutation.mutateAsync({
-        payload: {
-          joinCode: code.code,
-          agentFullName: displayName || undefined,
-          agentPhoneNumber: phoneNumber || undefined,
-        },
-      });
-      await addJoinSession(result);
-      navigation.reset({ index: 0, routes: [{ name: "WbsInbox" }] });
-    } catch (err) {
-      Toast.show({ type: "error", props: { title: "Demo join failed", message: formatMobileErrorMessage(err) } });
-    }
-  };
-
   const canGoBack = navigation.canGoBack();
   const roleLine = activeContext
     ? `${activeContext.roleName} · weight ${activeContext.assuranceWeight.toFixed(2)}`
     : account
       ? `${account.profile.mobileRole.name} · weight ${account.profile.mobileRole.assuranceWeight.toFixed(2)}`
       : "";
-  // Phase 6: the contractor package the active session works for, from the server.
-  const contractorLine = activeContext?.contractor ? contractorLabel(activeContext.contractor) : "";
 
   const renderProject = (project: FieldProjectContext) => {
     const isActive = project.projectId === activeProjectId;
@@ -189,12 +139,8 @@ export const ProfileAndProjectsScreen = () => {
         </View>
         <Text style={styles.projectName}>{project.projectName}</Text>
         <Text style={styles.projectMeta}>
-          {project.roleName} · {project.origin === "PROVISIONED_ACCOUNT" ? "Your account" : "Joined with code"}
-          {project.origin === "JOIN_CODE" && project.requiresIdentityAssurance && project.assuranceStatus !== "APPROVED"
-            ? ` · ID ${project.assuranceStatus === "PENDING_APPROVAL" ? "under review" : "needed"}`
-            : ""}
+          {project.roleName}
         </Text>
-        {project.contractor ? <Text style={styles.projectMeta}>{contractorLabel(project.contractor)}</Text> : null}
         {unsent > 0 && (
           <Text style={[styles.projectMeta, c?.dead ? styles.deadText : styles.pendingText]}>
             {unsent} item(s) not sent yet{c?.dead ? ` · ${c.dead} could not be sent` : ""}
@@ -203,9 +149,6 @@ export const ProfileAndProjectsScreen = () => {
       </TouchableOpacity>
     );
   };
-
-  const accountProjects = projects.filter((p) => p.origin === "PROVISIONED_ACCOUNT");
-  const codeProjects = projects.filter((p) => p.origin === "JOIN_CODE");
 
   return (
     <>
@@ -225,7 +168,6 @@ export const ProfileAndProjectsScreen = () => {
           <Text style={styles.userName}>{displayName}</Text>
           {/* The role and weight come from the server, never from the device. */}
           {roleLine ? <Text style={styles.userRole}>{roleLine}</Text> : null}
-          {contractorLine ? <Text style={styles.userRole}>{contractorLine}</Text> : null}
           {account ? <Text style={styles.userPhone}>{account.profile.email}</Text> : null}
           {phoneNumber ? <Text style={styles.userPhone}>{phoneNumber}</Text> : null}
         </View>
@@ -248,7 +190,7 @@ export const ProfileAndProjectsScreen = () => {
                   <Text style={styles.sectionTitle}>Your projects</Text>
                   <Text style={styles.sectionSubtitle}>Assigned to {account.profile.email}. Pull down to refresh.</Text>
                 </View>
-                {accountProjects.length === 0 ? (
+                {projects.length === 0 ? (
                   <EmptyStateCard
                     title="No projects assigned"
                     description="Ask your administrator to assign you to a project, then pull down to refresh."
@@ -256,51 +198,7 @@ export const ProfileAndProjectsScreen = () => {
                     onAction={onRefresh}
                   />
                 ) : (
-                  accountProjects.map(renderProject)
-                )}
-              </View>
-            )}
-
-            <View style={styles.section}>
-              <View>
-                <Text style={styles.sectionTitle}>Joined with a code</Text>
-                <Text style={styles.sectionSubtitle}>Projects you joined with a code from the project team.</Text>
-              </View>
-              {codeProjects.map(renderProject)}
-              <TouchableOpacity
-                style={styles.joinNewButton}
-                onPress={() => navigation.navigate(state.persona || account ? "EnterCode" : "Onboarding")}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.joinNewButtonText}>+ Join another project with a code</Text>
-              </TouchableOpacity>
-            </View>
-
-            {demo && (
-              <View style={styles.section}>
-                <Pill variant="warning" text="Demo mode: verification is skipped" />
-                <Text style={styles.sectionTitle}>Demo workspaces</Text>
-                {loadingDemo ? (
-                  <InSiteLoader size="sm" label="Loading demo workspaces..." />
-                ) : demoErrorObj && demoProjects.length === 0 ? (
-                  <EmptyStateCard
-                    title="Unable to load demo workspaces"
-                    description={formatMobileErrorMessage(demoErrorObj)}
-                    actionLabel="Retry"
-                    onAction={loadDemo}
-                  />
-                ) : (
-                  demoProjects.map((p) => (
-                    <TouchableOpacity
-                      key={p.id}
-                      style={styles.projectCard}
-                      onPress={() => void onDemoJoin(p)}
-                      disabled={demoMutation.isPending}
-                    >
-                      <Text style={styles.projectCode}>{p.codePrefix}</Text>
-                      <Text style={styles.projectName}>{p.name}</Text>
-                    </TouchableOpacity>
-                  ))
+                  projects.map(renderProject)
                 )}
               </View>
             )}

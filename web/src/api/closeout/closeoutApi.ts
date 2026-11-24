@@ -3,13 +3,10 @@ import type {
   ChangeProjectPhaseRequest,
   ConvertSnagsInput,
   CreateDefectTicketInput,
-  CreateHandoverLinkInput,
   DefectTicketDto,
-  HandoverLinkDto,
-  HandoverLinkIssuedDto,
   HandoverSubmissionDto,
   ProjectPhaseDto,
-  RectifyDefectTicketInput,
+  RecordHandoverResponseInput,
   RejectDefectTicketRequest,
   RetentionSummaryDto,
   VerifyDefectTicketInput,
@@ -17,7 +14,7 @@ import type {
 import { api } from '../../config/apiConfig';
 import type { ApiEnvelope } from '../types';
 
-/** Phase 10 (authenticated): construction phase, handover links and review, defects, retention. */
+/** Phase 10 (authenticated): construction phase, handover responses and review, defects, retention. */
 
 // Construction phase
 
@@ -31,30 +28,15 @@ export const changeProjectPhase = async (projectId: string, body: ChangeProjectP
   return data.data;
 };
 
-// Handover links and submissions
-
-export const listHandoverLinks = async (projectId: string) => {
-  const { data } = await api.get<ApiEnvelope<HandoverLinkDto[]>>(`/projects/${projectId}/handover/links`);
-  return data.data;
-};
-
-export const createHandoverLink = async (projectId: string, body: CreateHandoverLinkInput) => {
-  const { data } = await api.post<ApiEnvelope<HandoverLinkIssuedDto>>(`/projects/${projectId}/handover/links`, body);
-  return data.data;
-};
-
-export const revokeHandoverLink = async (projectId: string, linkId: string) => {
-  const { data } = await api.post<ApiEnvelope<HandoverLinkDto>>(`/projects/${projectId}/handover/links/${linkId}/revoke`);
-  return data.data;
-};
-
-export const reissueHandoverLink = async (projectId: string, linkId: string, body: { expiresInDays?: number; sendNow?: boolean }) => {
-  const { data } = await api.post<ApiEnvelope<HandoverLinkIssuedDto>>(`/projects/${projectId}/handover/links/${linkId}/reissue`, body);
-  return data.data;
-};
+// Handover responses (recorded by an officer from the signed paper copy)
 
 export const listHandoverSubmissions = async (projectId: string) => {
   const { data } = await api.get<ApiEnvelope<HandoverSubmissionDto[]>>(`/projects/${projectId}/handover/submissions`);
+  return data.data;
+};
+
+export const recordHandoverResponse = async (projectId: string, body: RecordHandoverResponseInput) => {
+  const { data } = await api.post<ApiEnvelope<HandoverSubmissionDto>>(`/projects/${projectId}/handover/submissions`, body);
   return data.data;
 };
 
@@ -88,7 +70,6 @@ export const createDefectTicket = async (projectId: string, body: CreateDefectTi
 
 export type DefectAction =
   | { kind: 'assign'; body: AssignDefectTicketRequest }
-  | { kind: 'rectify'; body: RectifyDefectTicketInput }
   | { kind: 'verify'; body: VerifyDefectTicketInput }
   | { kind: 'reject'; body: RejectDefectTicketRequest };
 

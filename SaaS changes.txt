@@ -1,0 +1,15 @@
+SaaS changes:
+- Make geofence options configurable (linear, radial, perimeter)
+- Make evidence ratings configurable (IPC reconciliation) rather than defaulting to [supported, partially supported, unsupported, conflicted], you should be able to create the evidence ratings, with descriptions
+- In the project creation flow, configure lenders and contractors (add a monitors input) to be free text inputs (current implementation) OR dropdowns to tie to specific configured lenders, monitors, and contractors
+- Monitors should be able to be provisioned as users of the mobile app, rather than needing join codes (All projects they are involved in will be visible to them immediately) Pre-provisioned users will have no need for identify/assurance verification. Super admins can specify which roles will be pre-provisioned
+
+
+
+drill down to see the 
+global delayed tooltips that explain everything
+
+
+Form button disabling when not valid (migrate to react hook form)
+
+

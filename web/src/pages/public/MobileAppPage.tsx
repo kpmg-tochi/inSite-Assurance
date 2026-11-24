@@ -160,9 +160,8 @@ export function MobileAppPage() {
             <p className="text-xs text-slate-600 leading-relaxed">
               Site evidence comes from the in-app camera only. At the shutter
               the app records the GPS fix and the phone&apos;s mock-location
-              flag, previews the corridor position (
-              <strong>KM X+YYY</strong>) offline with <strong>@turf/turf</strong>
-              , signs the capture with a per-device key and keeps it in an
+              flag, previews the position against the site boundary offline
+              with <strong>@turf/turf</strong>, signs the capture with a per-device key and keeps it in an
               encrypted local database until the outbox can send it. The server
               re-checks the position and screens for recycled photos.
             </p>

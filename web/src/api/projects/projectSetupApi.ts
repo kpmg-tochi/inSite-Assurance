@@ -1,9 +1,6 @@
 import type {
   ActivateProjectResponse,
-  BoqItemInput,
-  BoqPreviewResponse,
   BoqRevisionDto,
-  ContractorSuggestionResponse,
   CreateProjectDraftRequest,
   ProjectContractorDto,
   ProjectContractorInput,
@@ -12,7 +9,7 @@ import type {
   ProjectSetupStepId,
 } from '@insite/shared';
 import { api } from '../../config/apiConfig';
-import type { ApiEnvelope, BoqItemRecordDto } from '../types';
+import type { ApiEnvelope } from '../types';
 
 /** Staged project creation (Phase 6). */
 
@@ -65,8 +62,6 @@ export interface TeamOptions {
     name: string;
     code: string;
     fieldPersonaType: string;
-    onboardingMode: 'JOIN_CODE' | 'PROVISIONED_ACCOUNT';
-    requiresIdentityAssurance: boolean;
   }>;
 }
 
@@ -87,41 +82,9 @@ export const addProjectContractor = async (projectId: string, body: Omit<Project
   return data.data;
 };
 
-// BOQ
-
-export const previewBoq = async (projectId: string, spreadsheetBase64: string, fileName?: string) => {
-  const { data } = await api.post<ApiEnvelope<BoqPreviewResponse>>(`/projects/${projectId}/boq/preview`, {
-    spreadsheetBase64,
-    fileName,
-  });
-  return data.data;
-};
-
-export interface CommitBoqResult {
-  totalUploaded: number;
-  removedCount: number;
-  opaqueLumpSumCount: number;
-  holdPointCount: number;
-  revisionNumber: number | null;
-  items: BoqItemRecordDto[];
-}
-
-export const commitBoq = async (
-  projectId: string,
-  body: { items: BoqItemInput[]; reason?: string; mode?: 'REPLACE' | 'MERGE' }
-) => {
-  const { data } = await api.post<ApiEnvelope<CommitBoqResult>>(`/projects/${projectId}/boq/upload`, body);
-  return data.data;
-};
+// BOQ revisions (legacy, read-only)
 
 export const listBoqRevisions = async (projectId: string) => {
   const { data } = await api.get<ApiEnvelope<BoqRevisionDto[]>>(`/projects/${projectId}/boq/revisions`);
-  return data.data;
-};
-
-export const suggestContractorPackages = async (projectId: string) => {
-  const { data } = await api.post<ApiEnvelope<ContractorSuggestionResponse>>(
-    `/projects/${projectId}/boq/suggest-contractors`
-  );
   return data.data;
 };

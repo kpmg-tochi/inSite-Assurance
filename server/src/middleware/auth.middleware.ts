@@ -24,11 +24,6 @@ export interface WebTokenClaims {
   tokenVersion: number;
 }
 
-export interface FieldTokenClaims {
-  tokenType: 'FIELD_AGENT';
-  sessionId: string;
-}
-
 /** A provisioned account signed in on one device (Phase 5). Carries no project. */
 export interface MobileUserTokenClaims {
   tokenType: 'MOBILE_USER';
@@ -38,7 +33,7 @@ export interface MobileUserTokenClaims {
   tokenVersion: number;
 }
 
-type TokenClaims = WebTokenClaims | FieldTokenClaims | MobileUserTokenClaims;
+type TokenClaims = WebTokenClaims | MobileUserTokenClaims;
 
 /** Live authorization context for a web user (shape kept from Phase 1 so services do not change). */
 export interface WebJwtPayload {
@@ -56,7 +51,10 @@ export interface WebJwtPayload {
   mustChangePassword: boolean;
 }
 
-/** Live authorization context for a mobile field session. */
+/**
+ * Live authorization context for a mobile field session: a provisioned account working on one
+ * project from one device (redesign R1d: join-code sessions are gone).
+ */
 export interface FieldAgentJwtPayload {
   tokenType: 'FIELD_AGENT';
   sessionId: string;
@@ -67,13 +65,11 @@ export interface FieldAgentJwtPayload {
   roleName: string;
   fieldPersonaType: FieldPersonaType;
   assuranceWeight: number;
-  requiresIdentityAssurance: boolean;
   permissions: string[];
   agentFullName: string;
   deviceId: string;
-  origin: 'JOIN_CODE' | 'PROVISIONED_ACCOUNT';
-  /** Linked account for provisioned sessions; null for join-code sessions. */
-  userId: string | null;
+  /** The provisioned account the session belongs to. */
+  userId: string;
 }
 
 /** Account-level context for a provisioned mobile user on routes without a project. */
@@ -111,12 +107,6 @@ export function signWebUserToken(claims: Omit<WebTokenClaims, 'tokenType'>): str
   });
 }
 
-export function signFieldAgentToken(claims: Omit<FieldTokenClaims, 'tokenType'>): string {
-  const payload: FieldTokenClaims = { tokenType: 'FIELD_AGENT', sessionId: claims.sessionId };
-  // Long-lived for offline-first field work; revocation is enforced per request.
-  return jwt.sign(payload, env.JWT_SECRET, { expiresIn: '30d' });
-}
-
 export function signMobileUserToken(claims: Omit<MobileUserTokenClaims, 'tokenType'>): string {
   const payload: MobileUserTokenClaims = {
     tokenType: 'MOBILE_USER',
@@ -125,7 +115,7 @@ export function signMobileUserToken(claims: Omit<MobileUserTokenClaims, 'tokenTy
     deviceRowId: claims.deviceRowId,
     tokenVersion: claims.tokenVersion,
   };
-  // Long-lived like join-code sessions; password change, deactivation and device revoke end it.
+  // Long-lived for offline-first field work; password change, deactivation and device revoke end it.
   return jwt.sign(payload, env.JWT_SECRET, { expiresIn: '30d' });
 }
 
@@ -173,7 +163,6 @@ interface MobileContextRecord {
 }
 
 const webCache = new Map<string, { value: WebContextRecord | null; expiresAt: number }>();
-const fieldCache = new Map<string, { value: FieldContextRecord | null; expiresAt: number }>();
 // Keyed `${userId}:${deviceRowId}`.
 const mobileCache = new Map<string, { value: MobileContextRecord | null; expiresAt: number }>();
 // Keyed `${userId}:${deviceRowId}:${projectId}`; holds the resolved provisioned field principal.
@@ -193,14 +182,12 @@ export function invalidateUserAuthCache(userId: string): void {
 }
 
 export function invalidateSessionAuthCache(sessionId: string): void {
-  fieldCache.delete(sessionId);
   deleteWhere(provisionedFieldCache, (_key, entry) => entry.value.principal.sessionId === sessionId);
 }
 
 /** Use after role or tenant mutations, which can affect many principals. */
 export function clearAuthCache(): void {
   webCache.clear();
-  fieldCache.clear();
   mobileCache.clear();
   provisionedFieldCache.clear();
 }
@@ -242,48 +229,6 @@ async function loadWebContext(userId: string): Promise<WebContextRecord | null> 
     : null;
 
   webCache.set(userId, { value, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
-  return value;
-}
-
-async function loadFieldContext(sessionId: string): Promise<FieldContextRecord | null> {
-  const cached = fieldCache.get(sessionId);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
-
-  const session = await prisma.fieldAgentSession.findUnique({
-    where: { id: sessionId },
-    include: {
-      project: { select: { tenantId: true, tenant: { select: { status: true } } } },
-      role: {
-        include: { rolePermissions: { include: { permission: { select: { key: true } } } } },
-      },
-    },
-  });
-
-  const value: FieldContextRecord | null = session
-    ? {
-        isActive: session.isActive,
-        tenantStatus: session.project.tenant.status,
-        principal: {
-          tokenType: 'FIELD_AGENT',
-          sessionId: session.id,
-          tenantId: session.project.tenantId,
-          projectId: session.projectId,
-          roleId: session.roleId,
-          roleCode: session.role.code,
-          roleName: session.role.name,
-          fieldPersonaType: session.fieldPersonaType as FieldPersonaType,
-          assuranceWeight: session.assuranceWeight,
-          requiresIdentityAssurance: session.role.requiresIdentityAssurance,
-          permissions: session.role.rolePermissions.map((rp) => rp.permission.key),
-          agentFullName: session.agentFullName,
-          deviceId: session.deviceId,
-          origin: session.origin,
-          userId: session.userId,
-        },
-      }
-    : null;
-
-  fieldCache.set(sessionId, { value, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
   return value;
 }
 
@@ -329,12 +274,6 @@ function verifyClaims(req: Request): TokenClaims {
     return claims as WebTokenClaims;
   }
   if (
-    claims?.tokenType === 'FIELD_AGENT' &&
-    typeof (claims as FieldTokenClaims).sessionId === 'string'
-  ) {
-    return claims as FieldTokenClaims;
-  }
-  if (
     claims?.tokenType === 'MOBILE_USER' &&
     typeof (claims as MobileUserTokenClaims).userId === 'string' &&
     typeof (claims as MobileUserTokenClaims).deviceRowId === 'string'
@@ -361,20 +300,6 @@ async function resolveWebPrincipal(req: Request, claims: WebTokenClaims): Promis
       403,
       'PASSWORD_CHANGE_REQUIRED'
     );
-  }
-  return ctx.principal;
-}
-
-async function resolveFieldPrincipal(claims: FieldTokenClaims): Promise<FieldAgentJwtPayload> {
-  const ctx = await loadFieldContext(claims.sessionId);
-  if (!ctx) {
-    throw new AppError('Field session no longer exists', 401, 'UNAUTHORIZED');
-  }
-  if (!ctx.isActive) {
-    throw new AppError('This device session has been revoked', 403, 'SESSION_REVOKED');
-  }
-  if (ctx.tenantStatus === 'SUSPENDED') {
-    throw new AppError('This workspace has been suspended', 403, 'TENANT_SUSPENDED');
   }
   return ctx.principal;
 }
@@ -431,8 +356,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /**
  * Resolves a provisioned account's field session for `projectId`: checks mobile access and project
- * visibility, then finds or creates the session. Fills the same principal as a join-code session,
- * so no downstream service needs to know where the session came from.
+ * visibility, then finds or creates the session.
  */
 async function resolveProvisionedFieldPrincipal(
   req: Request,
@@ -484,11 +408,9 @@ async function resolveProvisionedFieldPrincipal(
       roleName: role.name,
       fieldPersonaType: role.fieldPersonaType as FieldPersonaType,
       assuranceWeight: role.assuranceWeight,
-      requiresIdentityAssurance: false,
       permissions: role.rolePermissions.map((rp) => rp.permission.key),
       agentFullName: session.agentFullName,
       deviceId: session.deviceId,
-      origin: 'PROVISIONED_ACCOUNT',
       userId: ctx.user.id,
     },
   };
@@ -506,15 +428,14 @@ function routeProjectId(req: Request): string | undefined {
 }
 
 /**
- * A field principal from either a join-code token or a provisioned-account token. Provisioned
- * tokens need a project: the URL `:projectId`, or `projectId` passed by the project guard.
+ * A field principal from a provisioned-account token. It needs a project: the URL `:projectId`, or
+ * `projectId` passed by the project guard.
  */
 async function resolveAnyFieldPrincipal(
   req: Request,
-  claims: FieldTokenClaims | MobileUserTokenClaims,
+  claims: MobileUserTokenClaims,
   projectId?: string
 ): Promise<FieldAgentJwtPayload> {
-  if (claims.tokenType === 'FIELD_AGENT') return resolveFieldPrincipal(claims);
   const target = projectId ?? routeProjectId(req);
   if (!target) {
     throw new AppError('This endpoint is not available to signed-in mobile accounts', 403, 'FORBIDDEN');
@@ -587,7 +508,7 @@ export const requirePlatformSuperAdmin = guard(async (req) => {
 export const requireFieldSession = guard(authenticateField);
 
 /**
- * Authenticates web, join-code and provisioned-account callers. A provisioned account gets a field
+ * Authenticates web and provisioned-account callers. A provisioned account gets a field
  * principal when the request names a project (URL or `projectId`), otherwise only `req.mobileUser`.
  */
 export async function authenticateAny(req: Request, projectId?: string): Promise<void> {
@@ -628,25 +549,3 @@ export function requireAnyAuthWithWebPermission(...webPermissions: string[]) {
   });
 }
 
-/**
- * Optional authentication: attaches a principal when a valid token is present and ignores
- * a missing or invalid one. Used only by demo routes.
- */
-export const optionalAuth = (req: Request, _res: Response, next: NextFunction): void => {
-  if (!req.headers.authorization) {
-    next();
-    return;
-  }
-  (async () => {
-    try {
-      const claims = verifyClaims(req);
-      if (claims.tokenType === 'WEB_USER') {
-        req.webUser = await resolveWebPrincipal(req, claims);
-      } else if (claims.tokenType === 'FIELD_AGENT') {
-        req.fieldAgent = await resolveFieldPrincipal(claims);
-      }
-    } catch {
-      // ignore
-    }
-  })().then(() => next(), next);
-};

@@ -32,7 +32,6 @@ import {
 import { personaCopy } from "../utils/personaCopy";
 import { projectCadenceSettings } from "../utils/activeCadence";
 import { cadenceCopy } from "../utils/projectCadence";
-import { briefCardCopy } from "../storage/briefMeta";
 import { reportQueryLabel, reportStatusView } from "../utils/reportStatus";
 import {
   HELD_EXPLANATION,
@@ -159,7 +158,7 @@ export const WbsChatThreadScreen: React.FC = () => {
         ? { text: "Location unavailable", variant: "warning" }
         : here.status
           ? {
-              text: geofenceBadgeText(here.status, here.distanceOutsideMeters, here.chainageLabel) ?? "",
+              text: geofenceBadgeText(here.status, here.distanceOutsideMeters) ?? "",
               variant: here.status === "OUTSIDE" ? "warning" : "positive",
             }
           : { text: "Geofence unknown", variant: "darkGlass" };
@@ -271,34 +270,6 @@ export const WbsChatThreadScreen: React.FC = () => {
   };
 
   const renderMessageBody = (msg: WbsChatMessageRecord): React.ReactNode => {
-      if (msg.messageType === "MORNING_BRIEF") {
-        // Title follows the persona the server wrote this brief for; older cached briefs use the session's.
-        const briefCopy = briefCardCopy(msg.brief, activeContext?.fieldPersonaType);
-        const standards = msg.brief?.appliedStandards ?? [];
-        return (
-          <View key={msg.id} style={styles.briefCard}>
-            <View style={styles.briefBadgeRow}>
-              <Text style={styles.briefBadgeText}>
-                Morning brief{msg.briefDate ? ` · ${msg.briefDate}` : ""}
-              </Text>
-            </View>
-            <Text style={styles.briefTitle}>{briefCopy.briefCardTitle}</Text>
-            <Text style={styles.briefBody}>{msg.textContent}</Text>
-            {standards.length > 0 && (
-              <View style={styles.standardsBox}>
-                <Text style={styles.standardsHeading}>{briefCopy.standardsHeading}</Text>
-                {standards.map((s) => (
-                  <Text key={s.code} style={styles.standardsItem}>
-                    <Text style={styles.standardsCode}>{s.code}</Text>
-                    {s.summaryRule ? `: ${s.summaryRule}` : s.title ? `: ${s.title}` : ""}
-                  </Text>
-                ))}
-              </View>
-            )}
-          </View>
-        );
-      }
-
       if (msg.messageType === "AI_QUERY" || msg.messageType === "MONITOR_QUERY") {
         const source = msg.queryDetails?.source;
         const isStandardsQuery = source === "AI_STANDARDS_CHECK";
@@ -677,57 +648,6 @@ const styles = StyleSheet.create({
   chatStream: {
     padding: 16,
     gap: 12,
-  },
-  briefCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#BFDBFE",
-    gap: 6,
-  },
-  briefBadgeRow: {
-    alignSelf: "flex-start",
-  },
-  briefBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#00338D",
-    backgroundColor: "#EFF6FF",
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 9999,
-  },
-  briefTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#0C233C",
-  },
-  briefBody: {
-    fontSize: 11,
-    color: "#334155",
-    lineHeight: 16,
-  },
-  standardsBox: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: "#CBD5E1",
-    gap: 3,
-  },
-  standardsHeading: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#1E293B",
-  },
-  standardsItem: {
-    fontSize: 11,
-    color: "#334155",
-    lineHeight: 16,
-  },
-  standardsCode: {
-    fontWeight: "700",
-    color: "#1E3A8A",
   },
   violationItem: {
     gap: 2,

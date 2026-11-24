@@ -1,7 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import { canonicalCaptureString } from '@insite/shared';
 import { signWithDeviceKey } from '../security/deviceKey';
-import { currentJoinSessionId, sessionKeyForProject } from '../config/authRegistry';
+import { currentSessionId, currentSessionKey } from '../config/authRegistry';
 import { getDb, newId, nowIso } from './db/database';
 import { enqueue } from './outbox/outboxStore';
 import { kickOutbox } from './outbox/outboxProcessor';
@@ -11,8 +11,9 @@ import { getCapture } from './captureStore';
 /**
  * Phase 5 Step 8: items queued under a session that has ended.
  *
- * When the person rejoins a project, every unsent photo, voice note, note and report queued under
- * an earlier session is HELD: it stays on the device and is never sent until the person decides.
+ * Since R1d this happens once, on the first start after the update, for projects that were joined
+ * with a code (join-code sessions no longer exist): every unsent photo, voice note, note and report
+ * queued under that session is HELD: it stays on the device and is never sent until the person decides.
  * - Remove deletes it (local file and outbox row); it never reaches the server.
  * - Update re-validates it for the current session: a capture gets a new client ID and a fresh
  *   signature, keeps its original capture time and GPS fix, and is linked to the original on the
@@ -25,7 +26,7 @@ export const HELD_EXPLANATION =
   'Remove it, or update it to send it under your current session. An updated item keeps its original time and location and is marked as re-submitted for reviewers.';
 
 /** Holds every unsent evidence row of the project that belongs to another session. Returns how many. */
-export async function holdItemsFromEndedSessions(projectId: string, currentSessionKey: string): Promise<number> {
+export async function holdItemsFromEndedSessions(projectId: string, keepSessionKey: string): Promise<number> {
   const db = await getDb();
   const rows = await db.getAllAsync<{ id: string; kind: string; status: string; session_key: string | null }>(
     `SELECT id, kind, status, session_key FROM outbox WHERE project_id = ? AND status != 'DONE'`,
@@ -34,7 +35,7 @@ export async function holdItemsFromEndedSessions(projectId: string, currentSessi
   const toHold = rows.filter((r) =>
     shouldHoldOnNewSession(
       { kind: r.kind as OutboxKind, status: r.status as OutboxStatus, sessionKey: r.session_key },
-      currentSessionKey
+      keepSessionKey
     )
   );
   if (toHold.length === 0) return 0;
@@ -227,7 +228,7 @@ export async function updateHeldMessage(clientMessageId: string): Promise<void> 
       `UPDATE outbox SET status = 'PENDING', attempts = 0, last_error = NULL, next_attempt_at = ?, updated_at = ?,
          depends_on_json = ?, session_key = ?
        WHERE kind = 'CHAT_MESSAGE' AND entity_id = ? AND status = 'HELD'`,
-      [now, now, JSON.stringify(dependsOn), sessionKeyForProject(msg.project_id), clientMessageId]
+      [now, now, JSON.stringify(dependsOn), currentSessionKey(), clientMessageId]
     );
   }
   kickOutbox();
@@ -256,7 +257,7 @@ export async function prepareHeldReportForReconfirm(reportId: string): Promise<{
     [reportId]
   );
   if (!report) return null;
-  const currentSession = currentJoinSessionId(report.project_id);
+  const currentSession = currentSessionId(report.project_id);
   const held = await getHeldState(report.project_id);
   for (const captureId of JSON.parse(report.capture_ids_json || '[]') as string[]) {
     const c = await getCapture(captureId);

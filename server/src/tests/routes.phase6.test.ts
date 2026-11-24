@@ -1,7 +1,7 @@
 /**
  * Phase 6 route-level tests: organisation directory and input mode, the staged project wizard and
- * its lifecycle, draft exclusion, contractor model and multi-prime scoping, per-contractor join
- * codes, geofence settings, and BOQ revisions.
+ * its lifecycle, draft exclusion, one contractor per project (redesign R1d, decision T; join codes
+ * and multi-prime are gone), geofence settings, and BOQ revisions.
  *
  * Runs against a disposable database rebuilt from migrations (see helpers/testDb.ts).
  */
@@ -102,21 +102,21 @@ describe('Phase 6', { concurrency: false }, () => {
   // -------------------------------------------------------------------------
   describe('organisation directory', () => {
     it('lists by tag, hides archived entries unless asked, and is readable by any tenant user', async () => {
-      const res = await request(app).get('/api/v1/organizations?tag=CONTRACTOR').set(await as('contractor@insite.ng'));
+      const res = await request(app).get('/api/v1/organizations?tag=CONTRACTOR').set(await as('lender@insite.ng'));
       assert.equal(res.status, 200, JSON.stringify(res.body));
       const names = res.body.data.map((o: { name: string }) => o.name);
       assert.ok(names.includes('Voltaic Power Systems Ltd'));
       assert.ok(!names.some((n: string) => n.startsWith('Legacy Works')));
       for (const o of res.body.data) assert.ok(o.categories.includes('CONTRACTOR'));
 
-      const all = await request(app).get('/api/v1/organizations?includeArchived=true').set(await as('contractor@insite.ng'));
+      const all = await request(app).get('/api/v1/organizations?includeArchived=true').set(await as('lender@insite.ng'));
       assert.ok(all.body.data.some((o: { name: string }) => o.name.startsWith('Legacy Works')));
     });
 
     it('needs organizations:manage to create, edit and archive; names are unique per tenant', async () => {
       const denied = await request(app)
         .post('/api/v1/organizations')
-        .set(await as('contractor@insite.ng'))
+        .set(await as('lender@insite.ng'))
         .send({ name: 'Rogue Ltd', categories: ['CONTRACTOR'] });
       assert.equal(denied.status, 403);
 
@@ -142,10 +142,10 @@ describe('Phase 6', { concurrency: false }, () => {
     });
 
     it('tenant settings are readable by any user and changed only with tenant:manage_settings', async () => {
-      const read = await request(app).get('/api/v1/rbac/tenant/settings').set(await as('contractor@insite.ng'));
+      const read = await request(app).get('/api/v1/rbac/tenant/settings').set(await as('lender@insite.ng'));
       assert.equal(read.status, 200);
       assert.equal(read.body.data.organizationInputMode, 'BOTH');
-      assert.deepEqual(read.body.data.enabledGeofenceModes.sort(), ['LINEAR_CORRIDOR', 'PERIMETER', 'RADIAL']);
+      assert.deepEqual(read.body.data.enabledGeofenceModes.sort(), ['PERIMETER', 'RADIAL']);
       assert.equal(read.body.data.defaultGeofenceToleranceMeters, 100);
 
       const denied = await request(app)
@@ -158,6 +158,19 @@ describe('Phase 6', { concurrency: false }, () => {
         .set(await as('admin@insite.ng'))
         .send({ defaultGeofenceToleranceMeters: 5000 });
       assert.equal(bad.status, 400);
+      // Redesign: the workspace default radius for new radial boundaries (projects set their own).
+      assert.equal(read.body.data.defaultGeofenceRadiusMeters, 150);
+      const tooSmall = await request(app).put('/api/v1/rbac/tenant/settings').set(await as('admin@insite.ng')).send({ defaultGeofenceRadiusMeters: 5 });
+      assert.equal(tooSmall.status, 400);
+      const radius = await request(app).put('/api/v1/rbac/tenant/settings').set(await as('admin@insite.ng')).send({ defaultGeofenceRadiusMeters: 250 });
+      assert.equal(radius.status, 200, JSON.stringify(radius.body));
+      assert.equal(radius.body.data.defaultGeofenceRadiusMeters, 250);
+      const corridor = await request(app)
+        .put('/api/v1/rbac/tenant/settings')
+        .set(await as('admin@insite.ng'))
+        .send({ enabledGeofenceModes: ['LINEAR_CORRIDOR'] });
+      assert.equal(corridor.status, 400, 'linear corridors are no longer a mode');
+      await request(app).put('/api/v1/rbac/tenant/settings').set(await as('admin@insite.ng')).send({ defaultGeofenceRadiusMeters: 150 });
     });
   });
 
@@ -189,7 +202,6 @@ describe('Phase 6', { concurrency: false }, () => {
       const steps = Object.fromEntries(res.body.data.steps.map((s: { stepId: string }) => [s.stepId, s]));
       assert.equal(steps.basics.complete, true);
       assert.equal(steps.parties.complete, false);
-      assert.equal(await prisma.projectJoinCode.count({ where: { projectId: ids.draft } }), 0, 'a draft has no join codes');
       assert.ok(await prisma.auditLog.findFirst({ where: { projectId: ids.draft, action: 'PROJECT_DRAFT_CREATED' } }));
     });
 
@@ -202,7 +214,8 @@ describe('Phase 6', { concurrency: false }, () => {
       const retention = await step('facility', { retention: { retentionPercentage: 5, retentionDurationMonths: null, retentionReleaseAtCompletionPct: 0 } });
       assert.equal(retention.status, 422);
       assert.equal(retention.body.error.code, 'RETENTION_DURATION_REQUIRED');
-      assert.equal((await step('boq', { items: [{ boqItemId: crypto.randomUUID(), isHoldPoint: false }] })).status, 404);
+      // Redesign R2b: the BOQ step is now "Scope & sprints".
+      assert.equal((await step('boq', {})).status, 404);
       assert.equal((await step('nonsense', {})).status, 404);
     });
 
@@ -214,15 +227,17 @@ describe('Phase 6', { concurrency: false }, () => {
       for (const expected of [
         'parties:STEP_NOT_SAVED',
         'parties:LENDER_REQUIRED',
-        'parties:CONTRACTOR_MODEL_REQUIRED',
         'parties:CONTRACTOR_REQUIRED',
         'site:GEOFENCE_REQUIRED',
-        'boq:BOQ_REQUIRED',
+        'scope:SPRINT_REQUIRED',
+        'scope:SCOPE_REQUIRED',
         'reporting:STEP_NOT_SAVED',
       ]) {
         assert.ok(codes.includes(expected), `missing ${expected} in ${codes.join(', ')}`);
       }
       assert.ok(!codes.some((c: string) => c.startsWith('basics:') || c.startsWith('team:')));
+      // R1d: there is no contractor model to choose any more.
+      assert.ok(!codes.includes('parties:CONTRACTOR_MODEL_REQUIRED'));
     });
 
     it('enforces the organisation input mode on the server', async () => {
@@ -230,7 +245,6 @@ describe('Phase 6', { concurrency: false }, () => {
       const typedNew = await step('parties', {
         monitorOrganization: { id: ids.monitorOrg },
         lenderOrganization: { name: 'Brand New Bank Plc' },
-        contractorExecutionMode: 'SINGLE_CONTRACTOR',
         contractors: [],
       });
       assert.equal(typedNew.status, 422, JSON.stringify(typedNew.body));
@@ -241,7 +255,6 @@ describe('Phase 6', { concurrency: false }, () => {
       const typedExisting = await step('parties', {
         monitorOrganization: { id: ids.monitorOrg },
         lenderOrganization: { name: 'infracredit guarantee & project finance desk' },
-        contractorExecutionMode: 'SINGLE_CONTRACTOR',
         contractors: [],
       });
       assert.equal(typedExisting.status, 200, JSON.stringify(typedExisting.body));
@@ -257,30 +270,43 @@ describe('Phase 6', { concurrency: false }, () => {
       await request(app)
         .put('/api/v1/rbac/tenant/settings')
         .set(await as('admin@insite.ng'))
-        .send({ enabledGeofenceModes: ['RADIAL', 'LINEAR_CORRIDOR', 'PERIMETER'] });
+        .send({ enabledGeofenceModes: ['RADIAL', 'PERIMETER'] });
     });
 
-    it('keeps drafts out of lists, portfolio, executive summary, mobile and scheduled jobs', async () => {
-      // Make the draft look runnable to the cron: BOQ items and a day that has already started.
-      const upload = await request(app)
-        .post(`/api/v1/projects/${ids.draft}/boq/upload`)
-        .set(await as('monitor@insite.ng'))
-        .send({
-          items: [
-            { wbsCode: '01.01', section: 'BILL 1', description: 'Pad foundations in reinforced concrete', unit: 'm3', totalQuantity: 100, rateNgn: 1_000_000, budgetedCostNgn: 100_000_000, isHoldPoint: false },
-            { wbsCode: '01.02', section: 'BILL 1', description: 'Blockwork walls 225mm', unit: 'm2', totalQuantity: 2_000, rateNgn: 50_000, budgetedCostNgn: 100_000_000, isHoldPoint: false },
-          ],
-        });
-      assert.equal(upload.status, 201, JSON.stringify(upload.body));
+    it('keeps drafts out of lists, the portfolio, mobile and scheduled jobs', async () => {
+      // Make the draft look runnable to the cron: scope lines on a unit in a running sprint (redesign
+      // R2b) and a day that has already started.
+      const monitorAuth = await as('monitor@insite.ng');
+      const scope = (path: string) => `/api/v1/projects/${ids.draft}/scope${path}`;
+      const sprints = await request(app)
+        .put(scope('/sprints'))
+        .set(monitorAuth)
+        .send({ sprints: [{ name: 'Construction', startDate: '2026-01-05', endDate: '2027-12-31' }] });
+      assert.equal(sprints.status, 200, JSON.stringify(sprints.body));
+      const sprintId = sprints.body.data.sprints[0].id;
+      const classroom = await prisma.facility.findFirstOrThrow({ where: { tenantId: ids.tenant, code: 'CLASSROOM' } });
+      const unit = await request(app)
+        .post(scope('/units'))
+        .set(monitorAuth)
+        .send({ facilityId: classroom.id, label: 'Classroom block', startSprintId: sprintId, endSprintId: sprintId });
+      assert.equal(unit.status, 201, JSON.stringify(unit.body));
+      const facilityUnitId = unit.body.data.units[0].id;
+      for (const line of [
+        { wbsCode: '01.01', description: 'Pad foundations in reinforced concrete', unit: 'm3', totalQuantity: 100, rateNgn: 1_000_000 },
+        { wbsCode: '01.02', description: 'Blockwork walls 225mm', unit: 'm2', totalQuantity: 2_000, rateNgn: 50_000 },
+      ]) {
+        const res = await request(app).post(scope('/lines')).set(monitorAuth).send({ facilityUnitId, ...line });
+        assert.equal(res.status, 201, JSON.stringify(res.body));
+      }
       await prisma.project.update({ where: { id: ids.draft }, data: { workdayStartTime: '00:00' } });
 
       const list = await request(app).get('/api/v1/projects').set(await as('monitor@insite.ng'));
       assert.ok(!list.body.data.some((p: { id: string }) => p.id === ids.draft));
       const drafts = await request(app).get('/api/v1/projects/drafts').set(await as('monitor@insite.ng'));
       assert.ok(drafts.body.data.some((p: { id: string; canDelete: boolean }) => p.id === ids.draft && p.canDelete));
-      const exec = await request(app).get('/api/v1/projects/portfolio/executive-summary').set(await as('monitor@insite.ng'));
+      const exec = await request(app).get('/api/v1/projects/portfolio/overview').set(await as('monitor@insite.ng'));
       assert.equal(exec.status, 200);
-      assert.ok(!exec.body.data.projects.some((p: { projectId: string }) => p.projectId === ids.draft));
+      assert.ok(!exec.body.data.projects.some((p: { id: string }) => p.id === ids.draft));
 
       // Someone without projects:create or edit_baseline does not see another person's draft.
       const lenderView = await request(app).get(`/api/v1/projects/${ids.draft}/setup`).set(await as('lender@insite.ng'));
@@ -300,22 +326,29 @@ describe('Phase 6', { concurrency: false }, () => {
       const field = await request(app).get(`/api/v1/projects/${ids.draft}/notifications`).set(bearer(mobile.accessToken));
       assert.ok([403, 404].includes(field.status), String(field.status));
 
-      await runJobOnce('brief-dispatch');
-      assert.equal(await prisma.morningDeliverableBrief.count({ where: { projectId: ids.draft } }), 0);
+      await runJobOnce('reporting-obligations');
+      assert.equal(await prisma.reportingObligation.count({ where: { projectId: ids.draft } }), 0);
     });
 
-    it('saves every step and activates once, issuing join codes', async () => {
+    it('saves every step and activates once', async () => {
+      // R1d: a project has one contractor; two are refused by the step schema.
+      const two = await step('parties', {
+        monitorOrganization: { id: ids.monitorOrg },
+        lenderOrganization: { id: ids.lenderOrg },
+        contractors: [
+          { organization: { name: 'Phase Six Builders Ltd' }, tradeCategory: 'Building works', tradeCode: 'BLD' },
+          { organization: { name: 'Phase Six Electrical Ltd' }, tradeCategory: 'Electrical works', tradeCode: 'ELEC' },
+        ],
+      });
+      assert.equal(two.status, 400, JSON.stringify(two.body));
       const parties = await step('parties', {
         monitorOrganization: { id: ids.monitorOrg },
         lenderOrganization: { id: ids.lenderOrg },
-        contractorExecutionMode: 'SINGLE_CONTRACTOR',
-        contractors: [
-          { organization: { name: 'Phase Six Builders Ltd' }, tradeCategory: 'Building works', tradeCode: 'BLD', isMainContractor: false },
-        ],
+        contractors: [{ organization: { name: 'Phase Six Builders Ltd' }, tradeCategory: 'Building works', tradeCode: 'BLD' }],
       });
       assert.equal(parties.status, 200, JSON.stringify(parties.body));
-      const contractor = parties.body.data.parties.contractors[0];
-      assert.equal(contractor.isMainContractor, true, 'the only contractor of a single-contractor project is main');
+      assert.equal(parties.body.data.parties.contractors.length, 1);
+      assert.equal(parties.body.data.parties.contractorExecutionMode, undefined, 'no contractor model any more');
       const created = await prisma.organization.findFirstOrThrow({ where: { name: 'Phase Six Builders Ltd' } });
       assert.deepEqual(created.categories, ['CONTRACTOR']);
 
@@ -332,37 +365,30 @@ describe('Phase 6', { concurrency: false }, () => {
       assert.equal(facility.body.data.facility.retention.retentionPercentage, 5);
       assert.equal(facility.body.data.facility.tranches, undefined);
 
-      const items = await prisma.boqItem.findMany({ where: { projectId: ids.draft } });
-      const boq = await step('boq', {
-        items: items.map((i) => ({ boqItemId: i.id, isHoldPoint: false })),
-      });
-      assert.equal(boq.status, 200, JSON.stringify(boq.body));
+      // Redesign R2b: scope data is saved through /scope; saving the step marks it reviewed.
+      const scopeStep = await step('scope', {});
+      assert.equal(scopeStep.status, 200, JSON.stringify(scopeStep.body));
+      assert.equal(scopeStep.body.data.steps.find((x: { stepId: string }) => x.stepId === 'scope').complete, true);
 
       const reporting = await step('reporting', { reportingCadence: 'WEEKLY', workdayStartTime: '07:30', workdayEndTime: '16:30' });
       assert.equal(reporting.status, 200);
       assert.equal(reporting.body.data.canActivate, true, JSON.stringify(reporting.body.data.steps));
 
       const lender = await prisma.user.findUniqueOrThrow({ where: { email: 'lender@insite.ng' } });
-      const team = await step('team', { userIds: [lender.id], joinCodeRoleIds: null });
+      const team = await step('team', { userIds: [lender.id] });
       assert.equal(team.status, 200, JSON.stringify(team.body));
       assert.ok(team.body.data.team.userIds.includes(lender.id));
 
-      const contractorDenied = await request(app).post(`/api/v1/projects/${ids.draft}/activate`).set(await as('contractor@insite.ng'));
-      assert.ok([403, 404].includes(contractorDenied.status));
+      const lenderDenied = await request(app).post(`/api/v1/projects/${ids.draft}/activate`).set(await as('lender@insite.ng'));
+      assert.ok([403, 404].includes(lenderDenied.status));
 
       const activated = await request(app).post(`/api/v1/projects/${ids.draft}/activate`).set(await as('monitor@insite.ng'));
       assert.equal(activated.status, 200, JSON.stringify(activated.body));
       assert.equal(activated.body.data.status, 'ACTIVE');
-      // Join-code roles of the tenant: Resident CoW (project-wide) and Contractor Site Engineer (bound to the contractor).
-      assert.equal(activated.body.data.issuedJoinCodes.length, 2);
-      const codes = await prisma.projectJoinCode.findMany({ where: { projectId: ids.draft }, include: { role: true } });
-      const con = codes.find((c) => c.role.fieldPersonaType === 'CONTRACTOR_EXECUTOR')!;
-      assert.equal(con.projectContractorId, contractor.id);
-      assert.match(con.code, /^TST-601-CON-[0-9A-HJKMNP-TV-Z]{6}$/);
+      assert.equal(activated.body.data.issuedJoinCodes, undefined, 'no join codes (R1d)');
 
       const again = await request(app).post(`/api/v1/projects/${ids.draft}/activate`).set(await as('monitor@insite.ng'));
       assert.equal(again.status, 409);
-      assert.equal(await prisma.projectJoinCode.count({ where: { projectId: ids.draft } }), 2, 'codes are issued once');
       assert.ok(await prisma.auditLog.findFirst({ where: { projectId: ids.draft, action: 'PROJECT_ACTIVATED' } }));
       const saves = await prisma.auditLog.count({ where: { projectId: ids.draft, action: 'PROJECT_SETUP_STEP_SAVED' } });
       assert.ok(saves >= 6);
@@ -377,8 +403,8 @@ describe('Phase 6', { concurrency: false }, () => {
       assert.equal(prefix.body.error.code, 'CODE_PREFIX_LOCKED');
       const ok = await step('basics', { ...basics, name: 'Phase 6 Test Clinic (renamed)' });
       assert.equal(ok.status, 200);
-      const contractorEdit = await step('reporting', { reportingCadence: 'DAILY', workdayStartTime: '07:00', workdayEndTime: '16:00' }, 'contractor@insite.ng');
-      assert.ok([403, 404].includes(contractorEdit.status));
+      const lenderEdit = await step('reporting', { reportingCadence: 'DAILY', workdayStartTime: '07:00', workdayEndTime: '16:00' }, 'lender@insite.ng');
+      assert.ok([403, 404].includes(lenderEdit.status));
     });
 
     it('deletes a draft for its creator only, and never an active project', async () => {
@@ -401,8 +427,8 @@ describe('Phase 6', { concurrency: false }, () => {
 
   // -------------------------------------------------------------------------
   describe('archiving', () => {
-    it('archives an active project: read-only, off mobile, codes deactivated, audited', async () => {
-      const denied = await request(app).post(`/api/v1/projects/${ids.draft}/archive`).set(await as('contractor@insite.ng')).send({});
+    it('archives an active project: read-only, off mobile, audited', async () => {
+      const denied = await request(app).post(`/api/v1/projects/${ids.draft}/archive`).set(await as('lender@insite.ng')).send({});
       assert.ok([403, 404].includes(denied.status));
 
       const res = await request(app)
@@ -411,7 +437,6 @@ describe('Phase 6', { concurrency: false }, () => {
         .send({ reason: 'Works completed' });
       assert.equal(res.status, 200, JSON.stringify(res.body));
       assert.equal(res.body.data.status, 'ARCHIVED');
-      assert.equal(await prisma.projectJoinCode.count({ where: { projectId: ids.draft, isActive: true } }), 0);
       const audit = await prisma.auditLog.findFirst({ where: { projectId: ids.draft, action: 'PROJECT_ARCHIVED' } });
       assert.ok(audit);
       assert.equal((audit.payload as { reason: string }).reason, 'Works completed');
@@ -430,56 +455,35 @@ describe('Phase 6', { concurrency: false }, () => {
       const again = await request(app).post(`/api/v1/projects/${ids.draft}/archive`).set(await as('monitor@insite.ng')).send({});
       assert.equal(again.status, 409);
 
-      // Gone from mobile and from the executive summary.
+      // Gone from mobile and from the portfolio.
       const mobile = await mobileToken('monitor@insite.ng', 'device-p6-archived');
       assert.ok(!mobile.projects.some((p) => p.id === ids.draft));
-      const exec = await request(app).get('/api/v1/projects/portfolio/executive-summary').set(await as('monitor@insite.ng'));
-      assert.ok(!exec.body.data.projects.some((p: { projectId: string }) => p.projectId === ids.draft));
+      const exec = await request(app).get('/api/v1/projects/portfolio/overview').set(await as('monitor@insite.ng'));
+      assert.ok(!exec.body.data.projects.some((p: { id: string }) => p.id === ids.draft));
     });
   });
 
   // -------------------------------------------------------------------------
-  describe('multi-prime contractors', () => {
-    it('issues one contractor code per package with its trade code, and scopes the mobile BOQ', async () => {
-      const codes = await prisma.projectJoinCode.findMany({
-        where: { projectId: ids.kan, isActive: true, projectContractorId: { not: null } },
-        include: { projectContractor: true },
-      });
-      assert.equal(codes.length, 3);
-      for (const c of codes) assert.match(c.code, new RegExp(`^KAN-210-CON-${c.projectContractor!.tradeCode}-[0-9A-HJKMNP-TV-Z]{6}$`));
-      const elec = codes.find((c) => c.projectContractor!.tradeCode === 'ELEC')!;
-
-      const join = await request(app).post('/api/v1/auth/join-project').send({
-        joinCode: elec.code,
-        agentFullName: 'Electrician Joiner',
-        agentPhoneNumber: '+2348012345678',
-        deviceId: 'device-p6-elec',
-      });
-      assert.equal(join.status, 201, JSON.stringify(join.body));
-      assert.equal(join.body.data.sessionProfile.contractor.tradeCode, 'ELEC');
-      assert.ok(join.body.data.sessionProfile.tenantBranding.primaryColorHex);
-      const wbs = join.body.data.baselinePack.boqItems.map((b: { wbsCode: string }) => b.wbsCode).sort();
-      assert.deepEqual(wbs, ['02.01', '02.02']);
-      const session = await prisma.fieldAgentSession.findUniqueOrThrow({ where: { id: join.body.data.sessionProfile.sessionId } });
-      assert.equal(session.projectContractorId, elec.projectContractorId);
-    });
-
-    it('turning field reporting off for a contractor deactivates its code', async () => {
-      const mep = await prisma.projectContractor.findFirstOrThrow({ where: { projectId: ids.kan, tradeCode: 'MEP' }, include: { organization: true } });
+  describe('one contractor per project (R1d)', () => {
+    it('refuses a second contractor on a live project and keeps the seeded one', async () => {
+      const before = await request(app).get(`/api/v1/projects/${ids.kan}/contractors`).set(await as('monitor@insite.ng'));
+      assert.equal(before.status, 200, JSON.stringify(before.body));
+      assert.equal(before.body.data.length, 1, 'KAN-210 has one contractor since R1d');
       const res = await request(app)
-        .patch(`/api/v1/projects/${ids.kan}/contractors/${mep.id}`)
+        .post(`/api/v1/projects/${ids.kan}/contractors`)
         .set(await as('monitor@insite.ng'))
-        .send({
-          organization: { id: mep.organizationId },
-          tradeCategory: mep.tradeCategory,
-          tradeCode: mep.tradeCode,
-          isMainContractor: false,
-          allowFieldReporting: false,
-        });
-      assert.equal(res.status, 200, JSON.stringify(res.body));
-      assert.equal(await prisma.projectJoinCode.count({ where: { projectContractorId: mep.id, isActive: true } }), 0);
+        .send({ organization: { name: 'Second Contractor Ltd' }, tradeCategory: 'Electrical works', tradeCode: 'ELEC' });
+      assert.equal(res.status, 422, JSON.stringify(res.body));
+      assert.equal(res.body.error.code, 'ONE_CONTRACTOR_ONLY');
+      assert.equal(await prisma.projectContractor.count({ where: { projectId: ids.kan } }), 1);
     });
 
+    it('serves the whole BOQ to the field (no contractor packages on sessions)', async () => {
+      const mobile = await mobileToken('monitor@insite.ng', 'device-p6-kan');
+      const res = await request(app).get(`/api/v1/auth/mobile/projects/${ids.kan}/baseline`).set(bearer(mobile.accessToken));
+      assert.equal(res.status, 200, JSON.stringify(res.body));
+      assert.equal(res.body.data.boqItems.length, 6);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -503,78 +507,6 @@ describe('Phase 6', { concurrency: false }, () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  describe('BOQ revisions after activation', () => {
-    it('requires a reason and never goes below the progress done', async () => {
-      const certified = await prisma.boqItem.findFirstOrThrow({
-        where: { projectId: ids.lkk, cumulativeCertifiedPct: { gt: 0 } },
-        orderBy: { cumulativeCertifiedPct: 'desc' },
-      });
-      const asInput = (overrides: Partial<{ totalQuantity: number; rateNgn: number }> = {}) => {
-        const totalQuantity = overrides.totalQuantity ?? Number(certified.totalQuantity);
-        const rateNgn = overrides.rateNgn ?? Number(certified.rateNgn);
-        return {
-          wbsCode: certified.wbsCode,
-          section: certified.section,
-          description: certified.description,
-          unit: certified.unit,
-          totalQuantity,
-          rateNgn,
-          budgetedCostNgn: totalQuantity * rateNgn,
-          isHoldPoint: certified.isHoldPoint,
-        };
-      };
-      const upload = async (body: object) =>
-        request(app).post(`/api/v1/projects/${ids.lkk}/boq/upload`).set(await as('monitor@insite.ng')).send(body);
-
-      const noReason = await upload({ items: [asInput()], mode: 'MERGE' });
-      assert.equal(noReason.status, 422);
-      assert.equal(noReason.body.error.code, 'REVISION_REASON_REQUIRED');
-
-      const certifiedQty = (Number(certified.cumulativeCertifiedPct) / 100) * Number(certified.totalQuantity);
-      const below = await upload({ items: [asInput({ totalQuantity: certifiedQty * 0.5 })], mode: 'MERGE', reason: 'Re-measure' });
-      assert.equal(below.status, 409, JSON.stringify(below.body));
-      assert.equal(below.body.error.code, 'BOQ_BELOW_CERTIFIED');
-
-      const lowerRate = await upload({ items: [asInput({ rateNgn: Number(certified.rateNgn) * 0.9 })], mode: 'MERGE', reason: 'Rate cut' });
-      assert.equal(lowerRate.status, 409);
-
-      const removal = await upload({
-        items: [{ wbsCode: 'NEW.01', section: 'EXTRA', description: 'Additional kerbs', unit: 'm', totalQuantity: 10, rateNgn: 1000, budgetedCostNgn: 10000, isHoldPoint: false }],
-        mode: 'REPLACE',
-        reason: 'Replace everything',
-      });
-      assert.equal(removal.status, 409);
-      assert.equal(removal.body.error.code, 'BOQ_ITEM_HAS_PROGRESS');
-
-      const grow = await upload({
-        items: [asInput({ totalQuantity: Number(certified.totalQuantity) * 2 })],
-        mode: 'MERGE',
-        reason: 'Variation order 3: scope doubled',
-      });
-      assert.equal(grow.status, 201, JSON.stringify(grow.body));
-      assert.equal(grow.body.data.revisionNumber, 1);
-      const after = await prisma.boqItem.findUniqueOrThrow({ where: { id: certified.id } });
-      // Redesign R1b: progress is recomputed from the counted reports against the new quantity.
-      const { getReportedProgressByItem } = await import('../modules/evidence/evidenceProvider');
-      const expected = (await getReportedProgressByItem(ids.lkk, [{ id: after.id, totalQuantity: Number(after.totalQuantity) }])).get(after.id) ?? 0;
-      assert.ok(Math.abs(Number(after.cumulativeCertifiedPct) - Math.round(expected * 100) / 100) < 0.01);
-      assert.ok(after.lastRevisionId);
-      assert.ok(await prisma.auditLog.findFirst({ where: { projectId: ids.lkk, action: 'BOQ_REVISED' } }));
-      const revisions = await request(app).get(`/api/v1/projects/${ids.lkk}/boq/revisions`).set(await as('monitor@insite.ng'));
-      assert.equal(revisions.body.data[0].reason, 'Variation order 3: scope doubled');
-    });
-
-    it('suggests contractor packages without saving anything', async () => {
-      const before = await prisma.projectContractor.count();
-      const res = await request(app).post(`/api/v1/projects/${ids.kan}/boq/suggest-contractors`).set(await as('monitor@insite.ng'));
-      assert.equal(res.status, 200, JSON.stringify(res.body));
-      assert.equal(res.body.data.engine, 'RULES_ENGINE');
-      const codes = res.body.data.packages.map((p: { tradeCode: string }) => p.tradeCode);
-      assert.ok(codes.includes('ELEC'), codes.join(','));
-      const all = res.body.data.packages.flatMap((p: { matchedWbsCodes: string[] }) => p.matchedWbsCodes).sort();
-      assert.deepEqual(all, ['01.01', '01.02', '02.01', '02.02', '03.01', '03.02']);
-      assert.equal(await prisma.projectContractor.count(), before);
-    });
-  });
+  // Redesign R2d: BOQ revisions by upload and contractor package suggestions are gone; scope edits on
+  // live projects are covered by routes.r2.test.ts.
 });

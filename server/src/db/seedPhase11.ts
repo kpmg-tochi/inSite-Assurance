@@ -13,7 +13,6 @@ import { provisionDefaultRoles } from "../modules/rbac/rbac.service";
 import { seedStarterTemplates } from "../modules/process/workflowTemplates.service";
 import { createProjectType } from "../modules/projectTypes/projectTypes.service";
 import { createProjectDraft, saveProjectSetupStep } from "../modules/projects/projectSetup.service";
-import { issueMissingJoinCodes } from "../modules/projects/joinCodes.service";
 
 /**
  * Phase 11 seed: a second tenant run as a programme with two delivery models.
@@ -255,8 +254,7 @@ export async function seedPhase11(p: { passwordHash: string }) {
     await saveProjectSetupStep(draft.projectId, "parties", adminPayload, {
       ...(spec.ownerId ? { owningOrganizationId: spec.ownerId } : {}),
       monitorOrganization: { id: monitor.id },
-      contractorExecutionMode: "SINGLE_CONTRACTOR",
-      contractors: [{ organization: { id: contractor.id }, tradeCategory: "Civil works", tradeCode: "CIV", isMainContractor: true }],
+      contractors: [{ organization: { id: contractor.id }, tradeCategory: "Civil works", tradeCode: "CIV" }],
       beneficiaries: [
         {
           name: spec.beneficiary,
@@ -268,7 +266,7 @@ export async function seedPhase11(p: { passwordHash: string }) {
       ],
     });
     if (spec.live) {
-      const live = await prisma.project.update({
+      await prisma.project.update({
         where: { id: draft.projectId },
         data: {
           status: "ACTIVE",
@@ -278,10 +276,6 @@ export async function seedPhase11(p: { passwordHash: string }) {
           geofenceGeoJson: geofence(spec.live.label, spec.live.lat, spec.live.lng) as unknown as Prisma.InputJsonValue,
         },
       });
-      const joinRoles = await prisma.role.findMany({
-        where: { tenantId: tenant.id, surface: { in: ["MOBILE", "BOTH"] }, onboardingMode: "JOIN_CODE" },
-      });
-      await issueMissingJoinCodes(prisma as unknown as Prisma.TransactionClient, live, joinRoles);
     }
     return draft.projectId;
   }

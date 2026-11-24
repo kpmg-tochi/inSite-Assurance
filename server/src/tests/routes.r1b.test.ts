@@ -8,6 +8,7 @@
  * (archived). LKK-402 supplies a seeded field session.
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { fieldToken as sessionToken } from './helpers/fieldAuth';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
@@ -19,13 +20,12 @@ type PrismaClientType = typeof import('../config/prisma')['prisma'];
 
 let app: Express;
 let prisma: PrismaClientType;
-let signFieldAgentToken: typeof import('../middleware/auth.middleware')['signFieldAgentToken'];
 let progress: typeof import('../modules/progress/progress.service');
 
 const PASSWORD = 'Password123!';
 const LENDER = 'lender@insite.ng'; // Funder / Finance Officer: payments:record
 const MONITOR = 'monitor@insite.ng'; // payments:view
-const CONTRACTOR = 'contractor@insite.ng'; // neither
+const NEITHER = 'no.payments@insite.test'; // neither (R1d: contractors have no login; a test user stands in)
 const ids: Record<string, string> = {};
 let today = '';
 
@@ -56,7 +56,6 @@ async function money(projectId = ids.project) {
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
-  ({ signFieldAgentToken } = await import('../middleware/auth.middleware'));
   progress = await import('../modules/progress/progress.service');
   const { createApp } = await import('../app');
   app = createApp();
@@ -67,7 +66,28 @@ before(async () => {
   ids.tenant = lkk.tenantId;
   const config = ProjectTypeConfigSchema.parse({ closure: { requireCocFor: ['FINAL_PAYMENT'] } });
   const snapshot = { projectTypeId: crypto.randomUUID(), code: 'R1B', name: 'R1B type', version: 1, config };
-  const users = await prisma.user.findMany({ where: { email: { in: [LENDER, MONITOR, CONTRACTOR] } } });
+  // A web user who holds neither payments permission.
+  const viewOnly = await prisma.role.create({
+    data: {
+      tenantId: ids.tenant,
+      name: 'Project viewer',
+      code: 'R1B_PROJECT_VIEWER',
+      surface: 'WEB',
+      rolePermissions: { create: [{ permission: { connect: { key: 'projects:view_assigned' } } }] },
+    },
+  });
+  const anyOrg = await prisma.organization.findFirstOrThrow({ where: { tenantId: ids.tenant } });
+  await prisma.user.create({
+    data: {
+      tenantId: ids.tenant,
+      email: NEITHER,
+      passwordHash: await (await import('bcryptjs')).default.hash('Password123!', 8),
+      fullName: 'No Payments',
+      roleId: viewOnly.id,
+      organizationId: anyOrg.id,
+    },
+  });
+  const users = await prisma.user.findMany({ where: { email: { in: [LENDER, MONITOR, NEITHER] } } });
   const make = async (code: string, status: 'ACTIVE' | 'ARCHIVED') => {
     const p = await prisma.project.create({
       data: {
@@ -197,13 +217,13 @@ describe('Redesign R1b: payment record', () => {
     assert.equal(res.body.data.payments.length, 5);
     assert.equal((await request(app).get(url()).set(await web(LENDER))).body.data.canRecord, true);
 
-    const contractor = await request(app).get(url()).set(await web(CONTRACTOR));
-    assert.equal(contractor.status, 403, JSON.stringify(contractor.body));
+    const neither = await request(app).get(url()).set(await web(NEITHER));
+    assert.equal(neither.status, 403, JSON.stringify(neither.body));
     const monitorWrite = await request(app).post(url()).set(await web(MONITOR)).send({ kind: 'INTERIM', paidOn: today, grossAmountNgn: 1, reference: 'X' });
     assert.equal(monitorWrite.status, 403);
     const fieldRead = await request(app)
       .get(url('', ids.lkk))
-      .set({ Authorization: `Bearer ${signFieldAgentToken({ sessionId: ids.lkkSession })}` });
+      .set({ Authorization: `Bearer ${(await sessionToken(prisma, ids.lkkSession))}` });
     assert.ok([401, 403].includes(fieldRead.status), String(fieldRead.status));
   });
 

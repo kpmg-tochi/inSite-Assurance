@@ -6,7 +6,6 @@ import type {
   ProjectReportingStreamsDto,
   RaiseInspectionFindingRequest,
   ReviewSiteInspectionRequest,
-  SaveChecklistTemplateRequestInput,
   SaveReportingStreamsRequest,
   SiteInspectionDto,
   SiteInspectionSummaryDto,
@@ -101,20 +100,6 @@ export const listChecklistTemplates = async (includeArchived = false) => {
   return data.data;
 };
 
-export const createChecklistTemplate = async (body: SaveChecklistTemplateRequestInput) => {
-  const { data } = await api.post<ApiEnvelope<InspectionChecklistTemplateDto>>('/inspection-templates', body);
-  return data.data;
-};
-
-export const updateChecklistTemplate = async (code: string, body: SaveChecklistTemplateRequestInput) => {
-  const { data } = await api.put<ApiEnvelope<InspectionChecklistTemplateDto>>(`/inspection-templates/${code}`, body);
-  return data.data;
-};
-
-export const setChecklistTemplateArchived = async (code: string, archived: boolean) => {
-  const { data } = await api.post<ApiEnvelope<InspectionChecklistTemplateDto[]>>(`/inspection-templates/${code}/${archived ? 'archive' : 'restore'}`);
-  return data.data;
-};
 
 // Supervision
 

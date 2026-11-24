@@ -100,37 +100,23 @@ export const CreateDefectTicketRequestSchema = z.object({
   title: z.string().trim().min(3).max(160),
   description: z.string().trim().min(3).max(4000),
   severity: DefectSeverityEnum.default('MEDIUM'),
-  /** Liable contractor; the main contractor when omitted (unified model). Required in multi-prime. */
-  projectContractorId: z.string().uuid().nullable().optional(),
   boqItemId: z.string().uuid().nullable().optional(),
   location: z.string().trim().max(200).optional(),
   dueDate: CalendarDate.nullable().optional(),
-  /** Assign (and notify) the liable contractor straight away. */
+  /** Mark the ticket as passed to the contractor straight away (the contractor has no login, R1d). */
   assign: z.boolean().default(true),
 });
 export type CreateDefectTicketRequest = z.infer<typeof CreateDefectTicketRequestSchema>;
 export type CreateDefectTicketInput = z.input<typeof CreateDefectTicketRequestSchema>;
 
+/** The ticket was passed to the project's contractor (outside the platform). */
 export const AssignDefectTicketRequestSchema = z.object({
-  projectContractorId: z.string().uuid(),
   dueDate: CalendarDate.nullable().optional(),
 });
 export type AssignDefectTicketRequest = z.infer<typeof AssignDefectTicketRequestSchema>;
 
 /** Capture IDs are the clientCaptureIds of Phase 4 captures registered on this project. */
 const CaptureIds = z.array(z.string().uuid()).max(20).default([]);
-
-export const RectifyDefectTicketRequestSchema = z
-  .object({
-    notes: z.string().trim().max(2000).default(''),
-    captureIds: CaptureIds,
-  })
-  .refine((v) => v.captureIds.length > 0 || v.notes.length >= 5, {
-    path: ['notes'],
-    message: 'Add photos of the repair or describe what was done',
-  });
-export type RectifyDefectTicketRequest = z.infer<typeof RectifyDefectTicketRequestSchema>;
-export type RectifyDefectTicketInput = z.input<typeof RectifyDefectTicketRequestSchema>;
 
 export const VerifyDefectTicketRequestSchema = z
   .object({
@@ -176,29 +162,17 @@ export const DefectTicketDtoSchema = z.object({
   boqItemId: z.string().uuid().nullable(),
   boqItemLabel: z.string().nullable(),
   sourceHandoverSubmissionId: z.string().uuid().nullable(),
-  /** Photos the stakeholder attached to the snag (handover uploads, not field evidence). */
-  snagPhotoKeys: z.array(z.string()),
   raisedByName: z.string().nullable(),
-  rectificationNotes: z.string().nullable(),
-  rectificationCaptures: z.array(DefectCaptureDtoSchema),
-  rectifiedAt: z.string().nullable(),
   verificationNotes: z.string().nullable(),
   verificationCaptures: z.array(DefectCaptureDtoSchema),
   verifiedByName: z.string().nullable(),
   verifiedAt: z.string().nullable(),
   resolutionReason: z.string().nullable(),
   reopenCount: z.number().int(),
-  /**
-   * Who captures the field evidence for the repair, following the project's reporting set-up:
-   * CONTRACTOR when contractors report from site, MONITOR when only the monitoring side does (then
-   * closing a ticket needs the verifier's site photos, and a verifier may close it from Open/Assigned).
-   */
-  evidenceCapturedBy: z.enum(['CONTRACTOR', 'MONITOR']),
   createdAt: z.string(),
   updatedAt: z.string(),
   actions: z.object({
     assign: gate,
-    rectify: gate,
     verify: gate,
     reject: gate,
   }),
@@ -227,13 +201,3 @@ export const RetentionSummaryDtoSchema = z.object({
 });
 export type RetentionSummaryDto = z.infer<typeof RetentionSummaryDtoSchema>;
 
-/** Executive view row (Phase 10 Step 8). */
-export const PortfolioRetentionItemSchema = z.object({
-  phase: ConstructionPhaseEnum,
-  heldNgn: z.number(),
-  releasedNgn: z.number(),
-  retentionEndDate: z.string().nullable(),
-  daysRemaining: z.number().int().nullable(),
-  openDefectCount: z.number().int(),
-});
-export type PortfolioRetentionItem = z.infer<typeof PortfolioRetentionItemSchema>;

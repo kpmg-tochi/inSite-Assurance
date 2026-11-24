@@ -1,7 +1,5 @@
 import type {
   ConstructionPhase,
-  ContractorExecutionMode,
-  FieldPersonaType,
   GeofenceMode,
   ProjectDeliveryModelFields,
   ProjectGeofence,
@@ -48,18 +46,15 @@ export interface ProjectSummaryDto extends ProjectDeliveryModelFields {
   scheduleVariance: ScheduleVarianceBadge | null;
   monitorOrganizationName: string;
   lenderOrganizationName: string;
-  /** Main contractor (or the only one). Use contractorCount for "+N". */
+  /** The project's contractor (one per project). */
   contractorOrganizationName: string;
   contractorCount: number;
-  contractorExecutionMode: ContractorExecutionMode | null;
   contractors: Array<{
     id: string;
     organizationId: string;
     organizationName: string;
     tradeCategory: string;
     tradeCode: string;
-    isMainContractor: boolean;
-    allowFieldReporting: boolean;
   }>;
   activatedAt: string | null;
   archivedAt: string | null;
@@ -68,26 +63,11 @@ export interface ProjectSummaryDto extends ProjectDeliveryModelFields {
   totalBoqItems: number;
   opaqueLumpSumCount: number;
   lastFieldCaptureAt: string | null;
-  joinCodes: Array<{
-    id: string;
-    code: string;
-    roleId: string;
-    roleCode: string;
-    roleName: string;
-    fieldPersonaType: FieldPersonaType;
-    assuranceWeight: number;
-    requiresIdentityAssurance: boolean;
-    projectContractorId?: string | null;
-    contractorName?: string | null;
-    tradeCode?: string | null;
-    isActive: boolean;
-  }>;
 }
 
 export interface BoqItemRecordDto {
   id: string;
   projectId: string;
-  projectContractorId?: string | null;
   lastRevisionId?: string | null;
   wbsCode: string;
   section: string;
@@ -131,10 +111,6 @@ export interface AuditTrailResponseDto {
 }
 
 export type {
-  ContractorVerificationRecordDto,
-  ReviewContractorVerificationRequest,
-  PortfolioExecutiveSummaryDto,
-  PortfolioProjectHealthItem,
   PermissionDto,
   RoleDto,
   TenantDto,

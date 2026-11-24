@@ -12,7 +12,6 @@ import {
   Settings,
   FolderKanban,
   ArrowRight,
-  CalendarRange,
   ClipboardCheck,
   Handshake,
   Wrench,
@@ -31,7 +30,7 @@ import type { ProjectSummaryDto } from "../api/types";
 import { useAuth } from "../lib/auth-context";
 import { useDemoAccounts } from "../config/useDemoAccounts";
 import { IS_DEMO_MODE } from "../config/demoMode";
-import { formatRegistrationCredential, getInitials } from "../lib/formatters";
+import { getInitials } from "../lib/formatters";
 import Notifications from "./Notifications";
 import { APPLICATION_NAME } from "../config/appName";
 
@@ -49,7 +48,6 @@ const SHOW_RECENT_PROJECTS = false;
 
 /** Header page names for the project pages, by the path segment after /app/projects/:id/. */
 const PROJECT_PAGE_NAMES: Record<string, string> = {
-  schedule: "Schedule",
   inspections: "Inspections",
   milestones: "Milestones",
   kickoff: "Kick-off",
@@ -107,11 +105,6 @@ export function AppShell({
   }, []);
 
   const userInitials = getInitials(user?.fullName || "User");
-  const credentialText = formatRegistrationCredential(
-    user?.professionalRegistrationBodyCode,
-    user?.professionalRegistrationNumber,
-  );
-
   const roleDisplayLabel = user?.roleName || user?.roleCode || "Team Member";
 
   const workspaceTitleByRole = user?.isPlatformSuperAdmin
@@ -120,9 +113,8 @@ export function AppShell({
 
   const navLabels = {
     dashboard: "Project overview",
-    boq: hasPermission("boq:upload_edit")
-      ? "BOQ & Hold-Points"
-      : "BOQ & Hold-Point Rules",
+    // Redesign R2b
+    scope: "Scope & sprints",
   };
 
   // Header: the project code only on pages about one project (and only when it is the selected
@@ -134,7 +126,7 @@ export function AppShell({
     if (routeProjectId) {
       const section = projectRoute?.[2] ?? "dashboard";
       if (section === "dashboard") return navLabels.dashboard;
-      if (section === "boq") return navLabels.boq;
+      if (section === "scope") return navLabels.scope;
       return PROJECT_PAGE_NAMES[section] ?? "Project";
     }
     if (location.pathname.startsWith("/app/projects/new")) return "New Project";
@@ -335,8 +327,8 @@ export function AppShell({
 
             {hasPermission("boq:view") && (
             <NavLink
-              to={selectedProject ? `${projectBasePath}/boq` : "/app/projects"}
-              title={navLabels.boq}
+              to={selectedProject ? `${projectBasePath}/scope` : "/app/projects"}
+              title={navLabels.scope}
               className={({ isActive }) =>
                 `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
                   isActive
@@ -347,28 +339,11 @@ export function AppShell({
             >
               <ClipboardList className="w-4 h-4 shrink-0" />
               {!sidebarCollapsed && (
-                <span className="truncate">{navLabels.boq}</span>
+                <span className="truncate">{navLabels.scope}</span>
               )}
             </NavLink>
             )}
 
-            {/* Phase 9: schedule and variance */}
-            {(hasPermission("schedule:view_variance") || hasPermission("schedule:propose_programme")) && (
-              <NavLink
-                to={selectedProject ? `${projectBasePath}/schedule` : "/app/projects"}
-                title="Schedule"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive
-                      ? "bg-white/15 text-white shadow-sm"
-                      : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <CalendarRange className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Schedule</span>}
-              </NavLink>
-            )}
 
             {/* Phase 14: site inspections and findings */}
             {selectedProject && (hasPermission("inspections:view") || hasPermission("inspections:manage_findings")) && (
@@ -423,7 +398,7 @@ export function AppShell({
             )}
 
             {/* Phase 10: handover and retention, shown only when the module is on for the project */}
-            {selectedProject && closeout?.enableHandoverModule && (hasPermission("handover:manage_links") || hasPermission("handover:review_feedback")) && (
+            {selectedProject && closeout?.enableHandoverModule && (hasPermission("handover:record_response") || hasPermission("handover:review_feedback")) && (
               <NavLink
                 to={`${projectBasePath}/handover`}
                 title="Handover"
@@ -564,7 +539,6 @@ export function AppShell({
                 </div>
                 <div className="text-[11px] text-white/70 truncate">
                   {roleDisplayLabel}
-                  {credentialText ? ` · ${credentialText}` : ""}
                 </div>
               </div>
             )}

@@ -38,8 +38,6 @@ export const SubmissionGeotagSchema = SubmissionGeotagInputSchema.extend({
   geofenceStatus: GeofenceStatusEnum.nullable().optional(),
   /** Metres outside the boundary; 0 inside. */
   distanceOutsideMeters: z.number().nullable().optional(),
-
-  chainageLabel: z.string().nullable(),
   distanceFromSiteMeters: z.number().nonnegative().nullable(),
 });
 export type SubmissionGeotag = z.infer<typeof SubmissionGeotagSchema>;
@@ -108,7 +106,6 @@ export const WorkdayReportCaptureSummarySchema = CaptureDtoSchema.pick({
   gpsAccuracyMeters: true,
   isMockLocation: true,
   isWithinGeofence: true,
-  chainageLabel: true,
   signatureVerified: true,
   integrityPassed: true,
   integrityFlags: true,

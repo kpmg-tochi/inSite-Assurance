@@ -7,7 +7,6 @@ import { getWbsThreads } from '../storage/wbsRepository';
 
 type PushData = {
   actionType?: string;
-  assuranceStatus?: string;
   wbsItemId?: string;
   /** Set by the server on every project notification (Phase 5). */
   projectId?: string;
@@ -19,9 +18,6 @@ async function routeFor(data: PushData, projectId: string | null): Promise<void>
   switch (data.actionType) {
     case 'OPEN_PROJECT':
       rootNavigationRef.navigate('WbsInbox');
-      return;
-    case 'OPEN_ASSURANCE_WIZARD':
-      rootNavigationRef.navigate('AssuranceWizard');
       return;
     case 'OPEN_REPORT_SUMMARY':
     case 'OPEN_BACKLOG_REVIEW':
@@ -47,12 +43,12 @@ async function routeFor(data: PushData, projectId: string | null): Promise<void>
 }
 
 /**
- * Registers the push token for every identity on the device when permission was already granted
- * (no prompt at launch), refreshes assurance status when a push arrives, and routes taps by
+ * Registers the push token for the signed-in account when permission was already granted
+ * (no prompt at launch), and routes taps by
  * `actionType`, switching to the notification's project first when it is not the open one.
  */
 export function usePushNotifications(identities: PushIdentity[]): void {
-  const { refreshAssuranceStatus, activeProjectId, projects, switchProject, refreshProjects } = useProfile();
+  const { activeProjectId, projects, switchProject, refreshProjects } = useProfile();
   const identityKey = useMemo(() => identities.map((i) => `${i.scope}:${i.token}`).join('|'), [identities]);
   const latest = useRef({ activeProjectId, projects, switchProject, refreshProjects });
   latest.current = { activeProjectId, projects, switchProject, refreshProjects };
@@ -66,7 +62,6 @@ export function usePushNotifications(identities: PushIdentity[]): void {
   useEffect(() => {
     const received = Notifications.addNotificationReceivedListener((n) => {
       const data = (n.request.content.data ?? {}) as PushData;
-      if (data.assuranceStatus) void refreshAssuranceStatus();
       if (data.actionType === 'OPEN_PROJECT') void latest.current.refreshProjects().catch(() => undefined);
     });
     const tapped = Notifications.addNotificationResponseReceivedListener((response) => {
@@ -80,7 +75,6 @@ export function usePushNotifications(identities: PushIdentity[]): void {
           await current.switchProject(data.projectId);
           projectId = data.projectId;
         }
-        if (data.assuranceStatus) await refreshAssuranceStatus();
         await routeFor(data, projectId);
       })();
     });
@@ -88,5 +82,5 @@ export function usePushNotifications(identities: PushIdentity[]): void {
       received.remove();
       tapped.remove();
     };
-  }, [refreshAssuranceStatus]);
+  }, []);
 }

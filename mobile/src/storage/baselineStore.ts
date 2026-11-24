@@ -40,7 +40,7 @@ export function getLoadedBaselinePack(projectId: string | null = getActiveProjec
   return projectId ? loaded.get(projectId) ?? null : null;
 }
 
-/** Removes one project's pack (leaving a join-code project) or all of them (sign-out, reset). */
+/** Removes the given projects' packs (sign-out) or all of them (reset). */
 export async function deleteBaselinePacks(projectIds?: string[]): Promise<void> {
   const db = await getDb();
   if (!projectIds) {

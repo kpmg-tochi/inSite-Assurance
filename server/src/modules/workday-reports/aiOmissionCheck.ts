@@ -126,19 +126,9 @@ export async function runAiOmissionCheck(reportId: string): Promise<WorkdayAiChe
     });
     const config = await getProcessConfig(report.projectId);
     const holdPoint = config.enableHoldPoints && report.boqItem.isHoldPoint;
-    const persona = report.reporterPersonaType === 'CONTRACTOR_EXECUTOR' ? 'CONTRACTOR_EXECUTOR' : 'INDEPENDENT_VERIFIER';
 
     const omission = config.enableAiOmissionCheck
       ? await (async () => {
-          const brief =
-            (await prisma.morningDeliverableBrief.findFirst({
-              where: { projectId: report.projectId, boqItemId: report.wbsItemId, workdayDate: report.workdayDate, targetPersona: persona },
-              select: { reportingChecklist: true },
-            })) ??
-            (await prisma.morningDeliverableBrief.findFirst({
-              where: { projectId: report.projectId, boqItemId: report.wbsItemId, workdayDate: report.workdayDate },
-              select: { reportingChecklist: true },
-            }));
           const result = evaluateOmissionsByRules({
             wbsCode: report.boqItem.wbsCode,
             summaryText: report.summaryText,
@@ -146,7 +136,8 @@ export async function runAiOmissionCheck(reportId: string): Promise<WorkdayAiChe
             isHoldPoint: holdPoint,
             holdPointInstruction: holdPoint ? report.boqItem.holdPointInstruction : null,
             isHoldPointClaimed: holdPoint && report.isHoldPointClaimed,
-            checklist: Array.isArray(brief?.reportingChecklist) ? (brief.reportingChecklist as string[]) : [],
+            // R1e: briefs (whose checklists always asked for a photo of the work) are gone; the rule stays.
+            checklist: [`Photograph the work in place for WBS ${report.boqItem.wbsCode}.`],
             captures: report.captures
               .filter((c) => c.integrityPassed)
               .map((c) => ({ mediaType: c.mediaAttachments[0]?.mediaType ?? 'UNKNOWN' })),

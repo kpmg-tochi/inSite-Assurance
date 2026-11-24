@@ -6,6 +6,7 @@
  * Runs against a disposable database rebuilt from migrations (see helpers/testDb.ts).
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { createFieldSession, fieldAuth, fieldToken as sessionToken } from './helpers/fieldAuth';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
@@ -20,7 +21,6 @@ type Shared = typeof import('@insite/shared');
 let app: Express;
 let prisma: PrismaClientType;
 let shared: Shared;
-let signFieldAgentToken: typeof import('../middleware/auth.middleware')['signFieldAgentToken'];
 
 const PASSWORD = 'Password123!';
 const ABJ_POINT = { latitude: 9.0489, longitude: 7.3497 };
@@ -45,6 +45,9 @@ function makeDeviceKey(): Key {
     sign: (message) => crypto.sign(null, Buffer.from(message, 'utf8'), privateKey).toString('base64'),
   };
 }
+
+/** The key id the server derives from a public key (first 16 hex of its SHA-256). */
+const keyIdOf = (key: Key) => crypto.createHash('sha256').update(Buffer.from(key.publicKey, 'base64')).digest('hex').slice(0, 16);
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
 
@@ -80,7 +83,6 @@ before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
   shared = await import('@insite/shared');
-  ({ signFieldAgentToken } = await import('../middleware/auth.middleware'));
   const { createApp } = await import('../app');
   app = createApp();
 
@@ -109,18 +111,18 @@ after(async () => {
 
 describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
   describe('seed', () => {
-    it('marks Monitor Inspector as provisioned with no join codes, and keeps the others on codes', async () => {
+    it('has only verifier mobile roles, no contractor roles, and every session belongs to an account (R1d)', async () => {
       const roles = await prisma.role.findMany({
         where: { tenantId: ids.tenant, surface: { in: ['MOBILE', 'BOTH'] } },
-        select: { code: true, onboardingMode: true, requiresIdentityAssurance: true },
+        select: { code: true, fieldPersonaType: true },
       });
-      const byCode = Object.fromEntries(roles.map((r) => [r.code, r]));
-      assert.equal(byCode.MONITOR_INSPECTOR.onboardingMode, 'PROVISIONED_ACCOUNT');
-      assert.equal(byCode.MONITOR_INSPECTOR.requiresIdentityAssurance, false);
-      assert.equal(byCode.INDEPENDENT_RESIDENT.onboardingMode, 'JOIN_CODE');
-      assert.equal(byCode.CONTRACTOR_ENGINEER.onboardingMode, 'JOIN_CODE');
-      const codes = await prisma.projectJoinCode.count({ where: { roleId: ids.monitorInspectorRole } });
-      assert.equal(codes, 0);
+      const codes = roles.map((r) => r.code).sort();
+      assert.ok(codes.includes('MONITOR_INSPECTOR') && codes.includes('INDEPENDENT_RESIDENT'));
+      assert.ok(roles.every((r) => r.fieldPersonaType !== 'CONTRACTOR_EXECUTOR'));
+      assert.equal(await prisma.role.count({ where: { tenantId: ids.tenant, code: { in: ['CONTRACTOR', 'CONTRACTOR_ENGINEER'] } } }), 0);
+      const sessions = await prisma.fieldAgentSession.findMany({ select: { userId: true, mobileDeviceId: true } });
+      assert.ok(sessions.length > 0);
+      assert.ok(sessions.every((s) => s.userId && s.mobileDeviceId), 'seeded sessions are provisioned');
     });
   });
 
@@ -203,9 +205,7 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
       });
       assert.equal(sessions.length, 1);
       const s = sessions[0];
-      assert.equal(s.origin, 'PROVISIONED_ACCOUNT');
-      assert.equal(s.joinCodeId, null);
-      assert.equal(s.assuranceStatus, 'APPROVED');
+      assert.equal(s.userId, ids.monitorUser);
       assert.equal(s.roleId, ids.monitorInspectorRole);
       assert.ok(s.devicePublicKey, 'the device key is copied onto the session');
 
@@ -273,15 +273,25 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
       assert.equal(res.body.data.signatureVerified, true, 'signed with the key registered at sign-in');
     });
 
-    it('refuses the join-code-only endpoints for a provisioned account', async () => {
+    it('has no join-code-era endpoints any more (R1d)', async () => {
       const { token } = await signedIn('monitor@insite.ng', 'device-mon-endpoints');
       const deviceKey = await request(app)
         .post('/api/v1/auth/device-key')
         .set(bearer(token))
         .send({ devicePublicKey: makeDeviceKey().publicKey, devicePublicKeyAlg: 'ED25519' });
-      assert.equal(deviceKey.status, 403);
+      assert.equal(deviceKey.status, 404);
       const assurance = await request(app).post('/api/v1/auth/assurance-verification').set(bearer(token)).send({});
-      assert.ok([400, 403].includes(assurance.status), `got ${assurance.status}`);
+      assert.equal(assurance.status, 404);
+      const join = await request(app).post('/api/v1/auth/join-project').send({});
+      assert.equal(join.status, 404);
+    });
+
+    it('refuses a retired join-code session token (R1d)', async () => {
+      const jwt = (await import('jsonwebtoken')).default;
+      const { env } = await import('../config/env');
+      const legacy = jwt.sign({ tokenType: 'FIELD_AGENT', sessionId: ids.lkkCow }, env.JWT_SECRET);
+      const res = await notifications(legacy, ids.lkk);
+      assert.equal(res.status, 401);
     });
 
     it('serves /auth/me and the baseline pack', async () => {
@@ -298,18 +308,18 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
 
       const session = await request(app).get(`/api/v1/auth/mobile/projects/${ids.lkk}/session`).set(bearer(token));
       assert.equal(session.status, 200, JSON.stringify(session.body));
-      assert.equal(session.body.data.origin, 'PROVISIONED_ACCOUNT');
+      assert.equal(session.body.data.origin, undefined);
       assert.equal(session.body.data.roleCode, 'MONITOR_INSPECTOR');
       const row = await prisma.fieldAgentSession.findUniqueOrThrow({ where: { id: session.body.data.sessionId } });
       assert.equal(row.userId, ids.monitorUser);
 
-      // A join-code session may read its own project's baseline, and no other.
-      const cow = bearer(signFieldAgentToken({ sessionId: ids.lkkCow }));
+      // A resident assigned to one project reads its baseline, and no other.
+      const cow = bearer((await sessionToken(prisma, ids.lkkCow)));
       assert.equal((await request(app).get(`/api/v1/auth/mobile/projects/${ids.lkk}/baseline`).set(cow)).status, 200);
       assert.equal((await request(app).get(`/api/v1/auth/mobile/projects/${ids.abj}/baseline`).set(cow)).status, 403);
     });
 
-    it('keeps an account push token and a join-session push token for the same phone', async () => {
+    it('keeps one push token per account when two accounts share a phone', async () => {
       const { token } = await signedIn('monitor@insite.ng', 'device-mon-push');
       const deviceToken = 'ExponentPushToken[shared-phone-1]';
       const asAccount = await request(app)
@@ -317,11 +327,11 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
         .set(bearer(token))
         .send({ deviceToken, devicePlatform: 'ANDROID' });
       assert.equal(asAccount.status, 200, JSON.stringify(asAccount.body));
-      const asJoin = await request(app)
+      const asResident = await request(app)
         .post('/api/v1/auth/push-token')
-        .set(bearer(signFieldAgentToken({ sessionId: ids.lkkCow })))
+        .set(bearer((await sessionToken(prisma, ids.lkkCow))))
         .send({ deviceToken, devicePlatform: 'ANDROID' });
-      assert.equal(asJoin.status, 200);
+      assert.equal(asResident.status, 200);
       const rows = await prisma.pushToken.findMany({ where: { deviceToken } });
       assert.equal(rows.length, 2);
       const account = rows.find((r) => r.userId === ids.monitorUser);
@@ -332,9 +342,9 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
   describe('visibility and password change', () => {
     it('forces a password change, follows assignments, and loses access on the next request when unassigned', async () => {
       const admin = await webLogin('admin@insite.ng');
-      const contractorRole = await prisma.role.findFirstOrThrow({ where: { tenantId: ids.tenant, code: 'CONTRACTOR' } });
+      const webRole = await prisma.role.findFirstOrThrow({ where: { tenantId: ids.tenant, code: 'ORGANIZATION_ADMIN' } });
 
-      // A web contractor role (no all-projects permission) plus a separate provisioned mobile role.
+      // A web role without the all-projects permission plus a separate mobile role.
       const created = await request(app)
         .post('/api/v1/rbac/users')
         .set(bearer(admin))
@@ -342,7 +352,7 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
           fullName: 'Field Inspector Two',
           email: 'inspector2@insite.ng',
           password: 'TempPass123',
-          roleId: contractorRole.id,
+          roleId: webRole.id,
           mobileRoleId: ids.monitorInspectorRole,
           phoneNumber: '+234 803 000 1111',
           organizationName: 'KPMG Infrastructure & Project Monitoring Advisory',
@@ -400,12 +410,13 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
       assert.equal(noAccess.body.error.code, 'NO_MOBILE_ACCESS');
     });
 
-    it('refuses a mobile role that is not pre-provisioned', async () => {
+    it('refuses a web-only role as the mobile role', async () => {
       const admin = await webLogin('admin@insite.ng');
+      const lender = await prisma.role.findFirstOrThrow({ where: { tenantId: ids.tenant, code: 'LENDER' } });
       const res = await request(app)
         .put(`/api/v1/rbac/users/${ids.monitorUser}/assignments`)
         .set(bearer(admin))
-        .send({ projectIds: [ids.lkk, ids.abj], mobileRoleId: ids.residentRole });
+        .send({ projectIds: [ids.lkk, ids.abj], mobileRoleId: lender.id });
       assert.equal(res.status, 400);
       assert.equal(res.body.error.code, 'ROLE_NOT_PROVISIONED');
     });
@@ -440,9 +451,9 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
       const roster = await request(app).get(`/api/v1/projects/${ids.lkk}/field-sessions`).set(bearer(admin));
       assert.equal(roster.status, 200);
       const row = roster.body.data.find((r: { id: string }) => r.id === lkkSession.id);
-      assert.equal(row.origin, 'PROVISIONED_ACCOUNT');
+      assert.equal(row.origin, undefined);
       assert.equal(row.userEmail, 'monitor@insite.ng');
-      assert.equal(row.joinCodeUsed, null);
+      assert.equal(row.userId, ids.monitorUser);
 
       const revoke = await request(app)
         .patch(`/api/v1/projects/${ids.lkk}/field-sessions/${lkkSession.id}/status`)
@@ -490,27 +501,10 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
   describe('items re-submitted after a session ends (Step 8)', () => {
     const LKK_POINT = { latitude: 6.4502, longitude: 3.57, accuracyMeters: 5 };
 
-    async function joinLkk(deviceId: string, key: Key) {
-      const admin = await webLogin('admin@insite.ng');
-      // One active code per role: rotate to get a fresh one (Phase 6).
-      const current = await prisma.projectJoinCode.findFirstOrThrow({
-        where: { projectId: ids.lkk, roleId: ids.residentRole, isActive: true },
-      });
-      const code = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/join-codes/${current.id}/rotate`)
-        .set(bearer(admin))
-        .send({});
-      assert.equal(code.status, 201, JSON.stringify(code.body));
-      const join = await request(app).post('/api/v1/auth/join-project').send({
-        joinCode: code.body.data.code,
-        agentFullName: 'Rejoining Resident',
-        agentPhoneNumber: '+2348012345678',
-        deviceId,
-        devicePublicKey: key.publicKey,
-        devicePublicKeyAlg: 'ED25519',
-      });
-      assert.equal(join.status, 201, JSON.stringify(join.body));
-      return { token: join.body.data.accessToken as string, sessionId: join.body.data.sessionProfile.sessionId as string };
+    /** R1d: a resident account on LKK-402 signed in on a device with `key`, and its session. */
+    async function residentOnLkk(deviceId: string, key: Key) {
+      const s = await createFieldSession(prisma, { projectId: ids.lkk, roleId: ids.residentRole, name: 'Rejoining Resident', key: { ...key, keyId: keyIdOf(key) }, deviceId });
+      return { token: await sessionToken(prisma, s.sessionId), sessionId: s.sessionId };
     }
 
     async function pngBytes() {
@@ -575,21 +569,21 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
     it('accepts an update once, under the new session, flagged and linked; the original keeps its session', async () => {
       const key = makeDeviceKey();
       const deviceId = 'device-rejoin-1';
-      const first = await joinLkk(deviceId, key);
+      const first = await residentOnLkk(deviceId, key);
       const bytes = await pngBytes();
       const capturedAt = new Date(Date.now() - 3_600_000).toISOString();
       const original = await post(first.token, captureBody(key, bytes, await uploadPng(first.token, bytes), capturedAt));
       assert.equal(original.status, 201, JSON.stringify(original.body));
       const originalId = original.body.data.clientCaptureId as string;
 
-      // The session ends; the same phone rejoins with a new code.
+      // The session ends; the person carries on under a new session (another account on the phone).
       const admin = await webLogin('admin@insite.ng');
       const revoke = await request(app)
         .patch(`/api/v1/projects/${ids.lkk}/field-sessions/${first.sessionId}/status`)
         .set(bearer(admin))
         .send({ isActive: false });
       assert.equal(revoke.status, 200);
-      const second = await joinLkk(deviceId, key);
+      const second = await residentOnLkk(deviceId, key);
 
       const body = captureBody(key, bytes, await uploadPng(second.token, bytes), capturedAt, {
         resubmittedFromClientCaptureId: originalId,
@@ -617,7 +611,7 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
 
     it('accepts an original that never reached the server, and refuses an invalid link', async () => {
       const key = makeDeviceKey();
-      const session = await joinLkk('device-rejoin-2', key);
+      const session = await residentOnLkk('device-rejoin-2', key);
       const bytes = await pngBytes();
       const capturedAt = new Date().toISOString();
 
@@ -633,7 +627,7 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
 
       // A capture of a session that is still active cannot be re-submitted by another session.
       const otherKey = makeDeviceKey();
-      const other = await joinLkk('device-rejoin-3', otherKey);
+      const other = await residentOnLkk('device-rejoin-3', otherKey);
       const bytes2 = await pngBytes();
       const bad = await post(
         other.token,
@@ -650,7 +644,7 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
     it('one session completes a broadcast query; the other sees it answered, not unread', async () => {
       const { createMobileNotification } = await import('../modules/notifications/notifications.service');
       const contractor = await prisma.fieldAgentSession.findFirstOrThrow({
-        where: { projectId: ids.lkk, agentFullName: { contains: 'Contractor Site Engr' } },
+        where: { projectId: ids.lkk, agentFullName: { contains: 'M&E Officer' } },
       });
       const monitorQueryId = crypto.randomUUID();
       const broadcast = await createMobileNotification(prisma, {
@@ -662,8 +656,8 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
         message: 'Send the cube test certificates.',
         metadata: { monitorQueryId },
       });
-      const cow = bearer(signFieldAgentToken({ sessionId: ids.lkkCow }));
-      const con = bearer(signFieldAgentToken({ sessionId: contractor.id }));
+      const cow = bearer((await sessionToken(prisma, ids.lkkCow)));
+      const con = bearer((await sessionToken(prisma, contractor.id)));
 
       const resolved = await request(app)
         .post(`/api/v1/projects/${ids.lkk}/notifications/${broadcast.id}/resolve`)
@@ -709,72 +703,27 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
     });
   });
 
-  describe('role onboarding mode', () => {
-    it('switching a role to provisioned deactivates its codes; join sessions keep working; switching back reissues', async () => {
+  describe('mobile roles (R1d: every mobile role signs in with an account)', () => {
+    it('the role editor refuses the contractor persona', async () => {
       const admin = await webLogin('admin@insite.ng');
-      const before = await prisma.projectJoinCode.count({ where: { roleId: ids.residentRole, isActive: true } });
-      assert.ok(before > 0);
-
-      const impact = await request(app).get(`/api/v1/rbac/roles/${ids.residentRole}/onboarding-impact`).set(bearer(admin));
-      assert.equal(impact.status, 200);
-      assert.equal(impact.body.data.activeJoinCodeCount, before);
-      assert.ok(impact.body.data.projects.length > 0);
-
-      const assuranceTrue = await request(app)
-        .put(`/api/v1/rbac/roles/${ids.residentRole}`)
-        .set(bearer(admin))
-        .send({ onboardingMode: 'PROVISIONED_ACCOUNT', requiresIdentityAssurance: true });
-      assert.equal(assuranceTrue.status, 400, 'provisioned roles cannot require identity assurance');
-
-      const toProvisioned = await request(app)
-        .put(`/api/v1/rbac/roles/${ids.residentRole}`)
-        .set(bearer(admin))
-        .send({ onboardingMode: 'PROVISIONED_ACCOUNT' });
-      assert.equal(toProvisioned.status, 200, JSON.stringify(toProvisioned.body));
-      assert.equal(toProvisioned.body.data.onboardingMode, 'PROVISIONED_ACCOUNT');
-      assert.equal(toProvisioned.body.data.requiresIdentityAssurance, false);
-      assert.equal(await prisma.projectJoinCode.count({ where: { roleId: ids.residentRole, isActive: true } }), 0);
-      assert.ok(await prisma.auditLog.findFirst({ where: { action: 'ROLE_ONBOARDING_MODE_CHANGED' } }));
-
-      // Existing join-code sessions for the role keep working until revoked.
-      assert.equal((await notifications(signFieldAgentToken({ sessionId: ids.lkkCow }), ids.lkk)).status, 200);
-
-      const issue = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/join-codes`)
-        .set(bearer(admin))
-        .send({ roleId: ids.residentRole });
-      assert.equal(issue.status, 409);
-      assert.equal(issue.body.error.code, 'ROLE_IS_PROVISIONED');
-
-      const back = await request(app)
-        .put(`/api/v1/rbac/roles/${ids.residentRole}`)
-        .set(bearer(admin))
-        .send({ onboardingMode: 'JOIN_CODE' });
-      assert.equal(back.status, 200);
-      // Codes are reissued on live projects only (drafts get theirs at activation).
-      const projectCount = await prisma.project.count({ where: { tenantId: ids.tenant, status: 'ACTIVE' } });
-      assert.equal(await prisma.projectJoinCode.count({ where: { roleId: ids.residentRole, isActive: true } }), projectCount);
-    });
-
-    it('a web-only role cannot be provisioned', async () => {
-      const admin = await webLogin('admin@insite.ng');
-      const lender = await prisma.role.findFirstOrThrow({ where: { tenantId: ids.tenant, code: 'LENDER' } });
       const res = await request(app)
-        .put(`/api/v1/rbac/roles/${lender.id}`)
+        .put(`/api/v1/rbac/roles/${ids.residentRole}`)
         .set(bearer(admin))
-        .send({ onboardingMode: 'PROVISIONED_ACCOUNT' });
+        .send({ fieldPersonaType: 'CONTRACTOR_EXECUTOR' });
       assert.equal(res.status, 400);
+      const impact = await request(app).get(`/api/v1/rbac/roles/${ids.residentRole}/onboarding-impact`).set(bearer(admin));
+      assert.equal(impact.status, 404);
     });
 
-    it('switching the mobile role back to join codes removes mobile access on the next request', async () => {
+    it('making the mobile role web-only removes mobile access on the next request', async () => {
       const admin = await webLogin('admin@insite.ng');
       const { token } = await signedIn('monitor@insite.ng', 'device-mon-mode');
       assert.equal((await notifications(token, ids.lkk)).status, 200);
       const res = await request(app)
         .put(`/api/v1/rbac/roles/${ids.monitorInspectorRole}`)
         .set(bearer(admin))
-        .send({ onboardingMode: 'JOIN_CODE' });
-      assert.equal(res.status, 200);
+        .send({ surface: 'WEB', fieldPersonaType: 'NONE' });
+      assert.equal(res.status, 200, JSON.stringify(res.body));
       const after = await notifications(token, ids.lkk);
       assert.equal(after.status, 403);
       assert.equal(after.body.error.code, 'NO_MOBILE_ACCESS');

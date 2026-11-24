@@ -17,8 +17,7 @@ type Db = Prisma.TransactionClient | typeof prisma;
  */
 export type NotificationActionEvent =
   | { kind: 'MONITOR_QUERY_ANSWERED'; monitorQueryId: string }
-  | { kind: 'REPORT_QUERY_ANSWERED'; reportQueryId: string }
-  | { kind: 'IDENTITY_RESUBMITTED'; fieldSessionId: string };
+  | { kind: 'REPORT_QUERY_ANSWERED'; reportQueryId: string };
 
 export interface NotificationActor {
   sessionId?: string | null;
@@ -32,8 +31,6 @@ function whereFor(event: NotificationActionEvent): Prisma.MobileNotificationWher
       return { type: 'REPORT_QUERY', metadata: { path: ['monitorQueryId'], equals: event.monitorQueryId } };
     case 'REPORT_QUERY_ANSWERED':
       return { type: 'REPORT_QUERY', metadata: { path: ['reportQueryId'], equals: event.reportQueryId } };
-    case 'IDENTITY_RESUBMITTED':
-      return { type: 'ASSURANCE_REJECTED', fieldSessionId: event.fieldSessionId };
   }
 }
 

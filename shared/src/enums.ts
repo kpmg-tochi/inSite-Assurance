@@ -7,10 +7,12 @@ export const RoleSurfaceEnum = z.enum(['WEB', 'MOBILE', 'BOTH']);
 export type RoleSurface = z.infer<typeof RoleSurfaceEnum>;
 
 /**
- * Determines how a mobile field role interacts with workflows & AI briefs:
- * - INDEPENDENT_VERIFIER: Independent M&E / Monitor / Clerk of Works (AI brief tells them what to inspect/verify)
- * - CONTRACTOR_EXECUTOR: Contractor / Trade Engineer (AI brief tells them what to execute & submit)
- * - NONE: Web-only governance role
+ * How a mobile field role takes part in workflows:
+ * - INDEPENDENT_VERIFIER: M&E officer / monitor / clerk of works.
+ * - CONTRACTOR_EXECUTOR: legacy. Contractors have no login (redesign R1d, decision P2); no role can be
+ *   given this persona (see AssignableFieldPersonaTypeEnum). It stays only for the contractor reporter
+ *   scopes in cadence, which the visit plan replaces in R4.
+ * - NONE: web-only role.
  */
 export const FieldPersonaTypeEnum = z.enum([
   'INDEPENDENT_VERIFIER',
@@ -19,18 +21,9 @@ export const FieldPersonaTypeEnum = z.enum([
 ]);
 export type FieldPersonaType = z.infer<typeof FieldPersonaTypeEnum>;
 
-/**
- * How people in a mobile-capable role get onto a project (Phase 5, decision G):
- * - JOIN_CODE: a per-project, per-role join code creates an anonymous field session.
- * - PROVISIONED_ACCOUNT: the person signs in with a tenant account and sees every assigned project.
- *   Provisioned roles never require identity assurance and never get join codes.
- */
-export const RoleOnboardingModeEnum = z.enum(['JOIN_CODE', 'PROVISIONED_ACCOUNT']);
-export type RoleOnboardingMode = z.infer<typeof RoleOnboardingModeEnum>;
-
-/** Where a field session came from: a join code, or a provisioned account signing in. */
-export const FieldSessionOriginEnum = z.enum(['JOIN_CODE', 'PROVISIONED_ACCOUNT']);
-export type FieldSessionOrigin = z.infer<typeof FieldSessionOriginEnum>;
+/** The personas a role can be given (redesign R1d: no contractor persona). */
+export const AssignableFieldPersonaTypeEnum = z.enum(['INDEPENDENT_VERIFIER', 'NONE']);
+export type AssignableFieldPersonaType = z.infer<typeof AssignableFieldPersonaTypeEnum>;
 
 export const OrganizationCategoryEnum = z.enum([
   'ADVISORY_MONITOR',
@@ -73,38 +66,6 @@ export type ProjectStatus = z.infer<typeof ProjectStatusEnum>;
 export const ConstructionPhaseEnum = z.enum(['ACTIVE_CONSTRUCTION', 'HANDOVER_IN_PROGRESS', 'RETENTION_PERIOD', 'COMPLETED_CLOSED']);
 export type ConstructionPhase = z.infer<typeof ConstructionPhaseEnum>;
 
-/**
- * Contractor model (decision D):
- * - SINGLE_CONTRACTOR: one contractor, one IPC stream.
- * - MAIN_PLUS_SUBS_UNIFIED_IPC: the main contractor submits IPCs covering every package;
- *   subcontractors may field-report only.
- * - MULTI_PRIME_SEPARATE_IPC: each contractor submits IPCs for its own BOQ items.
- */
-export const ContractorExecutionModeEnum = z.enum([
-  'SINGLE_CONTRACTOR',
-  'MAIN_PLUS_SUBS_UNIFIED_IPC',
-  'MULTI_PRIME_SEPARATE_IPC',
-]);
-export type ContractorExecutionMode = z.infer<typeof ContractorExecutionModeEnum>;
-
-export const CONTRACTOR_EXECUTION_MODE_META: Record<
-  ContractorExecutionMode,
-  { label: string; description: string }
-> = {
-  SINGLE_CONTRACTOR: {
-    label: 'Single contractor',
-    description: 'One contractor delivers the whole project and submits every IPC.',
-  },
-  MAIN_PLUS_SUBS_UNIFIED_IPC: {
-    label: 'Main contractor with subcontractors',
-    description: 'The main contractor submits one IPC covering all packages; subcontractors report from site only.',
-  },
-  MULTI_PRIME_SEPARATE_IPC: {
-    label: 'Multiple prime contractors',
-    description: 'Each contractor owns its BOQ items and submits its own IPCs.',
-  },
-};
-
 export const PermissionCategoryEnum = z.enum([
   'TENANT_ADMIN',
   'PORTFOLIO_PROJECTS',
@@ -135,11 +96,11 @@ export const PERMISSION_CATEGORY_META: Record<
   },
   MOBILIZATION_ASSURANCE: {
     label: 'Mobilization & Access Assurance',
-    description: 'Pre-register site personnel, configure reminders, review ID/liveness, and revoke device sessions.',
+    description: 'Revoke mobile device sessions.',
   },
   FIELD_PRESENCE: {
     label: 'Field Capture & Site Presence',
-    description: 'Join projects on mobile, submit field reports, perform GPS check-ins, and manage no-show alerts.',
+    description: 'Submit field reports and captures from the mobile app.',
   },
   REPORT_APPROVALS: {
     label: 'Report Review & Approvals',
@@ -151,7 +112,7 @@ export const PERMISSION_CATEGORY_META: Record<
   },
   AUDIT_CLOSEOUT: {
     label: 'Audit, Handover & Retention',
-    description: 'Inspect cryptographic audit logs, issue stakeholder handover links, and manage retention defects.',
+    description: 'Inspect cryptographic audit logs, record handover responses, and manage retention defects.',
   },
 };
 
@@ -267,14 +228,6 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     unlocksViews: ['Portfolio Dashboard'],
   },
   {
-    key: 'projects:view_executive_matrix',
-    name: 'Access Executive Risk Matrix',
-    description: 'View cross-facility financial commitments, holdbacks, and risk standing.',
-    category: 'PORTFOLIO_PROJECTS',
-    surface: 'WEB',
-    unlocksViews: ['Executive Risk Matrix'],
-  },
-  {
     key: 'projects:create',
     name: 'Create & Initialize New Projects',
     description: 'Create new project baselines, geofences, tranches, and initial BOQ schedules.',
@@ -285,7 +238,7 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   {
     key: 'projects:activate',
     name: 'Activate Draft Projects',
-    description: 'Set a completed draft project live: issues join codes and makes it visible on mobile and in portfolio views.',
+    description: 'Set a completed draft project live: makes it visible on mobile and in portfolio views.',
     category: 'PORTFOLIO_PROJECTS',
     surface: 'WEB',
     unlocksViews: ['Project setup -> Set project active'],
@@ -310,68 +263,35 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   // 3. BOQ_SCHEDULE
   {
     key: 'boq:view',
-    name: 'View Bill of Quantities (BOQ) & WBS',
-    description: 'Read-only access to baseline BOQ items, quantities, and Hold-Point rules.',
+    name: 'View Scope & Sprints',
+    description: 'Read the project scope: sprints, facility units and BoQ lines (hold-point flags read-only).',
     category: 'BOQ_SCHEDULE',
     surface: 'BOTH',
-    unlocksViews: ['BOQ & Hold-Points', 'Mobile WBS Inbox'],
+    unlocksViews: ['Scope & sprints', 'Mobile WBS Inbox'],
   },
   {
     key: 'boq:upload_edit',
-    name: 'Upload BOQ & Edit WBS Mappings',
-    description: 'Import BOQ spreadsheets and confirm AI-suggested tranche mappings.',
+    name: 'Edit Scope & Sprints',
+    description: 'Edit sprints, facility units and BoQ lines, and import the needs-assessment workbook into a draft.',
     category: 'BOQ_SCHEDULE',
     surface: 'WEB',
-    unlocksViews: ['BOQ Import & Mapping'],
-  },
-  {
-    key: 'boq:configure_hold_points',
-    name: 'Configure Mandatory Visual Hold-Points',
-    description: 'Flag or unflag critical WBS items as Mandatory Visual Hold-Points.',
-    category: 'BOQ_SCHEDULE',
-    surface: 'WEB',
-    unlocksViews: ['BOQ Hold-Point Controls'],
+    unlocksViews: ['Scope & sprints editing', 'Workbook import'],
   },
   {
     key: 'contractors:manage_packages',
-    name: 'Manage Contractors & Trade Packages',
-    description: 'Create/assign multiple trade contractors and review AI BOQ contractor suggestions.',
+    name: 'Manage the Project Contractor',
+    description: 'Add, change or remove the project\'s contractor (one per project).',
     category: 'BOQ_SCHEDULE',
     surface: 'WEB',
     unlocksViews: ['Project Contractors'],
   },
   {
     key: 'schedule:view_variance',
-    name: 'View Project Schedule Variance',
-    description: 'Monitor planned vs. actual schedule progress (ahead, on time, behind).',
+    name: 'View Schedule Status',
+    description: 'See the sprint schedule badge and get the notification when a project falls behind.',
     category: 'BOQ_SCHEDULE',
     surface: 'WEB',
-    unlocksViews: ['Schedule Variance Analytics'],
-  },
-  {
-    key: 'schedule:catch_up_refactor',
-    name: 'Refactor Schedule ("Catch Project Up")',
-    description: 'Re-baseline downstream WBS dates to absorb delays while preserving daily rates.',
-    category: 'BOQ_SCHEDULE',
-    surface: 'WEB',
-    unlocksViews: ['Catch Project Up Wizard'],
-  },
-  {
-    key: 'schedule:approve_refactor',
-    name: 'Approve Schedule Refactoring',
-    description: 'Approve or reject proposed baseline schedule shifts when approval is required.',
-    category: 'BOQ_SCHEDULE',
-    surface: 'WEB',
-    unlocksViews: ['Schedule Change Approvals'],
-  },
-  // Phase 13
-  {
-    key: 'schedule:propose_programme',
-    name: 'Propose Programme of Works',
-    description: "Submit the contractor's programme of works (item dates and dependencies) for the monitor to accept.",
-    category: 'BOQ_SCHEDULE',
-    surface: 'WEB',
-    unlocksViews: ['Programme of Works'],
+    unlocksViews: ['Schedule badge', 'Behind-schedule notifications'],
   },
   {
     key: 'documents:view',
@@ -396,6 +316,24 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     category: 'TENANT_ADMIN',
     surface: 'WEB',
     unlocksViews: ['Document Types Settings'],
+  },
+  // Redesign R2a
+  {
+    key: 'facilities:manage',
+    name: 'Manage Facility Catalogue',
+    description: 'Add, rename, re-archetype and retire the facilities that scope lines are tagged with.',
+    category: 'TENANT_ADMIN',
+    surface: 'WEB',
+    unlocksViews: ['Settings -> Facilities'],
+  },
+  // Redesign R3
+  {
+    key: 'forms:manage',
+    name: 'Manage Form Library',
+    description: 'Build and version the visit form library: fixed sections, facility sub-forms and visit form templates.',
+    category: 'TENANT_ADMIN',
+    surface: 'WEB',
+    unlocksViews: ['Settings -> Forms & facilities'],
   },
   {
     key: 'milestones:manage',
@@ -440,30 +378,6 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
 
   // 4. MOBILIZATION_ASSURANCE
   {
-    key: 'mobilization:manage_roster',
-    name: 'Manage Expected Mobilization Roster',
-    description: 'Pre-register expected contractors/monitors with planned mobilization dates.',
-    category: 'MOBILIZATION_ASSURANCE',
-    surface: 'WEB',
-    unlocksViews: ['Settings -> Access & Mobilization', 'Project Join Codes'],
-  },
-  {
-    key: 'mobilization:configure_reminders',
-    name: 'Configure Onboarding Reminders',
-    description: 'Set automated countdown reminders before planned site mobilization dates.',
-    category: 'MOBILIZATION_ASSURANCE',
-    surface: 'WEB',
-    unlocksViews: ['Onboarding Reminder Settings'],
-  },
-  {
-    key: 'assurance:review_credentials',
-    name: 'Approve/Reject Identity & Credentials',
-    description: 'Review mobile ID cards, 3D liveness selfies, and regulatory licenses.',
-    category: 'MOBILIZATION_ASSURANCE',
-    surface: 'WEB',
-    unlocksViews: ['Contractor Verification Queue'],
-  },
-  {
     key: 'sessions:revoke_device',
     name: 'Revoke or Restore Mobile Device Sessions',
     description: 'Manage active mobile field agent sessions and revoke compromised devices.',
@@ -473,14 +387,7 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   },
 
   // 5. FIELD_PRESENCE
-  {
-    key: 'field:join_project',
-    name: 'Join Project via Mobile Join Code',
-    description: 'Authenticate a mobile field device onto a project via join code.',
-    category: 'FIELD_PRESENCE',
-    surface: 'MOBILE',
-    unlocksViews: ['Mobile Project Onboarding'],
-  },
+
   {
     key: 'field:submit_report',
     name: 'Capture Field Evidence & Submit Reports',
@@ -490,36 +397,12 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     unlocksViews: ['Mobile WBS Chat & Camera'],
   },
   {
-    key: 'field:manual_checkin',
-    name: 'Perform On-Site GPS Check-In',
-    description: 'Submit explicit on-site presence check-ins within project geofence.',
-    category: 'FIELD_PRESENCE',
-    surface: 'MOBILE',
-    unlocksViews: ['Mobile Site Check-In'],
-  },
-  {
     key: 'field:raise_incident',
     name: 'Submit Special Incident / Whistleblower Alert',
     description: 'Escalate safety emergencies, material failures, or confidential disclosures.',
     category: 'FIELD_PRESENCE',
     surface: 'MOBILE',
     unlocksViews: ['Mobile Incident Escalation'],
-  },
-  {
-    key: 'presence:view_telemetry',
-    name: 'View Site Presence & Geotag Telemetry',
-    description: 'Inspect hourly GPS telemetry, check-in timestamps, and submission geotags.',
-    category: 'FIELD_PRESENCE',
-    surface: 'WEB',
-    unlocksViews: ['Site Presence Telemetry Panel'],
-  },
-  {
-    key: 'presence:manage_noshow_alerts',
-    name: 'Manage No-Show & Late Check-In Alerts',
-    description: 'Acknowledge or resolve missed check-in and mobilization no-show alerts.',
-    category: 'FIELD_PRESENCE',
-    surface: 'WEB',
-    unlocksViews: ['Site Attendance Alerts'],
   },
 
   // 6. REPORT_APPROVALS
@@ -529,7 +412,7 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     description: 'Inspect submitted workday/period reports, AI assessments, and evidence.',
     category: 'REPORT_APPROVALS',
     surface: 'WEB',
-    unlocksViews: ['Daily Reports & Site Telemetry'],
+    unlocksViews: ['Daily Reports'],
   },
   {
     key: 'reports:raise_query',
@@ -571,14 +454,6 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     category: 'REPORT_APPROVALS',
     surface: 'WEB',
     unlocksViews: ['Inspections Tab', 'Supervisors View'],
-  },
-  {
-    key: 'inspections:manage_templates',
-    name: 'Manage Inspection Checklist Templates',
-    description: 'Create and version the tenant checklist templates used for site inspections.',
-    category: 'REPORT_APPROVALS',
-    surface: 'WEB',
-    unlocksViews: ['Checklist Templates Settings'],
   },
   {
     key: 'inspections:manage_findings',
@@ -625,9 +500,9 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     unlocksViews: ['Audit Ledger'],
   },
   {
-    key: 'handover:manage_links',
-    name: 'Generate Stakeholder Handover Links',
-    description: 'Create tokenized external stakeholder feedback links for project handover.',
+    key: 'handover:record_response',
+    name: 'Record Handover Responses',
+    description: "Record the beneficiary's handover response from the signed paper copy.",
     category: 'AUDIT_CLOSEOUT',
     surface: 'WEB',
     unlocksViews: ['Project Handover Console'],
@@ -789,21 +664,11 @@ export const PROFESSIONAL_LICENSE_META: Record<
 };
 
 /**
- * 2b. Field Assurance Verification Statuses
- */
-export const ContractorAssuranceStatusEnum = z.enum([
-  'PENDING_APPROVAL',
-  'APPROVED',
-  'REJECTED',
-]);
-export type ContractorAssuranceStatus = z.infer<typeof ContractorAssuranceStatusEnum>;
-
-/**
  * 3. Geofence Modes
  */
+/** Redesign: linear corridors (centreline + chainage) were removed; sites are radial or perimeter. */
 export const GeofenceModeEnum = z.enum([
   'RADIAL',
-  'LINEAR_CORRIDOR',
   'PERIMETER',
 ]);
 export type GeofenceMode = z.infer<typeof GeofenceModeEnum>;
@@ -816,11 +681,6 @@ export const GEOFENCE_MODE_META: Record<
     label: 'Radial',
     shortLabel: 'Radial',
     description: 'A centre point and radius. Suits buildings, plants and compact sites.',
-  },
-  LINEAR_CORRIDOR: {
-    label: 'Linear corridor',
-    shortLabel: 'Corridor',
-    description: 'A centreline with a half-width, measured by chainage. Suits roads, pipelines and lines.',
   },
   PERIMETER: {
     label: 'Perimeter',
@@ -899,7 +759,7 @@ export const AuditActorTypeEnum = z.enum([
   'WEB_USER',
   'FIELD_AGENT',
   'AI_SYSTEM',
-  // Phase 8: scheduled jobs (missed reports, attendance alerts)
+  // Phase 8: scheduled jobs (missed reports)
   'SYSTEM',
 ]);
 export type AuditActorType = z.infer<typeof AuditActorTypeEnum>;
@@ -914,12 +774,8 @@ export const AuditActionTypeEnum = z.enum([
   'PROJECT_CREATED',
   'BASELINE_UPDATED',
   'BOQ_UPLOADED',
-  'JOIN_CODE_ISSUED',
   'FIELD_AGENT_JOINED',
   'FIELD_SESSION_STATUS_UPDATED',
-  'CONTRACTOR_ASSURANCE_SUBMITTED',
-  'CONTRACTOR_ASSURANCE_APPROVED',
-  'CONTRACTOR_ASSURANCE_REJECTED',
   'EVIDENCE_EXTRACTED',
   'EVIDENCE_CONFIRMED',
   'EVIDENCE_FLAGGED_INTEGRITY',
@@ -933,18 +789,15 @@ export const AuditActionTypeEnum = z.enum([
   'USER_CREATED',
   'USER_UPDATED',
   'USER_DEACTIVATED',
-  'JOIN_CODE_ROTATED',
   'LOGIN_FAILED_LOCKOUT',
   'TENANT_SETTINGS_UPDATED',
   'CAPTURE_REGISTERED',
   'CAPTURE_FLAGGED_INTEGRITY',
-  'TELEMETRY_ANOMALY_SUMMARY',
   'WORKDAY_REPORTS_RELEASED',
   'DEVICE_KEY_REGISTERED',
   'REPORT_QUERY_RESOLVED',
   'MOBILE_USER_SIGNED_IN',
   'MOBILE_DEVICE_REVOKED',
-  'ROLE_ONBOARDING_MODE_CHANGED',
   'ORGANIZATION_CREATED',
   'ORGANIZATION_UPDATED',
   'PROJECT_DRAFT_CREATED',
@@ -967,25 +820,12 @@ export const AuditActionTypeEnum = z.enum([
   'WORKDAY_REPORT_RETURNED',
   'STANDARDS_VIOLATION_FLAGGED',
   'APPROVAL_STEP_ACTIONED',
-  // Phase 8: cadence, mobilization, attendance
+  // Phase 8: cadence
   'REPORT_SUBMITTED_LATE',
   'REPORT_MISSED',
-  'PARTICIPANT_PREREGISTERED',
-  'PARTICIPANT_REMINDER_SENT',
-  'ATTENDANCE_ALERT_RAISED',
-  'ATTENDANCE_ALERT_RESOLVED',
-  'MANUAL_CHECKIN_RECORDED',
   'REPORTING_OBLIGATION_EXCUSED',
-  // Phase 9: schedule baseline and revisions
-  'SCHEDULE_BASELINE_SET',
-  'SCHEDULE_REVISION_PROPOSED',
-  'SCHEDULE_REVISION_APPLIED',
-  'SCHEDULE_REVISION_REJECTED',
-  'SCHEDULE_REVISION_WITHDRAWN',
   // Phase 10: handover, retention and defects
-  'HANDOVER_LINK_CREATED',
-  'HANDOVER_LINK_REVOKED',
-  'HANDOVER_SUBMITTED',
+  'HANDOVER_RECORDED',
   'HANDOVER_REVIEWED',
   'PROJECT_PHASE_CHANGED',
   'RETENTION_WITHHELD',
@@ -1005,9 +845,6 @@ export const AuditActionTypeEnum = z.enum([
   'INSPECTION_FINDING_RESOLVED',
   'REPORTING_STREAMS_SAVED',
   'CHECKLIST_TEMPLATE_SAVED',
-  // Phase 12: credentials
-  'CREDENTIAL_POLICY_UPDATED',
-  'REGISTRATION_BODY_SAVED',
   // Phase 13: documents, contract milestones, kick-off, default cases
   'DOCUMENT_UPLOADED',
   'DOCUMENT_VERSIONED',
@@ -1025,9 +862,6 @@ export const AuditActionTypeEnum = z.enum([
   'DEFAULT_CASE_REVIEWED',
   'DEFAULT_CASE_DECIDED',
   'CONTRACTOR_TERMINATED',
-  'CONTRACTOR_REPLACED',
-  'PROGRAMME_OF_WORKS_SUBMITTED',
-  'PROGRAMME_OF_WORKS_DECIDED',
   // Phase 15
   'COC_DRAFTED',
   'COC_SIGNED',
@@ -1043,6 +877,13 @@ export const AuditActionTypeEnum = z.enum([
   // Redesign R1b
   'PAYMENT_RECORDED',
   'PAYMENT_VOIDED',
+  // Redesign R2
+  'FACILITY_SAVED',
+  'SCOPE_UPDATED',
+  'SPRINTS_SAVED',
+  'SCOPE_IMPORTED',
+  // Redesign R3
+  'FORM_COMPONENT_SAVED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 
@@ -1206,7 +1047,4 @@ export const BENEFICIARY_TYPE_META: Record<BeneficiaryType, { label: string }> =
 export const ApprovalDecisionEnum = z.enum(['APPROVE', 'RETURN', 'REJECT']);
 export type ApprovalDecision = z.infer<typeof ApprovalDecisionEnum>;
 
-/** Who a morning brief is written for. */
-export const BriefPersonaEnum = z.enum(['CONTRACTOR_EXECUTOR', 'INDEPENDENT_VERIFIER']);
-export type BriefPersona = z.infer<typeof BriefPersonaEnum>;
 

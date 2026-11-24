@@ -1,13 +1,11 @@
 import { RetentionSettingsSchema } from './retention.schema';
 import { z } from 'zod';
 import {
-  ContractorExecutionModeEnum,
   GeofenceModeEnum,
   OrganizationCategoryEnum,
   ProjectStatusEnum,
   ReportingCadenceEnum,
 } from '../enums';
-import { TRADE_CODE_REGEX } from '../joinCodes';
 import { isValidTimeZone } from '../utils/time';
 import { GeofenceToleranceMetersSchema, ProjectGeofenceSchema } from './geofence.schema';
 import { OrganizationRefSchema } from './organization.schema';
@@ -53,20 +51,18 @@ export const PROJECT_SETUP_STEPS: ProjectSetupStepDefinition[] = [
   { id: 'site', title: 'Site', route: 'site', required: true, order: 30, description: 'Geofence, tolerance and time zone' },
   // Redesign R1b: tranches and conditions precedent are gone; the step keeps the retention settings.
   { id: 'facility', title: 'Retention', route: 'facility', required: false, order: 40, description: 'Retention percentage and defects liability period' },
-  { id: 'boq', title: 'Bill of quantities', route: 'boq', required: true, order: 50, description: 'BOQ items, hold points and packages' },
+  // Redesign R2b: facility units, scope lines and sprints (replaces the BOQ step).
+  { id: 'scope', title: 'Scope & sprints', route: 'scope', required: true, order: 50, description: 'Sprints, facility units and BoQ lines' },
   { id: 'reporting', title: 'Reporting', route: 'reporting', required: true, order: 60, description: 'Cadence and working day' },
-  // Phase 9. After Reporting, which sets the work-week the schedule counts in; optional for activation.
-  // Dates and dependencies are saved through the schedule endpoints.
-  { id: 'schedule', title: 'Schedule', route: 'schedule', required: false, order: 61, description: 'Project and item dates, dependencies' },
   // Phase 7. Valid defaults, so not required; the standards step becomes required when the process
   // configuration sets standards or needs assessments to REQUIRED_AT_CREATION (server-computed).
   { id: 'process', title: 'Workflow and process', route: 'process', required: false, order: 62, description: 'Template, process switches and approval chains' },
   { id: 'standards', title: 'Standards and needs assessment', route: 'standards', required: false, order: 64, description: 'Project standards and needs-assessment documents' },
-  { id: 'team', title: 'Team', route: 'team', required: false, order: 70, description: 'Web users, mobile users and join codes' },
+  { id: 'team', title: 'Team', route: 'team', required: false, order: 70, description: 'Web users and mobile users' },
   { id: 'review', title: 'Review', route: 'review', required: false, order: 1000, description: 'Check and set the project active' },
 ];
 
-export const ProjectSetupStepIdEnum = z.enum(['basics', 'parties', 'contract', 'site', 'facility', 'boq', 'reporting', 'schedule', 'process', 'standards', 'team']);
+export const ProjectSetupStepIdEnum = z.enum(['basics', 'parties', 'contract', 'site', 'facility', 'scope', 'reporting', 'process', 'standards', 'team']);
 export type ProjectSetupStepId = z.infer<typeof ProjectSetupStepIdEnum>;
 
 const TimeOfDay = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Use 24-hour HH:MM');
@@ -102,6 +98,10 @@ export type CreateProjectDraftRequest = z.infer<typeof CreateProjectDraftRequest
 // Step 2: parties
 // ---------------------------------------------------------------------------
 
+/** A contractor's trade code (2 to 6 letters or digits). */
+export const TRADE_CODE_REGEX = /^[A-Z0-9]{2,6}$/;
+
+/** The project's contractor (redesign R1d, decision T: one contractor per project, no login). */
 export const ProjectContractorInputSchema = z.object({
   /** Existing ProjectContractor row; omit to add. */
   id: z.string().uuid().optional(),
@@ -112,9 +112,7 @@ export const ProjectContractorInputSchema = z.object({
     .trim()
     .toUpperCase()
     .regex(TRADE_CODE_REGEX, 'Trade code: 2 to 6 letters or digits, e.g. CIV or ELEC'),
-  isMainContractor: z.boolean().default(false),
   allocatedBudgetNgn: z.number().nonnegative().nullable().optional(),
-  allowFieldReporting: z.boolean().default(true),
   plannedMobilizationDate: IsoDate.nullable().optional(),
   plannedCompletionDate: IsoDate.nullable().optional(),
 });
@@ -125,9 +123,8 @@ export const ProjectPartiesStepSchema = z.object({
   owningOrganizationId: z.string().uuid().nullable().optional(),
   monitorOrganization: OrganizationRefSchema.nullable().optional(),
   lenderOrganization: OrganizationRefSchema.nullable().optional(),
-  contractorExecutionMode: ContractorExecutionModeEnum.nullable().optional(),
-  /** The full contractor list: rows not listed are removed (refused if they have activity). */
-  contractors: z.array(ProjectContractorInputSchema).max(50).default([]),
+  /** The contractor (at most one): a row not listed is removed (refused if it has activity). */
+  contractors: z.array(ProjectContractorInputSchema).max(1, 'A project has one contractor').default([]),
   /** Phase 11: the full beneficiary list; omitted keeps the current list. */
   beneficiaries: ProjectBeneficiaryListSchema.optional(),
 });
@@ -157,23 +154,12 @@ export const ProjectFacilityStepSchema = z.object({
 export type ProjectFacilityStep = z.infer<typeof ProjectFacilityStepSchema>;
 
 // ---------------------------------------------------------------------------
-// Step 5: BOQ (items arrive through the BOQ preview and commit endpoints; this saves mappings)
+// Step 5: scope & sprints (redesign R2b). Data is saved through /scope endpoints (or the workbook
+// import); saving the step only marks it reviewed.
 // ---------------------------------------------------------------------------
 
-export const ProjectBoqItemMappingSchema = z.object({
-  boqItemId: z.string().uuid(),
-  isHoldPoint: z.boolean(),
-  holdPointInstruction: z.string().max(400).nullable().optional(),
-  isOpaqueLumpSum: z.boolean().optional(),
-  /** Contractor package; required for every item in multi-prime before activation. */
-  projectContractorId: z.string().uuid().nullable().optional(),
-});
-export type ProjectBoqItemMapping = z.infer<typeof ProjectBoqItemMappingSchema>;
-
-export const ProjectBoqStepSchema = z.object({
-  items: z.array(ProjectBoqItemMappingSchema).max(5000).default([]),
-});
-export type ProjectBoqStep = z.infer<typeof ProjectBoqStepSchema>;
+export const ProjectScopeStepSchema = z.object({});
+export type ProjectScopeStep = z.infer<typeof ProjectScopeStepSchema>;
 
 // ---------------------------------------------------------------------------
 // Step 6: reporting
@@ -204,8 +190,6 @@ export type ProjectReportingStep = z.infer<typeof ProjectReportingStepSchema>;
 export const ProjectTeamStepSchema = z.object({
   /** Web users (and provisioned mobile users) assigned to the project. The creator stays assigned. */
   userIds: z.array(z.string().uuid()).max(500).default([]),
-  /** Join-code roles to issue codes for at activation. null issues every join-code mobile role. */
-  joinCodeRoleIds: z.array(z.string().uuid()).max(50).nullable().default(null),
 });
 export type ProjectTeamStep = z.infer<typeof ProjectTeamStepSchema>;
 
@@ -216,11 +200,10 @@ export const PROJECT_STEP_SAVE_SCHEMAS = {
   contract: ProjectContractStepSchema,
   site: ProjectSiteStepSchema,
   facility: ProjectFacilityStepSchema,
-  boq: ProjectBoqStepSchema,
+  scope: ProjectScopeStepSchema,
   reporting: ProjectReportingStepSchema,
   process: ProjectProcessStepSchema,
   standards: ProjectStandardsStepSchema,
-  schedule: ProjectStandardsStepSchema,
   team: ProjectTeamStepSchema,
 } as const;
 
@@ -239,7 +222,6 @@ export const ProjectActivationSchema = z.object({
   parties: z.object({
     monitorOrganizationId: z.string().uuid().optional(),
     lenderOrganizationId: z.string().uuid().optional(),
-    contractorExecutionMode: ContractorExecutionModeEnum,
   }),
   site: z.object({
     geofence: ProjectGeofenceSchema,
@@ -277,18 +259,14 @@ export const ProjectContractorDtoSchema = z.object({
   organizationName: z.string(),
   tradeCategory: z.string(),
   tradeCode: z.string(),
-  isMainContractor: z.boolean(),
   allocatedBudgetNgn: z.number().nullable(),
-  allowFieldReporting: z.boolean(),
   plannedMobilizationDate: z.string().nullable(),
   plannedCompletionDate: z.string().nullable(),
-  boqItemCount: z.number().int(),
-  /** Sessions or IPC claims exist; the contractor cannot be removed. */
+  /** Work is recorded against it (BOQ items, milestones, defects…); the contractor cannot be removed. */
   hasActivity: z.boolean(),
   /** Phase 13: contract state; a terminated contractor keeps its history. */
   contractStatus: ContractStatusEnum,
   terminatedAt: z.string().nullable(),
-  replacesProjectContractorId: z.string().uuid().nullable(),
 });
 export type ProjectContractorDto = z.infer<typeof ProjectContractorDtoSchema>;
 
@@ -309,6 +287,10 @@ export const ProjectSetupDtoSchema = z.object({
     /** Phase 11 */
     projectType: ProjectTypeSummarySchema.nullable(),
     region: RegionSummarySchema.nullable(),
+    /** Redesign R2c: needs-assessment details from the workbook (read-only for now). */
+    siteAddress: z.string().nullable(),
+    strategicJustification: z.string().nullable(),
+    assumptions: z.string().nullable(),
   }),
   parties: z.object({
     /** Phase 11 */
@@ -325,7 +307,6 @@ export const ProjectSetupDtoSchema = z.object({
     }),
     monitorOrganization: OrgSummary,
     lenderOrganization: OrgSummary,
-    contractorExecutionMode: ContractorExecutionModeEnum.nullable(),
     contractors: z.array(ProjectContractorDtoSchema),
   }),
   site: z.object({
@@ -334,6 +315,8 @@ export const ProjectSetupDtoSchema = z.object({
     geofenceToleranceMeters: z.number().int().nullable(),
     effectiveToleranceMeters: z.number().int(),
     tenantDefaultToleranceMeters: z.number().int(),
+    /** Workspace default radius for a new radial boundary (the project sets its own). */
+    tenantDefaultRadiusMeters: z.number().int(),
     timezone: z.string(),
     enabledGeofenceModes: z.array(GeofenceModeEnum),
   }),
@@ -346,9 +329,13 @@ export const ProjectSetupDtoSchema = z.object({
       heldNgn: z.number(),
     }),
   }),
-  boq: z.object({
-    itemCount: z.number().int(),
-    unassignedContractorCount: z.number().int(),
+  /** Redesign R2b */
+  scope: z.object({
+    sprintCount: z.number().int(),
+    unitCount: z.number().int(),
+    lineCount: z.number().int(),
+    /** Lines with no facility unit (legacy projects). */
+    unassignedLineCount: z.number().int(),
     holdPointCount: z.number().int(),
     totalBudgetedCostNgn: z.number(),
   }),
@@ -360,7 +347,6 @@ export const ProjectSetupDtoSchema = z.object({
   }),
   team: z.object({
     userIds: z.array(z.string().uuid()),
-    joinCodeRoleIds: z.array(z.string().uuid()).nullable(),
   }),
   /** Phase 7 */
   process: ProjectProcessSettingsDtoSchema,
@@ -377,49 +363,12 @@ export const ActivateProjectResponseSchema = z.object({
   projectId: z.string().uuid(),
   status: ProjectStatusEnum,
   activatedAt: z.string(),
-  issuedJoinCodes: z.array(z.string()),
 });
 export type ActivateProjectResponse = z.infer<typeof ActivateProjectResponseSchema>;
 
 // ---------------------------------------------------------------------------
-// BOQ preview, revisions and contractor package suggestion
+// BOQ revisions (legacy, read-only: redesign R2d removed the BOQ upload)
 // ---------------------------------------------------------------------------
-
-export const BoqPreviewRequestSchema = z.object({
-  spreadsheetBase64: z.string().min(1).max(15_000_000),
-  fileName: z.string().max(200).optional(),
-});
-export type BoqPreviewRequest = z.infer<typeof BoqPreviewRequestSchema>;
-
-export const BoqPreviewRowSchema = z.object({
-  rowNumber: z.number().int(),
-  item: z
-    .object({
-      wbsCode: z.string(),
-      section: z.string(),
-      description: z.string(),
-      unit: z.string(),
-      totalQuantity: z.number(),
-      rateNgn: z.number(),
-      budgetedCostNgn: z.number(),
-      isHoldPoint: z.boolean(),
-    })
-    .nullable(),
-  warnings: z.array(z.string()),
-  errors: z.array(z.string()),
-});
-export type BoqPreviewRow = z.infer<typeof BoqPreviewRowSchema>;
-
-export const BoqPreviewResponseSchema = z.object({
-  fileType: z.enum(['XLSX', 'CSV']),
-  detectedColumns: z.record(z.string(), z.string().nullable()),
-  rows: z.array(BoqPreviewRowSchema),
-  validCount: z.number().int(),
-  warningCount: z.number().int(),
-  errorCount: z.number().int(),
-  totalBudgetedCostNgn: z.number(),
-});
-export type BoqPreviewResponse = z.infer<typeof BoqPreviewResponseSchema>;
 
 export const BoqRevisionDtoSchema = z.object({
   id: z.string().uuid(),
@@ -431,24 +380,6 @@ export const BoqRevisionDtoSchema = z.object({
   createdAt: z.string(),
 });
 export type BoqRevisionDto = z.infer<typeof BoqRevisionDtoSchema>;
-
-export const ContractorPackageSuggestionSchema = z.object({
-  suggestedTradeCategory: z.string(),
-  tradeCode: z.string(),
-  matchedWbsCodes: z.array(z.string()),
-  estimatedPackageBudgetNgn: z.number(),
-  rationale: z.string(),
-  /** Existing ProjectContractor with the same trade code, if any. */
-  existingProjectContractorId: z.string().uuid().nullable(),
-});
-export type ContractorPackageSuggestion = z.infer<typeof ContractorPackageSuggestionSchema>;
-
-export const ContractorSuggestionResponseSchema = z.object({
-  engine: z.enum(['RULES_ENGINE']),
-  engineDetail: z.string().nullable(),
-  packages: z.array(ContractorPackageSuggestionSchema),
-});
-export type ContractorSuggestionResponse = z.infer<typeof ContractorSuggestionResponseSchema>;
 
 /** Directory row for a draft (Drafts tab). */
 export const ProjectDraftSummarySchema = z.object({

@@ -59,7 +59,6 @@ export const useDeleteWorkflowTemplateMutation = () => {
 function invalidateStandards(queryClient: QueryClient, projectId: string) {
   queryClient.invalidateQueries({ queryKey: projectStandardsKey(projectId) });
   queryClient.invalidateQueries({ queryKey: projectSetupKey(projectId) });
-  queryClient.invalidateQueries({ queryKey: ['morning-briefs', projectId] });
 }
 
 export const useCreateStandardMutation = (projectId: string) => {

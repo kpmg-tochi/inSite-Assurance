@@ -2,13 +2,10 @@ import { Router, Request, Response, NextFunction } from 'express';
 import {
   ActOnDefaultCaseRequestSchema,
   CompleteMilestoneRequestSchema,
-  DecideProgrammeOfWorksRequestSchema,
   RaiseDefaultCaseRequestSchema,
   RecordKickoffHeldRequestSchema,
-  ReplaceContractorRequestSchema,
   SaveKickoffMeetingRequestSchema,
   SendKickoffNoticeRequestSchema,
-  SubmitProgrammeOfWorksRequestSchema,
   WaiveMilestoneRequestSchema,
 } from '@insite/shared';
 import { guardProjectRoutes } from '../../utils/accessControl';
@@ -17,12 +14,11 @@ import { validateBody } from '../../middleware/validate.middleware';
 import { completeMilestone, getProjectMilestones, waiveMilestone } from './milestones.service';
 import { getProjectKickoff, recordKickoffHeld, saveKickoffMeeting, sendKickoffNotice } from './kickoff.service';
 import { getMobilisationCompliance } from './compliance.service';
-import { actOnDefaultCase, getDefaultCase, listDefaultCases, raiseDefaultCase, replaceContractor } from './defaultCases.service';
-import { decideProgrammeOfWorks, listProgrammeSubmissions, submitProgrammeOfWorks } from './programmeOfWorks.service';
+import { actOnDefaultCase, getDefaultCase, listDefaultCases, raiseDefaultCase } from './defaultCases.service';
 
 /**
  * Phase 13 project routes: contract milestones, kick-off meeting, mobilisation compliance, default
- * cases, contractor replacement and programme of works. Mounted at /api/v1/projects.
+ * cases. Mounted at /api/v1/projects. (Redesign R2d: the programme of works is a document.)
  */
 const router = guardProjectRoutes(Router());
 
@@ -148,41 +144,5 @@ router.post(
   })
 );
 
-router.post(
-  '/:projectId/contractors/:projectContractorId/replace',
-  requirePermission('contractors:manage_packages'),
-  validateBody(ReplaceContractorRequestSchema),
-  wrap(async (req, res) => {
-    res.json({ success: true, data: await replaceContractor(p(req, 'projectId'), p(req, 'projectContractorId'), req.webUser!, req.body) });
-  })
-);
-
-// Programme of works ------------------------------------------------------------------
-
-router.get(
-  '/:projectId/programme-of-works',
-  requirePermission('schedule:propose_programme', 'projects:edit_baseline', 'schedule:view_variance'),
-  wrap(async (req, res) => {
-    res.json({ success: true, data: await listProgrammeSubmissions(p(req, 'projectId'), req.webUser!) });
-  })
-);
-
-router.post(
-  '/:projectId/programme-of-works',
-  requirePermission('schedule:propose_programme'),
-  validateBody(SubmitProgrammeOfWorksRequestSchema),
-  wrap(async (req, res) => {
-    res.status(201).json({ success: true, data: await submitProgrammeOfWorks(p(req, 'projectId'), req.webUser!, req.body) });
-  })
-);
-
-router.post(
-  '/:projectId/programme-of-works/:submissionId/decision',
-  requirePermission('projects:edit_baseline'),
-  validateBody(DecideProgrammeOfWorksRequestSchema),
-  wrap(async (req, res) => {
-    res.json({ success: true, data: await decideProgrammeOfWorks(p(req, 'projectId'), p(req, 'submissionId'), req.webUser!, req.body) });
-  })
-);
 
 export const contractsRoutes = router;

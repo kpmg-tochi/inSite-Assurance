@@ -53,7 +53,6 @@ export function starterTemplates(): Array<{ name: string; description: string; i
           ...DEFAULT_PROJECT_PROCESS_CONFIG,
           needsAssessmentMode: 'REQUIRED_AT_CREATION',
           standardsSpecificationMode: 'REQUIRED_AT_CREATION',
-          allowContractorFieldReporting: false,
           requireReportApproval: true,
         },
         reportChain: defaultReportChain(),
@@ -66,7 +65,6 @@ export function starterTemplates(): Array<{ name: string; description: string; i
       config: {
         process: {
           ...DEFAULT_PROJECT_PROCESS_CONFIG,
-          allowContractorFieldReporting: false,
         },
         reportChain: defaultReportChain(),
       },

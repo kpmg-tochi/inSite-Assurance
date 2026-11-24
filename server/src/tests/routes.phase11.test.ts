@@ -42,6 +42,40 @@ async function login(email: string) {
 
 const ids: Record<string, string> = {};
 
+/**
+ * R1d: the main-tenant contractor login is gone. A web user who only holds projects:view_assigned
+ * (no tenant-wide, tree or portfolio permission), assigned to LKK-402 and ABJ-108.
+ */
+const ASSIGNED_ONLY = 'assigned.only@insite.test';
+async function ensureAssignedOnlyUser() {
+  if (await prisma.user.findUnique({ where: { email: ASSIGNED_ONLY } })) return;
+  const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: 'kpmg-nigeria' } });
+  const perm = await prisma.permission.findUniqueOrThrow({ where: { key: 'projects:view_assigned' } });
+  const role = await prisma.role.create({
+    data: {
+      tenantId: tenant.id,
+      name: 'Assigned viewer',
+      code: 'ASSIGNED_VIEWER',
+      surface: 'WEB',
+      rolePermissions: { create: [{ permissionId: perm.id }] },
+    },
+  });
+  const org = await prisma.organization.findFirstOrThrow({ where: { tenantId: tenant.id }, orderBy: { createdAt: 'asc' } });
+  const bcrypt = (await import('bcryptjs')).default;
+  const user = await prisma.user.create({
+    data: {
+      tenantId: tenant.id,
+      email: ASSIGNED_ONLY,
+      passwordHash: await bcrypt.hash(PASSWORD, 8),
+      fullName: 'Assigned Viewer',
+      roleId: role.id,
+      organizationId: org.id,
+    },
+  });
+  const projects = await prisma.project.findMany({ where: { tenantId: tenant.id, codePrefix: { in: ['LKK-402', 'ABJ-108'] } } });
+  await prisma.userProjectAssignment.createMany({ data: projects.map((p) => ({ userId: user.id, projectId: p.id })) });
+}
+
 async function projectId(code: string) {
   const p = await prisma.project.findFirstOrThrow({ where: { codePrefix: code }, select: { id: true } });
   return p.id;
@@ -178,8 +212,8 @@ describe('organisation-tree visibility', () => {
     assert.notEqual(flagship.status, 403);
   });
 
-  it('the executive matrix and notification lists use the same scope', async () => {
-    const res = await request(app).get('/api/v1/projects/portfolio/executive-summary').set(await login(NORTH));
+  it('the portfolio and notification lists use the same scope', async () => {
+    const res = await request(app).get('/api/v1/projects/portfolio/overview').set(await login(NORTH));
     assert.equal(res.status, 200, JSON.stringify(res.body));
     assert.deepEqual(
       (res.body.data.projects as Array<{ codePrefix: string }>).map((p) => p.codePrefix),
@@ -202,8 +236,8 @@ describe('organisation-tree visibility', () => {
   });
 
   it('users without the tree permission still see only assigned projects', async () => {
-    // The main-tenant contractor is assigned to two projects and holds no tree permission.
-    const res = await request(app).get('/api/v1/projects').set(await login('contractor@insite.ng'));
+    await ensureAssignedOnlyUser();
+    const res = await request(app).get('/api/v1/projects').set(await login(ASSIGNED_ONLY));
     assert.equal(res.status, 200);
     assert.ok((res.body.data as unknown[]).length >= 1);
     assert.ok((res.body.data as Array<{ codePrefix: string }>).every((p) => !p.codePrefix.startsWith('PRG')));
@@ -391,13 +425,11 @@ describe('project types', () => {
         owningOrganizationId: ids.flagship,
         monitorOrganization: { id: res.body.data.parties.monitorOrganization.id },
         lenderOrganization: { id: ids.flagship },
-        contractorExecutionMode: 'SINGLE_CONTRACTOR',
         contractors: res.body.data.parties.contractors.map((c: Record<string, unknown>) => ({
           id: c.id,
           organization: { id: c.organizationId },
           tradeCategory: c.tradeCategory,
           tradeCode: c.tradeCode,
-          isMainContractor: c.isMainContractor,
         })),
         beneficiaries: [],
       });
@@ -542,7 +574,8 @@ describe('portfolio dashboard', () => {
   });
 
   it('needs projects:view_portfolio', async () => {
-    const res = await request(app).get('/api/v1/projects/portfolio/overview').set(await login('contractor@insite.ng'));
+    await ensureAssignedOnlyUser();
+    const res = await request(app).get('/api/v1/projects/portfolio/overview').set(await login(ASSIGNED_ONLY));
     assert.equal(res.status, 403);
   });
 });

@@ -2,7 +2,7 @@
 
 **For:** presenters running the client demo of the two delivery models.
 **Length:** about 45 minutes (two storylines of ~15 minutes, KPIs ~5, configuration live ~10).
-**Status:** written against the Phase 16 seed and verified through the API and route tests. **Not yet rehearsed in the browser:** do one full dry run on a fresh seed before the client session, and note anything that differs here.
+**Status:** written against the Phase 16 seed plus the redesign R2 seed (facilities, scope and sprints), and verified through the API and route tests. **Not yet rehearsed in the browser:** do one full dry run on a fresh seed before the client session, and note anything that differs here.
 
 ---
 
@@ -10,7 +10,7 @@
 
 1. Reset and seed: from `server/`, `npm run prisma:seed`. Dates are relative to the seed day, so seed **on the demo day** (or the day before).
 2. Start the API (`npm run dev` in `server/`) and the web app (`npm run dev` in `web/`). Leave scheduled jobs on: the KPI snapshot job and the deadline jobs run at start-up.
-3. Copy the **beneficiary handover link** printed at the end of the seed (PRG-104). The one-time code goes to `headteacher.prg-104@example.org`. In dev the console adapter prints it in the API log.
+3. Have a signed handover form ready to describe (paper; the beneficiary has no login, redesign R1d). PRG-104's handover response is left for you to record.
 4. Open one browser profile per persona you will switch to quickly (or use private windows).
 
 **Logins** (password `Password123!` for all):
@@ -25,18 +25,16 @@
 | Funding authority | `programme.funder@insite.ng` | Records payments made outside the platform |
 | Monitor | `programme.monitor@insite.ng` | Inspections, report approval, handover review |
 | M&E officer | `me.officer@insite.ng` | Supervision workload (over the site limit) |
-| Resident Supervisor (mobile, provisioned) | `resident.supervisor@insite.ng` | Mobile sign-in without a join code |
+| Resident Supervisor (mobile, provisioned) | `resident.supervisor@insite.ng` | Mobile sign-in with an account |
 | Legal officer | `legal.officer@insite.ng` | Default case review |
-| Contractor (Sahel Build) | `sahel.contractor@insite.ng` | Contractor's view: shared documents, findings, defects |
-| Beneficiary | Handover link from the seed log | Accepts the works on PRG-104 |
 
 **The demo programme** ("Programme Authority (demo programme)"):
 
 | Stage (process flow) | Central | Co-Funded |
 | :--- | :--- | :--- |
 | Draft, kick-off planned | PRG-101 (kick-off in 9 days, agenda filed) | PRG-201 (draft) |
-| Mobilising | PRG-102 (on time, due in ~5 days) | PRG-221 (overdue, default case at the decision step) |
-| Under construction, M&E | PRG-105 (ahead of schedule) | PRG-211 (weekly supervision, late visit, open finding) |
+| Mobilising | PRG-102 (on time, due in ~5 days; sprints start in a week) | PRG-221 (overdue, default case at the decision step) |
+| Under construction, M&E | PRG-105 (sprint 3 of 3, on track) | PRG-211 (weekly supervision, late visit, open finding) |
 | Payments | PRG-105 (one interim payment recorded, 5% retention held) | – |
 | Completion | PRG-104 (CoC signed once, waiting for the flagship and the beneficiary) | – |
 | Liability period | PRG-103 (two open defects) | – |
@@ -65,6 +63,22 @@
 
 **Click:** Milestones on PRG-102 to show a held kick-off: notice sent on time, quorum met, minutes signed by the owner and the monitor.
 
+### A1b. Scope and sprints from the needs-assessment workbook (redesign R2)
+
+**Login:** `programme.admin@`. **Open:** PRG-101 (draft) → Setup → Scope & sprints.
+
+**Say:** "The scope comes from the needs assessment. Every bill line belongs to a facility on site: a classroom block, a toilet, 120 desks. Sprints say which facilities are being built when. The facility list is the programme's own, and it feeds the workbook's dropdowns."
+
+**Click:** Download workbook. Open it: the Facility units sheet's Facility column is a dropdown of the 50 facilities; BoQ Amount is a formula. Fill two sprints, three units (one Classroom, one Toilet, one Pupils' furniture with 120 desks) and four BoQ lines; on the Project sheet enter the school name, LGA and GPS point. (Have a filled copy ready to save time.)
+
+**Click:** Import workbook → choose the file. **Show:** the preview: lines grouped by facility and sprint, amounts recomputed as quantity × rate, the project fields that will be filled (only empty ones), and any warning (for example the total above the budget). Nothing is saved yet.
+
+**Click:** Import. **Show:** the Scope & sprints step is complete; the lines took their planned dates from their sprints.
+
+**Optional:** paste an unknown facility name into the workbook and import again: the preview shows a row-level error and Import stays disabled.
+
+**Show (live project):** PRG-102 → Scope & sprints: three sprints, three units; Import is disabled ("change the scope below, every change is audited"). Settings → Forms & facilities → Facilities shows the catalogue; retiring a facility hides it from new scope but keeps it on PRG-102.
+
 ### A2. Mobilisation (process slide: Mobilisation)
 
 **Open:** PRG-102 → Milestones.
@@ -75,9 +89,23 @@
 
 ### A3. Monitoring and evaluation (process slide: M&E)
 
-**Open:** PRG-105 → Dashboard: schedule badge (ahead), KPI card, inspections card.
+**Open:** PRG-105 → Dashboard: schedule badge (on track: computed from sprints; a project falls behind when a facility unit due by an ended sprint is not complete), KPI card, inspections card. **Then:** Scope & sprints: sprint 3 active, the classroom block and the toilet block with their lines.
 
-**Optional mobile:** sign in on the phone as `resident.supervisor@`. **Say:** "Supervisors are provisioned: no join code, and they see all their sites at once."
+**Optional mobile:** sign in on the phone as `resident.supervisor@`. **Say:** "Field staff sign in with their own account and see all their sites at once. Contractors and beneficiaries have no login."
+
+### A3b. Visit forms (redesign R3)
+
+**Login:** `programme.monitor@`. **Open:** Settings → Forms & facilities.
+
+**Say:** "Fifty facilities, but nobody wrote fifty forms. Each facility starts from one of four archetype sub-forms, and the M&E team customises only the ones that differ. The fixed sections (health & safety, materials…) are written once and reused by every visit type."
+
+**Show:** Facility sub-forms: the four archetype defaults; filter "Customised only": Toilet is customised (v1). **Click:** Edit on Toilet: the building questions plus "Plumbing connected", asked per unit, photo when yes. Show preview → Routine: "Workmanship acceptable on all 3 toilets", one photo slot per toilet. Cancel.
+
+**Show:** Fixed sections and Visit form templates: Routine = Progress → [facility sub-forms] → Workmanship → Materials → Health & safety → Environment.
+
+**Click:** Preview → PRG-105, Routine, today → Build form. **Show:** the sprint 3 header and deliverables, one block per facility with its units (the classroom block and the toilet block), the Toilet's per-unit plumbing question and one photo slot per unit, the rules on each question. **Say:** "This is what the officer's phone gets when a visit is assigned. It is frozen then: editing a template later never changes a visit already assigned." Switch to Ad hoc, pick Toilet: only the toilet block.
+
+**Optional (carry-over):** as `monitor@` (main workspace), preview LKK-402 Routine: sprint 2's units plus sprint 1's earthworks and culverts, which ended four weeks ago and are not complete.
 
 ### A4. Payments (process slide: Payments)
 
@@ -95,13 +123,13 @@
 
 **Click:** sign the "Head of M&E" slot. Then, as `programme.admin@`, record the beneficiary's signed paper copy (upload any PDF, attest). The last signature issues the certificate and its PDF.
 
-**Beneficiary:** open the handover link in a private window, enter the code from the API log, accept with one snag. As `programme.monitor@`, review it on PRG-104 → Handover: the handover certificate is issued and the handover milestone is done.
+**Handover:** as `programme.monitor@`, open PRG-104 → Handover → Record handover response: the head teacher accepted with one snag; tick the attestation that it matches the signed copy. Then mark it reviewed: the handover certificate is issued and the handover milestone is done.
 
 ### A6. Liability period (process slide: Defects liability)
 
-**Login:** `sahel.contractor@`. **Open:** PRG-103 → Retention and defects.
+**Login:** `programme.monitor@`. **Open:** PRG-103 → Retention and defects.
 
-**Say:** "Snags from the handover became defect tickets for the contractor. Retention is released by recording a retention-release payment; one recorded before the period ends or with defects still open is flagged."
+**Say:** "Snags from the handover became defect tickets against the contractor. Officers close them on site with photos; the contractor has no login. Retention is released by recording a retention-release payment; one recorded before the period ends or with defects still open is flagged."
 
 ---
 
@@ -117,7 +145,7 @@
 
 **Login:** `south.admin@`. **Open:** PRG-221 → Milestones.
 
-**Say:** "Co-Funded contracts allow 14 days. The contractor never checked in, so the milestone went overdue and a default case opened by itself. Legal has reviewed it and served notice. The decision belongs to the delivery entity's executive."
+**Say:** "Co-Funded contracts allow 14 days. No officer confirmed the contractor on site, so the milestone went overdue and a default case opened by itself. Legal has reviewed it and served notice. The decision belongs to the delivery entity's executive."
 
 **Click:** the default case → decide (for example, a cure period of 7 days).
 
@@ -163,7 +191,6 @@ Change each setting, show the effect, and say whether it applies at once or to n
 | Setting | Where (as `programme.admin@`) | Change | Show | Applies |
 | :--- | :--- | :--- | :--- | :--- |
 | **Terminology** | Settings → Tenant Settings → Terminology | "Retention" → "Retention money" | PRG-105 → Payments and Retention and defects; mobile labels too | At once |
-| **Registration policy** | Settings → Tenant Settings → Professional registration | Certifier: Optional → Required | As `programme.monitor@` (no registration on file), open a Certificate of Completion signature: the registration is now marked required. Set it back afterwards. (Registrations are removed in redesign R1d.) | At once |
 | **Mobilisation days** | Settings → Project types → Central → Contract rules → "Contractor mobilised on site" | 21 → 28 days | Save (new version). Create a new Central draft, set a kick-off date, and see the deadline at +28. PRG-102 keeps +21. | New projects (existing projects keep their version) |
 | **CoC signatories** | Settings → Project types → Co-Funded → Closure rules | Add a third slot, e.g. "Programme Authority M&E", scope "Owning organisation or above" | Save. A new Co-Funded project's certificate shows three staff slots. | New projects |
 | **KPI targets** (optional) | Settings → Project types → Co-Funded → KPI targets | Mobilised on time 85 → 95 | Programme KPIs: the Co-Funded figure turns from met to missed | At once |

@@ -42,8 +42,6 @@ function geofenceSizeText(geofence: ProjectGeofence): string {
   switch (geofence.mode) {
     case 'RADIAL':
       return `${geofence.radiusMeters.toLocaleString()} m site radius`;
-    case 'LINEAR_CORRIDOR':
-      return `±${geofence.corridorHalfWidthMeters.toLocaleString()} m corridor half-width`;
     case 'PERIMETER': {
       const ring = geofence.perimeterCoordinates;
       const closed =
@@ -81,7 +79,6 @@ export function LiveGeospatialMap({
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
       return (
-        log.chainageLabel?.toLowerCase().includes(q) ||
         log.wbsCode?.toLowerCase().includes(q) ||
         log.wbsDescription?.toLowerCase().includes(q) ||
         log.reporterName.toLowerCase().includes(q) ||
@@ -105,7 +102,6 @@ export function LiveGeospatialMap({
     () => (geofence ? paddedGeofenceBounds(geofence, tolerance) : null),
     [geofence, tolerance]
   );
-  const isCorridor = geofence?.mode === 'LINEAR_CORRIDOR';
 
   // Counted only over captures the server could evaluate; no data means no percentage.
   const evaluated = evidenceLogs.filter((l) => l.isWithinGeofence !== null);
@@ -153,7 +149,7 @@ export function LiveGeospatialMap({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={isCorridor ? 'Search chainage, WBS, reporter or caption...' : 'Search WBS, reporter or caption...'}
+            placeholder="Search WBS, reporter or caption..."
             className="text-xs text-slate-800 placeholder-slate-400 bg-transparent focus:outline-none w-full"
           />
           {searchQuery && (
@@ -233,7 +229,7 @@ export function LiveGeospatialMap({
               <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
                 <div className="text-xs font-sans">
                   <div className="font-bold text-slate-900">
-                    {log.chainageLabel || 'Capture'} · {log.wbsCode || 'No WBS item'}
+                    Capture · {log.wbsCode || 'No WBS item'}
                   </div>
                   <div className="text-slate-600">
                     {formatReporterRoleBadge(log.reporterRoleName, log.fieldPersonaType)}
@@ -291,7 +287,7 @@ export function LiveGeospatialMap({
           <div className="bg-brand-navy/95 backdrop-blur-md text-white rounded-xl p-3 shadow-xl border border-white/10 w-64 flex flex-col justify-between">
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">
-                {selectedLog.chainageLabel || 'Site Pin'} ·{' '}
+                Site Pin ·{' '}
                 {selectedLog.reporterRoleName ||
                   (selectedLog.fieldPersonaType === 'INDEPENDENT_VERIFIER' ? 'Independent' : 'Contractor')}
               </span>

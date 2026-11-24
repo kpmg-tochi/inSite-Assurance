@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import { registerPushToken } from '../api/auth/authApi';
 import type { SessionScope } from '../config/authRegistry';
 
-/** Who a token is registered for: the signed-in account, or one join-code session (Phase 5). */
+/** Who a token is registered for: the signed-in account (one project scope is kept for session-end handling). */
 export interface PushIdentity {
   token: string;
   scope: SessionScope;
@@ -13,8 +13,7 @@ export interface PushIdentity {
 /**
  * Push notifications (Phase 4 Step 6).
  *
- * - Permission is asked in context (after joining a project, after submitting identity), never at
- *   app launch. On launch the token is registered only if permission was already granted.
+ * - Permission is asked in context (when the person opens a project), never at app launch. On launch the token is registered only if permission was already granted.
  * - Android uses one channel, "default", which the server targets (`channelId: 'default'`).
  * - The Expo push token needs the EAS project ID (`extra.eas.projectId`, set from EAS_PROJECT_ID).
  */
@@ -70,7 +69,7 @@ async function registerToken(identities: PushIdentity[]): Promise<string | null>
     devicePlatform: Platform.OS === 'ios' ? ('IOS' as const) : ('ANDROID' as const),
     appVersion: appVersion(),
   };
-  // One phone, one Expo token, registered once per identity: the account and each join session.
+  // One phone, one Expo token, registered once per identity (the signed-in account).
   await Promise.all(
     identities.map((id) => registerPushToken(payload, id.token, id.scope).catch(() => undefined))
   );
@@ -90,8 +89,8 @@ export async function registerPushIfPermitted(identities: PushIdentity[]): Promi
 }
 
 /**
- * Asks for permission at a moment where the reason is obvious (for example "we will tell you when
- * your identity is approved"), then registers the token.
+ * Asks for permission at a moment where the reason is obvious (opening a project, whose queries,
+ * hold points and overdue reports arrive as notifications), then registers the token.
  */
 export async function requestPushPermissionInContext(identities: PushIdentity[]): Promise<boolean> {
   if (Platform.OS === 'web' || identities.length === 0) return false;

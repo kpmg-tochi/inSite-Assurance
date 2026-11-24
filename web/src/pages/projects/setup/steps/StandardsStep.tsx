@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
-import { BookOpen, ExternalLink, FileUp, Pencil, Plus, Trash2 } from "lucide-react";
+import { BookOpen, Download, ExternalLink, FileSpreadsheet, FileUp, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   DOCUMENT_MODE_META,
   NEEDS_ASSESSMENT_DOC_TYPE_META,
@@ -36,6 +36,7 @@ import {
   useUploadNeedsAssessmentMutation,
 } from "../../../../mutations/process/useProcessMutations";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
+import { useDownloadScopeWorkbookMutation } from "../../../../mutations/scope/useScopeMutations";
 import { extractErrors, inputClass, labelClass, StepSection, useRegisterStep, type StepProps } from "../setupContext";
 
 const MAX_DOC_BYTES = 25 * 1024 * 1024;
@@ -70,6 +71,7 @@ export function StandardsStep({ projectId, setup, readOnly }: StepProps) {
   const deleteDoc = useDeleteNeedsAssessmentMutation(projectId);
   const openDoc = useOpenProjectDocumentMutation(projectId);
   const save = useSaveSetupStepMutation(projectId);
+  const workbook = useDownloadScopeWorkbookMutation(projectId);
   const { ask, dialog } = useConfirmDialog();
 
   const [editor, setEditor] = useState<EditorState>(null);
@@ -157,7 +159,7 @@ export function StandardsStep({ projectId, setup, readOnly }: StepProps) {
               onClick={async () => {
                 const ok = await ask({
                   title: `Delete ${s.code}?`,
-                  message: "Briefs and report checks stop using this standard. Reports already checked keep their result.",
+                  message: "Report checks stop using this standard. Reports already checked keep their result.",
                   confirmLabel: "Delete",
                   danger: true,
                 });
@@ -249,7 +251,7 @@ export function StandardsStep({ projectId, setup, readOnly }: StepProps) {
       {dialog}
       <StepSection
         title="Standards and needs assessment"
-        description="Standards are passed to field briefs and used to check submitted reports. Needs-assessment documents record why the project exists."
+        description="Standards are used to check submitted reports. Needs-assessment documents record why the project exists."
       >
         {saveError && <p className="text-xs font-medium text-red-600">{saveError}</p>}
         <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-600">
@@ -305,6 +307,29 @@ export function StandardsStep({ projectId, setup, readOnly }: StepProps) {
 
       {docsOn && (
         <div className="space-y-3">
+          {/* Redesign: the needs-assessment workbook (scope, sprints, project details). */}
+          {hasPermission("boq:view") && (
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm">
+              <div className="flex items-start gap-3">
+                <FileSpreadsheet className="w-5 h-5 text-brand-primary shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="text-xs font-bold text-slate-900">Needs-assessment workbook</h3>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Excel workbook for the project details, facility units, BoQ and sprints, with this workspace's lists
+                    and anything already entered for this project. Fill it in, then import it on the Scope &amp; sprints step.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => workbook.mutate()}
+                disabled={workbook.isPending}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+              >
+                <Download className="w-3.5 h-3.5" /> {workbook.isPending ? "Preparing…" : "Download workbook"}
+              </button>
+            </div>
+          )}
           {canManage && (
             <form onSubmit={handleUpload} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-3">
               <h3 className="text-xs font-bold text-slate-900">Upload a needs-assessment document</h3>

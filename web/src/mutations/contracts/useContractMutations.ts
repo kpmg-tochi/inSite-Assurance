@@ -3,16 +3,13 @@ import { toast } from 'sonner';
 import type {
   ActOnDefaultCaseRequest,
   ApprovalStepConfigInput,
-  DecideProgrammeOfWorksRequest,
   ProjectDocumentDetailDto,
   RaiseDefaultCaseRequest,
   RecordKickoffHeldRequest,
   RegisterProjectDocumentRequest,
-  ReplaceContractorRequest,
   SaveDocumentTypeRequestInput,
   SaveKickoffMeetingRequest,
   SendKickoffNoticeRequest,
-  SubmitProgrammeOfWorksRequest,
 } from '@insite/shared';
 import {
   actOnDefaultCase,
@@ -20,16 +17,13 @@ import {
   archiveProjectDocument,
   completeMilestone,
   createDocumentType,
-  decideProgrammeOfWorks,
   getDocumentDownload,
   raiseDefaultCase,
   recordKickoffHeld,
   registerProjectDocument,
-  replaceContractor,
   saveKickoff,
   sendKickoffNotice,
   signProjectDocument,
-  submitProgrammeOfWorks,
   updateDocumentType,
   uploadProjectDocumentFile,
   waiveMilestone,
@@ -42,12 +36,10 @@ import {
   kickoffKey,
   milestonesKey,
   mobilisationComplianceKey,
-  programmeOfWorksKey,
   projectDocumentKey,
   projectDocumentsKey,
 } from '../../queries/contracts/useContractQueries';
 import { projectSetupKey } from '../../queries/projects/useProjectSetupQueries';
-import { projectScheduleKey, scheduleRevisionsKey } from '../../queries/schedule/useScheduleQueries';
 
 /** Mutation hooks own their toasts; pages must not toast again. */
 const errorMessage = (err: unknown, fallback: string) => (err as { message?: string })?.message || fallback;
@@ -275,7 +267,7 @@ export const useRecordKickoffHeldMutation = (projectId: string) => {
 };
 
 // ---------------------------------------------------------------------------
-// Default cases, termination and replacement
+// Default cases and termination
 // ---------------------------------------------------------------------------
 
 export const useRaiseDefaultCaseMutation = (projectId: string) => {
@@ -315,61 +307,6 @@ export const useActOnDefaultCaseMutation = (projectId: string) => {
                   ? 'Case closed with no action.'
                   : 'Step approved.';
       toast.success(message);
-    },
-    onError: (err) => toast.error(errorMessage(err, 'Could not record the decision.')),
-  });
-};
-
-export const useReplaceContractorMutation = (projectId: string) => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (p: { projectContractorId: string; body: ReplaceContractorRequest }) =>
-      replaceContractor(projectId, p.projectContractorId, p.body),
-    onSuccess: (res) => {
-      invalidateContractState(qc, projectId);
-      qc.invalidateQueries({ queryKey: projectSetupKey(projectId) });
-      qc.invalidateQueries({ queryKey: ['projects'] });
-      qc.invalidateQueries({ queryKey: ['boq', projectId] });
-      qc.invalidateQueries({ queryKey: ['join-codes', projectId] });
-      toast.success(
-        `Replacement appointed: ${res.movedItemCount} item(s) moved, ${res.createdMilestoneCount} milestone(s) created, ${res.issuedJoinCodes.length} join code(s) issued.`
-      );
-    },
-    onError: (err) => toast.error(errorMessage(err, 'Could not appoint the replacement.')),
-  });
-};
-
-// ---------------------------------------------------------------------------
-// Programme of works
-// ---------------------------------------------------------------------------
-
-export const useSubmitProgrammeMutation = (projectId: string) => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: SubmitProgrammeOfWorksRequest) => submitProgrammeOfWorks(projectId, body),
-    onSuccess: (p) => {
-      qc.invalidateQueries({ queryKey: programmeOfWorksKey(projectId) });
-      toast.success(`Programme of works sent for acceptance (${p.itemCount} item(s)).`);
-    },
-    onError: (err) => toast.error(errorMessage(err, 'Could not submit the programme.')),
-  });
-};
-
-export const useDecideProgrammeMutation = (projectId: string) => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (p: { submissionId: string; body: DecideProgrammeOfWorksRequest }) =>
-      decideProgrammeOfWorks(projectId, p.submissionId, p.body),
-    onSuccess: (p) => {
-      qc.invalidateQueries({ queryKey: programmeOfWorksKey(projectId) });
-      if (p.status === 'ACCEPTED') {
-        qc.invalidateQueries({ queryKey: projectScheduleKey(projectId) });
-        qc.invalidateQueries({ queryKey: scheduleRevisionsKey(projectId) });
-        qc.invalidateQueries({ queryKey: projectSetupKey(projectId) });
-        qc.invalidateQueries({ queryKey: milestonesKey(projectId) });
-        qc.invalidateQueries({ queryKey: ['projects'] });
-      }
-      toast.success(p.status === 'ACCEPTED' ? 'Programme accepted. Its dates are now the schedule baseline.' : 'Programme returned to the contractor.');
     },
     onError: (err) => toast.error(errorMessage(err, 'Could not record the decision.')),
   });

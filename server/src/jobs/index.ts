@@ -1,5 +1,5 @@
 import { registerCadenceJobs } from './cadenceJobs';
-import { registerMobilizationJobs } from './mobilizationJobs';
+import { registerMessageJobs } from './messageJobs';
 import { registerScheduleJobs } from './scheduleJobs';
 import { registerCloseoutJobs } from './closeoutJobs';
 import { registerContractJobs } from './contractJobs';
@@ -12,7 +12,7 @@ let registered = false;
 export function registerAllJobs(): void {
   if (registered) return;
   registerCadenceJobs();
-  registerMobilizationJobs();
+  registerMessageJobs();
   registerScheduleJobs();
   registerCloseoutJobs();
   registerContractJobs(); // Phase 13

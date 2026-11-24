@@ -28,7 +28,7 @@ import { useSyncStatus, useWbsInboxQuery } from "../queries/wbs/useWbsQueries";
 import { formatMobileErrorMessage } from "../utils/errorFormatter";
 import { personaCopy } from "../utils/personaCopy";
 import { projectCadenceSettings } from "../utils/activeCadence";
-import { PeriodCheckInCard } from "../components/PeriodCheckInCard";
+import { PeriodCard } from "../components/PeriodCard";
 import { cadenceCopy } from "../utils/projectCadence";
 import type { RootStackParamList } from "../navigation/types";
 import { Feather } from "@expo/vector-icons";
@@ -38,7 +38,7 @@ import { showFindingsEntry, streamPeriodCards, visitTypesOffered } from "../util
 
 type InboxTab = "ACTIVE" | "REPORTED";
 
-/** Phase 9: scheduled this period = the server briefed it as Plan A, or its planned window says so. */
+/** Phase 9: scheduled this period = the item is marked Plan A, or its planned window says so. */
 const isScheduledNow = (t: WbsItemRecord) =>
   t.planningTier === "PLAN_A" || t.periodStatus === "DUE_THIS_PERIOD" || t.periodStatus === "OVERDUE";
 
@@ -57,9 +57,7 @@ export const WbsInboxScreen: React.FC = () => {
     activeProjectId: projectId,
     projectCode,
     userInitials,
-    isVerified,
     activeContext,
-    refreshAssuranceStatus,
   } = useProfile();
   const syncStatus = useSyncStatus();
   const copy = personaCopy(activeContext?.fieldPersonaType, projectCadenceSettings(activeContext?.projectId).reportingCadence);
@@ -67,7 +65,6 @@ export const WbsInboxScreen: React.FC = () => {
   const cadence = projectCadenceSettings(projectId).reportingCadence;
   const periodCopy = cadenceCopy(cadence);
   const scheduledPill = cadence === "DAILY" ? "Plan A · Today" : cadence === "INSPECTION_ONLY" ? "Plan A" : "Plan A · This period";
-  const canCheckIn = Boolean(activeContext?.permissions?.includes("field:manual_checkin"));
 
   const onSelectWbsThread = (wbsItem: WbsItemRecord) =>
     navigation.navigate("WbsThread", { wbsItem });
@@ -121,7 +118,7 @@ export const WbsInboxScreen: React.FC = () => {
 
   const onRefresh = async () => {
     setDismissedError(false);
-    await Promise.all([refetch(), refreshAssuranceStatus()]);
+    await refetch();
   };
 
   const activeThreads = useMemo(
@@ -250,7 +247,7 @@ export const WbsInboxScreen: React.FC = () => {
             )}
           </View>
 
-          {/* Right Action Icons + Profile Avatar with presence badge */}
+          {/* Right Action Icons + Profile Avatar with online dot */}
           <View style={styles.headerActions}>
             {findingsVisible && (
               <TouchableOpacity
@@ -359,17 +356,15 @@ export const WbsInboxScreen: React.FC = () => {
           { paddingBottom: Math.max(insets.bottom, 16) },
         ]}
       >
-        {/* Phase 8: current period, due countdown and today's check-in */}
-        {/* Phase 14: one card per reporting stream the person owes (the first carries the check-in) */}
+        {/* Phase 8: current period and due countdown */}
+        {/* Phase 14: one card per reporting stream the person owes */}
         {projectId &&
-          periodCards.map((c, i) => (
-            <PeriodCheckInCard
+          periodCards.map((c) => (
+            <PeriodCard
               key={c.key}
               projectId={projectId}
-              canCheckIn={canCheckIn}
               settings={c.label ? c.settings : undefined}
               label={c.label}
-              showCheckIn={i === 0}
             />
           ))}
         {projectId && inspectionsVisible && (
@@ -383,20 +378,6 @@ export const WbsInboxScreen: React.FC = () => {
             <Feather name="clipboard" size={16} color="#1E3A8A" />
             <Text style={styles.inspectionEntryText}>{copy.inspectionEntry}</Text>
             <Feather name="chevron-right" size={16} color="#64748B" />
-          </TouchableOpacity>
-        )}
-
-        {/* Unverified Mode Warning Banner */}
-        {!isVerified && (
-          <TouchableOpacity
-            style={styles.unverifiedBanner}
-            onPress={onOpenBacklogModal}
-            activeOpacity={0.9}
-          >
-            <View style={styles.unverifiedBannerContent}>
-              <Pill variant="warning" text={copy.verificationPendingPill} />
-              <Text style={styles.unverifiedText}>{copy.verificationPendingText}</Text>
-            </View>
           </TouchableOpacity>
         )}
 
@@ -449,7 +430,7 @@ export const WbsInboxScreen: React.FC = () => {
           {loading ? (
             <InSiteLoader
               size="md"
-              label="Syncing WBS deliverables & morning briefs..."
+              label="Syncing WBS deliverables..."
             />
           ) : activeTab === "ACTIVE" ? (
             <>

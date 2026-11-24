@@ -27,15 +27,7 @@ export const loginRateLimit = limiter({
   message: 'Too many sign-in attempts from this network. Try again later.',
 });
 
-/** Per IP: 10 join-code attempts per 15 minutes, to make join-code guessing impractical. */
-export const joinProjectRateLimit = limiter({
-  windowMs: 15 * 60 * 1000,
-  limit: 10,
-  code: 'RATE_LIMITED_JOIN',
-  message: 'Too many project join attempts. Try again later.',
-});
-
-/** Per IP: demo endpoints (reset, seed, skip-verification). */
+/** Per IP: demo endpoints (reset, seed). */
 export const demoRateLimit = limiter({
   windowMs: 60 * 60 * 1000,
   limit: 30,

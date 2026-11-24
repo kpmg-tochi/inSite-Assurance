@@ -90,28 +90,17 @@ async function recordPaymentOf(kind: 'INTERIM' | 'FINAL' | 'RETENTION_RELEASE', 
 /** An accepted handover response, reviewed through the real route (issues the handover certificate). */
 async function acceptHandover(projectId: string) {
   const monitor = await prisma.user.findUniqueOrThrow({ where: { email: 'monitor@insite.ng' } });
-  const link = await prisma.handoverLink.create({
-    data: {
-      projectId,
-      tokenHash: crypto.randomBytes(32).toString('hex'),
-      label: 'Head teacher',
-      recipientName: 'Head teacher',
-      recipientContact: 'head@example.org',
-      stakeholderType: 'END_USER',
-      handoverSummary: 'Handover of the school blocks.',
-      expiresAt: new Date(Date.now() + 7 * 86_400_000),
-      createdByUserId: monitor.id,
-    },
-  });
+  // R1d: recorded by staff from the signed copy (no public link).
   const submission = await prisma.handoverSubmission.create({
     data: {
-      handoverLinkId: link.id,
       projectId,
+      stakeholderType: 'END_USER',
+      recordedByUserId: monitor.id,
       decision: 'ACCEPTED_WITH_SNAGS',
       submitterName: 'Mrs Bello',
       submitterRole: 'Head teacher',
       feedbackText: 'We accept the works; the classroom door needs fixing.',
-      snagsJson: [{ title: 'Door', location: 'Block A', description: 'The classroom door sticks.', photos: [] }],
+      snagsJson: [{ title: 'Door', location: 'Block A', description: 'The classroom door sticks.' }],
     },
   });
   return request(app)
@@ -154,7 +143,33 @@ before(async () => {
   const admin = await prisma.user.findUniqueOrThrow({ where: { email: 'admin@insite.ng' } });
   const monitor = await prisma.user.findUniqueOrThrow({ where: { email: 'monitor@insite.ng' } });
   const lender = await prisma.user.findUniqueOrThrow({ where: { email: 'lender@insite.ng' } });
-  const contractorUser = await prisma.user.findUniqueOrThrow({ where: { email: 'contractor@insite.ng' } });
+  // R1d: contractors have no login and the seed has no contractor user. The organisation-side
+  // branches (ratings, lessons, documents) still exist until R4/R6, so a user in the contractor's
+  // organisation is made here with the old contractor permissions to keep covering them.
+  const contractorOrg = await prisma.organization.findFirstOrThrow({ where: { tenantId: tenant.id, name: { startsWith: 'Julius & Sons' } } });
+  const contractorStaffRole = await prisma.role.create({
+    data: {
+      tenantId: tenant.id,
+      name: 'Contractor staff (test)',
+      code: 'P15_CONTRACTOR_STAFF',
+      surface: 'WEB',
+      rolePermissions: {
+        create: ['projects:view_assigned', 'boq:view', 'documents:view', 'documents:upload', 'inspections:view', 'retention:manage_defects'].map(
+          (key) => ({ permission: { connect: { key } } })
+        ),
+      },
+    },
+  });
+  const contractorUser = await prisma.user.create({
+    data: {
+      tenantId: tenant.id,
+      email: 'contractor@insite.ng',
+      passwordHash: admin.passwordHash,
+      fullName: 'Contractor staff',
+      roleId: contractorStaffRole.id,
+      organizationId: contractorOrg.id,
+    },
+  });
 
   ids.ownerOrg = (await prisma.organization.create({ data: { tenantId: tenant.id, name: 'P15 Owner Authority', categories: ['CLIENT_OWNER'] } })).id;
   ids.otherOrg = (await prisma.organization.create({ data: { tenantId: tenant.id, name: 'P15 Other Authority', categories: ['CLIENT_OWNER'] } })).id;
@@ -215,7 +230,6 @@ before(async () => {
         activatedAt: new Date(),
         timezone: 'Africa/Lagos',
         totalBudgetNgn: 1_000_000,
-        contractorExecutionMode: 'SINGLE_CONTRACTOR',
         owningOrganizationId: ids.ownerOrg,
         monitorOrganizationId: monitor.organizationId,
         lenderOrganizationId: lender.organizationId,
@@ -235,7 +249,7 @@ before(async () => {
       await prisma.userProjectAssignment.create({ data: { userId: u.id, projectId: p.id } });
     }
     const main = await prisma.projectContractor.create({
-      data: { projectId: p.id, organizationId: contractorUser.organizationId, tradeCategory: 'Civil works', tradeCode: 'CIV', isMainContractor: true },
+      data: { projectId: p.id, organizationId: contractorUser.organizationId, tradeCategory: 'Civil works', tradeCode: 'CIV' },
     });
     return { p, main };
   };
@@ -247,7 +261,6 @@ before(async () => {
     const item = await prisma.boqItem.create({
       data: {
         projectId: p.id,
-        projectContractorId: main.id,
         wbsCode: `0${n}.01`,
         section: 'BILL 1',
         description: `Block ${n}`,

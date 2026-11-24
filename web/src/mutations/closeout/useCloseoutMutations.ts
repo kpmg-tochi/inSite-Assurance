@@ -4,7 +4,7 @@ import type {
   ChangeProjectPhaseRequest,
   ConvertSnagsInput,
   CreateDefectTicketInput,
-  CreateHandoverLinkInput,
+  RecordHandoverResponseInput,
 } from '@insite/shared';
 import { CONSTRUCTION_PHASE_LABELS } from '@insite/shared';
 import {
@@ -12,15 +12,12 @@ import {
   changeProjectPhase,
   convertSnagsToDefects,
   createDefectTicket,
-  createHandoverLink,
-  reissueHandoverLink,
+  recordHandoverResponse,
   reviewHandoverSubmission,
-  revokeHandoverLink,
   type DefectAction,
 } from '../../api/closeout/closeoutApi';
 import {
   defectTicketsKey,
-  handoverLinksKey,
   handoverSubmissionsKey,
   projectPhaseKey,
   retentionSummaryKey,
@@ -30,7 +27,7 @@ import {
 const errorMessage = (err: unknown, fallback: string) => (err as { message?: string })?.message || fallback;
 
 function invalidateCloseout(queryClient: QueryClient, projectId: string) {
-  for (const key of [projectPhaseKey, handoverLinksKey, handoverSubmissionsKey, defectTicketsKey, retentionSummaryKey]) {
+  for (const key of [projectPhaseKey, handoverSubmissionsKey, defectTicketsKey, retentionSummaryKey]) {
     queryClient.invalidateQueries({ queryKey: key(projectId) });
   }
   queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -53,43 +50,15 @@ export const useChangeProjectPhaseMutation = (projectId: string) => {
   });
 };
 
-export const useCreateHandoverLinkMutation = (projectId: string) => {
+export const useRecordHandoverResponseMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: CreateHandoverLinkInput) => createHandoverLink(projectId, body),
-    onSuccess: (issued) => {
-      queryClient.invalidateQueries({ queryKey: handoverLinksKey(projectId) });
-      toast.success(
-        issued.delivery === 'SENT' || issued.delivery === 'QUEUED'
-          ? `Link emailed to ${issued.link.recipientContact}.`
-          : 'Link created. Copy it now: it is shown only once.'
-      );
-    },
-    onError: (err) => toast.error(errorMessage(err, 'Could not create the link.')),
-  });
-};
-
-export const useRevokeHandoverLinkMutation = (projectId: string) => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (linkId: string) => revokeHandoverLink(projectId, linkId),
+    mutationFn: (body: RecordHandoverResponseInput) => recordHandoverResponse(projectId, body),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: handoverLinksKey(projectId) });
-      toast.success('Link revoked. It stopped working immediately.');
+      invalidateCloseout(queryClient, projectId);
+      toast.success('Handover response recorded.');
     },
-    onError: (err) => toast.error(errorMessage(err, 'Could not revoke the link.')),
-  });
-};
-
-export const useReissueHandoverLinkMutation = (projectId: string) => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (args: { linkId: string; sendNow: boolean }) => reissueHandoverLink(projectId, args.linkId, { sendNow: args.sendNow }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: handoverLinksKey(projectId) });
-      toast.success('New link issued; the old one no longer works.');
-    },
-    onError: (err) => toast.error(errorMessage(err, 'Could not re-issue the link.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not record the handover response.')),
   });
 };
 
@@ -135,7 +104,6 @@ export const useCreateDefectTicketMutation = (projectId: string) => {
 
 const ACTION_DONE: Record<DefectAction['kind'], string> = {
   assign: 'assigned',
-  rectify: 'marked as fixed',
   verify: 'updated',
   reject: 'rejected as not a defect',
 };

@@ -58,7 +58,7 @@ export function useSendWbsMessageMutation(wbsItemId: string) {
   });
 }
 
-/** Reports still on the device, or held by the server until identity approval. Read-only. */
+/** Reports still on the device, waiting on the report approval chain or returned. Read-only. */
 export function usePendingReportsQuery(projectId?: string | null) {
   return useQuery({
     queryKey: wbsQueryKeys.pendingReports(projectId),

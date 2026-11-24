@@ -4,17 +4,15 @@ import { ModalShell } from "../common/ModalShell";
 import { ApprovalProgressBar } from "../process/ApprovalProgressBar";
 import { useConfirmDialog } from "../process/ConfirmDialog";
 import Loader from "../Loader";
-import { useAuth } from "../../lib/auth-context";
 import { formatDateTimeShort } from "../../lib/formatters";
-import { useDefaultCaseQuery, useMobilisationComplianceQuery } from "../../queries/contracts/useContractQueries";
+import { useDefaultCaseQuery } from "../../queries/contracts/useContractQueries";
 import { useActOnDefaultCaseMutation } from "../../mutations/contracts/useContractMutations";
-import { ReplaceContractorDialog } from "./ReplaceContractorDialog";
 import { DEFAULT_CASE_STATUS_META, primaryButton, secondaryButton, smallInput, StatusChip } from "./contractUi";
 
 /**
  * Phase 13: one contractor default case. Review steps are approved or returned through the
  * approval bar; the decision step chooses the outcome (cure period, extension, termination,
- * closure). Termination asks for confirmation and then offers to appoint a replacement.
+ * closure). Termination asks for confirmation.
  */
 export function DefaultCaseModal({ projectId, caseId, onClose }: { projectId: string; caseId: string; onClose: () => void }) {
   const q = useDefaultCaseQuery(projectId, caseId);
@@ -33,14 +31,8 @@ export function DefaultCaseModal({ projectId, caseId, onClose }: { projectId: st
 }
 
 function CaseDetail({ projectId, c }: { projectId: string; c: ContractorDefaultCaseDto }) {
-  const { hasPermission } = useAuth();
   const act = useActOnDefaultCaseMutation(projectId);
-  const compliance = useMobilisationComplianceQuery(projectId, c.status === "TERMINATED");
-  const [replacing, setReplacing] = useState(false);
   const status = DEFAULT_CASE_STATUS_META[c.status];
-  const terminatedRow = compliance.data?.find((r) => r.projectContractorId === c.projectContractorId);
-  const alreadyReplaced = (compliance.data ?? []).some((r) => r.replacesProjectContractorId === c.projectContractorId);
-  const canReplace = c.status === "TERMINATED" && hasPermission("contractors:manage_packages") && !alreadyReplaced;
 
   return (
     <>
@@ -82,25 +74,9 @@ function CaseDetail({ projectId, c }: { projectId: string; c: ContractorDefaultC
       )}
 
       {c.status === "TERMINATED" && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3 text-xs text-slate-700 space-y-2">
-          <p>
-            The contract with {c.contractorName} is terminated. Its history, certified progress and retention stay on the project.
-            {alreadyReplaced ? " A replacement has been appointed." : ""}
-          </p>
-          {canReplace && (
-            <button type="button" className={primaryButton} onClick={() => setReplacing(true)}>
-              Appoint replacement
-            </button>
-          )}
+        <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3 text-xs text-slate-700">
+          <p>The contract with {c.contractorName} is terminated. Its history, certified progress and retention stay on the project.</p>
         </div>
-      )}
-
-      {replacing && (
-        <ReplaceContractorDialog
-          projectId={projectId}
-          terminated={{ projectContractorId: c.projectContractorId, organizationName: terminatedRow?.organizationName ?? c.contractorName, tradeCode: c.tradeCode }}
-          onClose={() => setReplacing(false)}
-        />
       )}
     </>
   );
@@ -125,13 +101,8 @@ function DecisionForm({ projectId, c }: { projectId: string; c: ContractorDefaul
         title: `Terminate the contract with ${c.contractorName}?`,
         message: (
           <div className="space-y-2">
-            <p>This ends the contractor's contract on this project. In one step the platform will:</p>
-            <ul className="list-disc pl-5 space-y-0.5">
-              <li>deactivate the contractor's join codes;</li>
-              <li>revoke the contractor's field sessions;</li>
-              <li>waive the contractor's open milestones.</li>
-            </ul>
-            <p>Its reports, paid claims, certified progress, retention and open defects stay on record. You can then appoint a replacement.</p>
+            <p>This ends the contractor's contract on this project and waives its open milestones.</p>
+            <p>Its reports, payments, certified progress, retention and open defects stay on record.</p>
           </div>
         ),
         confirmLabel: "Terminate the contract",

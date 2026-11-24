@@ -7,7 +7,6 @@ import type {
   MobileDeviceDto,
   PermissionDto,
   RoleDto,
-  RoleOnboardingImpactDto,
   TenantDto,
   TenantUserDto,
   UpdateFieldSessionStatusRequest,
@@ -127,13 +126,6 @@ export const updateProjectFieldSessionStatus = async (
   const { data } = await api.patch<ApiEnvelope<{ id: string; isActive: boolean }>>(
     `/projects/${projectId}/field-sessions/${sessionId}/status`,
     payload
-  );
-  return data.data;
-};
-
-export const getRoleOnboardingImpact = async (roleId: string) => {
-  const { data } = await api.get<ApiEnvelope<RoleOnboardingImpactDto>>(
-    `/rbac/roles/${roleId}/onboarding-impact`
   );
   return data.data;
 };

@@ -24,9 +24,8 @@ import { ProjectsDirectoryPage } from "./pages/projects/ProjectsDirectoryPage";
 import { NewProjectPage } from "./pages/projects/setup/NewProjectPage";
 import { ProjectSetupShell } from "./pages/projects/setup/ProjectSetupShell";
 import { ProjectPaymentsPage } from "./pages/payments/ProjectPaymentsPage";
-import { BoqAndHoldPointsPage } from "./pages/boq/BoqAndHoldPointsPage";
+import { ProjectScopePage } from "./pages/scope/ProjectScopePage";
 import { AuditLedgerPage } from "./pages/audit/AuditLedgerPage";
-import { ProjectSchedulePage } from "./pages/schedule/ProjectSchedulePage";
 import { ProjectHandoverPage } from "./pages/closeout/ProjectHandoverPage";
 import { RetentionDefectsPage } from "./pages/closeout/RetentionDefectsPage";
 import { ProjectInspectionsPage } from "./pages/inspections/ProjectInspectionsPage";
@@ -34,7 +33,6 @@ import { ProjectDocumentsPage } from "./pages/documents/ProjectDocumentsPage";
 import { ProjectMilestonesPage } from "./pages/milestones/ProjectMilestonesPage";
 import { ProjectKickoffPage } from "./pages/milestones/ProjectKickoffPage";
 import { MILESTONE_VIEW_PERMISSIONS } from "./components/contracts/contractUi";
-import PublicHandoverPage from "./pages/handover/PublicHandoverPage";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { ChangePasswordPage } from "./pages/auth/ChangePasswordPage";
 import { RequirePermission } from "./components/PermissionGate";
@@ -107,7 +105,7 @@ function AuthenticatedWorkspace() {
   const handleSelectProject = (projectId: string) => {
     setSelectedProjectId(projectId);
     const subRouteMatch = location.pathname.match(
-      /\/app\/projects\/[^/]+\/(dashboard|payments|boq|audit|schedule|handover|retention|documents|milestones|kickoff|closure|inspections)/,
+      /\/app\/projects\/[^/]+\/(dashboard|payments|scope|audit|schedule|handover|retention|documents|milestones|kickoff|closure|inspections)/,
     );
     const subRoute = subRouteMatch?.[1] || "dashboard";
     const safeSubRoute =
@@ -266,29 +264,22 @@ function AuthenticatedWorkspace() {
                 </RequirePermission>
               }
             />
+            {/* Redesign R2b: "Scope & sprints" replaces "BOQ & hold points". */}
             <Route
-              path="projects/:projectId/boq"
+              path="projects/:projectId/scope"
               element={
                 <RequirePermission anyOf={["boq:view"]} backTo={projectHome}>
-                  <BoqAndHoldPointsPage
-                    project={activeProject}
-                    boqItems={boqQuery.data || []}
-                  />
+                  <ProjectScopePage project={activeProject} />
                 </RequirePermission>
               }
             />
-            <Route
-              path="projects/:projectId/schedule"
-              element={
-                <RequirePermission anyOf={["schedule:view_variance", "schedule:propose_programme"]} backTo={projectHome}>
-                  <ProjectSchedulePage project={activeProject} />
-                </RequirePermission>
-              }
-            />
+            <Route path="projects/:projectId/boq" element={<Navigate to={`/app/projects/${activeProject.id}/scope`} replace />} />
+            {/* Redesign R2d: the schedule page is gone; sprints live on Scope & sprints. */}
+            <Route path="projects/:projectId/schedule" element={<Navigate to={`/app/projects/${activeProject.id}/scope`} replace />} />
             <Route
               path="projects/:projectId/handover"
               element={
-                <RequirePermission anyOf={["handover:manage_links", "handover:review_feedback"]} backTo={projectHome}>
+                <RequirePermission anyOf={["handover:record_response", "handover:review_feedback"]} backTo={projectHome}>
                   <ProjectHandoverPage project={activeProject} />
                 </RequirePermission>
               }
@@ -352,7 +343,7 @@ function AuthenticatedWorkspace() {
             <Route path="dashboard" element={<Navigate to={projectHome} replace />} />
             <Route
               path="boq"
-              element={<Navigate to={`/app/projects/${activeProject.id}/boq`} replace />}
+              element={<Navigate to={`/app/projects/${activeProject.id}/scope`} replace />}
             />
             <Route
               path="audit"
@@ -418,9 +409,6 @@ export function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/mobile-app" element={<MobileAppPage />} />
-
-        {/* Phase 10: public stakeholder handover (no account, no portal chrome) */}
-        <Route path="/handover/:token" element={<PublicHandoverPage />} />
 
         {/* Login Route */}
         <Route

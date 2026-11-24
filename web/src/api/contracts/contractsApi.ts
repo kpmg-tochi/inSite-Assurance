@@ -4,11 +4,9 @@ import type {
   ArchiveProjectDocumentRequest,
   CompleteMilestoneRequest,
   ContractorDefaultCaseDto,
-  DecideProgrammeOfWorksRequest,
   DocumentDownloadDto,
   DocumentTypeDto,
   MobilisationComplianceRow,
-  ProgrammeOfWorksDto,
   ProjectDocumentDetailDto,
   ProjectDocumentDto,
   ProjectKickoffDto,
@@ -16,13 +14,10 @@ import type {
   RaiseDefaultCaseRequest,
   RecordKickoffHeldRequest,
   RegisterProjectDocumentRequest,
-  ReplaceContractorRequest,
-  ReplaceContractorResponse,
   SaveDocumentTypeRequestInput,
   SaveKickoffMeetingRequest,
   SendKickoffNoticeRequest,
   SignProjectDocumentRequest,
-  SubmitProgrammeOfWorksRequest,
   WaiveMilestoneRequest,
 } from '@insite/shared';
 import { api } from '../../config/apiConfig';
@@ -30,7 +25,7 @@ import type { ApiEnvelope } from '../types';
 
 /**
  * Phase 13: document register, document types, contract milestones, kick-off meeting, mobilisation
- * compliance, contractor default cases (termination and replacement) and the programme of works.
+ * compliance and contractor default cases (termination). Redesign R2d: the programme of works is a document.
  */
 
 const base = (projectId: string) => `/projects/${projectId}`;
@@ -219,32 +214,3 @@ export const actOnDefaultCase = async (projectId: string, caseId: string, body: 
   return data.data;
 };
 
-export const replaceContractor = async (projectId: string, projectContractorId: string, body: ReplaceContractorRequest) => {
-  const { data } = await api.post<ApiEnvelope<ReplaceContractorResponse>>(
-    `${base(projectId)}/contractors/${projectContractorId}/replace`,
-    body
-  );
-  return data.data;
-};
-
-// ---------------------------------------------------------------------------
-// Programme of works
-// ---------------------------------------------------------------------------
-
-export const listProgrammesOfWorks = async (projectId: string) => {
-  const { data } = await api.get<ApiEnvelope<ProgrammeOfWorksDto[]>>(`${base(projectId)}/programme-of-works`);
-  return data.data;
-};
-
-export const submitProgrammeOfWorks = async (projectId: string, body: SubmitProgrammeOfWorksRequest) => {
-  const { data } = await api.post<ApiEnvelope<ProgrammeOfWorksDto>>(`${base(projectId)}/programme-of-works`, body);
-  return data.data;
-};
-
-export const decideProgrammeOfWorks = async (projectId: string, submissionId: string, body: DecideProgrammeOfWorksRequest) => {
-  const { data } = await api.post<ApiEnvelope<ProgrammeOfWorksDto>>(
-    `${base(projectId)}/programme-of-works/${submissionId}/decision`,
-    body
-  );
-  return data.data;
-};

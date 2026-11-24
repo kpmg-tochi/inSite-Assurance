@@ -1,7 +1,6 @@
 // Enums & Domain Metadata
 export * from './enums';
 export * from './defaultRoles';
-export * from './joinCodes';
 export * from './terminology';
 
 // Zod Schemas & DTO Types
@@ -18,8 +17,6 @@ export * from './schemas/payment.schema';
 export * from './schemas/incident.schema';
 export * from './schemas/workday.schema';
 export * from './schemas/pushToken.schema';
-export * from './schemas/telemetry.schema';
-export * from './schemas/morningBrief.schema';
 export * from './schemas/notification.schema';
 export * from './schemas/wbsChat.schema';
 export * from './schemas/standards.schema';
@@ -32,12 +29,20 @@ export * from './schemas/deliveryModel.schema';
 export * from './schemas/projectType.schema';
 // Phase 14
 export * from './schemas/inspection.schema';
-export * from './schemas/credentials.schema';
 // Phase 13
 export * from './schemas/contract.schema';
 // Phase 15
 export * from './schemas/closure.schema';
 export * from './schemas/kpi.schema';
+// Redesign R2
+export * from './schemas/facility.schema';
+export * from './schemas/scope.schema';
+export * from './schemas/scopeWorkbook.schema';
+export * from './utils/scope';
+// Redesign R3
+export * from './schemas/form.schema';
+export * from './utils/visitForm';
+export * from './data/defaultFormLibrary';
 
 // Data
 export * from './data/standardsLibrary';
@@ -56,6 +61,6 @@ export * from './utils/inspectionChecklist';
 // Phase 13
 export * from './utils/contractMilestones';
 
-// Shared Turf.js Radial & Linear Corridor Chainage Geospatial Utilities
+// Shared Turf.js radial and perimeter geofence utilities
 export * from './geo/geofence';
 

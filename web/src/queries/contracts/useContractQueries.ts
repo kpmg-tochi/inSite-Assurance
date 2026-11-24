@@ -7,7 +7,6 @@ import {
   getProjectMilestones,
   listDefaultCases,
   listDocumentTypes,
-  listProgrammesOfWorks,
   listProjectDocuments,
   type DocumentFilters,
 } from '../../api/contracts/contractsApi';
@@ -23,7 +22,6 @@ export const mobilisationComplianceKey = (projectId: string | null | undefined) 
 export const defaultCasesKey = (projectId: string | null | undefined) => ['default-cases', projectId] as const;
 export const defaultCaseKey = (projectId: string | null | undefined, id: string | null | undefined) =>
   ['default-case', projectId, id] as const;
-export const programmeOfWorksKey = (projectId: string | null | undefined) => ['programme-of-works', projectId] as const;
 
 export const useDocumentTypesQuery = (includeArchived = false, enabled = true) =>
   useQuery({
@@ -86,10 +84,3 @@ export const useDefaultCaseQuery = (projectId: string | null | undefined, caseId
     enabled: Boolean(projectId && caseId),
   });
 
-export const useProgrammesOfWorksQuery = (projectId: string | null | undefined, enabled = true) =>
-  useQuery({
-    queryKey: programmeOfWorksKey(projectId),
-    queryFn: () => listProgrammesOfWorks(projectId!),
-    enabled: Boolean(projectId) && enabled,
-    retry: false,
-  });

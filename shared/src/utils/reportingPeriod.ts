@@ -28,7 +28,7 @@ export interface CadenceSettings {
   /** ISO weekday a weekly period starts on (also aligns the default bi-weekly anchor). */
   periodStartDayOfWeek: number;
   customIntervalDays?: number | null;
-  /** HH:MM; briefs go out at this time on the first workday of a period. */
+  /** HH:MM; a period opens at this time on its first workday. */
   workdayStartTime: string;
   /** HH:MM */
   workdayEndTime: string;
@@ -50,10 +50,10 @@ export interface ReportingPeriod {
   periodEnd: string;
   /** Last calendar day that belongs to the period (on or after periodEnd). */
   calendarEnd: string;
-  /** First workday of the period, when briefs go out; null if the period has no workday. */
+  /** First workday of the period; null if the period has no workday. */
   firstWorkday: string | null;
-  /** When briefs for the period go out (first workday at workdayStartTime). */
-  briefAt: string | null;
+  /** When the period opens (first workday at workdayStartTime); its obligations are created then. */
+  opensAt: string | null;
   /** Report due instant (periodEnd at the due time). */
   dueAt: string;
   /** dueAt plus grace: a report after this is late, an unfulfilled obligation is missed. */
@@ -82,13 +82,8 @@ export const ISO_WEEKDAY_SHORT: Record<number, string> = {
   7: 'Sun',
 };
 
-/** Cadences with reporting periods (and therefore briefs, obligations and due times). */
+/** Cadences with reporting periods (and therefore obligations and due times). */
 export function cadenceHasPeriods(cadence: ReportingCadence): boolean {
-  return cadence !== 'INSPECTION_ONLY';
-}
-
-/** Cadences under which people are expected on site every workday (missed check-in alerts). */
-export function cadenceExpectsDailyPresence(cadence: ReportingCadence): boolean {
   return cadence !== 'INSPECTION_ONLY';
 }
 
@@ -249,7 +244,7 @@ export function getReportingPeriodForDate(settings: CadenceSettings, date: strin
     periodEnd,
     calendarEnd: range.end,
     firstWorkday,
-    briefAt: firstWorkday
+    opensAt: firstWorkday
       ? zonedDateTimeToInstant(firstWorkday, settings.workdayStartTime || '08:00', settings.timezone).toISOString()
       : null,
     dueAt: dueAt.toISOString(),
@@ -274,14 +269,6 @@ export function listWorkdaysInPeriod(settings: CadenceSettings, date: string): s
 export function nextPeriodStart(settings: CadenceSettings, instant: Date | string = new Date()): string | null {
   const range = calendarRange(settings, zonedCalendarDate(instant, settings.timezone));
   return range ? addDays(range.end, 1) : null;
-}
-
-/** Whether an instant is inside working hours on a workday (telemetry window). */
-export function isWithinWorkingHours(settings: CadenceSettings, instant: Date | string = new Date()): boolean {
-  const date = zonedCalendarDate(instant, settings.timezone);
-  if (!isWorkday(settings, date)) return false;
-  const minutes = zonedMinutesOfDay(instant, settings.timezone);
-  return minutes >= hhMmToMinutes(settings.workdayStartTime, '07:00') && minutes < hhMmToMinutes(settings.workdayEndTime, '19:00');
 }
 
 /** Short noun for a period: "today", "this week", "this fortnight", "this month", "this period". */
@@ -316,7 +303,7 @@ export function formatDueLabel(instant: string | Date, timeZone: string): string
 
 /**
  * Plain-language preview for the setup wizard, e.g.
- * "Briefs go out Monday 08:00. Reports are due Saturday 17:00."
+ * "Periods open Monday 08:00. Reports are due Saturday 17:00."
  */
 export function describeCadence(settings: CadenceSettings, today: string): string {
   if (!cadenceHasPeriods(settings.reportingCadence)) {
@@ -327,7 +314,7 @@ export function describeCadence(settings: CadenceSettings, today: string): strin
   const dueTime = settings.reportDueTime || settings.workdayEndTime;
   const grace = settings.reportGraceMinutes > 0 ? ` (${settings.reportGraceMinutes} min grace)` : '';
   if (settings.reportingCadence === 'DAILY') {
-    return `Briefs go out each workday at ${settings.workdayStartTime}. Reports are due the same day at ${dueTime}${grace}.`;
+    return `Reports are due each workday at ${dueTime}${grace}.`;
   }
   const first = ISO_WEEKDAY_LABELS[isoWeekday(period.firstWorkday)];
   const last = ISO_WEEKDAY_LABELS[isoWeekday(period.periodEnd)];
@@ -335,5 +322,5 @@ export function describeCadence(settings: CadenceSettings, today: string): strin
     settings.reportingCadence === 'WEEKLY'
       ? ''
       : ` The current period runs ${period.periodStart} to ${period.calendarEnd}.`;
-  return `Briefs go out ${first} ${settings.workdayStartTime}. Reports are due ${last} ${dueTime}${grace}.${span}`;
+  return `Periods open ${first} ${settings.workdayStartTime}. Reports are due ${last} ${dueTime}${grace}.${span}`;
 }

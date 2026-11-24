@@ -22,7 +22,6 @@ import {
   createTenantWithDefaults,
   createUserInTenant,
   deleteRoleForTenant,
-  getRoleOnboardingImpact,
   getTenantDetails,
   listMobileDevicesForTenant,
   revokeMobileDevice,
@@ -144,23 +143,6 @@ router.get(
     try {
       const users = await listUsersForTenant(req.webUser!.tenantId);
       res.json({ success: true, data: users });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * GET /api/v1/rbac/roles/:roleId/onboarding-impact
- * What switching the role's onboarding mode would change (shown in the confirmation dialog).
- */
-router.get(
-  '/roles/:roleId/onboarding-impact',
-  requirePermission('roles:create_edit'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const impact = await getRoleOnboardingImpact(req.webUser!, String(req.params.roleId));
-      res.json({ success: true, data: impact });
     } catch (error) {
       next(error);
     }

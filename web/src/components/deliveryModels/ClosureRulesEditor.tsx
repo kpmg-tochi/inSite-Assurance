@@ -140,13 +140,6 @@ export function ClosureRulesEditor({ value, onChange }: { value: ClosureRules; o
             <span className="font-medium">An approved final evaluation inspection is needed before drafting</span>
           </label>
           <label className="flex items-start gap-2 text-xs text-slate-700">
-            <input type="checkbox" className="mt-0.5" checked={Boolean(value.cocSignatureUsesCertifierPolicy)} onChange={(e) => set({ cocSignatureUsesCertifierPolicy: e.target.checked })} />
-            <span>
-              <span className="font-medium">Staff signatures follow the certifier registration policy</span>
-              <span className="block text-[11px] text-slate-500">The signer's registration is checked and printed as for certifications.</span>
-            </span>
-          </label>
-          <label className="flex items-start gap-2 text-xs text-slate-700">
             <input type="checkbox" className="mt-0.5" checked={Boolean(value.shareRatingsWithContractor)} onChange={(e) => set({ shareRatingsWithContractor: e.target.checked })} />
             <span className="font-medium">Show contractor ratings to the contractor</span>
           </label>

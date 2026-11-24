@@ -76,24 +76,3 @@ export function canonicalReportString(f: ReportSignatureFields): string {
   ]);
 }
 
-export interface PingSignatureFields {
-  clientPingId: string;
-  projectId: string;
-  latitude: number;
-  longitude: number;
-  accuracyMeters: number | null;
-  isMocked: boolean;
-  capturedAt: string;
-}
-
-export function canonicalPingString(f: PingSignatureFields): string {
-  return canonical('insite.ping.v1', [
-    f.clientPingId,
-    f.projectId,
-    f.latitude,
-    f.longitude,
-    num(f.accuracyMeters),
-    f.isMocked,
-    f.capturedAt,
-  ]);
-}

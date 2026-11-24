@@ -12,7 +12,7 @@ import {
   CompleteMultipartUploadCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { HANDOVER_UPLOAD_POLICY, MediaType } from '@insite/shared';
+import { MediaType } from '@insite/shared';
 import { env } from '../config/env';
 import { AppError } from '../middleware/error.middleware';
 
@@ -64,20 +64,12 @@ export const MEDIA_UPLOAD_POLICY: Record<MediaType, { mimeTypes: string[]; maxBy
   },
 };
 
-export const MAX_UPLOAD_BYTES = Math.max(
-  ...Object.values(MEDIA_UPLOAD_POLICY).map((p) => p.maxBytes),
-  // Phase 10: stakeholder audio and video.
-  ...Object.values(HANDOVER_UPLOAD_POLICY).map((p) => p.maxBytes)
-);
+export const MAX_UPLOAD_BYTES = Math.max(...Object.values(MEDIA_UPLOAD_POLICY).map((p) => p.maxBytes));
 
 /**
- * Phase 10: stakeholder handover uploads live under this prefix inside the project namespace. They
- * are quarantined: never registered as captures and never counted as field evidence.
+ * Phase 10: stakeholder uploads from the old public handover link (deleted in R1d) live under this
+ * prefix. They stay quarantined: never registered as captures, served only to handover reviewers.
  */
-export function handoverObjectPrefix(tenantId: string, projectId: string, linkId: string): string {
-  return `${projectObjectPrefix(tenantId, projectId)}handover/${linkId}/`;
-}
-
 export function isHandoverObjectKey(objectKey: string, tenantId: string, projectId: string): boolean {
   return objectKey.startsWith(`${projectObjectPrefix(tenantId, projectId)}handover/`);
 }

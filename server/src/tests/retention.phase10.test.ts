@@ -14,8 +14,7 @@ import {
   retentionWithheldFor,
   sanitizeHandoverLine,
   sanitizeHandoverText,
-  handoverUploadKind,
-  SubmitHandoverRequestSchema,
+  RecordHandoverResponseRequestSchema,
 } from '@insite/shared';
 
 describe('retention withheld per release', () => {
@@ -115,20 +114,12 @@ describe('stakeholder text', () => {
   });
 });
 
-describe('stakeholder uploads and submission rules', () => {
-  it('allows photos, PDF, audio and video only', () => {
-    assert.equal(handoverUploadKind('image/jpeg'), 'IMAGE');
-    assert.equal(handoverUploadKind('application/pdf'), 'DOCUMENT');
-    assert.equal(handoverUploadKind('audio/mp4'), 'AUDIO');
-    assert.equal(handoverUploadKind('video/quicktime'), 'VIDEO');
-    for (const bad of ['text/html', 'image/svg+xml', 'application/x-msdownload', 'application/zip', 'application/javascript']) {
-      assert.equal(handoverUploadKind(bad), null, bad);
-    }
-  });
-  it('needs a snag for "accepted with snags" and a reason for a rejection', () => {
-    const base = { submitterName: 'Ada', submitterRole: 'Head teacher' };
-    assert.equal(SubmitHandoverRequestSchema.safeParse({ ...base, decision: 'ACCEPTED_WITH_SNAGS' }).success, false);
-    assert.equal(SubmitHandoverRequestSchema.safeParse({ ...base, decision: 'REJECTED', feedbackText: 'no' }).success, false);
-    assert.equal(SubmitHandoverRequestSchema.safeParse({ ...base, decision: 'ACCEPTED' }).success, true);
+describe('recorded handover response rules (R1d)', () => {
+  it('needs a snag for "accepted with snags", a reason for a rejection, and the attestation', () => {
+    const base = { stakeholderType: 'CLIENT_STAFF', submitterName: 'Ada', submitterRole: 'Head teacher', attest: true };
+    assert.equal(RecordHandoverResponseRequestSchema.safeParse({ ...base, decision: 'ACCEPTED_WITH_SNAGS' }).success, false);
+    assert.equal(RecordHandoverResponseRequestSchema.safeParse({ ...base, decision: 'REJECTED', feedbackText: 'no' }).success, false);
+    assert.equal(RecordHandoverResponseRequestSchema.safeParse({ ...base, decision: 'ACCEPTED' }).success, true);
+    assert.equal(RecordHandoverResponseRequestSchema.safeParse({ ...base, attest: false, decision: 'ACCEPTED' }).success, false);
   });
 });

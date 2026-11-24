@@ -19,9 +19,9 @@ export async function buildMobileInspectionPack(params: {
       where: { id: params.projectId },
       select: { ...CADENCE_PROJECT_SELECT, tenantId: true, projectTypeSnapshotJson: true },
     }),
-    prisma.fieldAgentSession.findUniqueOrThrow({ where: { id: params.sessionId }, select: { roleId: true, projectContractorId: true } }),
+    prisma.fieldAgentSession.findUniqueOrThrow({ where: { id: params.sessionId }, select: { roleId: true } }),
   ]);
-  const streams = await streamsOwedBy(prisma, params.projectId, session);
+  const streams = await streamsOwedBy(prisma, params.projectId, { roleId: session.roleId, projectContractorId: null });
   const canSubmitInspections = params.permissions.includes('inspections:submit');
   const typeConfig = resolveProjectTypeConfig(project.projectTypeSnapshotJson);
   const templates: MobileInspectionPack['templates'] = [];

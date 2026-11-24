@@ -2,16 +2,16 @@ import { z } from 'zod';
 import { ApprovalOrganizationScopeEnum } from '../enums';
 import { OrganizationRefSchema } from './organization.schema';
 import { ApprovalProgressDtoSchema } from './process.schema';
-import { ScheduleDependencyInputSchema } from './schedule.schema';
 
 /**
  * Phase 13: the stretch between contract award and the contractor working on site.
  * - Document register: typed, versioned project documents with authenticated sign-offs.
  * - Contract milestones: dated obligations computed from anchor dates with per-type offsets.
  * - Kick-off meeting: invitees by stakeholder group, notice, quorum, minutes.
- * - Contractor mobilisation compliance and default cases (CONTRACT_DEFAULT chain), termination
- *   and replacement.
- * - Programme of works: the contractor proposes the schedule baseline, the monitor accepts it.
+ * - Contractor mobilisation compliance and default cases (CONTRACT_DEFAULT chain) and termination
+ *   (redesign R1d: one contractor per project, no replacement).
+ * - Programme of works (redesign R2d): a PROGRAMME_OF_WORKS document; its sign-off completes the
+ *   "programme accepted" milestone (AUTO_SCHEDULE_BASELINE_SET).
  *
  * Due-date maths is pure and lives in utils/contractMilestones.ts.
  */
@@ -44,7 +44,7 @@ export const DEFAULT_DOCUMENT_TYPES: DefaultDocumentTypeDefinition[] = [
   { code: 'KICKOFF_MINUTES', name: 'Kick-off minutes', description: 'Minutes of the kick-off meeting, signed off by attendees.', visibleToContractors: true, requiresSignOff: true },
   { code: 'MOBILISATION_AGREEMENT', name: 'Mobilisation agreement', description: 'Agreement on how and when the contractor mobilises.', visibleToContractors: true, requiresSignOff: true },
   { code: 'MOBILISATION_PLAN', name: 'Mobilisation plan', description: "The contractor's plan for people, plant and materials.", visibleToContractors: true, requiresSignOff: false },
-  { code: 'PROGRAMME_OF_WORKS', name: 'Programme of works', description: "The contractor's programme (when supplied as a file).", visibleToContractors: true, requiresSignOff: false },
+  { code: 'PROGRAMME_OF_WORKS', name: 'Programme of works', description: "The contractor's programme of works. Signing it off accepts the programme.", visibleToContractors: true, requiresSignOff: true },
   { code: 'LETTER_OF_INTRODUCTION', name: 'Letter of introduction', description: 'Introduces the contractor to the beneficiary and community.', visibleToContractors: true, requiresSignOff: false },
   { code: 'SITE_POSSESSION_FORM', name: 'Site possession form', description: 'Records that the site was handed to the contractor.', visibleToContractors: true, requiresSignOff: true },
   { code: 'SUPERVISOR_ASSIGNMENT', name: 'Supervisor assignment', description: 'Names the supervisor assigned to the site.', visibleToContractors: true, requiresSignOff: false },
@@ -268,10 +268,10 @@ export const CONTRACT_MILESTONE_ANCHOR_META: Record<ContractMilestoneAnchor, { l
 
 export const MILESTONE_COMPLETION_MODE_META: Record<MilestoneCompletionMode, { label: string; description: string }> = {
   MANUAL: { label: 'Completed by a person', description: 'Completed by someone with milestones:manage once its documents are in place.' },
-  AUTO_CONTRACTOR_ON_SITE: { label: 'Contractor on site', description: "Completed by the contractor's first check-in inside the site boundary." },
+  AUTO_CONTRACTOR_ON_SITE: { label: 'Contractor on site', description: 'An officer confirms the contractor is on site (redesign R1e; mobilisation check visits complete it in R4).' },
   AUTO_KICKOFF_NOTICE_SENT: { label: 'Kick-off notice sent', description: 'Completed when the kick-off notice goes out through the platform.' },
   AUTO_KICKOFF_QUORUM: { label: 'Kick-off held', description: 'Completed when the kick-off is recorded as held with quorum (or a waiver).' },
-  AUTO_SCHEDULE_BASELINE_SET: { label: 'Programme accepted', description: 'Completed when the schedule baseline is set or a programme of works is accepted.' },
+  AUTO_SCHEDULE_BASELINE_SET: { label: 'Programme accepted', description: 'Completed when a programme of works document is signed off.' },
   AUTO_COC_ISSUED: { label: 'Certificate issued', description: 'Completed when the Certificate of Completion is issued (reopened if it is revoked).' },
   AUTO_HANDOVER_ACCEPTED: { label: 'Handover accepted', description: 'Completed when an accepted handover response is reviewed (the handover certificate is issued).' },
   AUTO_FINAL_EVALUATION_APPROVED: {
@@ -451,7 +451,7 @@ export const ContractMilestoneDtoSchema = z.object({
   offsetUnit: MilestoneOffsetUnitEnum,
   /** "Kick-off + 21 days" */
   anchorLabel: z.string(),
-  /** Set for a replacement contractor's milestones: counted from this date instead of the anchor. */
+  /** Set when a milestone is counted from another date than its anchor (extensions). */
   anchorDateOverride: z.string().nullable(),
   dueDate: z.string().nullable(),
   /** PENDING / DUE / OVERDUE as of today in the project zone; DONE and WAIVED as stored. */
@@ -629,7 +629,7 @@ export const DEFAULT_CASE_OUTCOME_META: Record<DefaultCaseOutcome, { label: stri
   EXTENSION_GRANTED: { label: 'Extension granted', description: "The milestone's due date moves to the new date." },
   TERMINATED: {
     label: 'Terminate the contract',
-    description: "Ends the contractor's contract on this project. A replacement can then be appointed. Not possible while one of its claims is still unpaid.",
+    description: "Ends the contractor's contract on this project.",
   },
   CLOSED: { label: 'Close with no action', description: 'The case is closed without consequences.' },
 };
@@ -686,25 +686,6 @@ export const ContractorDefaultCaseDtoSchema = z.object({
 });
 export type ContractorDefaultCaseDto = z.infer<typeof ContractorDefaultCaseDtoSchema>;
 
-export const ReplaceContractorRequestSchema = z.object({
-  organization: OrganizationRefSchema,
-  tradeCategory: z.string().trim().min(2).max(80),
-  tradeCode: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{2,6}$/, 'Trade code: 2 to 6 letters or digits'),
-  allocatedBudgetNgn: z.number().nonnegative().nullable().optional(),
-  allowFieldReporting: z.boolean().default(true),
-  /** Move the terminated contractor's items that are not fully certified (certified % stays). */
-  moveUncertifiedItems: z.boolean().default(true),
-});
-export type ReplaceContractorRequest = z.infer<typeof ReplaceContractorRequestSchema>;
-
-export const ReplaceContractorResponseSchema = z.object({
-  projectContractorId: Uuid,
-  movedItemCount: z.number().int(),
-  createdMilestoneCount: z.number().int(),
-  issuedJoinCodes: z.array(z.string()),
-});
-export type ReplaceContractorResponse = z.infer<typeof ReplaceContractorResponseSchema>;
-
 // ---------------------------------------------------------------------------
 // Mobilisation compliance
 // ---------------------------------------------------------------------------
@@ -714,7 +695,6 @@ export const MobilisationComplianceRowSchema = z.object({
   organizationName: z.string(),
   tradeCode: z.string(),
   contractStatus: ContractStatusEnum,
-  replacesProjectContractorId: Uuid.nullable(),
   milestone: z
     .object({
       id: Uuid,
@@ -725,56 +705,10 @@ export const MobilisationComplianceRowSchema = z.object({
       completedAt: z.string().nullable(),
     })
     .nullable(),
+  /** The mobilisation milestone is done (redesign R1e: an officer confirmed it; telemetry was removed). */
   onSite: z.boolean(),
-  firstCheckInAt: z.string().nullable(),
   missingDocuments: z.array(z.object({ code: z.string(), name: z.string() })),
   openDefaultCaseId: Uuid.nullable(),
 });
 export type MobilisationComplianceRow = z.infer<typeof MobilisationComplianceRowSchema>;
 
-// ---------------------------------------------------------------------------
-// Programme of works
-// ---------------------------------------------------------------------------
-
-export const ProgrammeOfWorksStatusEnum = z.enum(['PENDING', 'ACCEPTED', 'RETURNED']);
-export type ProgrammeOfWorksStatus = z.infer<typeof ProgrammeOfWorksStatusEnum>;
-
-export const SubmitProgrammeOfWorksRequestSchema = z.object({
-  /** Proposed project dates; used only when the project has no baseline dates yet. */
-  plannedStartDate: IsoDate.optional(),
-  plannedEndDate: IsoDate.optional(),
-  items: z
-    .array(z.object({ boqItemId: Uuid, plannedStartDate: IsoDate, plannedEndDate: IsoDate }))
-    .min(1, 'Date at least one item')
-    .max(5000),
-  dependencies: z.array(ScheduleDependencyInputSchema).max(10000).default([]),
-  notes: z.string().trim().max(2000).nullable().optional(),
-});
-export type SubmitProgrammeOfWorksRequest = z.infer<typeof SubmitProgrammeOfWorksRequestSchema>;
-
-export const DecideProgrammeOfWorksRequestSchema = z
-  .object({
-    decision: z.enum(['ACCEPT', 'RETURN']),
-    notes: z.string().trim().max(2000).nullable().optional(),
-  })
-  .refine((v) => v.decision !== 'RETURN' || (v.notes ?? '').length >= 5, {
-    message: 'Say what needs to change',
-    path: ['notes'],
-  });
-export type DecideProgrammeOfWorksRequest = z.infer<typeof DecideProgrammeOfWorksRequestSchema>;
-
-export const ProgrammeOfWorksDtoSchema = z.object({
-  id: Uuid,
-  projectContractorId: Uuid.nullable(),
-  contractorName: z.string().nullable(),
-  submittedByUserId: Uuid,
-  submittedByName: z.string().nullable(),
-  status: ProgrammeOfWorksStatusEnum,
-  proposal: SubmitProgrammeOfWorksRequestSchema,
-  itemCount: z.number().int(),
-  decidedByName: z.string().nullable(),
-  decisionNotes: z.string().nullable(),
-  createdAt: z.string(),
-  decidedAt: z.string().nullable(),
-});
-export type ProgrammeOfWorksDto = z.infer<typeof ProgrammeOfWorksDtoSchema>;

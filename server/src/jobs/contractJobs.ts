@@ -127,7 +127,7 @@ async function processProject(project: ProjectRow, now: Date): Promise<string> {
               projectContractorId: row.projectContractorId,
               trigger: 'MILESTONE_OVERDUE',
               milestoneId: row.id,
-              summary: `${row.projectContractor?.organization.name ?? 'The contractor'} has not checked in on site; "${row.label}" was due on ${row.dueDate}.`,
+              summary: `${row.projectContractor?.organization.name ?? 'The contractor'} has not mobilised; "${row.label}" was due on ${row.dueDate}.`,
               actor: SYSTEM_ACTOR,
             });
             opened += 1;

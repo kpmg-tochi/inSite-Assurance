@@ -1,23 +1,16 @@
 import React, { useState } from "react";
-import { AlarmClock, CalendarClock, ClipboardCheck, UserX } from "lucide-react";
+import { AlarmClock, CalendarClock, ClipboardCheck } from "lucide-react";
 import {
   formatDueLabel,
   periodNoun,
-  type AttendanceAlertStatus,
-  type AttendanceAlertType,
   type ReportingObligationDto,
   type ReportingObligationStatus,
-  type SiteAttendanceAlertDto,
 } from "@insite/shared";
 import { useAuth } from "../lib/auth-context";
 import { KpiCard, Overlay } from "./common";
 import { StandardTable, TableBadge, type TableBadgeVariant, type TableColumnDef } from "./table";
-import {
-  useAttendanceAlertsQuery,
-  useCadenceOverviewQuery,
-  useDueObligationsQuery,
-} from "../queries/cadence/useCadenceQueries";
-import { useAttendanceAlertActionMutation, useExcuseObligationMutation } from "../mutations/cadence/useCadenceMutations";
+import { useCadenceOverviewQuery, useDueObligationsQuery } from "../queries/cadence/useCadenceQueries";
+import { useExcuseObligationMutation } from "../mutations/cadence/useCadenceMutations";
 
 const OBLIGATION_META: Record<ReportingObligationStatus, { label: string; variant: TableBadgeVariant }> = {
   PENDING: { label: "Due", variant: "info" },
@@ -27,20 +20,7 @@ const OBLIGATION_META: Record<ReportingObligationStatus, { label: string; varian
   EXCUSED: { label: "Excused", variant: "neutral" },
 };
 
-const ALERT_TYPE_LABEL: Record<AttendanceAlertType, string> = {
-  MOBILIZATION_NO_SHOW: "No-show on mobilization day",
-  WORKDAY_MISSED_CHECKIN: "Missed check-in",
-  UNVERIFIED_AT_MOBILIZATION: "Not registered / verified",
-};
-
-const ALERT_STATUS_META: Record<AttendanceAlertStatus, { label: string; variant: TableBadgeVariant }> = {
-  OPEN: { label: "Open", variant: "danger" },
-  ACKNOWLEDGED: { label: "Acknowledged", variant: "warning" },
-  EXCUSED: { label: "Excused", variant: "neutral" },
-  RESOLVED: { label: "Resolved", variant: "success" },
-};
-
-/** A note prompt shared by "excuse" actions (a note is required and audited). */
+/** A note prompt for excusing a report (a note is required and audited). */
 function NoteDialog({
   title,
   onCancel,
@@ -87,23 +67,18 @@ function NoteDialog({
 }
 
 /**
- * Phase 8: reporting cadence and attendance on the site presence tab. Counts for the current period,
- * the "Due and overdue" list and the attendance alerts panel.
+ * Phase 8: reporting cadence on the field reports tab. Counts for the current period and the
+ * "Due and overdue" obligations list (a missed or due report can be excused with a note).
  */
 export function ReportingCadencePanel({ projectId }: { projectId: string }) {
   const { hasPermission } = useAuth();
   const canViewReports = hasPermission("reports:view_all");
-  const canManageAlerts = hasPermission("presence:manage_noshow_alerts");
-  const canSeeAlerts = canManageAlerts || hasPermission("presence:view_telemetry");
+  const canExcuse = hasPermission("reports:approve_completion");
 
   const overview = useCadenceOverviewQuery(projectId, canViewReports);
   const due = useDueObligationsQuery(projectId, canViewReports);
-  const [statusFilter, setStatusFilter] = useState<AttendanceAlertStatus[]>(["OPEN", "ACKNOWLEDGED"]);
-  const [typeFilter, setTypeFilter] = useState<AttendanceAlertType | "">("");
-  const alerts = useAttendanceAlertsQuery(projectId, { status: statusFilter, type: typeFilter ? [typeFilter] : undefined }, canSeeAlerts);
   const excuseObligation = useExcuseObligationMutation(projectId);
-  const alertAction = useAttendanceAlertActionMutation(projectId);
-  const [excusing, setExcusing] = useState<{ kind: "obligation" | "alert"; id: string } | null>(null);
+  const [excusingId, setExcusingId] = useState<string | null>(null);
 
   const o = overview.data;
   const tz = o?.settings.timezone ?? "Africa/Lagos";
@@ -128,13 +103,13 @@ export function ReportingCadencePanel({ projectId }: { projectId: string }) {
       header: "",
       align: "right",
       cell: (r) =>
-        canManageAlerts && (r.status === "MISSED" || r.status === "PENDING") ? (
+        canExcuse && (r.status === "MISSED" || r.status === "PENDING") ? (
           <button
             type="button"
             className="text-xs font-semibold text-brand-primary hover:underline"
             onClick={(e) => {
               e.stopPropagation();
-              setExcusing({ kind: "obligation", id: r.id });
+              setExcusingId(r.id);
             }}
           >
             Excuse
@@ -143,49 +118,12 @@ export function ReportingCadencePanel({ projectId }: { projectId: string }) {
     },
   ];
 
-  const alertColumns: TableColumnDef<SiteAttendanceAlertDto>[] = [
-    { id: "date", header: "Day", cell: (a) => <span className="text-xs font-mono text-slate-700">{a.workdayDate}</span> },
-    { id: "who", header: "Person", cell: (a) => <span className="text-xs font-semibold text-slate-800">{a.participantName ?? "—"}</span> },
-    { id: "type", header: "Alert", cell: (a) => <span className="text-xs text-slate-700">{ALERT_TYPE_LABEL[a.alertType]}</span> },
-    {
-      id: "status",
-      header: "Status",
-      cell: (a) => (
-        <div className="space-y-0.5">
-          <TableBadge variant={ALERT_STATUS_META[a.status].variant}>{ALERT_STATUS_META[a.status].label}</TableBadge>
-          {a.resolutionNotes && <p className="text-[11px] text-slate-500 max-w-xs truncate" title={a.resolutionNotes}>{a.resolutionNotes}</p>}
-        </div>
-      ),
-    },
-    {
-      id: "actions",
-      header: "",
-      align: "right",
-      cell: (a) =>
-        canManageAlerts && (a.status === "OPEN" || a.status === "ACKNOWLEDGED") ? (
-          <div className="flex justify-end gap-3 text-xs font-semibold">
-            {a.status === "OPEN" && (
-              <button type="button" className="text-slate-600 hover:underline" onClick={() => alertAction.mutate({ alertId: a.id, body: { action: "ACKNOWLEDGE" } })}>
-                Acknowledge
-              </button>
-            )}
-            <button type="button" className="text-slate-600 hover:underline" onClick={() => setExcusing({ kind: "alert", id: a.id })}>
-              Excuse
-            </button>
-            <button type="button" className="text-brand-primary hover:underline" onClick={() => alertAction.mutate({ alertId: a.id, body: { action: "RESOLVE" } })}>
-              Resolve
-            </button>
-          </div>
-        ) : null,
-    },
-  ];
-
-  if (!canViewReports && !canSeeAlerts) return null;
+  if (!canViewReports) return null;
 
   return (
     <div className="space-y-5">
       {o && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <KpiCard
             title="Current period"
             value={o.currentPeriod ? (o.currentPeriod.periodStart === o.currentPeriod.periodEnd ? o.currentPeriod.periodStart : `${o.currentPeriod.periodStart} → ${o.currentPeriod.periodEnd}`) : "No periods"}
@@ -207,12 +145,6 @@ export function ReportingCadencePanel({ projectId }: { projectId: string }) {
             icon={<AlarmClock className="w-4 h-4" />}
             iconVariant={o.counts.late + o.counts.missed > 0 ? "amber" : "slate"}
           />
-          <KpiCard
-            title="Open attendance alerts"
-            value={o.counts.openAttendanceAlerts}
-            icon={<UserX className="w-4 h-4" />}
-            iconVariant={o.counts.openAttendanceAlerts > 0 ? "rose" : "slate"}
-          />
         </div>
       )}
       {o?.pendingChange && (
@@ -227,58 +159,19 @@ export function ReportingCadencePanel({ projectId }: { projectId: string }) {
           data={due.data ?? []}
           keyExtractor={(r) => r.id}
           loading={due.isLoading}
-          emptyState={{ title: "Nothing due or overdue", description: "Obligations appear when the period's briefs go out." }}
+          emptyState={{ title: "Nothing due or overdue", description: "Obligations appear when a reporting period opens for the scheduled WBS items." }}
         />
       )}
 
-      {canSeeAlerts && (
-        <StandardTable
-          title="Attendance alerts"
-          subtitle="Raised when someone expected does not check in on site by their expected time plus grace, or is not registered on their mobilization day."
-          columns={alertColumns}
-          data={alerts.data ?? []}
-          keyExtractor={(a) => a.id}
-          loading={alerts.isLoading}
-          filters={
-            <div className="flex flex-wrap items-center gap-3 text-xs">
-              {(Object.keys(ALERT_STATUS_META) as AttendanceAlertStatus[]).map((s) => (
-                <label key={s} className="inline-flex items-center gap-1.5 font-semibold text-slate-700">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 accent-brand-primary"
-                    checked={statusFilter.includes(s)}
-                    onChange={() => setStatusFilter((f) => (f.includes(s) ? f.filter((x) => x !== s) : [...f, s]))}
-                  />
-                  {ALERT_STATUS_META[s].label}
-                </label>
-              ))}
-              <select
-                aria-label="Alert type"
-                className="rounded-lg border border-slate-200 px-2 py-1 text-xs"
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value as AttendanceAlertType | "")}
-              >
-                <option value="">All alert types</option>
-                {(Object.keys(ALERT_TYPE_LABEL) as AttendanceAlertType[]).map((t) => (
-                  <option key={t} value={t}>{ALERT_TYPE_LABEL[t]}</option>
-                ))}
-              </select>
-            </div>
-          }
-          emptyState={{ title: "No attendance alerts", description: "Pre-register expected people in project settings → Team to get alerts." }}
-        />
-      )}
-
-      {excusing && (
+      {excusingId && (
         <NoteDialog
-          title={excusing.kind === "obligation" ? "Excuse this report" : "Excuse this alert"}
-          busy={excuseObligation.isPending || alertAction.isPending}
-          onCancel={() => setExcusing(null)}
+          title="Excuse this report"
+          busy={excuseObligation.isPending}
+          onCancel={() => setExcusingId(null)}
           onConfirm={async (notes) => {
             try {
-              if (excusing.kind === "obligation") await excuseObligation.mutateAsync({ obligationId: excusing.id, notes });
-              else await alertAction.mutateAsync({ alertId: excusing.id, body: { action: "EXCUSE", notes } });
-              setExcusing(null);
+              await excuseObligation.mutateAsync({ obligationId: excusingId, notes });
+              setExcusingId(null);
             } catch {
               /* the mutation shows the error */
             }

@@ -58,6 +58,7 @@ export function WorkspaceSettingsCard() {
   const [mode, setMode] = useState<OrgInputMode>('BOTH');
   const [geofenceModes, setGeofenceModes] = useState<GeofenceMode[]>([]);
   const [tolerance, setTolerance] = useState('100');
+  const [radius, setRadius] = useState('150');
   const [currency, setCurrency] = useState('');
   const [timezone, setTimezone] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -67,6 +68,7 @@ export function WorkspaceSettingsCard() {
     setMode(data.organizationInputMode);
     setGeofenceModes(data.enabledGeofenceModes);
     setTolerance(String(data.defaultGeofenceToleranceMeters));
+    setRadius(String(data.defaultGeofenceRadiusMeters));
     setCurrency(data.defaultCurrency);
     setTimezone(data.timezone);
     setErrors({});
@@ -91,6 +93,10 @@ export function WorkspaceSettingsCard() {
     if (tolerance.trim() === '' || !Number.isInteger(toleranceNum) || toleranceNum < 0 || toleranceNum > 1000) {
       local.defaultGeofenceToleranceMeters = 'Enter a whole number from 0 to 1000';
     }
+    const radiusNum = Number(radius);
+    if (radius.trim() === '' || !Number.isInteger(radiusNum) || radiusNum < 20 || radiusNum > 50000) {
+      local.defaultGeofenceRadiusMeters = 'Enter a whole number from 20 to 50,000';
+    }
     if (!/^[A-Za-z]{3}$/.test(currency.trim())) local.defaultCurrency = 'Use a 3-letter ISO 4217 code, e.g. NGN';
     if (!timezone.trim()) local.timezone = 'Choose a time zone';
     if (Object.keys(local).length) {
@@ -104,6 +110,7 @@ export function WorkspaceSettingsCard() {
         // Keep the canonical order so the stored list is stable.
         enabledGeofenceModes: GeofenceModeEnum.options.filter((m) => geofenceModes.includes(m)),
         defaultGeofenceToleranceMeters: toleranceNum,
+        defaultGeofenceRadiusMeters: radiusNum,
         defaultCurrency: currency.trim().toUpperCase(),
         timezone: timezone.trim(),
       });
@@ -121,8 +128,8 @@ export function WorkspaceSettingsCard() {
           <h3 className="text-sm font-bold text-slate-900">Workspace settings</h3>
         </div>
         <p className="text-xs text-slate-500 mt-0.5">
-          Defaults for every project and form in this workspace. Projects can override the geofence tolerance and time
-          zone.
+          Defaults for every project and form in this workspace. Projects can override the geofence radius, tolerance and
+          time zone.
         </p>
       </div>
 
@@ -222,6 +229,32 @@ export function WorkspaceSettingsCard() {
           </p>
           {errors.defaultGeofenceToleranceMeters && (
             <p className="text-[11px] text-rose-600 mt-1">{errors.defaultGeofenceToleranceMeters}</p>
+          )}
+        </div>
+
+        <div>
+          <label htmlFor="ws-radius" className="block font-semibold text-slate-700 mb-1">
+            Default site radius (m)
+          </label>
+          <input
+            id="ws-radius"
+            type="number"
+            inputMode="numeric"
+            min={20}
+            max={50000}
+            step={1}
+            value={radius}
+            aria-invalid={Boolean(errors.defaultGeofenceRadiusMeters)}
+            aria-describedby="ws-radius-hint"
+            onChange={(e) => setRadius(e.target.value)}
+            className={inputClass(Boolean(errors.defaultGeofenceRadiusMeters))}
+          />
+          <p id="ws-radius-hint" className="text-[11px] text-slate-500 mt-1">
+            20 to 50,000. A new radial site boundary, and the one made from a workbook's GPS point, start with this radius.
+            Each project can change its own.
+          </p>
+          {errors.defaultGeofenceRadiusMeters && (
+            <p className="text-[11px] text-rose-600 mt-1">{errors.defaultGeofenceRadiusMeters}</p>
           )}
         </div>
 

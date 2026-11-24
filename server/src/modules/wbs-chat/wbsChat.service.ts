@@ -79,7 +79,6 @@ export function serializeWbsChatMessage(row: {
   } | null;
   latitude: number | null;
   longitude: number | null;
-  chainageLabel: string | null;
   createdAt: Date;
   reportQuery?: Parameters<typeof serializeReportQuery>[0] | null;
 }): WbsChatMessageDto {
@@ -109,7 +108,6 @@ export function serializeWbsChatMessage(row: {
         : null,
     latitude: row.latitude,
     longitude: row.longitude,
-    chainageLabel: row.chainageLabel,
     queryDetails: row.reportQuery
       ? serializeReportQuery(row.reportQuery)
       : null,
@@ -361,15 +359,14 @@ export async function postWbsChatMessage(params: {
   }
 
   let captureId: string | null = null;
-  let location: { latitude: number | null; longitude: number | null; chainageLabel: string | null } = {
+  let location: { latitude: number | null; longitude: number | null } = {
     latitude: null,
     longitude: null,
-    chainageLabel: null,
   };
   if (input.captureId) {
     const capture = await prisma.fieldEvidenceLog.findUnique({
       where: { clientCaptureId: input.captureId },
-      select: { id: true, projectId: true, fieldSessionId: true, boqItemId: true, latitude: true, longitude: true, chainageLabel: true },
+      select: { id: true, projectId: true, fieldSessionId: true, boqItemId: true, latitude: true, longitude: true },
     });
     if (!capture) {
       throw new AppError('Register the capture before posting it', 409, 'CAPTURES_NOT_REGISTERED', {
@@ -384,7 +381,7 @@ export async function postWbsChatMessage(params: {
       throw new AppError('Capture not found', 404, 'CAPTURE_NOT_FOUND');
     }
     captureId = capture.id;
-    location = { latitude: capture.latitude, longitude: capture.longitude, chainageLabel: capture.chainageLabel };
+    location = { latitude: capture.latitude, longitude: capture.longitude };
   } else if (input.messageType === 'PHOTO' || input.messageType === 'VOICE_NOTE') {
     throw new AppError('Photo and voice messages must reference a registered capture', 400, 'CAPTURE_REQUIRED');
   }
@@ -408,7 +405,6 @@ export async function postWbsChatMessage(params: {
         // Location shown on a media message is the capture's server-evaluated location only.
         latitude: location.latitude,
         longitude: location.longitude,
-        chainageLabel: location.chainageLabel,
       },
       include: MESSAGE_INCLUDE,
     });

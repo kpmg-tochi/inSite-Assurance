@@ -131,7 +131,7 @@ export function LoginPage() {
               <div className="flex items-center justify-between mb-2.5">
                 <div>
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">
-                    Example corridor geofence (illustration)
+                    Example site geofence (illustration)
                   </div>
                   <div className="text-xs font-bold text-white mt-0.5">
                     LKK-402 · Lekki–Epe Dual-Carriageway (KM 0+000 to KM 24+500)
@@ -193,7 +193,7 @@ export function LoginPage() {
                   </span>
                 </div>
 
-                {/* Bottom Telemetry Strip inside Map Preview */}
+                {/* Bottom GPS strip inside Map Preview */}
                 <div className="absolute bottom-2 left-2.5 right-2.5 z-20 flex items-center justify-between text-[10px] text-white/70 bg-brand-navy/75 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/10">
                   <span>Example GPS fix · ±3.4m</span>
                   <span>±150m Corridor Buffer</span>

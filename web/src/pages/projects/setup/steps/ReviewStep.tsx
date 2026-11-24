@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, Circle, Pencil } from "lucide-react";
 import {
-  CONTRACTOR_EXECUTION_MODE_META,
   DOCUMENT_MODE_META,
   formatMoney,
   geofenceModeLabel,
@@ -27,12 +26,9 @@ function summaryFor(stepId: string, s: ProjectSetupDto, currency: string): strin
       return [
         `Monitor: ${s.parties.monitorOrganization?.name ?? "not set"}`,
         `Lender: ${s.parties.lenderOrganization?.name ?? "not set"}`,
-        s.parties.contractorExecutionMode
-          ? CONTRACTOR_EXECUTION_MODE_META[s.parties.contractorExecutionMode].label
-          : "Contractor model not chosen",
         s.parties.contractors.length
-          ? s.parties.contractors.map((c) => `${c.organizationName} (${c.tradeCode}${c.isMainContractor ? ", main" : ""})`).join("; ")
-          : "No contractors",
+          ? `Contractor: ${s.parties.contractors.map((c) => `${c.organizationName} (${c.tradeCode})`).join("; ")}`
+          : "No contractor",
       ];
     case "site":
       return [
@@ -48,10 +44,10 @@ function summaryFor(stepId: string, s: ProjectSetupDto, currency: string): strin
         r.retentionDurationMonths ? `${r.retentionDurationMonths}-month defects liability period` : "No liability period set",
       ];
     }
-    case "boq":
+    case "scope":
       return [
-        `${s.boq.itemCount} item(s), ${formatMoney(s.boq.totalBudgetedCostNgn, { currency })}`,
-        ...(s.process.config.enableHoldPoints ? [`${s.boq.holdPointCount} hold point(s)`] : []),
+        `${s.scope.sprintCount} sprint(s), ${s.scope.unitCount} facility unit(s)`,
+        `${s.scope.lineCount} BoQ line(s), ${formatMoney(s.scope.totalBudgetedCostNgn, { currency })}`,
       ];
     case "reporting":
       return [`${s.reporting.reportingCadence.replace("_", " ").toLowerCase()} reports`, `${s.reporting.workdayStartTime}–${s.reporting.workdayEndTime}`];
@@ -72,7 +68,6 @@ function summaryFor(stepId: string, s: ProjectSetupDto, currency: string): strin
     case "team":
       return [
         `${s.team.userIds.length} person(s) assigned`,
-        s.team.joinCodeRoleIds === null ? "Join codes for every join-code role" : `Join codes for ${s.team.joinCodeRoleIds.length} role(s)`,
       ];
     default:
       return [];
@@ -172,7 +167,7 @@ export function ReviewStep({ projectId, setup, mode }: StepProps) {
       </div>
 
       {isDraft && (
-        <StepSection title="Go live" description="Active projects appear on mobile and in portfolio views, and join codes are issued. A project cannot go back to draft.">
+        <StepSection title="Go live" description="Active projects appear on mobile and in portfolio views. A project cannot go back to draft.">
           {blocking.length > 0 && (
             <div className="rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-900">
               <p className="font-semibold">Before it can go live:</p>

@@ -153,7 +153,7 @@ export async function serializeInspection(r: InspectionRow, principal: Inspectio
     capturesByItem.set(key, [...(capturesByItem.get(key) ?? []), c]);
   }
   const viewer = principal ? await findingViewerFor(r.projectId, principal) : null;
-  const findings = r.findings.filter((f) => !viewer || viewer.kind !== 'contractor' || f.projectContractorId === viewer.contractorId);
+  const findings = r.findings;
   return {
     ...summaryOf(r),
     summaryText: r.summaryText,
@@ -208,7 +208,6 @@ function evaluateGeotag(
     isWithinGeofence: evaluation.isWithinGeofence,
     geofenceStatus: evaluation.geofenceStatus,
     distanceOutsideMeters: evaluation.distanceOutsideMeters,
-    chainageLabel: evaluation.chainageLabel,
     distanceFromSiteMeters: evaluation.distanceFromSiteMeters,
   };
 }
@@ -244,14 +243,6 @@ async function reporterFor(projectId: string, principal: InspectionPrincipal): P
   if (!f.permissions.includes('inspections:submit')) {
     throw new AppError('Access requires permission(s): inspections:submit', 403, 'FORBIDDEN_PERMISSION');
   }
-  const session = await prisma.fieldAgentSession.findUniqueOrThrow({
-    where: { id: f.sessionId },
-    select: { projectContractorId: true, assuranceStatus: true },
-  });
-  const config = await getProcessConfig(projectId);
-  if (config.enableContractorIdentityAssurance && session.assuranceStatus !== 'APPROVED') {
-    throw new AppError('Your identity has not been approved yet, so you cannot submit inspections', 403, 'IDENTITY_NOT_APPROVED');
-  }
   return {
     fieldSessionId: f.sessionId,
     userId: f.userId,
@@ -259,7 +250,8 @@ async function reporterFor(projectId: string, principal: InspectionPrincipal): P
     roleId: f.roleId,
     roleName: f.roleName,
     persona: f.fieldPersonaType,
-    projectContractorId: session.projectContractorId,
+    // R1d: sessions are no longer bound to a contractor package.
+    projectContractorId: null,
     actorType: 'FIELD_AGENT',
     actorId: f.sessionId,
   };

@@ -114,7 +114,7 @@ function PhaseChangeModal({
           <p className="text-slate-600">You can then send stakeholders a link to accept the works.</p>
         )}
         {transition.to === "RETENTION_PERIOD" && (
-          <p className="text-slate-600">New claims, briefs and reporting stop. Field users can only record defect work.</p>
+          <p className="text-slate-600">Reporting obligations stop. Field users can only record defect work.</p>
         )}
         {(needsReason || transition.to !== "ACTIVE_CONSTRUCTION") && (
           <label className="block space-y-1">

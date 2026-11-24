@@ -1,20 +1,18 @@
-import { ContractorExecutionMode, ProjectContractorInput } from '@insite/shared';
+import { ProjectContractorInput } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import { WebJwtPayload } from '../../middleware/auth.middleware';
 import {
   auditContractorChanges,
-  contractorModelIssues,
+  contractorIssues,
   getProjectContractors,
   serializeContractor,
   syncProjectContractors,
 } from './contractors.service';
-import { reconcileContractorJoinCodes } from './joinCodes.service';
 
 /**
- * Single-contractor CRUD under /projects/:projectId/contractors (`contractors:manage_packages`).
- * The parties step saves the whole list; these endpoints change one row at a time with the same
- * rules.
+ * Contractor CRUD under /projects/:projectId/contractors (`contractors:manage_packages`). The parties
+ * step saves the contractor too; these endpoints apply the same rules (one contractor per project).
  */
 
 export async function listProjectContractors(projectId: string) {
@@ -31,12 +29,11 @@ async function applyChange(
     await tx.$queryRaw`SELECT id FROM "Project" WHERE id = ${projectId}::uuid FOR UPDATE`;
     const project = await tx.project.findUniqueOrThrow({
       where: { id: projectId },
-      select: { id: true, tenantId: true, codePrefix: true, status: true, contractorExecutionMode: true },
+      select: { id: true, tenantId: true, codePrefix: true, status: true },
     });
     if (project.status === 'ARCHIVED') {
       throw new AppError('This project is archived and read-only', 409, 'PROJECT_ARCHIVED');
     }
-    const mode = project.contractorExecutionMode as ContractorExecutionMode | null;
     let result;
     if (change.removeId) {
       const current = await getProjectContractors(tx, projectId);
@@ -46,7 +43,6 @@ async function applyChange(
       result = await syncProjectContractors(tx, {
         projectId,
         tenantId: project.tenantId,
-        mode,
         webUser,
         inputs: current
           .filter((c) => c.id !== change.removeId)
@@ -55,9 +51,7 @@ async function applyChange(
             organization: { id: c.organizationId },
             tradeCategory: c.tradeCategory,
             tradeCode: c.tradeCode,
-            isMainContractor: c.isMainContractor,
             allocatedBudgetNgn: c.allocatedBudgetNgn === null ? null : Number(c.allocatedBudgetNgn),
-            allowFieldReporting: c.allowFieldReporting,
             plannedMobilizationDate: c.plannedMobilizationDate?.toISOString().slice(0, 10) ?? null,
             plannedCompletionDate: c.plannedCompletionDate?.toISOString().slice(0, 10) ?? null,
           })),
@@ -66,7 +60,6 @@ async function applyChange(
       result = await syncProjectContractors(tx, {
         projectId,
         tenantId: project.tenantId,
-        mode,
         webUser,
         inputs: [change.upsert!],
         partial: true,
@@ -74,9 +67,8 @@ async function applyChange(
       changedId = change.upsert!.id ?? result.added[0]?.id ?? null;
     }
     if (project.status === 'ACTIVE') {
-      const problems = contractorModelIssues(mode, await getProjectContractors(tx, projectId));
+      const problems = contractorIssues(await getProjectContractors(tx, projectId));
       if (problems.length > 0) throw new AppError(problems[0].message, 422, problems[0].code);
-      await reconcileContractorJoinCodes(tx, project);
     }
     await auditContractorChanges(tx, { projectId, webUser, result });
   });

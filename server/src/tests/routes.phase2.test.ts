@@ -3,6 +3,7 @@
  * (see helpers/testDb.ts). Run with `npm run test:routes --workspace=@insite/server`.
  */
 import { TEST_DATABASE_URL, resetTestDatabase } from './helpers/testDb';
+import { createFieldSession, fieldAuth, fieldToken as sessionToken } from './helpers/fieldAuth';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
@@ -13,11 +14,11 @@ type Prisma = typeof import('../config/prisma')['prisma'];
 
 let app: Express;
 let prisma: Prisma;
-let signFieldAgentToken: typeof import('../middleware/auth.middleware')['signFieldAgentToken'];
 let recordAuditEvent: typeof import('../modules/audit/audit.service')['recordAuditEvent'];
 let getAndVerifyProjectAuditTrail: typeof import('../modules/audit/audit.service')['getAndVerifyProjectAuditTrail'];
 
 const PASSWORD = 'Password123!';
+const LIMITED = 'assigned.viewer@insite.test';
 
 const ids = {
   tenantA: '',
@@ -94,7 +95,6 @@ before(async () => {
   await resetTestDatabase();
 
   ({ prisma } = await import('../config/prisma'));
-  ({ signFieldAgentToken } = await import('../middleware/auth.middleware'));
   ({ recordAuditEvent, getAndVerifyProjectAuditTrail } = await import('../modules/audit/audit.service'));
   const { createApp } = await import('../app');
 
@@ -114,6 +114,39 @@ before(async () => {
       where: { projectId: lkk.id, isActive: true, role: { code: 'INDEPENDENT_RESIDENT' } },
     })
   ).id;
+
+  // R1d: a web user who sees only assigned projects (LKK-402 and ABJ-108). Contractors have no login.
+  const viewPermissions = await prisma.permission.findMany({
+    where: { key: { in: ['projects:view_assigned', 'boq:view'] } },
+    select: { id: true },
+  });
+  const limitedRole = await prisma.role.create({
+    data: {
+      tenantId: tenantA.id,
+      name: 'Assigned Viewer',
+      code: 'ASSIGNED_VIEWER',
+      surface: 'WEB',
+      fieldPersonaType: 'NONE',
+      rolePermissions: { create: viewPermissions.map((perm) => ({ permissionId: perm.id })) },
+    },
+  });
+  const bcrypt = (await import('bcryptjs')).default;
+  const limited = await prisma.user.create({
+    data: {
+      tenantId: tenantA.id,
+      email: LIMITED,
+      passwordHash: await bcrypt.hash(PASSWORD, 8),
+      fullName: 'Assigned Viewer',
+      roleId: limitedRole.id,
+      organizationId: lkk.monitorOrganizationId!,
+    },
+  });
+  await prisma.userProjectAssignment.createMany({
+    data: [
+      { userId: limited.id, projectId: lkk.id },
+      { userId: limited.id, projectId: abj.id },
+    ],
+  });
 
   // A tenant-A project nobody is assigned to.
   const unassigned = await prisma.project.create({
@@ -159,9 +192,8 @@ before(async () => {
       monitorOrganizationId: orgB.id,
       lenderOrganizationId: orgB.id,
       status: 'ACTIVE',
-      contractorExecutionMode: 'SINGLE_CONTRACTOR',
       contractors: {
-        create: { organizationId: orgB.id, tradeCategory: 'General works', tradeCode: 'GEN', isMainContractor: true },
+        create: { organizationId: orgB.id, tradeCategory: 'General works', tradeCode: 'GEN' },
       },
     },
   });
@@ -232,12 +264,12 @@ describe('Phase 2 route security', { concurrency: false }, () => {
 
     it('locks an account after repeated failed sign-ins', async () => {
       for (let i = 0; i < 5; i++) {
-        const r = await request(app).post('/api/v1/auth/login').send({ email: 'contractor@insite.ng', password: 'wrong-password' });
+        const r = await request(app).post('/api/v1/auth/login').send({ email: LIMITED, password: 'wrong-password' });
         assert.equal(r.status, 401);
       }
-      const locked = await request(app).post('/api/v1/auth/login').send({ email: 'contractor@insite.ng', password: PASSWORD });
+      const locked = await request(app).post('/api/v1/auth/login').send({ email: LIMITED, password: PASSWORD });
       assert.equal(locked.status, 423);
-      await prisma.user.update({ where: { email: 'contractor@insite.ng' }, data: { lockedUntil: null, failedLoginCount: 0 } });
+      await prisma.user.update({ where: { email: LIMITED }, data: { lockedUntil: null, failedLoginCount: 0 } });
     });
 
     it('forces a password change for admin-created users', async () => {
@@ -280,7 +312,7 @@ describe('Phase 2 route security', { concurrency: false }, () => {
     });
 
     it('refuses a user without projects:view_all_tenant on an unassigned project', async () => {
-      const token = await login('contractor@insite.ng');
+      const token = await login(LIMITED);
       const res = await request(app).get(`/api/v1/projects/${ids.unassignedA}/baseline`).set(bearer(token));
       assert.equal(res.status, 403);
       assert.equal(res.body.error.code, 'FORBIDDEN_PROJECT_ASSIGNMENT');
@@ -289,13 +321,13 @@ describe('Phase 2 route security', { concurrency: false }, () => {
     });
 
     it('lists only visible projects', async () => {
-      const contractor = await login('contractor@insite.ng');
-      const res = await request(app).get('/api/v1/projects').set(bearer(contractor));
+      const limited = await login(LIMITED);
+      const res = await request(app).get('/api/v1/projects').set(bearer(limited));
       assert.equal(res.status, 200);
       const codes = res.body.data.map((p: { id: string }) => p.id).sort();
       // Assigned, live projects only (Phase 6 seeds more; drafts never appear here).
       const assigned = await prisma.project.findMany({
-        where: { status: { not: 'DRAFT' }, userAssignments: { some: { user: { email: 'contractor@insite.ng' } } } },
+        where: { status: { not: 'DRAFT' }, userAssignments: { some: { user: { email: LIMITED } } } },
         select: { id: true },
       });
       assert.ok(codes.includes(ids.abj) && codes.includes(ids.lkk));
@@ -303,7 +335,7 @@ describe('Phase 2 route security', { concurrency: false }, () => {
     });
 
     it('refuses a field agent on every project-scoped route of another project', async () => {
-      const token = signFieldAgentToken({ sessionId: ids.lkkFieldSession });
+      const token = (await sessionToken(prisma, ids.lkkFieldSession));
       const failures: string[] = [];
       for (const route of projectScopedRoutes()) {
         const res = await call(route.method, fillPath(route.path, ids.abj), token);
@@ -321,11 +353,19 @@ describe('Phase 2 route security', { concurrency: false }, () => {
       const res = await request(app).get(`/api/v1/projects/${ids.lkk}/boq`).set(bearer(forged));
       assert.equal(res.status, 401);
     });
+
+    it('refuses the retired join-code session token (R1d)', async () => {
+      const jwt = (await import('jsonwebtoken')).default;
+      const { env } = await import('../config/env');
+      const legacy = jwt.sign({ tokenType: 'FIELD_AGENT', sessionId: ids.lkkFieldSession }, env.JWT_SECRET);
+      const res = await request(app).get(`/api/v1/projects/${ids.lkk}/boq`).set(bearer(legacy));
+      assert.equal(res.status, 401);
+    });
   });
 
   describe('session revocation', () => {
     it('refuses a revoked field session on the next request', async () => {
-      const fieldToken = signFieldAgentToken({ sessionId: ids.lkkFieldSession });
+      const fieldToken = (await sessionToken(prisma, ids.lkkFieldSession));
       const ok = await request(app).get(`/api/v1/projects/${ids.lkk}/boq`).set(bearer(fieldToken));
       assert.equal(ok.status, 200); // also warms the auth cache
 
@@ -361,13 +401,14 @@ describe('Phase 2 route security', { concurrency: false }, () => {
       assert.equal(untouched.voidedAt, null);
     });
 
-    it('rejects confirming a hold point on another project item', async () => {
+    it('rejects editing a scope line of another project (redesign R2d)', async () => {
       const monitor = await login('monitor@insite.ng');
       const res = await request(app)
-        .patch(`/api/v1/projects/${ids.lkk}/boq/mappings`)
+        .patch(`/api/v1/projects/${ids.lkk}/scope/lines/${ids.abjBoq}`)
         .set(bearer(monitor))
-        .send({ updates: [{ boqItemId: ids.abjBoq, isHoldPoint: false }] });
+        .send({ rateNgn: 1 });
       assert.equal(res.status, 404);
+      assert.equal(res.body.error.code, 'BOQ_ITEM_NOT_FOUND');
     });
 
     it('rejects assigning a user to another tenant project', async () => {
@@ -503,15 +544,15 @@ describe('Phase 2 route security', { concurrency: false }, () => {
       }
     });
 
-    it('hides join codes from roles without mobilization:manage_roster', async () => {
+    it('no longer carries join codes in the baseline (R1d)', async () => {
       const lender = await login('lender@insite.ng');
       const res = await request(app).get(`/api/v1/projects/${ids.lkk}/baseline`).set(bearer(lender));
       assert.equal(res.status, 200);
-      assert.deepEqual(res.body.data.joinCodes, []);
+      assert.equal(res.body.data.joinCodes, undefined);
     });
 
     it('shields whistleblower identity from the audit ledger and from viewers without the permission', async () => {
-      const fieldToken = signFieldAgentToken({ sessionId: ids.lkkFieldSession });
+      const fieldToken = (await sessionToken(prisma, ids.lkkFieldSession));
       const session = await prisma.fieldAgentSession.findUniqueOrThrow({ where: { id: ids.lkkFieldSession } });
       const created = await request(app)
         .post(`/api/v1/projects/${ids.lkk}/incidents`)
@@ -548,7 +589,7 @@ describe('Phase 2 route security', { concurrency: false }, () => {
     });
 
     it('rejects object keys outside the project namespace', async () => {
-      const fieldToken = signFieldAgentToken({ sessionId: ids.lkkFieldSession });
+      const fieldToken = (await sessionToken(prisma, ids.lkkFieldSession));
       const res = await request(app)
         .get(`/api/v1/projects/${ids.lkk}/media`)
         .query({ key: `tenants/${ids.tenantB}/projects/${ids.projectB}/site_photo/x.jpg` })
@@ -558,7 +599,7 @@ describe('Phase 2 route security', { concurrency: false }, () => {
     });
 
     it('enforces the presign content-type allow-list and size cap', async () => {
-      const fieldToken = signFieldAgentToken({ sessionId: ids.lkkFieldSession });
+      const fieldToken = (await sessionToken(prisma, ids.lkkFieldSession));
       const badType = await request(app)
         .post(`/api/v1/projects/${ids.lkk}/evidence/presign`)
         .set(bearer(fieldToken))
@@ -578,65 +619,17 @@ describe('Phase 2 route security', { concurrency: false }, () => {
     });
   });
 
-  describe('join codes', () => {
-    it('enforces maxUses and rotation', async () => {
+  describe('removed contractor access (R1d)', () => {
+    it('has no join-code, join, identity or device-key endpoints', async () => {
       const monitor = await login('monitor@insite.ng');
-      const role = await prisma.role.findFirstOrThrow({ where: { tenantId: ids.tenantA, code: 'INDEPENDENT_RESIDENT' } });
-      // Phase 6: one active code per (project, role, contractor); a second one is refused.
-      const duplicate = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/join-codes`)
-        .set(bearer(monitor))
-        .send({ roleId: role.id, maxUses: 1 });
-      assert.equal(duplicate.status, 409, JSON.stringify(duplicate.body));
-      assert.equal(duplicate.body.error.code, 'ACTIVE_JOIN_CODE_EXISTS');
-      const current = await prisma.projectJoinCode.findFirstOrThrow({
-        where: { projectId: ids.lkk, roleId: role.id, isActive: true },
-      });
-      const issued = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/join-codes/${current.id}/rotate`)
-        .set(bearer(monitor))
-        .send({ maxUses: 1 });
-      assert.equal(issued.status, 201, JSON.stringify(issued.body));
-      assert.match(issued.body.data.code, /^LKK-402-COW-[0-9A-HJKMNP-TV-Z]{6}$/);
-
-      const join = (code: string, deviceId: string) =>
-        request(app).post('/api/v1/auth/join-project').send({
-          joinCode: code,
-          agentFullName: 'Tunde Field',
-          agentPhoneNumber: '+2348012345678',
-          deviceId,
-          livenessPassed: true,
-          idDocumentUrl: 'https://evil.example/id.jpg',
-        });
-
-      const first = await join(issued.body.data.code, 'device-0001');
-      assert.equal(first.status, 201, JSON.stringify(first.body));
-      const session = await prisma.fieldAgentSession.findUniqueOrThrow({ where: { id: first.body.data.sessionProfile.sessionId } });
-      assert.equal(session.livenessPassed, false, 'client-supplied liveness must be ignored');
-      assert.equal(session.idDocumentUrl, null, 'client-supplied document URL must be ignored');
-
-      const second = await join(issued.body.data.code, 'device-0002');
-      assert.equal(second.status, 403);
-
-      const rotated = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/join-codes/${issued.body.data.id}/rotate`)
-        .set(bearer(monitor))
-        .send({ maxUses: 5 });
-      assert.equal(rotated.status, 201);
-      const old = await join(issued.body.data.code, 'device-0003');
-      assert.equal(old.status, 404);
-      const fresh = await join(rotated.body.data.code, 'device-0004');
-      assert.equal(fresh.status, 201);
-    });
-
-    it('stops a contractor from issuing independent-verifier codes', async () => {
-      const contractor = await login('contractor@insite.ng');
-      const role = await prisma.role.findFirstOrThrow({ where: { tenantId: ids.tenantA, code: 'INDEPENDENT_RESIDENT' } });
-      const res = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/join-codes`)
-        .set(bearer(contractor))
-        .send({ roleId: role.id });
-      assert.equal(res.status, 403);
+      const join = await request(app).post('/api/v1/auth/join-project').send({ joinCode: 'LKK-402-COW-7K2QXM' });
+      assert.equal(join.status, 404);
+      const assurance = await request(app).post('/api/v1/auth/assurance-verification').send({});
+      assert.equal(assurance.status, 404);
+      const deviceKey = await request(app).post('/api/v1/auth/device-key').send({});
+      assert.equal(deviceKey.status, 404);
+      const codes = await request(app).get(`/api/v1/projects/${ids.lkk}/join-codes`).set(bearer(monitor));
+      assert.equal(codes.status, 404);
     });
   });
 

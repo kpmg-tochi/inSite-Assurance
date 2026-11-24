@@ -16,6 +16,7 @@ import { hasWebPermission, WebJwtPayload } from '../../middleware/auth.middlewar
 import { assertProjectObjectKey, projectObjectPrefix, storageService } from '../../integrations/storage.service';
 import { recordAuditEvent } from '../audit/audit.service';
 import { provisionDefaultDocumentTypes } from './documentTypes.service';
+import { autoCompleteMilestones, webActor } from '../contracts/milestones.service';
 
 /**
  * Phase 13: the project document register. A document has a type, versions (each one an object in
@@ -454,6 +455,17 @@ export async function signProjectDocument(
         summaryText: `Signed off "${doc.title}" (version ${input.version}).`,
         payload: { documentId, version: input.version, versionSha256: version.sha256, statementHash },
       });
+      // Redesign R2d: signing the programme of works accepts it ("Programme accepted" milestones).
+      if (doc.documentType.code === 'PROGRAMME_OF_WORKS') {
+        await autoCompleteMilestones(tx, {
+          projectId,
+          mode: 'AUTO_SCHEDULE_BASELINE_SET',
+          onlyProjectLevel: true,
+          at: new Date(),
+          notes: `Programme of works "${doc.title}" (version ${input.version}) signed off by ${webUser.fullName}.`,
+          actor: webActor(webUser),
+        });
+      }
     });
   } catch (error) {
     if (uniqueKeyConflict(error)) throw new AppError('You have already signed this version', 409, 'ALREADY_SIGNED');

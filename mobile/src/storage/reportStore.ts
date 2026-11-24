@@ -330,7 +330,7 @@ export async function markReportSent(id: string, server: WorkdayReportDto): Prom
 }
 
 /**
- * Reports still on the device, held by the server until identity approval, waiting on the report
+ * Reports still on the device, held by the server (legacy STAGED_UNVERIFIED), waiting on the report
  * approval chain, or returned for revision (Phase 7). Read-only list.
  */
 export async function listPendingOrStagedReports(projectId: string): Promise<StoredReport[]> {

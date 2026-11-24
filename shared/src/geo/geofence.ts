@@ -1,39 +1,16 @@
 import { point, lineString } from '@turf/helpers';
 import distance from '@turf/distance';
-import length from '@turf/length';
 import nearestPointOnLine from '@turf/nearest-point-on-line';
 import type { GeofenceStatus } from '../enums';
 import {
   GeoCoordinate,
   GeofenceBounds,
   GeofenceVerificationResult,
-  LinearCorridorGeofence,
   PerimeterGeofence,
   ProjectGeofence,
   RadialGeofence,
 } from '../schemas/geofence.schema';
 import { closeRing, isPointInRing, openRing, ringCentroid, type LonLat } from './polygon';
-
-/**
- * Formats a kilometer floating-point chainage value into standard civil engineering
- * stationing / chainage format: e.g., 14.2 -> "KM 14+200", 0.045 -> "KM 0+045".
- */
-export function formatChainage(chainageKm: number): string {
-  const clampedKm = Math.max(0, chainageKm);
-  const totalMeters = Math.round(clampedKm * 1000);
-  const wholeKilometers = Math.floor(totalMeters / 1000);
-  const remainderMeters = totalMeters % 1000;
-  const paddedMeters = String(remainderMeters).padStart(3, '0');
-  return `KM ${wholeKilometers}+${paddedMeters}`;
-}
-
-/**
- * Computes total centerline length in kilometers for a Linear Corridor geofence.
- */
-export function computeLinearCorridorLengthKm(geofence: LinearCorridorGeofence): number {
-  const line = lineString(geofence.centerlineCoordinates);
-  return Number(length(line, { units: 'kilometers' }).toFixed(3));
-}
 
 const round1 = (n: number) => Number(n.toFixed(1));
 
@@ -85,73 +62,11 @@ export function verifyRadialGeofence(
     distanceToBoundaryMeters: round1(Math.abs(distMeters - geofence.radiusMeters)),
     distanceFromCenterOrLineMeters: distMeters,
     allowedThresholdMeters: geofence.radiusMeters,
-    chainageKm: null,
-    chainageFormatted: null,
-    corridorOffsetMeters: null,
     verificationBadgeText: badge(
       status,
       `Site Verified (${siteName}${Math.round(distMeters)}m from center)`,
       distanceOutsideMeters,
       `Outside Radial Geofence (${Math.round(distMeters)}m from center; limit ${geofence.radiusMeters}m)`
-    ),
-  };
-}
-
-/**
- * Verifies a GPS capture coordinate against a Linear Corridor / Chainage Geofence
- * (e.g., highway, drainage channel, pipeline, transmission line).
- */
-export function verifyLinearCorridorGeofence(
-  captureCoord: GeoCoordinate,
-  geofence: LinearCorridorGeofence,
-  toleranceMeters = 0
-): GeofenceVerificationResult {
-  const capturePt = point([captureCoord.longitude, captureCoord.latitude]);
-  const corridorLine = lineString(geofence.centerlineCoordinates);
-
-  const snapped = nearestPointOnLine(corridorLine, capturePt, {
-    units: 'kilometers',
-  });
-
-  // Perpendicular offset in meters from road/pipeline centerline
-  const offsetKm =
-    typeof snapped.properties?.dist === 'number'
-      ? snapped.properties.dist
-      : distance(capturePt, snapped, { units: 'kilometers' });
-  const corridorOffsetMeters = round1(offsetKm * 1000);
-
-  // Distance along centerline from start vertex (in km) + startChainageKm
-  const distanceAlongLineKm =
-    typeof snapped.properties?.location === 'number'
-      ? snapped.properties.location
-      : 0;
-  const chainageKm = Number(
-    (geofence.startChainageKm + distanceAlongLineKm).toFixed(3)
-  );
-  const chainageFormatted = formatChainage(chainageKm);
-
-  const distanceOutsideMeters = round1(
-    Math.max(0, corridorOffsetMeters - geofence.corridorHalfWidthMeters)
-  );
-  const status = classify(distanceOutsideMeters, toleranceMeters);
-
-  return {
-    mode: 'LINEAR_CORRIDOR',
-    status,
-    isWithinGeofence: status !== 'OUTSIDE',
-    toleranceMeters,
-    distanceOutsideMeters,
-    distanceToBoundaryMeters: round1(Math.abs(corridorOffsetMeters - geofence.corridorHalfWidthMeters)),
-    distanceFromCenterOrLineMeters: corridorOffsetMeters,
-    allowedThresholdMeters: geofence.corridorHalfWidthMeters,
-    chainageKm,
-    chainageFormatted,
-    corridorOffsetMeters,
-    verificationBadgeText: badge(
-      status,
-      `Corridor Verified (Chainage ${chainageFormatted} | ±${Math.round(corridorOffsetMeters)}m)`,
-      distanceOutsideMeters,
-      `Off-Corridor Capture (Chainage ${chainageFormatted} | ${Math.round(corridorOffsetMeters)}m offset > ${geofence.corridorHalfWidthMeters}m limit)`
     ),
   };
 }
@@ -196,9 +111,6 @@ export function verifyPerimeterGeofence(
     distanceToBoundaryMeters: edgeMeters,
     distanceFromCenterOrLineMeters: edgeMeters,
     allowedThresholdMeters: toleranceMeters,
-    chainageKm: null,
-    chainageFormatted: null,
-    corridorOffsetMeters: null,
     verificationBadgeText: badge(
       status,
       `Inside Site Perimeter${siteName}`,
@@ -225,8 +137,6 @@ export function verifyPointAgainstGeofence(
   switch (geofence.mode) {
     case 'RADIAL':
       return verifyRadialGeofence(captureCoord, geofence, tolerance);
-    case 'LINEAR_CORRIDOR':
-      return verifyLinearCorridorGeofence(captureCoord, geofence, tolerance);
     case 'PERIMETER':
       return verifyPerimeterGeofence(captureCoord, geofence, tolerance);
     default:
@@ -239,25 +149,6 @@ export function geofenceCentroid(geofence: ProjectGeofence): GeoCoordinate {
   switch (geofence.mode) {
     case 'RADIAL':
       return { ...geofence.center };
-    case 'LINEAR_CORRIDOR': {
-      const line = lineString(geofence.centerlineCoordinates);
-      const total = length(line, { units: 'kilometers' });
-      // Midpoint along the line: walk the vertices.
-      let walked = 0;
-      const coords = geofence.centerlineCoordinates;
-      for (let i = 1; i < coords.length; i++) {
-        const seg = distance(point(coords[i - 1]), point(coords[i]), { units: 'kilometers' });
-        if (walked + seg >= total / 2 && seg > 0) {
-          const t = (total / 2 - walked) / seg;
-          return {
-            longitude: coords[i - 1][0] + (coords[i][0] - coords[i - 1][0]) * t,
-            latitude: coords[i - 1][1] + (coords[i][1] - coords[i - 1][1]) * t,
-          };
-        }
-        walked += seg;
-      }
-      return { longitude: coords[0][0], latitude: coords[0][1] };
-    }
     case 'PERIMETER': {
       const [lon, lat] = ringCentroid(geofence.perimeterCoordinates as LonLat[]);
       return { latitude: lat, longitude: lon };
@@ -269,7 +160,7 @@ export function geofenceCentroid(geofence: ProjectGeofence): GeoCoordinate {
 
 const METERS_PER_DEG_LAT = 111_320;
 
-/** Bounding box of a geofence including its buffer (radius or half-width), for fitting a map. */
+/** Bounding box of a geofence including its radius, for fitting a map. */
 export function geofenceBounds(geofence: ProjectGeofence): GeofenceBounds {
   const fromPoints = (pts: LonLat[], bufferMeters: number): GeofenceBounds => {
     const lats = pts.map((p) => p[1]);
@@ -287,8 +178,6 @@ export function geofenceBounds(geofence: ProjectGeofence): GeofenceBounds {
   switch (geofence.mode) {
     case 'RADIAL':
       return fromPoints([[geofence.center.longitude, geofence.center.latitude]], geofence.radiusMeters);
-    case 'LINEAR_CORRIDOR':
-      return fromPoints(geofence.centerlineCoordinates as LonLat[], geofence.corridorHalfWidthMeters);
     case 'PERIMETER':
       return fromPoints(openRing(geofence.perimeterCoordinates as LonLat[]), 0);
     default:

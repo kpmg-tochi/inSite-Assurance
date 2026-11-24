@@ -1,4 +1,6 @@
 import { provisionDefaultDocumentTypes } from '../documents/documentTypes.service';
+import { provisionDefaultFacilities } from '../facilities/facilities.service';
+import { provisionDefaultFormLibrary } from '../forms/formLibraryProvisioning';
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 import {
@@ -8,8 +10,6 @@ import {
   CreateTenantUserRequest,
   DEFAULT_TENANT_ROLES,
   MobileDeviceDto,
-  RoleOnboardingImpactDto,
-  RoleOnboardingMode,
   FieldPersonaType,
   OrganizationCategory,
   PermissionCategory,
@@ -29,9 +29,6 @@ import {
 import { primaryCategory, resolveOrganization } from '../organizations/organizations.service';
 import { recordAuditEvent } from '../audit/audit.service';
 import { seedStarterTemplates } from '../process/workflowTemplates.service';
-import { provisionDefaultRegistrationBodies } from '../credentials/registrationBodies.service';
-import { normaliseProfileRegistration } from '../credentials/credentialPolicy.service';
-import { issueJoinCodesForRoleOnAllProjects } from '../projects/joinCodes.service';
 import { sendPushToMobileUser } from '../../integrations/push.service';
 
 type Tx = Prisma.TransactionClient;
@@ -79,13 +76,10 @@ function serializeRole(r: RoleWithDetail) {
     tenantId: r.tenantId,
     name: r.name,
     code: r.code,
-    codeSuffix: r.codeSuffix,
     description: r.description,
     surface: r.surface as RoleSurface,
     fieldPersonaType: r.fieldPersonaType as FieldPersonaType,
     assuranceWeight: r.assuranceWeight,
-    requiresIdentityAssurance: r.requiresIdentityAssurance,
-    onboardingMode: r.onboardingMode as RoleOnboardingMode,
     isSystemDefault: r.isSystemDefault,
     permissions: r.rolePermissions.map((rp) => ({
       id: rp.permission.id,
@@ -197,12 +191,10 @@ export async function provisionDefaultRoles(db: Tx | typeof prisma, tenantId: st
         tenantId,
         name: def.name,
         code: def.code,
-        codeSuffix: def.codeSuffix,
         description: def.description,
         surface: def.surface,
         fieldPersonaType: def.fieldPersonaType,
         assuranceWeight: def.assuranceWeight,
-        requiresIdentityAssurance: def.requiresIdentityAssurance,
         isSystemDefault: true,
       },
     });
@@ -246,29 +238,9 @@ export async function listRolesForTenant(tenantId: string) {
   return roles.map(serializeRole);
 }
 
-async function assertCodeSuffixAvailable(
-  tenantId: string,
-  codeSuffix: string | null | undefined,
-  excludeRoleId?: string
-) {
-  if (!codeSuffix) return;
-  const clash = await prisma.role.findFirst({
-    where: { tenantId, codeSuffix, ...(excludeRoleId ? { id: { not: excludeRoleId } } : {}) },
-    select: { name: true },
-  });
-  if (clash) {
-    throw new AppError(
-      `Join-code suffix "${codeSuffix}" is already used by role "${clash.name}"`,
-      409,
-      'DUPLICATE_ROLE_SUFFIX'
-    );
-  }
-}
-
 export async function createRoleForTenant(webUser: WebJwtPayload, input: CreateRoleRequest) {
   const tenantId = webUser.tenantId;
   const code = input.code.trim().toUpperCase();
-  const codeSuffix = input.codeSuffix ? input.codeSuffix.trim().toUpperCase() : null;
 
   const existing = await prisma.role.findUnique({
     where: { tenantId_code: { tenantId, code } },
@@ -280,7 +252,6 @@ export async function createRoleForTenant(webUser: WebJwtPayload, input: CreateR
       'DUPLICATE_ROLE_CODE'
     );
   }
-  await assertCodeSuffixAvailable(tenantId, codeSuffix);
 
   const keys = await permissionKeysForIds(prisma, input.permissionIds);
   assertCallerHoldsAll(webUser, keys, 'Create role');
@@ -291,15 +262,10 @@ export async function createRoleForTenant(webUser: WebJwtPayload, input: CreateR
         tenantId,
         name: input.name.trim(),
         code,
-        codeSuffix,
         description: input.description ?? null,
         surface: input.surface,
         fieldPersonaType: input.fieldPersonaType,
         assuranceWeight: input.assuranceWeight,
-        // Decision G: a pre-provisioned role never requires identity assurance.
-        requiresIdentityAssurance:
-          input.onboardingMode === 'PROVISIONED_ACCOUNT' ? false : input.requiresIdentityAssurance,
-        onboardingMode: input.onboardingMode,
         isSystemDefault: false,
       },
     });
@@ -356,50 +322,27 @@ export async function updateRoleForTenant(
     });
   }
 
-  const codeSuffix =
-    input.codeSuffix === undefined
-      ? undefined
-      : input.codeSuffix
-        ? input.codeSuffix.trim().toUpperCase()
-        : null;
-  await assertCodeSuffixAvailable(existing.tenantId, codeSuffix, roleId);
-
-  // Onboarding mode applies to the merged role, not just the fields sent.
-  const nextSurface = input.surface ?? existing.surface;
-  const nextMode = (input.onboardingMode ?? existing.onboardingMode) as RoleOnboardingMode;
-  const modeChanged = nextMode !== existing.onboardingMode;
-  if (nextMode === 'PROVISIONED_ACCOUNT' && nextSurface === 'WEB') {
-    throw new AppError('Only mobile roles can be pre-provisioned', 400, 'VALIDATION_ERROR');
-  }
-  if (nextMode === 'PROVISIONED_ACCOUNT' && input.requiresIdentityAssurance === true) {
-    throw new AppError(
-      'Pre-provisioned roles do not use identity assurance; the account is the identity',
-      400,
-      'VALIDATION_ERROR'
-    );
+  // Redesign R1d: contractors have no login, so no role may carry the contractor persona. A legacy
+  // role that still has it must be moved to another persona when its surface stays mobile.
+  if (
+    existing.fieldPersonaType === 'CONTRACTOR_EXECUTOR' &&
+    !input.fieldPersonaType &&
+    (input.surface ?? existing.surface) !== 'WEB'
+  ) {
+    throw new AppError('Contractors have no login: choose another field persona for this role.', 400, 'VALIDATION_ERROR');
   }
 
   const updated = await prisma.$transaction(async (tx) => {
     await tx.role.update({
       where: { id: roleId },
       data: {
-        ...(modeChanged ? { onboardingMode: nextMode } : {}),
-        ...(nextMode === 'PROVISIONED_ACCOUNT' ? { requiresIdentityAssurance: false } : {}),
         ...(input.name ? { name: input.name.trim() } : {}),
-        ...(codeSuffix !== undefined ? { codeSuffix } : {}),
         ...(input.description !== undefined ? { description: input.description } : {}),
         ...(input.surface ? { surface: input.surface } : {}),
         ...(input.fieldPersonaType ? { fieldPersonaType: input.fieldPersonaType } : {}),
         ...(input.assuranceWeight !== undefined ? { assuranceWeight: input.assuranceWeight } : {}),
-        ...(input.requiresIdentityAssurance !== undefined && nextMode !== 'PROVISIONED_ACCOUNT'
-          ? { requiresIdentityAssurance: input.requiresIdentityAssurance }
-          : {}),
       },
     });
-
-    if (modeChanged) {
-      await applyOnboardingModeChange(tx, webUser, { ...existing, onboardingMode: nextMode });
-    }
 
     if (input.permissionIds) {
       await tx.rolePermission.deleteMany({ where: { roleId } });
@@ -446,7 +389,7 @@ export async function deleteRoleForTenant(webUser: WebJwtPayload, roleId: string
       ...(webUser.isPlatformSuperAdmin ? {} : { tenantId: webUser.tenantId }),
     },
     include: {
-      _count: { select: { users: true, fieldSessions: true, joinCodes: true } },
+      _count: { select: { users: true, fieldSessions: true } },
     },
   });
 
@@ -460,11 +403,7 @@ export async function deleteRoleForTenant(webUser: WebJwtPayload, roleId: string
       'CANNOT_DELETE_DEFAULT_ROLE'
     );
   }
-  if (
-    existing._count.users > 0 ||
-    existing._count.fieldSessions > 0 ||
-    existing._count.joinCodes > 0
-  ) {
+  if (existing._count.users > 0 || existing._count.fieldSessions > 0) {
     throw new AppError(
       'Role is currently assigned to active users or mobile sessions and cannot be deleted.',
       409,
@@ -505,7 +444,7 @@ export async function listUsersForTenant(tenantId: string) {
           },
         },
       },
-      mobileRole: { select: { id: true, name: true, surface: true, onboardingMode: true } },
+      mobileRole: { select: { id: true, name: true, surface: true } },
       organization: true,
       projectAssignments: {
         include: {
@@ -534,8 +473,6 @@ export async function listUsersForTenant(tenantId: string) {
       organizationName: u.organization.name,
       organizationCategory: primaryCategory(u.organization.categories),
       organizationCategories: u.organization.categories as OrganizationCategory[],
-      professionalRegistrationBodyCode: u.professionalRegistrationBodyCode,
-      professionalRegistrationNumber: u.professionalRegistrationNumber,
       phoneNumber: u.phoneNumber,
       mobileRoleId: u.mobileRoleId,
       mobileRoleName: u.mobileRole?.name ?? null,
@@ -609,10 +546,6 @@ export async function createUserInTenant(webUser: WebJwtPayload, input: CreateTe
         mobileRoleId: mobileRole?.id ?? null,
         phoneNumber: input.phoneNumber ?? null,
         organizationId: org.id,
-        ...(await normaliseProfileRegistration(tx, tenantId, {
-          code: input.professionalRegistrationBodyCode ?? null,
-          number: input.professionalRegistrationNumber ?? null,
-        })),
       },
     });
 
@@ -659,8 +592,8 @@ export async function assignUserProjectsAndRole(
     },
     include: {
       projectAssignments: { select: { projectId: true } },
-      role: { select: { surface: true, onboardingMode: true } },
-      mobileRole: { select: { surface: true, onboardingMode: true } },
+      role: { select: { surface: true } },
+      mobileRole: { select: { surface: true } },
     },
   });
 
@@ -700,18 +633,6 @@ export async function assignUserProjectsAndRole(
       : null;
   const phoneChanged =
     input.phoneNumber !== undefined && (input.phoneNumber ?? null) !== targetUser.phoneNumber;
-  // Phase 12: registration body and number (omitted = unchanged).
-  const registration = await normaliseProfileRegistration(
-    prisma,
-    targetUser.tenantId,
-    { code: input.professionalRegistrationBodyCode, number: input.professionalRegistrationNumber },
-    targetUser
-  );
-  const registrationChanged =
-    (registration.professionalRegistrationBodyCode !== undefined &&
-      registration.professionalRegistrationBodyCode !== targetUser.professionalRegistrationBodyCode) ||
-    (registration.professionalRegistrationNumber !== undefined &&
-      registration.professionalRegistrationNumber !== targetUser.professionalRegistrationNumber);
 
   const validProjects =
     input.projectIds.length > 0
@@ -729,14 +650,13 @@ export async function assignUserProjectsAndRole(
   const revokeSessions = Boolean(newRole) || deactivating;
 
   await prisma.$transaction(async (tx) => {
-    if (newRole || input.isActive !== undefined || mobileRoleChanged || phoneChanged || registrationChanged) {
+    if (newRole || input.isActive !== undefined || mobileRoleChanged || phoneChanged) {
       await tx.user.update({
         where: { id: userId },
         data: {
           ...(newRole ? { roleId: newRole.id } : {}),
           ...(mobileRoleChanged ? { mobileRoleId: nextMobileRole?.id ?? null } : {}),
           ...(phoneChanged ? { phoneNumber: input.phoneNumber ?? null } : {}),
-          ...(registrationChanged ? registration : {}),
           ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
           ...(revokeSessions ? { tokenVersion: { increment: 1 } } : {}),
         },
@@ -770,7 +690,7 @@ export async function assignUserProjectsAndRole(
         payload: { userId },
       });
     }
-    if (newRole || reactivating || mobileRoleChanged || phoneChanged || registrationChanged) {
+    if (newRole || reactivating || mobileRoleChanged || phoneChanged) {
       await recordAuditEvent(tx, {
         tenantId: targetUser.tenantId,
         projectId: null,
@@ -784,7 +704,7 @@ export async function assignUserProjectsAndRole(
               ? ` mobile access → "${nextMobileRole.name}"`
               : ' mobile role removed'
             : ''
-        }${phoneChanged ? ' phone number changed' : ''}${registrationChanged ? ' professional registration changed' : ''}${
+        }${phoneChanged ? ' phone number changed' : ''}${
           reactivating ? ' reactivated' : ''
         }.`,
         payload: {
@@ -794,7 +714,6 @@ export async function assignUserProjectsAndRole(
           previousMobileRoleId: targetUser.mobileRoleId,
           newMobileRoleId: mobileRoleChanged ? nextMobileRole?.id ?? null : targetUser.mobileRoleId,
           phoneChanged,
-          registrationChanged,
           reactivated: reactivating,
         },
       });
@@ -840,11 +759,12 @@ export async function assignUserProjectsAndRole(
 // Pre-provisioned mobile access (Phase 5)
 // ---------------------------------------------------------------------------
 
-function isProvisioned(role: { surface: string; onboardingMode: string } | null | undefined): boolean {
-  return Boolean(role && role.surface !== 'WEB' && role.onboardingMode === 'PROVISIONED_ACCOUNT');
+/** R1d: every mobile-capable role is a provisioned-account role (no join codes). */
+function isProvisioned(role: { surface: string } | null | undefined): boolean {
+  return Boolean(role && role.surface !== 'WEB');
 }
 
-/** A role that can be given as a user's mobile role: same tenant, mobile surface, provisioned. */
+/** A role that can be given as a user's mobile role: same tenant, mobile surface. */
 async function findAssignableMobileRole(
   webUser: WebJwtPayload,
   tenantId: string,
@@ -857,7 +777,7 @@ async function findAssignableMobileRole(
   }
   if (!isProvisioned(role)) {
     throw new AppError(
-      `"${role.name}" is not a pre-provisioned mobile role. Set its onboarding to "Pre-provisioned account" first.`,
+      `"${role.name}" is not a mobile role. Give it the Mobile or Both surface first.`,
       400,
       'ROLE_NOT_PROVISIONED'
     );
@@ -868,89 +788,10 @@ async function findAssignableMobileRole(
   return role;
 }
 
-/**
- * What switching this role's onboarding mode will touch, for the confirmation dialog: active join
- * codes (and their projects) that will be deactivated, and join-code sessions that keep working.
- */
-export async function getRoleOnboardingImpact(
-  webUser: WebJwtPayload,
-  roleId: string
-): Promise<RoleOnboardingImpactDto> {
-  const role = await prisma.role.findFirst({
-    where: { id: roleId, ...(webUser.isPlatformSuperAdmin ? {} : { tenantId: webUser.tenantId }) },
-    select: { id: true },
-  });
-  if (!role) {
-    throw new AppError('Role not found for this tenant', 404, 'ROLE_NOT_FOUND');
-  }
-  const [codes, activeJoinCodeSessionCount] = await Promise.all([
-    prisma.projectJoinCode.findMany({
-      where: { roleId, isActive: true },
-      select: { project: { select: { id: true, codePrefix: true, name: true } } },
-    }),
-    prisma.fieldAgentSession.count({ where: { roleId, origin: 'JOIN_CODE', isActive: true } }),
-  ]);
-  const projects = new Map<string, { id: string; codePrefix: string; name: string }>();
-  for (const c of codes) projects.set(c.project.id, c.project);
-  return {
-    roleId,
-    activeJoinCodeCount: codes.length,
-    projects: [...projects.values()].sort((a, b) => a.codePrefix.localeCompare(b.codePrefix)),
-    activeJoinCodeSessionCount,
-  };
-}
-
-/**
- * Inside the role-update transaction. To provisioned: deactivate every active join code for the
- * role (existing join-code sessions keep working until revoked). Back to join codes: issue one code
- * per project. Writes ROLE_ONBOARDING_MODE_CHANGED on the tenant chain.
- */
-async function applyOnboardingModeChange(
-  tx: Tx,
-  webUser: WebJwtPayload,
-  role: { id: string; tenantId: string; name: string; code: string; codeSuffix: string | null; onboardingMode: string; fieldPersonaType: string }
-) {
-  let deactivated: Array<{ id: string; code: string; projectId: string }> = [];
-  let issuedCodes: string[] = [];
-  if (role.onboardingMode === 'PROVISIONED_ACCOUNT') {
-    deactivated = await tx.projectJoinCode.findMany({
-      where: { roleId: role.id, isActive: true },
-      select: { id: true, code: true, projectId: true },
-    });
-    await tx.projectJoinCode.updateMany({
-      where: { id: { in: deactivated.map((c) => c.id) } },
-      data: { isActive: false },
-    });
-  } else {
-    const issued = await issueJoinCodesForRoleOnAllProjects(tx, role);
-    issuedCodes = issued.map((jc) => jc.code);
-  }
-
-  await recordAuditEvent(tx, {
-    tenantId: role.tenantId,
-    projectId: null,
-    actorType: 'WEB_USER',
-    actorId: webUser.userId,
-    actorDisplayName: actorName(webUser),
-    action: 'ROLE_ONBOARDING_MODE_CHANGED',
-    summaryText:
-      role.onboardingMode === 'PROVISIONED_ACCOUNT'
-        ? `Role "${role.name}" is now pre-provisioned: people sign in with an account. ${deactivated.length} join code(s) deactivated.`
-        : `Role "${role.name}" now uses join codes. ${issuedCodes.length} join code(s) issued.`,
-    payload: {
-      roleId: role.id,
-      onboardingMode: role.onboardingMode,
-      deactivatedJoinCodeIds: deactivated.map((c) => c.id),
-      deactivatedProjectIds: [...new Set(deactivated.map((c) => c.projectId))],
-      issuedJoinCodes: issuedCodes,
-    },
-  });
-}
-
 function serializeMobileDevice(
   d: Prisma.MobileDeviceGetPayload<{
     include: {
-      user: { select: { fullName: true; email: true; mobileRole: { select: { name: true } }; role: { select: { name: true; surface: true; onboardingMode: true } } } };
+      user: { select: { fullName: true; email: true; mobileRole: { select: { name: true } }; role: { select: { name: true; surface: true } } } };
       _count: { select: { fieldSessions: true } };
     };
   }>
@@ -977,7 +818,7 @@ const MOBILE_DEVICE_INCLUDE = {
       fullName: true,
       email: true,
       mobileRole: { select: { name: true } },
-      role: { select: { name: true, surface: true, onboardingMode: true } },
+      role: { select: { name: true, surface: true } },
     },
   },
   _count: { select: { fieldSessions: true } },
@@ -1136,10 +977,11 @@ export async function createTenantWithDefaults(webUser: WebJwtPayload, input: Cr
     const roles = await provisionDefaultRoles(tx, tenant.id);
     // Phase 7: the three starter workflow templates.
     await seedStarterTemplates(tx, tenant.id);
-    // Phase 12: the default registration bodies.
-    await provisionDefaultRegistrationBodies(tx, tenant.id);
     // Phase 13: the default document types.
     await provisionDefaultDocumentTypes(tx, tenant.id);
+    // Redesign R2a: the 50 default facilities.
+    await provisionDefaultFacilities(tx, tenant.id);
+    await provisionDefaultFormLibrary(tx, tenant.id); // Redesign R3
 
     let adminUserId: string | null = null;
     if (input.adminEmail && input.adminPassword && input.adminFullName) {

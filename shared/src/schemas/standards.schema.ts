@@ -80,7 +80,7 @@ export const StandardsViolationItemSchema = z.object({
 });
 export type StandardsViolationItem = z.infer<typeof StandardsViolationItemSchema>;
 
-/** A standard as it is shown on a brief: the code, title and a one-line rule. */
+/** A standard as it is shown in a list: the code, title and a one-line rule. */
 export const AppliedStandardSchema = z.object({
   code: z.string(),
   title: z.string(),
@@ -99,7 +99,7 @@ export function standardAppliesToWbs(codes: readonly string[], wbsCode: string):
   });
 }
 
-/** First sentence of a specification, trimmed to fit a pill or a brief line. */
+/** First sentence of a specification, trimmed to fit a pill or a short line. */
 export function summariseStandardRule(text: string, maxLength = 160): string {
   const clean = text.replace(/\s+/g, ' ').trim();
   const firstSentence = clean.split(/(?<=[.;])\s/)[0] ?? clean;

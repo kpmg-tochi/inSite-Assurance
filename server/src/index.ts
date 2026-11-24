@@ -5,14 +5,14 @@ import { registerAllJobs, startJobRunner } from "./jobs";
 import { startAiOmissionCheckSweep } from "./modules/workday-reports/aiOmissionCheck";
 
 const app = createApp();
-// Phase 8: brief dispatch, overdue reports, reminders, attendance and message retries. Each job
+// Scheduled jobs (reporting obligations, overdue reports, message retries, milestones, KPIs). Each job
 // takes a database lock per tick and claims each unit of work, so several instances are safe.
 registerAllJobs();
 const stopJobs = startJobRunner({ enabled: env.JOBS_ENABLED });
 const stopAiCheckSweep = startAiOmissionCheckSweep(env.AI_CHECK_SWEEP_INTERVAL_SECONDS);
 
 if (env.NODE_ENV === "production" && env.MESSAGING_EMAIL_PROVIDER !== "resend") {
-  console.warn("[InSite Assurance API] No email provider configured: mobilization reminders by email will not be sent.");
+  console.warn("[InSite Assurance API] No email provider configured: kick-off notices by email will not be sent.");
 }
 
 const server = app.listen(env.PORT, "0.0.0.0", () => {

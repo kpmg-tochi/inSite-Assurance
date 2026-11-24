@@ -3,7 +3,6 @@ import {
   DEFAULT_WORK_WEEK_DAYS,
   formatDueLabel,
   getReportingPeriodForDate,
-  isWithinWorkingHours,
   periodNoun,
   type CadenceSettings,
   type MobileBaselinePack,
@@ -90,13 +89,4 @@ export function formatCountdown(minutes: number): string {
   if (d > 0) return `${d}d ${h}h left`;
   if (h > 0) return `${h}h ${m}m left`;
   return `${m}m left`;
-}
-
-/**
- * Whether foreground presence pings should be recorded now: inside the project's working hours on a
- * working day. Inspection-only projects only ping on check-in, capture and report.
- */
-export function presenceWindowOpen(settings: CadenceSettings, at: Date = new Date()): boolean {
-  if (settings.reportingCadence === 'INSPECTION_ONLY') return false;
-  return isWithinWorkingHours(settings, at);
 }

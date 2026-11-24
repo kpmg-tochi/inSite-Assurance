@@ -6,6 +6,9 @@ import {
   ProjectTypeDto,
   ProjectTypeSnapshot,
   ProjectTypeSummary,
+  resolveProjectTypeConfig,
+  VISIT_KIND_META,
+  VisitKind,
   SaveProjectTypeRequest,
   WorkflowTemplateConfig,
   WorkflowTemplateConfigSchema,
@@ -14,6 +17,8 @@ import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
+import { liveTemplateKinds } from '../forms/formLibrary.service';
+import { ensureFormLibrary } from '../forms/formLibraryProvisioning';
 import { applyTemplateConfig } from '../process/processConfig.service';
 import { createStreamsFromProjectType } from '../cadence/streams.service';
 import { syncContractMilestones } from '../contracts/milestones.service';
@@ -112,6 +117,28 @@ async function assertOrganizationsInTenant(tx: Tx, tenantId: string, config: Pro
   }
 }
 
+/**
+ * Redesign R3 (D-R3.18): each visit form template code the type names must be a live template of that
+ * visit kind. Only codes that changed are checked, so archiving a type never fails on a template
+ * archived since.
+ */
+async function assertVisitFormTemplates(tx: Tx, tenantId: string, config: ProjectTypeConfig, before: unknown) {
+  const previous = resolveProjectTypeConfig({ config: before ?? {} })?.visitForms.templateCodeByVisitKind ?? {};
+  const changed = (Object.entries(config.visitForms.templateCodeByVisitKind) as Array<[VisitKind, string | undefined]>).filter(
+    ([kind, code]) => code && previous[kind] !== code
+  );
+  if (changed.length === 0) return;
+  await ensureFormLibrary(tx, tenantId);
+  const live = await liveTemplateKinds(tx, tenantId);
+  for (const [kind, code] of changed) {
+    const kindOfCode = live.get(code!);
+    if (!kindOfCode) throw new AppError(`Visit form template ${code} does not exist or is archived`, 422, 'VISIT_FORM_TEMPLATE_NOT_FOUND');
+    if (kindOfCode !== kind) {
+      throw new AppError(`Template ${code} is for ${VISIT_KIND_META[kindOfCode].label} visits, not ${VISIT_KIND_META[kind].label}`, 422, 'TEMPLATE_KIND_MISMATCH');
+    }
+  }
+}
+
 async function saveType(webUser: WebJwtPayload, input: SaveProjectTypeRequest, typeId: string | null): Promise<ProjectTypeDto> {
   const tenantId = webUser.tenantId;
   try {
@@ -125,6 +152,7 @@ async function saveType(webUser: WebJwtPayload, input: SaveProjectTypeRequest, t
         throw new AppError('This workflow template is not valid any more. Edit and save it first.', 422, 'INVALID_WORKFLOW_TEMPLATE');
       }
       await assertOrganizationsInTenant(tx, tenantId, input.config);
+      await assertVisitFormTemplates(tx, tenantId, input.config, before?.configJson);
       if (input.isDefault) {
         await tx.projectType.updateMany({ where: { tenantId, isDefault: true }, data: { isDefault: false } });
       }

@@ -1,61 +1,50 @@
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
-import type {
-  FieldProjectContext,
-  MobileAccountProfile,
-  MobileTenantBranding,
+import {
+  FieldProjectContextSchema,
+  type FieldProjectContext,
+  type MobileAccountProfile,
 } from '@insite/shared';
 
 /**
- * Everything that identifies this device's user, kept in the OS keystore (Phase 5).
+ * Everything that identifies this device's user, kept in the OS keystore (Phase 5; provisioned
+ * accounts only since R1d).
  *
- * - `persona`: name and phone typed by someone who joins with a project code (no account).
- * - `account`: a pre-provisioned account signed in on this device, with its token.
- * - `joinSessions`: one per project joined with a code, each with its own token.
- * - `projects`: the provisioned projects last listed by the server (offline cache).
+ * - `account`: the pre-provisioned account signed in on this device, with its token.
+ * - `projects`: the account's projects last listed by the server (offline cache).
  * - `activeProjectId`: the project the app is showing.
  *
- * The state is always written as a whole object, so a field can be cleared (the v2 store merged
- * with `??` and could never clear one).
+ * The state is always written as a whole object, so a field can be cleared.
  */
-
-export interface LocalPersona {
-  fullName: string;
-  phoneNumber: string;
-  avatarBase64: string | null;
-}
 
 export interface StoredAccount {
   token: string;
   profile: MobileAccountProfile;
 }
 
-export interface StoredJoinSession {
-  token: string;
-  context: FieldProjectContext;
-  /** The project's tenant branding from the join response (Phase 6); absent for older sessions. */
-  tenantBranding?: MobileTenantBranding | null;
-}
-
 export interface DeviceState {
-  version: 3;
-  persona: LocalPersona | null;
+  version: 4;
   account: StoredAccount | null;
-  joinSessions: StoredJoinSession[];
   projects: FieldProjectContext[];
   activeProjectId: string | null;
 }
 
 export const EMPTY_DEVICE_STATE: DeviceState = {
-  version: 3,
-  persona: null,
+  version: 4,
   account: null,
-  joinSessions: [],
   projects: [],
   activeProjectId: null,
 };
 
-const STATE_KEY = 'insite_mobile_device_state_v3';
+/** What a load found: the state, and projects whose join-code session was dropped (pre-R1d). */
+export interface LoadedDeviceState {
+  state: DeviceState;
+  endedJoinProjectIds: string[];
+}
+
+const STATE_KEY = 'insite_mobile_device_state_v4';
+/** v3 (Phase 5): account plus join-code sessions. v2: one join-code session. Read once to migrate. */
+const LEGACY_STATE_KEY_V3 = 'insite_mobile_device_state_v3';
 const LEGACY_PROFILE_KEY = 'insite_mobile_user_profile_v2';
 const DEVICE_ID_KEY = 'insite_mobile_device_id_v2';
 
@@ -71,91 +60,67 @@ export async function getOrCreateHardwareDeviceId(): Promise<string> {
       await SecureStore.setItemAsync(DEVICE_ID_KEY, deviceId);
     }
     return deviceId;
-  } catch (error) {
+  } catch {
     // Web or fallback simulation
     return 'DEV-IN-SITU-HARDWARE-001';
   }
 }
 
-/** The v2 single-project profile, read once to migrate. */
-interface LegacyProfileV2 {
-  fullName?: string;
-  phoneNumber?: string;
-  avatarBase64?: string | null;
-  activeProjectId?: string | null;
-  activeProjectCode?: string | null;
-  activeSessionId?: string | null;
-  activeSessionToken?: string | null;
-  activeRoleId?: string | null;
-  activeRoleCode?: string | null;
-  activeRoleName?: string | null;
-  activeFieldPersonaType?: FieldProjectContext['fieldPersonaType'] | null;
-  activeAssuranceWeight?: number | null;
-  activeRequiresIdentityAssurance?: boolean;
-  activePermissions?: string[];
-  assuranceStatus?: FieldProjectContext['assuranceStatus'];
-  rejectionReason?: string | null;
-  onboardingCompleted?: boolean;
+/** Stored project contexts, reduced to the current shape (older fields are dropped). */
+function toContexts(raw: unknown): FieldProjectContext[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((p) => {
+    const parsed = FieldProjectContextSchema.safeParse(p);
+    return parsed.success ? [parsed.data] : [];
+  });
 }
 
-function migrateLegacy(legacy: LegacyProfileV2): DeviceState {
-  const persona: LocalPersona | null = legacy.onboardingCompleted
-    ? {
-        fullName: legacy.fullName ?? '',
-        phoneNumber: legacy.phoneNumber ?? '',
-        avatarBase64: legacy.avatarBase64 ?? null,
-      }
-    : null;
-  const joinSessions: StoredJoinSession[] = [];
-  if (legacy.activeSessionToken && legacy.activeProjectId && legacy.activeSessionId && legacy.activeRoleId) {
-    joinSessions.push({
-      token: legacy.activeSessionToken,
-      context: {
-        projectId: legacy.activeProjectId,
-        // The v2 store kept only the join code; the projects screen refreshes the name.
-        projectName: legacy.activeProjectCode ?? 'Project',
-        projectCodePrefix: (legacy.activeProjectCode ?? '').split('-').slice(0, 2).join('-'),
-        origin: 'JOIN_CODE',
-        sessionId: legacy.activeSessionId,
-        joinCodeUsed: legacy.activeProjectCode ?? null,
-        roleId: legacy.activeRoleId,
-        roleCode: legacy.activeRoleCode ?? null,
-        roleName: legacy.activeRoleName ?? 'Field reporter',
-        fieldPersonaType: legacy.activeFieldPersonaType ?? 'INDEPENDENT_VERIFIER',
-        assuranceWeight: legacy.activeAssuranceWeight ?? 1,
-        requiresIdentityAssurance: Boolean(legacy.activeRequiresIdentityAssurance),
-        permissions: legacy.activePermissions ?? [],
-        assuranceStatus: legacy.assuranceStatus ?? 'NOT_SUBMITTED',
-        rejectionReason: legacy.rejectionReason ?? null,
-      },
-    });
-  }
+function toState(raw: Partial<Record<keyof DeviceState, unknown>>): DeviceState {
+  const account = raw.account as StoredAccount | null | undefined;
   return {
-    ...EMPTY_DEVICE_STATE,
-    persona,
-    joinSessions,
-    activeProjectId: joinSessions[0]?.context.projectId ?? null,
+    version: 4,
+    account: account?.token && account.profile ? account : null,
+    projects: toContexts(raw.projects),
+    activeProjectId: typeof raw.activeProjectId === 'string' ? raw.activeProjectId : null,
   };
 }
 
-export async function loadDeviceState(): Promise<DeviceState> {
+/**
+ * The v3 state kept join-code sessions beside the account. Their tokens no longer work (R1d), so
+ * they are dropped; their projects are reported so that work queued under them is held.
+ */
+function migrateV3(raw: Record<string, unknown>): LoadedDeviceState {
+  const joinSessions = Array.isArray(raw.joinSessions) ? (raw.joinSessions as Array<{ context?: { projectId?: unknown } }>) : [];
+  const endedJoinProjectIds = joinSessions
+    .map((j) => j.context?.projectId)
+    .filter((id): id is string => typeof id === 'string');
+  return { state: toState(raw), endedJoinProjectIds };
+}
+
+/** The v2 store held one join-code session and no account: only its queued work is kept. */
+function migrateV2(raw: { activeProjectId?: unknown; activeSessionToken?: unknown }): LoadedDeviceState {
+  const projectId = typeof raw.activeProjectId === 'string' && raw.activeSessionToken ? raw.activeProjectId : null;
+  return { state: EMPTY_DEVICE_STATE, endedJoinProjectIds: projectId ? [projectId] : [] };
+}
+
+export async function loadDeviceState(): Promise<LoadedDeviceState> {
   try {
     const raw = await SecureStore.getItemAsync(STATE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as DeviceState;
-      return { ...EMPTY_DEVICE_STATE, ...parsed, version: 3 };
-    }
-    const legacyRaw = await SecureStore.getItemAsync(LEGACY_PROFILE_KEY);
-    if (legacyRaw) {
-      const migrated = migrateLegacy(JSON.parse(legacyRaw) as LegacyProfileV2);
-      await saveDeviceState(migrated);
+    if (raw) return { state: toState(JSON.parse(raw)), endedJoinProjectIds: [] };
+
+    const v3 = await SecureStore.getItemAsync(LEGACY_STATE_KEY_V3);
+    const v2 = v3 ? null : await SecureStore.getItemAsync(LEGACY_PROFILE_KEY);
+    if (v3 || v2) {
+      const migrated = v3 ? migrateV3(JSON.parse(v3)) : migrateV2(JSON.parse(v2!));
+      await saveDeviceState(migrated.state);
+      await SecureStore.deleteItemAsync(LEGACY_STATE_KEY_V3).catch(() => undefined);
       await SecureStore.deleteItemAsync(LEGACY_PROFILE_KEY).catch(() => undefined);
       return migrated;
     }
   } catch (error) {
     console.warn('Failed to load device state from SecureStore:', error);
   }
-  return EMPTY_DEVICE_STATE;
+  return { state: EMPTY_DEVICE_STATE, endedJoinProjectIds: [] };
 }
 
 /** Writes the whole state. Callers build the next state from the previous one. */
@@ -163,10 +128,11 @@ export async function saveDeviceState(state: DeviceState): Promise<void> {
   await SecureStore.setItemAsync(STATE_KEY, JSON.stringify(state));
 }
 
-/** Removes everything except the hardware device id (sign-out of the last identity, reset). */
+/** Removes everything except the hardware device id (sign-out, reset). */
 export async function wipeDeviceState(): Promise<void> {
   try {
     await SecureStore.deleteItemAsync(STATE_KEY);
+    await SecureStore.deleteItemAsync(LEGACY_STATE_KEY_V3);
     await SecureStore.deleteItemAsync(LEGACY_PROFILE_KEY);
   } catch (error) {
     console.warn('Failed to clear device state from SecureStore:', error);

@@ -36,8 +36,8 @@ export async function assertAnyCloseoutModuleOn(projectId: string, db?: Db): Pro
 }
 
 /**
- * Phase 10: in the defects liability period and after closing, no new IPCs, milestone
- * verifications or briefs are created.
+ * Phase 10: in the defects liability period and after closing, no new construction reports are
+ * submitted.
  */
 export async function assertConstructionOngoing(projectId: string, what: string, db: Db = prisma) {
   const project = await db.project.findUnique({ where: { id: projectId }, select: { constructionPhase: true } });

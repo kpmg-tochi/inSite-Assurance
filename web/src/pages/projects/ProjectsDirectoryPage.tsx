@@ -112,7 +112,7 @@ export function ProjectsDirectoryPage({ projects, selectedProjectId, onSelectPro
     ...(counts.ARCHIVED > 0 ? [{ id: "ARCHIVED" as const, label: "Archived", count: counts.ARCHIVED }] : []),
   ];
 
-  const openProject = (projectId: string, subRoute: "dashboard" | "boq" | "payments" = "dashboard") => {
+  const openProject = (projectId: string, subRoute: "dashboard" | "scope" | "payments" = "dashboard") => {
     onSelectProject(projectId);
     navigate(`/app/projects/${projectId}/${subRoute}`);
   };
@@ -246,7 +246,7 @@ export function ProjectsDirectoryPage({ projects, selectedProjectId, onSelectPro
       cell: (p) => {
         const actions: TableActionItem[] = [
           { label: "Open dashboard", icon: <LayoutDashboard className="w-4 h-4" />, onClick: () => openProject(p.id) },
-          { label: `BOQ (${p.totalBoqItems})`, icon: <ClipboardList className="w-4 h-4" />, onClick: () => openProject(p.id, "boq") },
+          { label: `BOQ (${p.totalBoqItems})`, icon: <ClipboardList className="w-4 h-4" />, onClick: () => openProject(p.id, "scope") },
           ...(hasPermission("payments:view") || hasPermission("payments:record")
             ? [{ label: "Payments", icon: <FileSpreadsheet className="w-4 h-4" />, onClick: () => openProject(p.id, "payments") }]
             : []),

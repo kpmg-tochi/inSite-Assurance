@@ -1,12 +1,12 @@
 import React, { useState } from "react";
-import { Check, ClipboardCopy, Link2, ListChecks, RotateCcw, ShieldOff } from "lucide-react";
+import { ClipboardPen, ListChecks, Plus, Trash2 } from "lucide-react";
 import {
   HANDOVER_DECISION_LABELS,
   HANDOVER_LIMITS,
   HANDOVER_STAKEHOLDER_LABELS,
+  HandoverDecisionEnum,
+  RecordHandoverResponseRequestSchema,
   type HandoverDecision,
-  type HandoverLinkDto,
-  type HandoverLinkIssuedDto,
   type HandoverStakeholderType,
   type ProjectBeneficiaryDto,
   type HandoverSubmissionDto,
@@ -14,30 +14,18 @@ import {
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth } from "../../lib/auth-context";
 import Loader from "../../components/Loader";
-import { StandardTable, TableActionMenu, TableBadge, type TableColumnDef } from "../../components/table/StandardTable";
+import { TableBadge } from "../../components/table/StandardTable";
 import { CustomSelect } from "../../components/common";
-import { useConfirmDialog } from "../../components/process/ConfirmDialog";
 import { ModalActions, ModalShell, inputClass } from "../../components/common/ModalShell";
 import { RichTextView } from "../../components/closeout/RichTextView";
-import { HandoverFileView } from "../../components/closeout/HandoverFileView";
 import { CompletionSection } from "../../components/closure/CompletionSection";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
-import { useHandoverLinksQuery, useHandoverSubmissionsQuery, useProjectPhaseQuery } from "../../queries/closeout/useCloseoutQueries";
+import { useHandoverSubmissionsQuery, useProjectPhaseQuery } from "../../queries/closeout/useCloseoutQueries";
 import {
   useConvertSnagsMutation,
-  useCreateHandoverLinkMutation,
-  useReissueHandoverLinkMutation,
+  useRecordHandoverResponseMutation,
   useReviewHandoverSubmissionMutation,
-  useRevokeHandoverLinkMutation,
 } from "../../mutations/closeout/useCloseoutMutations";
-
-const STATUS_BADGE: Record<HandoverLinkDto["status"], { variant: "success" | "warning" | "danger" | "neutral" | "info"; label: string }> = {
-  ACTIVE: { variant: "success", label: "Active" },
-  EXPIRED: { variant: "neutral", label: "Expired" },
-  REVOKED: { variant: "danger", label: "Revoked" },
-  LOCKED: { variant: "warning", label: "Locked (wrong codes)" },
-  USED_UP: { variant: "info", label: "Responded" },
-};
 
 const DECISION_BADGE: Record<HandoverDecision, "success" | "warning" | "danger"> = {
   ACCEPTED: "success",
@@ -48,21 +36,21 @@ const DECISION_BADGE: Record<HandoverDecision, "success" | "warning" | "danger">
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "—");
 
 /**
- * Project "Handover" tab (Phase 10 Step 8): stakeholder links (create, revoke, re-issue) and their
- * submissions (decision, feedback, snags, attachments), review and "create defect tickets from
- * snags".
+ * Project "Handover" tab (Phase 10; redesign R1d): the beneficiary has no login and there is no
+ * public link. An officer records the beneficiary's response from the signed paper copy (accept,
+ * accept with snags, reject); reviewers mark responses reviewed and turn snags into defect tickets.
  */
 export function ProjectHandoverPage({ project }: { project: ProjectSummaryDto }) {
   const { hasPermission } = useAuth();
   const processQuery = useProjectProcess(project.id);
   const enabled = processQuery.data?.config.enableHandoverModule ?? false;
-  const canManage = hasPermission("handover:manage_links");
+  const canRecord = hasPermission("handover:record_response");
   const canReview = hasPermission("handover:review_feedback");
   const phaseQuery = useProjectPhaseQuery(project.id, enabled);
-  const linksQuery = useHandoverLinksQuery(project.id, enabled && (canManage || canReview));
-  const submissionsQuery = useHandoverSubmissionsQuery(project.id, enabled && canReview);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [issued, setIssued] = useState<HandoverLinkIssuedDto | null>(null);
+  // The list is open to recorders and reviewers; only reviewers mark a response reviewed.
+  const canSeeResponses = canReview || canRecord;
+  const submissionsQuery = useHandoverSubmissionsQuery(project.id, enabled && canSeeResponses);
+  const [recordOpen, setRecordOpen] = useState(false);
 
   if (processQuery.isLoading) return <Loader />;
   if (!enabled) {
@@ -80,18 +68,18 @@ export function ProjectHandoverPage({ project }: { project: ProjectSummaryDto })
         <div>
           <h1 className="text-lg font-bold text-slate-900">Handover</h1>
           <p className="text-xs text-slate-500">
-            {project.codePrefix} · send stakeholders a secure link to accept the works, accept with snags, or reject them.
+            {project.codePrefix} · record whether the beneficiary accepted the works, accepted them with snags, or rejected them.
           </p>
         </div>
-        {canManage && (
+        {canRecord && (
           <button
             type="button"
             disabled={!inHandover}
-            title={inHandover ? undefined : "Links can be sent once the project is in handover."}
-            onClick={() => setCreateOpen(true)}
+            title={inHandover ? undefined : "Responses can be recorded once the project is in handover."}
+            onClick={() => setRecordOpen(true)}
             className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-3 py-2 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
           >
-            <Link2 className="h-4 w-4" /> New handover link
+            <ClipboardPen className="h-4 w-4" /> Record handover response
           </button>
         )}
       </div>
@@ -99,19 +87,13 @@ export function ProjectHandoverPage({ project }: { project: ProjectSummaryDto })
       {/* Phase 15: the Certificate of Completion comes before the handover ceremony. */}
       <CompletionSection projectId={project.id} />
 
-      {!inHandover && phaseQuery.data && (
+      {canRecord && !inHandover && phaseQuery.data && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-          Links work only while the project is in handover. Use the phase actions on the project header.
+          Responses can be recorded only while the project is in handover. Use the phase actions on the project header.
         </div>
       )}
 
-      {issued && <IssuedLinkNotice issued={issued} onDismiss={() => setIssued(null)} />}
-
-      {(canManage || canReview) && (
-        <LinksTable project={project} links={linksQuery.data ?? []} loading={linksQuery.isLoading} canManage={canManage && inHandover} onIssued={setIssued} />
-      )}
-
-      {canReview && (
+      {canSeeResponses && (
         <section className="space-y-3">
           <h2 className="text-sm font-bold text-slate-900">Responses</h2>
           {submissionsQuery.isLoading && <Loader />}
@@ -119,158 +101,19 @@ export function ProjectHandoverPage({ project }: { project: ProjectSummaryDto })
             <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-xs text-slate-500">No responses yet.</div>
           )}
           {submissionsQuery.data?.map((s) => (
-            <SubmissionCard key={s.id} project={project} submission={s} canConvert={hasPermission("retention:manage_defects")} />
+            <SubmissionCard key={s.id} project={project} submission={s} canReview={canReview} canConvert={hasPermission("retention:manage_defects")} />
           ))}
         </section>
       )}
 
-      {createOpen && (
-        <CreateLinkModal
+      {recordOpen && (
+        <RecordResponseModal
           projectId={project.id}
           primaryBeneficiary={project.primaryBeneficiary ?? null}
-          onClose={() => setCreateOpen(false)}
-          onIssued={(i) => {
-            setIssued(i);
-            setCreateOpen(false);
-          }}
+          onClose={() => setRecordOpen(false)}
         />
       )}
     </div>
-  );
-}
-
-function IssuedLinkNotice({ issued, onDismiss }: { issued: HandoverLinkIssuedDto; onDismiss: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(issued.url);
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
-  };
-  return (
-    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-900 space-y-2">
-      <p className="font-semibold">
-        Link for {issued.link.recipientName}
-        {issued.delivery === "SENT" || issued.delivery === "QUEUED" ? ` emailed to ${issued.link.recipientContact}.` : "."} This is the only time it is shown.
-      </p>
-      <div className="flex flex-wrap items-center gap-2">
-        <code className="break-all rounded-lg bg-white px-2 py-1 text-[11px] text-slate-700 border border-emerald-200">{issued.url}</code>
-        <button type="button" onClick={copy} className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-2 py-1 font-semibold">
-          {copied ? <Check className="h-3.5 w-3.5" /> : <ClipboardCopy className="h-3.5 w-3.5" />} {copied ? "Copied" : "Copy"}
-        </button>
-        <button type="button" onClick={onDismiss} className="ml-auto font-semibold underline">
-          Done
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function LinksTable({
-  project,
-  links,
-  loading,
-  canManage,
-  onIssued,
-}: {
-  project: ProjectSummaryDto;
-  links: HandoverLinkDto[];
-  loading: boolean;
-  canManage: boolean;
-  onIssued: (i: HandoverLinkIssuedDto) => void;
-}) {
-  const revoke = useRevokeHandoverLinkMutation(project.id);
-  const reissue = useReissueHandoverLinkMutation(project.id);
-  const { ask: confirm, dialog } = useConfirmDialog();
-
-  const columns: TableColumnDef<HandoverLinkDto>[] = [
-    {
-      id: "recipient",
-      header: "Recipient",
-      cell: (l) => (
-        <div>
-          <p className="font-semibold text-slate-900">{l.recipientName}</p>
-          <p className="text-[11px] text-slate-500">
-            {HANDOVER_STAKEHOLDER_LABELS[l.stakeholderType]} · {l.recipientContact}
-          </p>
-        </div>
-      ),
-    },
-    { id: "label", header: "Label", cell: (l) => <span className="text-slate-700">{l.label}</span> },
-    {
-      id: "status",
-      header: "Status",
-      cell: (l) => <TableBadge variant={STATUS_BADGE[l.status].variant}>{STATUS_BADGE[l.status].label}</TableBadge>,
-    },
-    {
-      id: "responses",
-      header: "Responses",
-      align: "center",
-      cell: (l) => `${l.submissionCount} / ${l.maxSubmissions}`,
-    },
-    { id: "expires", header: "Expires", cell: (l) => fmtDate(l.expiresAt) },
-    { id: "opened", header: "Last opened", cell: (l) => fmtDate(l.lastAccessedAt) },
-    {
-      id: "actions",
-      header: "",
-      align: "right",
-      cell: (l) =>
-        canManage ? (
-          <TableActionMenu
-            actions={[
-              {
-                label: "Re-issue (new link)",
-                icon: <RotateCcw className="h-3.5 w-3.5" />,
-                onClick: async () => {
-                  const ok = await confirm({
-                    title: "Re-issue this link?",
-                    message: `The current link stops working and ${l.recipientName} gets a new one by email.`,
-                    confirmLabel: "Re-issue",
-                  });
-                  if (!ok) return;
-                  try {
-                    onIssued(await reissue.mutateAsync({ linkId: l.id, sendNow: true }));
-                  } catch {
-                    // toasted by the mutation hook
-                  }
-                },
-              },
-              {
-                label: "Revoke",
-                icon: <ShieldOff className="h-3.5 w-3.5" />,
-                variant: "danger",
-                disabled: l.status === "REVOKED",
-                onClick: async () => {
-                  const ok = await confirm({
-                    title: "Revoke this link?",
-                    message: "It stops working immediately.",
-                    confirmLabel: "Revoke",
-                    danger: true,
-                  });
-                  if (ok) revoke.mutate(l.id);
-                },
-              },
-            ]}
-          />
-        ) : null,
-    },
-  ];
-
-  return (
-    <>
-      <StandardTable<HandoverLinkDto>
-        title="Handover links"
-        subtitle="Only a hash of each link is stored; a lost link is re-issued, never recovered."
-        columns={columns}
-        data={links}
-        keyExtractor={(l) => l.id}
-        loading={loading}
-        emptyState={{ title: "No links yet", description: "Create a link for each stakeholder who should accept the works." }}
-      />
-      {dialog}
-    </>
   );
 }
 
@@ -282,129 +125,206 @@ function stakeholderTypeFor(b: ProjectBeneficiaryDto | null): HandoverStakeholde
   return "OTHER";
 }
 
-function CreateLinkModal({
+interface SnagRow {
+  key: number;
+  title: string;
+  location: string;
+  description: string;
+}
+
+let snagSeq = 0;
+const emptySnag = (): SnagRow => ({ key: ++snagSeq, title: "", location: "", description: "" });
+
+/** Redesign R1d: an officer records the beneficiary's response from the signed paper copy and attests it. */
+function RecordResponseModal({
   projectId,
   primaryBeneficiary,
   onClose,
-  onIssued,
 }: {
   projectId: string;
-  /** Phase 11: pre-fills the recipient (still editable). */
+  /** Pre-fills the person who signed (still editable). */
   primaryBeneficiary: ProjectBeneficiaryDto | null;
   onClose: () => void;
-  onIssued: (i: HandoverLinkIssuedDto) => void;
 }) {
-  const mutation = useCreateHandoverLinkMutation(projectId);
-  const [form, setForm] = useState({
-    label: primaryBeneficiary ? `Handover to ${primaryBeneficiary.name}` : "",
-    recipientName: primaryBeneficiary ? primaryBeneficiary.contactName || primaryBeneficiary.name : "",
-    recipientContact: primaryBeneficiary?.contactEmail ?? "",
-    stakeholderType: stakeholderTypeFor(primaryBeneficiary),
-    handoverSummary: "",
-    expiresInDays: HANDOVER_LIMITS.defaultExpiryDays as number,
-    requiresOtp: true,
-    maxSubmissions: 1 as number,
-    sendNow: true,
-  });
-  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const mutation = useRecordHandoverResponseMutation(projectId);
+  const [stakeholderType, setStakeholderType] = useState<HandoverStakeholderType>(stakeholderTypeFor(primaryBeneficiary));
+  const [decision, setDecision] = useState<HandoverDecision>("ACCEPTED");
+  const [submitterName, setSubmitterName] = useState(primaryBeneficiary?.contactName || primaryBeneficiary?.name || "");
+  const [submitterRole, setSubmitterRole] = useState("");
+  const [feedbackText, setFeedbackText] = useState("");
+  const [snags, setSnags] = useState<SnagRow[]>([]);
+  const [attest, setAttest] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const withSnags = decision !== "ACCEPTED";
+  const setSnag = (key: number, patch: Partial<SnagRow>) => setSnags((list) => list.map((s) => (s.key === key ? { ...s, ...patch } : s)));
+  const chooseDecision = (d: HandoverDecision) => {
+    setDecision(d);
+    if (d === "ACCEPTED_WITH_SNAGS" && snags.length === 0) setSnags([emptySnag()]);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const parsed = RecordHandoverResponseRequestSchema.safeParse({
+      stakeholderType,
+      decision,
+      submitterName,
+      submitterRole,
+      feedbackText,
+      snags: withSnags
+        ? snags
+            .filter((s) => s.title.trim() || s.location.trim() || s.description.trim())
+            .map((s) => ({
+              title: s.title,
+              location: s.location.trim() || undefined,
+              description: s.description.trim() || undefined,
+            }))
+        : [],
+      attest,
+    });
+    if (!parsed.success) {
+      const next: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const key = issue.path.join(".");
+        if (!next[key]) next[key] = issue.message;
+      }
+      setErrors(next);
+      return;
+    }
+    setErrors({});
     try {
-      onIssued(await mutation.mutateAsync(form));
+      await mutation.mutateAsync(parsed.data);
+      onClose();
     } catch {
       // toasted by the mutation hook
     }
   };
 
   return (
-    <ModalShell title="New handover link" subtitle="The stakeholder needs no account" onClose={onClose} maxWidth="max-w-2xl">
-      <form onSubmit={submit} className="grid gap-3 p-5 text-xs sm:grid-cols-2">
-        <label className="space-y-1">
-          <span className="font-semibold text-slate-700">Recipient name</span>
-          <input required value={form.recipientName} onChange={(e) => set("recipientName", e.target.value)} className={inputClass} maxLength={120} />
-        </label>
-        <label className="space-y-1">
-          <span className="font-semibold text-slate-700">Email address</span>
-          <input
-            required
-            type="email"
-            value={form.recipientContact}
-            onChange={(e) => set("recipientContact", e.target.value)}
-            className={inputClass}
-            maxLength={200}
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="font-semibold text-slate-700">Stakeholder</span>
-          <CustomSelect
-            value={form.stakeholderType}
-            onChange={(v) => set("stakeholderType", v as HandoverStakeholderType)}
-            options={Object.entries(HANDOVER_STAKEHOLDER_LABELS).map(([value, label]) => ({ value, label }))}
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="font-semibold text-slate-700">Label (internal)</span>
-          <input required value={form.label} onChange={(e) => set("label", e.target.value)} className={inputClass} maxLength={120} placeholder="e.g. Community handover" />
-        </label>
-        <label className="space-y-1 sm:col-span-2">
-          <span className="font-semibold text-slate-700">What is being handed over</span>
-          <textarea
-            required
-            rows={4}
-            minLength={10}
-            value={form.handoverSummary}
-            onChange={(e) => set("handoverSummary", e.target.value)}
-            className={inputClass}
-            maxLength={4000}
-            placeholder="Plain language: what was built, where, and what you want them to check."
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="font-semibold text-slate-700">Link valid for (days)</span>
-          <input
-            type="number"
-            min={1}
-            max={HANDOVER_LIMITS.maxExpiryDays}
-            value={form.expiresInDays}
-            onChange={(e) => set("expiresInDays", Math.max(1, Math.min(HANDOVER_LIMITS.maxExpiryDays, Number(e.target.value) || 1)))}
-            className={inputClass}
-          />
-        </label>
-        <label className="space-y-1">
-          <span className="font-semibold text-slate-700">Responses allowed</span>
-          <input
-            type="number"
-            min={1}
-            max={HANDOVER_LIMITS.maxSubmissions}
-            value={form.maxSubmissions}
-            onChange={(e) => set("maxSubmissions", Math.max(1, Math.min(HANDOVER_LIMITS.maxSubmissions, Number(e.target.value) || 1)))}
-            className={inputClass}
-          />
-        </label>
-        <label className="flex items-start gap-2 sm:col-span-2">
-          <input type="checkbox" checked={form.requiresOtp} onChange={(e) => set("requiresOtp", e.target.checked)} className="mt-0.5" />
-          <span>Require a one-time code sent to the email address (recommended).</span>
-        </label>
-        <label className="flex items-start gap-2 sm:col-span-2">
-          <input type="checkbox" checked={form.sendNow} onChange={(e) => set("sendNow", e.target.checked)} className="mt-0.5" />
-          <span>Email the link to the recipient now. Otherwise copy it from the next screen.</span>
-        </label>
-        <div className="sm:col-span-2">
-          <ModalActions onCancel={onClose} submitLabel="Create link" pendingLabel="Creating…" isPending={mutation.isPending} />
+    <ModalShell title="Record handover response" subtitle="Copy the beneficiary's response from the signed paper copy" onClose={onClose} maxWidth="max-w-2xl">
+      <form onSubmit={submit} className="space-y-4 p-5 text-xs" noValidate>
+        <fieldset className="space-y-2">
+          <legend className="font-semibold text-slate-700 mb-1">Decision</legend>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {HandoverDecisionEnum.options.map((d) => (
+              <label
+                key={d}
+                className={`flex items-center gap-2 rounded-xl border px-3 py-2 cursor-pointer ${
+                  decision === d ? "border-brand-primary bg-brand-primary/5" : "border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                <input type="radio" name="handover-decision" checked={decision === d} onChange={() => chooseDecision(d)} />
+                <span className="font-semibold text-slate-800">{HANDOVER_DECISION_LABELS[d]}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="space-y-1">
+            <span className="font-semibold text-slate-700">Name of the person who signed</span>
+            <input value={submitterName} onChange={(e) => setSubmitterName(e.target.value)} className={inputClass} maxLength={120} />
+            <FieldMessage message={errors.submitterName} />
+          </label>
+          <label className="space-y-1">
+            <span className="font-semibold text-slate-700">Their role</span>
+            <input value={submitterRole} onChange={(e) => setSubmitterRole(e.target.value)} className={inputClass} maxLength={120} placeholder="e.g. Head teacher" />
+            <FieldMessage message={errors.submitterRole} />
+          </label>
+          <label className="space-y-1">
+            <span className="font-semibold text-slate-700">Stakeholder</span>
+            <CustomSelect
+              value={stakeholderType}
+              onChange={(v) => setStakeholderType(v as HandoverStakeholderType)}
+              options={Object.entries(HANDOVER_STAKEHOLDER_LABELS).map(([value, label]) => ({ value, label }))}
+            />
+          </label>
         </div>
+
+        <label className="block space-y-1">
+          <span className="font-semibold text-slate-700">{decision === "REJECTED" ? "Why the works were not accepted" : "Comments (optional)"}</span>
+          <textarea
+            rows={4}
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value)}
+            className={inputClass}
+            maxLength={HANDOVER_LIMITS.feedbackMaxLength}
+          />
+          <FieldMessage message={errors.feedbackText} />
+        </label>
+
+        {withSnags && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-slate-700">
+                Snags{decision === "REJECTED" ? " (optional)" : ""}
+              </p>
+              {snags.length < HANDOVER_LIMITS.maxSnags && (
+                <button
+                  type="button"
+                  onClick={() => setSnags((list) => [...list, emptySnag()])}
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add snag
+                </button>
+              )}
+            </div>
+            {snags.length === 0 && <p className="text-slate-500">No snags listed.</p>}
+            {snags.map((s, i) => (
+              <div key={s.key} className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-2">
+                <label className="space-y-1">
+                  <span className="font-semibold text-slate-700">Snag {i + 1}</span>
+                  <input value={s.title} onChange={(e) => setSnag(s.key, { title: e.target.value })} className={inputClass} maxLength={160} placeholder="Short title" />
+                  <FieldMessage message={errors[`snags.${i}.title`]} />
+                </label>
+                <label className="space-y-1">
+                  <span className="font-semibold text-slate-700">Location (optional)</span>
+                  <input value={s.location} onChange={(e) => setSnag(s.key, { location: e.target.value })} className={inputClass} maxLength={200} />
+                </label>
+                <label className="space-y-1 sm:col-span-2">
+                  <span className="font-semibold text-slate-700">Description (optional)</span>
+                  <textarea rows={2} value={s.description} onChange={(e) => setSnag(s.key, { description: e.target.value })} className={inputClass} maxLength={2000} />
+                </label>
+                <div className="sm:col-span-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setSnags((list) => list.filter((x) => x.key !== s.key))}
+                    className="inline-flex items-center gap-1 font-semibold text-rose-600 hover:underline"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+            <FieldMessage message={errors.snags} />
+          </div>
+        )}
+
+        <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <input type="checkbox" checked={attest} onChange={(e) => setAttest(e.target.checked)} className="mt-0.5" />
+          <span className="font-semibold text-slate-800">I confirm this matches the signed copy.</span>
+        </label>
+        <FieldMessage message={errors.attest} />
+
+        <ModalActions onCancel={onClose} submitLabel="Record response" pendingLabel="Recording…" isPending={mutation.isPending} disabled={!attest} />
       </form>
     </ModalShell>
   );
 }
 
+function FieldMessage({ message }: { message?: string }) {
+  return message ? <span className="block text-[11px] font-medium text-red-600">{message}</span> : null;
+}
+
 function SubmissionCard({
   project,
   submission: s,
+  canReview,
   canConvert,
 }: {
   project: ProjectSummaryDto;
   submission: HandoverSubmissionDto;
+  canReview: boolean;
   canConvert: boolean;
 }) {
   const review = useReviewHandoverSubmissionMutation(project.id);
@@ -420,7 +340,8 @@ function SubmissionCard({
             {s.submitterName} <span className="font-normal text-slate-500">· {s.submitterRole}</span>
           </p>
           <p className="text-[11px] text-slate-500">
-            {s.linkLabel} · {HANDOVER_STAKEHOLDER_LABELS[s.stakeholderType]} · {fmtDate(s.submittedAt)}
+            {HANDOVER_STAKEHOLDER_LABELS[s.stakeholderType]} · {fmtDate(s.submittedAt)}
+            {s.recordedByName ? ` · recorded by ${s.recordedByName}` : ""}
           </p>
         </div>
         <TableBadge variant={DECISION_BADGE[s.decision]}>{HANDOVER_DECISION_LABELS[s.decision]}</TableBadge>
@@ -442,27 +363,9 @@ function SubmissionCard({
                   {snag.defectTicketId && <TableBadge variant="info">Defect ticket raised</TableBadge>}
                 </div>
                 {snag.description && <p className="mt-1 text-xs text-slate-600">{snag.description}</p>}
-                {snag.photos.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {snag.photos.map((f) => (
-                      <HandoverFileView key={f.objectKey} projectId={project.id} file={f} />
-                    ))}
-                  </div>
-                )}
               </li>
             ))}
           </ul>
-        </div>
-      )}
-
-      {s.attachments.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-xs font-semibold text-slate-700">Attachments</p>
-          <div className="flex flex-wrap gap-2">
-            {s.attachments.map((f) => (
-              <HandoverFileView key={f.objectKey} projectId={project.id} file={f} />
-            ))}
-          </div>
         </div>
       )}
 
@@ -472,6 +375,8 @@ function SubmissionCard({
             Reviewed by {s.reviewedByName ?? "—"} on {fmtDate(s.reviewedAt)}
             {s.reviewNotes ? `: ${s.reviewNotes}` : ""}
           </p>
+        ) : !canReview ? (
+          <p className="text-[11px] text-slate-500">Waiting for review.</p>
         ) : (
           <>
             <input
@@ -508,9 +413,7 @@ function SubmissionCard({
 
 function ConvertSnagsModal({ project, submission, onClose }: { project: ProjectSummaryDto; submission: HandoverSubmissionDto; onClose: () => void }) {
   const mutation = useConvertSnagsMutation(project.id);
-  const multiPrime = project.contractorExecutionMode === "MULTI_PRIME_SEPARATE_IPC";
-  const main = project.contractors.find((c) => c.isMainContractor) ?? project.contractors[0];
-  const [contractorId, setContractorId] = useState(multiPrime ? "" : main?.id ?? "");
+  const contractor = project.contractors[0];
   const [severity, setSeverity] = useState<"LOW" | "MEDIUM" | "HIGH" | "CRITICAL">("MEDIUM");
   const [dueDate, setDueDate] = useState("");
 
@@ -519,7 +422,7 @@ function ConvertSnagsModal({ project, submission, onClose }: { project: ProjectS
     try {
       await mutation.mutateAsync({
         submissionId: submission.id,
-        body: { projectContractorId: contractorId || null, severity, dueDate: dueDate || null },
+        body: { severity, dueDate: dueDate || null },
       });
       onClose();
     } catch {
@@ -530,15 +433,9 @@ function ConvertSnagsModal({ project, submission, onClose }: { project: ProjectS
   return (
     <ModalShell title="Create defect tickets" subtitle={`${submission.snags.filter((s) => !s.defectTicketId).length} snag(s) without a ticket`} onClose={onClose}>
       <form onSubmit={submit} className="space-y-3 p-5 text-xs">
-        <label className="block space-y-1">
-          <span className="font-semibold text-slate-700">Responsible contractor</span>
-          <CustomSelect
-            value={contractorId}
-            onChange={setContractorId}
-            placeholder="Choose the contractor"
-            options={project.contractors.map((c) => ({ value: c.id, label: `${c.organizationName} (${c.tradeCode})${c.isMainContractor ? " · main" : ""}` }))}
-          />
-        </label>
+        <p className="text-slate-600">
+          {contractor ? <>Tickets are raised against {contractor.organizationName}.</> : "The project has no contractor to raise tickets against."}
+        </p>
         <div className="grid grid-cols-2 gap-3">
           <label className="space-y-1">
             <span className="font-semibold text-slate-700">Severity</span>
@@ -558,7 +455,7 @@ function ConvertSnagsModal({ project, submission, onClose }: { project: ProjectS
           submitLabel="Create tickets"
           pendingLabel="Creating…"
           isPending={mutation.isPending}
-          disabled={multiPrime && !contractorId}
+          disabled={!contractor}
         />
       </form>
     </ModalShell>

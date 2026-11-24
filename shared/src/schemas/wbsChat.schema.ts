@@ -57,7 +57,6 @@ export const WbsChatMessageTypeEnum = z.enum([
   'TEXT_COMMENT',
   'PHOTO',
   'VOICE_NOTE',
-  'MORNING_BRIEF',
   'EOD_PROMPT',
 ]);
 export type WbsChatMessageType = z.infer<typeof WbsChatMessageTypeEnum>;
@@ -91,7 +90,6 @@ export const WbsChatMessageDtoSchema = z.object({
     .optional(),
   latitude: z.number().nullable().optional(),
   longitude: z.number().nullable().optional(),
-  chainageLabel: z.string().nullable().optional(),
   queryDetails: ReportQueryDtoSchema.nullable().optional(),
   createdAt: z.string(),
 });

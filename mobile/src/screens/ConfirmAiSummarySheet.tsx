@@ -180,7 +180,7 @@ export const ConfirmAiSummarySheet: React.FC = () => {
         : preview?.status === 'WITHIN_TOLERANCE'
           ? `${geofenceBadgeText(preview.status, preview.distanceOutsideMeters)} (checked again by the server).`
           : preview?.status === 'INSIDE'
-            ? `Inside the project geofence${preview.chainageLabel ? ` at ${preview.chainageLabel}` : ''} (checked again by the server).`
+            ? 'Inside the project geofence (checked again by the server).'
             : 'Geofence not available on this device; the server will check it.';
 
   return (

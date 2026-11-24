@@ -7,6 +7,7 @@
  * default Phase 3 process.
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { createFieldSession, fieldAuth, fieldToken as sessionToken } from './helpers/fieldAuth';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
@@ -19,11 +20,9 @@ type Shared = typeof import('@insite/shared');
 let app: Express;
 let prisma: PrismaClientType;
 let shared: Shared;
-let signFieldAgentToken: typeof import('../middleware/auth.middleware')['signFieldAgentToken'];
 let aiCheck: typeof import('../modules/workday-reports/aiOmissionCheck');
 let provider: typeof import('../modules/evidence/evidenceProvider');
 let rules: typeof import('../modules/standards/standardsRules');
-let persona: typeof import('../modules/morning-briefs/briefPersona');
 
 const PASSWORD = 'Password123!';
 const tokens: Record<string, string> = {};
@@ -38,7 +37,7 @@ const ids = {
   edoRoofing: '',
   edoSession: '',
   edoSession2: '',
-  lkkContractorSession: '',
+  lkkFieldSession: '',
   lkkItem: '',
 };
 
@@ -50,7 +49,7 @@ async function web(email: string) {
   }
   return { Authorization: `Bearer ${tokens[email]}` };
 }
-const field = (sessionId: string) => ({ Authorization: `Bearer ${signFieldAgentToken({ sessionId })}` });
+const field = (sessionId: string) => fieldAuth(prisma, sessionId);
 
 let periodOffset = 0;
 function nextPeriod(): string {
@@ -81,41 +80,22 @@ function reportBody(wbsItemId: string, overrides: Record<string, unknown> = {}, 
 }
 
 async function submit(sessionId: string, projectId: string, body: Record<string, unknown>) {
-  const res = await request(app).post(`/api/v1/projects/${projectId}/workday-reports`).set(field(sessionId)).send(body);
+  const res = await request(app).post(`/api/v1/projects/${projectId}/workday-reports`).set(await field(sessionId)).send(body);
   assert.equal(res.status, 201, JSON.stringify(res.body));
   return res.body.data as { id: string; status: string; currentApprovalStep: number; approvalChainVersion: number | null };
 }
 
 async function makeSession(projectId: string, roleCode: string, name: string) {
-  const role = await prisma.role.findFirstOrThrow({ where: { tenantId: ids.tenant, code: roleCode } });
-  const joinCode = await prisma.projectJoinCode.findFirstOrThrow({ where: { projectId, roleId: role.id, isActive: true } });
-  const s = await prisma.fieldAgentSession.create({
-    data: {
-      projectId,
-      origin: 'JOIN_CODE',
-      joinCodeId: joinCode.id,
-      roleId: role.id,
-      roleNameSnapshot: role.name,
-      fieldPersonaType: role.fieldPersonaType,
-      assuranceWeight: role.assuranceWeight,
-      agentFullName: name,
-      agentPhoneNumber: '+2348000000000',
-      deviceId: crypto.randomUUID(),
-      assuranceStatus: 'APPROVED',
-    },
-  });
-  return s.id;
+  return (await createFieldSession(prisma, { projectId, roleCode, name, phoneNumber: '+2348000000000' })).sessionId;
 }
 
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
   shared = await import('@insite/shared');
-  ({ signFieldAgentToken } = await import('../middleware/auth.middleware'));
   aiCheck = await import('../modules/workday-reports/aiOmissionCheck');
   provider = await import('../modules/evidence/evidenceProvider');
   rules = await import('../modules/standards/standardsRules');
-  persona = await import('../modules/morning-briefs/briefPersona');
   const { createApp } = await import('../app');
   app = createApp();
   aiCheck.setAiOmissionCheckScheduler(() => undefined);
@@ -132,10 +112,9 @@ before(async () => {
   ids.edoRoofing = await item('01.03');
   ids.edoSession = await makeSession(ids.edo, 'INDEPENDENT_RESIDENT', 'M&E Officer Ada');
   ids.edoSession2 = await makeSession(ids.edo, 'INDEPENDENT_RESIDENT', 'M&E Officer Bisi');
-  ids.lkkContractorSession = (
-    await prisma.fieldAgentSession.findFirstOrThrow({
-      where: { projectId: ids.lkk, fieldPersonaType: 'CONTRACTOR_EXECUTOR', assuranceStatus: 'APPROVED' },
-    })
+  // R1d: the seeded LKK-402 field officer (a provisioned verifier account).
+  ids.lkkFieldSession = (
+    await prisma.fieldAgentSession.findFirstOrThrow({ where: { projectId: ids.lkk, user: { email: 'field.officer@insite.ng' } } })
   ).id;
   ids.lkkItem = (await prisma.boqItem.findFirstOrThrow({ where: { projectId: ids.lkk }, orderBy: { wbsCode: 'asc' } })).id;
 });
@@ -153,7 +132,10 @@ describe('Phase 7', { concurrency: false }, () => {
       assert.equal('disbursementMechanism' in shared.ProjectProcessConfigSchema.parse(d), false, 'redesign R1b: no disbursement');
       assert.equal(d.requireReportApproval, false);
       assert.equal(d.enableHoldPoints, true);
-      assert.equal(d.allowContractorFieldReporting, true);
+      // Redesign R1d: no contractor field reporting or identity check switches.
+      const parsed = shared.ProjectProcessConfigSchema.parse(d) as Record<string, unknown>;
+      assert.equal('allowContractorFieldReporting' in parsed, false);
+      assert.equal('enableContractorIdentityAssurance' in parsed, false);
     });
 
     it('accepts the default chains and rejects the wrong shapes', () => {
@@ -178,7 +160,7 @@ describe('Phase 7', { concurrency: false }, () => {
       const edo = await request(app).get(`/api/v1/projects/${ids.edo}/process`).set(await web('verifier@insite.ng'));
       assert.equal(edo.status, 200, JSON.stringify(edo.body));
       assert.equal(edo.body.data.config.requireReportApproval, true);
-      assert.equal(edo.body.data.config.allowContractorFieldReporting, false);
+      assert.equal('allowContractorFieldReporting' in edo.body.data.config, false, 'R1d: no contractor reporting switch');
       assert.equal(edo.body.data.disbursementChain, undefined);
       const lkk = await request(app).get(`/api/v1/projects/${ids.lkk}/process`).set(await web('monitor@insite.ng'));
       assert.equal(lkk.body.data.config.requireReportApproval, false);
@@ -194,15 +176,16 @@ describe('Phase 7', { concurrency: false }, () => {
       });
       assert.equal(created.status, 201, JSON.stringify(created.body));
       const draftId = created.body.data.projectId as string;
-      // A new draft gets the tenant default template.
-      assert.equal(created.body.data.process.config.allowContractorFieldReporting, true);
+      // A new draft gets the tenant default template (no default here: the defaults apply).
+      assert.equal(created.body.data.process.config.requireReportApproval, false);
+      assert.equal('enableContractorIdentityAssurance' in created.body.data.process.config, false);
 
       const templates = (await request(app).get('/api/v1/workflow-templates').set(admin)).body.data as Array<{ id: string; name: string; config: unknown }>;
       const rapid = templates.find((t) => t.name.startsWith('Lightweight'))!;
       const applied = await request(app).post(`/api/v1/projects/${draftId}/process/apply-template`).set(admin).send({ templateId: rapid.id });
       assert.equal(applied.status, 200, JSON.stringify(applied.body));
-      assert.equal(applied.body.data.config.allowContractorFieldReporting, false);
       assert.equal(applied.body.data.workflowTemplateId, rapid.id);
+      assert.equal(applied.body.data.workflowTemplateName, rapid.name);
       const rows = await prisma.approvalStep.count({ where: { projectId: draftId, isActive: true } });
       assert.equal(rows, 1); // the report chain
 
@@ -249,70 +232,10 @@ describe('Phase 7', { concurrency: false }, () => {
   });
 
   // -------------------------------------------------------------------------
-  describe('persona-aware briefs', () => {
-    it('detects execution instructions aimed at the reader', () => {
-      const yes = { headline: 'WBS 01.01', expectedDeliverable: 'Pour the column concrete today.', reportingChecklist: ['Photograph it.', 'Record it.'] };
-      const also = { headline: 'x', expectedDeliverable: 'You must install the roof sheets.', reportingChecklist: ['a', 'b'] };
-      const no = { headline: 'Inspect WBS 01.01', expectedDeliverable: 'Verify the concrete poured today.', reportingChecklist: ['Witness the slump test.', 'Measure the cover.'] };
-      assert.equal(persona.containsExecutionInstruction(yes), true);
-      assert.equal(persona.containsExecutionInstruction(also), true);
-      assert.equal(persona.containsExecutionInstruction(no), false);
-    });
-
-    it('a verifier brief never tells the inspector to build', async () => {
-      const res = await request(app)
-        .post(`/api/v1/projects/${ids.edo}/boq/${ids.edoColumns}/morning-brief`)
-        .set(field(ids.edoSession))
-        .send({});
-      assert.equal(res.status, 201, JSON.stringify(res.body));
-      const brief = res.body.data;
-      assert.equal(brief.targetPersona, 'INDEPENDENT_VERIFIER');
-      assert.equal(brief.generatedByAi, false);
-      assert.equal(persona.containsExecutionInstruction(brief), false);
-      assert.deepEqual(brief.appliedStandards.map((s: { code: string }) => s.code), ['CONC-SLUMP']);
-    });
-
-    it('a contractor brief lists its standards; the two personas are cached separately', async () => {
-      await prisma.projectStandardSpecification.create({
-        data: {
-          projectId: ids.lkk,
-          code: 'HSE-SITE',
-          title: 'Site safety',
-          category: 'SAFETY_ENVIRONMENT',
-          specificationText: 'Workers on site wear PPE at all times.',
-          applicableWbsCodes: [],
-          isMandatory: false,
-          createdByUserId: (await prisma.user.findUniqueOrThrow({ where: { email: 'monitor@insite.ng' } })).id,
-        },
-      });
-      const contractor = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/boq/${ids.lkkItem}/morning-brief`)
-        .set(field(ids.lkkContractorSession))
-        .send({});
-      assert.equal(contractor.status, 201, JSON.stringify(contractor.body));
-      assert.equal(contractor.body.data.targetPersona, 'CONTRACTOR_EXECUTOR');
-      assert.ok(contractor.body.data.reportingChecklist.some((l: string) => l.includes('HSE-SITE')));
-      assert.deepEqual(contractor.body.data.appliedStandards.map((s: { code: string }) => s.code), ['HSE-SITE']);
-
-      const verifier = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/boq/${ids.lkkItem}/morning-brief?persona=INDEPENDENT_VERIFIER`)
-        .set(await web('monitor@insite.ng'))
-        .send({ targetPersona: 'INDEPENDENT_VERIFIER' });
-      assert.equal(verifier.status, 201, JSON.stringify(verifier.body));
-      assert.equal(verifier.body.data.targetPersona, 'INDEPENDENT_VERIFIER');
-      assert.notEqual(verifier.body.data.id, contractor.body.data.id);
-      const rows = await prisma.morningDeliverableBrief.count({ where: { projectId: ids.lkk, boqItemId: ids.lkkItem } });
-      assert.equal(rows, 2);
-    });
-
-    it('forces the verifier brief when contractor reporting is off, and skips contractor dispatch', async () => {
-      const res = await request(app)
-        .get(`/api/v1/projects/${ids.edo}/morning-briefs?persona=CONTRACTOR_EXECUTOR`)
-        .set(await web('verifier@insite.ng'));
-      assert.equal(res.status, 200);
-      for (const b of res.body.data) assert.equal(b.targetPersona, 'INDEPENDENT_VERIFIER');
-      const { briefPersonasForProject } = await import('../modules/morning-briefs/morningBrief.service');
-      assert.deepEqual(await briefPersonasForProject(ids.edo), ['INDEPENDENT_VERIFIER']);
+  describe('reporting personas (briefs removed in R1e)', () => {
+    it('only the verifier owes reports (no contractor login)', async () => {
+      const { reportingPersonasForProject } = await import('../modules/cadence/obligationDispatch');
+      assert.deepEqual(await reportingPersonasForProject(ids.edo), ['INDEPENDENT_VERIFIER']);
     });
   });
 
@@ -440,7 +363,7 @@ describe('Phase 7', { concurrency: false }, () => {
       const original = await prisma.workdayReport.findUniqueOrThrow({ where: { id: report.id } });
       const revised = await request(app)
         .post(`/api/v1/projects/${ids.edo}/workday-reports/${report.id}/revalidate`)
-        .set(field(ids.edoSession2))
+        .set(await field(ids.edoSession2))
         .send({
           clientReportId: crypto.randomUUID(),
           reportQueryId: query.id,
@@ -495,13 +418,12 @@ async function pdfWithText(text: string): Promise<Buffer> {
 }
 
 describe('Phase 7 gap closure', { concurrency: false }, () => {
-  const ogn = { id: '', contractorSession: '', holdItem: '' };
+  const ogn = { id: '', holdItem: '' };
   const OGN_POINT = { latitude: 6.951, longitude: 3.4 };
   const SAMPLE = 'The Ikpoba Hill community needs a maternity ward, clean water and solar backup for the cold chain.';
 
   before(async () => {
     ogn.id = (await prisma.project.findFirstOrThrow({ where: { tenantId: ids.tenant, codePrefix: 'OGN-305' } })).id;
-    ogn.contractorSession = await makeSession(ogn.id, 'CONTRACTOR_ENGINEER', 'Contractor Engr Femi');
     ogn.holdItem = (await prisma.boqItem.findFirstOrThrow({ where: { projectId: ogn.id }, orderBy: { wbsCode: 'asc' } })).id;
     await prisma.boqItem.update({
       where: { id: ogn.holdItem },
@@ -540,7 +462,7 @@ describe('Phase 7 gap closure', { concurrency: false }, () => {
         .send({ isMandatory: false });
       assert.equal(updated.status, 200, JSON.stringify(updated.body));
       assert.equal(updated.body.data.isMandatory, false);
-      const fieldList = await request(app).get(`/api/v1/projects/${ids.edo}/standards`).set(field(ids.edoSession));
+      const fieldList = await request(app).get(`/api/v1/projects/${ids.edo}/standards`).set(await field(ids.edoSession));
       assert.equal(fieldList.status, 200);
       assert.ok(fieldList.body.data.some((s: { code: string }) => s.code === 'ROOF-01'));
       const removed = await request(app).delete(`/api/v1/projects/${ids.edo}/standards/${created.body.data.id}`).set(verifier);
@@ -563,115 +485,6 @@ describe('Phase 7 gap closure', { concurrency: false }, () => {
       assert.equal(res.body.data.title, 'Assessment PDF');
       const removed = await request(app).delete(`/api/v1/projects/${ids.edo}/needs-assessments/${res.body.data.id}`).set(verifier);
       assert.equal(removed.status, 200);
-    });
-  });
-
-  describe('settings side effects', () => {
-    it('contractor reporting off: needs confirmation, deactivates codes, refuses contractor reports, forces verifier briefs; on again reissues codes', async () => {
-      const admin = await web('admin@insite.ng');
-      const current = (await request(app).get(`/api/v1/projects/${ogn.id}/process`).set(admin)).body.data;
-      assert.ok(current.activeContractorJoinCodeCount > 0);
-      const off = { ...current.config, allowContractorFieldReporting: false };
-      const unconfirmed = await request(app).put(`/api/v1/projects/${ogn.id}/process`).set(admin).send({ config: off });
-      assert.equal(unconfirmed.status, 409);
-      assert.equal(unconfirmed.body.error.code, 'CONFIRMATION_REQUIRED');
-      const confirmed = await request(app)
-        .put(`/api/v1/projects/${ogn.id}/process`)
-        .set(admin)
-        .send({ config: off, confirmDeactivateContractorCodes: true });
-      assert.equal(confirmed.status, 200, JSON.stringify(confirmed.body));
-      assert.equal(confirmed.body.data.activeContractorJoinCodeCount, 0);
-
-      const refused = await request(app)
-        .post(`/api/v1/projects/${ogn.id}/workday-reports`)
-        .set(field(ogn.contractorSession))
-        .send(reportBody(ogn.holdItem, { unitOfMeasure: 'm2' }, OGN_POINT));
-      assert.equal(refused.status, 403, JSON.stringify(refused.body));
-      assert.equal(refused.body.error.code, 'CONTRACTOR_FIELD_REPORTING_DISABLED');
-
-      const brief = await request(app)
-        .post(`/api/v1/projects/${ogn.id}/boq/${ogn.holdItem}/morning-brief`)
-        .set(field(ogn.contractorSession))
-        .send({});
-      assert.equal(brief.status, 201, JSON.stringify(brief.body));
-      assert.equal(brief.body.data.targetPersona, 'INDEPENDENT_VERIFIER');
-
-      const on = await request(app)
-        .put(`/api/v1/projects/${ogn.id}/process`)
-        .set(admin)
-        .send({ config: { ...off, allowContractorFieldReporting: true } });
-      assert.equal(on.status, 200, JSON.stringify(on.body));
-      assert.ok(on.body.data.activeContractorJoinCodeCount > 0);
-    });
-
-    it('identity assurance off: an unverified contractor report is accepted, not staged', async () => {
-      const admin = await web('admin@insite.ng');
-      await prisma.fieldAgentSession.update({ where: { id: ogn.contractorSession }, data: { assuranceStatus: 'PENDING_APPROVAL' } });
-      const config = (await request(app).get(`/api/v1/projects/${ogn.id}/process`).set(admin)).body.data.config;
-      const staged = await submit(ogn.contractorSession, ogn.id, reportBody(ogn.holdItem, { unitOfMeasure: 'm2' }, OGN_POINT));
-      assert.equal(staged.status, 'STAGED_UNVERIFIED');
-      const off = await request(app)
-        .put(`/api/v1/projects/${ogn.id}/process`)
-        .set(admin)
-        .send({ config: { ...config, enableContractorIdentityAssurance: false } });
-      assert.equal(off.status, 200, JSON.stringify(off.body));
-      const accepted = await submit(ogn.contractorSession, ogn.id, reportBody(ogn.holdItem, { unitOfMeasure: 'm2' }, OGN_POINT));
-      assert.equal(accepted.status, 'CONFIRMED');
-    });
-
-    it('hold points off: briefs show no hold point', async () => {
-      const admin = await web('admin@insite.ng');
-      const config = (await request(app).get(`/api/v1/projects/${ogn.id}/process`).set(admin)).body.data.config;
-      const before = await request(app)
-        .post(`/api/v1/projects/${ogn.id}/boq/${ogn.holdItem}/morning-brief`)
-        .set(admin)
-        .send({ targetPersona: 'CONTRACTOR_EXECUTOR' });
-      assert.equal(before.status, 201, JSON.stringify(before.body));
-      assert.equal(before.body.data.isHoldPoint, true);
-      await request(app).put(`/api/v1/projects/${ogn.id}/process`).set(admin).send({ config: { ...config, enableHoldPoints: false } });
-      const after = await request(app)
-        .post(`/api/v1/projects/${ogn.id}/boq/${ogn.holdItem}/morning-brief`)
-        .set(admin)
-        .send({ targetPersona: 'CONTRACTOR_EXECUTOR' });
-      assert.equal(after.body.data.isHoldPoint, false);
-      assert.equal(after.body.data.holdPointInstruction, null);
-    });
-
-    it('a provisioned contractor account does not see a project with contractor reporting off', async () => {
-      const admin = await web('admin@insite.ng');
-      const role = await prisma.role.update({
-        where: { tenantId_code: { tenantId: ids.tenant, code: 'CONTRACTOR_ENGINEER' } },
-        data: { onboardingMode: 'PROVISIONED_ACCOUNT', requiresIdentityAssurance: false },
-      });
-      const user = await prisma.user.update({ where: { email: 'contractor@insite.ng' }, data: { mobileRoleId: role.id } });
-      await prisma.userProjectAssignment.upsert({
-        where: { userId_projectId: { userId: user.id, projectId: ogn.id } },
-        create: { userId: user.id, projectId: ogn.id },
-        update: {},
-      });
-      const { invalidateUserAuthCache } = await import('../middleware/auth.middleware');
-      invalidateUserAuthCache(user.id);
-      const login = async () => {
-        const { publicKey } = crypto.generateKeyPairSync('ed25519');
-        const x = publicKey.export({ format: 'jwk' }).x as string;
-        const res = await request(app).post('/api/v1/auth/mobile/login').send({
-          email: 'contractor@insite.ng',
-          password: PASSWORD,
-          deviceId: crypto.randomUUID(),
-          devicePublicKey: Buffer.from(x, 'base64url').toString('base64'),
-          devicePublicKeyAlg: 'ED25519',
-        });
-        assert.equal(res.status, 200, JSON.stringify(res.body));
-        return (res.body.data.projects as Array<{ codePrefix: string }>).map((p) => p.codePrefix);
-      };
-      assert.ok((await login()).includes('OGN-305'));
-      const cfg = (await request(app).get(`/api/v1/projects/${ogn.id}/process`).set(admin)).body.data.config;
-      const off = await request(app)
-        .put(`/api/v1/projects/${ogn.id}/process`)
-        .set(admin)
-        .send({ config: { ...cfg, allowContractorFieldReporting: false }, confirmDeactivateContractorCodes: true });
-      assert.equal(off.status, 200, JSON.stringify(off.body));
-      assert.ok(!(await login()).includes('OGN-305'));
     });
   });
 });

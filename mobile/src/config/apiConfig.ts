@@ -2,14 +2,7 @@ import Constants from 'expo-constants';
 import { NativeModules, Platform } from 'react-native';
 import { formatMobileErrorMessage } from '../utils/errorFormatter';
 import { markSessionEnded, type SessionEndReason } from './sessionState';
-import {
-  getActiveProjectId,
-  projectIdFromPath,
-  scopeForProject,
-  tokenForActiveProject,
-  tokenForProject,
-  type SessionScope,
-} from './authRegistry';
+import { getAccountToken, getActiveProjectId, projectIdFromPath, type SessionScope } from './authRegistry';
 
 function extractLanHost(uriOrUrl?: string | null): string | null {
   if (!uriOrUrl) return null;
@@ -96,8 +89,8 @@ export class MobileApiError extends Error {
 
 export interface MobileRequestOptions extends RequestInit {
   /**
-   * `false` sends no token (sign-in, join). A string sends that token, for example one join
-   * session's token on a route without a project. Default: chosen from the path (see authRegistry).
+   * `false` sends no token (sign-in). A string sends that token (an account token not yet in the
+   * registry, e.g. right after a password change). Default: the signed-in account's token.
    */
   auth?: false | string;
   /** Scope to end if `auth` is an explicit token and the server refuses it. */
@@ -145,17 +138,15 @@ export async function mobileRequest<T>(
     ...(init.headers as Record<string, string>),
   };
 
-  // The token follows the project in the path, so queued work for any project uses the right one.
-  const pathProjectId = projectIdFromPath(path);
-  const targetProjectId = pathProjectId ?? getActiveProjectId();
+  // The project the request is about decides which scope a refusal ends.
+  const targetProjectId = projectIdFromPath(path) ?? getActiveProjectId();
   let token: string | null = null;
   let requestScope: SessionScope = 'account';
   if (typeof auth === 'string') {
     token = auth;
     requestScope = authScope ?? 'account';
   } else if (auth !== false) {
-    token = pathProjectId ? tokenForProject(pathProjectId) : tokenForActiveProject();
-    requestScope = targetProjectId ? scopeForProject(targetProjectId) : 'account';
+    token = getAccountToken();
   }
   if (token) {
     headers.Authorization = `Bearer ${token}`;

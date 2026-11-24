@@ -2,14 +2,12 @@ import { Prisma } from '@prisma/client';
 import {
   ActivateProjectResponse,
   addCalendarMonths,
-  ContractorExecutionMode,
   CreateProjectDraftRequest,
   GeofenceMode,
   PROJECT_SETUP_STEPS,
   PROJECT_STEP_SAVE_SCHEMAS,
   ProjectActivationSchema,
   ProjectBasicsStepSchema,
-  ProjectBoqStep,
   ProjectDraftSummary,
   ProjectFacilityStep,
   ProjectGeofence,
@@ -31,6 +29,8 @@ import {
   zonedCalendarDate,
   ProjectContractStep,
   CONTRACT_MILESTONE_ANCHOR_META,
+  FacilityArchetype,
+  validateUnits,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -43,12 +43,11 @@ import { recordAuditEvent } from '../audit/audit.service';
 import { resolveOrganization } from '../organizations/organizations.service';
 import {
   auditContractorChanges,
-  contractorModelIssues,
+  contractorIssues,
   getProjectContractors,
   serializeContractor,
   syncProjectContractors,
 } from './contractors.service';
-import { issueMissingJoinCodes, reconcileContractorJoinCodes } from './joinCodes.service';
 import { cadenceSettingsOf, serializeCadenceSettings } from '../cadence/cadence.service';
 import {
   applyProcessSettings,
@@ -75,7 +74,7 @@ import { archiveBlockedReason, freezeMetAutomaticItems } from '../completion/clo
 
 type Tx = Prisma.TransactionClient;
 
-const ALL_GEOFENCE_MODES: GeofenceMode[] = ['RADIAL', 'LINEAR_CORRIDOR', 'PERIMETER'];
+const ALL_GEOFENCE_MODES: GeofenceMode[] = ['RADIAL', 'PERIMETER'];
 
 function actorName(webUser: WebJwtPayload) {
   return `${webUser.fullName} (${webUser.roleName})`;
@@ -95,17 +94,12 @@ interface StepState {
 
 interface SetupState {
   steps: Partial<Record<string, StepState>>;
-  team: { joinCodeRoleIds: string[] | null };
 }
 
 function parseSetupState(raw: unknown): SetupState {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const steps = obj.steps && typeof obj.steps === 'object' ? (obj.steps as SetupState['steps']) : {};
-  const team = obj.team && typeof obj.team === 'object' ? (obj.team as Record<string, unknown>) : {};
-  const ids = Array.isArray(team.joinCodeRoleIds)
-    ? (team.joinCodeRoleIds as unknown[]).filter((v): v is string => typeof v === 'string')
-    : null;
-  return { steps, team: { joinCodeRoleIds: ids } };
+  return { steps };
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +112,7 @@ const SETUP_INCLUDE = {
       timezone: true,
       enabledGeofenceModes: true,
       defaultGeofenceToleranceMeters: true,
+      defaultGeofenceRadiusMeters: true,
       organizationInputMode: true,
     },
   },
@@ -138,13 +133,27 @@ async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
   if (!project) throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   const typeConfigForLoad = resolveProjectTypeConfig(project.projectTypeSnapshotJson);
   const beforeActivationCodes = typeConfigForLoad?.documentRequirements.beforeActivation ?? [];
-  const [contractors, itemCount, unassignedContractorCount, holdPointCount, budgetSum, process, standards, tenantHasTypes, presentDocTypes] =
+  const [contractors, lineCount, unassignedLineCount, holdPointCount, budgetSum, sprintCount, units, process, standards, tenantHasTypes, presentDocTypes] =
     await Promise.all([
       getProjectContractors(db, projectId),
       db.boqItem.count({ where: { projectId } }),
-      db.boqItem.count({ where: { projectId, projectContractorId: null } }),
+      db.boqItem.count({ where: { projectId, facilityUnitId: null } }),
       db.boqItem.count({ where: { projectId, isHoldPoint: true } }),
       db.boqItem.aggregate({ where: { projectId }, _sum: { budgetedCostNgn: true } }),
+      // Redesign R2b: scope and sprints.
+      db.projectSprint.count({ where: { projectId } }),
+      db.facilityUnit.findMany({
+        where: { projectId },
+        orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
+        select: {
+          code: true,
+          label: true,
+          plannedQuantity: true,
+          facility: { select: { archetype: true } },
+          startSprint: { select: { number: true } },
+          endSprint: { select: { number: true } },
+        },
+      }),
       getProjectProcessSettings(projectId, db),
       countStandardsDocs(db, projectId),
       tenantHasActiveProjectTypes(db, project.tenantId),
@@ -171,11 +180,23 @@ async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
       beforeActivationCodes,
       presentDocTypeCodes: new Set(presentDocTypes.map((d) => d.documentType.code)),
     },
-    boq: {
-      itemCount,
-      unassignedContractorCount,
-      holdPointCount,
-      totalBudgetedCostNgn: Number(budgetSum._sum.budgetedCostNgn ?? 0),
+    scope: {
+      summary: {
+        sprintCount,
+        unitCount: units.length,
+        lineCount,
+        unassignedLineCount,
+        holdPointCount,
+        totalBudgetedCostNgn: Number(budgetSum._sum.budgetedCostNgn ?? 0),
+      },
+      units: units.map((u) => ({
+        code: u.code,
+        label: u.label,
+        archetype: u.facility.archetype as FacilityArchetype,
+        plannedQuantity: u.plannedQuantity === null ? null : Number(u.plannedQuantity),
+        startSprintNumber: u.startSprint?.number ?? null,
+        endSprintNumber: u.endSprint?.number ?? null,
+      })),
     },
   };
 }
@@ -201,7 +222,7 @@ function enabledModes(project: SetupProjectRow): GeofenceMode[] {
 
 /** Issues per step, from the saved data. Required steps must have no issues to activate. */
 function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupIssue[]; warnings: SetupIssue[] }> {
-  const { project, contractors, boq } = loaded;
+  const { project, contractors, scope } = loaded;
   const config = loaded.process.config;
   const out: Record<string, { issues: SetupIssue[]; warnings: SetupIssue[] }> = {};
   const budget = project.totalBudgetNgn === null ? null : Number(project.totalBudgetNgn);
@@ -248,18 +269,15 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
   if (rules.beneficiaryRequired && project.beneficiaries.length === 0) {
     parties.push({ code: 'BENEFICIARY_REQUIRED', message: 'Add at least one beneficiary.', field: 'beneficiaries' });
   }
-  for (const i of contractorModelIssues(
-    project.contractorExecutionMode as ContractorExecutionMode | null,
-    contractors
-  )) {
-    parties.push({ ...i, field: i.code === 'CONTRACTOR_MODEL_REQUIRED' ? 'contractorExecutionMode' : 'contractors' });
+  for (const i of contractorIssues(contractors)) {
+    parties.push({ ...i, field: 'contractors' });
   }
   const partyWarnings: SetupIssue[] = [];
   const allocated = contractors.reduce((s, c) => s + Number(c.allocatedBudgetNgn ?? 0), 0);
   if (budget !== null && allocated > budget) {
     partyWarnings.push({
       code: 'CONTRACTOR_BUDGETS_EXCEED_PROJECT',
-      message: 'Contractor package budgets add up to more than the project budget.',
+      message: 'The contractor budget is more than the project budget.',
       field: 'contractors',
     });
   }
@@ -306,20 +324,30 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
   }
   out.facility = { issues: facility, warnings: [] };
 
-  // BOQ
-  const boqIssues: SetupIssue[] = [];
-  if (boq.itemCount === 0) {
-    boqIssues.push({ code: 'BOQ_REQUIRED', message: 'Upload the bill of quantities.', field: 'items' });
-  } else {
-    if (project.contractorExecutionMode === 'MULTI_PRIME_SEPARATE_IPC' && boq.unassignedContractorCount > 0) {
-      boqIssues.push({
-        code: 'BOQ_ITEMS_UNASSIGNED',
-        message: `${boq.unassignedContractorCount} BOQ item(s) have no contractor. In the multi-prime model every item needs one.`,
-        field: 'items',
+  // Scope & sprints (redesign R2b, D-R2.6). Projects that went live before R2 have no units and
+  // are not flagged.
+  const scopeIssues: SetupIssue[] = [];
+  const scopeWarnings: SetupIssue[] = [];
+  const legacyLive = project.status !== 'DRAFT' && scope.units.length === 0;
+  if (!legacyLive) {
+    const s = scope.summary;
+    if (s.sprintCount === 0) scopeIssues.push({ code: 'SPRINT_REQUIRED', message: 'Add at least one sprint.', field: 'sprints' });
+    if (s.lineCount === 0) scopeIssues.push({ code: 'SCOPE_REQUIRED', message: 'Add the BoQ lines (by hand or from the workbook).', field: 'lines' });
+    if (s.unassignedLineCount > 0) {
+      scopeIssues.push({
+        code: 'LINE_UNIT_REQUIRED',
+        message: `${s.unassignedLineCount} BoQ line(s) have no facility unit.`,
+        field: 'lines',
       });
     }
+    for (const i of validateUnits(scope.units, { requireSprints: true })) {
+      scopeIssues.push({ code: i.code, message: i.message, field: 'units' });
+    }
+    if (budget !== null && s.totalBudgetedCostNgn > budget + 0.005) {
+      scopeWarnings.push({ code: 'SCOPE_ABOVE_BUDGET', message: 'The scope total is above the project budget.', field: 'lines' });
+    }
   }
-  out.boq = { issues: boqIssues, warnings: [] };
+  out.scope = { issues: scopeIssues, warnings: scopeWarnings };
 
   // Reporting: always has valid defaults; the step must still be reviewed (saved) once.
   out.reporting = { issues: [], warnings: [] };
@@ -386,8 +414,7 @@ function buildStepStatuses(loaded: LoadedSetup): SetupStepStatus[] {
 }
 
 function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
-  const { project, contractors, boq } = loaded;
-  const state = parseSetupState(project.setupState);
+  const { project, contractors } = loaded;
   const steps = buildStepStatuses(loaded);
   const geofence = project.geofenceGeoJson
     ? (ProjectGeofenceSchema.safeParse(project.geofenceGeoJson).data ?? null)
@@ -406,6 +433,9 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
       totalBudgetNgn: project.totalBudgetNgn === null ? null : Number(project.totalBudgetNgn),
       projectType: projectTypeSummary(project),
       region: regionSummary(project.region),
+      siteAddress: project.siteAddress,
+      strategicJustification: project.strategicJustification,
+      assumptions: project.assumptions,
     },
     parties: {
       owningOrganization: project.owningOrganization,
@@ -432,7 +462,6 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
       })(),
       monitorOrganization: project.monitorOrganization,
       lenderOrganization: project.lenderOrganization,
-      contractorExecutionMode: project.contractorExecutionMode as ContractorExecutionMode | null,
       contractors: contractors.map(serializeContractor),
     },
     site: {
@@ -441,6 +470,7 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
       geofenceToleranceMeters: project.geofenceToleranceMeters,
       effectiveToleranceMeters: project.geofenceToleranceMeters ?? project.tenant.defaultGeofenceToleranceMeters,
       tenantDefaultToleranceMeters: project.tenant.defaultGeofenceToleranceMeters,
+      tenantDefaultRadiusMeters: project.tenant.defaultGeofenceRadiusMeters,
       timezone: project.timezone,
       enabledGeofenceModes: enabledModes(project),
     },
@@ -452,7 +482,7 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
         heldNgn: Number(project.retentionHeldNgn),
       },
     },
-    boq,
+    scope: loaded.scope.summary,
     contract: {
       contractReference: project.contractReference,
       contractAwardDate: project.contractAwardDate,
@@ -470,7 +500,6 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
     },
     team: {
       userIds: project.userAssignments.map((a) => a.userId),
-      joinCodeRoleIds: state.team.joinCodeRoleIds,
     },
     process: loaded.process,
     standards: loaded.standards,
@@ -532,7 +561,6 @@ export async function createProjectDraft(webUser: WebJwtPayload, input: CreatePr
       steps: {
         basics: { savedAt: now, savedByUserId: webUser.userId, completedAt: now, completedByUserId: webUser.userId },
       },
-      team: { joinCodeRoleIds: null },
     };
     const project = await tx.project.create({
       data: {
@@ -644,7 +672,6 @@ const saveBasics: StepSaver = async ({ tx, project, webUser, input }) => {
 const saveParties: StepSaver = async ({ tx, project, webUser, input }) => {
   const data = input as ProjectPartiesStep;
   const actor = { actorId: webUser.userId, actorDisplayName: actorName(webUser) };
-  const nextMode = (data.contractorExecutionMode ?? null) as ContractorExecutionMode | null;
 
   const monitor = data.monitorOrganization
     ? (
@@ -702,15 +729,14 @@ const saveParties: StepSaver = async ({ tx, project, webUser, input }) => {
   const sync = await syncProjectContractors(tx, {
     projectId: project.id,
     tenantId: project.tenantId,
-    mode: nextMode,
     inputs: data.contractors,
     webUser,
   });
 
-  // A live project's model rules must hold after every save (drafts may be incomplete).
+  // A live project keeps its contractor after every save (drafts may be incomplete).
   if (project.status !== 'DRAFT') {
     const after = await getProjectContractors(tx, project.id);
-    const problems = contractorModelIssues(nextMode, after);
+    const problems = contractorIssues(after);
     if (problems.length > 0) {
       throw new AppError(problems[0].message, 422, problems[0].code);
     }
@@ -722,12 +748,8 @@ const saveParties: StepSaver = async ({ tx, project, webUser, input }) => {
       owningOrganizationId,
       monitorOrganizationId: monitor?.id ?? null,
       lenderOrganizationId: lender?.id ?? null,
-      contractorExecutionMode: nextMode,
     },
   });
-  if (project.status === 'ACTIVE') {
-    await reconcileContractorJoinCodes(tx, project);
-  }
   await auditContractorChanges(tx, { projectId: project.id, webUser, result: sync });
   // Phase 13: per-contractor milestones follow the contractor list.
   if (sync.added.length || sync.removed.length) await syncContractMilestones(tx, project.id);
@@ -737,13 +759,11 @@ const saveParties: StepSaver = async ({ tx, project, webUser, input }) => {
       owningOrganizationId: project.owningOrganizationId,
       monitorOrganizationId: project.monitorOrganizationId,
       lenderOrganizationId: project.lenderOrganizationId,
-      contractorExecutionMode: project.contractorExecutionMode,
     },
     {
       owningOrganizationId,
       monitorOrganizationId: monitor?.id ?? null,
       lenderOrganizationId: lender?.id ?? null,
-      contractorExecutionMode: nextMode,
     }
   );
   if (sync.added.length || sync.removed.length || sync.updated.length) changedFields.push('contractors');
@@ -862,36 +882,8 @@ const saveFacility: StepSaver = async ({ tx, project, input }) => {
   };
 };
 
-const saveBoq: StepSaver = async ({ tx, project, input }) => {
-  const data = input as ProjectBoqStep;
-  if (data.items.length === 0) return { changedFields: [] };
-  const [contractors, items] = await Promise.all([
-    tx.projectContractor.findMany({ where: { projectId: project.id }, select: { id: true } }),
-    tx.boqItem.findMany({
-      where: { projectId: project.id, id: { in: data.items.map((i) => i.boqItemId) } },
-      select: { id: true },
-    }),
-  ]);
-  const contractorIds = new Set(contractors.map((c) => c.id));
-  const itemById = new Map(items.map((i) => [i.id, i]));
-  for (const u of data.items) {
-    const item = itemById.get(u.boqItemId);
-    if (!item) throw new AppError('BOQ item not found', 404, 'BOQ_ITEM_NOT_FOUND');
-    if (u.projectContractorId && !contractorIds.has(u.projectContractorId)) {
-      throw new AppError('Contractor not found on this project', 404, 'CONTRACTOR_NOT_FOUND');
-    }
-    await tx.boqItem.update({
-      where: { id: u.boqItemId },
-      data: {
-        isHoldPoint: u.isHoldPoint,
-        ...(u.holdPointInstruction !== undefined ? { holdPointInstruction: u.holdPointInstruction } : {}),
-        ...(u.isOpaqueLumpSum !== undefined ? { isOpaqueLumpSum: u.isOpaqueLumpSum } : {}),
-        ...(u.projectContractorId !== undefined ? { projectContractorId: u.projectContractorId } : {}),
-      },
-    });
-  }
-  return { changedFields: ['items'], payload: { updatedItemCount: data.items.length } };
-};
+/** Redesign R2b: scope data is saved through /scope (or the workbook); saving marks the step reviewed. */
+const saveScope: StepSaver = async () => ({ changedFields: [] });
 
 /** Fields that change the shape of reporting periods (Phase 8). */
 const PERIOD_SHAPE_FIELDS = ['reportingCadence', 'workWeekDays', 'periodStartDayOfWeek', 'customIntervalDays', 'cadenceAnchorDate', 'cadenceQuarterAnchorMonth'] as const;
@@ -942,20 +934,6 @@ const saveTeam: StepSaver = async ({ tx, project, webUser, input }) => {
   if (users.length !== wanted.size) {
     throw new AppError('One or more users were not found in this workspace', 404, 'USER_NOT_FOUND');
   }
-  if (data.joinCodeRoleIds) {
-    const roles = await tx.role.findMany({
-      where: {
-        id: { in: data.joinCodeRoleIds },
-        tenantId: project.tenantId,
-        surface: { in: ['MOBILE', 'BOTH'] },
-        onboardingMode: 'JOIN_CODE',
-      },
-      select: { id: true },
-    });
-    if (roles.length !== new Set(data.joinCodeRoleIds).size) {
-      throw new AppError('Join codes can only be issued for join-code mobile roles of this workspace', 422, 'INVALID_JOIN_CODE_ROLE');
-    }
-  }
 
   const current = new Set(project.userAssignments.map((a) => a.userId));
   const added = [...wanted].filter((id) => !current.has(id));
@@ -969,16 +947,8 @@ const saveTeam: StepSaver = async ({ tx, project, webUser, input }) => {
   if (removed.length) {
     await tx.userProjectAssignment.deleteMany({ where: { projectId: project.id, userId: { in: removed } } });
   }
-  const state = parseSetupState(project.setupState);
-  const beforeRoles = state.team.joinCodeRoleIds;
-  state.team.joinCodeRoleIds = data.joinCodeRoleIds ?? null;
-  await tx.project.update({
-    where: { id: project.id },
-    data: { setupState: state as unknown as Prisma.InputJsonValue },
-  });
   const changedFields: string[] = [];
   if (added.length || removed.length) changedFields.push('userIds');
-  if (JSON.stringify(beforeRoles) !== JSON.stringify(state.team.joinCodeRoleIds)) changedFields.push('joinCodeRoleIds');
   void webUser;
   return { changedFields, payload: { usersAdded: added, usersRemoved: removed }, affectedUserIds: [...added, ...removed] };
 };
@@ -997,12 +967,8 @@ const saveProcess: StepSaver = async ({ tx, project, input }) => {
     config: data.config,
     reportChain: data.reportChain,
     workflowTemplateId: data.workflowTemplateId,
-    confirmDeactivateContractorCodes: data.confirmDeactivateContractorCodes,
   });
-  return {
-    changedFields: result.changedFields,
-    payload: { deactivatedJoinCodes: result.deactivatedJoinCodes, issuedJoinCodes: result.issuedJoinCodes },
-  };
+  return { changedFields: result.changedFields };
 };
 
 /**
@@ -1068,12 +1034,10 @@ const STEP_SAVERS: Record<ProjectSetupStepId, StepSaver> = {
   contract: saveContract,
   site: saveSite,
   facility: saveFacility,
-  boq: saveBoq,
+  scope: saveScope,
   reporting: saveReporting,
   process: saveProcess,
   standards: saveStandards,
-  // Phase 9: dates and dependencies are saved through PUT /schedule/baseline; this marks the step reviewed.
-  schedule: saveStandards,
   team: saveTeam,
 };
 
@@ -1167,7 +1131,6 @@ export async function activateProject(projectId: string, webUser: WebJwtPayload)
       parties: {
         monitorOrganizationId: project.monitorOrganizationId ?? undefined,
         lenderOrganizationId: project.lenderOrganizationId ?? undefined,
-        contractorExecutionMode: project.contractorExecutionMode ?? undefined,
       },
       site: { geofence: project.geofenceGeoJson ?? undefined, timezone: project.timezone },
       reporting: {
@@ -1190,19 +1153,6 @@ export async function activateProject(projectId: string, webUser: WebJwtPayload)
       throw new AppError('The project cannot be activated yet', 422, 'PROJECT_INCOMPLETE', { issues });
     }
 
-    // Join codes for the chosen roles (all join-code mobile roles when none were chosen).
-    const state = parseSetupState(project.setupState);
-    const roles = await tx.role.findMany({
-      where: {
-        tenantId: project.tenantId,
-        surface: { in: ['MOBILE', 'BOTH'] },
-        onboardingMode: 'JOIN_CODE',
-        ...(state.team.joinCodeRoleIds ? { id: { in: state.team.joinCodeRoleIds } } : {}),
-      },
-      orderBy: { assuranceWeight: 'desc' },
-    });
-    const issued = await issueMissingJoinCodes(tx, project, roles);
-
     const activatedAt = new Date();
     await tx.project.update({
       where: { id: projectId },
@@ -1216,21 +1166,20 @@ export async function activateProject(projectId: string, webUser: WebJwtPayload)
       actorId: webUser.userId,
       actorDisplayName: actorName(webUser),
       action: 'PROJECT_ACTIVATED',
-      summaryText: `Set project "${project.name}" (${project.codePrefix}) active and issued ${issued.length} join code(s).`,
+      summaryText: `Set project "${project.name}" (${project.codePrefix}) active.`,
       payload: {
         codePrefix: project.codePrefix,
         geofenceMode: project.geofenceMode,
-        contractorExecutionMode: project.contractorExecutionMode,
         contractorCount: loaded.contractors.length,
-        boqItemCount: loaded.boq.itemCount,
-        issuedJoinCodes: issued.map((jc) => jc.code),
+        boqItemCount: loaded.scope.summary.lineCount,
+        sprintCount: loaded.scope.summary.sprintCount,
+        facilityUnitCount: loaded.scope.summary.unitCount,
       },
     });
     return {
       projectId,
       status: 'ACTIVE' as const,
       activatedAt: activatedAt.toISOString(),
-      issuedJoinCodes: issued.map((jc) => jc.code),
       userIds: project.userAssignments.map((a) => a.userId),
     };
   });
@@ -1258,10 +1207,6 @@ export async function archiveProject(projectId: string, webUser: WebJwtPayload, 
     const blocked = await archiveBlockedReason(tx, projectId);
     if (blocked) throw new AppError(blocked, 409, 'CLOSURE_ITEMS_PENDING');
     await freezeMetAutomaticItems(tx, projectId, 'BEFORE_ARCHIVE', webUser.userId);
-    const deactivated = await tx.projectJoinCode.updateMany({
-      where: { projectId, isActive: true },
-      data: { isActive: false },
-    });
     await tx.project.update({ where: { id: projectId }, data: { status: 'ARCHIVED', archivedAt: new Date() } });
     await recordAuditEvent(tx, {
       projectId,
@@ -1270,7 +1215,7 @@ export async function archiveProject(projectId: string, webUser: WebJwtPayload, 
       actorDisplayName: actorName(webUser),
       action: 'PROJECT_ARCHIVED',
       summaryText: `Archived project "${project.name}" (${project.codePrefix})${reason ? `: ${reason}` : ''}.`,
-      payload: { reason: reason ?? null, deactivatedJoinCodes: deactivated.count },
+      payload: { reason: reason ?? null },
     });
     return project.userAssignments.map((a) => a.userId);
   });
@@ -1305,7 +1250,6 @@ export async function deleteDraftProject(projectId: string, webUser: WebJwtPaylo
             evidenceLogs: true,
             workdayReports: true,
             incidentReports: true,
-            joinCodes: true,
           },
         },
       },
@@ -1372,7 +1316,7 @@ export async function listDraftProjects(
   return out;
 }
 
-/** Users and join-code roles the team step offers. */
+/** Users and mobile roles the team step offers (R1d: mobile users sign in with their account). */
 export async function getTeamOptions(projectId: string, tenantId: string) {
   const [users, roles] = await Promise.all([
     prisma.user.findMany({
@@ -1382,19 +1326,18 @@ export async function getTeamOptions(projectId: string, tenantId: string) {
         id: true,
         fullName: true,
         email: true,
-        role: { select: { name: true, surface: true, onboardingMode: true } },
-        mobileRole: { select: { name: true, surface: true, onboardingMode: true } },
+        role: { select: { name: true, surface: true } },
+        mobileRole: { select: { name: true, surface: true } },
         organization: { select: { name: true } },
       },
     }),
     prisma.role.findMany({
       where: { tenantId, surface: { in: ['MOBILE', 'BOTH'] } },
       orderBy: { assuranceWeight: 'desc' },
-      select: { id: true, name: true, code: true, fieldPersonaType: true, onboardingMode: true, requiresIdentityAssurance: true },
+      select: { id: true, name: true, code: true, fieldPersonaType: true },
     }),
   ]);
-  const provisioned = (r: { surface: string; onboardingMode: string } | null) =>
-    Boolean(r && r.surface !== 'WEB' && r.onboardingMode === 'PROVISIONED_ACCOUNT');
+  const provisioned = (r: { surface: string } | null) => Boolean(r && r.surface !== 'WEB');
   void projectId;
   return {
     users: users.map((u) => ({
@@ -1410,8 +1353,6 @@ export async function getTeamOptions(projectId: string, tenantId: string) {
       name: r.name,
       code: r.code,
       fieldPersonaType: r.fieldPersonaType,
-      onboardingMode: r.onboardingMode,
-      requiresIdentityAssurance: r.requiresIdentityAssurance,
     })),
   };
 }

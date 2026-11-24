@@ -113,7 +113,7 @@ export async function syncContractMilestones(tx: Tx, projectId: string): Promise
   const [contractors, existing] = await Promise.all([
     tx.projectContractor.findMany({
       where: { projectId, contractStatus: 'ACTIVE' },
-      orderBy: [{ isMainContractor: 'desc' }, { createdAt: 'asc' }],
+      orderBy: [{ createdAt: 'asc' }],
       select: { id: true },
     }),
     tx.projectContractMilestone.findMany({ where: { projectId } }),
@@ -336,7 +336,7 @@ export async function getProjectMilestones(projectId: string, now: Date = new Da
       completedNotes: r.completedNotes,
       waivedReason: r.waivedReason,
       evidence,
-      readyToComplete: r.completionMode === 'MANUAL' && !CLOSED.includes(status) && evidenceComplete(evidence),
+      readyToComplete: STAFF_COMPLETABLE.includes(r.completionMode) && !CLOSED.includes(status) && evidenceComplete(evidence),
       openDefaultCaseId: r.defaultCases[0]?.id ?? null,
       sortOrder: r.sortOrder,
     };
@@ -390,10 +390,16 @@ async function lockMilestone(tx: Tx, projectId: string, milestoneId: string) {
   return row;
 }
 
+/**
+ * Modes staff complete by hand. R1e: telemetry is gone, so "contractor on site" is confirmed by an
+ * officer until the mobilisation check visits complete it (R4).
+ */
+const STAFF_COMPLETABLE: string[] = ['MANUAL', 'AUTO_CONTRACTOR_ON_SITE'];
+
 export async function completeMilestone(projectId: string, milestoneId: string, webUser: WebJwtPayload, notes: string | null) {
   await prisma.$transaction(async (tx) => {
     const row = await lockMilestone(tx, projectId, milestoneId);
-    if (row.completionMode !== 'MANUAL') {
+    if (!STAFF_COMPLETABLE.includes(row.completionMode)) {
       throw new AppError('This milestone is completed by the platform when its event happens.', 409, 'MILESTONE_NOT_MANUAL');
     }
     const project = await tx.project.findUniqueOrThrow({ where: { id: projectId }, select: { tenantId: true } });
@@ -544,36 +550,3 @@ export async function reopenMilestones(tx: Tx, params: { projectId: string; mode
   return rows.length;
 }
 
-/**
- * Hook for an in-geofence check-in (telemetry): the session's contractor is on site. The contractor
- * is the session's join-code package, or, for an account session, the project contractor of the
- * user's organisation.
- */
-export async function recordContractorOnSite(tx: Tx, sessionId: string, at: Date): Promise<number> {
-  const session = await tx.fieldAgentSession.findUnique({
-    where: { id: sessionId },
-    select: { projectId: true, projectContractorId: true, agentFullName: true, user: { select: { organizationId: true } } },
-  });
-  if (!session) return 0;
-  let contractorId = session.projectContractorId;
-  if (!contractorId && session.user) {
-    const pc = await tx.projectContractor.findFirst({
-      where: { projectId: session.projectId, organizationId: session.user.organizationId },
-      select: { id: true },
-    });
-    contractorId = pc?.id ?? null;
-  }
-  if (!contractorId) return 0;
-  const contractor = await tx.projectContractor.findUnique({
-    where: { id: contractorId },
-    select: { contractStatus: true, organization: { select: { name: true } } },
-  });
-  if (!contractor || contractor.contractStatus !== 'ACTIVE') return 0;
-  return autoCompleteMilestones(tx, {
-    projectId: session.projectId,
-    mode: 'AUTO_CONTRACTOR_ON_SITE',
-    projectContractorId: contractorId,
-    at,
-    notes: `First check-in inside the site boundary by ${session.agentFullName} (${contractor.organization.name}).`,
-  });
-}

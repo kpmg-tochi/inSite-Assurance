@@ -129,17 +129,12 @@ router.post(
   wrap(async (req, res) => {
     res.json({
       success: true,
-      data: await applyTemplateToProject(
-        p(req, 'projectId'),
-        req.body.templateId,
-        req.webUser!,
-        req.body.confirmDeactivateContractorCodes === true
-      ),
+      data: await applyTemplateToProject(p(req, 'projectId'), req.body.templateId, req.webUser!),
     });
   })
 );
 
-// Standards are read by field users too (briefs show them); writes need manage_standards_docs.
+// Standards are read by field users too; writes need manage_standards_docs.
 router.get(
   '/:projectId/standards',
   requireAnyAuthWithWebPermission('boq:view', 'projects:manage_standards_docs'),

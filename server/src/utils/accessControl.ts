@@ -194,7 +194,7 @@ export function requireProjectAccess(
 }
 
 /** Routes under /projects/:projectId that work on a draft (the wizard and its data). */
-const DRAFT_ROUTE_RE = /^\/api\/v1\/projects\/[^/]+(?:\/(?:setup|activate|contractors|boq|baseline|join-codes|process|standards|needs-assessments|evidence\/presign|media|participants|schedule|reporting-streams|supervision|documents|milestones|programme-of-works)(?:\/|$)|\/?$)/;
+const DRAFT_ROUTE_RE = /^\/api\/v1\/projects\/[^/]+(?:\/(?:setup|activate|contractors|boq|scope|baseline|process|standards|needs-assessments|evidence\/presign|media|reporting-streams|supervision|documents|milestones|visit-form)(?:\/|$)|\/?$)/;
 
 /** Writes an archived project still serves (Phase 15: the closure pack export). */
 const ARCHIVED_WRITE_RE = /^\/api\/v1\/projects\/[^/]+\/closure-pack\/?$/;
@@ -220,7 +220,7 @@ function lifecycleRefusal(status: ProjectStatus, req: Request): AppError | null 
  * still read, but may only write for defect work: defect actions, the captures that evidence them
  * (presign, register, and the capture's location ping) and notification reads.
  */
-const FIELD_DEFECT_WORK_RE = /^\/api\/v1\/projects\/[^/]+\/(?:defects|captures|evidence\/presign|telemetry|notifications)(?:\/|$)/;
+const FIELD_DEFECT_WORK_RE = /^\/api\/v1\/projects\/[^/]+\/(?:defects|captures|evidence\/presign|notifications)(?:\/|$)/;
 
 function fieldPhaseRefusal(phase: ConstructionPhase, req: Request): AppError | null {
   if (phase !== 'RETENTION_PERIOD' && phase !== 'COMPLETED_CLOSED') return null;

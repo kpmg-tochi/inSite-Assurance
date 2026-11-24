@@ -14,7 +14,6 @@ import { DaysLeft, MILESTONE_STATUS_META, sectionClass, StatusChip } from "./con
 export function MobilisationCompliancePanel({ projectId, bare = false }: { projectId: string; bare?: boolean }) {
   const q = useMobilisationComplianceQuery(projectId);
   const rows = q.data ?? [];
-  const nameOf = (id: string | null) => rows.find((r) => r.projectContractorId === id)?.organizationName ?? "a terminated contractor";
 
   const body = q.isLoading ? (
     <Loader />
@@ -36,7 +35,7 @@ export function MobilisationCompliancePanel({ projectId, bare = false }: { proje
         </thead>
         <tbody className="divide-y divide-slate-100">
           {rows.map((r) => (
-            <Row key={r.projectContractorId} projectId={projectId} r={r} replacesName={r.replacesProjectContractorId ? nameOf(r.replacesProjectContractorId) : null} />
+            <Row key={r.projectContractorId} projectId={projectId} r={r} />
           ))}
         </tbody>
       </table>
@@ -50,14 +49,14 @@ export function MobilisationCompliancePanel({ projectId, bare = false }: { proje
         <h2 className="text-sm font-bold text-slate-900 inline-flex items-center gap-2">
           <Truck className="w-4 h-4 text-brand-primary" /> Contractor mobilisation
         </h2>
-        <p className="text-[11px] text-slate-500">A contractor counts as mobilised at its first check-in inside the site boundary.</p>
+        <p className="text-[11px] text-slate-500">A contractor counts as mobilised once an officer marks the "Contractor on site" milestone complete.</p>
       </div>
       {body}
     </section>
   );
 }
 
-function Row({ projectId, r, replacesName }: { projectId: string; r: MobilisationComplianceRow; replacesName: string | null }) {
+function Row({ projectId, r }: { projectId: string; r: MobilisationComplianceRow }) {
   const terminated = r.contractStatus === "TERMINATED";
   const m = r.milestone;
   return (
@@ -67,7 +66,6 @@ function Row({ projectId, r, replacesName }: { projectId: string; r: Mobilisatio
           {r.organizationName} <span className="font-normal text-slate-500">({r.tradeCode})</span>
         </p>
         {terminated && <StatusChip label="Terminated" cls="bg-rose-50 text-rose-700 border-rose-200" />}
-        {replacesName && <p className="text-[11px] text-slate-500">Replaces {replacesName}</p>}
       </td>
       <td className="py-2.5 pr-3 align-top">
         {m ? (
@@ -85,7 +83,7 @@ function Row({ projectId, r, replacesName }: { projectId: string; r: Mobilisatio
       <td className="py-2.5 pr-3 align-top">
         {r.onSite ? (
           <span className="text-emerald-700 font-semibold">
-            Yes{r.firstCheckInAt ? <span className="block font-normal text-[11px] text-slate-500">First check-in {formatDateTimeShort(r.firstCheckInAt)}</span> : null}
+            On site{m?.completedAt ? <span className="block font-normal text-[11px] text-slate-500">Confirmed {formatDateTimeShort(m.completedAt)}</span> : null}
           </span>
         ) : (
           <span className="text-slate-500">Not yet</span>

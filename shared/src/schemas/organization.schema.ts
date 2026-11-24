@@ -4,7 +4,7 @@ import {
   OrganizationCategoryEnum,
   OrgInputModeEnum,
 } from '../enums';
-import { GeofenceToleranceMetersSchema } from './geofence.schema';
+import { GeofenceToleranceMetersSchema, GeofenceRadiusMetersSchema } from './geofence.schema';
 import { isValidTimeZone } from '../utils/time';
 
 /**
@@ -75,6 +75,8 @@ export const TenantSettingsDtoSchema = z.object({
   organizationInputMode: OrgInputModeEnum,
   enabledGeofenceModes: z.array(GeofenceModeEnum),
   defaultGeofenceToleranceMeters: z.number().int(),
+  /** Pre-fills new radial site boundaries (each project sets its own radius). */
+  defaultGeofenceRadiusMeters: z.number().int(),
   defaultCurrency: z.string(),
   timezone: z.string(),
 });
@@ -84,6 +86,7 @@ export const UpdateTenantSettingsRequestSchema = z.object({
   organizationInputMode: OrgInputModeEnum.optional(),
   enabledGeofenceModes: z.array(GeofenceModeEnum).min(1, 'Enable at least one geofence mode').optional(),
   defaultGeofenceToleranceMeters: GeofenceToleranceMetersSchema.optional(),
+  defaultGeofenceRadiusMeters: GeofenceRadiusMetersSchema.optional(),
   defaultCurrency: z
     .string()
     .trim()

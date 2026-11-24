@@ -1,5 +1,5 @@
 import { SYSTEM_PERMISSIONS_CATALOG } from './enums';
-import type { FieldPersonaType, RoleSurface } from './enums';
+import type { AssignableFieldPersonaType, RoleSurface } from './enums';
 
 /**
  * Single source of truth for the roles every new tenant starts with.
@@ -8,20 +8,16 @@ import type { FieldPersonaType, RoleSurface } from './enums';
 export interface DefaultRoleDefinition {
   name: string;
   code: string;
-  codeSuffix: string | null;
   description: string;
   surface: RoleSurface;
-  fieldPersonaType: FieldPersonaType;
+  fieldPersonaType: AssignableFieldPersonaType;
   assuranceWeight: number;
-  requiresIdentityAssurance: boolean;
   permissionKeys: string[];
 }
 
 const FIELD_BASE_PERMISSIONS = [
   'boq:view',
-  'field:join_project',
   'field:submit_report',
-  'field:manual_checkin',
   'field:raise_incident',
 ];
 
@@ -29,58 +25,47 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
   {
     name: 'Tenant Super Admin',
     code: 'TENANT_SUPER_ADMIN',
-    codeSuffix: null,
     description:
       'Full tenant governance authority: creates custom roles, assigns permissions, configures branding, and oversees all projects.',
     surface: 'WEB',
     fieldPersonaType: 'NONE',
     assuranceWeight: 1.0,
-    requiresIdentityAssurance: false,
     permissionKeys: SYSTEM_PERMISSIONS_CATALOG.map((p) => p.key),
   },
   {
     name: 'Independent Monitor',
     code: 'MONITOR',
-    codeSuffix: null,
     description:
       'Monitoring and evaluation lead: sets up projects, reviews field reports, runs inspections and drives completion.',
     surface: 'WEB',
     fieldPersonaType: 'NONE',
     assuranceWeight: 1.0,
-    requiresIdentityAssurance: false,
     permissionKeys: [
       'projects:view_assigned',
       'projects:view_all_tenant',
-      'projects:view_executive_matrix',
       'projects:view_portfolio',
       'projects:create',
       'projects:activate',
       'projects:edit_baseline',
       'projects:manage_standards_docs',
+      'facilities:manage', // R2a
+      'forms:manage', // R3
       'boq:view',
       'boq:upload_edit',
-      'boq:configure_hold_points',
       'contractors:manage_packages',
       'schedule:view_variance',
-      'schedule:catch_up_refactor',
-      'mobilization:manage_roster',
-      'mobilization:configure_reminders',
-      'assurance:review_credentials',
       'sessions:revoke_device',
-      'presence:view_telemetry',
-      'presence:manage_noshow_alerts',
       'reports:view_all',
       'reports:raise_query',
       'reports:approve_completion',
       'payments:view',
       'audit:view_ledger',
-      'handover:manage_links',
+      'handover:record_response',
       'handover:review_feedback',
       'retention:manage_defects',
       // Phase 14
       'inspections:submit',
       'inspections:view',
-      'inspections:manage_templates',
       'inspections:manage_findings',
       // Phase 13
       'documents:view',
@@ -101,23 +86,17 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
   {
     name: 'Funder / Finance Officer',
     code: 'LENDER',
-    codeSuffix: null,
     description:
       'Funding organisation or finance officer: records payments made outside the platform and tracks retention.',
     surface: 'WEB',
     fieldPersonaType: 'NONE',
     assuranceWeight: 1.0,
-    requiresIdentityAssurance: false,
     permissionKeys: [
       'projects:view_assigned',
       'projects:view_all_tenant',
-      'projects:view_executive_matrix',
       'projects:view_portfolio',
       'boq:view',
       'schedule:view_variance',
-      'schedule:approve_refactor',
-      'assurance:review_credentials',
-      'presence:view_telemetry',
       'reports:view_all',
       'payments:view',
       'payments:record',
@@ -134,46 +113,18 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
     ],
   },
   {
-    name: 'Main Contractor',
-    code: 'CONTRACTOR',
-    codeSuffix: null,
-    description:
-      'Contractor portal for responding to monitor queries and viewing assigned BOQ baselines.',
-    surface: 'WEB',
-    fieldPersonaType: 'NONE',
-    assuranceWeight: 0.4,
-    requiresIdentityAssurance: false,
-    permissionKeys: [
-      'projects:view_assigned',
-      'boq:view',
-      'mobilization:manage_roster',
-      'reports:respond_query',
-      'retention:manage_defects',
-      // Phase 14: sees and resolves inspection findings aimed at its organisation.
-      'inspections:view',
-      'inspections:manage_findings',
-      // Phase 13: its documents, and the programme of works it proposes.
-      'documents:view',
-      'documents:upload',
-      'schedule:propose_programme',
-    ],
-  },
-  {
     // Phase 11: staff of a flagship or subsidiary organisation who oversee the projects their part
     // of the organisation owns. Sees the organisation tree, not the whole tenant.
     name: 'Organisation Administrator',
     code: 'ORGANIZATION_ADMIN',
-    codeSuffix: null,
     description:
       'Oversees every project owned by their organisation and the organisations below it in the hierarchy.',
     surface: 'WEB',
     fieldPersonaType: 'NONE',
     assuranceWeight: 1.0,
-    requiresIdentityAssurance: false,
     permissionKeys: [
       'projects:view_assigned',
       'projects:view_organization_tree',
-      'projects:view_executive_matrix',
       'projects:view_portfolio',
       'boq:view',
       'schedule:view_variance',
@@ -204,38 +155,22 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
   {
     name: 'Monitor Inspector (Visiting QS / COREN)',
     code: 'MONITOR_INSPECTOR',
-    codeSuffix: 'INS',
     description:
       'Visiting Quantity Surveyor or COREN Engineer from the independent monitoring firm (corroboration weight 1.0).',
     surface: 'MOBILE',
     fieldPersonaType: 'INDEPENDENT_VERIFIER',
     assuranceWeight: 1.0,
-    requiresIdentityAssurance: false,
     // Phase 10: verifiers check and close defect rectification during the liability period.
     permissionKeys: [...FIELD_BASE_PERMISSIONS, 'retention:manage_defects', 'inspections:submit', 'inspections:manage_findings'],
   },
   {
     name: 'Independent Resident Clerk of Works',
     code: 'INDEPENDENT_RESIDENT',
-    codeSuffix: 'COW',
     description:
       'Full-time on-site Resident Clerk of Works or M&E officer overseeing daily quality and compliance (weight 0.85).',
     surface: 'MOBILE',
     fieldPersonaType: 'INDEPENDENT_VERIFIER',
     assuranceWeight: 0.85,
-    requiresIdentityAssurance: false,
     permissionKeys: [...FIELD_BASE_PERMISSIONS, 'retention:manage_defects', 'inspections:submit', 'inspections:manage_findings'],
-  },
-  {
-    name: 'Contractor Site Engineer',
-    code: 'CONTRACTOR_ENGINEER',
-    codeSuffix: 'CON',
-    description:
-      'Contractor site engineer submitting self-reported progress logs; requires ID and liveness assurance (weight 0.40).',
-    surface: 'MOBILE',
-    fieldPersonaType: 'CONTRACTOR_EXECUTOR',
-    assuranceWeight: 0.4,
-    requiresIdentityAssurance: true,
-    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'reports:respond_query', 'retention:manage_defects', 'inspections:manage_findings'],
   },
 ];

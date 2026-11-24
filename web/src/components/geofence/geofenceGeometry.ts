@@ -67,42 +67,6 @@ function miter(p: Vec, n1: Vec, n2: Vec, d: number): Vec {
   return add(p, scale(m, len));
 }
 
-function arc(c: Vec, from: Vec, radius: number, steps: number, sweep: number): Vec[] {
-  const a0 = Math.atan2(from[1], from[0]);
-  const out: Vec[] = [];
-  for (let i = 1; i < steps; i++) {
-    const a = a0 + (sweep * i) / steps;
-    out.push([c[0] + Math.cos(a) * radius, c[1] + Math.sin(a) * radius]);
-  }
-  return out;
-}
-
-/**
- * Approximate buffer polygon around a centreline, `halfWidthMeters` on each side, with round
- * end caps. Used to draw the corridor and its tolerance band.
- */
-export function bufferLine(line: LonLat[], halfWidthMeters: number): LatLngTuple[] {
-  if (line.length < 2 || !(halfWidthMeters > 0)) return [];
-  const proj = makeProjection(line);
-  const pts = dedupe(line.map(proj.fwd));
-  if (pts.length < 2) return [];
-  const d = halfWidthMeters;
-  const left: Vec[] = [];
-  const right: Vec[] = [];
-  for (let i = 0; i < pts.length; i++) {
-    const nPrev = i > 0 ? leftNormal(pts[i - 1], pts[i]) : leftNormal(pts[0], pts[1]);
-    const nNext = i < pts.length - 1 ? leftNormal(pts[i], pts[i + 1]) : nPrev;
-    left.push(miter(pts[i], nPrev, nNext, d));
-    right.push(miter(pts[i], nPrev, nNext, -d));
-  }
-  const nEnd = leftNormal(pts[pts.length - 2], pts[pts.length - 1]);
-  const nStart = leftNormal(pts[0], pts[1]);
-  const endCap = arc(pts[pts.length - 1], nEnd, d, 12, -Math.PI);
-  const startCap = arc(pts[0], scale(nStart, -1), d, 12, -Math.PI);
-  const ring = [...left, ...endCap, ...right.reverse(), ...startCap];
-  return ring.map(proj.inv);
-}
-
 /** Outward offset of a polygon ring by `distanceMeters` (mitred). Used for the tolerance band. */
 export function offsetRing(ring: LonLat[], distanceMeters: number): LatLngTuple[] {
   const open = openRingLonLat(ring);

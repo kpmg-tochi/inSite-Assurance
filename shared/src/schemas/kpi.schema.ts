@@ -152,7 +152,7 @@ export const KPI_CATALOGUE: KpiDefinition[] = [
     key: 'contractors_mobilised_on_time',
     label: 'Contractors mobilised on time',
     stage: 'MOBILISATION',
-    description: 'Contractor-on-site milestones (first in-geofence check-in) done by their due date.',
+    description: 'Contractor-on-site milestones done by their due date.',
     numerator: 'Contractors on site by the due date',
     denominator: 'Mobilisation milestones due in the period',
     unit: 'PERCENT',

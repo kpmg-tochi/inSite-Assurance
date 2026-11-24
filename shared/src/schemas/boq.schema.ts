@@ -1,5 +1,13 @@
 import { z } from 'zod';
 
+/** Manual item tier (Phase 9; briefs were removed in redesign R1e, the field goes with the BoQ rework in R2). */
+export const PlanningTierEnum = z.enum([
+  'PLAN_A',
+  'FALLBACK_BACKLOG',
+  'UNBLOCKED_POOL',
+]);
+export type PlanningTier = z.infer<typeof PlanningTierEnum>;
+
 /**
  * Bill of Quantities (BOQ) Work Item Schema (Section 4.A Role 1)
  */
@@ -23,10 +31,8 @@ export const BoqItemDtoSchema = BoqItemInputSchema.extend({
   opacityWarningReason: z.string().nullable(),
   /** Progress from counted reports (legacy name; redesign R1b, modules/progress). */
   cumulativeCertifiedPct: z.number().min(0).max(100),
-  /** Contractor package (Phase 6). */
-  projectContractorId: z.string().uuid().nullable().optional(),
   lastRevisionId: z.string().uuid().nullable().optional(),
-  /** Manual brief override (Phase 9): PLAN_A | FALLBACK_BACKLOG | UNBLOCKED_POOL. */
+  /** Manual tier (Phase 9): PLAN_A | FALLBACK_BACKLOG | UNBLOCKED_POOL. PLAN_A makes an item owed every period. */
   planningTier: z.string().optional(),
   /** Phase 9: planned window (YYYY-MM-DD, project zone); null until scheduled. */
   plannedStartDate: z.string().nullable().optional(),
@@ -36,19 +42,4 @@ export const BoqItemDtoSchema = BoqItemInputSchema.extend({
 });
 export type BoqItemDto = z.infer<typeof BoqItemDtoSchema>;
 
-/**
- * Monitor hold-point confirmation request
- */
-export const UpdateBoqMappingsRequestSchema = z.object({
-  updates: z
-    .array(
-      z.object({
-        boqItemId: z.string().uuid(),
-        isHoldPoint: z.boolean(),
-        holdPointInstruction: z.string().max(400).nullable().optional(),
-      })
-    )
-    .min(1),
-});
-export type UpdateBoqMappingsRequest = z.infer<typeof UpdateBoqMappingsRequestSchema>;
 

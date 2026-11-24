@@ -51,7 +51,6 @@ export function serializeBoqItem(item: Prisma.BoqItemGetPayload<object>) {
   return {
     id: item.id,
     projectId: item.projectId,
-    projectContractorId: item.projectContractorId,
     lastRevisionId: item.lastRevisionId,
     wbsCode: item.wbsCode,
     section: item.section,
@@ -104,7 +103,6 @@ export function serializeCapture(log: CaptureRow): CaptureDto {
     isWithinGeofence: log.isWithinGeofence,
     geofenceStatus: log.geofenceStatus ?? null,
     distanceOutsideMeters: log.distanceOutsideMeters ?? null,
-    chainageLabel: log.chainageLabel,
     distanceFromSiteMeters: log.distanceFromSiteMeters,
     signatureVerified: log.signatureVerified,
     serverSha256: log.serverSha256,

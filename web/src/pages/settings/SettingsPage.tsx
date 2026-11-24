@@ -1,23 +1,17 @@
 import React, { useState, useMemo } from "react";
-import { ShieldCheck, User, KeyRound, Users, Palette, Building2, Workflow, Layers } from "lucide-react";
+import { ShieldCheck, User, KeyRound, Users, Palette, Building2, Workflow, Layers, School } from "lucide-react";
 import { ProjectTypesTab } from "../../components/deliveryModels/ProjectTypesTab";
 import { ClipboardCheck } from "lucide-react";
-import { ChecklistTemplatesCard } from "../../components/inspections/ChecklistTemplatesCard";
 import { SupervisorsCard } from "../../components/inspections/SupervisorsCard";
 import { RegionsCard } from "../../components/deliveryModels/RegionsCard";
 import { DocumentTypesCard } from "../../components/documents/DocumentTypesCard";
+import { FormsAndFacilitiesTab } from "../../components/forms/FormsAndFacilitiesTab";
 import { TerminologyCard } from "../../components/deliveryModels/TerminologyCard";
-import { ProfessionalRegistrationCard } from "../../components/credentials/ProfessionalRegistrationCard";
 import { toast } from "sonner";
 import type { FieldSessionRosterDto } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth } from "../../lib/auth-context";
-import {
-  formatDateTimeShort,
-  formatRegistrationCredential,
-} from "../../lib/formatters";
-import ContractorVerificationQueue from "../../components/ContractorVerificationQueue";
-import { useContractorVerificationsQuery } from "../../queries/projects/useContractorVerificationQueries";
+import { formatDateTimeShort } from "../../lib/formatters";
 import { useProjectFieldSessionsQuery } from "../../queries/rbac/useRbacQueries";
 import { useUpdateFieldSessionStatusMutation } from "../../mutations/rbac/useRbacMutations";
 import { RolesPermissionsTab } from "../../components/rbac/RolesPermissionsTab";
@@ -26,7 +20,6 @@ import { TenantBrandingTab } from "../../components/rbac/TenantBrandingTab";
 import { RatingCriteriaCard } from "../../components/closure/RatingCriteriaCard";
 import { OrganizationsTab } from "../../components/rbac/OrganizationsTab";
 import { WorkspaceSettingsCard } from "../../components/rbac/WorkspaceSettingsCard";
-import { JoinCodesPanel } from "../../components/JoinCodesPanel";
 import { MobileDevicesPanel } from "../../components/rbac/MobileDevicesPanel";
 import { WorkflowTemplatesTab } from "../../components/process/WorkflowTemplatesTab";
 import {
@@ -42,7 +35,7 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({ project }: SettingsPageProps) {
-  const { user, hasPermission, hasAnyPermission, changePassword } = useAuth();
+  const { user, hasPermission, changePassword } = useAuth();
   const canManageRoles = hasPermission("roles:create_edit");
   const canManageUsers = hasPermission("users:invite_manage");
   const canManageBranding = hasPermission("tenant:manage_branding");
@@ -51,22 +44,22 @@ export function SettingsPage({ project }: SettingsPageProps) {
   const canManageOrganizations = hasPermission("organizations:manage");
   const canManageWorkflows = hasPermission("templates:manage_workflows");
   const canRevokeDevices = hasPermission("sessions:revoke_device");
-  const canReviewCredentials = hasPermission("assurance:review_credentials");
-  const canManageRoster = hasPermission("mobilization:manage_roster");
-  const canViewRoster = hasAnyPermission("sessions:revoke_device", "mobilization:manage_roster");
-  const canSeeAccessTab = canReviewCredentials || canViewRoster;
+  const canViewRoster = hasPermission("sessions:revoke_device");
+  const canSeeAccessTab = canViewRoster;
   // Phase 11: delivery models (project types and regions).
   const canManageProjectTypes = hasPermission("project_types:manage");
   const canManageRegions = hasPermission("regions:manage");
   // Phase 13: tenant document types sit with the delivery-model settings.
   const canManageDocumentTypes = hasPermission("documents:manage_types");
   const canSeeDeliveryTab = canManageProjectTypes || canManageRegions || canManageDocumentTypes;
+  // Redesign R2a / R3: the facility catalogue and the form library share one tab.
+  const canManageFacilities = hasPermission("facilities:manage");
+  const canSeeFormsTab = canManageFacilities || hasPermission("forms:manage");
 
-  // Phase 14: checklist templates and the supervisors view.
-  const canManageChecklists = hasPermission("inspections:manage_templates");
-  const canSeeInspectionsTab = canManageChecklists || hasPermission("inspections:view");
+  // Phase 14: the supervisors view (checklist template authoring moved to Forms & facilities in R3e).
+  const canSeeInspectionsTab = hasPermission("inspections:view");
 
-  type SettingsTab = "ACCESS" | "ROLES" | "USERS" | "ORGANIZATIONS" | "WORKFLOWS" | "DELIVERY" | "INSPECTIONS" | "BRANDING" | "ACCOUNT";
+  type SettingsTab = "ACCESS" | "ROLES" | "USERS" | "ORGANIZATIONS" | "WORKFLOWS" | "DELIVERY" | "FORMS" | "INSPECTIONS" | "BRANDING" | "ACCOUNT";
   const [activeTab, setActiveTab] = useState<SettingsTab>(() =>
     canSeeAccessTab
       ? "ACCESS"
@@ -80,6 +73,8 @@ export function SettingsPage({ project }: SettingsPageProps) {
               ? "WORKFLOWS"
               : canSeeDeliveryTab
               ? "DELIVERY"
+              : canSeeFormsTab
+              ? "FORMS"
               : canSeeInspectionsTab
               ? "INSPECTIONS"
               : canSeeTenantTab
@@ -105,7 +100,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
       const matchesSearch =
         agent.agentFullName.toLowerCase().includes(term) ||
         agent.roleName.toLowerCase().includes(term) ||
-        (agent.joinCodeUsed ?? agent.userEmail ?? "").toLowerCase().includes(term) ||
+        (agent.userEmail ?? "").toLowerCase().includes(term) ||
         agent.agentPhoneNumber.toLowerCase().includes(term);
 
       const matchesStatus =
@@ -152,27 +147,18 @@ export function SettingsPage({ project }: SettingsPageProps) {
           >
             {agent.fieldPersonaType === "INDEPENDENT_VERIFIER"
               ? `Independent (${agent.assuranceWeight.toFixed(1)}x)`
-              : `Contractor (${agent.assuranceWeight.toFixed(1)}x)`}
+              : `Weight ${agent.assuranceWeight.toFixed(1)}x`}
           </TableBadge>
         ),
       },
       {
-        id: "joinCode",
-        header: "How They Joined",
-        tooltip:
-          "A project join code, or a pre-provisioned account signed in on this device",
+        id: "account",
+        header: "Account",
+        tooltip: "The account signed in on this device",
         width: "w-44",
-        cell: (agent) =>
-          agent.origin === "PROVISIONED_ACCOUNT" ? (
-            <div>
-              <TableBadge variant="success">Signed-in account</TableBadge>
-              <div className="text-[11px] text-slate-500 mt-0.5">{agent.userEmail}</div>
-            </div>
-          ) : (
-            <span className="font-semibold text-brand-primary">
-              {agent.joinCodeUsed}
-            </span>
-          ),
+        cell: (agent) => (
+          <span className="text-slate-600">{agent.userEmail ?? "—"}</span>
+        ),
       },
       {
         id: "phone",
@@ -233,17 +219,6 @@ export function SettingsPage({ project }: SettingsPageProps) {
                     onClick: () =>
                       handleToggleAgentStatus(agent.id, !agent.isActive),
                   },
-                  ...(agent.joinCodeUsed
-                    ? [
-                        {
-                          label: "Copy Join Code",
-                          onClick: () => {
-                            navigator.clipboard?.writeText(agent.joinCodeUsed!);
-                            toast.success(`Copied join code ${agent.joinCodeUsed}`);
-                          },
-                        },
-                      ]
-                    : []),
                 ]}
               />
             </div>
@@ -253,15 +228,6 @@ export function SettingsPage({ project }: SettingsPageProps) {
     ],
     [canRevokeDevices],
   );
-
-  // Contractor Verifications from API
-  const { data: verifications = [] } = useContractorVerificationsQuery(
-    project?.id || "all",
-    canReviewCredentials,
-  );
-  const pendingCount = verifications.filter(
-    (v) => v.assuranceStatus === "PENDING_APPROVAL",
-  ).length;
 
   // Account / Security Form State
   const [currentPassword, setCurrentPassword] = useState("");
@@ -317,7 +283,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Manage mobile field agent credentials, roles &amp; permissions,
+            Manage mobile field access, roles &amp; permissions,
             tenant branding, and your account.
           </p>
         </div>
@@ -337,12 +303,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
             }`}
           >
             <ShieldCheck className="w-4 h-4" />
-            <span>Access &amp; Assurance</span>
-            {pendingCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-white text-[10px] font-bold">
-                {pendingCount}
-              </span>
-            )}
+            <span>Field access</span>
           </button>
           )}
 
@@ -421,6 +382,21 @@ export function SettingsPage({ project }: SettingsPageProps) {
             </button>
           )}
 
+          {canSeeFormsTab && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("FORMS")}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
+                activeTab === "FORMS"
+                  ? "bg-white text-brand-primary shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <School className="w-4 h-4" />
+              <span>Forms &amp; facilities</span>
+            </button>
+          )}
+
           {canSeeInspectionsTab && (
             <button
               type="button"
@@ -477,9 +453,9 @@ export function SettingsPage({ project }: SettingsPageProps) {
           {canManageDocumentTypes && <DocumentTypesCard />}
         </div>
       )}
+      {activeTab === "FORMS" && canSeeFormsTab && <FormsAndFacilitiesTab />}
       {activeTab === "INSPECTIONS" && canSeeInspectionsTab && (
         <div className="space-y-4">
-          <ChecklistTemplatesCard />
           <SupervisorsCard />
         </div>
       )}
@@ -489,39 +465,12 @@ export function SettingsPage({ project }: SettingsPageProps) {
           {canManageSettings && <WorkspaceSettingsCard />}
           {canManageSettings && <RatingCriteriaCard />}
           {canManageSettings && <TerminologyCard />}
-          {canManageSettings && <ProfessionalRegistrationCard />}
         </div>
       )}
 
-      {/* 2. TAB A: Access Management & Contractor Assurance */}
+      {/* 2. TAB A: Field access (mobile sessions and devices) */}
       {activeTab === "ACCESS" && canSeeAccessTab && (
         <div className="space-y-4">
-          {/* Assurance Value Proposition Notice */}
-          <div className="bg-brand-primary/5 border border-brand-primary/25 rounded-2xl p-4 flex items-start gap-3">
-            <ShieldCheck className="w-5 h-5 text-brand-primary shrink-0 mt-0.5" />
-            <div className="text-xs text-brand-navy/90 leading-relaxed">
-              <strong className="font-bold text-brand-navy block mb-0.5">
-                Contractor Identity &amp; Competence Assurance
-              </strong>
-              Contractors joining via mobile submit a government photo ID, a
-              guided selfie set (3 poses) and proof of professional
-              qualifications (COREN / QSRBN). A reviewer compares them by eye;
-              no automated liveness check is run. Reports from a contractor are
-              held until the review is approved.
-            </div>
-          </div>
-
-          {/* Pending Contractor Onboarding Approvals Queue */}
-          {canReviewCredentials && (
-            <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
-              <ContractorVerificationQueue projectId={project?.id || "all"} />
-            </div>
-          )}
-
-          {canManageRoster && project && (
-            <JoinCodesPanel projectId={project.id} projectCode={project.codePrefix} />
-          )}
-
           {/* Active Field Agent Roster & Revocation Standard Table */}
           {canViewRoster && (
           <StandardTable<FieldSessionRosterDto>
@@ -539,7 +488,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
             search={{
               value: rosterSearch,
               onChange: setRosterSearch,
-              placeholder: "Search agent name, role, code, or phone...",
+              placeholder: "Search agent name, role, account, or phone...",
             }}
             filters={
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -604,7 +553,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
             <h3 className="text-sm font-bold text-slate-900 mb-3">
               Professional Profile
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
                 <span className="text-slate-400 block text-[11px]">
                   Full Name
@@ -628,23 +577,6 @@ export function SettingsPage({ project }: SettingsPageProps) {
                 <span className="font-bold text-slate-900">
                   {user?.organizationName || "—"}
                 </span>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70">
-                <span className="text-slate-400 block text-[11px]">
-                  Professional registration
-                </span>
-                <span className="font-bold text-brand-primary">
-                  {formatRegistrationCredential(
-                    user?.professionalRegistrationBodyCode,
-                    user?.professionalRegistrationNumber,
-                  ) ?? "None on file"}
-                </span>
-                {user?.certifierRegistrationRequirement === "REQUIRED" &&
-                  !user?.professionalRegistrationNumber && (
-                    <span className="block text-[11px] text-amber-700 mt-1">
-                      Certifiers in this workspace need a registration. Ask a user administrator to add yours.
-                    </span>
-                  )}
               </div>
             </div>
           </div>

@@ -2,7 +2,6 @@ import { Prisma } from "@prisma/client";
 import { RadialGeofence, STANDARDS_LIBRARY } from "@insite/shared";
 import { prisma } from "../config/prisma";
 import { recordAuditEvent } from "../modules/audit/audit.service";
-import { createJoinCode } from "../modules/projects/joinCodes.service";
 import { applyTemplateConfig } from "../modules/process/processConfig.service";
 import { projectObjectPrefix } from "../integrations/storage.service";
 import { seedStarterTemplates } from "../modules/process/workflowTemplates.service";
@@ -15,7 +14,7 @@ import { seedStarterTemplates } from "../modules/process/workflowTemplates.servi
  *   standards from the starter library, so two projects in one tenant run different processes.
  */
 
-type SeedRole = { id: string; code: string; codeSuffix: string | null; name: string; fieldPersonaType: string };
+type SeedRole = { id: string; name: string };
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 3600 * 1000);
 
@@ -71,7 +70,6 @@ export async function seedPhase7(p: {
       geofenceGeoJson: geofence as unknown as Prisma.InputJsonValue,
       monitorOrganizationId: p.monitorOrgId,
       lenderOrganizationId: p.lenderOrgId,
-      contractorExecutionMode: "SINGLE_CONTRACTOR",
       setupState: {
         steps: Object.fromEntries(
           ["basics", "parties", "site", "facility", "boq", "reporting", "process", "standards", "team"].map((id) => [
@@ -79,18 +77,15 @@ export async function seedPhase7(p: {
             { savedAt: at, savedByUserId: p.monitorUserId, completedAt: at, completedByUserId: p.monitorUserId },
           ]),
         ),
-        team: { joinCodeRoleIds: [p.residentRole.id] },
       } as unknown as Prisma.InputJsonValue,
     },
   });
-  const contractor = await prisma.projectContractor.create({
+  await prisma.projectContractor.create({
     data: {
       projectId: edo.id,
       organizationId: p.civilContractorOrgId,
       tradeCategory: "Building works",
       tradeCode: "BLD",
-      isMainContractor: true,
-      allowFieldReporting: false,
     },
   });
   for (const [wbs, desc, unit, qty, rate] of [
@@ -101,7 +96,6 @@ export async function seedPhase7(p: {
     await prisma.boqItem.create({
       data: {
         projectId: edo.id,
-        projectContractorId: contractor.id,
         wbsCode: wbs,
         section: "BILL 1 — STRUCTURE AND ROOFING",
         description: desc,
@@ -121,8 +115,6 @@ export async function seedPhase7(p: {
       fullName: "Engr. Osaro Igbinedion, MNSE",
       roleId: p.monitorRoleId,
       organizationId: p.monitorOrgId,
-      professionalRegistrationBodyCode: "COREN",
-      professionalRegistrationNumber: "R.51877",
     },
   });
   await prisma.userProjectAssignment.createMany({
@@ -142,7 +134,6 @@ export async function seedPhase7(p: {
       meTemplate,
     );
   });
-  await createJoinCode(prisma, { projectId: edo.id, codePrefix: edo.codePrefix, role: p.residentRole });
 
   for (const code of ["CONC-SLUMP", "BLOCK-NIS87"]) {
     const entry = STANDARDS_LIBRARY.find((s) => s.code === code)!;

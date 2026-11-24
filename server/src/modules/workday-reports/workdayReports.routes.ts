@@ -102,8 +102,8 @@ router.get(
         projectId: String(req.params.projectId),
         workdayDate: req.query.workdayDate ? String(req.query.workdayDate) : undefined,
         reporterSessionId: req.fieldAgent?.sessionId,
-        // A provisioned account sees its reports from all its devices; a join-code session only its own.
-        reporterUserId: req.fieldAgent?.origin === 'PROVISIONED_ACCOUNT' ? req.fieldAgent.userId : null,
+        // An account sees its reports from all its devices.
+        reporterUserId: req.fieldAgent?.userId ?? null,
         viewer: req.webUser ?? null,
         status: typeof req.query.status === 'string' ? req.query.status : undefined,
         periodStart: typeof req.query.periodStart === 'string' ? req.query.periodStart : undefined,

@@ -23,8 +23,6 @@ export const ProjectProcessConfigSchema = z.object({
   needsAssessmentMode: NeedsAssessmentModeEnum,
   standardsSpecificationMode: StandardsSpecificationModeEnum,
   enableHoldPoints: z.boolean(),
-  allowContractorFieldReporting: z.boolean(),
-  enableContractorIdentityAssurance: z.boolean(),
   enableAiOmissionCheck: z.boolean(),
   enableAiStandardsCheck: z.boolean(),
   requireReportApproval: z.boolean(),
@@ -38,8 +36,6 @@ export const DEFAULT_PROJECT_PROCESS_CONFIG: ProjectProcessConfig = {
   needsAssessmentMode: 'OPTIONAL_AT_CREATION',
   standardsSpecificationMode: 'OPTIONAL_AT_CREATION',
   enableHoldPoints: true,
-  allowContractorFieldReporting: true,
-  enableContractorIdentityAssurance: true,
   enableAiOmissionCheck: true,
   enableAiStandardsCheck: true,
   requireReportApproval: false,
@@ -54,14 +50,6 @@ export const PROCESS_TOGGLE_META: Record<
   enableHoldPoints: {
     label: 'Hold points',
     description: 'Off: hold-point flags are ignored and hidden.',
-  },
-  allowContractorFieldReporting: {
-    label: 'Contractor field reporting',
-    description: 'Off: no contractor join codes, and every brief is written for an independent verifier.',
-  },
-  enableContractorIdentityAssurance: {
-    label: 'Contractor identity check',
-    description: 'Off: the guided selfie and ID review is skipped on this project, whatever the role says.',
   },
   enableAiOmissionCheck: {
     label: 'Omission check on reports',
@@ -273,8 +261,6 @@ export type WorkflowTemplateDto = z.infer<typeof WorkflowTemplateDtoSchema>;
 
 export const ApplyWorkflowTemplateRequestSchema = z.object({
   templateId: z.string().uuid(),
-  /** Required when the template turns contractor reporting off on a live project with codes. */
-  confirmDeactivateContractorCodes: z.boolean().optional(),
 });
 export type ApplyWorkflowTemplateRequest = z.infer<typeof ApplyWorkflowTemplateRequestSchema>;
 
@@ -312,15 +298,11 @@ export const ProjectProcessSettingsDtoSchema = z.object({
   reportChain: ApprovalChainDtoSchema,
   /** Phase 13: the contractor default chain (edited through PUT .../process/chains/CONTRACT_DEFAULT). */
   contractDefaultChain: ApprovalChainDtoSchema,
-  /** Active contractor-executor join codes (shown when turning contractor reporting off). */
-  activeContractorJoinCodeCount: z.number().int(),
 });
 export type ProjectProcessSettingsDto = z.infer<typeof ProjectProcessSettingsDtoSchema>;
 
 export const UpdateProjectProcessConfigRequestSchema = z.object({
   config: ProjectProcessConfigSchema,
-  /** Required when the change deactivates contractor join codes. */
-  confirmDeactivateContractorCodes: z.boolean().optional(),
 });
 export type UpdateProjectProcessConfigRequest = z.infer<typeof UpdateProjectProcessConfigRequestSchema>;
 
@@ -334,7 +316,6 @@ export const ProjectProcessStepSchema = z.object({
   workflowTemplateId: z.string().uuid().nullable().optional(),
   config: ProjectProcessConfigSchema,
   reportChain: ReportApprovalChainSchema,
-  confirmDeactivateContractorCodes: z.boolean().optional(),
 });
 export type ProjectProcessStep = z.infer<typeof ProjectProcessStepSchema>;
 

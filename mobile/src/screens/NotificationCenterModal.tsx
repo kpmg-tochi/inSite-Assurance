@@ -137,7 +137,7 @@ export const NotificationCenterModal: React.FC = () => {
         return;
       }
 
-      // Phase 14: an inspection finding aimed at this contractor.
+      // Phase 14: an inspection finding on this project.
       if (notif.actionType === "OPEN_INSPECTION_FINDINGS") {
         navigation.replace("InspectionFindings");
         return;
@@ -184,12 +184,6 @@ export const NotificationCenterModal: React.FC = () => {
         });
         return;
       }
-
-      if (notif.actionType === "OPEN_ASSURANCE_WIZARD") {
-        navigation.replace("AssuranceWizard", {
-          resolveNotificationId: notif.requiresAction ? notif.id : undefined,
-        });
-      }
     },
     [findWbsItem, markReadMutation, navigation],
   );
@@ -226,8 +220,8 @@ export const NotificationCenterModal: React.FC = () => {
       title="Notification Center"
       subtitle={
         unreadCount > 0
-          ? `${unreadCount} unread update${unreadCount === 1 ? "" : "s"} · Assurance, backlog & queries`
-          : "Critical updates on assurance verifications & queries."
+          ? `${unreadCount} unread update${unreadCount === 1 ? "" : "s"} · Backlog & queries`
+          : "Critical updates on reports & queries."
       }
       rightAction={<IconButton icon="close" onPress={onClose} />}
       contentContainerStyle={styles.layoutContent}
@@ -281,7 +275,7 @@ export const NotificationCenterModal: React.FC = () => {
             ) : (
               <EmptyStateCard
                 title="All Caught Up"
-                description="Assurance decisions, queued report summaries, hold points, and monitor queries will appear here."
+                description="Queued report summaries, hold points, and monitor queries will appear here."
               />
             )
           }

@@ -4,21 +4,16 @@ import type {
   DismissInspectionFindingRequest,
   RaiseInspectionFindingRequest,
   ReviewSiteInspectionRequest,
-  SaveChecklistTemplateRequestInput,
   SaveReportingStreamsRequest,
 } from '@insite/shared';
 import {
-  createChecklistTemplate,
   dismissFinding,
   raiseFinding,
   resolveFinding,
   reviewInspection,
   saveReportingStreams,
-  setChecklistTemplateArchived,
-  updateChecklistTemplate,
 } from '../../api/inspections/inspectionsApi';
 import {
-  checklistTemplatesKey,
   findingsKey,
   inspectionKey,
   inspectionOverviewKey,
@@ -96,27 +91,3 @@ export const useDismissFindingMutation = (projectId: string) => {
   });
 };
 
-export const useSaveChecklistTemplateMutation = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (p: { existingCode: string | null; body: SaveChecklistTemplateRequestInput }) =>
-      p.existingCode ? updateChecklistTemplate(p.existingCode, p.body) : createChecklistTemplate(p.body),
-    onSuccess: (t, p) => {
-      qc.invalidateQueries({ queryKey: checklistTemplatesKey });
-      toast.success(!p.existingCode ? `Template ${t.code} created.` : `Template ${t.code} saved (version ${t.version}). Inspections already done keep the version they used.`);
-    },
-    onError: (err) => toast.error(errorMessage(err, 'Could not save the template.')),
-  });
-};
-
-export const useArchiveChecklistTemplateMutation = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (p: { code: string; archived: boolean }) => setChecklistTemplateArchived(p.code, p.archived),
-    onSuccess: (_d, p) => {
-      qc.invalidateQueries({ queryKey: checklistTemplatesKey });
-      toast.success(p.archived ? `Template ${p.code} archived.` : `Template ${p.code} restored.`);
-    },
-    onError: (err) => toast.error(errorMessage(err, 'Could not change the template.')),
-  });
-};

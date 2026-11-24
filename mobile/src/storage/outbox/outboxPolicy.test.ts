@@ -120,7 +120,6 @@ describe('Phase 5 Step 8: items from an ended session', () => {
   it('leaves sent rows, rows of the current session, and non-evidence kinds alone', () => {
     assert.equal(shouldHoldOnNewSession(r('CAPTURE', 'DONE', 'join:old'), current), false);
     assert.equal(shouldHoldOnNewSession(r('CAPTURE', 'PENDING', current), current), false);
-    assert.equal(shouldHoldOnNewSession(r('TELEMETRY', 'PENDING', 'join:old'), current), false);
     assert.equal(shouldHoldOnNewSession(r('INCIDENT', 'PENDING', 'join:old'), current), false);
   });
 

@@ -48,7 +48,7 @@ const COPY: Record<SessionEndedState['reason'], { title: string; body: string }>
  * projects on the device keep syncing. This is deliberately not treated as "offline".
  */
 export const SessionEndedOverlay: React.FC = () => {
-  const { activeProjectId, activeContext, projects, leaveJoinProject, signOut } = useProfile();
+  const { activeProjectId, projects, signOut } = useProfile();
   const [, setVersion] = useState(0);
 
   useEffect(() => subscribeSessionEnded(() => setVersion((v) => v + 1)), []);
@@ -64,26 +64,17 @@ export const SessionEndedOverlay: React.FC = () => {
     if (rootNavigationRef.isReady()) rootNavigationRef.reset({ index: 0, routes: [{ name }] });
   };
 
-  const isJoinProject = activeContext?.origin === 'JOIN_CODE' && ended.scope !== 'account';
   const isAccountWide = ended.scope === 'account';
 
-  const primary = isJoinProject
+  const primary = isAccountWide
     ? {
-        text: 'Join again with a new code',
+        text: 'Sign in again',
         onPress: async () => {
-          await leaveJoinProject(activeProjectId);
-          reset('EnterCode');
+          await signOut();
+          reset('SignIn');
         },
       }
-    : isAccountWide
-      ? {
-          text: 'Sign in again',
-          onPress: async () => {
-            await signOut();
-            reset('SignIn');
-          },
-        }
-      : { text: 'Choose another project', onPress: async () => reset('Projects') };
+    : { text: 'Choose another project', onPress: async () => reset('Projects') };
 
   return (
     <Modal visible transparent animationType="fade">

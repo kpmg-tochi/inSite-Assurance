@@ -3,21 +3,17 @@ import { addDays, ProjectTypeConfigSchema, ProjectTypeKpiTargetsSchema, RadialGe
 import { prisma } from "../config/prisma";
 import { WebJwtPayload } from "../middleware/auth.middleware";
 import { createProjectDraft, saveProjectSetupStep, archiveProject } from "../modules/projects/projectSetup.service";
-import { issueMissingJoinCodes } from "../modules/projects/joinCodes.service";
 import { recomputeMilestoneDates, completeMilestone } from "../modules/contracts/milestones.service";
 import { saveKickoffMeeting } from "../modules/contracts/kickoff.service";
 import { recordPayment } from "../modules/payments/payments.service";
 import { changeProjectPhase } from "../modules/closeout/projectPhase.service";
-import { createHandoverLink } from "../modules/closeout/handover.service";
 import { createTicketsFromSnags } from "../modules/closeout/defects.service";
 import { draftCompletionCertificate, recordBeneficiarySignature, signCompletionCertificate } from "../modules/completion/completion.service";
 import { completeClosureItem } from "../modules/completion/closure.service";
 import { rateContractor, tenantRatingCriteria } from "../modules/completion/ratings.service";
 import { createLesson, publishLesson } from "../modules/completion/lessons.service";
 import { requestClosurePack, runClosurePackExport, setClosurePackScheduler } from "../modules/completion/closurePack.service";
-import { updateRoleForTenant } from "../modules/rbac/rbac.service";
 import { snapshotTenantKpis } from "../modules/kpis/kpis.service";
-import { refreshScheduleBadge, saveScheduleBaseline } from "../modules/schedule/schedule.service";
 import { PROGRAMME_TENANT_SLUG } from "./seedPhase11";
 import { fileDocument, heldKickoff, payloadFor } from "./seedPhase13";
 import { acceptedHandover, approvedFinalEvaluation, paperCopy } from "./seedPhase15";
@@ -33,14 +29,15 @@ import { acceptedHandover, approvedFinalEvaluation, paperCopy } from "./seedPhas
  * | Mobilisation overdue with a default case        | PRG-221 (Co-Funded, South)  |
  * | Active: weekly supervision, late visit, finding | PRG-211 (Co-Funded, North)  |
  * | Interim payment recorded, works ~80% done      | PRG-105 (Central, North)    | new
- * | CoC pending a signature                         | PRG-104 (Central, South)    | new
+ * | CoC pending a signature, handover to record     | PRG-104 (Central, South)    | new
  * | In retention with a defect                      | PRG-103 (Central, North)    | defect added
  * | Closed, post-closure evaluation pending         | PRG-241 (Co-Funded, South)  |
  * | Closed and archived with a closure pack         | PRG-242 (Co-Funded, South)  | new
  *
  * Also: KPI targets on both project types (written without a version bump, as Phases 13–15 do),
- * demo logins for every persona (a provisioned Resident Supervisor and a contractor are added), a
- * beneficiary handover link on PRG-104, and KPI snapshots for the current and five earlier months.
+ * demo logins for every persona (a provisioned Resident Supervisor is added; R1d: contractors have no
+ * login), PRG-104's beneficiary handover response left for the demo to record (no public link), and
+ * KPI snapshots for the current and five earlier months.
  * Everything goes through the real services; the only shortcuts are dates of seeded history
  * (milestones done earlier). Redesign R1b: payments are made outside the platform and recorded.
  */
@@ -98,10 +95,9 @@ export async function seedPhase16() {
   const lagos = await region("S-LAG");
   const byCode = async (code: string) => prisma.project.findFirstOrThrow({ where: { tenantId: programme.id, codePrefix: code } });
 
-  // ---- Demo personas: a provisioned Resident Supervisor (mobile) and a contractor login --------
+  // ---- Demo persona: a provisioned Resident Supervisor (mobile) --------------------------------
   const roleOf = (code: string) => prisma.role.findFirstOrThrow({ where: { tenantId: programme.id, code } });
   const residentRole = await roleOf("INDEPENDENT_RESIDENT");
-  await updateRoleForTenant(admin, residentRole.id, { onboardingMode: "PROVISIONED_ACCOUNT" });
   const resident = await prisma.user.create({
     data: {
       tenantId: programme.id,
@@ -114,17 +110,6 @@ export async function seedPhase16() {
       phoneNumber: "+234 803 555 0161",
     },
   });
-  const contractorUser = await prisma.user.create({
-    data: {
-      tenantId: programme.id,
-      email: "sahel.contractor@insite.ng",
-      passwordHash: resident.passwordHash,
-      fullName: "Yakubu Bello (Sahel Build, site manager)",
-      roleId: (await roleOf("CONTRACTOR")).id,
-      organizationId: contractorOrg.id,
-    },
-  });
-
   // ---- New projects through the real setup services --------------------------------------------
   async function liveProject(spec: {
     code: string;
@@ -150,8 +135,7 @@ export async function seedPhase16() {
     await saveProjectSetupStep(draft.projectId, "parties", admin, {
       ...(spec.ownerId ? { owningOrganizationId: spec.ownerId } : {}),
       monitorOrganization: { id: monitorOrg.id },
-      contractorExecutionMode: "SINGLE_CONTRACTOR",
-      contractors: [{ organization: { id: contractorOrg.id }, tradeCategory: "Civil works", tradeCode: "CIV", isMainContractor: true }],
+      contractors: [{ organization: { id: contractorOrg.id }, tradeCategory: "Civil works", tradeCode: "CIV" }],
       beneficiaries: [
         {
           name: spec.beneficiary,
@@ -172,11 +156,7 @@ export async function seedPhase16() {
         geofenceGeoJson: geofence(spec.site.label, spec.site.lat, spec.site.lng) as unknown as Prisma.InputJsonValue,
       },
     });
-    const joinRoles = await prisma.role.findMany({
-      where: { tenantId: programme.id, surface: { in: ["MOBILE", "BOTH"] }, onboardingMode: "JOIN_CODE" },
-    });
-    await issueMissingJoinCodes(prisma as unknown as Prisma.TransactionClient, live, joinRoles);
-    for (const userId of [monitor.userId, resident.id, contractorUser.id, funder.userId]) {
+    for (const userId of [monitor.userId, resident.id, funder.userId]) {
       await prisma.userProjectAssignment.create({ data: { userId, projectId: live.id } });
     }
     return live;
@@ -282,7 +262,7 @@ export async function seedPhase16() {
     invitees: [
       { stakeholderGroup: "OWNER", name: flagshipAdmin.fullName, email: flagshipAdmin.email, userId: flagshipAdmin.userId, organizationId: flagship.id },
       { stakeholderGroup: "MONITOR", name: monitor.fullName, email: monitor.email, userId: monitor.userId, organizationId: monitorOrg.id },
-      { stakeholderGroup: "CONTRACTOR", name: "Sahel Build & Civil Works Ltd", email: contractorUser.email, organizationId: contractor101.organizationId },
+      { stakeholderGroup: "CONTRACTOR", name: "Sahel Build & Civil Works Ltd", email: "projects@sahelbuild.example", organizationId: contractor101.organizationId },
       { stakeholderGroup: "BENEFICIARY", name: "Head teacher, Kano Model Primary School", email: "headteacher.prg-101@example.org" },
     ],
   });
@@ -304,7 +284,7 @@ export async function seedPhase16() {
     site: { lat: 12.0471, lng: 8.5233, label: "Day Secondary School, Kano" },
     state: "Kano State",
   });
-  const contractor105 = await pastContract(prg105.id, "PA/CEN/2026/105", 120, [flagshipAdmin, monitor]);
+  await pastContract(prg105.id, "PA/CEN/2026/105", 120, [flagshipAdmin, monitor]);
   for (const [n, name, share, items] of [
     [1, "Substructure", 0.3, [["01.01", "Excavation and foundations", "m3", 380], ["01.02", "Ground floor slab", "m2", 1100]]],
     [2, "Superstructure", 0.4, [["02.01", "Columns, beams and block walls", "m2", 2400], ["02.02", "Roof structure and roofing", "m2", 1250]]],
@@ -316,7 +296,6 @@ export async function seedPhase16() {
       await prisma.boqItem.create({
         data: {
           projectId: prg105.id,
-          projectContractorId: contractor105.id,
           wbsCode,
           section: name.toUpperCase(),
           description,
@@ -331,23 +310,7 @@ export async function seedPhase16() {
     }
   }
   await prisma.project.update({ where: { id: prg105.id }, data: { certifiedProgressPct: 80.5 } });
-  // A schedule baseline (the project is a little ahead) so the schedule KPI has a badge to count.
-  const windows: Array<[number, number]> = [
-    [-98, -60],
-    [-59, -15],
-    [-14, 80],
-  ];
-  const items105 = await prisma.boqItem.findMany({ where: { projectId: prg105.id }, select: { id: true, wbsCode: true } });
-  await saveScheduleBaseline(prg105.id, monitor, {
-    plannedStartDate: addDays(today, -98),
-    plannedEndDate: addDays(today, 80),
-    items: items105.map((i) => {
-      const [start, end] = windows[Number(i.wbsCode.slice(0, 2)) - 1];
-      return { boqItemId: i.id, plannedStartDate: addDays(today, start), plannedEndDate: addDays(today, end) };
-    }),
-    dependencies: [],
-  });
-  await refreshScheduleBadge(prg105.id, new Date());
+  // Redesign R2d: PRG-105's sprints and facility units (and its schedule badge) come from seedR2.
   // One interim payment recorded by the funding authority (made outside the platform); retention
   // is held at the project's percentage.
   await recordPayment(prg105.id, funder, {
@@ -376,18 +339,7 @@ export async function seedPhase16() {
   await changeProjectPhase({ projectId: prg104.id, webUser: admin, input: { to: "HANDOVER_IN_PROGRESS" } });
   await draftCompletionCertificate(prg104.id, admin, { completionDate: addDays(today, -1) });
   await signCompletionCertificate(prg104.id, admin, { slotKey: "head-physical-planning" });
-  const beneficiaryLink = await createHandoverLink(prg104.id, admin, {
-    label: "Principal, Lagos Island Model College",
-    recipientName: "Mrs Adaeze Nwosu",
-    recipientContact: "headteacher.prg-104@example.org",
-    stakeholderType: "END_USER",
-    handoverSummary:
-      "Twelve classrooms, a science laboratory, the toilet block and the solar borehole. Please walk the site and tell us whether you accept the works and about anything that needs fixing.",
-    expiresInDays: 14,
-    requiresOtp: true,
-    maxSubmissions: 1,
-    sendNow: false,
-  });
+  // The beneficiary's handover response is left for the demo to record (R1d: no public link).
 
   // ---- PRG-242 (Co-Funded, South): closed, evaluated, audited, archived, closure pack built ------
   const prg242 = await liveProject({
@@ -462,16 +414,6 @@ export async function seedPhase16() {
     setClosurePackScheduler(null);
   }
 
-  // The contractor login sees every programme project its organisation works on.
-  const contracted = await prisma.projectContractor.findMany({
-    where: { organizationId: contractorOrg.id, project: { tenantId: programme.id, status: { in: ["ACTIVE", "ARCHIVED"] } } },
-    select: { projectId: true },
-  });
-  await prisma.userProjectAssignment.createMany({
-    data: contracted.map((c) => ({ userId: contractorUser.id, projectId: c.projectId })),
-    skipDuplicates: true,
-  });
-
   // ---- KPI snapshots: the current month and five earlier months (trend lines) -------------------
   const snapshot = await snapshotTenantKpis(programme.id, new Date(), { backfillMonths: 5 });
 
@@ -482,12 +424,10 @@ export async function seedPhase16() {
     ["Subsidiary admins (North, South)", "north.admin@insite.ng, south.admin@insite.ng (second South signatory: south.me@)"],
     ["Funding authority (records payments)", "programme.funder@insite.ng"],
     ["M&E officer (web, over the site limit)", "me.officer@insite.ng"],
-    ["Monitor (no registration on file)", "programme.monitor@insite.ng"],
+    ["Monitor", "programme.monitor@insite.ng"],
     ["Resident Supervisor (mobile, provisioned)", "resident.supervisor@insite.ng"],
     ["Legal officer (default cases)", "legal.officer@insite.ng"],
-    ["Contractor (Sahel Build)", "sahel.contractor@insite.ng"],
   ] as const) {
     console.log(`     - ${persona.padEnd(42)} ${login}`);
   }
-  console.log(`     - Beneficiary handover link (PRG-104, code to headteacher.prg-104@example.org): ${beneficiaryLink.url}`);
 }

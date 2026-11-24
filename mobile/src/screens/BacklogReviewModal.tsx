@@ -24,9 +24,7 @@ const KIND_LABEL: Record<string, string> = {
   REPORT: 'Daily report',
   REVALIDATION: 'Report revision',
   CHAT_MESSAGE: 'Chat message',
-  TELEMETRY: 'Presence ping',
   INCIDENT: 'Incident report',
-  ASSURANCE: 'Identity submission',
   DEFECT_ACTION: 'Defect update',
   SITE_INSPECTION: 'Site inspection',
   FINDING_RESOLUTION: 'Finding update',
@@ -34,8 +32,7 @@ const KIND_LABEL: Record<string, string> = {
 
 /**
  * Sync status (Phase 4). Read-only: what is waiting to send, what failed (with Retry), and which
- * reports the server is holding until identity approval. The server releases held reports when
- * the identity check is approved; the device never re-submits them.
+ * reports are waiting on the report approval chain or were returned for revision.
  */
 export const BacklogReviewModal: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -139,14 +136,6 @@ export const BacklogReviewModal: React.FC = () => {
               </View>
               );
             })
-          )}
-
-          {reports.some((r) => r.serverStatus === 'STAGED_UNVERIFIED') && (
-            <InfoCallout
-              variant="info"
-              title="Held reports"
-              description={copy.heldReportsDescription}
-            />
           )}
         </ScrollView>
       </View>

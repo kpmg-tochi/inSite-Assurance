@@ -13,7 +13,7 @@ import {
 } from "@insite/shared";
 import { prisma } from "../config/prisma";
 import { WebJwtPayload } from "../middleware/auth.middleware";
-import { saveChecklistTemplate, parseSections } from "../modules/inspections/checklistTemplates.service";
+import { parseSections } from "../modules/inspections/checklistTemplates.service";
 import { reviewSiteInspection, submitSiteInspection } from "../modules/inspections/inspections.service";
 import { setInspectionCheckScheduler } from "../modules/workday-reports/aiOmissionCheck";
 import { createInspectionObligation, createStreamsFromProjectType, STREAM_SELECT, streamCadenceRow } from "../modules/cadence/streams.service";
@@ -196,9 +196,21 @@ export async function seedPhase14(): Promise<void> {
   const admin = await payloadFor("programme.admin@insite.ng");
   const defaultAdmin = await payloadFor("admin@insite.ng");
 
-  // Templates in both tenants.
+  // Templates in both tenants (written directly: authoring moved to the form library in R3e).
   for (const actor of [admin, defaultAdmin]) {
-    for (const t of TEMPLATES) await saveChecklistTemplate(actor, SaveChecklistTemplateRequestSchema.parse(t), null);
+    for (const t of TEMPLATES) {
+      const parsed = SaveChecklistTemplateRequestSchema.parse(t);
+      await prisma.inspectionChecklistTemplate.create({
+        data: {
+          tenantId: actor.tenantId,
+          code: parsed.code,
+          name: parsed.name,
+          visitTypes: parsed.visitTypes,
+          version: 1,
+          sectionsJson: parsed.sections as unknown as Prisma.InputJsonValue,
+        },
+      });
+    }
   }
 
   // The M&E officer: an Independent Monitor in the monitoring consultancy who supervises every live
@@ -237,7 +249,7 @@ export async function seedPhase14(): Promise<void> {
         visitType: "ROUTINE",
         submissionDeadlineDays: 7,
       },
-      { key: "contractor-progress", label: "Contractor progress", kind: "ITEM_REPORTS", roleCodes: ["CONTRACTOR_ENGINEER"], reportingCadence: "WEEKLY" },
+      { key: "resident-progress", label: "Resident supervisor progress", kind: "ITEM_REPORTS", roleCodes: ["INDEPENDENT_RESIDENT"], reportingCadence: "WEEKLY" },
     ],
   }).reportingStreams;
   const inspections = {

@@ -2,12 +2,11 @@ import { itemPeriodStatus, type ItemPeriodStatus } from '@insite/shared';
 import type {
   CaptureMediaType,
   GeofenceStatus,
-  MorningDeliverableBriefDto,
   PlanningTier,
   ReportQueryDto,
   WbsChatMessageDto,
 } from '@insite/shared';
-import { fetchMorningBriefs, fetchProjectBoqItems } from '../api/boq/boqApi';
+import { fetchProjectBoqItems } from '../api/boq/boqApi';
 import { fetchBoqChatMessages } from '../api/wbs/wbsChatApi';
 import { getDb, newId, nowIso } from './db/database';
 import { enqueue, findOpenRowId } from './outbox/outboxStore';
@@ -15,10 +14,6 @@ import { kickOutbox } from './outbox/outboxProcessor';
 import { captureDisplayUri, getCaptures, type CaptureRecord } from './captureStore';
 import { getHeldState } from './heldItems';
 import { currentPeriod, reportedWbsItemIds } from './reportStore';
-import { personaCopy } from '../utils/personaCopy';
-import { briefMetaJson, parseBriefMeta, type BriefMeta } from './briefMeta';
-
-export type { BriefMeta } from './briefMeta';
 
 /**
  * WBS threads and their chat (Phase 4). All persistence is SQLite; there is no in-memory copy
@@ -52,7 +47,6 @@ export interface WbsItemRecord {
 }
 
 export type ChatMessageType =
-  | 'MORNING_BRIEF'
   | 'PHOTO'
   | 'TEXT_COMMENT'
   | 'VOICE_NOTE'
@@ -79,7 +73,6 @@ export interface ChatCaptureView {
   geofenceStatus: GeofenceStatus | null;
   /** Metres outside the boundary as the server measured it; null when not known. */
   distanceOutsideMeters: number | null;
-  chainageLabel: string | null;
   uploadState: 'PENDING_UPLOAD' | 'UPLOADED' | 'SERVER_ONLY';
   integrityPassed: boolean | null;
 }
@@ -96,10 +89,6 @@ export interface WbsChatMessageRecord {
   workdayReportId?: string | null;
   reportQueryId?: string | null;
   queryDetails?: ReportQueryDto | null;
-  /** For morning briefs: the day the brief is for. */
-  briefDate?: string | null;
-  /** For morning briefs synced since Phase 7; null for older cached briefs. */
-  brief?: BriefMeta | null;
   /** ISO timestamp. Format at render. */
   createdAt: string;
   syncStatus: ChatSyncStatus;
@@ -141,8 +130,6 @@ type MessageRow = {
   workday_report_id: string | null;
   report_query_id: string | null;
   query_json: string | null;
-  brief_date: string | null;
-  brief_json: string | null;
   created_at: string;
   sync_status: string;
 };
@@ -183,19 +170,8 @@ export async function getWbsThreads(projectId: string): Promise<WbsItemRecord[]>
   }));
 }
 
-/** Brief body as stored. The pointers heading follows the persona the server wrote the brief for. */
-function briefText(brief: MorningDeliverableBriefDto): string {
-  const heading = personaCopy(brief.targetPersona).pointersHeading;
-  const checklist =
-    brief.reportingChecklist.length > 0
-      ? `\n\n${heading}\n${brief.reportingChecklist.map((p) => `• ${p}`).join('\n')}`
-      : '';
-  return `${brief.headline}\n${brief.expectedDeliverable}${checklist}`;
-}
-
 /**
- * Pulls BOQ items and morning briefs into SQLite. Briefs are upserted, so a regenerated brief
- * replaces the old one (TD-P2-5). On failure the cached threads are returned with the error.
+ * Pulls BOQ items into SQLite (upserted). On failure the cached threads are returned with the error.
  */
 export async function syncWbsInboxFromServer(projectId: string): Promise<{
   items: WbsItemRecord[];
@@ -203,17 +179,11 @@ export async function syncWbsInboxFromServer(projectId: string): Promise<{
 }> {
   let syncError: string | null = null;
   try {
-    const [boqItems, morningBriefs] = await Promise.all([
-      fetchProjectBoqItems(projectId),
-      fetchMorningBriefs(projectId).catch(() => [] as MorningDeliverableBriefDto[]),
-    ]);
-    const briefByBoqId = new Map(morningBriefs.map((b) => [b.boqItemId, b]));
+    const boqItems = await fetchProjectBoqItems(projectId);
     const db = await getDb();
     await db.withTransactionAsync(async () => {
       for (const b of boqItems ?? []) {
-        const brief = briefByBoqId.get(b.id);
-        const tier: PlanningTier =
-          brief?.planningTier || (b.planningTier as PlanningTier) || 'UNBLOCKED_POOL';
+        const tier: PlanningTier = (b.planningTier as PlanningTier) || 'UNBLOCKED_POOL';
         await db.runAsync(
           `INSERT INTO wbs_items (id, project_id, wbs_code, description, unit, rate_ngn, total_quantity,
              cumulative_certified_pct, is_hold_point, hold_point_instruction, planned_start_date, planned_end_date, planning_tier)
@@ -241,25 +211,6 @@ export async function syncWbsInboxFromServer(projectId: string): Promise<{
             tier,
           ]
         );
-        if (brief) {
-          // One brief message per WBS item, replaced when the brief changes.
-          await db.runAsync(
-            `INSERT INTO chat_messages (id, project_id, wbs_item_id, sender_name, sender_role, message_type,
-               text_content, brief_date, brief_json, created_at, sync_status)
-             VALUES (?, ?, ?, 'InSite Morning Brief', 'SYSTEM_BRIEF', 'MORNING_BRIEF', ?, ?, ?, ?, 'SERVER')
-             ON CONFLICT(id) DO UPDATE SET text_content = excluded.text_content,
-               brief_date = excluded.brief_date, brief_json = excluded.brief_json, created_at = excluded.created_at`,
-            [
-              `brief-${b.id}`,
-              projectId,
-              b.id,
-              briefText(brief),
-              brief.workdayDate,
-              briefMetaJson(brief),
-              brief.createdAt,
-            ]
-          );
-        }
       }
     });
     await refreshLastMessages(projectId);
@@ -296,7 +247,6 @@ function captureView(c: CaptureRecord | undefined, server?: WbsChatMessageDto['c
       geofenceStatus: c.server?.geofenceStatus ?? null,
       // Metres outside the boundary (0 inside), as evaluated by the server.
       distanceOutsideMeters: c.server?.geofenceStatus ? c.server.distanceOutsideMeters ?? null : null,
-      chainageLabel: c.server?.chainageLabel ?? null,
       uploadState: c.uploadStatus === 'REGISTERED' ? 'UPLOADED' : 'PENDING_UPLOAD',
       integrityPassed: c.server?.integrityPassed ?? null,
     };
@@ -313,7 +263,6 @@ function captureView(c: CaptureRecord | undefined, server?: WbsChatMessageDto['c
       isWithinGeofence: null,
       geofenceStatus: null,
       distanceOutsideMeters: null,
-      chainageLabel: null,
       uploadState: 'SERVER_ONLY',
       integrityPassed: null,
     };
@@ -350,8 +299,6 @@ export async function getWbsChatMessages(wbsItemId: string): Promise<WbsChatMess
       workdayReportId: r.workday_report_id,
       reportQueryId: r.report_query_id,
       queryDetails: query,
-      briefDate: r.brief_date,
-      brief: r.message_type === 'MORNING_BRIEF' ? parseBriefMeta(r.brief_json) : null,
       createdAt: r.created_at,
       syncStatus: r.sync_status as ChatSyncStatus,
       heldAfterSessionEnd:

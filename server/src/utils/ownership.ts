@@ -40,3 +40,19 @@ export async function loadReportQueryInProject(db: Db, projectId: string, queryI
   if (!query) throw notFound('Report query', 'REPORT_QUERY_NOT_FOUND');
   return query;
 }
+
+/** Redesign R2b: a facility unit of the project. */
+export async function loadFacilityUnitInProject(db: Db, projectId: string, unitId: string) {
+  assertUuid(unitId, 'Facility unit', 'FACILITY_UNIT_NOT_FOUND');
+  const unit = await db.facilityUnit.findFirst({ where: { id: unitId, projectId } });
+  if (!unit) throw notFound('Facility unit', 'FACILITY_UNIT_NOT_FOUND');
+  return unit;
+}
+
+/** Redesign R2b: a sprint of the project. */
+export async function loadSprintInProject(db: Db, projectId: string, sprintId: string) {
+  assertUuid(sprintId, 'Sprint', 'SPRINT_NOT_FOUND');
+  const sprint = await db.projectSprint.findFirst({ where: { id: sprintId, projectId } });
+  if (!sprint) throw notFound('Sprint', 'SPRINT_NOT_FOUND');
+  return sprint;
+}

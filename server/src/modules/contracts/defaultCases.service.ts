@@ -5,8 +5,6 @@ import {
   DefaultCaseStatus,
   OPEN_DEFAULT_CASE_STATUSES,
   RaiseDefaultCaseRequest,
-  ReplaceContractorRequest,
-  ReplaceContractorResponse,
   resolveProjectTypeConfig,
   zonedCalendarDate,
 } from '@insite/shared';
@@ -25,8 +23,6 @@ import {
   recordApprovalAction,
 } from '../process/approvalChain';
 import { createWebNotification } from '../notifications/notifications.service';
-import { resolveOrganization } from '../organizations/organizations.service';
-import { reconcileContractorJoinCodes } from '../projects/joinCodes.service';
 import { MilestoneActor, OPEN_MILESTONE_STATUSES, recomputeMilestoneDates, SYSTEM_ACTOR, webActor } from './milestones.service';
 
 /**
@@ -34,7 +30,7 @@ import { MilestoneActor, OPEN_MILESTONE_STATUSES, recomputeMilestoneDates, SYSTE
  * chain (review steps, then the decision step, `contracts:decide_default`, organisation-scoped
  * through the Phase 11 rules). The decision is a cure period, an extension (moves the milestone),
  * termination or closure. Termination is a contract state on the contractor, never the project's
- * ARCHIVED, and keeps the contractor's history; a replacement can then be appointed.
+ * ARCHIVED, and keeps the contractor's history (R1d: no replacement; one contractor per project).
  */
 
 type Tx = Prisma.TransactionClient;
@@ -316,7 +312,7 @@ export async function actOnDefaultCase(projectId: string, caseId: string, webUse
   return getDefaultCase(projectId, caseId, webUser);
 }
 
-async function audit(tx: Tx, projectId: string, actor: MilestoneActor, action: 'DEFAULT_CASE_REVIEWED' | 'DEFAULT_CASE_DECIDED' | 'MILESTONE_DATES_RECOMPUTED' | 'CONTRACTOR_TERMINATED' | 'CONTRACTOR_REPLACED', summaryText: string, payload: Record<string, unknown>) {
+async function audit(tx: Tx, projectId: string, actor: MilestoneActor, action: 'DEFAULT_CASE_REVIEWED' | 'DEFAULT_CASE_DECIDED' | 'MILESTONE_DATES_RECOMPUTED' | 'CONTRACTOR_TERMINATED', summaryText: string, payload: Record<string, unknown>) {
   await recordAuditEvent(tx, {
     projectId,
     actorType: actor.actorType,
@@ -389,122 +385,14 @@ export async function terminateContractor(
     where: { id: pc.id },
     data: { contractStatus: 'TERMINATED', terminatedAt: now, terminationCaseId: params.caseId },
   });
-  const codes = await tx.projectJoinCode.updateMany({ where: { projectContractorId: pc.id, isActive: true }, data: { isActive: false } });
-  const sessions = await tx.fieldAgentSession.updateMany({
-    where: { projectContractorId: pc.id, isActive: true },
-    data: { isActive: false, revokedAt: now, revokedByUserId: params.actor.userId, revokeReason: 'Contract terminated' },
-  });
   const waived = await tx.projectContractMilestone.updateMany({
     where: { projectContractorId: pc.id, status: { in: OPEN_MILESTONE_STATUSES } },
     data: { status: 'WAIVED', waivedReason: 'Contract terminated', completedAt: now, completedByUserId: params.actor.userId },
   });
-  await audit(tx, params.projectId, params.actor, 'CONTRACTOR_TERMINATED', `Terminated the contract of ${pc.organization.name} (${pc.tradeCode}): ${params.reason}. Deactivated ${codes.count} join code(s), revoked ${sessions.count} field session(s) and waived ${waived.count} open milestone(s). Certified progress, retention and defect tickets stay.`, {
+  await audit(tx, params.projectId, params.actor, 'CONTRACTOR_TERMINATED', `Terminated the contract of ${pc.organization.name} (${pc.tradeCode}): ${params.reason}. Waived ${waived.count} open milestone(s). Progress, retention and defect tickets stay.`, {
     projectContractorId: pc.id,
     caseId: params.caseId,
-    deactivatedJoinCodes: codes.count,
-    revokedSessions: sessions.count,
     waivedMilestones: waived.count,
   });
 }
 
-export async function replaceContractor(
-  projectId: string,
-  terminatedId: string,
-  webUser: WebJwtPayload,
-  input: ReplaceContractorRequest
-): Promise<ReplaceContractorResponse> {
-  const actor = webActor(webUser);
-  return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "Project" WHERE id = ${projectId}::uuid FOR UPDATE`;
-    const project = await tx.project.findUniqueOrThrow({
-      where: { id: projectId },
-      select: { id: true, tenantId: true, codePrefix: true, status: true, timezone: true, projectTypeSnapshotJson: true },
-    });
-    const old = await tx.projectContractor.findFirst({
-      where: { id: terminatedId, projectId },
-      include: { organization: { select: { name: true } }, replacedBy: { select: { id: true } } },
-    });
-    if (!old) throw new AppError('Contractor not found on this project', 404, 'CONTRACTOR_NOT_FOUND');
-    if (old.contractStatus !== 'TERMINATED') throw new AppError('Only a terminated contractor can be replaced', 409, 'CONTRACTOR_NOT_TERMINATED');
-    if (old.replacedBy.length) throw new AppError('This contractor has already been replaced', 409, 'CONTRACTOR_ALREADY_REPLACED');
-    const { organization } = await resolveOrganization(tx, project.tenantId, input.organization, 'CONTRACTOR', {
-      actor: { actorId: webUser.userId, actorDisplayName: actor.actorDisplayName },
-    });
-    if (organization.id === old.organizationId) {
-      throw new AppError('The replacement must be another organisation', 422, 'REPLACEMENT_SAME_ORGANIZATION');
-    }
-    const clash = await tx.projectContractor.findFirst({
-      where: { projectId, OR: [{ organizationId: organization.id }, { tradeCode: input.tradeCode }] },
-      select: { id: true },
-    });
-    if (clash) throw new AppError('That organisation or trade code is already on this project', 422, 'DUPLICATE_CONTRACTOR');
-
-    // The main-contractor role moves to the replacement (model rules count active contractors).
-    const created = await tx.projectContractor.create({
-      data: {
-        projectId,
-        organizationId: organization.id,
-        tradeCategory: input.tradeCategory,
-        tradeCode: input.tradeCode,
-        isMainContractor: old.isMainContractor,
-        allocatedBudgetNgn: input.allocatedBudgetNgn ?? null,
-        allowFieldReporting: input.allowFieldReporting,
-        replacesProjectContractorId: old.id,
-      },
-    });
-    if (old.isMainContractor) await tx.projectContractor.update({ where: { id: old.id }, data: { isMainContractor: false } });
-
-    let movedItemCount = 0;
-    if (input.moveUncertifiedItems) {
-      const moved = await tx.boqItem.updateMany({
-        where: { projectId, projectContractorId: old.id, cumulativeCertifiedPct: { lt: 100 } },
-        data: { projectContractorId: created.id },
-      });
-      movedItemCount = moved.count;
-    }
-
-    // Per-contractor milestones for the replacement, counted from today (the replacement start).
-    const templates = (resolveProjectTypeConfig(project.projectTypeSnapshotJson)?.contractMilestones ?? []).filter((t) => t.perContractor);
-    const startDate = zonedCalendarDate(new Date(), project.timezone);
-    const roleCodes = [...new Set(templates.map((t) => t.responsibleRoleCode).filter((c): c is string => Boolean(c)))];
-    const roles = roleCodes.length ? await tx.role.findMany({ where: { tenantId: project.tenantId, code: { in: roleCodes } }, select: { id: true, code: true } }) : [];
-    for (const [index, t] of templates.entries()) {
-      await tx.projectContractMilestone.create({
-        data: {
-          projectId,
-          projectContractorId: created.id,
-          key: t.key,
-          label: t.label,
-          description: t.description,
-          anchor: t.anchor,
-          anchorMilestoneKey: t.anchor === 'MILESTONE' ? t.anchorMilestoneKey : null,
-          // Counted from the replacement start, keeping the template's offset (e.g. +21 days).
-          anchorDateOverride: startDate,
-          offsetValue: Math.max(0, t.offsetValue),
-          offsetUnit: t.offsetUnit,
-          completionMode: t.completionMode,
-          requiredDocumentTypeCodes: t.requiredDocumentTypeCodes,
-          requiresSignOffPermissionKey: t.signOffPermissionKey,
-          responsibleRoleId: roles.find((r) => r.code === t.responsibleRoleCode)?.id ?? null,
-          responsibleOrganizationScope: t.responsibleScope,
-          sortOrder: (index + 1) * 10 + 5,
-        },
-      });
-    }
-    await recomputeMilestoneDates(tx, projectId);
-    const issued = project.status === 'ACTIVE' ? await reconcileContractorJoinCodes(tx, project) : [];
-    await audit(tx, projectId, actor, 'CONTRACTOR_REPLACED', `Appointed ${organization.name} (${created.tradeCode}) to replace ${old.organization.name} (${old.tradeCode}); moved ${movedItemCount} item(s) not fully certified and created ${templates.length} milestone(s) counted from ${startDate}.`, {
-      projectContractorId: created.id,
-      replacesProjectContractorId: old.id,
-      movedItemCount,
-      createdMilestoneCount: templates.length,
-      issuedJoinCodes: issued.map((j) => j.code),
-    });
-    return {
-      projectContractorId: created.id,
-      movedItemCount,
-      createdMilestoneCount: templates.length,
-      issuedJoinCodes: issued.map((j) => j.code),
-    };
-  });
-}

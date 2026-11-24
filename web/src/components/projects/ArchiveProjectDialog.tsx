@@ -5,7 +5,7 @@ import { useArchiveProjectMutation } from "../../mutations/projects/useProjectSe
 
 /**
  * Confirms archiving an active project. Archiving is one-way from the web: the project becomes
- * read-only, disappears from mobile and portfolio views, and its join codes stop working.
+ * read-only and disappears from mobile and portfolio views.
  */
 export function ArchiveProjectDialog({
   projectId,
@@ -64,8 +64,8 @@ export function ArchiveProjectDialog({
             <span className="font-semibold text-slate-800">{projectName}</span> becomes read-only.
           </p>
           <ul className="list-disc pl-5 space-y-0.5">
-            <li>It disappears from the mobile app and from portfolio and executive views.</li>
-            <li>Its join codes stop working. Field staff cannot send new reports.</li>
+            <li>It disappears from the mobile app and from the portfolio views.</li>
+            <li>Field staff cannot send new reports.</li>
             <li>IPCs, reports, evidence and the audit ledger stay available to read.</li>
           </ul>
         </div>

@@ -1,16 +1,14 @@
 import * as Network from 'expo-network';
 import { AppState, type AppStateStatus } from 'react-native';
 import { listSessionEnded, sessionEndedFor, subscribeSessionEnded } from '../../config/sessionState';
-import { tokenForProject } from '../../config/authRegistry';
+import { getAccountToken } from '../../config/authRegistry';
 import { getStorageInfo } from '../db/database';
 import {
   afterFailure,
-  BATCHED_KINDS,
   classifyFailure,
   failureMessage,
   dependencyState,
   dueRows,
-  TELEMETRY_BATCH_SIZE,
   type ClassifiableError,
   type OutboxKind,
   type OutboxRow,
@@ -19,7 +17,6 @@ import {
 import {
   listOpenRows,
   markDone,
-  markManyDone,
   outboxCounts,
   purgeDoneRows,
   recordFailure,
@@ -39,7 +36,6 @@ import {
  */
 
 export type RowHandler = (row: OutboxRow) => Promise<void>;
-export type BatchHandler = (rows: OutboxRow[]) => Promise<void>;
 
 /** Thrown by handlers for failures that retrying cannot fix (a missing local file, for example). */
 export class LocalPermanentError extends Error {
@@ -51,14 +47,9 @@ export class LocalPermanentError extends Error {
 }
 
 const handlers = new Map<OutboxKind, RowHandler>();
-const batchHandlers = new Map<OutboxKind, BatchHandler>();
 
 export function registerOutboxHandler(kind: OutboxKind, handler: RowHandler): void {
   handlers.set(kind, handler);
-}
-
-export function registerOutboxBatchHandler(kind: OutboxKind, handler: BatchHandler): void {
-  batchHandlers.set(kind, handler);
 }
 
 export interface SyncStatusSnapshot {
@@ -170,8 +161,8 @@ async function runOnce(): Promise<void> {
       const rows = await listOpenRows();
       const statusById = new Map<string, OutboxStatus>(rows.map((r) => [r.id, r.status]));
       const now = new Date();
-      // Rows wait while their project has no usable token or its session ended; nothing is lost.
-      const due = dueRows(rows, now).filter((r) => tokenForProject(r.projectId) && !sessionEndedFor(r.projectId));
+      // Rows wait while nobody is signed in or their session ended; nothing is lost.
+      const due = dueRows(rows, now).filter((r) => getAccountToken() && !sessionEndedFor(r.projectId));
       if (due.length === 0) break;
       let progressed = false;
 
@@ -191,36 +182,7 @@ async function runOnce(): Promise<void> {
         ready.push(row);
       }
 
-      // Batched kinds: one request for many rows.
-      for (const kind of BATCHED_KINDS) {
-        const batch = ready.filter((r) => r.kind === kind);
-        const handler = batchHandlers.get(kind);
-        if (!handler || batch.length === 0) continue;
-        for (let i = 0; i < batch.length; i += TELEMETRY_BATCH_SIZE) {
-          const chunk = batch.slice(i, i + TELEMETRY_BATCH_SIZE);
-          try {
-            await handler(chunk);
-            await markManyDone(chunk.map((r) => r.id));
-            chunk.forEach((r) => statusById.set(r.id, 'DONE'));
-            progressed = anySucceeded = true;
-          } catch (error) {
-            const failure = classifyFailure(toClassifiable(error));
-            if (failure === 'AUTH_PAUSE') {
-              pauseForAuth(error);
-              continue;
-            }
-            for (const r of chunk) {
-              const outcome = afterFailure(r, failure, new Date());
-              await recordFailure(r.id, outcome, describe(error));
-              statusById.set(r.id, outcome.status);
-            }
-            publish({ lastError: describe(error) });
-          }
-        }
-      }
-
       for (const row of ready) {
-        if (BATCHED_KINDS.has(row.kind)) continue;
         const handler = handlers.get(row.kind);
         if (!handler) continue;
         // A row of a scope that ended earlier in this pass is held, not attempted.

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -32,76 +32,16 @@ export const SettingsScreen: React.FC = () => {
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { account, persona, displayName, phoneNumber: knownPhone, savePersona, resetAll } = useProfile();
-  // A signed-in account's name and phone come from the organisation; code users edit their own.
-  const isAccount = Boolean(account);
-
-  const [fullName, setFullName] = useState(displayName);
-  const [phoneNumber, setPhoneNumber] = useState(knownPhone);
-  const [isSaving, setIsSaving] = useState(false);
+  // The account's name and phone come from the organisation and are read-only here.
+  const { account, displayName, phoneNumber, resetAll } = useProfile();
 
   const resetDemoMutation = useResetDemoMutation();
   const isResettingDemo = resetDemoMutation.isPending;
 
   const avatarInitials = useMemo(
-    () => getInitials(fullName, "ID"),
-    [fullName],
+    () => getInitials(displayName, "ID"),
+    [displayName],
   );
-
-  const canSave = useMemo(() => {
-    return fullName.trim().length > 0 && phoneNumber.trim().length > 0;
-  }, [fullName, phoneNumber]);
-
-  const handleSaveProfile = async () => {
-    if (!canSave) {
-      Toast.show({
-        type: "error",
-        props: {
-          title: "Required Fields",
-          message: "Please enter both your full name and mobile phone number.",
-        },
-      });
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      await savePersona({
-        fullName: fullName.trim(),
-        phoneNumber: phoneNumber.trim(),
-        avatarBase64: persona?.avatarBase64 ?? null,
-      });
-      Toast.show({
-        type: "success",
-        props: {
-          title: "Settings Saved",
-          message: "Your field profile has been updated.",
-        },
-      });
-    } catch {
-      Toast.show({
-        type: "error",
-        props: {
-          title: "Save Failed",
-          message: "Unable to save profile updates to secure storage.",
-        },
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleRedoOnboarding = async () => {
-    await resetAll();
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "Landing" }],
-    });
-  };
-
-  const handleDemoVerificationFlow = () => {
-    navigation.navigate("AssuranceWizard", { isPreviewDemo: true });
-  };
 
   const performFullDemoReset = async () => {
     try {
@@ -161,7 +101,7 @@ export const SettingsScreen: React.FC = () => {
       }}
     >
       <View style={styles.sectionStack}>
-        {/* Avatar Identity Card (matches OnboardingProfileScreen) */}
+        {/* Avatar Identity Card */}
         <View style={styles.card}>
           <View style={styles.avatarRow}>
             <Avatar forceInitials={avatarInitials} editable />
@@ -174,60 +114,27 @@ export const SettingsScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Editable Profile Details Card */}
+        {/* Profile Details Card (read-only: managed by the organisation) */}
         <View style={styles.card}>
-          {isAccount && (
-            <Text style={[styles.helperText, { marginBottom: 12 }]}>
-              Signed in as {account?.profile.email}. Your name and phone number are managed by your
-              organisation.
-            </Text>
-          )}
+          <Text style={[styles.helperText, { marginBottom: 12 }]}>
+            Signed in as {account?.profile.email}. Your name and phone number are managed by your
+            organisation.
+          </Text>
           <View style={styles.inputGroup}>
-            <Text style={styles.fieldLabel}>
-              Full Name <Text style={{ color: "#DC2626" }}>*</Text>
-            </Text>
-            <TextInput
-              style={styles.input}
-              editable={!isAccount}
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="e.g. Engr. Chukwuma Okeke"
-              placeholderTextColor="#94A3B8"
-              autoCapitalize="words"
-              autoCorrect={false}
-            />
+            <Text style={styles.fieldLabel}>Full Name</Text>
+            <TextInput style={styles.input} editable={false} value={displayName} />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.fieldLabel}>
-              Mobile Phone Number <Text style={{ color: "#DC2626" }}>*</Text>
-            </Text>
-            <TextInput
-              style={styles.input}
-              editable={!isAccount}
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-              keyboardType="phone-pad"
-              placeholder="e.g. +234 803 555 0192"
-              placeholderTextColor="#94A3B8"
-            />
+            <Text style={styles.fieldLabel}>Mobile Phone Number</Text>
+            <TextInput style={styles.input} editable={false} value={phoneNumber} />
           </View>
 
-          {isAccount ? (
-            <PrimaryButton
-              onPress={() => navigation.navigate("ChangePassword")}
-              text="Change password"
-              accessibilityLabel="Change your account password"
-            />
-          ) : (
-            <PrimaryButton
-              onPress={handleSaveProfile}
-              text="Save Profile Changes"
-              isWorking={isSaving}
-              disabled={isSaving || !canSave}
-              accessibilityLabel="Save Profile Changes"
-            />
-          )}
+          <PrimaryButton
+            onPress={() => navigation.navigate("ChangePassword")}
+            text="Change password"
+            accessibilityLabel="Change your account password"
+          />
         </View>
 
         {/* Demo Controls Section (rendered only when DEMO_MODE is true) */}
@@ -237,49 +144,13 @@ export const SettingsScreen: React.FC = () => {
               <View style={{ flex: 1 }}>
                 <Text style={styles.demoSectionTitle}>Demo Controls</Text>
                 <Text style={styles.helperText}>
-                  Walk through onboarding/verification or restore clean seeded data.
+                  Restore clean seeded data.
                 </Text>
               </View>
               <Pill variant="info" text="DEMO_MODE" />
             </View>
 
             <View style={styles.demoButtonsStack}>
-              <TouchableOpacity
-                style={styles.demoActionBtn}
-                onPress={handleRedoOnboarding}
-                disabled={isResettingDemo}
-                activeOpacity={0.75}
-              >
-                <View style={styles.demoBtnIconWrap}>
-                  <Feather name="rotate-ccw" size={16} color={defaultColors.primary} />
-                </View>
-                <View style={styles.demoBtnTexts}>
-                  <Text style={styles.demoBtnTitle}>Redo Onboarding</Text>
-                  <Text style={styles.demoBtnSubtitle}>
-                    Replay the welcome screen, profile setup, and project join flow.
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={16} color="#94A3B8" />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.demoActionBtn}
-                onPress={handleDemoVerificationFlow}
-                disabled={isResettingDemo}
-                activeOpacity={0.75}
-              >
-                <View style={styles.demoBtnIconWrap}>
-                  <Feather name="shield" size={16} color={defaultColors.primary} />
-                </View>
-                <View style={styles.demoBtnTexts}>
-                  <Text style={styles.demoBtnTitle}>Demo Verification Flow</Text>
-                  <Text style={styles.demoBtnSubtitle}>
-                    Preview ID scan, 3-pose liveness, and credentials without saving.
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={16} color="#94A3B8" />
-              </TouchableOpacity>
-
               <TouchableOpacity
                 style={[
                   styles.demoActionBtn,

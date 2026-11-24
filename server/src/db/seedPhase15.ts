@@ -151,33 +151,21 @@ export async function paperCopy(tenantId: string, projectId: string, label: stri
   return key;
 }
 
-/** An accepted handover response from the head of the institution, reviewed by the monitor. */
+/** An accepted handover response from the head of the institution, recorded by staff (R1d) and reviewed by the monitor. */
 export async function acceptedHandover(p: { projectId: string; createdByUserId: string; reviewer: WebJwtPayload; headName: string; snags: number }) {
-  const link = await prisma.handoverLink.create({
-    data: {
-      projectId: p.projectId,
-      tokenHash: crypto.randomBytes(32).toString("hex"),
-      label: "Head of institution",
-      recipientName: p.headName,
-      recipientContact: "head@example.org",
-      stakeholderType: "END_USER",
-      handoverSummary: "Handover of the completed works to the institution.",
-      expiresAt: new Date(Date.now() - 86_400_000),
-      createdByUserId: p.createdByUserId,
-    },
-  });
   const submission = await prisma.handoverSubmission.create({
     data: {
-      handoverLinkId: link.id,
       projectId: p.projectId,
+      stakeholderType: "END_USER",
+      recordedByUserId: p.createdByUserId,
       decision: p.snags ? "ACCEPTED_WITH_SNAGS" : "ACCEPTED",
       submitterName: p.headName,
       submitterRole: "Head of institution",
       feedbackText: p.snags ? "We accept the works. Two classroom doors stick and one tap drips." : "We accept the works. Thank you.",
       snagsJson: p.snags
         ? [
-            { title: "Classroom doors", location: "Block A", description: "Two doors stick at the frame.", photos: [] },
-            { title: "Dripping tap", location: "Toilet block", description: "Hand-washing tap drips.", photos: [] },
+            { title: "Classroom doors", location: "Block A", description: "Two doors stick at the frame." },
+            { title: "Dripping tap", location: "Toilet block", description: "Hand-washing tap drips." },
           ]
         : [],
     },

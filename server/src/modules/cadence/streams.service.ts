@@ -1,6 +1,5 @@
 import { Prisma } from '@prisma/client';
 import {
-  BriefPersona,
   getReportingPeriod,
   INSPECTION_REPORTER_SCOPE,
   InspectionVisitType,
@@ -24,6 +23,7 @@ import {
   cadenceSettingsOf,
   loadCadenceProject,
   PeriodKey,
+  ReportingPersona,
   serializeCadenceSettings,
 } from './cadence.service';
 
@@ -141,10 +141,10 @@ export async function applyDuePendingStreamCadence(stream: StreamRow, today: str
 }
 
 /** Personas of a stream's roles that report on BOQ items (web-only roles have none). */
-export async function streamPersonas(db: Db, stream: Pick<StreamRow, 'roleIds'>): Promise<BriefPersona[]> {
+export async function streamPersonas(db: Db, stream: Pick<StreamRow, 'roleIds'>): Promise<ReportingPersona[]> {
   if (stream.roleIds.length === 0) return [];
   const roles = await db.role.findMany({ where: { id: { in: stream.roleIds } }, select: { fieldPersonaType: true } });
-  const out: BriefPersona[] = [];
+  const out: ReportingPersona[] = [];
   if (roles.some((r) => r.fieldPersonaType === 'INDEPENDENT_VERIFIER')) out.push('INDEPENDENT_VERIFIER');
   if (roles.some((r) => r.fieldPersonaType === 'CONTRACTOR_EXECUTOR')) out.push('CONTRACTOR_EXECUTOR');
   return out;
@@ -163,14 +163,6 @@ export async function itemStreamForReporter(
 ): Promise<StreamRow | null> {
   const streams = await loadActiveStreams(db, projectId);
   return streams.find((s) => s.kind === 'ITEM_REPORTS' && owes(s, reporter)) ?? null;
-}
-
-/** The first ITEM_REPORTS stream owed by a persona (brief lists for a persona). */
-export async function itemStreamForPersona(db: Db, projectId: string, persona: BriefPersona): Promise<StreamRow | null> {
-  for (const s of await loadActiveStreams(db, projectId)) {
-    if (s.kind === 'ITEM_REPORTS' && (await streamPersonas(db, s)).includes(persona)) return s;
-  }
-  return null;
 }
 
 /** The INSPECTION stream an inspection answers: same visit type, owed by the reporter's role first. */

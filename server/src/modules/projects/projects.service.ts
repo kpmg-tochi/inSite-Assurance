@@ -1,7 +1,6 @@
 import { overdueMilestoneCounts } from '../contracts/milestones.service';
 import { Prisma, ProjectStatus } from '@prisma/client';
 import {
-  ContractorExecutionMode,
   geofenceCentroid,
   PORTFOLIO_QUIET_SITE_DAYS,
   PortfolioOverviewDto,
@@ -21,7 +20,6 @@ import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import {
   FieldAgentJwtPayload,
-  hasWebPermission,
   invalidateSessionAuthCache,
   WebJwtPayload,
 } from '../../middleware/auth.middleware';
@@ -34,12 +32,6 @@ import { serializeBoqItem } from '../../utils/serializers';
 import { contractorHeadline } from './contractors.service';
 import { serializeScheduleBadge } from '../schedule/schedule.service';
 import { effectiveToleranceMeters } from '../../utils/geofenceEvaluation';
-import { isProjectObjectKey, storageService } from '../../integrations/storage.service';
-import { createMobileNotification } from '../notifications/notifications.service';
-import { releaseStagedReportsForSession } from '../workday-reports/workdayReports.service';
-import { scheduleAiOmissionCheck } from '../workday-reports/aiOmissionCheck';
-import { sendPushToFieldSession } from '../../integrations/push.service';
-import { syncParticipantForSession } from '../mobilization/participants.service';
 import { PROJECT_TYPE_SUMMARY_SELECT, projectTypeSummary } from '../projectTypes/projectTypes.service';
 import { REGION_SUMMARY_SELECT, regionSummary } from '../regions/regions.service';
 
@@ -83,74 +75,8 @@ export function deliveryModelFilterWhere(filters: ProjectListFilters = {}): Pris
   return out;
 }
 
-type JoinCodeWithRole = {
-  id: string;
-  projectId: string;
-  code: string;
-  isActive: boolean;
-  expiresAt: Date | null;
-  maxUses?: number | null;
-  useCount?: number;
-  projectContractorId?: string | null;
-  projectContractor?: { tradeCode: string; organization: { name: string } } | null;
-  role: {
-    id: string;
-    code: string;
-    name: string;
-    fieldPersonaType: string;
-    assuranceWeight: number;
-    requiresIdentityAssurance: boolean;
-  };
-};
-
-/**
- * Join-code visibility (Phase 2 Step 7): only holders of `mobilization:manage_roster` see codes.
- * Of those, users who cannot edit the baseline (e.g. the main contractor) only see codes for
- * contractor-executor roles, so they cannot hand out independent-verifier codes.
- */
-export function visibleJoinCodesFor(joinCodes: JoinCodeWithRole[], webUser?: WebJwtPayload) {
-  if (!webUser || !hasWebPermission(webUser, 'mobilization:manage_roster')) {
-    return [];
-  }
-  const seeAll = hasWebPermission(webUser, 'projects:edit_baseline');
-  return joinCodes
-    .filter((jc) => seeAll || jc.role.fieldPersonaType === 'CONTRACTOR_EXECUTOR')
-    .map((jc) => ({
-      id: jc.id,
-      projectId: jc.projectId,
-      code: jc.code,
-      roleId: jc.role.id,
-      roleCode: jc.role.code,
-      roleName: jc.role.name,
-      fieldPersonaType: jc.role.fieldPersonaType as FieldPersonaType,
-      assuranceWeight: jc.role.assuranceWeight,
-      requiresIdentityAssurance: jc.role.requiresIdentityAssurance,
-      projectContractorId: jc.projectContractorId ?? null,
-      contractorName: jc.projectContractor?.organization.name ?? null,
-      tradeCode: jc.projectContractor?.tradeCode ?? null,
-      isActive: jc.isActive,
-      expiresAt: jc.expiresAt ? jc.expiresAt.toISOString() : null,
-      maxUses: jc.maxUses ?? null,
-      useCount: jc.useCount ?? 0,
-    }));
-}
-
-const JOIN_CODE_LIST_INCLUDE = {
-  role: {
-    select: {
-      id: true,
-      code: true,
-      name: true,
-      fieldPersonaType: true,
-      assuranceWeight: true,
-      requiresIdentityAssurance: true,
-    },
-  },
-  projectContractor: { select: { tradeCode: true, organization: { select: { name: true } } } },
-} as const;
-
 const PROJECT_CONTRACTORS_INCLUDE = {
-  orderBy: [{ isMainContractor: 'desc' as const }, { createdAt: 'asc' as const }],
+  orderBy: [{ createdAt: 'asc' as const }],
   include: { organization: { select: { id: true, name: true } } },
 };
 
@@ -194,10 +120,9 @@ function serializeProjectCore(project: ProjectCoreRow) {
     scheduleVariance: serializeScheduleBadge(project),
     monitorOrganizationName: project.monitorOrganization?.name ?? '',
     lenderOrganizationName: project.lenderOrganization?.name ?? '',
-    /** Main contractor (or the only one). */
+    /** The contractor (one per project since R1d). */
     contractorOrganizationName: headline.name,
     contractorCount: headline.total,
-    contractorExecutionMode: project.contractorExecutionMode as ContractorExecutionMode | null,
     /** Phase 11: type chip, region and owning organisation. */
     ...serializeDeliveryModel(project),
     contractors: project.contractors.map((c) => ({
@@ -206,8 +131,6 @@ function serializeProjectCore(project: ProjectCoreRow) {
       organizationName: c.organization.name,
       tradeCategory: c.tradeCategory,
       tradeCode: c.tradeCode,
-      isMainContractor: c.isMainContractor,
-      allowFieldReporting: c.allowFieldReporting,
     })),
     activatedAt: project.activatedAt?.toISOString() ?? null,
     archivedAt: project.archivedAt?.toISOString() ?? null,
@@ -234,7 +157,6 @@ export async function listProjectsForUser(
     orderBy: { createdAt: 'desc' },
     include: {
       ...PROJECT_CORE_INCLUDE,
-      joinCodes: { include: JOIN_CODE_LIST_INCLUDE },
       boqItems: {
         select: {
           id: true,
@@ -261,22 +183,17 @@ export async function listProjectsForUser(
       opaqueLumpSumCount: project.boqItems.filter((b) => b.isOpaqueLumpSum).length,
       lastFieldCaptureAt:
         project.evidenceLogs[0]?.capturedAtDevice.toISOString() ?? null,
-      joinCodes: visibleJoinCodesFor(project.joinCodes, webUser),
       overdueMilestoneCount: overdue.get(project.id) ?? 0,
     };
   });
 }
 
-export async function getProjectBaselineDetails(
-  projectId: string,
-  webUser?: WebJwtPayload,
-  fieldAgent?: FieldAgentJwtPayload
-) {
+/** The project and its BOQ for web users and field sessions (access is checked by the project guard). */
+export async function getProjectBaselineDetails(projectId: string) {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: {
       ...PROJECT_CORE_INCLUDE,
-      joinCodes: { include: JOIN_CODE_LIST_INCLUDE },
       boqItems: {
         orderBy: { wbsCode: 'asc' },
       },
@@ -287,22 +204,9 @@ export async function getProjectBaselineDetails(
     throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   }
 
-  // Field agents get the baseline they need to report against; no join codes. In multi-prime a
-  // contractor session only sees its own contractor's items.
-  const contractorScope =
-    fieldAgent && project.contractorExecutionMode === 'MULTI_PRIME_SEPARATE_IPC'
-      ? await prisma.fieldAgentSession.findUnique({
-          where: { id: fieldAgent.sessionId },
-          select: { projectContractorId: true },
-        })
-      : null;
-  const boqItems = contractorScope?.projectContractorId
-    ? project.boqItems.filter((b) => b.projectContractorId === contractorScope.projectContractorId)
-    : project.boqItems;
   return {
     ...serializeProjectCore(project),
-    joinCodes: fieldAgent ? [] : visibleJoinCodesFor(project.joinCodes, webUser),
-    boqItems: boqItems.map((b) => serializeBoqItem(b)),
+    boqItems: project.boqItems.map((b) => serializeBoqItem(b)),
   };
 }
 
@@ -356,10 +260,6 @@ export async function listProjectFieldSessions(
       role: {
         select: { id: true, code: true, name: true },
       },
-      projectContractor: { select: { id: true, tradeCode: true, organization: { select: { name: true } } } },
-      joinCode: {
-        select: { code: true },
-      },
       user: { select: { id: true, email: true } },
     },
   });
@@ -374,18 +274,12 @@ export async function listProjectFieldSessions(
     assuranceWeight: s.assuranceWeight,
     agentFullName: s.agentFullName,
     agentPhoneNumber: s.agentPhoneNumber,
-    origin: s.origin,
-    joinCodeUsed: s.joinCode?.code ?? null,
-    userId: s.user?.id ?? null,
-    userEmail: s.user?.email ?? null,
+    userId: s.userId,
+    userEmail: s.user.email,
     deviceId: s.deviceId,
     deviceModel: s.deviceModel,
     mobileDeviceId: s.mobileDeviceId,
-    projectContractorId: s.projectContractorId,
-    contractorName: s.projectContractor?.organization.name ?? null,
-    tradeCode: s.projectContractor?.tradeCode ?? null,
     isActive: s.isActive,
-    assuranceStatus: s.assuranceStatus,
     lastSyncAt: s.lastSyncAt?.toISOString() ?? null,
     createdAt: s.createdAt.toISOString(),
   }));
@@ -453,370 +347,6 @@ export async function updateFieldSessionStatus(params: {
   };
 }
 
-/**
- * List all Assurance Verification Requests scoped to tenant & user project visibility.
- */
-export async function listContractorVerifications(
-  projectId: string | undefined,
-  webUser: WebJwtPayload
-) {
-  const whereClause: Prisma.FieldAgentSessionWhereInput = {
-    role: { requiresIdentityAssurance: true },
-  };
-
-  if (projectId && projectId !== 'all') {
-    await assertCallerProjectAccess({ projectId, webUser });
-    whereClause.projectId = projectId;
-  } else {
-    whereClause.project = buildProjectVisibilityWhere(webUser, undefined, { statuses: ['ACTIVE', 'ARCHIVED'] });
-  }
-
-  const sessions = await prisma.fieldAgentSession.findMany({
-    where: whereClause,
-    orderBy: { createdAt: 'desc' },
-    include: {
-      role: {
-        select: { id: true, name: true, fieldPersonaType: true },
-      },
-      project: {
-        select: {
-          id: true,
-          tenantId: true,
-          name: true,
-          codePrefix: true,
-          contractors: { ...PROJECT_CONTRACTORS_INCLUDE, include: { organization: { select: { name: true } } } },
-        },
-      },
-      // The contractor this person works for (Phase 6), not "the" project contractor.
-      projectContractor: { select: { tradeCode: true, organization: { select: { name: true } } } },
-      joinCode: { select: { code: true } },
-    },
-  });
-
-  const reviewerIds = sessions
-    .map((s) => s.reviewedByUserId)
-    .filter((id): id is string => Boolean(id));
-
-  const reviewers =
-    reviewerIds.length > 0
-      ? await prisma.user.findMany({
-          where: { id: { in: reviewerIds } },
-          select: { id: true, fullName: true },
-        })
-      : [];
-
-  const reviewerMap = new Map(reviewers.map((r) => [r.id, r.fullName]));
-  // Phase 12: body names for the registration codes shown (archived bodies included).
-  const bodyCodes = [...new Set(sessions.map((s) => s.registrationBodyCode).filter((c): c is string => Boolean(c)))];
-  const bodies = bodyCodes.length
-    ? await prisma.professionalRegistrationBody.findMany({
-        where: { code: { in: bodyCodes }, tenantId: { in: [...new Set(sessions.map((s) => s.project.tenantId))] } },
-        select: { tenantId: true, code: true, fullName: true },
-      })
-    : [];
-  const bodyName = (tenantId: string, code: string | null) =>
-    code ? bodies.find((b) => b.tenantId === tenantId && b.code === code)?.fullName ?? null : null;
-
-  // Stored values are object keys; hand out 5-minute signed URLs, and nothing for legacy values
-  // that are not keys in the session's project namespace.
-  const signed = async (key: string | null, tenantId: string, projectId: string) =>
-    isProjectObjectKey(key, tenantId, projectId)
-      ? storageService.getPresignedReadUrl(key!, 300)
-      : null;
-
-  return Promise.all(sessions.map(async (s) => ({
-    id: s.id,
-    projectId: s.projectId,
-    projectCodePrefix: s.project.codePrefix,
-    projectName: s.project.name,
-    organizationName:
-      s.projectContractor?.organization.name ?? contractorHeadline(s.project.contractors).name,
-    tradeCode: s.projectContractor?.tradeCode ?? null,
-    roleId: s.roleId,
-    roleName: s.role.name || s.roleNameSnapshot,
-    fieldPersonaType: s.fieldPersonaType as FieldPersonaType,
-    agentFullName: s.agentFullName,
-    agentPhoneNumber: s.agentPhoneNumber,
-    joinCodeUsed: s.joinCode?.code ?? '',
-    registrationNumber: s.registrationNumber,
-    registrationBodyCode: s.registrationBodyCode,
-    registrationBodyName: bodyName(s.project.tenantId, s.registrationBodyCode),
-    idDocumentType: s.idDocumentType,
-    idDocumentUrl: await signed(s.idDocumentUrl, s.project.tenantId, s.projectId),
-    selfieImageUrl: await signed(s.selfieImageUrl, s.project.tenantId, s.projectId),
-    selfieLeftUrl: await signed(s.selfieLeftUrl, s.project.tenantId, s.projectId),
-    selfieRightUrl: await signed(s.selfieRightUrl, s.project.tenantId, s.projectId),
-    livenessPassed: s.livenessPassed,
-    experienceSummary: s.experienceSummary,
-    assuranceStatus: s.assuranceStatus,
-    deviceId: s.deviceId,
-    deviceModel: s.deviceModel,
-    createdAt: s.createdAt.toISOString(),
-    submittedAt: s.createdAt.toISOString(),
-    reviewedAt: s.reviewedAt?.toISOString() || null,
-    reviewedByUserName: s.reviewedByUserId
-      ? reviewerMap.get(s.reviewedByUserId) || 'Reviewer'
-      : null,
-    rejectionReason: s.rejectionReason,
-  })));
-}
-
-/**
- * Review (Approve or Reject) an Assurance Verification Request
- */
-export async function reviewContractorVerification(
-  projectId: string,
-  sessionId: string,
-  webUser: WebJwtPayload,
-  decision: 'APPROVE' | 'REJECT',
-  remarks?: string
-) {
-  const session = await prisma.fieldAgentSession.findFirst({
-    where: { id: sessionId, projectId },
-    include: { project: true, joinCode: true },
-  });
-
-  if (!session) {
-    throw new AppError(
-      'Contractor verification request not found',
-      404,
-      'VERIFICATION_NOT_FOUND'
-    );
-  }
-
-  const nextStatus = decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
-  const rejectionMessage = remarks || 'Verification rejected by reviewer.';
-  let releasedReportIds: string[] = [];
-
-  // A rejected session stays signed in so the device can show the reason and route the person
-  // back to the identity wizard. Its reports stay staged; revocation is a separate action.
-  const updated = await prisma.$transaction(async (tx) => {
-    const updated = await tx.fieldAgentSession.update({
-      where: { id: sessionId },
-      data: {
-        assuranceStatus: nextStatus,
-        reviewedByUserId: webUser.userId,
-        reviewedAt: new Date(),
-        rejectionReason: decision === 'REJECT' ? rejectionMessage : null,
-      },
-    });
-    await syncParticipantForSession(tx, sessionId);
-
-    await recordAuditEvent(tx, {
-      projectId,
-      actorType: 'WEB_USER',
-      actorId: webUser.userId,
-      actorDisplayName: `${webUser.fullName} (${webUser.roleName})`,
-      action:
-        decision === 'APPROVE'
-          ? 'CONTRACTOR_ASSURANCE_APPROVED'
-          : 'CONTRACTOR_ASSURANCE_REJECTED',
-      summaryText:
-        decision === 'APPROVE'
-          ? `${webUser.fullName} (${webUser.roleName}) verified and approved credentials for ${session.agentFullName}${
-              session.registrationNumber ? ` (registration ${session.registrationNumber})` : ''
-            }. Mobile field access activated.`
-          : `${webUser.fullName} (${webUser.roleName}) rejected verification for ${session.agentFullName}. Reason: ${remarks || 'Incomplete credentials'}.`,
-      payload: {
-        sessionId,
-        agentFullName: session.agentFullName,
-        registrationNumber: session.registrationNumber,
-        decision,
-        remarks: remarks || null,
-      },
-    });
-
-    await createMobileNotification(tx, {
-      projectId,
-      fieldSessionId: sessionId,
-      type: decision === 'APPROVE' ? 'ASSURANCE_APPROVED' : 'ASSURANCE_REJECTED',
-      actionType: decision === 'APPROVE' ? 'NONE' : 'OPEN_ASSURANCE_WIZARD',
-      requiresAction: decision === 'REJECT',
-      title:
-        decision === 'APPROVE'
-          ? 'Identity Assurance Approved'
-          : 'Verification Resubmission Needed',
-      message:
-        decision === 'APPROVE'
-          ? `${webUser.fullName} approved your identity${session.registrationNumber ? ' and registration' : ''}.`
-          : `Verification was returned: ${remarks || 'Please re-capture a clear ID photo and selfies.'}`,
-    });
-
-    if (decision === 'APPROVE') {
-      // The server releases staged reports; the device never re-submits them.
-      releasedReportIds = await releaseStagedReportsForSession(tx, { projectId, sessionId });
-      if (releasedReportIds.length > 0) {
-        await recordAuditEvent(tx, {
-          projectId,
-          actorType: 'WEB_USER',
-          actorId: webUser.userId,
-          actorDisplayName: `${webUser.fullName} (${webUser.roleName})`,
-          action: 'WORKDAY_REPORTS_RELEASED',
-          summaryText: `Released ${releasedReportIds.length} staged report(s) from ${session.agentFullName} after identity approval.`,
-          payload: { sessionId, workdayReportIds: releasedReportIds },
-        });
-      }
-    }
-
-    return updated;
-  });
-
-  invalidateSessionAuthCache(sessionId);
-  for (const reportId of releasedReportIds) scheduleAiOmissionCheck(reportId);
-  void sendPushToFieldSession(sessionId, {
-    title: decision === 'APPROVE' ? 'Identity approved' : 'Identity check returned',
-    body:
-      decision === 'APPROVE'
-        ? releasedReportIds.length > 0
-          ? `Your identity was approved. ${releasedReportIds.length} staged report(s) were submitted.`
-          : 'Your identity was approved.'
-        : `Your identity check was returned: ${rejectionMessage}`,
-    data: {
-      actionType: decision === 'APPROVE' ? 'NONE' : 'OPEN_ASSURANCE_WIZARD',
-      assuranceStatus: nextStatus,
-    },
-  });
-  return {
-    releasedReportCount: releasedReportIds.length,
-    id: updated.id,
-    projectId: updated.projectId,
-    agentFullName: updated.agentFullName,
-    assuranceStatus: updated.assuranceStatus,
-    isActive: updated.isActive,
-    reviewedAt: updated.reviewedAt?.toISOString() ?? null,
-    rejectionReason: updated.rejectionReason,
-  };
-}
-
-/**
- * Aggregated Portfolio Executive Summary scoped to tenant & user visibility.
- */
-export async function getPortfolioExecutiveSummary(webUser: WebJwtPayload, filters: ProjectListFilters = {}) {
-  const projects = await prisma.project.findMany({
-    where: { AND: [buildProjectVisibilityWhere(webUser), ...deliveryModelFilterWhere(filters)] },
-    orderBy: { createdAt: 'desc' },
-    include: {
-      ...DELIVERY_MODEL_INCLUDE,
-      contractors: { ...PROJECT_CONTRACTORS_INCLUDE, include: { organization: { select: { name: true } } } },
-      lenderOrganization: { select: { name: true } },
-      fieldSessions: {
-        where: {
-          assuranceStatus: 'PENDING_APPROVAL',
-        },
-        select: { id: true },
-      },
-      // Phase 10: retention column (module switch and open defects).
-      processConfig: { select: { enableRetentionModule: true } },
-      defectTickets: {
-        where: { status: { in: ['OPEN', 'ASSIGNED', 'RECTIFIED_PENDING_VERIFICATION'] } },
-        select: { id: true },
-      },
-    },
-  });
-
-  let totalPortfolioCommitmentNgn = 0;
-  let totalDisbursedToDateNgn = 0;
-  let pendingContractorVerificationsCount = 0;
-
-  const projectItems = projects.map((p) => {
-    const budget = Number(p.totalBudgetNgn ?? 0);
-    const disbursed = Number(p.disbursedToDateNgn);
-    totalPortfolioCommitmentNgn += budget;
-    totalDisbursedToDateNgn += disbursed;
-
-    const pendingContractors = p.fieldSessions.length;
-    pendingContractorVerificationsCount += pendingContractors;
-
-    return {
-      projectId: p.id,
-      codePrefix: p.codePrefix,
-      name: p.name,
-      stateLocation: p.stateLocation ?? '',
-      contractorName: contractorHeadline(p.contractors).name,
-      contractorCount: p.contractors.length,
-      lenderName: p.lenderOrganization?.name ?? '',
-      totalBudgetNgn: budget,
-      disbursedToDateNgn: disbursed,
-      certifiedProgressPct: Number(p.certifiedProgressPct),
-      pendingContractorCount: pendingContractors,
-      scheduleVariance: serializeScheduleBadge(p),
-      retention: p.processConfig?.enableRetentionModule
-        ? {
-            phase: p.constructionPhase,
-            heldNgn: Number(p.retentionHeldNgn),
-            releasedNgn: Number(p.retentionReleasedNgn),
-            retentionEndDate: p.retentionEndDate,
-            daysRemaining: p.retentionEndDate
-              ? calendarDaysUntil(zonedCalendarDate(new Date(), p.timezone), p.retentionEndDate)
-              : null,
-            openDefectCount: p.defectTickets.length,
-          }
-        : null,
-      ...serializeDeliveryModel(p),
-    };
-  });
-
-  return {
-    totalPortfolioCommitmentNgn,
-    totalDisbursedToDateNgn,
-    activeProjectsCount: projects.length,
-    pendingContractorVerificationsCount,
-    projects: projectItems,
-  };
-}
-
-/**
- * Demo-only catalog endpoint: lists seeded/active projects and their active join codes.
- */
-export async function listDemoProjects() {
-  const projects = await prisma.project.findMany({
-    where: { status: 'ACTIVE' },
-    orderBy: { createdAt: 'asc' },
-    select: {
-      id: true,
-      codePrefix: true,
-      name: true,
-      stateLocation: true,
-      lgaLocation: true,
-      geofenceMode: true,
-      joinCodes: {
-        where: { isActive: true },
-        orderBy: { code: 'asc' },
-        select: {
-          code: true,
-          role: {
-            select: {
-              id: true,
-              code: true,
-              name: true,
-              fieldPersonaType: true,
-              assuranceWeight: true,
-              requiresIdentityAssurance: true,
-            },
-          },
-        },
-      },
-    },
-  });
-
-  return projects.map((p) => ({
-    id: p.id,
-    codePrefix: p.codePrefix,
-    name: p.name,
-    stateLocation: p.stateLocation ?? '',
-    lgaLocation: p.lgaLocation,
-    geofenceMode: p.geofenceMode as GeofenceMode,
-    joinCodes: p.joinCodes.map((jc) => ({
-      code: jc.code,
-      roleId: jc.role.id,
-      roleCode: jc.role.code,
-      roleName: jc.role.name,
-      fieldPersonaType: jc.role.fieldPersonaType as FieldPersonaType,
-      assuranceWeight: jc.role.assuranceWeight,
-      requiresIdentityAssurance: jc.role.requiresIdentityAssurance,
-    })),
-  }));
-}
 
 // ---------------------------------------------------------------------------
 // Portfolio dashboard (map + KPI cards)

@@ -140,7 +140,9 @@ function MilestoneRow({ projectId, m, onOpenCase }: { projectId: string; m: Cont
   const [text, setText] = useState("");
   const closed = m.status === "DONE" || m.status === "WAIVED";
   const manual = m.completionMode === "MANUAL";
-  const canComplete = !closed && manual && hasPermission("milestones:manage");
+  // R1e: "Contractor on site" is confirmed by an officer through the same complete action.
+  const officerConfirmed = m.completionMode === "AUTO_CONTRACTOR_ON_SITE";
+  const canComplete = !closed && (manual || officerConfirmed) && hasPermission("milestones:manage");
   const canWaive = !closed && hasPermission("milestones:waive");
   const canRaise = !closed && m.status === "OVERDUE" && Boolean(m.projectContractorId) && !m.openDefaultCaseId && hasPermission("contracts:raise_default");
   const s = MILESTONE_STATUS_META[m.status];
@@ -158,7 +160,11 @@ function MilestoneRow({ projectId, m, onOpenCase }: { projectId: string; m: Cont
             <p className="text-[11px] text-slate-500">
               {m.anchorLabel}
               {m.dueDate ? ` · due ${m.dueDate}` : " · no date yet"}
-              {!manual ? ` · ${MILESTONE_COMPLETION_MODE_META[m.completionMode].label.toLowerCase()} (automatic)` : ""}
+              {officerConfirmed
+                ? ` · ${MILESTONE_COMPLETION_MODE_META[m.completionMode].label.toLowerCase()} (confirmed by an officer)`
+                : !manual
+                  ? ` · ${MILESTONE_COMPLETION_MODE_META[m.completionMode].label.toLowerCase()} (automatic)`
+                  : ""}
               {m.responsibleRoleName ? ` · ${m.responsibleRoleName}` : ""}
             </p>
             {m.description && <p className="text-[11px] text-slate-600">{m.description}</p>}

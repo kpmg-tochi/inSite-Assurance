@@ -304,7 +304,7 @@ export function HomePage() {
                     <strong className="text-slate-900">
                       Independent Monitor (Certifier):
                     </strong>{" "}
-                    Configures radial or linear corridor geofences, flags
+                    Configures radial or perimeter geofences, flags
                     Mandatory Visual Hold-Points, reviews AI claim-vs-evidence
                     ratings, and signs formal Valuation Reports.
                   </li>
@@ -363,7 +363,7 @@ export function HomePage() {
                     </strong>{" "}
                     No gallery uploads. Each photo carries the GPS fix from the
                     shutter, is signed with a per-device key, and is checked by
-                    the server against the corridor (<strong>KM X+YYY</strong>).
+                    the server against the site boundary.
                   </li>
                   <li>
                     <strong className="text-slate-900">

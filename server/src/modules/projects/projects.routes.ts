@@ -4,11 +4,8 @@ import { buildProjectVisibilityWhere, guardProjectRoutes } from '../../utils/acc
 import {
   CreateProjectDraftRequestSchema,
   GeoCoordinateSchema,
-  IssueJoinCodeRequestSchema,
   ProjectContractorInputSchema,
   ProjectListFiltersSchema,
-  RotateJoinCodeRequestSchema,
-  ReviewContractorVerificationRequestSchema,
   UpdateFieldSessionStatusRequestSchema,
 } from '@insite/shared';
 import {
@@ -18,14 +15,10 @@ import {
 } from '../../middleware/auth.middleware';
 import { validateBody } from '../../middleware/validate.middleware';
 import {
-  getPortfolioExecutiveSummary,
   getPortfolioOverview,
   getProjectBaselineDetails,
-  listContractorVerifications,
-  listDemoProjects,
   listProjectFieldSessions,
   listProjectsForUser,
-  reviewContractorVerification,
   updateFieldSessionStatus,
   verifyCoordinateForProject,
 } from './projects.service';
@@ -45,11 +38,6 @@ import {
   removeProjectContractor,
   updateProjectContractor,
 } from './contractorRoutes.service';
-import {
-  issueProjectJoinCode,
-  listProjectJoinCodes,
-  rotateProjectJoinCode,
-} from './joinCodes.service';
 import { env } from '../../config/env';
 import { seedDatabase } from '../../db/seedDatabase';
 import { demoRateLimit } from '../../middleware/rateLimit.middleware';
@@ -58,23 +46,6 @@ const router = guardProjectRoutes(Router());
 
 // Demo endpoints are mounted only when DEMO_MODE is on (Phase 2 Step 8).
 if (env.DEMO_MODE) {
-  /**
-   * GET /api/v1/projects/demo
-   * Demo-only: projects and active join codes for mobile workspace switching and autofill.
-   */
-  router.get(
-    '/demo',
-    demoRateLimit,
-    async (_req: Request, res: Response, next: NextFunction) => {
-      try {
-        const projects = await listDemoProjects();
-        res.json({ success: true, data: projects });
-      } catch (error) {
-        next(error);
-      }
-    }
-  );
-
   /**
    * POST /api/v1/projects/demo/reset
    * Demo-only: wipes runtime data and restores the demo seed.
@@ -112,22 +83,6 @@ router.get(
   }
 );
 
-/**
- * GET /api/v1/projects/portfolio/executive-summary
- * Multi-project portfolio executive metrics scoped to tenant & user permissions.
- */
-router.get(
-  '/portfolio/executive-summary',
-  requirePermission('projects:view_executive_matrix'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const summary = await getPortfolioExecutiveSummary(req.webUser!, ProjectListFiltersSchema.parse(req.query));
-      res.json({ success: true, data: summary });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
 
 /**
  * GET /api/v1/projects
@@ -356,11 +311,7 @@ router.get(
   requireAnyAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const baseline = await getProjectBaselineDetails(
-        String(req.params.projectId),
-        req.webUser,
-        req.fieldAgent
-      );
+      const baseline = await getProjectBaselineDetails(String(req.params.projectId));
       res.json({ success: true, data: baseline });
     } catch (error) {
       next(error);
@@ -372,7 +323,7 @@ router.get(
 
 /**
  * POST /api/v1/projects/:projectId/verify-geofence
- * Tests any GPS coordinate against the project's Radial or Linear Corridor Geofence.
+ * Tests any GPS coordinate against the project's radial or perimeter geofence.
  */
 router.post(
   '/:projectId/verify-geofence',
@@ -394,70 +345,12 @@ router.post(
 );
 
 /**
- * GET /api/v1/projects/:projectId/join-codes
- * Lists the project's mobile join codes (active and rotated-out).
- */
-router.get(
-  '/:projectId/join-codes',
-  requirePermission('mobilization:manage_roster'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const codes = await listProjectJoinCodes(String(req.params.projectId), req.webUser!);
-      res.json({ success: true, data: codes });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * POST /api/v1/projects/:projectId/join-codes
- * Issues a join code for a mobile role, e.g. one created after the project was set up.
- */
-router.post(
-  '/:projectId/join-codes',
-  requirePermission('mobilization:manage_roster'),
-  validateBody(IssueJoinCodeRequestSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const created = await issueProjectJoinCode(String(req.params.projectId), req.webUser!, req.body);
-      res.status(201).json({ success: true, data: created });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * POST /api/v1/projects/:projectId/join-codes/:joinCodeId/rotate
- * Deactivates a join code and issues a replacement for the same role.
- */
-router.post(
-  '/:projectId/join-codes/:joinCodeId/rotate',
-  requirePermission('mobilization:manage_roster'),
-  validateBody(RotateJoinCodeRequestSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const created = await rotateProjectJoinCode(
-        String(req.params.projectId),
-        String(req.params.joinCodeId),
-        req.webUser!,
-        req.body
-      );
-      res.status(201).json({ success: true, data: created });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
  * GET /api/v1/projects/:projectId/field-sessions
  * Lists active and revoked mobile field agent sessions for the project (or tenant-scoped 'all').
  */
 router.get(
   '/:projectId/field-sessions',
-  requirePermission('sessions:revoke_device', 'mobilization:manage_roster'),
+  requirePermission('sessions:revoke_device'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const sessions = await listProjectFieldSessions(
@@ -488,50 +381,6 @@ router.patch(
         isActive: req.body.isActive,
         reason: req.body.reason,
       });
-      res.json({ success: true, data: updated });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * GET /api/v1/projects/:projectId/contractor-verifications
- * Lists assurance verification submissions scoped to tenant/user project access.
- */
-router.get(
-  '/:projectId/contractor-verifications',
-  requirePermission('assurance:review_credentials'),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const verifications = await listContractorVerifications(
-        String(req.params.projectId),
-        req.webUser!
-      );
-      res.json({ success: true, data: verifications });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * POST /api/v1/projects/:projectId/contractor-verifications/:sessionId/review
- * Approves or rejects a field assurance onboarding dossier.
- */
-router.post(
-  '/:projectId/contractor-verifications/:sessionId/review',
-  requirePermission('assurance:review_credentials'),
-  validateBody(ReviewContractorVerificationRequestSchema),
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const updated = await reviewContractorVerification(
-        String(req.params.projectId),
-        String(req.params.sessionId),
-        req.webUser!,
-        req.body.decision,
-        req.body.remarks
-      );
       res.json({ success: true, data: updated });
     } catch (error) {
       next(error);

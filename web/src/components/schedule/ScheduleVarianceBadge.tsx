@@ -9,29 +9,23 @@ const TONE_CLASSES: Record<string, string> = {
   muted: "bg-slate-50 text-slate-400 border-slate-200",
 };
 
-/** Tone for a status; "behind" by under two weeks is a warning, not critical. */
-function toneFor(status: ScheduleStatusValue, varianceWorkdays: number | null | undefined, weekLength = 6): string {
-  if (status === "BEHIND" && varianceWorkdays !== null && varianceWorkdays !== undefined && -varianceWorkdays < 2 * weekLength) {
-    return "warning";
-  }
+function toneFor(status: ScheduleStatusValue): string {
   return SCHEDULE_STATUS_META[status].tone;
 }
 
-/** Variance pill: "On schedule", "4 weeks behind", "No schedule". */
+/** Schedule pill: "On track", "Behind", "No sprints" (redesign R2d: computed from sprints). */
 export function ScheduleVariancePill({
   status,
   label,
-  varianceWorkdays,
   title,
   size = "sm",
 }: {
   status: ScheduleStatusValue;
   label: string;
-  varianceWorkdays?: number | null;
   title?: string;
   size?: "xs" | "sm";
 }) {
-  const tone = toneFor(status, varianceWorkdays);
+  const tone = toneFor(status);
   return (
     <span
       title={title}
@@ -44,7 +38,7 @@ export function ScheduleVariancePill({
   );
 }
 
-/** The stored project badge (directory, dashboard, executive matrix). Renders nothing without one. */
+/** The stored project badge (directory, dashboard, portfolio). Renders nothing without one. */
 export function ScheduleBadge({ badge, size = "sm" }: { badge: Badge | null | undefined; size?: "xs" | "sm" }) {
   if (!badge) return null;
   const computed = badge.computedAt ? ` · computed ${new Date(badge.computedAt).toLocaleString()}` : "";
@@ -52,9 +46,8 @@ export function ScheduleBadge({ badge, size = "sm" }: { badge: Badge | null | un
     <ScheduleVariancePill
       status={badge.status}
       label={badge.label}
-      varianceWorkdays={badge.varianceWorkdays}
       size={size}
-      title={`Schedule variance on certified progress${computed}`}
+      title={`Schedule from sprints: behind when a unit due by an ended sprint is not complete${computed}`}
     />
   );
 }

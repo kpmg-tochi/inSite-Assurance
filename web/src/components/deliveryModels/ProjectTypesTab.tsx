@@ -8,10 +8,6 @@ import {
   type ProjectTypeKpiTargets,
   type ProjectTypeFunderDefault,
   type SaveProjectTypeRequestInput,
-  CREDENTIAL_REQUIREMENT_META,
-  CREDENTIAL_SUBJECT_META,
-  type CredentialRequirement,
-  type CredentialSubject,
 } from "@insite/shared";
 import { StandardTable, TableActionButton, TableBadge, type TableColumnDef } from "../table";
 import { CustomSelect } from "../common";
@@ -55,9 +51,6 @@ interface Draft {
   reportingOn: boolean;
   /** Every field of the Reporting step (since Phase 16, not only cadence and hours). */
   reporting: ReportingDefaults;
-  /** Phase 12: registration policy per subject; "" uses the tenant setting. */
-  credentialCertifier: CredentialRequirement | "";
-  credentialFieldAssurance: CredentialRequirement | "";
   /** Redesign R1b: retention defaults for new projects of this type ("" = none). */
   retentionPct: string;
   retentionMonths: string;
@@ -75,15 +68,12 @@ interface Draft {
   rest: Record<string, unknown>;
 }
 
-/** Phase 12 credentials and the R1b payment (retention) defaults as stored on the type (read leniently). */
-function phase12From(config: unknown) {
+/** The R1b payment (retention) defaults as stored on the type (read leniently). */
+function paymentsFrom(config: unknown) {
   const c = (config ?? {}) as {
-    credentials?: { certifier?: CredentialRequirement | null; fieldAssurance?: CredentialRequirement | null };
     payments?: { retentionPercentage?: number | null; retentionDurationMonths?: number | null };
   };
   return {
-    credentialCertifier: c.credentials?.certifier ?? ("" as const),
-    credentialFieldAssurance: c.credentials?.fieldAssurance ?? ("" as const),
     retentionPct: c.payments?.retentionPercentage != null ? String(c.payments.retentionPercentage) : "",
     retentionMonths: c.payments?.retentionDurationMonths != null ? String(c.payments.retentionDurationMonths) : "",
   };
@@ -91,7 +81,7 @@ function phase12From(config: unknown) {
 
 function draftFrom(t: ProjectTypeDto | null): Draft {
   const c = t?.config;
-  const { ownership, parties, reportingDefaults, contractMilestones, kickoff, closure, kpiTargets, reportingStreams, inspections, supervision, documentRequirements, defaultCases, ...rest } = (c ?? {}) as ProjectTypeDto["config"];
+  const { ownership, parties, reportingDefaults, contractMilestones, kickoff, closure, kpiTargets, reportingStreams, inspections, supervision, visitForms, documentRequirements, defaultCases, ...rest } = (c ?? {}) as ProjectTypeDto["config"];
   return {
     id: t?.id ?? null,
     code: t?.code ?? "",
@@ -112,7 +102,7 @@ function draftFrom(t: ProjectTypeDto | null): Draft {
     defaultFunderId: parties?.defaultFunderOrganizationId ?? "",
     reportingOn: Boolean(reportingDefaults),
     reporting: reportingDefaults ? { ...reportingDefaults } : { reportingCadence: "WEEKLY", workdayStartTime: "08:00", workdayEndTime: "17:00" },
-    ...phase12From(c),
+    ...paymentsFrom(c),
     contract: {
       milestones: (contractMilestones ?? []).map((m) => ({ ...m })),
       kickoff: {
@@ -126,6 +116,7 @@ function draftFrom(t: ProjectTypeDto | null): Draft {
       reportingStreams: (reportingStreams ?? []).map((st) => ({ ...st, roleCodes: [...st.roleCodes] })),
       inspections: { templateCodeByVisitType: { ...(inspections?.templateCodeByVisitType ?? {}) } },
       supervision: { ...(supervision ?? {}), supervisorRoleCodes: [...(supervision?.supervisorRoleCodes ?? [])] },
+      visitForms: { templateCodeByVisitKind: { ...(visitForms?.templateCodeByVisitKind ?? {}) } },
     },
     documents: {
       documentRequirements: {
@@ -157,11 +148,6 @@ function payloadFrom(d: Draft): SaveProjectTypeRequestInput {
     reportingDefaults: d.reportingOn
       ? d.reporting
       : null,
-    // Phase 12
-    credentials: {
-      certifier: d.credentialCertifier || null,
-      fieldAssurance: d.credentialFieldAssurance || null,
-    },
     payments: {
       retentionPercentage: d.retentionPct.trim() === "" ? null : Number(d.retentionPct),
       retentionDurationMonths: d.retentionMonths.trim() === "" ? null : Math.round(Number(d.retentionMonths)),
@@ -186,6 +172,8 @@ function payloadFrom(d: Draft): SaveProjectTypeRequestInput {
     reportingStreams: d.monitoring.reportingStreams.map((st) => ({ ...st, label: st.label.trim() })),
     inspections: d.monitoring.inspections,
     supervision: d.monitoring.supervision,
+    // Redesign R3
+    visitForms: d.monitoring.visitForms,
     documentRequirements: d.documents.documentRequirements,
     defaultCases: d.documents.defaultCases,
   };
@@ -411,38 +399,6 @@ export function ProjectTypesTab() {
                 <CustomSelect value={draft.defaultFunderId} onChange={(v) => set({ defaultFunderId: v })} options={orgOptions} searchable placeholder="Choose" />
               </div>
             )}
-          </div>
-        </section>
-
-        <section className={sectionCls}>
-          <h3 className="text-sm font-bold text-slate-900">Credentials</h3>
-          <p className="text-[11px] text-slate-500">
-            Whether a professional registration is required, optional or hidden on projects of this type. Permissions and
-            segregation of duties apply either way.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {(
-              [
-                ["certifier", "credentialCertifier"],
-                ["fieldAssurance", "credentialFieldAssurance"],
-              ] as Array<[CredentialSubject, "credentialCertifier" | "credentialFieldAssurance"]>
-            ).map(([subject, key]) => (
-              <div key={subject}>
-                <p className="text-xs font-medium text-slate-700 mb-1">{CREDENTIAL_SUBJECT_META[subject].label}</p>
-                <CustomSelect
-                  value={draft[key]}
-                  onChange={(v) => set({ [key]: v as CredentialRequirement | "" } as Partial<Draft>)}
-                  options={[
-                    { value: "", label: "Use the workspace setting" },
-                    ...(["REQUIRED", "OPTIONAL", "HIDDEN"] as const).map((r) => ({
-                      value: r,
-                      label: CREDENTIAL_REQUIREMENT_META[r].label,
-                      description: CREDENTIAL_REQUIREMENT_META[r].description,
-                    })),
-                  ]}
-                />
-              </div>
-            ))}
           </div>
         </section>
 

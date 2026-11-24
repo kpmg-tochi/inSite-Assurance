@@ -1,9 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { defectActionBody, showDefectsEntry } from './defects';
+import { defectActionBody, RECTIFY_REMOVED_MESSAGE, showDefectsEntry, type DefectActionPayload } from './defects';
 import { SESSION_BOUND_KINDS } from '../storage/outbox/outboxPolicy';
 
-describe('defect work on mobile (Phase 10)', () => {
+const capture = '6f1c2d4e-0000-4000-8000-000000000001';
+
+describe('defect work on mobile (Phase 10, staff-only since R1d)', () => {
   it('shows the Defects entry only after construction and with the permission', () => {
     const perms = ['field:submit_report', 'retention:manage_defects'];
     assert.equal(showDefectsEntry('ACTIVE_CONSTRUCTION', perms), false);
@@ -13,31 +15,30 @@ describe('defect work on mobile (Phase 10)', () => {
     assert.equal(showDefectsEntry('RETENTION_PERIOD', ['field:submit_report']), false);
   });
 
-  it('builds the request bodies the server accepts', () => {
-    const capture = '6f1c2d4e-0000-4000-8000-000000000001';
-    assert.deepEqual(defectActionBody({ ticketId: 't', kind: 'rectify', notes: '', captureIds: [capture] }), { notes: '', captureIds: [capture] });
-    assert.throws(() => defectActionBody({ ticketId: 't', kind: 'rectify', notes: 'ok', captureIds: [] }));
-    assert.deepEqual(defectActionBody({ ticketId: 't', kind: 'verify', notes: '', captureIds: [], decision: 'CLOSE' }), {
-      decision: 'CLOSE',
-      notes: '',
-      captureIds: [],
-    });
-    assert.throws(() => defectActionBody({ ticketId: 't', kind: 'verify', notes: 'no', captureIds: [], decision: 'REOPEN' }));
-  });
-
-  it("needs the verifier's photos to close when the monitoring side captures the evidence", () => {
-    const capture = '6f1c2d4e-0000-4000-8000-000000000002';
-    assert.throws(() => defectActionBody({ ticketId: 't', kind: 'verify', notes: '', captureIds: [], decision: 'CLOSE', photosRequired: true }));
-    assert.deepEqual(defectActionBody({ ticketId: 't', kind: 'verify', notes: '', captureIds: [capture], decision: 'CLOSE', photosRequired: true }), {
+  it("closing needs the officer's site photos", () => {
+    assert.throws(() => defectActionBody({ ticketId: 't', decision: 'CLOSE', notes: 'Looks fine', captureIds: [] }));
+    assert.deepEqual(defectActionBody({ ticketId: 't', decision: 'CLOSE', notes: ' ', captureIds: [capture] }), {
       decision: 'CLOSE',
       notes: '',
       captureIds: [capture],
     });
-    // Reopening never needs photos.
-    assert.doesNotThrow(() => defectActionBody({ ticketId: 't', kind: 'verify', notes: 'Still leaking', captureIds: [], decision: 'REOPEN', photosRequired: true }));
   });
 
-  it('defect updates are held after a rejoin like other evidence', () => {
+  it('reopening needs a reason and no photos', () => {
+    assert.throws(() => defectActionBody({ ticketId: 't', decision: 'REOPEN', notes: 'no', captureIds: [] }));
+    assert.deepEqual(defectActionBody({ ticketId: 't', decision: 'REOPEN', notes: 'Still leaking', captureIds: [] }), {
+      decision: 'REOPEN',
+      notes: 'Still leaking',
+      captureIds: [],
+    });
+  });
+
+  it('a "mark fixed" action queued before R1d is refused on the device, never sent', () => {
+    const legacy = { ticketId: 't', kind: 'rectify', notes: 'Patched', captureIds: [capture] } as unknown as DefectActionPayload;
+    assert.throws(() => defectActionBody(legacy), { message: RECTIFY_REMOVED_MESSAGE });
+  });
+
+  it('defect updates are held like other evidence when their session ended', () => {
     assert.equal(SESSION_BOUND_KINDS.has('DEFECT_ACTION'), true);
   });
 });

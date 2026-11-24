@@ -4,7 +4,6 @@ import {
   formatDateInZone,
   formatDateTimeInZone,
   formatMoney,
-  formatRegistrationShort,
   timeZoneAbbreviation,
 } from '@insite/shared';
 
@@ -58,14 +57,6 @@ export function getInitials(fullName: string): string {
     return parts[0].slice(0, 2).toUpperCase();
   }
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-}
-
-/**
- * Phase 12: "QSRBN #3842", or null when there is no registration number (nothing is shown; the
- * old "Verified Credential" placeholder claimed something that was not on file).
- */
-export function formatRegistrationCredential(bodyCode?: string | null, number?: string | null): string | null {
-  return formatRegistrationShort({ bodyCode, number });
 }
 
 export function formatDateShort(isoString?: string | null): string {

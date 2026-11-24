@@ -7,7 +7,6 @@ import { formatCompactNaira, formatDateTimeShort, formatNaira } from "../../lib/
 import { LiveGeospatialMap } from "../../components/LiveGeospatialMap";
 import { formatReporterRoleBadge } from "../../components/reporterRole";
 import { useAuth, useTerm } from "../../lib/auth-context";
-import ContractorVerificationQueue from "../../components/ContractorVerificationQueue";
 import { KpiCard } from "../../components/common";
 import { ScheduleBadge } from "../../components/schedule/ScheduleVarianceBadge";
 import { InspectionOverviewCard } from "../../components/inspections/InspectionOverviewCard";
@@ -76,13 +75,13 @@ export function PortfolioDashboardPage({ project, evidenceLogs }: PortfolioDashb
       {/* Phase 16: the project's KPIs against its project type's targets */}
       {hasPermission("kpis:view") && project.status !== "DRAFT" && <ProjectKpisCard projectId={project.id} />}
 
-      {/* 3. Bottom 3-Card Telemetry, Field Log & Tranche Readiness Grid */}
+      {/* 3. Bottom 3-card grid: capture integrity, latest capture, payments */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {/* Card A: Geofence / Boundary Telemetry */}
+        {/* Card A: geofence and capture integrity */}
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm flex flex-col justify-between">
           <div>
             <div className="text-xs font-bold text-slate-900">
-              Geofence &amp; Integrity Telemetry
+              Geofence &amp; Capture Integrity
             </div>
             <p className="text-[11px] text-slate-500 mt-0.5">
               Results computed by the server for each capture
@@ -150,7 +149,7 @@ export function PortfolioDashboardPage({ project, evidenceLogs }: PortfolioDashb
               <div className="mt-2.5 space-y-2">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-brand-primary">
-                    {latestConfirmedLog.chainageLabel || "Site Pin"} · WBS{" "}
+                    Site Pin · WBS{" "}
                     {latestConfirmedLog.wbsCode || "not linked"}
                   </span>
                   <span className="text-[11px] text-slate-500">
@@ -235,12 +234,6 @@ export function PortfolioDashboardPage({ project, evidenceLogs }: PortfolioDashb
         </div>
       </div>
 
-      {/* Contractor Assurance Verification Queue: only for roles that can review credentials */}
-      {hasPermission("assurance:review_credentials") && (
-        <div className="mt-4">
-          <ContractorVerificationQueue projectId={project.id} />
-        </div>
-      )}
     </div>
   );
 }

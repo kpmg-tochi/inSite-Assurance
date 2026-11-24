@@ -3,19 +3,18 @@ import { addCalendarMonths, RadialGeofence, zonedCalendarDate } from "@insite/sh
 import { prisma } from "../config/prisma";
 import { recordAuditEvent } from "../modules/audit/audit.service";
 import { applyTemplateConfig } from "../modules/process/processConfig.service";
-import { handoverUrl, newHandoverToken } from "../modules/closeout/handover.service";
 import { seedRecordedPayment } from "./seedPayments";
 
 /**
  * Phase 10 seed (dates relative to today):
- * - OGN-501 in handover, with a pending stakeholder link (code required). The seed prints the link
- *   once; only its hash is stored.
+ * - OGN-501 in handover, with no handover response recorded yet (R1d: no public link; staff record
+ *   the beneficiary's response from the signed paper copy).
  * - KWR-502 in its defects liability period: practical completion two months ago, 12-month period,
  *   5% retention held on its recorded payment (redesign R1b), and two defect tickets (one assigned and overdue, one fixed and waiting for
  *   verification).
  * Both have one recorded interim payment with 5% retention held (payments are made outside the
- * platform and recorded). Both have the handover and retention modules on and are assigned to the verifier, the lender and
- * the contractor user (its organisation is the liable contractor).
+ * platform and recorded). Both have the handover and retention modules on and are assigned to the
+ * verifier and the lender. The contractor has no login (R1d); it is the liable party on the tickets.
  */
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 3600 * 1000);
@@ -30,8 +29,6 @@ export async function seedPhase10(p: {
 }) {
   const verifier = await prisma.user.findUniqueOrThrow({ where: { email: "verifier@insite.ng" } });
   const lender = await prisma.user.findUniqueOrThrow({ where: { email: "lender@insite.ng" } });
-  // The liable contractor's web user sees its own defect tickets.
-  const contractorUser = await prisma.user.findUniqueOrThrow({ where: { email: "contractor@insite.ng" } });
   const standard = await prisma.workflowTemplate.findFirstOrThrow({ where: { tenantId: p.tenantId, isDefault: true } });
   const at = daysAgo(400).toISOString();
   const today = zonedCalendarDate(new Date(), "Africa/Lagos");
@@ -69,7 +66,6 @@ export async function seedPhase10(p: {
         geofenceGeoJson: geofence as unknown as Prisma.InputJsonValue,
         monitorOrganizationId: p.monitorOrgId,
         lenderOrganizationId: p.lenderOrgId,
-        contractorExecutionMode: "SINGLE_CONTRACTOR",
         retentionPercentage: 5,
         retentionDurationMonths: 12,
         retentionReleaseAtCompletionPct: 50,
@@ -77,7 +73,6 @@ export async function seedPhase10(p: {
           steps: Object.fromEntries(
             STEPS.map((id) => [id, { savedAt: at, savedByUserId: p.monitorUserId, completedAt: at, completedByUserId: p.monitorUserId }]),
           ),
-          team: { joinCodeRoleIds: [] },
         } as unknown as Prisma.InputJsonValue,
         ...data.extra,
       },
@@ -88,7 +83,6 @@ export async function seedPhase10(p: {
         organizationId: p.civilContractorOrgId,
         tradeCategory: "Civil works",
         tradeCode: "CIV",
-        isMainContractor: true,
       },
     });
     await seedRecordedPayment({
@@ -104,7 +98,6 @@ export async function seedPhase10(p: {
     await prisma.boqItem.create({
       data: {
         projectId: project.id,
-        projectContractorId: contractor.id,
         wbsCode: "01.01",
         section: "BILL 1 — MAIN WORKS",
         description: "Main works (lump sum)",
@@ -130,14 +123,13 @@ export async function seedPhase10(p: {
       data: [
         { userId: verifier.id, projectId: project.id },
         { userId: lender.id, projectId: project.id },
-        { userId: contractorUser.id, projectId: project.id },
       ],
     });
     return { project, contractor };
   }
 
   // ------------------------------------------------------------------------
-  // OGN-501: in handover, one pending link
+  // OGN-501: in handover, response not recorded yet
   // ------------------------------------------------------------------------
   const ogun = await createProject({
     codePrefix: "OGN-501",
@@ -150,29 +142,13 @@ export async function seedPhase10(p: {
     progress: 100,
     extra: { constructionPhase: "HANDOVER_IN_PROGRESS", constructionPhaseChangedAt: daysAgo(3) },
   });
-  const { token, tokenHash } = newHandoverToken();
-  await prisma.handoverLink.create({
-    data: {
-      projectId: ogun.project.id,
-      tokenHash,
-      label: "Ilaro community handover",
-      recipientName: "Chief Adebayo Ogundipe",
-      recipientContact: "community.rep@example.com",
-      stakeholderType: "COMMUNITY_REPRESENTATIVE",
-      handoverSummary:
-        "Four solar-powered boreholes with overhead tanks and two public taps each, at the market, the primary school, the health post and the mosque. Please check that water flows at every tap and tell us about anything that needs fixing.",
-      requiresOtp: true,
-      expiresAt: new Date(Date.now() + 14 * 24 * 3600 * 1000),
-      createdByUserId: verifier.id,
-    },
-  });
   await recordAuditEvent(prisma, {
     projectId: ogun.project.id,
     actorType: "WEB_USER",
     actorId: verifier.id,
     actorDisplayName: "Seed",
     action: "PROJECT_PHASE_CHANGED",
-    summaryText: "Seeded OGN-501 in handover with a pending stakeholder link.",
+    summaryText: "Seeded OGN-501 in handover; the beneficiary's response is still to be recorded.",
     payload: { from: "ACTIVE_CONSTRUCTION", to: "HANDOVER_IN_PROGRESS" },
   });
 
@@ -227,11 +203,10 @@ export async function seedPhase10(p: {
       dueDate: today,
       rectificationNotes: "Cut, cleaned and patched with hot asphalt; compacted.",
       rectifiedAt: daysAgo(2),
-      rectifiedByLabel: "Seed contractor",
+      rectifiedByLabel: "Contractor (reported to the officer)",
       raisedByUserId: verifier.id,
       createdAt: daysAgo(30),
     },
   });
 
-  console.log(`   • Phase 10 handover link (OGN-501, code goes to community.rep@example.com): ${handoverUrl(token)}`);
 }

@@ -15,7 +15,6 @@ import {
   type ProjectGeofence,
 } from '@insite/shared';
 import { evaluateGeofence } from '../utils/geofenceEvaluation';
-import { parseBoqNumber, previewBoqSpreadsheet } from '../modules/boq/boqParser';
 
 // Roughly 1.1 km x 1.1 km square near Abeokuta.
 const SQUARE: PerimeterGeofence = PerimeterGeofenceSchema.parse({
@@ -120,17 +119,8 @@ describe('Phase 6 perimeter geofence', () => {
   });
 });
 
-describe('Phase 6 tolerance for radial and linear modes', () => {
+describe('Phase 6 tolerance for radial geofences', () => {
   const radial: ProjectGeofence = { mode: 'RADIAL', center: { latitude: 9.0, longitude: 7.0 }, radiusMeters: 300 };
-  const linear: ProjectGeofence = ProjectGeofenceSchema.parse({
-    mode: 'LINEAR_CORRIDOR',
-    centerlineCoordinates: [
-      [3.5, 6.45],
-      [3.6, 6.45],
-    ],
-    corridorHalfWidthMeters: 100,
-    startChainageKm: 0,
-  });
 
   it('radial: distance beyond the radius', () => {
     const at = (m: number) => ({ latitude: 9.0 + m / M_PER_DEG_LAT, longitude: 7.0 });
@@ -143,12 +133,9 @@ describe('Phase 6 tolerance for radial and linear modes', () => {
     assert.equal(verifyPointAgainstGeofence(at(363), radial).status, 'OUTSIDE');
   });
 
-  it('linear: offset beyond the half-width, chainage kept', () => {
-    const at = (m: number) => ({ latitude: 6.45 + m / M_PER_DEG_LAT, longitude: 3.55 });
-    const r = verifyPointAgainstGeofence(at(150), linear, 100);
-    assert.equal(r.status, 'WITHIN_TOLERANCE');
-    assert.ok(r.chainageKm !== null);
-    assert.equal(verifyPointAgainstGeofence(at(250), linear, 100).status, 'OUTSIDE');
+  it('linear corridors are no longer a geofence mode (redesign)', () => {
+    const res = ProjectGeofenceSchema.safeParse({ mode: 'LINEAR_CORRIDOR', centerlineCoordinates: [[3.5, 6.45], [3.6, 6.45]], corridorHalfWidthMeters: 100 });
+    assert.equal(res.success, false);
   });
 
   it('server evaluation flags within-tolerance positions and keeps isWithinGeofence true', () => {
@@ -162,46 +149,11 @@ describe('Phase 6 tolerance for radial and linear modes', () => {
   });
 
   it('centroid and bounds cover every mode', () => {
-    for (const g of [radial, linear, SQUARE]) {
+    for (const g of [radial, SQUARE]) {
       const c = geofenceCentroid(g);
       const b = geofenceBounds(g);
       assert.ok(b.south < c.latitude && c.latitude < b.north, g.mode);
       assert.ok(b.west < c.longitude && c.longitude < b.east, g.mode);
     }
-  });
-});
-
-describe('Phase 6 BOQ parser', () => {
-  it('reads thousands separators and currency symbols', () => {
-    assert.equal(parseBoqNumber('12,500'), 12500);
-    assert.equal(parseBoqNumber('₦8,500,000.50'), 8500000.5);
-    assert.equal(parseBoqNumber('(1,000)'), -1000);
-    assert.equal(parseBoqNumber(''), null);
-    assert.ok(Number.isNaN(parseBoqNumber('abc') as number));
-  });
-
-  it('uses "Item No" as the WBS code, not the description, and reports per-row issues', async () => {
-    const csv = [
-      'Item No,Description,Unit,Qty,Rate,Amount',
-      '1.1,Excavation to formation level,m3,"12,500","4,500",',
-      '1.2,Ab,m3,10,100,',
-      '1.3,Blinding concrete,m3,,2000,',
-      ',Formwork to columns,m2,50,3000,160000',
-    ].join('\n');
-    const preview = await previewBoqSpreadsheet(Buffer.from(csv).toString('base64'));
-    assert.equal(preview.detectedColumns.wbsCode, 'Item No');
-    assert.equal(preview.detectedColumns.description, 'Description');
-    const [r1, r2, r3, r4] = preview.rows;
-    assert.equal(r1.item?.wbsCode, '1.1');
-    assert.equal(r1.item?.totalQuantity, 12500);
-    assert.equal(r1.item?.budgetedCostNgn, 12500 * 4500);
-    assert.equal(r2.item, null);
-    assert.match(r2.errors.join(' '), /Description/);
-    assert.equal(r3.item, null);
-    assert.match(r3.errors.join(' '), /Quantity is empty/);
-    assert.match(r4.warnings.join(' '), /No WBS code/);
-    assert.match(r4.warnings.join(' '), /differs from quantity/);
-    assert.equal(preview.validCount, 2);
-    assert.equal(preview.errorCount, 2);
   });
 });

@@ -1,6 +1,5 @@
 import { Prisma } from '@prisma/client';
 import {
-  ContractorExecutionMode,
   ProjectContractorDto,
   ProjectContractorInput,
 } from '@insite/shared';
@@ -11,8 +10,8 @@ import { recordAuditEvent } from '../audit/audit.service';
 import { resolveOrganization } from '../organizations/organizations.service';
 
 /**
- * Project contractors (Phase 6, decision D). A project has one or more `ProjectContractor` rows;
- * the contractor model decides which BOQ items a contractor owns.
+ * The project's contractor (Phase 6). Redesign R1d (decision T): one contractor per project, no
+ * execution modes, no replacement. The contractor has no login (decision P2).
  */
 
 type Tx = Prisma.TransactionClient;
@@ -20,12 +19,26 @@ type Db = Tx | typeof prisma;
 
 export const CONTRACTOR_INCLUDE = {
   organization: { select: { id: true, name: true } },
-  _count: { select: { boqItems: true, fieldSessions: true } },
+  _count: {
+    select: {
+      defectTickets: true,
+      documents: true,
+      defaultCases: true,
+      inspectionFindings: true,
+      performanceRatings: true,
+    },
+  },
 } satisfies Prisma.ProjectContractorInclude;
 
 export type ContractorRow = Prisma.ProjectContractorGetPayload<{ include: typeof CONTRACTOR_INCLUDE }>;
 
 const isoDate = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
+
+/** Work is recorded against the contractor, so it cannot be removed or moved to another organisation. */
+function hasActivity(c: ContractorRow): boolean {
+  const n = c._count;
+  return n.defectTickets + n.documents + n.defaultCases + n.inspectionFindings + n.performanceRatings > 0;
+}
 
 export function serializeContractor(c: ContractorRow): ProjectContractorDto {
   return {
@@ -35,41 +48,36 @@ export function serializeContractor(c: ContractorRow): ProjectContractorDto {
     organizationName: c.organization.name,
     tradeCategory: c.tradeCategory,
     tradeCode: c.tradeCode,
-    isMainContractor: c.isMainContractor,
     allocatedBudgetNgn: c.allocatedBudgetNgn === null ? null : Number(c.allocatedBudgetNgn),
-    allowFieldReporting: c.allowFieldReporting,
     plannedMobilizationDate: isoDate(c.plannedMobilizationDate),
     plannedCompletionDate: isoDate(c.plannedCompletionDate),
-    boqItemCount: c._count.boqItems,
-    hasActivity: c._count.fieldSessions > 0,
+    hasActivity: hasActivity(c),
     contractStatus: c.contractStatus,
     terminatedAt: c.terminatedAt?.toISOString() ?? null,
-    replacesProjectContractorId: c.replacesProjectContractorId,
   };
 }
 
-/** All contractors of a project, main contractor first. */
+/** The project's contractor rows (at most one since R1d; older data may hold more), oldest first. */
 export async function getProjectContractors(db: Db, projectId: string): Promise<ContractorRow[]> {
   return db.projectContractor.findMany({
     where: { projectId },
     include: CONTRACTOR_INCLUDE,
-    orderBy: [{ isMainContractor: 'desc' }, { createdAt: 'asc' }],
+    orderBy: [{ createdAt: 'asc' }],
   });
 }
 
 /**
- * The contractor shown where one name fits: the main contractor, or the first one. `extraCount` is
- * how many others there are, for "+N" labels.
+ * The contractor shown where one name fits: the first one. `extraCount` is how many others there
+ * are (only legacy data has more than one), for "+N" labels.
  */
 export function contractorHeadline(
-  contractors: Array<{ isMainContractor: boolean; organization: { name: string } }>
+  contractors: Array<{ organization: { name: string } }>
 ): { name: string; extraCount: number; total: number } {
   if (contractors.length === 0) return { name: '', extraCount: 0, total: 0 };
-  const main = contractors.find((c) => c.isMainContractor) ?? contractors[0];
-  return { name: main.organization.name, extraCount: contractors.length - 1, total: contractors.length };
+  return { name: contractors[0].organization.name, extraCount: contractors.length - 1, total: contractors.length };
 }
 
-export function contractorHeadlineLabel(contractors: Array<{ isMainContractor: boolean; organization: { name: string } }>) {
+export function contractorHeadlineLabel(contractors: Array<{ organization: { name: string } }>) {
   const h = contractorHeadline(contractors);
   return h.extraCount > 0 ? `${h.name} +${h.extraCount}` : h.name;
 }
@@ -89,36 +97,16 @@ export async function contractorForWebUser(
   });
 }
 
-/** Model rules checked whenever the contractor list or model changes. Returns issue messages. */
-export function contractorModelIssues(
-  mode: ContractorExecutionMode | null,
-  allContractors: Array<{ isMainContractor: boolean; contractStatus?: string }>
-): Array<{ code: string; message: string }> {
-  // Phase 13: a terminated contractor stays for the record but does not count for the model.
-  const contractors = allContractors.filter((c) => c.contractStatus !== 'TERMINATED');
-  const issues: Array<{ code: string; message: string }> = [];
-  if (!mode) issues.push({ code: 'CONTRACTOR_MODEL_REQUIRED', message: 'Choose the contractor model.' });
-  if (contractors.length === 0) {
-    issues.push({ code: 'CONTRACTOR_REQUIRED', message: 'Add at least one contractor.' });
-    return issues;
+/**
+ * Contractor rules checked whenever the contractor changes (R1d: one contractor, required on a live
+ * project). Returns issue messages. A terminated contractor stays for the record.
+ */
+export function contractorIssues(contractors: Array<{ contractStatus?: string }>): Array<{ code: string; message: string }> {
+  if (contractors.length === 0) return [{ code: 'CONTRACTOR_REQUIRED', message: 'Add the contractor.' }];
+  if (contractors.length > 1) {
+    return [{ code: 'ONE_CONTRACTOR_ONLY', message: 'A project has one contractor. Remove the others.' }];
   }
-  const mains = contractors.filter((c) => c.isMainContractor).length;
-  if (mode === 'SINGLE_CONTRACTOR' && contractors.length > 1) {
-    issues.push({
-      code: 'SINGLE_CONTRACTOR_ONLY',
-      message: 'The single-contractor model allows one contractor. Remove the others or choose another model.',
-    });
-  }
-  if (mode === 'MAIN_PLUS_SUBS_UNIFIED_IPC' && mains !== 1) {
-    issues.push({
-      code: 'ONE_MAIN_CONTRACTOR_REQUIRED',
-      message: 'Mark exactly one contractor as the main contractor.',
-    });
-  }
-  if (mode === 'MULTI_PRIME_SEPARATE_IPC' && mains > 1) {
-    issues.push({ code: 'AT_MOST_ONE_MAIN_CONTRACTOR', message: 'At most one contractor can be marked as main.' });
-  }
-  return issues;
+  return [];
 }
 
 function actorName(webUser: WebJwtPayload) {
@@ -135,15 +123,15 @@ export interface ContractorSyncResult {
 
 /**
  * Makes the project's contractors equal `inputs`: updates rows with an id, creates the rest, and
- * removes rows not listed. Refuses to remove a contractor that has sessions or IPC claims, and
- * refuses duplicate organisations or trade codes. Runs inside the caller's transaction.
+ * removes rows not listed. Refuses to remove a contractor with recorded work, more than one
+ * contractor (decision T), and duplicate organisations or trade codes. Runs inside the caller's
+ * transaction.
  */
 export async function syncProjectContractors(
   tx: Tx,
   params: {
     projectId: string;
     tenantId: string;
-    mode: ContractorExecutionMode | null;
     inputs: ProjectContractorInput[];
     webUser: WebJwtPayload;
     /** Leave rows that are not listed alone (single add or edit). */
@@ -172,6 +160,9 @@ export async function syncProjectContractors(
   const staying = params.partial ? existing.filter((c) => !keptIds.has(c.id)) : [];
   const orgs = [...staying.map((c) => c.organizationId), ...resolved.map((r) => r.organizationId)];
   const codes = [...staying.map((c) => c.tradeCode), ...resolved.map((r) => r.input.tradeCode.toUpperCase())];
+  if (orgs.length > 1) {
+    throw new AppError('A project has one contractor. Remove the current one first.', 422, 'ONE_CONTRACTOR_ONLY');
+  }
   const dupOrg = orgs.find((o, i) => orgs.indexOf(o) !== i);
   if (dupOrg) {
     const name = resolved.find((r) => r.organizationId === dupOrg)?.organizationName ?? 'An organisation';
@@ -186,14 +177,13 @@ export async function syncProjectContractors(
   if (!params.partial) {
     for (const c of existing) {
       if (keptIds.has(c.id)) continue;
-      if (c._count.fieldSessions > 0) {
+      if (hasActivity(c)) {
         throw new AppError(
-          `${c.organization.name} has field sessions or IPC claims on this project and cannot be removed.`,
+          `${c.organization.name} has recorded work on this project and cannot be removed.`,
           409,
           'CONTRACTOR_HAS_ACTIVITY'
         );
       }
-      await tx.projectJoinCode.deleteMany({ where: { projectContractorId: c.id, fieldSessions: { none: {} } } });
       await tx.projectContractor.delete({ where: { id: c.id } });
       result.removed.push({ id: c.id, organizationName: c.organization.name, tradeCode: c.tradeCode });
     }
@@ -209,22 +199,18 @@ export async function syncProjectContractors(
     }
   }
 
-  const singleMode = params.mode === 'SINGLE_CONTRACTOR';
   for (const r of resolved) {
     const data = {
       organizationId: r.organizationId,
       tradeCategory: r.input.tradeCategory.trim(),
       tradeCode: r.input.tradeCode.toUpperCase(),
-      // The only contractor of a single-contractor project is its main contractor.
-      isMainContractor: singleMode ? true : r.input.isMainContractor,
       allocatedBudgetNgn: r.input.allocatedBudgetNgn ?? null,
-      allowFieldReporting: r.input.allowFieldReporting,
       plannedMobilizationDate: toDate(r.input.plannedMobilizationDate),
       plannedCompletionDate: toDate(r.input.plannedCompletionDate),
     };
     if (r.input.id) {
       const before = byId.get(r.input.id)!;
-      if (before.organizationId !== r.organizationId && before._count.fieldSessions > 0) {
+      if (before.organizationId !== r.organizationId && hasActivity(before)) {
         throw new AppError(
           `${before.organization.name} has activity on this project; its organisation cannot be changed.`,
           409,

@@ -9,6 +9,7 @@
  * Monday, 2025-04-01 a Tuesday, 2025-06-30 a Monday, 2025-07-01 a Tuesday, 2025-09-30 a Tuesday.
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { createFieldSession, fieldAuth } from './helpers/fieldAuth';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
@@ -19,7 +20,6 @@ type PrismaClientType = typeof import('../config/prisma')['prisma'];
 
 let app: Express;
 let prisma: PrismaClientType;
-let signFieldAgentToken: typeof import('../middleware/auth.middleware')['signFieldAgentToken'];
 let jobs: typeof import('../jobs');
 let omission: typeof import('../modules/workday-reports/aiOmissionCheck');
 
@@ -33,16 +33,11 @@ const ids = {
   items: [] as string[],
   inspectorRole: '',
   residentRole: '',
-  contractorRole: '',
   inspector: '',
   inspector2: '',
   resident: '',
-  mainSession: '',
-  subSession: '',
   otherSession: '',
   mainContractor: '',
-  subContractor: '',
-  subOrg: '',
   weeklyStream: '',
   quarterlyStream: '',
   template: { id: '', version: 1 },
@@ -57,7 +52,7 @@ async function web(email: string) {
   }
   return { Authorization: `Bearer ${tokens[email]}` };
 }
-const field = (sessionId: string) => ({ Authorization: `Bearer ${signFieldAgentToken({ sessionId })}` });
+const field = (sessionId: string) => fieldAuth(prisma, sessionId);
 
 const SECTIONS = [
   {
@@ -91,32 +86,9 @@ function inspectionBody(over: Record<string, unknown> = {}) {
   };
 }
 
-async function session(p: { projectId: string; roleId: string; name: string; persona: 'INDEPENDENT_VERIFIER' | 'CONTRACTOR_EXECUTOR'; contractorId?: string | null }) {
-  // The origin CHECK needs a join code; reuse the active one per project, role and contractor (partial unique index).
-  const { createJoinCode } = await import('../modules/projects/joinCodes.service');
-  const role = await prisma.role.findUniqueOrThrow({ where: { id: p.roleId } });
-  const project = await prisma.project.findUniqueOrThrow({ where: { id: p.projectId } });
-  const contractor = p.contractorId ? await prisma.projectContractor.findUniqueOrThrow({ where: { id: p.contractorId } }) : null;
-  const code =
-    (await prisma.projectJoinCode.findFirst({
-      where: { projectId: p.projectId, roleId: role.id, projectContractorId: p.contractorId ?? null, isActive: true },
-    })) ?? (await createJoinCode(prisma, { projectId: p.projectId, codePrefix: project.codePrefix, role, contractor }));
-  const s = await prisma.fieldAgentSession.create({
-    data: {
-      projectId: p.projectId,
-      origin: 'JOIN_CODE',
-      joinCodeId: code.id,
-      roleId: p.roleId,
-      roleNameSnapshot: p.name,
-      fieldPersonaType: p.persona,
-      projectContractorId: p.contractorId ?? null,
-      agentFullName: p.name,
-      agentPhoneNumber: `+23480${Math.floor(Math.random() * 1e8).toString().padStart(8, '0')}`,
-      deviceId: crypto.randomUUID(),
-      assuranceStatus: 'APPROVED',
-    },
-  });
-  return s.id;
+/** R1d: a provisioned field account and its session on the project (join codes are gone). */
+async function session(p: { projectId: string; roleId: string; name: string }) {
+  return (await createFieldSession(prisma, { projectId: p.projectId, roleId: p.roleId, name: p.name })).sessionId;
 }
 
 async function capture(projectId: string, sessionId: string) {
@@ -168,7 +140,6 @@ async function liveProject(code: string, name: string) {
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
-  ({ signFieldAgentToken } = await import('../middleware/auth.middleware'));
   jobs = await import('../jobs');
   jobs.registerAllJobs();
   omission = await import('../modules/workday-reports/aiOmissionCheck');
@@ -189,35 +160,26 @@ before(async () => {
   const role = (code: string) => prisma.role.findFirstOrThrow({ where: { tenantId: tenant.id, code } });
   ids.inspectorRole = (await role('MONITOR_INSPECTOR')).id;
   ids.residentRole = (await role('INDEPENDENT_RESIDENT')).id;
-  ids.contractorRole = (await role('CONTRACTOR_ENGINEER')).id;
 
-  // Main contractor = the seeded contractor@ organisation; a second package for a subcontractor.
-  const contractorUser = await prisma.user.findUniqueOrThrow({ where: { email: 'contractor@insite.ng' } });
-  await prisma.userProjectAssignment.create({ data: { userId: contractorUser.id, projectId: ids.project } });
+  // The project's one contractor (decision T): the seeded civil contractor organisation, no login (P2).
+  const contractorOrg = await prisma.organization.findFirstOrThrow({ where: { tenantId: tenant.id, name: { startsWith: 'Julius & Sons' } } });
   ids.mainContractor = (
     await prisma.projectContractor.create({
-      data: { projectId: ids.project, organizationId: contractorUser.organizationId, tradeCategory: 'Civil works', tradeCode: 'CIV', isMainContractor: true },
+      data: { projectId: ids.project, organizationId: contractorOrg.id, tradeCategory: 'Civil works', tradeCode: 'CIV' },
     })
   ).id;
-  ids.subOrg = (await prisma.organization.create({ data: { tenantId: tenant.id, name: 'Roofing Sub Ltd', categories: ['CONTRACTOR'] } })).id;
-  ids.subContractor = (
-    await prisma.projectContractor.create({ data: { projectId: ids.project, organizationId: ids.subOrg, tradeCategory: 'Roofing', tradeCode: 'ROF' } })
-  ).id;
 
-  ids.inspector = await session({ projectId: ids.project, roleId: ids.inspectorRole, name: 'Inspector Bisi', persona: 'INDEPENDENT_VERIFIER' });
-  ids.inspector2 = await session({ projectId: ids.project, roleId: ids.inspectorRole, name: 'Inspector Tunde', persona: 'INDEPENDENT_VERIFIER' });
-  ids.resident = await session({ projectId: ids.project, roleId: ids.residentRole, name: 'Resident Ada', persona: 'INDEPENDENT_VERIFIER' });
-  ids.mainSession = await session({ projectId: ids.project, roleId: ids.contractorRole, name: 'Main Engineer', persona: 'CONTRACTOR_EXECUTOR', contractorId: ids.mainContractor });
-  ids.subSession = await session({ projectId: ids.project, roleId: ids.contractorRole, name: 'Sub Engineer', persona: 'CONTRACTOR_EXECUTOR', contractorId: ids.subContractor });
-  ids.otherSession = await session({ projectId: ids.other, roleId: ids.inspectorRole, name: 'Elsewhere', persona: 'INDEPENDENT_VERIFIER' });
+  ids.inspector = await session({ projectId: ids.project, roleId: ids.inspectorRole, name: 'Inspector Bisi' });
+  ids.inspector2 = await session({ projectId: ids.project, roleId: ids.inspectorRole, name: 'Inspector Tunde' });
+  ids.resident = await session({ projectId: ids.project, roleId: ids.residentRole, name: 'Resident Ada' });
+  ids.otherSession = await session({ projectId: ids.other, roleId: ids.inspectorRole, name: 'Elsewhere' });
 
-  // A template of this test (the seed has others).
-  const created = await request(app)
-    .post('/api/v1/inspection-templates')
-    .set(await web('admin@insite.ng'))
-    .send({ code: 'TEST_ROUTINE', name: 'Test routine visit', visitTypes: ['ROUTINE'], sections: SECTIONS });
-  assert.equal(created.status, 201, JSON.stringify(created.body));
-  ids.template = { id: created.body.data.id, version: created.body.data.version };
+  // A template of this test (the seed has others). Written directly: authoring moved to the form
+  // library in redesign R3e, the runtime still reads checklist templates until R4.
+  const created = await prisma.inspectionChecklistTemplate.create({
+    data: { tenantId: tenant.id, code: 'TEST_ROUTINE', name: 'Test routine visit', visitTypes: ['ROUTINE'], version: 1, sectionsJson: SECTIONS },
+  });
+  ids.template = { id: created.id, version: created.version };
 });
 
 after(async () => {
@@ -226,6 +188,18 @@ after(async () => {
 });
 
 describe('Phase 14', () => {
+  it('checklist template authoring is gone (redesign R3e): write routes answer 404, reads still work', async () => {
+    const auth = await web('admin@insite.ng');
+    const body = { code: 'R3E_GONE', name: 'Gone', visitTypes: ['ROUTINE'], sections: SECTIONS };
+    assert.equal((await request(app).post('/api/v1/inspection-templates').set(auth).send(body)).status, 404);
+    assert.equal((await request(app).put('/api/v1/inspection-templates/TEST_ROUTINE').set(auth).send(body)).status, 404);
+    assert.equal((await request(app).post('/api/v1/inspection-templates/TEST_ROUTINE/archive').set(auth)).status, 404);
+    const list = await request(app).get('/api/v1/inspection-templates').set(auth);
+    assert.equal(list.status, 200);
+    assert.ok(list.body.data.some((t: { code: string }) => t.code === 'TEST_ROUTINE'));
+    assert.equal(await prisma.permission.count({ where: { key: 'inspections:manage_templates' } }), 0);
+  });
+
   describe('reporting streams', () => {
     it('saves a weekly item stream and a quarterly inspection stream; quarterly periods are calendar quarters', async () => {
       const res = await request(app)
@@ -260,7 +234,7 @@ describe('Phase 14', () => {
     });
 
     it('dispatch creates item obligations per stream and one inspection obligation per quarter', async () => {
-      await jobs.runJobOnce('brief-dispatch', new Date('2025-04-01T07:30:00Z'));
+      await jobs.runJobOnce('reporting-obligations', new Date('2025-04-01T07:30:00Z'));
       const obligations = await prisma.reportingObligation.findMany({ where: { projectId: ids.project } });
       const items = obligations.filter((o) => o.boqItemId);
       assert.equal(items.length, 2, 'one verifier obligation per scheduled item');
@@ -274,7 +248,7 @@ describe('Phase 14', () => {
       assert.equal(inspection[0].dueAt.toISOString(), '2025-06-30T16:00:00.000Z');
       assert.equal(inspection[0].lateAfter.toISOString(), '2025-07-07T16:00:00.000Z', 'late after the 7-day upload deadline');
       // INSPECTION streams get no briefs; dispatching again creates nothing new.
-      await jobs.runJobOnce('brief-dispatch', new Date('2025-04-02T07:30:00Z'));
+      await jobs.runJobOnce('reporting-obligations', new Date('2025-04-02T07:30:00Z'));
       assert.equal(await prisma.reportingObligation.count({ where: { projectId: ids.project } }), 3);
     });
 
@@ -282,7 +256,7 @@ describe('Phase 14', () => {
       const confirmedAt = '2025-04-01T15:00:00.000Z';
       const res = await request(app)
         .post(`/api/v1/projects/${ids.project}/workday-reports`)
-        .set(field(ids.resident))
+        .set(await field(ids.resident))
         .send({
           clientReportId: crypto.randomUUID(),
           wbsItemId: ids.items[0],
@@ -309,8 +283,9 @@ describe('Phase 14', () => {
       assert.equal(view.status, 200);
       assert.equal(view.body.data.usesImplicitDefault, true);
       assert.equal(view.body.data.defaultStream.label, 'Default');
-      await prisma.projectJoinCode.create({ data: { projectId: ids.plain, roleId: ids.residentRole, code: 'INS-1402-COW-TEST' } });
-      await jobs.runJobOnce('brief-dispatch', new Date('2025-04-07T07:30:00Z'));
+      // A resident account works on the project, so verifier obligations are owed.
+      await session({ projectId: ids.plain, roleId: ids.residentRole, name: 'Plain Resident' });
+      await jobs.runJobOnce('reporting-obligations', new Date('2025-04-07T07:30:00Z'));
       // Earlier dispatch ticks in this file already produced the previous week's rows; check this week only.
       const obligations = await prisma.reportingObligation.findMany({ where: { projectId: ids.plain, periodStart: '2025-04-07' } });
       assert.equal(obligations.length, 2, JSON.stringify(obligations.map((o) => [o.reporterScope, o.boqItemId, o.periodStart])));
@@ -349,12 +324,12 @@ describe('Phase 14', () => {
     let firstId = '';
 
     it('the mobile pack carries the streams the session owes and its templates', async () => {
-      const res = await request(app).get(`/api/v1/projects/${ids.project}/inspections/field-pack`).set(field(ids.inspector));
+      const res = await request(app).get(`/api/v1/projects/${ids.project}/inspections/field-pack`).set(await field(ids.inspector));
       assert.equal(res.status, 200, JSON.stringify(res.body));
       assert.deepEqual(res.body.data.streams.map((s: { key: string }) => s.key), ['me-visit']);
       assert.equal(res.body.data.canSubmitInspections, true);
       assert.ok(res.body.data.templateIdByVisitType.ROUTINE, 'a routine template is offered');
-      const resident = await request(app).get(`/api/v1/projects/${ids.project}/inspections/field-pack`).set(field(ids.resident));
+      const resident = await request(app).get(`/api/v1/projects/${ids.project}/inspections/field-pack`).set(await field(ids.resident));
       assert.deepEqual(resident.body.data.streams.map((s: { key: string }) => s.key), ['resident']);
     });
 
@@ -367,17 +342,17 @@ describe('Phase 14', () => {
           { itemKey: 'ppe', value: 'YES', comment: null, clientCaptureIds: [] },
         ],
       });
-      const first = await request(app).post(`/api/v1/projects/${ids.project}/inspections`).set(field(ids.inspector)).send(body);
+      const first = await request(app).post(`/api/v1/projects/${ids.project}/inspections`).set(await field(ids.inspector)).send(body);
       assert.equal(first.status, 201, JSON.stringify(first.body));
       firstId = first.body.data.id;
       assert.equal(first.body.data.status, 'SUBMITTED');
       assert.equal(first.body.data.isLate, false);
       assert.equal(first.body.data.streamId, ids.quarterlyStream);
       assert.equal(first.body.data.answers.find((a: { itemKey: string }) => a.itemKey === 'site-photo').captures.length, 1);
-      const again = await request(app).post(`/api/v1/projects/${ids.project}/inspections`).set(field(ids.inspector)).send(body);
+      const again = await request(app).post(`/api/v1/projects/${ids.project}/inspections`).set(await field(ids.inspector)).send(body);
       assert.equal(again.status, 200);
       assert.equal(again.body.data.id, firstId);
-      const stolen = await request(app).post(`/api/v1/projects/${ids.project}/inspections`).set(field(ids.inspector2)).send(body);
+      const stolen = await request(app).post(`/api/v1/projects/${ids.project}/inspections`).set(await field(ids.inspector2)).send(body);
       assert.equal(stolen.status, 409);
       assert.equal(stolen.body.error.code, 'REPORT_ID_CONFLICT');
       assert.equal(await prisma.siteInspectionReport.count({ where: { projectId: ids.project } }), 1);
@@ -390,36 +365,35 @@ describe('Phase 14', () => {
     it('validates answers against the stored template version', async () => {
       const missing = await request(app)
         .post(`/api/v1/projects/${ids.project}/inspections`)
-        .set(field(ids.inspector))
+        .set(await field(ids.inspector))
         .send(inspectionBody({ answers: [{ itemKey: 'on-programme', value: 4, comment: null, clientCaptureIds: [] }] }));
       assert.equal(missing.status, 422);
       assert.equal(missing.body.error.code, 'INVALID_INSPECTION_ANSWERS');
 
-      // The template was used, so saving it creates version 2; version 1 stays valid for devices
-      // that still have it, and answers are checked against the version they name.
-      const v2 = await request(app)
-        .put('/api/v1/inspection-templates/TEST_ROUTINE')
-        .set(await web('admin@insite.ng'))
-        .send({
+      // A version 2 exists; version 1 stays valid for devices that still have it, and answers are
+      // checked against the version they name.
+      const v2row = await prisma.inspectionChecklistTemplate.create({
+        data: {
+          tenantId: ids.tenant,
           code: 'TEST_ROUTINE',
           name: 'Test routine visit',
           visitTypes: ['ROUTINE'],
-          sections: [...SECTIONS, { key: 'env', title: 'Environment', items: [{ key: 'waste', label: 'Waste managed', responseType: 'YES_NO' }] }],
-        });
-      assert.equal(v2.status, 200, JSON.stringify(v2.body));
-      assert.equal(v2.body.data.version, 2);
-      assert.notEqual(v2.body.data.id, ids.template.id);
+          version: 2,
+          sectionsJson: [...SECTIONS, { key: 'env', title: 'Environment', items: [{ key: 'waste', label: 'Waste managed', responseType: 'YES_NO', required: true, photoRequired: false, photoRequiredOnFail: false }] }],
+        },
+      });
+      const v2 = { body: { data: { id: v2row.id } } };
 
       const wrongVersion = await request(app)
         .post(`/api/v1/projects/${ids.project}/inspections`)
-        .set(field(ids.inspector))
+        .set(await field(ids.inspector))
         .send(inspectionBody({ templateVersion: 2 }));
       assert.equal(wrongVersion.status, 422);
       assert.equal(wrongVersion.body.error.code, 'TEMPLATE_VERSION_MISMATCH');
 
       const v1Answers = await request(app)
         .post(`/api/v1/projects/${ids.project}/inspections`)
-        .set(field(ids.inspector))
+        .set(await field(ids.inspector))
         .send(inspectionBody({ templateId: v2.body.data.id, templateVersion: 2 }));
       assert.equal(v1Answers.status, 422, 'version 2 requires its new item');
       assert.equal(v1Answers.body.error.details.errors[0].itemKey, 'waste');
@@ -429,7 +403,7 @@ describe('Phase 14', () => {
       const foreign = await capture(ids.other, ids.inspector);
       const res = await request(app)
         .post(`/api/v1/projects/${ids.project}/inspections`)
-        .set(field(ids.inspector))
+        .set(await field(ids.inspector))
         .send(
           inspectionBody({
             answers: [
@@ -443,14 +417,14 @@ describe('Phase 14', () => {
       assert.equal(res.body.error.code, 'CAPTURE_OTHER_PROJECT');
       const unregistered = await request(app)
         .post(`/api/v1/projects/${ids.project}/inspections`)
-        .set(field(ids.inspector))
+        .set(await field(ids.inspector))
         .send(inspectionBody({ answers: [{ itemKey: 'site-photo', value: null, comment: null, clientCaptureIds: [crypto.randomUUID()] }, { itemKey: 'on-programme', value: 4, clientCaptureIds: [] }, { itemKey: 'ppe', value: 'YES', clientCaptureIds: [] }] }));
       assert.equal(unregistered.status, 409);
       assert.equal(unregistered.body.error.code, 'CAPTURES_NOT_REGISTERED');
     });
 
     it('a missed quarterly visit becomes MISSED; a late upload still meets it, flagged late', async () => {
-      await jobs.runJobOnce('brief-dispatch', new Date('2025-07-01T07:30:00Z'));
+      await jobs.runJobOnce('reporting-obligations', new Date('2025-07-01T07:30:00Z'));
       const q3 = await prisma.reportingObligation.findFirstOrThrow({ where: { projectId: ids.project, boqItemId: null, periodStart: '2025-07-01' } });
       assert.equal(q3.status, 'PENDING');
       await jobs.runJobOnce('overdue-reports', new Date('2025-10-08T08:00:00Z'));
@@ -464,7 +438,7 @@ describe('Phase 14', () => {
 
       const late = await request(app)
         .post(`/api/v1/projects/${ids.project}/inspections`)
-        .set(field(ids.inspector))
+        .set(await field(ids.inspector))
         .send(
           inspectionBody({
             visitDate: '2025-09-29',
@@ -483,10 +457,10 @@ describe('Phase 14', () => {
   describe('findings', () => {
     let findingId = '';
 
-    it('failed items raise findings aimed at the main contractor (web by organisation, mobile by package)', async () => {
+    it('failed items raise findings against the project contractor; nothing is aimed at the contractor (R1d)', async () => {
       const res = await request(app)
         .post(`/api/v1/projects/${ids.project}/inspections`)
-        .set(field(ids.inspector))
+        .set(await field(ids.inspector))
         .send(
           inspectionBody({
             visitDate: '2025-04-20',
@@ -506,59 +480,57 @@ describe('Phase 14', () => {
       assert.equal(f.projectContractorId, ids.mainContractor);
       assert.equal(f.severity, 'MAJOR');
       assert.equal(f.status, 'OPEN');
-
-      const contractorUser = await prisma.user.findUniqueOrThrow({ where: { email: 'contractor@insite.ng' } });
-      const webNote = await prisma.webNotification.findFirstOrThrow({ where: { projectId: ids.project, category: 'INSPECTION_FINDING' } });
-      assert.equal(webNote.targetOrganizationId, contractorUser.organizationId);
-      assert.ok(await prisma.mobileNotification.findFirst({ where: { fieldSessionId: ids.mainSession, type: 'INSPECTION_FINDING' } }));
-      assert.equal(await prisma.mobileNotification.count({ where: { fieldSessionId: ids.subSession, type: 'INSPECTION_FINDING' } }), 0);
+      // The contractor has no login: no notification aimed at its organisation, none to field devices.
+      assert.equal(await prisma.webNotification.count({ where: { projectId: ids.project, category: 'INSPECTION_FINDING', targetOrganizationId: { not: null } } }), 0);
+      assert.equal(await prisma.mobileNotification.count({ where: { projectId: ids.project, type: 'INSPECTION_FINDING' } }), 0);
     });
 
-    it('a finding raised by hand reaches the subcontractor only; each side sees its own', async () => {
+    it('a finding raised by hand needs a failed item; staff see every finding', async () => {
       const inspection = await prisma.siteInspectionReport.findFirstOrThrow({ where: { projectId: ids.project, overallFinding: 'MAJOR_ISSUES' } });
       const notFailed = await request(app)
         .post(`/api/v1/projects/${ids.project}/inspections/${inspection.id}/findings`)
         .set(await web('monitor@insite.ng'))
-        .send({ checklistItemKey: 'on-programme', projectContractorId: ids.subContractor, description: 'Not a failed item', severity: 'MINOR' });
+        .send({ checklistItemKey: 'on-programme', projectContractorId: ids.mainContractor, description: 'Not a failed item', severity: 'MINOR' });
       assert.equal(notFailed.status, 422);
       assert.equal(notFailed.body.error.code, 'FINDING_ITEM_NOT_FAILED');
       const raised = await request(app)
         .post(`/api/v1/projects/${ids.project}/inspections/${inspection.id}/findings`)
         .set(await web('monitor@insite.ng'))
-        .send({ checklistItemKey: 'ppe', projectContractorId: ids.subContractor, description: 'Roofers without harnesses', severity: 'CRITICAL' });
+        .send({ checklistItemKey: 'ppe', projectContractorId: ids.mainContractor, description: 'Roofers without harnesses', severity: 'CRITICAL' });
       assert.equal(raised.status, 201, JSON.stringify(raised.body));
-      assert.ok(await prisma.mobileNotification.findFirst({ where: { fieldSessionId: ids.subSession, type: 'INSPECTION_FINDING' } }));
       assert.equal(await prisma.auditLog.count({ where: { projectId: ids.project, action: 'INSPECTION_FINDING_RAISED' } }), 1);
 
-      const mainView = await request(app).get(`/api/v1/projects/${ids.project}/inspection-findings`).set(await web('contractor@insite.ng'));
-      assert.equal(mainView.status, 200, JSON.stringify(mainView.body));
-      assert.deepEqual(mainView.body.data.map((f: { id: string }) => f.id), [findingId]);
-      const subView = await request(app).get(`/api/v1/projects/${ids.project}/inspection-findings`).set(field(ids.subSession));
-      assert.deepEqual(subView.body.data.map((f: { id: string }) => f.id), [raised.body.data.id]);
       const monitorView = await request(app).get(`/api/v1/projects/${ids.project}/inspection-findings`).set(await web('monitor@insite.ng'));
       assert.equal(monitorView.body.data.length, 2);
+      const officerView = await request(app).get(`/api/v1/projects/${ids.project}/inspection-findings`).set(await field(ids.inspector2));
+      assert.equal(officerView.status, 200, JSON.stringify(officerView.body));
+      assert.equal(officerView.body.data.length, 2);
+      assert.ok(officerView.body.data.every((x: { canResolve: boolean }) => x.canResolve));
     });
 
-    it('the contractor resolves its finding with photos; the other contractor cannot touch it', async () => {
-      const otherSide = await request(app)
+    it('an officer resolves a finding with their own photos; others cannot dismiss without the permission', async () => {
+      const notMine = await capture(ids.project, ids.inspector);
+      const refused = await request(app)
         .post(`/api/v1/projects/${ids.project}/inspection-findings/${findingId}/resolve`)
-        .set(field(ids.subSession))
-        .send({ notes: 'Not ours but trying' });
-      assert.equal(otherSide.status, 404);
-      const photo = await capture(ids.project, ids.mainSession);
+        .set(await field(ids.inspector2))
+        .send({ notes: 'Using a colleague photo', clientCaptureIds: [notMine] });
+      assert.equal(refused.status, 403);
+      assert.equal(refused.body.error.code, 'CAPTURE_NOT_OWNED');
+      const photo = await capture(ids.project, ids.inspector2);
       const res = await request(app)
         .post(`/api/v1/projects/${ids.project}/inspection-findings/${findingId}/resolve`)
-        .set(field(ids.mainSession))
+        .set(await field(ids.inspector2))
         .send({ notes: 'Harnesses issued and in use', clientCaptureIds: [photo] });
       assert.equal(res.status, 200, JSON.stringify(res.body));
       assert.equal(res.body.data.status, 'RESOLVED');
       assert.equal(res.body.data.resolutionCaptures.length, 1);
       assert.equal(await prisma.auditLog.count({ where: { projectId: ids.project, action: 'INSPECTION_FINDING_RESOLVED' } }), 1);
-      const contractorDismiss = await request(app)
-        .post(`/api/v1/projects/${ids.project}/inspection-findings/${findingId}/dismiss`)
-        .set(await web('contractor@insite.ng'))
+      const open = await prisma.inspectionFinding.findFirstOrThrow({ where: { projectId: ids.project, status: 'OPEN' } });
+      const lenderDismiss = await request(app)
+        .post(`/api/v1/projects/${ids.project}/inspection-findings/${open.id}/dismiss`)
+        .set(await web('lender@insite.ng'))
         .send({ reason: 'We would rather not' });
-      assert.equal(contractorDismiss.status, 403);
+      assert.equal(lenderDismiss.status, 403);
     });
   });
 

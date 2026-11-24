@@ -28,17 +28,6 @@ enum FieldPersonaType {
   NONE
 }
 
-// How people in a mobile-capable role get onto a project (Phase 5).
-enum RoleOnboardingMode {
-  JOIN_CODE
-  PROVISIONED_ACCOUNT
-}
-
-enum FieldSessionOrigin {
-  JOIN_CODE
-  PROVISIONED_ACCOUNT
-}
-
 enum OrganizationCategory {
   ADVISORY_MONITOR
   FINANCIER_LENDER
@@ -61,9 +50,9 @@ enum PermissionCategory {
 
 // FieldPersonaType replaces static IndependenceTier enum on Role & FieldAgentSession
 
+// Redesign: linear corridors were removed (sites are radial or perimeter).
 enum GeofenceMode {
   RADIAL
-  LINEAR_CORRIDOR
   PERIMETER
 }
 
@@ -86,13 +75,6 @@ enum ProjectStatus {
   DRAFT
   ACTIVE
   ARCHIVED
-}
-
-// Contractor model (decision D).
-enum ContractorExecutionMode {
-  SINGLE_CONTRACTOR
-  MAIN_PLUS_SUBS_UNIFIED_IPC
-  MULTI_PRIME_SEPARATE_IPC
 }
 
 enum ReportingCadence {
@@ -164,11 +146,6 @@ enum ApprovalDecision {
   REJECT
 }
 
-enum BriefPersona {
-  CONTRACTOR_EXECUTOR
-  INDEPENDENT_VERIFIER
-}
-
 enum ReportQuerySource {
   MONITOR
   AI_OMISSION_CHECK
@@ -208,12 +185,6 @@ enum AuditActorType {
   SYSTEM
 }
 
-enum ContractorAssuranceStatus {
-  PENDING_APPROVAL
-  APPROVED
-  REJECTED
-}
-
 enum AuditActionType {
   TENANT_CREATED
   TENANT_BRANDING_UPDATED
@@ -224,12 +195,8 @@ enum AuditActionType {
   PROJECT_CREATED
   BASELINE_UPDATED
   BOQ_UPLOADED
-  JOIN_CODE_ISSUED
   FIELD_AGENT_JOINED
   FIELD_SESSION_STATUS_UPDATED
-  CONTRACTOR_ASSURANCE_SUBMITTED
-  CONTRACTOR_ASSURANCE_APPROVED
-  CONTRACTOR_ASSURANCE_REJECTED
   EVIDENCE_EXTRACTED
   EVIDENCE_CONFIRMED
   EVIDENCE_FLAGGED_INTEGRITY
@@ -243,18 +210,15 @@ enum AuditActionType {
   USER_CREATED
   USER_UPDATED
   USER_DEACTIVATED
-  JOIN_CODE_ROTATED
   LOGIN_FAILED_LOCKOUT
   TENANT_SETTINGS_UPDATED
   CAPTURE_REGISTERED
   CAPTURE_FLAGGED_INTEGRITY
-  TELEMETRY_ANOMALY_SUMMARY
   WORKDAY_REPORTS_RELEASED
   DEVICE_KEY_REGISTERED
   REPORT_QUERY_RESOLVED
   MOBILE_USER_SIGNED_IN
   MOBILE_DEVICE_REVOKED
-  ROLE_ONBOARDING_MODE_CHANGED
   ORGANIZATION_CREATED
   ORGANIZATION_UPDATED
   PROJECT_DRAFT_CREATED
@@ -279,22 +243,9 @@ enum AuditActionType {
   // Phase 8
   REPORT_SUBMITTED_LATE
   REPORT_MISSED
-  PARTICIPANT_PREREGISTERED
-  PARTICIPANT_REMINDER_SENT
-  ATTENDANCE_ALERT_RAISED
-  ATTENDANCE_ALERT_RESOLVED
-  MANUAL_CHECKIN_RECORDED
   REPORTING_OBLIGATION_EXCUSED
-  // Phase 9
-  SCHEDULE_BASELINE_SET
-  SCHEDULE_REVISION_PROPOSED
-  SCHEDULE_REVISION_APPLIED
-  SCHEDULE_REVISION_REJECTED
-  SCHEDULE_REVISION_WITHDRAWN
-  // Phase 10
-  HANDOVER_LINK_CREATED
-  HANDOVER_LINK_REVOKED
-  HANDOVER_SUBMITTED
+  // Phase 10 (R1d: the response is recorded by staff, no public link)
+  HANDOVER_RECORDED
   HANDOVER_REVIEWED
   PROJECT_PHASE_CHANGED
   RETENTION_WITHHELD
@@ -314,9 +265,6 @@ enum AuditActionType {
   INSPECTION_FINDING_RESOLVED
   REPORTING_STREAMS_SAVED
   CHECKLIST_TEMPLATE_SAVED
-  // Phase 12
-  CREDENTIAL_POLICY_UPDATED
-  REGISTRATION_BODY_SAVED
   // Phase 13
   DOCUMENT_UPLOADED
   DOCUMENT_VERSIONED
@@ -334,9 +282,6 @@ enum AuditActionType {
   DEFAULT_CASE_REVIEWED
   DEFAULT_CASE_DECIDED
   CONTRACTOR_TERMINATED
-  CONTRACTOR_REPLACED
-  PROGRAMME_OF_WORKS_SUBMITTED
-  PROGRAMME_OF_WORKS_DECIDED
   // Phase 15
   COC_DRAFTED
   COC_SIGNED
@@ -352,6 +297,13 @@ enum AuditActionType {
   // Redesign R1b: payments are made outside the platform and recorded here
   PAYMENT_RECORDED
   PAYMENT_VOIDED
+  // Redesign R2: facilities, scope and sprints
+  FACILITY_SAVED
+  SCOPE_UPDATED
+  SPRINTS_SAVED
+  SCOPE_IMPORTED
+  // Redesign R3: form library
+  FORM_COMPONENT_SAVED
 }
 
 // Phase 11: which organisation an approval step actor must belong to (ANY = Phase 7 behaviour).
@@ -405,35 +357,13 @@ enum DefectTicketStatus {
   REJECTED_NOT_A_DEFECT
 }
 
-// Phase 8: cadence, mobilization, attendance, jobs and outbound messages
+// Phase 8: cadence, jobs and outbound messages (roster and attendance removed in redesign R1e)
 enum ReportingObligationStatus {
   PENDING
   SUBMITTED
   LATE
   MISSED
   EXCUSED
-}
-
-enum MobilizationStatus {
-  INVITED
-  REGISTERED_PENDING_ASSURANCE
-  READY_FOR_MOBILIZATION
-  MOBILIZED_ON_SITE
-  NO_SHOW_FLAGGED
-  WITHDRAWN
-}
-
-enum AttendanceAlertType {
-  MOBILIZATION_NO_SHOW
-  WORKDAY_MISSED_CHECKIN
-  UNVERIFIED_AT_MOBILIZATION
-}
-
-enum AttendanceAlertStatus {
-  OPEN
-  ACKNOWLEDGED
-  EXCUSED
-  RESOLVED
 }
 
 enum JobRunStatus {
@@ -455,14 +385,9 @@ enum OutboundMessageStatus {
 }
 
 enum MobileNotificationType {
-  ASSURANCE_PENDING
-  ASSURANCE_APPROVED
-  ASSURANCE_REJECTED
   BACKLOG_REVIEW_REQUIRED
   REPORT_QUERY
   HOLD_POINT_ALERT
-  MORNING_DELIVERABLE_READY
-  SITE_GEOFENCE_WARNING
   REPORT_OVERDUE
   // Phase 10
   DEFECT_UPDATE
@@ -475,7 +400,6 @@ enum NotificationActionType {
   OPEN_REPORT_SUMMARY
   OPEN_WBS_CHAT
   OPEN_BACKLOG_REVIEW
-  OPEN_ASSURANCE_WIZARD
   // Phase 10
   OPEN_DEFECTS
   // Phase 14
@@ -500,12 +424,12 @@ model Tenant {
   brandingConfig                 Json           @default("{}")
   // Phase 6 settings
   organizationInputMode          OrgInputMode   @default(BOTH)
-  enabledGeofenceModes           GeofenceMode[] @default([RADIAL, LINEAR_CORRIDOR, PERIMETER])
+  enabledGeofenceModes           GeofenceMode[] @default([RADIAL, PERIMETER])
   defaultGeofenceToleranceMeters Int            @default(100)
+  // Redesign: pre-fills a new radial boundary and the workbook GPS boundary; projects set their own radius.
+  defaultGeofenceRadiusMeters    Int            @default(150)
   // Phase 11: tenant wording per terminology key ({ key: { singular, plural? } }); keys fixed in shared.
   terminologyLabels              Json           @default("{}")
-  // Phase 12: professional registration policy { certifier?, fieldAssurance? } (REQUIRED | OPTIONAL | HIDDEN).
-  credentialPolicyJson           Json           @default("{}")
   // Phase 15: contractor rating criteria [{ key, label, description }]; empty = the defaults.
   ratingCriteriaJson             Json           @default("[]")
   createdAt                      DateTime       @default(now())
@@ -526,7 +450,13 @@ model Tenant {
   checklistTemplates InspectionChecklistTemplate[]
   // Phase 13
   documentTypes      DocumentType[]
-  registrationBodies ProfessionalRegistrationBody[]
+  // Redesign R2a
+  facilities         Facility[]
+  // Redesign R3
+  formSections       FormSection[]
+  facilitySubForms   FacilitySubForm[]
+  visitFormTemplates VisitFormTemplate[]
+  visitFormSnapshots VisitFormSnapshot[]
 
   @@map("tenants")
 }
@@ -547,32 +477,27 @@ model Permission {
 }
 
 model Role {
-  id                        String             @id @default(uuid()) @db.Uuid
-  tenantId                  String             @db.Uuid
-  name                      String
-  code                      String
-  codeSuffix                String?
-  description               String?
-  surface                   RoleSurface        @default(WEB)
-  fieldPersonaType          FieldPersonaType   @default(NONE)
-  assuranceWeight           Float              @default(1.0)
-  requiresIdentityAssurance Boolean            @default(false)
-  // Only meaningful for surface MOBILE or BOTH. PROVISIONED_ACCOUNT implies no identity assurance.
-  onboardingMode            RoleOnboardingMode @default(JOIN_CODE)
-  isSystemDefault           Boolean            @default(false)
-  createdAt                 DateTime           @default(now())
-  updatedAt                 DateTime           @updatedAt
+  id               String           @id @default(uuid()) @db.Uuid
+  tenantId         String           @db.Uuid
+  name             String
+  code             String
+  description      String?
+  surface          RoleSurface      @default(WEB)
+  // Redesign R1d: mobile roles are provisioned accounts only; CONTRACTOR_EXECUTOR is refused by the role
+  // editor (the enum value stays until the cadence reporter scopes go in R4).
+  fieldPersonaType FieldPersonaType @default(NONE)
+  assuranceWeight  Float            @default(1.0)
+  isSystemDefault  Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 
-  tenant               Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  rolePermissions      RolePermission[]
-  users                User[]                       @relation("UserMainRole")
-  mobileUsers          User[]                       @relation("UserMobileRole")
-  joinCodes            ProjectJoinCode[]
-  fieldSessions        FieldAgentSession[]
-  expectedParticipants ExpectedProjectParticipant[]
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rolePermissions RolePermission[]
+  users           User[]              @relation("UserMainRole")
+  mobileUsers     User[]              @relation("UserMobileRole")
+  fieldSessions   FieldAgentSession[]
 
   @@unique([tenantId, code])
-  @@unique([tenantId, codeSuffix])
   @@index([tenantId, surface])
   @@map("roles")
 }
@@ -623,43 +548,37 @@ model Organization {
 }
 
 model User {
-  id                               String    @id @default(uuid()) @db.Uuid
-  tenantId                         String    @db.Uuid
-  email                            String    @unique
-  passwordHash                     String
-  fullName                         String
-  isPlatformSuperAdmin             Boolean   @default(false)
-  roleId                           String    @db.Uuid
-  // Optional pre-provisioned mobile role (surface MOBILE or BOTH, mode PROVISIONED_ACCOUNT).
-  mobileRoleId                     String?   @db.Uuid
-  phoneNumber                      String?
-  organizationId                   String    @db.Uuid
-  // Phase 12: a code of the tenant's ProfessionalRegistrationBody list (validated by the server).
-  professionalRegistrationBodyCode String?
-  professionalRegistrationNumber   String?
-  isActive                         Boolean   @default(true)
-  mustChangePassword               Boolean   @default(false)
-  tokenVersion                     Int       @default(0)
-  failedLoginCount                 Int       @default(0)
-  lockedUntil                      DateTime?
-  lastLoginAt                      DateTime?
-  createdAt                        DateTime  @default(now())
-  updatedAt                        DateTime  @updatedAt
+  id                   String    @id @default(uuid()) @db.Uuid
+  tenantId             String    @db.Uuid
+  email                String    @unique
+  passwordHash         String
+  fullName             String
+  isPlatformSuperAdmin Boolean   @default(false)
+  roleId               String    @db.Uuid
+  // Optional pre-provisioned mobile role (surface MOBILE or BOTH).
+  mobileRoleId         String?   @db.Uuid
+  phoneNumber          String?
+  organizationId       String    @db.Uuid
+  isActive             Boolean   @default(true)
+  mustChangePassword   Boolean   @default(false)
+  tokenVersion         Int       @default(0)
+  failedLoginCount     Int       @default(0)
+  lockedUntil          DateTime?
+  lastLoginAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
-  tenant                     Tenant                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  notificationReads          WebNotificationRead[]
-  role                       Role                         @relation("UserMainRole", fields: [roleId], references: [id], onDelete: Restrict)
-  mobileRole                 Role?                        @relation("UserMobileRole", fields: [mobileRoleId], references: [id], onDelete: SetNull)
-  mobileDevices              MobileDevice[]
-  fieldSessions              FieldAgentSession[]
-  organization               Organization                 @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  projectAssignments         UserProjectAssignment[]
-  pushTokens                 PushToken[]
-  raisedReportQueries        ReportQuery[]                @relation("RaisedReportQueries")
-  approvalActions            ApprovalAction[]
-  expectedParticipations     ExpectedProjectParticipant[]
-  initiatedScheduleRevisions ScheduleRevision[]           @relation("ScheduleRevisionInitiator")
-  approvedScheduleRevisions  ScheduleRevision[]           @relation("ScheduleRevisionApprover")
+  tenant              Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  notificationReads   WebNotificationRead[]
+  role                Role                    @relation("UserMainRole", fields: [roleId], references: [id], onDelete: Restrict)
+  mobileRole          Role?                   @relation("UserMobileRole", fields: [mobileRoleId], references: [id], onDelete: SetNull)
+  mobileDevices       MobileDevice[]
+  fieldSessions       FieldAgentSession[]
+  organization        Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  projectAssignments  UserProjectAssignment[]
+  pushTokens          PushToken[]
+  raisedReportQueries ReportQuery[]           @relation("RaisedReportQueries")
+  approvalActions     ApprovalAction[]
 
   @@index([tenantId])
   @@index([organizationId])
@@ -708,7 +627,7 @@ model Project {
   // IANA zone that defines a reporting day (one report per WBS item per day). Defaults to the tenant zone.
   timezone                String           @default("Africa/Lagos")
   geofenceMode            GeofenceMode?
-  geofenceGeoJson         Json? // ProjectGeofence: radial, linear corridor or perimeter
+  geofenceGeoJson         Json? // ProjectGeofence: radial or perimeter
   // Tolerance band outside the boundary; null uses Tenant.defaultGeofenceToleranceMeters.
   geofenceToleranceMeters Int?
 
@@ -721,23 +640,21 @@ model Project {
   cadenceAnchorDate               String?
   // Phase 14: month (1-12) a QUARTERLY year starts in.
   cadenceQuarterAnchorMonth       Int     @default(1)
-  // Phase 8: mobilization reminder schedule (days before the planned date).
+  // Days before a contract milestone is due that reminders go out (Phase 8 name; the roster went in R1e).
   mobilizationReminderOffsetsDays Int[]   @default([7, 3, 1])
   // A cadence change on a live project waits here until the next period starts
-  // (ProjectReportingStep JSON; applied by brief-dispatch, read by cadenceSettingsForDate).
+  // (ProjectReportingStep JSON; applied by the reporting-obligations job, read by cadenceSettingsForDate).
   pendingCadenceJson              Json?
   pendingCadenceEffectiveFrom     String?
 
-  // Phase 9: schedule (YYYY-MM-DD in the project zone). originalPlannedEndDate is never overwritten
-  // once the project is live; currentProjectedEndDate is the end of the current plan (after revisions).
+  // Phase 9 schedule dates (YYYY-MM-DD in the project zone). Redesign R2d: planned start and end follow
+  // the first and last sprint; originalPlannedEndDate is kept once the project is live.
   plannedStartDate           String?
   plannedEndDate             String?
   originalPlannedEndDate     String?
-  currentProjectedEndDate    String?
   actualStartDate            String?
-  // Variance badge stored by the schedule-variance job (working days, positive = ahead).
+  // Schedule badge stored by the schedule-variance job (redesign R2d: computed from sprints).
   scheduleStatus             String?
-  scheduleVarianceWorkdays   Float?
   scheduleVarianceComputedAt DateTime?
   // Set when the "behind" web notification went out; cleared when the project recovers.
   scheduleBehindAlertedAt    DateTime?
@@ -755,9 +672,8 @@ model Project {
   retentionHeldNgn                Decimal           @default(0) @db.Decimal(18, 2)
   retentionReleasedNgn            Decimal           @default(0) @db.Decimal(18, 2)
 
-  monitorOrganizationId   String?                  @db.Uuid
-  lenderOrganizationId    String?                  @db.Uuid
-  contractorExecutionMode ContractorExecutionMode?
+  monitorOrganizationId String? @db.Uuid
+  lenderOrganizationId  String? @db.Uuid
 
   // Phase 11: delivery model. The snapshot is the type config when applied (later type edits do not
   // change it); a project without a type behaves as before Phase 11.
@@ -776,6 +692,12 @@ model Project {
   kickoffDate        String?
   kickoffHeldAt      DateTime?
 
+  // Redesign R2c: needs-assessment details (filled from the workbook's Project sheet; the Needs
+  // Assessment module uses them too).
+  siteAddress            String? @db.Text
+  strategicJustification String? @db.Text
+  assumptions            String? @db.Text
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -790,16 +712,12 @@ model Project {
   boqRevisions        BoqRevision[]
 
   userAssignments        UserProjectAssignment[]
-  joinCodes              ProjectJoinCode[]
   fieldSessions          FieldAgentSession[]
   boqItems               BoqItem[]
   evidenceLogs           FieldEvidenceLog[]
   auditLogs              AuditLog[]
   incidentReports        IncidentReport[]
   workdayReports         WorkdayReport[]
-  telemetryPings         SiteTelemetryPing[]
-  telemetryAnomalies     TelemetryAnomalyDaily[]
-  morningBriefs          MorningDeliverableBrief[]
   notifications          MobileNotification[]
   reportQueries          ReportQuery[]
   wbsChatMessages        WbsChatMessage[]
@@ -812,14 +730,8 @@ model Project {
   needsAssessments       ProjectNeedsAssessmentDocument[]
   // Phase 8
   reportingObligations   ReportingObligation[]
-  expectedParticipants   ExpectedProjectParticipant[]
-  attendanceAlerts       SiteAttendanceAlert[]
   outboundMessages       OutboundMessage[]
-  // Phase 9
-  boqItemDependencies    BoqItemDependency[]
-  scheduleRevisions      ScheduleRevision[]
   // Phase 10
-  handoverLinks          HandoverLink[]
   handoverSubmissions    HandoverSubmission[]
   defectTickets          RetentionDefectTicket[]
   // Phase 14
@@ -831,7 +743,6 @@ model Project {
   contractMilestones     ProjectContractMilestone[]
   kickoffMeeting         KickoffMeeting?
   defaultCases           ContractorDefaultCase[]
-  programmeSubmissions   ProgrammeOfWorksSubmission[]
   // Phase 15
   completionCertificates CompletionCertificate[]
   payments               ProjectPayment[]
@@ -840,6 +751,10 @@ model Project {
   lessonsLearned         LessonLearned[]
   kpiSnapshots           KpiSnapshot[] // Phase 16
   closurePackExports     ClosurePackExport[]
+  // Redesign R2b
+  sprints                ProjectSprint[]
+  facilityUnits          FacilityUnit[]
+  visitFormSnapshots     VisitFormSnapshot[] // Redesign R3
 
   @@unique([tenantId, codePrefix])
   @@index([tenantId])
@@ -851,47 +766,36 @@ model Project {
   @@index([regionId])
 }
 
-// A contractor on a project (Phase 6). In multi-prime each contractor owns its BOQ items and IPCs;
-// in the unified model the main contractor submits IPCs and the others report from site only.
+// The contractor on a project (Phase 6). Redesign R1d (decision T): one contractor per project, no
+// replacement. The contractor has no login (decision P2); it is an organisation record with contacts.
 model ProjectContractor {
-  id                          String         @id @default(uuid()) @db.Uuid
-  projectId                   String         @db.Uuid
-  organizationId              String         @db.Uuid
-  tradeCategory               String
-  tradeCode                   String
-  isMainContractor            Boolean        @default(false)
-  allocatedBudgetNgn          Decimal?       @db.Decimal(18, 2)
-  allowFieldReporting         Boolean        @default(true)
-  plannedMobilizationDate     DateTime?      @db.Date
-  plannedCompletionDate       DateTime?      @db.Date
-  // Phase 13: contract state. A terminated contractor keeps its history (IPCs, certified progress,
-  // retention); a replacement points back to it.
-  contractStatus              ContractStatus @default(ACTIVE)
-  terminatedAt                DateTime?
-  terminationCaseId           String?        @db.Uuid
-  replacesProjectContractorId String?        @db.Uuid
-  createdAt                   DateTime       @default(now())
-  updatedAt                   DateTime       @updatedAt
+  id                      String         @id @default(uuid()) @db.Uuid
+  projectId               String         @db.Uuid
+  organizationId          String         @db.Uuid
+  tradeCategory           String
+  tradeCode               String
+  allocatedBudgetNgn      Decimal?       @db.Decimal(18, 2)
+  plannedMobilizationDate DateTime?      @db.Date
+  plannedCompletionDate   DateTime?      @db.Date
+  // Phase 13: contract state. A terminated contractor keeps its history (progress, retention).
+  contractStatus          ContractStatus @default(ACTIVE)
+  terminatedAt            DateTime?
+  terminationCaseId       String?        @db.Uuid
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
 
-  project              Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  organization         Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  boqItems             BoqItem[]
-  joinCodes            ProjectJoinCode[]
-  fieldSessions        FieldAgentSession[]
-  expectedParticipants ExpectedProjectParticipant[]
-  defectTickets        RetentionDefectTicket[]
+  project            Project                       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization       Organization                  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  defectTickets      RetentionDefectTicket[]
   // Phase 14
-  reportingStreams     ProjectReportingStream[]
-  inspectionFindings   InspectionFinding[]
+  reportingStreams   ProjectReportingStream[]
+  inspectionFindings InspectionFinding[]
   // Phase 13
-  replaces             ProjectContractor?            @relation("ContractorReplacement", fields: [replacesProjectContractorId], references: [id], onDelete: SetNull)
-  replacedBy           ProjectContractor[]           @relation("ContractorReplacement")
-  documents            ProjectDocument[]
-  contractMilestones   ProjectContractMilestone[]
-  defaultCases         ContractorDefaultCase[]
-  programmeSubmissions ProgrammeOfWorksSubmission[]
+  documents          ProjectDocument[]
+  contractMilestones ProjectContractMilestone[]
+  defaultCases       ContractorDefaultCase[]
   // Phase 15
-  performanceRatings   ContractorPerformanceRating[]
+  performanceRatings ContractorPerformanceRating[]
 
   @@unique([projectId, organizationId])
   @@unique([projectId, tradeCode])
@@ -916,52 +820,19 @@ model BoqRevision {
   @@map("boq_revisions")
 }
 
-// One active code per (project, role, contractor): partial unique index
-// "ProjectJoinCode_active_project_role_contractor_key" (raw SQL, Phase 6). Keep it when generating
-// later migrations.
-model ProjectJoinCode {
-  id                  String    @id @default(uuid()) @db.Uuid
-  projectId           String    @db.Uuid
-  roleId              String    @db.Uuid
-  // Set for contractor-executor codes on projects with contractors; binds sessions to the package.
-  projectContractorId String?   @db.Uuid
-  code                String    @unique // e.g., "LKK-402-INS-7K2QXM"
-  isActive            Boolean   @default(true)
-  expiresAt           DateTime?
-  maxUses             Int?
-  useCount            Int       @default(0)
-  rotatedFromId       String?   @db.Uuid
-  createdAt           DateTime  @default(now())
-
-  project           Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  role              Role                @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  projectContractor ProjectContractor?  @relation(fields: [projectContractorId], references: [id], onDelete: Restrict)
-  fieldSessions     FieldAgentSession[]
-
-  @@index([projectId])
-  @@index([roleId])
-  @@index([projectContractorId])
-}
-
-// One unit of field provenance. Either a join-code session (joinCodeId set) or a provisioned
-// account's session for one project on one device (userId set); a CHECK constraint keeps exactly
-// one of the two.
+// One unit of field provenance: a provisioned account's session for one project on one device.
+// Redesign R1d: join codes, join-code sessions and identity assurance are deleted (decision P2).
 model FieldAgentSession {
-  id                     String             @id @default(uuid()) @db.Uuid
-  projectId              String             @db.Uuid
-  origin                 FieldSessionOrigin @default(JOIN_CODE)
-  joinCodeId             String?            @db.Uuid
-  userId                 String?            @db.Uuid
-  mobileDeviceId         String?            @db.Uuid
-  // Contractor package the session reports for (from its join code); null when project-wide.
-  projectContractorId    String?            @db.Uuid
-  roleId                 String             @db.Uuid
+  id                     String           @id @default(uuid()) @db.Uuid
+  projectId              String           @db.Uuid
+  userId                 String           @db.Uuid
+  mobileDeviceId         String?          @db.Uuid
+  roleId                 String           @db.Uuid
   roleNameSnapshot       String
-  fieldPersonaType       FieldPersonaType   @default(INDEPENDENT_VERIFIER)
-  assuranceWeight        Float              @default(1.0)
+  fieldPersonaType       FieldPersonaType @default(INDEPENDENT_VERIFIER)
+  assuranceWeight        Float            @default(1.0)
   agentFullName          String
   agentPhoneNumber       String
-  agentPinHash           String?
   deviceId               String
   deviceModel            String?
   deviceOs               String?
@@ -970,56 +841,30 @@ model FieldAgentSession {
   devicePublicKeyAlg     String?
   devicePublicKeyId      String?
   devicePublicKeyAddedAt DateTime?
-  isActive               Boolean            @default(true)
+  isActive               Boolean          @default(true)
   revokedAt              DateTime?
-  revokedByUserId        String?            @db.Uuid
+  revokedByUserId        String?          @db.Uuid
   revokeReason           String?
   lastSyncAt             DateTime?
-  createdAt              DateTime           @default(now())
+  createdAt              DateTime         @default(now())
 
-  // Identity & Competence Assurance
-  assuranceStatus      ContractorAssuranceStatus @default(APPROVED)
-  idDocumentType       String?
-  idDocumentUrl        String?
-  selfieImageUrl       String?
-  selfieLeftUrl        String?
-  selfieRightUrl       String?
-  livenessScore        Float?
-  livenessPassed       Boolean                   @default(false)
-  livenessMetadata     Json?
-  // Phase 12: replaces corenLicenseNumber; both null when none was given or the policy is HIDDEN.
-  registrationNumber   String?
-  registrationBodyCode String?
-  experienceSummary    String?
-  reviewedByUserId     String?                   @db.Uuid
-  reviewedAt           DateTime?
-  rejectionReason      String?
-
-  project              Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  joinCode             ProjectJoinCode?             @relation(fields: [joinCodeId], references: [id], onDelete: Restrict)
-  user                 User?                        @relation(fields: [userId], references: [id], onDelete: Restrict)
-  mobileDevice         MobileDevice?                @relation(fields: [mobileDeviceId], references: [id], onDelete: Restrict)
-  projectContractor    ProjectContractor?           @relation(fields: [projectContractorId], references: [id], onDelete: Restrict)
-  role                 Role                         @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  evidenceLogs         FieldEvidenceLog[]
-  incidentReports      IncidentReport[]
-  workdayReports       WorkdayReport[]
-  pushTokens           PushToken[]
-  telemetryPings       SiteTelemetryPing[]
-  notifications        MobileNotification[]
-  wbsChatMessages      WbsChatMessage[]
-  sentChatMessages     WbsChatMessage[]             @relation("ChatSenderSession")
-  telemetryAnomalies   TelemetryAnomalyDaily[]
-  notificationReads    MobileNotificationRead[]
-  expectedParticipants ExpectedProjectParticipant[]
-  attendanceAlerts     SiteAttendanceAlert[]
+  project           Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user              User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  mobileDevice      MobileDevice?            @relation(fields: [mobileDeviceId], references: [id], onDelete: Restrict)
+  role              Role                     @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  evidenceLogs      FieldEvidenceLog[]
+  incidentReports   IncidentReport[]
+  workdayReports    WorkdayReport[]
+  pushTokens        PushToken[]
+  notifications     MobileNotification[]
+  wbsChatMessages   WbsChatMessage[]
+  sentChatMessages  WbsChatMessage[]         @relation("ChatSenderSession")
+  notificationReads MobileNotificationRead[]
 
   @@unique([userId, projectId, deviceId])
   @@index([projectId, roleId])
-  @@index([projectId, assuranceStatus])
   @@index([deviceId])
   @@index([userId])
-  @@index([projectContractorId])
 }
 
 // A device a provisioned user has signed in on. Holds the per-install signing key (Phase 4) that
@@ -1050,12 +895,12 @@ model MobileDevice {
 }
 
 model BoqItem {
-  id                  String  @id @default(uuid()) @db.Uuid
-  projectId           String  @db.Uuid
-  // Contractor package (Phase 6); required for every item in multi-prime before activation.
-  projectContractorId String? @db.Uuid
+  id             String  @id @default(uuid()) @db.Uuid
+  projectId      String  @db.Uuid
   // Last post-activation BOQ revision that changed this item.
-  lastRevisionId      String? @db.Uuid
+  lastRevisionId String? @db.Uuid
+  // Redesign R2b: the facility unit this scope line belongs to (null on legacy projects).
+  facilityUnitId String? @db.Uuid
 
   wbsCode         String // e.g., "02.03.1"
   section         String // e.g., "BILL NO. 2 — DRAINAGE & CULVERTS"
@@ -1066,7 +911,7 @@ model BoqItem {
   budgetedCostNgn Decimal @db.Decimal(18, 2)
 
   isHoldPoint            Boolean  @default(false)
-  // Manual override only (Phase 9): PLAN_A forces an item into every period's briefs. Otherwise the
+  // Manual override only (Phase 9): PLAN_A makes an item owed every period. Otherwise the
   // planned window decides. PLAN_A | FALLBACK_BACKLOG | UNBLOCKED_POOL
   planningTier           String   @default("UNBLOCKED_POOL")
   dailyTargetQuantity    Decimal? @db.Decimal(14, 3)
@@ -1078,31 +923,26 @@ model BoqItem {
 
   // Phase 9: schedule (YYYY-MM-DD in the project zone). The original window is kept for good once
   // the project is live; revisions only move the planned window.
-  plannedStartDate         String?
-  plannedEndDate           String?
-  originalPlannedStartDate String?
-  originalPlannedEndDate   String?
-  actualStartDate          String?
-  actualCompletionDate     String?
+  plannedStartDate     String?
+  plannedEndDate       String?
+  actualStartDate      String?
+  actualCompletionDate String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  project              Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectContractor    ProjectContractor?        @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
-  lastRevision         BoqRevision?              @relation(fields: [lastRevisionId], references: [id], onDelete: SetNull)
+  project              Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  lastRevision         BoqRevision?          @relation(fields: [lastRevisionId], references: [id], onDelete: SetNull)
+  facilityUnit         FacilityUnit?         @relation(fields: [facilityUnitId], references: [id], onDelete: SetNull)
   evidenceLogs         FieldEvidenceLog[]
   incidentReports      IncidentReport[]
   workdayReports       WorkdayReport[]
-  morningBriefs        MorningDeliverableBrief[]
   reportQueries        ReportQuery[]
   wbsChatMessages      WbsChatMessage[]
   reportingObligations ReportingObligation[]
-  predecessorLinks     BoqItemDependency[]       @relation("DependencySuccessor")
-  successorLinks       BoqItemDependency[]       @relation("DependencyPredecessor")
 
   @@unique([projectId, wbsCode])
-  @@index([projectId, projectContractorId])
+  @@index([facilityUnitId])
 }
 
 // One capture: a photo, voice note or document with its hardware metadata (Phase 4).
@@ -1134,9 +974,6 @@ model FieldEvidenceLog {
   geofenceStatus         GeofenceStatus?
   // Distance outside the boundary in metres (0 when inside); null when not evaluated.
   distanceOutsideMeters  Float?
-  chainageKm             Float?
-  chainageLabel          String?
-  corridorOffsetMeters   Float?
   distanceFromSiteMeters Float?
 
   // Device orientation and provenance
@@ -1348,84 +1185,6 @@ model WorkdayReport {
   @@map("workday_reports")
 }
 
-model SiteTelemetryPing {
-  id                    String          @id @default(uuid()) @db.Uuid
-  clientPingId          String          @unique @db.Uuid
-  projectId             String          @db.Uuid
-  fieldSessionId        String          @db.Uuid
-  wbsItemId             String?         @db.Uuid
-  latitude              Float
-  longitude             Float
-  accuracyMeters        Float?
-  altitudeMeters        Float?
-  isMocked              Boolean         @default(false)
-  isWithinGeofence      Boolean?
-  geofenceStatus        GeofenceStatus?
-  distanceOutsideMeters Float?
-  chainageLabel         String?
-  distanceMeters        Float?
-  pingSource            String          @default("FOREGROUND_PRESENCE") // FOREGROUND_PRESENCE | CAPTURE | REPORT_SUBMISSION | MANUAL_CHECKIN
-  deviceSignature       String?
-  signatureVerified     Boolean?
-  capturedAtDevice      DateTime
-  syncedAtServer        DateTime        @default(now())
-
-  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  fieldSession FieldAgentSession @relation(fields: [fieldSessionId], references: [id], onDelete: Cascade)
-
-  @@index([projectId, capturedAtDevice])
-  @@index([fieldSessionId, capturedAtDevice])
-  @@map("site_telemetry_pings")
-}
-
-// One row per session, calendar day and anomaly type. Replaces one audit entry per ping.
-model TelemetryAnomalyDaily {
-  id             String   @id @default(uuid()) @db.Uuid
-  projectId      String   @db.Uuid
-  fieldSessionId String   @db.Uuid
-  day            String // YYYY-MM-DD in the tenant time zone
-  anomalyType    String // MOCK_LOCATION | OUTSIDE_GEOFENCE
-  pingCount      Int      @default(0)
-  firstSeenAt    DateTime
-  lastSeenAt     DateTime
-
-  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  fieldSession FieldAgentSession @relation(fields: [fieldSessionId], references: [id], onDelete: Cascade)
-
-  @@unique([fieldSessionId, day, anomalyType])
-  @@index([projectId, day])
-  @@map("telemetry_anomaly_daily")
-}
-
-model MorningDeliverableBrief {
-  id                   String       @id @default(uuid()) @db.Uuid
-  projectId            String       @db.Uuid
-  boqItemId            String       @db.Uuid
-  workdayDate          String // YYYY-MM-DD
-  planningTier         String       @default("PLAN_A")
-  headline             String
-  expectedDeliverable  String       @db.Text
-  reportingChecklist   Json         @default("[]")
-  dailyTargetQuantity  Decimal?     @db.Decimal(14, 3)
-  generatedByAi        Boolean      @default(false)
-  // Phase 7: one brief per persona; an inspector's brief never tells them to build anything.
-  targetPersona        BriefPersona @default(CONTRACTOR_EXECUTOR)
-  appliedStandardsJson Json         @default("[]")
-  // Phase 8: one brief per item, persona and reporting period. workdayDate is the dispatch day.
-  reportingPeriodStart String
-  reportingPeriodEnd   String
-  dueAt                DateTime
-  createdAt            DateTime     @default(now())
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  boqItem BoqItem @relation(fields: [boqItemId], references: [id], onDelete: Cascade)
-
-  @@unique([projectId, boqItemId, reportingPeriodStart, targetPersona])
-  @@index([projectId, workdayDate])
-  @@index([projectId, reportingPeriodStart])
-  @@map("morning_deliverable_briefs")
-}
-
 model MobileNotification {
   id                  String                 @id @default(uuid()) @db.Uuid
   projectId           String                 @db.Uuid
@@ -1513,7 +1272,6 @@ model WbsChatMessage {
   textContent     String?  @db.Text
   latitude        Float?
   longitude       Float?
-  chainageLabel   String?
   createdAt       DateTime @default(now())
 
   project       Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1590,22 +1348,20 @@ model WorkflowTemplate {
 }
 
 model ProjectProcessConfig {
-  id                                String                  @id @default(uuid()) @db.Uuid
-  projectId                         String                  @unique @db.Uuid
+  id                         String                  @id @default(uuid()) @db.Uuid
+  projectId                  String                  @unique @db.Uuid
   // Provenance only: the template the settings were copied from.
-  workflowTemplateId                String?                 @db.Uuid
-  needsAssessmentMode               DocumentRequirementMode @default(OPTIONAL_AT_CREATION)
-  standardsSpecificationMode        DocumentRequirementMode @default(OPTIONAL_AT_CREATION)
-  enableHoldPoints                  Boolean                 @default(true)
-  allowContractorFieldReporting     Boolean                 @default(true)
-  enableContractorIdentityAssurance Boolean                 @default(true)
-  enableAiOmissionCheck             Boolean                 @default(true)
-  enableAiStandardsCheck            Boolean                 @default(true)
-  requireReportApproval             Boolean                 @default(false)
-  enableHandoverModule              Boolean                 @default(false)
-  enableRetentionModule             Boolean                 @default(false)
-  createdAt                         DateTime                @default(now())
-  updatedAt                         DateTime                @updatedAt
+  workflowTemplateId         String?                 @db.Uuid
+  needsAssessmentMode        DocumentRequirementMode @default(OPTIONAL_AT_CREATION)
+  standardsSpecificationMode DocumentRequirementMode @default(OPTIONAL_AT_CREATION)
+  enableHoldPoints           Boolean                 @default(true)
+  enableAiOmissionCheck      Boolean                 @default(true)
+  enableAiStandardsCheck     Boolean                 @default(true)
+  requireReportApproval      Boolean                 @default(false)
+  enableHandoverModule       Boolean                 @default(false)
+  enableRetentionModule      Boolean                 @default(false)
+  createdAt                  DateTime                @default(now())
+  updatedAt                  DateTime                @updatedAt
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -1699,7 +1455,7 @@ model ProjectNeedsAssessmentDocument {
 }
 
 // ============================================================================
-// PHASE 8: CADENCE, MOBILIZATION, ATTENDANCE, JOBS, OUTBOUND MESSAGES
+// PHASE 8: CADENCE, JOBS, OUTBOUND MESSAGES
 // ============================================================================
 
 // One report owed for one WBS item and reporting period by one reporter scope:
@@ -1740,66 +1496,6 @@ model ReportingObligation {
   @@index([projectId, periodStart])
   @@index([status, lateAfter])
   @@map("reporting_obligations")
-}
-
-// Someone expected on a project (mobilization roster). Linked to an account for provisioned roles,
-// or described by name plus email or phone for join-code roles.
-model ExpectedProjectParticipant {
-  id                          String             @id @default(uuid()) @db.Uuid
-  projectId                   String             @db.Uuid
-  projectContractorId         String?            @db.Uuid
-  roleId                      String             @db.Uuid
-  userId                      String?            @db.Uuid
-  fullName                    String
-  email                       String?
-  phoneNumber                 String?
-  plannedMobilizationDate     String // YYYY-MM-DD in the project time zone
-  // HH:MM; null = the project's workday start time.
-  expectedCheckInTime         String?
-  checkInGraceMinutes         Int                @default(120)
-  // Used only when usesProjectReminderSchedule is false.
-  reminderOffsetsDays         Int[]              @default([7, 3, 1])
-  usesProjectReminderSchedule Boolean            @default(true)
-  lastReminderSentAt          DateTime?
-  linkedFieldSessionId        String?            @db.Uuid
-  mobilizationStatus          MobilizationStatus @default(INVITED)
-  createdByUserId             String             @db.Uuid
-  createdAt                   DateTime           @default(now())
-  updatedAt                   DateTime           @updatedAt
-
-  project            Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectContractor  ProjectContractor?    @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
-  role               Role                  @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  user               User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
-  linkedFieldSession FieldAgentSession?    @relation(fields: [linkedFieldSessionId], references: [id], onDelete: SetNull)
-  alerts             SiteAttendanceAlert[]
-
-  @@index([projectId, mobilizationStatus])
-  @@index([projectId, plannedMobilizationDate])
-  @@index([userId])
-  @@map("expected_project_participants")
-}
-
-model SiteAttendanceAlert {
-  id               String                @id @default(uuid()) @db.Uuid
-  projectId        String                @db.Uuid
-  participantId    String?               @db.Uuid
-  fieldSessionId   String?               @db.Uuid
-  workdayDate      String
-  alertType        AttendanceAlertType
-  status           AttendanceAlertStatus @default(OPEN)
-  resolvedByUserId String?               @db.Uuid
-  resolutionNotes  String?
-  resolvedAt       DateTime?
-  createdAt        DateTime              @default(now())
-
-  project      Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  participant  ExpectedProjectParticipant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
-  fieldSession FieldAgentSession?          @relation(fields: [fieldSessionId], references: [id], onDelete: SetNull)
-
-  @@unique([projectId, participantId, workdayDate, alertType])
-  @@index([projectId, status])
-  @@map("site_attendance_alerts")
 }
 
 // One claimed unit of scheduled work. The unique (jobName, scopeKey) makes each unit run once
@@ -1847,131 +1543,35 @@ model OutboundMessage {
 // Phase 9: schedule dependencies and revisions
 // ---------------------------------------------------------------------------
 
-enum ScheduleRevisionStatus {
-  DRAFT
-  PENDING_APPROVAL
-  APPLIED
-  REJECTED
-  // The proposer took it back before a decision.
-  WITHDRAWN
-}
-
-// Finish-to-start: the successor starts on the first working day after the predecessor's planned
-// end plus lagWorkdays.
-model BoqItemDependency {
-  id                   String   @id @default(uuid()) @db.Uuid
-  projectId            String   @db.Uuid
-  predecessorBoqItemId String   @db.Uuid
-  successorBoqItemId   String   @db.Uuid
-  lagWorkdays          Int      @default(0)
-  createdAt            DateTime @default(now())
-
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  predecessor BoqItem @relation("DependencyPredecessor", fields: [predecessorBoqItemId], references: [id], onDelete: Cascade)
-  successor   BoqItem @relation("DependencySuccessor", fields: [successorBoqItemId], references: [id], onDelete: Cascade)
-
-  @@unique([predecessorBoqItemId, successorBoqItemId])
-  @@index([projectId])
-  @@index([successorBoqItemId])
-  @@map("boq_item_dependencies")
-}
-
-// One "Catch Project Up" revision. itemAdjustmentsJson: { changes: requested input, adjustments:
-// every moved item with previous and new dates }. Applying writes exactly those adjustments.
-// At most one PENDING_APPROVAL per project (partial unique index
-// "schedule_revisions_one_pending_per_project", raw SQL; keep it in later migrations).
-model ScheduleRevision {
-  id                       String                 @id @default(uuid()) @db.Uuid
-  projectId                String                 @db.Uuid
-  revisionNumber           Int
-  initiatedByUserId        String                 @db.Uuid
-  approvedByUserId         String?                @db.Uuid
-  status                   ScheduleRevisionStatus @default(PENDING_APPROVAL)
-  reason                   String                 @db.Text
-  decisionNotes            String?                @db.Text
-  previousProjectedEndDate String?
-  newProjectedEndDate      String?
-  totalShiftedWorkdays     Int                    @default(0)
-  itemAdjustmentsJson      Json                   @default("{}")
-  createdAt                DateTime               @default(now())
-  decidedAt                DateTime?
-
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  initiatedBy User    @relation("ScheduleRevisionInitiator", fields: [initiatedByUserId], references: [id], onDelete: Restrict)
-  approvedBy  User?   @relation("ScheduleRevisionApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
-
-  @@unique([projectId, revisionNumber])
-  @@index([projectId, status])
-  @@map("schedule_revisions")
-}
-
 // ============================================================================
 // Phase 10: stakeholder handover, retention and defects
 // ============================================================================
 
-// A secure link for an external stakeholder. Only the SHA-256 of the token is stored.
-model HandoverLink {
-  id                  String                  @id @default(uuid()) @db.Uuid
-  projectId           String                  @db.Uuid
-  // Phase 15: what the link is for. COC_BENEFICIARY_SIGNATURE is added only when D-15.1 chooses
-  // public-link signing of the Certificate of Completion.
-  purpose             HandoverLinkPurpose     @default(HANDOVER)
-  tokenHash           String                  @unique
-  label               String
-  recipientName       String
-  recipientContact    String
-  stakeholderType     HandoverStakeholderType
-  handoverSummary     String                  @db.Text
-  requiresOtp         Boolean                 @default(true)
-  otpHash             String?
-  otpExpiresAt        DateTime?
-  // Failed code attempts; at the limit the link is locked until re-issued.
-  otpAttempts         Int                     @default(0)
-  lockedAt            DateTime?
-  expiresAt           DateTime
-  maxSubmissions      Int                     @default(1)
-  revokedAt           DateTime?
-  reissuedFromLinkId  String?                 @db.Uuid
-  // Upload allowance reserved by presigned uploads (per-link caps).
-  reservedUploadBytes BigInt                  @default(0)
-  reservedUploadCount Int                     @default(0)
-  createdByUserId     String                  @db.Uuid
-  createdAt           DateTime                @default(now())
-  lastAccessedAt      DateTime?
-
-  project     Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  submissions HandoverSubmission[]
-
-  @@index([projectId, createdAt])
-  @@map("handover_links")
-}
-
+// The beneficiary's handover response, recorded by staff from the signed paper copy (redesign R1d:
+// the public handover link is deleted, decision P2). Reviewing an accepted response issues the
+// handover certificate (Phase 15).
 model HandoverSubmission {
-  id               String           @id @default(uuid()) @db.Uuid
-  handoverLinkId   String           @db.Uuid
-  projectId        String           @db.Uuid
+  id               String                  @id @default(uuid()) @db.Uuid
+  projectId        String                  @db.Uuid
+  stakeholderType  HandoverStakeholderType
   decision         HandoverDecision
   submitterName    String
   submitterRole    String
   // Plain text (sanitised); never HTML.
-  feedbackText     String           @db.Text
-  // [{ title, location, description, photos: [{ objectKey, fileName, mimeType, byteSize, kind }] }]
-  snagsJson        Json             @default("[]")
-  // [{ objectKey, fileName, mimeType, byteSize, kind }]
-  attachmentsJson  Json             @default("[]")
-  submittedAt      DateTime         @default(now())
-  clientIp         String?
-  userAgent        String?
-  reviewedByUserId String?          @db.Uuid
+  feedbackText     String                  @db.Text
+  // [{ title, location, description }]
+  snagsJson        Json                    @default("[]")
+  // The officer who recorded the response and attested it matches the signed copy.
+  recordedByUserId String                  @db.Uuid
+  submittedAt      DateTime                @default(now())
+  reviewedByUserId String?                 @db.Uuid
   reviewedAt       DateTime?
   reviewNotes      String?
 
-  link          HandoverLink            @relation(fields: [handoverLinkId], references: [id], onDelete: Cascade)
   project       Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
   defectTickets RetentionDefectTicket[]
 
   @@index([projectId, submittedAt])
-  @@index([handoverLinkId])
   @@map("handover_submissions")
 }
 
@@ -1980,7 +1580,7 @@ model RetentionDefectTicket {
   projectId                  String             @db.Uuid
   // Per-project running number (DEF-001).
   ticketNumber               Int
-  // The liable party: the main contractor in the unified model unless a subcontractor is named.
+  // The liable party: the project's contractor (one per project, decision T). Defects are staff-only (R1d).
   projectContractorId        String             @db.Uuid
   boqItemId                  String?            @db.Uuid
   sourceHandoverSubmissionId String?            @db.Uuid
@@ -1991,8 +1591,6 @@ model RetentionDefectTicket {
   severity                   DefectSeverity     @default(MEDIUM)
   status                     DefectTicketStatus @default(OPEN)
   dueDate                    String?
-  // Stakeholder snag photos (handover uploads; never field evidence).
-  snagPhotoKeys              Json               @default("[]")
   raisedByUserId             String             @db.Uuid
   assignedAt                 DateTime?
   // clientCaptureIds of Phase 4 captures.
@@ -2090,27 +1688,6 @@ model ProjectBeneficiary {
 
   @@index([projectId])
   @@map("project_beneficiaries")
-}
-
-// Phase 12: tenant list of professional registration bodies (QSRBN, COREN, ...). Codes are stored as
-// strings on users and certifier snapshots; a referenced body is archived instead of deleted.
-model ProfessionalRegistrationBody {
-  id            String   @id @default(uuid()) @db.Uuid
-  tenantId      String   @db.Uuid
-  code          String
-  fullName      String
-  displayPrefix String
-  exampleNumber String?
-  isArchived    Boolean  @default(false)
-  sortOrder     Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-
-  @@unique([tenantId, code])
-  @@index([tenantId])
-  @@map("professional_registration_bodies")
 }
 
 // ---------------------------------------------------------------------------
@@ -2356,12 +1933,6 @@ enum DefaultCaseStatus {
   CLOSED
 }
 
-enum ProgrammeOfWorksStatus {
-  PENDING
-  ACCEPTED
-  RETURNED
-}
-
 /// Tenant document types (seeded from DEFAULT_DOCUMENT_TYPES with every tenant).
 model DocumentType {
   id                   String   @id @default(uuid()) @db.Uuid
@@ -2569,32 +2140,9 @@ model ContractorDefaultCase {
   @@map("contractor_default_cases")
 }
 
-model ProgrammeOfWorksSubmission {
-  id                  String                 @id @default(uuid()) @db.Uuid
-  projectId           String                 @db.Uuid
-  projectContractorId String?                @db.Uuid
-  submittedByUserId   String                 @db.Uuid
-  proposalJson        Json
-  status              ProgrammeOfWorksStatus @default(PENDING)
-  decidedByUserId     String?                @db.Uuid
-  decisionNotes       String?
-  createdAt           DateTime               @default(now())
-  decidedAt           DateTime?
-
-  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  projectContractor ProjectContractor? @relation(fields: [projectContractorId], references: [id], onDelete: SetNull)
-
-  @@index([projectId, status])
-  @@map("programme_of_works_submissions")
-}
-
 // ---------------------------------------------------------------------------
 // Phase 15: Certificate of Completion and closure governance
 // ---------------------------------------------------------------------------
-
-enum HandoverLinkPurpose {
-  HANDOVER
-}
 
 enum CompletionCertificateStatus {
   DRAFT
@@ -2678,8 +2226,6 @@ model CompletionCertificateSignature {
   beneficiaryRole    String?
   evidenceDocumentId String?  @db.Uuid
   recordedByUserId   String?  @db.Uuid
-  // Registration snapshot (only when the type follows the certifier policy and a number exists).
-  registrationText   String?
   statement          String
   statementHash      String
   signedAt           DateTime @default(now())
@@ -2853,4 +2399,209 @@ model ProjectPayment {
   @@unique([projectId, externalReference])
   @@index([projectId, paidOn])
   @@map("project_payments")
+}
+
+// ---------------------------------------------------------------------------
+// Redesign R2: facility catalogue, facility units, sprints (spec section 5)
+// ---------------------------------------------------------------------------
+
+enum FacilityArchetype {
+  BUILDING_WORKS
+  SUPPLY_INSTALLATION
+  UTILITIES
+  EXTERNAL_WORKS
+}
+
+// Tenant catalogue entry (provisioned from DEFAULT_FACILITIES). A retired facility stays on the
+// projects that use it and is hidden from pickers and the workbook. The code is locked once used.
+model Facility {
+  id         String            @id @default(uuid()) @db.Uuid
+  tenantId   String            @db.Uuid
+  code       String
+  name       String
+  // R3: plural for form placeholders when the simple English plural is wrong.
+  pluralName String?
+  category   String?
+  archetype  FacilityArchetype
+  isRetired  Boolean           @default(false)
+  sortOrder  Int               @default(0)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  units    FacilityUnit[]
+  subForms FacilitySubForm[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isRetired])
+  @@map("facilities")
+}
+
+// A named period of the project with deliverables (D-R2.4). Numbers follow date order (1…n);
+// overlaps are refused; status is derived from the dates (R4 adds verification).
+model ProjectSprint {
+  id           String   @id @default(uuid()) @db.Uuid
+  projectId    String   @db.Uuid
+  number       Int
+  name         String
+  // YYYY-MM-DD in the project zone, both days included.
+  startDate    String
+  endDate      String
+  deliverables String   @default("") @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  startingUnits      FacilityUnit[]      @relation("UnitStartSprint")
+  endingUnits        FacilityUnit[]      @relation("UnitEndSprint")
+  visitFormSnapshots VisitFormSnapshot[]
+
+  @@unique([projectId, number])
+  @@map("project_sprints")
+}
+
+// One physical instance of a catalogue facility on a project ("Ground floor male toilet"). Supply
+// units carry a planned quantity. Its scope lines take their planned window from its sprints.
+model FacilityUnit {
+  id              String   @id @default(uuid()) @db.Uuid
+  projectId       String   @db.Uuid
+  facilityId      String   @db.Uuid
+  // The workbook "Unit ID", unique per project (e.g. U01).
+  code            String
+  label           String
+  plannedQuantity Decimal? @db.Decimal(14, 3)
+  quantityUnit    String?
+  startSprintId   String?  @db.Uuid
+  endSprintId     String?  @db.Uuid
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  facility    Facility       @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  startSprint ProjectSprint? @relation("UnitStartSprint", fields: [startSprintId], references: [id], onDelete: SetNull)
+  endSprint   ProjectSprint? @relation("UnitEndSprint", fields: [endSprintId], references: [id], onDelete: SetNull)
+  lines       BoqItem[]
+
+  @@unique([projectId, code])
+  @@index([facilityId])
+  @@index([startSprintId])
+  @@index([endSprintId])
+  @@map("facility_units")
+}
+
+// ---------------------------------------------------------------------------
+// Redesign R3: form library (fixed sections, facility sub-forms, visit form templates). Each is
+// versioned: a version used by a stored VisitFormSnapshot is never edited; saving makes version + 1.
+// ---------------------------------------------------------------------------
+
+enum VisitKind {
+  MOBILISATION_CHECK
+  BASELINE
+  ROUTINE
+  QUARTERLY_ME
+  FINAL_EVALUATION
+  POST_CLOSURE_EVALUATION
+  AD_HOC
+}
+
+enum FormSubFormSubject {
+  ARCHETYPE
+  FACILITY
+}
+
+// A reusable fixed section ("Health & safety"), versioned by code. fieldsJson: FormField[].
+model FormSection {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @db.Uuid
+  code            String
+  version         Int      @default(1)
+  title           String
+  description     String?
+  fieldsJson      Json
+  isArchived      Boolean  @default(false)
+  createdByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code, version])
+  @@index([tenantId, isArchived])
+  @@map("form_sections")
+}
+
+// A facility sub-form: the archetype default (subject ARCHETYPE) or a facility's own override
+// (subject FACILITY). subjectKey is "ARCHETYPE:<archetype>" or "FACILITY:<facilityId>", written by
+// the service. Hand-written CHECK facility_subforms_subject_check keeps subject and columns in step.
+model FacilitySubForm {
+  id              String             @id @default(uuid()) @db.Uuid
+  tenantId        String             @db.Uuid
+  subject         FormSubFormSubject
+  archetype       FacilityArchetype?
+  facilityId      String?            @db.Uuid
+  subjectKey      String
+  version         Int                @default(1)
+  fieldsJson      Json
+  isArchived      Boolean            @default(false)
+  createdByUserId String?            @db.Uuid
+  createdAt       DateTime           @default(now())
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  facility Facility? @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, subjectKey, version])
+  @@index([facilityId])
+  @@map("facility_subforms")
+}
+
+// A visit form template for one visit kind: ordered blocks (sections by code, one FACILITIES slot).
+model VisitFormTemplate {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @db.Uuid
+  code            String
+  version         Int       @default(1)
+  name            String
+  visitKind       VisitKind
+  layoutJson      Json
+  isArchived      Boolean   @default(false)
+  createdByUserId String?   @db.Uuid
+  createdAt       DateTime  @default(now())
+
+  tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  snapshots VisitFormSnapshot[]
+
+  @@unique([tenantId, code, version])
+  @@index([tenantId, visitKind])
+  @@map("visit_form_templates")
+}
+
+// Redesign R3c: a frozen, self-contained visit form (D-R3.15). R4 links it from Visit.formSnapshotId and
+// creates it in the transaction that assigns the visit; a stored snapshot is never mutated. Its
+// template, section and sub-form ids mark those versions as used (they are never edited again).
+model VisitFormSnapshot {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String    @db.Uuid
+  projectId     String    @db.Uuid
+  visitKind     VisitKind
+  // YYYY-MM-DD in the project zone
+  visitDate     String
+  sprintId      String?   @db.Uuid
+  templateId    String    @db.Uuid
+  sectionIds    String[]  @db.Uuid
+  subFormIds    String[]  @db.Uuid
+  snapshotJson  Json
+  // SHA-256 of canonicalVisitFormSnapshot (builtAt excluded)
+  contentSha256 String
+  schemaVersion Int
+  builtAt       DateTime
+  builtByUserId String?   @db.Uuid
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  project  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprint   ProjectSprint?    @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  template VisitFormTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+
+  @@index([projectId])
+  @@index([templateId])
+  @@map("visit_form_snapshots")
 }

@@ -5,7 +5,6 @@ import type { LocationFix } from '../services/locationService';
 import { getDb, newId, nowIso } from './db/database';
 import { enqueue } from './outbox/outboxStore';
 import { kickOutbox } from './outbox/outboxProcessor';
-import { insertPing } from './telemetryStore';
 
 /**
  * Captures (Phase 4): one photo, voice note or document.
@@ -193,15 +192,6 @@ export async function saveCapture(input: NewCaptureInput): Promise<CaptureRecord
       ]
     );
     await enqueue(db, { projectId: input.projectId, kind: 'CAPTURE', entityId: id });
-    // D-4.3: a presence ping with every capture that has a fix.
-    if (input.fix) {
-      await insertPing(db, {
-        projectId: input.projectId,
-        wbsItemId: input.wbsItemId,
-        fix: input.fix,
-        source: 'CAPTURE',
-      });
-    }
   });
   kickOutbox();
   const saved = await getCapture(id);

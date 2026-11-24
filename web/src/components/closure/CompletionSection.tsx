@@ -269,7 +269,6 @@ function SlotRow({ projectId, cert, slot }: { projectId: string; cert: Completio
             Signed by <span className="font-semibold">{s.signerName}</span>
             {s.isBeneficiary ? (s.beneficiaryRole ? `, ${s.beneficiaryRole}` : "") : s.roleName ? `, ${s.roleName}` : ""}
             {s.organizationName ? ` (${s.organizationName})` : ""} · {fmt(s.signedAt)}
-            {s.registration ? ` · ${s.registration}` : ""}
             {s.recordedByName ? ` · recorded by ${s.recordedByName}` : ""}
             {s.evidenceDocumentId && (
               <button type="button" onClick={() => openDocument.mutate({ documentId: s.evidenceDocumentId! })} className="ml-2 font-semibold text-brand-primary hover:underline">

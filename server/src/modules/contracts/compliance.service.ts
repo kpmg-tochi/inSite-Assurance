@@ -11,8 +11,8 @@ import { evidenceFor, registerEvidence } from '../documents/documents.service';
 
 /**
  * Phase 13: contractor mobilisation compliance per contractor: the mobilisation milestone (the
- * AUTO_CONTRACTOR_ON_SITE milestone of the contractor, else a project-level one), the first
- * in-geofence check-in, documents still missing from the type's `beforeMobilisation` list, and any
+ * AUTO_CONTRACTOR_ON_SITE milestone of the contractor, else a project-level one; R1e: on site means
+ * that milestone is done, confirmed by an officer), documents still missing from the type's `beforeMobilisation` list, and any
  * running default case.
  */
 export async function getMobilisationCompliance(projectId: string, now: Date = new Date()): Promise<MobilisationComplianceRow[]> {
@@ -25,7 +25,7 @@ export async function getMobilisationCompliance(projectId: string, now: Date = n
   const [contractors, milestones, evidence, types, cases] = await Promise.all([
     prisma.projectContractor.findMany({
       where: { projectId },
-      orderBy: [{ isMainContractor: 'desc' }, { createdAt: 'asc' }],
+      orderBy: [{ createdAt: 'asc' }],
       include: { organization: { select: { name: true } } },
     }),
     prisma.projectContractMilestone.findMany({ where: { projectId, completionMode: 'AUTO_CONTRACTOR_ON_SITE' }, orderBy: { sortOrder: 'asc' } }),
@@ -43,22 +43,11 @@ export async function getMobilisationCompliance(projectId: string, now: Date = n
   for (const c of contractors) {
     const m = milestones.find((x) => x.projectContractorId === c.id) ?? milestones.find((x) => x.projectContractorId === null) ?? null;
     const status = m ? deriveMilestoneStatus(m.status, m.dueDate, today) : null;
-    const firstPing = await prisma.siteTelemetryPing.findFirst({
-      where: {
-        projectId,
-        isMocked: false,
-        fieldSession: { OR: [{ projectContractorId: c.id }, { user: { organizationId: c.organizationId } }] },
-        OR: [{ geofenceStatus: { in: ['INSIDE', 'WITHIN_TOLERANCE'] } }, { geofenceStatus: null, isWithinGeofence: true }],
-      },
-      orderBy: { capturedAtDevice: 'asc' },
-      select: { capturedAtDevice: true },
-    });
     rows.push({
       projectContractorId: c.id,
       organizationName: c.organization.name,
       tradeCode: c.tradeCode,
       contractStatus: c.contractStatus,
-      replacesProjectContractorId: c.replacesProjectContractorId,
       milestone:
         m && status
           ? {
@@ -70,8 +59,7 @@ export async function getMobilisationCompliance(projectId: string, now: Date = n
               completedAt: m.completedAt?.toISOString() ?? null,
             }
           : null,
-      onSite: Boolean(firstPing),
-      firstCheckInAt: firstPing?.capturedAtDevice.toISOString() ?? null,
+      onSite: status === 'DONE',
       missingDocuments: requiredCodes
         .filter((code) => evidenceFor(evidence, code, c.id).length === 0)
         .map((code) => ({ code, name: typeName.get(code) ?? code })),

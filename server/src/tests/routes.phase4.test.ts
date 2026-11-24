@@ -1,12 +1,13 @@
 /**
  * Phase 4 route-level tests: capture registration, integrity screening with real image bytes,
  * device signatures, idempotent reports, the assurance gate, staged release, honest AI fallbacks,
- * telemetry and chat idempotency, and counted reports driving progress (redesign R1b).
+ * chat idempotency, and counted reports driving progress (redesign R1b).
  *
  * Runs against a disposable database rebuilt from migrations (see helpers/testDb.ts). Uploads use
  * the local-disk storage mode (no S3), through the same presign -> PUT -> register flow as devices.
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { createFieldSession, fieldAuth, fieldToken as sessionToken } from './helpers/fieldAuth';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
@@ -21,7 +22,6 @@ type Shared = typeof import('@insite/shared');
 let app: Express;
 let prisma: PrismaClientType;
 let shared: Shared;
-let signFieldAgentToken: typeof import('../middleware/auth.middleware')['signFieldAgentToken'];
 let aiCheck: typeof import('../modules/workday-reports/aiOmissionCheck');
 let provider: typeof import('../modules/evidence/evidenceProvider');
 
@@ -35,7 +35,6 @@ const ids = {
   abjCow: '',
   lkkCow: '',
   lkkContractor: '',
-  lkkPending: '',
   pvModules: '',
   culvertConcrete: '',
   stoneBase: '',
@@ -48,7 +47,7 @@ const ABJ_POINT = { latitude: 9.0489, longitude: 7.3497 };
 const LKK_POINT = { latitude: 6.4502, longitude: 3.57 };
 const FAR_AWAY = { latitude: 4.8156, longitude: 7.0498 }; // Port Harcourt
 
-const fieldHeaders = (sessionId: string) => ({ Authorization: `Bearer ${signFieldAgentToken({ sessionId })}` });
+const fieldHeaders = (sessionId: string) => fieldAuth(prisma, sessionId);
 
 async function webHeaders(email: string) {
   const res = await request(app).post('/api/v1/auth/login').send({ email, password: PASSWORD });
@@ -111,7 +110,7 @@ function makeDeviceKey(): Key {
 async function upload(sessionId: string, projectId: string, bytes: Buffer, mediaType: string, mimeType: string) {
   const presign = await request(app)
     .post(`/api/v1/projects/${projectId}/evidence/presign`)
-    .set(fieldHeaders(sessionId))
+    .set(await fieldHeaders(sessionId))
     .send({ mediaType, fileName: 'capture.bin', mimeType, byteSize: bytes.length });
   assert.equal(presign.status, 200, JSON.stringify(presign.body));
   assert.equal(presign.body.data.storageMode, 'LOCAL_DEV_SIMULATED');
@@ -172,7 +171,7 @@ async function registerCapture(params: {
   }
   const res = await request(app)
     .post(`/api/v1/projects/${params.projectId}/captures`)
-    .set(fieldHeaders(params.sessionId))
+    .set(await fieldHeaders(params.sessionId))
     .send(body);
   return { res, body };
 }
@@ -217,7 +216,6 @@ before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
   shared = await import('@insite/shared');
-  ({ signFieldAgentToken } = await import('../middleware/auth.middleware'));
   aiCheck = await import('../modules/workday-reports/aiOmissionCheck');
   provider = await import('../modules/evidence/evidenceProvider');
   const { createApp } = await import('../app');
@@ -230,8 +228,8 @@ before(async () => {
   ids.lkk = (await prisma.project.findFirstOrThrow({ where: { tenantId: tenant.id, codePrefix: 'LKK-402' } })).id;
   ids.abjCow = (await prisma.fieldAgentSession.findFirstOrThrow({ where: { projectId: ids.abj } })).id;
   ids.lkkCow = (await prisma.fieldAgentSession.findFirstOrThrow({ where: { projectId: ids.lkk, agentFullName: { contains: 'Resident CoW' } } })).id;
-  ids.lkkContractor = (await prisma.fieldAgentSession.findFirstOrThrow({ where: { projectId: ids.lkk, agentFullName: { contains: 'Contractor Site Engr' } } })).id;
-  ids.lkkPending = (await prisma.fieldAgentSession.findFirstOrThrow({ where: { projectId: ids.lkk, assuranceStatus: 'PENDING_APPROVAL' } })).id;
+  // R1d: the second LKK-402 field session is an M&E officer (it holds the old contractor engineer's data).
+  ids.lkkContractor = (await prisma.fieldAgentSession.findFirstOrThrow({ where: { projectId: ids.lkk, agentFullName: { contains: 'M&E Officer' } } })).id;
   ids.pvModules = (await prisma.boqItem.findFirstOrThrow({ where: { projectId: ids.abj, wbsCode: '02.01.1' } })).id;
   ids.culvertConcrete = (await prisma.boqItem.findFirstOrThrow({ where: { projectId: ids.lkk, unit: 'm3' } })).id;
   ids.stoneBase = (await prisma.boqItem.findFirstOrThrow({ where: { projectId: ids.lkk, unit: 'm2' } })).id;
@@ -255,7 +253,7 @@ describe('Phase 4 field evidence pipeline', () => {
       const bytes = await renderImage('scene');
       const presign = await request(app)
         .post(`/api/v1/projects/${ids.abj}/evidence/presign`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send({ mediaType: 'SITE_PHOTO', fileName: 'a.png', mimeType: 'image/png', byteSize: bytes.length });
       const url = new URL(presign.body.data.uploadUrl);
 
@@ -270,7 +268,7 @@ describe('Phase 4 field evidence pipeline', () => {
       const bytes = await renderImage('checker');
       const presign = await request(app)
         .post(`/api/v1/projects/${ids.abj}/evidence/presign`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send({ mediaType: 'SITE_PHOTO', fileName: 'a.png', mimeType: 'image/png', byteSize: bytes.length });
       const { res } = await registerCapture({
         sessionId: ids.abjCow,
@@ -295,7 +293,7 @@ describe('Phase 4 field evidence pipeline', () => {
 
       const other = await request(app)
         .post(`/api/v1/projects/${ids.lkk}/captures`)
-        .set(fieldHeaders(ids.lkkCow))
+        .set(await fieldHeaders(ids.lkkCow))
         .send({ ...first.body, objectKey: objectKey.replace(ids.abj, ids.lkk) });
       assert.equal(other.status, 409);
       assert.equal(other.body.error.code, 'CAPTURE_ID_CONFLICT');
@@ -395,33 +393,30 @@ describe('Phase 4 field evidence pipeline', () => {
   });
 
   describe('device signatures', () => {
-    const key = makeDeviceKey();
+    // R1d: the key comes with the account's device at sign-in (no separate device-key registration).
+    let signer = '';
+    let key: Key;
+    before(async () => {
+      const s = await createFieldSession(prisma, { projectId: ids.abj, roleCode: 'INDEPENDENT_RESIDENT', name: 'Signing Officer' });
+      signer = s.sessionId;
+      key = s.key;
+    });
 
-    it('registers a device key once and refuses a different key later', async () => {
-      const first = await request(app)
+    it('has no device-key registration endpoint any more', async () => {
+      const res = await request(app)
         .post('/api/v1/auth/device-key')
-        .set(fieldHeaders(ids.abjCow))
-        .send({ devicePublicKey: key.publicKey, devicePublicKeyAlg: 'ED25519' });
-      assert.equal(first.status, 201, JSON.stringify(first.body));
-      const same = await request(app)
-        .post('/api/v1/auth/device-key')
-        .set(fieldHeaders(ids.abjCow))
-        .send({ devicePublicKey: key.publicKey, devicePublicKeyAlg: 'ED25519' });
-      assert.equal(same.status, 200);
-      const swap = await request(app)
-        .post('/api/v1/auth/device-key')
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(signer))
         .send({ devicePublicKey: makeDeviceKey().publicKey, devicePublicKeyAlg: 'ED25519' });
-      assert.equal(swap.status, 409);
+      assert.equal(res.status, 404);
     });
 
     it('verifies a valid capture signature and fails a tampered one', async () => {
-      const good = await registerCapture({ sessionId: ids.abjCow, projectId: ids.abj, bytes: await renderImage('checker', 160), key });
+      const good = await registerCapture({ sessionId: signer, projectId: ids.abj, bytes: await renderImage('checker', 160), key });
       assert.equal(good.res.body.data.signatureVerified, true);
       assert.equal(good.res.body.data.integrityPassed, true);
 
       const bad = await registerCapture({
-        sessionId: ids.abjCow,
+        sessionId: signer,
         projectId: ids.abj,
         bytes: await renderImage('checker', 170),
         key,
@@ -433,7 +428,7 @@ describe('Phase 4 field evidence pipeline', () => {
     });
 
     it('flags an unsigned capture from a device that has a key, without failing it', async () => {
-      const unsigned = await registerCapture({ sessionId: ids.abjCow, projectId: ids.abj, bytes: await renderImage('scene', 180) });
+      const unsigned = await registerCapture({ sessionId: signer, projectId: ids.abj, bytes: await renderImage('scene', 180) });
       assert.equal(unsigned.res.body.data.signatureVerified, null);
       assert.ok(unsigned.res.body.data.integrityFlags.includes('UNSIGNED'));
     });
@@ -448,14 +443,14 @@ describe('Phase 4 field evidence pipeline', () => {
         wbsItemId: ids.pvModules,
       });
       const body = reportBody({ clientCaptureIds: [capture.body.clientCaptureId] });
-      const first = await request(app).post(`/api/v1/projects/${ids.abj}/workday-reports`).set(fieldHeaders(ids.abjCow)).send(body);
+      const first = await request(app).post(`/api/v1/projects/${ids.abj}/workday-reports`).set(await fieldHeaders(ids.abjCow)).send(body);
       assert.equal(first.status, 201, JSON.stringify(first.body));
       assert.equal(first.body.data.status, 'CONFIRMED');
       assert.equal(first.body.data.aiCheckStatus, 'PENDING');
       assert.equal(first.body.data.captures.length, 1);
       assert.ok(scheduled.includes(first.body.data.id), 'omission check is scheduled after the response');
 
-      const retry = await request(app).post(`/api/v1/projects/${ids.abj}/workday-reports`).set(fieldHeaders(ids.abjCow)).send(body);
+      const retry = await request(app).post(`/api/v1/projects/${ids.abj}/workday-reports`).set(await fieldHeaders(ids.abjCow)).send(body);
       assert.equal(retry.status, 200);
       assert.equal(retry.body.data.id, first.body.data.id);
       assert.equal(retry.body.data.idempotentReplay, true);
@@ -463,7 +458,7 @@ describe('Phase 4 field evidence pipeline', () => {
 
       const reuse = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send(reportBody({ clientCaptureIds: [capture.body.clientCaptureId] }));
       assert.equal(reuse.status, 409);
       assert.equal(reuse.body.error.code, 'CAPTURE_ALREADY_LINKED');
@@ -473,7 +468,7 @@ describe('Phase 4 field evidence pipeline', () => {
       const missing = crypto.randomUUID();
       const res = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send(reportBody({ clientCaptureIds: [missing] }));
       assert.equal(res.status, 409);
       assert.deepEqual(res.body.error.details.missingClientCaptureIds, [missing]);
@@ -483,14 +478,14 @@ describe('Phase 4 field evidence pipeline', () => {
       const { submissionGeotag: _omit, ...noLocation } = reportBody();
       const missing = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send(noLocation);
       assert.equal(missing.status, 400);
 
       const day = nextPeriod();
       const poor = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send(
           reportBody({
             workdayDate: day,
@@ -507,7 +502,7 @@ describe('Phase 4 field evidence pipeline', () => {
       // 23:30 UTC on 1 Mar is 00:30 on 2 Mar in Lagos (UTC+1): the reporting day is 2 Mar.
       const wrong = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send(reportBody({ workdayDate: '2025-03-01', confirmedAt: '2025-03-01T23:30:00.000Z' }));
       assert.equal(wrong.status, 400);
       assert.equal(wrong.body.error.code, 'WORKDAY_DATE_MISMATCH');
@@ -515,13 +510,13 @@ describe('Phase 4 field evidence pipeline', () => {
 
       const right = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send(reportBody({ workdayDate: '2025-03-02', confirmedAt: '2025-03-01T23:30:00.000Z' }));
       assert.equal(right.status, 201, JSON.stringify(right.body));
 
       const future = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send(reportBody({ workdayDate: '2099-01-01', confirmedAt: '2099-01-01T12:00:00.000Z' }));
       assert.equal(future.status, 400);
       assert.equal(future.body.error.code, 'CONFIRMED_AT_IN_FUTURE');
@@ -530,7 +525,7 @@ describe('Phase 4 field evidence pipeline', () => {
     it('rejects a hold-point claim on an item that is not a hold point', async () => {
       const res = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send(reportBody({ isHoldPointClaimed: true }));
       assert.equal(res.status, 400);
       assert.equal(res.body.error.code, 'HOLD_POINT_NOT_APPLICABLE');
@@ -539,7 +534,7 @@ describe('Phase 4 field evidence pipeline', () => {
     it('runs the omission check after the response with the rules engine when no AI is configured', async () => {
       const res = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send(reportBody());
       assert.equal(res.body.data.aiCheckStatus, 'PENDING');
       const status = await aiCheck.runAiOmissionCheck(res.body.data.id);
@@ -547,116 +542,6 @@ describe('Phase 4 field evidence pipeline', () => {
       const row = await prisma.workdayReport.findUniqueOrThrow({ where: { id: res.body.data.id } });
       assert.equal(row.aiCheckEngine, 'RULES');
       assert.ok(row.aiReasoning?.startsWith('Rules check'));
-    });
-
-    it('stages a report from an unapproved reporter without an AI check, and releases it on approval', async () => {
-      const capture = await registerCapture({
-        sessionId: ids.lkkPending,
-        projectId: ids.lkk,
-        bytes: await renderImage('checker', 140),
-        location: LKK_POINT,
-        wbsItemId: ids.stoneBase,
-      });
-      assert.equal(capture.res.status, 201, JSON.stringify(capture.res.body));
-      const before = scheduled.length;
-      const staged = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/workday-reports`)
-        .set(fieldHeaders(ids.lkkPending))
-        .send(
-          reportBody({
-            wbsItemId: ids.stoneBase,
-            unitOfMeasure: 'm2',
-            clientCaptureIds: [capture.body.clientCaptureId],
-            submissionGeotag: { ...LKK_POINT, accuracyMeters: 5, isMocked: false, capturedAt: new Date().toISOString() },
-          })
-        );
-      assert.equal(staged.status, 201, JSON.stringify(staged.body));
-      assert.equal(staged.body.data.status, 'STAGED_UNVERIFIED');
-      assert.equal(staged.body.data.aiCheckStatus, 'SKIPPED');
-      assert.equal(scheduled.length, before);
-
-      // A staged report does not count: the item's reported progress is unchanged.
-      const stone = await prisma.boqItem.findUniqueOrThrow({ where: { id: ids.stoneBase } });
-      const progressOf = async () =>
-        (await provider.getReportedProgressByItem(ids.lkk, [{ id: stone.id, totalQuantity: Number(stone.totalQuantity) }])).get(stone.id) ?? 0;
-      const beforeRelease = await progressOf();
-
-      const review = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/contractor-verifications/${ids.lkkPending}/review`)
-        .set(await webHeaders('monitor@insite.ng'))
-        .send({ decision: 'APPROVE' });
-      assert.equal(review.status, 200, JSON.stringify(review.body));
-      assert.equal(review.body.data.releasedReportCount, 1);
-
-      const released = await prisma.workdayReport.findUniqueOrThrow({ where: { id: staged.body.data.id } });
-      assert.equal(released.status, 'CONFIRMED');
-      assert.ok(released.releasedAt);
-      assert.equal(released.aiCheckStatus, 'PENDING');
-      assert.ok(scheduled.includes(released.id));
-      // Released, it counts (the item's progress is the larger of the contractor and verifier sums).
-      assert.ok(provider.countedReportStatuses(false).includes(released.status as 'CONFIRMED'));
-      assert.ok((await progressOf()) >= beforeRelease);
-    });
-
-    it('keeps a rejected session signed in so the device can read the reason', async () => {
-      const session = await prisma.fieldAgentSession.create({
-        data: {
-          ...(await prisma.fieldAgentSession.findUniqueOrThrow({
-            where: { id: ids.lkkPending },
-            select: { projectId: true, joinCodeId: true, roleId: true, roleNameSnapshot: true, fieldPersonaType: true, assuranceWeight: true },
-          })),
-          agentFullName: 'Rejected Tester',
-          agentPhoneNumber: '+2348000000000',
-          deviceId: 'TEST-REJECT',
-          assuranceStatus: 'PENDING_APPROVAL',
-        },
-      });
-      const review = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/contractor-verifications/${session.id}/review`)
-        .set(await webHeaders('monitor@insite.ng'))
-        .send({ decision: 'REJECT', remarks: 'ID photo is blurred' });
-      assert.equal(review.status, 200);
-      const me = await request(app).get('/api/v1/auth/me').set(fieldHeaders(session.id));
-      assert.equal(me.status, 200, JSON.stringify(me.body));
-      assert.equal(me.body.data.fieldSession.assuranceStatus, 'REJECTED');
-      assert.equal(me.body.data.fieldSession.rejectionReason, 'ID photo is blurred');
-    });
-
-    it('stores a guided selfie set for manual review and never records a liveness result (D-4.2)', async () => {
-      const base = await prisma.fieldAgentSession.findUniqueOrThrow({
-        where: { id: ids.lkkPending },
-        select: { projectId: true, joinCodeId: true, roleId: true, roleNameSnapshot: true, fieldPersonaType: true, assuranceWeight: true },
-      });
-      const session = await prisma.fieldAgentSession.create({
-        data: { ...base, agentFullName: 'Selfie Tester', agentPhoneNumber: '+2348000000001', deviceId: 'TEST-SELFIE', assuranceStatus: 'PENDING_APPROVAL' },
-      });
-      const project = await prisma.project.findUniqueOrThrow({ where: { id: ids.lkk }, select: { tenantId: true } });
-      const key = (name: string) => `tenants/${project.tenantId}/projects/${ids.lkk}/identity_selfie/${name}.jpg`;
-      const now = new Date().toISOString();
-      const body = {
-        projectId: ids.lkk,
-        idDocumentType: 'NIN',
-        idDocumentUrl: key('id'),
-        selfieFrontUrl: key('front'),
-        selfieLeftUrl: key('left'),
-        selfieRightUrl: key('right'),
-        selfieSet: { captureMethod: 'GUIDED_SELFIE', frontCapturedAt: now, leftCapturedAt: now, rightCapturedAt: now },
-        corenLicenseNumber: 'COREN R.1234',
-        experienceSummary: 'Ten years of culvert works.',
-      };
-      const res = await request(app).post('/api/v1/auth/assurance-verification').set(fieldHeaders(session.id)).send(body);
-      assert.equal(res.status, 200, JSON.stringify(res.body));
-      const stored = await prisma.fieldAgentSession.findUniqueOrThrow({ where: { id: session.id } });
-      assert.equal(stored.livenessPassed, false);
-      assert.equal(stored.livenessScore, null);
-      assert.equal((stored.livenessMetadata as { captureMethod?: string }).captureMethod, 'GUIDED_SELFIE');
-
-      const { selfieSet: _s, ...oldShape } = body;
-      const old = await request(app)
-        .post('/api/v1/auth/assurance-verification')
-        .set(fieldHeaders(session.id))
-        .send({ ...oldShape, livenessVerification: { isLive: true } });
-      assert.equal(old.status, 400);
     });
 
     it('revalidates idempotently and marks the targeted query resubmitted', async () => {
@@ -673,14 +558,14 @@ describe('Phase 4 field evidence pipeline', () => {
       };
       const first = await request(app)
         .post(`/api/v1/projects/${ids.lkk}/workday-reports/${ids.rebarReport}/revalidate`)
-        .set(fieldHeaders(ids.lkkContractor))
+        .set(await fieldHeaders(ids.lkkContractor))
         .send(body);
       assert.equal(first.status, 201, JSON.stringify(first.body));
       assert.equal(first.body.data.parentReportId, ids.rebarReport);
       assert.equal(first.body.data.revisionNumber, 2);
       const retry = await request(app)
         .post(`/api/v1/projects/${ids.lkk}/workday-reports/${ids.rebarReport}/revalidate`)
-        .set(fieldHeaders(ids.lkkContractor))
+        .set(await fieldHeaders(ids.lkkContractor))
         .send(body);
       assert.equal(retry.status, 200);
       assert.equal(retry.body.data.id, first.body.data.id);
@@ -689,14 +574,14 @@ describe('Phase 4 field evidence pipeline', () => {
 
       const otherReporter = await request(app)
         .post(`/api/v1/projects/${ids.lkk}/workday-reports/${ids.rebarReport}/revalidate`)
-        .set(fieldHeaders(ids.lkkCow))
+        .set(await fieldHeaders(ids.lkkCow))
         .send({ ...body, clientReportId: crypto.randomUUID() });
       assert.equal(otherReporter.status, 404);
 
       // The answered query is closed: no further revision without a new query.
       const noQuery = await request(app)
         .post(`/api/v1/projects/${ids.lkk}/workday-reports/${first.body.data.id}/revalidate`)
-        .set(fieldHeaders(ids.lkkContractor))
+        .set(await fieldHeaders(ids.lkkContractor))
         .send({ ...body, reportQueryId: undefined, clientReportId: crypto.randomUUID() });
       assert.equal(noQuery.status, 409);
       assert.equal(noQuery.body.error.code, 'NO_OPEN_QUERY');
@@ -704,7 +589,7 @@ describe('Phase 4 field evidence pipeline', () => {
       // The original can no longer be revised; only the latest revision can.
       const superseded = await request(app)
         .post(`/api/v1/projects/${ids.lkk}/workday-reports/${ids.rebarReport}/revalidate`)
-        .set(fieldHeaders(ids.lkkContractor))
+        .set(await fieldHeaders(ids.lkkContractor))
         .send({ ...body, reportQueryId: undefined, clientReportId: crypto.randomUUID() });
       assert.equal(superseded.status, 409);
       assert.equal(superseded.body.error.code, 'REPORT_SUPERSEDED');
@@ -714,19 +599,19 @@ describe('Phase 4 field evidence pipeline', () => {
       const period = nextPeriod();
       const unconfirmed = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send(reportBody({ workdayDate: period, confirmedAsFinal: false }));
       assert.equal(unconfirmed.status, 400);
 
       const first = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send(reportBody({ workdayDate: period }));
       assert.equal(first.status, 201, JSON.stringify(first.body));
 
       const second = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send(reportBody({ workdayDate: period, summaryText: 'Forgot to mention the cable trays.' }));
       assert.equal(second.status, 409);
       assert.equal(second.body.error.code, 'REPORT_ALREADY_SUBMITTED');
@@ -735,7 +620,7 @@ describe('Phase 4 field evidence pipeline', () => {
       // No query has been raised, so it cannot be revised either.
       const revise = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports/${first.body.data.id}/revalidate`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send({
           clientReportId: crypto.randomUUID(),
           reporterTimezone: 'Africa/Lagos',
@@ -775,10 +660,11 @@ describe('Phase 4 field evidence pipeline', () => {
       const latest = await prisma.workdayReport.findFirstOrThrow({ where: { parentReportId: ids.rebarReport } });
       const url = `/api/v1/projects/${ids.lkk}/report-queries/${ids.rebarQuery}/resolve`;
 
-      const asField = await request(app).post(url).set(fieldHeaders(ids.lkkContractor)).send({});
+      const asField = await request(app).post(url).set(await fieldHeaders(ids.lkkContractor)).send({});
       assert.ok(asField.status === 401 || asField.status === 403, `field agent got ${asField.status}`);
-      const asContractor = await request(app).post(url).set(await webHeaders('contractor@insite.ng')).send({});
-      assert.equal(asContractor.status, 403);
+      // A web user without reports:raise_query (R1d: contractors have no login).
+      const asLender = await request(app).post(url).set(await webHeaders('lender@insite.ng')).send({});
+      assert.equal(asLender.status, 403);
 
       const monitor = await webHeaders('monitor@insite.ng');
       const resolved = await request(app).post(url).set(monitor).send({ resolutionNote: 'Mill certificate received.' });
@@ -790,7 +676,7 @@ describe('Phase 4 field evidence pipeline', () => {
 
       const revise = await request(app)
         .post(`/api/v1/projects/${ids.lkk}/workday-reports/${latest.id}/revalidate`)
-        .set(fieldHeaders(ids.lkkContractor))
+        .set(await fieldHeaders(ids.lkkContractor))
         .send({
           clientReportId: crypto.randomUUID(),
           reporterTimezone: 'Africa/Lagos',
@@ -803,7 +689,7 @@ describe('Phase 4 field evidence pipeline', () => {
 
       const notices = await request(app)
         .get(`/api/v1/projects/${ids.lkk}/notifications`)
-        .set(fieldHeaders(ids.lkkContractor));
+        .set(await fieldHeaders(ids.lkkContractor));
       assert.equal(notices.status, 200);
       const resolvedNotice = notices.body.data.find((n: { title: string }) => n.title.startsWith('Query resolved'));
       assert.ok(resolvedNotice, 'the reporter is told the query was resolved');
@@ -812,18 +698,12 @@ describe('Phase 4 field evidence pipeline', () => {
     });
 
     it('keeps notification read state per field session', async () => {
-      const base = await prisma.fieldAgentSession.findUniqueOrThrow({
-        where: { id: ids.abjCow },
-        select: { projectId: true, joinCodeId: true, roleId: true, roleNameSnapshot: true, fieldPersonaType: true, assuranceWeight: true },
-      });
-      const other = await prisma.fieldAgentSession.create({
-        data: { ...base, agentFullName: 'Second Reader', agentPhoneNumber: '+2348000000002', deviceId: 'TEST-READER' },
-      });
+      const other = { id: (await createFieldSession(prisma, { projectId: ids.abj, roleCode: 'INDEPENDENT_RESIDENT', name: 'Second Reader' })).sessionId };
       const broadcast = await prisma.mobileNotification.create({
         data: {
           projectId: ids.abj,
           fieldSessionId: null,
-          type: 'MORNING_DELIVERABLE_READY',
+          type: 'HOLD_POINT_ALERT',
           actionType: 'NONE',
           title: 'Broadcast for read-state test',
           message: 'Everyone on the project sees this.',
@@ -831,12 +711,12 @@ describe('Phase 4 field evidence pipeline', () => {
       });
       const mark = await request(app)
         .patch(`/api/v1/projects/${ids.abj}/notifications/${broadcast.id}/read`)
-        .set(fieldHeaders(ids.abjCow));
+        .set(await fieldHeaders(ids.abjCow));
       assert.equal(mark.status, 200, JSON.stringify(mark.body));
       assert.equal(mark.body.data.isRead, true);
 
-      const forReader = await request(app).get(`/api/v1/projects/${ids.abj}/notifications`).set(fieldHeaders(ids.abjCow));
-      const forOther = await request(app).get(`/api/v1/projects/${ids.abj}/notifications`).set(fieldHeaders(other.id));
+      const forReader = await request(app).get(`/api/v1/projects/${ids.abj}/notifications`).set(await fieldHeaders(ids.abjCow));
+      const forOther = await request(app).get(`/api/v1/projects/${ids.abj}/notifications`).set(await fieldHeaders(other.id));
       const find = (res: request.Response) => res.body.data.find((n: { id: string }) => n.id === broadcast.id);
       assert.equal(find(forReader).isRead, true);
       assert.equal(find(forOther).isRead, false);
@@ -857,7 +737,7 @@ describe('Phase 4 field evidence pipeline', () => {
       assert.equal(voice.res.body.data.transcriptionStatus, 'PENDING');
       const res = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports/suggest`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send({ wbsItemId: ids.pvModules, clientCaptureIds: [voice.body.clientCaptureId] });
       assert.equal(res.status, 200, JSON.stringify(res.body));
       assert.equal(res.body.data.transcripts[0].transcriptionStatus, 'PENDING');
@@ -869,7 +749,7 @@ describe('Phase 4 field evidence pipeline', () => {
     it('suggests from typed notes with the rules engine, without linking a BOQ item or describing photos', async () => {
       const res = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports/suggest`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send({ wbsItemId: ids.pvModules, textNotes: ['Installed 40 m of cable tray, rain delay after 3pm'] });
       assert.equal(res.status, 200);
       const s = res.body.data.suggestion;
@@ -880,51 +760,25 @@ describe('Phase 4 field evidence pipeline', () => {
     });
   });
 
-  describe('telemetry and chat idempotency', () => {
-    it('stores each ping once and writes one anomaly summary per day and type', async () => {
-      const capturedAt = new Date().toISOString();
-      const pings = [
-        { clientPingId: crypto.randomUUID(), ...FAR_AWAY, accuracyMeters: 6, isMocked: false, capturedAt },
-        { clientPingId: crypto.randomUUID(), ...FAR_AWAY, accuracyMeters: 6, isMocked: false, capturedAt },
-        { clientPingId: crypto.randomUUID(), ...ABJ_POINT, accuracyMeters: 6, isMocked: true, capturedAt },
-      ];
-      const first = await request(app).post(`/api/v1/projects/${ids.abj}/telemetry`).set(fieldHeaders(ids.abjCow)).send({ pings });
-      assert.equal(first.status, 201, JSON.stringify(first.body));
-      assert.equal(first.body.data.created, 3);
-      const again = await request(app).post(`/api/v1/projects/${ids.abj}/telemetry`).set(fieldHeaders(ids.abjCow)).send({ pings });
-      assert.equal(again.body.data.created, 0);
-
-      const more = [{ clientPingId: crypto.randomUUID(), ...FAR_AWAY, accuracyMeters: 6, isMocked: false, capturedAt }];
-      await request(app).post(`/api/v1/projects/${ids.abj}/telemetry`).set(fieldHeaders(ids.abjCow)).send({ pings: more });
-
-      const rows = await prisma.telemetryAnomalyDaily.findMany({ where: { fieldSessionId: ids.abjCow } });
-      const outside = rows.find((r) => r.anomalyType === 'OUTSIDE_GEOFENCE');
-      assert.equal(outside?.pingCount, 3);
-      assert.equal(rows.find((r) => r.anomalyType === 'MOCK_LOCATION')?.pingCount, 1);
-      const summaries = await prisma.auditLog.count({
-        where: { projectId: ids.abj, action: 'TELEMETRY_ANOMALY_SUMMARY', actorId: ids.abjCow },
-      });
-      assert.equal(summaries, 2);
-    });
-
+  describe('chat idempotency', () => {
     it('stores a chat message once and refuses inline media', async () => {
       const url = `/api/v1/projects/${ids.abj}/boq/${ids.pvModules}/messages`;
       const body = { clientMessageId: crypto.randomUUID(), messageType: 'TEXT_COMMENT', textContent: 'Row C done' };
-      const first = await request(app).post(url).set(fieldHeaders(ids.abjCow)).send(body);
+      const first = await request(app).post(url).set(await fieldHeaders(ids.abjCow)).send(body);
       assert.equal(first.status, 201, JSON.stringify(first.body));
       assert.equal(first.body.data.senderSessionId, ids.abjCow);
-      const retry = await request(app).post(url).set(fieldHeaders(ids.abjCow)).send(body);
+      const retry = await request(app).post(url).set(await fieldHeaders(ids.abjCow)).send(body);
       assert.equal(retry.status, 200);
       assert.equal(retry.body.data.id, first.body.data.id);
 
       const inline = await request(app)
         .post(url)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send({ clientMessageId: crypto.randomUUID(), messageType: 'PHOTO', mediaUrls: ['data:image/png;base64,AAAA'] });
       assert.equal(inline.status, 400);
       const noCapture = await request(app)
         .post(url)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send({ clientMessageId: crypto.randomUUID(), messageType: 'PHOTO' });
       assert.equal(noCapture.status, 400);
       assert.equal(noCapture.body.error.code, 'CAPTURE_REQUIRED');
@@ -938,14 +792,14 @@ describe('Phase 4 field evidence pipeline', () => {
         description: 'Tower crane hydraulic failure, lifting halted.',
       };
       const url = `/api/v1/projects/${ids.abj}/incidents`;
-      const first = await request(app).post(url).set(fieldHeaders(ids.abjCow)).send(body);
+      const first = await request(app).post(url).set(await fieldHeaders(ids.abjCow)).send(body);
       assert.equal(first.status, 201, JSON.stringify(first.body));
-      const retry = await request(app).post(url).set(fieldHeaders(ids.abjCow)).send(body);
+      const retry = await request(app).post(url).set(await fieldHeaders(ids.abjCow)).send(body);
       assert.equal(retry.status, 200);
       assert.equal(retry.body.data.id, first.body.data.id);
       const filePath = await request(app)
         .post(url)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send({ ...body, clientIncidentId: crypto.randomUUID(), photoEvidenceUrls: ['file:///data/photo.jpg'] });
       assert.equal(filePath.status, 400);
     });
@@ -974,7 +828,7 @@ describe('Phase 4 field evidence pipeline', () => {
       });
       const submit = await request(app)
         .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(fieldHeaders(ids.abjCow))
+        .set(await fieldHeaders(ids.abjCow))
         .send(
           reportBody({
             wbsItemId: boq.id,

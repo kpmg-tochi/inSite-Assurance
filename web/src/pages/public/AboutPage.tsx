@@ -286,7 +286,7 @@ export function AboutPage() {
                 </div>
                 <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
                   Performs mock-location and perceptual hash duplicate
-                  screening, supports Radial and Linear Corridor geofences,
+                  screening, supports radial and perimeter geofences,
                   transcribes English and Pidgin voice notes with mandatory
                   human confirmation <CitationRef id={20} />, and computes
                   line-item Evidence Strength Ratings.
@@ -330,11 +330,10 @@ export function AboutPage() {
                   budget, allocated loan tranches, location, and the
                   participating institutions (Financier, Monitoring Firm, Main
                   Contractor). Physical project boundaries are defined using
-                  either a <strong>Linear Corridor Geofence</strong> (polyline
-                  centerline with a buffer tolerance, such as ±150m for highway
-                  corridors) or a <strong>Radial Site Boundary</strong> (center
-                  coordinate with radius for captive power plants or
-                  substations). The platform automatically generates three
+                  either a <strong>Radial Site Boundary</strong> (centre
+                  coordinate with a radius, defaulting to the workspace setting)
+                  or a <strong>Perimeter</strong> (a drawn boundary polygon for
+                  irregular sites such as school compounds). The platform automatically generates three
                   role-specific 6-character Mobile Join Codes (<code>-INS</code>{" "}
                   for Monitor Inspectors, <code>-COW</code> for Resident Clerks
                   of Works, and <code>-CON</code> for Contractor Site
@@ -386,8 +385,7 @@ export function AboutPage() {
                   GPS fix taken at the shutter and the phone's mock-location
                   flag. Each capture is signed with a key unique to the
                   device. The server then checks the position against the
-                  corridor, works out the highway chainage (KM X+YYY) and
-                  screens for recycled photos. Voice logs in
+                  site boundary and screens for recycled photos. Voice logs in
                   English or Nigerian Pidgin are transcribed and converted into
                   structured material quantities. The reporter completes a
                   mandatory confirmation step to sign the log before
@@ -506,7 +504,7 @@ export function AboutPage() {
                 <ul className="list-disc list-inside text-xs text-slate-600 space-y-1.5 leading-relaxed">
                   <li>
                     <strong>Project Baseline Setup:</strong>{" "}
-                    Configures Point Radius or Linear Corridor geofences,
+                    Configures radial or perimeter geofences,
                     expected reporting cadences, and flags critical BOQ items as
                     Mandatory Visual Hold Points <CitationRef id={27} />.
                   </li>
@@ -790,7 +788,7 @@ export function AboutPage() {
                         Lender / Guarantor Growth
                       </td>
                       <td className="py-3 px-4 text-slate-600">
-                        Up to 30 active projects; Linear Corridor Geofencing,
+                        Up to 30 active projects; radial and perimeter geofencing,
                         Custom Report Templates and Priority SLA
                       </td>
                       <td className="py-3 px-4 font-bold text-brand-primary">

@@ -1,7 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { getDb, newId, nowIso } from '../db/database';
 import type { OutboxKind, OutboxRow, OutboxStatus } from './outboxPolicy';
-import { sessionKeyForProject } from '../../config/authRegistry';
+import { currentSessionKey } from '../../config/authRegistry';
 
 type Row = {
   id: string;
@@ -63,7 +63,7 @@ export async function enqueue(
       now,
       now,
       now,
-      sessionKeyForProject(params.projectId),
+      currentSessionKey(),
     ]
   );
   return id;
@@ -92,17 +92,6 @@ export async function markDone(id: string): Promise<void> {
     `UPDATE outbox SET status = 'DONE', last_error = NULL, updated_at = ? WHERE id = ?`,
     [nowIso(), id]
   );
-}
-
-export async function markManyDone(ids: string[]): Promise<void> {
-  if (ids.length === 0) return;
-  const db = await getDb();
-  const now = nowIso();
-  await db.withTransactionAsync(async () => {
-    for (const id of ids) {
-      await db.runAsync(`UPDATE outbox SET status = 'DONE', last_error = NULL, updated_at = ? WHERE id = ?`, [now, id]);
-    }
-  });
 }
 
 export async function recordFailure(

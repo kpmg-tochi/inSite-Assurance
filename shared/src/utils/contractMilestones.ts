@@ -37,7 +37,7 @@ export interface MilestoneDateRow {
   anchorMilestoneKey: string | null;
   offsetValue: number;
   offsetUnit: MilestoneOffsetUnit;
-  /** Replacement contractors: counts from this date instead of the anchor. */
+  /** Counts from this date instead of the anchor (extensions). */
   anchorDateOverride?: string | null;
   status?: ContractMilestoneStatus;
   /** The day it was done, in the project zone (DONE rows). */
@@ -118,7 +118,7 @@ export function describeMilestoneAnchor(
   const n = Math.abs(row.offsetValue);
   const unit = row.offsetUnit === 'WORKING_DAYS' ? (n === 1 ? 'working day' : 'working days') : n === 1 ? 'day' : 'days';
   const base = row.anchorDateOverride
-    ? 'Replacement start'
+    ? 'Extended to'
     : row.anchor === 'MILESTONE'
       ? `After “${(row.anchorMilestoneKey && labelForKey(row.anchorMilestoneKey)) ?? row.anchorMilestoneKey ?? 'another milestone'}”`
       : CONTRACT_MILESTONE_ANCHOR_META[row.anchor].label;

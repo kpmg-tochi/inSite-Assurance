@@ -9,30 +9,29 @@ import { rbacRoutes } from "./modules/rbac/rbac.routes";
 import { organizationsRoutes } from "./modules/organizations/organizations.routes";
 import { projectsRoutes } from "./modules/projects/projects.routes";
 import { boqRoutes } from "./modules/boq/boq.routes";
+import { facilitiesRoutes } from "./modules/facilities/facilities.routes";
+import { formLibraryRoutes } from "./modules/forms/formLibrary.routes";
+import { visitFormRoutes } from "./modules/forms/visitForm.routes";
+import { scopeRoutes, scopeWorkbookRoutes } from "./modules/scope/scope.routes";
 import { evidenceRoutes } from "./modules/evidence/evidence.routes";
 import { auditRoutes } from "./modules/audit/audit.routes";
 import { incidentRoutes } from "./modules/incidents/incident.routes";
-import { telemetryRoutes } from "./modules/telemetry/telemetry.routes";
 import { workdayReportsRoutes } from "./modules/workday-reports/workdayReports.routes";
-import { morningBriefRoutes } from "./modules/morning-briefs/morningBrief.routes";
 import { notificationsRoutes } from "./modules/notifications/notifications.routes";
 import { wbsChatRoutes } from "./modules/wbs-chat/wbsChat.routes";
 import { capturesRoutes } from "./modules/evidence/captures.routes";
 import { processRoutes, workflowTemplateRoutes } from "./modules/process/process.routes";
-import { mobilizationRoutes } from "./modules/mobilization/mobilization.routes";
-import { scheduleRoutes } from "./modules/schedule/schedule.routes";
+import { cadenceRoutes } from "./modules/cadence/cadence.routes";
 import { closeoutRoutes } from "./modules/closeout/closeout.routes";
 import { paymentsRoutes } from "./modules/payments/payments.routes";
 import { inspectionsRoutes } from "./modules/inspections/inspections.routes";
 import { inspectionTemplatesRoutes, supervisionRoutes } from "./modules/inspections/inspectionTemplates.routes";
-import { handoverPublicRoutes } from "./modules/closeout/handoverPublic.routes";
 import { projectTypesRoutes } from "./modules/projectTypes/projectTypes.routes";
 import { documentsRoutes, documentTypesRoutes } from "./modules/documents/documents.routes";
 import { contractsRoutes } from "./modules/contracts/contracts.routes";
 import { closureTenantRoutes, completionRoutes } from "./modules/completion/completion.routes";
 import { kpiRoutes, projectKpiRoutes } from "./modules/kpis/kpis.routes";
 import { regionsRoutes } from "./modules/regions/regions.routes";
-import { credentialsRoutes, projectCredentialRoutes } from "./modules/credentials/credentials.routes";
 import { requestContextMiddleware } from "./utils/requestContext";
 import { localStorageRoutes } from "./modules/storage/localStorage.routes";
 import { storageService } from "./integrations/storage.service";
@@ -48,9 +47,6 @@ export function createApp() {
       credentials: true,
     }),
   );
-  // Phase 10: the public stakeholder handover API has its own small body limit and rate limits, so
-  // it is mounted before the app-wide parsers. It reaches nothing else.
-  app.use("/api/v1/public/handover", handoverPublicRoutes);
 
   app.use(express.json({ limit: "15mb" }));
   app.use(express.urlencoded({ extended: true }));
@@ -93,18 +89,17 @@ export function createApp() {
   app.use("/api/v1/organizations", organizationsRoutes);
   app.use("/api/v1/projects", projectsRoutes);
   app.use("/api/v1/projects", boqRoutes);
+  app.use("/api/v1/projects", scopeRoutes); // Redesign R2b
+  app.use("/api/v1/projects", visitFormRoutes); // Redesign R3c
   app.use("/api/v1/projects", evidenceRoutes);
   app.use("/api/v1/projects", auditRoutes);
   app.use("/api/v1/projects", incidentRoutes);
-  app.use("/api/v1/projects", telemetryRoutes);
   app.use("/api/v1/projects", workdayReportsRoutes);
-  app.use("/api/v1/projects", morningBriefRoutes);
   app.use("/api/v1/projects", notificationsRoutes);
   app.use("/api/v1/projects", wbsChatRoutes);
   app.use("/api/v1/projects", capturesRoutes);
   app.use("/api/v1/projects", processRoutes);
-  app.use("/api/v1/projects", mobilizationRoutes);
-  app.use("/api/v1/projects", scheduleRoutes);
+  app.use("/api/v1/projects", cadenceRoutes);
   app.use("/api/v1/projects", closeoutRoutes);
   app.use("/api/v1/projects", paymentsRoutes);
   // Phase 14: reporting streams, inspections, findings, supervision
@@ -125,9 +120,9 @@ export function createApp() {
   // Phase 11: delivery models
   app.use("/api/v1/project-types", projectTypesRoutes);
   app.use("/api/v1/regions", regionsRoutes);
-  // Phase 12: professional registration policy and bodies
-  app.use("/api/v1/credentials", credentialsRoutes);
-  app.use("/api/v1/projects", projectCredentialRoutes);
+  app.use("/api/v1/facilities", facilitiesRoutes); // Redesign R2a
+  app.use("/api/v1/form-library", formLibraryRoutes); // Redesign R3
+  app.use("/api/v1/scope-workbook", scopeWorkbookRoutes); // blank needs-assessment workbook
 
   // Development object storage when S3 is not configured (never in production; see env checks).
   if (!storageService.isCloudConfigured() && env.NODE_ENV !== "production") {

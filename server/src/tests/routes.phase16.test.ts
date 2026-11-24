@@ -27,6 +27,8 @@ const today = zonedCalendarDate(new Date(), 'Africa/Lagos');
 const period = { from: addDays(today, -60), to: today };
 const ids = { tenant: '', central: '', coFunded: '', north: '', south: '', regionSouth: '', prg105: '', prg211: '', prg242: '' };
 
+const NO_KPIS = 'no.kpis@insite.test';
+
 async function web(email: string) {
   if (!tokens[email]) {
     const res = await request(app).post('/api/v1/auth/login').send({ email, password: PASSWORD });
@@ -68,6 +70,28 @@ before(async () => {
   ids.prg105 = (await project('PRG-105')).id;
   ids.prg211 = (await project('PRG-211')).id;
   ids.prg242 = (await project('PRG-242')).id;
+
+  // R1d: contractors have no login. A web user assigned to PRG-105 without kpis:view stands in.
+  const viewer = await prisma.role.create({
+    data: {
+      tenantId: tenant.id,
+      name: 'Project viewer',
+      code: 'P16_PROJECT_VIEWER',
+      surface: 'WEB',
+      rolePermissions: { create: [{ permission: { connect: { key: 'projects:view_assigned' } } }] },
+    },
+  });
+  const user = await prisma.user.create({
+    data: {
+      tenantId: tenant.id,
+      email: NO_KPIS,
+      passwordHash: await (await import('bcryptjs')).default.hash(PASSWORD, 8),
+      fullName: 'No KPIs',
+      roleId: viewer.id,
+      organizationId: ids.south,
+    },
+  });
+  await prisma.userProjectAssignment.create({ data: { userId: user.id, projectId: ids.prg105 } });
 });
 
 after(async () => {
@@ -75,8 +99,8 @@ after(async () => {
 });
 
 describe('Phase 16: programme KPI dashboard', () => {
-  it('needs kpis:view (the contractor login has none)', async () => {
-    const res = await request(app).get('/api/v1/kpis').set(await web('sahel.contractor@insite.ng'));
+  it('needs kpis:view', async () => {
+    const res = await request(app).get('/api/v1/kpis').set(await web(NO_KPIS));
     assert.equal(res.status, 403);
   });
 
@@ -202,8 +226,8 @@ describe('Phase 16: project KPIs', () => {
   it('is guarded like the project (another organisation tree) and by the permission', async () => {
     const north = await request(app).get(`/api/v1/projects/${ids.prg242}/kpis`).set(await web('north.admin@insite.ng'));
     assert.equal(north.status, 403); // the project guard, as for every project route
-    const contractor = await request(app).get(`/api/v1/projects/${ids.prg105}/kpis`).set(await web('sahel.contractor@insite.ng'));
-    assert.equal(contractor.status, 403);
+    const assignedWithoutPermission = await request(app).get(`/api/v1/projects/${ids.prg105}/kpis`).set(await web(NO_KPIS));
+    assert.equal(assignedWithoutPermission.status, 403);
   });
 });
 

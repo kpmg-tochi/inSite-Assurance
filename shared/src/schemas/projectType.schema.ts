@@ -5,7 +5,6 @@ import {
   ProjectTypeReportingStreamSchema,
   ProjectTypeSupervisionConfigSchema,
 } from './inspection.schema';
-import { ProjectTypeCredentialsConfigSchema } from './credentials.schema';
 import { ProjectTypePaymentsConfigSchema } from './payment.schema';
 import {
   ContractMilestoneTemplateListSchema,
@@ -15,6 +14,7 @@ import {
 } from './contract.schema';
 import { ProjectTypeClosureConfigSchema } from './closure.schema';
 import { ProjectTypeKpiTargetsSchema } from './kpi.schema';
+import { ProjectTypeVisitFormsConfigSchema } from './form.schema';
 
 /**
  * Project types (Phase 11): a delivery model ("Central Delivery Model", "Co-Funded Delivery
@@ -73,8 +73,6 @@ export const ProjectTypeConfigSchema = z.object({
   /** Pre-fills the Reporting step of a new project (values already saved are kept). */
   reportingDefaults: ProjectReportingStepSchema.nullable().default(null),
   // Reserved, filled by later phases (kept as-is until then).
-  /** Phase 12: registration policy per subject; an omitted subject uses the tenant setting. */
-  credentials: ProjectTypeCredentialsConfigSchema.default({}),
   /** Redesign R1b: retention defaults for new projects (payments are recorded, not made, here). */
   payments: ProjectTypePaymentsConfigSchema,
   /** Phase 13: dated obligations created on the project when the type is applied. */
@@ -95,6 +93,8 @@ export const ProjectTypeConfigSchema = z.object({
   closure: ProjectTypeClosureConfigSchema.default({}),
   /** Phase 16: KPI targets and which KPIs are shown (catalogue defaults for missing keys). */
   kpiTargets: ProjectTypeKpiTargetsSchema.default({}),
+  /** Redesign R3: visit form template code per visit kind (form library). */
+  visitForms: ProjectTypeVisitFormsConfigSchema.default({}),
 });
 export type ProjectTypeConfig = z.infer<typeof ProjectTypeConfigSchema>;
 export type ProjectTypeConfigInput = z.input<typeof ProjectTypeConfigSchema>;

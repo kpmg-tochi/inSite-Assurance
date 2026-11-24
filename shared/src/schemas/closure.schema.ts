@@ -56,9 +56,8 @@ export const DEFAULT_COC_SIGNATORIES: CocSignatorySlotInput[] = [
 ];
 
 /**
- * How the beneficiary signs (D-15.1). Only RECORDED_BY_STAFF is built: an officer uploads the
- * beneficiary's signed paper certificate and attests. HANDOVER_LINK (a public signing link on the
- * Phase 10 handover router) is added here when the client confirms it.
+ * How the beneficiary signs (D-15.1): an officer uploads the beneficiary's signed paper certificate
+ * and attests. The beneficiary has no login (redesign R1d, decision P2).
  */
 export const BeneficiarySignatureModeEnum = z.enum(['RECORDED_BY_STAFF']);
 export type BeneficiarySignatureMode = z.infer<typeof BeneficiarySignatureModeEnum>;
@@ -164,8 +163,6 @@ export const ProjectTypeClosureConfigSchema = z
   .object({
     cocSignatories: z.array(CocSignatorySlotSchema).min(1).max(8).default(DEFAULT_COC_SIGNATORIES),
     beneficiarySignatureMode: BeneficiarySignatureModeEnum.default('RECORDED_BY_STAFF'),
-    /** Staff signatures follow the Phase 12 certifier registration policy (registration printed). */
-    cocSignatureUsesCertifierPolicy: z.boolean().default(false),
     /** A CoC can only be drafted after an approved FINAL_EVALUATION inspection. */
     requireFinalEvaluationBeforeCoc: z.boolean().default(false),
     requireCocFor: z.array(ClosureGateEnum).max(3).default([]),
@@ -264,8 +261,6 @@ export const CocSlotSignatureDtoSchema = z.object({
   signerName: z.string(),
   roleName: z.string().nullable(),
   organizationName: z.string().nullable(),
-  /** Printed only where present and the policy allows. */
-  registration: z.string().nullable(),
   isBeneficiary: z.boolean(),
   beneficiaryRole: z.string().nullable(),
   evidenceDocumentId: Uuid.nullable(),
@@ -316,7 +311,6 @@ export const ProjectCompletionDtoSchema = z.object({
     requireCocFor: z.array(ClosureGateEnum),
     handoverDueDaysAfterCoc: z.number().int(),
     beneficiarySignatureMode: BeneficiarySignatureModeEnum,
-    cocSignatureUsesCertifierPolicy: z.boolean(),
   }),
   finalEvaluation: z.object({
     required: z.boolean(),

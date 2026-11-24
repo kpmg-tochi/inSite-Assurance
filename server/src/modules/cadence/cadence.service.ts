@@ -1,6 +1,5 @@
 import { Prisma } from '@prisma/client';
 import {
-  BriefPersona,
   CadenceSettings,
   cadenceHasPeriods,
   CONTRACTOR_PROJECT_WIDE_SCOPE,
@@ -24,6 +23,9 @@ import type { WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 
 type Db = Prisma.TransactionClient | typeof prisma;
+
+/** A field persona that can owe reports (CONTRACTOR_EXECUTOR is legacy since R1d; R4 removes it). */
+export type ReportingPersona = Exclude<FieldPersonaType, 'NONE'>;
 
 /**
  * Reporting cadence (Phase 8 Step 3). All period maths is in the shared module; this file maps
@@ -126,7 +128,7 @@ export async function loadCadenceProject(db: Db, projectId: string): Promise<Cad
   return project;
 }
 
-/** The key that reports and briefs are stored under. */
+/** The key that reports and obligations are stored under. */
 export interface PeriodKey {
   periodStart: string;
   periodEnd: string;
@@ -137,8 +139,8 @@ export interface PeriodKey {
 }
 
 /**
- * The reporting period containing a calendar date. INSPECTION_ONLY has no periods, so reports and
- * briefs are keyed by the day itself and are never late.
+ * The reporting period containing a calendar date. INSPECTION_ONLY has no periods, so reports are
+ * keyed by the day itself and are never late.
  */
 export function periodKeyForDate(settings: CadenceSettings, date: string): PeriodKey {
   const period = getReportingPeriodForDate(settings, date);
@@ -169,7 +171,7 @@ export function lateness(key: PeriodKey, confirmedAt: Date): { isLate: boolean; 
 // Reporter scopes
 // ---------------------------------------------------------------------------
 
-export function reporterScopeFor(persona: FieldPersonaType | BriefPersona, projectContractorId: string | null): string {
+export function reporterScopeFor(persona: FieldPersonaType, projectContractorId: string | null): string {
   if (persona === 'CONTRACTOR_EXECUTOR') {
     return projectContractorId ? `${CONTRACTOR_REPORTER_SCOPE_PREFIX}${projectContractorId}` : CONTRACTOR_PROJECT_WIDE_SCOPE;
   }
@@ -182,18 +184,13 @@ function contractorIdOfScope(scope: string): string | null {
 }
 
 /**
- * Which contractor scope owes the report for an item: its own package when that package reports
- * from site, else the main contractor, else the project-wide contractor scope.
+ * Which contractor scope owes the report for an item: the project's contractor, else the
+ * project-wide contractor scope (redesign R2d: lines have no contractor package). Legacy: contractors have no login since R1d,
+ * so contractor obligations are no longer created (only the verifier persona reports).
  */
-function contractorScopeForItem(
-  item: { projectContractorId: string | null },
-  contractors: Array<{ id: string; isMainContractor: boolean; allowFieldReporting: boolean }>
-): string | null {
-  if (contractors.length === 0) return CONTRACTOR_PROJECT_WIDE_SCOPE;
-  const own = contractors.find((c) => c.id === item.projectContractorId);
-  if (own) return own.allowFieldReporting ? `${CONTRACTOR_REPORTER_SCOPE_PREFIX}${own.id}` : null;
-  const main = contractors.find((c) => c.isMainContractor && c.allowFieldReporting);
-  return main ? `${CONTRACTOR_REPORTER_SCOPE_PREFIX}${main.id}` : CONTRACTOR_PROJECT_WIDE_SCOPE;
+function contractorScopeForItem(contractors: Array<{ id: string }>): string {
+  const own = contractors[0];
+  return own ? `${CONTRACTOR_REPORTER_SCOPE_PREFIX}${own.id}` : CONTRACTOR_PROJECT_WIDE_SCOPE;
 }
 
 // ---------------------------------------------------------------------------
@@ -208,20 +205,21 @@ function contractorScopeForItem(
 export async function createObligationsForPeriod(params: {
   projectId: string;
   key: PeriodKey;
-  personas: BriefPersona[];
-  items: Array<{ id: string; projectContractorId: string | null; isScheduled: boolean }>;
+  personas: ReportingPersona[];
+  items: Array<{ id: string; isScheduled: boolean }>;
   /** Phase 14: the ITEM_REPORTS stream the obligations belong to (null/absent = implicit stream). */
   stream?: { id: string; projectContractorId: string | null } | null;
 }): Promise<number> {
   if (!params.key.hasObligations) return 0;
   const contractors = await prisma.projectContractor.findMany({
     where: { projectId: params.projectId },
-    select: { id: true, isMainContractor: true, allowFieldReporting: true },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
   });
   const rows: Prisma.ReportingObligationCreateManyInput[] = [];
   for (const item of params.items.filter((i) => i.isScheduled)) {
     for (const persona of params.personas) {
-      const scope = persona === 'INDEPENDENT_VERIFIER' ? VERIFIER_REPORTER_SCOPE : contractorScopeForItem(item, contractors);
+      const scope = persona === 'INDEPENDENT_VERIFIER' ? VERIFIER_REPORTER_SCOPE : contractorScopeForItem(contractors);
       if (!scope) continue;
       // Phase 14: a stream limited to one package owes only that package's contractor reports.
       const limitTo = params.stream?.projectContractorId;
@@ -377,7 +375,6 @@ export async function getCadenceOverview(projectId: string, now = new Date()): P
   const current = getReportingPeriod(settings, now);
   const obligations = current ? await listObligations({ projectId, periodStart: current.periodStart }) : [];
   const count = (s: ReportingObligationStatus) => obligations.filter((o) => o.status === s).length;
-  const openAttendanceAlerts = await prisma.siteAttendanceAlert.count({ where: { projectId, status: 'OPEN' } });
   return {
     settings: { ...serializeCadenceSettings(project), ...settings, customIntervalDays: settings.customIntervalDays ?? null, reportDueTime: settings.reportDueTime ?? null, cadenceAnchorDate: settings.cadenceAnchorDate ?? null },
     pendingChange: project.pendingCadenceEffectiveFrom ? { effectiveFrom: project.pendingCadenceEffectiveFrom } : null,
@@ -389,7 +386,6 @@ export async function getCadenceOverview(projectId: string, now = new Date()): P
       late: count('LATE'),
       missed: count('MISSED'),
       excused: count('EXCUSED'),
-      openAttendanceAlerts,
     },
   };
 }

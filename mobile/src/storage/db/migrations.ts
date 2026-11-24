@@ -251,6 +251,33 @@ CREATE TABLE IF NOT EXISTS inspection_drafts (
 CREATE INDEX IF NOT EXISTS inspection_drafts_project ON inspection_drafts (project_id, status);
 `,
   },
+  {
+    // Redesign R1d: the identity-assurance step is gone (provisioned accounts only), so queued
+    // identity submissions can never be sent. They are removed; the empty assurance_submissions
+    // table stays (nothing reads or writes it any more).
+    version: 7,
+    sql: `
+DELETE FROM outbox WHERE kind = 'ASSURANCE';
+DELETE FROM assurance_submissions;
+`,
+  },
+  {
+    // Redesign R1e: morning briefs and presence telemetry are gone. Cached brief messages are
+    // removed (the brief_date / brief_json columns stay; nothing reads or writes them any more),
+    // queued presence pings can never be sent, so they and the local ping table go, and each
+    // thread's last-message preview is recomputed without the briefs.
+    version: 8,
+    sql: `
+DELETE FROM chat_messages WHERE message_type = 'MORNING_BRIEF';
+DELETE FROM outbox WHERE kind = 'TELEMETRY';
+DROP TABLE IF EXISTS telemetry_pings;
+UPDATE wbs_items SET
+  last_message_text = (SELECT COALESCE(m.text_content, m.message_type) FROM chat_messages m
+                       WHERE m.wbs_item_id = wbs_items.id ORDER BY m.created_at DESC LIMIT 1),
+  last_message_at = (SELECT m.created_at FROM chat_messages m
+                     WHERE m.wbs_item_id = wbs_items.id ORDER BY m.created_at DESC LIMIT 1);
+`,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
@@ -263,7 +290,6 @@ export const DATA_TABLES = [
   'wbs_items',
   'chat_messages',
   'server_reports',
-  'telemetry_pings',
   'incidents',
   'assurance_submissions',
   'project_baseline',

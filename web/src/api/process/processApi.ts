@@ -46,7 +46,7 @@ export const getProjectProcess = async (projectId: string) => {
 
 export const updateProjectProcessConfig = async (
   projectId: string,
-  body: { config: ProjectProcessConfig; confirmDeactivateContractorCodes?: boolean }
+  body: { config: ProjectProcessConfig }
 ) => {
   const { data } = await api.put<ApiEnvelope<ProjectProcessSettingsDto>>(`/projects/${projectId}/process`, body);
   return data.data;
@@ -66,7 +66,7 @@ export const replaceProjectChain = async (
 
 export const applyWorkflowTemplate = async (
   projectId: string,
-  body: { templateId: string; confirmDeactivateContractorCodes?: boolean }
+  body: { templateId: string }
 ) => {
   const { data } = await api.post<ApiEnvelope<ProjectProcessSettingsDto>>(
     `/projects/${projectId}/process/apply-template`,

@@ -1,37 +1,26 @@
 import { File } from 'expo-file-system';
 import type { MediaType } from '@insite/shared';
-import { submitAssuranceVerification } from '../../api/auth/authApi';
 import {
   presignEvidenceUpload,
   registerCapture,
   uploadFileToPresignedUrl,
 } from '../../api/evidence/evidenceApi';
 import { createIncidentReport } from '../../api/incidents/incidentsApi';
-import { postDefectAction } from '../../api/defects/defectsApi';
+import { postDefectVerify } from '../../api/defects/defectsApi';
 import { postFindingResolution, submitSiteInspection } from '../../api/inspections/inspectionsApi';
 import { FINDING_ALREADY_RESOLVED_CODES, findingResolutionBody, type FindingResolutionPayload } from '../../utils/inspections';
 import { getQueuedInspection, markInspectionSent } from '../inspectionStore';
 import { DEFECT_ALREADY_APPLIED_CODES, defectActionBody, type DefectActionPayload } from '../../utils/defects';
-import { uploadTelemetryPings } from '../../api/telemetry/telemetryApi';
 import { postBoqChatMessage } from '../../api/wbs/wbsChatApi';
 import { revalidateWorkdayReport, submitWorkdayReport } from '../../api/workday/workdayApi';
-import {
-  loadAssuranceSubmission,
-  markAssuranceSubmissionSynced,
-  recordAssuranceUpload,
-  registrationFieldsOf,
-  type AssuranceImageSlot,
-} from '../assuranceRepository';
 import { getCapture, updateCaptureUpload } from '../captureStore';
 import { loadIncident, markIncidentSent, recordIncidentPhotoUploaded } from '../incidentStore';
 import { buildRevalidateRequest, buildSubmitRequest } from '../reportPayload';
 import { getReport, markReportRefused, markReportSent } from '../reportStore';
 import { CONTRACTOR_REPORTING_OFF_CODE, CONTRACTOR_REPORTING_OFF_MESSAGE } from './outboxPolicy';
-import { loadPingInputs } from '../telemetryStore';
 import { loadQueuedMessage, markMessageSent } from '../wbsRepository';
 import {
   LocalPermanentError,
-  registerOutboxBatchHandler,
   registerOutboxHandler,
 } from './outboxProcessor';
 
@@ -185,8 +174,8 @@ export function registerOutboxHandlers(): void {
     if (created?.id) await markIncidentSent(row.entityId, created.id);
   });
 
-  // Phase 10: a defect action. Its photos were sent first (dependsOn). A retry after a lost response
-  // finds the ticket already moved on; that counts as done.
+  // Phase 10: a defect verify action (close with photos, or reopen). Its photos were sent first
+  // (dependsOn). A retry after a lost response finds the ticket already moved on; that counts as done.
   registerOutboxHandler('DEFECT_ACTION', async (row) => {
     const payload = row.payload as unknown as DefectActionPayload;
     if (!payload?.ticketId) throw new LocalPermanentError('Defect update is missing its ticket.');
@@ -197,7 +186,7 @@ export function registerOutboxHandlers(): void {
       throw new LocalPermanentError((err as Error).message);
     }
     try {
-      await postDefectAction(row.projectId, payload.ticketId, payload.kind, body);
+      await postDefectVerify(row.projectId, payload.ticketId, body);
     } catch (error) {
       const code = (error as { code?: string })?.code;
       if (code && DEFECT_ALREADY_APPLIED_CODES.includes(code) && row.attempts > 0) return;
@@ -231,54 +220,6 @@ export function registerOutboxHandlers(): void {
       const code = (error as { code?: string })?.code;
       if (code && FINDING_ALREADY_RESOLVED_CODES.includes(code) && row.attempts > 0) return;
       throw error;
-    }
-  });
-
-  // Every image must upload and the server must accept the keys before this is marked sent.
-  registerOutboxHandler('ASSURANCE', async (row) => {
-    const loaded = await loadAssuranceSubmission(row.entityId);
-    if (!loaded) throw new LocalPermanentError('Identity submission not found on this device.');
-    const { payload } = loaded;
-    const keys = { ...loaded.uploadedKeys };
-    const images: Array<[AssuranceImageSlot, string, MediaType]> = [
-      ['idDocument', payload.idPhotoUri, 'IDENTITY_DOCUMENT'],
-      ['selfieFront', payload.selfieFrontUri, 'IDENTITY_SELFIE'],
-      ['selfieLeft', payload.selfieLeftUri, 'IDENTITY_SELFIE'],
-      ['selfieRight', payload.selfieRightUri, 'IDENTITY_SELFIE'],
-    ];
-    for (const [slot, uri, mediaType] of images) {
-      if (keys[slot]) continue;
-      keys[slot] = await uploadLocalFile({
-        projectId: payload.projectId,
-        mediaType,
-        localUri: uri,
-        mimeType: 'image/jpeg',
-        name: `${slot}-${row.entityId}.jpg`,
-      });
-      await recordAssuranceUpload(row.entityId, slot, keys[slot]!);
-    }
-    await submitAssuranceVerification({
-      projectId: payload.projectId,
-      idDocumentType: payload.idType,
-      idDocumentUrl: keys.idDocument!,
-      selfieFrontUrl: keys.selfieFront!,
-      selfieLeftUrl: keys.selfieLeft!,
-      selfieRightUrl: keys.selfieRight!,
-      selfieSet: payload.selfieSet,
-      // Phase 12: separate fields; rows queued before Phase 12 carry the old ones.
-      ...registrationFieldsOf(payload),
-      experienceSummary: payload.experienceSummary,
-    });
-    await markAssuranceSubmissionSynced(row.entityId);
-  });
-
-  registerOutboxBatchHandler('TELEMETRY', async (rows) => {
-    const byId = await loadPingInputs(rows.map((r) => r.entityId));
-    const byProject = new Map<string, typeof rows>();
-    for (const r of rows) byProject.set(r.projectId, [...(byProject.get(r.projectId) ?? []), r]);
-    for (const [projectId, projectRows] of byProject) {
-      const pings = projectRows.map((r) => byId.get(r.entityId)).filter((p) => p !== undefined);
-      if (pings.length > 0) await uploadTelemetryPings(projectId, pings);
     }
   });
 }

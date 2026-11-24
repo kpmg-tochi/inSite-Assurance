@@ -19,7 +19,7 @@ const ERROR_COPY: Record<string, { title: string; message: string }> = {
   NO_MOBILE_ACCESS: {
     title: "No mobile access",
     message:
-      "Your account is not set up for the field app. Ask your administrator for a mobile role, or join with a project code.",
+      "Your account is not set up for the field app. Ask your administrator for a mobile role.",
   },
   DEVICE_REVOKED: {
     title: "Device revoked",
@@ -98,19 +98,12 @@ export const SignInScreen: React.FC = () => {
           />
         </View>
         <Text style={styles.helperText}>
-          You will see every project you are assigned to. No project code or identity check is needed.
+          You will see every project you are assigned to.
         </Text>
       </View>
 
       <View style={styles.actions}>
         <PrimaryButton text="Sign in" onPress={handleSignIn} isWorking={working} disabled={!canSubmit || working} />
-        <PrimaryButton
-          text="I have a project code instead"
-          backgroundColor="#FFFFFF"
-          textColor={defaultColors.primary}
-          style={styles.secondary}
-          onPress={() => navigation.navigate("Onboarding")}
-        />
       </View>
     </GradientHeaderLayout>
   );
@@ -141,5 +134,4 @@ const styles = StyleSheet.create({
   },
   helperText: { fontSize: 12, color: defaultColors.secondaryText, lineHeight: 17 },
   actions: { marginTop: 16, gap: 10 },
-  secondary: { borderWidth: 1, borderColor: defaultColors.border },
 });

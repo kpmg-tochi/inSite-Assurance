@@ -9,7 +9,6 @@ import {
   describeCadence,
   getReportingPeriod,
   getReportingPeriodForDate,
-  isWithinWorkingHours,
   listWorkdaysInPeriod,
   nextPeriodStart,
   type CadenceSettings,
@@ -151,7 +150,7 @@ describe('Phase 8: reporting period maths', () => {
 
   it('briefs go out on the first workday at the workday start time', () => {
     const p = getReportingPeriodForDate(settings({ periodStartDayOfWeek: 7 }), '2026-11-18')!;
-    assert.equal(p.briefAt, '2026-11-16T07:00:00.000Z');
+    assert.equal(p.opensAt, '2026-11-16T07:00:00.000Z');
   });
 
   it('inspection-only has no periods', () => {
@@ -180,14 +179,7 @@ describe('Phase 8: reporting period maths', () => {
     );
   });
 
-  it('working hours follow the work week and day', () => {
-    const s = settings();
-    assert.equal(isWithinWorkingHours(s, new Date('2026-11-18T09:00:00Z')), true); // Wed 10:00
-    assert.equal(isWithinWorkingHours(s, new Date('2026-11-18T17:00:00Z')), false); // Wed 18:00
-    assert.equal(isWithinWorkingHours(s, new Date('2026-11-22T09:00:00Z')), false); // Sunday
-  });
-
   it('describes a weekly cadence in plain language', () => {
-    assert.equal(describeCadence(settings(), '2026-11-18'), 'Briefs go out Monday 08:00. Reports are due Saturday 17:00.');
+    assert.equal(describeCadence(settings(), '2026-11-18'), 'Periods open Monday 08:00. Reports are due Saturday 17:00.');
   });
 });

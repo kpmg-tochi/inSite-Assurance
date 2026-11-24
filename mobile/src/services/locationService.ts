@@ -36,8 +36,6 @@ export interface GeofencePreview {
   isWithinGeofence: boolean | null;
   /** Metres outside the boundary; 0 inside. */
   distanceOutsideMeters: number | null;
-  /** Chainage, only for linear corridor projects; null otherwise. */
-  chainageLabel: string | null;
   distanceFromSiteMeters: number | null;
 }
 
@@ -45,18 +43,16 @@ const NO_PREVIEW: GeofencePreview = {
   status: null,
   isWithinGeofence: null,
   distanceOutsideMeters: null,
-  chainageLabel: null,
   distanceFromSiteMeters: null,
 };
 
 /**
  * Short badge text for a geofence status the app or server actually computed; null when there is
- * no status. Chainage is appended only when one exists (linear corridor projects).
+ * no status.
  */
 export function geofenceBadgeText(
   status: GeofenceStatus | null | undefined,
-  distanceOutsideMeters: number | null | undefined,
-  chainageLabel?: string | null
+  distanceOutsideMeters: number | null | undefined
 ): string | null {
   if (!status) return null;
   if (status === 'WITHIN_TOLERANCE') {
@@ -64,8 +60,7 @@ export function geofenceBadgeText(
       ? `Within tolerance (${Math.round(distanceOutsideMeters)} m outside)`
       : 'Within tolerance';
   }
-  const base = status === 'INSIDE' ? 'In geofence' : 'Outside geofence';
-  return chainageLabel ? `${base} · ${chainageLabel}` : base;
+  return status === 'INSIDE' ? 'In geofence' : 'Outside geofence';
 }
 
 /** @deprecated name kept for older screens; a geotag is a fix plus a local geofence preview. */
@@ -149,7 +144,6 @@ export function previewGeofence(
       status: result.status,
       isWithinGeofence: result.isWithinGeofence,
       distanceOutsideMeters: result.distanceOutsideMeters,
-      chainageLabel: result.chainageFormatted,
       distanceFromSiteMeters: result.distanceFromCenterOrLineMeters,
     };
   } catch {

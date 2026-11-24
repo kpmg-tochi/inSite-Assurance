@@ -3,13 +3,11 @@ import {
   getProjectPhase,
   getRetentionSummary,
   listDefectTickets,
-  listHandoverLinks,
   listHandoverSubmissions,
 } from '../../api/closeout/closeoutApi';
 
 /** Phase 10 query keys. */
 export const projectPhaseKey = (projectId: string | null | undefined) => ['project-phase', projectId] as const;
-export const handoverLinksKey = (projectId: string | null | undefined) => ['handover-links', projectId] as const;
 export const handoverSubmissionsKey = (projectId: string | null | undefined) => ['handover-submissions', projectId] as const;
 export const defectTicketsKey = (projectId: string | null | undefined) => ['defect-tickets', projectId] as const;
 export const retentionSummaryKey = (projectId: string | null | undefined) => ['retention-summary', projectId] as const;
@@ -22,9 +20,6 @@ export const useProjectPhaseQuery = (projectId: string | null | undefined, enabl
     enabled: Boolean(projectId) && enabled,
     staleTime: 30 * 1000,
   });
-
-export const useHandoverLinksQuery = (projectId: string | null | undefined, enabled = true) =>
-  useQuery({ queryKey: handoverLinksKey(projectId), queryFn: () => listHandoverLinks(projectId!), enabled: Boolean(projectId) && enabled });
 
 export const useHandoverSubmissionsQuery = (projectId: string | null | undefined, enabled = true) =>
   useQuery({

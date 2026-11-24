@@ -1,14 +1,9 @@
 import { z } from 'zod';
 
 export const MobileNotificationTypeEnum = z.enum([
-  'ASSURANCE_PENDING',
-  'ASSURANCE_APPROVED',
-  'ASSURANCE_REJECTED',
   'BACKLOG_REVIEW_REQUIRED',
   'REPORT_QUERY',
   'HOLD_POINT_ALERT',
-  'MORNING_DELIVERABLE_READY',
-  'SITE_GEOFENCE_WARNING',
   // Phase 8
   'REPORT_OVERDUE',
   // Phase 10
@@ -23,7 +18,6 @@ export const NotificationActionTypeEnum = z.enum([
   'OPEN_REPORT_SUMMARY',
   'OPEN_WBS_CHAT',
   'OPEN_BACKLOG_REVIEW',
-  'OPEN_ASSURANCE_WIZARD',
   // Phase 10
   'OPEN_DEFECTS',
   // Phase 14
@@ -84,13 +78,10 @@ export const WebNotificationCategoryEnum = z.enum([
   'REPORT_PENDING_APPROVAL',
   // Phase 8
   'REPORT_MISSED',
-  'ATTENDANCE_ALERT',
-  // Phase 9
+  // Phase 9 (redesign R2d: sprints decide it)
   'SCHEDULE_BEHIND',
-  'SCHEDULE_REVISION_PENDING',
-  'SCHEDULE_REVISION_DECIDED',
   // Phase 10
-  'HANDOVER_SUBMITTED',
+  'HANDOVER_RECORDED',
   'DEFECT_TICKET',
   // Phase 14
   'INSPECTION_PENDING_APPROVAL',
@@ -99,7 +90,6 @@ export const WebNotificationCategoryEnum = z.enum([
   // Phase 13
   'CONTRACT_MILESTONE',
   'CONTRACT_DEFAULT_CASE',
-  'PROGRAMME_OF_WORKS',
   'DOCUMENT_SIGN_OFF',
   // Phase 15
   'COMPLETION_CERTIFICATE',

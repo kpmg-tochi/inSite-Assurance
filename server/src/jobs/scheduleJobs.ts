@@ -1,4 +1,4 @@
-import { formatVariance, SCHEDULE_BEHIND_ALERT_WEEKS, workWeekLength, zonedCalendarDate } from '@insite/shared';
+import { zonedCalendarDate } from '@insite/shared';
 import { prisma } from '../config/prisma';
 import { createWebNotification } from '../modules/notifications/notifications.service';
 import { refreshScheduleBadge } from '../modules/schedule/schedule.service';
@@ -6,24 +6,23 @@ import { LIVE_PROJECT_WHERE } from './cadenceJobs';
 import { JobContext, registerJob, runUnit } from './runner';
 
 /**
- * schedule-variance (Phase 9): once a day per live project (keyed on the project's calendar day),
- * recompute and store the variance badge. When a project first falls SCHEDULE_BEHIND_ALERT_WEEKS
- * working weeks behind, users with schedule:view_variance get a web notification; the flag clears
- * when the project recovers, so a later fall alerts again.
+ * schedule-variance: once a day per live project (keyed on the project's calendar day), recompute
+ * and store the schedule badge from sprints (redesign R2d, D-R2.15). When a project first falls
+ * BEHIND (a unit whose end sprint has ended still has a line below 100%), users with
+ * schedule:view_variance get a web notification; the flag clears when the project recovers, so a
+ * later fall alerts again. Projects without sprints get UNSCHEDULED.
  */
 export async function runScheduleVariance({ now }: JobContext): Promise<void> {
   const projects = await prisma.project.findMany({
-    where: { ...LIVE_PROJECT_WHERE, plannedStartDate: { not: null } },
+    where: { ...LIVE_PROJECT_WHERE },
     select: { id: true, name: true, codePrefix: true, timezone: true },
   });
   for (const p of projects) {
     const today = zonedCalendarDate(now, p.timezone);
     await runUnit('schedule-variance', `${p.id}:${today}`, async () => {
-      const { status, varianceWorkdays, project } = await refreshScheduleBadge(p.id, now);
-      const threshold = SCHEDULE_BEHIND_ALERT_WEEKS * workWeekLength(project.workWeekDays);
-      const behind = varianceWorkdays !== null && status === 'BEHIND' && -varianceWorkdays >= threshold;
-      if (behind && !project.scheduleBehindAlertedAt) {
-        const label = formatVariance(varianceWorkdays, project.workWeekDays);
+      const { status, behindUnitCount, scheduleBehindAlertedAt } = await refreshScheduleBadge(p.id, now);
+      const behind = status === 'BEHIND';
+      if (behind && !scheduleBehindAlertedAt) {
         await prisma.$transaction(async (tx) => {
           const claimed = await tx.project.updateMany({
             where: { id: p.id, scheduleBehindAlertedAt: null },
@@ -34,18 +33,18 @@ export async function runScheduleVariance({ now }: JobContext): Promise<void> {
             projectId: p.id,
             targetPermissionKey: 'schedule:view_variance',
             category: 'SCHEDULE_BEHIND',
-            title: `${p.codePrefix} is ${label}`,
-            description: `${p.name} has fallen ${label} on certified progress. Review the schedule or propose a catch-up revision.`,
-            actionUrl: `/app/projects/${p.id}/schedule`,
-            metadata: { varianceWorkdays, status },
+            title: `${p.codePrefix} is behind schedule`,
+            description: `${p.name}: ${behindUnitCount} facility unit(s) due by a sprint that has ended are not complete.`,
+            actionUrl: `/app/projects/${p.id}/scope`,
+            metadata: { status, behindUnitCount },
           });
         });
-        return `${status} ${varianceWorkdays?.toFixed(1)}; alerted`;
+        return `${status} (${behindUnitCount} late unit(s)); alerted`;
       }
-      if (!behind && project.scheduleBehindAlertedAt) {
+      if (!behind && scheduleBehindAlertedAt) {
         await prisma.project.update({ where: { id: p.id }, data: { scheduleBehindAlertedAt: null } });
       }
-      return `${status} ${varianceWorkdays === null ? 'n/a' : varianceWorkdays.toFixed(1)}`;
+      return behind ? `${status} (${behindUnitCount} late unit(s))` : status;
     });
   }
 }

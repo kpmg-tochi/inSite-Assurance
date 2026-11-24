@@ -19,7 +19,6 @@ import { AppError } from '../../middleware/error.middleware';
 import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { clearRequestMemo, getRequestMemo, setRequestMemo } from '../../utils/requestContext';
 import { recordAuditEvent } from '../audit/audit.service';
-import { issueMissingJoinCodes } from '../projects/joinCodes.service';
 
 /**
  * Process configuration (Phase 7). Every service that branches on a setting reads it through
@@ -37,8 +36,6 @@ const CONFIG_SELECT = {
   needsAssessmentMode: true,
   standardsSpecificationMode: true,
   enableHoldPoints: true,
-  allowContractorFieldReporting: true,
-  enableContractorIdentityAssurance: true,
   enableAiOmissionCheck: true,
   enableAiStandardsCheck: true,
   requireReportApproval: true,
@@ -64,20 +61,6 @@ export async function getProcessConfig(projectId: string, db: Db = prisma): Prom
   const config = configFromRow(row);
   if (db === prisma) setRequestMemo(memoKey(projectId), config);
   return config;
-}
-
-/**
- * Contractor field reporting off (Phase 7): contractor-executor sessions that already exist (join
- * codes are deactivated, but sessions live on) may not register captures or submit reports.
- */
-export async function assertFieldReportingAllowed(projectId: string, fieldPersonaType: string): Promise<void> {
-  if (fieldPersonaType !== 'CONTRACTOR_EXECUTOR') return;
-  if ((await getProcessConfig(projectId)).allowContractorFieldReporting) return;
-  throw new AppError(
-    'Contractor reporting is off for this project.',
-    403,
-    'CONTRACTOR_FIELD_REPORTING_DISABLED'
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -263,22 +246,15 @@ async function serializeChain(
   };
 }
 
-async function activeContractorCodeCount(db: Db, projectId: string): Promise<number> {
-  return db.projectJoinCode.count({
-    where: { projectId, isActive: true, role: { fieldPersonaType: 'CONTRACTOR_EXECUTOR' } },
-  });
-}
-
 export async function getProjectProcessSettings(projectId: string, db: Db = prisma): Promise<ProjectProcessSettingsDto> {
   const row = await db.projectProcessConfig.findUnique({ where: { projectId }, select: CONFIG_SELECT });
   const config = configFromRow(row);
   const template = row?.workflowTemplateId
     ? await db.workflowTemplate.findUnique({ where: { id: row.workflowTemplateId }, select: { id: true, name: true } })
     : null;
-  const [reportChain, contractDefaultChain, codeCount] = await Promise.all([
+  const [reportChain, contractDefaultChain] = await Promise.all([
     serializeChain(db, projectId, 'REPORT', config),
     serializeChain(db, projectId, 'CONTRACT_DEFAULT', config),
-    activeContractorCodeCount(db, projectId),
   ]);
   return {
     projectId,
@@ -287,7 +263,6 @@ export async function getProjectProcessSettings(projectId: string, db: Db = pris
     workflowTemplateName: template?.name ?? null,
     reportChain,
     contractDefaultChain,
-    activeContractorJoinCodeCount: codeCount,
   };
 }
 
@@ -302,48 +277,25 @@ export interface ProcessSettingsInput {
   contractDefaultChain?: ApprovalStepConfig[];
   /** Set when copying a template; undefined keeps the current provenance, null clears it. */
   workflowTemplateId?: string | null;
-  confirmDeactivateContractorCodes?: boolean;
 }
 
 /**
  * Applies process settings to a project inside the caller's transaction (wizard step, settings
  * page, template application). Returns the changed fields; the caller audits.
  *
- * Effects on live projects:
- * - contractor field reporting off: contractor-executor join codes are deactivated, which needs
- *   `confirmDeactivateContractorCodes`; back on: missing contractor codes are issued again.
- * - chain edits write a new version; items in flight finish on theirs.
+ * On live projects, chain edits write a new version; items in flight finish on theirs.
  */
 export async function applyProcessSettings(
   tx: Tx,
   project: { id: string; tenantId: string; codePrefix: string; status: string; setupState: unknown },
   input: ProcessSettingsInput
-): Promise<{ changedFields: string[]; deactivatedJoinCodes: number; issuedJoinCodes: string[] }> {
+): Promise<{ changedFields: string[] }> {
   const projectId = project.id;
   const beforeRow = await tx.projectProcessConfig.findUnique({ where: { projectId }, select: CONFIG_SELECT });
   const before = configFromRow(beforeRow);
   const next = ProjectProcessConfigSchema.parse(input.config);
 
   const changedFields: string[] = (Object.keys(next) as Array<keyof ProjectProcessConfig>).filter((k) => before[k] !== next[k]);
-
-  let deactivatedJoinCodes = 0;
-  let issuedJoinCodes: string[] = [];
-  if (project.status === 'ACTIVE' && before.allowContractorFieldReporting && !next.allowContractorFieldReporting) {
-    const count = await activeContractorCodeCount(tx, projectId);
-    if (count > 0 && !input.confirmDeactivateContractorCodes) {
-      throw new AppError(
-        `Turning contractor field reporting off deactivates ${count} contractor join code(s). Confirm to continue.`,
-        409,
-        'CONFIRMATION_REQUIRED',
-        { activeContractorJoinCodeCount: count }
-      );
-    }
-    const res = await tx.projectJoinCode.updateMany({
-      where: { projectId, isActive: true, role: { fieldPersonaType: 'CONTRACTOR_EXECUTOR' } },
-      data: { isActive: false },
-    });
-    deactivatedJoinCodes = res.count;
-  }
 
   await tx.projectProcessConfig.upsert({
     where: { projectId },
@@ -358,21 +310,6 @@ export async function applyProcessSettings(
     },
   });
   clearRequestMemo(memoKey(projectId));
-
-  if (project.status === 'ACTIVE' && !before.allowContractorFieldReporting && next.allowContractorFieldReporting) {
-    const state = (project.setupState ?? {}) as { team?: { joinCodeRoleIds?: string[] | null } };
-    const chosen = Array.isArray(state.team?.joinCodeRoleIds) ? state.team!.joinCodeRoleIds! : null;
-    const roles = await tx.role.findMany({
-      where: {
-        tenantId: project.tenantId,
-        surface: { in: ['MOBILE', 'BOTH'] },
-        onboardingMode: 'JOIN_CODE',
-        fieldPersonaType: 'CONTRACTOR_EXECUTOR',
-        ...(chosen ? { id: { in: chosen } } : {}),
-      },
-    });
-    issuedJoinCodes = (await issueMissingJoinCodes(tx, project, roles)).map((jc) => jc.code);
-  }
 
   // The report chain: write a new version only when the steps actually change.
   {
@@ -407,7 +344,7 @@ export async function applyProcessSettings(
     }
   }
 
-  return { changedFields, deactivatedJoinCodes, issuedJoinCodes };
+  return { changedFields };
 }
 
 /** Creates the config row and the report chain for a new draft, from the tenant's default template if any. */
@@ -435,8 +372,7 @@ export async function initialiseProjectProcess(
 export async function applyTemplateConfig(
   tx: Tx,
   project: { id: string; tenantId: string; codePrefix: string; status: string; setupState: unknown },
-  template: { id: string; configJson: unknown },
-  confirmDeactivateContractorCodes?: boolean
+  template: { id: string; configJson: unknown }
 ) {
   const parsed = WorkflowTemplateConfigSchema.safeParse(template.configJson);
   if (!parsed.success) {
@@ -447,7 +383,6 @@ export async function applyTemplateConfig(
     config: cfg.process,
     reportChain: cfg.reportChain,
     workflowTemplateId: template.id,
-    confirmDeactivateContractorCodes,
   });
 }
 
@@ -469,7 +404,7 @@ async function auditSettingsChange(
   tx: Tx,
   projectId: string,
   webUser: WebJwtPayload,
-  result: { changedFields: string[]; deactivatedJoinCodes: number; issuedJoinCodes: string[] },
+  result: { changedFields: string[] },
   extra: Record<string, unknown> = {}
 ) {
   await recordAuditEvent(tx, {
@@ -479,9 +414,7 @@ async function auditSettingsChange(
     actorDisplayName: actorName(webUser),
     action: 'PROJECT_PROCESS_CONFIG_UPDATED',
     summaryText: result.changedFields.length
-      ? `Changed process settings (${result.changedFields.join(', ')}).${
-          result.deactivatedJoinCodes ? ` Deactivated ${result.deactivatedJoinCodes} contractor join code(s).` : ''
-        }`
+      ? `Changed process settings (${result.changedFields.join(', ')}).`
       : 'Saved process settings (no changes).',
     payload: { ...result, ...extra },
   });
@@ -491,7 +424,7 @@ async function auditSettingsChange(
 export async function updateProjectProcessConfig(
   projectId: string,
   webUser: WebJwtPayload,
-  input: { config: ProjectProcessConfig; confirmDeactivateContractorCodes?: boolean }
+  input: { config: ProjectProcessConfig }
 ): Promise<ProjectProcessSettingsDto> {
   await prisma.$transaction(async (tx) => {
     const project = await lockProjectForSettings(tx, projectId);
@@ -524,14 +457,13 @@ export async function replaceProjectChain(
 export async function applyTemplateToProject(
   projectId: string,
   templateId: string,
-  webUser: WebJwtPayload,
-  confirmDeactivateContractorCodes?: boolean
+  webUser: WebJwtPayload
 ): Promise<ProjectProcessSettingsDto> {
   await prisma.$transaction(async (tx) => {
     const project = await lockProjectForSettings(tx, projectId);
     const template = await tx.workflowTemplate.findFirst({ where: { id: templateId, tenantId: project.tenantId } });
     if (!template) throw new AppError('Workflow template not found', 404, 'WORKFLOW_TEMPLATE_NOT_FOUND');
-    const result = await applyTemplateConfig(tx, project, template, confirmDeactivateContractorCodes);
+    const result = await applyTemplateConfig(tx, project, template);
     await auditSettingsChange(tx, projectId, webUser, result, { appliedTemplateId: template.id, appliedTemplateName: template.name });
   });
   return getProjectProcessSettings(projectId);

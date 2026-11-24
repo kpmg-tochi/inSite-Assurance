@@ -275,13 +275,33 @@ export function BasicsStep({ projectId, setup, mode, readOnly }: StepProps) {
     }
   });
 
+  const needs = [
+    { label: "Site address", value: setup.basics.siteAddress },
+    { label: "Strategic justification", value: setup.basics.strategicJustification },
+    { label: "Assumptions", value: setup.basics.assumptions },
+  ].filter((n) => n.value);
   return (
-    <BasicsForm
-      values={values}
-      onChange={setValues}
-      errors={errors}
-      disabled={readOnly}
-      codePrefixLocked={mode === "settings" || setup.status !== "DRAFT"}
-    />
+    <>
+      <BasicsForm
+        values={values}
+        onChange={setValues}
+        errors={errors}
+        disabled={readOnly}
+        codePrefixLocked={mode === "settings" || setup.status !== "DRAFT"}
+      />
+      {needs.length > 0 && (
+        // Redesign R2c: filled from the needs-assessment workbook; read-only for now.
+        <StepSection title="Needs assessment" description="From the needs-assessment workbook.">
+          <dl className="space-y-3">
+            {needs.map((n) => (
+              <div key={n.label}>
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{n.label}</dt>
+                <dd className="text-xs text-slate-800 whitespace-pre-wrap">{n.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </StepSection>
+      )}
+    </>
   );
 }

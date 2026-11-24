@@ -54,7 +54,6 @@ const CENTRAL: ContractMilestoneTemplateInput[] = [
     offsetValue: 21,
     completionMode: "AUTO_CONTRACTOR_ON_SITE",
     perContractor: true,
-    responsibleRoleCode: "CONTRACTOR",
     responsibleScope: "CONTRACTOR",
   },
 ];

@@ -20,14 +20,14 @@ import {
   streamCadenceRow,
   streamPersonas,
 } from '../modules/cadence/streams.service';
-import { briefPersonasForProject, generateDispatchForProject } from '../modules/morning-briefs/morningBrief.service';
+import { dispatchObligationsForProject, reportingPersonasForProject } from '../modules/cadence/obligationDispatch';
 import { createMobileNotification, createWebNotification } from '../modules/notifications/notifications.service';
 import { JobContext, registerJob, runUnit } from './runner';
 
 /**
  * Scheduled jobs only ever touch live projects of tenants that are not suspended. Phase 10: once a
- * project is in its defects liability period (or closed), construction jobs (briefs, reporting
- * obligations, mobilization, attendance, schedule variance) stop for it.
+ * project is in its defects liability period (or closed), construction jobs (reporting obligations,
+ * schedule variance) stop for it.
  */
 export const LIVE_PROJECT_WHERE: Prisma.ProjectWhereInput = {
   status: 'ACTIVE',
@@ -36,11 +36,12 @@ export const LIVE_PROJECT_WHERE: Prisma.ProjectWhereInput = {
 };
 
 /**
- * brief-dispatch: at a project's period start (first workday of the period, at workdayStartTime in
- * the project zone) generate the period's briefs per persona and its reporting obligations. One
- * JobRun per (project, period, persona), so a persona that appears mid-period still gets briefs.
+ * reporting-obligations (was brief-dispatch; briefs were removed in redesign R1e): when a project's
+ * period opens (first workday of the period, at workdayStartTime in the project zone) create the
+ * period's reporting obligations per persona. One JobRun per (project, period, persona), so a persona
+ * that appears mid-period is still owed reports.
  */
-export async function runBriefDispatch({ now }: JobContext): Promise<void> {
+export async function runObligationDispatch({ now }: JobContext): Promise<void> {
   const projects = await prisma.project.findMany({ where: LIVE_PROJECT_WHERE, select: CADENCE_PROJECT_SELECT });
   for (const project of projects) {
     try {
@@ -55,25 +56,25 @@ export async function runBriefDispatch({ now }: JobContext): Promise<void> {
       const settings = cadenceSettingsForDate(project, today);
       if (!cadenceHasPeriods(settings.reportingCadence)) continue;
       const period = getReportingPeriod(settings, now);
-      if (!period?.briefAt || now.getTime() < new Date(period.briefAt).getTime()) continue;
-      for (const persona of await briefPersonasForProject(project.id)) {
-        await runUnit('brief-dispatch', `${project.id}:${period.periodStart}:${persona}`, async () => {
-          const briefs = await generateDispatchForProject(project.id, today, [persona]);
-          return `${briefs.length} brief(s)`;
+      if (!period?.opensAt || now.getTime() < new Date(period.opensAt).getTime()) continue;
+      for (const persona of await reportingPersonasForProject(project.id)) {
+        await runUnit('reporting-obligations', `${project.id}:${period.periodStart}:${persona}`, async () => {
+          const created = await dispatchObligationsForProject(project.id, today, [persona]);
+          return `${created} obligation(s)`;
         });
       }
     } catch (error) {
-      console.warn(`[jobs] brief-dispatch failed for project ${project.id}:`, error);
+      console.warn(`[jobs] reporting-obligations failed for project ${project.id}:`, error);
     }
   }
 }
 
 /**
- * Phase 14: per stream, at its period start. ITEM_REPORTS streams generate briefs and item
- * obligations for the personas of their roles; INSPECTION streams create their one obligation.
+ * Phase 14: per stream, at its period start. ITEM_REPORTS streams create item obligations for the
+ * personas of their roles; INSPECTION streams create their one obligation.
  */
 async function dispatchStreams(project: CadenceProjectRow, streams: StreamRow[], today: string, now: Date): Promise<void> {
-  const personas = await briefPersonasForProject(project.id);
+  const personas = await reportingPersonasForProject(project.id);
   for (const stream of streams) {
     if (await applyDuePendingStreamCadence(stream, today)) {
       const fresh = await prisma.projectReportingStream.findUnique({ where: { id: stream.id }, select: STREAM_SELECT });
@@ -82,9 +83,9 @@ async function dispatchStreams(project: CadenceProjectRow, streams: StreamRow[],
     const settings = cadenceSettingsForDate(streamCadenceRow(project, stream), today);
     if (!cadenceHasPeriods(settings.reportingCadence)) continue;
     const period = getReportingPeriod(settings, now);
-    if (!period?.briefAt || now.getTime() < new Date(period.briefAt).getTime()) continue;
+    if (!period?.opensAt || now.getTime() < new Date(period.opensAt).getTime()) continue;
     if (stream.kind === 'INSPECTION') {
-      await runUnit('brief-dispatch', `${project.id}:${stream.id}:${period.periodStart}:inspection`, async () => {
+      await runUnit('reporting-obligations', `${project.id}:${stream.id}:${period.periodStart}:inspection`, async () => {
         const created = await createInspectionObligation(stream, periodKeyForDate(settings, today));
         return `${created} inspection obligation(s)`;
       });
@@ -92,9 +93,9 @@ async function dispatchStreams(project: CadenceProjectRow, streams: StreamRow[],
     }
     const owed = (await streamPersonas(prisma, stream)).filter((p) => personas.includes(p));
     for (const persona of owed) {
-      await runUnit('brief-dispatch', `${project.id}:${stream.id}:${period.periodStart}:${persona}`, async () => {
-        const briefs = await generateDispatchForProject(project.id, today, [persona], stream);
-        return `${briefs.length} brief(s)`;
+      await runUnit('reporting-obligations', `${project.id}:${stream.id}:${period.periodStart}:${persona}`, async () => {
+        const created = await dispatchObligationsForProject(project.id, today, [persona], stream);
+        return `${created} obligation(s)`;
       });
     }
   }
@@ -240,6 +241,6 @@ async function notifyMissedInspection(o: MissedObligation): Promise<void> {
 }
 
 export function registerCadenceJobs(): void {
-  registerJob({ name: 'brief-dispatch', intervalMs: 5 * 60 * 1000, run: runBriefDispatch });
+  registerJob({ name: 'reporting-obligations', intervalMs: 5 * 60 * 1000, run: runObligationDispatch });
   registerJob({ name: 'overdue-reports', intervalMs: 5 * 60 * 1000, run: runOverdueReports });
 }

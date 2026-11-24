@@ -24,7 +24,6 @@ import { env } from '../../config/env';
 import { AppError } from '../../middleware/error.middleware';
 import { FieldAgentJwtPayload, WebJwtPayload } from '../../middleware/auth.middleware';
 import {
-  assertFieldReportingAllowed,
   ensureChain,
   getChainVersionSteps,
   getProcessConfig,
@@ -105,7 +104,6 @@ export function toCaptureSummary(c: ReportRow['captures'][number]): WorkdayRepor
     gpsAccuracyMeters: full.gpsAccuracyMeters,
     isMockLocation: full.isMockLocation,
     isWithinGeofence: full.isWithinGeofence,
-    chainageLabel: full.chainageLabel,
     signatureVerified: full.signatureVerified,
     integrityPassed: full.integrityPassed,
     integrityFlags: full.integrityFlags,
@@ -273,7 +271,6 @@ function evaluateGeotag(
     isWithinGeofence: evaluation.isWithinGeofence,
     geofenceStatus: evaluation.geofenceStatus,
     distanceOutsideMeters: evaluation.distanceOutsideMeters,
-    chainageLabel: evaluation.chainageLabel,
     distanceFromSiteMeters: evaluation.distanceFromSiteMeters,
   };
 }
@@ -331,33 +328,6 @@ async function linkCaptures(tx: Tx, reportId: string, wbsItemId: string, capture
   }
 }
 
-async function recordReportPing(
-  tx: Tx,
-  params: { projectId: string; sessionId: string; wbsItemId: string; geotag: SubmissionGeotag | null }
-) {
-  if (!params.geotag) return;
-  await tx.siteTelemetryPing.create({
-    data: {
-      clientPingId: crypto.randomUUID(),
-      projectId: params.projectId,
-      fieldSessionId: params.sessionId,
-      wbsItemId: params.wbsItemId,
-      latitude: params.geotag.latitude,
-      longitude: params.geotag.longitude,
-      accuracyMeters: params.geotag.accuracyMeters ?? null,
-      altitudeMeters: params.geotag.altitudeMeters ?? null,
-      isMocked: params.geotag.isMocked,
-      isWithinGeofence: params.geotag.isWithinGeofence,
-      geofenceStatus: params.geotag.geofenceStatus ?? null,
-      distanceOutsideMeters: params.geotag.distanceOutsideMeters ?? null,
-      chainageLabel: params.geotag.chainageLabel,
-      distanceMeters: params.geotag.distanceFromSiteMeters,
-      pingSource: 'REPORT_SUBMISSION',
-      capturedAtDevice: new Date(params.geotag.capturedAt),
-    },
-  });
-}
-
 /** Badges for the report itself: location quality and the device signature result. */
 function reportFlags(geotag: SubmissionGeotag, signatureFlag: string | null): string[] {
   const flags: string[] = [];
@@ -397,8 +367,6 @@ async function loadSessionForReport(sessionId: string) {
   return prisma.fieldAgentSession.findUniqueOrThrow({
     where: { id: sessionId },
     select: {
-      projectContractorId: true,
-      assuranceStatus: true,
       agentFullName: true,
       devicePublicKey: true,
       devicePublicKeyAlg: true,
@@ -428,7 +396,6 @@ export async function submitWorkdayReport(params: {
 
   const replay = await findReportForReplay(input.clientReportId, fieldAgent.sessionId);
   if (replay) return { report: replay, created: false };
-  await assertFieldReportingAllowed(projectId, fieldAgent.fieldPersonaType);
 
   assertTimezone(input.reporterTimezone);
   const [project, boqItem, session] = await Promise.all([
@@ -444,7 +411,7 @@ export async function submitWorkdayReport(params: {
   // ITEM_REPORTS stream the reporter's role owes, when the project has streams.
   const stream = await itemStreamForReporter(prisma, projectId, {
     roleId: fieldAgent.roleId,
-    projectContractorId: session.projectContractorId,
+    projectContractorId: null,
   });
   const cadenceRow = stream ? streamCadenceRow(project, stream) : project;
   const period = periodKeyForDate(cadenceSettingsForDate(cadenceRow, input.workdayDate), input.workdayDate);
@@ -481,9 +448,9 @@ export async function submitWorkdayReport(params: {
     }),
   });
 
-  // Phase 7: with identity assurance off for the project, the gate does not apply.
+  // R1d: identity assurance is gone (every session is a signed-in account), so reports are accepted.
   const config = await getProcessConfig(projectId);
-  const approved = session.assuranceStatus === 'APPROVED' || !config.enableContractorIdentityAssurance;
+  const approved = true;
   const runChecks = config.enableAiOmissionCheck || config.enableAiStandardsCheck;
   const flags = reportFlags(geotag!, signature.flag);
 
@@ -527,11 +494,10 @@ export async function submitWorkdayReport(params: {
       await linkCaptures(tx, report.id, input.wbsItemId, captures.map((c) => c.id));
       // Phase 9: the first counted report on an item marks its actual start.
       if (isCountedStatus(report.status)) await recordCountedReport(tx, projectId, input.wbsItemId, input.workdayDate);
-      await recordReportPing(tx, { projectId, sessionId: fieldAgent.sessionId, wbsItemId: input.wbsItemId, geotag });
       const obligationId = await fulfilObligation(tx, {
         projectId,
         boqItemId: input.wbsItemId,
-        scope: reporterScopeFor(fieldAgent.fieldPersonaType, session.projectContractorId),
+        scope: reporterScopeFor(fieldAgent.fieldPersonaType, null),
         periodStart: period.periodStart,
         reportId: report.id,
         isLate: late.isLate,
@@ -666,7 +632,6 @@ export async function revalidateWorkdayReport(params: {
 
   const replay = await findReportForReplay(input.clientReportId, fieldAgent.sessionId);
   if (replay) return { report: replay, created: false };
-  await assertFieldReportingAllowed(projectId, fieldAgent.fieldPersonaType);
 
   assertTimezone(input.reporterTimezone);
   const prev = await prisma.workdayReport.findFirst({
@@ -756,7 +721,7 @@ export async function revalidateWorkdayReport(params: {
     }),
   });
   const config = await getProcessConfig(projectId);
-  const approved = session.assuranceStatus === 'APPROVED' || !config.enableContractorIdentityAssurance;
+  const approved = true;
   const runChecks = config.enableAiOmissionCheck || config.enableAiStandardsCheck;
   const flags = reportFlags(geotag!, signature.flag);
   if (new Date(input.confirmedAt).getTime() - Date.now() > MAX_FUTURE_CONFIRMATION_MS) {
@@ -812,7 +777,6 @@ export async function revalidateWorkdayReport(params: {
       });
       await linkCaptures(tx, report.id, prev.wbsItemId, captures.map((c) => c.id));
       if (isCountedStatus(report.status)) await recordCountedReport(tx, projectId, prev.wbsItemId, report.workdayDate);
-      await recordReportPing(tx, { projectId, sessionId: fieldAgent.sessionId, wbsItemId: prev.wbsItemId, geotag });
       if (report.status === 'PENDING_APPROVAL' && report.approvalChainVersion !== null) {
         await notifyPendingApproval(tx, {
           projectId,

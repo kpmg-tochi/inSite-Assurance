@@ -329,7 +329,7 @@ async function auditHierarchyChange(tx: Tx, webUser: WebJwtPayload, org: Organiz
 // Tenant settings (Phase 6)
 // ---------------------------------------------------------------------------
 
-const ALL_GEOFENCE_MODES: GeofenceMode[] = ['RADIAL', 'LINEAR_CORRIDOR', 'PERIMETER'];
+const ALL_GEOFENCE_MODES: GeofenceMode[] = ['RADIAL', 'PERIMETER'];
 
 export async function getTenantSettings(tenantId: string): Promise<TenantSettingsDto> {
   const t = await prisma.tenant.findUnique({ where: { id: tenantId } });
@@ -339,6 +339,7 @@ export async function getTenantSettings(tenantId: string): Promise<TenantSetting
     organizationInputMode: t.organizationInputMode as OrgInputMode,
     enabledGeofenceModes: enabled.length ? enabled : ALL_GEOFENCE_MODES,
     defaultGeofenceToleranceMeters: t.defaultGeofenceToleranceMeters,
+    defaultGeofenceRadiusMeters: t.defaultGeofenceRadiusMeters,
     defaultCurrency: t.defaultCurrency,
     timezone: t.timezone,
   };
@@ -354,6 +355,7 @@ export async function updateTenantSettings(webUser: WebJwtPayload, input: Update
       ...(input.defaultGeofenceToleranceMeters !== undefined
         ? { defaultGeofenceToleranceMeters: input.defaultGeofenceToleranceMeters }
         : {}),
+      ...(input.defaultGeofenceRadiusMeters !== undefined ? { defaultGeofenceRadiusMeters: input.defaultGeofenceRadiusMeters } : {}),
       ...(input.defaultCurrency ? { defaultCurrency: input.defaultCurrency } : {}),
       ...(input.timezone ? { timezone: input.timezone } : {}),
     };

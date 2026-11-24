@@ -8,8 +8,6 @@ import {
   SessionEndedOverlay,
 } from "../components/common/SessionEndedOverlay";
 import {
-  useAssuranceStatusSync,
-  usePresenceTelemetry,
   useNetworkSync,
   usePushNotifications,
 } from "../hooks";
@@ -21,10 +19,6 @@ import type { RootStackParamList } from "./types";
 import { LandingScreen } from "../screens/LandingScreen";
 import { SignInScreen } from "../screens/SignInScreen";
 import { ChangePasswordScreen } from "../screens/ChangePasswordScreen";
-import { OnboardingProfileScreen } from "../screens/OnboardingProfileScreen";
-import { EnterProjectCodeScreen } from "../screens/EnterProjectCodeScreen";
-import { AssuranceVerificationWizard } from "../screens/AssuranceVerificationWizard";
-import { VerificationUnderReviewScreen } from "../screens/VerificationUnderReviewScreen";
 import { WbsInboxScreen } from "../screens/WbsInboxScreen";
 import { WbsChatThreadScreen } from "../screens/WbsChatThreadScreen";
 import DefectsScreen from "../screens/DefectsScreen";
@@ -42,13 +36,11 @@ import { ConfirmAiSummarySheet } from "../screens/ConfirmAiSummarySheet";
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const RootNavigator: React.FC = () => {
-  const { loading, account, persona, activeContext, activeProjectId, pushIdentities } = useProfile();
+  const { loading, account, activeContext, pushIdentities } = useProfile();
 
-  // Background lifecycle hooks. Telemetry pings the open project only.
+  // Background lifecycle hooks.
   usePushNotifications(pushIdentities);
   useNetworkSync();
-  useAssuranceStatusSync();
-  usePresenceTelemetry(activeProjectId || null);
 
   if (loading) {
     return (
@@ -60,16 +52,9 @@ export const RootNavigator: React.FC = () => {
 
   const getInitialRouteName = (): keyof RootStackParamList => {
     if (account?.profile.mustChangePassword) return "ChangePassword";
-    if (!account && !persona) return "Landing";
-    // Signed-in users pick from their projects; code users without a project enter a code.
-    if (!activeContext) return account ? "Projects" : "EnterCode";
-    // Role-driven only: the server says whether the active session's role needs identity assurance.
-    if (
-      activeContext.requiresIdentityAssurance &&
-      (activeContext.assuranceStatus === "NOT_SUBMITTED" || activeContext.assuranceStatus === "REJECTED")
-    ) {
-      return "AssuranceWizard";
-    }
+    // A provisioned account is the only way in (redesign R1d, decision P2).
+    if (!account) return "Landing";
+    if (!activeContext) return "Projects";
     return "WbsInbox";
   };
 
@@ -85,16 +70,6 @@ export const RootNavigator: React.FC = () => {
         <Stack.Screen name="SignIn" component={SignInScreen} />
         <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
         <Stack.Screen name="Projects" component={ProfileAndProjectsScreen} />
-        <Stack.Screen name="Onboarding" component={OnboardingProfileScreen} />
-        <Stack.Screen name="EnterCode" component={EnterProjectCodeScreen} />
-        <Stack.Screen
-          name="AssuranceWizard"
-          component={AssuranceVerificationWizard}
-        />
-        <Stack.Screen
-          name="UnderReview"
-          component={VerificationUnderReviewScreen}
-        />
         <Stack.Screen name="WbsInbox" component={WbsInboxScreen} />
         <Stack.Screen name="WbsThread" component={WbsChatThreadScreen} />
         <Stack.Screen name="Defects" component={DefectsScreen} />

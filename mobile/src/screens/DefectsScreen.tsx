@@ -14,13 +14,13 @@ import { fetchDefectTickets } from "../api/defects/defectsApi";
 import { saveCapture } from "../storage/captureStore";
 import { queueDefectAction } from "../storage/defectActionStore";
 import { formatMobileErrorMessage } from "../utils/errorFormatter";
-import type { DefectActionKind } from "../utils/defects";
 import type { RootStackParamList } from "../navigation/types";
 
 /**
- * Defects (Phase 10). The liable contractor marks its tickets as fixed; verifiers check the repair
- * and close or reopen it. Photos go through the normal capture path (signed, geotagged, sent by
- * the outbox) and the action is queued behind them, so it works offline.
+ * Defects (Phase 10; staff-only since R1d). The contractor fixes defects outside the platform; an
+ * officer closes a ticket with site photos of the repair, or reopens one awaiting verification.
+ * Photos go through the normal capture path (signed, geotagged, sent by the outbox) and the action
+ * is queued behind them, so it works offline.
  */
 
 const STATUS_VARIANT: Record<DefectTicketDto["status"], "primary" | "positive" | "warning" | "info"> = {
@@ -42,7 +42,7 @@ export default function DefectsScreen() {
     queryFn: () => fetchDefectTickets(projectId!),
     enabled: Boolean(projectId),
   });
-  const [acting, setActing] = useState<{ ticket: DefectTicketDto; kind: DefectActionKind } | null>(null);
+  const [acting, setActing] = useState<DefectTicketDto | null>(null);
   const [queued, setQueued] = useState<Set<string>>(new Set());
 
   const tickets = query.data ?? [];
@@ -75,10 +75,10 @@ export default function DefectsScreen() {
           />
         )}
         {!query.isLoading && !query.isError && tickets.length === 0 && (
-          <EmptyStateCard title="No defects" description="Nothing has been raised for you on this project." />
+          <EmptyStateCard title="No defects" description="Nothing has been raised on this project." />
         )}
         {open.map((t) => (
-          <TicketCard key={t.id} ticket={t} queued={queued.has(t.id)} onAct={(kind) => setActing({ ticket: t, kind })} />
+          <TicketCard key={t.id} ticket={t} queued={queued.has(t.id)} onAct={() => setActing(t)} />
         ))}
         {closed.length > 0 && <Text style={styles.sectionLabel}>Closed</Text>}
         {closed.map((t) => (
@@ -92,11 +92,10 @@ export default function DefectsScreen() {
       {acting && projectId && (
         <ActionSheet
           projectId={projectId}
-          ticket={acting.ticket}
-          kind={acting.kind}
+          ticket={acting}
           onClose={() => setActing(null)}
           onQueued={() => {
-            setQueued((s) => new Set(s).add(acting.ticket.id));
+            setQueued((s) => new Set(s).add(acting.id));
             setActing(null);
           }}
         />
@@ -105,7 +104,7 @@ export default function DefectsScreen() {
   );
 }
 
-function TicketCard({ ticket: t, queued, onAct }: { ticket: DefectTicketDto; queued: boolean; onAct: (k: DefectActionKind) => void }) {
+function TicketCard({ ticket: t, queued, onAct }: { ticket: DefectTicketDto; queued: boolean; onAct: () => void }) {
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -125,13 +124,8 @@ function TicketCard({ ticket: t, queued, onAct }: { ticket: DefectTicketDto; que
         <Text style={styles.queued}>Update saved. It sends when you are online.</Text>
       ) : (
         <View style={styles.actions}>
-          {t.actions.rectify.allowed && (
-            <TouchableOpacity style={styles.primaryButton} onPress={() => onAct("rectify")} activeOpacity={0.8}>
-              <Text style={styles.primaryButtonText}>Mark as fixed</Text>
-            </TouchableOpacity>
-          )}
           {t.actions.verify.allowed && (
-            <TouchableOpacity style={styles.primaryButton} onPress={() => onAct("verify")} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.primaryButton} onPress={onAct} activeOpacity={0.8}>
               <Text style={styles.primaryButtonText}>Check the repair</Text>
             </TouchableOpacity>
           )}
@@ -144,13 +138,11 @@ function TicketCard({ ticket: t, queued, onAct }: { ticket: DefectTicketDto; que
 function ActionSheet({
   projectId,
   ticket,
-  kind,
   onClose,
   onQueued,
 }: {
   projectId: string;
   ticket: DefectTicketDto;
-  kind: DefectActionKind;
   onClose: () => void;
   onQueued: () => void;
 }) {
@@ -159,6 +151,8 @@ function ActionSheet({
   const [captureIds, setCaptureIds] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
   const [decision, setDecision] = useState<"CLOSE" | "REOPEN">("CLOSE");
+  // Only a ticket awaiting verification can be reopened; an open or assigned one is closed with photos.
+  const canReopen = ticket.status === "RECTIFIED_PENDING_VERIFICATION";
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -174,7 +168,7 @@ function ActionSheet({
           sourceUri: photo.uri,
           mimeType: "image/jpeg",
           fileExtension: "jpg",
-          caption: batch.caption || `${ticket.reference} ${kind === "rectify" ? "repair" : "verification"}`,
+          caption: batch.caption || `${ticket.reference} verification`,
           // The fix taken at this photo's shutter; none means "location unavailable", never a default.
           fix: photo.gps ?? null,
           capturedAt: photo.capturedAt,
@@ -193,10 +187,9 @@ function ActionSheet({
     try {
       await queueDefectAction(projectId, {
         ticketId: ticket.id,
-        kind,
+        decision: canReopen ? decision : "CLOSE",
         notes,
         captureIds,
-        ...(kind === "verify" ? { decision, photosRequired: ticket.evidenceCapturedBy === "MONITOR" } : {}),
       });
       queryClient.invalidateQueries({ queryKey: defectsQueryKey(projectId) });
       onQueued();
@@ -210,16 +203,12 @@ function ActionSheet({
   return (
     <View style={styles.sheetBackdrop}>
       <View style={styles.sheet}>
-        <Text style={styles.sheetTitle}>{kind === "rectify" ? "Mark as fixed" : "Check the repair"}</Text>
+        <Text style={styles.sheetTitle}>Check the repair</Text>
         <Text style={styles.cardMeta}>
           {ticket.reference} · {ticket.title}
         </Text>
-        {kind === "verify" && ticket.evidenceCapturedBy === "MONITOR" && (
-          <Text style={styles.cardText}>
-            You record the repair on this project: take photos of the fixed defect before closing it.
-          </Text>
-        )}
-        {kind === "verify" && ticket.status !== "RECTIFIED_PENDING_VERIFICATION" ? null : kind === "verify" && (
+        <Text style={styles.cardText}>Take photos of the fixed defect before closing it.</Text>
+        {canReopen && (
           <View style={styles.actions}>
             {(["CLOSE", "REOPEN"] as const).map((d) => (
               <TouchableOpacity
@@ -242,7 +231,7 @@ function ActionSheet({
           value={notes}
           onChangeText={setNotes}
           maxLength={2000}
-          placeholder={kind === "rectify" ? "What was done" : decision === "REOPEN" ? "What is still wrong" : "Notes (optional)"}
+          placeholder={canReopen && decision === "REOPEN" ? "What is still wrong" : "Notes (optional)"}
         />
         {error && <Text style={styles.error}>{error}</Text>}
         <View style={styles.actions}>

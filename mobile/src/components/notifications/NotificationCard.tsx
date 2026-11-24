@@ -28,28 +28,6 @@ const NOTIFICATION_VISUALS: Record<
   MobileNotificationType,
   NotificationVisualConfig
 > = {
-  ASSURANCE_PENDING: {
-    icon: "clock",
-    accentColor: "#D97706",
-    iconBg: "#FEF3C7",
-    badgeText: "Pending Assurance",
-    pillVariant: "warning",
-  },
-  ASSURANCE_APPROVED: {
-    icon: "check-circle",
-    accentColor: "#059669",
-    iconBg: "#ECFDF5",
-    badgeText: "Assurance Approved",
-    pillVariant: "positive",
-  },
-  ASSURANCE_REJECTED: {
-    icon: "alert-triangle",
-    accentColor: "#DC2626",
-    iconBg: "#FFF1F2",
-    badgeText: "Resubmission Needed",
-    pillVariant: "negative",
-    ctaLabel: "Re-verify Identity",
-  },
   BACKLOG_REVIEW_REQUIRED: {
     icon: "layers",
     accentColor: "#00338D",
@@ -73,21 +51,6 @@ const NOTIFICATION_VISUALS: Record<
     badgeText: "Hold Point",
     pillVariant: "negative",
     ctaLabel: "Submit Hold-Point Proof",
-  },
-  MORNING_DELIVERABLE_READY: {
-    icon: "sun",
-    accentColor: "#0284C7",
-    iconBg: "#E0F2FE",
-    badgeText: "Morning Brief",
-    pillVariant: "info",
-    ctaLabel: "Open Deliverable",
-  },
-  SITE_GEOFENCE_WARNING: {
-    icon: "map-pin",
-    accentColor: "#D97706",
-    iconBg: "#FEF3C7",
-    badgeText: "Geofence Alert",
-    pillVariant: "warning",
   },
   REPORT_OVERDUE: {
     icon: "alert-circle",
@@ -131,7 +94,7 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
 }) => {
   const visuals =
     NOTIFICATION_VISUALS[notification.type] ??
-    NOTIFICATION_VISUALS.ASSURANCE_PENDING;
+    NOTIFICATION_VISUALS.BACKLOG_REVIEW_REQUIRED;
   const elapsedLabel = formatElapsedTime(notification.createdAt);
   const wbsCode = notification.metadata?.wbsCode;
   // Report queries say where they came from (Phase 7): standards check, omission check or monitor.

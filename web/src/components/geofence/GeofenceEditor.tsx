@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, Marker, Polyline, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { divIcon, latLng, latLngBounds, type LeafletEvent, type Marker as LeafletMarker } from 'leaflet';
-import { CircleDot, ClipboardPaste, Hexagon, Maximize2, Route, Trash2, Undo2 } from 'lucide-react';
+import { CircleDot, ClipboardPaste, Hexagon, Maximize2, Trash2, Undo2 } from 'lucide-react';
 import {
   GEOFENCE_MODE_META,
   PERIMETER_MAX_VERTICES,
@@ -31,15 +31,17 @@ export interface GeofenceEditorProps {
   lockedMode?: GeofenceMode | null;
   /** Draw a dashed tolerance band around the shape when > 0. */
   toleranceMeters?: number;
+  /** Workspace default radius: a new radial boundary starts with it (the project can change it). */
+  defaultRadiusMeters?: number;
   disabled?: boolean;
   /** Server or field error shown under the editor. */
   error?: string | null;
 }
 
-const MODE_ORDER: GeofenceMode[] = ['RADIAL', 'LINEAR_CORRIDOR', 'PERIMETER'];
+// Redesign: linear corridors were removed; a site is radial or a perimeter.
+const MODE_ORDER: GeofenceMode[] = ['RADIAL', 'PERIMETER'];
 const MODE_ICON: Record<GeofenceMode, React.ComponentType<{ className?: string }>> = {
   RADIAL: CircleDot,
-  LINEAR_CORRIDOR: Route,
   PERIMETER: Hexagon,
 };
 
@@ -49,20 +51,18 @@ interface Draft {
   center: LonLat | null;
   radius: string;
   points: LonLat[];
-  halfWidth: string;
-  startChainage: string;
   label: string;
 }
 
 const numText = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? String(n) : '');
 const toNumber = (s: string) => (s.trim() === '' ? Number.NaN : Number(s));
 
-function emptyDraft(mode: GeofenceMode | null, label = ''): Draft {
-  return { mode, center: null, radius: '', points: [], halfWidth: '', startChainage: '', label };
+function emptyDraft(mode: GeofenceMode | null, label = '', defaultRadius?: number): Draft {
+  return { mode, center: null, radius: mode === 'RADIAL' && defaultRadius ? String(defaultRadius) : '', points: [], label };
 }
 
-function draftFromValue(value: ProjectGeofenceInput | null, fallbackMode: GeofenceMode | null): Draft {
-  if (!value) return emptyDraft(fallbackMode);
+function draftFromValue(value: ProjectGeofenceInput | null, fallbackMode: GeofenceMode | null, defaultRadius?: number): Draft {
+  if (!value) return emptyDraft(fallbackMode, '', defaultRadius);
   switch (value.mode) {
     case 'RADIAL':
       return {
@@ -70,20 +70,13 @@ function draftFromValue(value: ProjectGeofenceInput | null, fallbackMode: Geofen
         center: value.center ? [value.center.longitude, value.center.latitude] : null,
         radius: numText(value.radiusMeters),
       };
-    case 'LINEAR_CORRIDOR':
-      return {
-        ...emptyDraft('LINEAR_CORRIDOR', value.corridorLabel ?? ''),
-        points: (value.centerlineCoordinates ?? []) as LonLat[],
-        halfWidth: numText(value.corridorHalfWidthMeters),
-        startChainage: numText(value.startChainageKm),
-      };
     case 'PERIMETER':
       return {
         ...emptyDraft('PERIMETER', value.siteLabel ?? ''),
         points: openRingLonLat((value.perimeterCoordinates ?? []) as LonLat[]),
       };
     default:
-      return emptyDraft(fallbackMode);
+      return emptyDraft(fallbackMode, '', defaultRadius);
   }
 }
 
@@ -98,15 +91,6 @@ function draftToInput(d: Draft): ProjectGeofenceInput | null {
         center: { latitude: d.center[1], longitude: d.center[0] },
         radiusMeters: toNumber(d.radius),
         ...(label ? { siteLabel: label } : {}),
-      };
-    case 'LINEAR_CORRIDOR':
-      if (d.points.length === 0) return null;
-      return {
-        mode: 'LINEAR_CORRIDOR',
-        centerlineCoordinates: d.points,
-        corridorHalfWidthMeters: toNumber(d.halfWidth),
-        ...(d.startChainage.trim() !== '' ? { startChainageKm: toNumber(d.startChainage) } : {}),
-        ...(label ? { corridorLabel: label } : {}),
       };
     case 'PERIMETER':
       if (d.points.length === 0) return null;
@@ -127,8 +111,6 @@ type Issue = SafeParseFailure['error']['issues'][number];
 
 const FIELD_NAMES: Record<string, { name: string; unit?: string }> = {
   radiusMeters: { name: 'radius', unit: 'm' },
-  corridorHalfWidthMeters: { name: 'corridor half-width', unit: 'm' },
-  startChainageKm: { name: 'start chainage', unit: 'km' },
 };
 
 /** First schema issue in plain words. */
@@ -136,7 +118,7 @@ function describeIssue(issue: Issue): string {
   const key = String(issue.path[0] ?? '');
   const field = FIELD_NAMES[key];
   if (field) {
-    if (issue.code === 'invalid_type') return `Enter the ${field.name} in ${field.unit === 'km' ? 'kilometres' : 'metres'}.`;
+    if (issue.code === 'invalid_type') return `Enter the ${field.name} in metres.`;
     if (issue.code === 'too_small') {
       return `The ${field.name} must be at least ${Number(issue.minimum).toLocaleString()} ${field.unit}.`;
     }
@@ -144,13 +126,10 @@ function describeIssue(issue: Issue): string {
       return `The ${field.name} can be at most ${Number(issue.maximum).toLocaleString()} ${field.unit}.`;
     }
   }
-  if (key === 'centerlineCoordinates' && issue.code === 'too_small') {
-    return 'Add at least 2 centreline points.';
-  }
-  if (key === 'siteLabel' || key === 'corridorLabel') {
+  if (key === 'siteLabel') {
     return issue.code === 'too_big' ? 'The label can be at most 120 characters.' : 'The label cannot be empty.';
   }
-  if (key === 'center' || key === 'centerlineCoordinates' || key === 'perimeterCoordinates') {
+  if (key === 'center' || key === 'perimeterCoordinates') {
     if (issue.code === 'custom') return issue.message;
     return 'A point is outside the valid range (latitude -90 to 90, longitude -180 to 180).';
   }
@@ -209,6 +188,7 @@ export function GeofenceEditor({
   enabledModes,
   lockedMode = null,
   toleranceMeters = 0,
+  defaultRadiusMeters,
   disabled = false,
   error = null,
 }: GeofenceEditorProps): JSX.Element {
@@ -216,7 +196,7 @@ export function GeofenceEditor({
   const initialMode = (): GeofenceMode | null =>
     value?.mode ?? lockedMode ?? (enabledModes.length === 1 ? enabledModes[0] : null);
 
-  const [draft, setDraft] = useState<Draft>(() => draftFromValue(value, initialMode()));
+  const [draft, setDraft] = useState<Draft>(() => draftFromValue(value, initialMode(), defaultRadiusMeters));
   const draftRef = useRef(draft);
   const lastEmitted = useRef(JSON.stringify(value ?? null));
   const [fitKey, setFitKey] = useState(0);
@@ -231,11 +211,11 @@ export function GeofenceEditor({
     const s = JSON.stringify(value ?? null);
     if (s === lastEmitted.current) return;
     lastEmitted.current = s;
-    const next = draftFromValue(value, draftRef.current.mode);
+    const next = draftFromValue(value, draftRef.current.mode, defaultRadiusMeters);
     draftRef.current = next;
     setDraft(next);
     setFitKey((k) => k + 1);
-  }, [value]);
+  }, [value, defaultRadiusMeters]);
 
   const commit = (update: (d: Draft) => Draft) => {
     const next = update(draftRef.current);
@@ -256,12 +236,8 @@ export function GeofenceEditor({
   const drawable: ProjectGeofence | null = useMemo(() => {
     if (validShape) return validShape;
     const radius = toNumber(draft.radius);
-    const halfWidth = toNumber(draft.halfWidth);
     if (draft.mode === 'RADIAL' && draft.center && radius > 0) {
       return { mode: 'RADIAL', center: { latitude: draft.center[1], longitude: draft.center[0] }, radiusMeters: radius };
-    }
-    if (draft.mode === 'LINEAR_CORRIDOR' && draft.points.length >= 2 && halfWidth > 0) {
-      return { mode: 'LINEAR_CORRIDOR', centerlineCoordinates: draft.points, corridorHalfWidthMeters: halfWidth, startChainageKm: 0 };
     }
     if (draft.mode === 'PERIMETER' && draft.points.length >= 3) {
       return { mode: 'PERIMETER', perimeterCoordinates: draft.points };
@@ -294,7 +270,7 @@ export function GeofenceEditor({
     }
     setPasteOpen(false);
     setPasteError(null);
-    commit((d) => emptyDraft(mode, d.label));
+    commit((d) => emptyDraft(mode, d.label, defaultRadiusMeters));
   };
 
   const handleMapClick = (p: LonLat) => {
@@ -320,7 +296,7 @@ export function GeofenceEditor({
   const clearShape = () => {
     if (!hasShape(draftRef.current)) return;
     if (!window.confirm('Clear the shape you have drawn?')) return;
-    commit((d) => ({ ...emptyDraft(d.mode, d.label), radius: d.radius, halfWidth: d.halfWidth, startChainage: d.startChainage }));
+    commit((d) => ({ ...emptyDraft(d.mode, d.label), radius: d.radius }));
   };
 
   const openPaste = () => {
@@ -360,14 +336,13 @@ export function GeofenceEditor({
   const hint = (() => {
     if (!mode) return 'Choose a geofence type to start.';
     if (mode === 'RADIAL') {
-      if (!draft.center) return 'Click the map to place the site centre.';
+      if (!draft.center) {
+        return draft.radius.trim() !== ''
+          ? `Click the map to place the site centre. The radius starts at ${draft.radius} m (the workspace default); change it below.`
+          : 'Click the map to place the site centre.';
+      }
       if (draft.radius.trim() === '') return 'Click the map again to set the edge of the circle, or type the radius below.';
       return 'Drag the centre or the edge handle to adjust. Clicking the map moves the centre.';
-    }
-    if (mode === 'LINEAR_CORRIDOR') {
-      if (draft.points.length === 0) return 'Click the map to place the start of the corridor centreline.';
-      if (draft.points.length === 1) return 'Click the map to add the next centreline point.';
-      return 'Keep clicking to extend the centreline. Drag a point to move it; right-click a point to remove it.';
     }
     if (draft.points.length === 0) return 'Click the map to place the first corner of the site boundary.';
     if (draft.points.length < 3) {
@@ -384,7 +359,7 @@ export function GeofenceEditor({
   return (
     <div className="space-y-3">
       {/* Mode cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3" role="radiogroup" aria-label="Geofence type">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3" role="radiogroup" aria-label="Geofence type">
         {MODE_ORDER.map((m) => {
           const meta = GEOFENCE_MODE_META[m];
           const Icon = MODE_ICON[m];
@@ -555,46 +530,9 @@ export function GeofenceEditor({
                 />
               </div>
             )}
-            {mode === 'LINEAR_CORRIDOR' && (
-              <>
-                <div>
-                  <label className={labelClass} htmlFor="geofence-half-width">
-                    Corridor half-width (m)
-                  </label>
-                  <input
-                    id="geofence-half-width"
-                    type="number"
-                    min={10}
-                    max={5000}
-                    step={1}
-                    value={draft.halfWidth}
-                    disabled={disabled}
-                    onChange={(e) => commit((d) => ({ ...d, halfWidth: e.target.value }))}
-                    placeholder="10 to 5,000, each side"
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass} htmlFor="geofence-start-chainage">
-                    Start chainage (km)
-                  </label>
-                  <input
-                    id="geofence-start-chainage"
-                    type="number"
-                    min={0}
-                    step="0.001"
-                    value={draft.startChainage}
-                    disabled={disabled}
-                    onChange={(e) => commit((d) => ({ ...d, startChainage: e.target.value }))}
-                    placeholder="Empty starts at KM 0+000"
-                    className={inputClass}
-                  />
-                </div>
-              </>
-            )}
-            <div className={mode === 'LINEAR_CORRIDOR' ? '' : 'md:col-span-2'}>
+            <div className="md:col-span-2">
               <label className={labelClass} htmlFor="geofence-label">
-                {mode === 'LINEAR_CORRIDOR' ? 'Corridor label (optional)' : 'Site label (optional)'}
+                Site label (optional)
               </label>
               <input
                 id="geofence-label"
@@ -603,7 +541,7 @@ export function GeofenceEditor({
                 value={draft.label}
                 disabled={disabled}
                 onChange={(e) => commit((d) => ({ ...d, label: e.target.value }))}
-                placeholder={mode === 'LINEAR_CORRIDOR' ? 'e.g. Northern bypass' : 'e.g. Main plant compound'}
+                placeholder="e.g. Main school compound"
                 className={inputClass}
               />
             </div>
@@ -615,7 +553,7 @@ export function GeofenceEditor({
                 ? draft.center
                   ? `Centre ${draft.center[1].toFixed(6)}, ${draft.center[0].toFixed(6)} (latitude, longitude)`
                   : 'No centre placed'
-                : `${pointCount} ${mode === 'PERIMETER' ? 'corner' : 'centreline point'}${pointCount === 1 ? '' : 's'}`}
+                : `${pointCount} corner${pointCount === 1 ? '' : 's'}`}
               {tolerance > 0 ? ` · Dashed line shows the ${tolerance.toLocaleString()} m tolerance band` : ''}
             </span>
             {!pasteOpen && (
@@ -634,7 +572,7 @@ export function GeofenceEditor({
           {pasteOpen && (
             <div className="space-y-2">
               <label className={labelClass} htmlFor="geofence-coordinates">
-                {mode === 'RADIAL' ? 'Centre point' : mode === 'PERIMETER' ? 'Boundary corners' : 'Centreline points'}
+                {mode === 'RADIAL' ? 'Centre point' : 'Boundary corners'}
               </label>
               <p className="text-[11px] text-slate-500">
                 {mode === 'RADIAL' ? 'One line' : 'One line per point'} as <strong>latitude, longitude</strong> (for

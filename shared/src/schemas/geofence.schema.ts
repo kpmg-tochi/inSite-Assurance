@@ -32,20 +32,6 @@ export const RadialGeofenceSchema = z.object({
 });
 export type RadialGeofence = z.infer<typeof RadialGeofenceSchema>;
 
-/**
- * 2. Linear Corridor / Chainage Geofence
- * Used for roads, pipelines, drainage channels, transmission lines, and mini-grids.
- * Coordinates are stored in GeoJSON [longitude, latitude] order along the centerline.
- */
-export const LinearCorridorGeofenceSchema = z.object({
-  mode: z.literal('LINEAR_CORRIDOR'),
-  centerlineCoordinates: z.array(LonLatTupleSchema).min(2),
-  corridorHalfWidthMeters: z.number().min(10).max(5000), // e.g., 100m on each side of road centerline
-  startChainageKm: z.number().min(0).default(0),         // e.g., 0 for KM 0+000 or 12.5 for KM 12+500
-  corridorLabel: z.string().min(1).max(120).optional(),
-});
-export type LinearCorridorGeofence = z.infer<typeof LinearCorridorGeofenceSchema>;
-
 export const PERIMETER_MAX_VERTICES = 500;
 
 /**
@@ -77,7 +63,7 @@ export const PerimeterRingSchema = z
   });
 
 /**
- * 3. Perimeter (polygon) Geofence (Phase 6)
+ * 2. Perimeter (polygon) Geofence (Phase 6)
  * Used for irregular sites: estates, campuses, farms, dams. Coordinates are [longitude, latitude].
  * Tolerance is not part of the shape: it is the project's general geofence tolerance.
  */
@@ -93,7 +79,6 @@ export type PerimeterGeofence = z.infer<typeof PerimeterGeofenceSchema>;
  */
 export const ProjectGeofenceSchema = z.discriminatedUnion('mode', [
   RadialGeofenceSchema,
-  LinearCorridorGeofenceSchema,
   PerimeterGeofenceSchema,
 ]);
 export type ProjectGeofence = z.infer<typeof ProjectGeofenceSchema>;
@@ -103,6 +88,14 @@ export type ProjectGeofenceInput = z.input<typeof ProjectGeofenceSchema>;
 /** Tenant default and project override for the tolerance band outside every boundary. */
 export const GeofenceToleranceMetersSchema = z.number().int().min(0).max(1000);
 export const DEFAULT_GEOFENCE_TOLERANCE_METERS = 100;
+
+/**
+ * Workspace default radius of a radial site boundary: it pre-fills a new radial boundary and the one
+ * created from the needs-assessment workbook's GPS point. Each project sets its own radius on the
+ * Site step.
+ */
+export const GeofenceRadiusMetersSchema = z.number().int().min(20).max(50000);
+export const DEFAULT_GEOFENCE_RADIUS_METERS = 150;
 
 /**
  * Output of On-Device (Mobile) & Backend (Server) geofence verification.
@@ -120,12 +113,9 @@ export const GeofenceVerificationResultSchema = z.object({
   distanceOutsideMeters: z.number(),
   /** Distance to the nearest point of the boundary, inside or outside. */
   distanceToBoundaryMeters: z.number(),
-  /** Radial: distance from the centre. Linear: offset from the centreline. Perimeter: same as distanceToBoundaryMeters. */
+  /** Radial: distance from the centre. Perimeter: same as distanceToBoundaryMeters. */
   distanceFromCenterOrLineMeters: z.number(),
   allowedThresholdMeters: z.number(),
-  chainageKm: z.number().nullable(),
-  chainageFormatted: z.string().nullable(), // e.g. "KM 14+200"
-  corridorOffsetMeters: z.number().nullable(),
   verificationBadgeText: z.string(),
 });
 export type GeofenceVerificationResult = z.infer<typeof GeofenceVerificationResultSchema>;

@@ -9,16 +9,12 @@ export type RootStackParamList = {
   ChangePassword: { forced?: boolean } | undefined;
   /** Every project on the device, with pending-sync counts; tap to switch. */
   Projects: undefined;
-  Onboarding: undefined;
-  EnterCode: undefined;
-  AssuranceWizard: { resolveNotificationId?: string; isPreviewDemo?: boolean } | undefined;
-  UnderReview: undefined;
   WbsInbox: undefined;
-  /** Phase 10: defect tickets after handover (contractor fixes, verifier checks). */
+  /** Phase 10: defect tickets after handover (officers close them with photos or reopen them). */
   Defects: undefined;
   /** Phase 14: the checklist site inspection flow (resumes an open draft). */
   Inspection: undefined;
-  /** Phase 14: inspection findings (contractor fixes its own; verifiers record fixes). */
+  /** Phase 14: inspection findings (officers record fixes). */
   InspectionFindings: undefined;
   WbsThread: {
     wbsItem: WbsItemRecord;

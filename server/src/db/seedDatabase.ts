@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import {
   DEFAULT_GEOFENCE_TOLERANCE_METERS,
   DEFAULT_TENANT_ROLES,
-  LinearCorridorGeofence,
+  PerimeterGeofence,
   RadialGeofence,
   SYSTEM_PERMISSIONS_CATALOG,
   verifyPointAgainstGeofence,
@@ -13,11 +13,10 @@ import {
 import { prisma } from "../config/prisma";
 import { recordAuditEvent } from "../modules/audit/audit.service";
 import { provisionDefaultRoles } from "../modules/rbac/rbac.service";
-import { randomJoinCodeSegment } from "../modules/projects/joinCodes.service";
+import { seedFieldAccount } from "./seedFieldAccounts";
 import { evaluateGeofence } from "../utils/geofenceEvaluation";
 import { seedPhase6Projects } from "./seedPhase6";
 import { seedPhase7 } from "./seedPhase7";
-import { seedPhase9 } from "./seedPhase9";
 import { seedPhase10 } from "./seedPhase10";
 import { seedPhase11 } from "./seedPhase11";
 import { seedPhase12 } from "./seedPhase12";
@@ -25,6 +24,8 @@ import { seedPhase14 } from "./seedPhase14";
 import { seedPhase13 } from "./seedPhase13";
 import { seedPhase15 } from "./seedPhase15";
 import { seedPhase16 } from "./seedPhase16";
+import { seedR2 } from "./seedR2";
+import { seedR3 } from "./seedR3";
 import { projectObjectPrefix } from "../integrations/storage.service";
 import { seedDaysAgo, seedRecordedPayment } from "./seedPayments";
 import { CADENCE_PROJECT_SELECT, cadenceSettingsOf, periodKeyForDate } from "../modules/cadence/cadence.service";
@@ -115,9 +116,6 @@ async function seedCaptures(params: {
         isWithinGeofence: geo.isWithinGeofence,
         geofenceStatus: geo.geofenceStatus,
         distanceOutsideMeters: geo.distanceOutsideMeters,
-        chainageKm: geo.chainageKm,
-        chainageLabel: geo.chainageLabel,
-        corridorOffsetMeters: geo.corridorOffsetMeters,
         distanceFromSiteMeters: geo.distanceFromSiteMeters,
         signatureVerified: null,
         serverSha256: sha,
@@ -195,7 +193,6 @@ async function seedReportWithCaptures(params: {
             isWithinGeofence: geo.isWithinGeofence,
             geofenceStatus: geo.geofenceStatus,
             distanceOutsideMeters: geo.distanceOutsideMeters,
-            chainageLabel: geo.chainageLabel,
             distanceFromSiteMeters: geo.distanceFromSiteMeters,
           } as unknown as Prisma.InputJsonValue)
         : Prisma.DbNull,
@@ -235,12 +232,21 @@ async function runSeed(): Promise<void> {
   await prisma.contractorPerformanceRating.deleteMany();
   await prisma.lessonLearned.deleteMany();
   // Phase 13 (documents before their types; CP evidence and kick-off links are SetNull).
-  await prisma.programmeOfWorksSubmission.deleteMany();
   await prisma.contractorDefaultCase.deleteMany();
   await prisma.kickoffMeeting.deleteMany();
   await prisma.projectDocument.deleteMany();
   await prisma.projectContractMilestone.deleteMany();
   await prisma.documentType.deleteMany();
+  // Redesign R3 (snapshots restrict their template; facility sub-forms restrict their facility)
+  await prisma.visitFormSnapshot.deleteMany();
+  await prisma.facilitySubForm.deleteMany();
+  await prisma.formSection.deleteMany();
+  await prisma.visitFormTemplate.deleteMany();
+  // Redesign R2 (units restrict their facility; lines and sprints point at units)
+  await prisma.boqItem.updateMany({ data: { facilityUnitId: null } });
+  await prisma.facilityUnit.deleteMany();
+  await prisma.projectSprint.deleteMany();
+  await prisma.facility.deleteMany();
   // Phase 14
   await prisma.inspectionFinding.deleteMany();
   await prisma.siteInspectionReport.deleteMany();
@@ -252,8 +258,6 @@ async function runSeed(): Promise<void> {
   await prisma.wbsChatMessage.deleteMany();
   await prisma.reportQuery.deleteMany();
   await prisma.workdayReport.deleteMany();
-  await prisma.siteTelemetryPing.deleteMany();
-  await prisma.morningDeliverableBrief.deleteMany();
   await prisma.mobileNotification.deleteMany();
   await prisma.approvalAction.deleteMany();
   await prisma.approvalStep.deleteMany();
@@ -261,7 +265,6 @@ async function runSeed(): Promise<void> {
   await prisma.projectPayment.deleteMany();
   await prisma.retentionDefectTicket.deleteMany();
   await prisma.handoverSubmission.deleteMany();
-  await prisma.handoverLink.deleteMany();
   await prisma.projectStandardSpecification.deleteMany();
   await prisma.projectNeedsAssessmentDocument.deleteMany();
   await prisma.projectProcessConfig.deleteMany();
@@ -279,7 +282,6 @@ async function runSeed(): Promise<void> {
   await prisma.boqRevision.deleteMany();
   await prisma.fieldAgentSession.deleteMany();
   await prisma.mobileDevice.deleteMany();
-  await prisma.projectJoinCode.deleteMany();
   await prisma.projectContractor.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.userProjectAssignment.deleteMany();
@@ -290,7 +292,6 @@ async function runSeed(): Promise<void> {
   await prisma.rolePermission.deleteMany();
   await prisma.role.deleteMany();
   await prisma.permission.deleteMany();
-  await prisma.professionalRegistrationBody.deleteMany(); // Phase 12
   await prisma.tenant.deleteMany();
 
   const defaultPasswordHash = await bcrypt.hash("Password123!", 10);
@@ -340,14 +341,9 @@ async function runSeed(): Promise<void> {
   const superAdminRole = roleByCode("TENANT_SUPER_ADMIN");
   const monitorRole = roleByCode("MONITOR");
   const lenderRole = roleByCode("LENDER");
-  const contractorRole = roleByCode("CONTRACTOR");
-  // Phase 5: monitor inspectors sign in with their account instead of a join code (decision G).
-  const monitorInspectorMobileRole = await prisma.role.update({
-    where: { id: roleByCode("MONITOR_INSPECTOR").id },
-    data: { onboardingMode: "PROVISIONED_ACCOUNT", requiresIdentityAssurance: false },
-  });
+  // Redesign R1d: every mobile role signs in with an account (no join codes, decision P2).
+  const monitorInspectorMobileRole = roleByCode("MONITOR_INSPECTOR");
   const residentCowMobileRole = roleByCode("INDEPENDENT_RESIDENT");
-  const contractorEngineerMobileRole = roleByCode("CONTRACTOR_ENGINEER");
 
   // 1. Create Organizations
   const monitorOrg = await prisma.organization.create({
@@ -387,8 +383,6 @@ async function runSeed(): Promise<void> {
       isPlatformSuperAdmin: true,
       roleId: superAdminRole.id,
       organizationId: monitorOrg.id,
-      professionalRegistrationBodyCode: "ICAN",
-      professionalRegistrationNumber: "FCA/019284",
     },
   });
 
@@ -403,8 +397,6 @@ async function runSeed(): Promise<void> {
       mobileRoleId: monitorInspectorMobileRole.id,
       phoneNumber: "+234 803 555 0142",
       organizationId: monitorOrg.id,
-      professionalRegistrationBodyCode: "QSRBN",
-      professionalRegistrationNumber: "3842",
     },
   });
 
@@ -444,8 +436,6 @@ async function runSeed(): Promise<void> {
       fullName: "Engr. Ifeoma Eze, FNSE",
       roleId: lenderTechnicalRole.id,
       organizationId: lenderOrg.id,
-      professionalRegistrationBodyCode: "COREN",
-      professionalRegistrationNumber: "R.33017",
     },
   });
 
@@ -457,39 +447,27 @@ async function runSeed(): Promise<void> {
       fullName: "Chidinma Okafor, CFA",
       roleId: lenderRole.id,
       organizationId: lenderOrg.id,
-      professionalRegistrationBodyCode: "ICAN",
-      professionalRegistrationNumber: "MB/049120",
-    },
-  });
-
-  const contractorUser = await prisma.user.create({
-    data: {
-      tenantId: defaultTenant.id,
-      email: "contractor@insite.ng",
-      passwordHash: defaultPasswordHash,
-      fullName: "Engr. Musa Danladi, MNSE",
-      roleId: contractorRole.id,
-      organizationId: contractorOrg.id,
-      professionalRegistrationBodyCode: "COREN",
-      professionalRegistrationNumber: "R.49201",
     },
   });
 
   // ==========================================================================
-  // PROJECT 1: LKK-402 (Linear Corridor Mode — Road & Culvert Infrastructure)
+  // PROJECT 1: LKK-402 (perimeter along the road; linear corridors were removed in the redesign)
   // ==========================================================================
-  const lkkCorridorGeofence: LinearCorridorGeofence = {
-    mode: "LINEAR_CORRIDOR",
-    corridorLabel:
-      "Lekki–Epe Industrial Access Corridor (KM 12+000 to KM 18+500)",
-    centerlineCoordinates: [
-      [3.55, 6.45],
-      [3.575, 6.451],
-      [3.6, 6.4525],
-      [3.61, 6.453],
+  // About 100 m either side of the road centreline (3.55,6.45) → (3.61,6.453).
+  const lkkCorridorGeofence: PerimeterGeofence = {
+    mode: "PERIMETER",
+    siteLabel: "Lekki–Epe Industrial Access Corridor (KM 12+000 to KM 18+500)",
+    perimeterCoordinates: [
+      [3.55, 6.4491],
+      [3.575, 6.4501],
+      [3.6, 6.4516],
+      [3.61, 6.4521],
+      [3.61, 6.4539],
+      [3.6, 6.4534],
+      [3.575, 6.4519],
+      [3.55, 6.4509],
+      [3.55, 6.4491],
     ],
-    corridorHalfWidthMeters: 100,
-    startChainageKm: 12.0,
   };
 
   const lkkProject = await prisma.project.create({
@@ -504,7 +482,7 @@ async function runSeed(): Promise<void> {
       totalBudgetNgn: 6850000000,
       certifiedProgressPct: 28.5,
       reportingCadence: "DAILY",
-      geofenceMode: "LINEAR_CORRIDOR",
+      geofenceMode: "PERIMETER",
       geofenceGeoJson: lkkCorridorGeofence as unknown as Prisma.InputJsonValue,
       monitorOrganizationId: monitorOrg.id,
       lenderOrganizationId: lenderOrg.id,
@@ -513,38 +491,16 @@ async function runSeed(): Promise<void> {
       activatedAt: new Date(Date.now() - 60 * 24 * 3600 * 1000),
       createdByUserId: monitorUser.id,
       activatedByUserId: monitorUser.id,
-      contractorExecutionMode: "SINGLE_CONTRACTOR",
       contractors: {
         create: {
           organizationId: contractorOrg.id,
           tradeCategory: "Civil works",
           tradeCode: "CIV",
-          isMainContractor: true,
-          allowFieldReporting: true,
         },
       },
     },
     include: { contractors: true },
   });
-  const lkkContractorId = lkkProject.contractors[0].id;
-
-  const lkkJoinCow = await prisma.projectJoinCode.create({
-    data: {
-      projectId: lkkProject.id,
-      roleId: residentCowMobileRole.id,
-      code: `LKK-402-COW-${randomJoinCodeSegment()}`,
-    },
-  });
-
-  const lkkJoinCon = await prisma.projectJoinCode.create({
-    data: {
-      projectId: lkkProject.id,
-      roleId: contractorEngineerMobileRole.id,
-      projectContractorId: lkkContractorId,
-      code: `LKK-402-CON-${randomJoinCodeSegment()}`,
-    },
-  });
-
   // Redesign R1b: payments are made outside the platform and recorded. LKK-402 has one interim
   // payment recorded (the old tranche 1 release).
   await seedRecordedPayment({
@@ -645,81 +601,38 @@ async function runSeed(): Promise<void> {
     },
   });
 
-  // Field Agent Sessions on LKK-402
-  const cowSession = await prisma.fieldAgentSession.create({
-    data: {
-      projectId: lkkProject.id,
-      joinCodeId: lkkJoinCow.id,
-      roleId: residentCowMobileRole.id,
-      roleNameSnapshot: residentCowMobileRole.name,
-      fieldPersonaType: residentCowMobileRole.fieldPersonaType,
-      assuranceWeight: residentCowMobileRole.assuranceWeight,
-      agentFullName: "Engr. Segun Oladipo (Resident CoW)",
-      agentPhoneNumber: "+2348034129801",
-      deviceId: "ANDROID-COW-88412",
-      deviceModel: "Samsung Galaxy A54 5G",
-      deviceOs: "Android 14",
-      lastSyncAt: new Date(),
-    },
+  // Field sessions on LKK-402 (R1d: provisioned field accounts; contractors have no login).
+  const cowAccount = await seedFieldAccount({
+    tenantId: defaultTenant.id,
+    organizationId: monitorOrg.id,
+    email: "resident.cow@insite.ng",
+    fullName: "Engr. Segun Oladipo (Resident CoW)",
+    phoneNumber: "+2348034129801",
+    role: residentCowMobileRole,
+    projectIds: [lkkProject.id],
+    deviceId: "ANDROID-COW-88412",
+    deviceModel: "Samsung Galaxy A54 5G",
+    deviceOs: "Android 14",
+    passwordHash: defaultPasswordHash,
   });
+  const cowSession = await prisma.fieldAgentSession.findUniqueOrThrow({ where: { id: cowAccount.sessionIds[lkkProject.id] } });
 
-  const conSession = await prisma.fieldAgentSession.create({
-    data: {
-      projectId: lkkProject.id,
-      joinCodeId: lkkJoinCon.id,
-      projectContractorId: lkkContractorId,
-      roleId: contractorEngineerMobileRole.id,
-      roleNameSnapshot: contractorEngineerMobileRole.name,
-      fieldPersonaType: contractorEngineerMobileRole.fieldPersonaType,
-      assuranceWeight: contractorEngineerMobileRole.assuranceWeight,
-      agentFullName: "Chukwudi Nnamdi (Contractor Site Engr)",
-      agentPhoneNumber: "+2348091124500",
-      deviceId: "ANDROID-CON-33109",
-      deviceModel: "Redmi Note 13 Pro",
-      deviceOs: "Android 14",
-      assuranceStatus: "APPROVED",
-      idDocumentType: "NIN_SLIP",
-      idDocumentUrl: "https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&w=600&q=80",
-      selfieImageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80",
-      livenessScore: null,
-      livenessPassed: false,
-      registrationNumber: "R.55102",
-      registrationBodyCode: "COREN",
-      experienceSummary: "8 years highway and drainage structural works. Resident Site Engineer for Julius & Sons.",
-      reviewedByUserId: monitorUser.id,
-      reviewedAt: new Date(Date.now() - 14 * 24 * 3600 * 1000),
-      lastSyncAt: new Date(),
-    },
+  const officerAccount = await seedFieldAccount({
+    tenantId: defaultTenant.id,
+    organizationId: monitorOrg.id,
+    email: "field.officer@insite.ng",
+    fullName: "Chukwudi Nnamdi (M&E Officer)",
+    phoneNumber: "+2348091124500",
+    role: monitorInspectorMobileRole,
+    projectIds: [lkkProject.id],
+    deviceId: "ANDROID-MEO-33109",
+    deviceModel: "Redmi Note 13 Pro",
+    deviceOs: "Android 14",
+    passwordHash: defaultPasswordHash,
   });
+  const conSession = await prisma.fieldAgentSession.findUniqueOrThrow({ where: { id: officerAccount.sessionIds[lkkProject.id] } });
 
-  await prisma.fieldAgentSession.create({
-    data: {
-      projectId: lkkProject.id,
-      joinCodeId: lkkJoinCon.id,
-      projectContractorId: lkkContractorId,
-      roleId: contractorEngineerMobileRole.id,
-      roleNameSnapshot: contractorEngineerMobileRole.name,
-      fieldPersonaType: contractorEngineerMobileRole.fieldPersonaType,
-      assuranceWeight: contractorEngineerMobileRole.assuranceWeight,
-      agentFullName: "Engr. Babatunde Fashanu",
-      agentPhoneNumber: "+2348023456789",
-      deviceId: "TECNO-CAMON-20-PRO",
-      deviceModel: "Tecno Camon 20 Pro 5G",
-      deviceOs: "Android 13",
-      assuranceStatus: "PENDING_APPROVAL",
-      idDocumentType: "FRSC_DRIVERS_LICENSE",
-      idDocumentUrl: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80",
-      selfieImageUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80",
-      livenessScore: null,
-      livenessPassed: false,
-      registrationNumber: "R.61044",
-      registrationBodyCode: "COREN",
-      experienceSummary: "10 years reinforced concrete box culverts, soil stabilization, and quality control on highway corridors. Project Site Engineer, Julius & Sons Civil Engineering.",
-      lastSyncAt: new Date(),
-    },
-  });
-
-  // Verify real corridor chainages using @insite/shared Turf.js engine
+  // Check the anchor position against the site boundary with the shared Turf.js engine
   const cowGeoCheck = verifyPointAgainstGeofence(
     { longitude: 3.57, latitude: 6.4502 },
     lkkCorridorGeofence,
@@ -784,10 +697,10 @@ async function runSeed(): Promise<void> {
     projectId: lkkProject.id,
     actorType: "WEB_USER",
     actorId: monitorUser.id,
-    actorDisplayName: `${monitorUser.fullName} (QSRBN #3842)`,
+    actorDisplayName: `${monitorUser.fullName} (${monitorRole.name})`,
     action: "PROJECT_CREATED",
     summaryText:
-      "Established baseline for Lekki–Epe Industrial Access Dual-Carriageway (LKK-402) with Linear Corridor Geofence (KM 12+000 to KM 18+500).",
+      "Established baseline for Lekki–Epe Industrial Access Dual-Carriageway (LKK-402) with a perimeter geofence along the road (KM 12+000 to KM 18+500).",
     payload: { codePrefix: "LKK-402", budgetNgn: 6850000000 },
   });
 
@@ -801,7 +714,7 @@ async function runSeed(): Promise<void> {
       "Confirmed voice & photo log at Chainage KM 14+210: 12m box culvert wall cast, 40 bags of cement used; Cell 2 delayed by rain.",
     payload: {
       workdayReportId: cowEvidenceReport.id,
-      chainage: cowGeoCheck.chainageFormatted,
+      geofenceStatus: cowGeoCheck.status,
       quantities: [{ item: "Cement", qty: 40, unit: "bags" }],
     },
   });
@@ -835,7 +748,6 @@ async function runSeed(): Promise<void> {
         accuracyMeters: 5.5,
         isMocked: false,
         isWithinGeofence: true,
-        chainageLabel: "KM 14+210",
         distanceFromSiteMeters: null,
         capturedAt: new Date(nowMs - 1000 * 60 * 60 * 5).toISOString(),
       } as unknown as Prisma.InputJsonValue,
@@ -887,7 +799,6 @@ async function runSeed(): Promise<void> {
         accuracyMeters: 4.8,
         isMocked: false,
         isWithinGeofence: true,
-        chainageLabel: "KM 14+210",
         distanceFromSiteMeters: null,
         capturedAt: new Date(nowMs - 1000 * 60 * 45).toISOString(),
       } as unknown as Prisma.InputJsonValue,
@@ -941,7 +852,6 @@ async function runSeed(): Promise<void> {
         accuracyMeters: 6.0,
         isMocked: false,
         isWithinGeofence: true,
-        chainageLabel: "KM 14+200",
         distanceFromSiteMeters: null,
         capturedAt: new Date(nowMs - 1000 * 60 * 30).toISOString(),
       } as unknown as Prisma.InputJsonValue,
@@ -1092,18 +1002,7 @@ async function runSeed(): Promise<void> {
         } as unknown as Prisma.InputJsonValue,
         createdAt: new Date(nowMs - 1000 * 60 * 60 * 3), // 3h ago
       },
-      {
-        projectId: lkkProject.id,
-        fieldSessionId: conSession.id,
-        type: "ASSURANCE_PENDING",
-        actionType: "NONE",
-        requiresAction: false,
-        title: "Assurance Verification Queued",
-        message:
-          "Your COREN and NIN credentials have been queued with KPMG Project Monitoring Desk. Offline field logs remain active.",
-        metadata: {} as unknown as Prisma.InputJsonValue,
-        createdAt: new Date(nowMs - 1000 * 60 * 60 * 8), // 8h ago
-      },
+
       {
         projectId: lkkProject.id,
         fieldSessionId: conSession.id,
@@ -1118,33 +1017,6 @@ async function runSeed(): Promise<void> {
           wbsCode: boqCulvertReinforcement.wbsCode,
         } as unknown as Prisma.InputJsonValue,
         createdAt: new Date(nowMs - 1000 * 60 * 60 * 24 * 2), // 2d ago
-      },
-      {
-        projectId: lkkProject.id,
-        fieldSessionId: conSession.id,
-        type: "ASSURANCE_APPROVED",
-        actionType: "NONE",
-        requiresAction: false,
-        title: "Identity Assurance Approved",
-        message:
-          "KPMG Monitor approved your contractor identity and COREN credentials for LKK-402.",
-        metadata: {} as unknown as Prisma.InputJsonValue,
-        createdAt: new Date(nowMs - 1000 * 60 * 60 * 24 * 5), // 5d ago
-      },
-      {
-        projectId: lkkProject.id,
-        fieldSessionId: conSession.id,
-        type: "MORNING_DELIVERABLE_READY",
-        actionType: "OPEN_WBS_CHAT",
-        requiresAction: false,
-        title: "Morning Plan A Brief · WBS 03.01.1",
-        message:
-          "Today's deliverable targets 1,500 m2 of crushed granite stone base compaction between KM 15+800 and KM 16+400.",
-        metadata: {
-          wbsItemId: boqStoneBase.id,
-          wbsCode: boqStoneBase.wbsCode,
-        } as unknown as Prisma.InputJsonValue,
-        createdAt: new Date(nowMs - 1000 * 60 * 60 * 24 * 14), // 2w ago
       },
     ],
   });
@@ -1196,49 +1068,19 @@ async function runSeed(): Promise<void> {
       activatedAt: new Date(Date.now() - 120 * 24 * 3600 * 1000),
       createdByUserId: monitorUser.id,
       activatedByUserId: monitorUser.id,
-      contractorExecutionMode: "SINGLE_CONTRACTOR",
       contractors: {
         create: {
           organizationId: contractorOrg.id,
           tradeCategory: "Civil and electrical works",
           tradeCode: "GEN",
-          isMainContractor: true,
-          allowFieldReporting: true,
         },
       },
     },
     include: { contractors: true },
   });
-  const abjContractorId = abjProject.contractors[0].id;
 
-  await prisma.projectJoinCode.create({
-    data: {
-      projectId: abjProject.id,
-      roleId: contractorEngineerMobileRole.id,
-      projectContractorId: abjContractorId,
-      code: `ABJ-108-CON-${randomJoinCodeSegment()}`,
-    },
-  });
-
-  const abjJoinCow = await prisma.projectJoinCode.create({
-    data: {
-      projectId: abjProject.id,
-      roleId: residentCowMobileRole.id,
-      code: `ABJ-108-COW-${randomJoinCodeSegment()}`,
-    },
-  });
-
-  // Assign Contractor User explicitly to LKK-402 & ABJ-108 (since Contractor lacks projects:view_all_tenant)
   await prisma.userProjectAssignment.createMany({
     data: [
-      {
-        userId: contractorUser.id,
-        projectId: lkkProject.id,
-      },
-      {
-        userId: contractorUser.id,
-        projectId: abjProject.id,
-      },
       // The monitor sees every project on the web through projects:view_all_tenant; explicit
       // assignments make the mobile project list independent of that permission.
       { userId: monitorUser.id, projectId: lkkProject.id },
@@ -1305,22 +1147,20 @@ async function runSeed(): Promise<void> {
     },
   });
 
-  const abjCowSession = await prisma.fieldAgentSession.create({
-    data: {
-      projectId: abjProject.id,
-      joinCodeId: abjJoinCow.id,
-      roleId: residentCowMobileRole.id,
-      roleNameSnapshot: residentCowMobileRole.name,
-      fieldPersonaType: residentCowMobileRole.fieldPersonaType,
-      assuranceWeight: residentCowMobileRole.assuranceWeight,
-      agentFullName: "Engr. Hauwa Bello (Resident CoW)",
-      agentPhoneNumber: "+2348031177420",
-      deviceId: "ANDROID-COW-ABJ-2201",
-      deviceModel: "Samsung Galaxy A35",
-      deviceOs: "Android 14",
-      lastSyncAt: new Date(),
-    },
+  const abjCowAccount = await seedFieldAccount({
+    tenantId: defaultTenant.id,
+    organizationId: monitorOrg.id,
+    email: "resident.abj@insite.ng",
+    fullName: "Engr. Hauwa Bello (Resident CoW)",
+    phoneNumber: "+2348031177420",
+    role: residentCowMobileRole,
+    projectIds: [abjProject.id],
+    deviceId: "ANDROID-COW-ABJ-2201",
+    deviceModel: "Samsung Galaxy A35",
+    deviceOs: "Android 14",
+    passwordHash: defaultPasswordHash,
   });
+  const abjCowSession = await prisma.fieldAgentSession.findUniqueOrThrow({ where: { id: abjCowAccount.sessionIds[abjProject.id] } });
 
   const abjEvidence = [
     {
@@ -1368,7 +1208,7 @@ async function runSeed(): Promise<void> {
     projectId: abjProject.id,
     actorType: "WEB_USER",
     actorId: monitorUser.id,
-    actorDisplayName: `${monitorUser.fullName} (QSRBN #3842)`,
+    actorDisplayName: `${monitorUser.fullName} (${monitorRole.name})`,
     action: "PROJECT_CREATED",
     summaryText:
       "Established baseline for Idu Industrial Park 15MW Solar & Substation (ABJ-108) with 350m Radial Geofence.",
@@ -1381,11 +1221,8 @@ async function runSeed(): Promise<void> {
     lenderOrgId: lenderOrg.id,
     civilContractorOrgId: contractorOrg.id,
     monitorUserId: monitorUser.id,
-    contractorUserId: contractorUser.id,
-    contractorRoleId: contractorRole.id,
     passwordHash: defaultPasswordHash,
     residentRole: residentCowMobileRole,
-    contractorEngineerRole: contractorEngineerMobileRole,
   });
 
   await seedPhase7({
@@ -1400,10 +1237,10 @@ async function runSeed(): Promise<void> {
     residentRole: residentCowMobileRole,
   });
 
-  // Phase 9: schedule baselines (one project on schedule, one four weeks behind with a pending revision).
-  await seedPhase9();
+  // Phase 9 schedule baselines and revisions were removed in redesign R2d: LKK-402 and ABJ-108 get
+  // sprints and facility units in seedR2 (behind and on track).
 
-  // Phase 10: one project in handover (pending link), one in its defects liability period.
+  // Phase 10: one project in handover (response to record), one in its defects liability period.
   await seedPhase10({
     tenantId: defaultTenant.id,
     monitorOrgId: monitorOrg.id,
@@ -1414,7 +1251,7 @@ async function runSeed(): Promise<void> {
 
   // Phase 11: a second tenant run as a programme (delivery models, organisation hierarchy, terminology).
   await seedPhase11({ passwordHash: defaultPasswordHash });
-  // Phase 12: registration bodies, programme credential policy and fixed payment milestones.
+  // Phase 12 (R1d: registration removed): PRG-102 bills and the programme types' retention defaults.
   await seedPhase12({ passwordHash: defaultPasswordHash });
   // Phase 14: checklist templates, reporting streams, inspections, findings and a supervisor over the limit.
   await seedPhase14();
@@ -1425,32 +1262,28 @@ async function runSeed(): Promise<void> {
   await seedPhase15();
   // Phase 16: the demo programme (a project at every stage), KPI targets, demo logins and KPI snapshots.
   await seedPhase16();
+  // Redesign R2: facility catalogue, scope and sprints.
+  await seedR2();
+  // Redesign R3: form library for every tenant, visit forms on the programme types, a customised Toilet.
+  await seedR3();
 
   console.log("✅ Seed complete!");
   console.log(
     "   • Super Admin Login: admin@insite.ng      / Password123! (Platform & Tenant Super Admin)",
   );
   console.log(
-    "   • Monitor Login:     monitor@insite.ng    / Password123! (QSRBN #3842; also mobile sign-in as Monitor Inspector)",
+    "   • Monitor Login:     monitor@insite.ng    / Password123! (also mobile sign-in as Monitor Inspector)",
   );
   console.log(
-    "   • Lender Login:      lender@insite.ng     / Password123! (ICAN #MB/049120)",
+    "   • Lender Login:      lender@insite.ng     / Password123! (funder / finance officer)",
   );
   console.log(
     "   • Lender Tech:       lto@insite.ng        / Password123! (funder officer; records payments, raises report queries)",
   );
   console.log(
-    "   • Contractor Login:  contractor@insite.ng / Password123! (COREN #R.49201)",
-  );
-  console.log(
     "   • Programme tenant:  programme.admin@insite.ng (tenant admin); flagship.admin@, north.admin@, south.admin@ insite.ng (Organisation Administrators) / Password123!",
   );
-  const seededCodes = await prisma.projectJoinCode.findMany({
-    where: { isActive: true },
-    orderBy: { code: "asc" },
-    select: { code: true },
-  });
   console.log(
-    `   • Mobile Join Codes: ${seededCodes.map((c) => c.code).join(", ")}`,
+    "   • Field accounts (mobile sign-in): resident.cow@, field.officer@, resident.abj@ insite.ng / Password123!",
   );
 }

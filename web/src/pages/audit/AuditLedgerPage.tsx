@@ -15,7 +15,7 @@ import {
 } from "../../components/table";
 import Drawer from "../../components/Drawer";
 import Loader from "../../components/Loader";
-import { SitePresencePanel } from "../../components/SitePresencePanel";
+import { WorkdayReportsPanel } from "../../components/WorkdayReportsPanel";
 import { ReportingCadencePanel } from "../../components/ReportingCadencePanel";
 import { ShieldCheck, X, FileText, User, Calendar, Tag } from "lucide-react";
 
@@ -26,20 +26,21 @@ interface AuditLedgerPageProps {
 }
 
 export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
-  const { hasAnyPermission } = useAuth();
-  const canSeePresence = hasAnyPermission("reports:view_all", "presence:view_telemetry");
+  const { hasPermission } = useAuth();
+  const canSeeReports = hasPermission("reports:view_all");
   const [searchParams] = useSearchParams();
+  // The reports tab keeps the URL value "presence": server notifications deep-link to ?tab=presence.
   const initialTab =
-    searchParams.get("tab") === "presence" && canSeePresence ? "presence" : "ledger";
+    searchParams.get("tab") === "presence" && canSeeReports ? "presence" : "ledger";
   const initialReportId = searchParams.get("reportId");
   const initialWbsItemId = searchParams.get("wbsItemId");
   const [activeTab, setActiveTab] = useState<"ledger" | "tenant" | "presence">(initialTab);
 
   useEffect(() => {
-    if (searchParams.get("tab") === "presence" && canSeePresence) {
+    if (searchParams.get("tab") === "presence" && canSeeReports) {
       setActiveTab("presence");
     }
-  }, [searchParams, canSeePresence]);
+  }, [searchParams, canSeeReports]);
 
   const projectLedger = useProjectAuditTrailQuery(project.id, activeTab === "ledger");
   const tenantLedger = useTenantAuditTrailQuery(activeTab === "tenant");
@@ -207,7 +208,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
         >
           Tenant Governance Ledger
         </button>
-        {canSeePresence && (
+        {canSeeReports && (
         <button
           type="button"
           onClick={() => setActiveTab("presence")}
@@ -217,7 +218,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
               : "text-slate-600 hover:text-slate-900"
           }`}
         >
-          Daily Reports &amp; Site Telemetry
+          Field reports
         </button>
         )}
       </div>
@@ -225,7 +226,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
       {activeTab === "presence" ? (
         <div className="space-y-5">
           <ReportingCadencePanel projectId={project.id} />
-          <SitePresencePanel
+          <WorkdayReportsPanel
             projectId={project.id}
             initialReportId={initialReportId}
             initialWbsItemId={initialWbsItemId}

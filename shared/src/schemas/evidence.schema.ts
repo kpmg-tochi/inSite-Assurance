@@ -105,7 +105,6 @@ export const CaptureDtoSchema = z.object({
   geofenceStatus: GeofenceStatusEnum.nullable().optional(),
   /** Metres outside the boundary; 0 inside. */
   distanceOutsideMeters: z.number().nullable().optional(),
-  chainageLabel: z.string().nullable(),
   distanceFromSiteMeters: z.number().nullable(),
   /** true = valid device signature, false = invalid, null = unsigned or no key registered. */
   signatureVerified: z.boolean().nullable(),

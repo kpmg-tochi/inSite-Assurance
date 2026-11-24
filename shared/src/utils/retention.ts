@@ -105,7 +105,7 @@ export function isPhaseTransitionAllowed(from: ConstructionPhase, to: Constructi
   return CONSTRUCTION_PHASE_TRANSITIONS[from].includes(to);
 }
 
-/** Phases in which construction work (IPCs, briefs, reporting obligations) has stopped. */
+/** Phases in which construction work (reporting obligations) has stopped. */
 export function isPostConstructionPhase(phase: ConstructionPhase | string | null | undefined): boolean {
   return phase === 'RETENTION_PERIOD' || phase === 'COMPLETED_CLOSED';
 }

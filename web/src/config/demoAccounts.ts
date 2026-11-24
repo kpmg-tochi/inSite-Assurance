@@ -41,15 +41,6 @@ export const SEEDED_DEMO_ACCOUNTS = [
     credential: "COREN #R.33017",
     initials: "IE",
   },
-  {
-    roleCode: "CONTRACTOR",
-    roleTitle: "Main Contractor (Claimant)",
-    name: "Engr. Musa Danladi",
-    organization: "J&S Civil Eng.",
-    email: "contractor@insite.ng",
-    credential: "COREN #R.49201",
-    initials: "MD",
-  },
 ];
 
 export type DemoAccount = (typeof SEEDED_DEMO_ACCOUNTS)[number];

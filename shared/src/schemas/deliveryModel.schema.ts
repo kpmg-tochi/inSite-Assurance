@@ -99,7 +99,7 @@ export const ProjectTypeSummarySchema = z.object({
 });
 export type ProjectTypeSummary = z.infer<typeof ProjectTypeSummarySchema>;
 
-/** Directory, portfolio map and executive matrix filters (Phase 11). */
+/** Directory and portfolio map filters (Phase 11). */
 export const ProjectListFiltersSchema = z.object({
   projectTypeId: z.string().uuid().optional(),
   regionId: z.string().uuid().optional(),

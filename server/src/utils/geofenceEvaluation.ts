@@ -1,7 +1,7 @@
 import { GeofenceStatus, ProjectGeofenceSchema, verifyPointAgainstGeofence } from '@insite/shared';
 
 /**
- * The one geofence evaluation used by captures, telemetry and workday reports (Phase 4), with the
+ * The one geofence evaluation used by captures and workday reports (Phase 4), with the
  * project's tolerance band (Phase 6).
  *
  * The result is always the server's own computation. When there is no fix, the stored geofence is
@@ -16,9 +16,6 @@ export interface GeofenceEvaluation {
   geofenceStatus: GeofenceStatus | null;
   /** Metres outside the boundary (0 when inside); null when not evaluated. */
   distanceOutsideMeters: number | null;
-  chainageKm: number | null;
-  chainageLabel: string | null;
-  corridorOffsetMeters: number | null;
   distanceFromSiteMeters: number | null;
   flag:
     | 'LOCATION_UNAVAILABLE'
@@ -32,9 +29,6 @@ const UNKNOWN = {
   isWithinGeofence: null,
   geofenceStatus: null,
   distanceOutsideMeters: null,
-  chainageKm: null,
-  chainageLabel: null,
-  corridorOffsetMeters: null,
   distanceFromSiteMeters: null,
 } as const;
 
@@ -71,9 +65,6 @@ export function evaluateGeofence(
       isWithinGeofence: result.status !== 'OUTSIDE',
       geofenceStatus: result.status,
       distanceOutsideMeters: result.distanceOutsideMeters,
-      chainageKm: result.chainageKm,
-      chainageLabel: result.chainageFormatted,
-      corridorOffsetMeters: result.corridorOffsetMeters,
       distanceFromSiteMeters: result.distanceFromCenterOrLineMeters,
       flag:
         result.status === 'OUTSIDE'

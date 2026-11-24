@@ -4,6 +4,8 @@ import os from 'os';
 import path from 'path';
 import { Prisma } from '@prisma/client';
 import {
+  SCHEDULE_STATUS_META,
+  ScheduleStatusValue,
   ClosurePackExportDto,
   CONSTRUCTION_PHASE_LABELS,
   INSPECTION_VISIT_TYPE_LABELS,
@@ -199,7 +201,7 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
       projectType: { select: { name: true } },
       region: { select: { name: true } },
       beneficiaries: { select: { name: true, isPrimary: true } },
-      contractors: { include: { organization: { select: { name: true } } }, orderBy: [{ isMainContractor: 'desc' }, { createdAt: 'asc' }] },
+      contractors: { include: { organization: { select: { name: true } } }, orderBy: [{ createdAt: 'asc' }] },
     },
   });
   const currency = project.tenant.defaultCurrency;
@@ -387,7 +389,7 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
     kpis: [
       ['Progress', `${Number(project.certifiedProgressPct)}%`],
       ['Paid to date (net of retention)', money(project.disbursedToDateNgn, currency)],
-      ['Schedule', project.scheduleVarianceWorkdays !== null ? `${project.scheduleStatus ?? ''} (${project.scheduleVarianceWorkdays} working days)` : '—'],
+      ['Schedule', project.scheduleStatus ? SCHEDULE_STATUS_META[project.scheduleStatus as ScheduleStatusValue]?.label ?? project.scheduleStatus : '—'],
       ['Contract milestones done', `${milestones.filter((m) => m.status === 'DONE' || m.status === 'WAIVED').length} of ${milestones.length}`],
       ['Site inspections', String(inspections.length)],
       ['Open inspection findings', String(findingsOpen)],

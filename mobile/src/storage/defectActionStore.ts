@@ -4,7 +4,7 @@ import { kickOutbox } from './outbox/outboxProcessor';
 import { defectActionBody, type DefectActionPayload } from '../utils/defects';
 
 /**
- * Phase 10: a defect action (mark fixed, or verify/reopen) queued in the one outbox. The action
+ * Phase 10: a defect verify action (close with photos, or reopen) queued in the one outbox. The action
  * lives in the outbox row's payload; it waits for every photo it links that is still being sent,
  * so the server always finds the captures by their clientCaptureId.
  */

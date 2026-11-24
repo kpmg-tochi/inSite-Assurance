@@ -9,14 +9,14 @@ import {
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
-import { syncParticipantForSession } from '../mobilization/participants.service';
 import { ownedByOrganizationTreeWhere } from '../organizations/hierarchy';
 
 /**
- * Phase 5: provisioned mobile accounts. A signed-in user works in the field under one
- * pre-provisioned role and gets one FieldAgentSession per (user, project, device), created lazily on
- * the first project-scoped request. The session stays the unit of field provenance, so evidence,
- * reports, chat and telemetry services do not change.
+ * Phase 5: provisioned mobile accounts, the only way onto the mobile app since redesign R1d (join
+ * codes are deleted, decision P2). A signed-in user works in the field under one mobile role and gets
+ * one FieldAgentSession per (user, project, device), created lazily on the first project-scoped
+ * request. The session stays the unit of field provenance, so evidence, reports and chat
+ * services do not change.
  *
  * This module must not import the auth middleware (the middleware imports it).
  */
@@ -37,21 +37,18 @@ export const MOBILE_USER_INCLUDE = {
 export type MobileUserRow = Prisma.UserGetPayload<{ include: typeof MOBILE_USER_INCLUDE }>;
 type RoleRow = MobileUserRow['role'];
 
-function isProvisionedMobileRole(role: {
-  surface: string;
-  onboardingMode: string;
-} | null | undefined): boolean {
-  return Boolean(role && role.surface !== 'WEB' && role.onboardingMode === 'PROVISIONED_ACCOUNT');
+function isMobileRole(role: { surface: string } | null | undefined): boolean {
+  return Boolean(role && role.surface !== 'WEB');
 }
 
 /**
- * The role a user works under on mobile: the separate mobile role if set and still provisioned,
- * otherwise the main role if it is itself a provisioned mobile role. The mode is checked on every
- * call, so switching a role back to join codes removes mobile access straight away.
+ * The role a user works under on mobile: the separate mobile role if set and still mobile-capable,
+ * otherwise the main role if it is itself a mobile role. Checked on every call, so making a role
+ * web-only removes mobile access straight away.
  */
 export function effectiveMobileRole(user: { role: RoleRow; mobileRole: RoleRow | null }): RoleRow | null {
-  if (user.mobileRole && isProvisionedMobileRole(user.mobileRole)) return user.mobileRole;
-  if (isProvisionedMobileRole(user.role)) return user.role;
+  if (user.mobileRole && isMobileRole(user.mobileRole)) return user.mobileRole;
+  if (isMobileRole(user.role)) return user.role;
   return null;
 }
 
@@ -74,21 +71,15 @@ export function roleSummary(role: RoleRow): MobileRoleSummary {
  */
 export function mobileProjectVisibilityWhere(user: MobileUserRow): Prisma.ProjectWhereInput {
   const mainPermissions = user.role.rolePermissions.map((rp) => rp.permission.key);
-  // Phase 7: a contractor-executor account does not see projects that switched contractor field
-  // reporting off (no row means the default, which allows it).
-  const contractorGate: Prisma.ProjectWhereInput =
-    effectiveMobileRole(user)?.fieldPersonaType === 'CONTRACTOR_EXECUTOR'
-      ? { NOT: { processConfig: { allowContractorFieldReporting: false } } }
-      : {};
   if (mainPermissions.includes('projects:view_all_tenant')) {
-    return { tenantId: user.tenantId, status: 'ACTIVE', ...contractorGate };
+    return { tenantId: user.tenantId, status: 'ACTIVE' };
   }
   const assigned: Prisma.ProjectWhereInput = { userAssignments: { some: { userId: user.id } } };
   // Phase 11: same organisation-tree rule as the web (projectAccessBranch).
   const access = mainPermissions.includes('projects:view_organization_tree')
     ? { OR: [assigned, ownedByOrganizationTreeWhere(user.organizationId)] }
     : assigned;
-  return { tenantId: user.tenantId, status: 'ACTIVE', AND: [access], ...contractorGate };
+  return { tenantId: user.tenantId, status: 'ACTIVE', AND: [access] };
 }
 
 export async function listMobileProjects(user: MobileUserRow): Promise<MobileProjectSummary[]> {
@@ -163,23 +154,13 @@ export async function findOrCreateProvisionedSession(params: {
 
   let session = await prisma.fieldAgentSession.findUnique({ where });
   if (!session) {
-    // A contractor-side account works for its organisation's contractor package (Phase 6).
-    const contractor =
-      role.fieldPersonaType === 'CONTRACTOR_EXECUTOR'
-        ? await prisma.projectContractor.findFirst({
-            where: { projectId, organizationId: user.organizationId },
-            select: { id: true },
-          })
-        : null;
     try {
       session = await prisma.$transaction(async (tx) => {
         const created = await tx.fieldAgentSession.create({
           data: {
             projectId,
-            origin: 'PROVISIONED_ACCOUNT',
             userId: user.id,
             mobileDeviceId: device.id,
-            projectContractorId: contractor?.id ?? null,
             roleId: role.id,
             roleNameSnapshot: role.name,
             fieldPersonaType: role.fieldPersonaType,
@@ -193,8 +174,6 @@ export async function findOrCreateProvisionedSession(params: {
             devicePublicKeyAlg: device.publicKeyAlg || DEVICE_SIGNATURE_ALGORITHM,
             devicePublicKeyId: device.publicKeyId,
             devicePublicKeyAddedAt: new Date(),
-            // Decision G: the account is the identity, so no assurance step.
-            assuranceStatus: 'APPROVED',
             lastSyncAt: new Date(),
           },
         });
@@ -206,7 +185,6 @@ export async function findOrCreateProvisionedSession(params: {
           action: 'FIELD_AGENT_JOINED',
           summaryText: `${user.fullName} started work on this project from a signed-in account as ${role.name}.`,
           payload: {
-            origin: 'PROVISIONED_ACCOUNT',
             userId: user.id,
             roleId: role.id,
             roleName: role.name,
@@ -214,8 +192,6 @@ export async function findOrCreateProvisionedSession(params: {
             deviceId: device.deviceId,
           },
         });
-        // Phase 8: the expected participant for this account is now registered and ready.
-        await syncParticipantForSession(tx, created.id);
         return created;
       });
     } catch (error) {
@@ -244,7 +220,7 @@ export function requireEffectiveMobileRole(user: MobileUserRow): RoleRow {
   const role = effectiveMobileRole(user);
   if (!role) {
     throw new AppError(
-      'Your account does not have mobile access. Ask your administrator to give you a mobile role, or join with a project code.',
+      'Your account does not have mobile access. Ask your administrator to give you a mobile role.',
       403,
       'NO_MOBILE_ACCESS'
     );

@@ -10,10 +10,8 @@ export type OutboxKind =
   | 'REPORT'
   | 'REVALIDATION'
   | 'CHAT_MESSAGE'
-  | 'TELEMETRY'
   | 'INCIDENT'
-  | 'ASSURANCE'
-  // Phase 10: mark a defect fixed, or verify/reopen it (payload carries the action).
+  // Phase 10: assign, verify (close with photos or reopen) or reject a defect (payload carries the action).
   | 'DEFECT_ACTION'
   // Phase 14: a confirmed site inspection (waits for its photos), and a finding resolution.
   | 'SITE_INSPECTION'
@@ -171,8 +169,9 @@ export const SESSION_BOUND_KINDS: ReadonlySet<OutboxKind> = new Set<OutboxKind>(
 ]);
 
 /**
- * When a new session starts on a project (rejoin), an unsent evidence row queued under any other
- * session, or before sessions were recorded, is held for the person to remove or update.
+ * When a project's earlier session has ended (a pre-R1d join-code session), an unsent evidence row
+ * queued under any other session, or before sessions were recorded, is held for the person to
+ * remove or update.
  */
 export function shouldHoldOnNewSession(
   row: Pick<OutboxRow, 'kind' | 'status'> & { sessionKey: string | null },
@@ -182,7 +181,3 @@ export function shouldHoldOnNewSession(
   if (!SESSION_BOUND_KINDS.has(row.kind)) return false;
   return row.sessionKey !== currentSessionKey;
 }
-
-/** Kinds sent as one request for many rows. */
-export const BATCHED_KINDS: ReadonlySet<OutboxKind> = new Set<OutboxKind>(['TELEMETRY']);
-export const TELEMETRY_BATCH_SIZE = 500;

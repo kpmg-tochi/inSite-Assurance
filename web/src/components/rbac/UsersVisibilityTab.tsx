@@ -27,14 +27,13 @@ import {
 import Drawer from '../Drawer';
 import Loader from '../Loader';
 import { OrganizationInput } from '../organizations/OrganizationInput';
-import { RegistrationFields } from '../credentials/RegistrationFields';
 
 const isProvisionedRole = (role: RoleDto | undefined) =>
-  Boolean(role && role.surface !== 'WEB' && role.onboardingMode === 'PROVISIONED_ACCOUNT');
+  Boolean(role && role.surface !== 'WEB');
 
 /**
- * Mobile access (Phase 5): a separate pre-provisioned mobile role, or none. When the main role is
- * itself a pre-provisioned mobile role, it already gives mobile sign-in.
+ * Mobile access (Phase 5): a separate mobile role, or none. When the main role is
+ * itself a mobile role, it already gives mobile sign-in.
  */
 function MobileAccessFields(props: {
   provisionedRoles: RoleDto[];
@@ -67,8 +66,8 @@ function MobileAccessFields(props: {
         </select>
         <p className="text-[11px] text-slate-500 mt-1">
           {props.provisionedRoles.length === 0
-            ? 'No role is pre-provisioned yet. In Roles, set a mobile role to "Pre-provisioned account" first.'
-            : 'People with a mobile role sign in to the app with this email and password and see every assigned project. No join code or identity check.'}
+            ? 'No mobile role yet. In Roles, create a role for the mobile app first.'
+            : 'People with a mobile role sign in to the app with this email and password and see every assigned project.'}
         </p>
       </div>
       <div>
@@ -112,8 +111,6 @@ export function UsersVisibilityTab() {
   const [createProjectIds, setCreateProjectIds] = useState<string[]>([]);
   const [mobileRoleId, setMobileRoleId] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [registrationBodyCode, setRegistrationBodyCode] = useState('');
-  const [registrationNumber, setRegistrationNumber] = useState('');
 
   // Edit User Assignments State
   const [editRoleId, setEditRoleId] = useState('');
@@ -121,8 +118,6 @@ export function UsersVisibilityTab() {
   const [editProjectIds, setEditProjectIds] = useState<string[]>([]);
   const [editMobileRoleId, setEditMobileRoleId] = useState('');
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
-  const [editRegistrationBodyCode, setEditRegistrationBodyCode] = useState('');
-  const [editRegistrationNumber, setEditRegistrationNumber] = useState('');
 
   const openCreateModal = () => {
     setFullName('');
@@ -135,8 +130,6 @@ export function UsersVisibilityTab() {
     setCreateProjectIds([]);
     setMobileRoleId('');
     setPhoneNumber('');
-    setRegistrationBodyCode('');
-    setRegistrationNumber('');
     setCreateDrawerOpen(true);
   };
 
@@ -147,8 +140,6 @@ export function UsersVisibilityTab() {
     setEditProjectIds(target.projectAssignments.map((a) => a.projectId));
     setEditMobileRoleId(target.mobileRoleId ?? '');
     setEditPhoneNumber(target.phoneNumber ?? '');
-    setEditRegistrationBodyCode(target.professionalRegistrationBodyCode ?? '');
-    setEditRegistrationNumber(target.professionalRegistrationNumber ?? '');
   };
 
   const toggleProject = (
@@ -182,8 +173,6 @@ export function UsersVisibilityTab() {
       organizationCategory,
       mobileRoleId: mobileRoleId || null,
       phoneNumber: phoneNumber.trim() || null,
-      professionalRegistrationBodyCode: registrationBodyCode || null,
-      professionalRegistrationNumber: registrationNumber.trim() || null,
       projectIds: createProjectIds,
     });
     setCreateDrawerOpen(false);
@@ -199,8 +188,6 @@ export function UsersVisibilityTab() {
         isActive: editIsActive,
         mobileRoleId: editMobileRoleId || null,
         phoneNumber: editPhoneNumber.trim() || null,
-        professionalRegistrationBodyCode: editRegistrationBodyCode || null,
-        professionalRegistrationNumber: editRegistrationNumber.trim() || null,
         projectIds: editProjectIds,
       },
     });
@@ -479,13 +466,6 @@ export function UsersVisibilityTab() {
               onPhoneNumber={setPhoneNumber}
             />
 
-            <RegistrationFields
-              bodyCode={registrationBodyCode}
-              onBodyCode={setRegistrationBodyCode}
-              number={registrationNumber}
-              onNumber={setRegistrationNumber}
-            />
-
             <div className="pt-2">
               <div className="font-semibold text-slate-700 mb-1.5">
                 Assign Visible Projects (ignored if role has view-all)
@@ -592,13 +572,6 @@ export function UsersVisibilityTab() {
                 onMobileRoleId={setEditMobileRoleId}
                 phoneNumber={editPhoneNumber}
                 onPhoneNumber={setEditPhoneNumber}
-              />
-
-              <RegistrationFields
-                bodyCode={editRegistrationBodyCode}
-                onBodyCode={setEditRegistrationBodyCode}
-                number={editRegistrationNumber}
-                onNumber={setEditRegistrationNumber}
               />
 
               <label className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">

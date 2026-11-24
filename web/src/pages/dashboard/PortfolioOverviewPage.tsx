@@ -7,7 +7,7 @@ import {
   type ScheduleStatusValue,
   type ProjectListFilters,
 } from "@insite/shared";
-import { usePortfolioOverviewQuery } from "../../queries/projects/useContractorVerificationQueries";
+import { usePortfolioOverviewQuery } from "../../queries/projects/useProjectsQueries";
 import { DeliveryModelFilters, ProjectTypeChip } from "../../components/projects/DeliveryModelFilters";
 import { KpiCard } from "../../components/common";
 import { ScheduleBadge } from "../../components/schedule/ScheduleVarianceBadge";

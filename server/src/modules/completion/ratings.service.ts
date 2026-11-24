@@ -86,7 +86,7 @@ export async function getProjectRatings(projectId: string, webUser: WebJwtPayloa
     tenantRatingCriteria(prisma, project.tenantId),
     prisma.projectContractor.findMany({
       where: { projectId, ...(side ? { id: side.id } : {}) },
-      orderBy: [{ isMainContractor: 'desc' }, { createdAt: 'asc' }],
+      orderBy: [{ createdAt: 'asc' }],
       select: { id: true, organizationId: true, tradeCode: true, contractStatus: true, organization: { select: { name: true } } },
     }),
     prisma.contractorPerformanceRating.findMany({

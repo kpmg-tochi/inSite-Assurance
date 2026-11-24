@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { MobileBaselinePack } from '@insite/shared';
-import { cadenceCopy, cadenceSettingsFromPack, dueStatus, formatCountdown, periodAt, presenceWindowOpen } from './projectCadence';
+import { cadenceCopy, cadenceSettingsFromPack, dueStatus, formatCountdown, periodAt } from './projectCadence';
 import { personaCopy } from './personaCopy';
 
 const pack = (cadence: Partial<NonNullable<MobileBaselinePack['cadence']>> | null) =>
@@ -42,23 +42,16 @@ describe('Phase 8: mobile cadence', () => {
     assert.equal(s.timezone, 'Africa/Lagos');
   });
 
-  it('has no due time and no presence window for inspection-only projects', () => {
+  it('has no due time for inspection-only projects', () => {
     const s = cadenceSettingsFromPack(pack({ reportingCadence: 'INSPECTION_ONLY' }), 'UTC');
     assert.equal(dueStatus(periodAt(s, new Date('2026-11-18T10:00:00Z'))), null);
-    assert.equal(presenceWindowOpen(s, new Date('2026-11-18T10:00:00Z')), false);
-  });
-
-  it('opens the presence window only in working hours on working days', () => {
-    const s = cadenceSettingsFromPack(pack({}), 'UTC');
-    assert.equal(presenceWindowOpen(s, new Date('2026-11-18T10:00:00Z')), true);
-    assert.equal(presenceWindowOpen(s, new Date('2026-11-18T18:00:00Z')), false);
-    assert.equal(presenceWindowOpen(s, new Date('2026-11-22T10:00:00Z')), false);
   });
 
   it('words follow the cadence; daily wording is unchanged', () => {
     assert.equal(cadenceCopy('WEEKLY').deliverablesHeading, "This week's deliverables");
     assert.equal(cadenceCopy('WEEKLY').reportNoun, 'Weekly report');
-    assert.equal(personaCopy('CONTRACTOR_EXECUTOR', 'WEEKLY').endOfDayButton, 'Submit full report for this week');
-    assert.equal(personaCopy('CONTRACTOR_EXECUTOR').endOfDayButton, 'Submit full report for today');
+    assert.equal(personaCopy('INDEPENDENT_VERIFIER', 'WEEKLY').inboxSubtitle, 'Weekly Inspection & Verification');
+    assert.equal(personaCopy('INDEPENDENT_VERIFIER').inboxSubtitle, 'Daily Inspection & Verification');
+    assert.equal(personaCopy('INDEPENDENT_VERIFIER', 'INSPECTION_ONLY').inboxSubtitle, 'Inspection & Verification');
   });
 });

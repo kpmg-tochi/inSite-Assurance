@@ -4,12 +4,17 @@
  * documents, the kick-off (notice lead time, quorum, automatic milestones, anchor move), automatic
  * mobilisation from an in-geofence check-in, the milestone-deadlines job (one notification per
  * state, one default case per overdue milestone), the CONTRACT_DEFAULT chain with organisation
- * scope, termination side effects, replacement keeping history, programme of works, CP evidence
- * and the third chain.
+ * scope, the programme of works (a signed document since redesign R2d), termination side effects,
+ * CP evidence and the third chain.
+ *
+ * Redesign R1d: one contractor per project (no replacement) and no contractor login. The
+ * organisation-side branches (documents, programme of works) still exist until R4/R6, so a web user
+ * in the contractor's organisation is created here to keep covering them.
  *
  * Uses a project created here; dates are relative to today (the services read the clock).
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { createFieldSession, fieldAuth } from './helpers/fieldAuth';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
@@ -21,7 +26,6 @@ type PrismaClientType = typeof import('../config/prisma')['prisma'];
 
 let app: Express;
 let prisma: PrismaClientType;
-let signFieldAgentToken: typeof import('../middleware/auth.middleware')['signFieldAgentToken'];
 let jobs: typeof import('../jobs');
 let messaging: typeof import('../integrations/messaging');
 let storage: typeof import('../integrations/storage.service');
@@ -36,17 +40,12 @@ const ids = {
   other: '',
   ownerOrg: '',
   otherOrg: '',
-  subOrg: '',
   main: '',
-  sub: '',
   items: [] as string[],
-  contractorRole: '',
-  mainSession: '',
-  subSession: '',
+  officerSession: '',
   minutesDoc: '',
   cpDoc: '',
   mainCase: '',
-  replacement: '',
 };
 let sitePoint = { latitude: 0, longitude: 0 };
 
@@ -58,7 +57,7 @@ async function web(email: string) {
   }
   return { Authorization: `Bearer ${tokens[email]}` };
 }
-const field = (sessionId: string) => ({ Authorization: `Bearer ${signFieldAgentToken({ sessionId })}` });
+const field = (sessionId: string) => fieldAuth(prisma, sessionId);
 const url = (path: string) => `/api/v1/projects/${ids.project}${path}`;
 const auditCount = (action: string) => prisma.auditLog.count({ where: { projectId: ids.project, action: action as never } });
 
@@ -88,32 +87,6 @@ async function fileDocument(email: string, typeCode: string, title: string, extr
   return { res, objectKey: presign.body.data.objectKey as string, body };
 }
 
-async function session(p: { roleId: string; name: string; contractorId: string }) {
-  const { createJoinCode } = await import('../modules/projects/joinCodes.service');
-  const role = await prisma.role.findUniqueOrThrow({ where: { id: p.roleId } });
-  const project = await prisma.project.findUniqueOrThrow({ where: { id: ids.project } });
-  const contractor = await prisma.projectContractor.findUniqueOrThrow({ where: { id: p.contractorId } });
-  const code =
-    (await prisma.projectJoinCode.findFirst({ where: { projectId: ids.project, roleId: role.id, projectContractorId: p.contractorId, isActive: true } })) ??
-    (await createJoinCode(prisma, { projectId: ids.project, codePrefix: project.codePrefix, role, contractor, includeTradeCode: true }));
-  const s = await prisma.fieldAgentSession.create({
-    data: {
-      projectId: ids.project,
-      origin: 'JOIN_CODE',
-      joinCodeId: code.id,
-      roleId: p.roleId,
-      roleNameSnapshot: p.name,
-      fieldPersonaType: 'CONTRACTOR_EXECUTOR',
-      projectContractorId: p.contractorId,
-      agentFullName: p.name,
-      agentPhoneNumber: `+23480${Math.floor(Math.random() * 1e8).toString().padStart(8, '0')}`,
-      deviceId: crypto.randomUUID(),
-      assuranceStatus: 'APPROVED',
-    },
-  });
-  return s.id;
-}
-
 const TEMPLATES = [
   { key: 'kickoff-notice', label: 'Kick-off notice sent', anchor: 'KICKOFF', offsetValue: -7, completionMode: 'AUTO_KICKOFF_NOTICE_SENT' },
   { key: 'kickoff-held', label: 'Kick-off held', anchor: 'KICKOFF', offsetValue: 0, completionMode: 'AUTO_KICKOFF_QUORUM' },
@@ -126,7 +99,7 @@ const TEMPLATES = [
     offsetValue: 14,
     completionMode: 'AUTO_CONTRACTOR_ON_SITE',
     perContractor: true,
-    responsibleRoleCode: 'CONTRACTOR',
+    responsibleRoleCode: 'P13_CONTRACTOR_STAFF',
     responsibleScope: 'CONTRACTOR',
   },
 ];
@@ -134,7 +107,6 @@ const TEMPLATES = [
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
-  ({ signFieldAgentToken } = await import('../middleware/auth.middleware'));
   jobs = await import('../jobs');
   jobs.registerAllJobs();
   messaging = await import('../integrations/messaging');
@@ -153,21 +125,41 @@ before(async () => {
   const g = edo.geofenceGeoJson as { center?: { latitude: number; longitude: number } };
   sitePoint = g.center ?? { latitude: 6.3176, longitude: 5.6145 };
   const role = (code: string) => prisma.role.findFirstOrThrow({ where: { tenantId: tenant.id, code } });
-  ids.contractorRole = (await role('CONTRACTOR_ENGINEER')).id;
   const orgAdmin = await role('ORGANIZATION_ADMIN');
-  const contractorWebRole = await role('CONTRACTOR');
   const admin = await prisma.user.findUniqueOrThrow({ where: { email: 'admin@insite.ng' } });
   const monitor = await prisma.user.findUniqueOrThrow({ where: { email: 'monitor@insite.ng' } });
-  const contractorUser = await prisma.user.findUniqueOrThrow({ where: { email: 'contractor@insite.ng' } });
+  // A web user in the contractor's organisation with the old contractor permissions (see the header).
+  const contractorOrg = await prisma.organization.findFirstOrThrow({ where: { tenantId: tenant.id, name: { startsWith: 'Julius & Sons' } } });
+  const contractorStaffRole = await prisma.role.create({
+    data: {
+      tenantId: tenant.id,
+      name: 'Contractor staff (test)',
+      code: 'P13_CONTRACTOR_STAFF',
+      surface: 'WEB',
+      rolePermissions: {
+        create: ['projects:view_assigned', 'boq:view', 'documents:view', 'documents:upload'].map((key) => ({
+          permission: { connect: { key } },
+        })),
+      },
+    },
+  });
+  const contractorUser = await prisma.user.create({
+    data: {
+      tenantId: tenant.id,
+      email: 'contractor@insite.ng',
+      passwordHash: admin.passwordHash,
+      fullName: 'Contractor staff',
+      roleId: contractorStaffRole.id,
+      organizationId: contractorOrg.id,
+    },
+  });
 
   ids.ownerOrg = (await prisma.organization.create({ data: { tenantId: tenant.id, name: 'P13 Owner Authority', categories: ['CLIENT_OWNER'] } })).id;
   ids.otherOrg = (await prisma.organization.create({ data: { tenantId: tenant.id, name: 'P13 Other Authority', categories: ['CLIENT_OWNER'] } })).id;
-  ids.subOrg = (await prisma.organization.create({ data: { tenantId: tenant.id, name: 'P13 Roofing Ltd', categories: ['CONTRACTOR'] } })).id;
   const mkUser = (email: string, fullName: string, roleId: string, organizationId: string) =>
     prisma.user.create({ data: { tenantId: tenant.id, email, passwordHash: admin.passwordHash, fullName, roleId, organizationId } });
   const exec = await mkUser('p13.exec@insite.ng', 'Owner Executive', orgAdmin.id, ids.ownerOrg);
   const exec2 = await mkUser('p13.exec2@insite.ng', 'Other Executive', orgAdmin.id, ids.otherOrg);
-  const subco = await mkUser('p13.subco@insite.ng', 'Roofing Manager', contractorWebRole.id, ids.subOrg);
 
   const config = ProjectTypeConfigSchema.parse({
     contractMilestones: TEMPLATES,
@@ -187,7 +179,6 @@ before(async () => {
       geofenceGeoJson: edo.geofenceGeoJson ?? undefined,
       geofenceToleranceMeters: edo.geofenceToleranceMeters,
       totalBudgetNgn: 1_000_000,
-      contractorExecutionMode: 'MULTI_PRIME_SEPARATE_IPC',
       owningOrganizationId: ids.ownerOrg,
       monitorOrganizationId: monitor.organizationId,
       contractAwardDate: addDays(today, -20),
@@ -206,20 +197,18 @@ before(async () => {
     },
   });
   ids.project = project.id;
-  for (const userId of [monitor.id, contractorUser.id, exec.id, exec2.id, subco.id]) {
+  for (const userId of [monitor.id, contractorUser.id, exec.id, exec2.id]) {
     await prisma.userProjectAssignment.create({ data: { userId, projectId: project.id } });
   }
   ids.main = (
     await prisma.projectContractor.create({
-      data: { projectId: project.id, organizationId: contractorUser.organizationId, tradeCategory: 'Civil works', tradeCode: 'CIV', isMainContractor: true },
+      data: { projectId: project.id, organizationId: contractorUser.organizationId, tradeCategory: 'Civil works', tradeCode: 'CIV' },
     })
   ).id;
-  ids.sub = (await prisma.projectContractor.create({ data: { projectId: project.id, organizationId: ids.subOrg, tradeCategory: 'Roofing', tradeCode: 'ROF' } })).id;
-  for (const [n, pc] of [[1, ids.main], [2, ids.sub]] as const) {
+  for (const n of [1, 2]) {
     const item = await prisma.boqItem.create({
       data: {
         projectId: project.id,
-        projectContractorId: pc,
         wbsCode: `0${n}.01`,
         section: 'BILL 1',
         description: `Block ${n}`,
@@ -232,8 +221,10 @@ before(async () => {
     ids.items.push(item.id);
   }
   await prisma.$transaction((tx) => syncContractMilestones(tx, project.id));
-  ids.mainSession = await session({ roleId: ids.contractorRole, name: 'Main Engineer', contractorId: ids.main });
-  ids.subSession = await session({ roleId: ids.contractorRole, name: 'Roofing Engineer', contractorId: ids.sub });
+  // An M&E officer's field account on the project (monitoring organisation, not the contractor).
+  ids.officerSession = (
+    await createFieldSession(prisma, { projectId: project.id, roleCode: 'MONITOR_INSPECTOR', name: 'Officer Bisi', organizationId: monitor.organizationId })
+  ).sessionId;
 });
 
 after(async () => {
@@ -243,10 +234,9 @@ after(async () => {
 describe('Phase 13', () => {
   it('generates milestones from the type (one per contractor) with dates from the anchors', async () => {
     const m = await milestones();
-    assert.equal(m.milestones.length, 6);
+    assert.equal(m.milestones.length, 5);
     assert.equal(find(m, 'kickoff-notice').dueDate, addDays(today, 13));
     assert.equal(find(m, 'mobilised', ids.main).dueDate, addDays(today, 34));
-    assert.equal(find(m, 'mobilised', ids.sub).dueDate, addDays(today, 34));
   });
 
   it('contract step on a live project: moving the kick-off needs milestones:manage and a reason, and recomputes', async () => {
@@ -270,7 +260,7 @@ describe('Phase 13', () => {
     assert.deepEqual(ok.body.data.contract.requiredAnchors, ['KICKOFF']);
     const m = await milestones();
     assert.equal(find(m, 'kickoff-notice').dueDate, addDays(today, 3));
-    assert.equal(find(m, 'mobilised', ids.sub).dueDate, addDays(today, 24));
+    assert.equal(find(m, 'mobilised', ids.main).dueDate, addDays(today, 24));
     assert.equal(await auditCount('MILESTONE_DATES_RECOMPUTED'), before + 1);
   });
 
@@ -288,9 +278,7 @@ describe('Phase 13', () => {
       .send({ documentTypeId: cp.res.body.data.documentType.id, title: 'Same file', objectKey: cp.objectKey });
     assert.equal(again.status, 409);
 
-    // The contractor side: shared types and its own uploads only.
-    const own = await fileDocument('contractor@insite.ng', 'MOBILISATION_AGREEMENT', 'Our mobilisation agreement', { projectContractorId: ids.sub });
-    assert.equal(own.res.status, 403, 'cannot file for another contractor');
+    // The contractor's organisation: shared types and its own uploads only.
     const own2 = await fileDocument('contractor@insite.ng', 'MOBILISATION_AGREEMENT', 'Our mobilisation agreement');
     assert.equal(own2.res.status, 201, JSON.stringify(own2.res.body));
     assert.equal(own2.res.body.data.projectContractorId, ids.main);
@@ -299,8 +287,6 @@ describe('Phase 13', () => {
     assert.equal((await request(app).get(url(`/documents/${ids.cpDoc}`)).set(await web('contractor@insite.ng'))).status, 404);
     const media = await request(app).get(url('/media')).query({ key: cp.objectKey, format: 'json' }).set(await web('contractor@insite.ng'));
     assert.equal(media.status, 400, 'a hidden document is not served through the media endpoint');
-    const subList = await request(app).get(url('/documents')).set(await web('p13.subco@insite.ng'));
-    assert.deepEqual(subList.body.data.map((d: { title: string }) => d.title), ['Kick-off minutes']);
     const dl = await request(app).get(url(`/documents/${ids.minutesDoc}/download`)).set(await web('contractor@insite.ng'));
     assert.equal(dl.status, 200);
     assert.match(dl.body.data.fileName, /-v1\.pdf$/);
@@ -398,29 +384,18 @@ describe('Phase 13', () => {
     assert.equal((await request(app).post(url('/kickoff/held')).set(h).send({ heldAt: new Date().toISOString(), attendance: [] })).body.error.code, 'KICKOFF_ALREADY_HELD');
   });
 
-  it('the first in-geofence check-in of a contractor completes its mobilisation milestone only', async () => {
-    const res = await request(app)
-      .post(url('/telemetry'))
-      .set(field(ids.subSession))
-      .send({ pings: [{ clientPingId: crypto.randomUUID(), ...sitePoint, accuracyMeters: 5, isMocked: false, pingSource: 'MANUAL_CHECKIN', capturedAt: new Date().toISOString() }] });
-    assert.equal(res.status, 201, JSON.stringify(res.body));
-    const m = await milestones();
-    assert.equal(find(m, 'mobilised', ids.sub).status, 'DONE');
-    assert.notEqual(find(m, 'mobilised', ids.main).status, 'DONE');
-    // Idempotent: a second ping changes nothing.
-    const completions = await auditCount('MILESTONE_COMPLETED');
-    await request(app)
-      .post(url('/telemetry'))
-      .set(field(ids.subSession))
-      .send({ pings: [{ clientPingId: crypto.randomUUID(), ...sitePoint, accuracyMeters: 5, isMocked: false, pingSource: 'MANUAL_CHECKIN', capturedAt: new Date().toISOString() }] });
-    assert.equal(await auditCount('MILESTONE_COMPLETED'), completions);
+  it('contractor on site is confirmed by an officer, not by telemetry (R1e)', async () => {
+    const mobilised = find(await milestones(), 'mobilised', ids.main);
+    assert.notEqual(mobilised.status, 'DONE');
+    assert.equal((mobilised as unknown as { completionMode: string }).completionMode, 'AUTO_CONTRACTOR_ON_SITE');
+    const telemetry = await request(app).post(url('/telemetry')).set(await field(ids.officerSession)).send({ pings: [] });
+    assert.equal(telemetry.status, 404, 'the telemetry endpoint is gone');
     const compliance = await request(app).get(url('/mobilisation-compliance')).set(await web('monitor@insite.ng'));
-    const sub = compliance.body.data.find((r: { projectContractorId: string }) => r.projectContractorId === ids.sub);
-    const main = compliance.body.data.find((r: { projectContractorId: string }) => r.projectContractorId === ids.main);
-    assert.equal(sub.onSite, true);
-    assert.deepEqual(sub.missingDocuments.map((d: { code: string }) => d.code), ['MOBILISATION_AGREEMENT']);
+    assert.equal(compliance.body.data.length, 1);
+    const main = compliance.body.data[0];
+    assert.equal(main.projectContractorId, ids.main);
     assert.equal(main.onSite, false);
-    assert.deepEqual(main.missingDocuments, [], 'the main contractor filed its agreement');
+    assert.deepEqual(main.missingDocuments, [], 'the contractor filed its agreement');
   });
 
   it('milestone-deadlines job: DUE then OVERDUE, one notification per state, one default case', async () => {
@@ -442,7 +417,7 @@ describe('Phase 13', () => {
     await jobs.runJobOnce('milestone-deadlines', noonOf(addDays(today, 16)));
     assert.equal(await notes(), afterOverdue, 'no second notification for the same state');
     const cases = await prisma.contractorDefaultCase.findMany({ where: { projectId: ids.project } });
-    assert.equal(cases.length, 1, 'only the contractor that did not check in');
+    assert.equal(cases.length, 1, 'one case for the overdue mobilisation');
     assert.equal(cases[0].projectContractorId, ids.main);
     assert.equal(cases[0].trigger, 'MILESTONE_OVERDUE');
     ids.mainCase = cases[0].id;
@@ -453,9 +428,25 @@ describe('Phase 13', () => {
     assert.equal(manual.body.error.code, 'DEFAULT_CASE_ALREADY_OPEN');
   });
 
+  it('programme of works: signing the document accepts it (redesign R2d)', async () => {
+    const before = find(await milestones(), 'programme');
+    assert.notEqual(before.status, 'DONE');
+    const pow = await fileDocument('monitor@insite.ng', 'PROGRAMME_OF_WORKS', 'Programme of works rev A');
+    assert.equal(pow.res.status, 201, JSON.stringify(pow.res.body));
+    assert.equal(pow.res.body.data.awaitingSignOff, true, 'the programme of works needs a sign-off');
+    assert.equal(find(await milestones(), 'programme').status, before.status, 'filing alone does not accept it');
+    const signed = await request(app)
+      .post(url(`/documents/${pow.res.body.data.id}/sign-off`))
+      .set(await web('monitor@insite.ng'))
+      .send({ version: 1 });
+    assert.equal(signed.status, 200, JSON.stringify(signed.body));
+    assert.equal(find(await milestones(), 'programme').status, 'DONE');
+    // The proposal and decision endpoints are gone.
+    assert.equal((await request(app).get(url('/programme-of-works')).set(await web('monitor@insite.ng'))).status, 404);
+  });
+
   it('default case: review, organisation-scoped decision, termination side effects', async () => {
-    // A live session of the contractor before the decision. Redesign R1b: payments are outside the
-    // platform, so nothing blocks termination.
+    // Redesign R1b: payments are outside the platform, so nothing blocks termination.
     await prisma.boqItem.update({ where: { id: ids.items[0] }, data: { cumulativeCertifiedPct: 40 } });
 
     const act = (email: string, body: Record<string, unknown>) =>
@@ -478,93 +469,23 @@ describe('Phase 13', () => {
 
     const pc = await prisma.projectContractor.findUniqueOrThrow({ where: { id: ids.main } });
     assert.equal(pc.contractStatus, 'TERMINATED');
-    assert.equal(await prisma.projectJoinCode.count({ where: { projectContractorId: ids.main, isActive: true } }), 0);
-    assert.equal((await prisma.fieldAgentSession.findUniqueOrThrow({ where: { id: ids.mainSession } })).isActive, false);
     assert.equal(find(await milestones(), 'mobilised', ids.main).status, 'WAIVED');
     assert.equal(await auditCount('CONTRACTOR_TERMINATED'), 1);
-    // A revoked session can no longer report.
-    const revoked = await request(app).get(url('/milestones')).set(field(ids.mainSession));
-    assert.ok(revoked.status === 401 || revoked.status === 403);
+    // R1d: termination touches no field sessions (they belong to staff accounts).
+    assert.equal((await prisma.fieldAgentSession.findUniqueOrThrow({ where: { id: ids.officerSession } })).isActive, true);
+    assert.equal((await request(app).get(`/api/v1/auth/mobile/projects/${ids.project}/session`).set(await field(ids.officerSession))).status, 200);
   });
 
-  it('replacement: items not fully certified move, certified % and history stay, new milestones count from today', async () => {
+  it('there is no contractor replacement (one contractor per project)', async () => {
     const h = await web('admin@insite.ng');
     const res = await request(app)
       .post(url(`/contractors/${ids.main}/replace`))
       .set(h)
       .send({ organization: { name: 'P13 Replacement Builders Ltd' }, tradeCategory: 'Civil works', tradeCode: 'CIV2' });
-    assert.equal(res.status, 200, JSON.stringify(res.body));
-    ids.replacement = res.body.data.projectContractorId;
-    assert.equal(res.body.data.movedItemCount, 1);
-    assert.equal(res.body.data.createdMilestoneCount, 1);
-    const item = await prisma.boqItem.findUniqueOrThrow({ where: { id: ids.items[0] } });
-    assert.equal(item.projectContractorId, ids.replacement);
-    assert.equal(Number(item.cumulativeCertifiedPct), 40);
-    const replacement = await prisma.projectContractor.findUniqueOrThrow({ where: { id: ids.replacement } });
-    assert.equal(replacement.isMainContractor, true);
-    assert.equal(replacement.replacesProjectContractorId, ids.main);
-    const m = find(await milestones(), 'mobilised', ids.replacement);
-    assert.equal(m.anchorDateOverride, today);
-    assert.equal(m.dueDate, addDays(today, 14));
-    const again = await request(app).post(url(`/contractors/${ids.main}/replace`)).set(h).send({ organization: { name: 'Another Ltd' }, tradeCategory: 'Civil', tradeCode: 'CIV3' });
-    assert.equal(again.body.error.code, 'CONTRACTOR_ALREADY_REPLACED');
-    assert.ok(res.body.data.issuedJoinCodes.length >= 0);
+    assert.equal(res.status, 404);
     const setup = await request(app).get(url('/setup')).set(h);
-    const old = setup.body.data.parties.contractors.find((c: { id: string }) => c.id === ids.main);
-    assert.equal(old.contractStatus, 'TERMINATED');
-  });
-
-  it('programme of works: the contractor proposes, the monitor accepts and the baseline is written', async () => {
-    const sub = await web('p13.subco@insite.ng');
-    const body = {
-      plannedStartDate: addDays(today, 1),
-      plannedEndDate: addDays(today, 120),
-      items: [{ boqItemId: ids.items[1], plannedStartDate: addDays(today, 7), plannedEndDate: addDays(today, 40) }],
-      dependencies: [],
-    };
-    const other = await request(app)
-      .post(url('/programme-of-works'))
-      .set(sub)
-      .send({ ...body, items: [{ boqItemId: ids.items[0], plannedStartDate: addDays(today, 7), plannedEndDate: addDays(today, 40) }] });
-    assert.equal(other.body.error.code, 'ITEM_OTHER_CONTRACTOR');
-    const terminated = await request(app).post(url('/programme-of-works')).set(await web('contractor@insite.ng')).send(body);
-    assert.equal(terminated.body.error.code, 'CONTRACTOR_TERMINATED');
-    // Dependencies: the successor must be an item of the programme; the predecessor needs dates.
-    const dep = { predecessorBoqItemId: ids.items[0], successorBoqItemId: ids.items[1], lagWorkdays: 1 };
-    const undated = await request(app).post(url('/programme-of-works')).set(sub).send({ ...body, dependencies: [dep] });
-    assert.equal(undated.status, 422);
-    assert.equal(undated.body.error.details.issues[0].code, 'DEPENDENCY_UNDATED');
-    const outside = await request(app)
-      .post(url('/programme-of-works'))
-      .set(sub)
-      .send({ ...body, dependencies: [{ predecessorBoqItemId: ids.items[1], successorBoqItemId: ids.items[0], lagWorkdays: 0 }] });
-    assert.equal(outside.body.error.code, 'DEPENDENCY_OUTSIDE_PROGRAMME');
-    // The replacement's item is dated (as its own programme would have done); the link is now valid.
-    await prisma.boqItem.update({ where: { id: ids.items[0] }, data: { plannedStartDate: addDays(today, 1), plannedEndDate: addDays(today, 3) } });
-    const submitted = await request(app).post(url('/programme-of-works')).set(sub).send({ ...body, dependencies: [dep] });
-    assert.equal(submitted.status, 201, JSON.stringify(submitted.body));
-    assert.equal(submitted.body.data.proposal.dependencies.length, 1);
-    assert.equal((await request(app).post(url('/programme-of-works')).set(sub).send(body)).body.error.code, 'PROGRAMME_PENDING');
-    assert.equal((await request(app).post(url(`/programme-of-works/${submitted.body.data.id}/decision`)).set(sub).send({ decision: 'ACCEPT' })).status, 403);
-    const accepted = await request(app)
-      .post(url(`/programme-of-works/${submitted.body.data.id}/decision`))
-      .set(await web('monitor@insite.ng'))
-      .send({ decision: 'ACCEPT', notes: 'Agreed at the site meeting' });
-    assert.equal(accepted.status, 200, JSON.stringify(accepted.body));
-    const item = await prisma.boqItem.findUniqueOrThrow({ where: { id: ids.items[1] } });
-    assert.equal(item.plannedStartDate, addDays(today, 7));
-    const links = await prisma.boqItemDependency.findMany({ where: { projectId: ids.project } });
-    assert.deepEqual(
-      links.map((l) => [l.predecessorBoqItemId, l.successorBoqItemId, l.lagWorkdays]),
-      [[ids.items[0], ids.items[1], 1]],
-      'the accepted link is part of the baseline'
-    );
-    const project = await prisma.project.findUniqueOrThrow({ where: { id: ids.project } });
-    assert.equal(project.plannedStartDate, addDays(today, 1));
-    assert.equal(find(await milestones(), 'programme').status, 'DONE');
-    // A live project's dated items do not move through a programme.
-    const dated = await request(app).post(url('/programme-of-works')).set(sub).send(body);
-    assert.equal(dated.body.error.code, 'ITEM_ALREADY_DATED');
+    assert.equal(setup.body.data.parties.contractors.length, 1);
+    assert.equal(setup.body.data.parties.contractors[0].contractStatus, 'TERMINATED');
   });
 
   it('the contract default chain is the third chain: shown with a default, validated when replaced', async () => {
@@ -593,5 +514,27 @@ describe('Phase 13', () => {
     // The case decided earlier keeps the version it ran on.
     const decided = await prisma.contractorDefaultCase.findUniqueOrThrow({ where: { id: ids.mainCase } });
     assert.equal(decided.chainVersion, chain.version);
+  });
+
+  it('R1e: staff confirm "contractor on site" by hand, and compliance follows it (seeded PRG-102)', async () => {
+    const prg102 = await prisma.project.findFirstOrThrow({ where: { codePrefix: 'PRG-102' } });
+    const h = await web('programme.admin@insite.ng');
+    const base = `/api/v1/projects/${prg102.id}`;
+    const list = await request(app).get(`${base}/milestones`).set(h);
+    assert.equal(list.status, 200, JSON.stringify(list.body));
+    const onSite = (list.body.data.milestones as Array<{ id: string; key: string; status: string; readyToComplete: boolean }>).find(
+      (m) => m.key === 'contractor-mobilised'
+    )!;
+    assert.ok(onSite, 'the seeded on-site milestone exists');
+    assert.notEqual(onSite.status, 'DONE');
+    assert.equal(onSite.readyToComplete, true);
+    const before = await request(app).get(`${base}/mobilisation-compliance`).set(h);
+    assert.equal(before.body.data[0].onSite, false);
+
+    const done = await request(app).post(`${base}/milestones/${onSite.id}/complete`).set(h).send({ notes: 'Contractor crew and plant seen on site.' });
+    assert.equal(done.status, 200, JSON.stringify(done.body));
+    assert.equal(done.body.data.milestones.find((m: { id: string }) => m.id === onSite.id).status, 'DONE');
+    const after = await request(app).get(`${base}/mobilisation-compliance`).set(h);
+    assert.equal(after.body.data[0].onSite, true);
   });
 });

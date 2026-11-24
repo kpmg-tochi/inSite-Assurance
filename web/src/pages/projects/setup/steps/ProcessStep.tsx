@@ -10,7 +10,6 @@ import { CustomSelect, type CustomSelectOption } from "../../../../components/co
 import { ProcessEditor } from "../../../../components/process/ProcessEditor";
 import { ApprovalChainEditor } from "../../../../components/process/ApprovalChainEditor";
 import { useSaveContractDefaultChainMutation } from "../../../../mutations/contracts/useContractMutations";
-import { useConfirmDialog } from "../../../../components/process/ConfirmDialog";
 import { useRoleOptions } from "../../../../components/process/useRoleOptions";
 import {
   chainFromDto,
@@ -19,7 +18,6 @@ import {
   validateProcessDraft,
   type ProcessDraft,
 } from "../../../../components/process/processState";
-import { apiErrorCode } from "../../../../api/process/processApi";
 import { useWorkflowTemplatesQuery } from "../../../../queries/process/useProcessQueries";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import {
@@ -68,7 +66,6 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
   ];
   const defaultChainDirty = JSON.stringify(defaultChain) !== JSON.stringify(initialDefaultChain);
   const saveDefaultChain = useSaveContractDefaultChainMutation(projectId);
-  const { ask, dialog } = useConfirmDialog();
   const issues = validateProcessDraft(draft);
   const savedOnce = setup.steps.find((s) => s.stepId === "process")?.saved ?? false;
   const processDirty =
@@ -96,12 +93,11 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
     setDraft(draftFromTemplate(template.config));
   };
 
-  const send = async (silent: boolean | undefined, confirm: boolean) => {
+  const send = async (silent: boolean | undefined) => {
     const body: ProjectProcessStep = {
       workflowTemplateId: templateId,
       config: draft.config,
       reportChain: draft.reportChain,
-      ...(confirm ? { confirmDeactivateContractorCodes: true } : {}),
     };
     await save.mutateAsync({ stepId: "process", body, silent });
   };
@@ -113,44 +109,12 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
       return false;
     }
     if (!processDirty) return saveDefaultChainOnly(opts?.silent);
-    let confirm = false;
-    const turningOff =
-      setup.status === "ACTIVE" && process.config.allowContractorFieldReporting && !draft.config.allowContractorFieldReporting;
-    if (turningOff && process.activeContractorJoinCodeCount > 0) {
-      confirm = await ask({
-        title: "Turn contractor field reporting off?",
-        message: `${process.activeContractorJoinCodeCount} active contractor join code(s) will be deactivated. Contractors already signed in keep their session but cannot submit reports. Every brief will be written for an independent verifier.`,
-        confirmLabel: "Deactivate codes and save",
-        danger: true,
-      });
-      if (!confirm) return false;
-    }
     try {
-      await send(opts?.silent, confirm);
+      await send(opts?.silent);
       if (defaultChainDirty) await saveDefaultChain.mutateAsync({ steps: defaultChain, silent: true });
       setErrors(NO_ERRORS);
       return true;
     } catch (err) {
-      const { code, details } = apiErrorCode(err);
-      if (code === "CONFIRMATION_REQUIRED" && !confirm) {
-        const count = Number(details?.activeContractorJoinCodeCount ?? 0);
-        const ok = await ask({
-          title: "Turn contractor field reporting off?",
-          message: `${count} active contractor join code(s) will be deactivated.`,
-          confirmLabel: "Deactivate codes and save",
-          danger: true,
-        });
-        if (!ok) return false;
-        try {
-          await send(opts?.silent, true);
-          if (defaultChainDirty) await saveDefaultChain.mutateAsync({ steps: defaultChain, silent: true });
-          setErrors(NO_ERRORS);
-          return true;
-        } catch (retryErr) {
-          setErrors(extractErrors(retryErr));
-          return false;
-        }
-      }
       setErrors(extractErrors(err));
       return false;
     }
@@ -169,7 +133,6 @@ export function ProcessStep({ projectId, setup, mode, readOnly }: StepProps) {
 
   return (
     <>
-      {dialog}
       <StepSection
         title="Workflow and process"
         description="Pick a workflow template to pre-fill, then adjust the switches and approval chains for this project."

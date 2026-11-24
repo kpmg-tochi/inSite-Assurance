@@ -2,15 +2,12 @@ import { Prisma } from "@prisma/client";
 import type { PerimeterGeofence, RadialGeofence } from "@insite/shared";
 import { prisma } from "../config/prisma";
 import { recordAuditEvent } from "../modules/audit/audit.service";
-import { createJoinCode } from "../modules/projects/joinCodes.service";
 
 /**
- * Phase 6 seed: an organisation directory with tags, a multi-prime project with three contractor
- * packages, a perimeter-geofence project, and a draft with three setup steps complete.
- * LKK-402 and ABJ-108 (seeded before this) are the single-contractor projects.
+ * Phase 6 seed: an organisation directory with tags, a hospital annex project (KAN-210, one
+ * contractor since R1d: one contractor per project, decision T), a perimeter-geofence project, and
+ * a draft with three setup steps complete. No join codes (R1d).
  */
-
-type SeedRole = { id: string; code: string; codeSuffix: string | null; name: string; fieldPersonaType: string };
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 3600 * 1000);
 
@@ -20,7 +17,6 @@ function stepState(stepIds: string[], userId: string) {
     steps: Object.fromEntries(
       stepIds.map((id) => [id, { savedAt: at, savedByUserId: userId, completedAt: at, completedByUserId: userId }]),
     ),
-    team: { joinCodeRoleIds: null },
   } as unknown as Prisma.InputJsonValue;
 }
 
@@ -30,16 +26,13 @@ export async function seedPhase6Projects(p: {
   lenderOrgId: string;
   civilContractorOrgId: string;
   monitorUserId: string;
-  contractorUserId: string;
-  contractorRoleId: string;
   passwordHash: string;
-  residentRole: SeedRole;
-  contractorEngineerRole: SeedRole;
+  residentRole: { id: string; name: string };
 }) {
   // ------------------------------------------------------------------------
   // Organisation directory
   // ------------------------------------------------------------------------
-  const voltaic = await prisma.organization.create({
+  await prisma.organization.create({
     data: {
       tenantId: p.tenantId,
       name: "Voltaic Power Systems Ltd",
@@ -79,22 +72,8 @@ export async function seedPhase6Projects(p: {
     },
   });
 
-  // A web user for the second multi-prime contractor, so two contractors can run claims.
-  const electricalUser = await prisma.user.create({
-    data: {
-      tenantId: p.tenantId,
-      email: "electrical@insite.ng",
-      passwordHash: p.passwordHash,
-      fullName: "Engr. Ifeoma Okafor, MNSE",
-      roleId: p.contractorRoleId,
-      organizationId: voltaic.id,
-      professionalRegistrationBodyCode: "COREN",
-      professionalRegistrationNumber: "R.61844",
-    },
-  });
-
   // ------------------------------------------------------------------------
-  // KAN-210: multi-prime, three packages, radial geofence
+  // KAN-210: one contractor (civil), radial geofence
   // ------------------------------------------------------------------------
   const kanGeofence: RadialGeofence = {
     mode: "RADIAL",
@@ -113,7 +92,7 @@ export async function seedPhase6Projects(p: {
       codePrefix: "KAN-210",
       stateLocation: "Kano State",
       lgaLocation: "Kano Municipal",
-      description: "Three-storey clinical annex with its electrical and mechanical services, delivered by three prime contractors.",
+      description: "Three-storey clinical annex with its electrical and mechanical services.",
       totalBudgetNgn: 3200000000,
       reportingCadence: "DAILY",
       timezone: "Africa/Lagos",
@@ -121,7 +100,6 @@ export async function seedPhase6Projects(p: {
       geofenceGeoJson: kanGeofence as unknown as Prisma.InputJsonValue,
       monitorOrganizationId: p.monitorOrgId,
       lenderOrganizationId: p.lenderOrgId,
-      contractorExecutionMode: "MULTI_PRIME_SEPARATE_IPC",
       setupState: stepState(["basics", "parties", "site", "facility", "boq", "reporting", "team"], p.monitorUserId),
     },
   });
@@ -131,29 +109,8 @@ export async function seedPhase6Projects(p: {
       organizationId: p.civilContractorOrgId,
       tradeCategory: "Civil and structural works",
       tradeCode: "CIV",
-      isMainContractor: true,
-      allocatedBudgetNgn: 1800000000,
+      allocatedBudgetNgn: 3200000000,
       plannedMobilizationDate: daysAgo(28),
-    },
-  });
-  const elec = await prisma.projectContractor.create({
-    data: {
-      projectId: kan.id,
-      organizationId: voltaic.id,
-      tradeCategory: "Electrical works",
-      tradeCode: "ELEC",
-      allocatedBudgetNgn: 800000000,
-      plannedMobilizationDate: daysAgo(14),
-    },
-  });
-  const mep = await prisma.projectContractor.create({
-    data: {
-      projectId: kan.id,
-      organizationId: aquaflow.id,
-      tradeCategory: "Mechanical and plumbing",
-      tradeCode: "MEP",
-      allocatedBudgetNgn: 600000000,
-      allowFieldReporting: true,
     },
   });
   const kanItems: Array<{
@@ -162,16 +119,15 @@ export async function seedPhase6Projects(p: {
   }> = [
     { wbs: "01.01", section: "BILL 1 — SUBSTRUCTURE", desc: "Reinforced concrete pad foundations and ground beams", unit: "m3", qty: 420, rate: 1_450_000, contractor: civ.id, hold: true },
     { wbs: "01.02", section: "BILL 1 — SUPERSTRUCTURE", desc: "Reinforced concrete frame, columns, beams and suspended slabs", unit: "m3", qty: 610, rate: 1_520_000, contractor: civ.id },
-    { wbs: "02.01", section: "BILL 2 — ELECTRICAL", desc: "Supply and install 500kVA transformer and main distribution board", unit: "item", qty: 1, rate: 185_000_000, contractor: elec.id },
-    { wbs: "02.02", section: "BILL 2 — ELECTRICAL", desc: "Conduit, cabling and wiring for lighting and power circuits", unit: "m", qty: 18_000, rate: 22_500, contractor: elec.id },
-    { wbs: "03.01", section: "BILL 3 — MECHANICAL & PLUMBING", desc: "Cold and hot water supply pipework including pumps", unit: "m", qty: 6_400, rate: 38_000, contractor: mep.id },
-    { wbs: "03.02", section: "BILL 3 — MECHANICAL & PLUMBING", desc: "Medical gas pipeline and outlets to wards", unit: "item", qty: 1, rate: 160_000_000, contractor: mep.id },
+    { wbs: "02.01", section: "BILL 2 — ELECTRICAL", desc: "Supply and install 500kVA transformer and main distribution board", unit: "item", qty: 1, rate: 185_000_000, contractor: civ.id },
+    { wbs: "02.02", section: "BILL 2 — ELECTRICAL", desc: "Conduit, cabling and wiring for lighting and power circuits", unit: "m", qty: 18_000, rate: 22_500, contractor: civ.id },
+    { wbs: "03.01", section: "BILL 3 — MECHANICAL & PLUMBING", desc: "Cold and hot water supply pipework including pumps", unit: "m", qty: 6_400, rate: 38_000, contractor: civ.id },
+    { wbs: "03.02", section: "BILL 3 — MECHANICAL & PLUMBING", desc: "Medical gas pipeline and outlets to wards", unit: "item", qty: 1, rate: 160_000_000, contractor: civ.id },
   ];
   for (const i of kanItems) {
     await prisma.boqItem.create({
       data: {
         projectId: kan.id,
-        projectContractorId: i.contractor,
         wbsCode: i.wbs,
         section: i.section,
         description: i.desc,
@@ -184,21 +140,9 @@ export async function seedPhase6Projects(p: {
       },
     });
   }
-  await createJoinCode(prisma, { projectId: kan.id, codePrefix: kan.codePrefix, role: p.residentRole });
-  for (const c of [civ, elec, mep]) {
-    await createJoinCode(prisma, {
-      projectId: kan.id,
-      codePrefix: kan.codePrefix,
-      role: p.contractorEngineerRole,
-      contractor: { id: c.id, tradeCode: c.tradeCode },
-      includeTradeCode: true,
-    });
-  }
   await prisma.userProjectAssignment.createMany({
     data: [
       { userId: p.monitorUserId, projectId: kan.id },
-      { userId: p.contractorUserId, projectId: kan.id },
-      { userId: electricalUser.id, projectId: kan.id },
     ],
   });
   await recordAuditEvent(prisma, {
@@ -207,8 +151,8 @@ export async function seedPhase6Projects(p: {
     actorId: p.monitorUserId,
     actorDisplayName: "Seed",
     action: "PROJECT_ACTIVATED",
-    summaryText: "Set Kano General Hospital Annex (KAN-210) active with three prime contractors.",
-    payload: { codePrefix: "KAN-210", contractorExecutionMode: "MULTI_PRIME_SEPARATE_IPC", contractorCount: 3 },
+    summaryText: "Set Kano General Hospital Annex (KAN-210) active with its contractor.",
+    payload: { codePrefix: "KAN-210", contractorCount: 1 },
   });
 
   // ------------------------------------------------------------------------
@@ -246,17 +190,15 @@ export async function seedPhase6Projects(p: {
       geofenceToleranceMeters: 50,
       monitorOrganizationId: p.monitorOrgId,
       lenderOrganizationId: p.lenderOrgId,
-      contractorExecutionMode: "SINGLE_CONTRACTOR",
       setupState: stepState(["basics", "parties", "site", "facility", "boq", "reporting", "team"], p.monitorUserId),
     },
   });
-  const ognContractor = await prisma.projectContractor.create({
+  await prisma.projectContractor.create({
     data: {
       projectId: ogn.id,
       organizationId: aquaflow.id,
       tradeCategory: "Civil and water works",
       tradeCode: "GEN",
-      isMainContractor: true,
     },
   });
   for (const [wbs, desc, unit, qty, rate] of [
@@ -267,7 +209,6 @@ export async function seedPhase6Projects(p: {
     await prisma.boqItem.create({
       data: {
         projectId: ogn.id,
-        projectContractorId: ognContractor.id,
         wbsCode: wbs,
         section: "BILL 1 — ESTATE INFRASTRUCTURE",
         description: desc,
@@ -278,14 +219,6 @@ export async function seedPhase6Projects(p: {
       },
     });
   }
-  await createJoinCode(prisma, { projectId: ogn.id, codePrefix: ogn.codePrefix, role: p.residentRole });
-  await createJoinCode(prisma, {
-    projectId: ogn.id,
-    codePrefix: ogn.codePrefix,
-    role: p.contractorEngineerRole,
-    contractor: { id: ognContractor.id, tradeCode: ognContractor.tradeCode },
-    includeTradeCode: false,
-  });
   await prisma.userProjectAssignment.createMany({
     data: [{ userId: p.monitorUserId, projectId: ogn.id }],
   });
@@ -314,14 +247,12 @@ export async function seedPhase6Projects(p: {
       geofenceGeoJson: enuGeofence as unknown as Prisma.InputJsonValue,
       monitorOrganizationId: p.monitorOrgId,
       lenderOrganizationId: p.lenderOrgId,
-      contractorExecutionMode: "SINGLE_CONTRACTOR",
       setupState: stepState(["basics", "parties", "site"], p.monitorUserId),
       contractors: {
         create: {
           organizationId: aquaflow.id,
           tradeCategory: "Water works",
           tradeCode: "WTR",
-          isMainContractor: true,
         },
       },
     },

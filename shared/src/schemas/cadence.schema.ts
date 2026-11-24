@@ -3,7 +3,7 @@ import { ReportingCadenceEnum } from '../enums';
 import { CALENDAR_DATE_REGEX } from '../utils/time';
 
 /**
- * Phase 8: reporting cadence, obligations, expected participants and attendance alerts.
+ * Phase 8: reporting cadence and obligations (the participant roster and attendance alerts were removed in redesign R1e).
  */
 
 const TimeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:MM (24-hour)');
@@ -55,7 +55,8 @@ export const ReportingPeriodDtoSchema = z.object({
   periodEnd: z.string(),
   calendarEnd: z.string(),
   firstWorkday: z.string().nullable(),
-  briefAt: z.string().nullable(),
+  /** When the period opens (first workday at workdayStartTime): its obligations are created then. */
+  opensAt: z.string().nullable(),
   dueAt: z.string(),
   lateAfter: z.string(),
   isWorkday: z.boolean(),
@@ -121,155 +122,7 @@ export const ProjectCadenceOverviewDtoSchema = z.object({
     late: z.number().int(),
     missed: z.number().int(),
     excused: z.number().int(),
-    openAttendanceAlerts: z.number().int(),
   }),
 });
 export type ProjectCadenceOverviewDto = z.infer<typeof ProjectCadenceOverviewDtoSchema>;
 
-// ---------------------------------------------------------------------------
-// Expected participants (mobilization roster)
-// ---------------------------------------------------------------------------
-
-export const MobilizationStatusEnum = z.enum([
-  'INVITED',
-  'REGISTERED_PENDING_ASSURANCE',
-  'READY_FOR_MOBILIZATION',
-  'MOBILIZED_ON_SITE',
-  'NO_SHOW_FLAGGED',
-  'WITHDRAWN',
-]);
-export type MobilizationStatus = z.infer<typeof MobilizationStatusEnum>;
-
-export const DEFAULT_REMINDER_OFFSETS_DAYS = [7, 3, 1];
-const ReminderOffsets = z
-  .array(z.number().int().min(0).max(90))
-  .max(10)
-  .transform((d) => [...new Set(d)].sort((a, b) => b - a));
-
-const participantFields = {
-  roleId: z.string().uuid(),
-  projectContractorId: z.string().uuid().nullable().optional(),
-  /** Set for provisioned roles: the participant is an existing account. */
-  userId: z.string().uuid().nullable().optional(),
-  fullName: z.string().trim().min(2).max(160),
-  email: z.string().trim().email().max(254).nullable().optional(),
-  /** E.164-ish; matched against the phone given when joining by code. */
-  phoneNumber: z
-    .string()
-    .trim()
-    .regex(/^\+?[0-9 ()-]{7,20}$/, 'Enter a phone number')
-    .nullable()
-    .optional(),
-  plannedMobilizationDate: CalendarDate,
-  /** null = the project's workday start time. */
-  expectedCheckInTime: TimeOfDay.nullable().optional(),
-  checkInGraceMinutes: z.number().int().min(0).max(24 * 60).optional(),
-  /** null = use the project's reminder schedule. */
-  reminderOffsetsDays: ReminderOffsets.nullable().optional(),
-};
-
-export const CreateExpectedParticipantRequestSchema = z
-  .object(participantFields)
-  .refine((v) => Boolean(v.userId || v.email || v.phoneNumber), {
-    message: 'Link an account, or give an email or phone number to send reminders to',
-    path: ['email'],
-  });
-export type CreateExpectedParticipantRequest = z.infer<typeof CreateExpectedParticipantRequestSchema>;
-
-export const UpdateExpectedParticipantRequestSchema = z
-  .object(participantFields)
-  .partial()
-  .extend({ withdrawn: z.boolean().optional() });
-export type UpdateExpectedParticipantRequest = z.infer<typeof UpdateExpectedParticipantRequestSchema>;
-
-export const ExpectedParticipantDtoSchema = z.object({
-  id: z.string().uuid(),
-  projectId: z.string().uuid(),
-  projectContractorId: z.string().uuid().nullable(),
-  contractorName: z.string().nullable(),
-  roleId: z.string().uuid(),
-  roleName: z.string(),
-  onboardingMode: z.enum(['JOIN_CODE', 'PROVISIONED_ACCOUNT']),
-  userId: z.string().uuid().nullable(),
-  fullName: z.string(),
-  email: z.string().nullable(),
-  phoneNumber: z.string().nullable(),
-  plannedMobilizationDate: z.string(),
-  expectedCheckInTime: z.string(),
-  checkInGraceMinutes: z.number().int(),
-  /** Effective schedule (own override or the project's). */
-  reminderOffsetsDays: z.array(z.number().int()),
-  usesProjectReminderSchedule: z.boolean(),
-  lastReminderSentAt: z.string().nullable(),
-  linkedFieldSessionId: z.string().uuid().nullable(),
-  mobilizationStatus: MobilizationStatusEnum,
-  createdAt: z.string(),
-});
-export type ExpectedParticipantDto = z.infer<typeof ExpectedParticipantDtoSchema>;
-
-export const ProjectReminderSettingsSchema = z.object({
-  reminderOffsetsDays: ReminderOffsets,
-});
-export type ProjectReminderSettings = z.infer<typeof ProjectReminderSettingsSchema>;
-
-// ---------------------------------------------------------------------------
-// Attendance alerts and check-in
-// ---------------------------------------------------------------------------
-
-export const AttendanceAlertTypeEnum = z.enum([
-  'MOBILIZATION_NO_SHOW',
-  'WORKDAY_MISSED_CHECKIN',
-  'UNVERIFIED_AT_MOBILIZATION',
-]);
-export type AttendanceAlertType = z.infer<typeof AttendanceAlertTypeEnum>;
-
-export const AttendanceAlertStatusEnum = z.enum(['OPEN', 'ACKNOWLEDGED', 'EXCUSED', 'RESOLVED']);
-export type AttendanceAlertStatus = z.infer<typeof AttendanceAlertStatusEnum>;
-
-export const SiteAttendanceAlertDtoSchema = z.object({
-  id: z.string().uuid(),
-  projectId: z.string().uuid(),
-  participantId: z.string().uuid().nullable(),
-  participantName: z.string().nullable(),
-  fieldSessionId: z.string().uuid().nullable(),
-  workdayDate: z.string(),
-  alertType: AttendanceAlertTypeEnum,
-  status: AttendanceAlertStatusEnum,
-  resolvedByUserId: z.string().uuid().nullable(),
-  resolvedByName: z.string().nullable(),
-  resolutionNotes: z.string().nullable(),
-  createdAt: z.string(),
-});
-export type SiteAttendanceAlertDto = z.infer<typeof SiteAttendanceAlertDtoSchema>;
-
-export const AttendanceAlertActionEnum = z.enum(['ACKNOWLEDGE', 'EXCUSE', 'RESOLVE']);
-export type AttendanceAlertAction = z.infer<typeof AttendanceAlertActionEnum>;
-
-export const AttendanceAlertActionRequestSchema = z
-  .object({
-    action: AttendanceAlertActionEnum,
-    notes: z.string().trim().max(1000).optional(),
-  })
-  .refine((v) => v.action !== 'EXCUSE' || (v.notes ?? '').length >= 3, {
-    message: 'A note is required to excuse an alert',
-    path: ['notes'],
-  });
-export type AttendanceAlertActionRequest = z.infer<typeof AttendanceAlertActionRequestSchema>;
-
-/** GET /projects/:id/check-in/today (field): the caller's check-in for the project's current day. */
-export const CheckInStatusDtoSchema = z.object({
-  workdayDate: z.string(),
-  isWorkday: z.boolean(),
-  checkedIn: z.boolean(),
-  checkedInAt: z.string().nullable(),
-  source: z.string().nullable(),
-  /** Most recent manual check-in today (in or outside the geofence), for feedback after tapping. */
-  lastManualCheckIn: z
-    .object({
-      capturedAt: z.string(),
-      isWithinGeofence: z.boolean().nullable(),
-      geofenceStatus: z.string().nullable(),
-    })
-    .nullable(),
-});
-export type CheckInStatusDto = z.infer<typeof CheckInStatusDtoSchema>;

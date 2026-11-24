@@ -151,7 +151,7 @@ export function ReportingStep({ projectId, setup, readOnly }: StepProps) {
         <div>
           <label className={labelClass} htmlFor="workday-start">Working day starts</label>
           <input id="workday-start" type="time" className={inputClass()} value={state.workdayStartTime} onChange={(e) => set("workdayStartTime", e.target.value)} disabled={readOnly} />
-          <p className="mt-1 text-[11px] text-slate-500">Briefs go out at this time.</p>
+          <p className="mt-1 text-[11px] text-slate-500">Each reporting period opens at this time on its first working day.</p>
         </div>
         <div>
           <label className={labelClass} htmlFor="workday-end">Working day ends</label>
