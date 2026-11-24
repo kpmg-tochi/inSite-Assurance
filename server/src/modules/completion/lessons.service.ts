@@ -153,7 +153,7 @@ async function notifyContractors(tx: Prisma.TransactionClient, projectId: string
       category: 'LESSON_SHARED',
       title: 'A lesson learned was shared with you',
       description: title,
-      actionUrl: `/app/projects/${projectId}/closure`,
+      actionUrl: `/app/projects/${projectId}/completion?tab=closure`,
       metadata: { lessonId },
     });
   }

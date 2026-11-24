@@ -145,7 +145,7 @@ async function notifyMonitors(
     category: 'DEFECT_TICKET',
     title: params.title,
     description: params.description,
-    actionUrl: `/app/projects/${params.projectId}/retention?ticket=${params.ticketId}`,
+    actionUrl: `/app/projects/${params.projectId}/completion?tab=defects&ticket=${params.ticketId}`,
     metadata: { defectTicketId: params.ticketId },
   });
   if (params.toVerifierDevices) {
@@ -592,7 +592,7 @@ export async function sendOverdueDefectReminders(projectId: string, codePrefix: 
       category: 'DEFECT_TICKET',
       title: `${codePrefix}: ${overdue.length} defect(s) overdue`,
       description: `${refs} are past their due date and not yet fixed.`,
-      actionUrl: `/app/projects/${projectId}/retention`,
+      actionUrl: `/app/projects/${projectId}/completion?tab=defects`,
       metadata: { overdueCount: overdue.length, day: today },
       createdAt: now,
     });

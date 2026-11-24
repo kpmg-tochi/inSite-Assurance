@@ -2,7 +2,6 @@ import { useQuery } from '@tanstack/react-query';
 import {
   getProjectSetup,
   getTeamOptions,
-  listBoqRevisions,
   listDraftProjects,
 } from '../../api/projects/projectSetupApi';
 
@@ -23,11 +22,4 @@ export const useTeamOptionsQuery = (projectId: string | null | undefined) =>
     queryKey: ['project-team-options', projectId],
     queryFn: () => getTeamOptions(projectId!),
     enabled: Boolean(projectId),
-  });
-
-export const useBoqRevisionsQuery = (projectId: string | null | undefined, enabled = true) =>
-  useQuery({
-    queryKey: ['boq-revisions', projectId],
-    queryFn: () => listBoqRevisions(projectId!),
-    enabled: Boolean(projectId) && enabled,
   });

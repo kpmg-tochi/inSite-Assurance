@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DEFECT_STATUS_LABELS, type DefectTicketDto } from "@insite/shared";
@@ -36,7 +36,10 @@ export const defectsQueryKey = (projectId: string | null) => ["defects", project
 export default function DefectsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
-  const { activeProjectId: projectId } = useProfile();
+  const route = useRoute<RouteProp<RootStackParamList, "Defects">>();
+  const { activeProjectId } = useProfile();
+  // Redesign R5b (D-R5.15): opened from the project screen with its id; the last opened project otherwise.
+  const projectId = route.params?.projectId || activeProjectId;
   const query = useQuery({
     queryKey: defectsQueryKey(projectId),
     queryFn: () => fetchDefectTickets(projectId!),
@@ -163,7 +166,6 @@ function ActionSheet({
       for (const photo of batch.photos) {
         const capture = await saveCapture({
           projectId,
-          wbsItemId: ticket.boqItemId,
           mediaType: "SITE_PHOTO",
           sourceUri: photo.uri,
           mimeType: "image/jpeg",
@@ -243,7 +245,7 @@ function ActionSheet({
           </TouchableOpacity>
         </View>
       </View>
-      <SiteEvidenceCameraModal visible={cameraOpen} wbsCode={ticket.reference} onSubmit={onPhotos} onClose={() => setCameraOpen(false)} />
+      <SiteEvidenceCameraModal visible={cameraOpen} title={`Defect ${ticket.reference}`} onSubmit={onPhotos} onClose={() => setCameraOpen(false)} />
     </View>
   );
 }

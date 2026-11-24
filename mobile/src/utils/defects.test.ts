@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { defectActionBody, RECTIFY_REMOVED_MESSAGE, showDefectsEntry, type DefectActionPayload } from './defects';
+import { defectActionBody, RECTIFY_REMOVED_MESSAGE, showDefectsEntry, showDefectsShortcut, type DefectActionPayload } from './defects';
 import { SESSION_BOUND_KINDS } from '../storage/outbox/outboxPolicy';
 
 const capture = '6f1c2d4e-0000-4000-8000-000000000001';
@@ -12,7 +12,15 @@ describe('defect work on mobile (Phase 10, staff-only since R1d)', () => {
     assert.equal(showDefectsEntry(undefined, perms), false, 'older packs have no phase');
     assert.equal(showDefectsEntry('HANDOVER_IN_PROGRESS', perms), true);
     assert.equal(showDefectsEntry('RETENTION_PERIOD', perms), true);
-    assert.equal(showDefectsEntry('RETENTION_PERIOD', ['field:submit_report']), false);
+    assert.equal(showDefectsEntry('RETENTION_PERIOD', ['visits:submit']), false);
+  });
+
+  it('the project screen shortcut also appears during construction when defects are open (D-R5.15)', () => {
+    const perms = ['retention:manage_defects'];
+    assert.equal(showDefectsShortcut('ACTIVE_CONSTRUCTION', 0, perms), false);
+    assert.equal(showDefectsShortcut('ACTIVE_CONSTRUCTION', 2, perms), true);
+    assert.equal(showDefectsShortcut('RETENTION_PERIOD', 0, perms), true);
+    assert.equal(showDefectsShortcut('RETENTION_PERIOD', 3, ['visits:submit']), false);
   });
 
   it("closing needs the officer's site photos", () => {

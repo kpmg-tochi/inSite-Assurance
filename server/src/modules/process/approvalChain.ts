@@ -5,6 +5,7 @@ import {
   ApprovalOrganizationScope,
   ApprovalProgressDto,
   ApprovalSubjectType,
+  SYSTEM_PERMISSIONS_CATALOG,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -150,6 +151,12 @@ export interface ActGate {
   reason: string | null;
 }
 
+/** The permission's name from the catalogue, quoted, for refusal text shown to users (the key if unknown). */
+function permissionLabel(key: string): string {
+  const name = SYSTEM_PERMISSIONS_CATALOG.find((p) => p.key === key)?.name;
+  return name ? `"${name}"` : key;
+}
+
 /** Whether `webUser` may act on `step` of this item now. Advisory for the UI; enforced by `assertMayAct`. */
 export function gateForStep(params: {
   webUser: WebJwtPayload;
@@ -167,8 +174,8 @@ export function gateForStep(params: {
     return {
       allowed: false,
       reason: step.requiredRoleId
-        ? `"${step.label}" needs a specific role and the ${step.requiredPermissionKey} permission.`
-        : `"${step.label}" needs the ${step.requiredPermissionKey} permission.`,
+        ? `"${step.label}" needs a specific role and the ${permissionLabel(step.requiredPermissionKey)} permission.`
+        : `"${step.label}" needs the ${permissionLabel(step.requiredPermissionKey)} permission.`,
     };
   }
   if (!organizationScopeAllows(step.organizationScope, webUser.organizationId, params.orgContext)) {

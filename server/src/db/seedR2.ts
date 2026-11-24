@@ -20,7 +20,7 @@ import { refreshScheduleBadge } from "../modules/schedule/schedule.service";
  * - R2d (Phase 9 baselines and revisions are gone): LKK-402 and ABJ-108 get sprints too, so their
  *   schedule badges come from sprints. LKK-402 is behind: sprint 1 ended four weeks ago with its
  *   earthworks and culvert units incomplete (the pending "catch-up" revision story ended). ABJ-108 is
- *   on track: its sprint 1 unit is complete. Actual start dates come from the first counted report.
+ *   on track: its sprint 1 unit is complete. Actual start dates are the planned starts of lines with progress.
  *
  * | LKK-402 | 1 Earthworks and culverts −90..−28, 2 Pavement and utilities −27..+60 | U01–U04 (Drainage and exterior works) |
  * | ABJ-108 | 1 Substation civil works −75..−5, 2 PV array and equipment −4..+70    | U01–U03 (Solar power)                 |
@@ -84,22 +84,17 @@ async function seedScope(codePrefix: string, sprints: SprintSeed[], units: UnitS
   return project.id;
 }
 
-/** Actual dates (as Phase 9 seeded them): the first counted report, else the planned start once work is done. */
+/** Actual dates: the planned start once work has progress (R5f: reports are gone), completion at 100%. */
 async function seedActualDates(projectId: string) {
   const project = await prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { timezone: true } });
   const today = zonedCalendarDate(new Date(), project.timezone);
   const items = await prisma.boqItem.findMany({ where: { projectId } });
   for (const i of items) {
     const pct = Number(i.cumulativeCertifiedPct);
-    const first = await prisma.workdayReport.findFirst({
-      where: { wbsItemId: i.id, status: { in: ["CONFIRMED", "APPROVED_COMPLETED"] } },
-      orderBy: { workdayDate: "asc" },
-      select: { workdayDate: true },
-    });
     const end = i.plannedEndDate && i.plannedEndDate < today ? i.plannedEndDate : addDays(today, -1);
     await prisma.boqItem.update({
       where: { id: i.id },
-      data: { actualStartDate: first?.workdayDate ?? (pct > 0 ? i.plannedStartDate : null), actualCompletionDate: pct >= 100 ? end : null },
+      data: { actualStartDate: pct > 0 ? i.plannedStartDate : null, actualCompletionDate: pct >= 100 ? end : null },
     });
   }
   const starts = (await prisma.boqItem.findMany({ where: { projectId, actualStartDate: { not: null } }, select: { actualStartDate: true } }))

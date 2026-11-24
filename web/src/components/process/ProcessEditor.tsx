@@ -16,7 +16,7 @@ function Block({ title, description, children }: { title: string; description?: 
 }
 
 /**
- * The process switches and the report approval chain. Shared by the wizard's "Workflow and process"
+ * The process switches and the visit report approval chain. Shared by the wizard's "Workflow and process"
  * step, project settings and the workflow-template editor.
  */
 export function ProcessEditor({
@@ -46,11 +46,11 @@ export function ProcessEditor({
       {chainNote}
 
       <Block
-        title="Report approval chain"
+        title="Visit report approval chain"
         description={
           draft.config.requireReportApproval
-            ? "Each submitted report goes through these steps in order before it counts as evidence. One person cannot act on two steps in a row."
-            : "Report approval is off, so this chain is not used until it is turned on."
+            ? "Each submitted visit report goes through these steps in order before it is accepted. One person cannot act on two steps in a row."
+            : "Report approval is off: visit reports are accepted when submitted, and this chain is not used until it is turned on."
         }
       >
         <ApprovalChainEditor

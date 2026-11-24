@@ -37,6 +37,10 @@ import {
 
 export type RowHandler = (row: OutboxRow) => Promise<void>;
 
+/** Stored on a row whose dependency was dead-lettered (redesign R5: also check-ins, unscheduled visits, site log entries). */
+export const BLOCKED_DEPENDENCY_MESSAGE =
+  'Something this depends on (a photo, voice note, check-in, site log entry or unscheduled visit) could not be sent. Retry that item first.';
+
 /** Thrown by handlers for failures that retrying cannot fix (a missing local file, for example). */
 export class LocalPermanentError extends Error {
   readonly kind = 'local' as const;
@@ -103,9 +107,9 @@ export async function refreshOutboxCounts(): Promise<void> {
   }
 }
 
-function describe(error: unknown): string {
+function describe(error: unknown, kind?: OutboxKind): string {
   const e = error as ClassifiableError & { message?: string };
-  return failureMessage({ code: e?.code, message: e?.message });
+  return failureMessage({ code: e?.code, message: e?.message }, kind);
 }
 
 function toClassifiable(error: unknown): ClassifiableError {
@@ -174,7 +178,7 @@ async function runOnce(): Promise<void> {
           await recordFailure(
             row.id,
             { status: 'DEAD', attempts: row.attempts, nextAttemptAt: now.toISOString() },
-            'A photo or voice note this depends on could not be sent. Retry that item first.'
+            BLOCKED_DEPENDENCY_MESSAGE
           );
           statusById.set(row.id, 'DEAD');
           continue;
@@ -199,9 +203,9 @@ async function runOnce(): Promise<void> {
             continue;
           }
           const outcome = afterFailure(row, failure, new Date());
-          await recordFailure(row.id, outcome, describe(error));
+          await recordFailure(row.id, outcome, describe(error, row.kind));
           statusById.set(row.id, outcome.status);
-          publish({ lastError: describe(error) });
+          publish({ lastError: describe(error, row.kind) });
         }
       }
 

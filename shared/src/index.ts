@@ -15,19 +15,16 @@ export * from './schemas/evidence.schema';
 export * from './schemas/audit.schema';
 export * from './schemas/payment.schema';
 export * from './schemas/incident.schema';
-export * from './schemas/workday.schema';
 export * from './schemas/pushToken.schema';
 export * from './schemas/notification.schema';
-export * from './schemas/wbsChat.schema';
 export * from './schemas/standards.schema';
 export * from './schemas/process.schema';
-export * from './schemas/cadence.schema';
 export * from './schemas/schedule.schema';
 export * from './schemas/handover.schema';
 export * from './schemas/retention.schema';
 export * from './schemas/deliveryModel.schema';
 export * from './schemas/projectType.schema';
-// Phase 14
+// Phase 14 (findings and supervision; R5f deleted the inspections runtime)
 export * from './schemas/inspection.schema';
 // Phase 13
 export * from './schemas/contract.schema';
@@ -46,21 +43,24 @@ export * from './data/defaultFormLibrary';
 // Redesign R4
 export * from './schemas/visit.schema';
 export * from './utils/visitPlan';
+// Redesign R6
+export * from './schemas/projectOverview.schema';
+export * from './utils/projectStage';
+export * from './schemas/projectTypeConfigGroups';
 
 // Data
 export * from './data/standardsLibrary';
 
 // Global Shared Utilities
 export * from './utils/time';
+export * from './utils/calendar';
 export * from './utils/deviceSignature';
 export * from './utils/format';
-export * from './utils/reportingPeriod';
 export * from './utils/schedule';
 export * from './utils/retention';
 export * from './utils/handoverText';
 export * from './utils/organizationHierarchy';
-// Phase 14
-export * from './utils/inspectionChecklist';
+export * from './utils/supervision';
 // Phase 13
 export * from './utils/contractMilestones';
 

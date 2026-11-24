@@ -27,20 +27,6 @@ export async function loadBoqItemInProject(db: Db, projectId: string, boqItemId:
   return item;
 }
 
-export async function loadWorkdayReportInProject(db: Db, projectId: string, reportId: string) {
-  assertUuid(reportId, 'Workday report', 'WORKDAY_REPORT_NOT_FOUND');
-  const report = await db.workdayReport.findFirst({ where: { id: reportId, projectId } });
-  if (!report) throw notFound('Workday report', 'WORKDAY_REPORT_NOT_FOUND');
-  return report;
-}
-
-export async function loadReportQueryInProject(db: Db, projectId: string, queryId: string) {
-  assertUuid(queryId, 'Report query', 'REPORT_QUERY_NOT_FOUND');
-  const query = await db.reportQuery.findFirst({ where: { id: queryId, projectId } });
-  if (!query) throw notFound('Report query', 'REPORT_QUERY_NOT_FOUND');
-  return query;
-}
-
 /** Redesign R2b: a facility unit of the project. */
 export async function loadFacilityUnitInProject(db: Db, projectId: string, unitId: string) {
   assertUuid(unitId, 'Facility unit', 'FACILITY_UNIT_NOT_FOUND');

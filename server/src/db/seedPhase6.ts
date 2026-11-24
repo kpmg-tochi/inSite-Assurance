@@ -94,7 +94,6 @@ export async function seedPhase6Projects(p: {
       lgaLocation: "Kano Municipal",
       description: "Three-storey clinical annex with its electrical and mechanical services.",
       totalBudgetNgn: 3200000000,
-      reportingCadence: "DAILY",
       timezone: "Africa/Lagos",
       geofenceMode: "RADIAL",
       geofenceGeoJson: kanGeofence as unknown as Prisma.InputJsonValue,
@@ -115,9 +114,9 @@ export async function seedPhase6Projects(p: {
   });
   const kanItems: Array<{
     wbs: string; section: string; desc: string; unit: string; qty: number; rate: number;
-    contractor: string; hold?: boolean;
+    contractor: string;
   }> = [
-    { wbs: "01.01", section: "BILL 1 — SUBSTRUCTURE", desc: "Reinforced concrete pad foundations and ground beams", unit: "m3", qty: 420, rate: 1_450_000, contractor: civ.id, hold: true },
+    { wbs: "01.01", section: "BILL 1 — SUBSTRUCTURE", desc: "Reinforced concrete pad foundations and ground beams", unit: "m3", qty: 420, rate: 1_450_000, contractor: civ.id },
     { wbs: "01.02", section: "BILL 1 — SUPERSTRUCTURE", desc: "Reinforced concrete frame, columns, beams and suspended slabs", unit: "m3", qty: 610, rate: 1_520_000, contractor: civ.id },
     { wbs: "02.01", section: "BILL 2 — ELECTRICAL", desc: "Supply and install 500kVA transformer and main distribution board", unit: "item", qty: 1, rate: 185_000_000, contractor: civ.id },
     { wbs: "02.02", section: "BILL 2 — ELECTRICAL", desc: "Conduit, cabling and wiring for lighting and power circuits", unit: "m", qty: 18_000, rate: 22_500, contractor: civ.id },
@@ -135,8 +134,6 @@ export async function seedPhase6Projects(p: {
         totalQuantity: i.qty,
         rateNgn: i.rate,
         budgetedCostNgn: i.qty * i.rate,
-        isHoldPoint: Boolean(i.hold),
-        holdPointInstruction: i.hold ? "Photograph reinforcement before the pour." : null,
       },
     });
   }
@@ -183,7 +180,6 @@ export async function seedPhase6Projects(p: {
       lgaLocation: "Obafemi Owode",
       description: "Estate roads, drainage, water reticulation and a processing shed inside an irregular plot boundary.",
       totalBudgetNgn: 1850000000,
-      reportingCadence: "WEEKLY",
       timezone: "Africa/Lagos",
       geofenceMode: "PERIMETER",
       geofenceGeoJson: ognGeofence as unknown as Prisma.InputJsonValue,

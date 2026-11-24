@@ -84,7 +84,7 @@ export async function cocGateReason(db: Db, projectId: string, gate: ClosureGate
       : (await db.project.findUniqueOrThrow({ where: { id: projectId }, select: { projectTypeSnapshotJson: true } })).projectTypeSnapshotJson;
   if (!cocGateOn(snap, gate)) return null;
   if (await issuedCertificate(db, projectId)) return null;
-  return `${CLOSURE_GATE_META[gate].label} needs an issued Certificate of Completion. Draft it and collect the signatures on the Closure tab.`;
+  return `${CLOSURE_GATE_META[gate].label} needs an issued Certificate of Completion. Draft it and collect the signatures on the Certificate tab of Completion & handover.`;
 }
 
 export async function assertCocGate(db: Db, projectId: string, gate: ClosureGate) {
@@ -97,10 +97,9 @@ export async function assertCocGate(db: Db, projectId: string, gate: ClosureGate
 // ---------------------------------------------------------------------------
 
 export interface FinalEvaluation {
-  /** The visit id (R4) or the legacy inspection id. */
+  /** The visit id. */
   id: string;
-  visitId: string | null;
-  inspectionId: string | null;
+  visitId: string;
   visitDate: string;
   approvedAt: Date | null;
   confirmedAt: Date;
@@ -110,8 +109,8 @@ export interface FinalEvaluation {
 }
 
 /**
- * The latest accepted final evaluation: an accepted FINAL_EVALUATION visit (redesign R4d), else a
- * legacy Phase 14 inspection (approved, or submitted where no approval applied) until R5 removes them.
+ * The latest accepted final evaluation: an accepted FINAL_EVALUATION visit (redesign R4d; R5f deleted
+ * the legacy Phase 14 inspections).
  */
 export async function latestFinalEvaluation(db: Db, projectId: string): Promise<FinalEvaluation | null> {
   const visit = await db.visitSubmission.findFirst({
@@ -119,25 +118,17 @@ export async function latestFinalEvaluation(db: Db, projectId: string): Promise<
     orderBy: [{ visit: { plannedDate: 'desc' } }, { approvedAt: 'desc' }],
     select: { visitId: true, approvedAt: true, confirmedAt: true, overallFinding: true, summaryText: true, reporterName: true, visit: { select: { plannedDate: true } } },
   });
-  if (visit) {
-    return {
-      id: visit.visitId,
-      visitId: visit.visitId,
-      inspectionId: null,
-      visitDate: visit.visit.plannedDate,
-      approvedAt: visit.approvedAt,
-      confirmedAt: visit.confirmedAt,
-      overallFinding: visit.overallFinding,
-      summaryText: visit.summaryText,
-      reporterName: visit.reporterName,
-    };
-  }
-  const r = await db.siteInspectionReport.findFirst({
-    where: { projectId, visitType: 'FINAL_EVALUATION', status: { in: ['APPROVED', 'SUBMITTED'] } },
-    orderBy: [{ visitDate: 'desc' }, { createdAt: 'desc' }],
-    select: { id: true, visitDate: true, approvedAt: true, overallFinding: true, summaryText: true, reporterName: true, confirmedAt: true },
-  });
-  return r ? { ...r, visitId: null, inspectionId: r.id } : null;
+  if (!visit) return null;
+  return {
+    id: visit.visitId,
+    visitId: visit.visitId,
+    visitDate: visit.visit.plannedDate,
+    approvedAt: visit.approvedAt,
+    confirmedAt: visit.confirmedAt,
+    overallFinding: visit.overallFinding,
+    summaryText: visit.summaryText,
+    reporterName: visit.reporterName,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -256,7 +247,6 @@ async function serializeCertificates(db: Db, rows: CertRow[], webUser: WebJwtPay
       status: c.status,
       scopeSummary: c.scopeSummary,
       completionDate: c.completionDate,
-      finalEvaluationInspectionId: c.finalEvaluationInspectionId,
       finalEvaluationVisitId: c.finalEvaluationVisitId,
       documentId: c.documentId,
       issuedAt: c.issuedAt?.toISOString() ?? null,
@@ -345,7 +335,6 @@ export async function getProjectCompletion(projectId: string, webUser: WebJwtPay
     },
     finalEvaluation: {
       required: config.requireFinalEvaluationBeforeCoc,
-      inspectionId: evaluation?.inspectionId ?? null,
       visitId: evaluation?.visitId ?? null,
       visitDate: evaluation?.visitDate ?? null,
       approvedAt: evaluation?.approvedAt?.toISOString() ?? evaluation?.confirmedAt.toISOString() ?? null,
@@ -402,7 +391,6 @@ export async function draftCompletionCertificate(projectId: string, webUser: Web
         status: 'DRAFT',
         scopeSummary,
         completionDate: input.completionDate,
-        finalEvaluationInspectionId: evaluation?.inspectionId ?? null,
         finalEvaluationVisitId: evaluation?.visitId ?? null,
         slotsJson: config.cocSignatories as unknown as Prisma.InputJsonValue,
         createdByUserId: webUser.userId,
@@ -419,7 +407,6 @@ export async function draftCompletionCertificate(projectId: string, webUser: Web
         certificateId: cert.id,
         certificateNumber,
         completionDate: input.completionDate,
-        finalEvaluationInspectionId: evaluation?.inspectionId ?? null,
         finalEvaluationVisitId: evaluation?.visitId ?? null,
         slots: config.cocSignatories.map((s) => ({ key: s.key, label: s.label, isBeneficiary: s.isBeneficiary })),
       },
@@ -639,9 +626,7 @@ export async function renderCertificatePdf(db: Db, projectId: string, cert: Cert
           select: { overallFinding: true, reporterName: true, visit: { select: { plannedDate: true } } },
         })
         .then((s) => (s ? { visitDate: s.visit.plannedDate, overallFinding: s.overallFinding as string, reporterName: s.reporterName } : null))
-    : cert.finalEvaluationInspectionId
-      ? await db.siteInspectionReport.findUnique({ where: { id: cert.finalEvaluationInspectionId }, select: { visitDate: true, overallFinding: true, reporterName: true } })
-      : null;
+    : null;
   const dto = dtos[0];
   return generateCompletionCertificatePdf({
     branding,
@@ -787,7 +772,7 @@ async function issueCertificate(tx: Tx, projectId: string, cert: CertRow, webUse
       category: 'COMPLETION_CERTIFICATE',
       title: `Certificate of Completion ${cert.certificateNumber} issued`,
       description: `Completion date ${cert.completionDate}.${ceremony?.dueDate ? ` The handover ceremony is due by ${ceremony.dueDate}.` : ''}`,
-      actionUrl: `/app/projects/${projectId}/closure`,
+      actionUrl: `/app/projects/${projectId}/completion?tab=certificate`,
       metadata: { certificateId: cert.id, documentId: stored.documentId },
     });
   }
@@ -837,7 +822,7 @@ export async function revokeCompletionCertificate(projectId: string, webUser: We
         category: 'COMPLETION_CERTIFICATE',
         title: `Certificate of Completion ${cert.certificateNumber} revoked`,
         description: reason,
-        actionUrl: `/app/projects/${projectId}/closure`,
+        actionUrl: `/app/projects/${projectId}/completion?tab=certificate`,
         metadata: { certificateId: cert.id },
       });
     }

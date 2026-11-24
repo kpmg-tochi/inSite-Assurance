@@ -52,7 +52,7 @@ export function StandardFormModal({
   title,
   initial,
   fromLibrary,
-  wbsSuggestions,
+  itemSuggestions,
   isPending,
   onCancel,
   onSubmit,
@@ -61,7 +61,8 @@ export function StandardFormModal({
   initial: StandardFormValue;
   /** Shows the library disclaimer and what the template is based on. */
   fromLibrary?: StandardLibraryEntry | null;
-  wbsSuggestions: string[];
+  /** Item numbers of the project's BoQ lines. */
+  itemSuggestions: string[];
   isPending: boolean;
   onCancel: () => void;
   onSubmit: (input: ProjectStandardInput) => Promise<void>;
@@ -145,28 +146,28 @@ export function StandardFormModal({
             onChange={(e) => setForm({ ...form, specificationText: e.target.value })}
           />
           <p className="mt-1 text-[11px] text-slate-500">
-            Write numeric rules as "slump 75 ± 25 mm", "cube strength minimum 25 N/mm²" so the automatic check on reports can read them.
+            Write numeric rules in full, e.g. "slump 75 ± 25 mm", "cube strength minimum 25 N/mm²".
           </p>
           {err("specificationText")}
         </div>
         <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="std-wbs">
-            Applies to WBS codes
+          <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="std-items">
+            Applies to BoQ item nos.
           </label>
           <input
-            id="std-wbs"
+            id="std-items"
             className={inputClass}
-            list="std-wbs-suggestions"
+            list="std-items-suggestions"
             placeholder="Leave empty for the whole project, e.g. 02, 03.1"
             value={form.applicableWbsCodesText}
             onChange={(e) => setForm({ ...form, applicableWbsCodesText: e.target.value })}
           />
-          <datalist id="std-wbs-suggestions">
-            {wbsSuggestions.map((c) => (
+          <datalist id="std-items-suggestions">
+            {itemSuggestions.map((c) => (
               <option key={c} value={c} />
             ))}
           </datalist>
-          <p className="mt-1 text-[11px] text-slate-500">Separate codes with commas. A code covers everything below it ("02" covers "02.03.1").</p>
+          <p className="mt-1 text-[11px] text-slate-500">Separate item nos. with commas. A number covers everything below it ("02" covers "02.03.1").</p>
           {fromLibrary && fromLibrary.suggestedFor.length > 0 && (
             <p className="mt-1 text-[11px] text-slate-500">Typically used for: {fromLibrary.suggestedFor.join(", ")}.</p>
           )}
@@ -174,7 +175,7 @@ export function StandardFormModal({
         </div>
         <label className="flex items-center gap-2 text-xs text-slate-700">
           <input type="checkbox" className="h-4 w-4 accent-brand-primary" checked={form.isMandatory} onChange={(e) => setForm({ ...form, isMandatory: e.target.checked })} />
-          Mandatory (a failed check on this standard is critical)
+          Mandatory (otherwise advisory)
         </label>
         <ModalActions onCancel={onCancel} submitLabel="Save standard" pendingLabel="Saving…" isPending={isPending} />
       </form>

@@ -1,25 +1,16 @@
 import React, { useMemo } from "react";
-import {
-  INSPECTION_VISIT_TYPE_LABELS,
-  InspectionVisitTypeEnum,
-  type ProjectTypeConfigInput,
-  VISIT_KIND_META,
-  VisitKindEnum,
-} from "@insite/shared";
+import { type ProjectTypeConfigInput, VISIT_KIND_META, VisitKindEnum } from "@insite/shared";
 import { CustomSelect } from "../common";
 import { useTenantRolesQuery } from "../../queries/rbac/useRbacQueries";
-import { useChecklistTemplatesQuery } from "../../queries/inspections/useInspectionQueries";
 import { useFormLibraryQuery } from "../../queries/forms/useFormQueries";
 
 /**
- * Phase 14 settings of a project type, editable since Phase 16: the legacy checklist template per
- * visit type (until R5), and who counts as a supervisor with the workload warning limits (redesign
- * R4f removed reporting streams: visits replace them). Redesign R3: the visit form template per visit kind. Like the type's other rules, projects keep the
- * version they were created with.
+ * Monitoring settings of a project type: the visit form template per visit kind (redesign R3) and
+ * who counts as a supervisor with the workload warning limits (Phase 14). Like the type's other
+ * rules, projects keep the version they were created with.
  */
 
 export interface MonitoringRules {
-  inspections: NonNullable<ProjectTypeConfigInput["inspections"]>;
   supervision: NonNullable<ProjectTypeConfigInput["supervision"]>;
   /** Redesign R3. */
   visitForms: { templateCodeByVisitKind: Partial<Record<string, string>> };
@@ -76,26 +67,24 @@ export function RoleCodePicker({
 
 export function MonitoringRulesEditor({ value, onChange }: { value: MonitoringRules; onChange: (next: MonitoringRules) => void }) {
   const { data: roles = [] } = useTenantRolesQuery();
-  const { data: templates = [] } = useChecklistTemplatesQuery(false);
   const { data: library } = useFormLibraryQuery();
   const formTemplates = (library?.templates ?? []).filter((t) => !t.isArchived);
   const formByKind = value.visitForms.templateCodeByVisitKind;
   const allRoles = useMemo(() => roles.map((r) => ({ code: r.code, name: r.name })), [roles]);
   const set = (patch: Partial<MonitoringRules>) => onChange({ ...value, ...patch });
-  const templateByType = value.inspections.templateCodeByVisitType ?? {};
   const supervision = value.supervision;
 
   return (
     <section className={sectionCls}>
       <div>
-        <h3 className="text-sm font-bold text-slate-900">Monitoring: visit forms, inspections and supervision</h3>
+        <h3 className="text-sm font-bold text-slate-900">Monitoring: visit forms and supervision</h3>
         <p className="text-[11px] text-slate-500">The visit plan and deadlines are in the next section.</p>
       </div>
 
       <div className="border-t border-slate-100 pt-3 space-y-2">
         <h4 className="text-xs font-bold text-slate-900">Visit forms</h4>
         <p className="text-[11px] text-slate-500">
-          The visit form template for each visit kind (Settings → Forms &amp; facilities). "Default" uses the template whose code is the visit kind. A project keeps the
+          The visit form template for each visit kind (Forms &amp; facilities page). "Default" uses the template whose code is the visit kind. A project keeps the
           choice it was created with; the latest version of the template is used when a visit's form is built.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -116,37 +105,6 @@ export function MonitoringRulesEditor({ value, onChange }: { value: MonitoringRu
                   }}
                   options={[
                     { value: "", label: "Default" },
-                    ...(!known ? [{ value: current, label: `${current} (not found)` }] : []),
-                    ...options.map((t) => ({ value: t.code, label: `${t.name} (${t.code})` })),
-                  ]}
-                />
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="border-t border-slate-100 pt-3 space-y-2">
-        <h4 className="text-xs font-bold text-slate-900">Legacy inspection checklists</h4>
-        <p className="text-[11px] text-slate-500">Phase 14 site inspections still use these until visits replace them (R4). New checklist templates cannot be created any more.</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {InspectionVisitTypeEnum.options.map((vt) => {
-            const options = templates.filter((t) => t.visitTypes.includes(vt));
-            const current = templateByType[vt] ?? "";
-            const known = !current || options.some((t) => t.code === current);
-            return (
-              <div key={vt}>
-                <span className={label}>{INSPECTION_VISIT_TYPE_LABELS[vt]}</span>
-                <CustomSelect
-                  value={current}
-                  onChange={(v) => {
-                    const next = { ...templateByType };
-                    if (v) next[vt] = v;
-                    else delete next[vt];
-                    set({ inspections: { ...value.inspections, templateCodeByVisitType: next } });
-                  }}
-                  options={[
-                    { value: "", label: "None" },
                     ...(!known ? [{ value: current, label: `${current} (not found)` }] : []),
                     ...options.map((t) => ({ value: t.code, label: `${t.name} (${t.code})` })),
                   ]}

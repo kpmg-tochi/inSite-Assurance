@@ -7,26 +7,19 @@ import {
 } from '../../api/evidence/evidenceApi';
 import { createIncidentReport } from '../../api/incidents/incidentsApi';
 import { postDefectVerify } from '../../api/defects/defectsApi';
-import { postFindingResolution, submitSiteInspection } from '../../api/inspections/inspectionsApi';
-import { FINDING_ALREADY_RESOLVED_CODES, findingResolutionBody, type FindingResolutionPayload } from '../../utils/inspections';
-import { getQueuedInspection, markInspectionSent } from '../inspectionStore';
 import { DEFECT_ALREADY_APPLIED_CODES, defectActionBody, type DefectActionPayload } from '../../utils/defects';
-import { postBoqChatMessage } from '../../api/wbs/wbsChatApi';
-import { revalidateWorkdayReport, submitWorkdayReport } from '../../api/workday/workdayApi';
 import { getCapture, updateCaptureUpload } from '../captureStore';
 import { loadIncident, markIncidentSent, recordIncidentPhotoUploaded } from '../incidentStore';
-import { buildRevalidateRequest, buildSubmitRequest } from '../reportPayload';
-import { getReport, markReportRefused, markReportSent } from '../reportStore';
-import { CONTRACTOR_REPORTING_OFF_CODE, CONTRACTOR_REPORTING_OFF_MESSAGE } from './outboxPolicy';
-import { loadQueuedMessage, markMessageSent } from '../wbsRepository';
 import {
   LocalPermanentError,
   registerOutboxHandler,
 } from './outboxProcessor';
+import { registerVisitHandlers } from './visitHandlers';
 
 /**
  * One handler per outbox kind. Handlers are idempotent: every request carries a client UUID, so
- * a retry after a timeout returns the original record instead of creating a second one.
+ * a retry after a timeout returns the original record instead of creating a second one. The visit
+ * app's kinds are in visitHandlers.ts (redesign R5).
  */
 
 function extensionOf(mimeType: string): string {
@@ -85,7 +78,6 @@ export function registerOutboxHandlers(): void {
     try {
       const server = await registerCapture(c.projectId, {
         clientCaptureId: c.id,
-        wbsItemId: c.wbsItemId,
         mediaType: c.mediaType,
         objectKey,
         mimeType: c.mimeType,
@@ -114,46 +106,6 @@ export function registerOutboxHandlers(): void {
       }
       throw error;
     }
-  });
-
-  /** Marks the report itself as not sent when contractor reporting is off, then rethrows for the outbox. */
-  const refusedReport =
-    (reportId: string) =>
-    async (error: unknown): Promise<never> => {
-      if ((error as { code?: string })?.code === CONTRACTOR_REPORTING_OFF_CODE) {
-        await markReportRefused(reportId, CONTRACTOR_REPORTING_OFF_MESSAGE).catch(() => undefined);
-      }
-      throw error;
-    };
-
-  registerOutboxHandler('REPORT', async (row) => {
-    const report = await getReport(row.entityId);
-    if (!report) throw new LocalPermanentError('Report not found on this device.');
-    if (report.syncStatus === 'SENT') return;
-    const server = await submitWorkdayReport(report.projectId, buildSubmitRequest(report)).catch(
-      refusedReport(report.id)
-    );
-    await markReportSent(report.id, server);
-  });
-
-  registerOutboxHandler('REVALIDATION', async (row) => {
-    const report = await getReport(row.entityId);
-    if (!report) throw new LocalPermanentError('Report not found on this device.');
-    if (report.syncStatus === 'SENT') return;
-    if (!report.revisesServerReportId) throw new LocalPermanentError('Revision has no original report.');
-    const server = await revalidateWorkdayReport(
-      report.projectId,
-      report.revisesServerReportId,
-      buildRevalidateRequest(report)
-    ).catch(refusedReport(report.id));
-    await markReportSent(report.id, server);
-  });
-
-  registerOutboxHandler('CHAT_MESSAGE', async (row) => {
-    const queued = await loadQueuedMessage(row.entityId);
-    if (!queued) throw new LocalPermanentError('Message not found on this device.');
-    const sent = await postBoqChatMessage(queued.projectId, queued.wbsItemId, queued.body);
-    await markMessageSent(row.entityId, sent.id);
   });
 
   registerOutboxHandler('INCIDENT', async (row) => {
@@ -194,32 +146,5 @@ export function registerOutboxHandlers(): void {
     }
   });
 
-  // Phase 14: a confirmed inspection; its photos were sent first (dependsOn). Idempotent on the
-  // clientReportId: a retry after a lost response gets the original back.
-  registerOutboxHandler('SITE_INSPECTION', async (row) => {
-    const stored = await getQueuedInspection(row.entityId);
-    if (!stored?.request) throw new LocalPermanentError('Inspection not found on this device.');
-    if (stored.status === 'SENT') return;
-    const server = await submitSiteInspection(row.projectId, stored.request);
-    await markInspectionSent(row.entityId, server.id);
-  });
-
-  // Phase 14: a finding resolution behind its photos. Already resolved on a retry counts as done.
-  registerOutboxHandler('FINDING_RESOLUTION', async (row) => {
-    const payload = row.payload as unknown as FindingResolutionPayload;
-    if (!payload?.findingId) throw new LocalPermanentError('Finding update is missing its finding.');
-    let body: { notes: string; clientCaptureIds: string[] };
-    try {
-      body = findingResolutionBody(payload);
-    } catch (err) {
-      throw new LocalPermanentError((err as Error).message);
-    }
-    try {
-      await postFindingResolution(row.projectId, payload.findingId, body);
-    } catch (error) {
-      const code = (error as { code?: string })?.code;
-      if (code && FINDING_ALREADY_RESOLVED_CODES.includes(code) && row.attempts > 0) return;
-      throw error;
-    }
-  });
+  registerVisitHandlers();
 }

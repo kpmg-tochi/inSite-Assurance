@@ -67,8 +67,6 @@ export interface VisitKindMeta {
   facilityRule: VisitFacilityRule;
   /** Hint for R4: open findings and defects are added as re-check items by default. */
   recheckByDefault: boolean;
-  /** The Phase 14 `InspectionVisitType` with the same meaning, for R4's mapping (removed with Phase 14). */
-  legacyInspectionVisitType: 'BASELINE' | 'ROUTINE' | 'MOBILISATION_CHECK' | 'FINAL_EVALUATION' | null;
 }
 
 export const VISIT_KIND_META: Record<VisitKind, VisitKindMeta> = {
@@ -77,49 +75,42 @@ export const VISIT_KIND_META: Record<VisitKind, VisitKindMeta> = {
     description: 'Contractor on site, personnel, equipment, materials, letter presented. No facility sub-forms.',
     facilityRule: 'NONE',
     recheckByDefault: false,
-    legacyInspectionVisitType: 'MOBILISATION_CHECK',
   },
   BASELINE: {
     label: 'Baseline',
     description: 'Existing condition of every facility in scope.',
     facilityRule: 'ALL',
     recheckByDefault: false,
-    legacyInspectionVisitType: 'BASELINE',
   },
   ROUTINE: {
     label: 'Routine',
     description: 'Units active in the sprint covering the visit date, plus earlier units not yet reported complete.',
     facilityRule: 'SPRINT',
     recheckByDefault: true,
-    legacyInspectionVisitType: 'ROUTINE',
   },
   QUARTERLY_ME: {
     label: 'Quarterly M&E',
     description: 'Same units as Routine, with the M&E sections (including the valuation estimate).',
     facilityRule: 'SPRINT',
     recheckByDefault: true,
-    legacyInspectionVisitType: null,
   },
   FINAL_EVALUATION: {
     label: 'Final evaluation',
     description: 'Every facility in scope, delivered to specification.',
     facilityRule: 'ALL',
     recheckByDefault: true,
-    legacyInspectionVisitType: 'FINAL_EVALUATION',
   },
   POST_CLOSURE_EVALUATION: {
     label: 'Post-closure evaluation',
     description: 'Facilities in use, beneficiary feedback, issues. No facility sub-forms.',
     facilityRule: 'NONE',
     recheckByDefault: true,
-    legacyInspectionVisitType: null,
   },
   AD_HOC: {
     label: 'Ad hoc',
     description: 'The officer picks the facilities to check.',
     facilityRule: 'PICKED',
     recheckByDefault: true,
-    legacyInspectionVisitType: null,
   },
 };
 

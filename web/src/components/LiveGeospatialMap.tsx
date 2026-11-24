@@ -26,6 +26,12 @@ type LocatedCapture = CaptureListItemDto & { latitude: number; longitude: number
 const isLocated = (c: CaptureListItemDto): c is LocatedCapture =>
   c.locationAvailable && c.latitude !== null && c.longitude !== null;
 
+/** "Photo", "Video", "Voice note": the capture's media type as a label. */
+const mediaLabel = (c: CaptureListItemDto): string => {
+  const words = c.mediaType.replace(/_/g, ' ').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
 /** Refits the map when the project's boundary changes. */
 function FitToGeofence({ bounds }: { bounds: [LatLngTuple, LatLngTuple] }) {
   const map = useMap();
@@ -79,9 +85,8 @@ export function LiveGeospatialMap({
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
       return (
-        log.wbsCode?.toLowerCase().includes(q) ||
-        log.wbsDescription?.toLowerCase().includes(q) ||
         log.reporterName.toLowerCase().includes(q) ||
+        log.reporterRoleName.toLowerCase().includes(q) ||
         log.caption?.toLowerCase().includes(q)
       );
     });
@@ -149,7 +154,7 @@ export function LiveGeospatialMap({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search WBS, reporter or caption..."
+            placeholder="Search reporter, role or caption..."
             className="text-xs text-slate-800 placeholder-slate-400 bg-transparent focus:outline-none w-full"
           />
           {searchQuery && (
@@ -229,7 +234,7 @@ export function LiveGeospatialMap({
               <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
                 <div className="text-xs font-sans">
                   <div className="font-bold text-slate-900">
-                    Capture · {log.wbsCode || 'No WBS item'}
+                    {mediaLabel(log)} · {formatDateTimeShort(log.capturedAt)}
                   </div>
                   <div className="text-slate-600">
                     {formatReporterRoleBadge(log.reporterRoleName, log.fieldPersonaType)}
@@ -289,7 +294,7 @@ export function LiveGeospatialMap({
               <span className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">
                 Site Pin ·{' '}
                 {selectedLog.reporterRoleName ||
-                  (selectedLog.fieldPersonaType === 'INDEPENDENT_VERIFIER' ? 'Independent' : 'Contractor')}
+                  (selectedLog.fieldPersonaType === 'INDEPENDENT_VERIFIER' ? 'Independent' : 'Field officer')}
               </span>
               <span className="text-[10px] text-white/55">
                 {formatDateTimeShort(selectedLog.capturedAt)}
@@ -297,16 +302,12 @@ export function LiveGeospatialMap({
             </div>
             <div className="my-1">
               <div className="text-xs font-semibold text-white truncate">
-                {selectedLog.wbsCode
-                  ? `WBS ${selectedLog.wbsCode}: ${selectedLog.wbsDescription ?? ''}`
-                  : 'Not linked to a WBS item'}
+                {mediaLabel(selectedLog)} by {selectedLog.reporterName}
               </div>
               <p className="text-[11px] text-white/80 line-clamp-2 mt-0.5">
                 {selectedLog.caption ||
                   (selectedLog.transcriptionStatus === 'DONE' ? selectedLog.transcript : null) ||
-                  (selectedLog.workdayReportId
-                    ? 'Linked to a submitted report'
-                    : 'Not yet in a submitted report')}
+                  'No caption'}
               </p>
               <p className="text-[10px] text-white/70 mt-1">
                 {selectedStatus?.text}

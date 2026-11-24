@@ -29,11 +29,10 @@ import { facilitiesKey } from '../../queries/facilities/useFacilityQueries';
 
 const errorMessage = (err: unknown, fallback: string) => (err as { message?: string })?.message || fallback;
 
-/** Every scope write returns the new scope; the setup status, BOQ list and facility counts follow it. */
+/** Every scope write returns the new scope; the setup status and facility counts follow it. */
 function settle(qc: QueryClient, projectId: string, scope: ProjectScopeDto) {
   qc.setQueryData(projectScopeKey(projectId), scope);
   qc.invalidateQueries({ queryKey: projectSetupKey(projectId) });
-  qc.invalidateQueries({ queryKey: ['boq', projectId] });
   qc.invalidateQueries({ queryKey: facilitiesKey });
   qc.invalidateQueries({ queryKey: ['project-drafts'] });
 }

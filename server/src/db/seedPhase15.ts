@@ -4,6 +4,7 @@ import {
   addDays,
   ClosureChecklistItemTemplateInput,
   ContractMilestoneTemplateInput,
+  DEVICE_SIGNATURE_ALGORITHM,
   ProjectTypeConfigSchema,
   ProjectTypeSnapshot,
   zonedCalendarDate,
@@ -12,7 +13,10 @@ import { prisma } from "../config/prisma";
 import { WebJwtPayload } from "../middleware/auth.middleware";
 import { projectObjectPrefix, storageService } from "../integrations/storage.service";
 import { syncContractMilestones } from "../modules/contracts/milestones.service";
-import { parseSections } from "../modules/inspections/checklistTemplates.service";
+import { ensureFacilities } from "../modules/facilities/facilities.service";
+import { ensureFormLibrary } from "../modules/forms/formLibraryProvisioning";
+import { freezeVisitFormSnapshot } from "../modules/forms/visitForm.service";
+import { answersFor } from "./seedR4";
 import { changeProjectPhase } from "../modules/closeout/projectPhase.service";
 import { reviewHandoverSubmission } from "../modules/closeout/handover.service";
 import {
@@ -93,53 +97,105 @@ async function payloadFor(email: string): Promise<WebJwtPayload> {
   };
 }
 
-/** An approved final evaluation inspection with passing answers (as the mobile app would file it). */
+/**
+ * An accepted final evaluation visit (redesign R5f: replaces the legacy Phase 14 inspection the seed
+ * wrote here). Seed only: the form is frozen through the real form library (provisioned here if
+ * seedR3 has not run yet; provisioning is idempotent) and the visit and its approved submission are
+ * written directly, as if the officer had submitted it and every approval step had passed. The
+ * reporter is a web user, so the submission names a seed field session for them.
+ */
 export async function approvedFinalEvaluation(p: {
   tenantId: string;
   projectId: string;
   reporter: WebJwtPayload;
   visitDate: string;
-  /** Phase 16 reuses this for baseline surveys. */
-  visitType?: "FINAL_EVALUATION" | "BASELINE";
-  templateCode?: string;
+  /** Phase 16 reuses this for baseline visits. */
+  visitKind?: "FINAL_EVALUATION" | "BASELINE";
   summary?: string;
 }) {
-  const template = await prisma.inspectionChecklistTemplate.findFirstOrThrow({
-    where: { tenantId: p.tenantId, code: p.templateCode ?? "FINAL_EVALUATION", isArchived: false },
-    orderBy: { version: "desc" },
-  });
-  const answers = parseSections(template.sectionsJson).flatMap((s) =>
-    s.items.map((item) => ({
-      itemKey: item.key,
-      value:
-        item.responseType === "RATING_1_5" ? 4 : item.responseType === "PASS_FAIL_NA" ? "PASS" : item.responseType === "YES_NO" ? "YES" : item.responseType === "NUMBER" ? 1 : item.responseType === "TEXT" ? "None outstanding." : null,
-      comment: null,
-      clientCaptureIds: [],
-    }))
-  );
+  const visitKind = p.visitKind ?? "FINAL_EVALUATION";
+  await ensureFacilities(prisma, p.tenantId);
+  await ensureFormLibrary(prisma, p.tenantId);
   const at = new Date(`${p.visitDate}T11:00:00.000Z`);
-  return prisma.siteInspectionReport.create({
-    data: {
-      clientReportId: crypto.randomUUID(),
-      projectId: p.projectId,
-      visitType: p.visitType ?? "FINAL_EVALUATION",
-      templateId: template.id,
-      templateVersion: template.version,
-      visitDate: p.visitDate,
-      reporterUserId: p.reporter.userId,
-      reporterName: p.reporter.fullName,
-      reporterRoleId: p.reporter.roleId,
-      reporterRoleName: p.reporter.roleName,
-      answersJson: answers as unknown as Prisma.InputJsonValue,
-      overallFinding: "SATISFACTORY",
-      summaryText: p.summary ?? "Final evaluation: all deliverables in place and functional; finishes good. No outstanding snags at evaluation.",
-      status: "APPROVED",
-      confirmedAt: at,
-      approvedAt: addHours(at, 26),
-      aiCheckStatus: "SKIPPED",
+  // Every session belongs to an account on a device (R1d): a seed device for the reporter.
+  let device = await prisma.mobileDevice.findFirst({ where: { userId: p.reporter.userId, deviceId: SEED_EVALUATION_DEVICE } });
+  if (!device) {
+    const raw = crypto.randomBytes(32);
+    device = await prisma.mobileDevice.create({
+      data: {
+        userId: p.reporter.userId,
+        deviceId: SEED_EVALUATION_DEVICE,
+        deviceModel: "Seed evaluation device",
+        publicKey: raw.toString("base64"),
+        publicKeyAlg: DEVICE_SIGNATURE_ALGORITHM,
+        publicKeyId: crypto.createHash("sha256").update(raw).digest("hex").slice(0, 16),
+      },
+    });
+  }
+  const session =
+    (await prisma.fieldAgentSession.findFirst({ where: { userId: p.reporter.userId, projectId: p.projectId, deviceId: SEED_EVALUATION_DEVICE } })) ??
+    (await prisma.fieldAgentSession.create({
+      data: {
+        projectId: p.projectId,
+        userId: p.reporter.userId,
+        mobileDeviceId: device.id,
+        roleId: p.reporter.roleId,
+        roleNameSnapshot: p.reporter.roleName,
+        agentFullName: p.reporter.fullName,
+        agentPhoneNumber: "",
+        deviceId: SEED_EVALUATION_DEVICE,
+        isActive: false,
+      },
+    }));
+  return prisma.$transaction(
+    async (tx) => {
+      const form = await freezeVisitFormSnapshot(tx, { projectId: p.projectId, visitKind, visitDate: p.visitDate, builtAt: at, builtByUserId: p.reporter.userId });
+      const visit = await tx.visit.create({
+        data: {
+          projectId: p.projectId,
+          visitKind,
+          status: "APPROVED",
+          originalPlannedDate: p.visitDate,
+          plannedDate: p.visitDate,
+          confirmation: "CONFIRMED",
+          confirmedAt: at,
+          formSnapshotId: form.id,
+          formHash: form.contentSha256,
+          formAssembledAt: at,
+          submissionDeadline: p.visitDate,
+          publishedAt: at,
+          publishedByUserId: p.reporter.userId,
+          createdByUserId: p.reporter.userId,
+          assignees: { create: { userId: p.reporter.userId, isLead: true } },
+        },
+      });
+      await tx.visitSubmission.create({
+        data: {
+          clientSubmissionId: crypto.randomUUID(),
+          visitId: visit.id,
+          projectId: p.projectId,
+          submittedByUserId: p.reporter.userId,
+          fieldSessionId: session.id,
+          reporterName: p.reporter.fullName,
+          reporterRoleName: p.reporter.roleName,
+          formSnapshotId: form.id,
+          formHash: form.contentSha256,
+          answersJson: answersFor(form.snapshot) as unknown as Prisma.InputJsonValue,
+          overallFinding: "SATISFACTORY",
+          summaryText: p.summary ?? "Final evaluation: all deliverables in place and functional; finishes good. No outstanding snags at evaluation.",
+          confirmedAt: at,
+          receivedAt: at,
+          status: "APPROVED",
+          approvedAt: addHours(at, 26),
+        },
+      });
+      return visit;
     },
-  });
+    { timeout: 60_000 }
+  );
 }
+
+const SEED_EVALUATION_DEVICE = "SEED-EVALUATION";
 
 const addHours = (d: Date, h: number) => new Date(d.getTime() + h * 3_600_000);
 

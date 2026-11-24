@@ -48,7 +48,7 @@ Visit statuses are R4's (spec six plus `PROPOSED` and `RETURNED`); R5 builds the
 | Baseline pack changes for multi-project home (every assigned project, permissions in the session) | **R5** (D-R5.3) | Forms come from the R4 field pack, not the baseline pack |
 | Phase 14 checklist template authoring | **R3e** retires it | `forms:manage` added |
 | Phase 14 inspections runtime (server/web) | **R4** replaces | Closure checklist, CoC gate, KPI facts, closure pack switch to visits |
-| Endpoints the current app calls (workday reports, WBS chat, inspection field pack, finding resolve, mobile `/boq`, cadence columns) | Deleted in **R5e**, after the app no longer calls them | R4 D-R4.37 and R5 D-R5.24 agree |
+| Endpoints the current app calls (workday reports, WBS chat, inspection field pack, finding resolve, mobile `/boq`, cadence columns) | Deleted in **R5f** (a sequential slice after R5e and R6; owner decision 2026-11-24, R5 plan 10.2), after the app no longer calls them | R4 D-R4.37 and R5 D-R5.24 agree |
 | Findings table | **R4** extends `InspectionFinding`; **R7** renames the model `Finding` | |
 | "Forms & facilities" | **R3d** builds it as a Settings tab; **R6b** moves it to the tenant nav entry `/app/forms` | Settings → Facilities folds into it |
 | Permission catalogue sync at start-up | **R7a** (`syncPermissionCatalog`) | Until then, **every slice that adds a permission ships an idempotent backfill migration** (insert the permission, grant it to the default roles that hold it), as `20261208090001_r2_facilities_permission_backfill` does. Otherwise a migrated, not reseeded database lacks the key. |
@@ -61,6 +61,7 @@ Visit statuses are R4's (spec six plus `PROPOSED` and `RETURNED`); R5 builds the
 | R3 | `202612100900xx` |
 | R4 | `202612150900xx` |
 | R6 | `202612200900xx` |
+| R5f (old-app server clean-up, after R6) | `202612220900xx` |
 | R7 | `202612250900xx` |
 
 R5 adds no server migration of its own (phone SQLite versions v9, v10 only).

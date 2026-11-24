@@ -19,7 +19,8 @@ import { recordAuditEvent } from '../audit/audit.service';
 import { createWebNotification } from '../notifications/notifications.service';
 import { getProcessConfig } from '../process/processConfig.service';
 import { cocGateReason } from '../completion/completion.service';
-import { fmtNgn } from '../closeout/closeoutGate';
+import { fmtNgn, projectToday } from '../closeout/closeoutGate';
+import { loadSprintInProject } from '../../utils/ownership';
 
 /**
  * Payment record (redesign R1b). Payments are made outside the platform; finance records them here
@@ -32,7 +33,8 @@ import { fmtNgn } from '../closeout/closeoutGate';
  */
 
 type Tx = Prisma.TransactionClient;
-type PaymentRow = Prisma.ProjectPaymentGetPayload<object>;
+const PAYMENT_INCLUDE = { sprint: { select: { id: true, number: true, name: true } } } satisfies Prisma.ProjectPaymentInclude;
+type PaymentRow = Prisma.ProjectPaymentGetPayload<{ include: typeof PAYMENT_INCLUDE }>;
 
 const RECORD = 'payments:record';
 
@@ -61,6 +63,7 @@ function serializePayment(p: PaymentRow): PaymentDto {
     voidedAt: p.voidedAt?.toISOString() ?? null,
     voidedByName: p.voidedByName,
     voidReason: p.voidReason,
+    sprint: p.sprint ? { id: p.sprint.id, number: p.sprint.number, name: p.sprint.name } : null,
   };
 }
 
@@ -82,7 +85,7 @@ async function lockProject(tx: Tx, projectId: string) {
 
 /** GET /projects/:projectId/payments */
 export async function getProjectPayments(projectId: string, viewer: WebJwtPayload): Promise<ProjectPaymentsSummaryDto> {
-  const [project, payments, openDefects, cocIssued] = await Promise.all([
+  const [project, payments, openDefects, cocIssued, sprints] = await Promise.all([
     prisma.project.findUniqueOrThrow({
       where: { id: projectId },
       select: {
@@ -92,12 +95,15 @@ export async function getProjectPayments(projectId: string, viewer: WebJwtPayloa
         retentionHeldNgn: true,
         retentionReleasedNgn: true,
         disbursedToDateNgn: true,
+        timezone: true,
       },
     }),
-    prisma.projectPayment.findMany({ where: { projectId }, orderBy: [{ paidOn: 'desc' }, { createdAt: 'desc' }] }),
+    prisma.projectPayment.findMany({ where: { projectId }, include: PAYMENT_INCLUDE, orderBy: [{ paidOn: 'desc' }, { createdAt: 'desc' }] }),
     prisma.retentionDefectTicket.count({ where: { projectId, status: { in: OPEN_DEFECT_STATUSES } } }),
     prisma.completionCertificate.count({ where: { projectId, status: 'ISSUED' } }),
+    prisma.projectSprint.findMany({ where: { projectId }, orderBy: { number: 'asc' }, select: { id: true, number: true, name: true } }),
   ]);
+  const today = projectToday(project.timezone);
   const live = payments.filter((p) => p.voidedAt === null);
   const rows = payments.map(serializePayment);
   return {
@@ -110,8 +116,11 @@ export async function getProjectPayments(projectId: string, viewer: WebJwtPayloa
     retentionReleasedNgn: Number(project.retentionReleasedNgn),
     retentionBalanceNgn: Number(project.retentionHeldNgn),
     retentionPeriodEnd: project.retentionEndDate,
+    retentionPeriodEnded: project.retentionEndDate !== null && today >= project.retentionEndDate,
     cocIssued: cocIssued > 0,
     openDefects,
+    today,
+    sprints,
     exceptionCount: rows.filter((r) => !r.voided).reduce((s, r) => s + r.exceptions.length, 0),
     canRecord: hasWebPermission(viewer, RECORD),
     payments: rows,
@@ -126,6 +135,7 @@ export async function recordPayment(projectId: string, webUser: WebJwtPayload, i
     if (project.status !== 'ACTIVE') {
       throw new AppError('Payments can be recorded on active projects only', 409, 'PROJECT_NOT_ACTIVE');
     }
+    const sprint = input.sprintId ? await loadSprintInProject(tx, projectId, input.sprintId) : null;
     const gross = roundNgn2(input.grossAmountNgn);
     const heldBalance = Number(project.retentionHeldNgn);
     let held = 0;
@@ -196,7 +206,9 @@ export async function recordPayment(projectId: string, webUser: WebJwtPayload, i
         exceptionsJson: exceptions as unknown as Prisma.InputJsonValue,
         recordedByUserId: webUser.userId,
         recordedByName: webUser.fullName,
+        sprintId: sprint?.id ?? null,
       },
+      include: PAYMENT_INCLUDE,
     });
     await tx.project.update({
       where: { id: projectId },
@@ -213,9 +225,19 @@ export async function recordPayment(projectId: string, webUser: WebJwtPayload, i
       action: 'PAYMENT_RECORDED',
       summaryText:
         `Recorded ${PAYMENT_KIND_LABELS[input.kind].toLowerCase()} ${input.reference} of ${fmtNgn(gross)} paid on ${input.paidOn}` +
+        (sprint ? ` for sprint ${sprint.number} (${sprint.name})` : '') +
         (held > 0 ? ` (${fmtNgn(held)} retention held, ${fmtNgn(net)} net).` : '.') +
         (exceptions.length ? ` Exceptions: ${exceptions.join(', ')}.` : ''),
-      payload: { paymentId: created.id, kind: input.kind, grossAmountNgn: gross, retentionHeldNgn: held, netAmountNgn: net, exceptions },
+      payload: {
+        paymentId: created.id,
+        kind: input.kind,
+        grossAmountNgn: gross,
+        retentionHeldNgn: held,
+        netAmountNgn: net,
+        exceptions,
+        sprintId: sprint?.id ?? null,
+        sprintNumber: sprint?.number ?? null,
+      },
     });
     if (exceptions.length > 0) {
       await createWebNotification(tx, {
@@ -259,6 +281,7 @@ export async function voidPayment(
     const updated = await tx.projectPayment.update({
       where: { id: payment.id },
       data: { voidedAt: new Date(), voidedByName: webUser.fullName, voidReason: input.reason },
+      include: PAYMENT_INCLUDE,
     });
     await tx.project.update({
       where: { id: projectId },

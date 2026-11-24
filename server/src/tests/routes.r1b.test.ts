@@ -236,59 +236,27 @@ describe('Redesign R1b: payment record', () => {
   });
 });
 
-describe('Redesign R1b: progress from counted reports', () => {
-  it('a counted report moves the item and the budget-weighted project progress', async () => {
-    const base = await prisma.workdayReport.findFirstOrThrow({ where: { projectId: ids.lkk, status: 'CONFIRMED' } });
+describe('Redesign R1b: budget-weighted project progress', () => {
+  it('project progress is the budget-weighted line progress; lines without unit progress keep their stored value (R5f)', async () => {
     const items = await Promise.all(
-      [1, 2].map((n) =>
+      [
+        [1, 25],
+        [2, 0],
+      ].map(([n, pct]) =>
         prisma.boqItem.create({
-          data: { projectId: ids.lkk, wbsCode: `R1B.0${n}`, section: 'R1B', description: `Item ${n}`, unit: 'm', totalQuantity: 200, rateNgn: 1, budgetedCostNgn: 200 },
+          data: { projectId: ids.lkk, wbsCode: `R1B.0${n}`, section: 'R1B', description: `Item ${n}`, unit: 'm', totalQuantity: 200, rateNgn: 1, budgetedCostNgn: 200, cumulativeCertifiedPct: pct },
         })
       )
     );
-    await prisma.workdayReport.create({
-      data: {
-        clientReportId: crypto.randomUUID(),
-        projectId: ids.lkk,
-        reporterSessionId: base.reporterSessionId,
-        wbsItemId: items[0].id,
-        workdayDate: base.workdayDate,
-        reporterTimezone: base.reporterTimezone,
-        status: 'CONFIRMED',
-        summaryText: 'Laid 50 m.',
-        reportedQuantity: 50,
-        unitOfMeasure: 'm',
-        reportingPeriodStart: base.reportingPeriodStart,
-        reportingPeriodEnd: base.reportingPeriodEnd,
-        dueAt: base.dueAt,
-        reporterPersonaType: base.reporterPersonaType,
-      },
-    });
-    // A pending report on the second item does not count.
-    await prisma.workdayReport.create({
-      data: {
-        clientReportId: crypto.randomUUID(),
-        projectId: ids.lkk,
-        reporterSessionId: base.reporterSessionId,
-        wbsItemId: items[1].id,
-        workdayDate: base.workdayDate,
-        reporterTimezone: base.reporterTimezone,
-        status: 'PENDING_APPROVAL',
-        summaryText: 'Laid 200 m.',
-        reportedQuantity: 200,
-        unitOfMeasure: 'm',
-        reportingPeriodStart: base.reportingPeriodStart,
-        reportingPeriodEnd: base.reportingPeriodEnd,
-        dueAt: base.dueAt,
-        reporterPersonaType: base.reporterPersonaType,
-      },
-    });
     const pct = await prisma.$transaction((tx) => progress.refreshProjectProgress(tx, ids.lkk));
     const [a, b] = await Promise.all(items.map((i) => prisma.boqItem.findUniqueOrThrow({ where: { id: i.id } })));
     assert.equal(Number(a.cumulativeCertifiedPct), 25);
     assert.equal(Number(b.cumulativeCertifiedPct), 0);
+    const lines = await prisma.boqItem.findMany({ where: { projectId: ids.lkk }, select: { budgetedCostNgn: true, cumulativeCertifiedPct: true } });
+    const budget = lines.reduce((sum, l) => sum + Number(l.budgetedCostNgn), 0);
+    const weighted = lines.reduce((sum, l) => sum + Number(l.budgetedCostNgn) * Number(l.cumulativeCertifiedPct), 0);
+    assert.equal(pct, Math.round((weighted / budget) * 100) / 100);
     const project = await prisma.project.findUniqueOrThrow({ where: { id: ids.lkk } });
     assert.equal(Number(project.certifiedProgressPct), pct);
-    assert.ok(pct >= 0 && pct <= 100);
   });
 });

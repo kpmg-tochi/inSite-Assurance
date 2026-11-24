@@ -228,7 +228,7 @@ function FindingCard({ projectId, finding: f }: { projectId: string; finding: In
       <p className="text-slate-700">{f.description}</p>
       <p className="text-[11px] text-slate-500">
         {where ? `${where} · ` : ""}
-        {f.visitKind ? visitKindLabel(f.visitKind) : "Inspection"} of {f.inspectionVisitDate} · {f.contractorName ?? "Monitoring side"}
+        {f.visitKind ? visitKindLabel(f.visitKind) : "Visit"} of {f.inspectionVisitDate} · {f.contractorName ?? "Monitoring side"}
         {f.recheckCount ? ` · re-checked ${f.recheckCount} time(s)` : ""}
         {f.escalatedAt ? " · escalated" : ""}
       </p>

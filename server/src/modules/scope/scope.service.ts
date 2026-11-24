@@ -53,10 +53,7 @@ const money = (n: number) => `NGN ${n.toLocaleString('en-NG', { maximumFractionD
 // Reads
 // ---------------------------------------------------------------------------
 
-export const LINE_INCLUDE = {
-  _count: { select: { evidenceLogs: true, workdayReports: true, incidentReports: true, reportQueries: true } },
-} satisfies Prisma.BoqItemInclude;
-type LineRow = Prisma.BoqItemGetPayload<{ include: typeof LINE_INCLUDE }>;
+type LineRow = Prisma.BoqItemGetPayload<object>;
 
 const UNIT_INCLUDE = {
   facility: { select: { id: true, code: true, name: true, archetype: true, isRetired: true, sortOrder: true } },
@@ -74,13 +71,9 @@ export async function defectItemIds(db: Db, projectId: string): Promise<Set<stri
   return new Set(rows.map((r) => r.boqItemId!));
 }
 
+/** A line with progress or a defect cannot be removed (R5f: captures and reports no longer name a line). */
 export function lineHasEvidence(line: LineRow, defects: Set<string>): boolean {
-  const c = line._count;
-  return (
-    c.evidenceLogs + c.workdayReports + c.incidentReports + c.reportQueries > 0 ||
-    Number(line.cumulativeCertifiedPct) > 0 ||
-    defects.has(line.id)
-  );
+  return Number(line.cumulativeCertifiedPct) > 0 || defects.has(line.id);
 }
 
 function serializeLine(line: LineRow, defects: Set<string>): ScopeLineDto {
@@ -94,8 +87,6 @@ function serializeLine(line: LineRow, defects: Set<string>): ScopeLineDto {
     totalQuantity: Number(line.totalQuantity),
     rateNgn: Number(line.rateNgn),
     budgetedCostNgn: Number(line.budgetedCostNgn),
-    isHoldPoint: line.isHoldPoint,
-    holdPointInstruction: line.holdPointInstruction,
     plannedStartDate: line.plannedStartDate,
     plannedEndDate: line.plannedEndDate,
     cumulativeCertifiedPct: Number(line.cumulativeCertifiedPct),
@@ -127,7 +118,7 @@ export async function getProjectScope(projectId: string): Promise<ProjectScopeDt
       include: UNIT_INCLUDE,
       orderBy: [{ facility: { sortOrder: 'asc' } }, { sortOrder: 'asc' }, { code: 'asc' }],
     }),
-    prisma.boqItem.findMany({ where: { projectId }, include: LINE_INCLUDE, orderBy: { wbsCode: 'asc' } }),
+    prisma.boqItem.findMany({ where: { projectId }, orderBy: { wbsCode: 'asc' } }),
     defectItemIds(prisma, projectId),
   ]);
   const today = zonedCalendarDate(new Date(), project.timezone);
@@ -318,6 +309,20 @@ export async function saveSprints(projectId: string, webUser: WebJwtPayload, inp
       if (used) {
         throw new AppError(
           `Unit ${used.code} (${used.label}) starts or ends in a sprint you removed. Move the unit first.`,
+          409,
+          'SPRINT_IN_USE'
+        );
+      }
+    }
+    if (removed.length) {
+      // Redesign R6d (D-R6.23): a sprint a payment names (voided ones included) is kept.
+      const paid = await tx.projectPayment.findFirst({
+        where: { projectId, sprintId: { in: removed.map((s) => s.id) } },
+        include: { sprint: { select: { number: true, name: true } } },
+      });
+      if (paid) {
+        throw new AppError(
+          `Payment ${paid.reference} is recorded against sprint ${paid.sprint!.number} (${paid.sprint!.name}). A sprint a payment names cannot be removed.`,
           409,
           'SPRINT_IN_USE'
         );
@@ -536,7 +541,7 @@ export async function deleteFacilityUnit(projectId: string, unitId: string, webU
   await runScopeWrite(projectId, webUser, async (ctx) => {
     const { tx } = ctx;
     const unit = await loadFacilityUnitInProject(tx, projectId, unitId);
-    const lines = await tx.boqItem.findMany({ where: { facilityUnitId: unit.id }, include: LINE_INCLUDE });
+    const lines = await tx.boqItem.findMany({ where: { facilityUnitId: unit.id } });
     const defects = await defectItemIds(tx, projectId);
     const withEvidence = lines.find((l) => lineHasEvidence(l, defects));
     if (withEvidence) {
@@ -684,7 +689,7 @@ export async function deleteScopeLine(projectId: string, lineId: string, webUser
   await runScopeWrite(projectId, webUser, async (ctx) => {
     const { tx } = ctx;
     await loadBoqItemInProject(tx, projectId, lineId);
-    const line = await tx.boqItem.findUniqueOrThrow({ where: { id: lineId }, include: LINE_INCLUDE });
+    const line = await tx.boqItem.findUniqueOrThrow({ where: { id: lineId } });
     if (lineHasEvidence(line, await defectItemIds(tx, projectId))) {
       throw new AppError(`Line ${line.wbsCode} has field evidence, reports or defects and cannot be removed.`, 409, 'LINE_HAS_EVIDENCE');
     }

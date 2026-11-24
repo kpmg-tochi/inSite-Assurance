@@ -9,7 +9,7 @@ import {
   VisitFormSnapshotSchema,
   VisitKindEnum,
 } from './form.schema';
-import { SubmissionGeotagInputSchema, SubmissionGeotagSchema, WorkdayReportCaptureSummarySchema } from './workday.schema';
+import { SubmissionGeotagInputSchema, SubmissionGeotagSchema, CaptureSummarySchema } from './evidence.schema';
 import { ApprovalProgressDtoSchema } from './process.schema';
 import { ProjectGeofenceSchema } from './geofence.schema';
 import { GeofenceStatusEnum } from '../enums';
@@ -455,7 +455,7 @@ export const SiteLogEntryDtoSchema = z.object({
   authorName: z.string(),
   kind: SiteLogKindEnum,
   text: z.string().nullable(),
-  capture: WorkdayReportCaptureSummarySchema.nullable(),
+  capture: CaptureSummarySchema.nullable(),
   latitude: z.number().nullable(),
   longitude: z.number().nullable(),
   geofenceStatus: GeofenceStatusEnum.nullable(),
@@ -488,7 +488,7 @@ export const VisitAnswerDtoSchema = z.object({
   path: z.string(),
   value: z.union([z.string(), z.number(), z.array(z.string()), z.null()]),
   comment: z.string().nullable(),
-  captures: z.array(WorkdayReportCaptureSummarySchema.extend({ unitId: Uuid.nullable() })),
+  captures: z.array(CaptureSummarySchema.extend({ unitId: Uuid.nullable() })),
 });
 export type VisitAnswerDto = z.infer<typeof VisitAnswerDtoSchema>;
 

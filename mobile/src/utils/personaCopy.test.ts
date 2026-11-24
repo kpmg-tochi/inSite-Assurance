@@ -1,25 +1,40 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { resolveTerminology } from '@insite/shared';
 import { personaCopy } from './personaCopy';
 
-describe('persona copy', () => {
-  it('every persona reads with the officer (verifier) wording; contractors no longer sign in', () => {
+describe('persona copy (D-R5.23)', () => {
+  it('every persona reads the same visit wording; there are no persona branches', () => {
     const v = personaCopy('INDEPENDENT_VERIFIER');
-    for (const persona of ['CONTRACTOR_EXECUTOR', 'NONE', null, undefined] as const) {
+    for (const persona of ['NONE', null, undefined] as const) {
       assert.deepEqual(personaCopy(persona), v);
     }
   });
 
-  it('wording is about inspecting and verifying', () => {
+  it('wording is about visits', () => {
     const v = personaCopy('INDEPENDENT_VERIFIER');
-    assert.equal(v.endOfDayButton, 'Record inspection summary & submit');
-    assert.equal(v.reportSheetTitle, 'Submit your inspection report');
+    assert.equal(v.checkInButton, 'Check in');
+    assert.equal(v.startFormButton, 'Start the visit form');
+    assert.match(v.unscheduledVisitHelp, /Ad hoc/);
   });
 
-  it('copy never tells the reader to execute work or mentions an identity check', () => {
+  it('takes the tenant terms for the contractor, beneficiary and funder', () => {
+    const terms = resolveTerminology({
+      contractor: { singular: 'Builder' },
+      beneficiary: { singular: 'School', plural: 'Schools' },
+      funderParty: { singular: 'Funding authority' },
+    });
+    const v = personaCopy('INDEPENDENT_VERIFIER', terms);
+    assert.equal(v.contractorLabel, 'Builder');
+    assert.equal(v.beneficiaryLabel, 'School');
+    assert.match(v.incidentSubtitle, /funding authority/);
+    assert.equal(personaCopy(null).contractorLabel, 'Contractor');
+  });
+
+  it('copy never mentions AI, summary suggestions, chat, reporting periods or an identity check', () => {
     const all = Object.values(personaCopy('INDEPENDENT_VERIFIER')).join(' ').toLowerCase();
-    for (const word of ['deliverable', 'execute', 'build', 'install', 'pour', 'complete the work', 'identity', 'brief']) {
-      assert.ok(!all.includes(word), `copy contains "${word}"`);
+    for (const word of [' ai ', 'ai-', 'suggest', 'chat', 'thread', 'inbox', 'daily', 'weekly', 'period', 'identity', 'deliverables inbox']) {
+      assert.ok(!` ${all} `.includes(word), `copy contains "${word}"`);
     }
   });
 

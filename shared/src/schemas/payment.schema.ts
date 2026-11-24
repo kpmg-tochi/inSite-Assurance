@@ -48,6 +48,8 @@ export const RecordPaymentRequestSchema = z
     retentionOverrideReason: z.string().trim().max(500).nullable().optional(),
     reference: z.string().trim().min(1, 'Enter the payment reference').max(120),
     description: z.string().trim().max(500).nullable().optional(),
+    /** Redesign R6d (D-R6.23): the sprint the payment is for, optional; must be a sprint of the project. */
+    sprintId: z.string().uuid().nullable().optional(),
   })
   .superRefine((v, ctx) => {
     if (v.retentionHeldNgn != null && v.retentionHeldNgn > v.grossAmountNgn) {
@@ -60,6 +62,13 @@ export const VoidPaymentRequestSchema = z.object({
   reason: z.string().trim().min(5, 'Say why this payment is being voided').max(500),
 });
 export type VoidPaymentRequest = z.infer<typeof VoidPaymentRequestSchema>;
+
+export const PaymentSprintRefSchema = z.object({
+  id: z.string().uuid(),
+  number: z.number().int(),
+  name: z.string(),
+});
+export type PaymentSprintRef = z.infer<typeof PaymentSprintRefSchema>;
 
 export const PaymentDtoSchema = z.object({
   id: z.string().uuid(),
@@ -81,6 +90,8 @@ export const PaymentDtoSchema = z.object({
   voidedAt: z.string().nullable(),
   voidedByName: z.string().nullable(),
   voidReason: z.string().nullable(),
+  /** Redesign R6d: the sprint the payment is for, or null. */
+  sprint: PaymentSprintRefSchema.nullable(),
 });
 export type PaymentDto = z.infer<typeof PaymentDtoSchema>;
 
@@ -96,8 +107,14 @@ export const ProjectPaymentsSummaryDtoSchema = z.object({
   retentionReleasedNgn: z.number(),
   retentionBalanceNgn: z.number(),
   retentionPeriodEnd: z.string().nullable(),
+  /** Redesign R6d: true once today (project zone) is on or after `retentionPeriodEnd`. */
+  retentionPeriodEnded: z.boolean(),
   cocIssued: z.boolean(),
   openDefects: z.number().int(),
+  /** Redesign R6d: today in the project zone (YYYY-MM-DD). */
+  today: z.string(),
+  /** Redesign R6d: the project's sprints in number order, for the record dialog and the filter. */
+  sprints: z.array(PaymentSprintRefSchema),
   exceptionCount: z.number().int(),
   canRecord: z.boolean(),
   payments: z.array(PaymentDtoSchema),

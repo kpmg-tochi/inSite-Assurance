@@ -24,7 +24,8 @@ export function ScoreStars({ score }: { score: number }) {
 }
 
 /** Phase 15: contractor ratings on the Closure tab (hidden from contractors unless shared). */
-export function ContractorRatingsPanel({ projectId }: { projectId: string }) {
+/** `readOnly`: an archived project (the server refuses every write but the closure pack). */
+export function ContractorRatingsPanel({ projectId, readOnly = false }: { projectId: string; readOnly?: boolean }) {
   const query = useProjectRatingsQuery(projectId);
   const [rating, setRating] = useState<{ contractor: ContractorRow; stage: ContractorRatingStage } | null>(null);
   if (query.isLoading) return <Loader />;
@@ -58,7 +59,7 @@ export function ContractorRatingsPanel({ projectId }: { projectId: string }) {
                   </span>
                 )}
               </div>
-              {data.canRate && (
+              {data.canRate && !readOnly && (
                 <div className="flex gap-2">
                   {data.openStages
                     .filter((s) => !c.myRatedStages.includes(s))

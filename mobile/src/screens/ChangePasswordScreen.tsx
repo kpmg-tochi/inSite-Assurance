@@ -45,7 +45,7 @@ export const ChangePasswordScreen: React.FC = () => {
       const result = await changeAccountPassword(account.token, parsed.data);
       await completePasswordChange(result);
       Toast.show({ type: "success", props: { title: "Password changed", message: "Your other sessions were signed out." } });
-      navigation.reset({ index: 0, routes: [{ name: "Projects" }] });
+      navigation.reset({ index: 0, routes: [{ name: "Home" }] });
     } catch (err) {
       Toast.show({
         type: "error",

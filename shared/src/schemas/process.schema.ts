@@ -22,9 +22,6 @@ import {
 export const ProjectProcessConfigSchema = z.object({
   needsAssessmentMode: NeedsAssessmentModeEnum,
   standardsSpecificationMode: StandardsSpecificationModeEnum,
-  enableHoldPoints: z.boolean(),
-  enableAiOmissionCheck: z.boolean(),
-  enableAiStandardsCheck: z.boolean(),
   requireReportApproval: z.boolean(),
   enableHandoverModule: z.boolean(),
   enableRetentionModule: z.boolean(),
@@ -35,9 +32,6 @@ export type ProjectProcessConfig = z.infer<typeof ProjectProcessConfigSchema>;
 export const DEFAULT_PROJECT_PROCESS_CONFIG: ProjectProcessConfig = {
   needsAssessmentMode: 'OPTIONAL_AT_CREATION',
   standardsSpecificationMode: 'OPTIONAL_AT_CREATION',
-  enableHoldPoints: true,
-  enableAiOmissionCheck: true,
-  enableAiStandardsCheck: true,
   requireReportApproval: false,
   enableHandoverModule: false,
   enableRetentionModule: false,
@@ -47,21 +41,9 @@ export const PROCESS_TOGGLE_META: Record<
   Exclude<keyof ProjectProcessConfig, 'needsAssessmentMode' | 'standardsSpecificationMode'>,
   { label: string; description: string }
 > = {
-  enableHoldPoints: {
-    label: 'Hold points',
-    description: 'Off: hold-point flags are ignored and hidden.',
-  },
-  enableAiOmissionCheck: {
-    label: 'Omission check on reports',
-    description: 'Checks submitted reports for missing hold-point and checklist proof.',
-  },
-  enableAiStandardsCheck: {
-    label: 'Standards check on reports',
-    description: 'Checks submitted reports against the project standards that apply to the item.',
-  },
   requireReportApproval: {
     label: 'Report approval',
-    description: 'Reports count as evidence only after every step of the report approval chain approves them.',
+    description: 'Visit reports are accepted only after every step of the report approval chain approves them.',
   },
   enableHandoverModule: {
     label: 'Stakeholder handover',
@@ -358,15 +340,3 @@ export const ApprovalProgressDtoSchema = z.object({
   cannotActReason: z.string().nullable(),
 });
 export type ApprovalProgressDto = z.infer<typeof ApprovalProgressDtoSchema>;
-
-/** POST /workday-reports/:reportId/review. REJECT is not accepted (reports are returned instead). */
-export const ReviewWorkdayReportRequestSchema = z
-  .object({
-    decision: z.enum(['APPROVE', 'RETURN']),
-    notes: z.string().trim().max(1500).nullable().optional(),
-  })
-  .refine((v) => v.decision !== 'RETURN' || (v.notes ?? '').length >= 5, {
-    message: 'Say what the reporter must change (at least 5 characters)',
-    path: ['notes'],
-  });
-export type ReviewWorkdayReportRequest = z.infer<typeof ReviewWorkdayReportRequestSchema>;

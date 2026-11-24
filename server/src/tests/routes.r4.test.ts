@@ -179,7 +179,8 @@ describe('Redesign R4a: visits, type plans and generators', () => {
       assert.deepEqual(v.assignees.map((a) => [a.userId, a.isLead]), [[ids.resident, true]]);
     }
     assert.ok(visits.some((v) => v.status === 'PROPOSED' && v.generatorKey.startsWith('routine:')));
-    assert.ok(visits.every((v) => v.plannedDate >= today()));
+    // R5f: the seeded baseline (seedPhase16, formerly a Phase 14 inspection) is an accepted visit in the past.
+    assert.ok(visits.filter((v) => v.status !== 'APPROVED').every((v) => v.plannedDate >= today()));
     assert.equal(res.body.data.toleranceWorkdays, 2);
   });
 
@@ -814,10 +815,7 @@ describe('Redesign R4d: approval, findings loop, progress, milestones', () => {
     assert.equal(resolved.resolutionCaptureIds.length, 1);
     const list = await request(app).get(`/api/v1/projects/${ids.prg105}/findings?visitId=${v.id}`).set(await web(P_MONITOR));
     assert.equal(list.status, 200, JSON.stringify(list.body));
-    assert.equal(list.body.data[0].source, 'VISIT');
     assert.equal(list.body.data[0].status, 'RESOLVED');
-    const alias = await request(app).get(`/api/v1/projects/${ids.prg105}/inspection-findings?visitId=${v.id}`).set(await web(P_MONITOR));
-    assert.equal(alias.status, 200);
   });
 
   it('accepts a submission against an older form that differs only in its re-checks', async () => {

@@ -1,16 +1,19 @@
 import type { MobileBaselinePack } from '@insite/shared';
 import { getActiveProjectId } from '../config/authRegistry';
 import { getDb, nowIso } from './db/database';
+import { emitVisitDataChanged } from './visitEvents';
+import { normaliseBaselinePack } from '../utils/baselinePack';
 
 /**
- * Project baselines (geofence, BOQ pack, time zone), one per project, persisted in SQLite so
+ * Project baseline packs (geofence, time zone, sprints, units, open findings), one per project, persisted in SQLite so
  * geofence checks work after a restart and offline (Phase 4). Phase 5: there is no single global
  * pack any more; packs are loaded per project and kept in a small in-memory map.
  */
 
 const loaded = new Map<string, MobileBaselinePack>();
 
-export async function persistBaselinePack(pack: MobileBaselinePack): Promise<void> {
+export async function persistBaselinePack(raw: MobileBaselinePack): Promise<void> {
+  const pack = normaliseBaselinePack(raw);
   loaded.set(pack.projectId, pack);
   const db = await getDb();
   await db.runAsync(
@@ -18,6 +21,7 @@ export async function persistBaselinePack(pack: MobileBaselinePack): Promise<voi
      ON CONFLICT(project_id) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at`,
     [pack.projectId, JSON.stringify(pack), nowIso()]
   );
+  emitVisitDataChanged('packs');
 }
 
 /** Loads a project's stored pack into memory. Returns null if none is stored yet. */
@@ -30,7 +34,8 @@ export async function hydrateBaselinePack(projectId: string): Promise<MobileBase
     [projectId]
   );
   if (!row) return null;
-  const pack = JSON.parse(row.json) as MobileBaselinePack;
+  // Redesign R5a: packs stored before R5 get the v2 fields with empty values.
+  const pack = normaliseBaselinePack(JSON.parse(row.json) as MobileBaselinePack);
   loaded.set(projectId, pack);
   return pack;
 }
@@ -52,4 +57,14 @@ export async function deleteBaselinePacks(projectIds?: string[]): Promise<void> 
     loaded.delete(id);
     await db.runAsync('DELETE FROM project_baseline WHERE project_id = ?', [id]);
   }
+}
+
+/** Redesign R5a: the stored packs of several projects (Home's project cards); projects without one are absent. */
+export async function loadBaselinePacks(projectIds: string[]): Promise<Map<string, MobileBaselinePack>> {
+  const out = new Map<string, MobileBaselinePack>();
+  for (const id of projectIds) {
+    const pack = await hydrateBaselinePack(id).catch(() => null);
+    if (pack) out.set(id, pack);
+  }
+  return out;
 }

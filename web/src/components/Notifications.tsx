@@ -4,9 +4,6 @@ import {
   Bell,
   AlertTriangle,
   UserCheck,
-  FileQuestion,
-  FileCheck2,
-  Sparkles,
   CheckCheck,
   X,
   ExternalLink,
@@ -21,19 +18,15 @@ import {
 } from "../queries/notifications/useWebNotificationsQueries";
 import { useTerm } from "../lib/auth-context";
 
-const CATEGORY_LABELS: Record<WebNotificationCategory, string> = {
-  REPORT_RESUBMITTED: "Report resubmitted",
+/**
+ * Redesign R5f: the old app's report, query and inspection categories are gone; a stored row of a
+ * category without a label shows as "Notification".
+ */
+const CATEGORY_LABELS: Partial<Record<WebNotificationCategory, string>> = {
   CONTRACTOR_ONBOARDING: "Contractor onboarding",
-  MONITOR_QUERY: "Monitor query",
-  AI_OMISSION_FLAG: "Missing evidence",
-  STANDARDS_VIOLATION_FLAGGED: "Standards violation",
-  REPORT_PENDING_APPROVAL: "Report awaiting approval",
-  REPORT_MISSED: "Missed report",
   SCHEDULE_BEHIND: "Behind schedule",
   HANDOVER_RECORDED: "Handover response",
   DEFECT_TICKET: "Defect",
-  INSPECTION_PENDING_APPROVAL: "Inspection awaiting approval",
-  INSPECTION_FINDING: "Inspection finding",
   CONTRACT_MILESTONE: "Contract milestone",
   CONTRACT_DEFAULT_CASE: "Default case",
   DOCUMENT_SIGN_OFF: "Document sign-off",
@@ -109,19 +102,13 @@ export default function Notifications({ projectId }: NotificationsProps) {
 
   const getCategoryIcon = (category: WebNotificationCategory) => {
     switch (category) {
-      case "REPORT_RESUBMITTED":
-        return <FileCheck2 className="w-4 h-4 text-emerald-600" />;
-      case "AI_OMISSION_FLAG":
-        return <Sparkles className="w-4 h-4 text-amber-600" />;
       case "PAYMENT_EXCEPTION":
         return <AlertTriangle className="w-4 h-4 text-amber-600" />;
       case "CONTRACTOR_ONBOARDING":
         return <UserCheck className="w-4 h-4 text-brand-primary" />;
-      case "MONITOR_QUERY":
-        return <FileQuestion className="w-4 h-4 text-brand-primary" />;
-      case "STANDARDS_VIOLATION_FLAGGED":
+      case "FINDING_ESCALATED":
         return <ShieldAlert className="w-4 h-4 text-rose-600" />;
-      case "REPORT_PENDING_APPROVAL":
+      case "VISIT_PENDING_APPROVAL":
         return <ClipboardCheck className="w-4 h-4 text-amber-600" />;
       default:
         return <Bell className="w-4 h-4 text-slate-500" />;
@@ -139,19 +126,13 @@ export default function Notifications({ projectId }: NotificationsProps) {
 
   const getCategoryBadgeClass = (category: WebNotificationCategory) => {
     switch (category) {
-      case "REPORT_RESUBMITTED":
-        return "bg-emerald-50 text-emerald-800 border-emerald-200";
-      case "AI_OMISSION_FLAG":
-        return "bg-amber-50 text-amber-800 border-amber-200";
       case "PAYMENT_EXCEPTION":
         return "bg-amber-50 text-amber-800 border-amber-200";
       case "CONTRACTOR_ONBOARDING":
         return "bg-brand-primary/5 text-brand-primary border-brand-primary/25";
-      case "MONITOR_QUERY":
-        return "bg-brand-sky/10 text-brand-medium border-brand-sky/30";
-      case "STANDARDS_VIOLATION_FLAGGED":
+      case "FINDING_ESCALATED":
         return "bg-rose-50 text-rose-800 border-rose-200";
-      case "REPORT_PENDING_APPROVAL":
+      case "VISIT_PENDING_APPROVAL":
         return "bg-amber-50 text-amber-800 border-amber-200";
       default:
         return "bg-slate-50 text-slate-700 border-slate-200";
@@ -165,7 +146,7 @@ export default function Notifications({ projectId }: NotificationsProps) {
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-label="Open governance notifications"
-        title="Governance Notifications & Report Resubmissions"
+        title="Notifications"
         className="relative p-2 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-white transition flex items-center justify-center focus:outline-hidden"
       >
         <Bell className="w-4 h-4 text-slate-200 hover:text-white" />
@@ -254,7 +235,7 @@ export default function Notifications({ projectId }: NotificationsProps) {
                     : "No notifications present for this project."}
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Resubmitted field reports, missing-evidence flags and payment exceptions appear here.
+                  Visits to review, findings, milestones and payment exceptions appear here.
                 </p>
               </div>
             ) : (
@@ -300,7 +281,7 @@ export default function Notifications({ projectId }: NotificationsProps) {
                     <div className="mt-1.5 flex items-center justify-between">
                       {item.actionUrl && (
                         <span className="text-[11px] font-semibold text-brand-primary group-hover:underline flex items-center gap-1">
-                          <span>Inspect report</span>
+                          <span>Open</span>
                           <ExternalLink className="w-3 h-3" />
                         </span>
                       )}

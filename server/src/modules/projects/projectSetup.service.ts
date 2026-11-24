@@ -1,29 +1,34 @@
 import { Prisma } from '@prisma/client';
 import {
   ActivateProjectResponse,
+  ActivationIssue,
   addCalendarMonths,
   CreateProjectDraftRequest,
   GeofenceMode,
+  PROJECT_SETUP_SECTIONS,
   PROJECT_SETUP_STEPS,
   PROJECT_STEP_SAVE_SCHEMAS,
   ProjectActivationSchema,
   ProjectBasicsStepSchema,
+  ProjectContractorSection,
   ProjectDraftSummary,
   ProjectFacilityStep,
   ProjectGeofence,
   ProjectGeofenceSchema,
   ProjectPartiesStep,
   ProjectSetupDto,
-  ProjectSetupStepId,
+  ProjectSetupSectionId,
   ProjectSiteStep,
   ProjectTeamStep,
   ProjectVisitsStep,
   partyRulesFor,
   ProjectBeneficiaryInput,
-  ReportingCadence,
   resolveProjectTypeConfig,
   SetupIssue,
   SetupStepStatus,
+  SetupWizardStepStatus,
+  wizardStepFor,
+  wizardStepLabel,
 
   ProjectContractStep,
   CONTRACT_MILESTONE_ANCHOR_META,
@@ -46,7 +51,6 @@ import {
   serializeContractor,
   syncProjectContractors,
 } from './contractors.service';
-import { serializeCadenceSettings } from '../cadence/cadence.service';
 import {
   applyProcessSettings,
   getProjectProcessSettings,
@@ -133,12 +137,11 @@ async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
   if (!project) throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   const typeConfigForLoad = resolveProjectTypeConfig(project.projectTypeSnapshotJson);
   const beforeActivationCodes = typeConfigForLoad?.documentRequirements.beforeActivation ?? [];
-  const [contractors, lineCount, unassignedLineCount, holdPointCount, budgetSum, sprintCount, units, process, standards, tenantHasTypes, presentDocTypes] =
+  const [contractors, lineCount, unassignedLineCount, budgetSum, sprintCount, units, process, standards, tenantHasTypes, presentDocTypes, lastSprint] =
     await Promise.all([
       getProjectContractors(db, projectId),
       db.boqItem.count({ where: { projectId } }),
       db.boqItem.count({ where: { projectId, facilityUnitId: null } }),
-      db.boqItem.count({ where: { projectId, isHoldPoint: true } }),
       db.boqItem.aggregate({ where: { projectId }, _sum: { budgetedCostNgn: true } }),
       // Redesign R2b: scope and sprints.
       db.projectSprint.count({ where: { projectId } }),
@@ -164,6 +167,8 @@ async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
             select: { documentType: { select: { code: true, name: true } } },
           })
         : Promise.resolve([] as Array<{ documentType: { code: string; name: string } }>),
+      // Redesign R6a: the last sprint's end, for the planned completion warning.
+      db.projectSprint.findFirst({ where: { projectId }, orderBy: { endDate: 'desc' }, select: { endDate: true } }),
     ]);
   return {
     project,
@@ -181,12 +186,12 @@ async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
       presentDocTypeCodes: new Set(presentDocTypes.map((d) => d.documentType.code)),
     },
     scope: {
+      lastSprintEndDate: lastSprint?.endDate ?? null,
       summary: {
         sprintCount,
         unitCount: units.length,
         lineCount,
         unassignedLineCount,
-        holdPointCount,
         totalBudgetedCostNgn: Number(budgetSum._sum.budgetedCostNgn ?? 0),
       },
       units: units.map((u) => ({
@@ -269,19 +274,20 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
   if (rules.beneficiaryRequired && project.beneficiaries.length === 0) {
     parties.push({ code: 'BENEFICIARY_REQUIRED', message: 'Add at least one beneficiary.', field: 'beneficiaries' });
   }
-  for (const i of contractorIssues(contractors)) {
-    parties.push({ ...i, field: 'contractors' });
-  }
-  const partyWarnings: SetupIssue[] = [];
+  out.parties = { issues: parties, warnings: [] };
+
+  // Contractor (redesign R6a, D-R6.4: split from parties)
+  const contractorSectionIssues: SetupIssue[] = contractorIssues(contractors).map((i) => ({ ...i, field: 'contractors' }));
+  const contractorWarnings: SetupIssue[] = [];
   const allocated = contractors.reduce((s, c) => s + Number(c.allocatedBudgetNgn ?? 0), 0);
   if (budget !== null && allocated > budget) {
-    partyWarnings.push({
+    contractorWarnings.push({
       code: 'CONTRACTOR_BUDGETS_EXCEED_PROJECT',
       message: 'The contractor budget is more than the project budget.',
       field: 'contractors',
     });
   }
-  out.parties = { issues: parties, warnings: partyWarnings };
+  out.contractor = { issues: contractorSectionIssues, warnings: contractorWarnings };
 
   // Contract (Phase 13): the anchors the type's milestones count from, and documents needed before activation.
   const contractIssues: SetupIssue[] = [];
@@ -305,7 +311,20 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
       });
     }
   }
-  out.contract = { issues: contractIssues, warnings: [] };
+  // Redesign R6a (D-R6.7): the contractor's planned completion should not be before the last sprint ends.
+  const contractWarnings: SetupIssue[] = [];
+  const lastSprintEnd = scope.lastSprintEndDate;
+  const plannedCompletion = contractors
+    .filter((c) => c.contractStatus !== 'TERMINATED' && c.plannedCompletionDate)
+    .map((c) => c.plannedCompletionDate!.toISOString().slice(0, 10))[0];
+  if (lastSprintEnd && plannedCompletion && plannedCompletion < lastSprintEnd) {
+    contractWarnings.push({
+      code: 'PLANNED_COMPLETION_BEFORE_SPRINTS_END',
+      message: `The contractor's planned completion (${plannedCompletion}) is before the last sprint ends (${lastSprintEnd}).`,
+      field: 'plannedCompletionDate',
+    });
+  }
+  out.contract = { issues: contractIssues, warnings: contractWarnings };
 
   // Site
   const site: SetupIssue[] = [];
@@ -395,29 +414,60 @@ function stepVisible(step: { id: string }, loaded: LoadedSetup): boolean {
   return !(c.standardsSpecificationMode === 'DISABLED' && c.needsAssessmentMode === 'DISABLED');
 }
 
+/** Section statuses, in section order (D-R6.2: `stepId` is the section id). */
 function buildStepStatuses(loaded: LoadedSetup): SetupStepStatus[] {
   const state = parseSetupState(loaded.project.setupState);
   const computed = computeStepIssues(loaded);
   const isLive = loaded.project.status !== 'DRAFT';
-  return PROJECT_SETUP_STEPS.filter((s) => s.id !== 'review' && stepVisible(s, loaded)).map((step) => {
-    const saved = state.steps[step.id];
-    const required = stepRequired(step, loaded);
-    const issues = [...(computed[step.id]?.issues ?? [])];
-    // A draft's steps must each be opened and saved; live projects were activated already.
-    if (!saved && !isLive && required && step.id !== 'basics') {
-      issues.unshift({ code: 'STEP_NOT_SAVED', message: `Open "${step.title}" and save it.` });
-    }
-    return {
-      stepId: step.id,
+  return [...PROJECT_SETUP_SECTIONS]
+    .sort((a, b) => a.order - b.order)
+    .filter((s) => stepVisible(s, loaded))
+    .map((section) => {
+      const saved = state.steps[section.id];
+      const required = stepRequired(section, loaded);
+      const issues = [...(computed[section.id]?.issues ?? [])];
+      const wizardStep = wizardStepFor(section.id)!;
+      // A draft's sections must each be opened and saved; live projects were activated already.
+      // D-R6.5: the message names the wizard step that shows the section.
+      if (!saved && !isLive && required && section.id !== 'basics') {
+        issues.unshift({ code: 'STEP_NOT_SAVED', message: `Open ${wizardStepLabel(wizardStep)} and save it.` });
+      }
+      return {
+        stepId: section.id,
+        wizardStepId: wizardStep.id,
+        title: section.title,
+        required,
+        saved: Boolean(saved) || section.id === 'basics' || isLive,
+        savedAt: saved?.savedAt ?? null,
+        complete: issues.length === 0,
+        issues,
+        warnings: computed[section.id]?.warnings ?? [],
+      } satisfies SetupStepStatus;
+    });
+}
+
+/**
+ * Redesign R6a (D-R6.6): wizard steps aggregated from their visible sections. Review has no
+ * section and is left out; a step whose sections are all hidden is left out.
+ */
+function buildWizardStepStatuses(sections: SetupStepStatus[]): SetupWizardStepStatus[] {
+  const out: SetupWizardStepStatus[] = [];
+  for (const step of [...PROJECT_SETUP_STEPS].sort((a, b) => a.order - b.order)) {
+    const own = sections.filter((s) => s.wizardStepId === step.id);
+    if (own.length === 0) continue;
+    const required = own.some((s) => s.required);
+    out.push({
+      id: step.id,
       title: step.title,
+      sectionIds: own.map((s) => s.stepId),
       required,
-      saved: Boolean(saved) || step.id === 'basics' || isLive,
-      savedAt: saved?.savedAt ?? null,
-      complete: issues.length === 0,
-      issues,
-      warnings: computed[step.id]?.warnings ?? [],
-    } as SetupStepStatus;
-  });
+      saved: required ? own.every((s) => !s.required || s.saved) : own.some((s) => s.saved),
+      complete: own.every((s) => s.complete),
+      issueCount: own.reduce((n, s) => n + s.issues.length, 0),
+      warningCount: own.reduce((n, s) => n + s.warnings.length, 0),
+    });
+  }
+  return out;
 }
 
 function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
@@ -500,11 +550,6 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
       requiredAnchors: loaded.contract.requiredAnchors,
       milestoneTemplateCount: loaded.contract.milestoneTemplateCount,
     },
-    reporting: {
-      ...serializeCadenceSettings(project),
-      reportingCadence: project.reportingCadence as ReportingCadence,
-      reminderOffsetsDays: project.mobilizationReminderOffsetsDays,
-    },
     team: {
       userIds: project.userAssignments.map((a) => a.userId),
     },
@@ -515,6 +560,7 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
     process: loaded.process,
     standards: loaded.standards,
     steps,
+    wizardSteps: buildWizardStepStatuses(steps),
     canActivate: project.status === 'DRAFT' && steps.every((s) => !s.required || s.complete),
   };
 }
@@ -624,7 +670,13 @@ type StepSaver = (ctx: {
   project: SetupProjectRow;
   webUser: WebJwtPayload;
   input: unknown;
-}) => Promise<{ changedFields: string[]; payload?: Record<string, unknown>; affectedUserIds?: string[] }>;
+}) => Promise<{
+  changedFields: string[];
+  payload?: Record<string, unknown>;
+  affectedUserIds?: string[];
+  /** Other sections this save also completes (D-R6.4: parties with `contractors`). */
+  alsoMarkSaved?: ProjectSetupSectionId[];
+}>;
 
 function diffFields(before: Record<string, unknown>, after: Record<string, unknown>): string[] {
   return Object.keys(after).filter((k) => JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null));
@@ -737,22 +789,6 @@ const saveParties: StepSaver = async ({ tx, project, webUser, input }) => {
     ? await syncBeneficiaries(tx, project.id, data.beneficiaries)
     : { added: 0, removed: 0, updated: 0 };
 
-  const sync = await syncProjectContractors(tx, {
-    projectId: project.id,
-    tenantId: project.tenantId,
-    inputs: data.contractors,
-    webUser,
-  });
-
-  // A live project keeps its contractor after every save (drafts may be incomplete).
-  if (project.status !== 'DRAFT') {
-    const after = await getProjectContractors(tx, project.id);
-    const problems = contractorIssues(after);
-    if (problems.length > 0) {
-      throw new AppError(problems[0].message, 422, problems[0].code);
-    }
-  }
-
   await tx.project.update({
     where: { id: project.id },
     data: {
@@ -761,9 +797,10 @@ const saveParties: StepSaver = async ({ tx, project, webUser, input }) => {
       lenderOrganizationId: lender?.id ?? null,
     },
   });
-  await auditContractorChanges(tx, { projectId: project.id, webUser, result: sync });
-  // Phase 13: per-contractor milestones follow the contractor list.
-  if (sync.added.length || sync.removed.length) await syncContractMilestones(tx, project.id);
+  // Redesign R6a (D-R6.4): the contractor has its own section; omitted keeps it. Sending it here
+  // is still accepted for one release (seed, older clients) and also marks that section saved.
+  const contractorResult =
+    data.contractors === undefined ? null : await applyContractors(tx, project, webUser, data.contractors);
 
   const changedFields = diffFields(
     {
@@ -777,15 +814,56 @@ const saveParties: StepSaver = async ({ tx, project, webUser, input }) => {
       lenderOrganizationId: lender?.id ?? null,
     }
   );
-  if (sync.added.length || sync.removed.length || sync.updated.length) changedFields.push('contractors');
+  if (contractorResult?.changed) changedFields.push('contractors');
   if (beneficiaryChange.added || beneficiaryChange.removed || beneficiaryChange.updated) changedFields.push('beneficiaries');
   return {
     changedFields,
+    payload: contractorResult ? contractorResult.payload : undefined,
+    alsoMarkSaved: contractorResult ? ['contractor'] : undefined,
+  };
+};
+
+/**
+ * Makes the project's contractor equal `inputs` (at most one), audits the change and keeps the
+ * per-contractor milestones in step. A live project must keep a contractor.
+ */
+async function applyContractors(
+  tx: Tx,
+  project: SetupProjectRow,
+  webUser: WebJwtPayload,
+  inputs: NonNullable<ProjectPartiesStep['contractors']>
+) {
+  const sync = await syncProjectContractors(tx, {
+    projectId: project.id,
+    tenantId: project.tenantId,
+    inputs,
+    webUser,
+  });
+  // A live project keeps its contractor after every save (drafts may be incomplete).
+  if (project.status !== 'DRAFT') {
+    const after = await getProjectContractors(tx, project.id);
+    const problems = contractorIssues(after);
+    if (problems.length > 0) {
+      throw new AppError(problems[0].message, 422, problems[0].code);
+    }
+  }
+  await auditContractorChanges(tx, { projectId: project.id, webUser, result: sync });
+  // Phase 13: per-contractor milestones follow the contractor list.
+  if (sync.added.length || sync.removed.length) await syncContractMilestones(tx, project.id);
+  return {
+    changed: Boolean(sync.added.length || sync.removed.length || sync.updated.length),
     payload: {
       contractorsAdded: sync.added.map((a) => a.tradeCode),
       contractorsRemoved: sync.removed.map((r) => r.tradeCode),
     },
   };
+}
+
+/** Redesign R6a (D-R6.4): the contractor section. */
+const saveContractor: StepSaver = async ({ tx, project, webUser, input }) => {
+  const data = input as ProjectContractorSection;
+  const result = await applyContractors(tx, project, webUser, data.contractors);
+  return { changedFields: result.changed ? ['contractors'] : [], payload: result.payload };
 };
 
 /** Replaces the beneficiary list (Phase 11). The schema guarantees exactly one primary. */
@@ -1012,9 +1090,10 @@ const saveVisits: StepSaver = async ({ tx, project, input }) => {
   return { changedFields };
 };
 
-const STEP_SAVERS: Record<ProjectSetupStepId, StepSaver> = {
+const STEP_SAVERS: Record<ProjectSetupSectionId, StepSaver> = {
   basics: saveBasics,
   parties: saveParties,
+  contractor: saveContractor,
   contract: saveContract,
   site: saveSite,
   facility: saveFacility,
@@ -1026,8 +1105,8 @@ const STEP_SAVERS: Record<ProjectSetupStepId, StepSaver> = {
 };
 
 /**
- * Marks a step saved in setupState (and complete if it now has no issues). Used by the step save
- * and by the BOQ upload, which feeds the BOQ step from its own endpoint.
+ * Marks a section saved in setupState (and complete if it now has no issues). Used by the section
+ * save and by the scope endpoints, which feed the scope section from their own routes.
  */
 export async function markStepSaved(tx: Tx, projectId: string, stepId: string, userId: string) {
   const loaded = await loadSetupProject(tx, projectId);
@@ -1043,16 +1122,17 @@ export async function markStepSaved(tx: Tx, projectId: string, stepId: string, u
   await tx.project.update({ where: { id: projectId }, data: { setupState: state as unknown as Prisma.InputJsonValue } });
 }
 
+/** Saves one section (`stepId` is a section id: D-R6.2 keeps the endpoint and audit payloads). */
 export async function saveProjectSetupStep(
   projectId: string,
   stepId: string,
   webUser: WebJwtPayload,
   body: unknown
 ): Promise<ProjectSetupDto> {
-  if (!(stepId in STEP_SAVERS)) {
+  if (!Object.prototype.hasOwnProperty.call(STEP_SAVERS, stepId)) {
     throw new AppError(`Unknown setup step "${stepId}"`, 404, 'SETUP_STEP_NOT_FOUND');
   }
-  const id = stepId as ProjectSetupStepId;
+  const id = stepId as ProjectSetupSectionId;
   // Shape validation: a ZodError becomes a 400 with field paths.
   const input = PROJECT_STEP_SAVE_SCHEMAS[id].parse(body);
 
@@ -1065,6 +1145,7 @@ export async function saveProjectSetupStep(
     const result = await STEP_SAVERS[id]({ tx, project, webUser, input });
     affectedUserIds = result.affectedUserIds ?? [];
     await markStepSaved(tx, projectId, id, webUser.userId);
+    for (const other of result.alsoMarkSaved ?? []) await markStepSaved(tx, projectId, other, webUser.userId);
     await recordAuditEvent(tx, {
       projectId,
       actorType: 'WEB_USER',
@@ -1098,10 +1179,11 @@ export async function activateProject(projectId: string, webUser: WebJwtPayload)
       );
     }
 
-    // Re-validate everything: the composed schema for the row, plus the per-step checks.
-    const issues: Array<SetupIssue & { stepId: string }> = [];
+    // Re-validate everything: the composed schema for the row, plus the per-section checks.
+    // Redesign R6a: each issue names its section (`stepId`) and the wizard step that shows it.
+    const issues: ActivationIssue[] = [];
     for (const step of buildStepStatuses(loaded)) {
-      if (step.required) issues.push(...step.issues.map((i) => ({ ...i, stepId: step.stepId })));
+      if (step.required) issues.push(...step.issues.map((i) => ({ ...i, stepId: step.stepId, wizardStepId: step.wizardStepId })));
     }
     const composed = ProjectActivationSchema.safeParse({
       basics: {
@@ -1117,19 +1199,13 @@ export async function activateProject(projectId: string, webUser: WebJwtPayload)
         lenderOrganizationId: project.lenderOrganizationId ?? undefined,
       },
       site: { geofence: project.geofenceGeoJson ?? undefined, timezone: project.timezone },
-      reporting: {
-        reportingCadence: project.reportingCadence,
-        workdayStartTime: project.workdayStartTime,
-        workdayEndTime: project.workdayEndTime,
-        customIntervalDays: project.customIntervalDays,
-      },
     });
     if (!composed.success) {
       for (const i of composed.error.issues) {
         const stepId = String(i.path[0]);
         const field = i.path.slice(1).join('.');
         if (!issues.some((x) => x.stepId === stepId && x.field === field)) {
-          issues.push({ code: 'INVALID_FIELD', message: i.message, field, stepId });
+          issues.push({ code: 'INVALID_FIELD', message: i.message, field, stepId, wizardStepId: wizardStepFor(stepId)?.id });
         }
       }
     }
@@ -1234,7 +1310,6 @@ export async function deleteDraftProject(projectId: string, webUser: WebJwtPaylo
           select: {
             fieldSessions: true,
             evidenceLogs: true,
-            workdayReports: true,
             incidentReports: true,
           },
         },
@@ -1281,11 +1356,11 @@ export async function listDraftProjects(
   const creatorIds = [...new Set(drafts.map((d) => d.createdByUserId).filter((v): v is string => Boolean(v)))];
   const creators = await prisma.user.findMany({ where: { id: { in: creatorIds } }, select: { id: true, fullName: true } });
   const nameById = new Map(creators.map((c) => [c.id, c.fullName]));
-  const required = PROJECT_SETUP_STEPS.filter((s) => s.required);
   const out: ProjectDraftSummary[] = [];
   for (const d of drafts) {
     const loaded = await loadSetupProject(prisma, d.id);
-    const steps = buildStepStatuses(loaded);
+    // Redesign R6a (D-R6.6): progress counts required wizard steps, not sections.
+    const required = buildWizardStepStatuses(buildStepStatuses(loaded)).filter((s) => s.required);
     out.push({
       id: d.id,
       name: d.name,
@@ -1294,7 +1369,7 @@ export async function listDraftProjects(
       createdByName: d.createdByUserId ? nameById.get(d.createdByUserId) ?? null : null,
       createdAt: d.createdAt.toISOString(),
       updatedAt: d.updatedAt.toISOString(),
-      completedRequiredSteps: steps.filter((s) => s.required && s.complete).length,
+      completedRequiredSteps: required.filter((s) => s.complete).length,
       totalRequiredSteps: required.length,
       canDelete: mayDeleteDraft(webUser, d),
     });

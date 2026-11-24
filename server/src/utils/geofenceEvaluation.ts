@@ -1,7 +1,7 @@
 import { GeofenceStatus, ProjectGeofenceSchema, verifyPointAgainstGeofence } from '@insite/shared';
 
 /**
- * The one geofence evaluation used by captures and workday reports (Phase 4), with the
+ * The one geofence evaluation used by captures, visit check-ins and submissions (Phase 4), with the
  * project's tolerance band (Phase 6).
  *
  * The result is always the server's own computation. When there is no fix, the stored geofence is

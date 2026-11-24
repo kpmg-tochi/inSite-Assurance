@@ -350,7 +350,7 @@ describe('Phase 2 route security', { concurrency: false }, () => {
       const jwt = (await import('jsonwebtoken')).default;
       const { env } = await import('../config/env');
       const forged = jwt.sign({ tokenType: 'SOMETHING_ELSE', sessionId: ids.lkkFieldSession }, env.JWT_SECRET);
-      const res = await request(app).get(`/api/v1/projects/${ids.lkk}/boq`).set(bearer(forged));
+      const res = await request(app).get(`/api/v1/projects/${ids.lkk}/notifications`).set(bearer(forged));
       assert.equal(res.status, 401);
     });
 
@@ -358,7 +358,7 @@ describe('Phase 2 route security', { concurrency: false }, () => {
       const jwt = (await import('jsonwebtoken')).default;
       const { env } = await import('../config/env');
       const legacy = jwt.sign({ tokenType: 'FIELD_AGENT', sessionId: ids.lkkFieldSession }, env.JWT_SECRET);
-      const res = await request(app).get(`/api/v1/projects/${ids.lkk}/boq`).set(bearer(legacy));
+      const res = await request(app).get(`/api/v1/projects/${ids.lkk}/notifications`).set(bearer(legacy));
       assert.equal(res.status, 401);
     });
   });
@@ -366,7 +366,7 @@ describe('Phase 2 route security', { concurrency: false }, () => {
   describe('session revocation', () => {
     it('refuses a revoked field session on the next request', async () => {
       const fieldToken = (await sessionToken(prisma, ids.lkkFieldSession));
-      const ok = await request(app).get(`/api/v1/projects/${ids.lkk}/boq`).set(bearer(fieldToken));
+      const ok = await request(app).get(`/api/v1/projects/${ids.lkk}/notifications`).set(bearer(fieldToken));
       assert.equal(ok.status, 200); // also warms the auth cache
 
       const monitor = await login('monitor@insite.ng');
@@ -377,7 +377,7 @@ describe('Phase 2 route security', { concurrency: false }, () => {
       assert.equal(revoke.status, 200, JSON.stringify(revoke.body));
       assert.equal(revoke.body.data.agentPinHash, undefined);
 
-      const refused = await request(app).get(`/api/v1/projects/${ids.lkk}/boq`).set(bearer(fieldToken));
+      const refused = await request(app).get(`/api/v1/projects/${ids.lkk}/notifications`).set(bearer(fieldToken));
       assert.equal(refused.status, 403);
       assert.equal(refused.body.error.code, 'SESSION_REVOKED');
 

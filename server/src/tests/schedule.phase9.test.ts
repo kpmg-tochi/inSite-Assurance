@@ -1,12 +1,13 @@
 /**
  * Phase 9 unit tests, after redesign R2d: the working-day and planned-window helpers that survive
  * (earned-schedule variance, dependencies, propagation and proposals were removed), and the
- * sprint-based schedule badge that replaced them (D-R2.15).
+ * sprint-based schedule badge that replaced them (D-R2.15), and the calendar helpers moved out of the
+ * deleted reporting-period maths in redesign R5f.
  * Calendar: 2025-03-03 is a Monday; 2025-03-08 a Saturday; 2025-03-09 a Sunday.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { addWorkdays, itemPeriodStatus, sprintScheduleStatus, windowEnd, windowOverlaps } from '@insite/shared';
+import { addDays, addWorkdays, daysBetween, isoWeekday, sprintScheduleStatus, windowEnd, windowOverlaps, zonedCalendarDate } from '@insite/shared';
 
 const FIVE = [1, 2, 3, 4, 5];
 const SIX = [1, 2, 3, 4, 5, 6];
@@ -41,19 +42,26 @@ describe('Phase 9 schedule helpers', () => {
     assert.equal(windowOverlaps('2025-03-16', '2025-03-20', '2025-03-10', '2025-03-15'), false);
     assert.equal(windowOverlaps(null, '2025-03-20', '2025-03-10', '2025-03-15'), false);
   });
+});
 
-  describe('itemPeriodStatus', () => {
-    const cases: Array<[string | null, string | null, number, string]> = [
-      ['2025-03-03', '2025-03-14', 0, 'DUE_THIS_PERIOD'],
-      ['2025-03-17', '2025-03-21', 0, 'UPCOMING'],
-      ['2025-02-17', '2025-02-21', 50, 'OVERDUE'],
-      ['2025-02-17', '2025-02-21', 100, 'COMPLETE'],
-      [null, null, 0, 'UNSCHEDULED'],
-    ];
-    for (const [s, e, p, expected] of cases) {
-      it(`${s}..${e} at ${p}% -> ${expected}`, () =>
-        assert.equal(itemPeriodStatus({ plannedStartDate: s, plannedEndDate: e, progressPct: p }, '2025-03-10', '2025-03-15'), expected));
-    }
+describe('Redesign R5f: calendar helpers (utils/calendar)', () => {
+  it('adds days across month and year ends, and counts days between dates', () => {
+    assert.equal(addDays('2025-02-27', 2), '2025-03-01');
+    assert.equal(addDays('2025-12-31', 1), '2026-01-01');
+    assert.equal(addDays('2025-03-01', -1), '2025-02-28');
+    assert.equal(daysBetween('2025-03-03', '2025-03-10'), 7);
+    assert.equal(daysBetween('2025-03-10', '2025-03-03'), -7);
+  });
+
+  it('gives ISO weekdays (Monday 1, Sunday 7)', () => {
+    assert.equal(isoWeekday('2025-03-03'), 1);
+    assert.equal(isoWeekday('2025-03-08'), 6);
+    assert.equal(isoWeekday('2025-03-09'), 7);
+  });
+
+  it('places an instant on its date in the zone, not UTC', () => {
+    assert.equal(zonedCalendarDate('2025-03-03T23:30:00.000Z', 'Africa/Lagos'), '2025-03-04');
+    assert.equal(zonedCalendarDate('2025-03-03T23:30:00.000Z', 'UTC'), '2025-03-03');
   });
 });
 

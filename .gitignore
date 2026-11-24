@@ -56,3 +56,10 @@ server/.local-storage/
 # Mobile platform folders
 mobile/android/
 mobile/ios/
+# QA run artefacts
+.playwright-mcp/
+qa/screenshots/
+
+# Agent
+.playwright-mcp/
+qa/screenshots/

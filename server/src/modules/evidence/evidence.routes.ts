@@ -29,7 +29,7 @@ async function projectTenantId(projectId: string): Promise<string> {
 }
 
 /**
- * GET /api/v1/projects/:projectId/evidence?wbsItemId=&workdayReportId=
+ * GET /api/v1/projects/:projectId/evidence
  * Every registered capture with its server-computed integrity results, newest first.
  */
 router.get(
@@ -38,11 +38,7 @@ router.get(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const projectId = String(req.params.projectId);
-      const captures = await listProjectCaptures(projectId, {
-        wbsItemId: typeof req.query.wbsItemId === 'string' ? req.query.wbsItemId : undefined,
-        workdayReportId:
-          typeof req.query.workdayReportId === 'string' ? req.query.workdayReportId : undefined,
-      });
+      const captures = await listProjectCaptures(projectId);
       res.json({ success: true, data: captures });
     } catch (error) {
       next(error);

@@ -57,7 +57,7 @@ export function LoginPage() {
       setIsSubmitting(true);
       setErrorMsg(null);
       await login(email, password);
-      navigate("/app/dashboard");
+      navigate("/app");
     } catch (err: any) {
       setErrorMsg(
         err?.message ||
@@ -93,12 +93,6 @@ export function LoginPage() {
                 className="text-[11px] font-medium text-white/85 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 transition"
               >
                 Overview
-              </Link>
-              <Link
-                to="/about"
-                className="text-[11px] font-medium text-white/85 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 transition"
-              >
-                Specification
               </Link>
               <Link
                 to="/mobile-app"
@@ -177,31 +171,31 @@ export function LoginPage() {
                   />
                 </svg>
 
-                {/* Pin 1: KM 12+400 */}
+                {/* Pin 1: a visit photo */}
                 <div className="absolute left-[22%] top-[58%] z-20 flex items-center gap-1.5 bg-brand-navy/90 backdrop-blur-sm border border-white/20 px-2 py-1 rounded-lg shadow">
                   <span className="w-2 h-2 rounded-full bg-emerald-400" />
                   <span className="text-[10px] text-white font-semibold">
-                    KM 12+400 · Tier 1
+                    Classroom block · Photo
                   </span>
                 </div>
 
-                {/* Pin 2: Active KM 14+210 Culvert Hold-Point */}
+                {/* Pin 2: the visit in progress */}
                 <div className="absolute left-[46%] top-[40%] z-20 flex items-center gap-1.5 bg-brand-primary/95 backdrop-blur-sm border border-brand-primary/30 px-2.5 py-1 rounded-lg shadow-lg">
                   <span className="w-2.5 h-2.5 rounded-full bg-brand-sky animate-pulse" />
                   <span className="text-[10px] text-white font-bold">
-                    KM 14+210 · WBS 02.03.1
+                    Routine visit · Checked in
                   </span>
                 </div>
 
                 {/* Bottom GPS strip inside Map Preview */}
                 <div className="absolute bottom-2 left-2.5 right-2.5 z-20 flex items-center justify-between text-[10px] text-white/70 bg-brand-navy/75 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/10">
                   <span>Example GPS fix · ±3.4m</span>
-                  <span>±150m Corridor Buffer</span>
+                  <span>150 m site radius</span>
                 </div>
               </div>
             </div>
 
-            {/* Card 2: Partially Overlapping Voice Note & Whisper Summary Card (~70% Opacity + Backdrop Blur + Subtle Border) */}
+            {/* Card 2: Partially Overlapping Voice Note & Transcript Card (~70% Opacity + Backdrop Blur + Subtle Border) */}
             <div className="lg:absolute lg:right-0 lg:-bottom-3 w-full lg:w-[370px] xl:w-[395px] z-30 bg-brand-navy/70 backdrop-blur-xl border border-white/20 rounded-2xl p-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.45)] space-y-2.5">
               {/* Top Sub-Card: Submitted Voice Note Player */}
               <div className="bg-brand-subcard/80 backdrop-blur-md border border-white/15 rounded-xl p-3">
@@ -232,11 +226,11 @@ export function LoginPage() {
                 </div>
               </div>
 
-              {/* Bottom Sub-Card: Agent-Confirmed Summary & Whisper Transcript */}
+              {/* Bottom Sub-Card: the officer's note and the voice-note transcript */}
               <div className="bg-white/85 backdrop-blur-md border border-white/40 rounded-xl p-3 text-slate-900">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[11px] font-semibold text-slate-600">
-                    Agent-Confirmed Summary
+                    Officer's note
                   </span>
                   <span className="text-[11px] font-bold text-emerald-700">
                     Signed Log
@@ -288,11 +282,13 @@ export function LoginPage() {
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                <label htmlFor="login-email" className="block text-xs font-semibold text-slate-700 mb-1.5">
                   Work Email
                 </label>
                 <input
+                  id="login-email"
                   type="email"
+                  autoComplete="username"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -300,11 +296,13 @@ export function LoginPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                <label htmlFor="login-password" className="block text-xs font-semibold text-slate-700 mb-1.5">
                   Password
                 </label>
                 <input
+                  id="login-password"
                   type="password"
+                  autoComplete="current-password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -331,7 +329,7 @@ export function LoginPage() {
                 >
                   Quick-Fill Demo Role
                 </label>
-                <span className="text-[10px] font-medium text-slate-400">
+                <span className="text-[10px] font-medium text-slate-500">
                   Select a role to autofill
                 </span>
               </div>
@@ -354,7 +352,7 @@ export function LoginPage() {
                       <div className="font-semibold text-slate-900">
                         {demoAccounts[selectedRoleIdx].name}
                       </div>
-                      <div className="text-[11px] text-slate-500">
+                      <div className="text-[11px] text-slate-600">
                         {demoAccounts[selectedRoleIdx].email} · {demoAccounts[selectedRoleIdx].organization}
                       </div>
                     </div>
@@ -369,9 +367,9 @@ export function LoginPage() {
         </div>
 
         {/* Bottom Copyright Footer */}
-        <div className="text-[11px] text-slate-400 flex items-center justify-between max-w-md w-full mx-auto pt-4">
+        <div className="text-[11px] text-slate-500 flex items-center justify-between max-w-md w-full mx-auto pt-4">
           <span>&copy; 2026 {APPLICATION_NAME}</span>
-          <span className="text-slate-400">Pilot</span>
+          <span>Pilot</span>
         </div>
       </div>
     </div>

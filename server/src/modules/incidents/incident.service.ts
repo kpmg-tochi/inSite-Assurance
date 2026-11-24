@@ -8,7 +8,6 @@ import {
   WebJwtPayload,
 } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
-import { loadBoqItemInProject } from '../../utils/ownership';
 import { assertProjectObjectKey } from '../../integrations/storage.service';
 
 /** Display name used wherever a confidential reporter's identity would otherwise appear. */
@@ -18,7 +17,6 @@ const PROTECTED_DISCLOSURE_ACTOR_ID = 'PROTECTED_DISCLOSURE';
 type IncidentRow = Prisma.IncidentReportGetPayload<{
   include: {
     reporterSession: { select: { agentFullName: true; roleNameSnapshot: true } };
-    boqItem: { select: { wbsCode: true; description: true } };
   };
 }>;
 
@@ -42,9 +40,6 @@ function serializeIncident(
     reporterSessionId: revealIdentity ? inc.reporterSessionId : null,
     reporterName: revealIdentity ? inc.reporterSession.agentFullName : PROTECTED_DISCLOSURE_LABEL,
     reporterRoleName: revealIdentity ? inc.reporterSession.roleNameSnapshot : null,
-    wbsItemId: inc.wbsItemId,
-    wbsCode: inc.boqItem?.wbsCode ?? null,
-    wbsDescription: inc.boqItem?.description ?? null,
     category: inc.category,
     severity: inc.severity,
     title: inc.title,
@@ -62,7 +57,6 @@ function serializeIncident(
 
 const INCIDENT_INCLUDE = {
   reporterSession: { select: { agentFullName: true, roleNameSnapshot: true } },
-  boqItem: { select: { wbsCode: true, description: true } },
 } satisfies Prisma.IncidentReportInclude;
 
 export async function createIncidentReport(
@@ -90,9 +84,6 @@ export async function createIncidentReport(
   if (input.voiceNoteUrl) {
     assertProjectObjectKey(input.voiceNoteUrl, fieldAgent.tenantId, projectId);
   }
-  if (input.wbsItemId) {
-    await loadBoqItemInProject(prisma, projectId, input.wbsItemId);
-  }
 
   const confidential = input.isConfidentialWhistleblower;
   const reporterDisplayName = `${fieldAgent.agentFullName} (${fieldAgent.roleName})`;
@@ -103,7 +94,6 @@ export async function createIncidentReport(
         clientIncidentId: input.clientIncidentId,
         projectId,
         reporterSessionId: fieldAgent.sessionId,
-        wbsItemId: input.wbsItemId ?? null,
         category: input.category,
         severity: input.severity,
         title: input.title,

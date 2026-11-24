@@ -368,7 +368,6 @@ describe('project types', () => {
     const afterEdit = await prisma.project.findUniqueOrThrow({ where: { id: ids['PRG-211'] } });
     assert.equal(afterEdit.projectTypeVersion, 1);
     assert.deepEqual(afterEdit.projectTypeSnapshotJson, before.projectTypeSnapshotJson);
-    assert.equal(afterEdit.reportingCadence, before.reportingCadence);
 
     // A new project gets the new version.
     const created = await request(app)
@@ -495,14 +494,14 @@ describe('cross-project web notifications (projectId = all)', () => {
     const northNote = await createWebNotification(prisma, {
       projectId: ids['PRG-211'],
       targetPermissionKey: 'reports:view_all',
-      category: 'REPORT_PENDING_APPROVAL',
+      category: 'VISIT_PENDING_APPROVAL',
       title: 'North item',
       description: 'For the north entity',
     });
     const southNote = await createWebNotification(prisma, {
       projectId: ids['PRG-221'],
       targetPermissionKey: 'reports:view_all',
-      category: 'REPORT_PENDING_APPROVAL',
+      category: 'VISIT_PENDING_APPROVAL',
       title: 'South item',
       description: 'For the south entity',
     });

@@ -1,86 +1,11 @@
-import type {
-  ConstructionPhase,
-  GeofenceMode,
-  ProjectDeliveryModelFields,
-  ProjectGeofence,
-  ProjectStatus,
-  ReportingCadence,
-  ScheduleVarianceBadge,
-} from '@insite/shared';
+import type { ProjectSummaryDto } from '@insite/shared';
+
+/** Redesign R6c (D-R6.22): the project summary DTO is the shared `ProjectSummaryDtoSchema`. */
+export type { ProjectSummaryDto };
 
 export interface ApiEnvelope<T> {
   success: boolean;
   data: T;
-}
-
-/** GET /projects and /projects/:id/baseline. Drafts are not in this list (see /projects/drafts). */
-/** Phase 11: carries projectType, region, owningOrganization and primaryBeneficiary. */
-export interface ProjectSummaryDto extends ProjectDeliveryModelFields {
-  id: string;
-  tenantId: string;
-  status: ProjectStatus;
-  /** Phase 10: where an active project is in its life. */
-  constructionPhase: ConstructionPhase;
-  practicalCompletionDate: string | null;
-  retentionEndDate: string | null;
-  /** Phase 10: percentage withheld from each release (applies only with the retention module on). */
-  retentionPercentage: number | null;
-  name: string;
-  codePrefix: string;
-  stateLocation: string;
-  lgaLocation: string | null;
-  description: string | null;
-  totalBudgetNgn: number;
-  disbursedToDateNgn: number;
-  certifiedProgressPct: number;
-  reportingCadence: ReportingCadence;
-  workdayStartTime: string;
-  workdayEndTime: string;
-  /** IANA zone of the project's reporting day. */
-  timezone: string;
-  geofenceMode: GeofenceMode | null;
-  geofence: ProjectGeofence | null;
-  /** Effective tolerance band outside the boundary, in metres. */
-  geofenceToleranceMeters: number;
-  /** Phase 9: variance badge stored by the schedule-variance job; null until computed. */
-  scheduleVariance: ScheduleVarianceBadge | null;
-  monitorOrganizationName: string;
-  lenderOrganizationName: string;
-  /** The project's contractor (one per project). */
-  contractorOrganizationName: string;
-  contractorCount: number;
-  contractors: Array<{
-    id: string;
-    organizationId: string;
-    organizationName: string;
-    tradeCategory: string;
-    tradeCode: string;
-  }>;
-  activatedAt: string | null;
-  archivedAt: string | null;
-  /** Phase 13: contract milestones past their due date (absent from servers before Phase 13). */
-  overdueMilestoneCount?: number;
-  totalBoqItems: number;
-  opaqueLumpSumCount: number;
-  lastFieldCaptureAt: string | null;
-}
-
-export interface BoqItemRecordDto {
-  id: string;
-  projectId: string;
-  lastRevisionId?: string | null;
-  wbsCode: string;
-  section: string;
-  description: string;
-  unit: string;
-  totalQuantity: number;
-  rateNgn: number;
-  budgetedCostNgn: number;
-  isHoldPoint: boolean;
-  holdPointInstruction: string | null;
-  isOpaqueLumpSum: boolean;
-  opacityWarningReason: string | null;
-  cumulativeCertifiedPct: number;
 }
 
 /** Server contract for GET /projects/:projectId/evidence (Phase 4). */

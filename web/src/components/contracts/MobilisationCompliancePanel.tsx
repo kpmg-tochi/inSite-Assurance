@@ -106,7 +106,7 @@ function Row({ projectId, r }: { projectId: string; r: MobilisationComplianceRow
       </td>
       <td className="py-2.5 align-top">
         {r.openDefaultCaseId ? (
-          <Link to={`/app/projects/${projectId}/milestones?case=${r.openDefaultCaseId}`} className="font-semibold text-rose-700 hover:underline">
+          <Link to={`/app/projects/${projectId}/kickoff?tab=milestones&case=${r.openDefaultCaseId}`} className="font-semibold text-rose-700 hover:underline">
             Open case
           </Link>
         ) : (

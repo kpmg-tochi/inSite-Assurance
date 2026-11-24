@@ -1,191 +1,157 @@
 # Physical Testing Checklist
 
-Manual checks on the web portal and on a phone that automated tests cannot cover. Each phase adds its section when it is implemented. Run everything at the end of the programme, then report failures by ID (for example "P4-M-07 failed: …" plus a screenshot) so they can be debugged one by one.
+Manual checks on the web portal and on a phone that automated tests cannot cover. Each phase adds its section when it is implemented. Run everything at the end of the programme, then report failures by ID (for example "R5-M-07 failed on iOS: …" plus a screenshot) so they can be debugged one by one.
 
 | | |
 | :--- | :--- |
-| **Covers** | Phases 1 to 4 (Phase 4 implemented) |
-| **Last updated** | 2026-11-19 |
-| **Needs** | A computer running the API and web app, one Android phone (a second phone helps for the duplicate-photo test), the seeded demo data |
+| **Covers** | Phases 1 to 4 (web), the redesign R5 visit app (section 4). Checks for removed features are listed in section 5. |
+| **Last updated** | 2026-11-24 |
+| **Needs** | A computer running the API and web app, one Android phone and one iPhone (a second phone of either kind helps for the two-officer and duplicate-photo tests), the seeded demo data |
 
 ---
 
 ## 0. Setup
 
 ### 0.1 Server and web
-- [ ] **S-01** Reset the dev database and seed it: `cd server && npx prisma migrate reset --force && npm run prisma:seed`. Expected: the seed ends with "✅ Seed complete!" and prints the logins and mobile join codes. Keep that output.
+- [ ] **S-01** Reset the dev database and seed it: `cd server && npx prisma migrate reset --force && npm run prisma:seed`. Expected: the seed ends with "✅ Seed complete!" and prints the demo logins. Keep that output. (There are no join codes since redesign R1d: every phone user signs in with an account.)
 - [ ] **S-02** In `server/.env`, set `PUBLIC_API_BASE_URL` to the computer's LAN address, for example `http://192.168.1.20:4000`. Phones cannot reach `localhost`, and uploads to local storage use this address.
 - [ ] **S-03** Start the API (`npm run dev:server`) and the web app (`npm run dev:web`). Open `/api/v1/health`. Expected: `objectStorage` is `LOCAL_DISK_DEV` (or `S3_COMPATIBLE` if S3 is configured), and `standaloneWhisper` is `NOT_CONFIGURED` unless a key is set.
 
-Seeded web logins (password `Password123!`): `admin@insite.ng`, `monitor@insite.ng`, `lender@insite.ng`, `lto@insite.ng`, `contractor@insite.ng`.
+Seeded logins (password `Password123!`):
+- Main workspace, web: `admin@insite.ng`, `monitor@insite.ng`, `lender@insite.ng`, `lto@insite.ng`, `verifier@insite.ng`.
+- Main workspace, phone: `resident.cow@insite.ng` and `field.officer@insite.ng` (LKK-402), `resident.abj@insite.ng` (ABJ-108 only).
+- Programme tenant, web: `programme.admin@`, `flagship.admin@`, `north.admin@`, `south.admin@`, `programme.monitor@`, `programme.funder@`, `me.officer@`, `legal.officer@`, `south.me@` (all `insite.ng`).
+- Programme tenant, phone: `resident.supervisor@insite.ng` (visit officer; see section 4).
+
+There are no contractor logins (redesign R1d).
 
 ### 0.2 Mobile development build
 SQLCipher and push notifications do not work in Expo Go, so testing needs a development build.
 - [ ] **S-04** In `mobile/eas.json`, replace the placeholder API hosts (`SET-…-API-HOST.invalid`) for the profiles you will use. Set `EAS_PROJECT_ID` (an EAS secret or environment variable) so push tokens work.
-- [ ] **S-05** Build and install: `cd mobile && eas build --profile development --platform android`. Then run `npx expo start --dev-client` on the same network as the phone.
+- [ ] **S-05** Build and install: `cd mobile && eas build --profile development --platform android` (and `--platform ios` for the iPhone). Then run `npx expo start --dev-client` on the same network as the phone.
 - [ ] **S-06** Expected on first launch: no notification permission prompt yet (it is asked later, in context), and no background-location prompt at any point.
 
 ---
 
 ## 1. Carried over from Phases 1 to 3 (web)
 
-- [ ] **P2-W-01** Rename a role in Settings → Roles. Expected: the new name shows in the web header of a user with that role, and in the mobile profile of a field user who joined with it.
-- [ ] **P3-W-01** Full claim cycle on a project with no IPC, signed in as the contractor, monitor, then lender:
-  1. Submit an IPC.
-  2. Run reconciliation.
-  3. Raise a query, respond to it, then resolve it.
-  4. Certify (dry run first).
-  5. Approve as lender.
-  6. Reverse the decision.
+- [ ] **P2-W-01** Rename a role in Settings → Roles & Permissions. Expected: the new name shows in the web header of a user with that role, and in the phone profile of a field user who signs in with it.
 
-  Expected: each step is allowed only for the right role, and the status moves as described in the Phase 3 plan.
-- [ ] **P3-W-02** A user who both certified and approves the same IPC is blocked (D-3.1).
-- [ ] **P3-W-03** Release with an unsatisfied mandatory condition precedent is blocked; waiving it with a reason allows release (D-3.2).
-- [ ] **P3-W-04** Change a rating label in tenant settings. Expected: the new label shows everywhere a rating appears (workbench, drawer, PDF).
-- [ ] **P3-W-05** Withdraw an IPC. Expected: it becomes read-only.
+The Phase 3 claim checks (P3-W-01 to P3-W-05) are retired: see section 5.
 
 ---
 
 ## 2. Phase 4: web portal
 
-- [ ] **P4-W-01** Project dashboard map. Expected:
+- [ ] **P4-W-01** Project → Overview map. Expected:
   - pins only for captures that have a GPS fix
   - "No data" when there are no captures
-  - the integrity pod shows real counts ("N mock location · N duplicate photo")
   - no "100% Within" or "Verified" text on an empty project
-- [ ] **P4-W-02** Click a pin. Expected: the side card shows the WBS item, caption or transcript, geofence result, signature result ("Signature checked", "Unsigned" or "Signature invalid"), reporter, and GPS accuracy.
-- [ ] **P4-W-03** Audit → Site Presence → open a report. Expected:
-  - a thumbnail for each photo; clicking one opens it full size
-  - "Play voice note" plays the recording
-  - badges on the report for any location issue (for example "Low GPS accuracy")
-  - notes typed in the chat are listed
-  - the omission check is labelled "Rules omission check" (or "AI omission check" if Azure is configured)
-- [ ] **P4-W-04** Presence pings are labelled "App open", "Capture" or "Report submitted". There is no "hourly" wording anywhere.
-- [ ] **P4-W-05** Reconciliation workbench → evidence drawer on a line. Expected: each piece of evidence shows "Inside geofence", "Outside geofence" or "Location unknown", photo thumbnails, and the signature state.
-- [ ] **P4-W-06** Contractor verification queue. Expected: three selfie photos (front, left, right) and the ID photo are visible, with the label "Selfie set (3 poses) for manual review". There is no "liveness verified", "3D liveness" or "head-turn" wording.
-- [ ] **P4-W-07** Settings and the executive page describe identity checks as a photo ID plus a guided selfie set reviewed by a person.
-- [ ] **P4-W-08** After a reporter revises a queried report (P4-M-16), the monitor clicks "Mark resolved" on the query in Site Presence. Expected:
-  - the query shows RESOLVED
-  - the reporter gets a "Query resolved" notification
-  - the phone can no longer revise that report
-- [ ] **P4-W-09** On a query nobody has answered yet, the button reads "Withdraw query" and behaves the same way.
-- [ ] **P4-W-10** The login page and the public pages (Home, About, Mobile app) label sample positions as examples. Their integrity claims match the Phase 4 claims table (no "Live Verified Camera", no "liveness").
+  - (the "Geofence & Capture Integrity" card was removed from the Overview in redesign R6c)
+- [ ] **P4-W-02** Click a pin. Expected: the side card shows the caption or transcript, geofence result, signature result ("Signature checked", "Unsigned" or "Signature invalid"), reporter, and GPS accuracy. (Its WBS item line goes when R5f removes the capture's WBS link.)
+- [ ] **P4-W-10** Signed out: the public pages (Home, Mobile app) carry no lender, AI, join-code or "liveness" text, and label sample positions as examples. `/about` redirects to `/`.
+
+P4-W-03 to P4-W-09 are retired: see section 5.
 
 ---
 
-## 3. Phase 4: mobile app
+## 3. Phases 4 and 12–16: mobile app (old app)
 
-### 3.1 Join and storage
-- [ ] **P4-M-01** Join a project with an independent (non-contractor) join code. Expected:
-  - you go straight to the WBS inbox
-  - you are asked for notification permission right after joining
-- [ ] **P4-M-02** Open Sync status (from the inbox banner, or Notifications → backlog). Expected: no "Local data is not encrypted" warning. That warning means the build lacks SQLCipher.
-- [ ] **P4-M-03** Settings → clear local data, then rejoin. Expected: the app works normally, with no crash or stale threads.
-
-### 3.2 Captures in the WBS chat
-- [ ] **P4-M-04** Take two photos in a WBS thread with location on. Expected:
-  - each photo appears straight away with "Pending upload"
-  - it then changes to "In geofence" (or "Outside geofence") once sent
-  - on the web (P4-W-01) the capture shows "Signature checked"
-- [ ] **P4-M-05** Turn location off and take a photo. Expected:
-  - the photo is saved with the badge "Location unavailable"
-  - the thread header shows "Location unavailable" instead of a zone
-  - no made-up coordinates or "Ch 14+200" anywhere
-- [ ] **P4-M-06** Use a mock-location app (Android developer options) and take a photo. Expected: "Mock location flagged". On the web the capture fails integrity and does not count as evidence.
-- [ ] **P4-M-07** Record a voice note. Expected: it plays back on the phone and on the web (P4-W-03).
-- [ ] **P4-M-08** Send a typed note, for example "Cement arrived 2 days late". Expected: it shows as "Waiting to send" offline, and as sent once online.
-- [ ] **P4-M-09** Duplicate photo: photograph the same printed picture from two different phones and accounts. Expected: the second one is flagged as a recycled photo on the web.
-
-### 3.3 Daily report (one per WBS item per day)
-- [ ] **P4-M-10** Open "Submit full report for today". Expected:
-  - the hold-point checkbox appears only on hold-point items, starts unticked, and shows that item's own instruction
-  - Submit is disabled until "This is my full report for today" is ticked and a GPS fix is shown
-- [ ] **P4-M-11** Submit with a poor fix (indoors, accuracy over 50 m). Expected: the phone warns "low accuracy, the report will show a badge", and on the web the report shows "Low GPS accuracy".
-- [ ] **P4-M-12** Submit, then try to submit again for the same item the same day. Expected:
-  - the thread shows "Report submitted for today ✓"
-  - a second report is refused with "already submitted"
-  - on the web the report lists every photo, voice note and typed note from that thread
-- [ ] **P4-M-13** Change the phone's time zone to one several hours away from the project's, then submit. Expected: the report's day matches the project's local date (Africa/Lagos for the seed), not the phone's date.
-- [ ] **P4-M-14** **Offline end to end.**
-  1. Turn on airplane mode.
-  2. Take three photos and a voice note on one WBS item, then submit the report.
-  3. Force-close the app, reopen it, and turn airplane mode off.
-
-  Expected:
-  - Sync status counts down to zero
-  - on the web the report appears once, with four captures
-  - in the reconciliation workbench that line's evidence includes the report
-
-### 3.4 Queries and revisions
-- [ ] **P4-M-15** On the web, raise a query on the report from P4-M-12. Expected:
-  - the phone shows the query in the thread, with a push notification if permission was granted
-  - the button changes to "Revise report (query open)"
-- [ ] **P4-M-16** Add a photo and revise the report. Expected:
-  - on the web the query shows as resubmitted and the report becomes revision 2
-  - the phone cannot revise again until a new query is raised
-
-### 3.5 Identity check (contractor role)
-- [ ] **P4-M-17** Join with a contractor join code. Expected:
-  - the identity wizard opens (ID photo, then three selfies: front, left, right)
-  - the wording never mentions liveness
-  - after submitting you are asked for notification permission
-  - the "Under review" screen says reports are held until approval
-- [ ] **P4-M-18** Before approval, submit a daily report. Expected:
-  - Sync status shows it as "Held until identity approval"
-  - on the web it is staged and not counted as evidence
-- [ ] **P4-M-19** On the web, reject the submission with a reason. Expected:
-  - the phone shows the reason (open the app, or tap the push) and returns to the wizard
-  - the session is not signed out
-- [ ] **P4-M-20** Resubmit, then approve on the web. Expected:
-  - the phone shows "Identity approved"
-  - the held report becomes confirmed on the web without being resent from the phone
-
-### 3.6 Push, sync and sessions
-- [ ] **P4-M-21** With the app in the background, approve or reject on the web. Expected: a push arrives; tapping it opens the right screen (the wizard for a rejection).
-- [ ] **P4-M-22** Revoke the field session on the web while the phone has items waiting. Expected:
-  - the phone shows the session-ended screen
-  - Sync status shows "Sending paused"
-  - nothing is deleted
-  - after rejoining, note what happens to the old items (sent, or listed under "Could not be sent" with a reason). This is not settled yet; Phase 5 decides how items from an ended session are handled.
-- [ ] **P4-M-24** Notifications are per person: on two phones joined to the same project, open the notification centre on one and read a project-wide notice (a morning brief). Expected: it stays unread on the other phone.
-- [ ] **P4-M-23** Presence: keep the app open on site for over an hour. Expected: presence pings appear on the web only for the times the app was open, plus one per capture and report.
-
-### 3.7 Phase 14: streams, site inspections and findings (device run pending)
-Use the programme tenant (seedPhase14): join PRG-211 with a Monitor Inspector join code (or sign in as a provisioned account in a supervisor role; since Phase 16 the programme tenant's Resident role is provisioned, `resident.supervisor@insite.ng`, and has no join codes), and a contractor engineer code on a second phone.
-- [ ] **P14-M-01** Period cards: the inbox shows one card per stream the person owes ("M&E visit · Quarterly report" for the inspector; "Resident supervision" for a resident), with the right quarter and due date. A project without streams still shows one card.
-- [ ] **P14-M-02** Offline inspection: in flight mode, start a routine inspection, answer every section (one screen per section), take a photo for each item that needs one, close and reopen the app mid-way. Expected: the draft resumes at the same section with its answers and photos.
-- [ ] **P14-M-03** The section "Next" button stays disabled until required answers, fail comments and required photos are there; Confirm needs the overall finding and a summary.
-- [ ] **P14-M-04** Confirm offline, then go online. Expected: Sync status shows the photos sending first, then "Site inspection"; the web Inspections tab shows the inspection with photos under each item, and a failed item as a finding for the main contractor.
-- [ ] **P14-M-05** Contractor phone: a push "Inspection finding to fix" arrives; the warning icon opens Findings; mark it resolved with a photo offline, then online. Expected: the web finding shows Resolved with the photo; a contractor of another package never sees it.
-- [ ] **P14-M-06** Upload more than 7 days after the visit date (set the visit in an earlier week by using an older draft). Expected: the web marks the inspection late and the quarter's obligation LATE.
-
-### 3.8 Phase 13: contractor mobilisation (device run pending)
-
-No mobile code changed in Phase 13; these check the server hook from a real check-in.
-
-- [ ] **P13-M-01** PRG-102 (seeded, mobilisation due in 5 days): join with the PRG-102 contractor code (`PRG-102-CON-…`, printed by the seed), walk inside the site boundary and tap Check in. Expected: on the web, Milestones shows "Contractor mobilised on site" Done with the check-in time, and the mobilisation compliance panel shows the contractor on site.
-- [ ] **P13-M-02** Same, but check in outside the boundary (or with a mock location). Expected: the milestone stays open.
-- [ ] **P13-M-03** After a contractor's contract is terminated on the web (PRG-221 default case, decision "Terminate"), the phone of a session joined with that contractor's code. Expected: the session is signed out (revoked) and the old join code no longer works.
-
-### 3.9 Phase 12: registration on the field assurance step (device run pending)
-
-Programme tenant. The field assurance policy is set in Settings → Tenant Settings → Professional registration (a project type can override it). Use a role that requires identity assurance, e.g. the contractor engineer join code `PRG-105-CON-…` printed by the seed.
-- [ ] **P12-M-01** Policy **Required**: join and reach the assurance step. Expected: registration body and number are required; Submit stays disabled without them; the web review shows them.
-- [ ] **P12-M-02** Policy **Optional**: the fields are shown and can be left empty; submitting without them succeeds.
-- [ ] **P12-M-03** Policy **Hidden**: the fields are not shown, and no message mentions a registration.
-- [ ] **P12-M-04** Change the policy while a phone has the assurance step open, then submit. Expected: the server applies the new policy and the phone shows its message (no crash, no stale required field).
-
-### 3.10 Phase 16: demo programme on a device (device run pending)
-
-Fresh seed on the demo day (see `demo_script_programme_delivery.md`).
-- [ ] **P16-M-01** Sign in as `resident.supervisor@insite.ng` (no join code). Expected: PRG-104 and PRG-105 are listed at once (its assigned live projects; archived PRG-242 is not); no identity assurance step.
-- [ ] **P16-M-02** On PRG-105, the inbox shows the resident supervision stream for the current week; submit a report for an item of payment milestone 3. Expected: the web shows it, and the PRG-105 KPI card's "Reports submitted on time" counts it once the obligation is met.
-- [ ] **P16-M-03** Run the Phase 14 inspection flow (P14-M-02 to P14-M-04) on PRG-211 with a Monitor Inspector join code, then check the Programme KPIs "Visits conducted vs planned" figure for Co-Funded.
+Every check written for the old app (WBS inbox and chat, daily reports, end-of-day sheet, join codes, identity assurance, Phase 14 inspections and findings, registration on the assurance step, Phase 13 check-in) is retired: those screens were deleted in redesign R5e, and their server side goes in R5f. Section 5 lists each retired ID and the R5 check that replaces it. The new app's checks are in section 4.
 
 ---
 
-## 4. Not ready to test yet
+## 4. Redesign R5: visit app on a device (device run pending)
 
-- Configurable geofence tolerance (moved to Phase 6).
-- Moving queued items between sessions after a revoke and rejoin: an exclamation on each item, with Remove or Update (Phase 5, Step 8).
-- Project-wide action notifications marked done for everyone once someone acts (Phase 5, Step 8).
+No device run has been done since Phase 5. Run **every check on one Android and one iOS device** against a fresh seed (S-01), and report the platform with a failure.
+
+Main account: `resident.supervisor@insite.ng`. It is assigned to PRG-102, PRG-104, PRG-105, PRG-211 and PRG-221 (and archived PRG-242, which the phone does not list). Its seeded visits: PRG-102 the first mobilisation check (published); PRG-105 a routine visit on the next working day, three published visits (one with a pending date proposal, one declined) and the proposed plan; PRG-211 three accepted past visits; PRG-221 a missed quarterly M&E visit. Web counterpart: `programme.monitor@` (Visit planner and Visits & reports).
+
+Photos must be taken inside the project's site boundary to fill a slot. Unless you test at a seeded site, move PRG-105's pin to where you are first (as `programme.admin@`: PRG-105 → More ▸ Settings → Project → Location), then pull down on Home.
+
+### 4.1 Sign-in and Home
+- [ ] **R5-M-01** Sign in as `resident.supervisor@`. Expected: Home opens directly (no project picker); My projects shows PRG-102, PRG-104, PRG-105, PRG-211 and PRG-221, each card with code, name, stage, sprint ("Sprint 3 of 3" on PRG-105), next visit and open findings; PRG-102 shows its mobilisation day count; PRG-242 (archived) is not listed.
+- [ ] **R5-M-02** Forced password change: sign in with an account that must change its password. Expected: the change-password screen comes first, then Home.
+- [ ] **R5-M-03** Single-project home: sign in as `resident.abj@` (ABJ-108 only). Expected: Home shows that project's card in full (current sprint and deliverables, units in the sprint, open findings, next visit, Site log and Defects shortcuts) instead of a list; the calendar and "+ Unscheduled visit" are still there.
+- [ ] **R5-M-04** Calendar: switch week ⇄ month; swipe several months forward and back. Expected: each swipe lands on the next or previous month (no skipped, blank or doubled months, no jump back to today); dots differ by shape as well as colour (planned, overdue, done) with a legend in words; tapping a day lists its visits.
+- [ ] **R5-M-05** Airplane mode on Home. Expected: the cached window (30 days back, 14 days ahead) still shows with an offline note; a month outside it says it needs a connection and names the window. Online again, that month loads.
+- [ ] **R5-M-06** Time zone (`Intl` under Hermes): set the phone to a zone far from Africa/Lagos (for example UTC−8, around the project's midnight). Expected: "today" on the calendar, overdue marking and the visit day follow the project's zone, not the phone's; check-in and photo times show in the project's zone; no crash or blank dates.
+
+### 4.2 Responses
+- [ ] **R5-M-07** Confirm the PRG-105 routine visit offline (optional comment). Expected: "Waiting to send" on the visit; online, the web planner shows it confirmed.
+- [ ] **R5-M-08** Move offline. Expected: only dates inside the allowed window are offered (± 2 working days of the original date, inside its sprint); the new date shows marked pending; online, the web shows the moved date.
+- [ ] **R5-M-09** Propose a date outside the window (a comment is required). Expected: the original date stays; the proposal waits in the web planner's side panel; after the manager accepts it and you pull down on Home, the phone shows the new date.
+- [ ] **R5-M-10** Decline with a comment. Expected: the web planner lists the visit as declined.
+- [ ] **R5-M-11** Move a visit on the web planner, then respond to it on the phone while still offline with the old data; go online. Expected: the response is refused with "This visit changed since you responded. Refresh and respond again."; the Outbox shows it failed and offers Remove.
+
+### 4.3 Check-in
+- [ ] **R5-M-12** Check in inside the boundary ("On site"), within the tolerance band ("Just outside the boundary") and outside it ("Outside the site boundary", with the distance). Expected: each is allowed; on the web the outside check-in is flagged on the visit.
+- [ ] **R5-M-13** Check in with location off ("No location") and with a mock-location app on Android ("Simulated location"). Expected: check-in still allowed and flagged on the web.
+
+### 4.4 Form, review and submission
+- [ ] **R5-M-14** Form download (304): with the visit's form already on the phone, pull down on Home while online. Expected: the API log shows `304` for `GET …/visits/:id/form` (no second download) and the form still opens offline. If the Visit screen says the form is not on the phone, "Download the form" fetches it.
+- [ ] **R5-M-15** Fill a Routine visit on PRG-105 offline: every field type (text, number with unit, percentage, yes/no/N/A, single and multiple choice, date, rating, photo, voice note); one photo per unit in the Toilet's per-unit slots; a rule-triggered comment; a rule note "This answer will raise a finding". Expected: one section per screen with a progress bar; photos only from the in-app camera.
+- [ ] **R5-M-16** Photo boundary rule: take a photo for a slot outside the boundary, and one with a mock location. Expected: the slot shows "Outside the site boundary" (or no location) and asks for a retake; submission stays blocked until it is replaced.
+- [ ] **R5-M-17** Re-check item: on a visit with an open finding (submit a visit that raises one first, then use the next unstarted visit). Expected: a re-check block per finding ("Resolved?", comment, photo).
+- [ ] **R5-M-18** Close the app mid-form (swipe it away) and reopen. Expected: the draft resumes at the same section with its answers and photos.
+- [ ] **R5-M-19** Review (`popTo`): tap an issue on the review screen. Expected: the form opens at that section; going back to review and submitting returns to the Visit screen, and the back button does not reopen the form or the review.
+- [ ] **R5-M-20** Submit offline, then reconnect. Expected: the Outbox drains in order (photos, then the check-in, then the report); the web shows the submission with photos under each unit, the check-in location and the findings raised.
+- [ ] **R5-M-21** Form rebuilt on the web after the phone checked in. Expected: opening the visit shows "The form was rebuilt" listing any answers that no longer fit; the notice survives a restart until dismissed.
+- [ ] **R5-M-22** Two officers on one visit (second phone): the second officer submits first. Expected: the first phone's report shows "Report refused" with the already-submitted message, and offers "Copy into a new report" and Delete.
+- [ ] **R5-M-23** One open draft per visit (expo-sqlite partial index): on a visit with a refused report, "Copy into a new report", fill a little, close and reopen the app. Expected: no database error; the visit resumes that one new draft and the refused report stays beside it.
+- [ ] **R5-M-24** Return a submission on the web. Expected: the phone (online) starts a correction pre-filled with the answers and comments; photos and voice notes are dropped and listed.
+
+### 4.5 Unscheduled visit
+- [ ] **R5-M-25** In airplane mode: "+ Unscheduled visit" → PRG-105 → pick a facility → create, check in, fill and submit. Expected: all offline; online, the web shows an Ad hoc visit with its submission.
+
+### 4.6 Site log
+- [ ] **R5-M-26** Project → Site log: add a photo, a voice note and a note offline. Expected: each geotagged and saved; online, the web's Visits & reports → Site log shows them. With Whisper configured the voice note's transcript appears after upload; without it no transcript is shown.
+- [ ] **R5-M-27** In a photo slot, "Pick from site log" with an unsent site log photo from the check-in day. Expected: it fills the slot and leaves the site log; a sent entry is not offered there, only "attach" on the review screen.
+
+### 4.7 Defects, incidents, notifications
+- [ ] **R5-M-28** Defects (a role with `retention:manage_defects`, on a project past construction or with open defects; assign the account to PRG-103 on the web if needed): close a defect with photos offline, then online; reopen one. Expected: the web defect board follows.
+- [ ] **R5-M-29** Project → Report an incident. Expected: the incident reaches the web.
+- [ ] **R5-M-30** Push with the app in the background: publish a visit to the officer on the web, and let a reminder fire for an unconfirmed visit. Expected: a push arrives; tapping it opens that visit.
+- [ ] **R5-M-31** Notification centre across projects: generate notifications on two projects. Expected: one list merging every project; a project that fails to load shows a warning instead of hiding the rest; a visit notification opens the visit, a defect one opens Defects; old notification types show as "Update".
+
+### 4.8 Outbox and sync
+- [ ] **R5-M-32** Outbox actions: with failed and waiting rows of several kinds. Expected: rows grouped per project and labelled (Visit report, Check-in, Visit response, Site log entry, Photo, Defect update, Incident) with state, saved time and last error; Retry on failed rows; Remove only on a refused report, a failed response, a failed or held defect update, a failed incident, and a held photo or voice note (which also offers "Send again"); failed photos, check-ins, unscheduled visits and site log entries offer Retry only. The Home header badge counts waiting rows.
+- [ ] **R5-M-33** Outbox shows no "Local data is not encrypted" warning (that warning means the build lacks SQLCipher).
+- [ ] **R5-M-34** Remove the account from a project on the web while the phone has rows waiting for it. Expected: the session-ended screen offers "Continue with my other projects" (or Sign out); nothing is deleted.
+- [ ] **R5-M-35** Sign out and back in. Expected: downloaded visits and forms are cleared and downloaded again; drafts and unsent work are kept.
+
+### 4.9 Upgrade and native build
+- [ ] **R5-M-36** Upgrade (SQLite v9 → v10): install a pre-R5 build, queue items of the old kinds offline (a daily report, a chat message, a site inspection, plus photos), then install the R5 build over it. Expected: the app opens without a crash; the old-kind rows are gone from the Outbox; photos are kept; the visit app works.
+- [ ] **R5-M-37** Permission texts after a native rebuild (the texts are in `app.json`, so they need a new EAS build, not only a JS reload): on first use, the camera, microphone and location prompts name visits, defects and the site log. Check on both platforms.
+
+---
+
+## 5. Retired checks
+
+Not to be run. Listed so earlier reports that cite these IDs can be traced.
+
+| IDs | Covered | Why retired | Replaced by |
+| :--- | :--- | :--- | :--- |
+| P3-W-01 to P3-W-05 | IPC claims, reconciliation, certification, conditions precedent, evidence ratings | Lender product deleted (R1b) | – |
+| P4-W-03, P4-W-08, P4-W-09 | Site Presence reports, report queries | Workday reports deleted (R5e app, R5f server) | Visit review on the web (R5-M-20) |
+| P4-W-04 | Presence pings | Presence telemetry deleted (R1e) | – |
+| P4-W-05 | Reconciliation workbench evidence drawer | Lender product deleted (R1b) | – |
+| P4-W-06, P4-W-07 | Contractor identity review (ID and selfies) | Identity assurance and contractor logins deleted (R1d) | – |
+| P4-M-01, P4-M-03, P4-M-17 to P4-M-20 | Join codes, rejoining, identity wizard | Join codes and identity assurance deleted (R1d) | R5-M-01, R5-M-35 |
+| P4-M-02 | Encryption warning in Sync status | Sync status became the Outbox (R5e) | R5-M-33 |
+| P4-M-04 to P4-M-09 | Captures in the WBS chat (location, mock location, voice note, typed note, duplicate photo) | WBS chat deleted (R5e) | R5-M-15, R5-M-16, R5-M-26 |
+| P4-M-10 to P4-M-14 | Daily report per WBS item, end-of-day sheet, offline report | Workday reports and the end-of-day sheet deleted (R5e) | R5-M-06, R5-M-15 to R5-M-20 |
+| P4-M-15, P4-M-16 | Report queries and revisions | Workday reports deleted | R5-M-24 |
+| P4-M-21 to P4-M-24 | Push for identity decisions, revoked join session, morning brief notices, presence | Identity, join sessions, morning briefs and presence deleted (R1d, R1e) | R5-M-30, R5-M-31, R5-M-34 |
+| P14-M-01 to P14-M-06 | Reporting streams, Phase 14 inspections and findings on the phone | Streams deleted (R4f); inspection screens deleted (R5e), server side in R5f | R5-M-15 to R5-M-20, R5-M-17 |
+| P13-M-01 to P13-M-03 | Contractor check-in completing mobilisation; join codes after termination | Telemetry check-in deleted (R1e); join codes deleted (R1d); mobilisation check visits complete the milestone (R4) | R5-M-12, R5-M-20 (on a PRG-102 mobilisation check) |
+| P12-M-01 to P12-M-04 | Registration on the field assurance step | Registration and identity assurance deleted (R1d) | – |
+| P16-M-01 | `resident.supervisor@` project list | Superseded | R5-M-01 |
+| P16-M-02, P16-M-03 | Resident supervision report; Phase 14 inspection flow and its KPI | Workday reports and inspections deleted | R5-M-20, then Programme KPIs "Visits conducted vs planned" |
+
+---
+
+## 6. Not ready to test yet
+
+- Moving queued items between sessions after an account is removed from a project and added back: an exclamation on each item, with Remove or Update.
+- Project-wide action notifications marked done for everyone once someone acts. The old app's action-required notifications (report queries, hold points, inspection findings) can no longer be completed from the phone; R5f cleans them up.

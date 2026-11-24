@@ -9,19 +9,15 @@ export type RoleSurface = z.infer<typeof RoleSurfaceEnum>;
 /**
  * How a mobile field role takes part in workflows:
  * - INDEPENDENT_VERIFIER: M&E officer / monitor / clerk of works.
- * - CONTRACTOR_EXECUTOR: legacy. Contractors have no login (redesign R1d, decision P2); no role can be
- *   given this persona (see AssignableFieldPersonaTypeEnum). It stays only for the contractor reporter
- *   scopes in cadence, which the visit plan replaces in R4.
  * - NONE: web-only role.
  */
 export const FieldPersonaTypeEnum = z.enum([
   'INDEPENDENT_VERIFIER',
-  'CONTRACTOR_EXECUTOR',
   'NONE',
 ]);
 export type FieldPersonaType = z.infer<typeof FieldPersonaTypeEnum>;
 
-/** The personas a role can be given (redesign R1d: no contractor persona). */
+/** The personas a role can be given (redesign R1d: no contractor persona; R5f removed the enum value). */
 export const AssignableFieldPersonaTypeEnum = z.enum(['INDEPENDENT_VERIFIER', 'NONE']);
 export type AssignableFieldPersonaType = z.infer<typeof AssignableFieldPersonaTypeEnum>;
 
@@ -745,22 +741,6 @@ export const GeofenceStatusEnum = z.enum(['INSIDE', 'WITHIN_TOLERANCE', 'OUTSIDE
 export type GeofenceStatus = z.infer<typeof GeofenceStatusEnum>;
 
 /**
- * 4. Configurable Field Reporting Cadences
- */
-export const ReportingCadenceEnum = z.enum([
-  'DAILY',
-  'WEEKLY',
-  'BI_WEEKLY',
-  'INSPECTION_ONLY',
-  // Phase 8
-  'MONTHLY',
-  'CUSTOM_INTERVAL',
-  // Phase 14: calendar quarters (anchor month configurable)
-  'QUARTERLY',
-]);
-export type ReportingCadence = z.infer<typeof ReportingCadenceEnum>;
-
-/**
  * 7. Field Evidence Log Lifecycle States
  */
 /** Server state of one registered capture (photo, voice note or document). */
@@ -786,13 +766,6 @@ export const MediaTypeEnum = z.enum([
   'PROJECT_DOCUMENT',
 ]);
 export type MediaType = z.infer<typeof MediaTypeEnum>;
-
-export const QueryStatusEnum = z.enum([
-  'OPEN',
-  'RESPONDED',
-  'RESOLVED',
-]);
-export type QueryStatus = z.infer<typeof QueryStatusEnum>;
 
 /**
  * 10. Immutable Audit Ledger Enums
@@ -822,12 +795,9 @@ export const AuditActionTypeEnum = z.enum([
   'EVIDENCE_CONFIRMED',
   'EVIDENCE_FLAGGED_INTEGRITY',
   // Field-report queries (raised by a monitor, answered by the reporter)
-  'MONITOR_QUERY_RAISED',
-  'CONTRACTOR_QUERY_RESPONDED',
   'INCIDENT_REPORT_SUBMITTED',
   'INCIDENT_STATUS_UPDATED',
   'PUSH_TOKEN_REGISTERED',
-  'WORKDAY_REPORT_SUBMITTED',
   'USER_CREATED',
   'USER_UPDATED',
   'USER_DEACTIVATED',
@@ -835,9 +805,7 @@ export const AuditActionTypeEnum = z.enum([
   'TENANT_SETTINGS_UPDATED',
   'CAPTURE_REGISTERED',
   'CAPTURE_FLAGGED_INTEGRITY',
-  'WORKDAY_REPORTS_RELEASED',
   'DEVICE_KEY_REGISTERED',
-  'REPORT_QUERY_RESOLVED',
   'MOBILE_USER_SIGNED_IN',
   'MOBILE_DEVICE_REVOKED',
   'ORGANIZATION_CREATED',
@@ -858,13 +826,7 @@ export const AuditActionTypeEnum = z.enum([
   'PROJECT_STANDARD_DELETED',
   'NEEDS_ASSESSMENT_UPLOADED',
   'NEEDS_ASSESSMENT_DELETED',
-  'WORKDAY_REPORT_APPROVED',
-  'WORKDAY_REPORT_RETURNED',
-  'STANDARDS_VIOLATION_FLAGGED',
   'APPROVAL_STEP_ACTIONED',
-  // Phase 8: cadence
-  'REPORT_SUBMITTED_LATE',
-  'REPORT_MISSED',
   // Phase 10: handover, retention and defects
   'HANDOVER_RECORDED',
   'HANDOVER_REVIEWED',
@@ -879,12 +841,9 @@ export const AuditActionTypeEnum = z.enum([
   'PROJECT_TYPE_APPLIED',
   'ORGANIZATION_HIERARCHY_CHANGED',
   'TERMINOLOGY_UPDATED',
-  // Phase 14: streams and inspections
-  'INSPECTION_SUBMITTED',
-  'INSPECTION_REVIEWED',
+  // Phase 14 (findings; R5f removed the inspection actions)
   'INSPECTION_FINDING_RAISED',
   'INSPECTION_FINDING_RESOLVED',
-  'CHECKLIST_TEMPLATE_SAVED',
   // Phase 13: documents, contract milestones, kick-off, default cases
   'DOCUMENT_UPLOADED',
   'DOCUMENT_VERSIONED',
@@ -973,33 +932,6 @@ export const IncidentStatusEnum = z.enum([
 ]);
 export type IncidentStatus = z.infer<typeof IncidentStatusEnum>;
 
-/**
- * 12. Workday Report Status
- */
-export const WorkdayReportStatusEnum = z.enum([
-  // Reporter's identity assurance is not approved yet; released by the server on approval.
-  'STAGED_UNVERIFIED',
-  // Accepted. With report approval off (Phase 7) this is final and counts as evidence.
-  'CONFIRMED',
-  // Phase 7, report approval on: waiting on a step of the project's report approval chain.
-  'PENDING_APPROVAL',
-  // Phase 7: every step of the report chain approved; counts as evidence.
-  'APPROVED_COMPLETED',
-  // Phase 7: a reviewer returned it; the reporter answers the query with a revision.
-  'RETURNED_FOR_REVISION',
-]);
-export type WorkdayReportStatus = z.infer<typeof WorkdayReportStatusEnum>;
-
-/** Post-submission omission check. Runs after the response, never in the request path. */
-export const WorkdayAiCheckStatusEnum = z.enum([
-  'PENDING',
-  'RUNNING',
-  'DONE',
-  'SKIPPED',
-  'FAILED',
-]);
-export type WorkdayAiCheckStatus = z.infer<typeof WorkdayAiCheckStatusEnum>;
-
 /** Media types a field device may register as a capture. */
 export const CaptureMediaTypeEnum = z.enum([
   'SITE_PHOTO',
@@ -1068,7 +1000,7 @@ export const NEEDS_ASSESSMENT_DOC_TYPE_META: Record<NeedsAssessmentDocType, { la
 export const ApprovalChainTypeEnum = z.enum(['REPORT', 'CONTRACT_DEFAULT']);
 export type ApprovalChainType = z.infer<typeof ApprovalChainTypeEnum>;
 
-export const ApprovalSubjectTypeEnum = z.enum(['WORKDAY_REPORT', 'SITE_INSPECTION', 'CONTRACT_DEFAULT_CASE', 'VISIT_SUBMISSION']);
+export const ApprovalSubjectTypeEnum = z.enum(['CONTRACT_DEFAULT_CASE', 'VISIT_SUBMISSION']);
 export type ApprovalSubjectType = z.infer<typeof ApprovalSubjectTypeEnum>;
 
 /**

@@ -74,3 +74,24 @@ export async function markIncidentSent(id: string, serverId: string): Promise<vo
   const db = await getDb();
   await db.runAsync('UPDATE incidents SET server_id = ? WHERE id = ?', [serverId, id]);
 }
+
+/**
+ * Redesign R5e (Outbox screen): an incident that could not be sent is removed from the phone with
+ * its outbox row and its photos still on the device. Sent incidents are never removed here.
+ */
+export async function discardIncident(id: string): Promise<void> {
+  const current = await loadIncident(id);
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(`DELETE FROM outbox WHERE kind = 'INCIDENT' AND entity_id = ? AND status IN ('DEAD', 'HELD')`, [id]);
+    await db.runAsync('DELETE FROM incidents WHERE id = ? AND server_id IS NULL', [id]);
+  });
+  for (const uri of current?.localPhotoUris ?? []) {
+    try {
+      const f = new File(uri);
+      if (f.exists) f.delete();
+    } catch {
+      // Already gone.
+    }
+  }
+}

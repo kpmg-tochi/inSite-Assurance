@@ -9,6 +9,7 @@ import { useDraftProjectsQuery } from "../../queries/projects/useProjectSetupQue
 import { useDeleteDraftMutation } from "../../mutations/projects/useProjectSetupMutations";
 import { ArchiveProjectDialog } from "../../components/projects/ArchiveProjectDialog";
 import { ScheduleBadge } from "../../components/schedule/ScheduleVarianceBadge";
+import { ProjectStageChip } from "../../components/overview/ProjectStageChip";
 import {
   StandardTable,
   TableActionButton,
@@ -185,6 +186,12 @@ export function ProjectsDirectoryPage({ projects, selectedProjectId, onSelectPro
       },
     },
     {
+      // Redesign R6c (D-R6.22): Kick-off → Mobilisation → Construction → Completion → Closure.
+      id: "stage",
+      header: "Stage",
+      cell: (p) => (p.stage ? <ProjectStageChip stage={p.stage} className="whitespace-nowrap" /> : <span className="text-slate-400">–</span>),
+    },
+    {
       id: "parties",
       header: "Contractor · " + term("funderParty"),
       cell: (p) => (
@@ -245,8 +252,8 @@ export function ProjectsDirectoryPage({ projects, selectedProjectId, onSelectPro
       align: "right",
       cell: (p) => {
         const actions: TableActionItem[] = [
-          { label: "Open dashboard", icon: <LayoutDashboard className="w-4 h-4" />, onClick: () => openProject(p.id) },
-          { label: `BOQ (${p.totalBoqItems})`, icon: <ClipboardList className="w-4 h-4" />, onClick: () => openProject(p.id, "scope") },
+          { label: "Open overview", icon: <LayoutDashboard className="w-4 h-4" />, onClick: () => openProject(p.id) },
+          { label: `Sprints & scope (${p.totalBoqItems ?? 0} lines)`, icon: <ClipboardList className="w-4 h-4" />, onClick: () => openProject(p.id, "scope") },
           ...(hasPermission("payments:view") || hasPermission("payments:record")
             ? [{ label: "Payments", icon: <FileSpreadsheet className="w-4 h-4" />, onClick: () => openProject(p.id, "payments") }]
             : []),
@@ -255,7 +262,7 @@ export function ProjectsDirectoryPage({ projects, selectedProjectId, onSelectPro
           actions.push({
             label: "Project settings",
             icon: <Settings2 className="w-4 h-4" />,
-            onClick: () => navigate(`/app/projects/${p.id}/settings/basics`),
+            onClick: () => navigate(`/app/projects/${p.id}/settings/project`),
           });
           if (p.status === "ACTIVE") {
             actions.push({

@@ -5,7 +5,7 @@ import { AppError } from '../../middleware/error.middleware';
 import type { FieldAgentJwtPayload, WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { evaluateProjectGeofence, GEOFENCE_CONTEXT_SELECT } from '../../utils/geofenceEvaluation';
-import { toCaptureSummary } from '../workday-reports/workdayReports.service';
+import { toCaptureSummary } from '../../utils/serializers';
 
 /**
  * Redesign R4c (D-R4.27, decision X): the officer's site log on a project: photos, voice notes and
@@ -25,7 +25,7 @@ export function serializeSiteLogEntry(e: SiteLogRow): SiteLogEntryDto {
     authorName: e.authorName,
     kind: e.kind,
     text: e.text,
-    capture: e.capture ? toCaptureSummary(e.capture as Parameters<typeof toCaptureSummary>[0]) : null,
+    capture: e.capture ? toCaptureSummary(e.capture) : null,
     latitude: e.latitude ?? e.capture?.latitude ?? null,
     longitude: e.longitude ?? e.capture?.longitude ?? null,
     geofenceStatus: e.geofenceStatus ?? e.capture?.geofenceStatus ?? null,
@@ -55,12 +55,12 @@ export async function createSiteLogEntry(projectId: string, f: FieldAgentJwtPayl
   if (input.kind !== 'NOTE') {
     const capture = await prisma.fieldEvidenceLog.findUnique({
       where: { clientCaptureId: input.clientCaptureId! },
-      select: { id: true, projectId: true, fieldSession: { select: { userId: true } }, workdayReportId: true, siteInspectionReportId: true, visitSubmissionId: true },
+      select: { id: true, projectId: true, fieldSession: { select: { userId: true } }, visitSubmissionId: true },
     });
     if (!capture) throw new AppError('The capture is not registered yet', 409, 'CAPTURES_NOT_REGISTERED', { missingClientCaptureIds: [input.clientCaptureId] });
     if (capture.projectId !== projectId) throw new AppError('The capture belongs to another project', 403, 'CAPTURE_OTHER_PROJECT');
     if (capture.fieldSession.userId !== f.userId) throw new AppError('The capture was taken by someone else', 403, 'CAPTURE_NOT_OWNED');
-    if (capture.workdayReportId || capture.siteInspectionReportId || capture.visitSubmissionId) {
+    if (capture.visitSubmissionId) {
       throw new AppError('The capture is already linked to a report', 409, 'CAPTURE_ALREADY_LINKED');
     }
     captureId = capture.id;

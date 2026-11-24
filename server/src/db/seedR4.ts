@@ -104,7 +104,7 @@ async function fieldAgentFor(userId: string, projectId: string): Promise<FieldAg
 }
 
 /** Valid answers for every non-capture question; `overrides` by answer path. */
-function answersFor(snapshot: VisitFormSnapshot, overrides: Record<string, { value: string | number; comment: string }> = {}) {
+export function answersFor(snapshot: VisitFormSnapshot, overrides: Record<string, { value: string | number; comment: string }> = {}) {
   const out: Array<{ path: string; value: string | number | string[] | null; comment: string | null; captures: [] }> = [];
   for (const b of snapshot.blocks) {
     for (const f of b.fields) {

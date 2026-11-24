@@ -48,7 +48,7 @@ const COPY: Record<SessionEndedState['reason'], { title: string; body: string }>
  * projects on the device keep syncing. This is deliberately not treated as "offline".
  */
 export const SessionEndedOverlay: React.FC = () => {
-  const { activeProjectId, projects, signOut } = useProfile();
+  const { activeProjectId, projects, signOut, switchProject } = useProfile();
   const [, setVersion] = useState(0);
 
   useEffect(() => subscribeSessionEnded(() => setVersion((v) => v + 1)), []);
@@ -66,15 +66,23 @@ export const SessionEndedOverlay: React.FC = () => {
 
   const isAccountWide = ended.scope === 'account';
 
-  const primary = isAccountWide
-    ? {
-        text: 'Sign in again',
-        onPress: async () => {
-          await signOut();
-          reset('SignIn');
-        },
-      }
-    : { text: 'Choose another project', onPress: async () => reset('Projects') };
+  // Redesign R5b: Home lists every project, so leaving the ended one means opening another there.
+  const primary =
+    isAccountWide || otherProjects.length === 0
+      ? {
+          text: isAccountWide ? 'Sign in again' : 'Sign out',
+          onPress: async () => {
+            await signOut();
+            reset(isAccountWide ? 'SignIn' : 'Landing');
+          },
+        }
+      : {
+          text: 'Continue with my other projects',
+          onPress: async () => {
+            await switchProject(otherProjects[0].projectId);
+            reset('Home');
+          },
+        };
 
   return (
     <Modal visible transparent animationType="fade">
@@ -84,15 +92,6 @@ export const SessionEndedOverlay: React.FC = () => {
           <Text style={styles.body}>{copy.body}</Text>
           {ended.message ? <Text style={styles.detail}>{ended.message}</Text> : null}
           <PrimaryButton text={primary.text} onPress={() => void primary.onPress()} />
-          {otherProjects.length > 0 && !(primary.text === 'Choose another project') && (
-            <PrimaryButton
-              text="Open another project"
-              backgroundColor="#FFFFFF"
-              textColor="#00338D"
-              style={styles.secondary}
-              onPress={() => reset('Projects')}
-            />
-          )}
         </View>
       </View>
     </Modal>
@@ -121,10 +120,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: '#475569',
-  },
-  secondary: {
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
   },
   detail: {
     fontSize: 12,

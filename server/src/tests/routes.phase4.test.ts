@@ -1,13 +1,14 @@
 /**
  * Phase 4 route-level tests: capture registration, integrity screening with real image bytes,
- * device signatures, idempotent reports, the assurance gate, staged release, honest AI fallbacks,
- * chat idempotency, and counted reports driving progress (redesign R1b).
+ * device signatures, notification read state, honest transcription fallbacks and incident
+ * idempotency. Redesign R5f removed workday reports, report queries, the summary assist and WBS
+ * chat (and their tests).
  *
  * Runs against a disposable database rebuilt from migrations (see helpers/testDb.ts). Uploads use
  * the local-disk storage mode (no S3), through the same presign -> PUT -> register flow as devices.
  */
 import { resetTestDatabase } from './helpers/testDb';
-import { createFieldSession, fieldAuth, fieldToken as sessionToken } from './helpers/fieldAuth';
+import { createFieldSession, fieldAuth } from './helpers/fieldAuth';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
@@ -22,11 +23,6 @@ type Shared = typeof import('@insite/shared');
 let app: Express;
 let prisma: PrismaClientType;
 let shared: Shared;
-let aiCheck: typeof import('../modules/workday-reports/aiOmissionCheck');
-let provider: typeof import('../modules/evidence/evidenceProvider');
-
-const PASSWORD = 'Password123!';
-const scheduled: string[] = [];
 
 const ids = {
   tenant: '',
@@ -35,12 +31,6 @@ const ids = {
   abjCow: '',
   lkkCow: '',
   lkkContractor: '',
-  pvModules: '',
-  culvertConcrete: '',
-  stoneBase: '',
-  culvertReinforcement: '',
-  rebarReport: '',
-  rebarQuery: '',
 };
 
 const ABJ_POINT = { latitude: 9.0489, longitude: 7.3497 };
@@ -48,12 +38,6 @@ const LKK_POINT = { latitude: 6.4502, longitude: 3.57 };
 const FAR_AWAY = { latitude: 4.8156, longitude: 7.0498 }; // Port Harcourt
 
 const fieldHeaders = (sessionId: string) => fieldAuth(prisma, sessionId);
-
-async function webHeaders(email: string) {
-  const res = await request(app).post('/api/v1/auth/login').send({ email, password: PASSWORD });
-  assert.equal(res.status, 200, JSON.stringify(res.body));
-  return { Authorization: `Bearer ${res.body.data.accessToken}` };
-}
 
 // ---------------------------------------------------------------------------
 // Image fixtures: real pixels, so the perceptual hash is computed from content.
@@ -126,7 +110,6 @@ async function registerCapture(params: {
   bytes: Buffer;
   mediaType?: string;
   mimeType?: string;
-  wbsItemId?: string | null;
   location?: { latitude: number; longitude: number } | null;
   isMockLocation?: boolean;
   key?: Key;
@@ -143,7 +126,6 @@ async function registerCapture(params: {
     params.location === null ? null : { ...(params.location ?? ABJ_POINT), accuracyMeters: 4.5 };
   const body = {
     clientCaptureId,
-    wbsItemId: params.wbsItemId ?? null,
     mediaType,
     objectKey,
     mimeType,
@@ -176,51 +158,12 @@ async function registerCapture(params: {
   return { res, body };
 }
 
-let periodOffset = 0;
-/**
- * Each report gets its own period unless a test sets one: one report per reporter, item and period.
- * The ABJ project reports weekly (Phase 8), so dates step a week at a time (always a Wednesday).
- */
-function nextPeriod(): string {
-  periodOffset += 1;
-  return shared.calendarDateInTimeZone(new Date(Date.UTC(2025, 0, 1) + periodOffset * 7 * 86_400_000), 'UTC');
-}
-
-/**
- * A valid report body. Each gets its own reporting day unless the test sets one; `confirmedAt` is
- * midday of that day, so it matches the project time zone (Africa/Lagos) as the server requires.
- */
-function reportBody(overrides: Record<string, unknown> = {}) {
-  const workdayDate = (overrides.workdayDate as string | undefined) ?? nextPeriod();
-  return {
-    clientReportId: crypto.randomUUID(),
-    wbsItemId: ids.pvModules,
-    workdayDate,
-    reporterTimezone: 'Africa/Lagos',
-    summaryText: 'Installed PV modules on row C.',
-    reportedQuantity: 100,
-    unitOfMeasure: 'kWp',
-    isHoldPointClaimed: false,
-    clientCaptureIds: [] as string[],
-    textNotes: [],
-    submissionGeotag: { ...ABJ_POINT, accuracyMeters: 5, isMocked: false, capturedAt: `${workdayDate}T11:59:00.000Z` },
-    confirmedAt: `${workdayDate}T12:00:00.000Z`,
-    confirmedAsFinal: true,
-    ...overrides,
-  };
-}
-
-const todayInLagos = () => shared.calendarDateInTimeZone(new Date(), 'Africa/Lagos');
-
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
   shared = await import('@insite/shared');
-  aiCheck = await import('../modules/workday-reports/aiOmissionCheck');
-  provider = await import('../modules/evidence/evidenceProvider');
   const { createApp } = await import('../app');
   app = createApp();
-  aiCheck.setAiOmissionCheckScheduler((id) => scheduled.push(id));
 
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: 'kpmg-nigeria' } });
   ids.tenant = tenant.id;
@@ -230,19 +173,9 @@ before(async () => {
   ids.lkkCow = (await prisma.fieldAgentSession.findFirstOrThrow({ where: { projectId: ids.lkk, agentFullName: { contains: 'Resident CoW' } } })).id;
   // R1d: the second LKK-402 field session is an M&E officer (it holds the old contractor engineer's data).
   ids.lkkContractor = (await prisma.fieldAgentSession.findFirstOrThrow({ where: { projectId: ids.lkk, agentFullName: { contains: 'M&E Officer' } } })).id;
-  ids.pvModules = (await prisma.boqItem.findFirstOrThrow({ where: { projectId: ids.abj, wbsCode: '02.01.1' } })).id;
-  ids.culvertConcrete = (await prisma.boqItem.findFirstOrThrow({ where: { projectId: ids.lkk, unit: 'm3' } })).id;
-  ids.stoneBase = (await prisma.boqItem.findFirstOrThrow({ where: { projectId: ids.lkk, unit: 'm2' } })).id;
-  ids.culvertReinforcement = (await prisma.boqItem.findFirstOrThrow({ where: { projectId: ids.lkk, unit: 'tons' } })).id;
-  const rebarQuery = await prisma.reportQuery.findFirstOrThrow({
-    where: { projectId: ids.lkk, boqItemId: ids.culvertReinforcement, status: 'OPEN' },
-  });
-  ids.rebarQuery = rebarQuery.id;
-  ids.rebarReport = rebarQuery.workdayReportId!;
 });
 
 after(async () => {
-  aiCheck?.setAiOmissionCheckScheduler(null);
   await prisma?.$disconnect();
   await fs.rm(process.env.LOCAL_STORAGE_DIR!, { recursive: true, force: true }).catch(() => undefined);
 });
@@ -434,276 +367,14 @@ describe('Phase 4 field evidence pipeline', () => {
     });
   });
 
-  describe('workday reports', () => {
-    it('is idempotent under a client retry and links captures exactly once', async () => {
-      const capture = await registerCapture({
-        sessionId: ids.abjCow,
-        projectId: ids.abj,
-        bytes: await renderImage('scene', 200),
-        wbsItemId: ids.pvModules,
-      });
-      const body = reportBody({ clientCaptureIds: [capture.body.clientCaptureId] });
-      const first = await request(app).post(`/api/v1/projects/${ids.abj}/workday-reports`).set(await fieldHeaders(ids.abjCow)).send(body);
-      assert.equal(first.status, 201, JSON.stringify(first.body));
-      assert.equal(first.body.data.status, 'CONFIRMED');
-      assert.equal(first.body.data.aiCheckStatus, 'PENDING');
-      assert.equal(first.body.data.captures.length, 1);
-      assert.ok(scheduled.includes(first.body.data.id), 'omission check is scheduled after the response');
-
-      const retry = await request(app).post(`/api/v1/projects/${ids.abj}/workday-reports`).set(await fieldHeaders(ids.abjCow)).send(body);
-      assert.equal(retry.status, 200);
-      assert.equal(retry.body.data.id, first.body.data.id);
-      assert.equal(retry.body.data.idempotentReplay, true);
-      assert.equal(await prisma.workdayReport.count({ where: { clientReportId: body.clientReportId } }), 1);
-
-      const reuse = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send(reportBody({ clientCaptureIds: [capture.body.clientCaptureId] }));
-      assert.equal(reuse.status, 409);
-      assert.equal(reuse.body.error.code, 'CAPTURE_ALREADY_LINKED');
-    });
-
-    it('returns a retryable 409 naming captures that are not registered yet', async () => {
-      const missing = crypto.randomUUID();
-      const res = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send(reportBody({ clientCaptureIds: [missing] }));
-      assert.equal(res.status, 409);
-      assert.deepEqual(res.body.error.details.missingClientCaptureIds, [missing]);
-    });
-
-    it('requires a location on every report and badges a low-accuracy fix', async () => {
-      const { submissionGeotag: _omit, ...noLocation } = reportBody();
-      const missing = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send(noLocation);
-      assert.equal(missing.status, 400);
-
-      const day = nextPeriod();
-      const poor = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send(
-          reportBody({
-            workdayDate: day,
-            submissionGeotag: { ...ABJ_POINT, accuracyMeters: 80, isMocked: false, capturedAt: `${day}T11:00:00.000Z` },
-          })
-        );
-      assert.equal(poor.status, 201, JSON.stringify(poor.body));
-      assert.ok(poor.body.data.integrityFlags.includes('LOW_GPS_ACCURACY'));
-      assert.ok(poor.body.data.integrityFlags.includes('UNSIGNED'));
-      assert.ok(!poor.body.data.integrityFlags.includes('OUTSIDE_PROJECT_GEOFENCE'));
-    });
-
-    it('checks the reporting day against the project time zone', async () => {
-      // 23:30 UTC on 1 Mar is 00:30 on 2 Mar in Lagos (UTC+1): the reporting day is 2 Mar.
-      const wrong = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send(reportBody({ workdayDate: '2025-03-01', confirmedAt: '2025-03-01T23:30:00.000Z' }));
-      assert.equal(wrong.status, 400);
-      assert.equal(wrong.body.error.code, 'WORKDAY_DATE_MISMATCH');
-      assert.equal(wrong.body.error.details.expectedWorkdayDate, '2025-03-02');
-
-      const right = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send(reportBody({ workdayDate: '2025-03-02', confirmedAt: '2025-03-01T23:30:00.000Z' }));
-      assert.equal(right.status, 201, JSON.stringify(right.body));
-
-      const future = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send(reportBody({ workdayDate: '2099-01-01', confirmedAt: '2099-01-01T12:00:00.000Z' }));
-      assert.equal(future.status, 400);
-      assert.equal(future.body.error.code, 'CONFIRMED_AT_IN_FUTURE');
-    });
-
-    it('rejects a hold-point claim on an item that is not a hold point', async () => {
-      const res = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send(reportBody({ isHoldPointClaimed: true }));
-      assert.equal(res.status, 400);
-      assert.equal(res.body.error.code, 'HOLD_POINT_NOT_APPLICABLE');
-    });
-
-    it('runs the omission check after the response with the rules engine when no AI is configured', async () => {
-      const res = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send(reportBody());
-      assert.equal(res.body.data.aiCheckStatus, 'PENDING');
-      const status = await aiCheck.runAiOmissionCheck(res.body.data.id);
-      assert.equal(status, 'DONE');
-      const row = await prisma.workdayReport.findUniqueOrThrow({ where: { id: res.body.data.id } });
-      assert.equal(row.aiCheckEngine, 'RULES');
-      assert.ok(row.aiReasoning?.startsWith('Rules check'));
-    });
-
-    it('revalidates idempotently and marks the targeted query resubmitted', async () => {
-      const body = {
-        clientReportId: crypto.randomUUID(),
-        reportQueryId: ids.rebarQuery,
-        reporterTimezone: 'Africa/Lagos',
-        delaysOrBlockers: 'Mill certificate arrives tomorrow.',
-        clientCaptureIds: [],
-        textNotes: [],
-        submissionGeotag: { ...LKK_POINT, accuracyMeters: 4, isMocked: false, capturedAt: new Date().toISOString() },
-        confirmedAt: new Date().toISOString(),
-        confirmedAsFinal: true,
-      };
-      const first = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/workday-reports/${ids.rebarReport}/revalidate`)
-        .set(await fieldHeaders(ids.lkkContractor))
-        .send(body);
-      assert.equal(first.status, 201, JSON.stringify(first.body));
-      assert.equal(first.body.data.parentReportId, ids.rebarReport);
-      assert.equal(first.body.data.revisionNumber, 2);
-      const retry = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/workday-reports/${ids.rebarReport}/revalidate`)
-        .set(await fieldHeaders(ids.lkkContractor))
-        .send(body);
-      assert.equal(retry.status, 200);
-      assert.equal(retry.body.data.id, first.body.data.id);
-      const query = await prisma.reportQuery.findUniqueOrThrow({ where: { id: ids.rebarQuery } });
-      assert.equal(query.status, 'RESUBMITTED');
-
-      const otherReporter = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/workday-reports/${ids.rebarReport}/revalidate`)
-        .set(await fieldHeaders(ids.lkkCow))
-        .send({ ...body, clientReportId: crypto.randomUUID() });
-      assert.equal(otherReporter.status, 404);
-
-      // The answered query is closed: no further revision without a new query.
-      const noQuery = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/workday-reports/${first.body.data.id}/revalidate`)
-        .set(await fieldHeaders(ids.lkkContractor))
-        .send({ ...body, reportQueryId: undefined, clientReportId: crypto.randomUUID() });
-      assert.equal(noQuery.status, 409);
-      assert.equal(noQuery.body.error.code, 'NO_OPEN_QUERY');
-
-      // The original can no longer be revised; only the latest revision can.
-      const superseded = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/workday-reports/${ids.rebarReport}/revalidate`)
-        .set(await fieldHeaders(ids.lkkContractor))
-        .send({ ...body, reportQueryId: undefined, clientReportId: crypto.randomUUID() });
-      assert.equal(superseded.status, 409);
-      assert.equal(superseded.body.error.code, 'REPORT_SUPERSEDED');
-    });
-
-    it('accepts one report per reporter, WBS item and period, confirmed as final', async () => {
-      const period = nextPeriod();
-      const unconfirmed = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send(reportBody({ workdayDate: period, confirmedAsFinal: false }));
-      assert.equal(unconfirmed.status, 400);
-
-      const first = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send(reportBody({ workdayDate: period }));
-      assert.equal(first.status, 201, JSON.stringify(first.body));
-
-      const second = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send(reportBody({ workdayDate: period, summaryText: 'Forgot to mention the cable trays.' }));
-      assert.equal(second.status, 409);
-      assert.equal(second.body.error.code, 'REPORT_ALREADY_SUBMITTED');
-      assert.equal(second.body.error.details.workdayReportId, first.body.data.id);
-
-      // No query has been raised, so it cannot be revised either.
-      const revise = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports/${first.body.data.id}/revalidate`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send({
-          clientReportId: crypto.randomUUID(),
-          reporterTimezone: 'Africa/Lagos',
-          submissionGeotag: { ...ABJ_POINT, accuracyMeters: 4, isMocked: false, capturedAt: new Date().toISOString() },
-          confirmedAt: new Date().toISOString(),
-          confirmedAsFinal: true,
-        });
-      assert.equal(revise.status, 409);
-      assert.equal(revise.body.error.code, 'NO_OPEN_QUERY');
-
-      // The database refuses a second original report for the period even if the check is bypassed.
-      const original = await prisma.workdayReport.findFirstOrThrow({
-        where: { reporterSessionId: ids.abjCow, wbsItemId: ids.pvModules, workdayDate: period, parentReportId: null },
-      });
-      await assert.rejects(
-        prisma.workdayReport.create({
-          data: {
-            clientReportId: crypto.randomUUID(),
-            projectId: ids.abj,
-            reporterSessionId: ids.abjCow,
-            wbsItemId: ids.pvModules,
-            workdayDate: period,
-            reportingPeriodStart: original.reportingPeriodStart,
-            reportingPeriodEnd: original.reportingPeriodEnd,
-            dueAt: original.dueAt,
-            reporterTimezone: 'Africa/Lagos',
-            summaryText: 'Direct insert',
-            unitOfMeasure: 'kWp',
-          },
-        })
-      );
-    });
-  });
-
   describe('Phase 2 and 3 carry-overs', () => {
-    it('lets a monitor resolve a report query, after which the report cannot be revised', async () => {
-      const latest = await prisma.workdayReport.findFirstOrThrow({ where: { parentReportId: ids.rebarReport } });
-      const url = `/api/v1/projects/${ids.lkk}/report-queries/${ids.rebarQuery}/resolve`;
-
-      const asField = await request(app).post(url).set(await fieldHeaders(ids.lkkContractor)).send({});
-      assert.ok(asField.status === 401 || asField.status === 403, `field agent got ${asField.status}`);
-      // A web user without reports:raise_query (R1d: contractors have no login).
-      const asLender = await request(app).post(url).set(await webHeaders('lender@insite.ng')).send({});
-      assert.equal(asLender.status, 403);
-
-      const monitor = await webHeaders('monitor@insite.ng');
-      const resolved = await request(app).post(url).set(monitor).send({ resolutionNote: 'Mill certificate received.' });
-      assert.equal(resolved.status, 200, JSON.stringify(resolved.body));
-      assert.equal(resolved.body.data.status, 'RESOLVED');
-      assert.ok(resolved.body.data.resolvedAt);
-      const again = await request(app).post(url).set(monitor).send({});
-      assert.equal(again.status, 409);
-
-      const revise = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/workday-reports/${latest.id}/revalidate`)
-        .set(await fieldHeaders(ids.lkkContractor))
-        .send({
-          clientReportId: crypto.randomUUID(),
-          reporterTimezone: 'Africa/Lagos',
-          submissionGeotag: { ...LKK_POINT, accuracyMeters: 4, isMocked: false, capturedAt: new Date().toISOString() },
-          confirmedAt: new Date().toISOString(),
-          confirmedAsFinal: true,
-        });
-      assert.equal(revise.status, 409);
-      assert.equal(revise.body.error.code, 'NO_OPEN_QUERY');
-
-      const notices = await request(app)
-        .get(`/api/v1/projects/${ids.lkk}/notifications`)
-        .set(await fieldHeaders(ids.lkkContractor));
-      assert.equal(notices.status, 200);
-      const resolvedNotice = notices.body.data.find((n: { title: string }) => n.title.startsWith('Query resolved'));
-      assert.ok(resolvedNotice, 'the reporter is told the query was resolved');
-      const audit = await prisma.auditLog.findFirst({ where: { projectId: ids.lkk, action: 'REPORT_QUERY_RESOLVED' } });
-      assert.ok(audit);
-    });
-
     it('keeps notification read state per field session', async () => {
       const other = { id: (await createFieldSession(prisma, { projectId: ids.abj, roleCode: 'INDEPENDENT_RESIDENT', name: 'Second Reader' })).sessionId };
       const broadcast = await prisma.mobileNotification.create({
         data: {
           projectId: ids.abj,
           fieldSessionId: null,
-          type: 'HOLD_POINT_ALERT',
+          type: 'DEFECT_UPDATE',
           actionType: 'NONE',
           title: 'Broadcast for read-state test',
           message: 'Everyone on the project sees this.',
@@ -723,8 +394,8 @@ describe('Phase 4 field evidence pipeline', () => {
     });
   });
 
-  describe('honest AI fallbacks', () => {
-    it('returns PENDING transcripts and no invented text when no speech provider is configured', async () => {
+  describe('honest transcription fallback', () => {
+    it('leaves a voice note PENDING, with no invented text, when no speech provider is configured', async () => {
       const audio = crypto.randomBytes(2048);
       const voice = await registerCapture({
         sessionId: ids.abjCow,
@@ -732,58 +403,15 @@ describe('Phase 4 field evidence pipeline', () => {
         bytes: audio,
         mediaType: 'VOICE_NOTE',
         mimeType: 'audio/mp4',
-        wbsItemId: ids.pvModules,
       });
+      assert.equal(voice.res.status, 201, JSON.stringify(voice.res.body));
       assert.equal(voice.res.body.data.transcriptionStatus, 'PENDING');
-      const res = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports/suggest`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send({ wbsItemId: ids.pvModules, clientCaptureIds: [voice.body.clientCaptureId] });
-      assert.equal(res.status, 200, JSON.stringify(res.body));
-      assert.equal(res.body.data.transcripts[0].transcriptionStatus, 'PENDING');
-      assert.equal(res.body.data.transcripts[0].transcript, null);
-      assert.equal(res.body.data.suggestion, null);
-      assert.ok(res.body.data.unavailableReason);
-    });
-
-    it('suggests from typed notes with the rules engine, without linking a BOQ item or describing photos', async () => {
-      const res = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports/suggest`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send({ wbsItemId: ids.pvModules, textNotes: ['Installed 40 m of cable tray, rain delay after 3pm'] });
-      assert.equal(res.status, 200);
-      const s = res.body.data.suggestion;
-      assert.equal(s.engine, 'RULES');
-      assert.equal(s.quantities[0].quantity, 40);
-      assert.equal(s.quantities[0].boqWbsCodeHint, null);
-      assert.doesNotMatch(JSON.stringify(res.body), /verified against project geofence/);
+      assert.equal(voice.res.body.data.transcript, null);
+      assert.equal('wbsItemId' in voice.res.body.data, false, 'R5f: captures no longer name a BoQ line');
     });
   });
 
-  describe('chat idempotency', () => {
-    it('stores a chat message once and refuses inline media', async () => {
-      const url = `/api/v1/projects/${ids.abj}/boq/${ids.pvModules}/messages`;
-      const body = { clientMessageId: crypto.randomUUID(), messageType: 'TEXT_COMMENT', textContent: 'Row C done' };
-      const first = await request(app).post(url).set(await fieldHeaders(ids.abjCow)).send(body);
-      assert.equal(first.status, 201, JSON.stringify(first.body));
-      assert.equal(first.body.data.senderSessionId, ids.abjCow);
-      const retry = await request(app).post(url).set(await fieldHeaders(ids.abjCow)).send(body);
-      assert.equal(retry.status, 200);
-      assert.equal(retry.body.data.id, first.body.data.id);
-
-      const inline = await request(app)
-        .post(url)
-        .set(await fieldHeaders(ids.abjCow))
-        .send({ clientMessageId: crypto.randomUUID(), messageType: 'PHOTO', mediaUrls: ['data:image/png;base64,AAAA'] });
-      assert.equal(inline.status, 400);
-      const noCapture = await request(app)
-        .post(url)
-        .set(await fieldHeaders(ids.abjCow))
-        .send({ clientMessageId: crypto.randomUUID(), messageType: 'PHOTO' });
-      assert.equal(noCapture.status, 400);
-      assert.equal(noCapture.body.error.code, 'CAPTURE_REQUIRED');
-    });
-
+  describe('incident idempotency', () => {
     it('stores an incident once and refuses device file paths', async () => {
       const body = {
         clientIncidentId: crypto.randomUUID(),
@@ -802,54 +430,6 @@ describe('Phase 4 field evidence pipeline', () => {
         .set(await fieldHeaders(ids.abjCow))
         .send({ ...body, clientIncidentId: crypto.randomUUID(), photoEvidenceUrls: ['file:///data/photo.jpg'] });
       assert.equal(filePath.status, 400);
-    });
-  });
-
-  describe('counted reports drive progress (redesign R1b)', () => {
-    it('a confirmed mobile-style report moves the item and project progress', async () => {
-      const boq = await prisma.boqItem.create({
-        data: {
-          projectId: ids.abj,
-          wbsCode: '09.09.9',
-          section: 'TEST',
-          description: 'Perimeter fence posts',
-          unit: 'nr',
-          totalQuantity: 100,
-          rateNgn: 10000,
-          budgetedCostNgn: 1000000,
-        },
-      });
-
-      const photo = await registerCapture({
-        sessionId: ids.abjCow,
-        projectId: ids.abj,
-        bytes: await renderImage('checker', 300),
-        wbsItemId: boq.id,
-      });
-      const submit = await request(app)
-        .post(`/api/v1/projects/${ids.abj}/workday-reports`)
-        .set(await fieldHeaders(ids.abjCow))
-        .send(
-          reportBody({
-            wbsItemId: boq.id,
-            workdayDate: todayInLagos(),
-            confirmedAt: new Date().toISOString(),
-            submissionGeotag: { ...ABJ_POINT, accuracyMeters: 5, isMocked: false, capturedAt: new Date().toISOString() },
-            summaryText: 'Installed 40 fence posts on the north perimeter.',
-            reportedQuantity: 40,
-            unitOfMeasure: 'nr',
-            clientCaptureIds: [photo.body.clientCaptureId],
-          })
-        );
-      assert.equal(submit.status, 201, JSON.stringify(submit.body));
-
-      const item = await prisma.boqItem.findUniqueOrThrow({ where: { id: boq.id } });
-      assert.equal(Number(item.cumulativeCertifiedPct), 40);
-      assert.ok(item.actualStartDate);
-      // The project figure was recomputed in the same transaction (a refresh now changes nothing).
-      const projectAfter = await prisma.project.findUniqueOrThrow({ where: { id: ids.abj } });
-      const { refreshProjectProgress } = await import('../modules/progress/progress.service');
-      assert.equal(await prisma.$transaction((tx) => refreshProjectProgress(tx, ids.abj)), Number(projectAfter.certifiedProgressPct));
     });
   });
 });

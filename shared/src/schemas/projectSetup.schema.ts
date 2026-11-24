@@ -4,13 +4,11 @@ import {
   GeofenceModeEnum,
   OrganizationCategoryEnum,
   ProjectStatusEnum,
-  ReportingCadenceEnum,
 } from '../enums';
 import { isValidTimeZone } from '../utils/time';
 import { GeofenceToleranceMetersSchema, ProjectGeofenceSchema } from './geofence.schema';
 import { OrganizationRefSchema } from './organization.schema';
 import { ProjectProcessSettingsDtoSchema, ProjectProcessStepSchema, ProjectStandardsStepSchema } from './process.schema';
-import { ProjectCadenceFieldsSchema, ProjectCadenceSettingsDtoSchema } from './cadence.schema';
 import {
   ProjectBeneficiaryDtoSchema,
   ProjectBeneficiaryListSchema,
@@ -20,53 +18,134 @@ import {
 import { ContractStatusEnum, ProjectContractDetailsDtoSchema, ProjectContractStepSchema } from './contract.schema';
 
 /**
- * Staged project creation (Phase 6, decision C). A project is created as a DRAFT from the basics
- * step and saved one step at a time. Each step has:
+ * Staged project creation (Phase 6, decision C; redesign R6a, D-R6.2). A project is created as a
+ * DRAFT from the basics section and saved one section at a time. Each section has:
  * - a save schema (shape only: a draft may be incomplete), and
- * - completeness rules, checked by the server and reported as issues per step.
- * Activation re-checks every required step.
+ * - completeness rules, checked by the server and reported as issues per section.
+ * Activation re-checks every required section.
  *
- * Steps are a registry so later phases can add steps without touching the wizard shell.
+ * Two levels: **sections** are what the server saves, validates and audits
+ * (`PUT /projects/:id/setup/:sectionId`, `setupState`, audit payloads keep the section id);
+ * five **wizard steps** group them for people (1 Project, 2 Contract, 3 Scope & sprints,
+ * 4 Team & visits, 5 Review), plus the optional "Advanced" entry listed under a divider.
  */
 
 export const PROJECT_CODE_PREFIX_REGEX = /^[A-Z0-9]{3}-[0-9]{3}$/;
 
-export interface ProjectSetupStepDefinition {
-  id: string;
+export const ProjectSetupSectionIdEnum = z.enum([
+  'basics',
+  'parties',
+  'site',
+  'contractor',
+  'contract',
+  'facility',
+  'scope',
+  'standards',
+  'team',
+  'visits',
+  'process',
+]);
+export type ProjectSetupSectionId = z.infer<typeof ProjectSetupSectionIdEnum>;
+
+export const ProjectSetupWizardStepIdEnum = z.enum(['project', 'contract', 'scope', 'team', 'review', 'advanced']);
+export type ProjectSetupWizardStepId = z.infer<typeof ProjectSetupWizardStepIdEnum>;
+
+export interface ProjectSetupSectionDefinition {
+  id: ProjectSetupSectionId;
   title: string;
-  /** Route segment under /app/projects/:id/setup/ and /settings/. */
-  route: string;
-  /** Required to activate. */
+  /** The wizard step that shows this section. */
+  stepId: ProjectSetupWizardStepId;
+  /** Required to activate (the server may decide per project: contract, standards). */
   required: boolean;
-  /** Sort order; gaps leave room for later phases (Phase 7 adds steps between 60 and 70). */
+  /** Order on its step page and in the section list. */
   order: number;
   description: string;
 }
 
-export const PROJECT_SETUP_STEPS: ProjectSetupStepDefinition[] = [
-  { id: 'basics', title: 'Basics', route: 'basics', required: true, order: 10, description: 'Name, code, location and budget' },
-  { id: 'parties', title: 'Parties', route: 'parties', required: true, order: 20, description: 'Monitor, funder and contractor' },
+export const PROJECT_SETUP_SECTIONS: ProjectSetupSectionDefinition[] = [
+  { id: 'basics', title: 'Project details', stepId: 'project', required: true, order: 10, description: 'Delivery model, name, code, location and budget' },
+  { id: 'parties', title: 'School and organisations', stepId: 'project', required: true, order: 20, description: 'Beneficiaries, owner, monitor and funder' },
+  { id: 'site', title: 'Location', stepId: 'project', required: true, order: 30, description: 'Site boundary, tolerance and time zone' },
+  // Redesign R6a (D-R6.4): split from the parties section.
+  { id: 'contractor', title: 'Contractor', stepId: 'contract', required: true, order: 40, description: 'The contractor and its planned completion' },
   // Phase 13. Required (server-computed) when the project type has contract milestones or documents needed before activation.
-  { id: 'contract', title: 'Contract and kick-off', route: 'contract', required: false, order: 25, description: 'Contract dates, sum and planned kick-off' },
-  { id: 'site', title: 'Site', route: 'site', required: true, order: 30, description: 'Geofence, tolerance and time zone' },
-  // Redesign R1b: tranches and conditions precedent are gone; the step keeps the retention settings.
-  { id: 'facility', title: 'Retention', route: 'facility', required: false, order: 40, description: 'Retention percentage and defects liability period' },
+  { id: 'contract', title: 'Contract and kick-off', stepId: 'contract', required: false, order: 50, description: 'Contract dates, sum and planned kick-off' },
+  // Redesign R1b: the section keeps the retention settings (id "facility" kept: setupState uses it).
+  { id: 'facility', title: 'Retention and defects liability', stepId: 'contract', required: false, order: 60, description: 'Retention percentage and defects liability period' },
   // Redesign R2b: facility units, scope lines and sprints (replaces the BOQ step).
-  { id: 'scope', title: 'Scope & sprints', route: 'scope', required: true, order: 50, description: 'Sprints, facility units and BoQ lines' },
-  // Phase 7. Valid defaults, so not required; the standards step becomes required when the process
-  // configuration sets standards or needs assessments to REQUIRED_AT_CREATION (server-computed).
-  { id: 'process', title: 'Workflow and process', route: 'process', required: false, order: 62, description: 'Template, process switches and approval chains' },
-  { id: 'standards', title: 'Standards and needs assessment', route: 'standards', required: false, order: 64, description: 'Project standards and needs-assessment documents' },
+  { id: 'scope', title: 'Scope & sprints', stepId: 'scope', required: true, order: 70, description: 'Sprints, facility units and BoQ lines' },
+  // Phase 7: required when the process configuration sets standards or needs assessments to
+  // REQUIRED_AT_CREATION, hidden when both are off (server-computed).
+  { id: 'standards', title: 'Needs assessment and standards', stepId: 'scope', required: false, order: 80, description: 'Needs-assessment documents and project standards' },
+  // Team before visits: saving visit officers adds them to the team.
+  { id: 'team', title: 'Team', stepId: 'team', required: false, order: 90, description: 'Web users and mobile users' },
   // Redesign R4 (D-R4.39): the visit officers, working days and a preview of the visit plan.
-  { id: 'visits', title: 'Visits', route: 'visits', required: false, order: 66, description: 'Visit officers, working days and the visit plan' },
-  { id: 'team', title: 'Team', route: 'team', required: false, order: 70, description: 'Web users and mobile users' },
-  { id: 'review', title: 'Review', route: 'review', required: false, order: 1000, description: 'Check and set the project active' },
+  { id: 'visits', title: 'Visits', stepId: 'team', required: false, order: 100, description: 'Visit officers, working days and the visit plan' },
+  // D-R6.9: optional, filled from the type's workflow template on apply.
+  { id: 'process', title: 'Workflow and process', stepId: 'advanced', required: false, order: 200, description: 'Template, process switches and approval chains' },
 ];
 
-export const ProjectSetupStepIdEnum = z.enum(['basics', 'parties', 'contract', 'site', 'facility', 'scope', 'process', 'standards', 'visits', 'team']);
-export type ProjectSetupStepId = z.infer<typeof ProjectSetupStepIdEnum>;
+export interface ProjectSetupStepDefinition {
+  id: ProjectSetupWizardStepId;
+  title: string;
+  /** Route segment under /app/projects/:id/setup/ and /settings/. */
+  route: string;
+  /** Sort order. */
+  order: number;
+  /** Sections shown on this step, in order. */
+  sectionIds: ProjectSetupSectionId[];
+  /** Not a numbered step: listed under a divider (Advanced). Reachable from drafts and live projects. */
+  settingsOnly: boolean;
+  description: string;
+}
 
-const TimeOfDay = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, 'Use 24-hour HH:MM');
+const sectionsOf = (stepId: ProjectSetupWizardStepId) =>
+  PROJECT_SETUP_SECTIONS.filter((s) => s.stepId === stepId)
+    .sort((a, b) => a.order - b.order)
+    .map((s) => s.id);
+
+/** The wizard (D-R6.2). */
+export const PROJECT_SETUP_STEPS: ProjectSetupStepDefinition[] = [
+  { id: 'project', title: 'Project', route: 'project', order: 1, sectionIds: sectionsOf('project'), settingsOnly: false, description: 'What, where and for whom' },
+  { id: 'contract', title: 'Contract', route: 'contract', order: 2, sectionIds: sectionsOf('contract'), settingsOnly: false, description: 'Contractor, contract dates and retention' },
+  { id: 'scope', title: 'Scope & sprints', route: 'scope', order: 3, sectionIds: sectionsOf('scope'), settingsOnly: false, description: 'Sprints, facility units, BoQ and needs assessment' },
+  { id: 'team', title: 'Team & visits', route: 'team', order: 4, sectionIds: sectionsOf('team'), settingsOnly: false, description: 'People with access and the visit plan' },
+  { id: 'review', title: 'Review', route: 'review', order: 5, sectionIds: [], settingsOnly: false, description: 'Check and set the project active' },
+  { id: 'advanced', title: 'Advanced', route: 'advanced', order: 100, sectionIds: sectionsOf('advanced'), settingsOnly: true, description: 'Workflow template, process switches and approval chains' },
+];
+
+/** The wizard step that shows a section. */
+export function wizardStepFor(sectionId: string): ProjectSetupStepDefinition | undefined {
+  const section = PROJECT_SETUP_SECTIONS.find((s) => s.id === sectionId);
+  return section ? PROJECT_SETUP_STEPS.find((s) => s.id === section.stepId) : undefined;
+}
+
+/** "step 2 "Contract"" for numbered steps, ""Advanced"" otherwise (used in issue messages). */
+export function wizardStepLabel(step: ProjectSetupStepDefinition): string {
+  return step.settingsOnly ? `"${step.title}"` : `step ${step.order} "${step.title}"`;
+}
+
+/**
+ * Resolves a setup URL segment (D-R6.10). A wizard step route resolves to itself; an old step URL
+ * (a section id such as `basics`, `facility` or `visits`) resolves to the step that now holds the
+ * section, with `sectionId` set so the page can scroll to `#section-<id>`. Unknown: null.
+ */
+export function resolveSetupRoute(
+  route: string | undefined | null
+): { step: ProjectSetupStepDefinition; sectionId: ProjectSetupSectionId | null; legacy: boolean } | null {
+  if (!route) return null;
+  const step = PROJECT_SETUP_STEPS.find((s) => s.route === route);
+  if (step) return { step, sectionId: null, legacy: false };
+  // Retired step ids that map onto a current step.
+  const retired: Record<string, ProjectSetupSectionId> = { boq: 'scope', reporting: 'team' };
+  const sectionId = (ProjectSetupSectionIdEnum.options as string[]).includes(route)
+    ? (route as ProjectSetupSectionId)
+    : retired[route] ?? null;
+  if (!sectionId) return null;
+  const owner = wizardStepFor(sectionId);
+  return owner ? { step: owner, sectionId, legacy: true } : null;
+}
+
 const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
 
 // ---------------------------------------------------------------------------
@@ -124,12 +203,25 @@ export const ProjectPartiesStepSchema = z.object({
   owningOrganizationId: z.string().uuid().nullable().optional(),
   monitorOrganization: OrganizationRefSchema.nullable().optional(),
   lenderOrganization: OrganizationRefSchema.nullable().optional(),
-  /** The contractor (at most one): a row not listed is removed (refused if it has activity). */
-  contractors: z.array(ProjectContractorInputSchema).max(1, 'A project has one contractor').default([]),
+  /**
+   * Deprecated (redesign R6a, D-R6.4): the contractor has its own section. Omitted keeps the current
+   * contractor. Still accepted for one release (seed, older clients): a row not listed is removed
+   * (refused if it has activity), and the save also marks the `contractor` section saved.
+   */
+  contractors: z.array(ProjectContractorInputSchema).max(1, 'A project has one contractor').optional(),
   /** Phase 11: the full beneficiary list; omitted keeps the current list. */
   beneficiaries: ProjectBeneficiaryListSchema.optional(),
 });
 export type ProjectPartiesStep = z.infer<typeof ProjectPartiesStepSchema>;
+
+/**
+ * Redesign R6a (D-R6.4): the contractor section. The full list (at most one): a row not listed is
+ * removed (refused if it has activity).
+ */
+export const ProjectContractorSectionSchema = z.object({
+  contractors: z.array(ProjectContractorInputSchema).max(1, 'A project has one contractor'),
+});
+export type ProjectContractorSection = z.infer<typeof ProjectContractorSectionSchema>;
 
 // ---------------------------------------------------------------------------
 // Step 3: site
@@ -163,28 +255,6 @@ export const ProjectScopeStepSchema = z.object({});
 export type ProjectScopeStep = z.infer<typeof ProjectScopeStepSchema>;
 
 // ---------------------------------------------------------------------------
-// Step 6: reporting
-// ---------------------------------------------------------------------------
-
-export const ProjectReportingStepSchema = z
-  .object({
-    reportingCadence: ReportingCadenceEnum,
-    workdayStartTime: TimeOfDay,
-    workdayEndTime: TimeOfDay,
-    // Phase 8: omitted fields keep their stored values.
-    ...ProjectCadenceFieldsSchema.partial().shape,
-  })
-  .refine((v) => v.workdayStartTime < v.workdayEndTime, {
-    message: 'The working day must end after it starts',
-    path: ['workdayEndTime'],
-  })
-  .refine((v) => v.reportingCadence !== 'CUSTOM_INTERVAL' || (v.customIntervalDays ?? 0) >= 1, {
-    message: 'Set how many days a custom period lasts',
-    path: ['customIntervalDays'],
-  });
-export type ProjectReportingStep = z.infer<typeof ProjectReportingStepSchema>;
-
-// ---------------------------------------------------------------------------
 // Redesign R4: visits (officers are saved through /visit-officers; the step saves the working days)
 // ---------------------------------------------------------------------------
 
@@ -204,10 +274,11 @@ export const ProjectTeamStepSchema = z.object({
 });
 export type ProjectTeamStep = z.infer<typeof ProjectTeamStepSchema>;
 
-/** Save schemas by step id. */
+/** Save schemas by section id (`PUT /projects/:id/setup/:sectionId`). */
 export const PROJECT_STEP_SAVE_SCHEMAS = {
   basics: ProjectBasicsStepSchema,
   parties: ProjectPartiesStepSchema,
+  contractor: ProjectContractorSectionSchema,
   contract: ProjectContractStepSchema,
   site: ProjectSiteStepSchema,
   facility: ProjectFacilityStepSchema,
@@ -216,7 +287,7 @@ export const PROJECT_STEP_SAVE_SCHEMAS = {
   standards: ProjectStandardsStepSchema,
   visits: ProjectVisitsStepSchema,
   team: ProjectTeamStepSchema,
-} as const;
+} as const satisfies Record<ProjectSetupSectionId, z.ZodTypeAny>;
 
 // ---------------------------------------------------------------------------
 // Completeness (activation)
@@ -247,8 +318,12 @@ export const SetupIssueSchema = z.object({
 });
 export type SetupIssue = z.infer<typeof SetupIssueSchema>;
 
+/** Status of one section (the name `steps`/`stepId` is kept for compatibility: D-R6.6). */
 export const SetupStepStatusSchema = z.object({
+  /** The section id. */
   stepId: z.string(),
+  /** Redesign R6a: the wizard step that shows the section. */
+  wizardStepId: ProjectSetupWizardStepIdEnum,
   title: z.string(),
   required: z.boolean(),
   /** Saved at least once. */
@@ -261,6 +336,32 @@ export const SetupStepStatusSchema = z.object({
   warnings: z.array(SetupIssueSchema).default([]),
 });
 export type SetupStepStatus = z.infer<typeof SetupStepStatusSchema>;
+
+/** Redesign R6a (D-R6.6): one wizard step, aggregated from its visible sections. */
+export const SetupWizardStepStatusSchema = z.object({
+  id: ProjectSetupWizardStepIdEnum,
+  title: z.string(),
+  /** Visible sections, in order. */
+  sectionIds: z.array(z.string()),
+  /** Any visible section is required. */
+  required: z.boolean(),
+  /** Every required section saved (a step without required sections: any section saved). */
+  saved: z.boolean(),
+  /** Every visible section has no issues. */
+  complete: z.boolean(),
+  issueCount: z.number().int(),
+  warningCount: z.number().int(),
+});
+export type SetupWizardStepStatus = z.infer<typeof SetupWizardStepStatusSchema>;
+
+/** An activation issue (422 PROJECT_INCOMPLETE `details.issues`). */
+export const ActivationIssueSchema = SetupIssueSchema.extend({
+  /** The section. */
+  stepId: z.string(),
+  /** Redesign R6a: the wizard step that shows the section. */
+  wizardStepId: ProjectSetupWizardStepIdEnum.optional(),
+});
+export type ActivationIssue = z.infer<typeof ActivationIssueSchema>;
 
 export const ProjectContractorDtoSchema = z.object({
   id: z.string().uuid(),
@@ -346,15 +447,10 @@ export const ProjectSetupDtoSchema = z.object({
     lineCount: z.number().int(),
     /** Lines with no facility unit (legacy projects). */
     unassignedLineCount: z.number().int(),
-    holdPointCount: z.number().int(),
     totalBudgetedCostNgn: z.number(),
   }),
   /** Phase 13 */
   contract: ProjectContractDetailsDtoSchema,
-  reporting: ProjectCadenceSettingsDtoSchema.extend({
-    /** Project-level mobilization reminder schedule (days before the planned date). */
-    reminderOffsetsDays: z.array(z.number().int()),
-  }),
   team: z.object({
     userIds: z.array(z.string().uuid()),
   }),
@@ -369,7 +465,10 @@ export const ProjectSetupDtoSchema = z.object({
     standardCount: z.number().int(),
     needsAssessmentCount: z.number().int(),
   }),
+  /** Section statuses (D-R6.6: name kept). */
   steps: z.array(SetupStepStatusSchema),
+  /** Redesign R6a: wizard steps with sections (Review excluded), in order. */
+  wizardSteps: z.array(SetupWizardStepStatusSchema),
   canActivate: z.boolean(),
 });
 export type ProjectSetupDto = z.infer<typeof ProjectSetupDtoSchema>;
@@ -405,6 +504,7 @@ export const ProjectDraftSummarySchema = z.object({
   createdByName: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  /** Redesign R6a: required wizard steps (not sections) that are complete. */
   completedRequiredSteps: z.number().int(),
   totalRequiredSteps: z.number().int(),
   canDelete: z.boolean(),

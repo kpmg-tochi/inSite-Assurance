@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 import { useAuth } from "../../lib/auth-context";
+import { Tabs, TabPanel, useUrlTab } from "../common/Tabs";
 import { FacilitiesCard } from "../facilities/FacilitiesCard";
 import { FacilitySubFormsCard } from "./FacilitySubFormsCard";
 import { FormSectionsCard } from "./FormSectionsCard";
@@ -9,48 +10,46 @@ import { VisitFormPreviewCard } from "./VisitFormPreviewCard";
 /**
  * Redesign R3 (D-R3.22): Settings → "Forms & facilities": the facility catalogue and the form library
  * (facility sub-forms, fixed sections, visit form templates) with a preview against a real project.
- * R6 moves it to the tenant navigation entry /app/forms.
+ * R6 moves it to the tenant navigation entry /app/forms; its sections are accessible tabs with the
+ * open one in the URL (`?tab=`).
  */
 
-type Section = "FACILITIES" | "SUBFORMS" | "SECTIONS" | "TEMPLATES" | "PREVIEW";
+type Section = "facilities" | "subforms" | "sections" | "templates" | "preview";
+
+const TAB_PREFIX = "forms-library";
 
 export function FormsAndFacilitiesTab() {
   const { hasPermission } = useAuth();
   const canFacilities = hasPermission("facilities:manage");
   const canForms = hasPermission("forms:manage");
   const sections: Array<{ id: Section; label: string; show: boolean }> = [
-    { id: "FACILITIES", label: "Facilities", show: canFacilities },
-    { id: "SUBFORMS", label: "Facility sub-forms", show: canForms },
-    { id: "SECTIONS", label: "Fixed sections", show: canForms },
-    { id: "TEMPLATES", label: "Visit form templates", show: canForms },
-    { id: "PREVIEW", label: "Preview", show: canForms },
+    { id: "facilities", label: "Facilities", show: canFacilities },
+    { id: "subforms", label: "Facility sub-forms", show: canForms },
+    { id: "sections", label: "Fixed sections", show: canForms },
+    { id: "templates", label: "Visit form templates", show: canForms },
+    { id: "preview", label: "Preview", show: canForms },
   ];
   const visible = sections.filter((s) => s.show);
-  const [active, setActive] = useState<Section>(visible[0]?.id ?? "FACILITIES");
+  const [active, setActive] = useUrlTab<Section>(visible.map((s) => s.id));
+  if (!active) return null;
 
+  const body = (
+    <>
+      {active === "facilities" && <FacilitiesCard />}
+      {active === "subforms" && <FacilitySubFormsCard />}
+      {active === "sections" && <FormSectionsCard />}
+      {active === "templates" && <VisitFormTemplatesCard />}
+      {active === "preview" && <VisitFormPreviewCard />}
+    </>
+  );
+
+  if (visible.length === 1) return body;
   return (
     <div className="space-y-4">
-      {visible.length > 1 && (
-        <div className="flex flex-wrap gap-1.5">
-          {visible.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() => setActive(s.id)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                active === s.id ? "bg-brand-primary text-white" : "bg-white border border-slate-200 text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-      )}
-      {active === "FACILITIES" && canFacilities && <FacilitiesCard />}
-      {active === "SUBFORMS" && canForms && <FacilitySubFormsCard />}
-      {active === "SECTIONS" && canForms && <FormSectionsCard />}
-      {active === "TEMPLATES" && canForms && <VisitFormTemplatesCard />}
-      {active === "PREVIEW" && canForms && <VisitFormPreviewCard />}
+      <Tabs tabs={visible} active={active} onChange={setActive} label="Forms and facilities" idPrefix={TAB_PREFIX} />
+      <TabPanel idPrefix={TAB_PREFIX} id={active}>
+        {body}
+      </TabPanel>
     </div>
   );
 }

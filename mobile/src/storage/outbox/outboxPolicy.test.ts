@@ -5,13 +5,21 @@ import {
   afterFailure,
   backoffMs,
   classifyFailure,
-  CONTRACTOR_REPORTING_OFF_CODE,
-  CONTRACTOR_REPORTING_OFF_MESSAGE,
   failureMessage,
   dependencyState,
   dueRows,
   MAX_ATTEMPTS,
   shouldHoldOnNewSession,
+  checkInDependsOn,
+  siteLogEntryDependsOn,
+  visitSubmissionDependsOn,
+  REMOVED_OUTBOX_KINDS,
+  SESSION_BOUND_KINDS,
+  SUBMISSION_REFUSED_CODES,
+  FORM_SNAPSHOT_STALE_MESSAGE,
+  VISIT_ALREADY_SUBMITTED_MESSAGE,
+  VISIT_CHANGED_RESPONSE_MESSAGE,
+  UNSCHEDULED_FORM_STALE_MESSAGE,
   type OutboxKind,
   type OutboxRow,
   type OutboxStatus,
@@ -23,7 +31,7 @@ function row(overrides: Partial<OutboxRow> = {}): OutboxRow {
   return {
     id: 'r1',
     projectId: 'p',
-    kind: 'REPORT',
+    kind: 'VISIT_SUBMISSION',
     entityId: 'e',
     payload: {},
     dependsOn: [],
@@ -45,12 +53,12 @@ describe('classifyFailure', () => {
       assert.equal(classifyFailure(e), 'RETRY');
     }
   });
-  it('retries when a capture the report needs is not registered yet', () => {
+  it('retries when a photo the visit report needs is not registered yet', () => {
     assert.equal(classifyFailure({ kind: 'http', status: 409, code: 'CAPTURES_NOT_REGISTERED' }), 'RETRY');
     assert.equal(classifyFailure({ kind: 'http', status: 409, code: 'OBJECT_NOT_UPLOADED' }), 'RETRY');
   });
   it('dead-letters refusals that retrying cannot fix', () => {
-    assert.equal(classifyFailure({ kind: 'http', status: 409, code: 'REPORT_ALREADY_SUBMITTED' }), 'PERMANENT');
+    assert.equal(classifyFailure({ kind: 'http', status: 409, code: 'DEFECT_NOT_AWAITING_VERIFICATION' }), 'PERMANENT');
     assert.equal(classifyFailure({ kind: 'http', status: 400 }), 'PERMANENT');
     assert.equal(classifyFailure({ kind: 'local' }), 'PERMANENT');
   });
@@ -85,7 +93,7 @@ describe('afterFailure', () => {
 });
 
 describe('ordering', () => {
-  it('a report waits for its captures, runs once they are done, and is blocked if one is dead', () => {
+  it('a visit report waits for its photos, runs once they are done, and is blocked if one is dead', () => {
     const status = new Map<string, OutboxStatus>([['cap1', 'PENDING'], ['cap2', 'DONE']]);
     assert.equal(dependencyState(['cap1', 'cap2'], status), 'WAITING');
     status.set('cap1', 'DONE');
@@ -112,9 +120,9 @@ describe('Phase 5 Step 8: items from an ended session', () => {
 
   it('holds unsent evidence queued under another session, or before sessions were recorded', () => {
     assert.equal(shouldHoldOnNewSession(r('CAPTURE', 'PENDING', 'join:old'), current), true);
-    assert.equal(shouldHoldOnNewSession(r('CHAT_MESSAGE', 'PENDING', null), current), true);
-    assert.equal(shouldHoldOnNewSession(r('REPORT', 'DEAD', 'join:old'), current), true);
-    assert.equal(shouldHoldOnNewSession(r('REVALIDATION', 'PENDING', 'join:old'), current), true);
+    assert.equal(shouldHoldOnNewSession(r('DEFECT_ACTION', 'PENDING', null), current), true);
+    assert.equal(shouldHoldOnNewSession(r('VISIT_SUBMISSION', 'DEAD', 'join:old'), current), true);
+    assert.equal(shouldHoldOnNewSession(r('VISIT_RESPONSE', 'PENDING', 'join:old'), current), true);
   });
 
   it('leaves sent rows, rows of the current session, and non-evidence kinds alone', () => {
@@ -129,23 +137,96 @@ describe('Phase 5 Step 8: items from an ended session', () => {
   });
 });
 
-describe('contractor field reporting switched off (Phase 7)', () => {
-  it('dead-letters at once, whatever status the server uses, and never pauses the outbox', () => {
-    for (const status of [403, 409]) {
-      assert.equal(classifyFailure({ kind: 'http', status, code: CONTRACTOR_REPORTING_OFF_CODE }), 'PERMANENT');
-    }
-    // Even if the API layer ever tagged it as an auth refusal, it must not pause every row.
-    assert.equal(classifyFailure({ kind: 'auth', status: 403, code: CONTRACTOR_REPORTING_OFF_CODE }), 'PERMANENT');
-    const outcome = afterFailure(row({ attempts: 0 }), 'PERMANENT', NOW);
-    assert.equal(outcome.status, 'DEAD');
-    assert.equal(outcome.attempts, 1);
-  });
-
-  it('stores a clear message instead of the raw server text', () => {
-    const msg = failureMessage({ code: CONTRACTOR_REPORTING_OFF_CODE, message: 'Forbidden' });
-    assert.equal(msg, CONTRACTOR_REPORTING_OFF_MESSAGE);
-    assert.ok(msg.startsWith('Contractor reporting is off for this project'));
+describe('failure messages', () => {
+  it('stores the server text, or a fallback when there is none', () => {
     assert.equal(failureMessage({ code: 'OTHER', message: 'Server said no' }), 'Server said no');
     assert.equal(failureMessage({}), 'Unknown error');
+  });
+});
+
+describe('Redesign R5e (D-R5.10): the old app kinds are gone', () => {
+  it('lists exactly the removed kinds, none of them session-bound', () => {
+    assert.deepEqual([...REMOVED_OUTBOX_KINDS].sort(), ['CHAT_MESSAGE', 'FINDING_RESOLUTION', 'REPORT', 'REVALIDATION', 'SITE_INSPECTION']);
+    for (const kind of REMOVED_OUTBOX_KINDS) assert.ok(!SESSION_BOUND_KINDS.has(kind as OutboxKind), kind);
+    assert.deepEqual([...SESSION_BOUND_KINDS].sort(), [
+      'CAPTURE',
+      'DEFECT_ACTION',
+      'SITE_LOG_ENTRY',
+      'UNSCHEDULED_VISIT',
+      'VISIT_CHECK_IN',
+      'VISIT_RESPONSE',
+      'VISIT_SUBMISSION',
+    ]);
+  });
+});
+
+describe('Redesign R5 (D-R5.9): visit-app kinds', () => {
+  const VISIT_KINDS: OutboxKind[] = ['VISIT_RESPONSE', 'VISIT_CHECK_IN', 'VISIT_SUBMISSION', 'UNSCHEDULED_VISIT', 'SITE_LOG_ENTRY'];
+
+  it('every new kind is session-bound (held, not sent, under another identity)', () => {
+    for (const kind of VISIT_KINDS) {
+      assert.ok(SESSION_BOUND_KINDS.has(kind), kind);
+      assert.equal(shouldHoldOnNewSession({ kind, status: 'PENDING', sessionKey: 'join:old' }, 'account'), true, kind);
+    }
+  });
+
+  /** Open rows on the phone: kind:entity → row id. */
+  const open = new Map<string, string>([
+    ['CAPTURE:c1', 'row-c1'],
+    ['VISIT_CHECK_IN:ci1', 'row-ci1'],
+    ['UNSCHEDULED_VISIT:v1', 'row-v1'],
+    ['SITE_LOG_ENTRY:s1', 'row-s1'],
+  ]);
+  const lookup = (kind: OutboxKind, id: string) => open.get(`${kind}:${id}`) ?? null;
+
+  it('a submission waits for its unscheduled visit, check-in, captures and site log entries still open', () => {
+    const deps = visitSubmissionDependsOn({ captureIds: ['c1', 'c2-sent', 'c1'], checkInId: 'ci1', unscheduledVisitId: 'v1', siteLogEntryIds: ['s1', 's2-sent'] }, lookup);
+    assert.deepEqual(deps, ['row-v1', 'row-ci1', 'row-c1', 'row-s1']);
+    assert.deepEqual(visitSubmissionDependsOn({ captureIds: ['c2-sent'], checkInId: null, unscheduledVisitId: null, siteLogEntryIds: [] }, lookup), []);
+  });
+
+  it('a check-in waits for its unscheduled visit; a site log entry for its capture', () => {
+    assert.deepEqual(checkInDependsOn({ unscheduledVisitId: 'v1' }, lookup), ['row-v1']);
+    assert.deepEqual(checkInDependsOn({ unscheduledVisitId: null }, lookup), []);
+    assert.deepEqual(siteLogEntryDependsOn({ captureId: 'c1' }, lookup), ['row-c1']);
+    assert.deepEqual(siteLogEntryDependsOn({ captureId: null }, lookup), []);
+  });
+
+  it('the chain sends in order: unscheduled visit → check-in → captures → submission; a dead link blocks it', () => {
+    const deps = visitSubmissionDependsOn({ captureIds: ['c1'], checkInId: 'ci1', unscheduledVisitId: 'v1', siteLogEntryIds: [] }, lookup);
+    const status = new Map<string, OutboxStatus>([['row-v1', 'PENDING'], ['row-ci1', 'PENDING'], ['row-c1', 'PENDING']]);
+    assert.equal(dependencyState(checkInDependsOn({ unscheduledVisitId: 'v1' }, lookup), status), 'WAITING');
+    assert.equal(dependencyState(deps, status), 'WAITING');
+    status.set('row-v1', 'DONE');
+    assert.equal(dependencyState(['row-v1'], status), 'READY', 'the check-in can go');
+    status.set('row-ci1', 'DONE');
+    assert.equal(dependencyState(deps, status), 'WAITING', 'still waiting for the photo');
+    status.set('row-c1', 'DONE');
+    assert.equal(dependencyState(deps, status), 'READY');
+    status.set('row-ci1', 'DEAD');
+    assert.equal(dependencyState(deps, status), 'BLOCKED');
+  });
+
+  it('a site log entry still being sent is retried, not refused', () => {
+    assert.equal(classifyFailure({ kind: 'http', status: 409, code: 'SITE_LOG_NOT_REGISTERED' }), 'RETRY');
+    assert.equal(classifyFailure({ kind: 'http', status: 409, code: 'CAPTURES_NOT_REGISTERED' }), 'RETRY');
+  });
+
+  it('stale forms, a visit already submitted and a changed visit are permanent with fixed messages', () => {
+    for (const code of ['FORM_SNAPSHOT_STALE', 'VISIT_ALREADY_SUBMITTED', 'VISIT_CHANGED', 'MOVE_OUTSIDE_WINDOW']) {
+      assert.equal(classifyFailure({ kind: 'http', status: code === 'MOVE_OUTSIDE_WINDOW' ? 422 : 409, code }), 'PERMANENT', code);
+    }
+    assert.deepEqual([...SUBMISSION_REFUSED_CODES].sort(), ['FORM_SNAPSHOT_STALE', 'VISIT_ALREADY_SUBMITTED']);
+    assert.equal(failureMessage({ code: 'FORM_SNAPSHOT_STALE', message: 'raw' }, 'VISIT_SUBMISSION'), FORM_SNAPSHOT_STALE_MESSAGE);
+    assert.equal(failureMessage({ code: 'VISIT_ALREADY_SUBMITTED', message: 'raw' }, 'VISIT_SUBMISSION'), VISIT_ALREADY_SUBMITTED_MESSAGE);
+    assert.equal(failureMessage({ code: 'FORM_SNAPSHOT_STALE', message: 'raw' }, 'UNSCHEDULED_VISIT'), UNSCHEDULED_FORM_STALE_MESSAGE);
+    assert.equal(VISIT_CHANGED_RESPONSE_MESSAGE, 'This visit changed since you responded. Refresh and respond again.');
+    assert.equal(failureMessage({ code: 'VISIT_CHANGED', message: 'raw' }, 'VISIT_RESPONSE'), VISIT_CHANGED_RESPONSE_MESSAGE);
+    assert.equal(failureMessage({ code: 'VISIT_CHANGED', message: 'This visit is not open for submission' }, 'VISIT_SUBMISSION'), 'This visit is not open for submission');
+    assert.equal(
+      failureMessage({ code: 'MOVE_OUTSIDE_WINDOW', message: 'That date is outside the move window. Propose the date to the manager instead.' }, 'VISIT_RESPONSE'),
+      'That date is outside the move window. Propose the date to the manager instead.',
+      'the server explains the window'
+    );
   });
 });

@@ -1,13 +1,11 @@
 import { Prisma } from '@prisma/client';
-import { ApprovalProgressDto, CaptureDto, FieldPersonaType } from '@insite/shared';
+import { CaptureDto, CaptureSummary, FieldPersonaType } from '@insite/shared';
 import { hasWebPermission, WebJwtPayload } from '../middleware/auth.middleware';
 
 /**
  * Response serializers (Phase 2 Step 4). Never spread a Prisma row into a response: list the
  * fields explicitly so new columns (hashes, secrets, document URLs) are not leaked by default.
  */
-
-const iso = (d: Date | null | undefined): string | null => (d ? d.toISOString() : null);
 
 /** Field-session data in responses is limited unless the caller manages field assurance. */
 export function canSeeFieldSessionDetail(webUser?: WebJwtPayload): boolean {
@@ -56,13 +54,10 @@ export function serializeBoqItem(item: Prisma.BoqItemGetPayload<object>) {
     totalQuantity: Number(item.totalQuantity),
     rateNgn: Number(item.rateNgn),
     budgetedCostNgn: Number(item.budgetedCostNgn),
-    isHoldPoint: item.isHoldPoint,
     plannedStartDate: item.plannedStartDate,
     plannedEndDate: item.plannedEndDate,
     actualStartDate: item.actualStartDate,
     actualCompletionDate: item.actualCompletionDate,
-    planningTier: item.planningTier,
-    holdPointInstruction: item.holdPointInstruction,
     isOpaqueLumpSum: item.isOpaqueLumpSum,
     opacityWarningReason: item.opacityWarningReason,
     cumulativeCertifiedPct: Number(item.cumulativeCertifiedPct),
@@ -78,8 +73,6 @@ export function serializeCapture(log: CaptureRow): CaptureDto {
     id: log.id,
     clientCaptureId: log.clientCaptureId,
     projectId: log.projectId,
-    wbsItemId: log.boqItemId,
-    workdayReportId: log.workdayReportId,
     fieldSessionId: log.fieldSessionId,
     status: log.status as CaptureDto['status'],
     mediaType: (media?.mediaType ?? 'SITE_PHOTO') as CaptureDto['mediaType'],
@@ -109,5 +102,33 @@ export function serializeCapture(log: CaptureRow): CaptureDto {
     reporterRoleName: log.reporterRoleName,
     fieldPersonaType: log.fieldPersonaType as FieldPersonaType,
     resubmittedFromClientCaptureId: log.resubmittedFromClientCaptureId ?? null,
+  };
+}
+
+/** A capture as shown inside a visit submission, a finding or a site log entry (moved from the
+ * workday reports module in redesign R5f). */
+export function toCaptureSummary(c: CaptureRow): CaptureSummary {
+  const full = serializeCapture(c);
+  return {
+    id: full.id,
+    clientCaptureId: full.clientCaptureId,
+    mediaType: full.mediaType,
+    objectKey: full.objectKey,
+    mimeType: full.mimeType,
+    caption: full.caption,
+    capturedAt: full.capturedAt,
+    locationAvailable: full.locationAvailable,
+    latitude: full.latitude,
+    longitude: full.longitude,
+    gpsAccuracyMeters: full.gpsAccuracyMeters,
+    isMockLocation: full.isMockLocation,
+    isWithinGeofence: full.isWithinGeofence,
+    signatureVerified: full.signatureVerified,
+    integrityPassed: full.integrityPassed,
+    integrityFlags: full.integrityFlags,
+    transcriptionStatus: full.transcriptionStatus,
+    transcript: full.transcript,
+    durationSeconds: full.durationSeconds,
+    resubmittedFromClientCaptureId: full.resubmittedFromClientCaptureId ?? null,
   };
 }

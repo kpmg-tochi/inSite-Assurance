@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ProjectTypeInspectionsConfigSchema, ProjectTypeSupervisionConfigSchema } from './inspection.schema';
+import { ProjectTypeSupervisionConfigSchema } from './inspection.schema';
 import { ProjectTypePaymentsConfigSchema } from './payment.schema';
 import {
   ContractMilestoneTemplateListSchema,
@@ -77,8 +77,6 @@ export const ProjectTypeConfigSchema = z.object({
   kickoff: ProjectTypeKickoffConfigSchema.default({}),
   /** Phase 13: contractor default cases (Legal role, automatic opening). */
   defaultCases: ProjectTypeDefaultCasesConfigSchema.default({}),
-  /** Phase 14: checklist template per visit type. */
-  inspections: ProjectTypeInspectionsConfigSchema.default({}),
   /** Phase 14: who counts as a supervisor and the workload warning thresholds. */
   supervision: ProjectTypeSupervisionConfigSchema.default({}),
   /** Phase 15: Certificate of Completion signatories and gates, closure checklists, ratings sharing. */

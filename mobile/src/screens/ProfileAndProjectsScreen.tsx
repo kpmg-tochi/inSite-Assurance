@@ -30,8 +30,9 @@ import { formatMobileErrorMessage } from "../utils/errorFormatter";
 type Counts = Map<string, { pending: number; dead: number }>;
 
 /**
- * The signed-in account's projects (Phase 5; provisioned accounts only since R1d). Tap to switch;
- * switching never discards queued work, and each project's unsent items are shown.
+ * The Profile modal (redesign R5b, D-R5.2; was the project picker): the account, its projects with
+ * the items each still has to send, settings and sign out. Tapping a project opens its page; queued
+ * work always keeps its own project.
  */
 export const ProfileAndProjectsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -43,7 +44,6 @@ export const ProfileAndProjectsScreen = () => {
     activeProjectId,
     displayName,
     phoneNumber,
-    switchProject,
     refreshProjects,
     signOut,
     pushIdentities,
@@ -80,10 +80,10 @@ export const ProfileAndProjectsScreen = () => {
     if (switchingId) return;
     setSwitchingId(project.projectId);
     try {
-      if (project.projectId !== activeProjectId) await switchProject(project.projectId);
-      // Asked here, in context, never at launch (the join-code and identity screens that used to ask are gone).
+      // Asked here, in context, never at launch.
       void requestPushPermissionInContext(pushIdentities);
-      navigation.reset({ index: 0, routes: [{ name: "WbsInbox" }] });
+      if (navigation.canGoBack()) navigation.goBack();
+      navigation.navigate("Project", { projectId: project.projectId });
     } finally {
       setSwitchingId(null);
     }
@@ -134,7 +134,7 @@ export const ProfileAndProjectsScreen = () => {
           <Text style={styles.projectCode}>{project.projectCodePrefix}</Text>
           <Pill
             variant={ended ? "negative" : isActive ? "positive" : "gray"}
-            text={ended ? "Access ended" : isActive ? "Open" : switchingId === project.projectId ? "Opening..." : "Open"}
+            text={ended ? "Access ended" : isActive ? "Last opened" : "Open"}
           />
         </View>
         <Text style={styles.projectName}>{project.projectName}</Text>
@@ -158,7 +158,7 @@ export const ProfileAndProjectsScreen = () => {
 
       <GradientHeaderLayout
         leftAction={canGoBack ? <BackButton onPress={() => navigation.goBack()} /> : undefined}
-        rightAction={<IconButton icon="cog-outline" onPress={() => navigation.navigate("SettingsModal")} />}
+        rightAction={<IconButton icon="cog-outline" text="Settings" onPress={() => navigation.navigate("SettingsModal")} />}
         contentContainerStyle={styles.body}
         scrollable={false}
       >
@@ -180,7 +180,7 @@ export const ProfileAndProjectsScreen = () => {
           >
             {totalPending > 0 && (
               <Text style={styles.pendingBanner}>
-                {totalPending} item(s) waiting to be sent across your projects. Switching project does not affect them.
+                {totalPending} item(s) waiting to be sent across your projects.
               </Text>
             )}
 
@@ -188,7 +188,7 @@ export const ProfileAndProjectsScreen = () => {
               <View style={styles.section}>
                 <View>
                   <Text style={styles.sectionTitle}>Your projects</Text>
-                  <Text style={styles.sectionSubtitle}>Assigned to {account.profile.email}. Pull down to refresh.</Text>
+                  <Text style={styles.sectionSubtitle}>Assigned to {account.profile.email}. Tap one to open it; pull down to refresh.</Text>
                 </View>
                 {projects.length === 0 ? (
                   <EmptyStateCard

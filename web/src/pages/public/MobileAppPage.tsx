@@ -3,188 +3,59 @@ import { Link } from "react-router-dom";
 import { PublicLayout } from "../../components/PublicLayout";
 import { APPLICATION_NAME } from "../../config/appName";
 
+const STEPS = [
+  {
+    title: "Sign in with your account",
+    text: "Your programme administrator creates your account and assigns you to projects. Sign in on the phone with the same email and password as the web portal.",
+  },
+  {
+    title: "See your visits",
+    text: "The app lists the visits assigned to you on every project. Confirm a visit, move it within the allowed days, or propose another date.",
+  },
+  {
+    title: "Fill the visit form on site",
+    text: "Check in at the site, answer the visit form for each facility, and add photos and voice notes. It works without a connection.",
+  },
+  {
+    title: "Submit when you are back online",
+    text: "Submissions wait on the phone and are sent when the connection returns. The project team reviews them on the web portal.",
+  },
+];
+
+/** Public page about the field app (redesign R6f, D-R6.26): account sign-in only. */
 export function MobileAppPage() {
   return (
     <PublicLayout>
-      {/* Hero Banner */}
       <section className="kpmg-ribbed-panel text-white border-b border-white/10">
-        <div className="max-w-7xl mx-auto px-6 py-16 grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-          <div className="lg:col-span-7 space-y-5">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-xs font-medium text-white/90">
-              <span>{APPLICATION_NAME} Field · iOS &amp; Android (Expo)</span>
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-bold leading-tight">
-              Offline-First, Provenance-Tagged Field Evidence Capture.
-            </h1>
-            <p className="text-sm sm:text-base text-white/90 leading-relaxed max-w-2xl">
-              Designed for zero training overhead and rugged Nigerian corridor
-              resilience. Visiting Monitors, Resident Clerks of Works, and
-              Contractor Site Engineers join via a 6-character Project Code,
-              capture live geotagged photos and English/Pidgin voice notes
-              offline, and cryptographically sign extracted quantities.
-            </p>
-
-            {/* Download / Pilot Distribution Callout */}
-            <div className="pt-2 flex flex-wrap items-center gap-3">
-              <div className="px-4 py-2.5 rounded-xl bg-white text-brand-primary text-xs font-bold shadow">
-                Android Pilot APK (Coming Soon)
-              </div>
-              <div className="px-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white text-xs font-semibold">
-                iOS TestFlight Build (Coming Soon)
-              </div>
-              <Link
-                to="/login"
-                className="px-4 py-2.5 rounded-xl text-white/90 hover:text-white text-xs font-semibold underline underline-offset-4"
-              >
-                View Synced Logs in Web Portal &rarr;
-              </Link>
-            </div>
-          </div>
-
-          {/* Right: Interactive Mobile Phone Frame Preview */}
-          <div className="lg:col-span-5 flex justify-center">
-            <div className="w-[330px] bg-brand-dark rounded-[36px] p-3 border-4 border-white/20 shadow-2xl">
-              <div className="bg-slate-50 rounded-[28px] overflow-hidden text-slate-900">
-                {/* Mobile Top Status Bar */}
-                <div className="bg-brand-navy text-white px-4 py-3.5">
-                  <div className="flex items-center justify-between text-[10px] font-semibold text-white/75">
-                    <span>LKK-402-COW-7K2QXM</span>
-                    <span className="text-emerald-400">
-                      SQLite Outbox Ready
-                    </span>
-                  </div>
-                  <div className="text-xs font-bold mt-0.5">
-                    Lekki–Epe Dual-Carriageway
-                  </div>
-                  <div className="text-[10px] text-white/70">
-                    Tier 2: Independent Resident Clerk of Works
-                  </div>
-                </div>
-
-                {/* Live Turf.js Chainage Banner */}
-                <div className="bg-emerald-50 border-b border-emerald-200 px-3.5 py-2 flex items-center justify-between text-[11px]">
-                  <span className="font-semibold text-emerald-900">
-                    Inside corridor · KM 14+200 (example)
-                  </span>
-                  <span className="font-medium text-emerald-700">
-                    ±3.2m GPS
-                  </span>
-                </div>
-
-                {/* Mandatory Human Confirmation Bubble Preview */}
-                <div className="p-3.5 space-y-3">
-                  <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-xs space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-brand-primary">
-                        Mandatory Confirmation Bubble
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        17:12 WAT
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 italic">
-                      &ldquo;We dey for chainage fourteen plus two hundred.
-                      Contractor don cast twelve meters of culvert wall and use
-                      forty bags of Dangote cement...&rdquo;
-                    </p>
-                    <div className="bg-slate-50 rounded-lg p-2 border border-slate-200/80 text-xs">
-                      <div className="font-semibold text-slate-900">
-                        Extracted Summary (GPT-4.1):
-                      </div>
-                      <p className="text-[11px] text-slate-700 mt-0.5">
-                        Cast <strong>12m</strong> of drainage culvert (WBS
-                        02.01.2). <strong>40 bags</strong> of cement used.
-                        Blocker: Granite delivery delayed.
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <div className="py-2 rounded-lg bg-brand-primary text-white text-center text-[11px] font-bold">
-                        Confirm &amp; Sign Log
-                      </div>
-                      <div className="py-2 rounded-lg border border-slate-300 text-slate-700 text-center text-[11px] font-semibold">
-                        Edit Quantities
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-14 space-y-5">
+          <h1 className="text-3xl sm:text-4xl font-bold leading-tight max-w-3xl">The {APPLICATION_NAME} field app</h1>
+          <p className="text-sm sm:text-base text-white/90 leading-relaxed max-w-2xl">
+            For monitoring officers and site supervisors: your visits, the visit forms, photos, voice notes and the site log, on Android and iOS.
+          </p>
+          <p className="text-xs text-white/80">Ask your programme administrator for the app download link.</p>
         </div>
       </section>
 
-      {/* Core Mobile Capabilities */}
-      <section className="max-w-7xl mx-auto px-6 py-16 space-y-12">
-        <div>
-          <div className="text-xs font-bold uppercase tracking-wider text-brand-primary">
-            How the Field App Works
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">
-            Built for Low-Connectivity Sites and Cryptographic Provenance
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-3">
-            <div className="text-xs font-bold text-brand-primary bg-brand-primary/5 inline-block px-2.5 py-1 rounded-lg">
-              Step 1 · Role-Bound Join Codes
-            </div>
-            <h3 className="text-base font-bold text-slate-900">
-              3 Provenance &amp; Independence Tiers
-            </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Field personnel do not need corporate email accounts. Entering a
-              project&apos;s 6-character Join Code binds their device session to
-              one of three strict provenance tiers:
-            </p>
-            <ul className="space-y-1.5 text-xs text-slate-700 font-medium bg-slate-50 p-3 rounded-xl border border-slate-200/80">
-              <li>
-                <strong>LKK-402-INS-…</strong> &rarr; Tier 1 Monitor Inspector
-              </li>
-              <li>
-                <strong>LKK-402-COW-…</strong> &rarr; Tier 2 Resident CoW
-              </li>
-              <li>
-                <strong>LKK-402-CON-…</strong> &rarr; Tier 3 Contractor Eng.
-              </li>
-            </ul>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-3">
-            <div className="text-xs font-bold text-brand-primary bg-brand-primary/5 inline-block px-2.5 py-1 rounded-lg">
-              Step 2 · On-Device Turf.js &amp; SQLite
-            </div>
-            <h3 className="text-base font-bold text-slate-900">
-              In-App Camera &amp; Offline Outbox
-            </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Site evidence comes from the in-app camera only. At the shutter
-              the app records the GPS fix and the phone&apos;s mock-location
-              flag, previews the position against the site boundary offline
-              with <strong>@turf/turf</strong>, signs the capture with a per-device key and keeps it in an
-              encrypted local database until the outbox can send it. The server
-              re-checks the position and screens for recycled photos.
-            </p>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-3">
-            <div className="text-xs font-bold text-brand-primary bg-brand-primary/5 inline-block px-2.5 py-1 rounded-lg">
-              Step 3 · Mitigating ASR Risk [S20]
-            </div>
-            <h3 className="text-base font-bold text-slate-900">
-              The Reporter Confirms Every Report
-            </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Published benchmarks show standard speech models exhibit higher
-              word error rates on Nigerian accents (31.6% vs. 8.6% US) and can
-              mistranscribe quantities. Transcripts and suggested quantities
-              are only suggestions: the reporter types or edits the summary and
-              quantity and confirms{" "}
-              <strong>This is my full report for today</strong> before it is
-              sent.
-            </p>
-          </div>
-        </div>
+      <section aria-labelledby="mobile-steps" className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+        <h2 id="mobile-steps" className="text-lg font-bold text-slate-900">
+          How it works
+        </h2>
+        <ol className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          {STEPS.map((step, i) => (
+            <li key={step.title} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-1.5">
+              <span className="text-xs font-semibold text-slate-500">Step {i + 1}</span>
+              <h3 className="text-sm font-bold text-slate-900">{step.title}</h3>
+              <p className="text-sm text-slate-600 leading-relaxed">{step.text}</p>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-8 text-sm text-slate-600">
+          Reviewing visits, findings and payments happens on the web portal.{" "}
+          <Link to="/login" className="font-semibold text-brand-primary hover:underline">
+            Sign in
+          </Link>
+          .
+        </p>
       </section>
     </PublicLayout>
   );

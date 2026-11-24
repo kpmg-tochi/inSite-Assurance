@@ -105,7 +105,7 @@ export function TerminologyCard() {
       <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 text-xs text-slate-700 space-y-1">
         <p className="font-semibold text-slate-800">Preview</p>
         <p>
-          The {word("monitorParty")} inspects the {word("contractor").toLowerCase()}'s work at each {word("holdPoint").toLowerCase()}. The{" "}
+          The {word("monitorParty")} visits the site to check the {word("contractor").toLowerCase()}'s work. The{" "}
           {word("funderParty")} records each payment, less {word("retention").toLowerCase()}, and the works are handed over to the{" "}
           {word("beneficiary").toLowerCase()}.
         </p>

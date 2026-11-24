@@ -63,7 +63,7 @@ async function notify(tx: Prisma.TransactionClient, project: ProjectRow, row: Mi
     category: 'CONTRACT_MILESTONE',
     title,
     description,
-    actionUrl: `/app/projects/${project.id}/milestones`,
+    actionUrl: `/app/projects/${project.id}/kickoff?tab=milestones`,
     metadata: { milestoneId: row.id, key: row.key, dueDate: row.dueDate, status: row.status },
   });
 }

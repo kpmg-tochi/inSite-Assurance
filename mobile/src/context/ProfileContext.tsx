@@ -33,6 +33,8 @@ import { deleteBaselinePacks, hydrateBaselinePack } from '../storage/baselineSto
 import { holdItemsFromEndedSessions } from '../storage/heldItems';
 import { getInitials } from '../utils/userUtils';
 import type { PushIdentity } from '../services/pushNotificationService';
+import { setVisitSyncProjects, syncVisits } from '../services/visitSync';
+import { clearVisitCache } from '../storage/visitStore';
 
 /**
  * The device's account and projects (Phase 5; provisioned accounts only since R1d). The one way in
@@ -63,6 +65,11 @@ interface ProfileContextValue {
   switchProject: (projectId: string) => Promise<void>;
   /** Re-lists the account's projects from the server (pull to refresh). */
   refreshProjects: () => Promise<void>;
+  /**
+   * Redesign R5a (D-R5.5, D-R5.6): pull-to-refresh for Home. Re-lists the projects, prepares every
+   * project (pack + session, sequentially, failures ignored) and runs a forced visit sync.
+   */
+  refreshAll: () => Promise<void>;
   signOut: () => Promise<void>;
   resetAll: () => Promise<void>;
 }
@@ -124,6 +131,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
       projectSessions: next.projects.map((p) => ({ projectId: p.projectId, sessionId: p.sessionId })),
       activeProjectId: next.activeProjectId,
     });
+    setVisitSyncProjects(next.projects.map((p) => p.projectId));
     setState(next);
     await saveDeviceState(next);
   }, []);
@@ -166,6 +174,21 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
     [update, patchProject]
   );
 
+  /**
+   * Redesign R5a (D-R5.6): every assigned project is prepared, not only the active one (Home needs
+   * every pack for project cards and geofence previews). Sequential; a failing project keeps its
+   * stored pack. Then the visits are downloaded.
+   */
+  const prepareAllProjects = useCallback(
+    async (opts: { force?: boolean } = {}) => {
+      for (const p of stateRef.current.projects) {
+        await prepareProject(p.projectId);
+      }
+      await syncVisits({ reason: 'prepare', force: opts.force ?? true }).catch(() => undefined);
+    },
+    [prepareProject]
+  );
+
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -181,6 +204,8 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
         }
         // Geofence checks must work after a restart, offline included.
         await Promise.all(next.projects.map((p) => hydrateBaselinePack(p.projectId).catch(() => null)));
+        // Redesign R5a: refresh every project's pack and session in the background (offline: no-op).
+        if (mounted && next.account && !next.account.profile.mustChangePassword) void prepareAllProjects({ force: false });
       } finally {
         if (mounted) setLoading(false);
       }
@@ -188,7 +213,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
     return () => {
       mounted = false;
     };
-  }, [commit]);
+  }, [commit, prepareAllProjects]);
 
   const signIn = useCallback(
     async (result: MobileLoginResponse) => {
@@ -202,22 +227,18 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
         return { ...next, activeProjectId: pickActive(next, prev.activeProjectId) };
       });
       clearSessionEnded();
-      if (!result.account.mustChangePassword) {
-        const active = stateRef.current.activeProjectId;
-        if (active) void prepareProject(active);
-      }
+      if (!result.account.mustChangePassword) void prepareAllProjects();
     },
-    [update, prepareProject]
+    [update, prepareAllProjects]
   );
 
   const completePasswordChange = useCallback(
     async (result: MobileChangePasswordResponse) => {
       await update((prev) => ({ ...prev, account: { token: result.accessToken, profile: result.account } }));
       clearSessionEnded('account');
-      const active = stateRef.current.activeProjectId;
-      if (active) void prepareProject(active);
+      void prepareAllProjects();
     },
-    [update, prepareProject]
+    [update, prepareAllProjects]
   );
 
   const switchProject = useCallback(
@@ -246,6 +267,11 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
     });
   }, [update]);
 
+  const refreshAll = useCallback(async () => {
+    await refreshProjects().catch(() => undefined);
+    await prepareAllProjects({ force: true });
+  }, [refreshProjects, prepareAllProjects]);
+
   const signOut = useCallback(async () => {
     const account = stateRef.current.account;
     if (account) void signOutAccount(account.token).catch(() => undefined);
@@ -253,6 +279,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
     await update((prev) => ({ ...prev, account: null, projects: [], activeProjectId: null }));
     clearSessionEnded();
     await deleteBaselinePacks(projectIds).catch(() => undefined);
+    await clearVisitCache().catch(() => undefined);
   }, [update]);
 
   const resetAll = useCallback(async () => {
@@ -291,10 +318,11 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
       completePasswordChange,
       switchProject,
       refreshProjects,
+      refreshAll,
       signOut,
       resetAll,
     };
-  }, [state, loading, signIn, completePasswordChange, switchProject, refreshProjects, signOut, resetAll]);
+  }, [state, loading, signIn, completePasswordChange, switchProject, refreshProjects, refreshAll, signOut, resetAll]);
 
   return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
 };

@@ -322,16 +322,6 @@ export async function updateRoleForTenant(
     });
   }
 
-  // Redesign R1d: contractors have no login, so no role may carry the contractor persona. A legacy
-  // role that still has it must be moved to another persona when its surface stays mobile.
-  if (
-    existing.fieldPersonaType === 'CONTRACTOR_EXECUTOR' &&
-    !input.fieldPersonaType &&
-    (input.surface ?? existing.surface) !== 'WEB'
-  ) {
-    throw new AppError('Contractors have no login: choose another field persona for this role.', 400, 'VALIDATION_ERROR');
-  }
-
   const updated = await prisma.$transaction(async (tx) => {
     await tx.role.update({
       where: { id: roleId },

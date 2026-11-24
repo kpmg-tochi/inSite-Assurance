@@ -8,7 +8,6 @@ import {
   listProjectNotifications,
   listWebNotifications,
   markAllWebNotificationsRead,
-  markNotificationActionedFromApp,
   markNotificationRead,
   markWebNotificationRead,
 } from './notifications.service';
@@ -37,7 +36,7 @@ router.get(
 
 /**
  * PATCH /api/v1/projects/:projectId/notifications/:notificationId/read
- * Marks a passive notification (requiresAction = false) as read on tap.
+ * Marks a notification as read on tap.
  */
 router.patch(
   '/:projectId/notifications/:notificationId/read',
@@ -47,29 +46,6 @@ router.patch(
       const updated = await markNotificationRead({
         projectId: req.fieldAgent!.projectId,
         fieldSessionId: req.fieldAgent!.sessionId,
-        notificationId: String(req.params.notificationId),
-        resolvedByAction: false,
-      });
-      res.json({ success: true, data: updated });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-
-/**
- * POST /api/v1/projects/:projectId/notifications/:notificationId/resolve
- * Marks an action-required notification as read once the required action (e.g. evidence reply or backlog send) is completed.
- */
-router.post(
-  '/:projectId/notifications/:notificationId/resolve',
-  requireFieldSession,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const updated = await markNotificationActionedFromApp({
-        projectId: req.fieldAgent!.projectId,
-        fieldSessionId: req.fieldAgent!.sessionId,
-        agentFullName: req.fieldAgent!.agentFullName,
         notificationId: String(req.params.notificationId),
       });
       res.json({ success: true, data: updated });

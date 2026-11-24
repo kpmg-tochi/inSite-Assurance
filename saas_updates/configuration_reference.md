@@ -3,7 +3,7 @@
 **For:** the delivery team preparing client workshops on the Central and Co-Funded delivery models.
 **Use:** go through it setting by setting with the client. Each row says where the setting lives, its default, what it changes, and which process-flow control (gap analysis IDs G1–G14) it serves.
 
-**Last updated:** 2026-11-24 (redesign R2: facility catalogue, scope and sprints, the needs-assessment workbook; schedule revisions and the programme-of-works proposal removed).
+**Last updated:** 2026-11-24 (redesign R6: type editor tabs, the five-step project setup, new page names and routes; redesign R5f: reporting cadence, hold points, contractor field reporting, the `inspections` type key and checklist templates removed, see 1.1).
 
 ---
 
@@ -14,13 +14,26 @@
 | Level | Who sets it | When it applies |
 | :--- | :--- | :--- |
 | **Workspace (tenant)** | Tenant administrator, in Settings | At once, for every project. |
-| **Project type** | Holder of `project_types:manage`, in Settings → Project types, regions & documents | Saving writes a new type version. **New projects take the version current when the type is applied; existing projects keep theirs.** Exception: KPI targets apply to every project of the type at once. |
+| **Project type** | Holder of `project_types:manage`, in Settings → Project types, regions & documents → Project types (editor tabs in section 3) | Saving writes a new type version. **New projects take the version current when the type is applied; existing projects keep theirs.** Exception: KPI targets apply to every project of the type at once. |
 | **Workflow template** | Holder of the workflow permission, in Settings → Workflow templates | Process switches and approval chains, copied to a project when its type is applied. |
-| **Project** | Project team, in the setup wizard (drafts) or project settings (live) | That project only. |
+| **Project** | Project team, in the five-step setup wizard (drafts, `/setup/project`) or More ▸ Settings (live, `/settings/project`); section 5 | That project only. |
 
 **Defaults.** Every setting defaults to how the platform behaved before Phase 11. A project with no project type behaves exactly as before.
 
-**Every project type setting below has a field in the type editor.** The one exception is the beneficiary signature mode: it has a single value ("recorded by staff") until D-15.1 changes, so there is nothing to choose. Role and template pickers list the workspace's roles, visit form templates and (legacy) checklist templates. A code that no longer exists is flagged so it can be removed.
+**Every project type setting below has a field in the type editor.** The one exception is the beneficiary signature mode: it has a single value ("recorded by staff") until D-15.1 changes, so there is nothing to choose. Role and template pickers list the workspace's roles and visit form templates. A code that no longer exists is flagged so it can be removed.
+
+### 1.1 Settings removed (redesign R4f and R5f)
+
+These no longer exist; do not offer them in a workshop. Visits (sections 3.3 and 5) replace them.
+
+| Removed | Was | Removed in |
+| :--- | :--- | :--- |
+| Reporting streams and reporting obligations | Type keys `reportingStreams`, `reportingDefaults`; the Reporting setup step | R4f |
+| Reporting cadence and reporting period | Per project: cadence, period start day, custom interval, report due time and grace, cadence anchor, pending cadence change. **Working days stay** (visits use them). | R5f |
+| Hold points | Process switch "Hold points", the hold-point flag and instruction on BoQ lines, hold-point alerts | R5f |
+| Contractor field reporting | Process switch for contractor reports from the field (contractors have had no login since R1d) | R5f |
+| Phase 14 inspections | Type key `inspections` (checklist template per visit type) and its editor section; workspace inspection checklist templates; site inspection reports | R5f |
+| Workday reports and WBS chat | The old app's daily reports, report queries and per-item chat | R5f |
 
 ---
 
@@ -30,15 +43,14 @@
 | :--- | :--- | :--- | :--- | :--- |
 | Organisation hierarchy (parent organisation) | Settings → Organisations | None (flat) | Up to 5 levels. Lets a flagship see and approve for its subsidiaries; cycles are refused. | G10 |
 | Regions and areas | Settings → Project types, regions & documents → Regions | None | Two levels (region → area). Used by project filters, the portfolio map and KPIs. A region filter includes its areas. | G10 |
-| Terminology | Settings → Tenant Settings → Terminology | Funder, Independent monitor, Contractor, Beneficiary, Hold point, Retention | Display labels only (singular and plural), on web and mobile. API fields and audit text keep the canonical names. Demo tenant: funder = "Funding authority". (Redesign R1b removed Tranche, Condition precedent, IPC and Valuation.) | G1 |
+| Terminology | Settings → Tenant Settings → Terminology | Funder, Independent monitor, Contractor, Beneficiary, Hold point, Retention | Display labels only (singular and plural), on web and mobile. API fields and audit text keep the canonical names. Demo tenant: funder = "Funding authority". (Redesign R1b removed Tranche, Condition precedent, IPC and Valuation. Hold point has no screen left once R5f removes hold points.) | G1 |
 | Document types | Settings → Project types, regions & documents → Document types | 18 types (contract, award and acceptance letters, kick-off pack, minutes, mobilisation agreement and plan, letter of introduction, site possession, supervisor assignment, CoC, handover certificate, final evaluation, closure file and others) | Per type: sign-off required, allowed files, and whether contractors can see it. Milestones, checklists and KPIs refer to types by code. | G3 |
-| Inspection checklist templates (legacy) | Not editable since redesign R3e | The demo has Baseline survey, Routine visit, Mobilisation check and Final evaluation. A workspace created after R3 has none. | Only the old mobile app still submits Phase 14 inspections (until R5). Visits (redesign R4) use the form library. | G5 |
 | Visit move tolerance (redesign R4) | Settings → Tenant Settings → Workspace settings | 2 working days (0–10) | An officer may move a visit this many working days either side of its original date, inside the same sprint, without asking; further moves are proposed to the manager. Measured from the original date, so repeated small moves cannot walk a visit away. | Q-H, P5 |
 | Contractor rating criteria | Settings → Tenant Settings → Rating criteria | Time, Quality, Health & safety, Responsiveness, Documentation | Criteria scored 1–5 at completion and after closure. | G6 |
-| Site boundaries (redesign) | Settings → Tenant Settings → Workspace settings | Radial and perimeter enabled; default radius 150 m; tolerance 100 m | Which boundary types projects may use (linear corridors were removed). The default radius pre-fills a new radial boundary and the boundary made from a workbook's GPS point; each project sets its own radius and may override the tolerance on its Site step. | G5 |
-| Facility catalogue (redesign R2) | Settings → Forms & facilities → Facilities (`facilities:manage`) | 50 facilities: 19 building works (Classroom, Toilet, Hostel…), 22 supply & installation (pupils' furniture, science kit, computers…), 4 utilities (Borehole, Overhead tank, Generator, Solar power), 5 external works (Fence, Drainage, Football pitch…) | Scope lines are tagged with facilities through facility units. Per facility: code (locked once a unit uses it), name, plural (R3: only when the plain plural is wrong; set by default for Staff quarters, Solar power, Landscaping, Drainage), category, archetype (decides whether units carry a planned quantity and the default sub-form). A retired facility stays on the projects that use it and leaves the pickers and the workbook. | Decision Y |
-| Form library (redesign R3) | Settings → Forms & facilities (`forms:manage`) | 10 fixed sections, 4 archetype sub-forms, 7 visit form templates (one per visit kind, code = kind); see 2.1 | The questions of every visit form. Versioned: a version a built form used is never edited, saving makes a new one. | Decision Y, P3 |
-| Units of measure (redesign R2) | Fixed list (not editable in v1) | m, m², m³, nr, item, LS, kg, t, set, lot, l | The workbook dropdown, the Scope & sprints page and server validation. A client list would become a workspace setting later (D-R2.7). | – |
+| Site boundaries (redesign) | Settings → Tenant Settings → Workspace settings | Radial and perimeter enabled; default radius 150 m; tolerance 100 m | Which boundary types projects may use (linear corridors were removed). The default radius pre-fills a new radial boundary and the boundary made from a workbook's GPS point; each project sets its own radius and may override the tolerance in the Location section of setup step 1 Project. | G5 |
+| Facility catalogue (redesign R2) | Forms & facilities (`/app/forms`) → Facilities (`facilities:manage`) | 50 facilities: 19 building works (Classroom, Toilet, Hostel…), 22 supply & installation (pupils' furniture, science kit, computers…), 4 utilities (Borehole, Overhead tank, Generator, Solar power), 5 external works (Fence, Drainage, Football pitch…) | Scope lines are tagged with facilities through facility units. Per facility: code (locked once a unit uses it), name, plural (R3: only when the plain plural is wrong; set by default for Staff quarters, Solar power, Landscaping, Drainage), category, archetype (decides whether units carry a planned quantity and the default sub-form). A retired facility stays on the projects that use it and leaves the pickers and the workbook. | Decision Y |
+| Form library (redesign R3) | Forms & facilities (`/app/forms`): Facility sub-forms, Fixed sections, Visit form templates, Preview (`forms:manage`) | 10 fixed sections, 4 archetype sub-forms, 7 visit form templates (one per visit kind, code = kind); see 2.1 | The questions of every visit form. Versioned: a version a built form used is never edited, saving makes a new one. | Decision Y, P3 |
+| Units of measure (redesign R2) | Fixed list (not editable in v1) | m, m², m³, nr, item, LS, kg, t, set, lot, l | The workbook dropdown, the Sprints & scope page and server validation. A client list would become a workspace setting later (D-R2.7). | – |
 
 ### 2.1 Form library (redesign R3)
 
@@ -70,7 +82,20 @@ Three kinds of component, each versioned. A form is built ("frozen") from them w
 
 Set in Settings → Project types, regions & documents → Project types. One type per delivery model. The demo has "Central Delivery Model" and "Co-Funded Delivery Model".
 
+**The type editor (redesign R6e).** General fields sit above five tabs. A tab with a validation error shows its error count; leaving the editor with unsaved changes asks first; "Save new version" saves every tab.
+
+| Editor place | Settings in it | Type config keys | Section below |
+| :--- | :--- | :--- | :--- |
+| General (above the tabs) | Code, name, colour, description, default type, active | – | 3.1 |
+| **Kick-off & mobilisation** tab | Contract milestone templates (incl. mobilisation days), kick-off quorum and notice lead time, required documents, contractor default cases (Legal role) | `contractMilestones`, `kickoff`, `documentRequirements`, `defaultCases` | 3.5, 3.6 |
+| **Monitoring** tab | Visit plan and deadlines, visit form per visit kind, supervisor roles and limits | `monitoring`, `visitForms`, `supervision` (and the legacy `inspections` until R5f removes it) | 3.3, 3.6 |
+| **Completion & closure** tab | CoC signatories and gates, handover due, closure checklists, rating sharing; retention defaults | `closure`, `payments` | 3.7, 3.4 |
+| **KPI targets** tab | Target and "shown" per KPI | `kpiTargets` | 3.8 |
+| **Advanced** tab | Workflow template, owner and party rules, funder default | `ownership`, `parties` (+ the workflow template) | 3.1, 3.2 |
+
 ### 3.1 Identity and process
+
+General fields, except the workflow template (Advanced tab).
 
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
@@ -81,17 +106,19 @@ Set in Settings → Project types, regions & documents → Project types. One ty
 
 ### 3.2 Ownership and parties
 
+Advanced tab.
+
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
-| Owning organisation required | Off | The Parties step needs an accountable owner. | G10 |
+| Owning organisation required | Off | The "School and organisations" section (setup step 1 Project) needs an accountable owner. | G10 |
 | Allowed owners | Any organisation | Limits who can own projects of the type. Demo: Central = flagship only; Co-Funded = North or South. | G10 |
 | Default owner | None | Pre-filled on new drafts (must be an allowed owner). | G10 |
-| Monitor / funder / beneficiary / region required | Monitor and funder on; beneficiary and region off | The Parties and Basics steps refuse to continue without them. | G10 |
+| Monitor / funder / beneficiary / region required | Monitor and funder on; beneficiary and region off | Setup step 1 Project (sections "Project details" and "School and organisations") refuses to continue without them. | G10 |
 | Funder default | `NONE` | `OWNER`: the owner funds the project (Co-Funded). `FIXED`: a named organisation (Central: the flagship). | G10 |
 
 ### 3.3 Visit plan and deadlines (redesign R4, type key `monitoring`)
 
-Replaces the Phase 8 reporting defaults and the Phase 14 reporting streams (both removed in R4f). Like every type rule except KPI targets, a project keeps the version it was created with.
+Monitoring tab. Replaces the Phase 8 reporting defaults and the Phase 14 reporting streams (both removed in R4f); R5f removes the remaining per-project reporting cadence (section 1.1). Like every type rule except KPI targets, a project keeps the version it was created with.
 
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
@@ -105,16 +132,16 @@ Replaces the Phase 8 reporting defaults and the Phase 14 reporting streams (both
 
 ### 3.4 Payments (redesign R1b)
 
-Professional registration (policy, bodies, certifier snapshots) was removed in redesign R1d (decision U).
+Completion & closure tab (retention defaults). Professional registration (policy, bodies, certifier snapshots) was removed in redesign R1d (decision U).
 
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
-| Retention percentage | None | Pre-fills the Retention step of a new project. Recorded payments hold this percentage back (another amount needs a reason). Payments are made outside the platform and recorded on the project's Payments page. | Decision Q |
-| Defects liability period (months) | None | Pre-fills the Retention step. The retention release is flagged when recorded before the period ends. | Decision P1 |
+| Retention percentage | None | Pre-fills "Retention and defects liability" (setup step 2 Contract) of a new project. Recorded payments hold this percentage back (another amount needs a reason). Payments are made outside the platform and recorded on the project's Payments page. | Decision Q |
+| Defects liability period (months) | None | Pre-fills "Retention and defects liability". The retention release is flagged when recorded before the period ends. | Decision P1 |
 
 ### 3.5 Contract milestones and kick-off (Phase 13)
 
-Edited in the type editor's contract rules section.
+Kick-off & mobilisation tab.
 
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
@@ -124,9 +151,9 @@ Edited in the type editor's contract rules section.
 | Kick-off quorum groups | None | At least one attendee per group (demo: owner, monitor, contractor, beneficiary), or a waiver reason. | G2 |
 | Kick-off notice lead time | 7 days | The notice must go out this many days ahead, or the shortfall is waived with a reason. | G2 |
 
-### 3.6 Documents, default cases, inspections and supervision (Phases 13–14)
+### 3.6 Documents, default cases, visit forms and supervision (Phases 13–14, R3)
 
-Edited in the type editor's "Required documents and contractor default" and "Monitoring: streams, inspections and supervision" sections (the latter also holds "Visit forms", redesign R3).
+Documents and default cases: Kick-off & mobilisation tab. Visit forms and supervision: Monitoring tab.
 
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
@@ -135,28 +162,27 @@ Edited in the type editor's "Required documents and contractor default" and "Mon
 | Legal role | None | The Legal role: told about new default cases, and names the review step. Demo: `LEGAL_OFFICER`. | G7 |
 | Open a default case when mobilisation is overdue | On | An overdue contractor-on-site milestone opens a default case once. The case runs Legal review, then the executive decision (`contracts:decide_default`). | G7 |
 | Visit forms (redesign R3) | Default (the template whose code is the visit kind) | The visit form template per visit kind. Only a live template of that kind can be chosen. Projects keep the choice they were created with; the latest version of the template is used when a form is built. Demo: code = kind for every kind. | Decision Y |
-| Legacy inspection checklists (Phase 14) | None | The checklist template per visit type for Phase 14 inspections (removed in R4). | G5 |
 | Supervisor roles | None | Roles whose users count as supervisors (workload view, "supervisor assigned" KPI). | G9 |
 | Most sites per supervisor / furthest distance between sites | No limit | The workload warns above them and never blocks. Demo: Co-Funded 2 sites, 50 km. | G9 |
 
 ### 3.7 Completion and closure (Phase 15)
 
-Edited in the type editor's closure rules section.
+Completion & closure tab. The results show on the project's Completion & handover page (tabs Certificate, Handover, Defects, Closure).
 
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
 | **CoC signatories** | Head of Physical Planning and Head of M&E (owning organisation), plus the beneficiary institution | Up to 8 slots, each with a permission (default `completion:sign_certificate`), an optional role, and an organisation scope (any, owner, owner or above, funder, monitor). One slot per person. The last signature issues the certificate and its PDF. | G6, decision O |
 | Beneficiary signature | Recorded by staff | Staff upload the signed paper copy and attest (D-15.1). The beneficiary has no login (R1d). | G6 |
-| Final evaluation before the CoC | Off | A CoC can only be drafted after an approved final evaluation inspection. | G6 |
+| Final evaluation before the CoC | Off | A CoC can only be drafted after an accepted final evaluation visit. (Approved Phase 14 final evaluation inspections stop counting when R5f removes inspections.) | G6 |
 | Gates needing an issued CoC | None | Liability period (handover → retention) and closure are refused without it. Final payment: a FINAL payment or retention release recorded without it is flagged as an exception (payments are made outside the platform). | G6 |
 | Handover due after the CoC | 7 days | Dates the handover ceremony milestone. | G6 |
-| Before-closing checklist | None | Items: document filed (and, per item, whether its current version must be signed), inspection approved, milestone done, contractors rated, lessons published, audit sign-off, manual. Each must be met or waived before closing. | G6 |
+| Before-closing checklist | None | Items: document filed (and, per item, whether its current version must be signed), visit accepted (of a chosen visit kind), milestone done, contractors rated, lessons published, audit sign-off, manual. Each must be met or waived before closing. | G6 |
 | Before-archiving checklist | None | The same item kinds, needed before archiving. Demo (Co-Funded): post-closure evaluation 14 days after closing, and an audit sign-off that cannot be waived. | G6 |
 | Share ratings with the contractor | Off | Contractors see their own ratings when on. | G6 |
 
 ### 3.8 KPI targets (Phase 16)
 
-Edited in the type editor's "KPI targets" section. **Changes apply to every project of the type at once.** Unlike the rules above, targets are reporting settings.
+KPI targets tab. **Changes apply to every project of the type at once.** Unlike the rules above, targets are reporting settings.
 
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
@@ -169,12 +195,14 @@ Demo values: Central (mobilisation 90%, reports 85%, visits 90%); Co-Funded (mob
 
 ## 4. Workflow template settings (process switches and chains)
 
-Phases 11–15 **added no new process switches**. The switches from Phases 7 and 10 are what the programme templates set:
+Phases 11–15 **added no new process switches**. The switches from Phases 7 and 10 are what the programme templates set. On a project they are in More ▸ Settings → Advanced (`/settings/advanced`), filled from the type's workflow template when the type is applied.
 
 | Switch | Default | Demo programme | Effect |
 | :--- | :--- | :--- | :--- |
-| Report approval | Off | On | Reports and inspections go through the report chain. Feeds the approval turnaround KPI. |
-| Handover module / retention module | Off | On | Handover links, handover certificate, liability period, defects, and retention held on recorded payments. |
+| Report approval | Off | On | Visit submissions go through the report chain (off: accepted at once). Feeds the approval turnaround KPI. |
+| Handover module / retention module | Off | On | Handover response and certificate, liability period, defects, and retention held on recorded payments. Off hides the Handover and Defects tabs of Completion & handover. |
+
+The hold points and contractor field reporting switches are removed in R5f (section 1.1).
 
 Approval chain additions:
 
@@ -187,18 +215,32 @@ Approval chain additions:
 
 ## 5. Project settings (wizard and project settings)
 
+**Setup is five wizard steps (redesign R6a).** Each step groups sections; a section is still the unit that is saved, checked and audited. Drafts open at `/setup/<step>`, live projects at `/settings/<step>` (More ▸ Settings). "Save and continue" saves every changed section of the step and every required section never saved. Old step addresses (`/setup/basics`, `/settings/facility`, …) open the step that holds the section and scroll to it.
+
+| Step (route) | Sections (section id) |
+| :--- | :--- |
+| 1 Project (`project`) | Project details (`basics`), School and organisations (`parties`), Location (`site`) |
+| 2 Contract (`contract`) | Contractor (`contractor`, required), Contract and kick-off (`contract`), Retention and defects liability (`facility`, when the retention module is on) |
+| 3 Scope & sprints (`scope`) | Scope & sprints (`scope`, required), Needs assessment and standards (`standards`) |
+| 4 Team & visits (`team`) | Team (`team`), Visits (`visits`) |
+| 5 Review (`review`) | Open issues grouped by step with Fix links; set the project active |
+| Advanced (`advanced`, settings only) | Workflow and process (`process`): template, process switches, approval chains |
+
 | Setting | Where | Effect | Control |
 | :--- | :--- | :--- | :--- |
-| Project type | Basics step (drafts only) | Applies the type: copies the template, snapshots the config, pre-fills parties and retention. Locked once live. | G1 |
-| Owning organisation, region, beneficiaries (one primary) | Basics / Parties steps | Visibility, filters, approvals and the handover recipient. | G10 |
-| Contract reference, award, signed and kick-off dates | Contract step | Anchor the contract milestones. Every change recomputes due dates and is audited. | G2 |
-| Visit officers, working days (redesign R4) | Visits step (route `visits`, replaces the Reporting step) | The default officers given to proposed visits (the first is the lead; someone not on the project is assigned to it) and the project's working days (visit dates, the move tolerance and deadlines count them). The step previews the visits the type will propose. | D-R4.39 |
-| Visits (redesign R4) | Project → Visits; tenant → Visit planner | Create, generate, publish, move, reassign and cancel visits; accept or reject officers' date proposals; review submissions; findings and the site log. | P3, P5 |
-| Sprint verification (redesign R4) | Scope & sprints → Verify | Met, partly met or not met once a sprint has started (early needs a note). Drives the sprint status (Late, Verified), the schedule badge and the on-time KPI. | Decision V |
-| Scope & sprints (redesign R2) | Scope & sprints step (route `scope`, replaces the BOQ step) and the project page Scope & sprints | Sprints (name, dates, deliverables; any length, gaps allowed, no overlaps; numbered by date), facility units (a facility, a label such as "Ground floor male toilet", start and end sprint, planned quantity for supply items) and BoQ lines (item no., unit, description, unit of measure, quantity, rate; amount = quantity × rate, computed by the server). Lines take their planned dates from their unit's sprints; the project's planned start and end follow the first and last sprint. To activate: at least one sprint and one line, every line on a unit, every unit with both sprints. On a live project every change is audited; units and lines with field evidence cannot be removed, nor a sprint a unit starts or ends in. | Decision R |
-| Needs-assessment workbook (redesign R2) | Scope & sprints → Download workbook / Import workbook | Excel workbook with the workspace's live lists (facilities, units of measure, regions, delivery models), pre-filled from the project. Import is for drafts: preview first (lines by facility and sprint, row errors, warnings such as the total being above the budget), then confirm; confirm replaces the draft's sprints, units and lines and fills only the project fields that are empty (a primary school beneficiary, region, LGA, site address, budget, delivery model, a radial site boundary of the workspace default radius from the GPS point, strategic justification, assumptions). A blank workbook (the workspace's lists only) downloads from Settings → Facilities; a project's own workbook also downloads from the needs-assessment section of the Standards step. Live projects change scope on the page instead. | Decision Y |
-| Retention percentage and liability period | Retention step (route `facility`) | Held from each recorded payment; changes apply to later payments. | Decision Q |
-| Payments | Project → Payments | Record interim, final and retention-release payments made outside the platform; void a wrong entry with a reason. Exceptions are flagged, not blocked. | Decision Q |
+| Project type | Step 1 Project → Project details (drafts only) | Applies the type: copies the template, snapshots the config, pre-fills parties and retention. Locked once live. | G1 |
+| Owning organisation, region, beneficiaries (one primary) | Step 1 Project → Project details / School and organisations | Visibility, filters, approvals and the handover recipient. | G10 |
+| Site boundary, tolerance, time zone | Step 1 Project → Location (tolerance and time zone collapsed) | Check-in and photo boundary checks on the phone and the server; the project's dates. | G5 |
+| Contractor | Step 2 Contract → Contractor | The one contractor organisation, its contacts and planned completion (trade pre-filled "Main contract"). A planned completion before the last sprint's end is warned. | G2 |
+| Contract reference, award, signed and kick-off dates | Step 2 Contract → Contract and kick-off | Anchor the contract milestones (preview shown). Every change recomputes due dates and is audited. | G2 |
+| Visit officers, working days (redesign R4) | Step 4 Team & visits → Visits (old route `visits` opens it) | The default officers given to proposed visits (the first is the lead; someone not on the project is assigned to it) and the project's working days (visit dates, the move tolerance and deadlines count them). The section previews the visits the type will propose. | D-R4.39 |
+| Visits (redesign R4) | Project → Visits & reports (`/visits`, tabs Plan, Findings, Site log; Findings also in the sidebar); Workspace → Visit planner (`/app/visits`) | Create, generate, publish, move, reassign and cancel visits; accept or reject officers' date proposals; review submissions; findings and the site log. Officers respond, check in and submit from the phone only. | P3, P5 |
+| Sprint verification (redesign R4) | Sprints & scope → Verify | Met, partly met or not met once a sprint has started (early needs a note). Drives the sprint status (Late, Verified), the schedule badge and the on-time KPI. | Decision V |
+| Scope & sprints (redesign R2) | Step 3 Scope & sprints (route `scope`; `/setup/boq` opens it) and the project page Sprints & scope (`/scope`) | Sprints (name, dates, deliverables; any length, gaps allowed, no overlaps; numbered by date), facility units (a facility, a label such as "Ground floor male toilet", start and end sprint, planned quantity for supply items) and BoQ lines (item no., unit, description, unit of measure, quantity, rate; amount = quantity × rate, computed by the server). Lines take their planned dates from their unit's sprints; the project's planned start and end follow the first and last sprint. To activate: at least one sprint and one line, every line on a unit, every unit with both sprints. On a live project every change is audited; units and lines with field evidence cannot be removed, nor a sprint a unit starts or ends in. | Decision R |
+| Needs-assessment workbook (redesign R2) | Step 3 Scope & sprints → Download workbook / Import workbook | Excel workbook with the workspace's live lists (facilities, units of measure, regions, delivery models), pre-filled from the project. Import is for drafts: preview first (lines by facility and sprint, row errors, warnings such as the total being above the budget), then confirm; confirm replaces the draft's sprints, units and lines and fills only the project fields that are empty (a primary school beneficiary, region, LGA, site address, budget, delivery model, a radial site boundary of the workspace default radius from the GPS point, strategic justification, assumptions). A blank workbook (the workspace's lists only) downloads from Forms & facilities → Facilities; a project's own workbook also downloads from the "Needs assessment and standards" section of step 3. Live projects change scope on the Sprints & scope page instead. | Decision Y |
+| Retention percentage and liability period | Step 2 Contract → Retention and defects liability (section id `facility`) | Held from each recorded payment; changes apply to later payments. | Decision Q |
+| Payments | Project → Payments | Record interim, final and retention-release payments made outside the platform, optionally naming a sprint (a sprint a payment names cannot be removed); void a wrong entry with a reason. Exceptions are flagged, not blocked. Filters (kind, sprint, exceptions only), a paid-against-contract-sum bar (also on the Overview) and a Release checks panel (CoC issued, liability period end, open defects). | Decision Q |
+| Project stage and phase changes (redesign R6c) | Project → Overview | The stage bar (Kick-off, Mobilisation, Construction, Completion, Closure) is derived, not set. The phase actions under it ("Start handover", "Start defects liability period", "Close the project") change the construction phase; a blocked action shows why (for example the CoC gate). | G6 |
 
 ---
 
@@ -221,7 +263,7 @@ Default roles: **TSA** Tenant Super Admin, **MON** Independent Monitor, **LEN** 
 | 13 | `milestones:manage`, `milestones:waive` | Complete and waive contract milestones; move anchor dates. |
 | 13 | `kickoff:manage` | Schedule the kick-off, send the notice, record attendance and minutes. |
 | 13 | `contracts:raise_default`, `contracts:decide_default` | Open and review default cases; make the final decision. |
-| 14 | `inspections:submit`, `inspections:view`, `inspections:manage_findings` | Site inspections and findings (`inspections:manage_templates` was removed in R3e). |
+| 14 | `inspections:view`, `inspections:manage_findings` | See and manage findings (also the visit form preview with `inspections:view`). `inspections:submit` covered Phase 14 site inspections, which R5f removes; R7's role catalogue settles it. (`inspections:manage_templates` was removed in R3e.) |
 | 15 | `completion:draft_certificate`, `completion:sign_certificate`, `completion:revoke_certificate` | Certificate of Completion. |
 | 15 | `closure:manage_checklist`, `closure:audit_signoff`, `closure:export_pack` | Closure checklist, audit sign-off, closure pack. |
 | 15 | `contractors:rate_performance` | Rate contractors and see ratings across projects. |
@@ -232,9 +274,9 @@ Default roles: **TSA** Tenant Super Admin, **MON** Independent Monitor, **LEN** 
 
 Redesign R1d removed `field:join_project` and `assurance:review_credentials`, and renamed `handover:manage_links` to `handover:record_response` (record the beneficiary's handover response from the signed copy). The default roles `CONTRACTOR` (web) and `CONTRACTOR_ENGINEER` (mobile) are gone: contractors have no login (decision P2). Every mobile role signs in with an account.
 
-Redesign R1e removed `projects:view_executive_matrix` (the executive risk matrix; `/app/executive` opens the portfolio), `mobilization:manage_roster`, `mobilization:configure_reminders`, `presence:view_telemetry`, `presence:manage_noshow_alerts` and `field:manual_checkin`, with morning briefs, telemetry, the participant roster and attendance alerts. Excusing a missed report now needs `reports:approve_completion`. The milestone reminder offsets (7, 3 and 1 days before due) are fixed until the R4 deadline settings; their editor went with the roster.
+Redesign R1e removed `projects:view_executive_matrix` (the executive risk matrix; `/app/executive` opens the portfolio), `mobilization:manage_roster`, `mobilization:configure_reminders`, `presence:view_telemetry`, `presence:manage_noshow_alerts` and `field:manual_checkin`, with morning briefs, telemetry, the participant roster and attendance alerts. (Excusing a missed workday report needed `reports:approve_completion` until R5f removed workday reports.) The milestone reminder offsets (7, 3 and 1 days before due) are fixed until the R4 deadline settings; their editor went with the roster.
 
-Redesign R2d removed `schedule:catch_up_refactor`, `schedule:approve_refactor` (schedule revisions), `schedule:propose_programme` (the programme of works is now a document whose sign-off accepts it; its document type needs a sign-off) and `boq:configure_hold_points` (hold-point flags stay visible read-only until R3/R4). `schedule:view_variance` now means: see the sprint schedule badge and get the behind-schedule notification.
+Redesign R2d removed `schedule:catch_up_refactor`, `schedule:approve_refactor` (schedule revisions), `schedule:propose_programme` (the programme of works is now a document whose sign-off accepts it; its document type needs a sign-off) and `boq:configure_hold_points` (the hold-point flags themselves go in R5f). `schedule:view_variance` now means: see the sprint schedule badge and get the behind-schedule notification.
 
 ---
 
@@ -255,7 +297,7 @@ The catalogue is fixed in code; tenants set targets and visibility only (section
 | M&E | Sites with baseline data | An accepted baseline visit (projects whose plan has one) | No | ≥ 100% |
 | M&E | Visits conducted vs planned | Planned visits dated in the period: submitted / (submitted + missed); unscheduled visits are not counted | Yes | ≥ 90% |
 | M&E | Reports submitted on time | Visits whose deadline fell in the period, submitted by it | Yes | ≥ 85% |
-| M&E | Average approval turnaround | Days from submission to final approval (visits, legacy reports and inspections) | Yes | ≤ 5 days |
+| M&E | Average approval turnaround | Days from submission to final approval of visit submissions (legacy workday reports and inspections stop counting when R5f removes them) | Yes | ≤ 5 days |
 | M&E | Sprints verified on time | Sprints verified by their end date + the verification period | Yes | ≥ 90% |
 | Payments | Financial utilisation | Paid to date (net, from the payment record) / budget (weighted by budget) | No | none |
 | Closure | Verified on time and to specification | CoC completion date ≤ planned end, no major issues in the final evaluation | Yes | ≥ 80% |

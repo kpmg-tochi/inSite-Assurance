@@ -5,6 +5,7 @@ import {
   Routes,
   useLocation,
   useMatch,
+  useParams,
 } from "react-router-dom";
 import { useAuth } from "./lib/auth-context";
 import { useGuardedNavigate } from "./lib/navigationGuard";
@@ -12,11 +13,9 @@ import { AppShell } from "./components/AppShell";
 import Loader from "./components/Loader";
 import { LoginPage } from "./pages/auth/LoginPage";
 import { HomePage } from "./pages/public/HomePage";
-import { AboutPage } from "./pages/public/AboutPage";
 import { MobileAppPage } from "./pages/public/MobileAppPage";
-import { PortfolioDashboardPage } from "./pages/dashboard/PortfolioDashboardPage";
+import { ProjectOverviewPage } from "./pages/overview/ProjectOverviewPage";
 import { PortfolioOverviewPage } from "./pages/dashboard/PortfolioOverviewPage";
-import { ProjectClosurePage } from "./pages/closure/ProjectClosurePage";
 import { LessonsLibraryPage } from "./pages/lessons/LessonsLibraryPage";
 import { ProgrammeKpisPage } from "./pages/kpis/ProgrammeKpisPage";
 import { OrganizationRatingsPage } from "./pages/organizations/OrganizationRatingsPage";
@@ -26,26 +25,38 @@ import { ProjectSetupShell } from "./pages/projects/setup/ProjectSetupShell";
 import { ProjectPaymentsPage } from "./pages/payments/ProjectPaymentsPage";
 import { ProjectScopePage } from "./pages/scope/ProjectScopePage";
 import { AuditLedgerPage } from "./pages/audit/AuditLedgerPage";
-import { ProjectHandoverPage } from "./pages/closeout/ProjectHandoverPage";
-import { RetentionDefectsPage } from "./pages/closeout/RetentionDefectsPage";
+import { CompletionHandoverPage } from "./pages/completion/CompletionHandoverPage";
+import { COMPLETION_PAGE_PERMISSIONS } from "./pages/completion/completionPermissions";
 import { ProjectVisitsPage } from "./pages/visits/ProjectVisitsPage";
 import { VisitPlannerPage } from "./pages/visits/VisitPlannerPage";
 import { ProjectDocumentsPage } from "./pages/documents/ProjectDocumentsPage";
-import { ProjectMilestonesPage } from "./pages/milestones/ProjectMilestonesPage";
-import { ProjectKickoffPage } from "./pages/milestones/ProjectKickoffPage";
+import { KickoffMobilisationPage } from "./pages/kickoff/KickoffMobilisationPage";
+import { FormsFacilitiesPage } from "./pages/forms/FormsFacilitiesPage";
+import { parseAppLocation, sameSubPageFor } from "./navigation/navItems";
 import { MILESTONE_VIEW_PERMISSIONS } from "./components/contracts/contractUi";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { ChangePasswordPage } from "./pages/auth/ChangePasswordPage";
 import { RequirePermission } from "./components/PermissionGate";
 import { Toaster } from "sonner";
 import { useProjectsQuery } from "./queries/projects/useProjectsQueries";
-import { useProjectBoqQuery } from "./queries/boq/useBoqQueries";
 import { useProjectEvidenceQuery } from "./queries/evidence/useEvidenceQueries";
 import { APPLICATION_NAME } from "./config/appName";
 
 function ProjectSetupRedirect({ mode }: { mode: "setup" | "settings" }) {
   const match = useMatch(`/app/projects/:projectId/${mode}`);
-  return <Navigate to={`/app/projects/${match?.params.projectId}/${mode}/basics`} replace />;
+  return <Navigate to={`/app/projects/${match?.params.projectId}/${mode}/project`} replace />;
+}
+
+/**
+ * Redesign R6b: an old project page URL opens the tab of the merged page that replaced it, keeping
+ * the query string (`?case=` from default-case links, `?ticket=` from defect links).
+ */
+function NavigateKeepingQuery({ page, tab }: { page: string; tab: string }) {
+  const { projectId } = useParams();
+  const { search, hash } = useLocation();
+  const params = new URLSearchParams(search);
+  params.set("tab", tab);
+  return <Navigate to={`/app/projects/${projectId}/${page}?${params.toString()}${hash}`} replace />;
 }
 
 function ScrollToTopOnNavigate() {
@@ -57,8 +68,7 @@ function ScrollToTopOnNavigate() {
 }
 
 function AuthenticatedWorkspace() {
-  const { user, isLoading: authLoading, hasPermission } = useAuth();
-  const canViewBoq = hasPermission("boq:view");
+  const { user, isLoading: authLoading, hasPermission, hasAnyPermission } = useAuth();
   const canViewReports = hasPermission("reports:view_all");
   // Asks to save first when the setup wizard has unsaved changes (Phase 6).
   const navigate = useGuardedNavigate();
@@ -95,25 +105,14 @@ function AuthenticatedWorkspace() {
     null;
 
   // Only fetch what the role can see; the API would refuse the rest.
-  const boqQuery = useProjectBoqQuery(
-    activeProject?.id,
-    Boolean(user && activeProject?.id && canViewBoq),
-  );
   const evidenceQuery = useProjectEvidenceQuery(
     activeProject?.id,
     Boolean(user && activeProject?.id && canViewReports),
   );
+  // Switching project keeps the sub-page (looked up in the navigation config) when the user may see it.
   const handleSelectProject = (projectId: string) => {
     setSelectedProjectId(projectId);
-    const subRouteMatch = location.pathname.match(
-      /\/app\/projects\/[^/]+\/(dashboard|payments|scope|audit|schedule|handover|retention|documents|milestones|kickoff|closure|inspections|visits)/,
-    );
-    const subRoute = subRouteMatch?.[1] || "dashboard";
-    const safeSubRoute =
-      !hasPermission("audit:view_ledger") && subRoute === "audit"
-        ? "dashboard"
-        : subRoute;
-    navigate(`/app/projects/${projectId}/${safeSubRoute}`);
+    navigate(sameSubPageFor(parseAppLocation(location.pathname, location.search), projectId, hasAnyPermission));
   };
 
   if (authLoading) {
@@ -135,24 +134,20 @@ function AuthenticatedWorkspace() {
     return <ChangePasswordPage />;
   }
 
-  // Project actions only on that project's own pages; "New Project" only on the portfolio and
-  // the project list.
+  // "New Project" only on the portfolio and the project list (project settings: sidebar More, Settings).
   const path = location.pathname.replace(/\/+$/, "");
-  const onProjectPage = Boolean(urlProjectId && activeProject?.id === urlProjectId);
-  const onProjectSetup = /^\/app\/projects\/[^/]+\/(setup|settings)(\/|$)/.test(path);
   const onProjectListPage = path === "/app/portfolio" || path === "/app/projects";
+
+  // A project page URL for a project outside the live list (a draft, or one the user cannot see) must
+  // not render another project's data under that URL: drafts have no Overview, so open their setup
+  // (which also answers for a project the user may not open).
+  const onSetupRoute = /^\/app\/projects\/[^/]+\/(setup|settings)(\/|$)/.test(path);
+  if (urlProjectId && !onSetupRoute && projectsQuery.isSuccess && !projects.some((p) => p.id === urlProjectId)) {
+    return <Navigate to={`/app/projects/${urlProjectId}/setup`} replace />;
+  }
 
   const headerActions = (
     <>
-      {onProjectPage && !onProjectSetup && activeProject && hasPermission("projects:edit_baseline") && (
-        <button
-          type="button"
-          onClick={() => navigate(`/app/projects/${activeProject.id}/settings/basics`)}
-          className="px-3.5 py-2 rounded-xl border border-white/20 bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition shadow-sm backdrop-blur-sm"
-        >
-          Project settings
-        </button>
-      )}
       {onProjectListPage && hasPermission("projects:create") && (
         <button
           type="button"
@@ -249,6 +244,15 @@ function AuthenticatedWorkspace() {
         />
         <Route path="organizations/:organizationId/ratings" element={<OrganizationRatingsPage />} />
         <Route path="executive" element={<Navigate to="/app/portfolio" replace />} />
+        {/* Redesign R6b (D-R6.25): the facility catalogue and the form library, moved out of Settings */}
+        <Route
+          path="forms"
+          element={
+            <RequirePermission anyOf={["facilities:manage", "forms:manage"]} backTo={projectHome}>
+              <FormsFacilitiesPage />
+            </RequirePermission>
+          }
+        />
 
         {activeProject ? (
           <>
@@ -257,10 +261,11 @@ function AuthenticatedWorkspace() {
               index
               element={<Navigate to={hasPermission("projects:view_portfolio") ? "/app/portfolio" : projectHome} replace />}
             />
+            {/* Redesign R6c: the project Overview (route kept as /dashboard, D-R6.18) */}
             <Route
               path="projects/:projectId/dashboard"
               element={
-                <PortfolioDashboardPage
+                <ProjectOverviewPage
                   project={activeProject}
                   evidenceLogs={evidenceQuery.data || []}
                 />
@@ -286,25 +291,18 @@ function AuthenticatedWorkspace() {
             <Route path="projects/:projectId/boq" element={<Navigate to={`/app/projects/${activeProject.id}/scope`} replace />} />
             {/* Redesign R2d: the schedule page is gone; sprints live on Scope & sprints. */}
             <Route path="projects/:projectId/schedule" element={<Navigate to={`/app/projects/${activeProject.id}/scope`} replace />} />
+            {/* Redesign R6b (D-R6.16): certificate, handover, defects and closure on one page */}
             <Route
-              path="projects/:projectId/handover"
+              path="projects/:projectId/completion"
               element={
-                <RequirePermission anyOf={["handover:record_response", "handover:review_feedback"]} backTo={projectHome}>
-                  <ProjectHandoverPage project={activeProject} />
+                <RequirePermission anyOf={COMPLETION_PAGE_PERMISSIONS} backTo={projectHome}>
+                  <CompletionHandoverPage project={activeProject} />
                 </RequirePermission>
               }
             />
-            <Route
-              path="projects/:projectId/retention"
-              element={
-                <RequirePermission
-                  anyOf={["retention:manage_defects", "payments:view", "payments:record", "audit:view_ledger"]}
-                  backTo={projectHome}
-                >
-                  <RetentionDefectsPage project={activeProject} />
-                </RequirePermission>
-              }
-            />
+            <Route path="projects/:projectId/handover" element={<NavigateKeepingQuery page="completion" tab="handover" />} />
+            <Route path="projects/:projectId/retention" element={<NavigateKeepingQuery page="completion" tab="defects" />} />
+            <Route path="projects/:projectId/closure" element={<NavigateKeepingQuery page="completion" tab="closure" />} />
             {/* Redesign R4: the project's visits, findings and site log */}
             <Route
               path="projects/:projectId/visits"
@@ -325,24 +323,16 @@ function AuthenticatedWorkspace() {
                 </RequirePermission>
               }
             />
-            <Route
-              path="projects/:projectId/milestones"
-              element={
-                <RequirePermission anyOf={MILESTONE_VIEW_PERMISSIONS} backTo={projectHome}>
-                  <ProjectMilestonesPage project={activeProject} />
-                </RequirePermission>
-              }
-            />
+            {/* Redesign R6b (D-R6.15): kick-off, milestones and mobilisation on one page */}
             <Route
               path="projects/:projectId/kickoff"
               element={
                 <RequirePermission anyOf={MILESTONE_VIEW_PERMISSIONS} backTo={projectHome}>
-                  <ProjectKickoffPage project={activeProject} />
+                  <KickoffMobilisationPage project={activeProject} />
                 </RequirePermission>
               }
             />
-            {/* Phase 15: closure checklist, ratings, lessons and the closure pack (contractors see shared lessons) */}
-            <Route path="projects/:projectId/closure" element={<ProjectClosurePage project={activeProject} />} />
+            <Route path="projects/:projectId/milestones" element={<NavigateKeepingQuery page="kickoff" tab="milestones" />} />
             <Route
               path="projects/:projectId/audit"
               element={
@@ -418,9 +408,9 @@ export function App() {
     <>
       <ScrollToTopOnNavigate />
       <Routes>
-        {/* Unauthenticated Public Marketing & Context Routes */}
+        {/* Public pages (redesign R6f, D-R6.26) */}
         <Route path="/" element={<HomePage />} />
-        <Route path="/about" element={<AboutPage />} />
+        <Route path="/about" element={<Navigate to="/" replace />} />
         <Route path="/mobile-app" element={<MobileAppPage />} />
 
         {/* Login Route */}
@@ -428,7 +418,7 @@ export function App() {
           path="/login"
           element={
             !authLoading && user ? (
-              <Navigate to="/app/dashboard" replace />
+              <Navigate to="/app" replace />
             ) : (
               <LoginPage />
             )

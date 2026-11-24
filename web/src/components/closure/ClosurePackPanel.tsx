@@ -30,7 +30,7 @@ export function ClosurePackPanel({ projectId }: { projectId: string }) {
           <div>
             <h2 className="text-sm font-bold text-slate-900">Closure pack</h2>
             <p className="text-[11px] text-slate-500">
-              A ZIP for audit: index, every current document, the certificates, the payment record, inspection summaries and the audit ledger with its
+              A ZIP for audit: index, every current document, the certificates, the payment record, visit summaries and the audit ledger with its
               chain verification. Filed in the register as a closure file.
             </p>
           </div>

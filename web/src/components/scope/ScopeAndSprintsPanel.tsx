@@ -365,14 +365,7 @@ function LinesTable({
           {lines.map((l) => (
             <tr key={l.id}>
               <td className="px-3 py-1.5 font-mono font-semibold text-slate-900">{l.wbsCode}</td>
-              <td className="px-3 py-1.5 text-slate-700">
-                {l.description}
-                {l.isHoldPoint && (
-                  <TableBadge variant="warning" className="ml-2">
-                    Hold point
-                  </TableBadge>
-                )}
-              </td>
+              <td className="px-3 py-1.5 text-slate-700">{l.description}</td>
               <td className="px-3 py-1.5 text-right tabular-nums">
                 {l.totalQuantity.toLocaleString()} {l.unit}
               </td>

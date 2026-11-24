@@ -6,7 +6,6 @@ export const CreateIncidentReportRequestSchema = z.object({
   clientIncidentId: z.string().uuid(),
   // Ignored by the server: the project comes from the field session. Kept for client compatibility.
   projectId: z.string().uuid().optional(),
-  wbsItemId: z.string().uuid().nullable().optional(),
   category: IncidentCategoryEnum,
   severity: IncidentSeverityEnum.default('HIGH'),
   title: z.string().min(3).max(200),
@@ -30,7 +29,6 @@ export const IncidentReportDtoSchema = z.object({
   reporterSessionId: z.string().uuid().nullable(),
   reporterName: z.string(),
   reporterRoleName: z.string().nullable(),
-  wbsItemId: z.string().uuid().nullable(),
   category: IncidentCategoryEnum,
   severity: IncidentSeverityEnum,
   title: z.string(),

@@ -17,7 +17,6 @@ import { demoRateLimit, loginRateLimit } from "../../middleware/rateLimit.middle
 import { prisma } from "../../config/prisma";
 import { env } from "../../config/env";
 import { AppError } from "../../middleware/error.middleware";
-import { buildMobileInspectionPack } from "../inspections/inspectionPack.service";
 import {
   changeMobileUserPassword,
   changeWebUserPassword,
@@ -157,12 +156,6 @@ router.get(
         throw new AppError("Field Agent session is bound to a different project", 403, "PROJECT_MISMATCH");
       }
       const pack = await getProjectBaselinePack(req.fieldAgent!.projectId);
-      // Phase 14: streams this session owes and its checklist templates.
-      pack.inspections = await buildMobileInspectionPack({
-        projectId: req.fieldAgent!.projectId,
-        sessionId: req.fieldAgent!.sessionId,
-        permissions: req.fieldAgent!.permissions,
-      });
       res.json({ success: true, data: pack });
     } catch (error) {
       next(error);

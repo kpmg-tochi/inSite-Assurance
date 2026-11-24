@@ -9,10 +9,10 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Toast from "react-native-toast-message";
 import type { MobileNotificationDto } from "@insite/shared";
 import {
   EmptyStateCard,
+  InfoCallout,
   InSiteLoader,
 } from "../components/common";
 import { GradientHeaderLayout } from "../components/common/GradientHeaderLayout";
@@ -21,14 +21,9 @@ import { NotificationCard } from "../components/notifications";
 import { useProfile } from "../context/ProfileContext";
 import type { RootStackParamList } from "../navigation/types";
 import {
+  useAccountNotificationsQuery,
   useMarkNotificationReadMutation,
-  useNotificationsQuery,
 } from "../queries/notifications/useNotificationQueries";
-import {
-  getWbsThreads,
-  syncWbsInboxFromServer,
-  type WbsItemRecord,
-} from "../storage/wbsRepository";
 import { formatMobileErrorMessage } from "../utils/errorFormatter";
 
 type NotificationListEntry =
@@ -43,149 +38,61 @@ type NotificationListEntry =
       label: string;
     };
 
+/**
+ * Notifications of every project on this account (redesign R5e), unread first. A visit notification
+ * opens the visit, a defect notification the project's defects; anything else (including actions of
+ * the pre-R5 app) is only marked read.
+ */
 export const NotificationCenterModal: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
-  const { activeProjectId, activeContext } = useProfile();
+  const { account, projects } = useProfile();
+  const projectIds = useMemo(() => projects.map((p) => p.projectId), [projects]);
+  const projectLabel = useMemo(
+    () => new Map(projects.map((p) => [p.projectId, p.projectCodePrefix])),
+    [projects],
+  );
 
   const {
-    data: notifications = [],
+    data,
     isLoading,
     isRefetching,
     error,
     refetch,
-  } = useNotificationsQuery(
-    activeProjectId,
-    Boolean(activeContext),
-  );
-  const markReadMutation = useMarkNotificationReadMutation(activeProjectId);
+  } = useAccountNotificationsQuery(projectIds, Boolean(account));
+  const notifications = useMemo(() => data?.items ?? [], [data]);
+  const failedProjects = (data?.failedProjectIds ?? []).map((id) => projectLabel.get(id) ?? "a project");
+  const markReadMutation = useMarkNotificationReadMutation();
 
   const onClose = () => navigation.goBack();
-
-  const findWbsItem = useCallback(
-    async (
-      wbsItemId?: string,
-      wbsCode?: string,
-    ): Promise<WbsItemRecord | undefined> => {
-      if (!activeProjectId) return undefined;
-      let threads = await getWbsThreads(activeProjectId);
-      const matchFn = (t: WbsItemRecord) =>
-        (wbsItemId && t.id === wbsItemId) ||
-        (wbsCode && t.wbsCode === wbsCode);
-
-      let target = threads.find(matchFn);
-      if (!target) {
-        const synced = await syncWbsInboxFromServer(activeProjectId).catch(
-          () => null,
-        );
-        if (synced?.items) {
-          threads = synced.items;
-          target = threads.find(matchFn);
-        }
-      }
-      return target;
-    },
-    [activeProjectId],
-  );
 
   const handlePress = useCallback(
     async (notif: MobileNotificationDto) => {
       // Passive notifications mark read immediately on tap;
       // Action-required notifications remain unread until the required flow completes.
       if (!notif.requiresAction && !notif.isRead) {
-        markReadMutation.mutate(notif.id);
+        markReadMutation.mutate(notif);
       }
       // Already answered by someone on the project: open it, but there is nothing left to resolve.
       if (notif.actionedAt) {
         notif = { ...notif, requiresAction: false };
       }
 
-      if (notif.actionType === "OPEN_REPORT_SUMMARY") {
-        const target = await findWbsItem(
-          notif.metadata?.wbsItemId,
-          notif.metadata?.wbsCode,
-        );
-        if (target) {
-          navigation.replace("EodConfirmModal", {
-            wbsItem: target,
-            resolveNotificationId: notif.requiresAction ? notif.id : undefined,
-            initialSummary:
-              typeof notif.metadata?.draftSummary === "string"
-                ? notif.metadata.draftSummary
-                : undefined,
-            initialQuantity:
-              typeof notif.metadata?.draftQuantity === "number"
-                ? notif.metadata.draftQuantity
-                : undefined,
-            initialUnit:
-              typeof notif.metadata?.unit === "string"
-                ? notif.metadata.unit
-                : undefined,
-          });
-          return;
-        }
-        navigation.replace("BacklogModal", {
-          resolveNotificationId: notif.requiresAction ? notif.id : undefined,
-        });
+      // Redesign R4/R5b: a visit assigned, changed, reminded, returned or accepted.
+      if (notif.actionType === "OPEN_VISIT" && notif.metadata?.visitId) {
+        navigation.replace("Visit", { visitId: notif.metadata.visitId });
         return;
       }
 
       // Phase 10: defect assigned, fixed, closed or overdue.
       if (notif.actionType === "OPEN_DEFECTS") {
-        navigation.replace("Defects");
+        navigation.replace("Defects", { projectId: notif.projectId });
         return;
       }
-
-      // Phase 14: an inspection finding on this project.
-      if (notif.actionType === "OPEN_INSPECTION_FINDINGS") {
-        navigation.replace("InspectionFindings");
-        return;
-      }
-
-      if (notif.actionType === "OPEN_BACKLOG_REVIEW") {
-        navigation.replace("BacklogModal", {
-          resolveNotificationId: notif.requiresAction ? notif.id : undefined,
-        });
-        return;
-      }
-
-      if (notif.actionType === "OPEN_WBS_CHAT") {
-        const target = await findWbsItem(
-          notif.metadata?.wbsItemId,
-          notif.metadata?.wbsCode,
-        );
-        if (!target) {
-          Toast.show({
-            type: "info",
-            props: {
-              title: "WBS Item Not Found",
-              message:
-                "Pull to refresh the Deliverables inbox, then try opening this query again.",
-            },
-          });
-          return;
-        }
-        navigation.goBack();
-        navigation.navigate("WbsThread", {
-          wbsItem: target,
-          activeQueryNotificationId: notif.requiresAction
-            ? notif.id
-            : undefined,
-          queryPrompt: notif.requiresAction ? notif.message : undefined,
-          workdayReportId:
-            typeof notif.metadata?.workdayReportId === "string"
-              ? notif.metadata.workdayReportId
-              : undefined,
-          reportQueryId:
-            typeof notif.metadata?.reportQueryId === "string"
-              ? notif.metadata.reportQueryId
-              : undefined,
-        });
-        return;
-      }
+      // Any other action (including those of the pre-R5 app) has no screen: tapping marks it read.
     },
-    [findWbsItem, markReadMutation, navigation],
+    [markReadMutation, navigation],
   );
 
   // Build ordered list items (unread newest first -> divider -> read newest first)
@@ -220,15 +127,15 @@ export const NotificationCenterModal: React.FC = () => {
       title="Notification Center"
       subtitle={
         unreadCount > 0
-          ? `${unreadCount} unread update${unreadCount === 1 ? "" : "s"} · Backlog & queries`
-          : "Critical updates on reports & queries."
+          ? `${unreadCount} unread update${unreadCount === 1 ? "" : "s"} across your projects`
+          : "Updates on your visits across your projects."
       }
       rightAction={<IconButton icon="close" onPress={onClose} />}
       contentContainerStyle={styles.layoutContent}
     >
       {isLoading ? (
         <View style={styles.loaderWrap}>
-          <InSiteLoader size="md" label="Loading project notifications..." />
+          <InSiteLoader size="md" label="Loading notifications..." />
         </View>
       ) : (
         <FlatList
@@ -248,6 +155,15 @@ export const NotificationCenterModal: React.FC = () => {
               tintColor="#00338D"
             />
           }
+          ListHeaderComponent={
+            failedProjects.length > 0 ? (
+              <InfoCallout
+                variant="warning"
+                title="Some projects could not be read"
+                description={`Notifications of ${failedProjects.join(", ")} are not shown. Pull to try again when you are online.`}
+              />
+            ) : undefined
+          }
           renderItem={({ item }) => {
             if (item.kind === "divider") {
               return (
@@ -262,6 +178,7 @@ export const NotificationCenterModal: React.FC = () => {
             return (
               <NotificationCard
                 notification={item.notification}
+                projectLabel={projects.length > 1 ? projectLabel.get(item.notification.projectId) ?? null : null}
                 onPress={handlePress}
               />
             );
@@ -275,7 +192,7 @@ export const NotificationCenterModal: React.FC = () => {
             ) : (
               <EmptyStateCard
                 title="All Caught Up"
-                description="Queued report summaries, hold points, and monitor queries will appear here."
+                description="Visit changes, reminders and reviews will appear here."
               />
             )
           }

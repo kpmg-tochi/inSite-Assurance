@@ -4,7 +4,7 @@
  * ISO numbers (1 = Monday ... 7 = Sunday), as everywhere else.
  */
 import type { VisitPlanRule } from '../schemas/visit.schema';
-import { addDays, isoWeekday } from './reportingPeriod';
+import { addDays, isoWeekday } from './calendar';
 import { addWorkdays, isScheduleWorkday, nextWorkdayOnOrAfter } from './schedule';
 
 export interface PlanSprint {

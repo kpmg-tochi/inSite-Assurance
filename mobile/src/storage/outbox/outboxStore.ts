@@ -78,6 +78,47 @@ export async function findOpenRowId(db: SQLiteDatabase, kind: OutboxKind, entity
   return row?.id ?? null;
 }
 
+/**
+ * Redesign R5: a synchronous lookup over the open rows of the given entities, for the pure
+ * dependency rules in outboxPolicy (`visitSubmissionDependsOn`, `checkInDependsOn`, ...).
+ */
+export async function openRowLookup(
+  db: SQLiteDatabase,
+  wanted: Array<[OutboxKind, string | null | undefined]>
+): Promise<(kind: OutboxKind, entityId: string) => string | null> {
+  const found = new Map<string, string | null>();
+  for (const [kind, id] of wanted) {
+    if (!id) continue;
+    const key = `${kind}:${id}`;
+    if (!found.has(key)) found.set(key, await findOpenRowId(db, kind, id));
+  }
+  return (kind, entityId) => found.get(`${kind}:${entityId}`) ?? null;
+}
+
+/** The latest row of an entity (any status), for "waiting / failed / sent" labels. */
+export async function latestRowFor(
+  kind: OutboxKind,
+  entityId: string
+): Promise<{ id: string; status: OutboxStatus; lastError: string | null; attempts: number } | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ id: string; status: string; last_error: string | null; attempts: number }>(
+    `SELECT id, status, last_error, attempts FROM outbox WHERE kind = ? AND entity_id = ? ORDER BY created_at DESC LIMIT 1`,
+    [kind, entityId]
+  );
+  return row ? { id: row.id, status: row.status as OutboxStatus, lastError: row.last_error, attempts: row.attempts } : null;
+}
+
+/** Deletes an entity's rows that are not being retried (DEAD or HELD), e.g. when a refused draft is deleted. */
+export async function deleteStoppedRows(db: SQLiteDatabase, kind: OutboxKind, entityId: string): Promise<void> {
+  await db.runAsync(`DELETE FROM outbox WHERE kind = ? AND entity_id = ? AND status IN ('DEAD', 'HELD')`, [kind, entityId]);
+}
+
+/** Deletes an entity's PENDING rows (an unsent site log entry whose photo moved into a form). */
+export async function deletePendingRows(db: SQLiteDatabase, kind: OutboxKind, entityId: string): Promise<number> {
+  const r = await db.runAsync(`DELETE FROM outbox WHERE kind = ? AND entity_id = ? AND status = 'PENDING'`, [kind, entityId]);
+  return r.changes;
+}
+
 export async function listOpenRows(): Promise<OutboxRow[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<Row>(

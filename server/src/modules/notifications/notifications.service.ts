@@ -10,7 +10,6 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import { WebJwtPayload } from '../../middleware/auth.middleware';
-import { markNotificationActionedById } from './notificationActions';
 import { ALL_PROJECTS_SENTINEL, buildProjectVisibilityWhere } from '../../utils/accessControl';
 
 type PrismaTransactionOrClient = Prisma.TransactionClient | typeof prisma;
@@ -51,8 +50,8 @@ export async function createMobileNotification(
     projectId: string;
     fieldSessionId?: string | null;
     type: MobileNotificationType;
-    actionType: NotificationActionType;
-    requiresAction?: boolean;
+    /** OPEN_PROJECT is push-only (never stored). */
+    actionType: Exclude<NotificationActionType, 'OPEN_PROJECT'>;
     title: string;
     message: string;
     metadata?: MobileNotificationMetadata;
@@ -69,7 +68,6 @@ export async function createMobileNotification(
       fieldSessionId,
       type: input.type,
       actionType: input.actionType,
-      requiresAction: input.requiresAction ?? false,
       title: input.title,
       message: input.message,
       metadata: (input.metadata ?? {}) as unknown as Prisma.InputJsonValue,
@@ -113,36 +111,14 @@ export async function listProjectNotifications(
   return rows.map(serializeNotification).sort((a, b) => Number(a.isRead) - Number(b.isRead));
 }
 
-/** Resolving an action-required notification from the app completes it for everyone. */
-export async function markNotificationActionedFromApp(params: {
-  projectId: string;
-  fieldSessionId: string;
-  agentFullName: string;
-  notificationId: string;
-}): Promise<MobileNotificationDto> {
-  const dto = await markNotificationRead({ ...params, resolvedByAction: true });
-  if (dto.requiresAction) {
-    await markNotificationActionedById(prisma, dto.id, {
-      sessionId: params.fieldSessionId,
-      name: params.agentFullName,
-    });
-  }
-  const row = await prisma.mobileNotification.findUniqueOrThrow({
-    where: { id: dto.id },
-    include: { reads: { where: { fieldSessionId: params.fieldSessionId }, select: { readAt: true }, take: 1 } },
-  });
-  return serializeNotification(row);
-}
-
 /**
- * Marks a notification read for the caller (only when no action is required), or records that
- * an action-required notification was resolved by completing its action.
+ * Marks a notification read for the caller. Redesign R5f: no notification asks for an action any
+ * more (the report, query and inspection types went), so every notification can be marked read.
  */
 export async function markNotificationRead(params: {
   projectId: string;
   fieldSessionId: string;
   notificationId: string;
-  resolvedByAction?: boolean;
 }): Promise<MobileNotificationDto> {
   const existing = await prisma.mobileNotification.findFirst({
     where: {
@@ -153,13 +129,6 @@ export async function markNotificationRead(params: {
   });
   if (!existing) {
     throw new AppError('Notification not found for this project', 404, 'NOTIFICATION_NOT_FOUND');
-  }
-  if (existing.requiresAction && !params.resolvedByAction) {
-    throw new AppError(
-      'This notification requires completing its action before it can be marked as read.',
-      400,
-      'NOTIFICATION_ACTION_REQUIRED'
-    );
   }
   await markNotificationsReadForSession(prisma, params.fieldSessionId, [existing.id]);
   const row = await prisma.mobileNotification.findUniqueOrThrow({

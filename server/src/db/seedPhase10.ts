@@ -60,7 +60,6 @@ export async function seedPhase10(p: {
         description: "Phase 10 fixture: end of project life (handover, retention and defects).",
         totalBudgetNgn: data.budget,
         certifiedProgressPct: data.progress,
-        reportingCadence: "WEEKLY",
         timezone: "Africa/Lagos",
         geofenceMode: "RADIAL",
         geofenceGeoJson: geofence as unknown as Prisma.InputJsonValue,

@@ -278,6 +278,122 @@ UPDATE wbs_items SET
                      WHERE m.wbs_item_id = wbs_items.id ORDER BY m.created_at DESC LIMIT 1);
 `,
   },
+  {
+    // Redesign R5a (D-R5.8): the visit app. Additive; the pre-R5 tables stay until v10 (R5e).
+    // - visits: the account feed (R4 `GET /visits/mine`), one row per visit. `id` is the server visit
+    //   id, or the client UUID of an unscheduled visit created on this phone (`server_id` is filled
+    //   once the server has it). `summary_json` is the feed item ({ visit, moveWindow }) exactly as
+    //   received; `local_state_json` holds the phone's overlays (unsent response, check-in).
+    // - visit_forms: frozen form snapshots by (snapshot id, hash); a phone-built Ad hoc form is
+    //   stored under `local:<clientVisitId>` until the server has created the visit.
+    // - visit_field_packs: the R4 field pack per project (offline Ad hoc forms).
+    // - visit_drafts: answers by R3 answer path; id = clientSubmissionId. At most one open draft
+    //   (DRAFT or QUEUED) per visit. Never file paths, base64 or display strings: captures are
+    //   clientCaptureIds, options are option keys, units are facilityUnitIds.
+    // - site_log_entries: id = clientEntryId.
+    // - visit_sync_meta: small key/value state of the visit sync (last window, last run).
+    version: 9,
+    sql: `
+CREATE TABLE IF NOT EXISTS visits (
+  id TEXT PRIMARY KEY NOT NULL,
+  server_id TEXT UNIQUE,
+  project_id TEXT NOT NULL,
+  planned_date TEXT NOT NULL,
+  status TEXT NOT NULL,
+  summary_json TEXT NOT NULL,
+  form_snapshot_id TEXT,
+  form_hash TEXT,
+  server_updated_at TEXT,
+  local_state_json TEXT NOT NULL DEFAULT '{}',
+  is_local INTEGER NOT NULL DEFAULT 0,
+  synced_at TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS visits_project_date ON visits (project_id, planned_date);
+CREATE INDEX IF NOT EXISTS visits_date ON visits (planned_date);
+
+CREATE TABLE IF NOT EXISTS visit_forms (
+  snapshot_id TEXT NOT NULL,
+  form_hash TEXT NOT NULL,
+  project_id TEXT NOT NULL,
+  visit_id TEXT,
+  json TEXT NOT NULL,
+  downloaded_at TEXT NOT NULL,
+  PRIMARY KEY (snapshot_id, form_hash)
+);
+CREATE INDEX IF NOT EXISTS visit_forms_visit ON visit_forms (visit_id);
+
+CREATE TABLE IF NOT EXISTS visit_field_packs (
+  project_id TEXT PRIMARY KEY NOT NULL,
+  json TEXT NOT NULL,
+  generated_at TEXT NOT NULL,
+  downloaded_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS visit_drafts (
+  id TEXT PRIMARY KEY NOT NULL,
+  visit_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'DRAFT',
+  form_snapshot_id TEXT,
+  form_hash TEXT NOT NULL,
+  draft_json TEXT NOT NULL,
+  request_json TEXT,
+  server_id TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS visit_drafts_visit ON visit_drafts (visit_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS visit_drafts_one_open ON visit_drafts (visit_id) WHERE status IN ('DRAFT', 'QUEUED');
+
+CREATE TABLE IF NOT EXISTS site_log_entries (
+  id TEXT PRIMARY KEY NOT NULL,
+  project_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  text TEXT,
+  capture_id TEXT,
+  captured_at TEXT NOT NULL,
+  latitude REAL,
+  longitude REAL,
+  accuracy_meters REAL,
+  is_mocked INTEGER NOT NULL DEFAULT 0,
+  geofence_status TEXT,
+  status TEXT NOT NULL DEFAULT 'QUEUED',
+  server_id TEXT,
+  server_json TEXT,
+  attached_submission_id TEXT,
+  moved_to_draft_id TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS site_log_entries_project ON site_log_entries (project_id, captured_at);
+
+CREATE TABLE IF NOT EXISTS visit_sync_meta (
+  key TEXT PRIMARY KEY NOT NULL,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+`,
+  },
+  {
+    // Redesign R5e (D-R5.10): the old app is gone. Queued rows of its kinds (workday reports and
+    // revisions, chat messages, Phase 14 inspections and finding resolutions) can never be sent, so
+    // they are deleted with the tables only those screens used. Rows that waited on a deleted row
+    // treat it as done (a missing dependency); captures stay (they upload as themselves and are
+    // purged as usual), and their unused wbs_item_id / report_id columns stay (SQLite keeps columns).
+    version: 10,
+    sql: `
+DELETE FROM outbox WHERE kind IN ('REPORT', 'REVALIDATION', 'CHAT_MESSAGE', 'SITE_INSPECTION', 'FINDING_RESOLUTION');
+DROP TABLE IF EXISTS workday_reports;
+DROP TABLE IF EXISTS server_reports;
+DROP TABLE IF EXISTS chat_messages;
+DROP TABLE IF EXISTS wbs_items;
+DROP TABLE IF EXISTS inspection_drafts;
+DROP TABLE IF EXISTS assurance_submissions;
+`,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
@@ -286,14 +402,15 @@ export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
 export const DATA_TABLES = [
   'outbox',
   'captures',
-  'workday_reports',
-  'wbs_items',
-  'chat_messages',
-  'server_reports',
   'incidents',
-  'assurance_submissions',
   'project_baseline',
-  'inspection_drafts',
+  // Redesign R5a (v9)
+  'visits',
+  'visit_forms',
+  'visit_field_packs',
+  'visit_drafts',
+  'site_log_entries',
+  'visit_sync_meta',
 ];
 
 /** Migrations still to run for a database at `currentVersion`. */

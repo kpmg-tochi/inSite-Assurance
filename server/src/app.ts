@@ -8,6 +8,7 @@ import { authRoutes } from "./modules/auth/auth.routes";
 import { rbacRoutes } from "./modules/rbac/rbac.routes";
 import { organizationsRoutes } from "./modules/organizations/organizations.routes";
 import { projectsRoutes } from "./modules/projects/projects.routes";
+import { projectOverviewRoutes } from "./modules/projects/overview.routes";
 import { boqRoutes } from "./modules/boq/boq.routes";
 import { facilitiesRoutes } from "./modules/facilities/facilities.routes";
 import { formLibraryRoutes } from "./modules/forms/formLibrary.routes";
@@ -20,15 +21,12 @@ import { scopeRoutes, scopeWorkbookRoutes } from "./modules/scope/scope.routes";
 import { evidenceRoutes } from "./modules/evidence/evidence.routes";
 import { auditRoutes } from "./modules/audit/audit.routes";
 import { incidentRoutes } from "./modules/incidents/incident.routes";
-import { workdayReportsRoutes } from "./modules/workday-reports/workdayReports.routes";
 import { notificationsRoutes } from "./modules/notifications/notifications.routes";
-import { wbsChatRoutes } from "./modules/wbs-chat/wbsChat.routes";
 import { capturesRoutes } from "./modules/evidence/captures.routes";
 import { processRoutes, workflowTemplateRoutes } from "./modules/process/process.routes";
 import { closeoutRoutes } from "./modules/closeout/closeout.routes";
 import { paymentsRoutes } from "./modules/payments/payments.routes";
-import { inspectionsRoutes } from "./modules/inspections/inspections.routes";
-import { inspectionTemplatesRoutes, supervisionRoutes } from "./modules/inspections/inspectionTemplates.routes";
+import { projectSupervisionRoutes, supervisionRoutes } from "./modules/supervision/supervision.routes";
 import { projectTypesRoutes } from "./modules/projectTypes/projectTypes.routes";
 import { documentsRoutes, documentTypesRoutes } from "./modules/documents/documents.routes";
 import { contractsRoutes } from "./modules/contracts/contracts.routes";
@@ -91,6 +89,7 @@ export function createApp() {
   app.use("/api/v1/rbac", rbacRoutes);
   app.use("/api/v1/organizations", organizationsRoutes);
   app.use("/api/v1/projects", projectsRoutes);
+  app.use("/api/v1/projects", projectOverviewRoutes); // Redesign R6c (after projectsRoutes: /portfolio/overview)
   app.use("/api/v1/projects", boqRoutes);
   app.use("/api/v1/projects", scopeRoutes); // Redesign R2b
   app.use("/api/v1/projects", visitFormRoutes); // Redesign R3c
@@ -101,15 +100,13 @@ export function createApp() {
   app.use("/api/v1/projects", evidenceRoutes);
   app.use("/api/v1/projects", auditRoutes);
   app.use("/api/v1/projects", incidentRoutes);
-  app.use("/api/v1/projects", workdayReportsRoutes);
   app.use("/api/v1/projects", notificationsRoutes);
-  app.use("/api/v1/projects", wbsChatRoutes);
   app.use("/api/v1/projects", capturesRoutes);
   app.use("/api/v1/projects", processRoutes);
   app.use("/api/v1/projects", closeoutRoutes);
   app.use("/api/v1/projects", paymentsRoutes);
-  // Phase 14: reporting streams, inspections, findings, supervision
-  app.use("/api/v1/projects", inspectionsRoutes);
+  // Phase 14: supervision workload (R5f deleted the inspections runtime)
+  app.use("/api/v1/projects", projectSupervisionRoutes);
   // Phase 13
   app.use("/api/v1/projects", documentsRoutes);
   app.use("/api/v1/projects", contractsRoutes);
@@ -120,7 +117,6 @@ export function createApp() {
   // Phase 16: programme KPIs
   app.use("/api/v1/kpis", kpiRoutes);
   app.use("/api/v1/projects", projectKpiRoutes);
-  app.use("/api/v1/inspection-templates", inspectionTemplatesRoutes);
   app.use("/api/v1/supervision", supervisionRoutes);
   app.use("/api/v1/workflow-templates", workflowTemplateRoutes);
   // Phase 11: delivery models

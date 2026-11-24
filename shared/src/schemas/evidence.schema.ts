@@ -8,28 +8,6 @@ import {
   GeofenceStatusEnum,
 } from '../enums';
 
-/**
- * Extracted material / work quantity (used by the optional summary assist).
- * e.g. { materialOrWork: "bags of cement", quantity: 40, unit: "bags" }
- */
-export const ExtractedQuantityItemSchema = z.object({
-  materialOrWork: z.string().min(1).max(160),
-  quantity: z.number().nonnegative(),
-  unit: z.string().min(1).max(32),
-  boqWbsCodeHint: z.string().nullable().optional(),
-});
-export type ExtractedQuantityItem = z.infer<typeof ExtractedQuantityItemSchema>;
-
-/** Structured output of the AI extraction model (summary assist only; never stored as evidence). */
-export const AiFieldNoteExtractionSchema = z.object({
-  normalizedSummary: z.string(),
-  extractedQuantities: z.array(ExtractedQuantityItemSchema),
-  siteBlockers: z.array(z.string()),
-  matchedBoqWbsCodes: z.array(z.string()),
-  visionObservationSummary: z.string().nullable(),
-});
-export type AiFieldNoteExtraction = z.infer<typeof AiFieldNoteExtractionSchema>;
-
 const Sha256HexSchema = z
   .string()
   .regex(/^[0-9a-fA-F]{64}$/, 'sha256 must be 64 hex characters');
@@ -52,7 +30,6 @@ export type CaptureLocation = z.infer<typeof CaptureLocationSchema>;
  */
 export const RegisterCaptureRequestSchema = z.object({
   clientCaptureId: z.string().uuid(),
-  wbsItemId: z.string().uuid().nullable().optional(),
   mediaType: CaptureMediaTypeEnum,
   objectKey: z.string().min(3).max(512),
   mimeType: z.string().min(3).max(80),
@@ -82,8 +59,6 @@ export const CaptureDtoSchema = z.object({
   id: z.string().uuid(),
   clientCaptureId: z.string().uuid(),
   projectId: z.string().uuid(),
-  wbsItemId: z.string().uuid().nullable(),
-  workdayReportId: z.string().uuid().nullable(),
   fieldSessionId: z.string().uuid(),
   status: EvidenceLogStatusEnum,
   mediaType: MediaTypeEnum,
@@ -121,9 +96,6 @@ export const CaptureDtoSchema = z.object({
 });
 export type CaptureDto = z.infer<typeof CaptureDtoSchema>;
 
-/** A report position less accurate than this gets the LOW_GPS_ACCURACY badge (not a failure). */
-export const REPORT_LOW_GPS_ACCURACY_METERS = 50;
-
 /** Non-critical flag on a capture re-submitted after the session that captured it ended. */
 export const RESUBMITTED_AFTER_SESSION_END_FLAG = 'RESUBMITTED_AFTER_SESSION_END';
 
@@ -136,10 +108,55 @@ export const CRITICAL_CAPTURE_FLAGS = [
   'CLIENT_HASH_MISMATCH',
 ] as const;
 
-/** GET /projects/:projectId/evidence — captures with their WBS item and reporter. */
+/** GET /projects/:projectId/evidence — captures with their reporter. */
 export const CaptureListItemDtoSchema = CaptureDtoSchema.extend({
-  wbsCode: z.string().nullable(),
-  wbsDescription: z.string().nullable(),
   reporterName: z.string(),
 });
 export type CaptureListItemDto = z.infer<typeof CaptureListItemDtoSchema>;
+
+/** Device position when the officer confirmed a submission or checked in. The server evaluates the geofence. */
+export const SubmissionGeotagInputSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  accuracyMeters: z.number().nonnegative().nullable().optional(),
+  altitudeMeters: z.number().nullable().optional(),
+  isMocked: z.boolean().default(false),
+  capturedAt: z.string().datetime(),
+});
+export type SubmissionGeotagInput = z.infer<typeof SubmissionGeotagInputSchema>;
+
+/** Stored and returned geotag: input plus the server's geofence result. */
+export const SubmissionGeotagSchema = SubmissionGeotagInputSchema.extend({
+  isWithinGeofence: z.boolean().nullable(),
+  /** INSIDE, WITHIN_TOLERANCE or OUTSIDE (Phase 6); null when not evaluated. */
+  geofenceStatus: GeofenceStatusEnum.nullable().optional(),
+  /** Metres outside the boundary; 0 inside. */
+  distanceOutsideMeters: z.number().nullable().optional(),
+  distanceFromSiteMeters: z.number().nonnegative().nullable(),
+});
+export type SubmissionGeotag = z.infer<typeof SubmissionGeotagSchema>;
+
+/** A capture as shown inside a visit submission, a finding or a site log entry. */
+export const CaptureSummarySchema = CaptureDtoSchema.pick({
+  id: true,
+  clientCaptureId: true,
+  mediaType: true,
+  objectKey: true,
+  mimeType: true,
+  caption: true,
+  capturedAt: true,
+  locationAvailable: true,
+  latitude: true,
+  longitude: true,
+  gpsAccuracyMeters: true,
+  isMockLocation: true,
+  isWithinGeofence: true,
+  signatureVerified: true,
+  integrityPassed: true,
+  integrityFlags: true,
+  transcriptionStatus: true,
+  transcript: true,
+  durationSeconds: true,
+  resubmittedFromClientCaptureId: true,
+});
+export type CaptureSummary = z.infer<typeof CaptureSummarySchema>;

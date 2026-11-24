@@ -3,14 +3,24 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchProjectNotifications,
   markNotificationAsRead,
-  resolveActionNotification,
 } from "../../api/notifications/notificationsApi";
 
+/**
+ * Redesign R5e: the notification centre lists every project of the account. The server lists
+ * notifications per project (each request runs on that project's field session), so the app asks
+ * every project and merges the lists; a project that fails does not hide the others.
+ */
 export const notificationQueryKeys = {
   all: ["notifications"] as const,
-  list: (projectId?: string | null) =>
-    ["notifications", projectId] as const,
+  account: (projectIds: string[]) =>
+    ["notifications", "account", [...projectIds].sort().join(",")] as const,
 };
+
+export interface AccountNotifications {
+  items: MobileNotificationDto[];
+  /** Projects whose notifications could not be read (offline, access removed). */
+  failedProjectIds: string[];
+}
 
 /**
  * Sorts notifications unread-first, then newest-first by UTC createdAt timestamp.
@@ -28,57 +38,51 @@ export function sortNotificationsByPriority(
   });
 }
 
-export function useNotificationsQuery(
-  projectId?: string | null,
+export function useAccountNotificationsQuery(
+  projectIds: string[],
   enabled = true,
 ) {
   return useQuery({
-    queryKey: notificationQueryKeys.list(projectId),
-    queryFn: async () => {
-      const list = await fetchProjectNotifications(projectId!);
-      return sortNotificationsByPriority(list);
-    },
-    enabled: Boolean(projectId) && enabled,
-  });
-}
-
-function updateCachedNotification(
-  queryClient: ReturnType<typeof useQueryClient>,
-  projectId: string,
-  updated: MobileNotificationDto,
-) {
-  queryClient.setQueryData<MobileNotificationDto[]>(
-    notificationQueryKeys.list(projectId),
-    (prev) => {
-      if (!prev) return [updated];
-      const mapped = prev.map((item) =>
-        item.id === updated.id ? updated : item,
+    queryKey: notificationQueryKeys.account(projectIds),
+    queryFn: async (): Promise<AccountNotifications> => {
+      const results = await Promise.allSettled(
+        projectIds.map((id) => fetchProjectNotifications(id)),
       );
-      return sortNotificationsByPriority(mapped);
+      const items: MobileNotificationDto[] = [];
+      const failedProjectIds: string[] = [];
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled") items.push(...r.value);
+        else failedProjectIds.push(projectIds[i]);
+      });
+      // Nothing could be read at all: show the error rather than an empty list.
+      const firstFailure = results.find((r) => r.status === "rejected");
+      if (projectIds.length > 0 && failedProjectIds.length === projectIds.length && firstFailure) {
+        throw (firstFailure as PromiseRejectedResult).reason;
+      }
+      return { items: sortNotificationsByPriority(items), failedProjectIds };
     },
-  );
-}
-
-export function useMarkNotificationReadMutation(projectId?: string | null) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (notificationId: string) =>
-      markNotificationAsRead(projectId!, notificationId),
-    onSuccess: (updated) => {
-      if (!projectId) return;
-      updateCachedNotification(queryClient, projectId, updated);
-    },
+    enabled: projectIds.length > 0 && enabled,
   });
 }
 
-export function useResolveNotificationMutation(projectId?: string | null) {
+export function useMarkNotificationReadMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (notificationId: string) =>
-      resolveActionNotification(projectId!, notificationId),
+    mutationFn: (n: Pick<MobileNotificationDto, "id" | "projectId">) =>
+      markNotificationAsRead(n.projectId, n.id),
     onSuccess: (updated) => {
-      if (!projectId) return;
-      updateCachedNotification(queryClient, projectId, updated);
+      queryClient.setQueriesData<AccountNotifications>(
+        { queryKey: notificationQueryKeys.all },
+        (prev) =>
+          prev
+            ? {
+                ...prev,
+                items: sortNotificationsByPriority(
+                  prev.items.map((item) => (item.id === updated.id ? updated : item)),
+                ),
+              }
+            : prev,
+      );
     },
   });
 }

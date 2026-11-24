@@ -275,8 +275,8 @@ export const MILESTONE_COMPLETION_MODE_META: Record<MilestoneCompletionMode, { l
   AUTO_COC_ISSUED: { label: 'Certificate issued', description: 'Completed when the Certificate of Completion is issued (reopened if it is revoked).' },
   AUTO_HANDOVER_ACCEPTED: { label: 'Handover accepted', description: 'Completed when an accepted handover response is reviewed (the handover certificate is issued).' },
   AUTO_FINAL_EVALUATION_APPROVED: {
-    label: 'Evaluation inspection approved',
-    description: 'Completed when a final evaluation inspection is approved while the milestone has a due date (e.g. after closure).',
+    label: 'Evaluation visit accepted',
+    description: 'Completed when a final or post-closure evaluation visit is accepted while the milestone has a due date (e.g. after closure).',
   },
 };
 

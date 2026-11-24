@@ -6,15 +6,17 @@
  * gates), the post-closure evaluation milestone, contractor rating visibility, lessons, and the
  * closure pack (expected entries, manifest hashes, a verified audit chain).
  *
- * Uses projects created here (dates relative to today; the services read the clock).
+ * Uses projects created here (dates relative to today; the services read the clock). Redesign R5f:
+ * final and post-closure evaluations are accepted visits (the legacy Phase 14 inspections are gone).
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { createFieldSession, fieldAuth } from './helpers/fieldAuth';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
 import type { Express } from 'express';
 import request from 'supertest';
-import { addDays, zonedCalendarDate } from '@insite/shared';
+import { addDays, nextWorkdayOnOrAfter, zonedCalendarDate, type VisitFormSnapshot } from '@insite/shared';
 
 type PrismaClientType = typeof import('../config/prisma')['prisma'];
 
@@ -38,7 +40,6 @@ const ids = {
   main: '',
   item1: '',
   item2: '',
-  template: '',
 };
 
 async function web(email: string) {
@@ -85,6 +86,64 @@ async function recordPaymentOf(kind: 'INTERIM' | 'FINAL' | 'RETENTION_RELEASE', 
     .send({ kind, paidOn: today, grossAmountNgn: amount, reference: `PV-${kind}-${crypto.randomUUID().slice(0, 6)}` });
   assert.equal(res.status, 201, JSON.stringify(res.body));
   return res.body.data.exceptions as string[];
+}
+
+/** Valid answers for every non-capture question of a frozen visit form. */
+function answerAll(snapshot: VisitFormSnapshot) {
+  const out: Array<{ path: string; value: unknown; comment: string | null; captures: unknown[] }> = [];
+  for (const b of snapshot.blocks) {
+    for (const field of b.fields) {
+      if (field.type === 'PHOTO' || field.type === 'VOICE_NOTE') continue;
+      const value =
+        field.type === 'SHORT_TEXT' || field.type === 'LONG_TEXT'
+          ? 'Checked on site'
+          : field.type === 'NUMBER'
+            ? field.boundedByPlannedQuantity && field.plannedQuantity !== null
+              ? field.plannedQuantity
+              : (field.min ?? 1)
+            : field.type === 'PERCENTAGE'
+              ? 100
+              : field.type === 'RATING_1_5'
+                ? 4
+                : field.type === 'YES_NO'
+                  ? 'YES'
+                  : field.type === 'SINGLE_CHOICE'
+                    ? (field.options[0]?.key ?? null)
+                    : field.type === 'MULTI_CHOICE'
+                      ? field.options.slice(0, Math.max(1, field.minSelected ?? 1)).map((o) => o.key)
+                      : field.type === 'DATE'
+                        ? today
+                        : null;
+      out.push({ path: field.path, value, comment: 'All checked', captures: [] });
+    }
+  }
+  return out;
+}
+
+/**
+ * An evaluation visit planned by the monitor, submitted by a field officer and accepted (report
+ * approval is off on these projects, so acceptance is immediate). Returns the visit id.
+ */
+async function acceptedEvaluation(visitKind: 'FINAL_EVALUATION' | 'POST_CLOSURE_EVALUATION', summaryText: string) {
+  const officer = await createFieldSession(prisma, { projectId: ids.project, roleCode: 'MONITOR_INSPECTOR', name: `Evaluator ${visitKind}` });
+  const auth = await fieldAuth(prisma, officer.sessionId);
+  const planned = await request(app)
+    .post(url('/visits'))
+    .set(await web('monitor@insite.ng'))
+    .send({ visitKind, plannedDate: nextWorkdayOnOrAfter(today, [1, 2, 3, 4, 5, 6]), assignees: [{ userId: officer.userId, isLead: true }] });
+  assert.equal(planned.status, 201, JSON.stringify(planned.body));
+  const visitId = planned.body.data.id as string;
+  const form = await request(app).get(url(`/visits/${visitId}/form`)).set(auth);
+  assert.equal(form.status, 200, JSON.stringify(form.body));
+  const { formSnapshotId, formHash, snapshot } = form.body.data as { formSnapshotId: string; formHash: string; snapshot: VisitFormSnapshot };
+  const submitted = await request(app)
+    .post(url(`/visits/${visitId}/submissions`))
+    .set(auth)
+    .send({ clientSubmissionId: crypto.randomUUID(), formSnapshotId, formHash, answers: answerAll(snapshot), overallFinding: 'SATISFACTORY', summaryText, confirmedAt: new Date().toISOString() });
+  assert.equal(submitted.status, 201, JSON.stringify(submitted.body));
+  const visit = await prisma.visit.findUniqueOrThrow({ where: { id: visitId } });
+  assert.equal(visit.status, 'APPROVED', 'accepted at once without report approval');
+  return visitId;
 }
 
 /** An accepted handover response, reviewed through the real route (issues the handover certificate). */
@@ -179,18 +238,6 @@ before(async () => {
   const exec2 = await mkUser('p15.me@insite.ng', 'Head of M&E', ids.ownerOrg);
   const exec3 = await mkUser('p15.other@insite.ng', 'Other Executive', ids.otherOrg);
 
-  const template = await prisma.inspectionChecklistTemplate.create({
-    data: {
-      tenantId: tenant.id,
-      code: 'P15_FINAL',
-      name: 'Final evaluation',
-      visitTypes: ['FINAL_EVALUATION'],
-      version: 1,
-      sectionsJson: [{ key: 'general', title: 'General', items: [{ key: 'works-complete', label: 'Works complete', responseType: 'YES_NO' }] }],
-    },
-  });
-  ids.template = template.id;
-
   const closedConfig = ProjectTypeConfigSchema.parse({
     contractMilestones: [
       {
@@ -238,8 +285,6 @@ before(async () => {
           create: {
             enableHandoverModule: true,
             enableRetentionModule: true,
-            enableAiOmissionCheck: false,
-            enableAiStandardsCheck: false,
           },
         },
         beneficiaries: { create: { name: 'Lagos Model School', beneficiaryType: 'SCHOOL', isPrimary: true } },
@@ -304,23 +349,9 @@ describe('Phase 15', () => {
     assert.equal(res.body.error.code, 'FINAL_EVALUATION_REQUIRED');
     assert.equal(res.body.error.details.linkTo, `/app/projects/${ids.project}/visits`, 'R4d: the gate links to visits');
 
-    const inspection = await request(app)
-      .post(url('/inspections'))
-      .set(await web('monitor@insite.ng'))
-      .send({
-        clientReportId: crypto.randomUUID(),
-        visitType: 'FINAL_EVALUATION',
-        templateId: ids.template,
-        templateVersion: 1,
-        visitDate: today,
-        answers: [{ itemKey: 'works-complete', value: 'YES' }],
-        overallFinding: 'SATISFACTORY',
-        summaryText: 'All works complete and to specification.',
-        confirmedAt: new Date().toISOString(),
-      });
-    assert.equal(inspection.status, 201, JSON.stringify(inspection.body));
+    const visitId = await acceptedEvaluation('FINAL_EVALUATION', 'All works complete and to specification.');
     const c = await completion();
-    assert.equal(c.finalEvaluation.inspectionId, inspection.body.data.id);
+    assert.equal(c.finalEvaluation.visitId, visitId);
     assert.equal(c.canDraft, true);
   });
 
@@ -581,22 +612,8 @@ describe('Phase 15', () => {
     assert.equal(await auditCount('CLOSURE_AUDIT_SIGNED'), 1);
     assert.equal((await archive()).status, 409);
 
-    // The post-closure evaluation: an accepted final evaluation completes the dated milestone.
-    const evaluation = await request(app)
-      .post(url('/inspections'))
-      .set(await web('monitor@insite.ng'))
-      .send({
-        clientReportId: crypto.randomUUID(),
-        visitType: 'FINAL_EVALUATION',
-        templateId: ids.template,
-        templateVersion: 1,
-        visitDate: today,
-        answers: [{ itemKey: 'works-complete', value: 'YES' }],
-        overallFinding: 'SATISFACTORY',
-        summaryText: 'Post-closure evaluation: facility in use, no defects.',
-        confirmedAt: new Date().toISOString(),
-      });
-    assert.equal(evaluation.status, 201, JSON.stringify(evaluation.body));
+    // The post-closure evaluation: an accepted post-closure evaluation visit completes the dated milestone.
+    await acceptedEvaluation('POST_CLOSURE_EVALUATION', 'Post-closure evaluation: facility in use, no defects.');
     const m = await prisma.projectContractMilestone.findFirstOrThrow({ where: { projectId: ids.project, key: 'post-closure-evaluation' } });
     assert.equal(m.status, 'DONE');
     const ok = await archive();
@@ -626,7 +643,7 @@ describe('Phase 15', () => {
     for (const expected of ['index.pdf', 'manifest.json', 'audit/audit-ledger.csv', 'audit/chain-verification.json']) assert.ok(names.includes(expected), expected);
     assert.ok(names.some((n) => n.startsWith('certificates/Certificate of Completion COC-P15-500-02')), names.join('\n'));
     assert.ok(names.some((n) => n.startsWith('certificates/Handover certificate')));
-    assert.ok(names.some((n) => n.startsWith('inspections/') && n.includes('final_evaluation')));
+    assert.ok(names.some((n) => n.startsWith('visits/') && n.includes('final_evaluation')), names.join('\n'));
     assert.ok(!names.some((n) => n.includes('COC-P15-500-01-')), 'the revoked certificate is archived and left out');
     const verification = JSON.parse(files.get('audit/chain-verification.json')!.toString('utf8'));
     assert.equal(verification.chainIntegrityVerified, true);

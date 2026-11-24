@@ -11,7 +11,6 @@ export const TERMINOLOGY_DEFAULTS = {
   monitorParty: { singular: 'Independent monitor', plural: 'Independent monitors' },
   contractor: { singular: 'Contractor', plural: 'Contractors' },
   beneficiary: { singular: 'Beneficiary', plural: 'Beneficiaries' },
-  holdPoint: { singular: 'Hold point', plural: 'Hold points' },
   retention: { singular: 'Retention', plural: 'Retention' },
 } as const satisfies Record<string, { singular: string; plural: string }>;
 
@@ -24,7 +23,6 @@ export const TERMINOLOGY_KEY_META: Record<TerminologyKey, { label: string; descr
   monitorParty: { label: 'Monitoring party', description: 'The independent organisation that monitors and certifies progress.' },
   contractor: { label: 'Contractor', description: 'The firm that builds the works.' },
   beneficiary: { label: 'Beneficiary', description: 'Who the project is for (a school, a community).' },
-  holdPoint: { label: 'Hold point', description: 'A stage that must be inspected before work continues.' },
   retention: { label: 'Retention', description: 'The part of each payment held back until defects are cleared.' },
 };
 

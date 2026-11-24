@@ -74,14 +74,9 @@ async function evaluateItems(db: Db, projectId: string, items: ClosureChecklistI
   const [evidence, inspections, milestones, contractors, ratings, lessons] = await Promise.all([
     registerEvidence(db, projectId, codes),
     needsInspections
-      ? Promise.all([
-          // Redesign R4d: accepted visits; legacy Phase 14 inspections still count until R5.
-          db.visit.findMany({ where: { projectId, status: 'APPROVED' }, select: { visitKind: true, plannedDate: true } }),
-          db.siteInspectionReport.findMany({ where: { projectId, status: { in: ['APPROVED', 'SUBMITTED'] } }, select: { visitType: true, visitDate: true } }),
-        ]).then(([visits, legacy]) => [
-          ...visits.map((v) => ({ visitType: v.visitKind as string, visitDate: v.plannedDate })),
-          ...legacy.map((i) => ({ visitType: i.visitType as string, visitDate: i.visitDate })),
-        ])
+      ? db.visit
+          .findMany({ where: { projectId, status: 'APPROVED' }, select: { visitKind: true, plannedDate: true } })
+          .then((visits) => visits.map((v) => ({ visitType: v.visitKind as string, visitDate: v.plannedDate })))
       : [],
     milestoneKeys.length ? db.projectContractMilestone.findMany({ where: { projectId, key: { in: milestoneKeys } }, select: { key: true, status: true, dueDate: true } }) : [],
     needsRatings ? db.projectContractor.findMany({ where: { projectId }, select: { id: true } }) : [],

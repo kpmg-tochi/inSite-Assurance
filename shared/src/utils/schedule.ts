@@ -2,14 +2,11 @@
  * Working-day and planned-window helpers (Phase 9). Redesign R2d removed the earned-schedule
  * variance, dependencies and revisions: the schedule badge now follows sprints
  * (`sprintScheduleStatus` in utils/scope.ts). Dates are "YYYY-MM-DD" calendar dates in the project
- * zone; weekdays are ISO numbers (1 = Monday ... 7 = Sunday), as in reportingPeriod.ts.
+ * zone; weekdays are ISO numbers (1 = Monday ... 7 = Sunday), as in calendar.ts.
  */
-import { addDays, DEFAULT_WORK_WEEK_DAYS, isoWeekday } from './reportingPeriod';
+import { addDays, DEFAULT_WORK_WEEK_DAYS, isoWeekday } from './calendar';
 
 export type ScheduleStatus = 'NOT_STARTED' | 'ON_TRACK' | 'AHEAD' | 'BEHIND' | 'COMPLETE' | 'UNSCHEDULED';
-
-/** Where an item's planned window sits relative to a reporting period (mobile inbox). */
-export type ItemPeriodStatus = 'DUE_THIS_PERIOD' | 'UPCOMING' | 'OVERDUE' | 'COMPLETE' | 'UNSCHEDULED';
 
 function workSet(workWeekDays: number[]): Set<number> {
   const days = (workWeekDays ?? []).filter((d) => Number.isInteger(d) && d >= 1 && d <= 7);
@@ -56,17 +53,4 @@ export function windowOverlaps(
 ): boolean {
   if (!plannedStartDate || !plannedEndDate) return false;
   return plannedStartDate <= periodEnd && plannedEndDate >= periodStart;
-}
-
-/** Due this period, upcoming or overdue, for the mobile inbox. */
-export function itemPeriodStatus(
-  item: { plannedStartDate?: string | null; plannedEndDate?: string | null; progressPct?: number },
-  periodStart: string,
-  periodEnd: string
-): ItemPeriodStatus {
-  if ((item.progressPct ?? 0) >= 100) return 'COMPLETE';
-  if (!item.plannedStartDate || !item.plannedEndDate) return 'UNSCHEDULED';
-  if (item.plannedEndDate < periodStart) return 'OVERDUE';
-  if (item.plannedStartDate > periodEnd) return 'UPCOMING';
-  return 'DUE_THIS_PERIOD';
 }

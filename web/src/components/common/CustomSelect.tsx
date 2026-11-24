@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { Check, ChevronDown, Search } from "lucide-react";
 
 export interface CustomSelectOption<T extends string | number = string> {
@@ -25,6 +25,10 @@ export interface CustomSelectProps<T extends string | number = string> {
   dropdownClassName?: string;
   size?: "sm" | "md" | "lg";
   variant?: "default" | "ghost" | "inline";
+  /** id of the trigger button, so an outside <label htmlFor> names it. */
+  id?: string;
+  /** Accessible name when there is no visible label (the selected value is read after it). */
+  ariaLabel?: string;
   renderTrigger?: (
     selectedOption: CustomSelectOption<T> | undefined,
     isOpen: boolean
@@ -52,8 +56,16 @@ export function CustomSelect<T extends string | number = string>({
   variant = "default",
   renderTrigger,
   renderOption,
+  id,
+  ariaLabel,
 }: CustomSelectProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const uid = useId();
+  const labelId = `${uid}-label`;
+  const valueId = `${uid}-value`;
+  const listboxId = `${uid}-listbox`;
+  const optionId = (i: number) => `${uid}-option-${i}`;
   const [searchQuery, setSearchQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -89,21 +101,6 @@ export function CustomSelect<T extends string | number = string>({
     }
   }, [isOpen, searchable]);
 
-  // Handle keyboard navigation
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (disabled) return;
-
-    if (e.key === "Escape") {
-      setIsOpen(false);
-    } else if (e.key === "ArrowDown" && !isOpen) {
-      e.preventDefault();
-      setIsOpen(true);
-    } else if (e.key === "Enter" && !isOpen) {
-      e.preventDefault();
-      setIsOpen(true);
-    }
-  };
-
   const filteredOptions = searchable && searchQuery.trim()
     ? options.filter(
         (opt) =>
@@ -112,6 +109,90 @@ export function CustomSelect<T extends string | number = string>({
           opt.badge?.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : options;
+
+  // The highlighted option starts on the selected one each time the list opens or the search changes.
+  useEffect(() => {
+    if (isOpen) {
+      setActiveIndex(filteredOptions.findIndex((opt) => opt.value === value));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, searchQuery]);
+
+  useEffect(() => {
+    if (isOpen && activeIndex >= 0) {
+      document.getElementById(optionId(activeIndex))?.scrollIntoView({ block: "nearest" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, activeIndex]);
+
+  const moveActive = (from: number, delta: number) => {
+    const count = filteredOptions.length;
+    if (count === 0) return;
+    let next = from;
+    for (let step = 0; step < count; step++) {
+      next = next < 0 ? (delta > 0 ? 0 : count - 1) : (next + delta + count) % count;
+      if (!filteredOptions[next].disabled) break;
+    }
+    setActiveIndex(next);
+  };
+
+  const choose = (opt: CustomSelectOption<T> | undefined) => {
+    if (!opt || opt.disabled) return;
+    onChange(opt.value);
+    setIsOpen(false);
+  };
+
+  // Keyboard: Enter, Space or the arrows open the list; arrows, Home and End move; Enter (or Space on
+  // the button) picks; Escape closes the list without closing a dialog around it; Tab closes it.
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (disabled) return;
+    const inSearch = e.target === searchInputRef.current;
+
+    if (!isOpen) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || (e.key === " " && !inSearch)) {
+        e.preventDefault();
+        setIsOpen(true);
+      }
+      return;
+    }
+    switch (e.key) {
+      case "Escape":
+        e.preventDefault();
+        e.stopPropagation();
+        setIsOpen(false);
+        break;
+      case "Tab":
+        setIsOpen(false);
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        moveActive(activeIndex, 1);
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        moveActive(activeIndex, -1);
+        break;
+      case "Home":
+        if (inSearch) break;
+        e.preventDefault();
+        moveActive(-1, 1);
+        break;
+      case "End":
+        if (inSearch) break;
+        e.preventDefault();
+        moveActive(-1, -1);
+        break;
+      case "Enter":
+        e.preventDefault();
+        choose(filteredOptions[activeIndex]);
+        break;
+      case " ":
+        if (inSearch) break;
+        e.preventDefault();
+        choose(filteredOptions[activeIndex]);
+        break;
+    }
+  };
 
   const sizeClasses = {
     sm: "px-2.5 py-1.5 text-[11px]",
@@ -131,9 +212,13 @@ export function CustomSelect<T extends string | number = string>({
       ref={containerRef}
       className={`relative inline-block w-full text-left ${className}`}
       onKeyDown={handleKeyDown}
+      // Space on a button clicks on key-up: keep it from toggling the list again after a keyboard pick.
+      onKeyUp={(e) => {
+        if (e.key === " " && e.target !== searchInputRef.current) e.preventDefault();
+      }}
     >
       {label && (
-        <label className="block text-xs font-semibold text-slate-700 mb-1">
+        <label id={labelId} htmlFor={id} className="block text-xs font-semibold text-slate-700 mb-1">
           {label}
         </label>
       )}
@@ -149,6 +234,7 @@ export function CustomSelect<T extends string | number = string>({
       ) : (
         <button
           type="button"
+          id={id}
           disabled={disabled}
           onClick={() => setIsOpen(!isOpen)}
           className={`w-full rounded-xl border flex items-center justify-between gap-2 transition focus:outline-none ${sizeClasses} ${getVariantTriggerClasses()} ${
@@ -156,14 +242,19 @@ export function CustomSelect<T extends string | number = string>({
           } ${isOpen ? "ring-2 ring-brand-primary/15 border-brand-primary" : ""} ${triggerClassName}`}
           aria-haspopup="listbox"
           aria-expanded={isOpen}
+          aria-controls={isOpen ? listboxId : undefined}
+          aria-activedescendant={isOpen && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+          aria-label={label || id || !ariaLabel ? undefined : `${ariaLabel}: ${selectedOption ? selectedOption.label : placeholder}`}
+          aria-labelledby={label && !id ? `${labelId} ${valueId}` : undefined}
         >
           <div className="flex items-center gap-2 min-w-0 truncate">
             {selectedOption?.icon && (
               <span className="shrink-0">{selectedOption.icon}</span>
             )}
             <span
+              id={valueId}
               className={`truncate font-medium ${
-                !selectedOption ? "text-slate-400" : ""
+                !selectedOption ? "text-slate-500" : ""
               }`}
             >
               {selectedOption ? selectedOption.label : placeholder}
@@ -186,6 +277,8 @@ export function CustomSelect<T extends string | number = string>({
       {isOpen && (
         <div
           role="listbox"
+          id={listboxId}
+          aria-label={label ?? ariaLabel}
           className={`absolute left-0 mt-1.5 w-full min-w-[200px] z-50 bg-white rounded-xl border border-slate-200 shadow-xl py-1 overflow-hidden animate-in fade-in-50 zoom-in-95 duration-100 ${dropdownClassName}`}
         >
           {searchable && (
@@ -198,6 +291,9 @@ export function CustomSelect<T extends string | number = string>({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search options..."
+                  aria-label="Search options"
+                  aria-controls={listboxId}
+                  aria-activedescendant={activeIndex >= 0 ? optionId(activeIndex) : undefined}
                   className="w-full pl-8 pr-2.5 py-1.5 text-xs bg-slate-50 rounded-lg border border-slate-200 focus:outline-none focus:border-brand-primary focus:bg-white"
                 />
               </div>
@@ -210,25 +306,25 @@ export function CustomSelect<T extends string | number = string>({
                 No matching options found
               </div>
             ) : (
-              filteredOptions.map((opt) => {
+              filteredOptions.map((opt, index) => {
                 const isSelected = opt.value === value;
+                const isActive = index === activeIndex;
                 return (
                   <div
                     key={String(opt.value)}
+                    id={optionId(index)}
                     role="option"
                     aria-selected={isSelected}
-                    onClick={() => {
-                      if (opt.disabled) return;
-                      onChange(opt.value);
-                      setIsOpen(false);
-                    }}
+                    aria-disabled={opt.disabled || undefined}
+                    onClick={() => choose(opt)}
+                    onMouseEnter={() => !opt.disabled && setActiveIndex(index)}
                     className={`px-3.5 py-2 text-xs flex items-center justify-between gap-2.5 transition cursor-pointer select-none ${
                       opt.disabled
                         ? "opacity-40 cursor-not-allowed bg-slate-50"
                         : isSelected
                         ? "bg-brand-primary/5 text-brand-primary font-semibold"
                         : "text-slate-700 hover:bg-slate-50 hover:text-slate-900"
-                    }`}
+                    } ${isActive && !opt.disabled ? "outline outline-2 -outline-offset-2 outline-brand-primary/60" : ""}`}
                   >
                     {renderOption ? (
                       renderOption(opt, isSelected)

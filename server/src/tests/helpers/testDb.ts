@@ -36,7 +36,6 @@ process.env.S3_ENDPOINT = '';
 // Route tests must never call the speech provider or push service; uploads go to a throwaway folder.
 process.env.WHISPER_API_KEY = '';
 process.env.PUSH_PROVIDER = 'none';
-process.env.AI_CHECK_SWEEP_INTERVAL_SECONDS = '0';
 process.env.LOCAL_STORAGE_DIR = path.join(os.tmpdir(), `insite-test-storage-${process.pid}`);
 
 const SERVER_DIR = path.resolve(__dirname, '../../..');

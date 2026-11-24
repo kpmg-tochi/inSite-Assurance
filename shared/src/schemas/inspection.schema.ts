@@ -1,145 +1,17 @@
 import { z } from 'zod';
-import { FieldPersonaTypeEnum, GeofenceStatusEnum } from '../enums';
-import { CALENDAR_DATE_REGEX } from '../utils/time';
-import { ProjectCadenceSettingsDtoSchema } from './cadence.schema';
-import { ApprovalProgressDtoSchema } from './process.schema';
-import { SubmissionGeotagInputSchema, SubmissionGeotagSchema, WorkdayReportCaptureSummarySchema } from './workday.schema';
+import { CaptureSummarySchema } from './evidence.schema';
 
 /**
- * Phase 14: reporting streams, site inspection checklists and reports, inspection findings and
- * supervision workload.
+ * Findings and supervision workload. Phase 14's checklist templates, site inspection reports and the
+ * mobile inspection pack were deleted in redesign R5f: findings come from visit submissions (R4) and
+ * R7 renames them.
  */
 
 const Uuid = z.string().uuid();
-const CalendarDate = z.string().regex(CALENDAR_DATE_REGEX, 'Use YYYY-MM-DD');
-/** Stable keys for streams, sections and checklist items: lower-case letters, digits, "_" and "-". */
-export const CHECKLIST_KEY_REGEX = /^[a-z0-9][a-z0-9_-]{0,47}$/;
-const Key = z.string().trim().regex(CHECKLIST_KEY_REGEX, 'Use 1 to 48 lower-case letters, digits, "-" or "_"');
 
 // ---------------------------------------------------------------------------
-// Visit types
+// Project type config: supervision (Phase 14 key, kept)
 // ---------------------------------------------------------------------------
-
-export const InspectionVisitTypeEnum = z.enum(['BASELINE', 'ROUTINE', 'MOBILISATION_CHECK', 'FINAL_EVALUATION']);
-export type InspectionVisitType = z.infer<typeof InspectionVisitTypeEnum>;
-
-export const INSPECTION_VISIT_TYPE_LABELS: Record<InspectionVisitType, string> = {
-  BASELINE: 'Baseline survey',
-  ROUTINE: 'Routine monitoring visit',
-  MOBILISATION_CHECK: 'Mobilisation check',
-  FINAL_EVALUATION: 'Final evaluation',
-};
-
-// ---------------------------------------------------------------------------
-// Checklist templates
-// ---------------------------------------------------------------------------
-
-export const ChecklistResponseTypeEnum = z.enum(['RATING_1_5', 'PASS_FAIL_NA', 'YES_NO', 'NUMBER', 'TEXT', 'PHOTO_ONLY']);
-export type ChecklistResponseType = z.infer<typeof ChecklistResponseTypeEnum>;
-
-export const CHECKLIST_RESPONSE_TYPE_LABELS: Record<ChecklistResponseType, string> = {
-  RATING_1_5: 'Rating 1 to 5',
-  PASS_FAIL_NA: 'Pass / fail / not applicable',
-  YES_NO: 'Yes / no',
-  NUMBER: 'Number',
-  TEXT: 'Text',
-  PHOTO_ONLY: 'Photo only',
-};
-
-/** A rating at or below this counts as failed (raises a finding, needs a comment). */
-export const CHECKLIST_RATING_FAIL_AT_OR_BELOW = 2;
-
-export const ChecklistItemSchema = z.object({
-  key: Key,
-  label: z.string().trim().min(2, 'Enter the question').max(300),
-  guidance: z.string().trim().max(1000).nullable().optional(),
-  responseType: ChecklistResponseTypeEnum,
-  /** NUMBER only: unit shown next to the value. */
-  unit: z.string().trim().max(30).nullable().optional(),
-  required: z.boolean().default(true),
-  photoRequired: z.boolean().default(false),
-  /** A photo is needed when the answer is a fail (rating <= 2, FAIL or NO). */
-  photoRequiredOnFail: z.boolean().default(false),
-});
-export type ChecklistItem = z.infer<typeof ChecklistItemSchema>;
-export type ChecklistItemInput = z.input<typeof ChecklistItemSchema>;
-
-export const ChecklistSectionSchema = z.object({
-  key: Key,
-  title: z.string().trim().min(2, 'Enter the section title').max(160),
-  items: z.array(ChecklistItemSchema).min(1, 'A section needs at least one item').max(60),
-});
-export type ChecklistSection = z.infer<typeof ChecklistSectionSchema>;
-
-/** A template's sections. Section keys and item keys are unique across the whole template. */
-export const ChecklistSectionsSchema = z
-  .array(ChecklistSectionSchema)
-  .min(1, 'Add at least one section')
-  .max(30)
-  .superRefine((sections, ctx) => {
-    const sectionKeys = new Set<string>();
-    const itemKeys = new Set<string>();
-    sections.forEach((s, si) => {
-      if (sectionKeys.has(s.key)) ctx.addIssue({ code: 'custom', message: `Section key "${s.key}" is used twice`, path: [si, 'key'] });
-      sectionKeys.add(s.key);
-      s.items.forEach((item, ii) => {
-        if (itemKeys.has(item.key)) {
-          ctx.addIssue({ code: 'custom', message: `Item key "${item.key}" is used twice`, path: [si, 'items', ii, 'key'] });
-        }
-        itemKeys.add(item.key);
-      });
-    });
-  });
-export type ChecklistSections = z.infer<typeof ChecklistSectionsSchema>;
-export type ChecklistSectionsInput = z.input<typeof ChecklistSectionsSchema>;
-
-export const TEMPLATE_CODE_REGEX = /^[A-Z][A-Z0-9_]{1,39}$/;
-
-export const SaveChecklistTemplateRequestSchema = z.object({
-  code: z.string().trim().toUpperCase().regex(TEMPLATE_CODE_REGEX, 'Code: 2 to 40 capital letters, digits or underscores'),
-  name: z.string().trim().min(3).max(160),
-  visitTypes: z.array(InspectionVisitTypeEnum).min(1, 'Pick at least one visit type').max(4),
-  sections: ChecklistSectionsSchema,
-});
-export type SaveChecklistTemplateRequest = z.infer<typeof SaveChecklistTemplateRequestSchema>;
-export type SaveChecklistTemplateRequestInput = z.input<typeof SaveChecklistTemplateRequestSchema>;
-
-export const InspectionChecklistTemplateDtoSchema = z.object({
-  id: Uuid,
-  code: z.string(),
-  name: z.string(),
-  visitTypes: z.array(InspectionVisitTypeEnum),
-  version: z.number().int(),
-  sections: ChecklistSectionsSchema,
-  isArchived: z.boolean(),
-  /** Inspections that used this version (a used version is never edited: saving makes a new one). */
-  usageCount: z.number().int(),
-  isLatest: z.boolean(),
-  createdAt: z.string(),
-});
-export type InspectionChecklistTemplateDto = z.infer<typeof InspectionChecklistTemplateDtoSchema>;
-
-// ---------------------------------------------------------------------------
-// Reporting streams
-// ---------------------------------------------------------------------------
-
-export const ReportingStreamKindEnum = z.enum(['ITEM_REPORTS', 'INSPECTION']);
-export type ReportingStreamKind = z.infer<typeof ReportingStreamKindEnum>;
-
-export const REPORTING_STREAM_KIND_LABELS: Record<ReportingStreamKind, string> = {
-  ITEM_REPORTS: 'Item reports (per BOQ item per period)',
-  INSPECTION: 'Site inspection (one per period)',
-};
-
-// ---------------------------------------------------------------------------
-// Project type config (Phase 14 keys)
-// ---------------------------------------------------------------------------
-
-export const ProjectTypeInspectionsConfigSchema = z.object({
-  /** Template code per visit type; the latest version of that template is used. */
-  templateCodeByVisitType: z.record(InspectionVisitTypeEnum, z.string().trim().min(1).max(40)).default({}),
-});
-export type ProjectTypeInspectionsConfig = z.infer<typeof ProjectTypeInspectionsConfigSchema>;
 
 export const ProjectTypeSupervisionConfigSchema = z.object({
   /** Roles whose holders count as supervisors (by role code). */
@@ -152,77 +24,20 @@ export const ProjectTypeSupervisionConfigSchema = z.object({
 export type ProjectTypeSupervisionConfig = z.infer<typeof ProjectTypeSupervisionConfigSchema>;
 
 // ---------------------------------------------------------------------------
-// Site inspection reports
+// Findings (raised from visit submissions)
 // ---------------------------------------------------------------------------
-
-export const InspectionOverallFindingEnum = z.enum(['SATISFACTORY', 'MINOR_ISSUES', 'MAJOR_ISSUES']);
-export type InspectionOverallFinding = z.infer<typeof InspectionOverallFindingEnum>;
-export const INSPECTION_OVERALL_FINDING_LABELS: Record<InspectionOverallFinding, string> = {
-  SATISFACTORY: 'Satisfactory',
-  MINOR_ISSUES: 'Minor issues',
-  MAJOR_ISSUES: 'Major issues',
-};
-
-export const SiteInspectionStatusEnum = z.enum(['SUBMITTED', 'PENDING_APPROVAL', 'APPROVED', 'RETURNED']);
-export type SiteInspectionStatus = z.infer<typeof SiteInspectionStatusEnum>;
-
-/** One answer. `value` type follows the item's response type (see validateInspectionAnswers). */
-export const InspectionAnswerSchema = z.object({
-  itemKey: z.string().min(1).max(48),
-  value: z.union([z.number(), z.string().max(4000), z.null()]),
-  comment: z.string().trim().max(2000).nullable().optional(),
-  /** Photos for this item: registered captures (clientCaptureId), sent before the inspection. */
-  clientCaptureIds: z.array(Uuid).max(20).default([]),
-});
-export type InspectionAnswer = z.infer<typeof InspectionAnswerSchema>;
-export type InspectionAnswerInput = z.input<typeof InspectionAnswerSchema>;
-
-export const SubmitSiteInspectionRequestSchema = z.object({
-  /** Client UUID; a retry with the same id returns the original inspection. */
-  clientReportId: Uuid,
-  visitType: InspectionVisitTypeEnum,
-  templateId: Uuid,
-  templateVersion: z.number().int().min(1),
-  visitDate: CalendarDate,
-  answers: z.array(InspectionAnswerSchema).max(1000),
-  overallFinding: InspectionOverallFindingEnum,
-  summaryText: z.string().trim().min(10, 'Write a short summary (at least 10 characters)').max(8000),
-  submissionGeotag: SubmissionGeotagInputSchema.nullable().optional(),
-  confirmedAt: z.string().datetime(),
-});
-export type SubmitSiteInspectionRequest = z.infer<typeof SubmitSiteInspectionRequestSchema>;
-export type SubmitSiteInspectionRequestInput = z.input<typeof SubmitSiteInspectionRequestSchema>;
-
-export const ReviewSiteInspectionRequestSchema = z
-  .object({
-    decision: z.enum(['APPROVE', 'RETURN']),
-    notes: z.string().trim().max(1500).nullable().optional(),
-  })
-  .refine((v) => v.decision !== 'RETURN' || (v.notes ?? '').length >= 5, {
-    message: 'Say what the inspector must change (at least 5 characters)',
-    path: ['notes'],
-  });
-export type ReviewSiteInspectionRequest = z.infer<typeof ReviewSiteInspectionRequestSchema>;
 
 export const InspectionFindingSeverityEnum = z.enum(['MINOR', 'MAJOR', 'CRITICAL']);
 export type InspectionFindingSeverity = z.infer<typeof InspectionFindingSeverityEnum>;
 export const InspectionFindingStatusEnum = z.enum(['OPEN', 'RESOLVED', 'DISMISSED']);
 export type InspectionFindingStatus = z.infer<typeof InspectionFindingStatusEnum>;
 
-/**
- * A finding (Phase 14, generalised in redesign R4d): raised from a Phase 14 inspection (legacy, until
- * R5) or from a visit submission. The same DTO serves /findings and the /inspection-findings alias.
- */
+/** A finding raised from a visit submission (redesign R4d). Served by /findings. */
 export const InspectionFindingDtoSchema = z.object({
   id: Uuid,
   projectId: Uuid,
-  source: z.enum(['INSPECTION', 'VISIT']),
-  /** Phase 14 inspection findings only. */
-  inspectionId: Uuid.nullable(),
-  inspectionVisitType: InspectionVisitTypeEnum.nullable(),
-  /** The inspection or visit date. */
+  /** The visit date. */
   inspectionVisitDate: z.string(),
-  /** Visit findings (R4). */
   visitId: Uuid.nullable(),
   visitSubmissionId: Uuid.nullable(),
   visitKind: z.string().nullable(),
@@ -231,11 +46,12 @@ export const InspectionFindingDtoSchema = z.object({
   facilityUnitId: Uuid.nullable(),
   unitLabel: z.string().nullable(),
   questionKey: z.string().nullable(),
-  /** The question as shown (visit findings) or the checklist item label. */
+  /** The question as shown. */
   title: z.string(),
   recheckCount: z.number().int(),
   lastRecheckedAt: z.string().nullable(),
   escalatedAt: z.string().nullable(),
+  /** The field key of the question. */
   checklistItemKey: z.string(),
   checklistItemLabel: z.string(),
   projectContractorId: Uuid.nullable(),
@@ -244,7 +60,7 @@ export const InspectionFindingDtoSchema = z.object({
   severity: InspectionFindingSeverityEnum,
   status: InspectionFindingStatusEnum,
   resolvedNotes: z.string().nullable(),
-  resolutionCaptures: z.array(WorkdayReportCaptureSummarySchema),
+  resolutionCaptures: z.array(CaptureSummarySchema),
   raisedByName: z.string().nullable(),
   resolvedByName: z.string().nullable(),
   createdAt: z.string(),
@@ -254,15 +70,6 @@ export const InspectionFindingDtoSchema = z.object({
   canDismiss: z.boolean(),
 });
 export type InspectionFindingDto = z.infer<typeof InspectionFindingDtoSchema>;
-
-export const RaiseInspectionFindingRequestSchema = z.object({
-  checklistItemKey: z.string().min(1).max(48),
-  /** The contractor the finding is aimed at; null for a monitoring-side finding. */
-  projectContractorId: Uuid.nullable().default(null),
-  description: z.string().trim().min(5, 'Describe the finding (at least 5 characters)').max(2000),
-  severity: InspectionFindingSeverityEnum.default('MAJOR'),
-});
-export type RaiseInspectionFindingRequest = z.infer<typeof RaiseInspectionFindingRequestSchema>;
 
 export const ResolveInspectionFindingRequestSchema = z
   .object({
@@ -280,84 +87,6 @@ export const DismissInspectionFindingRequestSchema = z.object({
 });
 export type DismissInspectionFindingRequest = z.infer<typeof DismissInspectionFindingRequestSchema>;
 
-export const InspectionAiFlagSchema = z.object({ itemKey: z.string(), message: z.string() });
-export type InspectionAiFlag = z.infer<typeof InspectionAiFlagSchema>;
-
-export const SiteInspectionSummaryDtoSchema = z.object({
-  id: Uuid,
-  clientReportId: Uuid,
-  projectId: Uuid,
-  streamId: Uuid.nullable(),
-  streamLabel: z.string().nullable(),
-  visitType: InspectionVisitTypeEnum,
-  templateId: Uuid,
-  templateCode: z.string(),
-  templateName: z.string(),
-  templateVersion: z.number().int(),
-  visitDate: z.string(),
-  reporterName: z.string(),
-  reporterRoleName: z.string(),
-  reporterPersonaType: FieldPersonaTypeEnum,
-  overallFinding: InspectionOverallFindingEnum,
-  status: SiteInspectionStatusEnum,
-  isLate: z.boolean(),
-  /** Last day the report could be uploaded without being late (visit date + deadline), if any. */
-  submissionDeadline: z.string().nullable(),
-  geofenceStatus: GeofenceStatusEnum.nullable(),
-  failedItemCount: z.number().int(),
-  openFindingCount: z.number().int(),
-  photoCount: z.number().int(),
-  createdAt: z.string(),
-});
-export type SiteInspectionSummaryDto = z.infer<typeof SiteInspectionSummaryDtoSchema>;
-
-export const SiteInspectionAnswerDtoSchema = z.object({
-  itemKey: z.string(),
-  value: z.union([z.number(), z.string(), z.null()]),
-  comment: z.string().nullable(),
-  failed: z.boolean(),
-  captures: z.array(WorkdayReportCaptureSummarySchema),
-});
-export type SiteInspectionAnswerDto = z.infer<typeof SiteInspectionAnswerDtoSchema>;
-
-export const SiteInspectionDtoSchema = SiteInspectionSummaryDtoSchema.extend({
-  summaryText: z.string(),
-  sections: ChecklistSectionsSchema,
-  answers: z.array(SiteInspectionAnswerDtoSchema),
-  submissionGeotag: SubmissionGeotagSchema.nullable(),
-  aiCheckStatus: z.string(),
-  aiCheckEngine: z.string().nullable(),
-  aiFlags: z.array(InspectionAiFlagSchema),
-  approval: ApprovalProgressDtoSchema.nullable(),
-  findings: z.array(InspectionFindingDtoSchema),
-  /** Reviewer return notes, latest first. */
-  returnedNotes: z.string().nullable(),
-});
-export type SiteInspectionDto = z.infer<typeof SiteInspectionDtoSchema>;
-
-export const MobileStreamSchema = z.object({
-  id: Uuid,
-  key: z.string(),
-  label: z.string(),
-  kind: ReportingStreamKindEnum,
-  visitType: InspectionVisitTypeEnum.nullable(),
-  submissionDeadlineDays: z.number().int().nullable(),
-  cadence: ProjectCadenceSettingsDtoSchema,
-});
-export type MobileStream = z.infer<typeof MobileStreamSchema>;
-
-/** Added to the baseline pack: the streams this person owes and the templates their visits use. */
-export const MobileInspectionPackSchema = z.object({
-  streams: z.array(MobileStreamSchema),
-  templates: z.array(
-    InspectionChecklistTemplateDtoSchema.pick({ id: true, code: true, name: true, visitTypes: true, version: true, sections: true })
-  ),
-  /** The template to use for each visit type this person can inspect. */
-  templateIdByVisitType: z.record(InspectionVisitTypeEnum, Uuid).default({}),
-  canSubmitInspections: z.boolean(),
-});
-export type MobileInspectionPack = z.infer<typeof MobileInspectionPackSchema>;
-
 // ---------------------------------------------------------------------------
 // Supervision workload
 // ---------------------------------------------------------------------------
@@ -372,7 +101,8 @@ export const SupervisorWorkloadDtoSchema = z.object({
       name: z.string(),
       codePrefix: z.string(),
       point: z.object({ latitude: z.number(), longitude: z.number() }).nullable(),
-      lastInspectionDate: z.string().nullable(),
+      /** The planned date of the supervisor's last submitted visit on the project (R5f: visits replaced inspections). */
+      lastVisitDate: z.string().nullable(),
     })
   ),
   activeProjectCount: z.number().int(),

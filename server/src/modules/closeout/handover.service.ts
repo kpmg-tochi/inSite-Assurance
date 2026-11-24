@@ -125,7 +125,7 @@ export async function recordHandoverResponse(
       category: 'HANDOVER_RECORDED',
       title: `${project.codePrefix}: handover response to review`,
       description: `${created.submitterName}: ${label}${snags.length ? `, ${snags.length} snag(s)` : ''}.`,
-      actionUrl: `/app/projects/${projectId}/handover`,
+      actionUrl: `/app/projects/${projectId}/completion?tab=handover`,
       metadata: { handoverSubmissionId: created.id },
     });
     return created.id;

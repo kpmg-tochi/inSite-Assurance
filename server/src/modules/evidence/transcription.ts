@@ -4,7 +4,7 @@ import { storageService } from '../../integrations/storage.service';
 
 /**
  * Redesign R4c (register section 3): a voice note is transcribed when its capture is registered,
- * off the request path, so visit answers and site log voice notes get a transcript without a workday
+ * off the request path, so visit answers and site log voice notes get a transcript without any other
  * report. Whisper is the only model the platform calls (decision Z). With no provider the capture
  * stays PENDING; a simulated demo transcript is never stored.
  */

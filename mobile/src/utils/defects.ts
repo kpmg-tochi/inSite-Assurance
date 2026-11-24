@@ -13,6 +13,19 @@ export function showDefectsEntry(phase: string | null | undefined, permissions: 
   return Boolean(phase && (DEFECT_PHASES as readonly string[]).includes(phase) && permissions?.includes('retention:manage_defects'));
 }
 
+/**
+ * Redesign R5b (D-R5.15): the project screen offers Defects when the project is past construction
+ * or already has open defects, and the role holds retention:manage_defects.
+ */
+export function showDefectsShortcut(
+  phase: string | null | undefined,
+  openDefectCount: number | null | undefined,
+  permissions: string[] | null | undefined
+): boolean {
+  if (!permissions?.includes('retention:manage_defects')) return false;
+  return showDefectsEntry(phase, permissions) || (openDefectCount ?? 0) > 0;
+}
+
 /** Server codes that mean the action was already applied (a retry after a lost response). */
 export const DEFECT_ALREADY_APPLIED_CODES = ['DEFECT_TICKET_NOT_OPEN', 'DEFECT_TICKET_NOT_RECTIFIED'];
 

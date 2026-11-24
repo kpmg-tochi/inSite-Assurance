@@ -13,7 +13,7 @@ import Toast from "react-native-toast-message";
 import { StatusBar } from "expo-status-bar";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, type RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { InSiteCamera, type CameraCaptureResult } from "../components/camera";
 import { useActiveBranding, useProfile } from "../context/ProfileContext";
@@ -22,11 +22,15 @@ import { useSubmitIncidentMutation } from "../queries/incidents/useIncidentMutat
 import type { RootStackParamList } from "../navigation/types";
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { defaultColors } from "../styles/commonStyles";
+import { personaCopy } from "../utils/personaCopy";
 
 export const SpecialIncidentModal: React.FC = () => {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { activeProjectId: projectId } = useProfile();
+  const route = useRoute<RouteProp<RootStackParamList, "IncidentModal">>();
+  const { activeProjectId } = useProfile();
+  // Redesign R5b (D-R5.16): opened from the project screen with its id; the last opened project otherwise.
+  const projectId = route.params?.projectId || activeProjectId;
   // Phase 11: tenant wording for the funding party.
   const terms = useActiveBranding().terminology;
   const onClose = () => navigation.goBack();
@@ -125,7 +129,7 @@ export const SpecialIncidentModal: React.FC = () => {
           <View style={{ flex: 1, marginLeft: 10 }}>
             <Text style={styles.title}>Special Incident &amp; Escalation</Text>
             <Text style={styles.subtitle}>
-              Direct Alert to Monitor &amp; Lender
+              {personaCopy(null, terms).incidentSubtitle}
             </Text>
           </View>
           <TouchableOpacity

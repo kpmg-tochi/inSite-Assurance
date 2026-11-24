@@ -11,6 +11,7 @@ import { usePortfolioOverviewQuery } from "../../queries/projects/useProjectsQue
 import { DeliveryModelFilters, ProjectTypeChip } from "../../components/projects/DeliveryModelFilters";
 import { KpiCard } from "../../components/common";
 import { ScheduleBadge } from "../../components/schedule/ScheduleVarianceBadge";
+import { ProjectStageChip } from "../../components/overview/ProjectStageChip";
 import Loader from "../../components/Loader";
 import { formatCompactNaira, formatDateTimeShort } from "../../lib/formatters";
 import { useTerm } from "../../lib/auth-context";
@@ -218,6 +219,7 @@ export function PortfolioOverviewPage({ onOpenProject }: { onOpenProject: (proje
                           <span className="block text-[11px] text-slate-500 truncate">
                             {p.region?.path ?? p.stateLocation} · {p.certifiedProgressPct}% done
                           </span>
+                          {p.stage && <ProjectStageChip stage={p.stage} className="mt-1" />}
                         </span>
                       </button>
                     </li>
@@ -251,6 +253,10 @@ function ProjectDetail({ project: p, onOpen, onBack }: { project: PortfolioOverv
         </p>
       </div>
       <dl className="grid grid-cols-2 gap-2 text-xs">
+        <div className="col-span-2">
+          <dt className="text-slate-500">Stage</dt>
+          <dd>{p.stage ? <ProjectStageChip stage={p.stage} /> : <span className="text-slate-400">Not started</span>}</dd>
+        </div>
         <div>
           <dt className="text-slate-500">Budget</dt>
           <dd className="font-semibold text-slate-900">{formatCompactNaira(p.totalBudgetNgn)}</dd>
@@ -287,7 +293,7 @@ function ProjectDetail({ project: p, onOpen, onBack }: { project: PortfolioOverv
         onClick={onOpen}
         className="w-full rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white hover:bg-brand-hover"
       >
-        Open project dashboard
+        Open project overview
       </button>
     </div>
   );

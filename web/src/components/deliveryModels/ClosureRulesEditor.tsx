@@ -137,7 +137,7 @@ export function ClosureRulesEditor({ value, onChange }: { value: ClosureRules; o
         <div className="space-y-2">
           <label className="flex items-start gap-2 text-xs text-slate-700">
             <input type="checkbox" className="mt-0.5" checked={Boolean(value.requireFinalEvaluationBeforeCoc)} onChange={(e) => set({ requireFinalEvaluationBeforeCoc: e.target.checked })} />
-            <span className="font-medium">An approved final evaluation inspection is needed before drafting</span>
+            <span className="font-medium">An accepted final evaluation visit is needed before drafting</span>
           </label>
           <label className="flex items-start gap-2 text-xs text-slate-700">
             <input type="checkbox" className="mt-0.5" checked={Boolean(value.shareRatingsWithContractor)} onChange={(e) => set({ shareRatingsWithContractor: e.target.checked })} />

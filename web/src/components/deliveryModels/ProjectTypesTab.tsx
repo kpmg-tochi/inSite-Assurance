@@ -1,8 +1,13 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Archive, Pencil, Plus, Star } from "lucide-react";
 import {
+  PROJECT_TYPE_CONFIG_GROUP_DEFS,
+  PROJECT_TYPE_CONFIG_GROUP_IDS,
   ProjectTypeFunderDefaultEnum,
+  projectTypeEditorSectionForPath,
   SaveProjectTypeRequestSchema,
+  type ProjectTypeConfigGroupId,
+  type ProjectTypeEditorSectionId,
   type ProjectTypeConfigInput,
   type ProjectTypeMonitoringConfigInput,
   type ProjectTypeDto,
@@ -12,6 +17,8 @@ import {
 } from "@insite/shared";
 import { StandardTable, TableActionButton, TableBadge, type TableColumnDef } from "../table";
 import { CustomSelect } from "../common";
+import { Tabs, tabId, tabPanelId } from "../common/Tabs";
+import { useGuardedAction, useLeaveGuard } from "../../lib/navigationGuard";
 import { useProjectTypesQuery } from "../../queries/deliveryModels/useDeliveryModelQueries";
 import { useWorkflowTemplatesQuery } from "../../queries/process/useProcessQueries";
 import { useOrganizationsQuery } from "../../queries/organizations/useOrganizationQueries";
@@ -25,10 +32,10 @@ import { MonitoringRulesEditor, type MonitoringRules } from "./MonitoringRulesEd
 import { MonitoringPlanEditor } from "./MonitoringPlanEditor";
 import { DocumentRulesEditor, type DocumentRules } from "./DocumentRulesEditor";
 
-
 const inputCls =
   "w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-primary";
 const sectionCls = "rounded-2xl border border-slate-200 bg-white p-4 space-y-3";
+const TAB_PREFIX = "project-type-rules";
 
 interface Draft {
   id: string | null;
@@ -57,7 +64,7 @@ interface Draft {
   closure: ClosureRules;
   /** Phase 16: KPI targets and which KPIs are shown. */
   kpiTargets: ProjectTypeKpiTargets;
-  /** Phase 14 (editable since Phase 16): streams, inspection templates, supervision. */
+  /** Visit form templates (redesign R3) and supervision (Phase 14). */
   monitoring: MonitoringRules;
   /** Phase 13 (editable since Phase 16): required documents and default cases. */
   documents: DocumentRules;
@@ -80,7 +87,9 @@ function paymentsFrom(config: unknown) {
 
 function draftFrom(t: ProjectTypeDto | null): Draft {
   const c = t?.config;
-  const { ownership, parties, contractMilestones, kickoff, closure, kpiTargets, inspections, supervision, visitForms, documentRequirements, defaultCases, monitoring, ...rest } = (c ?? {}) as ProjectTypeDto["config"];
+  const { ownership, parties, contractMilestones, kickoff, closure, kpiTargets, supervision, visitForms, documentRequirements, defaultCases, monitoring, ...rest } = (c ?? {}) as ProjectTypeDto["config"];
+  // Redesign R5f: the legacy Phase 14 key `inspections` is gone; a stored value is not sent back.
+  delete (rest as Record<string, unknown>).inspections;
   return {
     id: t?.id ?? null,
     code: t?.code ?? "",
@@ -110,7 +119,6 @@ function draftFrom(t: ProjectTypeDto | null): Draft {
     closure: closure ? { ...closure } : {},
     kpiTargets: { ...(kpiTargets ?? {}) },
     monitoring: {
-      inspections: { templateCodeByVisitType: { ...(inspections?.templateCodeByVisitType ?? {}) } },
       supervision: { ...(supervision ?? {}), supervisorRoleCodes: [...(supervision?.supervisorRoleCodes ?? [])] },
       visitForms: { templateCodeByVisitKind: { ...(visitForms?.templateCodeByVisitKind ?? {}) } },
     },
@@ -163,7 +171,6 @@ function payloadFrom(d: Draft): SaveProjectTypeRequestInput {
     // Phase 16
     kpiTargets: compactKpiTargets(d.kpiTargets),
     // Phases 13 and 14 (editors since Phase 16)
-    inspections: d.monitoring.inspections,
     supervision: d.monitoring.supervision,
     // Redesign R3
     visitForms: d.monitoring.visitForms,
@@ -196,24 +203,367 @@ function Toggle({ label, checked, onChange, hint }: { label: string; checked: bo
   );
 }
 
+const SECTION_LABELS: Record<ProjectTypeEditorSectionId, string> = {
+  general: "General",
+  ...(Object.fromEntries(PROJECT_TYPE_CONFIG_GROUP_DEFS.map((g) => [g.id, g.label])) as Record<ProjectTypeConfigGroupId, string>),
+};
+
+interface EditorIssue {
+  section: ProjectTypeEditorSectionId;
+  message: string;
+}
+
+/** Validation issues of the save payload, each placed in the general block or a tab. */
+function issuesFor(payload: SaveProjectTypeRequestInput): EditorIssue[] {
+  const parsed = SaveProjectTypeRequestSchema.safeParse(payload);
+  if (parsed.success) return [];
+  return parsed.error.issues.map((i) => {
+    const section = projectTypeEditorSectionForPath(i.path);
+    const [root, key, index, field] = i.path;
+    if (root === "config" && key === "contractMilestones" && typeof index === "number") {
+      return { section, message: `Milestone ${index + 1}${field ? ` (${String(field)})` : ""}: ${i.message}` };
+    }
+    if (root === "workflowTemplateId") return { section, message: "Choose a workflow template." };
+    const where = (root === "config" ? i.path.slice(1) : i.path).map(String).join(".");
+    return { section, message: where ? `${where}: ${i.message}` : i.message };
+  });
+}
+
+function IssueList({ issues }: { issues: EditorIssue[] }) {
+  if (issues.length === 0) return null;
+  return (
+    <ul role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 pl-6 text-xs text-rose-700 list-disc">
+      {issues.map((e, i) => (
+        <li key={`${i}-${e.message}`}>{e.message}</li>
+      ))}
+    </ul>
+  );
+}
+
 /**
- * Phase 11: delivery models. A type references a workflow template and holds ownership, party and
- * reporting defaults. Saving writes a new version; projects keep the version they were created with.
- * Later phases add sections to this editor.
+ * Redesign R6e (D-R6.24): the editor. General fields above five tabs (Kick-off & mobilisation,
+ * Monitoring, Completion & closure, KPI targets, Advanced); every config key belongs to one tab
+ * (`PROJECT_TYPE_CONFIG_GROUP_DEFS`). Validation errors are listed in their tab, with a count on
+ * the tab. While there are unsaved changes, leaving the page (or the editor) asks first.
+ */
+function ProjectTypeEditor({
+  initial,
+  templateOptions,
+  orgs,
+  onClose,
+}: {
+  initial: Draft;
+  templateOptions: Array<{ value: string; label: string; description?: string }>;
+  orgs: Array<{ id: string; name: string }>;
+  onClose: () => void;
+}) {
+  const term = useTerm();
+  const save = useSaveProjectTypeMutation();
+  const requestLeave = useGuardedAction();
+  const [draft, setDraft] = useState<Draft>(initial);
+  const [issues, setIssues] = useState<EditorIssue[]>([]);
+  const [tab, setTab] = useState<ProjectTypeConfigGroupId>("kickoff");
+
+  const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
+  const initialJson = useMemo(() => JSON.stringify(payloadFrom(initial)), [initial]);
+  const dirty = JSON.stringify(payloadFrom(draft)) !== initialJson;
+  const orgOptions = useMemo(() => orgs.map((o) => ({ value: o.id, label: o.name })), [orgs]);
+  const allowedSet = new Set(draft.allowedOwnerIds ?? []);
+
+  const countBySection = useMemo(() => {
+    const m = new Map<ProjectTypeEditorSectionId, number>();
+    for (const i of issues) m.set(i.section, (m.get(i.section) ?? 0) + 1);
+    return m;
+  }, [issues]);
+
+  /** Validates and saves; resolves false when it could not (errors shown, first tab with errors opened). */
+  const saveDraft = useCallback(async (): Promise<boolean> => {
+    const payload = payloadFrom(draft);
+    const found = issuesFor(payload);
+    setIssues(found);
+    if (found.length > 0) {
+      const firstTab = found.find((i) => i.section !== "general")?.section;
+      if (firstTab && !found.some((i) => i.section === "general")) setTab(firstTab as ProjectTypeConfigGroupId);
+      return false;
+    }
+    try {
+      await save.mutateAsync({ projectTypeId: draft.id, payload });
+      onClose();
+      return true;
+    } catch {
+      return false; // Toast from the mutation hook.
+    }
+  }, [draft, save, onClose]);
+
+  const guard = useMemo(
+    () => (dirty ? { label: `${draft.name.trim() || "New project type"}`, save: saveDraft } : null),
+    [dirty, draft.name, saveDraft]
+  );
+  useLeaveGuard(guard);
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+
+  const close = () => requestLeave(onClose);
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void saveDraft();
+  };
+
+  const tabs = PROJECT_TYPE_CONFIG_GROUP_DEFS.map((g) => {
+    const n = countBySection.get(g.id) ?? 0;
+    return {
+      id: g.id,
+      label: (
+        <>
+          {g.label}
+          {n > 0 && (
+            <span className="ml-1.5 inline-flex min-w-[1.25rem] justify-center rounded-full bg-rose-100 px-1.5 text-[11px] font-bold text-rose-700">
+              {n}
+              <span className="sr-only"> {n === 1 ? "error" : "errors"}</span>
+            </span>
+          )}
+        </>
+      ),
+    };
+  });
+  const inTab = (id: ProjectTypeEditorSectionId) => issues.filter((i) => i.section === id);
+  const panel = (id: ProjectTypeConfigGroupId, children: React.ReactNode) => (
+    <div
+      key={id}
+      role="tabpanel"
+      id={tabPanelId(TAB_PREFIX, id)}
+      aria-labelledby={tabId(TAB_PREFIX, id)}
+      hidden={tab !== id}
+      tabIndex={0}
+      className="space-y-4 focus:outline-none"
+    >
+      <p className="text-xs text-slate-500">{PROJECT_TYPE_CONFIG_GROUP_DEFS.find((g) => g.id === id)?.description}</p>
+      <IssueList issues={inTab(id)} />
+      {children}
+    </div>
+  );
+
+  return (
+    <form onSubmit={submit} className="space-y-4" noValidate>
+      <button type="button" onClick={close} className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900">
+        <ArrowLeft className="w-4 h-4" /> All project types
+      </button>
+
+      <section className={sectionCls} aria-labelledby="pt-general">
+        <div className="flex items-center justify-between gap-2">
+          <h3 id="pt-general" className="text-sm font-bold text-slate-900">
+            General
+          </h3>
+          {dirty && <span className="text-[11px] font-semibold text-amber-700">Unsaved changes</span>}
+        </div>
+        <IssueList issues={inTab("general")} />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label className="text-xs font-medium text-slate-700">
+            Name
+            <input required className={inputCls} value={draft.name} maxLength={120} onChange={(e) => set({ name: e.target.value })} />
+          </label>
+          <label className="text-xs font-medium text-slate-700">
+            Code
+            <input required className={inputCls} value={draft.code} maxLength={32} placeholder="e.g. CENTRAL" onChange={(e) => set({ code: e.target.value.toUpperCase() })} />
+          </label>
+          <label className="text-xs font-medium text-slate-700">
+            Colour
+            <input type="color" className="mt-0.5 h-9 w-full rounded-xl border border-slate-300" value={draft.colour} onChange={(e) => set({ colour: e.target.value })} />
+          </label>
+        </div>
+        <label className="block text-xs font-medium text-slate-700">
+          Description
+          <textarea rows={2} className={inputCls} value={draft.description} maxLength={1000} onChange={(e) => set({ description: e.target.value })} />
+        </label>
+        <div className="flex flex-wrap gap-6">
+          <Toggle label="Default for new projects" checked={draft.isDefault} onChange={(v) => set({ isDefault: v })} />
+          <Toggle label="Active" checked={draft.isActive} onChange={(v) => set({ isActive: v })} hint="Archived types cannot be chosen for new projects." />
+        </div>
+      </section>
+
+      <Tabs tabs={tabs} active={tab} onChange={setTab} label="Project type rules" idPrefix={TAB_PREFIX} />
+
+      {panel(
+        "kickoff",
+        <>
+          <ContractRulesEditor value={draft.contract} onChange={(contract) => set({ contract })} />
+          <DocumentRulesEditor value={draft.documents} onChange={(documents) => set({ documents })} />
+        </>
+      )}
+
+      {panel(
+        "monitoring",
+        <>
+          <MonitoringPlanEditor value={draft.visitPlan} onChange={(visitPlan) => set({ visitPlan })} />
+          <MonitoringRulesEditor value={draft.monitoring} onChange={(monitoring) => set({ monitoring })} />
+        </>
+      )}
+
+      {panel(
+        "completion",
+        <>
+          <ClosureRulesEditor value={draft.closure} onChange={(closure) => set({ closure })} />
+          <section className={sectionCls}>
+            <h3 className="text-sm font-bold text-slate-900">{term("retention")} defaults</h3>
+            <p className="text-[11px] text-slate-500">
+              Pre-fills the {term("retention", { lower: true })} settings of a new project of this type. Payments are made outside the platform and
+              recorded on each project's Payments page; {term("retention", { lower: true })} is held from each recorded payment at this rate.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-xs font-medium text-slate-700">{term("retention")} (%)</span>
+                <input inputMode="decimal" className={inputCls} placeholder="None" value={draft.retentionPct} onChange={(e) => set({ retentionPct: e.target.value })} />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-slate-700">Defects liability period (months)</span>
+                <input inputMode="numeric" className={inputCls} placeholder="None" value={draft.retentionMonths} onChange={(e) => set({ retentionMonths: e.target.value })} />
+              </label>
+            </div>
+          </section>
+        </>
+      )}
+
+      {panel("kpis", <KpiTargetsEditor value={draft.kpiTargets} onChange={(kpiTargets) => set({ kpiTargets })} />)}
+
+      {panel(
+        "advanced",
+        <>
+          <section className={sectionCls}>
+            <h3 className="text-sm font-bold text-slate-900">Workflow template</h3>
+            <p className="text-xs text-slate-500">Process switches and approval chains come from this template when the type is applied to a draft.</p>
+            <CustomSelect label="Template" value={draft.workflowTemplateId} onChange={(v) => set({ workflowTemplateId: v })} options={templateOptions} placeholder="Choose a template" />
+          </section>
+
+          <section className={sectionCls}>
+            <h3 className="text-sm font-bold text-slate-900">Ownership</h3>
+            <Toggle label="An owning organisation is required" checked={draft.ownerRequired} onChange={(v) => set({ ownerRequired: v })} />
+            <div>
+              <p className="text-xs font-medium text-slate-700 mb-1">Allowed owners</p>
+              <Toggle label="Any organisation" checked={draft.allowedOwnerIds === null} onChange={(v) => set({ allowedOwnerIds: v ? null : [] })} />
+              {draft.allowedOwnerIds !== null && (
+                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-1 max-h-48 overflow-y-auto rounded-xl border border-slate-200 p-2">
+                  {orgs.map((o) => (
+                    <label key={o.id} className="flex items-center gap-2 text-xs text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={allowedSet.has(o.id)}
+                        onChange={(e) =>
+                          set({
+                            allowedOwnerIds: e.target.checked
+                              ? [...(draft.allowedOwnerIds ?? []), o.id]
+                              : (draft.allowedOwnerIds ?? []).filter((id) => id !== o.id),
+                          })
+                        }
+                      />
+                      {o.name}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <CustomSelect
+              label="Default owner"
+              value={draft.defaultOwnerId}
+              onChange={(v) => set({ defaultOwnerId: v })}
+              options={[{ value: "", label: "No default" }, ...orgOptions.filter((o) => draft.allowedOwnerIds === null || allowedSet.has(o.value))]}
+              searchable
+            />
+          </section>
+
+          <section className={sectionCls}>
+            <h3 className="text-sm font-bold text-slate-900">Parties</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <Toggle label={`${term("monitorParty")} required`} checked={draft.monitorRequired} onChange={(v) => set({ monitorRequired: v })} />
+              <Toggle label={`${term("funderParty")} required`} checked={draft.funderRequired} onChange={(v) => set({ funderRequired: v })} />
+              <Toggle label={`At least one ${term("beneficiary", { lower: true })} required`} checked={draft.beneficiaryRequired} onChange={(v) => set({ beneficiaryRequired: v })} />
+              <Toggle label="Region required" checked={draft.regionRequired} onChange={(v) => set({ regionRequired: v })} />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <CustomSelect
+                label={`When the ${term("funderParty", { lower: true })} is left empty`}
+                value={draft.funderDefault}
+                onChange={(v) => set({ funderDefault: v as ProjectTypeFunderDefault })}
+                options={ProjectTypeFunderDefaultEnum.options.map((o) => ({
+                  value: o,
+                  label: o === "NONE" ? "Leave it empty" : o === "OWNER" ? "Use the owning organisation" : "Use a fixed organisation",
+                }))}
+              />
+              {draft.funderDefault === "FIXED" && (
+                <CustomSelect
+                  label={`Default ${term("funderParty", { lower: true })}`}
+                  value={draft.defaultFunderId}
+                  onChange={(v) => set({ defaultFunderId: v })}
+                  options={orgOptions}
+                  searchable
+                  placeholder="Choose"
+                />
+              )}
+            </div>
+          </section>
+        </>
+      )}
+
+      {issues.length > 0 && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">
+          <p className="font-semibold">
+            {issues.length} {issues.length === 1 ? "problem" : "problems"} to fix before saving:
+          </p>
+          <ul className="mt-1 flex flex-wrap gap-2">
+            {(["general", ...PROJECT_TYPE_CONFIG_GROUP_IDS] as ProjectTypeEditorSectionId[])
+              .filter((id) => countBySection.has(id))
+              .map((id) => (
+                <li key={id}>
+                  {id === "general" ? (
+                    <span>
+                      {SECTION_LABELS[id]} ({countBySection.get(id)})
+                    </span>
+                  ) : (
+                    <button type="button" className="font-semibold underline hover:text-rose-900" onClick={() => setTab(id)}>
+                      {SECTION_LABELS[id]} ({countBySection.get(id)})
+                    </button>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={close} className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700">
+          Cancel
+        </button>
+        <button type="submit" disabled={save.isPending} className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
+          {save.isPending ? "Saving..." : draft.id ? "Save new version" : "Create project type"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * Phase 11: delivery models. A type references a workflow template and holds ownership, party,
+ * contract, monitoring, closure and KPI rules. Saving writes a new version; projects keep the
+ * version they were created with.
  */
 export function ProjectTypesTab() {
-  const term = useTerm();
   const { data: types = [], isLoading } = useProjectTypesQuery(true);
   const { data: templates = [] } = useWorkflowTemplatesQuery();
   const { data: orgs = [] } = useOrganizationsQuery({});
-  const save = useSaveProjectTypeMutation();
   const archive = useArchiveProjectTypeMutation();
   const { ask: confirm, dialog } = useConfirmDialog();
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [errors, setErrors] = useState<string[]>([]);
+  const closeEditor = useCallback(() => setDraft(null), []);
 
-  const orgOptions = useMemo(() => orgs.map((o) => ({ value: o.id, label: o.name })), [orgs]);
-  const templateOptions = templates.map((t) => ({ value: t.id, label: t.name, description: t.description ?? undefined }));
+  const templateOptions = useMemo(
+    () => templates.map((t) => ({ value: t.id, label: t.name, description: t.description ?? undefined })),
+    [templates]
+  );
 
   const columns: TableColumnDef<ProjectTypeDto>[] = [
     {
@@ -241,7 +591,7 @@ export function ProjectTypesTab() {
       header: "",
       cell: (t) => (
         <div className="flex justify-end gap-1">
-          <TableActionButton onClick={() => { setErrors([]); setDraft(draftFrom(t)); }} icon={<Pencil className="w-3.5 h-3.5" />}>
+          <TableActionButton onClick={() => setDraft(draftFrom(t))} icon={<Pencil className="w-3.5 h-3.5" />}>
             Edit
           </TableActionButton>
           {t.isActive && (
@@ -265,197 +615,7 @@ export function ProjectTypesTab() {
   ];
 
   if (draft) {
-    const set = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch });
-    const submit = (e: React.FormEvent) => {
-      e.preventDefault();
-      const payload = payloadFrom(draft);
-      const parsed = SaveProjectTypeRequestSchema.safeParse(payload);
-      if (!parsed.success) {
-        setErrors(
-          parsed.error.issues.map((i) => {
-            const [, key, index, field] = i.path;
-            if (key === "contractMilestones" && typeof index === "number") {
-              return `Milestone ${index + 1}${field ? ` (${String(field)})` : ""}: ${i.message}`;
-            }
-            return `${i.path.join(".") || "type"}: ${i.message}`;
-          })
-        );
-        return;
-      }
-      setErrors([]);
-      save.mutate({ projectTypeId: draft.id, payload }, { onSuccess: () => setDraft(null) });
-    };
-    const allowedSet = new Set(draft.allowedOwnerIds ?? []);
-    return (
-      <form onSubmit={submit} className="space-y-4">
-        {dialog}
-        <button type="button" onClick={() => setDraft(null)} className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900">
-          <ArrowLeft className="w-4 h-4" /> All project types
-        </button>
-
-        <section className={sectionCls}>
-          <h3 className="text-sm font-bold text-slate-900">General</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <label className="text-xs font-medium text-slate-700">
-              Name
-              <input required className={inputCls} value={draft.name} maxLength={120} onChange={(e) => set({ name: e.target.value })} />
-            </label>
-            <label className="text-xs font-medium text-slate-700">
-              Code
-              <input required className={inputCls} value={draft.code} maxLength={32} placeholder="e.g. CENTRAL" onChange={(e) => set({ code: e.target.value.toUpperCase() })} />
-            </label>
-            <label className="text-xs font-medium text-slate-700">
-              Colour
-              <input type="color" className="mt-0.5 h-9 w-full rounded-xl border border-slate-300" value={draft.colour} onChange={(e) => set({ colour: e.target.value })} />
-            </label>
-          </div>
-          <label className="block text-xs font-medium text-slate-700">
-            Description
-            <textarea rows={2} className={inputCls} value={draft.description} maxLength={1000} onChange={(e) => set({ description: e.target.value })} />
-          </label>
-          <div className="flex flex-wrap gap-6">
-            <Toggle label="Default for new projects" checked={draft.isDefault} onChange={(v) => set({ isDefault: v })} />
-            <Toggle label="Active" checked={draft.isActive} onChange={(v) => set({ isActive: v })} hint="Archived types cannot be chosen for new projects." />
-          </div>
-        </section>
-
-        <section className={sectionCls}>
-          <h3 className="text-sm font-bold text-slate-900">Workflow template</h3>
-          <p className="text-xs text-slate-500">Process switches and approval chains come from this template when the type is applied to a draft.</p>
-          <CustomSelect value={draft.workflowTemplateId} onChange={(v) => set({ workflowTemplateId: v })} options={templateOptions} placeholder="Choose a template" />
-        </section>
-
-        <section className={sectionCls}>
-          <h3 className="text-sm font-bold text-slate-900">Ownership</h3>
-          <Toggle label="An owning organisation is required" checked={draft.ownerRequired} onChange={(v) => set({ ownerRequired: v })} />
-          <div>
-            <p className="text-xs font-medium text-slate-700 mb-1">Allowed owners</p>
-            <Toggle
-              label="Any organisation"
-              checked={draft.allowedOwnerIds === null}
-              onChange={(v) => set({ allowedOwnerIds: v ? null : [] })}
-            />
-            {draft.allowedOwnerIds !== null && (
-              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-1 max-h-48 overflow-y-auto rounded-xl border border-slate-200 p-2">
-                {orgs.map((o) => (
-                  <label key={o.id} className="flex items-center gap-2 text-xs text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={allowedSet.has(o.id)}
-                      onChange={(e) =>
-                        set({
-                          allowedOwnerIds: e.target.checked
-                            ? [...(draft.allowedOwnerIds ?? []), o.id]
-                            : (draft.allowedOwnerIds ?? []).filter((id) => id !== o.id),
-                        })
-                      }
-                    />
-                    {o.name}
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-medium text-slate-700 mb-1">Default owner</p>
-            <CustomSelect
-              value={draft.defaultOwnerId}
-              onChange={(v) => set({ defaultOwnerId: v })}
-              options={[{ value: "", label: "No default" }, ...orgOptions.filter((o) => draft.allowedOwnerIds === null || allowedSet.has(o.value))]}
-              searchable
-            />
-          </div>
-        </section>
-
-        <section className={sectionCls}>
-          <h3 className="text-sm font-bold text-slate-900">Parties</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            <Toggle label={`${term("monitorParty")} required`} checked={draft.monitorRequired} onChange={(v) => set({ monitorRequired: v })} />
-            <Toggle label={`${term("funderParty")} required`} checked={draft.funderRequired} onChange={(v) => set({ funderRequired: v })} />
-            <Toggle label={`At least one ${term("beneficiary", { lower: true })} required`} checked={draft.beneficiaryRequired} onChange={(v) => set({ beneficiaryRequired: v })} />
-            <Toggle label="Region required" checked={draft.regionRequired} onChange={(v) => set({ regionRequired: v })} />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <p className="text-xs font-medium text-slate-700 mb-1">When the {term("funderParty", { lower: true })} is left empty</p>
-              <CustomSelect
-                value={draft.funderDefault}
-                onChange={(v) => set({ funderDefault: v as ProjectTypeFunderDefault })}
-                options={ProjectTypeFunderDefaultEnum.options.map((o) => ({
-                  value: o,
-                  label: o === "NONE" ? "Leave it empty" : o === "OWNER" ? "Use the owning organisation" : "Use a fixed organisation",
-                }))}
-              />
-            </div>
-            {draft.funderDefault === "FIXED" && (
-              <div>
-                <p className="text-xs font-medium text-slate-700 mb-1">Default {term("funderParty", { lower: true })}</p>
-                <CustomSelect value={draft.defaultFunderId} onChange={(v) => set({ defaultFunderId: v })} options={orgOptions} searchable placeholder="Choose" />
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className={sectionCls}>
-          <h3 className="text-sm font-bold text-slate-900">{term("retention")} defaults</h3>
-          <p className="text-[11px] text-slate-500">
-            Pre-fills the {term("retention", { lower: true })} step of a new project of this type. Payments are made outside the platform and
-            recorded on each project's Payments page; {term("retention", { lower: true })} is held from each recorded payment at this rate.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-xs font-medium text-slate-700">{term("retention")} (%)</span>
-              <input
-                inputMode="decimal"
-                className={inputCls}
-                placeholder="None"
-                value={draft.retentionPct}
-                onChange={(e) => set({ retentionPct: e.target.value })}
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-slate-700">Defects liability period (months)</span>
-              <input
-                inputMode="numeric"
-                className={inputCls}
-                placeholder="None"
-                value={draft.retentionMonths}
-                onChange={(e) => set({ retentionMonths: e.target.value })}
-              />
-            </label>
-          </div>
-        </section>
-
-        <ContractRulesEditor value={draft.contract} onChange={(contract) => set({ contract })} />
-
-        <DocumentRulesEditor value={draft.documents} onChange={(documents) => set({ documents })} />
-
-        <MonitoringRulesEditor value={draft.monitoring} onChange={(monitoring) => set({ monitoring })} />
-
-        <MonitoringPlanEditor value={draft.visitPlan} onChange={(visitPlan) => set({ visitPlan })} />
-
-        <ClosureRulesEditor value={draft.closure} onChange={(closure) => set({ closure })} />
-
-        <KpiTargetsEditor value={draft.kpiTargets} onChange={(kpiTargets) => set({ kpiTargets })} />
-
-
-        {errors.length > 0 && (
-          <ul className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 list-disc pl-6">
-            {errors.map((e) => (
-              <li key={e}>{e}</li>
-            ))}
-          </ul>
-        )}
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={() => setDraft(null)} className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700">
-            Cancel
-          </button>
-          <button type="submit" disabled={save.isPending} className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
-            {save.isPending ? "Saving..." : draft.id ? "Save new version" : "Create project type"}
-          </button>
-        </div>
-      </form>
-    );
+    return <ProjectTypeEditor key={draft.id ?? "new"} initial={draft} templateOptions={templateOptions} orgs={orgs} onClose={closeEditor} />;
   }
 
   return (
@@ -467,7 +627,7 @@ export function ProjectTypesTab() {
         headerActions={
           <button
             type="button"
-            onClick={() => { setErrors([]); setDraft(draftFrom(null)); }}
+            onClick={() => setDraft(draftFrom(null))}
             className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-navy hover:bg-slate-100"
           >
             <Plus className="w-3.5 h-3.5" /> New project type

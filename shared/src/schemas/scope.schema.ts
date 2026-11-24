@@ -102,8 +102,6 @@ export const ScopeLineDtoSchema = z.object({
   rateNgn: z.number(),
   /** Amount: rate × quantity. */
   budgetedCostNgn: z.number(),
-  isHoldPoint: z.boolean(),
-  holdPointInstruction: z.string().nullable(),
   plannedStartDate: z.string().nullable(),
   plannedEndDate: z.string().nullable(),
   cumulativeCertifiedPct: z.number(),

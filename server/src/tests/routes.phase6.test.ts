@@ -226,7 +226,9 @@ describe('Phase 6', { concurrency: false }, () => {
       for (const expected of [
         'parties:STEP_NOT_SAVED',
         'parties:LENDER_REQUIRED',
-        'parties:CONTRACTOR_REQUIRED',
+        // Redesign R6a (D-R6.4): the contractor is its own section.
+        'contractor:STEP_NOT_SAVED',
+        'contractor:CONTRACTOR_REQUIRED',
         'site:GEOFENCE_REQUIRED',
         'scope:SPRINT_REQUIRED',
         'scope:SCOPE_REQUIRED',
@@ -472,11 +474,13 @@ describe('Phase 6', { concurrency: false }, () => {
       assert.equal(await prisma.projectContractor.count({ where: { projectId: ids.kan } }), 1);
     });
 
-    it('serves the whole BOQ to the field (no contractor packages on sessions)', async () => {
+    it('serves the baseline pack to the field (no contractor packages on sessions)', async () => {
       const mobile = await mobileToken('monitor@insite.ng', 'device-p6-kan');
       const res = await request(app).get(`/api/v1/auth/mobile/projects/${ids.kan}/baseline`).set(bearer(mobile.accessToken));
       assert.equal(res.status, 200, JSON.stringify(res.body));
-      assert.equal(res.body.data.boqItems.length, 6);
+      assert.equal(res.body.data.projectId, ids.kan);
+      // Redesign R5e: the pack no longer carries the BOQ (the visit app reads facility units).
+      assert.ok(Array.isArray(res.body.data.facilityUnits));
     });
   });
 

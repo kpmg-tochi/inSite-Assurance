@@ -16,7 +16,6 @@ import { computeDifferenceHash, screenCapture } from '../../utils/integrity';
 import { evaluateProjectGeofence, GEOFENCE_CONTEXT_SELECT } from '../../utils/geofenceEvaluation';
 import { verifyDeviceSignature } from '../../utils/deviceSignature';
 import { recordAuditEvent } from '../audit/audit.service';
-import { loadBoqItemInProject } from '../../utils/ownership';
 import { serializeCapture } from '../../utils/serializers';
 
 const CAPTURE_INCLUDE = { mediaAttachments: true } satisfies Prisma.FieldEvidenceLogInclude;
@@ -24,26 +23,19 @@ const CAPTURE_INCLUDE = { mediaAttachments: true } satisfies Prisma.FieldEvidenc
 /** GET /projects/:projectId/evidence — every registered capture, newest first. */
 export async function listProjectCaptures(
   projectId: string,
-  filters: { wbsItemId?: string; workdayReportId?: string; limit?: number } = {}
+  filters: { limit?: number } = {}
 ): Promise<CaptureListItemDto[]> {
   const logs = await prisma.fieldEvidenceLog.findMany({
-    where: {
-      projectId,
-      ...(filters.wbsItemId ? { boqItemId: filters.wbsItemId } : {}),
-      ...(filters.workdayReportId ? { workdayReportId: filters.workdayReportId } : {}),
-    },
+    where: { projectId },
     orderBy: { capturedAtDevice: 'desc' },
     take: Math.min(filters.limit ?? 300, 1000),
     include: {
       ...CAPTURE_INCLUDE,
-      boqItem: { select: { wbsCode: true, description: true } },
       fieldSession: { select: { agentFullName: true } },
     },
   });
   return logs.map((log) => ({
     ...serializeCapture(log),
-    wbsCode: log.boqItem?.wbsCode ?? null,
-    wbsDescription: log.boqItem?.description ?? null,
     reporterName: log.fieldSession.agentFullName,
   }));
 }
@@ -104,10 +96,6 @@ export async function registerCapture(params: {
   if (!policy.mimeTypes.includes(mimeType)) {
     throw new AppError(`Content type ${input.mimeType} is not allowed for ${input.mediaType}`, 415, 'UNSUPPORTED_MEDIA_TYPE');
   }
-  if (input.wbsItemId) {
-    await loadBoqItemInProject(prisma, projectId, input.wbsItemId);
-  }
-
   const bytes = await storageService.getObjectBuffer(input.objectKey, policy.maxBytes);
   if (!bytes) {
     throw new AppError('Upload the file before registering the capture', 409, 'OBJECT_NOT_UPLOADED');
@@ -166,7 +154,6 @@ export async function registerCapture(params: {
       const log = await tx.fieldEvidenceLog.create({
         data: {
           projectId,
-          boqItemId: input.wbsItemId ?? null,
           fieldSessionId: fieldAgent.sessionId,
           clientCaptureId: input.clientCaptureId,
           reporterRoleId: fieldAgent.roleId,

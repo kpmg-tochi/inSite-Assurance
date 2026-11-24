@@ -21,14 +21,15 @@ export interface SiteEvidenceBatchSubmission {
 
 interface Props {
   visible: boolean;
-  wbsCode: string;
+  /** What the photos are for (a visit question, a defect, the site log). */
+  title: string;
   onSubmit: (batch: SiteEvidenceBatchSubmission) => void;
   onClose: () => void;
 }
 
 export const SiteEvidenceCameraModal: React.FC<Props> = ({
   visible,
-  wbsCode,
+  title,
   onSubmit,
   onClose,
 }) => {
@@ -81,7 +82,7 @@ export const SiteEvidenceCameraModal: React.FC<Props> = ({
           initialFacing="back"
           allowFlipCamera={true}
           allowFlashToggle={true}
-          title={`WBS ${wbsCode} · Site Evidence`}
+          title={title}
           subtitle={
             capturedPhotos.length > 0
               ? `Adding photo #${capturedPhotos.length + 1} to current batch`

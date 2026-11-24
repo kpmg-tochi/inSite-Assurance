@@ -1,12 +1,9 @@
 import { Prisma } from '@prisma/client';
 import {
-  AppliedStandard,
   NeedsAssessmentDocumentDto,
   ProjectStandardDto,
   ProjectStandardInput,
   RegisterNeedsAssessmentRequest,
-  standardAppliesToWbs,
-  summariseStandardRule,
   UpdateProjectStandardRequest,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
@@ -76,18 +73,6 @@ export async function listProjectStandards(projectId: string): Promise<ProjectSt
 }
 
 /** Project-wide standards plus those scoped to this WBS code or one of its parents. */
-export async function getApplicableStandards(projectId: string, wbsCode: string, db: Db = prisma): Promise<StandardRow[]> {
-  const rows = await db.projectStandardSpecification.findMany({
-    where: { projectId },
-    orderBy: [{ isMandatory: 'desc' }, { code: 'asc' }],
-  });
-  return rows.filter((s) => standardAppliesToWbs(asStrings(s.applicableWbsCodes), wbsCode));
-}
-
-export function toAppliedStandards(rows: StandardRow[]): AppliedStandard[] {
-  return rows.map((s) => ({ code: s.code, title: s.title, summaryRule: summariseStandardRule(s.specificationText) }));
-}
-
 function isUniqueViolation(error: unknown) {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }

@@ -330,9 +330,10 @@ describe('Phase 10: defect tickets (staff-only, R1c/R1d)', () => {
     const list = await request(app).get(`/api/v1/projects/${ids.kwr}/defects`).set(await field(ids.kwrOfficer));
     assert.equal(list.status, 200, JSON.stringify(list.body));
     assert.deepEqual(list.body.data.map((t: { id: string }) => t.id).sort(), [ids.kwrTicket1, ids.kwrTicket2, ids.kwrTicket3].sort());
-    const report = await request(app).post(`/api/v1/projects/${ids.kwr}/workday-reports`).set(await field(ids.kwrOfficer)).send({});
-    assert.equal(report.status, 409);
-    assert.equal(report.body.error.code, 'PROJECT_CONSTRUCTION_ENDED');
+    // R5f: workday reports are gone; an incident report is another non-defect field write.
+    const incident = await request(app).post(`/api/v1/projects/${ids.kwr}/incidents`).set(await field(ids.kwrOfficer)).send({});
+    assert.equal(incident.status, 409);
+    assert.equal(incident.body.error.code, 'PROJECT_CONSTRUCTION_ENDED');
   });
 });
 

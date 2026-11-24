@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { IS_DEMO_MODE } from "../../../config/demoMode";
+import { useGuardedNavigate } from "../../../lib/navigationGuard";
 import { useCreateProjectDraftMutation } from "../../../mutations/projects/useProjectSetupMutations";
-import { BasicsForm, EMPTY_BASICS, validateBasics, type BasicsValues } from "./steps/BasicsStep";
+import { BasicsForm, EMPTY_BASICS, validateBasics, type BasicsValues } from "./sections/BasicsSection";
 import { extractErrors, NO_ERRORS, type FormErrors } from "./setupContext";
 
 /** Demo-only sample values; never in non-demo bundles (Vite folds IS_DEMO_MODE). */
@@ -19,11 +20,12 @@ const SAMPLE_BASICS: BasicsValues = {
 };
 
 /**
- * /app/projects/new: step 1 of the wizard. Saving creates the draft; the remaining steps live at
- * /app/projects/:projectId/setup/:stepId.
+ * /app/projects/new: the start of step 1 "Project". Saving the project details creates the draft;
+ * the wizard then opens at /app/projects/:projectId/setup/project (redesign R6a, D-R6.8) for the
+ * school, organisations and location, and the remaining steps.
  */
 export function NewProjectPage() {
-  const navigate = useNavigate();
+  const navigate = useGuardedNavigate();
   const [values, setValues] = useState<BasicsValues>(EMPTY_BASICS);
   const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
   const create = useCreateProjectDraftMutation();
@@ -37,7 +39,7 @@ export function NewProjectPage() {
     }
     try {
       const setup = await create.mutateAsync(body);
-      navigate(`/app/projects/${setup.projectId}/setup/parties`);
+      navigate(`/app/projects/${setup.projectId}/setup/project#section-parties`);
     } catch (err) {
       setErrors(extractErrors(err));
     }
@@ -52,7 +54,7 @@ export function NewProjectPage() {
           </Link>
           <h1 className="mt-1 text-lg font-bold text-slate-900">New project</h1>
           <p className="text-xs text-slate-500">
-            Start with the basics. The project is saved as a draft after this step and stays private until you set it active.
+            Start with the delivery model and the project details. The project is saved as a draft and stays private until you set it active.
           </p>
         </div>
         {IS_DEMO_MODE && (

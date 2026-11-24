@@ -223,9 +223,8 @@ export async function seedPhase16() {
       projectId,
       reporter: invitees[invitees.length - 1],
       visitDate: addDays(kickoff, 24),
-      visitType: "BASELINE",
-      templateCode: "BASELINE_SURVEY",
-      summary: "Baseline survey: site cleared and set out; existing structures and access recorded with photographs.",
+      visitKind: "BASELINE",
+      summary: "Baseline visit: site cleared and set out; existing structures and access recorded with photographs.",
     });
     return contractor;
   }

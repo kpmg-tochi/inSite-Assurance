@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { AlertTriangle, Landmark, Plus, Receipt, Wallet } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, Landmark, Plus, Receipt, Wallet } from "lucide-react";
 import {
   PAYMENT_EXCEPTION_LABELS,
   PAYMENT_KIND_LABELS,
@@ -17,6 +17,7 @@ import { StandardTable, TableActionButton, TableBadge, type TableColumnDef } fro
 import { useProjectPaymentsQuery } from "../../queries/payments/usePaymentsQueries";
 import { useRecordPaymentMutation, useVoidPaymentMutation } from "../../mutations/payments/usePaymentsMutations";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
+import { PaidVsContractSumBar } from "../../components/payments/PaidVsContractSumBar";
 
 const labelClass = "block text-xs font-semibold text-slate-700 mb-1";
 
@@ -34,14 +35,24 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
   const [recording, setRecording] = useState(false);
   const [voiding, setVoiding] = useState<PaymentDto | null>(null);
   const [search, setSearch] = useState("");
+  const [kindFilter, setKindFilter] = useState<"" | PaymentKind>("");
+  // "" = every sprint, "none" = payments without a sprint, else a sprint id.
+  const [sprintFilter, setSprintFilter] = useState("");
+  const [exceptionsOnly, setExceptionsOnly] = useState(false);
   const s = query.data;
+  const sprints = s?.sprints ?? [];
 
   const rows = useMemo(() => {
     const t = search.trim().toLowerCase();
     return (s?.payments ?? []).filter(
-      (p) => !t || p.reference.toLowerCase().includes(t) || (p.description ?? "").toLowerCase().includes(t)
+      (p) =>
+        (!t || p.reference.toLowerCase().includes(t) || (p.description ?? "").toLowerCase().includes(t)) &&
+        (!kindFilter || p.kind === kindFilter) &&
+        (!sprintFilter || (sprintFilter === "none" ? p.sprint === null : p.sprint?.id === sprintFilter)) &&
+        (!exceptionsOnly || (!p.voided && p.exceptions.length > 0))
     );
-  }, [s?.payments, search]);
+  }, [s?.payments, search, kindFilter, sprintFilter, exceptionsOnly]);
+  const filtered = Boolean(kindFilter || sprintFilter || exceptionsOnly || search.trim());
 
   const columns: TableColumnDef<PaymentDto>[] = [
     { id: "date", header: "Paid on", width: "w-28", cell: (p) => <span className="text-xs tabular-nums">{p.paidOn}</span> },
@@ -61,6 +72,24 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
         </div>
       ),
     },
+    ...(sprints.length > 0
+      ? [
+          {
+            id: "sprint",
+            header: "Sprint",
+            width: "w-32",
+            cell: (p: PaymentDto) =>
+              p.sprint ? (
+                <span className="text-xs text-slate-700" title={p.sprint.name}>
+                  Sprint {p.sprint.number}
+                  <span className="block truncate text-[11px] text-slate-500">{p.sprint.name}</span>
+                </span>
+              ) : (
+                <span className="text-xs text-slate-400">—</span>
+              ),
+          },
+        ]
+      : []),
     { id: "gross", header: "Amount", width: "w-36", align: "right", cell: (p) => <span className="text-xs tabular-nums">{formatNaira(p.grossAmountNgn)}</span> },
     ...(retentionOn
       ? [
@@ -129,10 +158,61 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
 
       {s && <SummaryCards s={s} retentionOn={retentionOn} />}
 
+      {s && (
+        <div className={`grid gap-3 ${retentionOn ? "lg:grid-cols-2" : ""}`}>
+          <section aria-labelledby="paid-vs-sum" className="rounded-2xl border border-slate-200 bg-white p-4">
+            <h2 id="paid-vs-sum" className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+              Paid against the contract sum
+            </h2>
+            <PaidVsContractSumBar paidNgn={s.paidGrossNgn} contractSumNgn={s.contractSumNgn} />
+            <p className="mt-1.5 text-[11px] text-slate-500">
+              Gross amounts of interim and final payments; voided entries and {term("retention", { lower: true })} releases are not counted.
+            </p>
+          </section>
+          {retentionOn && <ReleaseChecks s={s} />}
+        </div>
+      )}
+
       <StandardTable<PaymentDto>
         title="Payment record"
-        subtitle={`${rows.length} payment(s)${s && s.exceptionCount > 0 ? ` · ${s.exceptionCount} exception(s)` : ""}`}
+        subtitle={`${filtered ? `${rows.length} of ${s?.payments.length ?? 0}` : rows.length} payment(s)${s && s.exceptionCount > 0 ? ` · ${s.exceptionCount} exception(s)` : ""}`}
         search={{ value: search, onChange: setSearch, placeholder: "Search references" }}
+        filters={
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="w-44">
+              <CustomSelect
+                ariaLabel="Payment type"
+                value={kindFilter}
+                onChange={(v) => setKindFilter(v as "" | PaymentKind)}
+                options={[
+                  { value: "", label: "All payment types" },
+                  ...PaymentKindEnum.options
+                    .filter((k) => retentionOn || k !== "RETENTION_RELEASE")
+                    .map((k) => ({ value: k, label: PAYMENT_KIND_LABELS[k] })),
+                ]}
+                size="sm"
+              />
+            </div>
+            {sprints.length > 0 && (
+              <div className="w-48">
+                <CustomSelect
+                  ariaLabel="Sprint"
+                  value={sprintFilter}
+                  onChange={(v) => setSprintFilter(v)}
+                  options={[
+                    { value: "", label: "All sprints" },
+                    { value: "none", label: "No sprint named" },
+                    ...sprints.map((sp) => ({ value: sp.id, label: `Sprint ${sp.number} · ${sp.name}` })),
+                  ]}
+                  size="sm"
+                />
+              </div>
+            )}
+            <label className="inline-flex items-center gap-1.5 text-xs text-slate-700">
+              <input type="checkbox" checked={exceptionsOnly} onChange={(e) => setExceptionsOnly(e.target.checked)} /> Exceptions only
+            </label>
+          </div>
+        }
         headerActions={
           s?.canRecord && (
             <button
@@ -148,7 +228,11 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
         data={rows}
         keyExtractor={(p) => p.id}
         loading={query.isLoading}
-        emptyState={{ title: "No payments recorded", description: "Recorded payments appear here with their checks." }}
+        emptyState={
+          filtered && (s?.payments.length ?? 0) > 0
+            ? { title: "No payments match", description: "Clear the search or filters to see every payment." }
+            : { title: "No payments recorded", description: "Recorded payments appear here with their checks." }
+        }
       />
 
       {recording && s && <RecordPaymentModal projectId={project.id} summary={s} retentionOn={retentionOn} onClose={() => setRecording(false)} />}
@@ -187,6 +271,61 @@ function SummaryCards({ s, retentionOn }: { s: ProjectPaymentsSummaryDto; retent
   );
 }
 
+/** Redesign R6d (D-R6.17): what a retention release is checked against, shown before one is recorded. */
+function ReleaseChecks({ s }: { s: ProjectPaymentsSummaryDto }) {
+  const term = useTerm();
+  const checks: Array<{ key: string; met: boolean; label: string; detail: string }> = [
+    {
+      key: "coc",
+      met: s.cocIssued,
+      label: "Certificate of Completion",
+      detail: s.cocIssued ? "Issued" : "Not issued yet",
+    },
+    {
+      key: "period",
+      met: s.retentionPeriodEnded,
+      label: "Defects liability period",
+      detail: s.retentionPeriodEnd
+        ? s.retentionPeriodEnded
+          ? `Ended ${s.retentionPeriodEnd}`
+          : `Ends ${s.retentionPeriodEnd}`
+        : "No end date yet (set when the liability period starts)",
+    },
+    {
+      key: "defects",
+      met: s.openDefects === 0,
+      label: "Open defects",
+      detail: s.openDefects === 0 ? "None open" : `${s.openDefects} still open`,
+    },
+  ];
+  return (
+    <section aria-labelledby="release-checks" className="rounded-2xl border border-slate-200 bg-white p-4">
+      <h2 id="release-checks" className="text-xs font-bold uppercase tracking-wide text-slate-500">
+        Release checks
+      </h2>
+      <p className="mt-0.5 text-[11px] text-slate-500">
+        A {term("retention", { lower: true })} release recorded before these are met is flagged as an exception, not blocked.
+      </p>
+      <ul className="mt-2 space-y-1.5">
+        {checks.map((c) => (
+          <li key={c.key} className="flex items-start gap-2 text-xs">
+            {c.met ? (
+              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden="true" />
+            ) : (
+              <CircleDashed className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden="true" />
+            )}
+            <span>
+              <span className="font-semibold text-slate-800">{c.label}:</span>{" "}
+              <span className={c.met ? "text-slate-700" : "text-amber-800"}>{c.detail}</span>
+              <span className="sr-only">{c.met ? " (met)" : " (not met)"}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function RecordPaymentModal({
   projectId,
   summary,
@@ -202,7 +341,8 @@ function RecordPaymentModal({
   const record = useRecordPaymentMutation(projectId);
   const kinds = PaymentKindEnum.options.filter((k) => retentionOn || k !== "RETENTION_RELEASE");
   const [kind, setKind] = useState<PaymentKind>("INTERIM");
-  const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10));
+  const [paidOn, setPaidOn] = useState(summary.today);
+  const [sprintId, setSprintId] = useState("");
   const [amount, setAmount] = useState("");
   const [reference, setReference] = useState("");
   const [description, setDescription] = useState("");
@@ -234,6 +374,7 @@ function RecordPaymentModal({
         description: description.trim() || null,
         retentionHeldNgn: changedHeld ? held : null,
         retentionOverrideReason: changedHeld ? overrideReason.trim() : null,
+        sprintId: sprintId || null,
       });
       onClose();
     } catch {
@@ -272,6 +413,20 @@ function RecordPaymentModal({
             </label>
             <input id="pay-ref" className={inputClass} maxLength={120} value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. PV-2026-0142" />
           </div>
+          {summary.sprints.length > 0 && (
+            <div className="sm:col-span-2">
+              <CustomSelect
+                label="Sprint (optional)"
+                hint="The sprint this payment is for. A sprint a payment names cannot be removed later."
+                value={sprintId}
+                onChange={(v) => setSprintId(v)}
+                options={[
+                  { value: "", label: "No sprint" },
+                  ...summary.sprints.map((sp) => ({ value: sp.id, label: `Sprint ${sp.number} · ${sp.name}` })),
+                ]}
+              />
+            </div>
+          )}
         </div>
         {kind !== "RETENTION_RELEASE" && retentionOn && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
@@ -280,17 +435,38 @@ function RecordPaymentModal({
               {pct ? ` (${pct}% by default)` : ""} · net {formatNaira(Math.max(0, gross - held) || 0)}
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                className={inputClass}
-                placeholder="Different amount held (optional)"
-                value={heldOverride ?? ""}
-                onChange={(e) => setHeldOverride(e.target.value)}
-              />
+              <div>
+                <label className={labelClass} htmlFor="pay-held">
+                  Different amount held (optional)
+                </label>
+                <input
+                  id="pay-held"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className={inputClass}
+                  placeholder={formatNaira(expectedHeld)}
+                  aria-describedby="pay-held-hint"
+                  value={heldOverride ?? ""}
+                  onChange={(e) => setHeldOverride(e.target.value)}
+                />
+                <p id="pay-held-hint" className="mt-1 text-[11px] text-slate-500">
+                  Leave empty to hold the default amount.
+                </p>
+              </div>
               {changedHeld && (
-                <input className={inputClass} placeholder="Why it differs" value={overrideReason} onChange={(e) => setOverrideReason(e.target.value)} />
+                <div>
+                  <label className={labelClass} htmlFor="pay-held-reason">
+                    Why it differs
+                  </label>
+                  <input
+                    id="pay-held-reason"
+                    className={inputClass}
+                    maxLength={500}
+                    value={overrideReason}
+                    onChange={(e) => setOverrideReason(e.target.value)}
+                  />
+                </div>
               )}
             </div>
           </div>
@@ -330,7 +506,20 @@ function VoidPaymentModal({ projectId, payment, onClose }: { projectId: string; 
           A voided payment stays in the record, crossed out, and stops counting towards the totals. Record the correct payment
           separately.
         </p>
-        <textarea className={inputClass} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is this entry wrong?" />
+        <div>
+          <label className={labelClass} htmlFor="void-reason">
+            Reason
+          </label>
+          <textarea
+            id="void-reason"
+            className={inputClass}
+            rows={3}
+            maxLength={500}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Why is this entry wrong?"
+          />
+        </div>
         <ModalActions
           onCancel={onClose}
           submitLabel="Void payment"

@@ -16,17 +16,9 @@ import { kickOutbox } from './outbox/outboxProcessor';
 
 export type CaptureUploadStatus = 'LOCAL' | 'UPLOADED' | 'REGISTERED';
 
-/**
- * SQL condition: captures that may go into a new report (Phase 5 Step 8). Excludes originals
- * replaced by a re-submission and captures held from an ended session.
- */
-export const LINKABLE_CAPTURE_SQL = `superseded_by IS NULL
-  AND id NOT IN (SELECT entity_id FROM outbox WHERE kind = 'CAPTURE' AND status = 'HELD')`;
-
 export interface CaptureRecord {
   id: string;
   projectId: string;
-  wbsItemId: string | null;
   mediaType: CaptureMediaType;
   mimeType: string;
   localPath: string;
@@ -37,7 +29,6 @@ export interface CaptureRecord {
   fix: LocationFix | null;
   capturedAt: string;
   signature: string | null;
-  reportId: string | null;
   objectKey: string | null;
   uploadStatus: CaptureUploadStatus;
   server: CaptureDto | null;
@@ -50,7 +41,6 @@ export interface CaptureRecord {
 type Row = {
   id: string;
   project_id: string;
-  wbs_item_id: string | null;
   media_type: string;
   mime_type: string;
   local_path: string;
@@ -66,7 +56,6 @@ type Row = {
   location_available: number;
   captured_at: string;
   signature: string | null;
-  report_id: string | null;
   object_key: string | null;
   upload_status: string;
   server_json: string | null;
@@ -79,7 +68,6 @@ function map(r: Row): CaptureRecord {
   return {
     id: r.id,
     projectId: r.project_id,
-    wbsItemId: r.wbs_item_id,
     mediaType: r.media_type as CaptureMediaType,
     mimeType: r.mime_type,
     localPath: r.local_path,
@@ -100,7 +88,6 @@ function map(r: Row): CaptureRecord {
         : null,
     capturedAt: r.captured_at,
     signature: r.signature,
-    reportId: r.report_id,
     objectKey: r.object_key,
     uploadStatus: r.upload_status as CaptureUploadStatus,
     server: r.server_json ? (JSON.parse(r.server_json) as CaptureDto) : null,
@@ -118,7 +105,6 @@ function capturesDir(): Directory {
 
 export interface NewCaptureInput {
   projectId: string;
-  wbsItemId: string | null;
   mediaType: CaptureMediaType;
   /** Temporary file from the camera or recorder; it is moved into app storage. */
   sourceUri: string;
@@ -165,14 +151,13 @@ export async function saveCapture(input: NewCaptureInput): Promise<CaptureRecord
   const now = nowIso();
   await db.withTransactionAsync(async () => {
     await db.runAsync(
-      `INSERT INTO captures (id, project_id, wbs_item_id, media_type, mime_type, local_path, byte_size,
+      `INSERT INTO captures (id, project_id, media_type, mime_type, local_path, byte_size,
          sha256, duration_seconds, caption, latitude, longitude, accuracy_meters, altitude_meters,
          is_mocked, location_available, captured_at, signature, upload_status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'LOCAL', ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'LOCAL', ?)`,
       [
         id,
         input.projectId,
-        input.wbsItemId,
         input.mediaType,
         input.mimeType,
         dest.uri,
@@ -215,17 +200,6 @@ export async function getCaptures(ids: string[]): Promise<CaptureRecord[]> {
   return rows.map(map);
 }
 
-/** Captures for a WBS item not yet included in a submitted report (this period's evidence). */
-export async function listUnreportedCaptures(projectId: string, wbsItemId: string): Promise<CaptureRecord[]> {
-  const db = await getDb();
-  const rows = await db.getAllAsync<Row>(
-    `SELECT * FROM captures WHERE project_id = ? AND wbs_item_id = ? AND report_id IS NULL AND ${LINKABLE_CAPTURE_SQL}
-     ORDER BY captured_at ASC`,
-    [projectId, wbsItemId]
-  );
-  return rows.map(map);
-}
-
 export async function updateCaptureUpload(
   id: string,
   patch: { objectKey?: string | null; uploadStatus: CaptureUploadStatus; server?: CaptureDto }
@@ -247,6 +221,41 @@ export async function updateCaptureUpload(
       id,
     ]
   );
+}
+
+/**
+ * Redesign R5a (D-R5.13): voice notes the server registered whose transcript is still pending, per
+ * project with the earliest registration time (the `since` for `GET /captures/mine`).
+ */
+export async function listPendingTranscripts(): Promise<Array<{ projectId: string; since: string; ids: string[] }>> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<Row>(
+    `SELECT * FROM captures WHERE media_type = 'VOICE_NOTE' AND upload_status = 'REGISTERED' AND server_json IS NOT NULL`
+  );
+  const out = new Map<string, { projectId: string; since: string; ids: string[] }>();
+  for (const r of rows.map(map)) {
+    if (r.server?.transcriptionStatus !== 'PENDING') continue;
+    const at = r.server.registeredAt || r.registeredAt || r.capturedAt;
+    const entry = out.get(r.projectId) ?? { projectId: r.projectId, since: at, ids: [] };
+    if (at < entry.since) entry.since = at;
+    entry.ids.push(r.id);
+    out.set(r.projectId, entry);
+  }
+  return [...out.values()];
+}
+
+/** Stores the server's latest copy of registered captures (transcript, geofence result). Returns how many changed. */
+export async function refreshCaptureServerCopies(dtos: CaptureDto[]): Promise<number> {
+  const db = await getDb();
+  let changed = 0;
+  for (const dto of dtos) {
+    const r = await db.runAsync(
+      `UPDATE captures SET server_json = ? WHERE id = ? AND upload_status = 'REGISTERED' AND (server_json IS NULL OR server_json != ?)`,
+      [JSON.stringify(dto), dto.clientCaptureId, JSON.stringify(dto)]
+    );
+    changed += r.changes;
+  }
+  return changed;
 }
 
 /** Local file to show, or null once it was removed after upload (show it from the server then). */

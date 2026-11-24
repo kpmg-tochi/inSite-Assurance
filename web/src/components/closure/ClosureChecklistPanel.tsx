@@ -131,6 +131,7 @@ function ItemModal({ projectId, item, mode, onClose }: { projectId: string; item
           onChange={(e) => setText(e.target.value)}
           rows={3}
           className={inputClass}
+          aria-label={mode === "waive" ? "Reason for waiving" : "Notes"}
           placeholder={mode === "waive" ? "Why is it waived? (recorded in the audit ledger)" : "Notes (optional)"}
           required={mode === "waive"}
           minLength={mode === "waive" ? 5 : undefined}

@@ -33,7 +33,7 @@ import { AppError } from '../../middleware/error.middleware';
 import type { FieldAgentJwtPayload, WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { evaluateProjectGeofence, GEOFENCE_CONTEXT_SELECT } from '../../utils/geofenceEvaluation';
-import { toCaptureSummary } from '../workday-reports/workdayReports.service';
+import { toCaptureSummary } from '../../utils/serializers';
 import { buildApprovalProgress } from '../process/approvalChain';
 import {
   buildPinnedAdHocBundle,
@@ -252,8 +252,6 @@ async function loadAnswerCaptures(projectId: string, userId: string, answers: Su
       projectId: true,
       locationAvailable: true,
       geofenceStatus: true,
-      workdayReportId: true,
-      siteInspectionReportId: true,
       visitSubmissionId: true,
       fieldSession: { select: { userId: true } },
       siteLogEntry: { select: { id: true } },
@@ -265,7 +263,7 @@ async function loadAnswerCaptures(projectId: string, userId: string, answers: Su
   for (const c of rows) {
     if (c.projectId !== projectId) throw new AppError('A photo belongs to another project', 403, 'CAPTURE_OTHER_PROJECT');
     if (c.fieldSession.userId !== userId) throw new AppError('A capture was taken by someone else', 403, 'CAPTURE_NOT_OWNED');
-    if (c.workdayReportId || c.siteInspectionReportId || c.visitSubmissionId || c.siteLogEntry) {
+    if (c.visitSubmissionId || c.siteLogEntry) {
       throw new AppError('A capture is already linked to another report', 409, 'CAPTURE_ALREADY_LINKED', { clientCaptureId: c.clientCaptureId });
     }
   }
@@ -393,7 +391,7 @@ export async function submitVisit(params: {
       });
       for (const c of links) {
         const linked = await tx.fieldEvidenceLog.updateMany({
-          where: { id: c.id, workdayReportId: null, siteInspectionReportId: null, visitSubmissionId: null },
+          where: { id: c.id, visitSubmissionId: null },
           data: { visitSubmissionId: submission.id, visitAnswerPath: c.path, facilityUnitId: c.unitId },
         });
         if (linked.count !== 1) throw new AppError('A capture is already linked to another report', 409, 'CAPTURE_ALREADY_LINKED');

@@ -6,16 +6,29 @@
  */
 
 export type OutboxKind =
+  /** A photo or voice note (entity = clientCaptureId): upload, then register. */
   | 'CAPTURE'
-  | 'REPORT'
-  | 'REVALIDATION'
-  | 'CHAT_MESSAGE'
+  /** A special incident report (entity = clientIncidentId); the handler uploads its photos first. */
   | 'INCIDENT'
-  // Phase 10: assign, verify (close with photos or reopen) or reject a defect (payload carries the action).
+  // Phase 10: verify a defect (close with photos or reopen; the payload carries the action).
   | 'DEFECT_ACTION'
-  // Phase 14: a confirmed site inspection (waits for its photos), and a finding resolution.
-  | 'SITE_INSPECTION'
-  | 'FINDING_RESOLUTION';
+  // Redesign R5 (D-R5.9): the visit app. Every request carries a client UUID (idempotent on the server).
+  /** An officer's Confirm / Move / Propose / Decline (entity = clientActionId). */
+  | 'VISIT_RESPONSE'
+  /** A check-in (entity = clientCheckInId); waits for its unscheduled visit. */
+  | 'VISIT_CHECK_IN'
+  /** A visit submission (entity = clientSubmissionId = draft id); waits for captures, check-in, unscheduled visit, site log entries. */
+  | 'VISIT_SUBMISSION'
+  /** An Ad hoc visit built on the phone (entity = clientVisitId). */
+  | 'UNSCHEDULED_VISIT'
+  /** A site log photo, voice note or note (entity = clientEntryId); waits for its capture. */
+  | 'SITE_LOG_ENTRY';
+
+/**
+ * Redesign R5e (D-R5.10): kinds of the old app (workday reports, chat, Phase 14 inspections). Their
+ * rows are deleted by SQLite v10 and no handler exists for them; listed for that migration's test.
+ */
+export const REMOVED_OUTBOX_KINDS: readonly string[] = ['REPORT', 'REVALIDATION', 'CHAT_MESSAGE', 'SITE_INSPECTION', 'FINDING_RESOLUTION'];
 
 /**
  * HELD (Phase 5 Step 8): queued under a session that has since ended. Never sent until the person
@@ -66,33 +79,50 @@ export interface ClassifiableError {
 
 /** Server error codes that mean "try again later", not "this request is wrong". */
 const RETRYABLE_CODES = new Set([
-  'CAPTURES_NOT_REGISTERED', // a capture the report needs is still uploading
+  'CAPTURES_NOT_REGISTERED', // a photo the visit report needs is still uploading
   'OBJECT_NOT_UPLOADED', // the upload did not land; the handler re-uploads
+  'SITE_LOG_NOT_REGISTERED', // a site log entry a submission attaches has not reached the server yet
 ]);
 
-/**
- * Phase 7: the project switched contractor field reporting off. The contractor's session stays
- * valid, so this must not pause the outbox like an ended session, and retrying cannot succeed
- * until the project changes the setting: dead-letter at once with a message the person understands.
- */
-export const CONTRACTOR_REPORTING_OFF_CODE = 'CONTRACTOR_FIELD_REPORTING_DISABLED';
-export const CONTRACTOR_REPORTING_OFF_MESSAGE =
-  'Contractor reporting is off for this project. This item stays on this device and was not sent. Ask the project monitor; tap Retry only if they turn contractor reporting back on.';
+/** Redesign R5: fixed messages for the visit app's permanent refusals (D-R5.11, D-R5.19, D-R5.20). */
+export const VISIT_CHANGED_RESPONSE_MESSAGE = 'This visit changed since you responded. Refresh and respond again.';
+export const FORM_SNAPSHOT_STALE_MESSAGE =
+  'The visit form was rebuilt after it was downloaded, so this report was not sent. Your answers are kept on this phone: open the visit to move them onto the new form and submit again.';
+export const VISIT_ALREADY_SUBMITTED_MESSAGE =
+  'Another officer already submitted this visit, so your report was not sent. It stays on this phone until you delete it.';
+export const UNSCHEDULED_FORM_STALE_MESSAGE =
+  'The Ad hoc form on this phone no longer matches the project forms, so the unscheduled visit was not created. Refresh, then start the unscheduled visit again.';
 
 /** Server codes with a fixed message for the person, shown instead of the raw server text. */
 const PERMANENT_CODE_MESSAGES: Record<string, string> = {
-  [CONTRACTOR_REPORTING_OFF_CODE]: CONTRACTOR_REPORTING_OFF_MESSAGE,
+  FORM_SNAPSHOT_STALE: FORM_SNAPSHOT_STALE_MESSAGE,
+  VISIT_ALREADY_SUBMITTED: VISIT_ALREADY_SUBMITTED_MESSAGE,
+};
+
+/**
+ * Per-kind overrides: the same server code means something else for another request (409
+ * VISIT_CHANGED on a response is "respond again", on a submission the server text says why).
+ */
+const KIND_CODE_MESSAGES: Partial<Record<OutboxKind, Record<string, string>>> = {
+  VISIT_RESPONSE: { VISIT_CHANGED: VISIT_CHANGED_RESPONSE_MESSAGE },
+  UNSCHEDULED_VISIT: { FORM_SNAPSHOT_STALE: UNSCHEDULED_FORM_STALE_MESSAGE },
 };
 
 /** The message stored on a failed row: a fixed one for known permanent codes, else the error text. */
-export function failureMessage(error: ClassifiableError & { message?: string }): string {
+export function failureMessage(error: ClassifiableError & { message?: string }, kind?: OutboxKind): string {
+  const byKind = kind && error.code ? KIND_CODE_MESSAGES[kind]?.[error.code] : undefined;
+  if (byKind) return byKind;
   if (error.code && PERMANENT_CODE_MESSAGES[error.code]) return PERMANENT_CODE_MESSAGES[error.code];
   return error.message || 'Unknown error';
 }
 
+/**
+ * Redesign R5: codes that mean a visit submission (or the unscheduled visit under it) can never be
+ * sent as it is. The draft is marked REFUSED and kept on the phone (D-R5.19, D-R5.20).
+ */
+export const SUBMISSION_REFUSED_CODES: readonly string[] = ['FORM_SNAPSHOT_STALE', 'VISIT_ALREADY_SUBMITTED'];
+
 export function classifyFailure(error: ClassifiableError): FailureClass {
-  // Checked first: whatever status the server uses (403 on submissions, 409 on join), never retry.
-  if (error.code === CONTRACTOR_REPORTING_OFF_CODE) return 'PERMANENT';
   if (error.kind === 'auth') return 'AUTH_PAUSE';
   if (error.kind === 'network') return 'RETRY';
   if (error.kind === 'local') return 'PERMANENT';
@@ -133,7 +163,7 @@ export function afterFailure(
 export type DependencyState = 'READY' | 'WAITING' | 'BLOCKED';
 
 /**
- * A row may run only when every row it depends on is DONE (a report waits for its captures).
+ * A row may run only when every row it depends on is DONE (a visit report waits for its photos).
  * A dependency that is DEAD blocks it; a missing dependency is treated as done (it was purged
  * after completing).
  */
@@ -160,12 +190,12 @@ export function dueRows(rows: OutboxRow[], now: Date): OutboxRow[] {
 /** Kinds that become evidence; these are held after a rejoin instead of sent under the new session. */
 export const SESSION_BOUND_KINDS: ReadonlySet<OutboxKind> = new Set<OutboxKind>([
   'CAPTURE',
-  'CHAT_MESSAGE',
-  'REPORT',
-  'REVALIDATION',
   'DEFECT_ACTION',
-  'SITE_INSPECTION',
-  'FINDING_RESOLUTION',
+  'VISIT_RESPONSE',
+  'VISIT_CHECK_IN',
+  'VISIT_SUBMISSION',
+  'UNSCHEDULED_VISIT',
+  'SITE_LOG_ENTRY',
 ]);
 
 /**
@@ -180,4 +210,47 @@ export function shouldHoldOnNewSession(
   if (row.status === 'DONE' || row.status === 'HELD') return false;
   if (!SESSION_BOUND_KINDS.has(row.kind)) return false;
   return row.sessionKey !== currentSessionKey;
+}
+
+// ---------------------------------------------------------------------------
+// Redesign R5 (D-R5.9): what each visit-app row waits for
+// ---------------------------------------------------------------------------
+
+/** Finds the open (not DONE) outbox row of a kind for an entity, or null when it was sent or never queued. */
+export type OpenRowLookup = (kind: OutboxKind, entityId: string) => string | null;
+
+function openRows(lookup: OpenRowLookup, kind: OutboxKind, entityIds: Array<string | null | undefined>): string[] {
+  const out: string[] = [];
+  for (const id of entityIds) {
+    if (!id) continue;
+    const row = lookup(kind, id);
+    if (row && !out.includes(row)) out.push(row);
+  }
+  return out;
+}
+
+/** A check-in waits for its unscheduled visit (when the visit was created on this phone and is unsent). */
+export function checkInDependsOn(params: { unscheduledVisitId: string | null }, lookup: OpenRowLookup): string[] {
+  return openRows(lookup, 'UNSCHEDULED_VISIT', [params.unscheduledVisitId]);
+}
+
+/** A site log entry waits for its photo or voice note. */
+export function siteLogEntryDependsOn(params: { captureId: string | null }, lookup: OpenRowLookup): string[] {
+  return openRows(lookup, 'CAPTURE', [params.captureId]);
+}
+
+/**
+ * A submission waits for every capture its answers name, its visit's check-in, the unscheduled visit
+ * (Ad hoc on this phone) and every site log entry it attaches. Rows already sent are not waited for.
+ */
+export function visitSubmissionDependsOn(
+  params: { captureIds: string[]; checkInId: string | null; unscheduledVisitId: string | null; siteLogEntryIds: string[] },
+  lookup: OpenRowLookup
+): string[] {
+  return [
+    ...openRows(lookup, 'UNSCHEDULED_VISIT', [params.unscheduledVisitId]),
+    ...openRows(lookup, 'VISIT_CHECK_IN', [params.checkInId]),
+    ...openRows(lookup, 'CAPTURE', params.captureIds),
+    ...openRows(lookup, 'SITE_LOG_ENTRY', params.siteLogEntryIds),
+  ];
 }

@@ -47,7 +47,7 @@ export const SignInScreen: React.FC = () => {
       setPassword("");
       navigation.reset({
         index: 0,
-        routes: [{ name: result.account.mustChangePassword ? "ChangePassword" : "Projects" }],
+        routes: [{ name: result.account.mustChangePassword ? "ChangePassword" : "Home" }],
       });
     } catch (err) {
       const code = (err as { code?: string })?.code ?? "";

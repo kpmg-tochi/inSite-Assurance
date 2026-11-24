@@ -168,7 +168,8 @@ router.get(
 
 /**
  * PUT /api/v1/projects/:projectId/setup/:stepId
- * Validates and saves one step in a transaction and writes one PROJECT_SETUP_STEP_SAVED entry.
+ * Validates and saves one setup section (`:stepId` is a section id, e.g. `contractor`; redesign
+ * R6a) in a transaction and writes one PROJECT_SETUP_STEP_SAVED entry.
  * Drafts: projects:create or projects:edit_baseline. Active projects: projects:edit_baseline.
  */
 router.put(
@@ -191,8 +192,8 @@ router.put(
 
 /**
  * POST /api/v1/projects/:projectId/activate
- * Re-validates every step, issues join codes and sets the project ACTIVE. 422 with the issues
- * list if anything is incomplete.
+ * Re-validates every section and sets the project ACTIVE. 422 PROJECT_INCOMPLETE with the issues
+ * (each with its section `stepId` and `wizardStepId`) if anything is incomplete.
  */
 router.post(
   '/:projectId/activate',

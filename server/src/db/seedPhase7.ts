@@ -64,7 +64,6 @@ export async function seedPhase7(p: {
       lgaLocation: "Ikpoba-Okha",
       description: "Grant-funded renovation monitored by independent M&E officers; releases follow verified milestones.",
       totalBudgetNgn: 420_000_000,
-      reportingCadence: "WEEKLY",
       timezone: "Africa/Lagos",
       geofenceMode: "RADIAL",
       geofenceGeoJson: geofence as unknown as Prisma.InputJsonValue,

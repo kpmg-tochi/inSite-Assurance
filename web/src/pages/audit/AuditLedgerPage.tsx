@@ -1,12 +1,10 @@
-import React, { useState, useMemo, useEffect, MouseEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import React, { useState, useMemo, MouseEvent } from "react";
 import type { ProjectSummaryDto, AuditTrailResponseDto } from "../../api/types";
 import { displayZoneLabel, formatDateTimeShort } from "../../lib/formatters";
 import {
   useProjectAuditTrailQuery,
   useTenantAuditTrailQuery,
 } from "../../queries/audit/useAuditQueries";
-import { useAuth } from "../../lib/auth-context";
 import {
   StandardTable,
   TableBadge,
@@ -15,7 +13,6 @@ import {
 } from "../../components/table";
 import Drawer from "../../components/Drawer";
 import Loader from "../../components/Loader";
-import { WorkdayReportsPanel } from "../../components/WorkdayReportsPanel";
 import { ShieldCheck, X, FileText, User, Tag } from "lucide-react";
 
 type AuditLedgerEntry = AuditTrailResponseDto["entries"][number];
@@ -25,21 +22,7 @@ interface AuditLedgerPageProps {
 }
 
 export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
-  const { hasPermission } = useAuth();
-  const canSeeReports = hasPermission("reports:view_all");
-  const [searchParams] = useSearchParams();
-  // The reports tab keeps the URL value "presence": server notifications deep-link to ?tab=presence.
-  const initialTab =
-    searchParams.get("tab") === "presence" && canSeeReports ? "presence" : "ledger";
-  const initialReportId = searchParams.get("reportId");
-  const initialWbsItemId = searchParams.get("wbsItemId");
-  const [activeTab, setActiveTab] = useState<"ledger" | "tenant" | "presence">(initialTab);
-
-  useEffect(() => {
-    if (searchParams.get("tab") === "presence" && canSeeReports) {
-      setActiveTab("presence");
-    }
-  }, [searchParams, canSeeReports]);
+  const [activeTab, setActiveTab] = useState<"ledger" | "tenant">("ledger");
 
   const projectLedger = useProjectAuditTrailQuery(project.id, activeTab === "ledger");
   const tenantLedger = useTenantAuditTrailQuery(activeTab === "tenant");
@@ -101,7 +84,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
       id: "actor",
       header: "Actor & Role",
       tooltip:
-        "Authenticated portal user, mobile field reporter, or system process that committed the event",
+        "Authenticated portal user, mobile field officer, or system process that committed the event",
       width: "w-56",
         cell: (entry) => {
         const upperActor = entry.actorType.toUpperCase();
@@ -207,30 +190,9 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
         >
           Tenant Governance Ledger
         </button>
-        {canSeeReports && (
-        <button
-          type="button"
-          onClick={() => setActiveTab("presence")}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-            activeTab === "presence"
-              ? "bg-white text-slate-900 shadow-2xs"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
-        >
-          Field reports
-        </button>
-        )}
       </div>
 
-      {activeTab === "presence" ? (
-        <div className="space-y-5">
-          <WorkdayReportsPanel
-            projectId={project.id}
-            initialReportId={initialReportId}
-            initialWbsItemId={initialWbsItemId}
-          />
-        </div>
-      ) : isLoading ? (
+      {isLoading ? (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-10 flex flex-col items-center justify-center gap-3">
           <Loader size="sm" />
           <span className="text-xs text-slate-500 font-medium">

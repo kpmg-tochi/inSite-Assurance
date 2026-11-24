@@ -1,54 +1,62 @@
-import type { FieldPersonaType, ReportingCadence } from '@insite/shared';
+import { resolveTerm, resolveTerminology, type FieldPersonaType, type ResolvedTerminology } from '@insite/shared';
 
 /**
- * Wording for the field app (Phase 7 Step 8, reduced in redesign R1d).
- *
- * Contractors no longer sign in (decision P2): every mobile user is an officer who inspects and
- * records, so every persona, including a legacy CONTRACTOR_EXECUTOR, reads with the verifier
- * wording. The persona argument stays so callers keep one call shape.
+ * Wording for the field app (redesign R5b, D-R5.23). Every field role (M&E officer, resident
+ * supervisor, independent monitor) uses the same visit app, so every persona gets the same text;
+ * the persona argument stays so callers keep one call shape. Tenant words for the contractor, the
+ * funder and the beneficiary come from `useActiveBranding().terminology`.
  */
 
 export interface PersonaCopy {
-  /** Inbox header subtitle. */
-  inboxSubtitle: string;
-  /** End-of-day button in a WBS thread. */
-  endOfDayButton: string;
-  /** Title of the end-of-day report sheet. */
-  reportSheetTitle: string;
-  /** Sync status screen. */
-  backlogEmptyDescription: string;
-  /** Phase 14: inbox entry to the checklist inspection flow. */
-  inspectionEntry: string;
-  /** Phase 14: inbox entry to inspection findings, and the screen subtitle. */
-  findingsEntry: string;
-  findingsSubtitle: string;
-}
-
-/** Phase 8: the span a report covers, by cadence. Daily (or unknown) keeps the original wording. */
-function spanAdjective(cadence?: ReportingCadence | null): string {
-  switch (cadence) {
-    case 'WEEKLY': return 'Weekly';
-    case 'BI_WEEKLY': return 'Fortnightly';
-    case 'MONTHLY': return 'Monthly';
-    case 'QUARTERLY': return 'Quarterly';
-    case 'CUSTOM_INTERVAL': return 'Period';
-    case 'INSPECTION_ONLY': return 'Inspection';
-    default: return 'Daily';
-  }
+  /** Home header subtitle. */
+  homeSubtitle: string;
+  /** Home section above the project cards. */
+  myProjectsTitle: string;
+  /** The selected day has no visits. */
+  noVisitsOnDay: string;
+  /** Home and project button to record a visit that was not planned (recorded as Ad hoc). */
+  unscheduledVisitButton: string;
+  unscheduledVisitHelp: string;
+  /** Visit screen actions. */
+  checkInButton: string;
+  startFormButton: string;
+  resumeFormButton: string;
+  correctFormButton: string;
+  /** Something is saved on this phone and not sent yet. */
+  waitingToSend: string;
+  /** Outbox screen when nothing is waiting. */
+  outboxEmptyDescription: string;
+  /** Site log screen subtitle. */
+  siteLogSubtitle: string;
+  /** Tenant term for the contractor (project details). */
+  contractorLabel: string;
+  /** Tenant term for the beneficiary (the school). */
+  beneficiaryLabel: string;
+  /** Incident report subtitle. */
+  incidentSubtitle: string;
 }
 
 export function personaCopy(
   _persona: FieldPersonaType | null | undefined,
-  cadence?: ReportingCadence | null
+  terminology?: ResolvedTerminology | null
 ): PersonaCopy {
-  const adj = spanAdjective(cadence);
+  const terms = terminology ?? resolveTerminology({});
+  const funder = resolveTerm(terms, 'funderParty', { lower: true });
   return {
-    inboxSubtitle: cadence === 'INSPECTION_ONLY' ? 'Inspection & Verification' : `${adj} Inspection & Verification`,
-    endOfDayButton: 'Record inspection summary & submit',
-    reportSheetTitle: 'Submit your inspection report',
-    backlogEmptyDescription: 'Every inspection report from this device has been accepted by the server.',
-    inspectionEntry: 'Start a site inspection',
-    findingsEntry: 'Inspection findings',
-    findingsSubtitle: 'Findings raised from inspections on this project. Contractors fix them; you can record the fix too.',
+    homeSubtitle: 'Your site visits',
+    myProjectsTitle: 'My projects',
+    noVisitsOnDay: 'No visits on this day.',
+    unscheduledVisitButton: 'Unscheduled visit',
+    unscheduledVisitHelp: 'Record a visit that was not planned. It is saved as an Ad hoc visit.',
+    checkInButton: 'Check in',
+    startFormButton: 'Start the visit form',
+    resumeFormButton: 'Resume the visit form',
+    correctFormButton: 'Correct and resubmit',
+    waitingToSend: 'Waiting to send',
+    outboxEmptyDescription: 'Every visit report, check-in, response and site log entry from this phone has been accepted by the server.',
+    siteLogSubtitle: 'Photos, voice notes and notes from site. Saved on this phone and sent when you are online.',
+    contractorLabel: resolveTerm(terms, 'contractor'),
+    beneficiaryLabel: resolveTerm(terms, 'beneficiary'),
+    incidentSubtitle: `Direct alert to the monitor and the ${funder}`,
   };
 }

@@ -4,7 +4,7 @@ import type {
   MilestoneOffsetUnit,
 } from '../schemas/contract.schema';
 import { CONTRACT_MILESTONE_ANCHOR_META } from '../schemas/contract.schema';
-import { addDays, daysBetween } from './reportingPeriod';
+import { addDays, daysBetween } from './calendar';
 import { addWorkdays } from './schedule';
 
 /**

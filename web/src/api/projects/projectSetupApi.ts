@@ -1,12 +1,11 @@
 import type {
   ActivateProjectResponse,
-  BoqRevisionDto,
   CreateProjectDraftRequest,
   ProjectContractorDto,
   ProjectContractorInput,
   ProjectDraftSummary,
   ProjectSetupDto,
-  ProjectSetupStepId,
+  ProjectSetupSectionId,
 } from '@insite/shared';
 import { api } from '../../config/apiConfig';
 import type { ApiEnvelope } from '../types';
@@ -23,8 +22,9 @@ export const getProjectSetup = async (projectId: string) => {
   return data.data;
 };
 
-export const saveProjectSetupStep = async (projectId: string, stepId: ProjectSetupStepId, body: unknown) => {
-  const { data } = await api.put<ApiEnvelope<ProjectSetupDto>>(`/projects/${projectId}/setup/${stepId}`, body);
+/** Saves one setup section (redesign R6a: the endpoint takes a section id). */
+export const saveProjectSetupStep = async (projectId: string, sectionId: ProjectSetupSectionId, body: unknown) => {
+  const { data } = await api.put<ApiEnvelope<ProjectSetupDto>>(`/projects/${projectId}/setup/${sectionId}`, body);
   return data.data;
 };
 
@@ -79,12 +79,5 @@ export const listProjectContractors = async (projectId: string) => {
 
 export const addProjectContractor = async (projectId: string, body: Omit<ProjectContractorInput, 'id'>) => {
   const { data } = await api.post<ApiEnvelope<ProjectContractorDto>>(`/projects/${projectId}/contractors`, body);
-  return data.data;
-};
-
-// BOQ revisions (legacy, read-only)
-
-export const listBoqRevisions = async (projectId: string) => {
-  const { data } = await api.get<ApiEnvelope<BoqRevisionDto[]>>(`/projects/${projectId}/boq/revisions`);
   return data.data;
 };

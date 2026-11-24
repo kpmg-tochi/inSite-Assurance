@@ -163,7 +163,7 @@ export const ProjectTypeClosureConfigSchema = z
   .object({
     cocSignatories: z.array(CocSignatorySlotSchema).min(1).max(8).default(DEFAULT_COC_SIGNATORIES),
     beneficiarySignatureMode: BeneficiarySignatureModeEnum.default('RECORDED_BY_STAFF'),
-    /** A CoC can only be drafted after an approved FINAL_EVALUATION inspection. */
+    /** A CoC can only be drafted after an accepted final evaluation visit. */
     requireFinalEvaluationBeforeCoc: z.boolean().default(false),
     requireCocFor: z.array(ClosureGateEnum).max(3).default([]),
     /** The handover ceremony is due this many days after the CoC is issued. */
@@ -291,7 +291,6 @@ export const CompletionCertificateDtoSchema = z.object({
   status: CompletionCertificateStatusEnum,
   scopeSummary: z.string(),
   completionDate: z.string(),
-  finalEvaluationInspectionId: Uuid.nullable(),
   /** Redesign R4d: the accepted final evaluation visit the certificate was drafted on. */
   finalEvaluationVisitId: Uuid.nullable(),
   documentId: Uuid.nullable(),
@@ -316,8 +315,6 @@ export const ProjectCompletionDtoSchema = z.object({
   }),
   finalEvaluation: z.object({
     required: z.boolean(),
-    /** Legacy Phase 14 inspection (until R5). */
-    inspectionId: Uuid.nullable(),
     /** Redesign R4d: the accepted final evaluation visit. */
     visitId: Uuid.nullable(),
     visitDate: z.string().nullable(),

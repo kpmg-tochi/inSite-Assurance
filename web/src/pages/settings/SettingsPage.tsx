@@ -1,16 +1,15 @@
 import React, { useState, useMemo } from "react";
-import { ShieldCheck, User, KeyRound, Users, Palette, Building2, Workflow, Layers, School } from "lucide-react";
+import { ShieldCheck, User, KeyRound, Users, Palette, Building2, Workflow, Layers, UserCheck } from "lucide-react";
 import { ProjectTypesTab } from "../../components/deliveryModels/ProjectTypesTab";
-import { ClipboardCheck } from "lucide-react";
-import { SupervisorsCard } from "../../components/inspections/SupervisorsCard";
+import { SupervisorsCard } from "../../components/supervision/SupervisorsCard";
 import { RegionsCard } from "../../components/deliveryModels/RegionsCard";
 import { DocumentTypesCard } from "../../components/documents/DocumentTypesCard";
-import { FormsAndFacilitiesTab } from "../../components/forms/FormsAndFacilitiesTab";
 import { TerminologyCard } from "../../components/deliveryModels/TerminologyCard";
 import { toast } from "sonner";
 import type { FieldSessionRosterDto } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth } from "../../lib/auth-context";
+import { useGuardedAction } from "../../lib/navigationGuard";
 import { formatDateTimeShort } from "../../lib/formatters";
 import { useProjectFieldSessionsQuery } from "../../queries/rbac/useRbacQueries";
 import { useUpdateFieldSessionStatusMutation } from "../../mutations/rbac/useRbacMutations";
@@ -52,14 +51,12 @@ export function SettingsPage({ project }: SettingsPageProps) {
   // Phase 13: tenant document types sit with the delivery-model settings.
   const canManageDocumentTypes = hasPermission("documents:manage_types");
   const canSeeDeliveryTab = canManageProjectTypes || canManageRegions || canManageDocumentTypes;
-  // Redesign R2a / R3: the facility catalogue and the form library share one tab.
-  const canManageFacilities = hasPermission("facilities:manage");
-  const canSeeFormsTab = canManageFacilities || hasPermission("forms:manage");
+  // Redesign R6b: the facility catalogue and the form library moved to the tenant page /app/forms.
 
-  // Phase 14: the supervisors view (checklist template authoring moved to Forms & facilities in R3e).
-  const canSeeInspectionsTab = hasPermission("inspections:view");
+  // Phase 14: the supervisors view (redesign R5f: the legacy inspection settings are gone).
+  const canSeeSupervisorsTab = hasPermission("inspections:view");
 
-  type SettingsTab = "ACCESS" | "ROLES" | "USERS" | "ORGANIZATIONS" | "WORKFLOWS" | "DELIVERY" | "FORMS" | "INSPECTIONS" | "BRANDING" | "ACCOUNT";
+  type SettingsTab = "ACCESS" | "ROLES" | "USERS" | "ORGANIZATIONS" | "WORKFLOWS" | "DELIVERY" | "SUPERVISORS" | "BRANDING" | "ACCOUNT";
   const [activeTab, setActiveTab] = useState<SettingsTab>(() =>
     canSeeAccessTab
       ? "ACCESS"
@@ -73,14 +70,17 @@ export function SettingsPage({ project }: SettingsPageProps) {
               ? "WORKFLOWS"
               : canSeeDeliveryTab
               ? "DELIVERY"
-              : canSeeFormsTab
-              ? "FORMS"
-              : canSeeInspectionsTab
-              ? "INSPECTIONS"
+              : canSeeSupervisorsTab
+              ? "SUPERVISORS"
               : canSeeTenantTab
               ? "BRANDING"
               : "ACCOUNT",
   );
+  // Leaving a tab unmounts its editor: ask first when it has unsaved changes (useLeaveGuard).
+  const requestLeave = useGuardedAction();
+  const selectTab = (tab: SettingsTab) => {
+    if (tab !== activeTab) requestLeave(() => setActiveTab(tab));
+  };
 
   // Only fetch what the user is allowed to see.
   const { data: fieldAgents = [], isLoading: sessionsLoading } =
@@ -295,7 +295,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
           {canSeeAccessTab && (
           <button
             type="button"
-            onClick={() => setActiveTab("ACCESS")}
+            onClick={() => selectTab("ACCESS")}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
               activeTab === "ACCESS"
                 ? "bg-white text-brand-primary shadow-xs"
@@ -310,7 +310,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
           {canManageRoles && (
             <button
               type="button"
-              onClick={() => setActiveTab("ROLES")}
+              onClick={() => selectTab("ROLES")}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
                 activeTab === "ROLES"
                   ? "bg-white text-brand-primary shadow-xs"
@@ -325,7 +325,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
           {canManageUsers && (
             <button
               type="button"
-              onClick={() => setActiveTab("USERS")}
+              onClick={() => selectTab("USERS")}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
                 activeTab === "USERS"
                   ? "bg-white text-brand-primary shadow-xs"
@@ -340,7 +340,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
           {canManageOrganizations && (
             <button
               type="button"
-              onClick={() => setActiveTab("ORGANIZATIONS")}
+              onClick={() => selectTab("ORGANIZATIONS")}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
                 activeTab === "ORGANIZATIONS"
                   ? "bg-white text-brand-primary shadow-xs"
@@ -355,7 +355,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
           {canManageWorkflows && (
             <button
               type="button"
-              onClick={() => setActiveTab("WORKFLOWS")}
+              onClick={() => selectTab("WORKFLOWS")}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
                 activeTab === "WORKFLOWS"
                   ? "bg-white text-brand-primary shadow-xs"
@@ -370,7 +370,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
           {canSeeDeliveryTab && (
             <button
               type="button"
-              onClick={() => setActiveTab("DELIVERY")}
+              onClick={() => selectTab("DELIVERY")}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
                 activeTab === "DELIVERY"
                   ? "bg-white text-brand-primary shadow-xs"
@@ -382,40 +382,25 @@ export function SettingsPage({ project }: SettingsPageProps) {
             </button>
           )}
 
-          {canSeeFormsTab && (
+          {canSeeSupervisorsTab && (
             <button
               type="button"
-              onClick={() => setActiveTab("FORMS")}
+              onClick={() => selectTab("SUPERVISORS")}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
-                activeTab === "FORMS"
+                activeTab === "SUPERVISORS"
                   ? "bg-white text-brand-primary shadow-xs"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              <School className="w-4 h-4" />
-              <span>Forms &amp; facilities</span>
-            </button>
-          )}
-
-          {canSeeInspectionsTab && (
-            <button
-              type="button"
-              onClick={() => setActiveTab("INSPECTIONS")}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
-                activeTab === "INSPECTIONS"
-                  ? "bg-white text-brand-primary shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <ClipboardCheck className="w-4 h-4" />
-              <span>Inspections &amp; supervisors</span>
+              <UserCheck className="w-4 h-4" />
+              <span>Supervisors</span>
             </button>
           )}
 
           {canSeeTenantTab && (
             <button
               type="button"
-              onClick={() => setActiveTab("BRANDING")}
+              onClick={() => selectTab("BRANDING")}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
                 activeTab === "BRANDING"
                   ? "bg-white text-brand-primary shadow-xs"
@@ -429,7 +414,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
 
           <button
             type="button"
-            onClick={() => setActiveTab("ACCOUNT")}
+            onClick={() => selectTab("ACCOUNT")}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition ${
               activeTab === "ACCOUNT"
                 ? "bg-white text-brand-primary shadow-xs"
@@ -453,8 +438,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
           {canManageDocumentTypes && <DocumentTypesCard />}
         </div>
       )}
-      {activeTab === "FORMS" && canSeeFormsTab && <FormsAndFacilitiesTab />}
-      {activeTab === "INSPECTIONS" && canSeeInspectionsTab && (
+      {activeTab === "SUPERVISORS" && canSeeSupervisorsTab && (
         <div className="space-y-4">
           <SupervisorsCard />
         </div>
@@ -484,7 +468,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
                 </span>
               </div>
             }
-            subtitle="Field agents authorized to submit geotagged photos, audio notes, and Hold-Point logs"
+            subtitle="Field accounts signed in on a device for this project: visits, geotagged photos and voice notes"
             search={{
               value: rosterSearch,
               onChange: setRosterSearch,

@@ -66,21 +66,6 @@ export async function refreshScheduleBadge(
 // ---------------------------------------------------------------------------
 
 /**
- * Records that work on an item started: called when a report on it becomes counted evidence
- * (confirmed, approved, or released). Keeps the earliest workday; also sets the project's start.
- */
-export async function recordItemActualStart(tx: Tx, projectId: string, boqItemId: string, workdayDate: string) {
-  await tx.boqItem.updateMany({
-    where: { id: boqItemId, projectId, OR: [{ actualStartDate: null }, { actualStartDate: { gt: workdayDate } }] },
-    data: { actualStartDate: workdayDate },
-  });
-  await tx.project.updateMany({
-    where: { id: projectId, OR: [{ actualStartDate: null }, { actualStartDate: { gt: workdayDate } }] },
-    data: { actualStartDate: workdayDate },
-  });
-}
-
-/**
  * Keeps actualCompletionDate in step with progress: set (today, project zone) when an item reaches
  * 100%, cleared if it falls back below 100. Called from refreshProjectProgress (modules/progress).
  */

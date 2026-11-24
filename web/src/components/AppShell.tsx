@@ -1,31 +1,8 @@
 import { InSiteLogo } from "./InSiteLogo";
 import { useGuardedAction } from "../lib/navigationGuard";
-import React, { useState, useRef, useEffect } from "react";
-import { Link, NavLink, useNavigate, useLocation } from "react-router-dom";
-import {
-  Map,
-  Wallet,
-  ClipboardList,
-  ShieldCheck,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Settings,
-  FolderKanban,
-  ArrowRight,
-  Handshake,
-  Wrench,
-  Globe2,
-  Flag,
-  FolderOpen,
-  ListChecks,
-  Lightbulb,
-  Gauge,
-  CalendarDays,
-} from "lucide-react";
-import { CLOSURE_VIEW_PERMISSIONS } from "../pages/closure/ProjectClosurePage";
-import { MILESTONE_VIEW_PERMISSIONS } from "./contracts/contractUi";
-import { ProjectPhaseBanner } from "./closeout/ProjectPhaseBanner";
-import { useProjectProcess } from "../queries/process/useProcessQueries";
+import React, { useEffect, useId, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ChevronRight, Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import type { ProjectSummaryDto } from "../api/types";
 import { useAuth } from "../lib/auth-context";
 import { useDemoAccounts } from "../config/useDemoAccounts";
@@ -33,6 +10,18 @@ import { IS_DEMO_MODE } from "../config/demoMode";
 import { getInitials } from "../lib/formatters";
 import Notifications from "./Notifications";
 import { APPLICATION_NAME } from "../config/appName";
+import { ProjectStageChip } from "./overview/ProjectStageChip";
+import {
+  canSeeNavItem,
+  navItemMatches,
+  pageNameFor,
+  parseAppLocation,
+  PROJECT_MORE_NAV,
+  PROJECT_NAV,
+  WORKSPACE_NAV,
+  type AppLocation,
+  type NavItem,
+} from "../navigation/navItems";
 
 interface AppShellProps {
   projects: ProjectSummaryDto[];
@@ -42,661 +31,472 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-/** Phase 10: who sees the Retention and defects tab (same as the server route). */
-/** The "Recent Active Projects" list under the navigation is switched off for now. */
-const SHOW_RECENT_PROJECTS = false;
+const FOCUSABLE = 'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-/** Header page names for the project pages, by the path segment after /app/projects/:id/. */
-const PROJECT_PAGE_NAMES: Record<string, string> = {
-  visits: "Visits",
-  milestones: "Milestones",
-  kickoff: "Kick-off",
-  documents: "Documents",
-  handover: "Handover",
-  retention: "Retention and defects",
-  payments: "Payments",
-  closure: "Closure",
-  audit: "Audit Ledger",
-  setup: "Project setup",
-  settings: "Project settings",
-  kpis: "Project KPIs",
-};
-
-/** Header page names for the pages that are not about one project, by the segment after /app/. */
-const WORKSPACE_PAGE_NAMES: Record<string, string> = {
-  visits: "Visit planner",
-  portfolio: "Portfolio",
-  projects: "All Projects",
-  kpis: "Programme KPIs",
-  lessons: "Lessons learned",
-  settings: "Settings",
-  organizations: "Contractor ratings",
-};
-
-const RETENTION_VIEW_PERMISSIONS = ["retention:manage_defects", "payments:view", "payments:record", "audit:view_ledger"];
-
-export function AppShell({
-  projects,
-  selectedProject,
-  onSelectProject,
-  headerActions,
-  children,
-}: AppShellProps) {
-  const { user, quickSwitchDemoAccount, logout, hasPermission, hasAnyPermission } = useAuth();
-  const demoAccounts = useDemoAccounts()?.accounts ?? [];
-  const navigate = useNavigate();
-  const requestLeave = useGuardedAction();
+/**
+ * The portal frame (redesign R6b, D-R6.11): the sidebar renders the navigation config in a Workspace
+ * group and a Project group (selected project's code, switcher, "More ▸"); the header shows the page
+ * name from the same config and the project's stage chip. Below `lg` the sidebar is an off-canvas
+ * drawer opened from the header.
+ */
+export function AppShell({ projects, selectedProject, onSelectProject, headerActions, children }: AppShellProps) {
   const location = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [userPopoverOpen, setUserPopoverOpen] = useState(false);
-  const [switchingAccount, setSwitchingAccount] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
+  const loc = parseAppLocation(location.pathname, location.search);
+  // Header: the project code only on pages about one project (and only when it is the selected one,
+  // e.g. not a draft in setup), then the page name.
+  const headerProject = loc.projectId && selectedProject?.id === loc.projectId ? selectedProject : null;
+  const pageName = pageNameFor(loc);
+
+  // Close the drawer when a link in it navigates.
   useEffect(() => {
-    function handleOutsideClick(e: MouseEvent) {
-      if (
-        popoverRef.current &&
-        !popoverRef.current.contains(e.target as Node)
-      ) {
-        setUserPopoverOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, []);
+    setDrawerOpen(false);
+  }, [location.pathname, location.search]);
 
-  const userInitials = getInitials(user?.fullName || "User");
-  const roleDisplayLabel = user?.roleName || user?.roleCode || "Team Member";
-
-  const workspaceTitleByRole = user?.isPlatformSuperAdmin
-    ? "Platform Super Admin Console"
-    : `${user?.roleName || "Assurance"} Workspace`;
-
-  const navLabels = {
-    dashboard: "Project overview",
-    // Redesign R2b
-    scope: "Scope & sprints",
-  };
-
-  // Header: the project code only on pages about one project (and only when it is the selected
-  // one, e.g. not a draft in setup), then the page name.
-  const projectRoute = location.pathname.match(/^\/app\/projects\/([^/]+)(?:\/([^/]+))?/);
-  const routeProjectId = projectRoute && projectRoute[1] !== "new" ? projectRoute[1] : null;
-  const headerProject = routeProjectId && selectedProject?.id === routeProjectId ? selectedProject : null;
-  const pageName = (() => {
-    if (routeProjectId) {
-      const section = projectRoute?.[2] ?? "dashboard";
-      if (section === "dashboard") return navLabels.dashboard;
-      if (section === "scope") return navLabels.scope;
-      return PROJECT_PAGE_NAMES[section] ?? "Project";
-    }
-    if (location.pathname.startsWith("/app/projects/new")) return "New Project";
-    const section = location.pathname.split("/")[2] ?? "";
-    return WORKSPACE_PAGE_NAMES[section] ?? "";
-  })();
-
-  const projectBasePath = selectedProject
-    ? `/app/projects/${selectedProject.id}`
-    : "/app/projects";
-
-  // Phase 10: the Handover and Retention tabs exist only when the module is on for the project.
-  const closeout = useProjectProcess(selectedProject?.id, selectedProject?.status !== "DRAFT").data?.config;
-
-  const recentActiveProjects = React.useMemo(() => {
-    const active = projects.filter((p) => p.certifiedProgressPct < 100);
-    const sliced = active.slice(0, 4);
-    if (
-      selectedProject &&
-      selectedProject.certifiedProgressPct < 100 &&
-      !sliced.some((p) => p.id === selectedProject.id)
-    ) {
-      return [selectedProject, ...sliced.slice(0, 3)];
-    }
-    return sliced;
-  }, [projects, selectedProject]);
-
-  const handleRoleSwitch = async (email: string) => {
-    try {
-      setSwitchingAccount(true);
-      await quickSwitchDemoAccount(email);
-      setUserPopoverOpen(false);
-    } finally {
-      setSwitchingAccount(false);
-    }
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    menuButtonRef.current?.focus();
   };
 
   return (
     <div className="flex h-screen px-3 gap-3 overflow-hidden bg-slate-50 text-slate-900">
-      {/* Floating Collapsible KPMG Sidebar */}
+      {/* Sidebar (lg and up) */}
       <aside
         className={`${
           sidebarCollapsed ? "w-[68px]" : "w-64"
-        } transition-all duration-200 kpmg-sidebar-gradient text-slate-200 rounded-2xl p-3 my-3 flex flex-col shadow-xl shrink-0 relative select-none min-h-0`}
+        } hidden lg:flex motion-safe:transition-all motion-safe:duration-200 kpmg-sidebar-gradient text-slate-200 rounded-2xl p-3 my-3 flex-col shadow-xl shrink-0 relative select-none min-h-0`}
       >
-          {/* Brand Header + Minimize Toggle (pinned to the top) */}
-          <div className="flex items-center justify-between px-1.5 py-2 mb-3 border-b border-white/10 shrink-0">
-            <Link
-              to="/"
-              title="View Public Platform Overview"
-              className="flex items-center gap-2.5 overflow-hidden hover:opacity-90 transition"
-            >
-              <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-1 shrink-0 shadow-sm">
-                {user?.tenant?.brandingConfig?.logoUrl ? (
-                  <img
-                    src={user.tenant.brandingConfig.logoUrl}
-                    alt={user?.tenant?.name || APPLICATION_NAME}
-                    className="w-full h-full object-contain"
-                  />
-                ) : (
-                  <InSiteLogo showText={false} className="h-full" />
-                )}
-              </div>
-              {!sidebarCollapsed && (
-                <div className="truncate">
-                  <div className="text-white font-semibold text-sm leading-tight truncate">
-                    {user?.tenant?.name || APPLICATION_NAME}
-                  </div>
-                  <div className="text-[11px] text-white/70 truncate">
-                    {user?.tenant?.brandingConfig?.tagline || APPLICATION_NAME}
-                  </div>
-                </div>
-              )}
-            </Link>
+        <SidebarContent
+          collapsed={sidebarCollapsed}
+          loc={loc}
+          projects={projects}
+          selectedProject={selectedProject}
+          onSelectProject={onSelectProject}
+          headerButton={
             <button
               type="button"
               onClick={() => setSidebarCollapsed((prev) => !prev)}
-              title={sidebarCollapsed ? "Expand sidebar" : "Minimize sidebar"}
-              className="p-1.5 rounded-lg text-white/75 hover:text-white hover:bg-white/10 transition shrink-0"
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className="p-1.5 rounded-lg text-white/75 hover:text-white hover:bg-white/10 transition shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
             >
-              {sidebarCollapsed ? (
-                <PanelLeftOpen className="w-4 h-4" />
-              ) : (
-                <PanelLeftClose className="w-4 h-4" />
-              )}
+              {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
             </button>
-          </div>
-
-          {/* Scrollable middle: primary navigation (role-segregated) */}
-          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mr-1.5 pr-1.5 pb-2">
-          <div className="space-y-1">
-            {!sidebarCollapsed && (
-              <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/55">
-                {workspaceTitleByRole}
-              </div>
-            )}
-
-            {hasPermission("projects:view_portfolio") && (
-              <NavLink
-                to="/app/portfolio"
-                title="Portfolio dashboard"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive
-                      ? "bg-white/15 text-white shadow-sm"
-                      : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <Globe2 className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Portfolio</span>}
-              </NavLink>
-            )}
-
-            {/* Redesign R4: the visit planner */}
-            {hasPermission("visits:view") && (
-              <NavLink
-                to="/app/visits"
-                end
-                title="Visit planner"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive ? "bg-white/15 text-white shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <CalendarDays className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Visit planner</span>}
-              </NavLink>
-            )}
-
-            {/* Phase 16: programme KPIs */}
-            {hasPermission("kpis:view") && (
-              <NavLink
-                to="/app/kpis"
-                title="Programme KPIs"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive ? "bg-white/15 text-white shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <Gauge className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Programme KPIs</span>}
-              </NavLink>
-            )}
-
-            {/* Phase 15: the tenant library of published lessons */}
-            {hasPermission("lessons:view") && (
-              <NavLink
-                to="/app/lessons"
-                title="Lessons learned"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive ? "bg-white/15 text-white shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <Lightbulb className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Lessons learned</span>}
-              </NavLink>
-            )}
-
-            <NavLink
-              to="/app/projects"
-              end
-              title="All Projects"
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                  isActive
-                    ? "bg-white/15 text-white shadow-sm"
-                    : "text-white/80 hover:text-white hover:bg-white/10"
-                }`
-              }
-            >
-              <FolderKanban className="w-4 h-4 shrink-0" />
-              {!sidebarCollapsed && (
-                <span className="truncate">All Projects</span>
-              )}
-            </NavLink>
-
-            <NavLink
-              to={selectedProject ? `${projectBasePath}/dashboard` : "/app/projects"}
-              title={navLabels.dashboard}
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                  isActive
-                    ? "bg-white/15 text-white shadow-sm"
-                    : "text-white/80 hover:text-white hover:bg-white/10"
-                }`
-              }
-            >
-              <Map className="w-4 h-4 shrink-0" />
-              {!sidebarCollapsed && (
-                <span className="truncate">{navLabels.dashboard}</span>
-              )}
-            </NavLink>
-
-            {(hasPermission("payments:view") || hasPermission("payments:record")) && (
-            <NavLink
-              to={selectedProject ? `${projectBasePath}/payments` : "/app/projects"}
-              title="Payments"
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                  isActive
-                    ? "bg-white/15 text-white shadow-sm"
-                    : "text-white/80 hover:text-white hover:bg-white/10"
-                }`
-              }
-            >
-              <Wallet className="w-4 h-4 shrink-0" />
-              {!sidebarCollapsed && <span className="truncate">Payments</span>}
-            </NavLink>
-            )}
-
-            {hasPermission("boq:view") && (
-            <NavLink
-              to={selectedProject ? `${projectBasePath}/scope` : "/app/projects"}
-              title={navLabels.scope}
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                  isActive
-                    ? "bg-white/15 text-white shadow-sm"
-                    : "text-white/80 hover:text-white hover:bg-white/10"
-                }`
-              }
-            >
-              <ClipboardList className="w-4 h-4 shrink-0" />
-              {!sidebarCollapsed && (
-                <span className="truncate">{navLabels.scope}</span>
-              )}
-            </NavLink>
-            )}
-
-
-            {/* Redesign R4: visits, findings and the site log */}
-            {selectedProject && hasPermission("visits:view") && (
-              <NavLink
-                to={`${projectBasePath}/visits`}
-                title="Visits"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive
-                      ? "bg-white/15 text-white shadow-sm"
-                      : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <CalendarDays className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Visits</span>}
-              </NavLink>
-            )}
-
-
-            {/* Phase 13: contract milestones (kick-off inside) and the document register */}
-            {selectedProject && hasAnyPermission(...MILESTONE_VIEW_PERMISSIONS) && (
-              <NavLink
-                to={`${projectBasePath}/milestones`}
-                title="Milestones"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive || location.pathname.startsWith(`${projectBasePath}/kickoff`)
-                      ? "bg-white/15 text-white shadow-sm"
-                      : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <Flag className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Milestones</span>}
-              </NavLink>
-            )}
-            {selectedProject && (hasPermission("documents:view") || hasPermission("documents:upload")) && (
-              <NavLink
-                to={`${projectBasePath}/documents`}
-                title="Documents"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive
-                      ? "bg-white/15 text-white shadow-sm"
-                      : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <FolderOpen className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Documents</span>}
-              </NavLink>
-            )}
-
-            {/* Phase 10: handover and retention, shown only when the module is on for the project */}
-            {selectedProject && closeout?.enableHandoverModule && (hasPermission("handover:record_response") || hasPermission("handover:review_feedback")) && (
-              <NavLink
-                to={`${projectBasePath}/handover`}
-                title="Handover"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive ? "bg-white/15 text-white shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <Handshake className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Handover</span>}
-              </NavLink>
-            )}
-            {selectedProject && closeout?.enableRetentionModule && RETENTION_VIEW_PERMISSIONS.some((k) => hasPermission(k)) && (
-              <NavLink
-                to={`${projectBasePath}/retention`}
-                title="Retention and defects"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive ? "bg-white/15 text-white shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <Wrench className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Retention and defects</span>}
-              </NavLink>
-            )}
-
-            {/* Phase 15: closure checklist, ratings, lessons and the closure pack */}
-            {selectedProject && CLOSURE_VIEW_PERMISSIONS.some((k) => hasPermission(k)) && (
-              <NavLink
-                to={`${projectBasePath}/closure`}
-                title="Closure"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive ? "bg-white/15 text-white shadow-sm" : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <ListChecks className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && <span className="truncate">Closure</span>}
-              </NavLink>
-            )}
-
-            {/* Audit Ledger gated by audit:view_ledger permission */}
-            {hasPermission("audit:view_ledger") && (
-              <NavLink
-                to={selectedProject ? `${projectBasePath}/audit` : "/app/projects"}
-                title="Audit Ledger"
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                    isActive
-                      ? "bg-white/15 text-white shadow-sm"
-                      : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <ShieldCheck className="w-4 h-4 shrink-0" />
-                {!sidebarCollapsed && (
-                  <span className="truncate">Audit Ledger</span>
-                )}
-              </NavLink>
-            )}
-
-            {/* General Settings: Access Management, Notifications, & Profile */}
-            <NavLink
-              to="/app/settings"
-              title="Governance & App Settings"
-              className={({ isActive }) =>
-                `w-full flex items-center gap-3 px-2.5 py-2.5 rounded-xl text-sm font-medium transition ${
-                  isActive
-                    ? "bg-white/15 text-white shadow-sm"
-                    : "text-white/80 hover:text-white hover:bg-white/10"
-                }`
-              }
-            >
-              <Settings className="w-4 h-4 shrink-0" />
-              {!sidebarCollapsed && <span className="truncate">Settings</span>}
-            </NavLink>
-          </div>
-
-          {/* Recent Active Projects Tree (hidden for now; also hidden when collapsed) */}
-          {SHOW_RECENT_PROJECTS && !sidebarCollapsed && recentActiveProjects.length > 0 && (
-            <div className="mt-6 space-y-1">
-              <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/55">
-                Recent Active Projects
-              </div>
-              <div className="pl-3 ml-2 border-l border-white/15 space-y-1">
-                {recentActiveProjects.map((project) => {
-                  const isSelected = selectedProject?.id === project.id;
-                  return (
-                    <button
-                      key={project.id}
-                      type="button"
-                      onClick={() => onSelectProject(project.id)}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition truncate ${
-                        isSelected
-                          ? "bg-white/15 text-white font-medium"
-                          : "text-white/70 hover:text-white hover:bg-white/10"
-                      }`}
-                    >
-                      <span className="font-semibold mr-1.5">
-                        {project.codePrefix}
-                      </span>
-                      <span>{project.name}</span>
-                    </button>
-                  );
-                })}
-                <Link
-                  to="/app/projects"
-                  className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-white/70 hover:text-white hover:bg-white/10 transition"
-                >
-                  <span>View All Projects</span>
-                  <ArrowRight className="w-3 h-3" />
-                </Link>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Bottom User Profile Trigger & Popover Dialog (pinned to the bottom) */}
-        <div
-          className="relative pt-3 border-t border-white/10 shrink-0"
-          ref={popoverRef}
-        >
-          <button
-            type="button"
-            onClick={() => setUserPopoverOpen((prev) => !prev)}
-            className="w-full flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/10 transition text-left"
-          >
-            <div className="w-8 h-8 rounded-full bg-white text-brand-primary font-bold text-xs flex items-center justify-center shrink-0 shadow-sm">
-              {userInitials}
-            </div>
-            {!sidebarCollapsed && (
-              <div className="overflow-hidden">
-                <div className="text-xs font-semibold text-white truncate">
-                  {user?.fullName}
-                </div>
-                <div className="text-[11px] text-white/70 truncate">
-                  {roleDisplayLabel}
-                </div>
-              </div>
-            )}
-          </button>
-
-          {/* Popover Menu for Demo Role Switching, Public Docs & Logout */}
-          {userPopoverOpen && (
-            <div className="absolute bottom-14 left-2 w-64 bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-200 p-2 z-50">
-              {IS_DEMO_MODE && (
-                <>
-                  <div className="px-2.5 py-1.5 border-b border-slate-100">
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      Demo Account Switcher
-                    </div>
-                    <div className="text-[11px] text-slate-500">
-                      Switch active role for live demonstration
-                    </div>
-                  </div>
-                  <div className="py-1 space-y-0.5">
-                    {demoAccounts.map((acct) => {
-                      const isCurrent = user?.email === acct.email;
-                      return (
-                        <button
-                          key={acct.email}
-                          type="button"
-                          disabled={switchingAccount}
-                          onClick={() => handleRoleSwitch(acct.email)}
-                          className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs hover:bg-slate-100 flex items-center justify-between transition ${
-                            isCurrent
-                              ? "font-semibold text-brand-primary bg-brand-primary/5"
-                              : "text-slate-700"
-                          }`}
-                        >
-                          <div>
-                            <div>{acct.roleTitle.split(" (")[0]}</div>
-                            <div className="text-[10px] text-slate-400 font-normal">
-                              {acct.name} · {acct.organization}
-                            </div>
-                          </div>
-                          {isCurrent && (
-                            <span className="text-[10px] bg-brand-primary/5 text-brand-primary px-1.5 py-0.5 rounded font-semibold">
-                              Active
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-
-              <div className={`${IS_DEMO_MODE ? "pt-1 mt-1 border-t border-slate-100" : ""} space-y-0.5`}>
-                <div className="px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                  Settings &amp; Info
-                </div>
-                <Link
-                  to="/app/settings"
-                  onClick={() => setUserPopoverOpen(false)}
-                  className="block w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-brand-primary hover:bg-brand-primary/5 transition"
-                >
-                  Governance &amp; App Settings
-                </Link>
-                <Link
-                  to="/"
-                  onClick={() => setUserPopoverOpen(false)}
-                  className="block w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 transition"
-                >
-                  Platform Overview (Home)
-                </Link>
-                <Link
-                  to="/about"
-                  onClick={() => setUserPopoverOpen(false)}
-                  className="block w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 transition"
-                >
-                  Specification &amp; Context
-                </Link>
-                <Link
-                  to="/mobile-app"
-                  onClick={() => setUserPopoverOpen(false)}
-                  className="block w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 transition"
-                >
-                  Field Evidence Mobile App
-                </Link>
-              </div>
-
-              <div className="pt-1 mt-1 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUserPopoverOpen(false);
-                    requestLeave(() => {
-                      logout();
-                      navigate("/login");
-                    });
-                  }}
-                  className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-red-600 hover:bg-red-50 font-medium transition"
-                >
-                  Sign out
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+          }
+        />
       </aside>
 
+      {/* Drawer (below lg) */}
+      {drawerOpen && (
+        <NavDrawer onClose={closeDrawer}>
+          {(closeButton) => (
+            <SidebarContent
+              collapsed={false}
+              loc={loc}
+              projects={projects}
+              selectedProject={selectedProject}
+              onSelectProject={onSelectProject}
+              headerButton={closeButton}
+            />
+          )}
+        </NavDrawer>
+      )}
+
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col gap-3 mt-3 overflow-hidden">
-        {/* Top Header Bar: project code (project pages only), page name, actions */}
-        <header className="bg-brand-navy rounded-2xl border border-white/10 px-5 py-2.5 min-h-[52px] flex items-center justify-between gap-4 shadow-md shrink-0">
+      <div className="flex-1 min-w-0 flex flex-col gap-3 mt-3 overflow-hidden">
+        <header className="bg-brand-navy rounded-2xl border border-white/10 px-3 sm:px-5 py-2.5 min-h-[52px] flex items-center justify-between gap-3 shadow-md shrink-0">
           <div className="flex items-center gap-2 min-w-0">
+            <button
+              ref={menuButtonRef}
+              type="button"
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Open navigation"
+              aria-expanded={drawerOpen}
+              aria-controls="app-nav-drawer"
+              className="lg:hidden p-1.5 -ml-1 rounded-lg text-white/85 hover:text-white hover:bg-white/10 shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
             {headerProject && (
               <>
                 <span className="text-xs font-bold text-brand-sky shrink-0" title={headerProject.name}>
                   {headerProject.codePrefix}
                 </span>
-                <span className="text-white/30">/</span>
+                <span className="text-white/30" aria-hidden="true">
+                  /
+                </span>
               </>
             )}
             <h1 className="text-base font-bold text-white tracking-tight truncate">{pageName}</h1>
+            {headerProject && <ProjectStageChip stage={headerProject.stage} className="hidden sm:inline-flex shrink-0" />}
             {headerProject?.status === "ARCHIVED" && (
-              <span className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-white/10 text-white/75 border-white/20">
+              <span className="hidden sm:inline-flex shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold border bg-white/10 text-white/75 border-white/20">
                 Archived · read-only
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            {/* Phase 10: construction phase and phase-change actions */}
-            {headerProject && <ProjectPhaseBanner projectId={headerProject.id} projectStatus={headerProject.status} />}
             <Notifications projectId={selectedProject?.id} />
             {headerActions}
           </div>
         </header>
 
         {/* Scrollable Workspace Canvas */}
-        <div className="flex-1 overflow-y-auto pr-1 pb-3 rounded-2xl">
-          {children}
-        </div>
+        <main className="flex-1 overflow-y-auto pr-1 pb-3 rounded-2xl">{children}</main>
       </div>
+    </div>
+  );
+}
+
+/** Off-canvas navigation: focus moves in, Tab stays inside, Escape and the backdrop close it. */
+function NavDrawer({ onClose, children }: { onClose: () => void; children: (closeButton: React.ReactNode) => React.ReactNode }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    if (e.key !== "Tab" || !panelRef.current) return;
+    const items = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.offsetParent !== null);
+    if (items.length === 0) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
+  const closeButton = (
+    <button
+      ref={closeRef}
+      type="button"
+      onClick={onClose}
+      aria-label="Close navigation"
+      className="p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/10 shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+    >
+      <X className="w-4 h-4" />
+    </button>
+  );
+
+  return (
+    <div className="fixed inset-0 z-[900] lg:hidden" onKeyDown={onKeyDown}>
+      <div className="absolute inset-0 bg-slate-900/50" aria-hidden="true" onClick={onClose} />
+      <div
+        ref={panelRef}
+        id="app-nav-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation"
+        className="absolute inset-y-0 left-0 w-72 max-w-[85vw] kpmg-sidebar-gradient text-slate-200 p-3 flex flex-col shadow-2xl min-h-0"
+      >
+        {children(closeButton)}
+      </div>
+    </div>
+  );
+}
+
+const linkClass = (active: boolean) =>
+  `w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+    active ? "bg-white/15 text-white shadow-sm" : "text-white/85 hover:text-white hover:bg-white/10"
+  }`;
+
+function NavEntry({ item, projectId, loc, collapsed }: { item: NavItem; projectId: string; loc: AppLocation; collapsed: boolean }) {
+  const active = navItemMatches(item, loc) && (item.group === "workspace" || loc.projectId === projectId);
+  const Icon = item.icon;
+  return (
+    <li>
+      <Link to={item.to(projectId)} title={collapsed ? item.label : undefined} aria-current={active ? "page" : undefined} className={linkClass(active)}>
+        <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+        <span className={collapsed ? "sr-only" : "truncate"}>{item.label}</span>
+      </Link>
+    </li>
+  );
+}
+
+function GroupHeading({ id, collapsed, children }: { id: string; collapsed: boolean; children: React.ReactNode }) {
+  return (
+    <h2 id={id} className={collapsed ? "sr-only" : "px-2.5 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wider text-white/70"}>
+      {children}
+    </h2>
+  );
+}
+
+function SidebarContent({
+  collapsed,
+  loc,
+  projects,
+  selectedProject,
+  onSelectProject,
+  headerButton,
+}: {
+  collapsed: boolean;
+  loc: AppLocation;
+  projects: ProjectSummaryDto[];
+  selectedProject: ProjectSummaryDto | null;
+  onSelectProject: (projectId: string) => void;
+  headerButton: React.ReactNode;
+}) {
+  const { user, hasAnyPermission } = useAuth();
+  const uid = useId();
+  const visible = (items: readonly NavItem[]) => items.filter((item) => canSeeNavItem(item, hasAnyPermission));
+  const workspaceItems = visible(WORKSPACE_NAV);
+  const projectItems = visible(PROJECT_NAV);
+  const moreItems = visible(PROJECT_MORE_NAV);
+  const projectId = selectedProject?.id ?? "";
+  const moreActive = Boolean(selectedProject) && moreItems.some((item) => navItemMatches(item, loc) && loc.projectId === projectId);
+  const [moreOpen, setMoreOpen] = useState(moreActive);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (moreActive) setMoreOpen(true);
+  }, [moreActive]);
+
+  return (
+    <>
+      {/* Brand header (pinned to the top) */}
+      <div className="flex items-center justify-between px-1.5 py-2 mb-3 border-b border-white/10 shrink-0">
+        <Link to="/" title="Home" className="flex items-center gap-2.5 overflow-hidden hover:opacity-90 transition rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+          <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center p-1 shrink-0 shadow-sm">
+            {user?.tenant?.brandingConfig?.logoUrl ? (
+              <img src={user.tenant.brandingConfig.logoUrl} alt={user?.tenant?.name || APPLICATION_NAME} className="w-full h-full object-contain" />
+            ) : (
+              <InSiteLogo showText={false} className="h-full" />
+            )}
+          </div>
+          {!collapsed && (
+            <div className="truncate">
+              <div className="text-white font-semibold text-sm leading-tight truncate">{user?.tenant?.name || APPLICATION_NAME}</div>
+              <div className="text-[11px] text-white/75 truncate">{user?.tenant?.brandingConfig?.tagline || APPLICATION_NAME}</div>
+            </div>
+          )}
+        </Link>
+        {headerButton}
+      </div>
+
+      {/* Scrollable middle: navigation */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mr-1.5 pr-1.5 pb-2 space-y-4">
+        <nav aria-labelledby={`${uid}-ws`}>
+          <GroupHeading id={`${uid}-ws`} collapsed={collapsed}>
+            Workspace
+          </GroupHeading>
+          <ul className="space-y-0.5">
+            {workspaceItems.map((item) => (
+              <NavEntry key={item.key} item={item} projectId={projectId} loc={loc} collapsed={collapsed} />
+            ))}
+          </ul>
+        </nav>
+
+        {selectedProject && (
+          <nav aria-labelledby={`${uid}-pr`} className={collapsed ? "pt-3 border-t border-white/10" : ""}>
+            <GroupHeading id={`${uid}-pr`} collapsed={collapsed}>
+              Project <span className="normal-case tracking-normal text-brand-sky">{selectedProject.codePrefix}</span>
+            </GroupHeading>
+            {!collapsed && projects.length > 1 && (
+              <div className="px-1 pb-2">
+                <label htmlFor={`${uid}-switch`} className="sr-only">
+                  Switch project
+                </label>
+                <select
+                  id={`${uid}-switch`}
+                  value={selectedProject.id}
+                  onChange={(e) => onSelectProject(e.target.value)}
+                  className="w-full rounded-lg border border-white/20 bg-white/10 px-2 py-1.5 text-xs text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id} className="text-slate-900">
+                      {p.codePrefix} · {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <ul className="space-y-0.5">
+              {projectItems.map((item) => (
+                <NavEntry key={item.key} item={item} projectId={projectId} loc={loc} collapsed={collapsed} />
+              ))}
+              {moreItems.length > 0 && (
+                <li
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape" && moreOpen) {
+                      e.stopPropagation();
+                      setMoreOpen(false);
+                      moreButtonRef.current?.focus();
+                    }
+                  }}
+                >
+                  <button
+                    ref={moreButtonRef}
+                    type="button"
+                    aria-expanded={moreOpen}
+                    aria-controls={`${uid}-more`}
+                    onClick={() => setMoreOpen((o) => !o)}
+                    title={collapsed ? "More" : undefined}
+                    className={linkClass(false)}
+                  >
+                    {collapsed ? <MoreHorizontal className="w-4 h-4 shrink-0" aria-hidden="true" /> : (
+                      <ChevronRight className={`w-4 h-4 shrink-0 motion-safe:transition-transform ${moreOpen ? "rotate-90" : ""}`} aria-hidden="true" />
+                    )}
+                    <span className={collapsed ? "sr-only" : "truncate"}>More</span>
+                  </button>
+                  <ul id={`${uid}-more`} hidden={!moreOpen} className={`space-y-0.5 mt-0.5 ${collapsed ? "" : "pl-4"}`}>
+                    {moreItems.map((item) => (
+                      <NavEntry key={item.key} item={item} projectId={projectId} loc={loc} collapsed={collapsed} />
+                    ))}
+                  </ul>
+                </li>
+              )}
+            </ul>
+          </nav>
+        )}
+      </div>
+
+      <UserMenu collapsed={collapsed} />
+    </>
+  );
+}
+
+/** The signed-in user, the demo account switcher (demo flag only) and sign-out, pinned to the bottom. */
+function UserMenu({ collapsed }: { collapsed: boolean }) {
+  const { user, quickSwitchDemoAccount, logout } = useAuth();
+  const demoAccounts = useDemoAccounts()?.accounts ?? [];
+  const navigate = useNavigate();
+  const requestLeave = useGuardedAction();
+  const [open, setOpen] = useState(false);
+  const [switchingAccount, setSwitchingAccount] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleOutsideClick(e: MouseEvent) {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  const handleRoleSwitch = async (email: string) => {
+    try {
+      setSwitchingAccount(true);
+      await quickSwitchDemoAccount(email);
+      setOpen(false);
+    } finally {
+      setSwitchingAccount(false);
+    }
+  };
+
+  return (
+    <div
+      className="relative pt-3 border-t border-white/10 shrink-0"
+      ref={popoverRef}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && open) {
+          e.stopPropagation();
+          setOpen(false);
+        }
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        aria-haspopup="true"
+        className="w-full flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/10 transition text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+      >
+        <div className="w-8 h-8 rounded-full bg-white text-brand-primary font-bold text-xs flex items-center justify-center shrink-0 shadow-sm">
+          {getInitials(user?.fullName || "User")}
+        </div>
+        <div className={collapsed ? "sr-only" : "overflow-hidden"}>
+          <div className="text-xs font-semibold text-white truncate">{user?.fullName}</div>
+          <div className="text-[11px] text-white/75 truncate">{user?.roleName || user?.roleCode || "Team Member"}</div>
+        </div>
+      </button>
+
+      {open && (
+        <div className="absolute bottom-14 left-2 w-64 bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-200 p-2 z-50">
+          {IS_DEMO_MODE && (
+            <>
+              <div className="px-2.5 py-1.5 border-b border-slate-100">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Demo Account Switcher</div>
+                <div className="text-[11px] text-slate-500">Switch active role for live demonstration</div>
+              </div>
+              <div className="py-1 space-y-0.5">
+                {demoAccounts.map((acct) => {
+                  const isCurrent = user?.email === acct.email;
+                  return (
+                    <button
+                      key={acct.email}
+                      type="button"
+                      disabled={switchingAccount}
+                      onClick={() => handleRoleSwitch(acct.email)}
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs hover:bg-slate-100 flex items-center justify-between transition ${
+                        isCurrent ? "font-semibold text-brand-primary bg-brand-primary/5" : "text-slate-700"
+                      }`}
+                    >
+                      <div>
+                        <div>{acct.roleTitle.split(" (")[0]}</div>
+                        <div className="text-[10px] text-slate-500 font-normal">
+                          {acct.name} · {acct.organization}
+                        </div>
+                      </div>
+                      {isCurrent && <span className="text-[10px] bg-brand-primary/5 text-brand-primary px-1.5 py-0.5 rounded font-semibold">Active</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          <div className={`${IS_DEMO_MODE ? "pt-1 mt-1 border-t border-slate-100" : ""} space-y-0.5`}>
+            <Link
+              to="/app/settings"
+              onClick={() => setOpen(false)}
+              className="block w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-brand-primary hover:bg-brand-primary/5 transition"
+            >
+              Settings
+            </Link>
+            <Link to="/" onClick={() => setOpen(false)} className="block w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 transition">
+              Home page
+            </Link>
+            <Link
+              to="/mobile-app"
+              onClick={() => setOpen(false)}
+              className="block w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 transition"
+            >
+              Mobile app
+            </Link>
+          </div>
+
+          <div className="pt-1 mt-1 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                requestLeave(() => {
+                  logout();
+                  navigate("/login");
+                });
+              }}
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-red-600 hover:bg-red-50 font-medium transition"
+            >
+              Sign out
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -114,7 +114,7 @@ async function notifyCaseOpened(tx: Tx, projectId: string, c: { id: string; summ
     category: 'CONTRACT_DEFAULT_CASE' as const,
     title: `Default case opened: ${contractorName}`,
     description: c.summary,
-    actionUrl: `/app/projects/${projectId}/milestones`,
+    actionUrl: `/app/projects/${projectId}/kickoff?tab=milestones&case=${c.id}`,
     metadata: { caseId: c.id },
     hideFromProjectContractors: true,
   };
@@ -252,7 +252,7 @@ export async function actOnDefaultCase(projectId: string, caseId: string, webUse
         category: 'CONTRACT_DEFAULT_CASE',
         title: `Default case waiting for "${next.label}"`,
         description: `${c.projectContractor.organization.name}: ${c.summary}`,
-        actionUrl: `/app/projects/${projectId}/milestones`,
+        actionUrl: `/app/projects/${projectId}/kickoff?tab=milestones&case=${c.id}`,
         metadata: { caseId: c.id },
         hideFromProjectContractors: true,
       });
@@ -353,7 +353,7 @@ export async function lapseCurePeriods(projectId: string, today: string, now: Da
         category: 'CONTRACT_DEFAULT_CASE',
         title: `Cure period ended: ${c.projectContractor.organization.name}`,
         description: `The cure period ended on ${c.newDueDate} without a cure. The case needs a new decision.`,
-        actionUrl: `/app/projects/${projectId}/milestones`,
+        actionUrl: `/app/projects/${projectId}/kickoff?tab=milestones&case=${c.id}`,
         metadata: { caseId: c.id },
         hideFromProjectContractors: true,
       });

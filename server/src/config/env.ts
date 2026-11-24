@@ -61,9 +61,6 @@ const EnvSchema = z.object({
   PUSH_PROVIDER: z.enum(['expo', 'none']).optional(),
   EXPO_ACCESS_TOKEN: z.string().optional().default(''),
 
-  // Background sweep for omission checks that were not processed after submission.
-  AI_CHECK_SWEEP_INTERVAL_SECONDS: z.coerce.number().int().min(0).default(300),
-
   // Phase 8: scheduled jobs. Set false on API instances when a worker process owns the jobs.
   JOBS_ENABLED: booleanEnvSchema(true),
   // Phase 8 outbound messages (D-8.1 default: email). console = log only (development).

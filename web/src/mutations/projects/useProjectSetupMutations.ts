@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import type {
   CreateProjectDraftRequest,
   ProjectSetupDto,
-  ProjectSetupStepId,
+  ProjectSetupSectionId,
 } from '@insite/shared';
 import {
   activateProject,
@@ -28,33 +28,33 @@ export const useCreateProjectDraftMutation = () => {
 };
 
 /**
- * Saves one step. `silent` skips the success toast (used when saving on navigation). Field errors
- * come back on the error object (`response.data.error.issues`) for the step form to show.
+ * Saves one setup section (redesign R6a). `silent` skips the success toast (used when the shell
+ * saves several sections or saves on navigation). Field errors come back on the error object
+ * (`response.data.error.issues`) for the section form to show.
  */
 export const useSaveSetupStepMutation = (projectId: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (args: { stepId: ProjectSetupStepId; body: unknown; silent?: boolean }) =>
-      saveProjectSetupStep(projectId, args.stepId, args.body),
+    mutationFn: (args: { sectionId: ProjectSetupSectionId; body: unknown; silent?: boolean }) =>
+      saveProjectSetupStep(projectId, args.sectionId, args.body),
     onSuccess: (setup: ProjectSetupDto, args) => {
       queryClient.setQueryData(projectSetupKey(projectId), setup);
       queryClient.invalidateQueries({ queryKey: ['project-drafts'] });
       if (setup.status !== 'DRAFT') {
         queryClient.invalidateQueries({ queryKey: ['projects'] });
-        queryClient.invalidateQueries({ queryKey: ['project-baseline', projectId] });
       }
-      if (args.stepId === 'scope') queryClient.invalidateQueries({ queryKey: ['project-scope', projectId] });
-      // Phase 13: contract dates, contractors and the project type shape the contract milestones.
-      if (args.stepId === 'contract' || args.stepId === 'parties' || args.stepId === 'basics') {
+      if (args.sectionId === 'scope') queryClient.invalidateQueries({ queryKey: ['project-scope', projectId] });
+      // Phase 13: contract dates, the contractor and the project type shape the contract milestones.
+      if (['contract', 'contractor', 'parties', 'basics'].includes(args.sectionId)) {
         queryClient.invalidateQueries({ queryKey: ['contract-milestones', projectId] });
         queryClient.invalidateQueries({ queryKey: ['mobilisation-compliance', projectId] });
       }
-      if (args.stepId === 'process') {
+      if (args.sectionId === 'process') {
         queryClient.invalidateQueries({ queryKey: ['project-process', projectId] });
       }
       if (!args.silent) toast.success('Saved.');
     },
-    onError: (err: Error) => toast.error(err?.message || 'Could not save this step.'),
+    onError: (err: Error) => toast.error(err?.message || 'Could not save this section.'),
   });
 };
 

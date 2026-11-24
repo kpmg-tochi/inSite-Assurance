@@ -1,17 +1,16 @@
 /**
  * Phase 9 route and job tests after redesign R2d: the baseline, earned-schedule variance,
- * dependencies and "Catch Project Up" revisions are gone. What remains: actual dates from counted
- * reports, planned windows that follow sprints, and the schedule-variance job storing a badge
- * computed from sprints (D-R2.15). Obligation item selection went with reporting obligations in R4f.
+ * dependencies and "Catch Project Up" revisions are gone. What remains: actual completion dates that
+ * follow line progress, planned windows that follow sprints, and the schedule-variance job storing a badge
+ * computed from sprints (D-R2.15). Obligation item selection went with reporting obligations in R4f;
+ * actual start dates from counted reports went with workday reports in R5f.
  *
  * SCH-901 gets sprints relative to today (Lagos). The seed gives LKK-402 an ended sprint with incomplete units
  * (behind) and ABJ-108 a finished sprint 1 (on track).
  */
 import { resetTestDatabase } from './helpers/testDb';
-import { createFieldSession, fieldAuth } from './helpers/fieldAuth';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import crypto from 'crypto';
 import type { Express } from 'express';
 import request from 'supertest';
 import { addDays, zonedCalendarDate } from '@insite/shared';
@@ -32,10 +31,8 @@ const ids = {
   project: '',
   items: {} as Record<string, string>,
   units: {} as Record<string, string>,
-  session: '',
 };
 let today = '';
-let sitePoint = { latitude: 0, longitude: 0 };
 
 async function web(email: string) {
   if (!tokens[email]) {
@@ -45,7 +42,6 @@ async function web(email: string) {
   }
   return { Authorization: `Bearer ${tokens[email]}` };
 }
-const field = (sessionId: string) => fieldAuth(prisma, sessionId);
 
 const MONITOR = 'monitor@insite.ng';
 const ADMIN = 'admin@insite.ng';
@@ -80,8 +76,6 @@ before(async () => {
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: 'kpmg-nigeria' } });
   ids.tenant = tenant.id;
   const edo = await prisma.project.findFirstOrThrow({ where: { tenantId: tenant.id, codePrefix: 'EDO-410' } });
-  const geofence = edo.geofenceGeoJson as { center?: { latitude: number; longitude: number } };
-  sitePoint = geofence.center ?? { latitude: 6.3176, longitude: 5.6145 };
   today = zonedCalendarDate(new Date(), 'Africa/Lagos');
 
   const project = await prisma.project.create({
@@ -92,7 +86,6 @@ before(async () => {
       stateLocation: 'Edo State',
       status: 'ACTIVE',
       activatedAt: new Date(),
-      reportingCadence: 'WEEKLY',
       workWeekDays: WEEK,
       timezone: 'Africa/Lagos',
       geofenceMode: edo.geofenceMode,
@@ -118,9 +111,6 @@ before(async () => {
   ids.items.I3 = await createItem(project.id, '01.03', { facilityUnitId: ids.units.U2 });
   await prisma.$transaction((tx) => scope.deriveLineDatesFromSprints(tx, project.id));
 
-  const role = await prisma.role.findFirstOrThrow({ where: { tenantId: tenant.id, code: 'INDEPENDENT_RESIDENT' } });
-  const session = await createFieldSession(prisma, { projectId: project.id, roleId: role.id, name: 'Inspector Bisi', phoneNumber: '+2348030000901' });
-  ids.session = session.sessionId;
   for (const email of [MONITOR]) {
     const user = await prisma.user.findUniqueOrThrow({ where: { email } });
     await prisma.userProjectAssignment.create({ data: { userId: user.id, projectId: project.id } });
@@ -147,34 +137,6 @@ describe('Phase 9 after redesign R2d', () => {
   });
 
   describe('actual dates', () => {
-    it('a confirmed field report marks the actual start of the item and the project', async () => {
-      const confirmedAt = new Date().toISOString();
-      const res = await request(app)
-        .post(`/api/v1/projects/${ids.project}/workday-reports`)
-        .set(await field(ids.session))
-        .send({
-          clientReportId: crypto.randomUUID(),
-          wbsItemId: ids.items.I2,
-          workdayDate: today,
-          reporterTimezone: 'Africa/Lagos',
-          summaryText: 'Excavated and blinded the first half of the classroom foundations.',
-          reportedQuantity: 50,
-          unitOfMeasure: 'm3',
-          isHoldPointClaimed: false,
-          clientCaptureIds: [],
-          textNotes: [],
-          submissionGeotag: { ...sitePoint, accuracyMeters: 5, isMocked: false, capturedAt: confirmedAt },
-          confirmedAt,
-          confirmedAsFinal: true,
-        });
-      assert.equal(res.status, 201, JSON.stringify(res.body));
-      const i2 = await prisma.boqItem.findUniqueOrThrow({ where: { id: ids.items.I2 } });
-      assert.equal(i2.actualStartDate, today);
-      assert.equal(Number(i2.cumulativeCertifiedPct), 50, 'a counted report is the item progress (R1b)');
-      const project = await prisma.project.findUniqueOrThrow({ where: { id: ids.project } });
-      assert.equal(project.actualStartDate, today);
-    });
-
     it('sets and clears the completion date with progress', async () => {
       await prisma.boqItem.update({ where: { id: ids.items.I3 }, data: { cumulativeCertifiedPct: 100 } });
       await prisma.$transaction((tx) => schedule.syncActualCompletionDates(tx, ids.project));
@@ -190,7 +152,7 @@ describe('Phase 9 after redesign R2d', () => {
     const day = (offset: number) => new Date(Date.now() + offset * 24 * 3600 * 1000);
 
     it('ON_TRACK while the units due by ended sprints are complete', async () => {
-      // The report above refreshed progress from counted reports; I1 (unit U01, sprint 1) is set done here.
+      // I1 (unit U01, sprint 1) is done.
       await prisma.boqItem.update({ where: { id: ids.items.I1 }, data: { cumulativeCertifiedPct: 100 } });
       assert.equal(await badge(new Date()), 'ON_TRACK');
     });

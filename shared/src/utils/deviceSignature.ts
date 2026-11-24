@@ -47,32 +47,3 @@ export function canonicalCaptureString(f: CaptureSignatureFields): string {
     f.isMockLocation,
   ]);
 }
-
-export interface ReportSignatureFields {
-  clientReportId: string;
-  projectId: string;
-  wbsItemId: string;
-  workdayDate: string;
-  summaryText: string;
-  reportedQuantity: number;
-  unitOfMeasure: string;
-  isHoldPointClaimed: boolean;
-  clientCaptureIds: string[];
-  confirmedAt: string;
-}
-
-export function canonicalReportString(f: ReportSignatureFields): string {
-  return canonical('insite.report.v1', [
-    f.clientReportId,
-    f.projectId,
-    f.wbsItemId,
-    f.workdayDate,
-    f.summaryText,
-    f.reportedQuantity,
-    f.unitOfMeasure,
-    f.isHoldPointClaimed,
-    [...f.clientCaptureIds].sort().join(','),
-    f.confirmedAt,
-  ]);
-}
-

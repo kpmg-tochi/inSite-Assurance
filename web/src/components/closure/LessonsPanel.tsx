@@ -61,12 +61,13 @@ export function LessonCard({ lesson, showProject = false, actions }: { lesson: L
 }
 
 /** Phase 15: lessons learned on the project's Closure tab. */
-export function LessonsPanel({ projectId, defaultStage }: { projectId: string; defaultStage: LessonStage }) {
+/** `readOnly`: an archived project (the server refuses every write but the closure pack). */
+export function LessonsPanel({ projectId, defaultStage, readOnly = false }: { projectId: string; defaultStage: LessonStage; readOnly?: boolean }) {
   const { hasPermission } = useAuth();
   const query = useProjectLessonsQuery(projectId);
   const publish = usePublishLessonMutation(projectId);
   const [editing, setEditing] = useState<LessonDto | "new" | null>(null);
-  const canManage = hasPermission("lessons:manage");
+  const canManage = hasPermission("lessons:manage") && !readOnly;
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -94,7 +95,7 @@ export function LessonsPanel({ projectId, defaultStage }: { projectId: string; d
           key={lesson.id}
           lesson={lesson}
           actions={
-            lesson.canEdit && (
+            lesson.canEdit && !readOnly && (
               <div className="flex gap-2">
                 <button type="button" onClick={() => setEditing(lesson)} className="rounded-xl border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">
                   Edit

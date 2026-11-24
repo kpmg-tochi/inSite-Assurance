@@ -292,7 +292,7 @@ export const useActOnDefaultCaseMutation = (projectId: string) => {
       if (c.status === 'TERMINATED') {
         qc.invalidateQueries({ queryKey: projectSetupKey(projectId) });
         qc.invalidateQueries({ queryKey: ['projects'] });
-        qc.invalidateQueries({ queryKey: ['boq', projectId] });
+        qc.invalidateQueries({ queryKey: ['project-scope', projectId] });
       }
       const message =
         p.body.decision === 'RETURN'

@@ -97,7 +97,7 @@ export function NavigationGuardProvider({ children }: { children: React.ReactNod
       {children}
       {pending && (
         <Overlay zIndex="z-[1100]" className="flex items-center justify-center p-4" role="presentation">
-          <div role="alertdialog" aria-modal="true" aria-labelledby="leave-guard-title" className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl space-y-4">
+          <div role="alertdialog" aria-modal="true" aria-labelledby="leave-guard-title" onKeyDown={(e) => { if (e.key === "Escape" && !saving) { e.stopPropagation(); close(); } }} className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl space-y-4">
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-600 shrink-0" />
               <div>

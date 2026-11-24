@@ -4,11 +4,12 @@ import {
   FieldPersonaTypeEnum,
   GeofenceModeEnum,
   OrganizationCategoryEnum,
-  ReportingCadenceEnum,
+  ProjectStatusEnum,
 } from "../enums";
 import { ProjectGeofenceSchema } from "./geofence.schema";
-import { ProjectCadenceSettingsDtoSchema } from "./cadence.schema";
-import { MobileInspectionPackSchema } from "./inspection.schema";
+import { FacilityArchetypeEnum } from "./facility.schema";
+import { SprintStatusEnum } from "./scope.schema";
+import { ProjectStageSummarySchema } from "./projectOverview.schema";
 import { TenantDtoSchema } from "./rbac.schema";
 import { ResolvedTerminologySchema } from "../terminology";
 
@@ -179,44 +180,110 @@ export const MobileChangePasswordResponseSchema = z.object({
 });
 export type MobileChangePasswordResponse = z.infer<typeof MobileChangePasswordResponseSchema>;
 
-const BaselineBoqItemSchema = z.object({
-  id: z.string().uuid(),
-  wbsCode: z.string(),
-  section: z.string(),
-  description: z.string(),
-  unit: z.string(),
-  totalQuantity: z.number(),
-  budgetedCostNgn: z.number(),
-  isHoldPoint: z.boolean(),
-  holdPointInstruction: z.string().nullable(),
-  cumulativeCertifiedPct: z.number(),
-});
+// ---------------------------------------------------------------------------
+// Redesign R5 (D-R5.3): baseline pack v2 for the visit app. Every assigned project is prepared, so
+// the home screen can show project cards and geofence previews offline. Forms come from the R4
+// field pack (`/visits/field-pack`), not from here. Permissions come from the session.
+// ---------------------------------------------------------------------------
 
-/** The offline baseline a device needs per project: geofence, BOQ, hold points and cadence. */
+export const MOBILE_BASELINE_PACK_VERSION = 2;
+
+export const BaselineSprintSchema = z.object({
+  id: z.string().uuid(),
+  number: z.number().int(),
+  name: z.string(),
+  startDate: z.string(),
+  endDate: z.string(),
+  deliverables: z.string(),
+  /** Derived on the server for its "today" in the project zone (`deriveSprintStatus`). */
+  status: SprintStatusEnum,
+  verificationOutcome: z.enum(["MET", "PARTLY_MET", "NOT_MET"]).nullable(),
+});
+export type BaselineSprint = z.infer<typeof BaselineSprintSchema>;
+
+export const BaselineFacilityUnitSchema = z.object({
+  id: z.string().uuid(),
+  code: z.string(),
+  label: z.string(),
+  facilityId: z.string().uuid(),
+  facilityCode: z.string(),
+  facilityName: z.string(),
+  archetype: FacilityArchetypeEnum,
+  plannedQuantity: z.number().nullable(),
+  quantityUnit: z.string().nullable(),
+  startSprintNumber: z.number().int().nullable(),
+  endSprintNumber: z.number().int().nullable(),
+  /** Progress observed by the latest accepted visit (R4d); null before any. */
+  progressPct: z.number().nullable(),
+  sortOrder: z.number().int(),
+});
+export type BaselineFacilityUnit = z.infer<typeof BaselineFacilityUnitSchema>;
+
+export const BaselineOpenFindingSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  description: z.string(),
+  severity: z.enum(["MINOR", "MAJOR", "CRITICAL"]),
+  facilityId: z.string().uuid().nullable(),
+  facilityName: z.string().nullable(),
+  unitId: z.string().uuid().nullable(),
+  unitLabel: z.string().nullable(),
+  /** YYYY-MM-DD in the project zone. */
+  raisedDate: z.string(),
+  /** Raised date + the type's `findingEscalationDays`: when it is escalated if still open. */
+  escalatesOn: z.string(),
+  recheckCount: z.number().int(),
+});
+export type BaselineOpenFinding = z.infer<typeof BaselineOpenFindingSchema>;
+
+/** The open contractor-on-site milestone (spec: mobilisation day N of M). Null once done or absent. */
+export const BaselineMobilisationSchema = z.object({
+  milestoneId: z.string().uuid(),
+  label: z.string(),
+  /** Day 1: the kick-off held date (else the activation date), project zone. */
+  startedOn: z.string().nullable(),
+  /** The milestone due date; null when its anchor is not set yet. */
+  deadline: z.string().nullable(),
+  /** Derived for the server's today: PENDING, DUE or OVERDUE. */
+  status: z.enum(["PENDING", "DUE", "OVERDUE"]),
+});
+export type BaselineMobilisation = z.infer<typeof BaselineMobilisationSchema>;
+
+/** The offline baseline a device needs per project (v2, redesign R5; R5e removed the pre-R5 app's fields). */
 export const MobileBaselinePackSchema = z.object({
   projectId: z.string().uuid(),
   name: z.string(),
   codePrefix: z.string(),
   stateLocation: z.string(),
-  reportingCadence: ReportingCadenceEnum,
-  /** IANA zone that defines the project's reporting day. Absent in packs saved before Phase 4. */
+  /** Redesign R5: 2 for packs with the fields below. Absent in older stored packs. */
+  packVersion: z.number().int().optional(),
+  /** ISO time the server built the pack. */
+  generatedAt: z.string().optional(),
+  projectStatus: ProjectStatusEnum,
+  /** The project stage bar value (R6c); null for drafts. */
+  stage: ProjectStageSummarySchema.nullable(),
+  /** The primary beneficiary (the school), when set. */
+  school: z.string().nullable(),
+  /** The site address, when set. */
+  address: z.string().nullable(),
+  lgaLocation: z.string().nullable(),
+  /** The project's contractor organisation (one per project, decision T); null before award. */
+  contractorName: z.string().nullable(),
+  /** ISO weekdays (1 = Monday) the project works; the phone skips the others when offering moves. */
+  workWeekDays: z.array(z.number().int().min(1).max(7)),
+  sprints: z.array(BaselineSprintSchema),
+  facilityUnits: z.array(BaselineFacilityUnitSchema),
+  openFindings: z.array(BaselineOpenFindingSchema),
+  openDefectCount: z.number().int(),
+  mobilisation: BaselineMobilisationSchema.nullable(),
+  /** IANA zone of the project ("today", visit days). Absent in packs saved before Phase 4. */
   timezone: z.string().optional(),
-  /**
-   * Phase 8: everything the app needs to compute the current period with the shared module.
-   * Absent in packs saved before Phase 8: treat the cadence as daily with a Mon-Sat week.
-   */
-  cadence: ProjectCadenceSettingsDtoSchema.optional(),
   geofenceMode: GeofenceModeEnum,
   geofence: ProjectGeofenceSchema,
   /** Effective tolerance band outside the boundary (Phase 6). Absent in older packs: treat as 0. */
   geofenceToleranceMeters: z.number().int().optional(),
-  /** BOQ items of the project. */
-  boqItems: z.array(BaselineBoqItemSchema),
-  holdPoints: z.array(BaselineBoqItemSchema),
   /** Phase 10. Absent in older packs: treat as ACTIVE_CONSTRUCTION. */
   constructionPhase: ConstructionPhaseEnum.optional(),
-  /** Phase 14: streams this person owes and their checklist templates. Absent in older packs. */
-  inspections: MobileInspectionPackSchema.optional(),
 });
 export type MobileBaselinePack = z.infer<typeof MobileBaselinePackSchema>;
 

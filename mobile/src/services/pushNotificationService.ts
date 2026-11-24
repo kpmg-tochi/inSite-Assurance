@@ -89,8 +89,8 @@ export async function registerPushIfPermitted(identities: PushIdentity[]): Promi
 }
 
 /**
- * Asks for permission at a moment where the reason is obvious (opening a project, whose queries,
- * hold points and overdue reports arrive as notifications), then registers the token.
+ * Asks for permission at a moment where the reason is obvious (opening a project, whose visit
+ * changes, reminders and reviews arrive as notifications), then registers the token.
  */
 export async function requestPushPermissionInContext(identities: PushIdentity[]): Promise<boolean> {
   if (Platform.OS === 'web' || identities.length === 0) return false;

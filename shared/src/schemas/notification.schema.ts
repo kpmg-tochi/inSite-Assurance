@@ -1,15 +1,8 @@
 import { z } from 'zod';
 
 export const MobileNotificationTypeEnum = z.enum([
-  'BACKLOG_REVIEW_REQUIRED',
-  'REPORT_QUERY',
-  'HOLD_POINT_ALERT',
-  // Phase 8
-  'REPORT_OVERDUE',
   // Phase 10
   'DEFECT_UPDATE',
-  // Phase 14
-  'INSPECTION_FINDING',
   // Redesign R4
   'VISIT_ASSIGNED',
   'VISIT_CHANGED',
@@ -21,35 +14,19 @@ export type MobileNotificationType = z.infer<typeof MobileNotificationTypeEnum>;
 
 export const NotificationActionTypeEnum = z.enum([
   'NONE',
-  'OPEN_REPORT_SUMMARY',
-  'OPEN_WBS_CHAT',
-  'OPEN_BACKLOG_REVIEW',
   // Phase 10
   'OPEN_DEFECTS',
-  // Phase 14
-  'OPEN_INSPECTION_FINDINGS',
   // Redesign R4
   'OPEN_VISIT',
+  // Push only: the account was given a project (the app refreshes its project list).
+  'OPEN_PROJECT',
 ]);
 export type NotificationActionType = z.infer<typeof NotificationActionTypeEnum>;
 
 export const MobileNotificationMetadataSchema = z
   .object({
-    wbsItemId: z.string().uuid().optional(),
-    wbsCode: z.string().optional(),
-    workdayReportId: z.string().optional(),
-    monitorQueryId: z.string().optional(),
-    reportQueryId: z.string().uuid().optional(),
-    querySource: z.string().optional(),
-    aiOmissionPayload: z.record(z.string(), z.unknown()).optional(),
-    draftSummary: z.string().optional(),
-    draftQuantity: z.number().optional(),
-    unit: z.string().optional(),
-    requestedProofTypes: z.array(z.string()).optional(),
     /** Phase 10: the defect ticket a DEFECT_UPDATE is about. */
     defectTicketId: z.string().uuid().optional(),
-    /** Phase 14: the inspection finding an INSPECTION_FINDING is about. */
-    inspectionFindingId: z.string().uuid().optional(),
     /** Redesign R4: the visit a VISIT_* notification is about (action OPEN_VISIT). */
     visitId: z.string().uuid().optional(),
     visitSubmissionId: z.string().uuid().optional(),
@@ -80,23 +57,12 @@ export const MobileNotificationDtoSchema = z.object({
 export type MobileNotificationDto = z.infer<typeof MobileNotificationDtoSchema>;
 
 export const WebNotificationCategoryEnum = z.enum([
-  'REPORT_RESUBMITTED',
   'CONTRACTOR_ONBOARDING',
-  'MONITOR_QUERY',
-  'AI_OMISSION_FLAG',
-  // Phase 7
-  'STANDARDS_VIOLATION_FLAGGED',
-  'REPORT_PENDING_APPROVAL',
-  // Phase 8
-  'REPORT_MISSED',
   // Phase 9 (redesign R2d: sprints decide it)
   'SCHEDULE_BEHIND',
   // Phase 10
   'HANDOVER_RECORDED',
   'DEFECT_TICKET',
-  // Phase 14
-  'INSPECTION_PENDING_APPROVAL',
-  'INSPECTION_FINDING',
   // Phase 13
   'CONTRACT_MILESTONE',
   'CONTRACT_DEFAULT_CASE',

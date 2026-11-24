@@ -4,7 +4,7 @@
 **Branch:** `UBEC` (client-specific; decision P).
 **Depends on:** R2 (done). R3 and R4 for the parts listed in section 12; slices that do not need them can start now (D-R6.1).
 **Baseline:** measure at the start of R6a and record it in section 15 (R3 and R4 change the counts). Last recorded (R2d, 2026-11-24): typecheck clean, lint 0 errors (67 warnings), server 148 unit + 249 route, mobile 57, all passing.
-**Status:** Plan. Not started.
+**Status:** Implemented (R6a–R6f, 2026-11-24; section 15). Browser click-through owed (`web_testing_checklist.md`).
 **Cross-plan contracts:** [redesign_contracts_r3_r7.md](redesign_contracts_r3_r7.md) settles the names and ownership shared by R3–R7. Where this plan differs, the register wins.
 
 Each slice must leave typecheck, lint (0 errors), the web build, and the server and mobile suites green before the next one starts.
@@ -353,4 +353,61 @@ Form library and form builder UI (R3); visit planner, visit pages, findings page
 
 ## 15. Found during implementation
 
-_Empty. Record the baseline, each slice's gate numbers (lint warnings, server unit/route, mobile), decisions taken on the (confirm) items, and anything found._
+### 15.1 Verification numbers
+
+| Point | Typecheck | Lint | Web build | Server unit | Server route | Mobile |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| Baseline (R4 final record, tree clean) | clean | 0 errors, 64 warnings | pass | 195 | 293 | 57 |
+| After R5a–R5e and R6a–R6e (gated together, before R5f) | clean | 0 errors, 57 warnings | pass | 217 | 330 | 147 |
+| Final, after R5f (migrations up to date, seed runs) | clean | 0 errors, 47 warnings | pass | 173 | 301 | 147 |
+
+### 15.2 Run with R5 in parallel (2026-11-24)
+
+R6 and R5 were run in parallel, after R4. Review of the two plans before starting:
+
+| Topic | Finding | Decision |
+| :--- | :--- | :--- |
+| Can R5 and R6 run in parallel? | Yes for R5a–R5e (mobile + the baseline pack in `auth.*`) and every R6 slice: they share only `shared/src/index.ts`, `server/package.json` test lists and docs. **No** for D-R4.37 (the server/Prisma/seed/web deletion of the old app's endpoints, which the register gives to R5's last slice): it edits the Prisma schema, the seed, KPIs and web pages R6 rewrites. | Owner: R5 and R6 in parallel; the D-R4.37 clean-up runs afterwards as a separate sequential slice **R5f**. Shared index exports, test-list entries and stubs were created before the agents started; each agent owned a disjoint file set. |
+| D-R6.1 / D-R6.12 | R3 and R4 are done, so every slice can run and there is nothing to reserve. | `redesignModules.ts` is not built. Visit planner = `/app/visits`; Visits & reports = `/app/projects/:id/visits`; Findings = `/visits?tab=findings` (R4 put findings on the Visits page). |
+| Section 4.1 mapping | R4f deleted the `reporting` section and added `visits` (officers, working days, plan). | Team & visits = `visits` + `team`; `/setup/visits` resolves to the `team` step. |
+| D-R6.21 | `InspectionOverviewCard` and the inspections page are already gone (R4). | Nothing to keep. |
+| D-R6.25 | R3 built Forms & facilities as a Settings tab. | R6b moves it to `/app/forms` (register section 3). |
+| Overview contracts (written first) | `deriveProjectStage` (`shared/src/utils/projectStage.ts`), `ProjectStageSchema`/`ProjectStageSummarySchema`/`ProjectOverviewDtoSchema` (`projectOverview.schema.ts`), batched `loadProjectStageFacts`/`loadProjectStageSummaries` (`server/src/modules/projects/projectStage.service.ts`, also used by the R5 baseline pack). | Deviations: `enteredAt` is an ISO timestamp (the UI formats it) instead of `enteredOn`; `visitsEnabled` dropped; `hasSprints` and `openFindingCount` added. "Kick-off tracked" = the project has a type or any contract milestone. |
+
+### 15.3 R6c: Overview
+
+- Built: `GET /projects/:id/overview` (`modules/projects/overview.service.ts`, `overview.routes.ts`, mounted in `app.ts` right after `projectsRoutes` so `/portfolio/overview` keeps matching first); stage on `GET /projects` and `/projects/portfolio/overview` rows (batched); `ProjectCoreDtoSchema`/`ProjectSummaryDtoSchema` in `shared/src/schemas/project.schema.ts` (web `api/types.ts` re-exports it); `ProjectOverviewPage` with `ProjectStageBar` and `PhaseActions`/`PhaseChangeModal` (moved from the banner; refusal text shown under the button); stage chip in the directory, the portfolio rows and the header. Deleted: `PortfolioDashboardPage.tsx`, `ProjectPhaseBanner.tsx`, `NextDeadlinesCard`.
+- Gates (server): milestones = the web `MILESTONE_VIEW_PERMISSIONS` list; next visit = `visits:view`; findings = `inspections:view`, `inspections:manage_findings` or `visits:view`; defects = `retention:manage_defects`; sprints = `boq:view`; stage = every viewer. Hidden sections are null.
+- Next visit: PLANNED / IN_PROGRESS / RETURNED from today (project zone), earliest. Visit deadline candidate: the earliest `submissionDeadline` of an open visit, even when overdue; a milestone wins a tie. Payments stay a separate query (`useProjectPaymentsQuery`); the bar uses gross paid (`paidGrossNgn`, the figure `PAID_ABOVE_CONTRACT_SUM` uses).
+- Stale copy fixed in the phase modal (public handover link, reporting obligations).
+- **Seed vs plan:** PRG-101 is a draft (`seedPhase16`), so no seeded live project is in the Kick-off stage; the test asserts 409 `PROJECT_IS_DRAFT`. C8 cannot show Kick-off; R7's seed should add one. PRG-102 Mobilisation, PRG-105 Construction (sprint 3 of 3), PRG-104 Completion, PRG-103 Closure (liability period), PRG-242 Closure (archived), LKK-402 Construction with Kick-off/Mobilisation not tracked.
+- Tests: `routes.r6c.test.ts` 16, `projectStage.r6.test.ts` 10.
+
+### 15.4 R6d and R6e
+
+- Migration `20261220090000_r6d_payment_sprint`: `project_payments.sprintId` + index `(projectId, sprintId)` + FK `ON DELETE RESTRICT`. The diff held only this change; deployed on the dev DB.
+- R6d: `RecordPaymentRequestSchema.sprintId`, `PaymentSprintRefSchema`, `PaymentDto.sprint`; `ProjectPaymentsSummaryDto` gained `sprints`, `today`, `retentionPeriodEnded`. A sprint of another project → 404 `SPRINT_NOT_FOUND`; `PAYMENT_RECORDED` audits the sprint. `saveSprints` refuses to remove a sprint any payment names (voided included) with 409 `SPRINT_IN_USE` on drafts and live projects (else the FK would surface as 500). Web: sprint picker and column, client-side filters (kind, sprint incl. "No sprint named", exceptions only), paid-vs-contract bar, Release checks panel, labelled override and void inputs.
+- **Seed fix:** the reset list deleted sprints before payments, which the Restrict FK would refuse once a payment names a sprint (C12 creates one); `projectPayment.deleteMany()` now runs first.
+- R6e: `PROJECT_TYPE_CONFIG_GROUP_DEFS` / `PROJECT_TYPE_CONFIG_GROUPS` / `projectTypeEditorSectionForPath` (`shared/src/schemas/projectTypeConfigGroups.ts`): kickoff = `contractMilestones`, `kickoff`, `documentRequirements`, `defaultCases`; monitoring = `monitoring`, `visitForms`, `supervision`, `inspections` (legacy, until R5f); completion = `closure`, `payments` (retention defaults; D-R6.24 kept); kpis = `kpiTargets`; advanced = `ownership`, `parties` (+ the workflow template field). `ProjectTypeEditor`: General block, tabs (panels stay mounted), error counts per tab, leave guard on a dirty payload.
+- Tests: `routes.r6d.test.ts` 4, `typeConfigGroups.r6.test.ts` 5.
+
+### 15.5 R6b and the R6f public pages
+
+- Built: `web/src/navigation/navItems.ts` (Workspace and Project groups in spec order, More ▸ Audit ledger and Settings → `/settings/project`; legacy segments per entry so names and active state work on old URLs; helpers `parseAppLocation`, `findNavItem`, `canSeeNavItem`, `pageNameFor`, `sameSubPageFor`), `components/common/Tabs.tsx` (`Tabs`, `TabPanel`, `useUrlTab`; changing tab drops `case`/`ticket`), `pages/kickoff/*` (Kick-off guided sequence, Milestones with `?case=`, Mobilisation with the on-site milestone, `MOBILISATION_CHECK` visits and `MobilisationCompliancePanel`), `pages/completion/*` (Certificate, Handover, Defects with `?ticket=` highlight, Closure; retention cards deleted), `pages/forms/FormsFacilitiesPage.tsx` (`/app/forms`, `facilities:manage` or `forms:manage`; the Settings tab is gone). `AppShell` rewritten (project switcher, More ▸ disclosure, `aria-current`, drawer below `lg` with focus trap and Escape, header stage chip). Redirects keep the query string. Settings tabs go through `useGuardedAction` (the type editor's leave guard otherwise unmounted silently).
+- Deleted: `pages/milestones/*`, `pages/closeout/*`, `pages/closure/ProjectClosurePage.tsx`, `AboutPage.tsx`, `CitationRef.tsx`; `HomePage`, `MobileAppPage`, `PublicLayout` rewritten without lender/AI/join-code copy; `ArchiveProjectDialog` IPC line replaced.
+- Server `actionUrl`s moved to the new routes (default cases now open the case: `/kickoff?tab=milestones&case=<id>`). `routes.r6b.test.ts` (no database) reads the web routes from `App.tsx` and every `/app/...` link in server source and the seed (27) and checks each opens a page and a tab that exists. Legacy `/inspections` and `/audit?tab=presence` links are allowed until R5f.
+- Decisions: Findings entry gated `visits:view`; More ▸ Settings shown only for `projects:edit_baseline` (the gate of the header button it replaces; the route stays read-only for others); no `module` field (the page gates its tabs on the module switches). Completion & handover = union of closure, handover and defect-reader permissions incl. `payments:view` (a server defect reader); holders of only `payments:record` or `audit:view_ledger` lose the page, which only showed them the money cards now on Payments. The merged pages' `h1` is the header's.
+- Tests: `routes.r6b.test.ts` 3.
+
+### 15.6 R6a: 5-step setup
+
+- Built: `PROJECT_SETUP_SECTIONS` (with `stepId`; new section `contractor`), `PROJECT_SETUP_STEPS` = wizard (`project`, `contract`, `scope`, `team`, `review`, settings-only `advanced`), `ProjectSetupSectionIdEnum`, `ProjectSetupWizardStepIdEnum` (old `ProjectSetupStepIdEnum` removed, unused elsewhere), `wizardStepFor`, `wizardStepLabel`, `resolveSetupRoute`, `ProjectContractorSectionSchema`, optional `contractors` on parties, `wizardStepId` on section statuses and activation issues, `ProjectSetupDto.wizardSteps`; drafts list counts wizard steps. Server: `contractor` saver; `saveParties` touches the contractor only when sent and then also marks `contractor` saved (D-R6.4 compatibility, seed unchanged); contractor issues moved to `contractor`; warning `PLANNED_COMPLETION_BEFORE_SPRINTS_END`; `STEP_NOT_SAVED` names the step. Fixed: `PUT /setup/toString` (inherited property names) now 404.
+- Web: `steps/*Step.tsx` → `sections/*Section.tsx` + `ContractorSection`; `sectionRegistry.ts`; one data-driven `steps/SectionsStep.tsx` instead of four step pages (deviation); `ReviewStep`, `ProjectSetupShell`, `setupContext` (`useRegisterSection`), `stepRegistry` rewritten; `NewProjectPage` opens `/setup/project#section-parties`.
+- Decisions: D-R6.2 – D-R6.10 at their defaults (D-R6.6: `steps` keeps its name). Project = basics, parties (school card, then organisations), site. Contract = contractor, contract, facility (trade pre-filled "Main contract"/`MAIN`, collapsed; allocated budget and planned mobilisation hidden, resent unchanged). **Team & visits = team then visits** (saving visit officers adds them to the team, so team saves first). Legacy URLs: basics/parties/site → project; facility/contractor → contract; standards/boq → scope; visits/reporting → team; process → advanced; each to `#section-<id>`, query kept. Save and continue saves dirty sections, then required never-saved ones, stopping at the first failure. Process no longer counts as unsaved on an untouched draft. `MobilisationCompliancePanel` left the Team section. The shell's own step moves use plain `navigate()` after its save (the guard would prompt twice).
+- **For R7:** move the seed (`seedPhase11.ts`, `seedPhase16.ts`) to the `contractor` section; seeded draft ENU-501 (written straight into `setupState`) now shows `contractor:STEP_NOT_SAVED` (no test activates it).
+- **Test infrastructure:** concurrent route-test runs from different agents collided while building the shared `_tmpl` template (`permissions_key_key` unique violation), although the plan said the template is keyed per PID. The full gate is run alone. The R6a agent used a private `insite_r6a_test` database (and its `_tmpl`), which can be dropped.
+- Tests: `setupRegistry.r6.test.ts` 7, `routes.r6a.test.ts` 10; `routes.phase6` expectations moved to `contractor:*`.
+
+### 15.7 Click-through and accessibility check (sections 10 and 11)
+
+Owner decision (2026-11-24): no browser click-through in this run. Sections 10 and 11 are carried, updated to what was built, into [web_testing_checklist.md](web_testing_checklist.md) (IDs `WEB-R6-*`, plus the R2/R3/R4 checks still owed), to be run once when the platform edits are finished. A first run was stopped part-way: it fixed the login page labels and contrast, the browser tab title, and accessibility in a few closure, select and modal components (`qa/findings/web.md` W-R6-001 – W-R6-004); W-R6-004 (login showcase panel) stays open.

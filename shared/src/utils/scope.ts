@@ -1,6 +1,6 @@
 import { FACILITY_ARCHETYPE_META, type FacilityArchetype } from '../schemas/facility.schema';
 import type { SprintStatus } from '../schemas/scope.schema';
-import { addDays } from './reportingPeriod';
+import { addDays } from './calendar';
 
 /**
  * Redesign R2b: pure scope rules shared by the server, the web page and the workbook importer.

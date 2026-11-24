@@ -65,8 +65,8 @@ export function ArchiveProjectDialog({
           </p>
           <ul className="list-disc pl-5 space-y-0.5">
             <li>It disappears from the mobile app and from the portfolio views.</li>
-            <li>Field staff cannot send new reports.</li>
-            <li>IPCs, reports, evidence and the audit ledger stay available to read.</li>
+            <li>Field staff cannot submit new visits.</li>
+            <li>Visits, documents, payments, certificates and the audit ledger stay available to read.</li>
           </ul>
         </div>
         <div>

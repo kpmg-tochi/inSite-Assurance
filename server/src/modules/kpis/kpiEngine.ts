@@ -73,7 +73,7 @@ export interface KpiProjectFacts {
   hasVisitLead: boolean;
   /** Codes of document types with a non-archived document in the register. */
   documentTypeCodes: Set<string>;
-  /** An accepted baseline visit, or a legacy approved baseline inspection. */
+  /** An accepted baseline visit. */
   hasApprovedBaseline: boolean;
   /** Published visits dated or due near the KPI period. */
   visits: KpiVisitFact[];
@@ -83,7 +83,7 @@ export interface KpiProjectFacts {
   approvals: KpiDurationSum;
   /** The live (issued) Certificate of Completion. */
   certificate: { issuedDate: string; completionDate: string } | null;
-  /** Overall finding of the latest accepted final evaluation visit (or legacy inspection). */
+  /** Overall finding of the latest accepted final evaluation visit. */
   finalEvaluationFinding: string | null;
   /** Stored closure checklist rows (key → status). */
   closureItemStatus: Map<string, string>;

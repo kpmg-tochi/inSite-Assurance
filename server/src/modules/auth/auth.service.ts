@@ -1,10 +1,8 @@
 import bcrypt from 'bcryptjs';
-import { Prisma } from '@prisma/client';
 import {
   ChangePasswordRequest,
   DEVICE_SIGNATURE_ALGORITHM,
   MobileAccountProfile,
-  MobileBaselinePack,
   MobileLoginRequest,
   MobileLoginResponse,
   MobileTenantBranding,
@@ -31,7 +29,6 @@ import { primaryCategory, resolveOrganization } from '../organizations/organizat
 import { recordAuditEvent } from '../audit/audit.service';
 import { parseTenantBranding } from '../rbac/rbac.service';
 import { parseDevicePublicKey } from '../../utils/deviceSignature';
-import { CadenceProjectRow, serializeCadenceSettings } from '../cadence/cadence.service';
 
 export const WEB_USER_AUTH_INCLUDE = {
   organization: true,
@@ -466,79 +463,8 @@ export async function logoutMobileUser(principal: { userId: string; deviceRowId:
   });
 }
 
-type BaselineProject = CadenceProjectRow & {
-  id: string;
-  name: string;
-  codePrefix: string;
-  stateLocation: string | null;
-  reportingCadence: string;
-  timezone: string;
-  geofenceMode: string | null;
-  geofenceGeoJson: unknown;
-  geofenceToleranceMeters: number | null;
-  constructionPhase?: string;
-  tenant: { defaultGeofenceToleranceMeters: number };
-  boqItems: Array<{
-    id: string;
-    wbsCode: string;
-    section: string;
-    description: string;
-    unit: string;
-    totalQuantity: unknown;
-    budgetedCostNgn: unknown;
-    isHoldPoint: boolean;
-    holdPointInstruction: string | null;
-    cumulativeCertifiedPct: unknown;
-  }>;
-};
-
-/** The offline baseline for one project, as the baseline endpoint serves it. */
-export function buildBaselinePack(project: BaselineProject): MobileBaselinePack {
-  const boqItems = project.boqItems.map((item) => ({
-    id: item.id,
-    wbsCode: item.wbsCode,
-    section: item.section,
-    description: item.description,
-    unit: item.unit,
-    totalQuantity: Number(item.totalQuantity),
-    budgetedCostNgn: Number(item.budgetedCostNgn),
-    isHoldPoint: item.isHoldPoint,
-    holdPointInstruction: item.holdPointInstruction,
-    cumulativeCertifiedPct: Number(item.cumulativeCertifiedPct),
-  }));
-  return {
-    projectId: project.id,
-    name: project.name,
-    codePrefix: project.codePrefix,
-    stateLocation: project.stateLocation ?? '',
-    reportingCadence: project.reportingCadence as MobileBaselinePack['reportingCadence'],
-    timezone: project.timezone,
-    // Phase 8: the app computes the current period with the shared module from these settings.
-    cadence: serializeCadenceSettings(project),
-    geofenceMode: project.geofenceMode as MobileBaselinePack['geofenceMode'],
-    geofence: project.geofenceGeoJson as MobileBaselinePack['geofence'],
-    geofenceToleranceMeters: project.geofenceToleranceMeters ?? project.tenant.defaultGeofenceToleranceMeters,
-    boqItems,
-    holdPoints: boqItems.filter((b) => b.isHoldPoint),
-    // Phase 10: lets the app offer defect work once construction has ended.
-    constructionPhase: (project.constructionPhase ?? 'ACTIVE_CONSTRUCTION') as MobileBaselinePack['constructionPhase'],
-  };
-}
-
-/** GET /auth/mobile/projects/:projectId/baseline. Access is checked by the field auth guard. */
-export async function getProjectBaselinePack(projectId: string): Promise<MobileBaselinePack> {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    include: {
-      boqItems: { orderBy: { wbsCode: 'asc' } },
-      tenant: { select: { defaultGeofenceToleranceMeters: true } },
-    },
-  });
-  if (!project) {
-    throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
-  }
-  return buildBaselinePack(project);
-}
+/** GET /auth/mobile/projects/:projectId/baseline (redesign R5: pack v2, see baselinePack.service.ts). */
+export { getProjectBaselinePack } from './baselinePack.service';
 
 /** Tenant branding for the mobile app (Phase 6). */
 export function mobileTenantBranding(tenant: {

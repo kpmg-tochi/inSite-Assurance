@@ -118,7 +118,7 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
       });
       const codes = roles.map((r) => r.code).sort();
       assert.ok(codes.includes('MONITOR_INSPECTOR') && codes.includes('INDEPENDENT_RESIDENT'));
-      assert.ok(roles.every((r) => r.fieldPersonaType !== 'CONTRACTOR_EXECUTOR'));
+      assert.ok(roles.every((r) => r.fieldPersonaType === 'INDEPENDENT_VERIFIER' || r.fieldPersonaType === 'NONE'), 'R5f: no contractor persona');
       assert.equal(await prisma.role.count({ where: { tenantId: ids.tenant, code: { in: ['CONTRACTOR', 'CONTRACTOR_ENGINEER'] } } }), 0);
       const sessions = await prisma.fieldAgentSession.findMany({ select: { userId: true, mobileDeviceId: true } });
       assert.ok(sessions.length > 0);
@@ -304,7 +304,8 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
       const baseline = await request(app).get(`/api/v1/auth/mobile/projects/${ids.lkk}/baseline`).set(bearer(token));
       assert.equal(baseline.status, 200, JSON.stringify(baseline.body));
       assert.ok(shared.MobileBaselinePackSchema.safeParse(baseline.body.data).success);
-      assert.ok(baseline.body.data.boqItems.length > 0);
+      assert.equal(baseline.body.data.projectId, ids.lkk);
+      assert.equal(baseline.body.data.boqItems, undefined, 'redesign R5e: the pack carries no BOQ');
 
       const session = await request(app).get(`/api/v1/auth/mobile/projects/${ids.lkk}/session`).set(bearer(token));
       assert.equal(session.status, 200, JSON.stringify(session.body));
@@ -640,66 +641,33 @@ describe('Phase 5 provisioned mobile accounts', { concurrency: false }, () => {
     });
   });
 
-  describe('project-wide notifications that need an action (Step 8)', () => {
-    it('one session completes a broadcast query; the other sees it answered, not unread', async () => {
+  describe('project-wide notifications (R5f: none asks for an action)', () => {
+    it('a broadcast is read per session, and every notification can be marked read', async () => {
       const { createMobileNotification } = await import('../modules/notifications/notifications.service');
-      const contractor = await prisma.fieldAgentSession.findFirstOrThrow({
+      const officer = await prisma.fieldAgentSession.findFirstOrThrow({
         where: { projectId: ids.lkk, agentFullName: { contains: 'M&E Officer' } },
       });
-      const monitorQueryId = crypto.randomUUID();
       const broadcast = await createMobileNotification(prisma, {
         projectId: ids.lkk,
-        type: 'REPORT_QUERY',
-        actionType: 'OPEN_WBS_CHAT',
-        requiresAction: true,
-        title: 'Clarification Requested',
-        message: 'Send the cube test certificates.',
-        metadata: { monitorQueryId },
+        type: 'DEFECT_UPDATE',
+        actionType: 'OPEN_DEFECTS',
+        title: 'Defect assigned',
+        message: 'A defect on the culvert was passed to the contractor.',
       });
+      assert.equal(broadcast.requiresAction, false);
       const cow = bearer((await sessionToken(prisma, ids.lkkCow)));
-      const con = bearer((await sessionToken(prisma, contractor.id)));
+      const con = bearer((await sessionToken(prisma, officer.id)));
 
-      const resolved = await request(app)
-        .post(`/api/v1/projects/${ids.lkk}/notifications/${broadcast.id}/resolve`)
-        .set(con);
-      assert.equal(resolved.status, 200, JSON.stringify(resolved.body));
-      assert.ok(resolved.body.data.actionedAt);
+      const read = await request(app).patch(`/api/v1/projects/${ids.lkk}/notifications/${broadcast.id}/read`).set(con);
+      assert.equal(read.status, 200, JSON.stringify(read.body));
+      assert.equal(read.body.data.isRead, true);
 
       const list = await request(app).get(`/api/v1/projects/${ids.lkk}/notifications`).set(cow);
       assert.equal(list.status, 200);
       const seen = list.body.data.find((n: { id: string }) => n.id === broadcast.id);
-      assert.ok(seen.actionedAt, 'actioned for everyone');
-      assert.equal(seen.isRead, true, 'no longer counts as unread for the other session');
-      assert.equal(seen.actionedByName, contractor.agentFullName);
-    });
-
-    it('maps a monitor query response to every notification it completes', async () => {
-      const { createMobileNotification } = await import('../modules/notifications/notifications.service');
-      const { markNotificationsActioned } = await import('../modules/notifications/notificationActions');
-      const monitorQueryId = crypto.randomUUID();
-      const n = await createMobileNotification(prisma, {
-        projectId: ids.lkk,
-        type: 'REPORT_QUERY',
-        actionType: 'OPEN_WBS_CHAT',
-        requiresAction: true,
-        title: 'Clarification Requested',
-        message: 'x',
-        metadata: { monitorQueryId },
-      });
-      const count = await markNotificationsActioned(
-        prisma,
-        ids.lkk,
-        { kind: 'MONITOR_QUERY_ANSWERED', monitorQueryId },
-        { userId: ids.monitorUser, name: 'QS Tunde' }
-      );
-      assert.equal(count, 1);
-      const row = await prisma.mobileNotification.findUniqueOrThrow({ where: { id: n.id } });
-      assert.equal(row.actionedByUserId, ids.monitorUser);
-      // A second completion changes nothing (first answer wins).
-      assert.equal(
-        await markNotificationsActioned(prisma, ids.lkk, { kind: 'MONITOR_QUERY_ANSWERED', monitorQueryId }, { name: 'x' }),
-        0
-      );
+      assert.equal(seen.isRead, false, 'read state is per session');
+      const resolve = await request(app).post(`/api/v1/projects/${ids.lkk}/notifications/${broadcast.id}/resolve`).set(con);
+      assert.equal(resolve.status, 404, 'R5f: the resolve route is gone');
     });
   });
 

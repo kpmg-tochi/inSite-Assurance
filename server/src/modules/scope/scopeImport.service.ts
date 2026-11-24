@@ -21,7 +21,7 @@ import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { applyProjectTypeToProject } from '../projectTypes/projectTypes.service';
 import { ensureFacilities } from '../facilities/facilities.service';
-import { defectItemIds, getProjectScope, LINE_INCLUDE, lineHasEvidence, runScopeWrite } from './scope.service';
+import { defectItemIds, getProjectScope, lineHasEvidence, runScopeWrite } from './scope.service';
 import { buildScopeWorkbook, parseScopeWorkbook, ParsedScopeWorkbook, WorkbookFacility } from './workbook/scopeWorkbook';
 
 /**
@@ -310,7 +310,7 @@ async function analyse(db: Db, projectId: string, buffer: Buffer, fileName: stri
   const warnings = [...parsed.warnings, ...fill.warnings];
 
   // The draft's own lines: replaced on confirm, refused if any carries evidence.
-  const existingLines = await db.boqItem.findMany({ where: { projectId }, include: LINE_INCLUDE });
+  const existingLines = await db.boqItem.findMany({ where: { projectId } });
   const defects = await defectItemIds(db, projectId);
   const withEvidence = existingLines.filter((l) => lineHasEvidence(l, defects));
   if (withEvidence.length) {

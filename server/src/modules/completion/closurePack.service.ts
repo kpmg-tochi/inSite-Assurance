@@ -8,7 +8,6 @@ import {
   ScheduleStatusValue,
   ClosurePackExportDto,
   CONSTRUCTION_PHASE_LABELS,
-  INSPECTION_VISIT_TYPE_LABELS,
   resolveTerm,
   resolveTerminology,
   zonedCalendarDate,
@@ -25,14 +24,13 @@ import { recordAuditEvent, verifyAuditChain } from '../audit/audit.service';
 import { storeGeneratedDocument } from '../documents/documents.service';
 import { storageService } from '../../integrations/storage.service';
 import { generateClosureIndexPdf, generateInspectionSummaryPdf } from '../../integrations/closure-pdf.service';
-import { parseSections } from '../inspections/checklistTemplates.service';
 import { ZipFileWriter } from '../../utils/zipWriter';
 import { brandingFor } from './completion.service';
 
 /**
  * Phase 15 Step 7: the closure pack. POST queues an export; the export builds a ZIP on disk one
  * entry at a time (index PDF, manifest, every current document version, certificates, payment
- * PDFs, inspection summaries, the audit ledger as CSV with a chain verification), stores it as a
+ * PDFs, visit summaries, the audit ledger as CSV with a chain verification), stores it as a
  * CLOSURE_FILE register document and records CLOSURE_PACK_EXPORTED. Download goes through the
  * document register (contractors never see CLOSURE_FILE). Large files are skipped and listed in the
  * manifest rather than loaded; the archive is capped.
@@ -261,49 +259,7 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
     add('payments/payment-record.csv', Buffer.from(rows.join('\r\n') + '\r\n', 'utf8'), 'payment record');
   }
 
-  // 3. Inspection summaries.
-  const inspections = await prisma.siteInspectionReport.findMany({
-    where: { projectId },
-    include: { template: true, findings: { select: { description: true, severity: true, status: true } } },
-    orderBy: { visitDate: 'asc' },
-  });
-  for (const i of inspections) {
-    let items: Array<{ section: string; label: string; value: string; comment: string | null }> = [];
-    try {
-      const sections = parseSections(i.template.sectionsJson);
-      const answers = new Map(((Array.isArray(i.answersJson) ? i.answersJson : []) as Array<{ itemKey: string; value: unknown; comment?: string | null }>).map((a) => [a.itemKey, a]));
-      items = sections.flatMap((s) =>
-        s.items.map((it) => {
-          const a = answers.get(it.key);
-          return { section: s.title, label: it.label, value: a ? String(a.value ?? '—') : 'not answered', comment: a?.comment ?? null };
-        })
-      );
-    } catch {
-      items = [];
-    }
-    add(
-      `inspections/${i.visitDate}-${i.visitType.toLowerCase()}-${i.id.slice(0, 8)}.pdf`,
-      await generateInspectionSummaryPdf({
-        branding,
-        projectLabel: `[${project.codePrefix}] ${project.name}`,
-        title: `${INSPECTION_VISIT_TYPE_LABELS[i.visitType]} of ${i.visitDate}`,
-        fields: [
-          ['Inspector', `${i.reporterName} (${i.reporterRoleName})`],
-          ['Checklist', `${i.template.name} v${i.templateVersion}`],
-          ['Overall finding', i.overallFinding.replace('_', ' ').toLowerCase()],
-          ['Status', i.status.replace('_', ' ').toLowerCase()],
-          ['Geofence', i.geofenceStatus ?? '—'],
-          ['Late', i.isLate ? 'yes' : 'no'],
-        ],
-        summary: i.summaryText,
-        items,
-        findings: i.findings.map((f) => ({ severity: f.severity, title: f.description.slice(0, 160), status: f.status })),
-      }),
-      `inspection ${i.id}`
-    );
-  }
-
-  // 3b. Redesign R4d: visit summaries (the latest submission of every submitted visit).
+  // 3. Visit summaries (the latest submission of every submitted visit).
   const submissions = await prisma.visitSubmission.findMany({
     where: { projectId, status: { in: ['APPROVED', 'PENDING_APPROVAL'] } },
     include: { visit: { select: { id: true, visitKind: true, plannedDate: true, status: true } } },
@@ -397,7 +353,7 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
     { path: 'certificates/', description: 'Certificate of Completion and handover certificate.' },
     { path: 'documents/<type>/', description: 'Current version of every document in the register.' },
     { path: 'payments/payment-record.csv', description: 'Every recorded payment, voided ones included.' },
-    { path: 'inspections/', description: 'One summary per site inspection.' },
+    { path: 'visits/', description: 'One summary per submitted visit.' },
     { path: 'audit/audit-ledger.csv', description: 'The project audit ledger with entry hashes.' },
     { path: 'audit/chain-verification.json', description: 'Result of the hash chain verification.' },
   ];
@@ -438,8 +394,8 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
       ['Paid to date (net of retention)', money(project.disbursedToDateNgn, currency)],
       ['Schedule', project.scheduleStatus ? SCHEDULE_STATUS_META[project.scheduleStatus as ScheduleStatusValue]?.label ?? project.scheduleStatus : '—'],
       ['Contract milestones done', `${milestones.filter((m) => m.status === 'DONE' || m.status === 'WAIVED').length} of ${milestones.length}`],
-      ['Site inspections', String(inspections.length)],
-      ['Open inspection findings', String(findingsOpen)],
+      ['Visits submitted', String(submissions.length)],
+      ['Open findings', String(findingsOpen)],
       ['Defects closed / open', `${defectCount(['VERIFIED_CLOSED', 'REJECTED_NOT_A_DEFECT'])} / ${defectCount(['OPEN', 'ASSIGNED', 'RECTIFIED_PENDING_VERIFICATION'])}`],
       ['Average contractor rating', avgRating ? `${avgRating} of 5 (${ratings.length} rating(s))` : '—'],
     ],

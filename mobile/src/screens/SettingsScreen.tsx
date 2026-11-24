@@ -77,7 +77,7 @@ export const SettingsScreen: React.FC = () => {
   const handleConfirmResetDemo = () => {
     Alert.alert(
       "Reset Demo Environment?",
-      "This will clear all local SQLite data and device profile settings, and reset all user-submitted chat messages and reports in the database back to the original seed.",
+      "This will clear all local SQLite data and device profile settings, and reset everything submitted in the database (visit responses, visit reports, site log entries) back to the original seed.",
       [
         { text: "Cancel", style: "cancel" },
         {

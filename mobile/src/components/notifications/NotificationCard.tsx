@@ -7,7 +7,6 @@ import {
   type MobileNotificationType,
 } from "@insite/shared";
 import Pill, { type PillVariant } from "../common/Pill";
-import { reportQueryLabel } from "../../utils/reportStatus";
 import { SubtleGradient } from "../common/SubtleGradient";
 import {
   borderRadius,
@@ -24,41 +23,19 @@ interface NotificationVisualConfig {
   ctaLabel?: string;
 }
 
-const NOTIFICATION_VISUALS: Record<
-  MobileNotificationType,
-  NotificationVisualConfig
-> = {
-  BACKLOG_REVIEW_REQUIRED: {
-    icon: "layers",
-    accentColor: "#00338D",
-    iconBg: "#EFF6FF",
-    badgeText: "Backlog Review",
-    pillVariant: "info",
-    ctaLabel: "Review Summary",
-  },
-  REPORT_QUERY: {
-    icon: "message-square",
-    accentColor: "#B45309",
-    iconBg: "#FFFBEB",
-    badgeText: "Query · Clarification",
-    pillVariant: "warning",
-    ctaLabel: "Open WBS Chat",
-  },
-  HOLD_POINT_ALERT: {
-    icon: "shield",
-    accentColor: "#BE123C",
-    iconBg: "#FFF1F2",
-    badgeText: "Hold Point",
-    pillVariant: "negative",
-    ctaLabel: "Submit Hold-Point Proof",
-  },
-  REPORT_OVERDUE: {
-    icon: "alert-circle",
-    accentColor: "#DC2626",
-    iconBg: "#FEE2E2",
-    badgeText: "Report overdue",
-    pillVariant: "negative",
-  },
+/**
+ * Redesign R5e: the visit app's notification types. Types of the pre-R5 app (reports, chat, hold
+ * points, inspections) that the server may still have stored show as a plain update.
+ */
+const GENERIC_VISUAL: NotificationVisualConfig = {
+  icon: "bell",
+  accentColor: "#475569",
+  iconBg: "#F1F5F9",
+  badgeText: "Update",
+  pillVariant: "gray",
+};
+
+const NOTIFICATION_VISUALS: Partial<Record<MobileNotificationType, NotificationVisualConfig>> = {
   // Phase 10
   DEFECT_UPDATE: {
     icon: "tool",
@@ -68,22 +45,14 @@ const NOTIFICATION_VISUALS: Record<
     pillVariant: "info",
     ctaLabel: "Open defects",
   },
-  // Phase 14
-  INSPECTION_FINDING: {
-    icon: "alert-triangle",
-    accentColor: "#B45309",
-    iconBg: "#FEF3C7",
-    badgeText: "Finding",
-    pillVariant: "warning",
-    ctaLabel: "Open findings",
-  },
-  // Redesign R4: visit notifications (the visit screens come with R5).
+  // Redesign R4: visit notifications (OPEN_VISIT opens the visit).
   VISIT_ASSIGNED: {
     icon: "calendar",
     accentColor: "#4338CA",
     iconBg: "#E0E7FF",
     badgeText: "Visit",
     pillVariant: "info",
+    ctaLabel: "Open visit",
   },
   VISIT_CHANGED: {
     icon: "calendar",
@@ -91,6 +60,7 @@ const NOTIFICATION_VISUALS: Record<
     iconBg: "#E0E7FF",
     badgeText: "Visit changed",
     pillVariant: "info",
+    ctaLabel: "Open visit",
   },
   VISIT_REMINDER: {
     icon: "bell",
@@ -98,6 +68,7 @@ const NOTIFICATION_VISUALS: Record<
     iconBg: "#FEF3C7",
     badgeText: "Confirm visit",
     pillVariant: "warning",
+    ctaLabel: "Open visit",
   },
   VISIT_RETURNED: {
     icon: "corner-up-left",
@@ -105,6 +76,7 @@ const NOTIFICATION_VISUALS: Record<
     iconBg: "#FEF3C7",
     badgeText: "Returned",
     pillVariant: "warning",
+    ctaLabel: "Open visit",
   },
   VISIT_APPROVED: {
     icon: "check-circle",
@@ -112,11 +84,17 @@ const NOTIFICATION_VISUALS: Record<
     iconBg: "#D1FAE5",
     badgeText: "Accepted",
     pillVariant: "info",
+    ctaLabel: "Open visit",
   },
 };
 
+/** Actions that open a screen (the others only mark the notification read). */
+const OPENING_ACTIONS = new Set(["OPEN_VISIT", "OPEN_DEFECTS"]);
+
 export interface NotificationCardProps {
   notification: MobileNotificationDto;
+  /** The project's code, shown when the account has more than one project. */
+  projectLabel?: string | null;
   onPress: (notification: MobileNotificationDto) => void;
 }
 
@@ -126,27 +104,14 @@ export interface NotificationCardProps {
  */
 export const NotificationCard: React.FC<NotificationCardProps> = ({
   notification,
+  projectLabel,
   onPress,
 }) => {
-  const visuals =
-    NOTIFICATION_VISUALS[notification.type] ??
-    NOTIFICATION_VISUALS.BACKLOG_REVIEW_REQUIRED;
+  const visuals = NOTIFICATION_VISUALS[notification.type] ?? GENERIC_VISUAL;
   const elapsedLabel = formatElapsedTime(notification.createdAt);
-  const wbsCode = notification.metadata?.wbsCode;
-  // Report queries say where they came from (Phase 7): standards check, omission check or monitor.
-  const querySource = notification.metadata?.querySource;
-  const badgeText =
-    notification.type === "REPORT_QUERY" && querySource
-      ? reportQueryLabel(querySource)
-      : visuals.badgeText;
-  const rawCodes = (notification.metadata as Record<string, unknown> | undefined)?.standardCodes;
-  const standardCodes =
-    querySource === "AI_STANDARDS_CHECK" && Array.isArray(rawCodes)
-      ? rawCodes.filter((c): c is string => typeof c === "string" && c.length > 0)
-      : [];
+  const badgeText = visuals.badgeText;
   const showActionButton = Boolean(
-    visuals.ctaLabel &&
-      (notification.requiresAction || notification.actionType !== "NONE"),
+    visuals.ctaLabel && OPENING_ACTIONS.has(notification.actionType),
   );
 
   return (
@@ -200,19 +165,16 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
         </View>
 
         <View style={styles.contentColumn}>
-          {/* Top Metadata Row: Pill + WBS code + Unread dot + Elapsed time */}
+          {/* Top Metadata Row: Pill + project code + Unread dot + Elapsed time */}
           <View style={styles.metaRow}>
             <View style={styles.metaLeft}>
               <Pill
                 variant={notification.isRead ? "gray" : visuals.pillVariant}
                 text={badgeText}
               />
-              {wbsCode ? (
-                <Text style={styles.wbsTag}>WBS {wbsCode}</Text>
-              ) : null}
-              {standardCodes.length > 0 ? (
-                <Text style={styles.wbsTag} numberOfLines={1}>
-                  {standardCodes.join(", ")}
+              {projectLabel ? (
+                <Text style={styles.projectTag} numberOfLines={1}>
+                  {projectLabel}
                 </Text>
               ) : null}
             </View>
@@ -284,7 +246,7 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
               </View>
 
               {notification.requiresAction && !notification.isRead ? (
-                <Text style={styles.actionHint}>Stays unread until sent</Text>
+                <Text style={styles.actionHint}>Stays unread until done</Text>
               ) : null}
             </View>
           ) : !notification.isRead ? (
@@ -353,7 +315,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
-  wbsTag: {
+  projectTag: {
     fontSize: 10,
     fontWeight: "700",
     color: defaultColors.secondaryText,

@@ -76,12 +76,8 @@ export async function loadKpiFacts(
     visitsEver,
     visitLeads,
     sprintRows,
-    baselines,
     baselineVisits,
-    finalEvaluations,
     finalEvaluationVisits,
-    reportApprovals,
-    inspectionApprovals,
     visitApprovals,
     certificates,
     closureRows,
@@ -129,34 +125,11 @@ export async function loadKpiFacts(
       select: { visit: { select: { projectId: true } } },
     }),
     prisma.projectSprint.findMany({ where: { projectId: inIds }, select: { projectId: true, endDate: true, firstVerifiedAt: true } }),
-    prisma.siteInspectionReport.groupBy({
-      by: ['projectId'],
-      where: { projectId: inIds, visitType: 'BASELINE', status: 'APPROVED' },
-      _count: { _all: true },
-    }),
     prisma.visit.groupBy({ by: ['projectId'], where: { projectId: inIds, visitKind: 'BASELINE', status: 'APPROVED' }, _count: { _all: true } }),
-    prisma.siteInspectionReport.findMany({
-      where: { projectId: inIds, visitType: 'FINAL_EVALUATION', status: 'APPROVED' },
-      orderBy: { approvedAt: 'desc' },
-      select: { projectId: true, overallFinding: true },
-    }),
     prisma.visitSubmission.findMany({
       where: { projectId: inIds, status: 'APPROVED', visit: { visitKind: 'FINAL_EVALUATION' } },
       orderBy: { approvedAt: 'desc' },
       select: { projectId: true, overallFinding: true },
-    }),
-    prisma.workdayReport.findMany({
-      where: {
-        projectId: inIds,
-        status: 'APPROVED_COMPLETED',
-        approvedCompletedAt: { gte: windowStart, lte: windowEnd },
-        humanConfirmedAt: { not: null },
-      },
-      select: { projectId: true, humanConfirmedAt: true, approvedCompletedAt: true },
-    }),
-    prisma.siteInspectionReport.findMany({
-      where: { projectId: inIds, status: 'APPROVED', approvedAt: { gte: windowStart, lte: windowEnd } },
-      select: { projectId: true, confirmedAt: true, approvedAt: true },
     }),
     prisma.visitSubmission.findMany({
       where: { projectId: inIds, status: 'APPROVED', approvalChainVersion: { not: null }, approvedAt: { gte: windowStart, lte: windowEnd } },
@@ -178,11 +151,10 @@ export async function loadKpiFacts(
   const visitsEverSet = new Set(visitsEver.map((v) => v.projectId));
   const leadSet = new Set(visitLeads.map((l) => l.visit.projectId));
   const sprintsOf = groupBy(sprintRows, (s) => s.projectId);
-  const baselineSet = new Set([...baselines.map((b) => b.projectId), ...baselineVisits.map((b) => b.projectId)]);
+  const baselineSet = new Set(baselineVisits.map((b) => b.projectId));
   const finalFindingOf = new Map<string, string>();
-  // Accepted final evaluation visits first, then legacy inspections (until R5).
+  // The latest accepted final evaluation visit (R5f deleted the legacy inspections).
   for (const e of finalEvaluationVisits) if (!finalFindingOf.has(e.projectId)) finalFindingOf.set(e.projectId, e.overallFinding);
-  for (const e of finalEvaluations) if (!finalFindingOf.has(e.projectId)) finalFindingOf.set(e.projectId, e.overallFinding);
   const certificateOf = new Map(certificates.map((c) => [c.projectId, c]));
   const closureOf = groupBy(closureRows, (r) => r.projectId);
   const lessonsOf = new Map(lessons.map((l) => [l.projectId, l._count._all]));
@@ -196,8 +168,6 @@ export async function loadKpiFacts(
     d.count += 1;
     map.set(projectId, d);
   };
-  for (const r of reportApprovals) addDuration(approvalsOf, r.projectId, r.humanConfirmedAt, r.approvedCompletedAt);
-  for (const r of inspectionApprovals) addDuration(approvalsOf, r.projectId, r.confirmedAt, r.approvedAt);
   for (const r of visitApprovals) addDuration(approvalsOf, r.projectId, r.receivedAt, r.approvedAt);
 
   return projects.map((p) => {

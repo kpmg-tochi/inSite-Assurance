@@ -333,7 +333,7 @@ export function WorkspaceSettingsCard() {
             ))}
           </datalist>
           <p id="ws-timezone-hint" className="text-[11px] text-slate-500 mt-1">
-            Pick from the list or type any IANA zone. Defines the reporting day on new projects.
+            Pick from the list or type any IANA zone. New projects count their dates (visit days, deadlines) in this zone.
           </p>
           {errors.timezone && <p className="text-[11px] text-rose-600 mt-1">{errors.timezone}</p>}
         </div>

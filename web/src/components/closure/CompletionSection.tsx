@@ -141,15 +141,13 @@ export function CompletionSection({ projectId }: { projectId: string }) {
 
 function FinalEvaluationLine({ projectId, completion }: { projectId: string; completion: ProjectCompletionDto }) {
   const f = completion.finalEvaluation;
-  if (f.visitId || f.inspectionId) {
+  if (f.visitId) {
     return (
       <p className="text-xs text-emerald-700">
         Final evaluation of {f.visitDate} accepted.{" "}
-        {f.visitId && (
-          <Link to={`/app/projects/${projectId}/visits?visitId=${f.visitId}`} className="font-semibold text-brand-primary hover:underline">
-            Open the visit
-          </Link>
-        )}
+        <Link to={`/app/projects/${projectId}/visits?visitId=${f.visitId}`} className="font-semibold text-brand-primary hover:underline">
+          Open the visit
+        </Link>
       </p>
     );
   }

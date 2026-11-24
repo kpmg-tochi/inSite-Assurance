@@ -1,6 +1,7 @@
 import type { MobileNotificationDto } from "@insite/shared";
 import { mobileRequest } from "../../config/apiConfig";
 
+/** One project's notifications for this account (the request runs on that project's field session). */
 export async function fetchProjectNotifications(
   projectId: string,
 ): Promise<MobileNotificationDto[]> {
@@ -20,18 +21,6 @@ export async function markNotificationAsRead(
     `/projects/${projectId}/notifications/${notificationId}/read`,
     {
       method: "PATCH",
-    },
-  );
-}
-
-export async function resolveActionNotification(
-  projectId: string,
-  notificationId: string,
-): Promise<MobileNotificationDto> {
-  return mobileRequest<MobileNotificationDto>(
-    `/projects/${projectId}/notifications/${notificationId}/resolve`,
-    {
-      method: "POST",
     },
   );
 }

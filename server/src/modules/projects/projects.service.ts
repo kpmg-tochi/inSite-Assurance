@@ -1,4 +1,5 @@
 import { overdueMilestoneCounts } from '../contracts/milestones.service';
+import { loadProjectStageSummaries } from './projectStage.service';
 import { Prisma, ProjectStatus } from '@prisma/client';
 import {
   geofenceCentroid,
@@ -109,7 +110,6 @@ function serializeProjectCore(project: ProjectCoreRow) {
     totalBudgetNgn: Number(project.totalBudgetNgn ?? 0),
     disbursedToDateNgn: Number(project.disbursedToDateNgn),
     certifiedProgressPct: Number(project.certifiedProgressPct),
-    reportingCadence: project.reportingCadence,
     workdayStartTime: project.workdayStartTime,
     workdayEndTime: project.workdayEndTime,
     timezone: project.timezone,
@@ -160,7 +160,6 @@ export async function listProjectsForUser(
       boqItems: {
         select: {
           id: true,
-          isHoldPoint: true,
           isOpaqueLumpSum: true,
         },
       },
@@ -174,7 +173,11 @@ export async function listProjectsForUser(
   });
 
   // Phase 13: overdue contract milestones per project (directory badge).
-  const overdue = await overdueMilestoneCounts(projects);
+  // Redesign R6c (D-R6.22): the stage chip, batched.
+  const [overdue, stages] = await Promise.all([
+    overdueMilestoneCounts(projects),
+    loadProjectStageSummaries(projects.map((p) => p.id)),
+  ]);
 
   return projects.map((project) => {
     return {
@@ -184,6 +187,7 @@ export async function listProjectsForUser(
       lastFieldCaptureAt:
         project.evidenceLogs[0]?.capturedAtDevice.toISOString() ?? null,
       overdueMilestoneCount: overdue.get(project.id) ?? 0,
+      stage: stages.get(project.id) ?? null,
     };
   });
 }
@@ -368,6 +372,7 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
     },
   });
 
+  const stages = await loadProjectStageSummaries(projects.map((p) => p.id));
   const now = Date.now();
   const kpis: PortfolioOverviewKpis = {
     projectCount: projects.length,
@@ -418,6 +423,7 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
       scheduleVariance: schedule,
       geofence,
       point: geofence ? geofenceCentroid(geofence) : null,
+      stage: stages.get(p.id) ?? null,
       ...serializeDeliveryModel(p),
     };
   });

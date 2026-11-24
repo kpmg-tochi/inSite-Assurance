@@ -10,7 +10,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "InSite Assurance uses high-accuracy GPS to record where site evidence and reports are captured."
+          "locationWhenInUsePermission": "InSite Assurance uses your location to check you in at the site of a visit and to geotag visit and site log photos, voice notes and notes."
         }
       ],
       "expo-audio",
@@ -32,9 +32,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.kpmg.insiteassurance.mobile",
       "infoPlist": {
-        "NSCameraUsageDescription": "InSite Assurance requires live camera access to capture geotagged construction site evidence.",
-        "NSMicrophoneUsageDescription": "InSite Assurance requires microphone access to record English and Nigerian Pidgin site voice logs.",
-        "NSLocationWhenInUseUsageDescription": "InSite Assurance uses high-accuracy GPS to record where site evidence and reports are captured."
+        "NSCameraUsageDescription": "InSite Assurance uses the camera to take geotagged site photos for visits, defects and the site log.",
+        "NSMicrophoneUsageDescription": "InSite Assurance uses the microphone to record voice notes for visits and the site log.",
+        "NSLocationWhenInUseUsageDescription": "InSite Assurance uses your location to check you in at the site of a visit and to geotag visit and site log photos, voice notes and notes."
       }
     },
     "android": {
