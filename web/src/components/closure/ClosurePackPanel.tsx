@@ -2,16 +2,16 @@ import React from "react";
 import { Archive, Download } from "lucide-react";
 import type { ClosurePackExportDto } from "@insite/shared";
 import Loader from "../Loader";
-import { StatusChip } from "../contracts/contractUi";
+import { StatusText, type StatusTone } from "../common/StatusText";
 import { useClosurePacksQuery } from "../../queries/closure/useClosureQueries";
 import { useRequestClosurePackMutation } from "../../mutations/closure/useClosureMutations";
 import { useOpenDocumentMutation } from "../../mutations/contracts/useContractMutations";
 
-const STATUS: Record<ClosurePackExportDto["status"], { label: string; cls: string }> = {
-  QUEUED: { label: "Queued", cls: "bg-slate-100 text-slate-700 border-slate-200" },
-  RUNNING: { label: "Building", cls: "bg-amber-50 text-amber-800 border-amber-200" },
-  DONE: { label: "Ready", cls: "bg-emerald-50 text-emerald-800 border-emerald-200" },
-  FAILED: { label: "Failed", cls: "bg-rose-50 text-rose-700 border-rose-200" },
+const STATUS: Record<ClosurePackExportDto["status"], { label: string; tone: StatusTone }> = {
+  QUEUED: { label: "Queued", tone: "neutral" },
+  RUNNING: { label: "Building", tone: "pending" },
+  DONE: { label: "Ready", tone: "good" },
+  FAILED: { label: "Failed", tone: "bad" },
 };
 
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "—");
@@ -45,12 +45,14 @@ export function ClosurePackPanel({ projectId }: { projectId: string }) {
         </button>
       </div>
       {query.isLoading && <Loader />}
+      {query.isError && <p className="text-xs text-rose-700">Earlier closure packs could not be loaded.</p>}
+      {query.data && query.data.length === 0 && <p className="text-xs text-slate-500">No closure pack has been exported yet.</p>}
       {query.data && query.data.length > 0 && (
         <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
           {query.data.map((e) => (
             <li key={e.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-xs">
               <div className="flex flex-wrap items-center gap-2">
-                <StatusChip label={STATUS[e.status].label} cls={STATUS[e.status].cls} />
+                <StatusText label={STATUS[e.status].label} tone={STATUS[e.status].tone} />
                 <span className="text-slate-700">
                   {fmt(e.createdAt)} by {e.requestedByName ?? "—"}
                 </span>

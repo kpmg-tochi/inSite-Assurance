@@ -14,6 +14,9 @@ export default {
           dark: 'rgb(var(--color-brand-dark) / <alpha-value>)',
           subcard: 'rgb(var(--color-brand-subcard) / <alpha-value>)',
         },
+        surface: {
+          canvas: 'rgb(var(--color-surface-canvas) / <alpha-value>)',
+        },
         kpmg: {
           blue: 'rgb(var(--color-brand-primary) / <alpha-value>)',
           hover: 'rgb(var(--color-brand-hover) / <alpha-value>)',

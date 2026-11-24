@@ -6,6 +6,7 @@ import {
   type NeedsAssessmentMode,
   type ProjectProcessConfig,
 } from "@insite/shared";
+import { TAB_LIST_CLASS, tabItemClass } from "../common/Tabs";
 
 type ToggleKey = keyof typeof PROCESS_TOGGLE_META;
 const TOGGLE_KEYS = Object.keys(PROCESS_TOGGLE_META) as ToggleKey[];
@@ -24,7 +25,7 @@ function ModeGroup({
   return (
     <div>
       <p className="block text-xs font-semibold text-slate-700 mb-1">{label}</p>
-      <div className="inline-flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1" role="radiogroup" aria-label={label}>
+      <div className={TAB_LIST_CLASS} role="radiogroup" aria-label={label}>
         {NeedsAssessmentModeEnum.options.map((m) => (
           <button
             key={m}
@@ -33,9 +34,7 @@ function ModeGroup({
             aria-checked={value === m}
             disabled={disabled}
             onClick={() => onChange(m)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed ${
-              value === m ? "bg-white text-brand-primary shadow-xs" : "text-slate-600 hover:text-slate-900"
-            }`}
+            className={`${tabItemClass(value === m)} disabled:cursor-not-allowed disabled:opacity-60`}
           >
             {DOCUMENT_MODE_META[m].label}
           </button>

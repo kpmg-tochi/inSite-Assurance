@@ -7,7 +7,12 @@ import {
   X,
   Check,
   AlertCircle,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
+
+/** Rows per page when a table does not say (UBEC rebrand: long tables are paginated). */
+export const DEFAULT_TABLE_PAGE_SIZE = 15;
 
 export type TableBadgeVariant =
   | 'success'
@@ -219,6 +224,8 @@ export interface StandardTableProps<T> {
   minWidth?: string;
   footer?: ReactNode;
   containerClassName?: string;
+  /** Rows per page; `false` shows every row. Defaults to DEFAULT_TABLE_PAGE_SIZE. */
+  pageSize?: number | false;
 }
 
 /**
@@ -246,7 +253,19 @@ export function StandardTable<T>({
   minWidth = 'min-w-[920px]',
   footer,
   containerClassName = '',
+  pageSize = DEFAULT_TABLE_PAGE_SIZE,
 }: StandardTableProps<T>) {
+  const size = pageSize === false ? Math.max(1, data.length) : Math.max(1, pageSize);
+  const pageCount = Math.max(1, Math.ceil(data.length / size));
+  const [page, setPage] = useState(0);
+  // A filter or search that shrinks the data must not leave the table on an empty page.
+  useEffect(() => {
+    if (page > pageCount - 1) setPage(pageCount - 1);
+  }, [page, pageCount]);
+  const current = Math.min(page, pageCount - 1);
+  const offset = current * size;
+  const rows = pageCount > 1 ? data.slice(offset, offset + size) : data;
+
   return (
     <div
       className={`bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden flex flex-col ${containerClassName}`}
@@ -373,7 +392,8 @@ export function StandardTable<T>({
                 </td>
               </tr>
             ) : (
-              data.map((item, index) => {
+              rows.map((item, pageIndex) => {
+                const index = offset + pageIndex;
                 const rowKey = keyExtractor(item, index);
                 const isSelected = selectedId === rowKey;
                 const customClasses = rowClassName ? rowClassName(item, index) : '';
@@ -386,7 +406,7 @@ export function StandardTable<T>({
                       onRowClick ? 'cursor-pointer' : ''
                     } ${
                       isSelected
-                        ? 'bg-brand-primary/5 border-l-4 border-l-brand-primary'
+                        ? 'bg-brand-primary/[0.07]'
                         : 'hover:bg-slate-50/70'
                     } ${customClasses}`}
                   >
@@ -417,7 +437,55 @@ export function StandardTable<T>({
         </table>
       </div>
 
-      {/* 4. Optional Table Footer */}
+      {/* 4. Pages, when the rows do not fit one */}
+      {!loading && pageCount > 1 && (
+        <nav
+          aria-label="Table pages"
+          className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 border-t border-slate-100 text-xs text-slate-600"
+        >
+          <span className="tabular-nums">
+            {offset + 1}–{Math.min(offset + size, data.length)} of {data.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPage(current - 1)}
+              disabled={current === 0}
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" aria-hidden="true" /> Previous
+            </button>
+            {Array.from({ length: pageCount }, (_, i) => i)
+              .filter((i) => pageCount <= 7 || i === 0 || i === pageCount - 1 || Math.abs(i - current) <= 1)
+              .map((i, k, shown) => (
+                <React.Fragment key={i}>
+                  {k > 0 && i - shown[k - 1] > 1 && <span className="px-1 text-slate-400" aria-hidden="true">…</span>}
+                  <button
+                    type="button"
+                    onClick={() => setPage(i)}
+                    aria-current={i === current ? 'page' : undefined}
+                    aria-label={`Page ${i + 1}`}
+                    className={`min-w-[2rem] rounded-lg px-2 py-1.5 font-semibold tabular-nums focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
+                      i === current ? 'bg-brand-primary text-white' : 'text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                </React.Fragment>
+              ))}
+            <button
+              type="button"
+              onClick={() => setPage(current + 1)}
+              disabled={current >= pageCount - 1}
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+            >
+              Next <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />
+            </button>
+          </div>
+        </nav>
+      )}
+
+      {/* 5. Optional Table Footer */}
       {footer && (
         <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 text-xs text-slate-500">
           {footer}

@@ -18,6 +18,8 @@ type CompletionPageTab = "certificate" | "handover" | "defects" | "closure";
  * `/closure` redirect here. The route admits COMPLETION_PAGE_PERMISSIONS; each tab keeps the gate of
  * the page it came from, and Handover / Defects exist only when their module is on.
  */
+import { ProjectStageTabs } from "../../components/projects/ProjectStageTabs";
+
 export function CompletionHandoverPage({ project }: { project: ProjectSummaryDto }) {
   const { hasAnyPermission } = useAuth();
   const process = useProjectProcess(project.id);
@@ -37,7 +39,10 @@ export function CompletionHandoverPage({ project }: { project: ProjectSummaryDto
 
   return (
     <div className="space-y-4">
-      <Tabs tabs={tabs} active={tab} onChange={setActive} label="Completion and handover" idPrefix="completion" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ProjectStageTabs projectId={project.id} stage={project.stage} />
+        <Tabs tabs={tabs} active={tab} onChange={setActive} label="Completion and handover" idPrefix="completion" />
+      </div>
       <TabPanel idPrefix="completion" id={tab}>
         {tab === "certificate" && (
           <div className="space-y-4">

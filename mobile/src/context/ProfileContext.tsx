@@ -177,14 +177,17 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
   /**
    * Redesign R5a (D-R5.6): every assigned project is prepared, not only the active one (Home needs
    * every pack for project cards and geofence previews). Sequential; a failing project keeps its
-   * stored pack. Then the visits are downloaded.
+   * stored pack. The visit download starts first and runs alongside: it needs only the account
+   * token, and an officer who has just signed in must see their visits without waiting for every
+   * project's pack (found on the emulator: Home stayed empty and "Not updated" until all packs were in).
    */
   const prepareAllProjects = useCallback(
     async (opts: { force?: boolean } = {}) => {
+      const visits = syncVisits({ reason: 'prepare', force: opts.force ?? true }).catch(() => undefined);
       for (const p of stateRef.current.projects) {
         await prepareProject(p.projectId);
       }
-      await syncVisits({ reason: 'prepare', force: opts.force ?? true }).catch(() => undefined);
+      await visits;
     },
     [prepareProject]
   );

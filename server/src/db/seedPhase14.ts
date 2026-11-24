@@ -2,10 +2,11 @@ import { Prisma } from "@prisma/client";
 import { ProjectTypeConfig, ProjectTypeConfigSchema, ProjectTypeSnapshot } from "@insite/shared";
 import { prisma } from "../config/prisma";
 import { PROGRAMME_TENANT_SLUG } from "./seedPhase11";
+import { INDEPENDENT_ME_EMAIL, UBEC_ME_EMAIL, UBEC_ROLE } from "./seedUbecRoster";
 
 /**
- * Phase 14 seed: supervision on the programme's project types and an M&E officer who supervises
- * more sites than the Co-Funded limit. Redesign R5f deleted checklist templates and the legacy
+ * Phase 14 seed: supervision on the programme's project types; the UBEC M&E officer supervises more
+ * sites than the Matching Grants limit. Redesign R5f deleted checklist templates and the legacy
  * PRG-211 inspections: PRG-211's baseline, late routine visit and major finding are R4 visits
  * (seedR4).
  */
@@ -13,37 +14,34 @@ import { PROGRAMME_TENANT_SLUG } from "./seedPhase11";
 export async function seedPhase14(): Promise<void> {
   const programme = await prisma.tenant.findUniqueOrThrow({ where: { slug: PROGRAMME_TENANT_SLUG } });
 
-  // The M&E officer: an Independent Monitor in the monitoring consultancy who supervises every live
-  // programme site (three, above the Co-Funded limit of two, and ~830 km apart).
-  const monitorRole = await prisma.role.findFirstOrThrow({ where: { tenantId: programme.id, code: "MONITOR" } });
-  const monitorOrg = await prisma.organization.findFirstOrThrow({ where: { tenantId: programme.id, name: "Programme Monitoring Consultants" } });
-  const passwordHash = (await prisma.user.findUniqueOrThrow({ where: { email: "programme.admin@insite.ng" } })).passwordHash;
-  const officer = await prisma.user.create({
-    data: {
-      tenantId: programme.id,
-      email: "me.officer@insite.ng",
-      passwordHash,
-      fullName: "Ngozi Eze (M&E Officer)",
-      roleId: monitorRole.id,
-      organizationId: monitorOrg.id,
-    },
-  });
+  // UBEC roster: M&E officers see only the projects they are assigned to. The UBEC M&E officer
+  // (seedPhase12, on PRG-102) is assigned to the projects her stories touch: PRG-103 (final
+  // evaluation, CoC, handover review, defects) and PRG-211 / PRG-221 (visits planned and reviewed with
+  // the SUBEBs, seedR4); seedPhase16 adds PRG-104 and PRG-105. Above the Matching Grants limit of two
+  // and ~830 km apart. The Independent M&E is also on PRG-211.
+  const officer = await prisma.user.findUniqueOrThrow({ where: { email: UBEC_ME_EMAIL } });
+  const independent = await prisma.user.findUniqueOrThrow({ where: { email: INDEPENDENT_ME_EMAIL } });
   const liveProjects = await prisma.project.findMany({
     where: { tenantId: programme.id, status: "ACTIVE" },
     select: { id: true, codePrefix: true },
   });
-  await prisma.userProjectAssignment.createMany({ data: liveProjects.map((p) => ({ userId: officer.id, projectId: p.id })), skipDuplicates: true });
+  const officerProjects = liveProjects.filter((p) => ["PRG-102", "PRG-103", "PRG-211", "PRG-221"].includes(p.codePrefix));
+  await prisma.userProjectAssignment.createMany({ data: officerProjects.map((p) => ({ userId: officer.id, projectId: p.id })), skipDuplicates: true });
+  const prg211 = liveProjects.find((p) => p.codePrefix === "PRG-211");
+  if (prg211) await prisma.userProjectAssignment.createMany({ data: [{ userId: independent.id, projectId: prg211.id }], skipDuplicates: true });
 
   // Supervision on both project types. Seed only: written into the types' config (and the projects'
   // snapshots) without a version bump, as if the types had been created with it; editing a type
   // through the service bumps its version.
-  const supervisorRoleCodes = ["MONITOR", "MONITOR_INSPECTOR", "INDEPENDENT_RESIDENT"];
+  // UBEC roster: the M&E roles and the Resident Supervisor (MONITOR is the Independent M&E).
+  const supervisorRoleCodes: string[] = [UBEC_ROLE.UBEC_ME, UBEC_ROLE.SUBEB_ME, UBEC_ROLE.INDEPENDENT_ME, UBEC_ROLE.RESIDENT_SUPERVISOR];
   const types = await prisma.projectType.findMany({ where: { tenantId: programme.id } });
   const configs = new Map<string, ProjectTypeConfig>();
   for (const type of types) {
     const config = ProjectTypeConfigSchema.parse({
       ...ProjectTypeConfigSchema.parse(type.configJson),
-      // Co-Funded: a low site limit so the seeded M&E officer (three live sites) is over it.
+      // Matching Grants: a low site limit (demo only; the manual gives Resident Supervisors 7 to 10
+      // sites) so the seeded M&E officer (three live sites) is over it. Direct Intervention: 10.
       supervision:
         type.code === "CO_FUNDED"
           ? { supervisorRoleCodes, maxSitesPerSupervisor: 2, maxSpreadKm: 50 }

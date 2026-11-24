@@ -80,7 +80,15 @@ export function FormFieldCard(props: FormFieldCardProps) {
       input = <DateAnswerInput label={a11yLabel} value={value} readOnly={readOnly} timeZone={timeZone} onChange={set} />;
       break;
     case 'RATING_1_5':
-      input = <RatingInput label={a11yLabel} value={value} readOnly={readOnly} onChange={set} />;
+      input = (
+        <RatingInput
+          label={a11yLabel}
+          value={value}
+          readOnly={readOnly}
+          guidanceDefinesScale={Boolean(field.guidance && /\b1\s*=/.test(field.guidance))}
+          onChange={set}
+        />
+      );
       break;
     case 'VOICE_NOTE':
       input = (

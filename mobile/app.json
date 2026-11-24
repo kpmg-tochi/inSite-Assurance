@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "InSite Assurance Field",
+    "name": "InSite Assurance",
     "slug": "insite-assurance-mobile",
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "primaryColor": "#00338D",
+    "primaryColor": "#00715D",
     "plugins": [
       [
         "expo-location",
@@ -23,7 +23,7 @@
       [
         "expo-notifications",
         {
-          "color": "#00338D",
+          "color": "#00715D",
           "defaultChannel": "default"
         }
       ]

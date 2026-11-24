@@ -12,14 +12,10 @@ import { useGuardedNavigate } from "./lib/navigationGuard";
 import { AppShell } from "./components/AppShell";
 import Loader from "./components/Loader";
 import { LoginPage } from "./pages/auth/LoginPage";
-import { HomePage } from "./pages/public/HomePage";
 import { MobileAppPage } from "./pages/public/MobileAppPage";
 import { ProjectOverviewPage } from "./pages/overview/ProjectOverviewPage";
-import { PortfolioOverviewPage } from "./pages/dashboard/PortfolioOverviewPage";
-import { LessonsLibraryPage } from "./pages/lessons/LessonsLibraryPage";
-import { ProgrammeKpisPage } from "./pages/kpis/ProgrammeKpisPage";
+import { WorkspaceHomePage } from "./pages/dashboard/WorkspaceHomePage";
 import { OrganizationRatingsPage } from "./pages/organizations/OrganizationRatingsPage";
-import { ProjectsDirectoryPage } from "./pages/projects/ProjectsDirectoryPage";
 import { NewProjectPage } from "./pages/projects/setup/NewProjectPage";
 import { ProjectSetupShell } from "./pages/projects/setup/ProjectSetupShell";
 import { ProjectPaymentsPage } from "./pages/payments/ProjectPaymentsPage";
@@ -28,11 +24,10 @@ import { AuditLedgerPage } from "./pages/audit/AuditLedgerPage";
 import { CompletionHandoverPage } from "./pages/completion/CompletionHandoverPage";
 import { COMPLETION_PAGE_PERMISSIONS } from "./pages/completion/completionPermissions";
 import { ProjectVisitsPage } from "./pages/visits/ProjectVisitsPage";
-import { VisitPlannerPage } from "./pages/visits/VisitPlannerPage";
 import { ProjectDocumentsPage } from "./pages/documents/ProjectDocumentsPage";
 import { KickoffMobilisationPage } from "./pages/kickoff/KickoffMobilisationPage";
-import { FormsFacilitiesPage } from "./pages/forms/FormsFacilitiesPage";
-import { parseAppLocation, sameSubPageFor } from "./navigation/navItems";
+import { PORTFOLIO_PERMISSION, workspaceHomePath } from "./navigation/navItems";
+import { isOngoingProject } from "@insite/shared";
 import { MILESTONE_VIEW_PERMISSIONS } from "./components/contracts/contractUi";
 import { SettingsPage } from "./pages/settings/SettingsPage";
 import { ChangePasswordPage } from "./pages/auth/ChangePasswordPage";
@@ -57,6 +52,23 @@ function NavigateKeepingQuery({ page, tab }: { page: string; tab: string }) {
   const params = new URLSearchParams(search);
   params.set("tab", tab);
   return <Navigate to={`/app/projects/${projectId}/${page}?${params.toString()}${hash}`} replace />;
+}
+
+/** The project opened last on this browser (UBEC rebrand: the sidebar always shows a project). */
+const LAST_PROJECT_KEY = "ubec:lastProjectId";
+function readLastProjectId(): string | null {
+  try {
+    return localStorage.getItem(LAST_PROJECT_KEY);
+  } catch {
+    return null;
+  }
+}
+function rememberProjectId(id: string) {
+  try {
+    localStorage.setItem(LAST_PROJECT_KEY, id);
+  } catch {
+    // Storage can be unavailable (private window); the default then is the first ongoing project.
+  }
 }
 
 function ScrollToTopOnNavigate() {
@@ -90,11 +102,18 @@ function AuthenticatedWorkspace() {
     if (urlProjectId && projects.some((p) => p.id === urlProjectId)) {
       if (selectedProjectId !== urlProjectId) {
         setSelectedProjectId(urlProjectId);
+        rememberProjectId(urlProjectId);
       }
       return;
     }
     if (projects.length > 0 && !selectedProjectId) {
-      setSelectedProjectId(projects[0].id);
+      // The last project opened here, else the first ongoing one, else the first.
+      const last = readLastProjectId();
+      const fallback =
+        projects.find((p) => p.id === last) ??
+        projects.find(isOngoingProject) ??
+        projects[0];
+      setSelectedProjectId(fallback.id);
     }
   }, [projects, selectedProjectId, urlProjectId]);
 
@@ -109,11 +128,13 @@ function AuthenticatedWorkspace() {
     activeProject?.id,
     Boolean(user && activeProject?.id && canViewReports),
   );
-  // Switching project keeps the sub-page (looked up in the navigation config) when the user may see it.
-  const handleSelectProject = (projectId: string) => {
+  // UBEC rebrand: projects are opened from the home page's map and table only (no switcher).
+  const openProject = (projectId: string) => {
     setSelectedProjectId(projectId);
-    navigate(sameSubPageFor(parseAppLocation(location.pathname, location.search), projectId, hasAnyPermission));
+    rememberProjectId(projectId);
+    navigate(`/app/projects/${projectId}/dashboard`);
   };
+  const home = workspaceHomePath(hasAnyPermission);
 
   if (authLoading) {
     return (
@@ -134,9 +155,7 @@ function AuthenticatedWorkspace() {
     return <ChangePasswordPage />;
   }
 
-  // "New Project" only on the portfolio and the project list (project settings: sidebar More, Settings).
   const path = location.pathname.replace(/\/+$/, "");
-  const onProjectListPage = path === "/app/portfolio" || path === "/app/projects";
 
   // A project page URL for a project outside the live list (a draft, or one the user cannot see) must
   // not render another project's data under that URL: drafts have no Overview, so open their setup
@@ -146,32 +165,42 @@ function AuthenticatedWorkspace() {
     return <Navigate to={`/app/projects/${urlProjectId}/setup`} replace />;
   }
 
-  const headerActions = (
-    <>
-      {onProjectListPage && hasPermission("projects:create") && (
-        <button
-          type="button"
-          onClick={() => navigate("/app/projects/new")}
-          className="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-brand-navy text-xs font-bold transition shadow-sm"
-        >
-          + New Project
-        </button>
-      )}
-    </>
-  );
-
   const projectHome = activeProject
     ? `/app/projects/${activeProject.id}/dashboard`
-    : "/app";
+    : home;
 
   return (
-    <AppShell
-      projects={projects}
-      selectedProject={activeProject}
-      onSelectProject={handleSelectProject}
-      headerActions={headerActions}
-    >
+    <AppShell selectedProject={activeProject}>
       <Routes>
+        {/* UBEC rebrand: the workspace home. Programme admins get the Portfolio, everyone else the Dashboard. */}
+        <Route index element={<Navigate to={home} replace />} />
+        <Route
+          path="portfolio"
+          element={
+            hasPermission(PORTFOLIO_PERMISSION) ? (
+              <WorkspaceHomePage variant="portfolio" onOpenProject={openProject} />
+            ) : (
+              <Navigate to="/app/dashboard" replace />
+            )
+          }
+        />
+        <Route
+          path="dashboard"
+          element={
+            hasPermission(PORTFOLIO_PERMISSION) ? (
+              <Navigate to="/app/portfolio" replace />
+            ) : (
+              <WorkspaceHomePage variant="dashboard" onOpenProject={openProject} />
+            )
+          }
+        />
+        {/* The old workspace pages are tabs of the home page now (or a Settings tab). */}
+        <Route path="projects" element={<Navigate to={home} replace />} />
+        <Route path="kpis" element={<Navigate to={`${home}?tab=kpis`} replace />} />
+        <Route path="visits" element={<Navigate to={`${home}?tab=visits`} replace />} />
+        <Route path="lessons" element={<Navigate to={home} replace />} />
+        <Route path="forms" element={<Navigate to="/app/settings?tab=forms" replace />} />
+        <Route path="executive" element={<Navigate to={home} replace />} />
         {/* Routes that work with or without a selected project */}
         <Route path="settings" element={<SettingsPage project={activeProject} />} />
         <Route
@@ -187,80 +216,10 @@ function AuthenticatedWorkspace() {
         <Route path="projects/:projectId/setup" element={<ProjectSetupRedirect mode="setup" />} />
         <Route path="projects/:projectId/settings/:stepId" element={<ProjectSetupShell mode="settings" />} />
         <Route path="projects/:projectId/settings" element={<ProjectSetupRedirect mode="settings" />} />
-        <Route
-          path="projects"
-          element={
-            <ProjectsDirectoryPage
-              projects={projects}
-              selectedProjectId={activeProject?.id ?? null}
-              onSelectProject={setSelectedProjectId}
-            />
-          }
-        />
-        <Route
-          path="portfolio"
-          element={
-            <RequirePermission anyOf={["projects:view_portfolio"]} backTo={projectHome}>
-              <PortfolioOverviewPage
-                onOpenProject={(projectId) => {
-                  setSelectedProjectId(projectId);
-                  navigate(`/app/projects/${projectId}/dashboard`);
-                }}
-              />
-            </RequirePermission>
-          }
-        />
-        {/* Redesign R4: the visit planner across the visible projects */}
-        <Route
-          path="visits"
-          element={
-            <RequirePermission anyOf={["visits:view"]} backTo={projectHome}>
-              <VisitPlannerPage />
-            </RequirePermission>
-          }
-        />
-        {/* Phase 16: programme KPIs over the visible projects */}
-        <Route
-          path="kpis"
-          element={
-            <RequirePermission anyOf={["kpis:view"]} backTo={projectHome}>
-              <ProgrammeKpisPage
-                onOpenProject={(projectId) => {
-                  setSelectedProjectId(projectId);
-                  navigate(`/app/projects/${projectId}/dashboard`);
-                }}
-              />
-            </RequirePermission>
-          }
-        />
-        {/* Phase 15: the lessons-learned library and a contractor's ratings across projects */}
-        <Route
-          path="lessons"
-          element={
-            <RequirePermission anyOf={["lessons:view"]} backTo={projectHome}>
-              <LessonsLibraryPage />
-            </RequirePermission>
-          }
-        />
         <Route path="organizations/:organizationId/ratings" element={<OrganizationRatingsPage />} />
-        <Route path="executive" element={<Navigate to="/app/portfolio" replace />} />
-        {/* Redesign R6b (D-R6.25): the facility catalogue and the form library, moved out of Settings */}
-        <Route
-          path="forms"
-          element={
-            <RequirePermission anyOf={["facilities:manage", "forms:manage"]} backTo={projectHome}>
-              <FormsFacilitiesPage />
-            </RequirePermission>
-          }
-        />
 
         {activeProject ? (
           <>
-            {/* The portfolio dashboard is the central landing page for people who may see it. */}
-            <Route
-              index
-              element={<Navigate to={hasPermission("projects:view_portfolio") ? "/app/portfolio" : projectHome} replace />}
-            />
             {/* Redesign R6c: the project Overview (route kept as /dashboard, D-R6.18) */}
             <Route
               path="projects/:projectId/dashboard"
@@ -343,7 +302,6 @@ function AuthenticatedWorkspace() {
             />
 
             {/* Legacy non-scoped route redirects */}
-            <Route path="dashboard" element={<Navigate to={projectHome} replace />} />
             <Route
               path="boq"
               element={<Navigate to={`/app/projects/${activeProject.id}/scope`} replace />}
@@ -352,7 +310,7 @@ function AuthenticatedWorkspace() {
               path="audit"
               element={<Navigate to={`/app/projects/${activeProject.id}/audit`} replace />}
             />
-            <Route path="*" element={<Navigate to={projectHome} replace />} />
+            <Route path="*" element={<Navigate to={home} replace />} />
           </>
         ) : (
           <Route
@@ -409,8 +367,9 @@ export function App() {
       <ScrollToTopOnNavigate />
       <Routes>
         {/* Public pages (redesign R6f, D-R6.26) */}
-        <Route path="/" element={<HomePage />} />
-        <Route path="/about" element={<Navigate to="/" replace />} />
+        {/* UBEC rebrand: the portal has no public home page; the root opens the portal (or sign-in). */}
+        <Route path="/" element={<Navigate to="/app" replace />} />
+        <Route path="/about" element={<Navigate to="/app" replace />} />
         <Route path="/mobile-app" element={<MobileAppPage />} />
 
         {/* Login Route */}
@@ -441,7 +400,7 @@ export function App() {
         <Route path="/app/*" element={<AuthenticatedWorkspace />} />
 
         {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/app" replace />} />
       </Routes>
       <Toaster position="top-right" richColors closeButton theme="light" />
     </>

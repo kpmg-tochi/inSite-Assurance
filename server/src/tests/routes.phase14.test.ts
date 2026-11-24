@@ -64,7 +64,7 @@ describe('Phase 14', () => {
 
   describe('supervision workload', () => {
     it('reports active projects and spread, warns above the type thresholds (seeded supervisor)', async () => {
-      const res = await request(app).get('/api/v1/supervision').set(await web('programme.admin@insite.ng'));
+      const res = await request(app).get('/api/v1/supervision').set(await web('admin@ubec.test'));
       assert.equal(res.status, 200, JSON.stringify(res.body));
       const rows = res.body.data as Array<{
         fullName: string;
@@ -74,16 +74,21 @@ describe('Phase 14', () => {
         spreadKm: number;
         projects: Array<{ codePrefix: string; lastVisitDate: string | null }>;
       }>;
-      const officer = rows.find((s) => s.fullName.startsWith('Ngozi Eze'));
+      // The UBEC M&E officer (me.officer@ubec.test).
+      const officer = rows.find((s) => s.fullName === 'Ngozi Eze');
       assert.ok(officer, 'the seeded M&E officer is a supervisor');
-      // PRG-102, PRG-211, PRG-221 and (Phase 15) PRG-103 in its liability period; closed PRG-241 does not count.
-      assert.equal(officer.activeProjectCount, 4);
+      // PRG-102, PRG-211, PRG-221, PRG-103 (liability period), PRG-104 and PRG-105 (Phase 16); closed
+      // PRG-241 and archived PRG-242 do not count.
+      assert.equal(officer.activeProjectCount, 6);
       assert.equal(officer.overSiteLimit, true);
       assert.equal(officer.overSpread, true);
       assert.ok(officer.spreadKm > 500);
-      assert.ok(officer.projects.every((p) => p.lastVisitDate === null), 'Ngozi has submitted no visit');
+      // UBEC roster: she reported the final evaluations on PRG-103 and PRG-104 and the baselines of PRG-104/105.
+      const visited = officer.projects.filter((p) => p.lastVisitDate !== null).map((p) => p.codePrefix).sort();
+      assert.ok(['PRG-103', 'PRG-104'].every((c) => visited.includes(c)), visited.join(','));
+      assert.ok(['PRG-211', 'PRG-221'].every((c) => !visited.includes(c)), 'no visit submitted on the Matching Grants sites');
 
-      // R5f: the last visit is the supervisor's last submitted visit (seedR4: resident.supervisor@ on PRG-211).
+      // R5f: the last visit is the supervisor's last submitted visit (seedR4: resident.supervisor@ubec.test on PRG-211).
       const resident = rows.find((s) => s.projects.some((p) => p.codePrefix === 'PRG-211' && p.lastVisitDate !== null));
       assert.ok(resident, 'the seeded visit officer shows a last visit on PRG-211');
     });

@@ -54,7 +54,7 @@ export const InSiteLoader: React.FC<InSiteLoaderProps> = ({
   }, [anims]);
 
   const dims = BAR_DIMENSIONS[size];
-  const borderColor = white ? '#FFFFFF' : '#00338D';
+  const borderColor = white ? '#FFFFFF' : '#00715D';
 
   return (
     <View style={styles.container}>

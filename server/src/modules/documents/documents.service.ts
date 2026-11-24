@@ -15,7 +15,7 @@ import { AppError } from '../../middleware/error.middleware';
 import { hasWebPermission, WebJwtPayload } from '../../middleware/auth.middleware';
 import { assertProjectObjectKey, projectObjectPrefix, storageService } from '../../integrations/storage.service';
 import { recordAuditEvent } from '../audit/audit.service';
-import { provisionDefaultDocumentTypes } from './documentTypes.service';
+import { ensureDefaultDocumentTypes } from './documentTypes.service';
 import { autoCompleteMilestones, webActor } from '../contracts/milestones.service';
 
 /**
@@ -299,9 +299,7 @@ export async function registerProjectDocument(
   input: RegisterProjectDocumentRequest
 ): Promise<ProjectDocumentDetailDto> {
   const project = await loadProjectTenant(prisma, projectId);
-  if ((await prisma.documentType.count({ where: { tenantId: project.tenantId } })) === 0) {
-    await provisionDefaultDocumentTypes(prisma, project.tenantId);
-  }
+  await ensureDefaultDocumentTypes(prisma, project.tenantId);
   const type = await prisma.documentType.findFirst({ where: { id: input.documentTypeId, tenantId: project.tenantId } });
   if (!type) throw new AppError('Document type not found', 404, 'DOCUMENT_TYPE_NOT_FOUND');
   if (type.isArchived) throw new AppError(`"${type.name}" is archived and cannot be used`, 409, 'DOCUMENT_TYPE_ARCHIVED');
@@ -529,7 +527,7 @@ export async function storeGeneratedDocument(
     signOffs?: Array<{ userId: string; roleId: string | null; organizationId: string | null; statement: string }>;
   }
 ): Promise<{ documentId: string; objectKey: string; sha256: string; byteSize: number }> {
-  if ((await tx.documentType.count({ where: { tenantId: p.tenantId } })) === 0) await provisionDefaultDocumentTypes(tx, p.tenantId);
+  await ensureDefaultDocumentTypes(tx, p.tenantId);
   const type = await tx.documentType.findUnique({ where: { tenantId_code: { tenantId: p.tenantId, code: p.typeCode } } });
   if (!type) throw new AppError(`The document type ${p.typeCode} is missing for this tenant`, 409, 'DOCUMENT_TYPE_NOT_FOUND');
   const objectKey = `${projectObjectPrefix(p.tenantId, p.projectId)}project_document/generated-${crypto.randomUUID()}.${p.file.extension}`;
@@ -582,7 +580,7 @@ export async function registerUploadedDocumentTx(
   p: { projectId: string; tenantId: string; typeCode: string; title: string; objectKey: string; note: string | null; uploadedByUserId: string }
 ): Promise<{ documentId: string; sha256: string }> {
   const file = await inspectUpload(p.projectId, p.tenantId, p.objectKey);
-  if ((await tx.documentType.count({ where: { tenantId: p.tenantId } })) === 0) await provisionDefaultDocumentTypes(tx, p.tenantId);
+  await ensureDefaultDocumentTypes(tx, p.tenantId);
   const type = await tx.documentType.findUniqueOrThrow({ where: { tenantId_code: { tenantId: p.tenantId, code: p.typeCode } } });
   if (!documentMimeAllowed(type, file.mimeType)) {
     throw new AppError(`${file.mimeType} files are not allowed for "${type.name}"`, 415, 'UNSUPPORTED_MEDIA_TYPE');

@@ -57,6 +57,7 @@ export function ScopeWorkbookToolbar({ projectId, scope, canEdit }: { projectId:
       <button type="button" className={secondaryButton} disabled={download.isPending} onClick={() => download.mutate()}>
         <Download className="w-3.5 h-3.5 inline -mt-0.5" /> {download.isPending ? "Preparing…" : "Download workbook"}
       </button>
+      {scope.projectStatus === "DRAFT" && (
       <button
         type="button"
         className={primaryButton}
@@ -66,8 +67,8 @@ export function ScopeWorkbookToolbar({ projectId, scope, canEdit }: { projectId:
       >
         <FileUp className="w-3.5 h-3.5 inline -mt-0.5" /> {preview.isPending ? "Reading…" : "Import workbook"}
       </button>
+      )}
       <input ref={fileRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={onFile} />
-      {importReason && scope.projectStatus !== "DRAFT" && canEdit && <p className="w-full text-[11px] text-slate-500">{importReason}</p>}
       {fileError && <p className="w-full text-xs font-medium text-rose-600">{fileError}</p>}
       {pending && (
         <ImportPreviewModal

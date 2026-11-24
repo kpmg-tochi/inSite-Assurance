@@ -27,20 +27,21 @@ import {
 import { completeClosureItem } from "../modules/completion/closure.service";
 import { rateContractor, tenantRatingCriteria } from "../modules/completion/ratings.service";
 import { createLesson, publishLesson } from "../modules/completion/lessons.service";
-import { PROGRAMME_TENANT_SLUG } from "./seedPhase11";
+import { LAGOS_SUBEB_NAME, PROGRAMME_TENANT_SLUG } from "./seedPhase11";
+import { LAGOS_ADMIN_EMAIL, LAGOS_ME_EMAIL, UBEC_ADMIN_EMAIL, UBEC_ME_EMAIL, UBEC_ROLE } from "./seedUbecRoster";
 
 /**
  * Phase 15 seed: closure rules on both programme project types (default CoC slots, every gate on,
- * a final evaluation before the CoC, closure checklists, the handover ceremony and, for Co-Funded,
+ * a final evaluation before the CoC, closure checklists, the handover ceremony and, for Matching Grants,
  * the post-closure evaluation), then through the real services:
- * - PRG-103 (Central): final evaluation approved, CoC issued (owner admins + beneficiary paper copy),
+ * - PRG-103 (Direct Intervention): final evaluation approved, CoC issued (owner admins + beneficiary paper copy),
  *   handover accepted with the handover certificate, now in its defects liability period;
- * - PRG-241 (Co-Funded, South): the same, then rated, two lessons published and closed; its
- *   post-closure evaluation (close + 14 days) and audit sign-off are pending, so it cannot be archived.
+ * - PRG-241 (Matching Grants, Lagos SUBEB): the same, then rated, two lessons published and closed; its
+ *   post-closure evaluation (close + 14 days), closeout report and audit sign-off are pending, so it cannot be archived.
  *
  * Like Phases 13 and 14, the types' config and the projects' snapshots are written without a version
- * bump (seed only). Adds south.me@insite.ng (Organisation Administrator, South) as the second
- * signatory for South-owned projects.
+ * bump (seed only). Adds lagos.me@ubec.test (SUBEB M&E Officer, Lagos SUBEB) as the second signatory
+ * for Lagos SUBEB-owned projects. PRG-103 is signed by the UBEC administrator and the UBEC M&E officer.
  */
 
 const BEFORE_CLOSE: ClosureChecklistItemTemplateInput[] = [
@@ -51,9 +52,20 @@ const BEFORE_CLOSE: ClosureChecklistItemTemplateInput[] = [
   { key: "as-built", label: "As-built drawings and O&M manuals handed over", kind: "MANUAL" },
 ];
 
-const CO_FUNDED_BEFORE_ARCHIVE: ClosureChecklistItemTemplateInput[] = [
+/** UBEC rebrand: lessons learned come in the closeout report, uploaded per project (both types). */
+const CLOSEOUT_REPORT_ITEM: ClosureChecklistItemTemplateInput = {
+  key: "closeout-report",
+  label: "Closeout report filed (final evaluation, lessons learned, beneficiary feedback)",
+  kind: "DOCUMENT_TYPE",
+  documentTypeCode: "CLOSEOUT_REPORT",
+};
+
+const DIRECT_BEFORE_ARCHIVE: ClosureChecklistItemTemplateInput[] = [CLOSEOUT_REPORT_ITEM];
+
+const MATCHING_GRANTS_BEFORE_ARCHIVE: ClosureChecklistItemTemplateInput[] = [
+  CLOSEOUT_REPORT_ITEM,
   { key: "post-closure-evaluation", label: "Post-closure evaluation (2 weeks after closure)", kind: "CONTRACT_MILESTONE", milestoneKey: "post-closure-evaluation" },
-  { key: "archive-audit", label: "Archiving and audit sign-off", kind: "AUDIT_SIGNOFF" },
+  { key: "archive-audit", label: "Archiving and audit sign-off (Audit Department)", kind: "AUDIT_SIGNOFF" },
 ];
 
 const HANDOVER_CEREMONY: ContractMilestoneTemplateInput = {
@@ -266,7 +278,7 @@ export async function seedPhase15() {
         requireCocFor: ["HANDOVER_TO_RETENTION", "FINAL_PAYMENT", "PROJECT_CLOSE"],
         handoverDueDaysAfterCoc: 7,
         beforeClose: BEFORE_CLOSE,
-        beforeArchive: coFunded ? CO_FUNDED_BEFORE_ARCHIVE : [],
+        beforeArchive: coFunded ? MATCHING_GRANTS_BEFORE_ARCHIVE : DIRECT_BEFORE_ARCHIVE,
         shareRatingsWithContractor: false,
       },
     });
@@ -287,25 +299,37 @@ export async function seedPhase15() {
     });
   }
 
-  // The second South signatory (Head of M&E for South-owned projects).
-  const south = await prisma.organization.findFirstOrThrow({ where: { tenantId: programme.id, name: { endsWith: "South" } } });
-  const southAdminRow = await prisma.user.findUniqueOrThrow({ where: { email: "south.admin@insite.ng" } });
+  // The SUBEB M&E officer for Lagos (UBEC roster): Matching Grants evaluations and the second
+  // Lagos SUBEB signatory on the Certificate of Completion (Head of M&E slot).
+  const south = await prisma.organization.findFirstOrThrow({ where: { tenantId: programme.id, name: LAGOS_SUBEB_NAME } });
+  const southAdminRow = await prisma.user.findUniqueOrThrow({ where: { email: LAGOS_ADMIN_EMAIL } });
+  const subebMeRole = await prisma.role.findUniqueOrThrow({ where: { tenantId_code: { tenantId: programme.id, code: UBEC_ROLE.SUBEB_ME } } });
   await prisma.user.create({
     data: {
       tenantId: programme.id,
-      email: "south.me@insite.ng",
+      email: LAGOS_ME_EMAIL,
       passwordHash: southAdminRow.passwordHash,
-      fullName: "Bisi Adeyemi (Delivery Entity South, M&E)",
-      roleId: southAdminRow.roleId,
+      fullName: "Bisi Adeyemi",
+      phoneNumber: "+234 803 555 0131",
+      roleId: subebMeRole.id,
       organizationId: south.id,
     },
   });
 
-  const admin = await payloadFor("programme.admin@insite.ng");
-  const flagshipAdmin = await payloadFor("flagship.admin@insite.ng");
-  const monitor = await payloadFor("programme.monitor@insite.ng");
-  const southAdmin = await payloadFor("south.admin@insite.ng");
-  const southMe = await payloadFor("south.me@insite.ng");
+  // Assignment-based visibility (UBEC roster): the Lagos SUBEB M&E officer is on the Lagos projects she
+  // evaluates and signs (PRG-221, PRG-241; seedPhase16 adds PRG-242).
+  const lagosMe = await prisma.user.findUniqueOrThrow({ where: { email: LAGOS_ME_EMAIL } });
+  await prisma.userProjectAssignment.createMany({
+    data: projects.filter((p) => ["PRG-221", "PRG-241"].includes(p.codePrefix)).map((p) => ({ userId: lagosMe.id, projectId: p.id })),
+    skipDuplicates: true,
+  });
+
+  const admin = await payloadFor(UBEC_ADMIN_EMAIL);
+  // UBEC roster: the UBEC M&E officer is the second UBEC signatory (Head of M&E) and reviews visits
+  // and handovers on Direct Intervention projects; the Lagos SUBEB M&E officer does it for Lagos.
+  const monitor = await payloadFor(UBEC_ME_EMAIL);
+  const southAdmin = await payloadFor(LAGOS_ADMIN_EMAIL);
+  const southMe = await payloadFor(LAGOS_ME_EMAIL);
   const today = zonedCalendarDate(new Date(), "Africa/Lagos");
   const byCode = new Map(projects.map((p) => [p.codePrefix, p]));
 
@@ -315,7 +339,7 @@ export async function seedPhase15() {
     await prisma.project.update({
       where: { id: p.id },
       data: {
-        contractReference: code === "PRG-103" ? "PA/CEN/2025/103" : "RDE-S/CF/2025/241",
+        contractReference: code === "PRG-103" ? "UBEC/DI/2025/103" : "LASUBEB/MG/2025/241",
         contractAwardDate: addDays(today, -300),
         contractSignedDate: addDays(today, -290),
         kickoffDate: addDays(today, -280),
@@ -331,7 +355,7 @@ export async function seedPhase15() {
     });
   }
 
-  // ---- PRG-103 (Central): CoC issued, handover accepted, in its liability period -------------
+  // ---- PRG-103 (Direct Intervention): CoC issued, handover accepted, in its liability period -------------
   const prg103 = byCode.get("PRG-103")!;
   await approvedFinalEvaluation({ tenantId: programme.id, projectId: prg103.id, reporter: monitor, visitDate: addDays(today, -3) });
   await changeProjectPhase({ projectId: prg103.id, webUser: admin, input: { to: "HANDOVER_IN_PROGRESS" } });
@@ -339,16 +363,16 @@ export async function seedPhase15() {
     tenantId: programme.id,
     projectId: prg103.id,
     drafter: admin,
-    signers: [admin, flagshipAdmin],
+    signers: [admin, monitor],
     beneficiaryName: "Dr Sani Garba (Principal)",
     completionDate: addDays(today, -2),
   });
   await acceptedHandover({ projectId: prg103.id, createdByUserId: admin.userId, reviewer: monitor, headName: "Dr Sani Garba", snags: 2 });
   await changeProjectPhase({ projectId: prg103.id, webUser: admin, input: { to: "RETENTION_PERIOD" } });
 
-  // ---- PRG-241 (Co-Funded, South): closed; post-closure evaluation and audit pending ----------
+  // ---- PRG-241 (Matching Grants, Lagos SUBEB): closed; post-closure evaluation, closeout report and audit pending
   const prg241 = byCode.get("PRG-241")!;
-  await approvedFinalEvaluation({ tenantId: programme.id, projectId: prg241.id, reporter: monitor, visitDate: addDays(today, -6) });
+  await approvedFinalEvaluation({ tenantId: programme.id, projectId: prg241.id, reporter: southMe, visitDate: addDays(today, -6) });
   await changeProjectPhase({ projectId: prg241.id, webUser: admin, input: { to: "HANDOVER_IN_PROGRESS" } });
   await issueCertificate({
     tenantId: programme.id,
@@ -358,13 +382,13 @@ export async function seedPhase15() {
     beneficiaryName: "Mrs Funke Alabi (Head teacher)",
     completionDate: addDays(today, -5),
   });
-  await acceptedHandover({ projectId: prg241.id, createdByUserId: southAdmin.userId, reviewer: monitor, headName: "Mrs Funke Alabi", snags: 0 });
+  await acceptedHandover({ projectId: prg241.id, createdByUserId: southAdmin.userId, reviewer: southMe, headName: "Mrs Funke Alabi", snags: 0 });
   await changeProjectPhase({ projectId: prg241.id, webUser: admin, input: { to: "RETENTION_PERIOD" } });
 
   const contractor231 = await prisma.projectContractor.findFirstOrThrow({ where: { projectId: prg241.id } });
   const criteria = await tenantRatingCriteria(prisma, programme.id);
   for (const [rater, scores, comments] of [
-    [monitor, [4, 4, 5, 3, 4], "Solid delivery; slow to answer two findings."],
+    [southMe, [4, 4, 5, 3, 4], "Solid delivery; slow to answer two findings."],
     [southAdmin, [3, 4, 4, 4, 3], "Finished nine days late; quality good."],
   ] as const) {
     await rateContractor(prg241.id, rater, {

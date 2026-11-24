@@ -1,6 +1,6 @@
 # Configuration Reference: Programme Delivery (Phases 11–16)
 
-**For:** the delivery team preparing client workshops on the Central and Co-Funded delivery models.
+**For:** the delivery team preparing client workshops on UBEC's Direct Intervention and Matching Grants delivery models.
 **Use:** go through it setting by setting with the client. Each row says where the setting lives, its default, what it changes, and which process-flow control (gap analysis IDs G1–G14) it serves.
 
 **Last updated:** 2026-11-24 (redesign R6: type editor tabs, the five-step project setup, new page names and routes; redesign R5f: reporting cadence, hold points, contractor field reporting, the `inspections` type key and checklist templates removed, see 1.1).
@@ -80,7 +80,7 @@ Three kinds of component, each versioned. A form is built ("frozen") from them w
 
 ## 3. Project type settings
 
-Set in Settings → Project types, regions & documents → Project types. One type per delivery model. The demo has "Central Delivery Model" and "Co-Funded Delivery Model".
+Set in Settings → Project types, regions & documents → Project types. One type per delivery model. The demo (UBEC) has "Direct Intervention" (type code `CENTRAL`) and "Matching Grants" (type code `CO_FUNDED`).
 
 **The type editor (redesign R6e).** General fields sit above five tabs. A tab with a validation error shows its error count; leaving the editor with unsaved changes asks first; "Save new version" saves every tab.
 
@@ -111,10 +111,10 @@ Advanced tab.
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
 | Owning organisation required | Off | The "School and organisations" section (setup step 1 Project) needs an accountable owner. | G10 |
-| Allowed owners | Any organisation | Limits who can own projects of the type. Demo: Central = flagship only; Co-Funded = North or South. | G10 |
+| Allowed owners | Any organisation | Limits who can own projects of the type. Demo: Direct Intervention = UBEC only; Matching Grants = Kano SUBEB or Lagos SUBEB. | G10 |
 | Default owner | None | Pre-filled on new drafts (must be an allowed owner). | G10 |
 | Monitor / funder / beneficiary / region required | Monitor and funder on; beneficiary and region off | Setup step 1 Project (sections "Project details" and "School and organisations") refuses to continue without them. | G10 |
-| Funder default | `NONE` | `OWNER`: the owner funds the project (Co-Funded). `FIXED`: a named organisation (Central: the flagship). | G10 |
+| Funder default | `NONE` | `OWNER`: the owner funds the project (Matching Grants: the SUBEB). `FIXED`: a named organisation (Direct Intervention: UBEC). | G10 |
 
 ### 3.3 Visit plan and deadlines (redesign R4, type key `monitoring`)
 
@@ -122,7 +122,7 @@ Monitoring tab. Replaces the Phase 8 reporting defaults and the Phase 14 reporti
 
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
-| Visit plan rules (visit kind, when, interval, sprints, offsets) | None (demo: mobilisation checks every 2 weeks until the contractor is on site; baseline 5 working days after the later of activation and kick-off; routine every 2 weeks during construction; quarterly M&E 5 working days into each quarter's last month; final evaluation 5 working days after the completion notice; Co-Funded: post-closure evaluation on its closure milestone, else 180 days after closing) | Activation proposes the visits (all of them, through the last sprint); a live sprint change regenerates the proposed sprint-driven ones; the completion notice proposes the final evaluation, closing the post-closure one. The M&E manager assigns officers and publishes them. Dates fall on working days. | P3, Q-H |
+| Visit plan rules (visit kind, when, interval, sprints, offsets) | None (demo: mobilisation checks every 2 weeks until the contractor is on site; baseline 5 working days after the later of activation and kick-off; routine every week during construction (UBEC manual: weekly supervision); quarterly M&E 5 working days into each quarter's last month; final evaluation 5 working days after the completion notice; Matching Grants: post-closure evaluation on its closure milestone, else 180 days after closing) | Activation proposes the visits (all of them, through the last sprint); a live sprint change regenerates the proposed sprint-driven ones; the completion notice proposes the final evaluation, closing the post-closure one. The M&E manager assigns officers and publishes them. Dates fall on working days. | P3, Q-H |
 | Submit within | 7 days | The submission deadline is the visit date plus this many calendar days; later is late, and with nothing submitted the visit becomes missed. | Spec 8.1 |
 | Remind unconfirmed | 2 days before | Officers who have not confirmed get one reminder. | Spec 8.1 |
 | Escalate findings after | 14 days | An open finding is escalated once to holders of `findings:receive_escalations`. | Confirm |
@@ -147,7 +147,7 @@ Kick-off & mobilisation tab.
 | :--- | :--- | :--- | :--- |
 | Contract milestone templates | None | Dated obligations created on each project. Per milestone: key, label, anchor (contract award, contract signed, kick-off, activation, another milestone, CoC issued, project closed), offset (calendar or working days, negative = before), completion mode, required documents, a sign-off permission, responsible role and organisation, one per contractor. | G2 |
 | Completion modes | Manual | Contractor on site (confirmed by an officer through the complete button; telemetry was removed in redesign R1e), and automatic: kick-off notice sent, kick-off quorum, programme accepted (the programme of works document is signed off; redesign R2d), CoC issued, handover accepted, final evaluation approved. | G2 |
-| **Mobilisation days** | – | The offset of the "contractor mobilised" milestone from kick-off. Demo: Central 21 days, Co-Funded 14 days (decision M). | G2 |
+| **Mobilisation days** | – | The offset of the "contractor mobilised" milestone from kick-off. Demo: Direct Intervention 21 days, Matching Grants 14 days (decision M; UBEC manual). | G2 |
 | Kick-off quorum groups | None | At least one attendee per group (demo: owner, monitor, contractor, beneficiary), or a waiver reason. | G2 |
 | Kick-off notice lead time | 7 days | The notice must go out this many days ahead, or the shortfall is waived with a reason. | G2 |
 
@@ -159,11 +159,11 @@ Documents and default cases: Kick-off & mobilisation tab. Visit forms and superv
 | :--- | :--- | :--- | :--- |
 | Documents needed before going live | None | Document types needed before the project can go live. | G3 |
 | Documents needed before mobilisation | None | Shown on the mobilisation compliance panel per contractor. Counted by the "full mobilisation documentation" KPI. Demo: mobilisation agreement and site possession form. | G3 |
-| Legal role | None | The Legal role: told about new default cases, and names the review step. Demo: `LEGAL_OFFICER`. | G7 |
+| Legal role | None | The Legal role: told about new default cases, and names the review step. Demo (UBEC roster): `TENANT_SUPER_ADMIN` ("UBEC Administrator", who acts for the Director Legal; there is no Legal login). | G7 |
 | Open a default case when mobilisation is overdue | On | An overdue contractor-on-site milestone opens a default case once. The case runs Legal review, then the executive decision (`contracts:decide_default`). | G7 |
 | Visit forms (redesign R3) | Default (the template whose code is the visit kind) | The visit form template per visit kind. Only a live template of that kind can be chosen. Projects keep the choice they were created with; the latest version of the template is used when a form is built. Demo: code = kind for every kind. | Decision Y |
-| Supervisor roles | None | Roles whose users count as supervisors (workload view, "supervisor assigned" KPI). | G9 |
-| Most sites per supervisor / furthest distance between sites | No limit | The workload warns above them and never blocks. Demo: Co-Funded 2 sites, 50 km. | G9 |
+| Supervisor roles | None | Roles whose users count as supervisors (workload view, "supervisor assigned" KPI). Demo (UBEC): `UBEC_ME_OFFICER`, `SUBEB_ME_OFFICER`, `MONITOR` (Independent M&E), `INDEPENDENT_RESIDENT` (Resident Supervisor). | G9 |
+| Most sites per supervisor / furthest distance between sites | No limit | The workload warns above them and never blocks. Demo: Direct Intervention 10 sites, Matching Grants 2 sites (a demo value; the manual gives 7 to 10), 50 km. | G9 |
 
 ### 3.7 Completion and closure (Phase 15)
 
@@ -177,7 +177,7 @@ Completion & closure tab. The results show on the project's Completion & handove
 | Gates needing an issued CoC | None | Liability period (handover → retention) and closure are refused without it. Final payment: a FINAL payment or retention release recorded without it is flagged as an exception (payments are made outside the platform). | G6 |
 | Handover due after the CoC | 7 days | Dates the handover ceremony milestone. | G6 |
 | Before-closing checklist | None | Items: document filed (and, per item, whether its current version must be signed), visit accepted (of a chosen visit kind), milestone done, contractors rated, lessons published, audit sign-off, manual. Each must be met or waived before closing. | G6 |
-| Before-archiving checklist | None | The same item kinds, needed before archiving. Demo (Co-Funded): post-closure evaluation 14 days after closing, and an audit sign-off that cannot be waived. | G6 |
+| Before-archiving checklist | None | The same item kinds, needed before archiving. Demo: both types need the closeout report (document type `CLOSEOUT_REPORT`: final evaluation, lessons learned, beneficiary feedback); Matching Grants also the post-closure evaluation 14 days after closing and the Audit Department's sign-off, which cannot be waived. | G6 |
 | Share ratings with the contractor | Off | Contractors see their own ratings when on. | G6 |
 
 ### 3.8 KPI targets (Phase 16)
@@ -189,7 +189,7 @@ KPI targets tab. **Changes apply to every project of the type at once.** Unlike 
 | Target per KPI | Catalogue default (section 6) | "At least" for percentages, "at most" for durations. Blank means no target, and the KPI is shown without a status colour. Met = on target; near = within 10%; missed = further. | G8 |
 | Shown | On | Off hides the KPI for projects of the type. A KPI hidden on every type in view drops off the page. | G8 |
 
-Demo values: Central (mobilisation 90%, reports 85%, visits 90%); Co-Funded (mobilisation 85%, reports 80%, visits 85%, approval 7 days). Financial utilisation has no target.
+Demo values: Direct Intervention (mobilisation 90%, reports 85%, visits 90%); Matching Grants (mobilisation 85%, reports 80%, visits 85%, approval 7 days). Financial utilisation has no target.
 
 ---
 
@@ -209,7 +209,7 @@ Approval chain additions:
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
 | Step organisation scope (Phase 11) | `ANY` | `PROJECT_OWNER`, `PROJECT_OWNER_OR_ANCESTOR` or `FUNDER`: the actor must belong to that organisation. Applies to everyone, including the platform super admin. Demo: report and default-case steps limited to the owner. | G10 |
-| Contract default chain (Phase 13) | Legal review, then the executive decision | Built from the type's Legal role; the final step needs `contracts:decide_default`. | G7 |
+| Contract default chain (Phase 13) | Legal review, then the executive decision | Built from the type's Legal role; the final step needs `contracts:decide_default`. Demo (UBEC): "Director Legal review", then "Executive Secretary (ES) decision" (Direct Intervention) or "SUBEB Executive Chairman decision" (Matching Grants), written by the seed as each project's chain. | G7 |
 
 ---
 
@@ -247,6 +247,7 @@ Approval chain additions:
 ## 6. Permissions added in Phases 11–16
 
 Default roles: **TSA** Tenant Super Admin, **MON** Independent Monitor, **LEN** Lender/funder, **OA** Organisation Administrator. The Tenant Super Admin holds every permission except the segregated disbursement ones.
+**UBEC demo tenant (seed only, `server/src/db/seedUbecRoster.ts`; `shared/src/defaultRoles.ts` unchanged).** Six roles: UBEC Administrator (code `TENANT_SUPER_ADMIN`, every permission), SUBEB Administrator (`ORGANIZATION_ADMIN`, the default Organisation Administrator set: organisation tree, portfolio, audit ledger, `payments:view`, default case decision, CoC signature), UBEC M&E Officer (`UBEC_ME_OFFICER`) and SUBEB M&E Officer (`SUBEB_ME_OFFICER`), both seeing only the projects they are assigned to (`projects:view_assigned`, on web and phone): visits (view, plan), report approval, findings and escalations, sprint verification, documents (view, upload), handover review and response, defects, milestones, CoC signature, contractor ratings, lessons, KPIs, and no portfolio, audit ledger, payments, baseline edit or Settings permissions; Independent M&E (COREN-certified firm) (`MONITOR`, assigned projects only, read-mostly: visits, findings, documents view/upload, KPIs); Resident Supervisor (`INDEPENDENT_RESIDENT`, mobile only). The three M&E roles have surface Both (provisioned: the same account signs in on the field app; field persona Independent verifier, with `visits:submit`, `field:submit_report`, `field:raise_incident`). The lender, lender technical officer, monitor inspector and legal officer roles are not created for this tenant.
 
 | Phase | Permission | What it allows |
 | :--- | :--- | :--- |
@@ -318,8 +319,8 @@ Period-based KPIs count what fell due, was held, issued or decided in the chosen
 | Topic | Setting | Default if not answered |
 | :--- | :--- | :--- |
 | Who signs the CoC, and in which organisation? | CoC signatories | Two owner-organisation admins + beneficiary. |
-| Mobilisation period per model | Mobilisation milestone offset | 21 days Central, 14 days Co-Funded. |
+| Mobilisation period per model | Mobilisation milestone offset | 21 days Direct Intervention, 14 days Matching Grants. |
 | Which gates need an issued CoC? | Closure gates | All three on in the demo. |
 | KPI targets per model | KPI targets | Catalogue defaults; demo values above. |
-| Supervisor site limits | Supervision limits | 2 sites / 50 km on Co-Funded in the demo. |
+| Supervisor site limits | Supervision limits | 2 sites / 50 km on Matching Grants in the demo. |
 | What "indicators" means in the monitoring framework | (not built, G14) | Programme outcome indicators are not tracked. |

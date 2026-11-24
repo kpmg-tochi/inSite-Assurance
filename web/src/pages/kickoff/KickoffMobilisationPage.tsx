@@ -19,12 +19,17 @@ const TAB_IDS = TABS.map((t) => t.id);
  * on site. Tabs in the URL (`?tab=kickoff|milestones|mobilisation`); `/milestones` redirects here.
  * Gate: MILESTONE_VIEW_PERMISSIONS (the route), the same for every tab.
  */
+import { ProjectStageTabs } from "../../components/projects/ProjectStageTabs";
+
 export function KickoffMobilisationPage({ project }: { project: ProjectSummaryDto }) {
   const [active, setActive] = useUrlTab(TAB_IDS);
   const tab = active ?? "kickoff";
   return (
     <div className="space-y-4">
-      <Tabs tabs={TABS} active={tab} onChange={setActive} label="Kick-off and mobilisation" idPrefix="kickoff" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <ProjectStageTabs projectId={project.id} stage={project.stage} />
+        <Tabs tabs={TABS} active={tab} onChange={setActive} label="Kick-off and mobilisation" idPrefix="kickoff" />
+      </div>
       <TabPanel idPrefix="kickoff" id={tab}>
         {tab === "kickoff" && <KickoffTab project={project} />}
         {tab === "milestones" && <MilestonesTab project={project} />}

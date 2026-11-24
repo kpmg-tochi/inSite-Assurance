@@ -14,6 +14,21 @@ export interface TabItem<T extends string> {
   count?: number | null;
 }
 
+/**
+ * UBEC rebrand: the one look for every tab bar and segmented control in the portal. A light green
+ * track; the selected item is solid UBEC green with white text. Use these instead of local classes.
+ */
+export const TAB_LIST_CLASS = "flex flex-wrap gap-1 rounded-xl bg-brand-primary/[0.07] p-1 text-xs font-semibold w-fit max-w-full";
+export function tabItemClass(selected: boolean): string {
+  return `rounded-lg px-3 py-1.5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-1 ${
+    selected ? "bg-brand-primary text-white shadow-sm" : "text-slate-700 hover:bg-brand-primary/10 hover:text-slate-900"
+  }`;
+}
+/** A count inside a tab item ("All 7"): readable on both the green and the light track. */
+export function tabCountClass(selected: boolean): string {
+  return `ml-1.5 tabular-nums font-normal ${selected ? "text-white/80" : "text-slate-500"}`;
+}
+
 export const tabId = (idPrefix: string, id: string) => `${idPrefix}-tab-${id}`;
 export const tabPanelId = (idPrefix: string, id: string) => `${idPrefix}-panel-${id}`;
 
@@ -51,7 +66,7 @@ export function Tabs<T extends string>({
   };
 
   return (
-    <div role="tablist" aria-label={label} className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1 text-xs font-semibold w-fit max-w-full">
+    <div role="tablist" aria-label={label} className={TAB_LIST_CLASS}>
       {tabs.map((t, i) => {
         const selected = t.id === active;
         return (
@@ -68,12 +83,10 @@ export function Tabs<T extends string>({
             tabIndex={selected ? 0 : -1}
             onClick={() => onChange(t.id)}
             onKeyDown={(e) => onKeyDown(e, i)}
-            className={`rounded-lg px-3 py-1.5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
-              selected ? "bg-white text-brand-primary shadow-xs" : "text-slate-600 hover:text-slate-900"
-            }`}
+            className={tabItemClass(selected)}
           >
             {t.label}
-            {typeof t.count === "number" && <span className="ml-1.5 tabular-nums text-slate-500">({t.count})</span>}
+            {typeof t.count === "number" && <span className={tabCountClass(selected)}>({t.count})</span>}
           </button>
         );
       })}

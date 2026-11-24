@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import { CONSTRUCTION_PHASE_LABELS, type ConstructionPhase, type ProjectPhaseTransitionDto } from "@insite/shared";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { useProjectPhaseQuery } from "../../queries/closeout/useCloseoutQueries";
@@ -7,15 +8,31 @@ import { ModalShell, ModalActions, BlockedNotice, inputClass } from "../common/M
 
 export const PHASE_ACTION_LABEL: Record<ConstructionPhase, string> = {
   ACTIVE_CONSTRUCTION: "Back to construction",
-  HANDOVER_IN_PROGRESS: "Start handover",
-  RETENTION_PERIOD: "Start defects liability period",
+  HANDOVER_IN_PROGRESS: "Start the handover",
+  RETENTION_PERIOD: "Start the defects liability period",
   COMPLETED_CLOSED: "Close the project",
 };
 
 /**
- * Redesign R6c (D-R6.20): the phase-change actions, moved from the header banner to the Overview's
- * stage bar. Shown only when the handover or retention module is on and the caller may change the
- * phase (`canChangePhase`); a blocked transition shows its refusal text next to the button.
+ * Where to fix a refused phase change. The server's refusal text names the gate (Certificate of
+ * Completion, accepted handover, closure checklist, retention held); this maps it to the page.
+ */
+function fixLinkFor(projectId: string, reason: string | null): { to: string; label: string } | null {
+  if (!reason) return null;
+  const base = `/app/projects/${projectId}`;
+  if (/Certificate of Completion/i.test(reason)) return { to: `${base}/completion?tab=certificate`, label: "Open the Certificate tab" };
+  if (/accept the works|handover/i.test(reason)) return { to: `${base}/completion?tab=handover`, label: "Open the Handover tab" };
+  if (/Retention is still held|retention release/i.test(reason)) return { to: `${base}/payments`, label: "Open Payments" };
+  if (/can be closed|can be archived|checklist/i.test(reason)) return { to: `${base}/completion?tab=closure`, label: "Open the Closure tab" };
+  return null;
+}
+
+/**
+ * Redesign R6c (D-R6.20), UBEC: the phase-change actions as a faint green banner above the stage
+ * timeline. Shown only when the handover or retention module is on and the caller may change the
+ * phase (`canChangePhase`) with a move available. A refused move keeps its button (disabled unless
+ * it can be overridden) with the refusal as plain text and a link to where it is fixed. Without an
+ * action, the liability period end date is a plain line.
  */
 export function PhaseActions({ projectId, projectStatus }: { projectId: string; projectStatus: string }) {
   const live = projectStatus === "ACTIVE";
@@ -29,43 +46,69 @@ export function PhaseActions({ projectId, projectStatus }: { projectId: string; 
 
   const retentionNote =
     phase.phase === "RETENTION_PERIOD" && phase.retentionEndDate
-      ? `Liability period ends ${phase.retentionEndDate}${
-          phase.daysRemaining !== null ? (phase.daysRemaining >= 0 ? ` (${phase.daysRemaining} days left)` : " (ended)") : ""
+      ? `The defects liability period ends ${phase.retentionEndDate}${
+          phase.daysRemaining !== null ? (phase.daysRemaining >= 0 ? ` (${phase.daysRemaining} days left).` : " (ended).") : "."
         }`
       : null;
-  const actions = phase.canChangePhase ? phase.transitions : [];
-  if (!retentionNote && actions.length === 0) return null;
+  // Forward moves first, the backwards one last.
+  const actions = (phase.canChangePhase ? phase.transitions : []).slice().sort((a, b) => Number(a.to === "ACTIVE_CONSTRUCTION") - Number(b.to === "ACTIVE_CONSTRUCTION"));
+
+  if (actions.length === 0) {
+    return retentionNote ? <p className="text-xs text-slate-600">{retentionNote}</p> : null;
+  }
 
   return (
-    <div className="space-y-2">
-      {retentionNote && <p className="text-xs text-slate-600">{retentionNote}</p>}
-      {actions.length > 0 && (
-        <ul className="flex flex-wrap items-start gap-3" aria-label="Phase actions">
-          {actions.map((t) => (
-            <li key={t.to} className="max-w-xs space-y-1">
+    <section aria-label="Next step for this project" className="space-y-2.5 rounded-xl border border-brand-primary/20 bg-brand-primary/5 px-4 py-3">
+      {retentionNote && <p className="text-xs text-slate-700">{retentionNote}</p>}
+      <ul className="space-y-2.5">
+        {actions.map((t) => {
+          const blocked = !t.allowed;
+          const fix = blocked ? fixLinkFor(projectId, t.reason) : null;
+          const forward = t.to !== "ACTIVE_CONSTRUCTION";
+          return (
+            <li key={t.to} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 text-xs">
+                {blocked && t.reason ? (
+                  <p id={`phase-refusal-${t.to}`} className="text-slate-700">
+                    <span className="font-semibold text-slate-900">You cannot {PHASE_ACTION_LABEL[t.to].toLowerCase()} yet.</span> {t.reason}
+                    {fix && (
+                      <>
+                        {" "}
+                        <Link to={fix.to} className="font-semibold text-brand-primary underline-offset-2 hover:underline">
+                          {fix.label}
+                        </Link>
+                      </>
+                    )}
+                  </p>
+                ) : (
+                  <p className="text-slate-700">
+                    {forward ? (
+                      <>
+                        <span className="font-semibold text-slate-900">Next step:</span> {PHASE_ACTION_LABEL[t.to].toLowerCase()}.
+                      </>
+                    ) : (
+                      "If handover started too early, move the project back to construction."
+                    )}
+                  </p>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={() => setTarget(t)}
-                aria-describedby={!t.allowed && t.reason ? `phase-refusal-${t.to}` : undefined}
-                className={`rounded-xl px-3 py-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
-                  t.to === "ACTIVE_CONSTRUCTION"
-                    ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                    : "bg-brand-primary text-white hover:opacity-90"
+                disabled={blocked && !t.overridable}
+                aria-describedby={blocked && t.reason ? `phase-refusal-${t.to}` : undefined}
+                className={`shrink-0 self-start rounded-xl px-3 py-1.5 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary disabled:cursor-not-allowed disabled:opacity-50 sm:self-auto ${
+                  forward ? "bg-brand-primary text-white hover:bg-brand-hover" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                 }`}
               >
                 {PHASE_ACTION_LABEL[t.to]}
               </button>
-              {!t.allowed && t.reason && (
-                <p id={`phase-refusal-${t.to}`} className="text-[11px] text-rose-700">
-                  {t.reason}
-                </p>
-              )}
             </li>
-          ))}
-        </ul>
-      )}
+          );
+        })}
+      </ul>
       {target && <PhaseChangeModal projectId={projectId} transition={target} onClose={() => setTarget(null)} />}
-    </div>
+    </section>
   );
 }
 

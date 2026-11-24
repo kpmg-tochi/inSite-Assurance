@@ -13,6 +13,7 @@ import { formatReporterRoleBadge } from './reporterRole';
 import { GeofenceShapeLayers } from './geofence/GeofenceShapeLayers';
 import { paddedGeofenceBounds, type LatLngTuple } from './geofence/geofenceGeometry';
 import { describeGeofenceStatus } from './geofence/geofenceStatus';
+import { TAB_LIST_CLASS, tabCountClass, tabItemClass } from './common/Tabs';
 
 interface LiveGeospatialMapProps {
   project: ProjectSummaryDto;
@@ -169,25 +170,27 @@ export function LiveGeospatialMap({
         </div>
 
         <div className="flex items-center gap-2 pointer-events-auto">
-          <div className="bg-white/95 backdrop-blur-md border border-slate-200/90 rounded-xl p-1 shadow-md flex items-center gap-1 text-xs">
-            {(
-              [
-                ['ALL', `All Captures (${located.length})`],
-                ['INDEPENDENT', 'Independent Monitors'],
-                ['FLAGGED', 'Flagged'],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setTierFilter(key)}
-                className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                  tierFilter === key ? 'bg-brand-primary text-white' : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="rounded-xl bg-white shadow-md">
+            <div role="group" aria-label="Show captures" className={TAB_LIST_CLASS}>
+              {(
+                [
+                  ['ALL', 'All captures'],
+                  ['INDEPENDENT', 'Independent monitors'],
+                  ['FLAGGED', 'Flagged'],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={tierFilter === key}
+                  onClick={() => setTierFilter(key)}
+                  className={tabItemClass(tierFilter === key)}
+                >
+                  {label}
+                  {key === 'ALL' && <span className={tabCountClass(tierFilter === key)}>{located.length}</span>}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

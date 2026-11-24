@@ -39,7 +39,7 @@ const NOTIFICATION_VISUALS: Partial<Record<MobileNotificationType, NotificationV
   // Phase 10
   DEFECT_UPDATE: {
     icon: "tool",
-    accentColor: "#0369A1",
+    accentColor: "#005A4A",
     iconBg: "#E0F2FE",
     badgeText: "Defect",
     pillVariant: "info",
@@ -48,16 +48,16 @@ const NOTIFICATION_VISUALS: Partial<Record<MobileNotificationType, NotificationV
   // Redesign R4: visit notifications (OPEN_VISIT opens the visit).
   VISIT_ASSIGNED: {
     icon: "calendar",
-    accentColor: "#4338CA",
-    iconBg: "#E0E7FF",
+    accentColor: "#00715D",
+    iconBg: "#D7EEE8",
     badgeText: "Visit",
     pillVariant: "info",
     ctaLabel: "Open visit",
   },
   VISIT_CHANGED: {
     icon: "calendar",
-    accentColor: "#4338CA",
-    iconBg: "#E0E7FF",
+    accentColor: "#00715D",
+    iconBg: "#D7EEE8",
     badgeText: "Visit changed",
     pillVariant: "info",
     ctaLabel: "Open visit",

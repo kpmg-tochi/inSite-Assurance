@@ -29,6 +29,8 @@ export interface CustomSelectProps<T extends string | number = string> {
   id?: string;
   /** Accessible name when there is no visible label (the selected value is read after it). */
   ariaLabel?: string;
+  /** Open the list above the trigger (near the bottom of a page, so it does not lengthen it). */
+  openUpward?: boolean;
   renderTrigger?: (
     selectedOption: CustomSelectOption<T> | undefined,
     isOpen: boolean
@@ -58,6 +60,7 @@ export function CustomSelect<T extends string | number = string>({
   renderOption,
   id,
   ariaLabel,
+  openUpward = false,
 }: CustomSelectProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -279,7 +282,7 @@ export function CustomSelect<T extends string | number = string>({
           role="listbox"
           id={listboxId}
           aria-label={label ?? ariaLabel}
-          className={`absolute left-0 mt-1.5 w-full min-w-[200px] z-50 bg-white rounded-xl border border-slate-200 shadow-xl py-1 overflow-hidden animate-in fade-in-50 zoom-in-95 duration-100 ${dropdownClassName}`}
+          className={`absolute left-0 ${openUpward ? "bottom-full mb-1.5" : "mt-1.5"} w-full min-w-[200px] z-50 bg-white rounded-xl border border-slate-200 shadow-xl py-1 overflow-hidden animate-in fade-in-50 zoom-in-95 duration-100 ${dropdownClassName}`}
         >
           {searchable && (
             <div className="p-2 border-b border-slate-100">

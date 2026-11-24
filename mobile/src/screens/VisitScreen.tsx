@@ -5,7 +5,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Toast from 'react-native-toast-message';
 import { VISIT_SUBMISSION_STATUS_LABELS, type VisitDetailDto } from '@insite/shared';
 import { EmptyStateCard, GradientHeaderLayout, InfoCallout, InSiteLoader } from '../components/common';
-import { BackButton, PrimaryButton } from '../components/inputs/Buttons';
+import { BackButton, HomeButton, PrimaryButton } from '../components/inputs/Buttons';
 import CheckInSheet from '../components/visit/CheckInSheet';
 import { DetailLine, OutlineButton, SectionCard, StatusBadges, visitUiStyles } from '../components/visit/VisitUi';
 import { useProfile } from '../context/ProfileContext';
@@ -215,6 +215,7 @@ export function VisitScreen() {
       title={view.kindLabel}
       subtitle={`${s.projectCode} · ${s.projectName}`}
       leftAction={<BackButton onPress={() => navigation.goBack()} />}
+      rightAction={<HomeButton onPress={() => navigation.popTo('Home')} />}
       contentContainerStyle={styles.body}
     >
       <StatusBadges badges={visitBadges(view)} />

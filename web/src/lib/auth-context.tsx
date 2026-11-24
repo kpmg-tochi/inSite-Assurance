@@ -29,9 +29,11 @@ import { loadDemoAccounts } from "../config/useDemoAccounts";
 import { APPLICATION_NAME } from "../config/appName";
 
 const DEFAULT_BRANDING: TenantBrandingConfig = {
-  primaryColorHex: "#00338D",
-  navyColorHex: "#0C233C",
-  tagline: "Capital Projects Assurance Platform",
+  // UBEC palette (ubec.gov.ng): the signed-out and unbranded default.
+  primaryColorHex: "#00715D",
+  navyColorHex: "#122F2A",
+  logoUrl: "/client/ubec-logo.png",
+  tagline: "Project Monitoring Portal",
 };
 
 function hexToRgbChannels(hex: string): string | null {

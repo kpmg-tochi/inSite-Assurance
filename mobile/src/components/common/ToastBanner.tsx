@@ -14,7 +14,7 @@ interface ToastBannerProps {
 const COLORS: Record<ToastType, { bg: string; border: string; text: string }> = {
   error: { bg: '#FEF2F2', border: '#FECACA', text: '#991B1B' },
   warning: { bg: '#FFFBEB', border: '#FDE68A', text: '#92400E' },
-  info: { bg: '#EFF6FF', border: '#BFDBFE', text: '#1E40AF' },
+  info: { bg: '#E8F4F1', border: '#B5DDD3', text: '#005A4A' },
   success: { bg: '#ECFDF5', border: '#A7F3D0', text: '#065F46' },
 };
 

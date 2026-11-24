@@ -2,7 +2,7 @@ import { StyleSheet } from 'react-native';
 
 /** Redesign R5c: shared look of the visit form screens. */
 export const FORM_COLORS = {
-  brand: '#6546FC',
+  brand: '#00715D',
   text: '#0F172A',
   muted: '#64748B',
   border: '#CBD5E1',

@@ -102,7 +102,7 @@ export const GradientHeaderLayout: React.FC<GradientHeaderLayoutProps> = ({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: "#1E1B4B",
+    backgroundColor: "#122F2A",
   },
   headerTopRow: {
     flexDirection: "row",

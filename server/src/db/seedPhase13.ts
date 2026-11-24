@@ -2,6 +2,7 @@ import crypto from "crypto";
 import { Prisma } from "@prisma/client";
 import {
   addDays,
+  defaultContractDefaultChain,
   ContractMilestoneTemplateInput,
   defaultSignOffStatement,
   ProjectTypeConfigSchema,
@@ -16,22 +17,26 @@ import { signOffStatementHash } from "../modules/documents/documents.service";
 import { completeMilestone, recomputeMilestoneDates, syncContractMilestones } from "../modules/contracts/milestones.service";
 import { actOnDefaultCase, openDefaultCase } from "../modules/contracts/defaultCases.service";
 import { SYSTEM_ACTOR } from "../modules/contracts/milestones.service";
+import { getProcessConfig, writeChainVersion } from "../modules/process/processConfig.service";
 import { PROGRAMME_TENANT_SLUG } from "./seedPhase11";
+import { LAGOS_ADMIN_EMAIL, UBEC_ADMIN_EMAIL, UBEC_ME_EMAIL, UBEC_ROLE } from "./seedUbecRoster";
 
 /**
  * Phase 13 seed: document types for every tenant; contract milestone templates, kick-off rules,
- * document requirements and a Legal Officer on both programme project types; then
- * - PRG-102 (Central) mid-mobilisation: contract awarded and signed, kick-off held 16 days ago with
+ * document requirements and default cases on both programme project types (the UBEC administrator
+ * acts for the Director Legal); then
+ * - PRG-102 (Direct Intervention) mid-mobilisation: contract awarded and signed, kick-off held 16 days ago with
  *   quorum, minutes filed and signed, mobilisation due in 5 days;
- * - PRG-221 (Co-Funded) with mobilisation overdue (kick-off 20 days ago, +14) and a default case
- *   that Legal has reviewed, now waiting at the executive decision step (South Delivery Entity).
+ * - PRG-221 (Matching Grants) with mobilisation overdue (kick-off 20 days ago, +14) and a default case
+ *   that Legal has reviewed, now waiting for the Lagos SUBEB Executive Chairman's decision.
  *
  * Like Phase 14, the types' config and the projects' snapshots are written without a version bump
  * (seed only). Dates are relative to the seed day. Document files are written to local storage when
  * S3 is not configured (otherwise only the register rows exist).
  */
 
-const CENTRAL: ContractMilestoneTemplateInput[] = [
+/** Direct Intervention (type code CENTRAL): UBEC Project Cycle Manual, Direct Intervention sections 5-6. */
+const DIRECT_INTERVENTION: ContractMilestoneTemplateInput[] = [
   { key: "acceptance-letter", label: "Acceptance letter received", anchor: "CONTRACT_AWARD", offsetValue: 3, requiredDocumentTypeCodes: ["ACCEPTANCE_LETTER"], responsibleScope: "PROJECT_OWNER" },
   { key: "kickoff-notice", label: "Kick-off notice sent", anchor: "KICKOFF", offsetValue: -7, completionMode: "AUTO_KICKOFF_NOTICE_SENT", responsibleScope: "PROJECT_OWNER" },
   { key: "kickoff-held", label: "Kick-off meeting held", anchor: "KICKOFF", offsetValue: 0, completionMode: "AUTO_KICKOFF_QUORUM", responsibleScope: "PROJECT_OWNER" },
@@ -58,8 +63,13 @@ const CENTRAL: ContractMilestoneTemplateInput[] = [
   },
 ];
 
-const CO_FUNDED: ContractMilestoneTemplateInput[] = [
-  ...CENTRAL.filter((t) => t.key !== "contractor-mobilised"),
+/**
+ * Matching Grants (type code CO_FUNDED): programme of works and mobilisation plan at or before the
+ * kick-off, minutes approved and uploaded within 3 working days (instead of the Direct Intervention
+ * week), mobilisation within 14 calendar days.
+ */
+const MATCHING_GRANTS: ContractMilestoneTemplateInput[] = [
+  ...DIRECT_INTERVENTION.filter((t) => t.key !== "contractor-mobilised" && t.key !== "minutes-signed"),
   { key: "programme-of-works", label: "Programme of works accepted", anchor: "KICKOFF", offsetValue: 0, completionMode: "AUTO_SCHEDULE_BASELINE_SET", responsibleScope: "CONTRACTOR" },
   { key: "mobilisation-plan", label: "Mobilisation plan submitted", anchor: "KICKOFF", offsetValue: 0, requiredDocumentTypeCodes: ["MOBILISATION_PLAN"], perContractor: true, responsibleScope: "CONTRACTOR" },
   {
@@ -72,11 +82,30 @@ const CO_FUNDED: ContractMilestoneTemplateInput[] = [
     signOffPermissionKey: "kickoff:manage",
     responsibleScope: "PROJECT_OWNER",
   },
-  { ...CENTRAL.find((t) => t.key === "contractor-mobilised")!, offsetValue: 14 },
+  { ...DIRECT_INTERVENTION.find((t) => t.key === "contractor-mobilised")!, offsetValue: 14 },
 ];
 
 const KICKOFF = { requiredStakeholderGroups: ["OWNER", "MONITOR", "CONTRACTOR", "BENEFICIARY"] as const, noticeLeadDays: 7 };
 const DOCUMENT_REQUIREMENTS = { beforeActivation: [], beforeMobilisation: ["MOBILISATION_AGREEMENT", "SITE_POSSESSION_FORM"] };
+
+/**
+ * UBEC rebrand: the project's default case chain in the manual's words. A failure to mobilise goes
+ * to the Director Legal; termination is decided by the Executive Secretary (Direct Intervention) or
+ * the SUBEB Executive Chairman (Matching Grants). Same steps and scopes as the default chain (the
+ * decision step is limited to the owning organisation), written as the project's chain version.
+ */
+export async function labelDefaultCaseChain(projectId: string, typeCode: string): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const project = await tx.project.findUniqueOrThrow({ where: { id: projectId }, select: { tenantId: true, owningOrganizationId: true } });
+    const legal = await tx.role.findFirst({ where: { tenantId: project.tenantId, code: UBEC_ROLE.ADMIN }, select: { id: true } });
+    const [review, decision] = defaultContractDefaultChain({ hasOwner: Boolean(project.owningOrganizationId), legalRoleId: legal?.id ?? null });
+    const steps = [
+      { ...review, label: "Director Legal review" },
+      { ...decision, label: typeCode === "CO_FUNDED" ? "SUBEB Executive Chairman decision" : "Executive Secretary (ES) decision" },
+    ];
+    await writeChainVersion(tx, projectId, "CONTRACT_DEFAULT", steps, await getProcessConfig(projectId, tx));
+  });
+}
 
 export async function payloadFor(email: string): Promise<WebJwtPayload> {
   const u = await prisma.user.findUniqueOrThrow({
@@ -198,31 +227,8 @@ export async function seedPhase13() {
 
   const programme = await prisma.tenant.findUniqueOrThrow({ where: { slug: PROGRAMME_TENANT_SLUG } });
 
-  // A Legal Officer role and user in the programme tenant (reviews default cases).
-  const legalKeys = ["projects:view_assigned", "projects:view_all_tenant", "documents:view", "contracts:raise_default", "audit:view_ledger"];
-  const perms = await prisma.permission.findMany({ where: { key: { in: legalKeys } }, select: { id: true } });
-  const legalRole = await prisma.role.create({
-    data: {
-      tenantId: programme.id,
-      name: "Legal Officer",
-      code: "LEGAL_OFFICER",
-      description: "Reviews contractor default cases before the executive decides.",
-      surface: "WEB",
-      rolePermissions: { create: perms.map((p) => ({ permissionId: p.id })) },
-    },
-  });
-  const flagship = await prisma.organization.findFirstOrThrow({ where: { tenantId: programme.id, name: "Programme Authority" } });
-  const anyUser = await prisma.user.findFirstOrThrow({ where: { tenantId: programme.id } });
-  await prisma.user.create({
-    data: {
-      tenantId: programme.id,
-      email: "legal.officer@insite.ng",
-      passwordHash: anyUser.passwordHash,
-      fullName: "Ngozi Eze (Legal Officer)",
-      roleId: legalRole.id,
-      organizationId: flagship.id,
-    },
-  });
+  // UBEC roster: no Legal login. The UBEC administrator acts for the Director Legal, so the type's
+  // Legal role is the administrator's role (TENANT_SUPER_ADMIN, "UBEC Administrator").
 
   // Type config: milestones, kick-off, documents, default cases (no version bump, as Phase 14).
   const types = await prisma.projectType.findMany({ where: { tenantId: programme.id } });
@@ -230,10 +236,10 @@ export async function seedPhase13() {
   for (const type of types) {
     const config = ProjectTypeConfigSchema.parse({
       ...ProjectTypeConfigSchema.parse(type.configJson),
-      contractMilestones: type.code === "CO_FUNDED" ? CO_FUNDED : CENTRAL,
+      contractMilestones: type.code === "CO_FUNDED" ? MATCHING_GRANTS : DIRECT_INTERVENTION,
       kickoff: KICKOFF,
       documentRequirements: DOCUMENT_REQUIREMENTS,
-      defaultCases: { legalRoleCode: "LEGAL_OFFICER", autoOpenOnOverdueMobilisation: true },
+      defaultCases: { legalRoleCode: UBEC_ROLE.ADMIN, autoOpenOnOverdueMobilisation: true },
     });
     await prisma.projectType.update({ where: { id: type.id }, data: { configJson: config as unknown as Prisma.InputJsonValue } });
     configs.set(type.id, config);
@@ -250,22 +256,23 @@ export async function seedPhase13() {
       await tx.project.update({ where: { id: p.id }, data: { projectTypeSnapshotJson: snapshot as unknown as Prisma.InputJsonValue } });
       await syncContractMilestones(tx, p.id);
     });
+    await labelDefaultCaseChain(p.id, types.find((t) => t.id === p.projectTypeId)!.code);
   }
 
   const byCode = new Map(projects.map((p) => [p.codePrefix, p]));
   const today = zonedCalendarDate(new Date(), "Africa/Lagos");
   const daysAgo = (n: number) => new Date(`${addDays(today, -n)}T10:00:00.000Z`);
-  const admin = await payloadFor("programme.admin@insite.ng");
-  const monitorUser = await payloadFor("programme.monitor@insite.ng");
-  const southAdmin = await payloadFor("south.admin@insite.ng");
+  const admin = await payloadFor(UBEC_ADMIN_EMAIL);
+  const monitorUser = await payloadFor(UBEC_ME_EMAIL);
+  const southAdmin = await payloadFor(LAGOS_ADMIN_EMAIL);
 
-  // ---- PRG-102 (Central): mid-mobilisation -------------------------------------------------
+  // ---- PRG-102 (Direct Intervention): mid-mobilisation -------------------------------------------------
   const prg102 = byCode.get("PRG-102")!;
   const kickoff102 = addDays(today, -16);
   await prisma.project.update({
     where: { id: prg102.id },
     data: {
-      contractReference: "PA/CEN/2026/102",
+      contractReference: "UBEC/DI/2026/102",
       contractAwardDate: addDays(today, -40),
       contractSignedDate: addDays(today, -30),
       contractSumNgn: 232_000_000,
@@ -274,7 +281,7 @@ export async function seedPhase13() {
   });
   const contractor102 = await prisma.projectContractor.findFirstOrThrow({ where: { projectId: prg102.id }, include: { organization: true } });
   const beneficiary102 = await prisma.projectBeneficiary.findFirst({ where: { projectId: prg102.id, isPrimary: true } });
-  await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "CONTRACT", title: "Contract PA/CEN/2026/102", uploadedByUserId: admin.userId, createdAt: daysAgo(30) });
+  await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "CONTRACT", title: "Contract UBEC/DI/2026/102", uploadedByUserId: admin.userId, createdAt: daysAgo(30) });
   await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "ACCEPTANCE_LETTER", title: "Acceptance of award", uploadedByUserId: admin.userId, createdAt: daysAgo(38) });
   const minutes102 = await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "KICKOFF_MINUTES", title: "Kick-off meeting minutes", uploadedByUserId: admin.userId, createdAt: daysAgo(15) });
   await signDocument(minutes102, admin, daysAgo(14));
@@ -297,13 +304,13 @@ export async function seedPhase13() {
     await completeMilestone(prg102.id, m.id, admin, key === "minutes-signed" ? "Signed by the owner and the monitor." : null);
   }
 
-  // ---- PRG-221 (Co-Funded): mobilisation overdue, default case at the decision step ----------------
+  // ---- PRG-221 (Matching Grants): mobilisation overdue, default case at the decision step ----------------
   const prg221 = byCode.get("PRG-221")!;
   const kickoff221 = addDays(today, -20);
   await prisma.project.update({
     where: { id: prg221.id },
     data: {
-      contractReference: "RDE-S/CF/2026/221",
+      contractReference: "LASUBEB/MG/2026/221",
       contractAwardDate: addDays(today, -45),
       contractSignedDate: addDays(today, -35),
       contractSumNgn: 81_500_000,
@@ -325,7 +332,7 @@ export async function seedPhase13() {
     ],
   });
   await fileDocument({ tenantId: programme.id, projectId: prg221.id, typeCode: "ACCEPTANCE_LETTER", title: "Acceptance of award", uploadedByUserId: southAdmin.userId, createdAt: daysAgo(43) });
-  for (const key of ["acceptance-letter", "minutes-signed", "minutes-approved"]) {
+  for (const key of ["acceptance-letter", "minutes-approved"]) {
     const m = await prisma.projectContractMilestone.findFirstOrThrow({ where: { projectId: prg221.id, key } });
     await completeMilestone(prg221.id, m.id, southAdmin, null);
   }
@@ -342,8 +349,9 @@ export async function seedPhase13() {
     });
   });
   const theCase = await prisma.contractorDefaultCase.findFirstOrThrow({ where: { projectId: prg221.id } });
-  // Legal has reviewed it; it now waits for the South delivery entity's executive decision.
-  await actOnDefaultCase(prg221.id, theCase.id, await payloadFor("legal.officer@insite.ng"), {
+  // Legal has reviewed it (the UBEC administrator acting for the Director Legal); it now waits for
+  // the Lagos SUBEB Executive Chairman's decision (the Lagos SUBEB administrator acts for him).
+  await actOnDefaultCase(prg221.id, theCase.id, admin, {
     decision: "APPROVE",
     notes: "Notice of default served on the contractor; no reply within 5 days. Recommend a short cure period or termination.",
   });

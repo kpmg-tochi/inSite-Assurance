@@ -10,7 +10,7 @@ web
 
 ## Users
 
-The current client is one programme authority that delivers school infrastructure under two delivery models (Central and Co-Funded). Its staff use the portal on desktop, in offices (HQ, regional and area offices, regional delivery entities). Their roles, from `saas_updates/client_flow_redesign.md` section 4:
+The current client is UBEC, which delivers school infrastructure under two delivery models: Direct Intervention (UBEC-led) and Matching Grants (SUBEB-led). The role table below predates the rename: read "Chief Executive" as the Executive Secretary (Direct Intervention) or the SUBEB Executive Chairman (Matching Grants). Its staff use the portal on desktop, in offices (HQ, regional and area offices, regional delivery entities). Their roles, from `saas_updates/client_flow_redesign.md` section 4:
 
 | Role | Job in the portal |
 | :--- | :--- |
@@ -63,7 +63,7 @@ Success right now is a convincing client demo (`saas_updates/demo_script_program
 ## Capabilities and Constraints
 
 - Stack in place: React, Vite, Tailwind 3, React Query, React Router, lucide-react icons, Leaflet maps, sonner toasts. Contracts are shared Zod schemas from `@insite/shared`.
-- Navigation is data (`web/src/navigation/navItems.ts`): Workspace pages and Project pages. Workspace pages: Portfolio, Projects, Visit planner, KPIs, Lessons learned, Forms & facilities, Settings. Project pages: Overview, Kick-off & mobilisation, Sprints & scope, Visits & reports, Findings, Payments, Documents, Completion & handover, plus Audit ledger under More.
+- Navigation is data (`web/src/navigation/navItems.ts`). Workspace: Portfolio (programme admins, `projects:view_portfolio`) or Dashboard (everyone else), and Settings. Both home pages have Overview (headline figures, map, projects table: the only way into a project), KPIs and Visits tabs. Project pages: Project overview, Kick-off & mobilisation, Sprints & scope, Visits & reports, Findings, Payments, Documents, Completion & handover, plus Audit ledger and Settings under More. Lessons learned come in each project's closeout report, not a library page.
 - Project setup is a guided wizard with five steps: Project, Contract, Scope, Team & visits, Review.
 - Terminology is per tenant (`useTerm()`). The client's words replace canonical labels on screen only.
 - Payments happen outside the platform; the portal only records them.
@@ -73,12 +73,14 @@ Success right now is a convincing client demo (`saas_updates/demo_script_program
 
 ## Brand Commitments
 
-Undecided. The owner is about to rework the design and white-label the product. Until that work is done:
+Decided 2026-11-24 (owner): the portal is branded for the client.
 
-- keep surfaces brand-neutral;
-- do not treat the KPMG or InSite logos (`web/public/`, `mobile/assets/`) or the KPMG-aligned palette in `Project Context/mobile_ui_design_guidelines.md` as binding.
-
-Binding now: per-tenant terminology labels, and plain, factual wording.
+- Name on screen: **UBEC Project Monitoring Portal**. No InSite Assurance or KPMG credit anywhere in the portal.
+- Client: Universal Basic Education Commission (UBEC). Assets in `web/public/client/` (`ubec-logo.png` round mark, `ubec-logo-full.png` mark with white lettering for dark backgrounds, `ubec-login.jpeg` photograph).
+- Colours: UBEC deep green `#00715D`, dark green `#122F2A`, amber `#FFBF00` for accents on dark green only.
+- Delivery models in the client's words: **Direct Intervention** (projects UBEC oversees) and **Matching Grants** (projects the SUBEBs, State Universal Basic Education Boards, oversee). Other terms from the client's Project Cycle Manual: UBEC HQ, State/Zonal Offices, Executive Secretary (ES), SUBEB Executive Chairman, Resident Supervisor, M&E officer, Certificate of Completion (CoC).
+- Per-tenant terminology labels stay binding; wording stays plain and factual.
+- "Remove unnecessary badges; simplified and approachable" (owner): plain text over pills unless the pill carries state someone acts on.
 
 ## Evidence on Hand
 

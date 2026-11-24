@@ -35,7 +35,7 @@ before(async () => {
   ids.lkk = (await prisma.project.findFirstOrThrow({ where: { codePrefix: 'LKK-402' } })).id;
   const key = makeTestDeviceKey();
   const login = await request(app).post('/api/v1/auth/mobile/login').send({
-    email: 'resident.supervisor@insite.ng',
+    email: 'resident.supervisor@ubec.test',
     password: 'Password123!',
     deviceId: 'r5-pack-device',
     deviceModel: 'Pixel 8',

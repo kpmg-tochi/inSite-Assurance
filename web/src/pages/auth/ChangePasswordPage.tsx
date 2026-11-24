@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { ChangePasswordRequestSchema } from "@insite/shared";
 import { useAuth } from "../../lib/auth-context";
-import { InSiteLogo } from "../../components/InSiteLogo";
+import { BrandLogo } from "../../components/BrandLogo";
 
 /**
  * Shown instead of the workspace while `user.mustChangePassword` is set (accounts created by an
@@ -41,12 +41,12 @@ export function ChangePasswordPage() {
     "w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-brand-primary";
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+    <div className="min-h-screen bg-surface-canvas flex items-center justify-center p-6">
       <form
         onSubmit={handleSubmit}
         className="max-w-sm w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4"
       >
-        <InSiteLogo />
+        <BrandLogo className="h-12 w-12" />
         <div>
           <h1 className="text-base font-bold text-slate-900">Set a new password</h1>
           <p className="text-xs text-slate-500 mt-1">

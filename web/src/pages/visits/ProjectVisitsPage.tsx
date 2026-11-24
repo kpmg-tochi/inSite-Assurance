@@ -6,12 +6,14 @@ import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth } from "../../lib/auth-context";
 import Loader from "../../components/Loader";
 import { CustomSelect } from "../../components/common";
+import { TAB_LIST_CLASS, tabItemClass } from "../../components/common/Tabs";
 import { CapturePhoto, CaptureAudio } from "../../components/evidence/CaptureMedia";
+import { StandardTable, type TableColumnDef } from "../../components/table";
 import { useProjectFindingsQuery, useProjectVisitsQuery, useSiteLogQuery } from "../../queries/visits/useVisitQueries";
 import { useDismissProjectFindingMutation, useGenerateVisitsMutation, usePublishVisitsMutation, useResolveProjectFindingMutation } from "../../mutations/visits/useVisitMutations";
 import { CreateVisitDialog } from "../../components/visits/VisitDialogs";
 import { VisitDetailPanel } from "../../components/visits/VisitDetailPanel";
-import { ConfirmationText, officersText, primaryButton, secondaryButton, visitKindLabel, VisitStatusChip, WarningsList } from "../../components/visits/visitUi";
+import { ConfirmationText, officersText, primaryButton, secondaryButton, visitKindLabel, WarningsList } from "../../components/visits/visitUi";
 
 /**
  * Redesign R4: a project's visits. Plan (proposed, planned and done visits with their officers,
@@ -20,6 +22,12 @@ import { ConfirmationText, officersText, primaryButton, secondaryButton, visitKi
  */
 
 type Tab = "plan" | "findings" | "site-log";
+
+const REPORT_TABS: Array<{ id: "plan" | "findings" | "site-log"; label: string; intro: string }> = [
+  { id: "plan", label: "Visits", intro: "Planned and past site visits and their reports. Officers confirm or move visits and submit the form from the field app." },
+  { id: "findings", label: "Findings", intro: "Problems raised by visit reports, followed until the contractor corrects them and a visit confirms it." },
+  { id: "site-log", label: "Site log", intro: "Photos, voice notes and notes officers record on site outside a visit." },
+];
 
 export function ProjectVisitsPage({ project }: { project: ProjectSummaryDto }) {
   const [params, setParams] = useSearchParams();
@@ -35,23 +43,21 @@ export function ProjectVisitsPage({ project }: { project: ProjectSummaryDto }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-bold text-slate-900">Visits</h1>
-          <p className="text-xs text-slate-500">The project's visit plan. Officers confirm or move their visits and submit the frozen form from the field app.</p>
-        </div>
-        <div className="flex gap-1 rounded-xl bg-slate-100 p-1 text-xs font-semibold" role="tablist">
-          {(["plan", "findings", "site-log"] as const).map((t) => (
+        <div role="tablist" aria-label="Reports" className={TAB_LIST_CLASS}>
+          {REPORT_TABS.map((t) => (
             <button
-              key={t}
+              key={t.id}
+              type="button"
               role="tab"
-              aria-selected={tab === t}
-              onClick={() => setParam("tab", t === "plan" ? null : t)}
-              className={`rounded-lg px-3 py-1.5 ${tab === t ? "bg-white text-brand-primary shadow-xs" : "text-slate-600"}`}
+              aria-selected={tab === t.id}
+              onClick={() => setParam("tab", t.id === "plan" ? null : t.id)}
+              className={`${tabItemClass(tab === t.id)} text-sm`}
             >
-              {t === "plan" ? "Plan" : t === "findings" ? "Findings" : "Site log"}
+              {t.label}
             </button>
           ))}
         </div>
+        <p className="w-full text-sm text-slate-600">{REPORT_TABS.find((t) => t.id === tab)!.intro}</p>
       </div>
 
       {tab === "findings" ? (
@@ -74,6 +80,43 @@ export function ProjectVisitsPage({ project }: { project: ProjectSummaryDto }) {
   );
 }
 
+type DotTone = "muted" | "info" | "pending" | "good" | "bad";
+const DOT_CLASS: Record<DotTone, string> = {
+  muted: "bg-slate-400",
+  info: "bg-sky-500",
+  pending: "bg-amber-500",
+  good: "bg-emerald-600",
+  bad: "bg-rose-600",
+};
+const VISIT_STATUS_TONE: Record<VisitDto["status"], DotTone> = {
+  PROPOSED: "muted",
+  PLANNED: "info",
+  IN_PROGRESS: "info",
+  SUBMITTED: "pending",
+  RETURNED: "pending",
+  APPROVED: "good",
+  MISSED: "bad",
+  CANCELLED: "muted",
+};
+
+/** "24 Nov 2026" from YYYY-MM-DD (a calendar date, no zone shift). */
+const visitDay = (date: string) =>
+  new Date(`${date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+/** What else is worth knowing about a visit, in one line. */
+function visitNotes(v: VisitDto): string {
+  return [
+    v.sprint ? v.sprint.name : null,
+    v.facilityCount ? `${v.facilityCount} facilit${v.facilityCount === 1 ? "y" : "ies"}` : null,
+    v.recheckCount ? `${v.recheckCount} re-check${v.recheckCount === 1 ? "" : "s"}` : null,
+    v.pendingProposal ? `move to ${v.pendingProposal.toDate} proposed` : null,
+    v.isLate ? "late" : null,
+    v.origin === "UNSCHEDULED" ? "unscheduled" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 function PlanTab({ projectId, selectedId, onSelect }: { projectId: string; selectedId: string | null; onSelect: (id: string) => void }) {
   const { hasPermission } = useAuth();
   const canPlan = hasPermission("visits:plan");
@@ -90,36 +133,74 @@ function PlanTab({ projectId, selectedId, onSelect }: { projectId: string; selec
     return showDone || status ? all : all.filter((v) => !["APPROVED", "CANCELLED"].includes(v.status));
   }, [q.data, showDone, status]);
   const proposed = visits.filter((v) => v.status === "PROPOSED");
+  const selectable = canPlan && proposed.length > 0;
+
+  const columns: TableColumnDef<VisitDto>[] = [
+    ...(selectable
+      ? [
+          {
+            id: "select",
+            header: <span className="sr-only">Select to publish</span>,
+            width: "w-8",
+            cell: (v: VisitDto) =>
+              v.status === "PROPOSED" ? (
+                <input
+                  type="checkbox"
+                  checked={checked.includes(v.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setChecked((c) => (on ? [...c, v.id] : c.filter((x) => x !== v.id)));
+                  }}
+                  aria-label={`Select the ${visitKindLabel(v.visitKind)} of ${v.plannedDate} to publish`}
+                />
+              ) : null,
+          },
+        ]
+      : []),
+    {
+      id: "date",
+      header: "Date",
+      width: "w-28",
+      cell: (v) => <span className="whitespace-nowrap font-semibold tabular-nums text-slate-900">{visitDay(v.plannedDate)}</span>,
+    },
+    {
+      id: "visit",
+      header: "Visit",
+      cell: (v) => {
+        const notes = visitNotes(v);
+        return (
+          <div className="min-w-0">
+            <div className="font-semibold text-slate-900">{visitKindLabel(v.visitKind)}</div>
+            {notes && <div className="text-[11px] text-slate-500">{notes}</div>}
+          </div>
+        );
+      },
+    },
+    { id: "officers", header: "Officers", cell: (v) => <span className="text-slate-700">{officersText(v)}</span> },
+    {
+      id: "status",
+      header: "Status",
+      width: "w-36",
+      cell: (v) => (
+        <div>
+          <span className="inline-flex items-center gap-1.5 whitespace-nowrap font-semibold text-slate-800">
+            <span className={`h-2 w-2 shrink-0 rounded-full ${DOT_CLASS[VISIT_STATUS_TONE[v.status]]}`} aria-hidden="true" />
+            {VISIT_STATUS_LABELS[v.status]}
+          </span>
+          <div>
+            <ConfirmationText visit={v} />
+          </div>
+        </div>
+      ),
+    },
+  ];
 
   return (
-    <section className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm space-y-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="w-40">
-          <CustomSelect value={status} onChange={(v) => setStatus(String(v))} options={[{ value: "", label: "Open visits" }, ...VisitStatusEnum.options.map((s) => ({ value: s, label: VISIT_STATUS_LABELS[s] }))]} />
-        </div>
-        <div className="w-44">
-          <CustomSelect value={kind} onChange={(v) => setKind(String(v))} options={[{ value: "", label: "All kinds" }, ...VisitKindEnum.options.map((k) => ({ value: k, label: VISIT_KIND_META[k].label }))]} />
-        </div>
-        {!status && (
-          <label className="inline-flex items-center gap-1.5 text-xs text-slate-700">
-            <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> Include accepted and cancelled
-          </label>
-        )}
-        {canPlan && (
-          <div className="ml-auto flex flex-wrap gap-2">
-            <button type="button" className={`${secondaryButton} inline-flex items-center gap-1`} disabled={generate.isPending} onClick={() => generate.mutate({})}>
-              <Sparkles className="w-3.5 h-3.5" /> Generate from plan
-            </button>
-            <button type="button" className={`${primaryButton} inline-flex items-center gap-1`} onClick={() => setCreating(true)}>
-              <CalendarPlus className="w-3.5 h-3.5" /> New visit
-            </button>
-          </div>
-        )}
-      </div>
-
+    <div className="space-y-3">
       {q.data && <WarningsList warnings={q.data.warnings} />}
 
-      {canPlan && proposed.length > 0 && (
+      {selectable && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-700">
           <span>
             {proposed.length} proposed visit(s) not yet sent to officers{checked.length ? ` · ${checked.length} selected` : ""}.
@@ -138,69 +219,69 @@ function PlanTab({ projectId, selectedId, onSelect }: { projectId: string; selec
         </div>
       )}
 
-      {q.isLoading ? (
-        <Loader />
-      ) : visits.length === 0 ? (
-        <p className="text-xs text-slate-500 py-6 text-center">No visits match.</p>
-      ) : (
-        <ul className="divide-y divide-slate-100">
-          {visits.map((v) => (
-            <VisitRow
-              key={v.id}
-              visit={v}
-              selected={v.id === selectedId}
-              onSelect={() => onSelect(v.id)}
-              checkable={canPlan && v.status === "PROPOSED"}
-              checked={checked.includes(v.id)}
-              onCheck={(on) => setChecked((c) => (on ? [...c, v.id] : c.filter((x) => x !== v.id)))}
-            />
-          ))}
-        </ul>
-      )}
-      {creating && <CreateVisitDialog projectId={projectId} onClose={() => setCreating(false)} />}
-    </section>
-  );
-}
+      {q.isError && <p className="text-xs text-rose-700">The visits could not be loaded.</p>}
 
-function VisitRow({
-  visit: v,
-  selected,
-  onSelect,
-  checkable,
-  checked,
-  onCheck,
-}: {
-  visit: VisitDto;
-  selected: boolean;
-  onSelect: () => void;
-  checkable: boolean;
-  checked: boolean;
-  onCheck: (on: boolean) => void;
-}) {
-  return (
-    <li className={`flex items-start gap-2 px-2 py-3 rounded-lg hover:bg-slate-50 ${selected ? "bg-brand-primary/5" : ""}`}>
-      {checkable && <input type="checkbox" className="mt-1" checked={checked} onChange={(e) => onCheck(e.target.checked)} aria-label="Select to publish" />}
-      <button type="button" onClick={onSelect} className="flex-1 text-left">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs font-bold text-slate-900">
-            {v.plannedDate} · {visitKindLabel(v.visitKind)}
-          </span>
-          <span className="flex items-center gap-2">
-            <ConfirmationText visit={v} />
-            <VisitStatusChip status={v.status} />
-          </span>
-        </div>
-        <p className="mt-0.5 text-[11px] text-slate-500">
-          {officersText(v)}
-          {v.sprint ? ` · ${v.sprint.name}` : ""}
-          {v.facilityCount ? ` · ${v.facilityCount} facilit${v.facilityCount === 1 ? "y" : "ies"}` : ""}
-          {v.recheckCount ? ` · ${v.recheckCount} re-check(s)` : ""}
-          {v.pendingProposal ? ` · proposed ${v.pendingProposal.toDate}` : ""}
-          {v.isLate ? " · late" : ""}
-          {v.origin === "UNSCHEDULED" ? " · unscheduled" : ""}
-        </p>
-      </button>
-    </li>
+      <StandardTable<VisitDto>
+        title="Visits"
+        subtitle={q.data ? `${visits.length} visit${visits.length === 1 ? "" : "s"}` : undefined}
+        headerActions={
+          canPlan ? (
+            <>
+              <button
+                type="button"
+                disabled={generate.isPending}
+                onClick={() => generate.mutate({})}
+                className="inline-flex items-center gap-1 rounded-lg border border-white/30 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10 disabled:opacity-50"
+              >
+                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" /> Generate from plan
+              </button>
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-navy hover:bg-slate-100"
+              >
+                <CalendarPlus className="w-3.5 h-3.5" aria-hidden="true" /> New visit
+              </button>
+            </>
+          ) : undefined
+        }
+        filters={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="w-40">
+              <CustomSelect
+                value={status}
+                onChange={(v) => setStatus(String(v))}
+                options={[{ value: "", label: "Open visits" }, ...VisitStatusEnum.options.map((st) => ({ value: st, label: VISIT_STATUS_LABELS[st] }))]}
+              />
+            </div>
+            <div className="w-44">
+              <CustomSelect
+                value={kind}
+                onChange={(v) => setKind(String(v))}
+                options={[{ value: "", label: "All kinds" }, ...VisitKindEnum.options.map((k) => ({ value: k, label: VISIT_KIND_META[k].label }))]}
+              />
+            </div>
+            {!status && (
+              <label className="inline-flex items-center gap-1.5 text-xs text-slate-700">
+                <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} /> Include accepted and cancelled
+              </label>
+            )}
+          </div>
+        }
+        columns={columns}
+        data={visits}
+        keyExtractor={(v) => v.id}
+        onRowClick={(v) => onSelect(v.id)}
+        selectedId={selectedId}
+        loading={q.isLoading}
+        minWidth="min-w-[620px]"
+        emptyState={{
+          title: status || kind ? "No visits match" : "No visits yet",
+          description: status || kind ? "Choose another status or kind." : canPlan ? "Generate the visits from the plan, or add one with New visit." : "Visits appear here once they are planned.",
+        }}
+      />
+      {creating && <CreateVisitDialog projectId={projectId} onClose={() => setCreating(false)} />}
+    </div>
   );
 }
 

@@ -20,8 +20,8 @@ Manual checks on the web portal and on a phone that automated tests cannot cover
 Seeded logins (password `Password123!`):
 - Main workspace, web: `admin@insite.ng`, `monitor@insite.ng`, `lender@insite.ng`, `lto@insite.ng`, `verifier@insite.ng`.
 - Main workspace, phone: `resident.cow@insite.ng` and `field.officer@insite.ng` (LKK-402), `resident.abj@insite.ng` (ABJ-108 only).
-- Programme tenant, web: `programme.admin@`, `flagship.admin@`, `north.admin@`, `south.admin@`, `programme.monitor@`, `programme.funder@`, `me.officer@`, `legal.officer@`, `south.me@` (all `insite.ng`).
-- Programme tenant, phone: `resident.supervisor@insite.ng` (visit officer; see section 4).
+- UBEC tenant, web (UBEC roster): `admin@ubec.test` (UBEC Administrator; also acts for Legal, the Executive Secretary, Finance and Audit), `kano.admin@ubec.test` and `lagos.admin@ubec.test` (SUBEB Administrators), `me.officer@ubec.test` (UBEC M&E Officer); also seeded, not in the quick login: `lagos.me@ubec.test` (SUBEB M&E Officer), `independent.me@ubec.test` (Independent M&E).
+- UBEC tenant, phone: `resident.supervisor@ubec.test` (Resident Supervisor, mobile only; visit officer; see section 4), and the three M&E accounts `me.officer@`, `lagos.me@`, `independent.me@ubec.test` (web and phone; one seeded visit each, section 4).
 
 There are no contractor logins (redesign R1d).
 
@@ -65,12 +65,16 @@ Every check written for the old app (WBS inbox and chat, daily reports, end-of-d
 
 No device run has been done since Phase 5. Run **every check on one Android and one iOS device** against a fresh seed (S-01), and report the platform with a failure.
 
-Main account: `resident.supervisor@insite.ng`. It is assigned to PRG-102, PRG-104, PRG-105, PRG-211 and PRG-221 (and archived PRG-242, which the phone does not list). Its seeded visits: PRG-102 the first mobilisation check (published); PRG-105 a routine visit on the next working day, three published visits (one with a pending date proposal, one declined) and the proposed plan; PRG-211 three accepted past visits; PRG-221 a missed quarterly M&E visit. Web counterpart: `programme.monitor@` (Visit planner and Visits & reports).
+Main account: `resident.supervisor@ubec.test`. It is assigned to PRG-102, PRG-104, PRG-105, PRG-211 and PRG-221 (and archived PRG-242, which the phone does not list). Its seeded visits: PRG-102 the first mobilisation check (published); PRG-105 a routine visit on the next working day, three published visits (one with a pending date proposal, one declined) and the proposed plan; PRG-211 three accepted past visits; PRG-221 a missed quarterly M&E visit. Web counterpart: `me.officer@ubec.test` (Visit planner and Visits & reports).
 
-Photos must be taken inside the project's site boundary to fill a slot. Unless you test at a seeded site, move PRG-105's pin to where you are first (as `programme.admin@`: PRG-105 → More ▸ Settings → Project → Location), then pull down on Home.
+The three M&E roles are provisioned too (surface Both: web and phone with the same account). Each has one seeded upcoming visit to run the same checks with: `me.officer@ubec.test` a routine visit on PRG-105 (in two working days; sees her assigned projects PRG-102, PRG-103, PRG-104, PRG-105, PRG-211, PRG-221), `lagos.me@ubec.test` a mobilisation check on PRG-221 (in two working days; sees her assigned live projects PRG-221 and PRG-241), `independent.me@ubec.test` an ad hoc visit on PRG-105 picking one facility (in four working days; sees its assigned projects PRG-102, PRG-105, PRG-211).
+
+- [ ] **R5-M-UBEC-01** Sign in on the phone as each of `me.officer@ubec.test`, `lagos.me@ubec.test` and `independent.me@ubec.test`. Expected: Home lists the projects that account can see and its seeded visit on the calendar; the visit opens, checks in and submits like the Resident Supervisor's; the same account still signs in on the web.
+
+Photos must be taken inside the project's site boundary to fill a slot. Unless you test at a seeded site, move PRG-105's pin to where you are first (as `admin@ubec.test`: PRG-105 → More ▸ Settings → Project → Location), then pull down on Home.
 
 ### 4.1 Sign-in and Home
-- [ ] **R5-M-01** Sign in as `resident.supervisor@`. Expected: Home opens directly (no project picker); My projects shows PRG-102, PRG-104, PRG-105, PRG-211 and PRG-221, each card with code, name, stage, sprint ("Sprint 3 of 3" on PRG-105), next visit and open findings; PRG-102 shows its mobilisation day count; PRG-242 (archived) is not listed.
+- [ ] **R5-M-01** Sign in as `resident.supervisor@ubec.test`. Expected: Home opens directly (no project picker); My projects shows PRG-102, PRG-104, PRG-105, PRG-211 and PRG-221, each card with code, name, stage, sprint ("Sprint 3 of 3" on PRG-105), next visit and open findings; PRG-102 shows its mobilisation deadline as on the web ("5 days left, due Sun 29 Nov"; "Due today"; "N days overdue"); PRG-242 (archived) is not listed. Visits show straight after sign-in, without pulling down (UBEC fix 2026-11-24; passes on the emulator, `mobile/.maestro/ubec_field_smoke.yaml`).
 - [ ] **R5-M-02** Forced password change: sign in with an account that must change its password. Expected: the change-password screen comes first, then Home.
 - [ ] **R5-M-03** Single-project home: sign in as `resident.abj@` (ABJ-108 only). Expected: Home shows that project's card in full (current sprint and deliverables, units in the sprint, open findings, next visit, Site log and Defects shortcuts) instead of a list; the calendar and "+ Unscheduled visit" are still there.
 - [ ] **R5-M-04** Calendar: switch week ⇄ month; swipe several months forward and back. Expected: each swipe lands on the next or previous month (no skipped, blank or doubled months, no jump back to today); dots differ by shape as well as colour (planned, overdue, done) with a legend in words; tapping a day lists its visits.
@@ -110,7 +114,7 @@ Photos must be taken inside the project's site boundary to fill a slot. Unless y
 
 ### 4.7 Defects, incidents, notifications
 - [ ] **R5-M-28** Defects (a role with `retention:manage_defects`, on a project past construction or with open defects; assign the account to PRG-103 on the web if needed): close a defect with photos offline, then online; reopen one. Expected: the web defect board follows.
-- [ ] **R5-M-29** Project → Report an incident. Expected: the incident reaches the web.
+- [ ] **R5-M-29** ~~Project → Report an incident.~~ Not ready: the shortcut is hidden (2026-11-24) because the web portal has no incident screen and the server alerts nobody. Re-enable in `ProjectScreen.tsx` once the portal reads incidents.
 - [ ] **R5-M-30** Push with the app in the background: publish a visit to the officer on the web, and let a reminder fire for an unconfirmed visit. Expected: a push arrives; tapping it opens that visit.
 - [ ] **R5-M-31** Notification centre across projects: generate notifications on two projects. Expected: one list merging every project; a project that fails to load shows a warning instead of hiding the rest; a visit notification opens the visit, a defect one opens Defects; old notification types show as "Update".
 
@@ -122,6 +126,8 @@ Photos must be taken inside the project's site boundary to fill a slot. Unless y
 
 ### 4.9 Upgrade and native build
 - [ ] **R5-M-36** Upgrade (SQLite v9 → v10): install a pre-R5 build, queue items of the old kinds offline (a daily report, a chat message, a site inspection, plus photos), then install the R5 build over it. Expected: the app opens without a crash; the old-kind rows are gone from the Outbox; photos are kept; the visit app works.
+- [ ] **R5-M-38** UBEC branding after a native rebuild (`app.json` and `APPLICATION_NAME` reach the launcher only through a new build): the launcher label and the notification permission prompt say "UBEC Project Monitoring", Android notifications use UBEC green `#00715D`. JS-side branding (green headers, UBEC landing photo and logo, dot-and-text statuses) is already verified on the emulator.
+- [ ] **R5-M-39** Navigation (owner, 2026-11-24): the Profile screen has no project list; Project, Visit and Site log screens have a Home button that returns to Home (calendar and every project). Passes on the emulator; repeat on a device.
 - [ ] **R5-M-37** Permission texts after a native rebuild (the texts are in `app.json`, so they need a new EAS build, not only a JS reload): on first use, the camera, microphone and location prompts name visits, defects and the site log. Check on both platforms.
 
 ---
@@ -146,7 +152,7 @@ Not to be run. Listed so earlier reports that cite these IDs can be traced.
 | P14-M-01 to P14-M-06 | Reporting streams, Phase 14 inspections and findings on the phone | Streams deleted (R4f); inspection screens deleted (R5e), server side in R5f | R5-M-15 to R5-M-20, R5-M-17 |
 | P13-M-01 to P13-M-03 | Contractor check-in completing mobilisation; join codes after termination | Telemetry check-in deleted (R1e); join codes deleted (R1d); mobilisation check visits complete the milestone (R4) | R5-M-12, R5-M-20 (on a PRG-102 mobilisation check) |
 | P12-M-01 to P12-M-04 | Registration on the field assurance step | Registration and identity assurance deleted (R1d) | – |
-| P16-M-01 | `resident.supervisor@` project list | Superseded | R5-M-01 |
+| P16-M-01 | `resident.supervisor@ubec.test` project list | Superseded | R5-M-01 |
 | P16-M-02, P16-M-03 | Resident supervision report; Phase 14 inspection flow and its KPI | Workday reports and inspections deleted | R5-M-20, then Programme KPIs "Visits conducted vs planned" |
 
 ---

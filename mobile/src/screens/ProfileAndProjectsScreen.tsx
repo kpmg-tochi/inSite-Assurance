@@ -1,57 +1,31 @@
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  RefreshControl,
-  Alert,
-} from "react-native";
-import Toast from "react-native-toast-message";
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { FieldProjectContext } from "@insite/shared";
-import { EmptyStateCard, GradientHeaderLayout } from "../components/common";
+import { GradientHeaderLayout } from "../components/common";
 import { BackButton, IconButton } from "../components/inputs/Buttons";
 import Avatar from "../components/common/Avatar";
-import Pill from "../components/common/Pill";
 import { useProfile } from "../context/ProfileContext";
 import type { RootStackParamList } from "../navigation/types";
-import { borderRadius, defaultColors } from "../styles/commonStyles";
-import { sessionEndedFor } from "../config/sessionState";
+import { defaultColors } from "../styles/commonStyles";
 import { outboxCountsByProject } from "../storage/outbox/outboxStore";
 import { subscribeToSyncStatus } from "../storage/outbox/outboxProcessor";
-import { requestPushPermissionInContext } from "../services/pushNotificationService";
-import { formatMobileErrorMessage } from "../utils/errorFormatter";
 
 type Counts = Map<string, { pending: number; dead: number }>;
 
 /**
- * The Profile modal (redesign R5b, D-R5.2; was the project picker): the account, its projects with
- * the items each still has to send, settings and sign out. Tapping a project opens its page; queued
- * work always keeps its own project.
+ * The Profile modal (redesign R5b, D-R5.2): the account, what is still waiting to send, settings and
+ * sign out. Projects are chosen on Home only (owner, 2026-11-24): every project screen has a Home
+ * button, so the list here was a second, redundant project picker.
  */
 export const ProfileAndProjectsScreen = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
-  const {
-    account,
-    projects,
-    activeContext,
-    activeProjectId,
-    displayName,
-    phoneNumber,
-    refreshProjects,
-    signOut,
-    pushIdentities,
-  } = useProfile();
+  const { account, activeContext, displayName, phoneNumber, signOut } = useProfile();
 
   const [counts, setCounts] = useState<Counts>(new Map());
-  const [refreshing, setRefreshing] = useState(false);
-  const [switchingId, setSwitchingId] = useState<string | null>(null);
 
   const loadCounts = useCallback(() => {
     outboxCountsByProject().then(setCounts).catch(() => undefined);
@@ -60,34 +34,6 @@ export const ProfileAndProjectsScreen = () => {
   useFocusEffect(loadCounts);
   // Counts follow the outbox as it sends.
   useEffect(() => subscribeToSyncStatus(() => loadCounts()), [loadCounts]);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await refreshProjects();
-    } catch (err) {
-      Toast.show({
-        type: "error",
-        props: { title: "Could not refresh", message: formatMobileErrorMessage(err) },
-      });
-    } finally {
-      loadCounts();
-      setRefreshing(false);
-    }
-  };
-
-  const openProject = async (project: FieldProjectContext) => {
-    if (switchingId) return;
-    setSwitchingId(project.projectId);
-    try {
-      // Asked here, in context, never at launch.
-      void requestPushPermissionInContext(pushIdentities);
-      if (navigation.canGoBack()) navigation.goBack();
-      navigation.navigate("Project", { projectId: project.projectId });
-    } finally {
-      setSwitchingId(null);
-    }
-  };
 
   const totalPending = [...counts.values()].reduce((n, c) => n + c.pending + c.dead, 0);
 
@@ -109,46 +55,7 @@ export const ProfileAndProjectsScreen = () => {
   };
 
   const canGoBack = navigation.canGoBack();
-  const roleLine = activeContext
-    ? `${activeContext.roleName} · weight ${activeContext.assuranceWeight.toFixed(2)}`
-    : account
-      ? `${account.profile.mobileRole.name} · weight ${account.profile.mobileRole.assuranceWeight.toFixed(2)}`
-      : "";
-
-  const renderProject = (project: FieldProjectContext) => {
-    const isActive = project.projectId === activeProjectId;
-    const c = counts.get(project.projectId);
-    const unsent = (c?.pending ?? 0) + (c?.dead ?? 0);
-    const ended = sessionEndedFor(project.projectId);
-    return (
-      <TouchableOpacity
-        key={project.projectId}
-        style={[styles.projectCard, isActive && styles.projectCardActive, switchingId === project.projectId && { opacity: 0.7 }]}
-        onPress={() => void openProject(project)}
-        disabled={Boolean(switchingId)}
-        activeOpacity={0.75}
-        accessibilityRole="button"
-        accessibilityLabel={`Open ${project.projectName}`}
-      >
-        <View style={styles.projectTop}>
-          <Text style={styles.projectCode}>{project.projectCodePrefix}</Text>
-          <Pill
-            variant={ended ? "negative" : isActive ? "positive" : "gray"}
-            text={ended ? "Access ended" : isActive ? "Last opened" : "Open"}
-          />
-        </View>
-        <Text style={styles.projectName}>{project.projectName}</Text>
-        <Text style={styles.projectMeta}>
-          {project.roleName}
-        </Text>
-        {unsent > 0 && (
-          <Text style={[styles.projectMeta, c?.dead ? styles.deadText : styles.pendingText]}>
-            {unsent} item(s) not sent yet{c?.dead ? ` · ${c.dead} could not be sent` : ""}
-          </Text>
-        )}
-      </TouchableOpacity>
-    );
-  };
+  const roleLine = activeContext?.roleName ?? account?.profile.mobileRole.name ?? "";
 
   return (
     <>
@@ -166,7 +73,7 @@ export const ProfileAndProjectsScreen = () => {
 
         <View style={styles.user}>
           <Text style={styles.userName}>{displayName}</Text>
-          {/* The role and weight come from the server, never from the device. */}
+          {/* The role comes from the server, never from the device. */}
           {roleLine ? <Text style={styles.userRole}>{roleLine}</Text> : null}
           {account ? <Text style={styles.userPhone}>{account.profile.email}</Text> : null}
           {phoneNumber ? <Text style={styles.userPhone}>{phoneNumber}</Text> : null}
@@ -176,7 +83,6 @@ export const ProfileAndProjectsScreen = () => {
           <ScrollView
             contentContainerStyle={{ ...styles.body, paddingBottom: insets.bottom + 16 }}
             showsVerticalScrollIndicator={false}
-            refreshControl={account ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} /> : undefined}
           >
             {totalPending > 0 && (
               <Text style={styles.pendingBanner}>
@@ -184,24 +90,9 @@ export const ProfileAndProjectsScreen = () => {
               </Text>
             )}
 
-            {account && (
-              <View style={styles.section}>
-                <View>
-                  <Text style={styles.sectionTitle}>Your projects</Text>
-                  <Text style={styles.sectionSubtitle}>Assigned to {account.profile.email}. Tap one to open it; pull down to refresh.</Text>
-                </View>
-                {projects.length === 0 ? (
-                  <EmptyStateCard
-                    title="No projects assigned"
-                    description="Ask your administrator to assign you to a project, then pull down to refresh."
-                    actionLabel="Refresh"
-                    onAction={onRefresh}
-                  />
-                ) : (
-                  projects.map(renderProject)
-                )}
-              </View>
-            )}
+            {account ? (
+              <Text style={styles.note}>Your projects and visits are on Home. Pull down there to refresh them.</Text>
+            ) : null}
 
             {account ? (
               <TouchableOpacity style={styles.signOutButton} onPress={onSignOut} activeOpacity={0.8}>
@@ -244,16 +135,6 @@ const styles = StyleSheet.create({
   userRole: { fontSize: 12, color: defaultColors.primaryText, marginTop: 2 },
   userPhone: { fontSize: 11, color: defaultColors.secondaryText, marginTop: 2 },
   body: { paddingTop: 16, gap: 16, backgroundColor: "#fff" },
-  section: {
-    padding: 12,
-    borderRadius: borderRadius.medium,
-    backgroundColor: defaultColors.background,
-    borderWidth: 1,
-    borderColor: defaultColors.border,
-    gap: 10,
-  },
-  sectionTitle: { fontSize: 14, fontWeight: "800", color: "#0F172A" },
-  sectionSubtitle: { fontSize: 11, color: "#64748B" },
   pendingBanner: {
     fontSize: 12,
     color: "#92400E",
@@ -261,21 +142,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 10,
   },
-  projectCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    gap: 4,
-  },
-  projectCardActive: { borderColor: "#00338D", borderWidth: 1.5 },
-  projectTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  projectCode: { fontSize: 13, fontWeight: "800", color: "#0C233C" },
-  projectName: { fontSize: 12, fontWeight: "700", color: "#334155" },
-  projectMeta: { fontSize: 11, color: "#64748B" },
-  pendingText: { color: "#B45309", fontWeight: "700" },
-  deadText: { color: "#DC2626", fontWeight: "700" },
+  note: { fontSize: 12, color: defaultColors.secondaryText, textAlign: "center" },
   joinNewButton: {
     paddingVertical: 12,
     borderRadius: 12,
@@ -285,7 +152,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#FFFFFF",
   },
-  joinNewButtonText: { fontSize: 12, fontWeight: "700", color: "#00338D" },
+  joinNewButtonText: { fontSize: 12, fontWeight: "700", color: "#00715D" },
   signOutButton: {
     paddingVertical: 12,
     borderRadius: 12,

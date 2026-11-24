@@ -95,6 +95,11 @@ export interface MobileRequestOptions extends RequestInit {
   auth?: false | string;
   /** Scope to end if `auth` is an explicit token and the server refuses it. */
   authScope?: SessionScope;
+  /**
+   * `false`: a refused token does not end the session on this phone (sign-out: the person is
+   * leaving anyway, so "Your session has ended" must not appear over the landing screen).
+   */
+  reportSessionEnd?: boolean;
 }
 
 /** Maps a refusal to the session scope it ends, or null when it does not end a session. */
@@ -132,7 +137,7 @@ export async function mobileRequest<T>(
   path: string,
   options: MobileRequestOptions = {}
 ): Promise<T> {
-  const { auth, authScope, ...init } = options;
+  const { auth, authScope, reportSessionEnd = true, ...init } = options;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(init.headers as Record<string, string>),
@@ -173,7 +178,7 @@ export async function mobileRequest<T>(
   if (!response.ok || !payload?.success) {
     const code: string | undefined = payload?.error?.code;
     const message = formatMobileErrorMessage(payload?.error?.message, response.status);
-    const endedScope = token ? endedScopeFor(response.status, code, requestScope, targetProjectId) : null;
+    const endedScope = token && reportSessionEnd ? endedScopeFor(response.status, code, requestScope, targetProjectId) : null;
     if (endedScope) {
       markSessionEnded(endedScope.scope, endedScope.reason, payload?.error?.message ?? message);
       throw new MobileApiError(message, 'auth', response.status, code);

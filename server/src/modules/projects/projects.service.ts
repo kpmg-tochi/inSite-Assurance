@@ -16,6 +16,8 @@ import {
   verifyPointAgainstGeofence,
   calendarDaysUntil,
   zonedCalendarDate,
+  addDays,
+  isOngoingProject,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -369,10 +371,43 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
     include: {
       ...DELIVERY_MODEL_INCLUDE,
       evidenceLogs: { orderBy: { capturedAtDevice: 'desc' }, take: 1, select: { capturedAtDevice: true } },
+      // One contractor per project (decision T); the oldest row if a terminated one is kept.
+      contractors: { orderBy: { createdAt: 'asc' }, take: 1, select: { organization: { select: { name: true } } } },
     },
   });
 
-  const stages = await loadProjectStageSummaries(projects.map((p) => p.id));
+  const projectIds = projects.map((p) => p.id);
+  const [stages, findingGroups, openVisits] = await Promise.all([
+    loadProjectStageSummaries(projectIds),
+    projectIds.length
+      ? prisma.inspectionFinding.groupBy({
+          by: ['projectId'],
+          where: { projectId: { in: projectIds }, status: 'OPEN' },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
+    projectIds.length
+      ? prisma.visit.findMany({
+          where: { projectId: { in: projectIds }, status: { in: ['PLANNED', 'IN_PROGRESS', 'MISSED'] } },
+          select: { projectId: true, status: true, plannedDate: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const openFindingsByProject = new Map(findingGroups.map((g) => [g.projectId, g._count._all]));
+  const nowDate = new Date();
+  const todayByProject = new Map(projects.map((p) => [p.id, zonedCalendarDate(nowDate, p.timezone)]));
+  let upcomingVisitCount = 0;
+  let overdueVisitCount = 0;
+  for (const v of openVisits) {
+    if (v.status === 'MISSED') {
+      overdueVisitCount += 1;
+      continue;
+    }
+    const today = todayByProject.get(v.projectId)!;
+    if (v.plannedDate < today) overdueVisitCount += 1;
+    else if (v.plannedDate <= addDays(today, 7)) upcomingVisitCount += 1;
+  }
+
   const now = Date.now();
   const kpis: PortfolioOverviewKpis = {
     projectCount: projects.length,
@@ -384,6 +419,10 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
     quietSiteCount: 0,
     closeoutCount: 0,
     retentionHeldNgn: 0,
+    ongoingCount: 0,
+    openFindingsCount: 0,
+    upcomingVisitCount,
+    overdueVisitCount,
   };
   let weightedProgress = 0;
 
@@ -407,6 +446,9 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
     }
     if (p.constructionPhase === 'HANDOVER_IN_PROGRESS' || p.constructionPhase === 'RETENTION_PERIOD') kpis.closeoutCount += 1;
     kpis.retentionHeldNgn += Number(p.retentionHeldNgn);
+    if (isOngoingProject(p)) kpis.ongoingCount += 1;
+    const openFindingsCount = openFindingsByProject.get(p.id) ?? 0;
+    kpis.openFindingsCount += openFindingsCount;
 
     return {
       id: p.id,
@@ -424,6 +466,8 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
       geofence,
       point: geofence ? geofenceCentroid(geofence) : null,
       stage: stages.get(p.id) ?? null,
+      contractorName: p.contractors[0]?.organization.name ?? null,
+      openFindingsCount,
       ...serializeDeliveryModel(p),
     };
   });

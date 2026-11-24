@@ -52,6 +52,7 @@ export const DEFAULT_DOCUMENT_TYPES: DefaultDocumentTypeDefinition[] = [
   { code: 'COMPLETION_CERTIFICATE', name: 'Certificate of completion', description: 'Certificate of completion of the works.', visibleToContractors: true, requiresSignOff: true },
   { code: 'HANDOVER_CERTIFICATE', name: 'Handover certificate', description: 'Certificate of handover to the beneficiary.', visibleToContractors: true, requiresSignOff: true },
   { code: 'FINAL_EVALUATION_REPORT', name: 'Final evaluation report', description: 'Final evaluation of the project.', visibleToContractors: false, requiresSignOff: false },
+  { code: 'CLOSEOUT_REPORT', name: 'Closeout report', description: 'The closeout report: final evaluation summary, lessons learned and beneficiary feedback.', visibleToContractors: false, requiresSignOff: false },
   { code: 'CLOSURE_FILE', name: 'Closure file', description: 'The project closure file.', visibleToContractors: false, requiresSignOff: false },
   { code: 'OTHER', name: 'Other', description: 'Any other project document.', visibleToContractors: false, requiresSignOff: false },
 ];

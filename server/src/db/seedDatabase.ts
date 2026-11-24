@@ -819,7 +819,7 @@ async function runSeed(): Promise<void> {
     monitorUserId: monitorUser.id,
   });
 
-  // Phase 11: a second tenant run as a programme (delivery models, organisation hierarchy, terminology).
+  // Phase 11: a second tenant run as a programme, branded UBEC (Direct Intervention and Matching Grants, organisation hierarchy, terminology).
   await seedPhase11({ passwordHash: defaultPasswordHash });
   // Phase 12 (R1d: registration removed): PRG-102 bills and the programme types' retention defaults.
   await seedPhase12({ passwordHash: defaultPasswordHash });
@@ -853,7 +853,7 @@ async function runSeed(): Promise<void> {
     "   • Lender Tech:       lto@insite.ng        / Password123! (funder officer; records payments)",
   );
   console.log(
-    "   • Programme tenant:  programme.admin@insite.ng (tenant admin); flagship.admin@, north.admin@, south.admin@ insite.ng (Organisation Administrators) / Password123!",
+    "   • UBEC tenant:       admin@ubec.test (UBEC Administrator); kano.admin@, lagos.admin@ (SUBEB Administrators); me.officer@ (UBEC M&E) ubec.test / Password123! (roster above)",
   );
   console.log(
     "   • Field accounts (mobile sign-in): resident.cow@, field.officer@, resident.abj@ insite.ng / Password123!",

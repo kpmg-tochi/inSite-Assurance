@@ -15,6 +15,7 @@ import {
   type MobileBaselinePack,
 } from '@insite/shared';
 import type { VisitView } from './visitCalendar';
+import { formatDay } from './visitText';
 
 export type HomeMode = { mode: 'SINGLE'; projectId: string } | { mode: 'LIST' };
 
@@ -26,22 +27,33 @@ export function homeMode(projects: Array<{ projectId: string; projectStatus: str
 
 export interface MobilisationProgress {
   label: string;
-  /** "Day 12 of 21"; null without both dates. */
+  /**
+   * Worded as the web portal's deadline text (`daysLeftLabel`): "5 days left, due Sun 29 Nov",
+   * "Due today", "3 days overdue". Null without both dates.
+   */
   dayText: string | null;
+  /** Day N of the window since the kick-off (kick-off day = 1). */
   dayNumber: number | null;
   totalDays: number | null;
   deadline: string | null;
   overdue: boolean;
 }
 
-/** Day N of M from the kick-off to the contractor-on-site deadline, for today (project zone). */
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** Time left to the contractor-on-site deadline, for today (project zone). */
 export function mobilisationProgress(m: MobileBaselinePack['mobilisation'], today: string): MobilisationProgress | null {
   if (!m) return null;
   const overdue = Boolean(m.deadline && today > m.deadline);
   if (!m.startedOn || !m.deadline) return { label: m.label, dayText: null, dayNumber: null, totalDays: null, deadline: m.deadline, overdue };
   const total = daysBetween(m.startedOn, m.deadline) + 1;
   const day = daysBetween(m.startedOn, today) + 1;
-  const dayText = overdue ? `${daysBetween(m.deadline, today)} day${daysBetween(m.deadline, today) === 1 ? '' : 's'} overdue` : `Day ${Math.max(1, day)} of ${total}`;
+  const left = daysBetween(today, m.deadline);
+  const dayText = overdue
+    ? `${plural(-left, 'day')} overdue`
+    : left === 0
+      ? 'Due today'
+      : `${plural(left, 'day')} left, due ${formatDay(m.deadline)}`;
   return { label: m.label, dayText, dayNumber: Math.max(1, day), totalDays: total, deadline: m.deadline, overdue };
 }
 
@@ -88,7 +100,7 @@ export function projectCardModel(
   const units = pack?.facilityUnits ?? [];
   let sprintText: string | null = null;
   if (current) sprintText = `Sprint ${current.number} of ${sprints.length}`;
-  else if (next) sprintText = `Sprint 1 starts ${next.startDate}`;
+  else if (next) sprintText = `Sprint ${next.number} starts ${formatDay(next.startDate)}`;
   const mine = views.filter((v) => v.projectId === base.projectId);
   const upcoming = mine
     .filter((v) => !v.submitted && (v.status === 'PLANNED' || v.status === 'IN_PROGRESS') && v.date >= today)

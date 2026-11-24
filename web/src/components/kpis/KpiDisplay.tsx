@@ -29,6 +29,18 @@ export function KpiStatusChip({ status, label }: { status: KpiStatus; label?: st
   );
 }
 
+/** The status as its icon only, with the label for screen readers and as a tooltip. */
+export function KpiStatusIcon({ status, className = "w-4 h-4" }: { status: KpiStatus; className?: string }) {
+  const meta = KPI_STATUS_META[status];
+  const Icon = meta.icon;
+  return (
+    <span title={meta.label} className="inline-flex shrink-0">
+      <Icon className={className} style={{ color: meta.color }} aria-hidden="true" />
+      <span className="sr-only">{meta.label}</span>
+    </span>
+  );
+}
+
 /** "At least 90%" / "At most 14 days" / "No target". */
 export function targetText(def: Pick<KpiDefinition, "unit" | "direction">, target: number | null, varies = false): string {
   if (varies) return "Targets vary by project type";

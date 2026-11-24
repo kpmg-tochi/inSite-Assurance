@@ -8,10 +8,10 @@ const CALLOUT_THEMES: Record<
   { bg: string; border: string; titleColor: string; textColor: string }
 > = {
   info: {
-    bg: "#EFF6FF",
-    border: "#BFDBFE",
-    titleColor: "#00338D",
-    textColor: "#1E3A8A",
+    bg: "#E8F4F1",
+    border: "#B5DDD3",
+    titleColor: "#00715D",
+    textColor: "#005A4A",
   },
   neutral: {
     bg: "#F1F5F9",

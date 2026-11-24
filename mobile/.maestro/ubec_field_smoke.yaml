@@ -1,0 +1,73 @@
+# UBEC field app smoke test (dev build against the seeded dev API).
+# Run: maestro test mobile/.maestro/ubec_field_smoke.yaml   (emulator signed out or signed in, either works)
+# Checks: landing branding, sign-in, visits download without a manual refresh, project screen
+# (upcoming visits, Home button), profile without a project list, clean sign-out.
+appId: com.kpmg.insiteassurance.mobile
+name: UBEC field smoke
+env:
+  EMAIL: resident.supervisor@ubec.test
+  PASSWORD: Password123!
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "(?i)sign in|good (morning|afternoon|evening).*"
+    timeout: 60000
+
+# Signed in from an earlier run: sign out first.
+- runFlow:
+    when:
+      visible: "Good (morning|afternoon|evening).*"
+    commands:
+      - tapOn:
+          text: "^[A-Z]{2}$"
+      - scrollUntilVisible:
+          element:
+            text: "Sign out of .*"
+      - tapOn: "Sign out of .*"
+      - tapOn: "(?i)sign out"
+- extendedWaitUntil:
+    visible: "Every school project, from contract award to handover."
+    timeout: 15000
+- assertNotVisible: "Your session has ended"
+
+# Sign in
+- tapOn:
+    text: "Sign in"
+    index: 0
+- tapOn: "name@organisation.com"
+- inputText: ${EMAIL}
+- tapOn: "Your password"
+- inputText: ${PASSWORD}
+- hideKeyboard
+- tapOn:
+    text: "Sign in"
+    index: 1
+
+# Visits arrive without pulling down (sign-in syncs visits first).
+- extendedWaitUntil:
+    visible: "Routine · PRG-105"
+    timeout: 30000
+- assertVisible: "Your site visits · updated .*"
+
+# Project screen: upcoming visits and the Home button
+- scrollUntilVisible:
+    element:
+      text: "Kano Day Secondary School"
+      below:
+        text: "My projects"
+- tapOn:
+    text: "Kano Day Secondary School"
+    below:
+      text: "My projects"
+- assertVisible: "Upcoming visits"
+- assertNotVisible: "Report an incident"
+- tapOn: "Home: all projects"
+- assertVisible: "My projects"
+
+# Profile: no project list any more
+- tapOn:
+    text: "^[A-Z]{2}$"
+- assertNotVisible: "Your projects"
+- assertNotVisible: ".*weight.*"
+- assertVisible: "Your projects and visits are on Home.*"
+- back

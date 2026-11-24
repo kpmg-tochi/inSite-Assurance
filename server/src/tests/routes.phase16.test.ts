@@ -63,8 +63,8 @@ before(async () => {
   ids.central = types.find((t) => t.code === 'CENTRAL')!.id;
   ids.coFunded = types.find((t) => t.code === 'CO_FUNDED')!.id;
   const orgs = await prisma.organization.findMany({ where: { tenantId: tenant.id } });
-  ids.north = orgs.find((o) => o.name.endsWith('North'))!.id;
-  ids.south = orgs.find((o) => o.name.endsWith('South'))!.id;
+  ids.north = orgs.find((o) => o.name === 'Kano State Universal Basic Education Board (SUBEB)')!.id;
+  ids.south = orgs.find((o) => o.name === 'Lagos State Universal Basic Education Board (SUBEB)')!.id;
   ids.regionSouth = (await prisma.region.findFirstOrThrow({ where: { tenantId: tenant.id, code: 'S' } })).id;
   const project = (code: string) => prisma.project.findFirstOrThrow({ where: { tenantId: tenant.id, codePrefix: code } });
   ids.prg105 = (await project('PRG-105')).id;
@@ -105,7 +105,7 @@ describe('Phase 16: programme KPI dashboard', () => {
   });
 
   it('tracks every catalogue KPI on the seeded programme, with targets', async () => {
-    const d = await dashboard('programme.admin@insite.ng');
+    const d = await dashboard('admin@ubec.test');
     assert.deepEqual(d.period, period);
     assert.equal(d.projectCount, 8); // live and archived; drafts are left out
     assert.ok(!d.projects.some((p) => p.codePrefix === 'PRG-101' || p.codePrefix === 'PRG-201'));
@@ -127,7 +127,7 @@ describe('Phase 16: programme KPI dashboard', () => {
   });
 
   it('flags differing targets and breaks the KPI down per project type', async () => {
-    const d = await dashboard('programme.admin@insite.ng');
+    const d = await dashboard('admin@ubec.test');
     const mob = kpi(d, 'contractors_mobilised_on_time');
     assert.equal(mob.targetVaries, true);
     assert.equal(mob.target, null);
@@ -139,35 +139,35 @@ describe('Phase 16: programme KPI dashboard', () => {
   });
 
   it('filters by project type, region and owner', async () => {
-    const co = await dashboard('programme.admin@insite.ng', { projectTypeId: ids.coFunded });
+    const co = await dashboard('admin@ubec.test', { projectTypeId: ids.coFunded });
     assert.deepEqual(co.projects.map((p) => p.codePrefix).sort(), ['PRG-211', 'PRG-221', 'PRG-241', 'PRG-242']);
     assert.equal(kpi(co, 'contractors_mobilised_on_time').target, 85);
     assert.equal(kpi(co, 'contractors_mobilised_on_time').targetVaries, false);
 
-    const southRegion = await dashboard('programme.admin@insite.ng', { regionId: ids.regionSouth });
+    const southRegion = await dashboard('admin@ubec.test', { regionId: ids.regionSouth });
     assert.deepEqual(southRegion.projects.map((p) => p.codePrefix).sort(), ['PRG-104', 'PRG-221', 'PRG-241', 'PRG-242']);
-    const southOwned = await dashboard('programme.admin@insite.ng', { owningOrganizationId: ids.south });
+    const southOwned = await dashboard('admin@ubec.test', { owningOrganizationId: ids.south });
     assert.deepEqual(southOwned.projects.map((p) => p.codePrefix).sort(), ['PRG-221', 'PRG-241', 'PRG-242']);
   });
 
   it('follows project visibility: a subsidiary admin sees only its own projects', async () => {
-    const north = await dashboard('north.admin@insite.ng');
+    const north = await dashboard('kano.admin@ubec.test');
     assert.deepEqual(north.projects.map((p) => p.codePrefix), ['PRG-211']);
-    const south = await dashboard('south.admin@insite.ng');
+    const south = await dashboard('lagos.admin@ubec.test');
     assert.deepEqual(south.projects.map((p) => p.codePrefix).sort(), ['PRG-221', 'PRG-241', 'PRG-242']);
-    const flagship = await dashboard('flagship.admin@insite.ng');
-    assert.equal(flagship.projectCount, 8);
+    const ubec = await dashboard('admin@ubec.test');
+    assert.equal(ubec.projectCount, 8);
   });
 
   it('never reports an untracked KPI as 0: the project has no cell for it', async () => {
-    const d = await dashboard('programme.admin@insite.ng');
+    const d = await dashboard('admin@ubec.test');
     const prg211 = row(d, 'PRG-211');
     assert.equal('lessons_documented' in prg211.values, false); // not closed
     assert.ok('visits_conducted' in prg211.values);
   });
 
   it('applies a target saved on the project type at once, and hides KPIs the type hides', async () => {
-    const admin = await web('programme.admin@insite.ng');
+    const admin = await web('admin@ubec.test');
     const list = await request(app).get('/api/v1/project-types').set(admin);
     assert.equal(list.status, 200, JSON.stringify(list.body));
     const type = (list.body.data as import('@insite/shared').ProjectTypeDto[]).find((t) => t.id === ids.coFunded)!;
@@ -190,12 +190,12 @@ describe('Phase 16: programme KPI dashboard', () => {
     assert.equal(save.status, 200, JSON.stringify(save.body));
     assert.deepEqual(save.body.data.config.kpiTargets.contractors_mobilised_on_time, { target: 70, shown: true });
 
-    const co = await dashboard('programme.admin@insite.ng', { projectTypeId: ids.coFunded });
+    const co = await dashboard('admin@ubec.test', { projectTypeId: ids.coFunded });
     assert.equal(kpi(co, 'contractors_mobilised_on_time').target, 70);
     assert.equal(kpi(co, 'lessons_documented'), undefined); // hidden on every type in view
     assert.equal('lessons_documented' in row(co, 'PRG-242').values, false);
     // Still shown for Central (and so on the unfiltered page, from Central projects only).
-    const all = await dashboard('programme.admin@insite.ng');
+    const all = await dashboard('admin@ubec.test');
     assert.equal(kpi(all, 'lessons_documented').status, 'NOT_TRACKED'); // no closed Central project
   });
 
@@ -203,7 +203,7 @@ describe('Phase 16: programme KPI dashboard', () => {
     const res = await request(app)
       .get('/api/v1/kpis')
       .query({ from: today, to: addDays(today, -1) })
-      .set(await web('programme.admin@insite.ng'));
+      .set(await web('admin@ubec.test'));
     assert.equal(res.status, 400);
   });
 });
@@ -213,7 +213,7 @@ describe('Phase 16: project KPIs', () => {
     const res = await request(app)
       .get(`/api/v1/projects/${ids.prg105}/kpis`)
       .query(period)
-      .set(await web('programme.funder@insite.ng'));
+      .set(await web('me.officer@ubec.test'));
     assert.equal(res.status, 200, JSON.stringify(res.body));
     const byKey = new Map((res.body.data.kpis as Array<{ key: string; value: number | null; status: string }>).map((k) => [k.key, k]));
     const paid = await prisma.project.findUniqueOrThrow({ where: { id: ids.prg105 } });
@@ -225,7 +225,7 @@ describe('Phase 16: project KPIs', () => {
   });
 
   it('is guarded like the project (another organisation tree) and by the permission', async () => {
-    const north = await request(app).get(`/api/v1/projects/${ids.prg242}/kpis`).set(await web('north.admin@insite.ng'));
+    const north = await request(app).get(`/api/v1/projects/${ids.prg242}/kpis`).set(await web('kano.admin@ubec.test'));
     assert.equal(north.status, 403); // the project guard, as for every project route
     const assignedWithoutPermission = await request(app).get(`/api/v1/projects/${ids.prg105}/kpis`).set(await web(NO_KPIS));
     assert.equal(assignedWithoutPermission.status, 403);
@@ -250,7 +250,7 @@ describe('Phase 16: kpi-snapshot job', () => {
   });
 
   it('feeds monthly trends, including backfilled earlier months', async () => {
-    const d = await dashboard('programme.admin@insite.ng');
+    const d = await dashboard('admin@ubec.test');
     const kickoff = kpi(d, 'kickoff_notice_on_time');
     assert.ok(kickoff.trend.length >= 2, JSON.stringify(kickoff.trend));
     assert.ok(kickoff.trend.every((t, i, a) => i === 0 || a[i - 1].periodStart < t.periodStart));
@@ -273,7 +273,7 @@ describe('Phase 16: KPIs follow the tenant time zone', () => {
   it("defaults the period to the tenant's month, and says which zone", async () => {
     const { payloadFor } = await import('../db/seedPhase13');
     const { getKpiDashboard, getProjectKpis } = await import('../modules/kpis/kpis.service');
-    const admin = await payloadFor('programme.admin@insite.ng');
+    const admin = await payloadFor('admin@ubec.test');
     const lagos = await getKpiDashboard(admin, {}, instant);
     assert.deepEqual(lagos.period, { from: '2026-11-01', to: '2026-11-30' });
     assert.equal(lagos.timeZone, 'Africa/Lagos');

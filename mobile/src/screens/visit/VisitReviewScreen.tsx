@@ -135,7 +135,7 @@ export default function VisitReviewScreen({ route, navigation }: RootStackScreen
   };
 
   const header = (
-    <LinearGradient colors={['#6546FC', '#1E3A8A', '#1E1B4B']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
+    <LinearGradient colors={['#00715D', '#005A4A', '#122F2A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
       <TouchableOpacity
         onPress={() => void saver.flush().catch(() => undefined).then(() => navigation.goBack())}
         accessibilityRole="button"
@@ -332,13 +332,13 @@ export default function VisitReviewScreen({ route, navigation }: RootStackScreen
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: FORM_COLORS.page },
   header: { paddingHorizontal: 20, paddingBottom: 20 },
-  closeText: { fontSize: 13, color: '#C7D2FE', fontWeight: '700', marginBottom: 8, paddingVertical: 4 },
+  closeText: { fontSize: 13, color: '#B5DDD3', fontWeight: '700', marginBottom: 8, paddingVertical: 4 },
   title: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 },
-  subtitle: { fontSize: 12, color: '#E0E7FF', marginTop: 4 },
+  subtitle: { fontSize: 12, color: '#D7EEE8', marginTop: 4 },
   body: { padding: 16 },
   groupTitle: { fontSize: 13, fontWeight: '800', color: FORM_COLORS.brand, paddingVertical: 4 },
   entry: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#E2E8F0', marginTop: 8 },
-  entryOn: { backgroundColor: '#F5F3FF' },
+  entryOn: { backgroundColor: '#EEF7F4' },
   check: { fontSize: 20, color: FORM_COLORS.brand, width: 24 },
   thumb: { width: 56, height: 42, borderRadius: 6, backgroundColor: '#E2E8F0' },
 });

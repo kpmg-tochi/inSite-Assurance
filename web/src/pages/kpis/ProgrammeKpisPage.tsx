@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Download, Info, X } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import {
   addDays,
   formatKpiValue,
@@ -18,15 +19,16 @@ import { DeliveryModelFilters } from "../../components/projects/DeliveryModelFil
 import { CustomSelect } from "../../components/common";
 import { StandardTable, type TableColumnDef } from "../../components/table";
 import Loader from "../../components/Loader";
-import { countText, KPI_STATUS_META, KpiSparkline, KpiStatusChip, targetText } from "../../components/kpis/KpiDisplay";
+import { countText, KPI_STATUS_META, KpiSparkline, targetText } from "../../components/kpis/KpiDisplay";
 import { displayTimeZone } from "../../lib/formatters";
+import { shortOrganisationName } from "../../components/BrandLogo";
 
 /**
- * Phase 16: Programme KPIs (kpis:view). Every catalogue KPI over the projects the user can see,
- * grouped by process stage, against the targets set per project type. Filters by project type,
- * region and owning organisation; a period of a month, a quarter or a custom range. Clicking a
- * KPI opens the contributing projects (the table view of every figure); the CSV export holds the
- * same rows for every KPI.
+ * Phase 16, simplified for the UBEC rebrand: programme KPIs (kpis:view) over the projects the user
+ * can see, against the targets set per project type. The overview is a grid of plain tiles (the KPI
+ * and its value); selecting one opens its detail (target, counts, trend, split by project type)
+ * above the table of contributing projects. The selected KPI lives in `?kpi=` so Back works. The
+ * CSV export holds the same rows for every KPI.
  */
 
 type Preset = "THIS_MONTH" | "LAST_MONTH" | "THIS_QUARTER" | "LAST_QUARTER" | "CUSTOM";
@@ -96,90 +98,183 @@ function exportCsv(data: KpiDashboardDto) {
   URL.revokeObjectURL(url);
 }
 
-function KpiTile({ kpi, selected, onSelect }: { kpi: KpiDashboardKpi; selected: boolean; onSelect: () => void }) {
+/** Status as an icon whose shape carries the meaning (check, triangle, cross…), named for screen readers and on hover. */
+function StatusIcon({ status, className = "w-4 h-4" }: { status: KpiDashboardKpi["status"]; className?: string }) {
+  const meta = KPI_STATUS_META[status];
+  const Icon = meta.icon;
+  return (
+    <span title={meta.label} className="inline-flex shrink-0">
+      <Icon className={className} style={{ color: meta.color }} aria-hidden="true" />
+      <span className="sr-only">{meta.label}</span>
+    </span>
+  );
+}
+
+/** A tile: the KPI's name and its value. Everything else is one click away. */
+function KpiTile({ kpi, onSelect }: { kpi: KpiDashboardKpi; onSelect: () => void }) {
   const def = KPI_BY_KEY[kpi.key];
   const tracked = kpi.status !== "NOT_TRACKED";
-  const showBreakdown = kpi.byProjectType.length > 1 && tracked;
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      className={`text-left bg-white rounded-2xl border p-4 shadow-sm flex flex-col gap-2 transition hover:border-brand-primary ${
-        selected ? "border-brand-primary ring-2 ring-brand-primary/20" : "border-slate-200/80"
-      }`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-xs font-semibold text-slate-800 leading-snug">{def.label}</span>
-        <KpiStatusChip status={kpi.status} />
-      </div>
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <div className={`text-2xl font-bold tabular-nums ${tracked ? "text-slate-900" : "text-slate-400"}`}>
+    <li>
+      <button
+        type="button"
+        onClick={onSelect}
+        className="group w-full h-full text-left bg-white rounded-xl border border-slate-200/80 px-4 py-3.5 transition hover:border-brand-primary/60 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+      >
+        <span className="block text-sm text-slate-700 leading-snug line-clamp-2 min-h-[2.5rem] group-hover:text-slate-900">{def.label}</span>
+        <span className="mt-2 flex items-center gap-2">
+          <span className={tracked ? "text-2xl font-bold tracking-tight tabular-nums text-slate-900" : "text-base font-semibold text-slate-400 leading-8"}>
             {tracked ? formatKpiValue(def, kpi.value) : "Not tracked"}
-          </div>
-          <div className="text-[11px] text-slate-500">
-            {tracked ? countText(def, kpi.numerator, kpi.denominator) : "No project in view has this configured"}
-            {!def.periodBased && tracked && " · current value"}
-          </div>
-        </div>
-        {tracked && <KpiSparkline def={def} points={kpi.trend} />}
-      </div>
-      <div className="text-[11px] text-slate-600">{targetText(def, kpi.target, kpi.targetVaries)}</div>
-      {showBreakdown && (
-        <ul className="border-t border-slate-100 pt-2 space-y-1">
-          {kpi.byProjectType.map((b) => (
-            <li key={b.projectTypeId ?? "none"} className="flex items-center justify-between gap-2 text-[11px] text-slate-600">
-              <span className="truncate">{b.projectTypeName}</span>
-              <span className="flex items-center gap-2 shrink-0">
-                <span className="tabular-nums font-semibold text-slate-800">{b.status === "NOT_TRACKED" ? "–" : formatKpiValue(def, b.value)}</span>
-                <span className="text-slate-400">{b.target === null ? "" : `target ${formatKpiValue(def, b.target)}`}</span>
-                <KpiStatusChip status={b.status} label={KPI_STATUS_META[b.status].label} />
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </button>
+          </span>
+          {tracked && <StatusIcon status={kpi.status} />}
+        </span>
+      </button>
+    </li>
   );
 }
 
 type DrillRow = KpiDashboardDto["projects"][number];
 
-function DrillDown({ data, kpiKey, onClose, onOpenProject }: { data: KpiDashboardDto; kpiKey: KpiKey; onClose: () => void; onOpenProject: (id: string) => void }) {
-  const def = KPI_BY_KEY[kpiKey];
-  const rows = data.projects.filter((p) => p.values[kpiKey]);
+/** The selected KPI: what it measures and how it stands, then the projects behind the figure. */
+function KpiDetail({
+  data,
+  kpi,
+  onBack,
+  onOpenProject,
+}: {
+  data: KpiDashboardDto;
+  kpi: KpiDashboardKpi;
+  onBack: () => void;
+  onOpenProject: (id: string) => void;
+}) {
+  const def = KPI_BY_KEY[kpi.key];
+  const tracked = kpi.status !== "NOT_TRACKED";
+  const rows = data.projects.filter((p) => p.values[kpi.key]);
   const notTracking = data.projects.length - rows.length;
   const columns: TableColumnDef<DrillRow>[] = [
-    { id: "code", header: "Project", cell: (p) => (
-      <div>
-        <div className="text-xs font-semibold text-slate-900">{p.codePrefix}</div>
-        <div className="text-[11px] text-slate-500 truncate max-w-[260px]">{p.name}</div>
-      </div>
-    ) },
-    { id: "type", header: "Project type", cell: (p) => <span className="text-xs text-slate-700">{p.projectTypeName ?? "–"}</span> },
-    { id: "owner", header: "Owner · region", cell: (p) => <span className="text-xs text-slate-700">{[p.owningOrganizationName, p.regionName].filter(Boolean).join(" · ") || "–"}</span> },
-    { id: "value", header: "Value", align: "right", cell: (p) => <span className="text-xs font-semibold tabular-nums text-slate-900">{formatKpiValue(def, p.values[kpiKey].value)}</span> },
-    { id: "count", header: `${def.numerator} / ${def.denominator}`, align: "right", cell: (p) => <span className="text-xs tabular-nums text-slate-600">{countText(def, p.values[kpiKey].numerator, p.values[kpiKey].denominator)}</span> },
-    { id: "target", header: "Target", align: "right", cell: (p) => <span className="text-xs text-slate-600">{p.values[kpiKey].target === null ? "–" : formatKpiValue(def, p.values[kpiKey].target)}</span> },
-    { id: "status", header: "Status", cell: (p) => <KpiStatusChip status={p.values[kpiKey].status} /> },
+    {
+      id: "project",
+      header: "Project",
+      cell: (p) => (
+        <div className="min-w-0">
+          <div className="text-[11px] font-semibold text-slate-500 tabular-nums">{p.codePrefix}</div>
+          <div className="text-sm font-semibold text-slate-900 truncate max-w-[300px]">{p.name}</div>
+        </div>
+      ),
+    },
+    { id: "type", header: "Type", cell: (p) => <span className="text-slate-700">{p.projectTypeName ?? "–"}</span> },
+    {
+      id: "owner",
+      header: "Owner",
+      cell: (p) => (
+        <span className="text-slate-700 whitespace-nowrap" title={p.owningOrganizationName ?? undefined}>
+          {[shortOrganisationName(p.owningOrganizationName), p.regionName].filter(Boolean).join(" · ") || "–"}
+        </span>
+      ),
+    },
+    { id: "value", header: "Value", align: "right", cell: (p) => <span className="font-semibold tabular-nums text-slate-900">{formatKpiValue(def, p.values[kpi.key].value)}</span> },
+    { id: "count", header: "Count", tooltip: `${def.numerator} of ${def.denominator}`, align: "right", cell: (p) => <span className="tabular-nums text-slate-600">{countText(def, p.values[kpi.key].numerator, p.values[kpi.key].denominator)}</span> },
+    { id: "target", header: "Target", align: "right", cell: (p) => <span className="text-slate-600">{p.values[kpi.key].target === null ? "–" : formatKpiValue(def, p.values[kpi.key].target)}</span> },
+    {
+      id: "status",
+      header: "Status",
+      cell: (p) => (
+        <span className="inline-flex items-center gap-1.5 text-slate-700 whitespace-nowrap">
+          <StatusIcon status={p.values[kpi.key].status} className="w-3.5 h-3.5" />
+          {KPI_STATUS_META[p.values[kpi.key].status].label}
+        </span>
+      ),
+    },
   ];
+
   return (
-    <StandardTable<DrillRow>
-      title={`${def.label}: contributing projects`}
-      subtitle={`${def.description} ${notTracking ? `${notTracking} project${notTracking === 1 ? "" : "s"} in view do not track it.` : ""}`}
-      headerActions={
-        <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 p-1.5 text-slate-500 hover:bg-slate-50" aria-label="Close">
-          <X className="w-4 h-4" />
-        </button>
-      }
-      columns={columns}
-      data={rows}
-      keyExtractor={(p) => p.projectId}
-      onRowClick={(p) => onOpenProject(p.projectId)}
-      minWidth="min-w-[760px]"
-      emptyState={{ title: "No project in view tracks this KPI", description: "Its inputs are not configured on any project in the current filters." }}
-    />
+    <div className="space-y-4">
+      <button type="button" onClick={onBack} className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-600 hover:text-slate-900 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary">
+        <ArrowLeft className="w-4 h-4" aria-hidden="true" /> All KPIs
+      </button>
+
+      <section aria-labelledby="kpi-detail-title" className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5 lg:p-6">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="min-w-0 space-y-3">
+            <div>
+              <p className="text-xs text-slate-500">{KPI_STAGE_META[def.stage].label}</p>
+              <h2 id="kpi-detail-title" className="text-lg font-bold text-slate-900 leading-snug">
+                {def.label}
+              </h2>
+              <p className="mt-1 text-sm text-slate-600 max-w-prose">{def.description}</p>
+            </div>
+            <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+              <div>
+                <p className={`text-4xl font-bold tracking-tight tabular-nums ${tracked ? "text-slate-900" : "text-slate-400"}`}>
+                  {tracked ? formatKpiValue(def, kpi.value) : "Not tracked"}
+                </p>
+                {tracked && (
+                  <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-slate-700">
+                    <StatusIcon status={kpi.status} />
+                    {KPI_STATUS_META[kpi.status].label}
+                  </p>
+                )}
+              </div>
+              <dl className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                <div>
+                  <dt className="text-slate-500">Target</dt>
+                  <dd className="font-semibold text-slate-900">{targetText(def, kpi.target, kpi.targetVaries)}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-500">{def.unit === "DAYS" ? "Items" : "Count"}</dt>
+                  <dd className="font-semibold text-slate-900 tabular-nums">{tracked ? countText(def, kpi.numerator, kpi.denominator) : "–"}</dd>
+                  {def.unit !== "DAYS" && (
+                    <dd className="mt-0.5 max-w-[22rem] text-xs text-slate-500">
+                      {def.numerator} of {def.denominator.charAt(0).toLowerCase() + def.denominator.slice(1)}
+                    </dd>
+                  )}
+                </div>
+              </dl>
+            </div>
+            <p className="text-xs text-slate-500">
+              {def.periodBased ? `Counted over ${formatDay(data.period.from)} to ${formatDay(data.period.to)}.` : "Today's value; the period does not change it."}
+              {!tracked && " No project in view has this KPI's inputs configured, so it is not counted as 0."}
+            </p>
+          </div>
+
+          {tracked && (
+            <div className="space-y-4 lg:border-l lg:border-slate-100 lg:pl-6 lg:min-w-[280px]">
+              <div>
+                <p className="text-xs font-medium text-slate-600 mb-1.5">Monthly trend</p>
+                <KpiSparkline def={def} points={kpi.trend} width={260} height={56} />
+              </div>
+              {kpi.byProjectType.length > 1 && (
+                <div>
+                  <p className="text-xs font-medium text-slate-600 mb-1.5">By project type</p>
+                  <ul className="space-y-1.5">
+                    {kpi.byProjectType.map((b) => (
+                      <li key={b.projectTypeId ?? "none"} className="flex items-center justify-between gap-4 text-sm">
+                        <span className="text-slate-700 truncate">{b.projectTypeName}</span>
+                        <span className="inline-flex items-center gap-1.5 shrink-0">
+                          <span className="font-semibold text-slate-900 tabular-nums">{b.status === "NOT_TRACKED" ? "–" : formatKpiValue(def, b.value)}</span>
+                          <StatusIcon status={b.status} className="w-3.5 h-3.5" />
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <StandardTable<DrillRow>
+        title="Projects behind this figure"
+        subtitle={notTracking ? `${notTracking} project${notTracking === 1 ? " does" : "s do"} not track this KPI and ${notTracking === 1 ? "is" : "are"} left out.` : "Select a project to open it."}
+        columns={columns}
+        data={rows}
+        keyExtractor={(p) => p.projectId}
+        onRowClick={(p) => onOpenProject(p.projectId)}
+        minWidth="min-w-[860px]"
+        emptyState={{ title: "No project in view tracks this KPI", description: "Its inputs are not configured on any project under the current filters." }}
+      />
+    </div>
   );
 }
 
@@ -190,9 +285,17 @@ export function ProgrammeKpisPage({ onOpenProject }: { onOpenProject: (projectId
   const [preset, setPreset] = useState<Preset>("THIS_QUARTER");
   const [custom, setCustom] = useState(() => presetPeriod("THIS_MONTH", today));
   const period = preset === "CUSTOM" ? custom : presetPeriod(preset, today);
-  const { data, isLoading, isError, isFetching } = useKpiDashboardQuery({ ...filters, ...period });
-  const [selected, setSelected] = useState<KpiKey | null>(null);
+  const { data, isLoading, isError, isFetching, refetch } = useKpiDashboardQuery({ ...filters, ...period });
+  const [params, setParams] = useSearchParams();
+  const selected = params.get("kpi") as KpiKey | null;
   const [ownersSeen, setOwnersSeen] = useState<Array<{ id: string; name: string }>>([]);
+
+  const select = (key: KpiKey | null) => {
+    const next = new URLSearchParams(params);
+    if (key) next.set("kpi", key);
+    else next.delete("kpi");
+    setParams(next);
+  };
 
   useEffect(() => {
     const found = (data?.projects ?? [])
@@ -208,7 +311,7 @@ export function ProgrammeKpisPage({ onOpenProject }: { onOpenProject: (projectId
   }, [data]);
 
   useEffect(() => {
-    if (selected) document.getElementById("kpi-drilldown")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (selected) window.scrollTo({ top: 0 });
   }, [selected]);
 
   if (isLoading) {
@@ -219,68 +322,74 @@ export function ProgrammeKpisPage({ onOpenProject }: { onOpenProject: (projectId
     );
   }
   if (isError || !data) {
-    return <div className="bg-white rounded-2xl border border-rose-200 p-6 text-sm text-rose-700">The KPIs could not be loaded. Try again in a moment.</div>;
+    return (
+      <div className="bg-white rounded-2xl border border-rose-200 p-6 text-sm text-rose-700 flex flex-wrap items-center justify-between gap-3">
+        <span>The KPIs could not be loaded. Check your connection, then try again.</span>
+        <button type="button" onClick={() => refetch()} className="rounded-xl border border-rose-300 px-3 py-1.5 text-xs font-semibold hover:bg-rose-50">
+          Try again
+        </button>
+      </div>
+    );
   }
-  const selectedKpi = selected && data.kpis.some((k) => k.key === selected) ? selected : null;
+  const selectedKpi = selected ? data.kpis.find((k) => k.key === selected) ?? null : null;
   const customInvalid = preset === "CUSTOM" && custom.from > custom.to;
 
   return (
-    <div className="space-y-4">
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
-          <div>
-            <h1 className="text-base font-bold text-slate-900">Programme KPIs</h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {data.projectCount} project{data.projectCount === 1 ? "" : "s"} in view · {formatDay(data.period.from)} to {formatDay(data.period.to)} ({timeZoneAbbreviation(data.timeZone)})
-              {isFetching && " · updating…"}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="w-40">
-              <CustomSelect value={preset} onChange={(v) => setPreset(v as Preset)} options={PRESETS} />
-            </div>
-            {preset === "CUSTOM" && (
-              <div className="flex items-center gap-1 text-xs text-slate-600">
-                <input type="date" aria-label="From" className="rounded-xl border border-slate-300 px-2 py-1.5 text-xs" value={custom.from} max={custom.to} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, from: e.target.value }))} />
-                <span>to</span>
-                <input type="date" aria-label="To" className="rounded-xl border border-slate-300 px-2 py-1.5 text-xs" value={custom.to} min={custom.from} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, to: e.target.value }))} />
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={() => exportCsv(data)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              <Download className="w-3.5 h-3.5" /> Export CSV
-            </button>
-          </div>
-        </div>
-        <DeliveryModelFilters filters={filters} onChange={setFilters} owners={ownersSeen} />
-        {customInvalid && <p className="text-xs text-rose-700">The period must start before it ends.</p>}
-        <p className="flex items-start gap-1.5 text-[11px] text-slate-500">
-          <Info className="w-3.5 h-3.5 shrink-0 mt-px" />
-          Period-based KPIs count what fell due, was held, issued or decided in the period; the others show today's value. A KPI is "not
-          tracked" when no project in view has its inputs configured; that is never counted as 0%. Targets are set per project type in
-          Settings → Project types, regions &amp; documents.
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3">
+        <p className="text-sm text-slate-600">
+          {data.projectCount} project{data.projectCount === 1 ? "" : "s"} in view, {formatDay(data.period.from)} to {formatDay(data.period.to)} ({timeZoneAbbreviation(data.timeZone)})
+          {isFetching && <span className="text-slate-400"> · updating</span>}
         </p>
-      </div>
-
-      {selectedKpi && (
-        <div id="kpi-drilldown" className="scroll-mt-4">
-          <DrillDown data={data} kpiKey={selectedKpi} onClose={() => setSelected(null)} onOpenProject={onOpenProject} />
-        </div>
-      )}
-
-      {byStage.map(({ stage, kpis }) => (
-        <section key={stage} className="space-y-2">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 px-1">{KPI_STAGE_META[stage].label}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {kpis.map((k) => (
-              <KpiTile key={k.key} kpi={k} selected={selectedKpi === k.key} onSelect={() => setSelected(selectedKpi === k.key ? null : k.key)} />
-            ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <DeliveryModelFilters filters={filters} onChange={setFilters} owners={ownersSeen} />
+          <div className="w-40">
+            <CustomSelect value={preset} onChange={(v) => setPreset(v as Preset)} options={PRESETS} size="sm" />
           </div>
-        </section>
-      ))}
+          {preset === "CUSTOM" && (
+            <div className="flex items-center gap-1 text-xs text-slate-600">
+              <input type="date" aria-label="From" className="rounded-xl border border-slate-300 px-2 py-1.5 text-xs" value={custom.from} max={custom.to} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, from: e.target.value }))} />
+              <span>to</span>
+              <input type="date" aria-label="To" className="rounded-xl border border-slate-300 px-2 py-1.5 text-xs" value={custom.to} min={custom.from} onChange={(e) => e.target.value && setCustom((c) => ({ ...c, to: e.target.value }))} />
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => exportCsv(data)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <Download className="w-3.5 h-3.5" aria-hidden="true" /> Export CSV
+          </button>
+        </div>
+      </div>
+      {customInvalid && <p className="text-xs text-rose-700">The period must start before it ends.</p>}
+
+      {selectedKpi ? (
+        <KpiDetail data={data} kpi={selectedKpi} onBack={() => select(null)} onOpenProject={onOpenProject} />
+      ) : (
+        <>
+          {byStage.map(({ stage, kpis }) => (
+            <section key={stage} aria-labelledby={`kpi-stage-${stage}`} className="space-y-2">
+              <h2 id={`kpi-stage-${stage}`} className="text-sm font-semibold text-slate-900">
+                {KPI_STAGE_META[stage].label}
+              </h2>
+              <ul className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2.5">
+                {kpis.map((k) => (
+                  <KpiTile key={k.key} kpi={k} onSelect={() => select(k.key)} />
+                ))}
+              </ul>
+            </section>
+          ))}
+          <details className="text-xs text-slate-500">
+            <summary className="cursor-pointer font-medium text-slate-600 hover:text-slate-900">How these figures are counted</summary>
+            <p className="mt-1.5 max-w-prose">
+              KPIs marked as period-based count what fell due, was held, issued or decided in the period; the others show today's value. A KPI is
+              "not tracked" when no project in view has its inputs configured, and is never counted as 0%. Targets are set per project type in
+              Settings, Project types.
+            </p>
+          </details>
+        </>
+      )}
     </div>
   );
 }

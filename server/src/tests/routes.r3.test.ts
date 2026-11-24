@@ -3,8 +3,8 @@
  *
  * Main tenant: admin@ (platform + tenant super admin), monitor@ (forms:manage), lender@ (neither
  * forms:manage nor project_types:manage, but inspections:view), lto@ (given a role with only
- * project_types:manage here). Programme tenant: programme.monitor@ (forms:manage), programme.admin@
- * (project types); PRG-105 (live, sprints, a customised Toilet). LKK-402 (main tenant) has sprint 1
+ * project_types:manage here). Programme tenant (UBEC): admin@ubec.test (forms:manage and
+ * project types); PRG-105 (live, sprints, a customised Toilet). LKK-402 (main tenant) has sprint 1
  * units below 100% (the Routine carry-over); EDO-410 has no units (legacy).
  */
 import { resetTestDatabase } from './helpers/testDb';
@@ -34,8 +34,9 @@ const ADMIN = 'admin@insite.ng';
 const MONITOR = 'monitor@insite.ng';
 const LENDER = 'lender@insite.ng';
 const LTO = 'lto@insite.ng';
-const P_MONITOR = 'programme.monitor@insite.ng';
-const P_ADMIN = 'programme.admin@insite.ng';
+/** UBEC roster: the form library is managed by the UBEC administrator (M&E officers have no forms:manage). */
+const P_MONITOR = 'admin@ubec.test';
+const P_ADMIN = 'admin@ubec.test';
 const ids: Record<string, string> = {};
 
 const tokens: Record<string, string> = {};

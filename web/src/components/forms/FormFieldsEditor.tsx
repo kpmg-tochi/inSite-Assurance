@@ -28,6 +28,7 @@ import {
   type VisitKind,
 } from "@insite/shared";
 import { CustomSelect } from "../common";
+import { TAB_LIST_CLASS, tabItemClass } from "../common/Tabs";
 import { smallInput } from "../contracts/contractUi";
 import { FormSnapshotView } from "./FormSnapshotView";
 
@@ -486,14 +487,9 @@ function SamplePreview({ fields, context, facility }: { fields: FormField[]; con
   return (
     <div className="space-y-2">
       {context === "SUBFORM" && (
-        <div className="flex flex-wrap gap-1.5">
+        <div role="group" aria-label="Preview for visit kind" className={TAB_LIST_CLASS}>
           {FACILITY_KINDS.map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setKind(k)}
-              className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${kind === k ? "bg-brand-primary text-white" : "bg-slate-100 text-slate-600"}`}
-            >
+            <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={tabItemClass(kind === k)}>
               {VISIT_KIND_META[k].label}
             </button>
           ))}

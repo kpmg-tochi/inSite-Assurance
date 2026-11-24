@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { EmptyStateCard, GradientHeaderLayout, InSiteLoader, Pill } from '../components/common';
-import { BackButton } from '../components/inputs/Buttons';
+import { BackButton, HomeButton } from '../components/inputs/Buttons';
 import { DetailLine, LinkRow, SectionCard, visitUiStyles } from '../components/visit/VisitUi';
 import { useProfile } from '../context/ProfileContext';
 import { useVisitData } from '../hooks/useVisitData';
@@ -19,9 +19,14 @@ import { formatDay, SEVERITY_TEXT, SPRINT_OUTCOME_TEXT, SPRINT_STATUS_TEXT, visi
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 /**
- * Redesign R5b: one project (D-R5.2). Details, sprints, units by facility, open findings (read-only,
- * D-R5.17: findings are re-checked inside a visit form), past visits on this phone, and the site log,
- * defects (D-R5.15) and incident (D-R5.16) shortcuts. Read from the stored pack and visits, offline.
+ * Redesign R5b: one project (D-R5.2). Details, upcoming visits, sprints, units by facility, open
+ * findings (read-only, D-R5.17: findings are re-checked inside a visit form), past visits on this
+ * phone, and the site log and defects (D-R5.15) shortcuts. Read from the stored pack and visits,
+ * offline. Home (all projects) is one tap away in the header.
+ *
+ * The incident shortcut (D-R5.16) is hidden: the web portal has no screen that shows incidents and
+ * the server notifies nobody, so a report would reach no one (found against the web, 2026-11-24).
+ * Show it again once the portal reads incidents.
  */
 export function ProjectScreen() {
   const navigation = useNavigation<Nav>();
@@ -47,6 +52,14 @@ export function ProjectScreen() {
   );
   const pack = data?.pack ?? null;
   const today = projectToday(pack?.timezone);
+  const upcomingVisits = useMemo(
+    () =>
+      (data?.visits ?? [])
+        .map((v) => visitView(v, today))
+        .filter((v) => v.status !== 'CANCELLED' && v.status !== 'MISSED' && !v.submitted && v.date >= today)
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    [data, today]
+  );
   const pastVisits = useMemo(
     () =>
       (data?.visits ?? [])
@@ -66,6 +79,7 @@ export function ProjectScreen() {
       title={pack?.codePrefix ?? project?.projectCodePrefix ?? 'Project'}
       subtitle={pack?.name ?? project?.projectName}
       leftAction={<BackButton onPress={() => navigation.goBack()} />}
+      rightAction={<HomeButton onPress={() => navigation.popTo('Home')} />}
       contentContainerStyle={styles.body}
     >
       {loading && !data ? (
@@ -81,7 +95,7 @@ export function ProjectScreen() {
             <DetailLine label={copy.contractorLabel} value={pack.contractorName ?? 'Not awarded yet'} />
             {pack.stage?.contractTerminated ? <Text style={visitUiStyles.errorText}>The contract was terminated.</Text> : null}
             {mobilisation?.dayText ? (
-              <DetailLine label={mobilisation.label} value={`${mobilisation.dayText}${mobilisation.deadline ? ` (deadline ${formatDay(mobilisation.deadline)})` : ''}`} />
+              <DetailLine label={mobilisation.label} value={mobilisation.dayText} />
             ) : null}
           </SectionCard>
 
@@ -95,8 +109,19 @@ export function ProjectScreen() {
                 onPress={() => navigation.navigate('Defects', { projectId })}
               />
             )}
-            <LinkRow icon="alert-octagon" text="Report an incident" detail={copy.incidentSubtitle} onPress={() => navigation.navigate('IncidentModal', { projectId })} />
           </View>
+
+          <SectionCard title="Upcoming visits" subtitle={upcomingVisits.length === 0 ? 'None planned on this phone.' : null}>
+            {upcomingVisits.map((v) => (
+              <LinkRow
+                key={v.id}
+                icon="calendar"
+                text={`${v.kindLabel}, ${formatDay(v.date, true)}`}
+                detail={visitBadges(v).map((b) => b.text).join(' · ')}
+                onPress={() => navigation.navigate('Visit', { visitId: v.id })}
+              />
+            ))}
+          </SectionCard>
 
           <SectionCard title="Sprints" subtitle={sprints.length === 0 ? 'No sprints planned yet.' : `${sprints.length} sprint${sprints.length === 1 ? '' : 's'}`}>
             {sprints.map((s) => (
@@ -127,7 +152,7 @@ export function ProjectScreen() {
                   <Text key={u.id} style={visitUiStyles.body}>
                     {u.label}
                     {u.plannedQuantity != null ? ` · ${u.plannedQuantity} ${u.quantityUnit ?? ''}`.trimEnd() : ''}
-                    {u.startSprintNumber != null ? ` · sprints ${u.startSprintNumber}–${u.endSprintNumber ?? '?'}` : ''}
+                    {u.startSprintNumber != null ? ` · ${sprintRange(u.startSprintNumber, u.endSprintNumber)}` : ''}
                     {u.progressPct != null ? ` · ${Math.round(u.progressPct)}% seen on the last accepted visit` : ''}
                   </Text>
                 ))}
@@ -169,6 +194,12 @@ export function ProjectScreen() {
       )}
     </GradientHeaderLayout>
   );
+}
+
+/** "sprint 3" or "sprints 1–3". */
+function sprintRange(start: number, end: number | null): string {
+  if (end == null) return `from sprint ${start}`;
+  return start === end ? `sprint ${start}` : `sprints ${start}–${end}`;
 }
 
 const styles = StyleSheet.create({

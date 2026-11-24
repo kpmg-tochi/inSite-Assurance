@@ -24,7 +24,7 @@ const PASSWORD = 'Password123!';
 const ADMIN = 'admin@insite.ng';
 const MONITOR = 'monitor@insite.ng';
 const LENDER = 'lender@insite.ng';
-const PROGRAMME_ADMIN = 'programme.admin@insite.ng';
+const PROGRAMME_ADMIN = 'admin@ubec.test';
 const ids: Record<string, string> = {};
 
 const tokens: Record<string, string> = {};
@@ -389,7 +389,7 @@ describe('Redesign R2b: scope on a live project (PRG-105)', () => {
   it('refuses writes without boq:upload_edit', async () => {
     const res = await request(app)
       .post(scopeUrl(ids.live, '/lines'))
-      .set(await web('programme.funder@insite.ng'))
+      .set(await web('independent.me@ubec.test'))
       .send({ facilityUnitId: ids.liveUnit, wbsCode: '9.9', description: 'Not allowed', unit: 'nr', totalQuantity: 1, rateNgn: 1 });
     assert.ok([403, 404].includes(res.status), String(res.status));
   });

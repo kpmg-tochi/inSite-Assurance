@@ -101,13 +101,13 @@ export const OutboxModal: React.FC = () => {
     <GradientHeaderLayout
       scrollable={false}
       title="Outbox"
-      subtitle={`${summary}${status.lastSyncedAt ? ` Last sent ${formatElapsedTime(status.lastSyncedAt)} ago.` : ''}`}
+      subtitle={`${summary}${status.lastSyncedAt ? ` Last sent ${lastSentText(formatElapsedTime(status.lastSyncedAt))}.` : ''}`}
       rightAction={<IconButton icon="close" onPress={() => navigation.goBack()} />}
       contentContainerStyle={styles.layout}
     >
       <ScrollView
         contentContainerStyle={[styles.body, { paddingBottom: Math.max(insets.bottom + 24, 32) }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor="#00338D" />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} tintColor="#00715D" />}
       >
         <View style={visitUiStyles.row}>
           <Pill
@@ -209,6 +209,11 @@ function OutboxRow({
       ) : null}
     </View>
   );
+}
+
+/** "just now" or "5m ago" (formatElapsedTime returns "Just now" without a unit). */
+function lastSentText(elapsed: string): string {
+  return elapsed === 'Just now' ? 'just now' : `${elapsed} ago`;
 }
 
 const styles = StyleSheet.create({

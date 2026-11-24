@@ -4,7 +4,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 import { EmptyStateCard, GradientHeaderLayout, InSiteLoader } from '../components/common';
-import { BackButton } from '../components/inputs/Buttons';
+import { BackButton, HomeButton } from '../components/inputs/Buttons';
 import { VoiceNoteBubble } from '../components/audio';
 import { OutlineButton, StatusBadges, visitUiStyles } from '../components/visit/VisitUi';
 import { useProfile } from '../context/ProfileContext';
@@ -62,6 +62,7 @@ export function SiteLogScreen() {
       title="Site log"
       subtitle={data?.pack?.codePrefix ?? project?.projectCodePrefix}
       leftAction={<BackButton onPress={() => navigation.goBack()} />}
+      rightAction={<HomeButton onPress={() => navigation.popTo('Home')} />}
       contentContainerStyle={styles.body}
     >
       <Text style={visitUiStyles.muted}>{copy.siteLogSubtitle}</Text>
@@ -104,7 +105,7 @@ function EntryCard({
   return (
     <View style={styles.card} accessible={false}>
       <View style={styles.cardHeader}>
-        <Feather name={kind.icon} size={16} color="#1E3A8A" />
+        <Feather name={kind.icon} size={16} color="#005A4A" />
         <Text style={visitUiStyles.strong}>{kind.label}</Text>
         <Text style={[visitUiStyles.muted, styles.flex]}>
           {formatTime(entry.capturedAt)} · {place}

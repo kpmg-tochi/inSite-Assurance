@@ -152,7 +152,7 @@ export const NotificationCenterModal: React.FC = () => {
               onRefresh={() => {
                 refetch();
               }}
-              tintColor="#00338D"
+              tintColor="#00715D"
             />
           }
           ListHeaderComponent={

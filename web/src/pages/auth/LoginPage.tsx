@@ -1,17 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ChevronDown, Play } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../lib/auth-context";
 import { useDemoAccounts } from "../../config/useDemoAccounts";
-import { InSiteLogo } from "../../components/InSiteLogo";
 import { IS_DEMO_MODE } from "../../config/demoMode";
 import { CustomSelect, type CustomSelectOption } from "../../components/common";
 import { APPLICATION_NAME } from "../../config/appName";
+import { BrandLogo, DEFAULT_FULL_LOGO_URL } from "../../components/BrandLogo";
 
-const VOICE_WAVE_BARS = [
-  10, 18, 12, 22, 14, 24, 16, 12, 20, 10, 16, 22, 12, 18, 14, 10, 16, 12,
-];
-
+/**
+ * Sign-in (UBEC rebrand): the client's photograph and full logo on the left, a plain form on the
+ * right. In demo builds a role picker fills the form with a seeded account.
+ */
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -29,9 +28,8 @@ export function LoginPage() {
         value: idx,
         label: `${acct.roleTitle} — ${acct.name}`,
         description: `${acct.organization} · ${acct.email}`,
-        badge: acct.credential,
       })),
-    [demoAccounts],
+    [demoAccounts]
   );
 
   // Demo builds prefill the first seeded account once the demo module has loaded.
@@ -58,319 +56,108 @@ export function LoginPage() {
       setErrorMsg(null);
       await login(email, password);
       navigate("/app");
-    } catch (err: any) {
-      setErrorMsg(
-        err?.message ||
-          `Unable to connect to ${APPLICATION_NAME} API. Please verify the server is running on port 4000.`,
-      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : null;
+      setErrorMsg(message || "The portal could not be reached. Check your connection and try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const inputClass =
+    "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 transition";
+
   return (
-    <div className="h-screen w-screen overflow-hidden bg-white grid grid-cols-1 lg:grid-cols-12">
-      {/* Left Full-Height Ribbed KPMG Showcase Panel */}
-      <div className="hidden lg:flex lg:col-span-7 p-3 h-full overflow-hidden">
-        <div className="w-full h-full kpmg-ribbed-panel rounded-2xl p-8 xl:p-10 flex flex-col justify-between text-white relative overflow-hidden shadow-inner">
-          {/* Top Brand Bar */}
-          <div className="flex items-center justify-between z-10">
-            <Link
-              to="/"
-              className="flex items-center gap-3 hover:opacity-90 transition"
-            >
-              <div className="bg-white rounded-xl px-2.5 py-1.5 flex items-center justify-center shadow-sm">
-                <InSiteLogo />
-              </div>
-              <div className="h-4 w-px bg-white/25" />
-              <span className="font-semibold text-base tracking-tight text-white">
-                {APPLICATION_NAME}
-              </span>
-            </Link>
-            <div className="flex items-center gap-2">
-              <Link
-                to="/"
-                className="text-[11px] font-medium text-white/85 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 transition"
-              >
-                Overview
-              </Link>
-              <Link
-                to="/mobile-app"
-                className="text-[11px] font-medium text-white/85 hover:text-white bg-white/10 hover:bg-white/20 backdrop-blur-md px-3 py-1 rounded-full border border-white/15 transition"
-              >
-                Mobile App
-              </Link>
+    <div className="min-h-screen w-full bg-white grid grid-cols-1 lg:grid-cols-12">
+      {/* The client's photograph and mark */}
+      <div className="hidden lg:block lg:col-span-7 p-3 h-screen sticky top-0">
+        <div className="relative h-full w-full overflow-hidden rounded-2xl text-white">
+          <img src="/client/ubec-login.jpeg" alt="" className="absolute inset-0 h-full w-full object-cover object-[center_60%]" />
+          <div className="absolute inset-0 bg-gradient-to-b from-brand-navy/90 via-brand-navy/20 to-brand-navy/95" aria-hidden="true" />
+          <div className="relative z-10 flex h-full flex-col justify-between p-8 xl:p-10">
+            <img src={DEFAULT_FULL_LOGO_URL} alt="Universal Basic Education Commission (UBEC)" className="h-12 xl:h-14 w-auto self-start" />
+            <div className="max-w-xl">
+              <h1 className="text-3xl xl:text-4xl font-bold leading-tight tracking-tight text-balance">
+                Every school project, from contract award to handover.
+              </h1>
+              <p className="mt-3 text-sm xl:text-base leading-relaxed text-white/85 max-w-lg">
+                Site visits with geotagged photos, findings followed to correction, and every deadline and sign-off in one place, for
+                Direct Intervention and Matching Grants projects.
+              </p>
+              <p className="mt-6 border-t border-white/20 pt-3 text-xs text-white/75">Universal Basic Education Commission · Education for development</p>
             </div>
-          </div>
-
-          {/* Hero Copy */}
-          <div className="mt-4 max-w-xl z-10">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/75 mb-1.5">
-              Capital Project Governance
-            </div>
-            <h1 className="text-2xl xl:text-3xl font-bold leading-tight tracking-tight">
-              Every site visit, on record.
-            </h1>
-            <p className="text-xs xl:text-sm text-white/85 mt-2 leading-relaxed">
-              Scheduled monitoring visits, geotagged photo evidence and
-              clear deadlines from contract award to handover, for
-              programme authorities and their monitoring teams.
-            </p>
-          </div>
-
-          {/* Center Overlapping Glassmorphic Cards (Map Preview + Overlapping Voice Note / Extraction Card) */}
-          <div className="relative my-auto py-4 z-10">
-            {/* Card 1: Translucent Live Corridor Map Preview (~70% Opacity + Backdrop Blur + Subtle Border) */}
-            <div className="w-[82%] bg-brand-navy/70 backdrop-blur-md border border-white/20 rounded-2xl p-4 shadow-2xl">
-              <div className="flex items-center justify-between mb-2.5">
-                <div>
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-white/70">
-                    Example site geofence (illustration)
-                  </div>
-                  <div className="text-xs font-bold text-white mt-0.5">
-                    LKK-402 · Lekki–Epe Dual-Carriageway (KM 0+000 to KM 24+500)
-                  </div>
-                </div>
-                <span className="text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2.5 py-0.5 rounded-full">
-                  98.4% Within Corridor
-                </span>
-              </div>
-
-              {/* Stylized Vector Corridor Map Canvas */}
-              <div className="h-48 xl:h-52 rounded-xl bg-brand-dark/75 border border-white/10 relative overflow-hidden">
-                {/* Subtle Coordinate Grid */}
-                <div
-                  className="absolute inset-0 opacity-20"
-                  style={{
-                    backgroundImage:
-                      "linear-gradient(to right, rgba(148, 163, 184, 0.25) 1px, transparent 1px), linear-gradient(to bottom, rgba(148, 163, 184, 0.25) 1px, transparent 1px)",
-                    backgroundSize: "36px 36px",
-                  }}
-                />
-
-                {/* SVG Highway Corridor Buffer & Centerline */}
-                <svg
-                  viewBox="0 0 500 200"
-                  className="w-full h-full relative z-10"
-                  preserveAspectRatio="none"
-                >
-                  {/* Secondary arterial roads */}
-                  <path
-                    d="M 0 150 Q 140 130, 240 105 T 500 50"
-                    fill="none"
-                    stroke="rgba(56, 189, 248, 0.18)"
-                    strokeWidth="34"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M 0 150 Q 140 130, 240 105 T 500 50"
-                    fill="none"
-                    stroke="var(--hex-brand-sky)"
-                    strokeWidth="2.5"
-                    strokeDasharray="7 5"
-                  />
-                </svg>
-
-                {/* Pin 1: a visit photo */}
-                <div className="absolute left-[22%] top-[58%] z-20 flex items-center gap-1.5 bg-brand-navy/90 backdrop-blur-sm border border-white/20 px-2 py-1 rounded-lg shadow">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="text-[10px] text-white font-semibold">
-                    Classroom block · Photo
-                  </span>
-                </div>
-
-                {/* Pin 2: the visit in progress */}
-                <div className="absolute left-[46%] top-[40%] z-20 flex items-center gap-1.5 bg-brand-primary/95 backdrop-blur-sm border border-brand-primary/30 px-2.5 py-1 rounded-lg shadow-lg">
-                  <span className="w-2.5 h-2.5 rounded-full bg-brand-sky animate-pulse" />
-                  <span className="text-[10px] text-white font-bold">
-                    Routine visit · Checked in
-                  </span>
-                </div>
-
-                {/* Bottom GPS strip inside Map Preview */}
-                <div className="absolute bottom-2 left-2.5 right-2.5 z-20 flex items-center justify-between text-[10px] text-white/70 bg-brand-navy/75 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/10">
-                  <span>Example GPS fix · ±3.4m</span>
-                  <span>150 m site radius</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 2: Partially Overlapping Voice Note & Transcript Card (~70% Opacity + Backdrop Blur + Subtle Border) */}
-            <div className="lg:absolute lg:right-0 lg:-bottom-3 w-full lg:w-[370px] xl:w-[395px] z-30 bg-brand-navy/70 backdrop-blur-xl border border-white/20 rounded-2xl p-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.45)] space-y-2.5">
-              {/* Top Sub-Card: Submitted Voice Note Player */}
-              <div className="bg-brand-subcard/80 backdrop-blur-md border border-white/15 rounded-xl p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[11px] font-bold text-white">
-                    Submitted Voice Note (Pidgin / English)
-                  </span>
-                  <span className="text-[11px] text-brand-sky font-semibold">
-                    0:38
-                  </span>
-                </div>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-brand-primary border border-brand-primary/30 flex items-center justify-center shrink-0 shadow">
-                    <Play className="w-3.5 h-3.5 text-white fill-white ml-0.5" />
-                  </div>
-                  <div className="flex-1 flex items-center gap-1 h-7">
-                    {VOICE_WAVE_BARS.map((heightPx, idx) => (
-                      <div
-                        key={idx}
-                        style={{ height: `${heightPx}px` }}
-                        className={`w-1 rounded-full ${
-                          idx < 9 ? "bg-brand-sky" : "bg-white/25"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-[11px] text-slate-300">1.0x</span>
-                </div>
-              </div>
-
-              {/* Bottom Sub-Card: the officer's note and the voice-note transcript */}
-              <div className="bg-white/85 backdrop-blur-md border border-white/40 rounded-xl p-3 text-slate-900">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-semibold text-slate-600">
-                    Officer's note
-                  </span>
-                  <span className="text-[11px] font-bold text-emerald-700">
-                    Signed Log
-                  </span>
-                </div>
-                <p className="text-[11px] font-semibold text-slate-900 leading-relaxed">
-                  &ldquo;Cast 12m of box culvert wall at KM 14+210. 40 bags of
-                  Dangote cement and 2 trips of granite used. Blocker: Heavy
-                  rain halted pouring on Cell 2.&rdquo;
-                </p>
-                <div className="border-t border-slate-200/90 my-2" />
-                <p className="text-[10.5px] text-slate-600 leading-relaxed">
-                  <strong className="text-slate-700">Transcript:</strong>{" "}
-                  &ldquo;We dey for chainage fourteen plus two hundred this
-                  afternoon. Contractor don cast twelve meters of the box
-                  culvert wall and use forty bags of Dangote cement...&rdquo;
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Footer Bar */}
-          <div className="flex items-center justify-between text-[11px] text-white/75 pt-2 border-t border-white/10 z-10">
-            <span>
-              Project monitoring and delivery
-            </span>
-            <span>QSRBN · COREN · ICAN</span>
           </div>
         </div>
       </div>
 
-      {/* Right Full-Viewport Sign-In Panel */}
-      <div className="col-span-1 lg:col-span-5 h-full flex flex-col justify-between p-8 sm:p-10 xl:p-12 overflow-y-auto bg-white">
-        <div className="my-auto max-w-md w-full mx-auto">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
-              Sign in to Assurance Portal
-            </h2>
-            <p className="text-xs text-slate-500 mt-1.5">
-              Enter your corporate credentials or select a seeded pilot role
-              below.
-            </p>
+      {/* Sign-in */}
+      <div className="lg:col-span-5 min-h-screen flex flex-col justify-between px-6 py-8 sm:px-10 xl:px-12">
+        <div className="my-auto w-full max-w-sm mx-auto">
+          <BrandLogo className="h-14 w-14 mb-6" alt="Universal Basic Education Commission (UBEC)" />
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Sign in</h2>
+          <p className="mt-1.5 text-sm text-slate-600">{APPLICATION_NAME}</p>
 
-            {errorMsg && (
-              <div className="mt-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-medium">
-                {errorMsg}
-              </div>
-            )}
+          {errorMsg && (
+            <div role="alert" className="mt-5 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {errorMsg}
+            </div>
+          )}
 
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-              <div>
-                <label htmlFor="login-email" className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Work Email
-                </label>
-                <input
-                  id="login-email"
-                  type="email"
-                  autoComplete="username"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-brand-primary focus:bg-white transition"
-                />
-              </div>
-              <div>
-                <label htmlFor="login-password" className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Password
-                </label>
-                <input
-                  id="login-password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-brand-primary focus:bg-white transition"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-2.5 px-4 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm transition disabled:opacity-50"
-              >
-                {isSubmitting ? "Signing in..." : "Sign In to Workspace"}
-              </button>
-            </form>
-          </div>
-
-          {/* Quick-Select Demo Role Dropdown */}
-          {IS_DEMO_MODE && demoAccounts.length > 0 && (
-            <div className="mt-7 pt-5 border-t border-slate-100">
-              <div className="flex items-center justify-between mb-2">
-                <label
-                  htmlFor="demo-role-select"
-                  className="text-[11px] font-semibold uppercase tracking-wider text-slate-500"
-                >
-                  Quick-Fill Demo Role
-                </label>
-                <span className="text-[10px] font-medium text-slate-500">
-                  Select a role to autofill
-                </span>
-              </div>
-
-              <CustomSelect
-                value={selectedRoleIdx}
-                onChange={(idx) => handleSelectSeededAccount(idx)}
-                options={demoAccountOptions}
-                size="md"
+          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            <div>
+              <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium text-slate-700">
+                Work email
+              </label>
+              <input
+                id="login-email"
+                type="email"
+                autoComplete="username"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@ubec.gov.ng"
+                className={inputClass}
               />
+            </div>
+            <div>
+              <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium text-slate-700">
+                Password
+              </label>
+              <input
+                id="login-password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 disabled:opacity-60"
+            >
+              {isSubmitting ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
 
-              {/* Selected account summary card */}
+          {IS_DEMO_MODE && demoAccounts.length > 0 && (
+            <div className="mt-8 border-t border-slate-100 pt-5">
+              <label htmlFor="demo-role-select" className="mb-2 block text-sm font-medium text-slate-700">
+                Demo: sign in as
+              </label>
+              <CustomSelect id="demo-role-select" openUpward value={selectedRoleIdx} onChange={(idx) => handleSelectSeededAccount(idx)} options={demoAccountOptions} size="md" />
               {demoAccounts[selectedRoleIdx] && (
-                <div className="mt-2.5 p-2.5 rounded-xl bg-brand-primary/5 border border-brand-primary/15 flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-full bg-brand-primary text-white text-xs font-bold flex items-center justify-center shrink-0 shadow-sm">
-                      {demoAccounts[selectedRoleIdx].initials}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-slate-900">
-                        {demoAccounts[selectedRoleIdx].name}
-                      </div>
-                      <div className="text-[11px] text-slate-600">
-                        {demoAccounts[selectedRoleIdx].email} · {demoAccounts[selectedRoleIdx].organization}
-                      </div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-semibold text-brand-primary bg-white px-2 py-0.5 rounded border border-brand-primary/25 shrink-0">
-                    {demoAccounts[selectedRoleIdx].credential}
-                  </span>
-                </div>
+                <p className="mt-2 text-xs text-slate-500">
+                  {demoAccounts[selectedRoleIdx].name}, {demoAccounts[selectedRoleIdx].organization}
+                </p>
               )}
             </div>
           )}
         </div>
 
-        {/* Bottom Copyright Footer */}
-        <div className="text-[11px] text-slate-500 flex items-center justify-between max-w-md w-full mx-auto pt-4">
-          <span>&copy; 2026 {APPLICATION_NAME}</span>
-          <span>Pilot</span>
-        </div>
+        <p className="mx-auto w-full max-w-sm pt-6 text-xs text-slate-500">© 2026 Universal Basic Education Commission</p>
       </div>
     </div>
   );

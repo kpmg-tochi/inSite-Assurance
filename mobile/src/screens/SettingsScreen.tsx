@@ -92,7 +92,7 @@ export const SettingsScreen: React.FC = () => {
   return (
     <GradientHeaderLayout
       title="Settings"
-      subtitle="Manage your field profile and device preferences."
+      subtitle="Your profile and this phone."
       leftAction={<BackButton onPress={() => navigation.goBack()} />}
       rightAction={<BrandLogo size={56} />}
       contentContainerStyle={{
@@ -106,9 +106,9 @@ export const SettingsScreen: React.FC = () => {
           <View style={styles.avatarRow}>
             <Avatar forceInitials={avatarInitials} editable />
             <View style={styles.avatarTextContainer}>
-              <Text style={styles.cardLabel}>Identity Badge</Text>
+              <Text style={styles.cardLabel}>Your profile</Text>
               <Text style={styles.helperText}>
-                Your Field Profile is attached to site evidence logs.
+                Your name is recorded on the visits, photos and notes you send.
               </Text>
             </View>
           </View>
@@ -121,12 +121,12 @@ export const SettingsScreen: React.FC = () => {
             organisation.
           </Text>
           <View style={styles.inputGroup}>
-            <Text style={styles.fieldLabel}>Full Name</Text>
+            <Text style={styles.fieldLabel}>Full name</Text>
             <TextInput style={styles.input} editable={false} value={displayName} />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.fieldLabel}>Mobile Phone Number</Text>
+            <Text style={styles.fieldLabel}>Mobile phone number</Text>
             <TextInput style={styles.input} editable={false} value={phoneNumber} />
           </View>
 
@@ -142,12 +142,12 @@ export const SettingsScreen: React.FC = () => {
           <View style={[styles.card, styles.demoCard]}>
             <View style={styles.demoHeaderRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.demoSectionTitle}>Demo Controls</Text>
+                <Text style={styles.demoSectionTitle}>Demo controls</Text>
                 <Text style={styles.helperText}>
                   Restore clean seeded data.
                 </Text>
               </View>
-              <Pill variant="info" text="DEMO_MODE" />
+              <Pill variant="info" text="Demo build" />
             </View>
 
             <View style={styles.demoButtonsStack}>
@@ -173,7 +173,7 @@ export const SettingsScreen: React.FC = () => {
                     {isResettingDemo ? "Resetting Demo..." : "Reset Demo"}
                   </Text>
                   <Text style={styles.demoBtnSubtitle}>
-                    Clear SQLite profile/cache and restore Postgres back to original seed.
+                    Clears this phone and restores the demo data on the server.
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    backgroundColor: "#EFF6FF",
+    backgroundColor: "#E8F4F1",
     alignItems: "center",
     justifyContent: "center",
   },

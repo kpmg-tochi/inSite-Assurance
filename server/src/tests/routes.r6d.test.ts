@@ -20,7 +20,7 @@ let app: Express;
 let prisma: PrismaClientType;
 
 const PASSWORD = 'Password123!';
-const ADMIN = 'programme.admin@insite.ng';
+const ADMIN = 'admin@ubec.test';
 const ids: Record<string, string> = {};
 type SprintRow = { id: string; number: number; name: string; startDate: string; endDate: string; deliverables: string };
 

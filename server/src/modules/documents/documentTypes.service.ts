@@ -27,6 +27,18 @@ export async function provisionDefaultDocumentTypes(db: Db, tenantId: string): P
   });
 }
 
+const DEFAULT_DOCUMENT_TYPE_CODES = DEFAULT_DOCUMENT_TYPES.map((t) => t.code);
+
+/**
+ * Lazy path: a tenant missing any default type (created before Phase 13, or before a default was
+ * added, e.g. CLOSEOUT_REPORT in the UBEC rebrand) gets the missing ones. Types are archived, never
+ * deleted, so a missing default code was never there.
+ */
+export async function ensureDefaultDocumentTypes(db: Db, tenantId: string): Promise<void> {
+  const present = await db.documentType.count({ where: { tenantId, code: { in: DEFAULT_DOCUMENT_TYPE_CODES } } });
+  if (present < DEFAULT_DOCUMENT_TYPE_CODES.length) await provisionDefaultDocumentTypes(db, tenantId);
+}
+
 type TypeRow = Prisma.DocumentTypeGetPayload<{ include: { _count: { select: { documents: true } } } }>;
 
 function serialize(t: TypeRow): DocumentTypeDto {
@@ -45,10 +57,8 @@ function serialize(t: TypeRow): DocumentTypeDto {
 }
 
 export async function listDocumentTypes(tenantId: string, includeArchived = false): Promise<DocumentTypeDto[]> {
-  // Tenants created before Phase 13 (or by an older seed) get the defaults on first use.
-  if ((await prisma.documentType.count({ where: { tenantId } })) === 0) {
-    await provisionDefaultDocumentTypes(prisma, tenantId);
-  }
+  // Tenants created before Phase 13 (or before a default was added) get the defaults on first use.
+  await ensureDefaultDocumentTypes(prisma, tenantId);
   const rows = await prisma.documentType.findMany({
     where: { tenantId, ...(includeArchived ? {} : { isArchived: false }) },
     orderBy: [{ isArchived: 'asc' }, { name: 'asc' }],

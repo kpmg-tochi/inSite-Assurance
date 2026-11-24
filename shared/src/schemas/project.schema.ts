@@ -113,7 +113,7 @@ export type PortfolioProjectPin = z.infer<typeof PortfolioProjectPinSchema>;
 
 
 // ---------------------------------------------------------------------------
-// Portfolio dashboard (map + KPI cards), permission projects:view_portfolio
+// Portfolio dashboard (map + KPI cards). UBEC rebrand: any web user (the directory visibility rule)
 // ---------------------------------------------------------------------------
 
 /** One project on the portfolio map. "point" is the geofence centroid (server-computed). */
@@ -134,9 +134,21 @@ export const PortfolioOverviewProjectSchema = z.object({
   point: z.object({ latitude: z.number(), longitude: z.number() }).nullable(),
   /** Redesign R6c (D-R6.22): the stage chip. */
   stage: ProjectStageSummarySchema.nullable(),
+  /** UBEC rebrand: the project's contractor (one per project, decision T), for the projects table. */
+  contractorName: z.string().nullable(),
+  /** UBEC rebrand: findings with status OPEN. */
+  openFindingsCount: z.number().int(),
   ...ProjectDeliveryModelFieldsSchema.shape,
 });
 export type PortfolioOverviewProject = z.infer<typeof PortfolioOverviewProjectSchema>;
+
+/**
+ * UBEC rebrand: a project still being delivered (status ACTIVE, construction phase
+ * ACTIVE_CONSTRUCTION or HANDOVER_IN_PROGRESS). Shared so the KPI card and the table filter agree.
+ */
+export function isOngoingProject(p: { status: string; constructionPhase: string }): boolean {
+  return p.status === 'ACTIVE' && (p.constructionPhase === 'ACTIVE_CONSTRUCTION' || p.constructionPhase === 'HANDOVER_IN_PROGRESS');
+}
 
 /** Days without a field capture after which a live site counts as quiet. */
 export const PORTFOLIO_QUIET_SITE_DAYS = 7;
@@ -155,6 +167,17 @@ export const PortfolioOverviewKpisSchema = z.object({
   /** Projects in handover or their defects liability period. */
   closeoutCount: z.number().int(),
   retentionHeldNgn: z.number(),
+  /** UBEC rebrand: projects for which `isOngoingProject` holds. */
+  ongoingCount: z.number().int(),
+  /** UBEC rebrand: open findings over the projects in view. */
+  openFindingsCount: z.number().int(),
+  /**
+   * UBEC rebrand: visits on the projects in view planned from today (project zone) to today + 7
+   * days, status PLANNED or IN_PROGRESS.
+   */
+  upcomingVisitCount: z.number().int(),
+  /** UBEC rebrand: visits MISSED, or PLANNED / IN_PROGRESS with a planned date before today. */
+  overdueVisitCount: z.number().int(),
 });
 export type PortfolioOverviewKpis = z.infer<typeof PortfolioOverviewKpisSchema>;
 

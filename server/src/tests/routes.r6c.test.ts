@@ -30,9 +30,10 @@ const tokens: Record<string, string> = {};
 const today = zonedCalendarDate(new Date(), 'Africa/Lagos');
 const ids: Record<string, string> = {};
 
-const ADMIN = 'programme.admin@insite.ng';
-const MONITOR = 'programme.monitor@insite.ng';
-const FUNDER = 'programme.funder@insite.ng';
+const ADMIN = 'admin@ubec.test';
+const MONITOR = 'me.officer@ubec.test';
+/** UBEC roster: the Independent M&E (assigned to PRG-105; no defect permission) replaces the funder. */
+const FUNDER = 'independent.me@ubec.test';
 const VIEWER = 'r6c.viewer@insite.test';
 
 async function web(email: string) {
@@ -199,7 +200,7 @@ describe('R6c: project Overview', () => {
     }
   });
 
-  it('the funder sees sprints, visits, deadlines and findings but not defects', async () => {
+  it('the Independent M&E sees sprints, visits, deadlines and findings but not defects', async () => {
     const o = await overview(FUNDER, 'PRG-105');
     assert.equal(o.currentSprint?.number, 3);
     assert.ok(o.nextVisit);

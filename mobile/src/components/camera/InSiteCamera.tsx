@@ -190,7 +190,7 @@ export const InSiteCamera = forwardRef<InSiteCameraHandle, InSiteCameraProps>(
     if (!permission) {
       return (
         <View style={styles.permissionContainer}>
-          <ActivityIndicator size="large" color="#38BDF8" />
+          <ActivityIndicator size="large" color="#FFBF00" />
           <Text style={styles.permissionSubtitle}>
             Initializing camera hardware...
           </Text>
@@ -342,7 +342,7 @@ export const InSiteCamera = forwardRef<InSiteCameraHandle, InSiteCameraProps>(
               accessibilityLabel="Capture photo"
             >
               {isCapturing ? (
-                <ActivityIndicator size="small" color="#00338D" />
+                <ActivityIndicator size="small" color="#00715D" />
               ) : (
                 <View style={styles.shutterInner} />
               )}
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
   },
   permissionContainer: {
     flex: 1,
-    backgroundColor: "#0C233C",
+    backgroundColor: "#122F2A",
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
@@ -380,11 +380,11 @@ const styles = StyleSheet.create({
   permissionTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#0C233C",
+    color: "#122F2A",
   },
   permissionSubtitle: {
     fontSize: 13,
-    color: "#93C5FD",
+    color: "#A7D8CB",
     marginTop: 12,
   },
   permissionBody: {
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   permissionButton: {
-    backgroundColor: "#00338D",
+    backgroundColor: "#00715D",
     paddingVertical: 13,
     borderRadius: 12,
     alignItems: "center",
@@ -442,8 +442,8 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
   },
   utilityPillActive: {
-    backgroundColor: "#00338D",
-    borderColor: "#38BDF8",
+    backgroundColor: "#00715D",
+    borderColor: "#FFBF00",
   },
   utilityPillText: {
     color: "#FFFFFF",

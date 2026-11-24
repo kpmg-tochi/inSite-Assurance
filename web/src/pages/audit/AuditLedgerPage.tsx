@@ -13,6 +13,7 @@ import {
 } from "../../components/table";
 import Drawer from "../../components/Drawer";
 import Loader from "../../components/Loader";
+import { TAB_LIST_CLASS, tabCountClass, tabItemClass } from "../../components/common/Tabs";
 import { ShieldCheck, X, FileText, User, Tag } from "lucide-react";
 
 type AuditLedgerEntry = AuditTrailResponseDto["entries"][number];
@@ -167,29 +168,24 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
   return (
     <div className="space-y-4">
       {/* Sub-navigation Tabs */}
-      <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
-        <button
-          type="button"
-          onClick={() => setActiveTab("ledger")}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-            activeTab === "ledger"
-              ? "bg-white text-slate-900 shadow-2xs"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
-        >
-          Project Audit Ledger
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("tenant")}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-            activeTab === "tenant"
-              ? "bg-white text-slate-900 shadow-2xs"
-              : "text-slate-600 hover:text-slate-900"
-          }`}
-        >
-          Tenant Governance Ledger
-        </button>
+      <div role="tablist" aria-label="Audit ledger" className={TAB_LIST_CLASS}>
+        {(
+          [
+            ["ledger", "Project audit ledger"],
+            ["tenant", "Tenant governance ledger"],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === id}
+            onClick={() => setActiveTab(id)}
+            className={tabItemClass(activeTab === id)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {isLoading ? (
@@ -259,51 +255,26 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
           placeholder: "Search actor, action, or governance summary...",
         }}
         filters={
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setRoleFilter("ALL")}
-              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
-                roleFilter === "ALL"
-                  ? "bg-brand-navy text-white shadow-2xs"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
-              }`}
-            >
-              All ({entries.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setRoleFilter("WEB_USER")}
-              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
-                roleFilter === "WEB_USER"
-                  ? "bg-brand-primary text-white shadow-2xs"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
-              }`}
-            >
-              Portal Users
-            </button>
-            <button
-              type="button"
-              onClick={() => setRoleFilter("FIELD_AGENT")}
-              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
-                roleFilter === "FIELD_AGENT"
-                  ? "bg-amber-600 text-white shadow-2xs"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
-              }`}
-            >
-              Field Agents
-            </button>
-            <button
-              type="button"
-              onClick={() => setRoleFilter("SYSTEM")}
-              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition ${
-                roleFilter === "SYSTEM"
-                  ? "bg-slate-700 text-white shadow-2xs"
-                  : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
-              }`}
-            >
-              System
-            </button>
+          <div role="group" aria-label="Show events by" className={TAB_LIST_CLASS}>
+            {(
+              [
+                ["ALL", "All"],
+                ["WEB_USER", "Portal users"],
+                ["FIELD_AGENT", "Field agents"],
+                ["SYSTEM", "System"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={roleFilter === id}
+                onClick={() => setRoleFilter(id)}
+                className={tabItemClass(roleFilter === id)}
+              >
+                {label}
+                {id === "ALL" && <span className={tabCountClass(roleFilter === id)}>{entries.length}</span>}
+              </button>
+            ))}
           </div>
         }
         columns={columns}

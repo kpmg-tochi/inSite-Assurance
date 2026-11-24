@@ -135,7 +135,7 @@ export const VoiceNoteBubble: React.FC<VoiceNoteBubbleProps> = ({
             isRecording={false}
             progressRatio={progressRatio}
             maxHeight={26}
-            activeColor={isMe ? "#FFFFFF" : "#00338D"}
+            activeColor={isMe ? "#FFFFFF" : "#00715D"}
             inactiveColor={isMe ? "rgba(255,255,255,0.35)" : "#CBD5E1"}
           />
         </View>
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
   },
   bubbleMe: {
     alignSelf: "flex-end",
-    backgroundColor: "#00338D",
+    backgroundColor: "#00715D",
     borderBottomRightRadius: 4,
   },
   bubbleOther: {
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
   senderTextMe: {
-    color: "#BFDBFE",
+    color: "#B5DDD3",
   },
   playerRow: {
     flexDirection: "row",
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   playBtnOther: {
-    backgroundColor: "#00338D",
+    backgroundColor: "#00715D",
   },
   playIcon: {
     fontSize: 13,
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
   playIconMe: {
-    color: "#00338D",
+    color: "#00715D",
   },
   waveWrap: {
     flex: 1,
@@ -235,6 +235,6 @@ const styles = StyleSheet.create({
     color: "#64748B",
   },
   metaTextMe: {
-    color: "#BFDBFE",
+    color: "#B5DDD3",
   },
 });

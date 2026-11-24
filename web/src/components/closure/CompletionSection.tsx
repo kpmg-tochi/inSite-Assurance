@@ -16,7 +16,7 @@ import Loader from "../Loader";
 import { useAuth } from "../../lib/auth-context";
 import { useConfirmDialog } from "../process/ConfirmDialog";
 import { ModalActions, ModalShell, inputClass } from "../common/ModalShell";
-import { StatusChip } from "../contracts/contractUi";
+import { StatusText, type StatusTone } from "../common/StatusText";
 import { useProjectCompletionQuery } from "../../queries/closure/useClosureQueries";
 import {
   useDraftCertificateMutation,
@@ -28,11 +28,11 @@ import {
 } from "../../mutations/closure/useClosureMutations";
 import { useOpenDocumentMutation } from "../../mutations/contracts/useContractMutations";
 
-const STATUS_CLS: Record<CompletionCertificateStatus, string> = {
-  DRAFT: "bg-slate-100 text-slate-700 border-slate-200",
-  PENDING_SIGNATURES: "bg-amber-50 text-amber-800 border-amber-200",
-  ISSUED: "bg-emerald-50 text-emerald-800 border-emerald-200",
-  REVOKED: "bg-rose-50 text-rose-700 border-rose-200",
+const STATUS_TONE: Record<CompletionCertificateStatus, StatusTone> = {
+  DRAFT: "neutral",
+  PENDING_SIGNATURES: "pending",
+  ISSUED: "good",
+  REVOKED: "bad",
 };
 
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "—");
@@ -210,7 +210,7 @@ function CertificatePanel({ projectId, cert }: { projectId: string; cert: Comple
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-xs text-slate-700">
         <span className="font-bold text-slate-900">{cert.certificateNumber}</span>
-        <StatusChip label={COMPLETION_CERTIFICATE_STATUS_META[cert.status].label} cls={STATUS_CLS[cert.status]} />
+        <StatusText label={COMPLETION_CERTIFICATE_STATUS_META[cert.status].label} tone={STATUS_TONE[cert.status]} />
         <span>Completion {cert.completionDate}</span>
         {cert.issuedAt && <span>· issued {fmt(cert.issuedAt)}</span>}
         <span>

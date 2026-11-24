@@ -1,22 +1,16 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  CalendarDays,
-  ClipboardList,
-  FileSearch,
-  Flag,
-  FolderKanban,
+  ClipboardCheck,
   FolderOpen,
-  Gauge,
   Globe2,
-  Handshake,
   LayoutDashboard,
-  Lightbulb,
-  School,
+  Route,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
   Wallet,
 } from "lucide-react";
+import type { ProjectStageSummary } from "@insite/shared";
 import { MILESTONE_VIEW_PERMISSIONS } from "../components/contracts/contractUi";
 import { COMPLETION_PAGE_PERMISSIONS } from "../pages/completion/completionPermissions";
 
@@ -38,71 +32,128 @@ export interface NavItem {
   group: NavGroup;
   /** Workspace entries ignore the project id. */
   to: (projectId: string) => string;
+  /** When the target depends on the project (e.g. its current stage); wins over `to` when a project is known. */
+  toForProject?: (project: { id: string; stage: ProjectStageSummary | null }) => string;
+  /** Header page name per route segment, for an entry that spans several pages. */
+  segmentTitles?: Readonly<Record<string, string>>;
   /** Route segments this entry owns: its own and the legacy ones that redirect to it. */
   segments: readonly string[];
   /** Active only on this `?tab=` value, or never on it (two entries on one page). */
   tab?: { only?: string; not?: string };
   /** Shown when the user holds any of these; omitted = everyone who can open the portal. */
   anyOf?: readonly string[];
+  /** Hidden when the user holds any of these (the Dashboard is for people without the Portfolio). */
+  noneOf?: readonly string[];
+}
+
+/** UBEC rebrand: the workspace home. Portfolio for programme admins, Dashboard for everyone else. */
+export const PORTFOLIO_PERMISSION = "projects:view_portfolio";
+
+export function workspaceHomePath(hasAnyPermission: (...keys: string[]) => boolean): string {
+  return hasAnyPermission(PORTFOLIO_PERMISSION) ? "/app/portfolio" : "/app/dashboard";
 }
 
 const projectPath = (projectId: string, rest: string) => `/app/projects/${projectId}/${rest}`;
 
-/** Tenant entries, in spec order (D-R6.13). */
-export const WORKSPACE_NAV: readonly NavItem[] = [
-  { key: "portfolio", label: "Portfolio", icon: Globe2, group: "workspace", to: () => "/app/portfolio", segments: ["portfolio"], anyOf: ["projects:view_portfolio"] },
-  { key: "projects", label: "Projects", icon: FolderKanban, group: "workspace", to: () => "/app/projects", segments: ["projects"] },
-  { key: "visit-planner", label: "Visit planner", icon: CalendarDays, group: "workspace", to: () => "/app/visits", segments: ["visits"], anyOf: ["visits:view"] },
-  { key: "kpis", label: "KPIs", pageTitle: "Programme KPIs", icon: Gauge, group: "workspace", to: () => "/app/kpis", segments: ["kpis"], anyOf: ["kpis:view"] },
-  { key: "lessons", label: "Lessons learned", icon: Lightbulb, group: "workspace", to: () => "/app/lessons", segments: ["lessons"], anyOf: ["lessons:view"] },
-  { key: "forms", label: "Forms & facilities", icon: School, group: "workspace", to: () => "/app/forms", segments: ["forms"], anyOf: ["facilities:manage", "forms:manage"] },
-  { key: "settings", label: "Settings", icon: Settings, group: "workspace", to: () => "/app/settings", segments: ["settings"] },
+/** Holders of any of these administer the workspace and see Settings in the sidebar. */
+export const SETTINGS_ADMIN_PERMISSIONS: readonly string[] = [
+  "users:invite_manage",
+  "roles:create_edit",
+  "project_types:manage",
+  "forms:manage",
+  "facilities:manage",
+  "tenant:manage_settings",
 ];
 
-/** Project entries, in spec 10.2 order (D-R6.14). */
-export const PROJECT_NAV: readonly NavItem[] = [
-  { key: "overview", label: "Overview", icon: LayoutDashboard, group: "project", to: (id) => projectPath(id, "dashboard"), segments: ["dashboard"] },
+/**
+ * The stage pages of a project, in the order a project moves through them. "Project stages" opens
+ * the one the project is in: kick-off until mobilisation is over, scope and sprints while it is
+ * being built, completion and handover from then on.
+ */
+export const STAGE_PAGES = [
+  { segment: "kickoff", label: "Kick-off & mobilisation", anyOf: MILESTONE_VIEW_PERMISSIONS },
+  { segment: "scope", label: "Scope & sprints", anyOf: ["boq:view"] as readonly string[] },
+  { segment: "completion", label: "Completion & handover", anyOf: COMPLETION_PAGE_PERMISSIONS },
+] as const;
+
+export function currentStageSegment(stage: ProjectStageSummary | null | undefined): "kickoff" | "scope" | "completion" {
+  switch (stage?.current) {
+    case "CONSTRUCTION":
+      return "scope";
+    case "COMPLETION":
+    case "CLOSURE":
+      return "completion";
+    default:
+      return "kickoff";
+  }
+}
+
+/**
+ * Tenant entries (UBEC rebrand): only the workspace home and Settings. Projects, the visit planner
+ * and the KPIs are tabs of the home page; Forms & facilities is a Settings tab; the lessons library
+ * has no entry (lessons come in the closeout report). Projects are opened from the home page only.
+ */
+export const WORKSPACE_NAV: readonly NavItem[] = [
   {
-    key: "kickoff",
-    label: "Kick-off & mobilisation",
-    icon: Flag,
+    key: "portfolio",
+    label: "Portfolio",
+    icon: Globe2,
+    group: "workspace",
+    to: () => "/app/portfolio",
+    segments: ["portfolio", "projects", "kpis", "visits"],
+    anyOf: [PORTFOLIO_PERMISSION],
+  },
+  {
+    key: "dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    group: "workspace",
+    to: () => "/app/dashboard",
+    segments: ["dashboard", "projects", "kpis", "visits"],
+    noneOf: [PORTFOLIO_PERMISSION],
+  },
+  {
+    key: "settings",
+    label: "Settings",
+    icon: Settings,
+    group: "workspace",
+    to: () => "/app/settings",
+    segments: ["settings", "forms"],
+    // Admins only (owner, UBEC rebrand); everyone keeps their account page through the user menu.
+    anyOf: SETTINGS_ADMIN_PERMISSIONS,
+  },
+];
+
+/**
+ * Project entries (UBEC rebrand: as few as possible for non-technical users). Project stages holds
+ * the kick-off, scope and completion pages as stage tabs; Reports holds visits, findings and the site
+ * log as tabs of one page.
+ */
+export const PROJECT_NAV: readonly NavItem[] = [
+  { key: "overview", label: "Project overview", icon: LayoutDashboard, group: "project", to: (id) => projectPath(id, "dashboard"), segments: ["dashboard"] },
+  {
+    key: "stages",
+    label: "Project stages",
+    icon: Route,
     group: "project",
     to: (id) => projectPath(id, "kickoff"),
-    segments: ["kickoff", "milestones"],
-    anyOf: MILESTONE_VIEW_PERMISSIONS,
+    toForProject: (p) => projectPath(p.id, currentStageSegment(p.stage)),
+    segments: ["kickoff", "milestones", "scope", "boq", "schedule", "completion", "handover", "retention", "closure"],
+    segmentTitles: { kickoff: "Kick-off & mobilisation", scope: "Scope & sprints", completion: "Completion & handover" },
+    anyOf: [...MILESTONE_VIEW_PERMISSIONS, "boq:view", ...COMPLETION_PAGE_PERMISSIONS],
   },
-  { key: "scope", label: "Sprints & scope", icon: ClipboardList, group: "project", to: (id) => projectPath(id, "scope"), segments: ["scope", "boq", "schedule"], anyOf: ["boq:view"] },
   {
-    key: "visits",
-    label: "Visits & reports",
-    icon: CalendarDays,
+    key: "reports",
+    label: "Reports",
+    pageTitle: "Visits, reports and findings",
+    icon: ClipboardCheck,
     group: "project",
     to: (id) => projectPath(id, "visits"),
     segments: ["visits", "inspections"],
-    tab: { not: "findings" },
-    anyOf: ["visits:view"],
-  },
-  {
-    key: "findings",
-    label: "Findings",
-    icon: FileSearch,
-    group: "project",
-    to: (id) => projectPath(id, "visits?tab=findings"),
-    segments: ["visits"],
-    tab: { only: "findings" },
     anyOf: ["visits:view"],
   },
   { key: "payments", label: "Payments", icon: Wallet, group: "project", to: (id) => projectPath(id, "payments"), segments: ["payments"], anyOf: ["payments:view", "payments:record"] },
   { key: "documents", label: "Documents", icon: FolderOpen, group: "project", to: (id) => projectPath(id, "documents"), segments: ["documents"], anyOf: ["documents:view", "documents:upload"] },
-  {
-    key: "completion",
-    label: "Completion & handover",
-    icon: Handshake,
-    group: "project",
-    to: (id) => projectPath(id, "completion"),
-    segments: ["completion", "handover", "retention", "closure"],
-    anyOf: COMPLETION_PAGE_PERMISSIONS,
-  },
 ];
 
 /** "More ▸" entries of the project group. */
@@ -110,7 +161,7 @@ export const PROJECT_MORE_NAV: readonly NavItem[] = [
   { key: "audit", label: "Audit ledger", icon: ShieldCheck, group: "more", to: (id) => projectPath(id, "audit"), segments: ["audit"], anyOf: ["audit:view_ledger"] },
   {
     key: "project-settings",
-    label: "Settings",
+    label: "Project settings",
     pageTitle: "Project settings",
     icon: SlidersHorizontal,
     group: "more",
@@ -125,7 +176,7 @@ export const ALL_PROJECT_NAV: readonly NavItem[] = [...PROJECT_NAV, ...PROJECT_M
 
 /** Header names of pages that have no navigation entry. */
 const OTHER_PROJECT_PAGES: Record<string, string> = { setup: "Project setup" };
-const OTHER_WORKSPACE_PAGES: Record<string, string> = { organizations: "Contractor ratings" };
+const OTHER_WORKSPACE_PAGES: Record<string, string> = { organizations: "Contractor ratings", lessons: "Lessons learned" };
 
 export interface AppLocation {
   /** Set on /app/projects/:projectId/... (not on /app/projects or /app/projects/new). */
@@ -162,15 +213,22 @@ export function findNavItem(loc: AppLocation): NavItem | null {
   return list.find((item) => navItemMatches(item, loc)) ?? null;
 }
 
+/** The workspace entry for a location, among the entries this user sees (Portfolio and Dashboard share segments). */
+export function findVisibleNavItem(loc: AppLocation, hasAnyPermission: (...keys: string[]) => boolean): NavItem | null {
+  const list = loc.projectId ? ALL_PROJECT_NAV : WORKSPACE_NAV;
+  return list.find((item) => canSeeNavItem(item, hasAnyPermission) && navItemMatches(item, loc)) ?? null;
+}
+
 export function canSeeNavItem(item: NavItem, hasAnyPermission: (...keys: string[]) => boolean): boolean {
+  if (item.noneOf && hasAnyPermission(...item.noneOf)) return false;
   return !item.anyOf || hasAnyPermission(...item.anyOf);
 }
 
 /** The header page name for a location. */
-export function pageNameFor(loc: AppLocation): string {
-  if (loc.isNewProject) return "New Project";
-  const item = findNavItem(loc);
-  if (item) return item.pageTitle ?? item.label;
+export function pageNameFor(loc: AppLocation, hasAnyPermission?: (...keys: string[]) => boolean): string {
+  if (loc.isNewProject) return "New project";
+  const item = hasAnyPermission ? findVisibleNavItem(loc, hasAnyPermission) : findNavItem(loc);
+  if (item) return item.segmentTitles?.[loc.segment] ?? item.pageTitle ?? item.label;
   if (loc.projectId) return OTHER_PROJECT_PAGES[loc.segment] ?? "Project";
   return OTHER_WORKSPACE_PAGES[loc.segment] ?? "";
 }
@@ -186,7 +244,7 @@ export function sameSubPageFor(
 ): string {
   const item = loc.projectId ? findNavItem(loc) : null;
   if (!item || !canSeeNavItem(item, hasAnyPermission)) return projectPath(projectId, "dashboard");
-  const to = item.to(projectId);
+  const to = item.segments.includes(loc.segment) && item.segmentTitles?.[loc.segment] ? projectPath(projectId, loc.segment) : item.to(projectId);
   if (loc.tab && !item.tab?.only && !to.includes("?")) return `${to}?tab=${encodeURIComponent(loc.tab)}`;
   return to;
 }

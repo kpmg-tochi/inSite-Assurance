@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0C233C',
+    color: '#122F2A',
     textAlign: 'center',
   },
   description: {
@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 6,
-    backgroundColor: '#00338D',
+    backgroundColor: '#00715D',
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 10,

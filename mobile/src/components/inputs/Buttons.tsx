@@ -91,6 +91,23 @@ export const BackButton: FC<BackButtonProps> = ({
   );
 };
 
+/**
+ * Back to Home (the dashboard: calendar and every project) from anywhere in a project. Home is where
+ * officers switch project, so every project-level screen carries this in its header.
+ */
+export const HomeButton: FC<{ onPress: () => void; color?: string }> = ({ onPress, color = "#FFF" }) => (
+  <TouchableOpacity
+    onPress={onPress}
+    style={styles.iconButtonContent}
+    accessibilityRole="button"
+    accessibilityLabel="Home: all projects"
+    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+  >
+    <MaterialCommunityIcons name="home-outline" size={24} color={color} />
+    <Text style={{ color, fontSize: 10, fontWeight: "600" }}>Home</Text>
+  </TouchableOpacity>
+);
+
 interface IconButtonProps {
   onPress: () => void;
   color?: string;

@@ -15,6 +15,7 @@ import { prisma } from "../config/prisma";
 import type { FieldAgentJwtPayload, WebJwtPayload } from "../middleware/auth.middleware";
 import { PROGRAMME_TENANT_SLUG } from "./seedPhase11";
 import { payloadFor } from "./seedPhase13";
+import { INDEPENDENT_ME_EMAIL, LAGOS_ME_EMAIL, RESIDENT_SUPERVISOR_EMAIL, UBEC_ME_EMAIL } from "./seedUbecRoster";
 import { proposeVisitsFromType } from "../modules/visits/visitPlan.service";
 import { createVisit, publishVisits } from "../modules/visits/visits.service";
 import { webVisitActor } from "../modules/visits/visitCore";
@@ -26,20 +27,24 @@ import { runFindingEscalations, runVisitDeadlines } from "../jobs/visitJobs";
 
 /**
  * Redesign R4 seed. Runs after seedR3.
- * - Both programme types get the default visit plan (D-R4.13; Co-Funded also a post-closure
- *   evaluation on its PROJECT_CLOSED milestone, else 180 days after closing), merged without a version
- *   bump into the types and their projects' snapshots (seed only, as Phases 13–16 and R3 do).
- * - `resident.supervisor@` (provisioned mobile, Independent Resident) is the visit officer; the visits
+ * - Both programme types get the default visit plan (D-R4.13) with weekly routine supervision visits
+ *   (UBEC manual: Resident Supervisors visit weekly; the default plan has every two weeks). Matching
+ *   Grants also gets a post-closure evaluation (on its PROJECT_CLOSED milestone, else 180 days after
+ *   closing). Merged without a version bump into the types and their projects' snapshots (seed only,
+ *   as Phases 13–16 and R3 do).
+ * - `resident.supervisor@ubec.test` (mobile only, Resident Supervisor) is the visit officer; the visits
  *   below go through the real services (forms frozen, submissions validated, the approval chain run).
  *
  * | Project | Visits                                                                                       |
  * | ------- | -------------------------------------------------------------------------------------------- |
  * | PRG-102 | mobilisation checks every 2 weeks until mobilised (proposed); the first one published        |
  * | PRG-105 | plan proposed; the next three published; one routine visit tomorrow; a pending date proposal  |
- * |         | and a decline for `programme.monitor@`; sprint 1 verified PARTLY_MET (BEHIND), sprint 2 late  |
+ * |         | and a decline for `me.officer@ubec.test`; sprint 1 verified PARTLY_MET (BEHIND), sprint 2 late  |
  * | PRG-211 | accepted baseline; a routine visit 40 days ago uploaded today (late); a routine visit with a  |
  * |         | major finding open for 20 days (escalated)                                                    |
  * | PRG-221 | a quarterly M&E visit that was never submitted (missed)                                      |
+ * | M&E    | UBEC roster: me.officer@ leads a routine visit on PRG-105 (in 2 working days); independent.me@ |
+ * |         | an ad hoc visit on PRG-105 (in 4); lagos.me@ a mobilisation check on PRG-221 (in 2)            |
  */
 
 const SEED_DEVICE_ID = "SEED-RESIDENT-SUPERVISOR-PHONE";
@@ -48,9 +53,13 @@ const SEED_DEVICE_ID = "SEED-RESIDENT-SUPERVISOR-PHONE";
 async function fieldAgentFor(userId: string, projectId: string): Promise<FieldAgentJwtPayload> {
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
-    include: { mobileRole: { include: { rolePermissions: { include: { permission: { select: { key: true } } } } } } },
+    include: {
+      role: { include: { rolePermissions: { include: { permission: { select: { key: true } } } } } },
+      mobileRole: { include: { rolePermissions: { include: { permission: { select: { key: true } } } } } },
+    },
   });
-  const role = user.mobileRole!;
+  // The separate mobile role if any, else the main role (a mobile-only account, UBEC roster).
+  const role = user.mobileRole ?? user.role;
   let device = await prisma.mobileDevice.findFirst({ where: { userId, deviceId: SEED_DEVICE_ID } });
   if (!device) {
     const { publicKey } = crypto.generateKeyPairSync("ed25519");
@@ -175,7 +184,8 @@ async function submitAndAccept(
 export async function seedR4(): Promise<void> {
   const programme = await prisma.tenant.findUniqueOrThrow({ where: { slug: PROGRAMME_TENANT_SLUG } });
   for (const type of await prisma.projectType.findMany({ where: { tenantId: programme.id } })) {
-    const visitPlan: VisitPlanRuleInput[] = type.code === "CO_FUNDED" ? [...DEFAULT_VISIT_PLAN, DEFAULT_POST_CLOSURE_RULE] : [...DEFAULT_VISIT_PLAN];
+    const plan = DEFAULT_VISIT_PLAN.map((r) => (r.key === "routine" ? { ...r, intervalWeeks: 1 } : r));
+    const visitPlan: VisitPlanRuleInput[] = type.code === "CO_FUNDED" ? [...plan, DEFAULT_POST_CLOSURE_RULE] : plan;
     const merge = (raw: unknown) => {
       const base = ProjectTypeConfigSchema.parse(raw ?? {});
       return ProjectTypeConfigSchema.parse({ ...base, monitoring: { ...base.monitoring, visitPlan } });
@@ -191,8 +201,8 @@ export async function seedR4(): Promise<void> {
     }
   }
 
-  const resident = await prisma.user.findUniqueOrThrow({ where: { email: "resident.supervisor@insite.ng" } });
-  const monitor = await payloadFor("programme.monitor@insite.ng");
+  const resident = await prisma.user.findUniqueOrThrow({ where: { email: RESIDENT_SUPERVISOR_EMAIL } });
+  const monitor = await payloadFor(UBEC_ME_EMAIL);
   const byCode = (code: string) => prisma.project.findFirstOrThrow({ where: { tenantId: programme.id, codePrefix: code } });
   const lead = [{ userId: resident.id, isLead: true }];
   const now = new Date();
@@ -267,6 +277,21 @@ export async function seedR4(): Promise<void> {
   const prg221 = await prisma.project.findFirst({ where: { tenantId: programme.id, codePrefix: "PRG-221", status: "ACTIVE" } });
   if (prg221) {
     await createVisit(prg221.id, monitor, { visitKind: "QUARTERLY_ME", plannedDate: addWorkdays(today, -20, workdays), assignees: lead, pickedFacilityIds: [], proposed: false });
+  }
+
+  // ---- UBEC roster: the three M&E officers carry out visits on the field app too -------------------
+  // Published (form frozen) and upcoming, so each shows on that officer's phone (GET /visits/mine).
+  const officerOf = async (email: string) => [{ userId: (await prisma.user.findUniqueOrThrow({ where: { email } })).id, isLead: true }];
+  // PRG-105 (Direct Intervention): a routine visit led by the UBEC M&E officer.
+  await createVisit(prg105.id, monitor, { visitKind: "ROUTINE", plannedDate: addWorkdays(today, 2, workdays), assignees: await officerOf(UBEC_ME_EMAIL), pickedFacilityIds: [], proposed: false });
+  // PRG-105: an ad hoc independent visit by the COREN-certified firm, on one facility.
+  const unit105 = await prisma.facilityUnit.findFirst({ where: { projectId: prg105.id }, orderBy: { createdAt: "asc" }, select: { facilityId: true } });
+  if (unit105) {
+    await createVisit(prg105.id, monitor, { visitKind: "AD_HOC", plannedDate: addWorkdays(today, 4, workdays), assignees: await officerOf(INDEPENDENT_ME_EMAIL), pickedFacilityIds: [unit105.facilityId], proposed: false });
+  }
+  // PRG-221 (Matching Grants, Lagos SUBEB): a mobilisation check led by the Lagos SUBEB M&E officer.
+  if (prg221) {
+    await createVisit(prg221.id, monitor, { visitKind: "MOBILISATION_CHECK", plannedDate: addWorkdays(today, 2, workdays), assignees: await officerOf(LAGOS_ME_EMAIL), pickedFacilityIds: [], proposed: false });
   }
   // Missed visits and ended sprints are flagged by the deadlines job (as overnight).
   await runVisitDeadlines({ now });

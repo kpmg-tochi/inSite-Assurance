@@ -1,15 +1,16 @@
 import { Prisma } from "@prisma/client";
 import { ProjectTypeConfigSchema } from "@insite/shared";
 import { prisma } from "../config/prisma";
-import { PROGRAMME_TENANT_SLUG } from "./seedPhase11";
+import { ME_CONSULTANTS_NAME, PROGRAMME_TENANT_SLUG, UBEC_ORG_NAME } from "./seedPhase11";
+import { INDEPENDENT_ME_EMAIL, UBEC_ME_EMAIL, UBEC_ROLE } from "./seedUbecRoster";
 
 /**
  * Phase 12 seed (redesign R1b removed payment milestones, R1d removed professional registration):
  * - Programme tenant: both project types default new projects to 5% retention over 12 months. Type
  *   versions stay 1; project snapshots get the same config.
- * - A programme monitor (programme.monitor@insite.ng) and a funding-authority finance officer
- *   (programme.funder@insite.ng), both on the live Central project.
- * - Central project PRG-102: a BOQ in three bills (substructure, superstructure, finishes and
+ * - The UBEC M&E officer (me.officer@ubec.test) and the Independent M&E (independent.me@ubec.test),
+ *   both on the live Direct Intervention project PRG-102.
+ * - Direct Intervention project PRG-102: a BOQ in three bills (substructure, superstructure, finishes and
  *   WASH), 5% retention.
  */
 export async function seedPhase12(p: { passwordHash: string }) {
@@ -44,41 +45,30 @@ export async function seedPhase12(p: { passwordHash: string }) {
   const central = await prisma.project.findFirst({ where: { tenantId: tenant.id, codePrefix: "PRG-102" } });
   if (!central) return;
 
-  // People: a monitor and a finance officer.
-  const monitorOrg = await prisma.organization.findFirst({
-    where: { tenantId: tenant.id, name: "Programme Monitoring Consultants" },
-  });
-  const flagship = await prisma.organization.findFirst({ where: { tenantId: tenant.id, name: "Programme Authority" } });
-  const monitorRole = await prisma.role.findFirst({ where: { tenantId: tenant.id, code: "MONITOR" } });
-  const lenderRole = await prisma.role.findFirst({ where: { tenantId: tenant.id, code: "LENDER" } });
-  if (monitorOrg && monitorRole) {
-    const monitor = await prisma.user.create({
+  // People (UBEC roster): the UBEC M&E officer (web login) and the Independent M&E from the
+  // COREN-certified firm, both on PRG-102. Finance has no login: the UBEC administrator records payments.
+  const monitorOrg = await prisma.organization.findFirstOrThrow({ where: { tenantId: tenant.id, name: ME_CONSULTANTS_NAME } });
+  const ubec = await prisma.organization.findFirstOrThrow({ where: { tenantId: tenant.id, name: UBEC_ORG_NAME } });
+  const roleId = async (code: string) => (await prisma.role.findUniqueOrThrow({ where: { tenantId_code: { tenantId: tenant.id, code } } })).id;
+  for (const person of [
+    { email: UBEC_ME_EMAIL, fullName: "Ngozi Eze", roleCode: UBEC_ROLE.UBEC_ME, organizationId: ubec.id, phoneNumber: "+234 803 555 0121" },
+    { email: INDEPENDENT_ME_EMAIL, fullName: "Engr. Emeka Obi", roleCode: UBEC_ROLE.INDEPENDENT_ME, organizationId: monitorOrg.id, phoneNumber: "+234 803 555 0141" },
+  ]) {
+    const user = await prisma.user.create({
       data: {
         tenantId: tenant.id,
-        email: "programme.monitor@insite.ng",
+        email: person.email,
         passwordHash: p.passwordHash,
-        fullName: "Ngozi Eze (Programme Monitor)",
-        roleId: monitorRole.id,
-        organizationId: monitorOrg.id,
+        fullName: person.fullName,
+        phoneNumber: person.phoneNumber,
+        roleId: await roleId(person.roleCode),
+        organizationId: person.organizationId,
       },
     });
-    await prisma.userProjectAssignment.create({ data: { userId: monitor.id, projectId: central.id } });
-  }
-  if (flagship && lenderRole) {
-    const funder = await prisma.user.create({
-      data: {
-        tenantId: tenant.id,
-        email: "programme.funder@insite.ng",
-        passwordHash: p.passwordHash,
-        fullName: "Ibrahim Sule (Funding authority finance officer)",
-        roleId: lenderRole.id,
-        organizationId: flagship.id,
-      },
-    });
-    await prisma.userProjectAssignment.create({ data: { userId: funder.id, projectId: central.id } });
+    await prisma.userProjectAssignment.create({ data: { userId: user.id, projectId: central.id } });
   }
 
-  // Central project: a BOQ in three bills, 5% retention.
+  // Direct Intervention project PRG-102: a BOQ in three bills, 5% retention.
   const budget = Number(central.totalBudgetNgn ?? 240_000_000);
   await prisma.project.update({
     where: { id: central.id },

@@ -335,7 +335,7 @@ export function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#1E1B4B' },
+  container: { flex: 1, backgroundColor: '#122F2A' },
   header: { paddingHorizontal: 20, paddingBottom: 30, overflow: 'hidden' },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   headerTexts: { flex: 1 },

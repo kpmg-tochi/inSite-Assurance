@@ -3,9 +3,10 @@
  * approval steps, project types (apply, snapshot isolation, lock after activation), parties rules,
  * regions, filters and terminology.
  *
- * Uses the seeded programme tenant (seedPhase11): flagship "Programme Authority" with subsidiaries
- * North and South; live projects PRG-102 (Central, flagship), PRG-211 (Co-Funded, North) and
- * PRG-221 (Co-Funded, South); drafts PRG-101 (Central) and PRG-201 (Co-Funded, South).
+ * Uses the seeded programme tenant (seedPhase11, branded UBEC): flagship UBEC with subsidiaries Kano
+ * SUBEB ("north") and Lagos SUBEB ("south"); live projects PRG-102 (Direct Intervention = CENTRAL, UBEC),
+ * PRG-211 (Matching Grants = CO_FUNDED, Kano) and PRG-221 (Matching Grants, Lagos); drafts PRG-101
+ * (Direct Intervention) and PRG-201 (Matching Grants, Lagos).
  */
 import { resetTestDatabase } from './helpers/testDb';
 import { after, before, describe, it } from 'node:test';
@@ -24,11 +25,21 @@ const PASSWORD = 'Password123!';
 const tokens: Record<string, string> = {};
 const profiles: Record<string, Record<string, unknown>> = {};
 
-const PROGRAMME_ADMIN = 'programme.admin@insite.ng';
-const FLAGSHIP = 'flagship.admin@insite.ng';
-const NORTH = 'north.admin@insite.ng';
-const SOUTH = 'south.admin@insite.ng';
+const PROGRAMME_ADMIN = 'admin@ubec.test';
+/**
+ * UBEC roster: no UBEC HQ organisation administrator is seeded (the UBEC administrator sees the whole
+ * tenant). This test-only user has the SUBEB Administrator role (organisation tree) at UBEC HQ, so
+ * the flagship's organisation-tree visibility and scopes stay covered.
+ */
+const FLAGSHIP = 'ubec.tree.viewer@ubec.test';
+const NORTH = 'kano.admin@ubec.test';
+const SOUTH = 'lagos.admin@ubec.test';
 const MAIN_ADMIN = 'admin@insite.ng';
+
+// UBEC rebrand: the seeded organisations (seedPhase11).
+const UBEC = 'Universal Basic Education Commission (UBEC)';
+const KANO_SUBEB = 'Kano State Universal Basic Education Board (SUBEB)';
+const LAGOS_SUBEB = 'Lagos State Universal Basic Education Board (SUBEB)';
 
 async function login(email: string) {
   if (!tokens[email]) {
@@ -95,15 +106,26 @@ before(async () => {
   chain = await import('../modules/process/approvalChain');
   processConfig = await import('../modules/process/processConfig.service');
   const orgs = await prisma.organization.findMany({
-    where: { name: { in: ['Programme Authority', 'Regional Delivery Entity – North', 'Regional Delivery Entity – South'] } },
+    where: { name: { in: [UBEC, KANO_SUBEB, LAGOS_SUBEB] } },
   });
-  ids.flagship = orgs.find((o) => o.name === 'Programme Authority')!.id;
-  ids.north = orgs.find((o) => o.name.endsWith('North'))!.id;
-  ids.south = orgs.find((o) => o.name.endsWith('South'))!.id;
+  ids.flagship = orgs.find((o) => o.name === UBEC)!.id;
+  ids.north = orgs.find((o) => o.name === KANO_SUBEB)!.id;
+  ids.south = orgs.find((o) => o.name === LAGOS_SUBEB)!.id;
   const types = await prisma.projectType.findMany();
   ids.central = types.find((t) => t.code === 'CENTRAL')!.id;
   ids.coFunded = types.find((t) => t.code === 'CO_FUNDED')!.id;
   for (const code of ['PRG-101', 'PRG-102', 'PRG-201', 'PRG-211', 'PRG-221']) ids[code] = await projectId(code);
+  const subebAdmin = await prisma.user.findUniqueOrThrow({ where: { email: NORTH } });
+  await prisma.user.create({
+    data: {
+      tenantId: subebAdmin.tenantId,
+      email: FLAGSHIP,
+      passwordHash: subebAdmin.passwordHash,
+      fullName: 'UBEC HQ Tree Viewer',
+      roleId: subebAdmin.roleId,
+      organizationId: ids.flagship,
+    },
+  });
 });
 
 after(async () => {
@@ -568,9 +590,185 @@ describe('portfolio dashboard', () => {
     assert.equal(filtered.body.data.kpis.totalCommitmentNgn, 70_000_000 + 85_000_000 + 64_000_000);
   });
 
-  it('needs projects:view_portfolio', async () => {
+  it('is open to any web user (UBEC Dashboard) and keeps the visibility rule', async () => {
     await ensureAssignedOnlyUser();
     const res = await request(app).get('/api/v1/projects/portfolio/overview').set(await login(ASSIGNED_ONLY));
-    assert.equal(res.status, 403);
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual(
+      (res.body.data.projects as Array<{ codePrefix: string }>).map((p) => p.codePrefix).sort(),
+      ['ABJ-108', 'LKK-402']
+    );
+    assert.equal(res.body.data.kpis.projectCount, 2);
   });
+
+  it('reports contractor, open findings, ongoing projects and visit counts', async () => {
+    const res = await request(app).get('/api/v1/projects/portfolio/overview').set(await login(FLAGSHIP));
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const rows = res.body.data.projects as Array<{
+      id: string;
+      codePrefix: string;
+      status: string;
+      constructionPhase: string;
+      contractorName: string | null;
+      openFindingsCount: number;
+    }>;
+    const kpis = res.body.data.kpis;
+    const rowIds = rows.map((r) => r.id);
+
+    // Contractor: the project's contractor organisation.
+    for (const row of rows) {
+      const c = await prisma.projectContractor.findFirst({
+        where: { projectId: row.id },
+        orderBy: { createdAt: 'asc' },
+        include: { organization: { select: { name: true } } },
+      });
+      assert.equal(row.contractorName, c?.organization.name ?? null, row.codePrefix);
+    }
+    assert.ok(rows.some((r) => r.contractorName), 'seeded projects have a contractor');
+
+    // Open findings per project and in total.
+    for (const row of rows) {
+      const open = await prisma.inspectionFinding.count({ where: { projectId: row.id, status: 'OPEN' } });
+      assert.equal(row.openFindingsCount, open, row.codePrefix);
+    }
+    assert.equal(kpis.openFindingsCount, rows.reduce((s, r) => s + r.openFindingsCount, 0));
+
+    // Ongoing: ACTIVE and under construction or in handover.
+    const ongoing = rows.filter(
+      (r) => r.status === 'ACTIVE' && ['ACTIVE_CONSTRUCTION', 'HANDOVER_IN_PROGRESS'].includes(r.constructionPhase)
+    );
+    assert.equal(kpis.ongoingCount, ongoing.length);
+    assert.ok(ongoing.some((r) => r.codePrefix === 'PRG-105'));
+    assert.ok(!ongoing.some((r) => r.codePrefix === 'PRG-103'), 'PRG-103 is in its liability period');
+
+    // Visits: a planned visit tomorrow is upcoming, one last week is overdue, a missed one is overdue.
+    const before = { upcoming: kpis.upcomingVisitCount as number, overdue: kpis.overdueVisitCount as number };
+    const prg105 = rows.find((r) => r.codePrefix === 'PRG-105')!;
+    const project = await prisma.project.findUniqueOrThrow({ where: { id: prg105.id }, select: { timezone: true } });
+    const { zonedCalendarDate, addDays } = await import('@insite/shared');
+    const today = zonedCalendarDate(new Date(), project.timezone);
+    const created = await Promise.all(
+      [
+        { status: 'PLANNED' as const, plannedDate: addDays(today, 1) },
+        { status: 'PLANNED' as const, plannedDate: addDays(today, 30) },
+        { status: 'IN_PROGRESS' as const, plannedDate: addDays(today, -7) },
+        { status: 'MISSED' as const, plannedDate: addDays(today, -20) },
+      ].map((v) =>
+        prisma.visit.create({
+          data: { projectId: prg105.id, visitKind: 'AD_HOC', originalPlannedDate: v.plannedDate, ...v },
+        })
+      )
+    );
+    try {
+      const again = await request(app).get('/api/v1/projects/portfolio/overview').set(await login(FLAGSHIP));
+      assert.equal(again.body.data.kpis.upcomingVisitCount, before.upcoming + 1);
+      assert.equal(again.body.data.kpis.overdueVisitCount, before.overdue + 2);
+    } finally {
+      await prisma.visit.deleteMany({ where: { id: { in: created.map((v) => v.id) } } });
+    }
+
+    // The visit counts match the definitions over the seeded visits.
+    const visits = await prisma.visit.findMany({
+      where: { projectId: { in: rowIds }, status: { in: ['PLANNED', 'IN_PROGRESS', 'MISSED'] } },
+      select: { status: true, plannedDate: true, project: { select: { timezone: true } } },
+    });
+    let upcoming = 0;
+    let overdue = 0;
+    for (const v of visits) {
+      const day = zonedCalendarDate(new Date(), v.project.timezone);
+      if (v.status === 'MISSED' || v.plannedDate < day) overdue += 1;
+      else if (v.plannedDate <= addDays(day, 7)) upcoming += 1;
+    }
+    assert.equal(before.upcoming, upcoming);
+    assert.equal(before.overdue, overdue);
+  });
+});
+
+describe('UBEC roster: SUBEB administrators see only their jurisdiction', () => {
+  for (const [email, orgName, expected] of [
+    [NORTH, KANO_SUBEB, ['PRG-211']],
+    [SOUTH, LAGOS_SUBEB, ['PRG-221', 'PRG-241', 'PRG-242']],
+  ] as const) {
+    it(`${email}: projects list, portfolio, KPIs and the project guard`, async () => {
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { email },
+        include: { role: { include: { rolePermissions: { include: { permission: true } } } } },
+      });
+      const perms = user.role.rolePermissions.map((rp) => rp.permission.key);
+      assert.ok(perms.includes('projects:view_organization_tree'));
+      assert.ok(!perms.includes('projects:view_all_tenant'), 'no tenant-wide visibility');
+      assert.ok(!perms.some((k) => ['users:invite_manage', 'roles:create_edit', 'tenant:manage_settings', 'project_types:manage', 'organizations:manage'].includes(k)), 'no Settings permissions');
+      const org = await prisma.organization.findFirstOrThrow({ where: { name: orgName } });
+      const h = await login(email);
+
+      // Every list holds only projects their SUBEB owns.
+      const ownedBy = async (codes: string[]) => {
+        const rows = await prisma.project.findMany({ where: { codePrefix: { in: codes } }, select: { owningOrganizationId: true } });
+        return rows.every((r) => r.owningOrganizationId === org.id);
+      };
+      const list = await request(app).get('/api/v1/projects').set(h);
+      const listCodes = (list.body.data as Array<{ codePrefix: string }>).map((p) => p.codePrefix).sort();
+      assert.deepEqual(listCodes, [...expected]);
+      const portfolio = await request(app).get('/api/v1/projects/portfolio/overview').set(h);
+      const portfolioCodes = (portfolio.body.data.projects as Array<{ codePrefix: string }>).map((p) => p.codePrefix).sort();
+      assert.ok(portfolioCodes.every((c) => (expected as readonly string[]).includes(c)), portfolioCodes.join(','));
+      assert.ok(await ownedBy(portfolioCodes));
+      const kpis = await request(app).get('/api/v1/kpis').set(h);
+      assert.equal(kpis.status, 200, JSON.stringify(kpis.body));
+      const kpiCodes = (kpis.body.data.projects as Array<{ codePrefix: string }>).map((p) => p.codePrefix).sort();
+      assert.ok(kpiCodes.length > 0 && kpiCodes.every((c) => (expected as readonly string[]).includes(c)), kpiCodes.join(','));
+
+      // The guard refuses a Direct Intervention project (UBEC-owned) and the other SUBEB's projects.
+      for (const code of ['PRG-102', 'PRG-105', email === NORTH ? 'PRG-221' : 'PRG-211']) {
+        const p = await prisma.project.findFirstOrThrow({ where: { codePrefix: code } });
+        const res = await request(app).get(`/api/v1/projects/${p.id}/overview`).set(h);
+        assert.equal(res.status, 403, `${code}: ${res.status}`);
+      }
+    });
+  }
+});
+
+describe('UBEC roster: M&E officers see only the projects they are assigned to', () => {
+  for (const [email, listed, notAssigned] of [
+    ['me.officer@ubec.test', ['PRG-102', 'PRG-103', 'PRG-104', 'PRG-105', 'PRG-211', 'PRG-221'], ['PRG-241', 'PRG-242']],
+    ['lagos.me@ubec.test', ['PRG-221', 'PRG-241', 'PRG-242'], ['PRG-105', 'PRG-211']],
+    ['independent.me@ubec.test', ['PRG-102', 'PRG-105', 'PRG-211'], ['PRG-103', 'PRG-221']],
+  ] as const) {
+    it(`${email}: projects list, portfolio, KPIs and a 403 elsewhere`, async () => {
+      const user = await prisma.user.findUniqueOrThrow({
+        where: { email },
+        include: { role: { include: { rolePermissions: { include: { permission: true } } } } },
+      });
+      const perms = user.role.rolePermissions.map((rp) => rp.permission.key);
+      assert.ok(perms.includes('projects:view_assigned'));
+      for (const k of ['projects:view_all_tenant', 'projects:view_organization_tree', 'projects:view_portfolio']) {
+        assert.ok(!perms.includes(k), `${email} must not hold ${k}`);
+      }
+      const h = await login(email);
+      const list = await request(app).get('/api/v1/projects').set(h);
+      assert.equal(list.status, 200, JSON.stringify(list.body));
+      assert.deepEqual((list.body.data as Array<{ codePrefix: string }>).map((p) => p.codePrefix).sort(), [...listed]);
+
+      // The portfolio map/table lists live projects only (archived PRG-242 is not on it).
+      const portfolio = await request(app).get('/api/v1/projects/portfolio/overview').set(h);
+      assert.equal(portfolio.status, 200, JSON.stringify(portfolio.body));
+      assert.deepEqual(
+        (portfolio.body.data.projects as Array<{ codePrefix: string }>).map((p) => p.codePrefix).sort(),
+        listed.filter((c) => c !== 'PRG-242')
+      );
+      const kpis = await request(app).get('/api/v1/kpis').set(h);
+      assert.equal(kpis.status, 200, JSON.stringify(kpis.body));
+      const kpiCodes = (kpis.body.data.projects as Array<{ codePrefix: string }>).map((p) => p.codePrefix);
+      assert.ok(kpiCodes.length > 0 && kpiCodes.every((c) => (listed as readonly string[]).includes(c)), kpiCodes.join(','));
+
+      // Not assigned: the project guard refuses the project, its completion page and its visits.
+      for (const code of notAssigned) {
+        const p = await prisma.project.findFirstOrThrow({ where: { codePrefix: code } });
+        for (const path of ['overview', 'completion', 'visits']) {
+          const res = await request(app).get(`/api/v1/projects/${p.id}/${path}`).set(h);
+          assert.equal(res.status, 403, `${code}/${path}: ${res.status}`);
+        }
+      }
+    });
+  }
 });

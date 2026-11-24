@@ -2,13 +2,14 @@
  * Redesign R4 route tests: visits (R4a), officer responses and the planner (R4b), the field API
  * (R4c), approval, findings and acceptance effects (R4d), sprint verification (R4e).
  *
- * Programme tenant: programme.monitor@ (MONITOR: visits:plan, sprints:verify), programme.funder@
- * (LENDER: visits:view only), resident.supervisor@ (default officer on PRG-102/105). PRG-105 is live
+ * Programme tenant (UBEC roster): me.officer@ubec.test (UBEC M&E Officer: visits:plan, sprints:verify),
+ * independent.me@ubec.test (Independent M&E: visits:view only), resident.supervisor@ubec.test (default
+ * officer on PRG-102/105). PRG-105 is live
  * with sprints 1 −98..−60, 2 −59..−15, 3 −14..+80 and the default visit plan (seedR4). Officers in
- * these tests are fresh provisioned accounts (MONITOR_INSPECTOR) made with createFieldSession.
+ * these tests are fresh provisioned accounts (Resident Supervisor role) made with createFieldSession.
  */
 import { resetTestDatabase } from './helpers/testDb';
-import { createFieldSession, fieldAuth } from './helpers/fieldAuth';
+import { createFieldSession, fieldAuth, makeTestDeviceKey } from './helpers/fieldAuth';
 import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto, { createHash } from 'node:crypto';
@@ -31,8 +32,9 @@ type PrismaClientType = typeof import('../config/prisma')['prisma'];
 let app: Express;
 let prisma: PrismaClientType;
 const PASSWORD = 'Password123!';
-const P_MONITOR = 'programme.monitor@insite.ng';
-const P_FUNDER = 'programme.funder@insite.ng';
+const P_MONITOR = 'me.officer@ubec.test';
+/** UBEC roster: a read-only party on PRG-105 (visits:view, no visits:plan or sprints:verify). */
+const P_FUNDER = 'independent.me@ubec.test';
 const MAIN_MONITOR = 'monitor@insite.ng';
 const ids: Record<string, string> = {};
 const tokens: Record<string, string> = {};
@@ -55,7 +57,8 @@ interface Officer {
   auth: { Authorization: string };
 }
 async function officer(projectId = ids.prg105, name = 'Test officer'): Promise<Officer> {
-  const s = await createFieldSession(prisma, { projectId, roleCode: 'MONITOR_INSPECTOR', name });
+  // UBEC roster: the tenant's only field role is the Resident Supervisor (MONITOR_INSPECTOR was deleted).
+  const s = await createFieldSession(prisma, { projectId, roleCode: 'INDEPENDENT_RESIDENT', name });
   return { userId: s.userId, sessionId: s.sessionId, auth: await fieldAuth(prisma, s.sessionId) };
 }
 
@@ -159,7 +162,7 @@ before(async () => {
   ids.programme = (await prisma.user.findUniqueOrThrow({ where: { email: P_MONITOR } })).tenantId;
   ids.prg105 = (await prisma.project.findFirstOrThrow({ where: { codePrefix: 'PRG-105' } })).id;
   ids.prg102 = (await prisma.project.findFirstOrThrow({ where: { codePrefix: 'PRG-102' } })).id;
-  ids.resident = (await prisma.user.findUniqueOrThrow({ where: { email: 'resident.supervisor@insite.ng' } })).id;
+  ids.resident = (await prisma.user.findUniqueOrThrow({ where: { email: 'resident.supervisor@ubec.test' } })).id;
 });
 
 // ---------------------------------------------------------------------------
@@ -176,7 +179,9 @@ describe('Redesign R4a: visits, type plans and generators', () => {
     for (const v of planned) {
       assert.match(v.formHash!, /^[0-9a-f]{64}$/);
       assert.equal(v.submissionDeadline, addDays(v.plannedDate, 7));
-      assert.deepEqual(v.assignees.map((a) => [a.userId, a.isLead]), [[ids.resident, true]]);
+      // UBEC roster: two seeded visits are led by an M&E officer (seedR4), the rest by the Resident Supervisor.
+      if (v.generatorKey) assert.deepEqual(v.assignees.map((a) => [a.userId, a.isLead]), [[ids.resident, true]]);
+      else assert.equal(v.assignees.filter((a) => a.isLead).length, 1);
     }
     assert.ok(visits.some((v) => v.status === 'PROPOSED' && v.generatorKey.startsWith('routine:')));
     // R5f: the seeded baseline (seedPhase16, formerly a Phase 14 inspection) is an accepted visit in the past.
@@ -267,7 +272,8 @@ describe('Redesign R4a: visits, type plans and generators', () => {
     const sprints = scope.body.data.sprints as Array<{ id: string; name: string; startDate: string; endDate: string; deliverables: string }>;
     const last = sprints[sprints.length - 1];
     const longer = sprints.map((s) => ({ id: s.id, name: s.name, startDate: s.startDate, endDate: s.id === last.id ? addDays(last.endDate, 42) : s.endDate, deliverables: s.deliverables }));
-    const saved = await request(app).put(`/api/v1/projects/${ids.prg105}/scope/sprints`).set(await web(P_MONITOR)).send({ sprints: longer });
+    // Sprints are edited by the administrator (the UBEC M&E officer has no boq:upload_edit).
+    const saved = await request(app).put(`/api/v1/projects/${ids.prg105}/scope/sprints`).set(await web('admin@ubec.test')).send({ sprints: longer });
     assert.equal(saved.status, 200, JSON.stringify(saved.body));
     const after = await prisma.visit.findMany({ where: { projectId: ids.prg105 }, select: { id: true, status: true, generatorKey: true, plannedDate: true } });
     assert.deepEqual(after.filter((v) => v.status === 'PLANNED').map((v) => v.id).sort(), planned);
@@ -299,7 +305,8 @@ describe('Redesign R4a: visits, type plans and generators', () => {
   it('activation proposes the type plan; the preview shows it on a draft', async () => {
     const draft = await prisma.project.findFirst({ where: { tenantId: ids.programme, status: 'DRAFT', projectTypeId: { not: null } } });
     if (!draft) return; // no programme draft in the seed: covered by the live sprint test above
-    const preview = await request(app).get(`/api/v1/projects/${draft.id}/visit-plan/preview`).set(await web(P_MONITOR));
+    // Drafts are set up by the administrator (UBEC roster: M&E officers do not see drafts).
+    const preview = await request(app).get(`/api/v1/projects/${draft.id}/visit-plan/preview`).set(await web('admin@ubec.test'));
     assert.equal(preview.status, 200, JSON.stringify(preview.body));
     assert.ok(preview.body.data.rules.length > 0);
     assert.equal(await prisma.visit.count({ where: { projectId: draft.id } }), 0);
@@ -703,7 +710,7 @@ describe('Redesign R4d: approval, findings loop, progress, milestones', () => {
 
       const self = await request(app)
         .post(`/api/v1/projects/${ids.prg105}/visits/${v.id}/submissions/${sub.body.data.id}/review`)
-        .set(await web('resident.supervisor@insite.ng'))
+        .set(await web('resident.supervisor@ubec.test'))
         .send({ decision: 'APPROVE' });
       assert.equal(self.status, 403, JSON.stringify(self.body));
 
@@ -970,4 +977,50 @@ describe('Redesign R4e: sprint verification, badge and KPIs', () => {
     assert.ok(!body.includes('monitoring_framework_established'));
     assert.ok(body.includes('sprints_verified_on_time'));
   });
+});
+
+// ---------------------------------------------------------------------------
+// UBEC roster (owner decision 2026-11-24): the three M&E roles also work on the field app
+// ---------------------------------------------------------------------------
+
+describe('UBEC roster: M&E officers on the field app', () => {
+  async function mobileLogin(email: string) {
+    const key = makeTestDeviceKey();
+    const res = await request(app).post('/api/v1/auth/mobile/login').send({
+      email,
+      password: 'Password123!',
+      deviceId: `roster-${email}`,
+      deviceModel: 'Pixel 8',
+      deviceOs: 'Android 15',
+      devicePublicKey: key.publicKey,
+      devicePublicKeyAlg: 'ED25519',
+    });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    return { Authorization: `Bearer ${res.body.data.accessToken as string}` };
+  }
+
+  for (const [email, code, kind] of [
+    ['me.officer@ubec.test', 'PRG-105', 'ROUTINE'],
+    ['independent.me@ubec.test', 'PRG-105', 'AD_HOC'],
+    ['lagos.me@ubec.test', 'PRG-221', 'MOBILISATION_CHECK'],
+  ] as const) {
+    it(`${email} signs in on the phone, sees the seeded ${kind} visit on ${code} and submits it`, async () => {
+      const user = await prisma.user.findUniqueOrThrow({ where: { email }, include: { role: true } });
+      assert.equal(user.role.surface, 'BOTH', 'a provisioned role that keeps web access');
+      const project = await prisma.project.findFirstOrThrow({ where: { codePrefix: code } });
+      const visit = await prisma.visit.findFirstOrThrow({
+        where: { projectId: project.id, visitKind: kind, status: 'PLANNED', assignees: { some: { userId: user.id, isLead: true } } },
+      });
+      const auth = await mobileLogin(email);
+      const feed = await request(app).get('/api/v1/visits/mine').set(auth);
+      assert.equal(feed.status, 200, JSON.stringify(feed.body));
+      assert.ok(feed.body.data.items.some((i: { visit: { id: string } }) => i.visit.id === visit.id), 'the visit is in the feed');
+      const form = await formOf(project.id, visit.id, auth);
+      const res = await request(app).post(`/api/v1/projects/${project.id}/visits/${visit.id}/submissions`).set(auth).send(submitBody(form));
+      assert.equal(res.status, 201, JSON.stringify(res.body));
+      // Web access stays: the same account signs in on the web.
+      const webLogin = await request(app).post('/api/v1/auth/login').send({ email, password: 'Password123!' });
+      assert.equal(webLogin.status, 200, JSON.stringify(webLogin.body));
+    });
+  }
 });

@@ -8,11 +8,16 @@ export interface RatingInputProps {
   label: string;
   value: VisitFormAnswerInput['value'];
   readOnly: boolean;
+  /**
+   * The question's own guidance already defines the scale ("1 = far behind, …"): the generic
+   * "1 = poor, 5 = very good" line is left out so the two never contradict each other.
+   */
+  guidanceDefinesScale?: boolean;
   onChange: (value: number | null) => void;
 }
 
 /** RATING_1_5: 1 (poor) to 5 (very good); tapping the chosen rating clears it. */
-export function RatingInput({ label, value, readOnly, onChange }: RatingInputProps) {
+export function RatingInput({ label, value, readOnly, guidanceDefinesScale = false, onChange }: RatingInputProps) {
   const options = [1, 2, 3, 4, 5].map((n) => ({ key: String(n), label: String(n), accessibilityLabel: `${n} of 5` }));
   return (
     <View>
@@ -23,7 +28,11 @@ export function RatingInput({ label, value, readOnly, onChange }: RatingInputPro
         disabled={readOnly}
         onToggle={(k) => onChange(value === Number(k) ? null : Number(k))}
       />
-      <Text style={formStyles.meta}>1 = poor, 5 = very good{typeof value === 'number' ? `. Chosen: ${value} of 5` : ''}</Text>
+      {guidanceDefinesScale ? (
+        typeof value === 'number' ? <Text style={formStyles.meta}>Chosen: {value} of 5</Text> : null
+      ) : (
+        <Text style={formStyles.meta}>1 = poor, 5 = very good{typeof value === 'number' ? `. Chosen: ${value} of 5` : ''}</Text>
+      )}
     </View>
   );
 }

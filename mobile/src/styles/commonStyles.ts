@@ -21,12 +21,18 @@ export const componentShadow = {
   elevation: 4,
 };
 
+/**
+ * UBEC palette, the same tokens as the web portal (`web/src/index.css`): deep green `#00715D`,
+ * dark green `#122F2A`, UBEC green `#12915C`, and amber `#FFBF00` for accents on dark green only.
+ */
 export const defaultColors = {
-  primary: '#00338D',
-  primaryDark: '#0C233C',
-  background: '#F8FAFC',
+  primary: '#00715D',
+  primaryHover: '#005A4A',
+  primaryDark: '#122F2A',
+  medium: '#12915C',
+  background: '#F6F8F7',
   border: '#E2E8F0',
-  accent: '#38BDF8',
+  accent: '#FFBF00',
   primaryText: '#0F172A',
   secondaryText: '#64748B',
 };
@@ -35,11 +41,11 @@ export const colors = {
   ...defaultColors,
   surface: '#FFFFFF',
   componentBackground: '#FFFFFF',
-  pageBackground: '#F8FAFC',
+  pageBackground: '#F6F8F7',
   cardBackground: '#FFFFFF',
   red: '#DC2626',
   green: '#059669',
-  blue: '#0284C7',
+  blue: '#00715D',
   amber: '#D97706',
   white: '#FFFFFF',
 };

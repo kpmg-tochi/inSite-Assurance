@@ -17,6 +17,7 @@ import {
   useWebNotificationsQuery,
 } from "../queries/notifications/useWebNotificationsQueries";
 import { useTerm } from "../lib/auth-context";
+import { TAB_LIST_CLASS, tabCountClass, tabItemClass } from "./common/Tabs";
 
 /**
  * Redesign R5f: the old app's report, query and inspection categories are gone; a stored row of a
@@ -198,28 +199,12 @@ export default function Notifications({ projectId }: NotificationsProps) {
 
           {/* Subheader Filter Bar */}
           <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => setFilter("ALL")}
-                className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                  filter === "ALL"
-                    ? "bg-white text-brand-primary shadow-xs border border-slate-200/80"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                All ({notifications.length})
+            <div role="group" aria-label="Show notifications" className={TAB_LIST_CLASS}>
+              <button type="button" aria-pressed={filter === "ALL"} onClick={() => setFilter("ALL")} className={tabItemClass(filter === "ALL")}>
+                All<span className={tabCountClass(filter === "ALL")}>{notifications.length}</span>
               </button>
-              <button
-                type="button"
-                onClick={() => setFilter("UNREAD")}
-                className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                  filter === "UNREAD"
-                    ? "bg-white text-brand-primary shadow-xs border border-slate-200/80"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                Unread ({unreadCount})
+              <button type="button" aria-pressed={filter === "UNREAD"} onClick={() => setFilter("UNREAD")} className={tabItemClass(filter === "UNREAD")}>
+                Unread<span className={tabCountClass(filter === "UNREAD")}>{unreadCount}</span>
               </button>
             </div>
           </div>

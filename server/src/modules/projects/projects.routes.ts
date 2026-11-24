@@ -70,10 +70,11 @@ if (env.DEMO_MODE) {
 /**
  * GET /api/v1/projects/portfolio/overview?projectTypeId=&regionId=&owningOrganizationId=
  * Portfolio dashboard: a map point per visible live project and KPIs over the filtered set.
+ * UBEC rebrand: any web user (the directory's visibility rule), for the non-admin Dashboard.
  */
 router.get(
   '/portfolio/overview',
-  requirePermission('projects:view_portfolio'),
+  requireWebAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       res.json({ success: true, data: await getPortfolioOverview(req.webUser!, ProjectListFiltersSchema.parse(req.query)) });

@@ -67,7 +67,7 @@ export interface WorkbookLine {
 
 export interface WorkbookBuildData {
   generatedAt: Date;
-  /** e.g. "PRG-101 · Central — Kaduna Model School"; null for a blank needs-assessment workbook. */
+  /** e.g. "PRG-101 · Kaduna Model School"; null for a blank needs-assessment workbook. */
   title: string | null;
   project: Partial<Record<ScopeWorkbookProjectFieldKey, string | number | null>>;
   /** Active facilities (the dropdown). */

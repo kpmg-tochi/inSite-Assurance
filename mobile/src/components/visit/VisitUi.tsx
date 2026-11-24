@@ -104,7 +104,7 @@ export function LinkRow({ text, detail, icon, onPress }: { text: string; detail?
       accessibilityRole="button"
       accessibilityLabel={detail ? `${text}, ${detail}` : text}
     >
-      <Feather name={icon} size={16} color="#1E3A8A" />
+      <Feather name={icon} size={16} color="#005A4A" />
       <View style={styles.linkTexts}>
         <Text style={styles.linkText}>{text}</Text>
         {detail ? <Text style={styles.linkDetail}>{detail}</Text> : null}

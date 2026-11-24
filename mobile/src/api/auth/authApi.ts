@@ -58,7 +58,7 @@ export const fetchAccountProjects = async (accountToken: string): Promise<Mobile
 
 /** Stops pushes to this device for the account. Best effort: sign-out continues offline. */
 export const signOutAccount = async (accountToken: string): Promise<void> => {
-  await mobileRequest('/auth/mobile/logout', { method: 'POST', auth: accountToken, authScope: 'account' });
+  await mobileRequest('/auth/mobile/logout', { method: 'POST', auth: accountToken, authScope: 'account', reportSessionEnd: false });
 };
 
 /** The offline baseline for one of the account's projects. */

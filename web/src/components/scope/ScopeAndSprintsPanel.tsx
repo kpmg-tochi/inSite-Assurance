@@ -158,32 +158,35 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
     <div className="space-y-4">
       {dialog}
       {verifying && <SprintVerifyDialog projectId={projectId} sprintId={verifying} onClose={() => setVerifying(null)} />}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-1 min-w-[280px]">
-          <Stat label="Sprints" value={String(scope.totals.sprintCount)} />
-          <Stat label="Facility units" value={String(scope.totals.unitCount)} />
-          <Stat label="BoQ lines" value={String(scope.totals.lineCount)} />
-          <Stat
-            label="Scope total"
-            value={formatNaira(scope.totals.amountNgn)}
-            hint={scope.budgetNgn !== null ? `Budget ${formatNaira(scope.budgetNgn)}` : undefined}
-          />
+      {/* One summary: the total leads, the counts support it, the workbook sits beside it. */}
+      <section aria-label="Scope summary" className="bg-white rounded-2xl border border-slate-200/80 shadow-sm px-5 py-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-slate-600">Scope total</p>
+            <p className="mt-0.5 text-2xl font-bold tracking-tight tabular-nums text-slate-900">{formatNaira(scope.totals.amountNgn)}</p>
+            <p className="mt-1 text-sm text-slate-600">
+              {countOf(scope.totals.sprintCount, "sprint")} · {countOf(scope.totals.unitCount, "facility unit")} · {countOf(scope.totals.lineCount, "BoQ line")}
+              {scope.budgetNgn !== null &&
+                (scope.budgetNgn === scope.totals.amountNgn ? " · matches the budget" : ` · budget ${formatNaira(scope.budgetNgn)}`)}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <ScopeWorkbookToolbar projectId={projectId} scope={scope} canEdit={!readOnly} />
+          </div>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2 max-w-md">
-          <ScopeWorkbookToolbar projectId={projectId} scope={scope} canEdit={!readOnly} />
-        </div>
-      </div>
+        {live && !readOnly && (
+          <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
+            Changes are recorded in the audit ledger. Units and lines with site evidence cannot be removed.
+          </p>
+        )}
+        {readOnly && <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">View only: changing the scope needs scope editing rights.</p>}
+      </section>
 
       {scope.budgetWarning && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{scope.budgetWarning}</span>
         </div>
-      )}
-      {live && !readOnly && (
-        <p className="text-[11px] text-slate-500">
-          This project is live: every change is recorded in the audit ledger. Units and lines with field evidence cannot be removed.
-        </p>
       )}
 
       <StandardTable<ProjectSprintDto>
@@ -325,15 +328,7 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="text-sm font-bold text-slate-900 tabular-nums">{value}</p>
-      {hint && <p className="text-[10px] text-slate-500">{hint}</p>}
-    </div>
-  );
-}
+const countOf = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
 function LinesTable({
   lines,

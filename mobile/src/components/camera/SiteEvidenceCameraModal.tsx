@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   headerSub: {
-    color: '#93C5FD',
+    color: '#A7D8CB',
     fontSize: 11,
   },
   gridScroll: {
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
   },
   addAnotherBtn: {
     borderWidth: 1.5,
-    borderColor: '#38BDF8',
+    borderColor: '#FFBF00',
     borderStyle: 'dashed',
     borderRadius: 12,
     paddingVertical: 14,
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(56, 189, 248, 0.08)',
   },
   addAnotherText: {
-    color: '#38BDF8',
+    color: '#FFBF00',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   submitBtn: {
-    backgroundColor: '#00338D',
+    backgroundColor: '#00715D',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',

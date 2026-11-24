@@ -518,7 +518,7 @@ describe('Phase 13', () => {
 
   it('R1e: staff confirm "contractor on site" by hand, and compliance follows it (seeded PRG-102)', async () => {
     const prg102 = await prisma.project.findFirstOrThrow({ where: { codePrefix: 'PRG-102' } });
-    const h = await web('programme.admin@insite.ng');
+    const h = await web('admin@ubec.test');
     const base = `/api/v1/projects/${prg102.id}`;
     const list = await request(app).get(`${base}/milestones`).set(h);
     assert.equal(list.status, 200, JSON.stringify(list.body));

@@ -9,6 +9,7 @@ import { usePlannerQuery } from "../../queries/visits/useVisitQueries";
 import { useRegionsQuery } from "../../queries/deliveryModels/useDeliveryModelQueries";
 import { useDecideProposalMutation } from "../../mutations/visits/useVisitMutations";
 import { EditVisitDialog } from "../../components/visits/VisitDialogs";
+import { TAB_LIST_CLASS, tabItemClass } from "../../components/common/Tabs";
 import { primaryButton, secondaryButton, visitKindLabel, VisitStatusChip, WarningsList } from "../../components/visits/visitUi";
 
 /**
@@ -27,7 +28,8 @@ function mondayOf(date: string): string {
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
-export function VisitPlannerPage() {
+/** `embedded`: shown as the home page's Visits tab (UBEC rebrand), so the tab names it, not a heading. */
+export function VisitPlannerPage({ embedded = false }: { embedded?: boolean } = {}) {
   const { hasPermission } = useAuth();
   const canPlan = hasPermission("visits:plan");
   const [span, setSpan] = useState<"week" | "month">("week");
@@ -61,8 +63,10 @@ export function VisitPlannerPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-bold text-slate-900">Visit planner</h1>
-          <p className="text-xs text-slate-500">Every visit across your projects by officer and day. Drag a visit to another day to move it.</p>
+          {!embedded && <h1 className="text-lg font-bold text-slate-900">Visit planner</h1>}
+          <p className={embedded ? "text-sm text-slate-600" : "text-xs text-slate-500"}>
+            Every visit across your projects by officer and day.{canPlan ? " Drag a visit to another day to move it." : ""}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" className={secondaryButton} onClick={() => setStart(addDays(start, -days))} aria-label="Earlier">
@@ -74,9 +78,9 @@ export function VisitPlannerPage() {
           <button type="button" className={secondaryButton} onClick={() => setStart(addDays(start, days))} aria-label="Later">
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
-          <div className="flex gap-1 rounded-xl bg-slate-100 p-1 text-xs font-semibold">
+          <div role="group" aria-label="Period" className={TAB_LIST_CLASS}>
             {(["week", "month"] as const).map((s) => (
-              <button key={s} type="button" onClick={() => setSpan(s)} className={`rounded-lg px-3 py-1 ${span === s ? "bg-white text-brand-primary shadow-xs" : "text-slate-600"}`}>
+              <button key={s} type="button" onClick={() => setSpan(s)} aria-pressed={span === s} className={tabItemClass(span === s)}>
                 {s === "week" ? "Week" : "4 weeks"}
               </button>
             ))}

@@ -40,7 +40,7 @@ interface VisitCalendarProps {
 /** Months the month view can page through, either side of today. */
 const MONTHS_EACH_SIDE = 12;
 
-export const DOT_COLORS: Record<VisitDot, string> = { PLANNED: '#00338D', OVERDUE: '#DC2626', DONE: '#059669' };
+export const DOT_COLORS: Record<VisitDot, string> = { PLANNED: '#00715D', OVERDUE: '#DC2626', DONE: '#059669' };
 
 export function VisitDotMark({ dot, size = 6, plannedColor }: { dot: VisitDot; size?: number; plannedColor?: string }) {
   const color = dot === 'PLANNED' && plannedColor ? plannedColor : DOT_COLORS[dot];

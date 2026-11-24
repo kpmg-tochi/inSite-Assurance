@@ -357,7 +357,7 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
   const kindLabel = data ? VISIT_KIND_META[data.visit.visit.visitKind].label : 'Visit';
   const progress = data && check ? formProgress(data.form.snapshot, check) : null;
   const header = (
-    <LinearGradient colors={['#6546FC', '#1E3A8A', '#1E1B4B']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
+    <LinearGradient colors={['#00715D', '#005A4A', '#122F2A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
       <TouchableOpacity onPress={() => void back()} accessibilityRole="button" accessibilityLabel="Back to the visit">
         <Text style={styles.closeText}>‹ Back</Text>
       </TouchableOpacity>
@@ -581,9 +581,9 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: FORM_COLORS.page },
   header: { paddingHorizontal: 20, paddingBottom: 18 },
-  closeText: { fontSize: 13, color: '#C7D2FE', fontWeight: '700', marginBottom: 8, paddingVertical: 4 },
+  closeText: { fontSize: 13, color: '#B5DDD3', fontWeight: '700', marginBottom: 8, paddingVertical: 4 },
   title: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 },
-  subtitle: { fontSize: 12, color: '#E0E7FF', marginTop: 4 },
+  subtitle: { fontSize: 12, color: '#D7EEE8', marginTop: 4 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerLink: { fontSize: 12, color: '#FFFFFF', fontWeight: '800', marginTop: 4, paddingVertical: 4, textDecorationLine: 'underline' },
   progressTrack: { height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.25)', marginTop: 10, overflow: 'hidden' },
@@ -593,5 +593,5 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.45)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
   sectionRow: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  sectionRowOn: { backgroundColor: '#F5F3FF' },
+  sectionRowOn: { backgroundColor: '#EEF7F4' },
 });

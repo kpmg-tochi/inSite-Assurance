@@ -75,7 +75,7 @@ describe('project card', () => {
 
   it('before sprint 1 says when it starts; without a pack only the name is known', () => {
     const early = projectCardModel({ projectId: IDS.project, code: 'X', name: 'Y' }, pack(), [], '2026-10-20');
-    assert.equal(early.sprintText, 'Sprint 1 starts 2026-11-01');
+    assert.equal(early.sprintText, 'Sprint 1 starts Sun 1 Nov');
     assert.deepEqual(early.unitsInSprint, []);
     const none = projectCardModel({ projectId: IDS.project, code: 'PRG-102', name: 'Other school' }, null, [], TODAY);
     assert.equal(none.packMissing, true);
@@ -93,10 +93,12 @@ describe('project card', () => {
   });
 });
 
-describe('mobilisation day N of M', () => {
+describe('mobilisation time left (web wording)', () => {
   const m = { milestoneId: uuid(1), label: 'Contractor on site', startedOn: '2026-11-08', deadline: '2026-11-29', status: 'PENDING' as const };
-  it('counts from the kick-off', () => {
-    assert.deepEqual(mobilisationProgress(m, TODAY), { label: 'Contractor on site', dayText: 'Day 17 of 22', dayNumber: 17, totalDays: 22, deadline: '2026-11-29', overdue: false });
+  it('counts the days left to the deadline', () => {
+    assert.deepEqual(mobilisationProgress(m, TODAY), { label: 'Contractor on site', dayText: '5 days left, due Sun 29 Nov', dayNumber: 17, totalDays: 22, deadline: '2026-11-29', overdue: false });
+    assert.equal(mobilisationProgress(m, '2026-11-28')!.dayText, '1 day left, due Sun 29 Nov');
+    assert.equal(mobilisationProgress(m, '2026-11-29')!.dayText, 'Due today');
   });
   it('says how late it is once the deadline passed', () => {
     assert.equal(mobilisationProgress(m, '2026-12-02')!.dayText, '3 days overdue');

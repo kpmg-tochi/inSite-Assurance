@@ -50,6 +50,7 @@ export function getInitials(fullName: string): string {
   if (!fullName) return 'IS';
   const cleaned = fullName
     .replace(/^(QS|Engr\.|Dr\.|Arc\.|Mr\.|Mrs\.|Ms\.)\s+/i, '')
+    .replace(/\s*\(.*$/, '')
     .split(',')[0]
     .trim();
   const parts = cleaned.split(/\s+/);

@@ -1,4 +1,4 @@
-# Demo Script: Programme Delivery (Central and Co-Funded)
+# Demo Script: Programme Delivery (Direct Intervention and Matching Grants)
 
 **For:** presenters running the client demo of the two delivery models.
 **Length:** about 55 minutes (two storylines of ~15 minutes, the field visit on the phone ~10, KPIs ~5, configuration live ~10).
@@ -11,8 +11,8 @@
 1. Reset and seed: from `server/`, `npm run prisma:seed`. Dates are relative to the seed day, so seed **on the demo day** (or the day before).
 2. Start the API (`npm run dev` in `server/`) and the web app (`npm run dev` in `web/`). Leave scheduled jobs on: the KPI snapshot job and the deadline jobs run at start-up.
 3. Phone: a development build of the app (see `physical_testing_checklist.md` sections 0.1–0.2), with `PUBLIC_API_BASE_URL` set to the computer's LAN address so the phone can reach the API and upload photos.
-4. **Site boundary for the phone part.** Photos taken outside a project's site boundary do not satisfy a photo slot, and a simulated location counts as no location. Unless you demo at the PRG-105 site, sign in as `programme.admin@`, open PRG-105 → More ▸ Settings → Project → Location, and move the radial pin to the demo venue (keep the 150 m radius). The change is audited. Do this **before** signing in on the phone.
-5. Sign in on the phone as `resident.supervisor@` while online, so it downloads the visits of the next 14 days, their forms and the project packs. Pull down on Home to refresh if you re-seeded.
+4. **Site boundary for the phone part.** Photos taken outside a project's site boundary do not satisfy a photo slot, and a simulated location counts as no location. Unless you demo at the PRG-105 site, sign in as `admin@ubec.test`, open PRG-105 → More ▸ Settings → Project → Location, and move the radial pin to the demo venue (keep the 150 m radius). The change is audited. Do this **before** signing in on the phone.
+5. Sign in on the phone as `resident.supervisor@ubec.test` while online, so it downloads the visits of the next 14 days, their forms and the project packs. Pull down on Home to refresh if you re-seeded.
 6. Have a signed handover form ready to describe (paper; the beneficiary has no login, redesign R1d). PRG-104's handover response is left for you to record.
 7. Open one browser profile per persona you will switch to quickly (or use private windows).
 
@@ -20,27 +20,24 @@
 
 | Persona | Login | Used for |
 | :--- | :--- | :--- |
-| Programme administrator | `programme.admin@insite.ng` | Settings changes, drafts, KPI page |
-| Flagship admin (Programme Authority) | `flagship.admin@insite.ng` | Central owner; second CoC signatory |
-| Subsidiary admin, North | `north.admin@insite.ng` | Visibility contrast (sees North only) |
-| Subsidiary admin, South | `south.admin@insite.ng` | Co-Funded owner; default case decision |
-| South M&E (second signatory) | `south.me@insite.ng` | Co-Funded CoC |
-| Funding authority | `programme.funder@insite.ng` | Records payments made outside the platform |
-| Monitor (M&E manager) | `programme.monitor@insite.ng` | Visit planner, visit review, findings, handover review |
-| M&E officer | `me.officer@insite.ng` | Supervision workload (over the site limit) |
-| Resident Supervisor (phone) | `resident.supervisor@insite.ng` | The field visit on the phone; visit officer on PRG-102, PRG-105, PRG-211 and PRG-221, also assigned to PRG-104 |
-| Legal officer | `legal.officer@insite.ng` | Default case review |
+| UBEC Administrator (Hauwa Bello) | `admin@ubec.test` | Settings, drafts, KPIs; Direct Intervention owner and first CoC signatory. Also acts for the Director Legal (default case review), the Executive Secretary (Direct Intervention decisions), Finance & Accounts (records payments) and the Audit Department (audit sign-off): none of them has a login |
+| SUBEB Administrator, Kano (Aisha Musa) | `kano.admin@ubec.test` | Visibility contrast (sees Kano SUBEB's project only) |
+| SUBEB Administrator, Lagos (Chidi Okeke) | `lagos.admin@ubec.test` | Matching Grants owner; acts for the SUBEB Executive Chairman (default case decision); first Lagos CoC signatory |
+| UBEC M&E Officer (Ngozi Eze; web and phone; sees only her assigned projects: PRG-102, PRG-103, PRG-104, PRG-105, PRG-211, PRG-221, on the Dashboard, not the Portfolio) | `me.officer@ubec.test` | Visit planner, visit review, findings, sprint verification, handover review, Head of M&E CoC signature on Direct Intervention; supervision workload (over the site limit). On the phone: leads a routine visit on PRG-105 in two working days |
+| SUBEB M&E Officer, Lagos (Bisi Adeyemi; web and phone, not in the quick login; sees only PRG-221, PRG-241, PRG-242) | `lagos.me@ubec.test` | Matching Grants evaluations; Head of M&E CoC signature on Lagos projects. On the phone: leads a mobilisation check on PRG-221 in two working days |
+| Independent M&E, COREN-certified firm (Engr. Emeka Obi; web and phone, not in the quick login; sees only PRG-102, PRG-105, PRG-211) | `independent.me@ubec.test` | Read-only web view of its assigned projects. On the phone: an ad hoc independent visit on PRG-105 in four working days |
+| Resident Supervisor (Musa Danladi; phone only) | `resident.supervisor@ubec.test` | The field visit on the phone; visit officer on PRG-102, PRG-105, PRG-211 and PRG-221, also assigned to PRG-104 |
 | Resident, single project (optional, main workspace) | `resident.abj@insite.ng` | The single-project home on the phone (ABJ-108 only; no visits planned there) |
 
-**The demo programme** ("Programme Authority (demo programme)"). The Stage column is what the Overview's stage bar shows.
+**The demo programme** (tenant "Universal Basic Education Commission (UBEC)"). The Stage column is what the Overview's stage bar shows.
 
-| Stage | Central | Co-Funded |
+| Stage | Direct Intervention | Matching Grants |
 | :--- | :--- | :--- |
 | Draft (kick-off planned) | PRG-101 (kick-off in 9 days, agenda filed) | PRG-201 (draft) |
 | Mobilisation | PRG-102 (on time, due in ~5 days; sprints start in a week; first mobilisation check published) | PRG-221 (overdue, default case at the decision step; a missed quarterly M&E visit) |
 | Construction | PRG-105 (sprint 3 of 3; behind: sprint 1 verified partly met, sprint 2 not verified in time; a routine visit tomorrow) | PRG-211 (accepted baseline, a late routine visit, a major finding escalated) |
 | Payments | PRG-105 (one interim payment recorded, 5% retention held) | – |
-| Completion | PRG-104 (CoC signed once, waiting for the flagship and the beneficiary) | – |
+| Completion | PRG-104 (CoC signed once, waiting for UBEC HQ and the beneficiary) | – |
 | Closure: defects liability period | PRG-103 (two open defects) | – |
 | Closure: closed | – | PRG-241 (post-closure evaluation and audit pending) |
 | Closure: archived | – | PRG-242 (closure pack built) |
@@ -57,19 +54,19 @@
 
 ## 1. Opening: one programme, two models (2 min)
 
-**Login:** `programme.admin@`. **Click:** Portfolio.
+**Login:** `admin@ubec.test`. **Click:** Portfolio.
 
-**Say:** "This is one programme authority running two delivery models side by side. Central projects are owned and funded by the Programme Authority; Co-Funded ones by a regional delivery entity, itself funded by the authority. The rules for each model are configuration on a project type, not code."
+**Say:** "This is UBEC running its two programmes side by side. Direct Intervention projects are UBEC-led: owned and funded by UBEC, kicked off and supervised by the UBEC State/Zonal Offices. Matching Grants projects are SUBEB-led: the State Universal Basic Education Board owns and delivers them, with UBEC State/Zonal representatives in monitoring. The rules for each programme are configuration on a project type, not code."
 
-**Click:** the project type filter (Central, then Co-Funded); the region filter (North, South). **Show:** the stage chip on each row (Mobilisation, Construction, Completion, Closure).
+**Click:** the project type filter (Direct Intervention, then Matching Grants); the region filter (North West, South West). **Show:** the stage chip on each row (Mobilisation, Construction, Completion, Closure).
 
 ---
 
-## 2. Storyline A: Central Delivery Model (15 min)
+## 2. Storyline A: Direct Intervention (15 min)
 
 ### A1. Setup, contract award and kick-off (process slide: Kick-off)
 
-**Login:** `programme.admin@`. **Open:** Projects → Drafts → PRG-101. Setup opens.
+**Login:** `admin@ubec.test`. **Open:** Projects → Drafts → PRG-101. Setup opens.
 
 **Show:** the five setup steps on the left: 1 Project, 2 Contract, 3 Scope & sprints, 4 Team & visits, 5 Review (Advanced, under a divider, is only offered in project settings).
 
@@ -83,7 +80,7 @@
 
 ### A1b. Scope and sprints from the needs-assessment workbook (redesign R2)
 
-**Login:** `programme.admin@`. **Open:** PRG-101 (draft) → setup step 3 Scope & sprints.
+**Login:** `admin@ubec.test`. **Open:** PRG-101 (draft) → setup step 3 Scope & sprints.
 
 **Say:** "The scope comes from the needs assessment. Every bill line belongs to a facility on site: a classroom block, a toilet, 120 desks. Sprints say which facilities are being built when. The facility list is the programme's own, and it feeds the workbook's dropdowns."
 
@@ -105,9 +102,9 @@
 
 **Open:** Kick-off & mobilisation → Mobilisation tab.
 
-**Say:** "Central contracts allow 21 days from kick-off to mobilise. Officers visit every two weeks until the contractor is on site: the first accepted mobilisation check that says so completes the milestone, dated on the visit, and cancels the later checks. The letter of introduction and the mobilisation documents are tracked alongside."
+**Say:** "Direct Intervention contracts allow three weeks (21 days) from kick-off to mobilise. Officers visit every two weeks until the contractor is on site: the first accepted mobilisation check that says so completes the milestone, dated on the visit, and cancels the later checks. The letter of introduction and the mobilisation documents are tracked alongside."
 
-**Show:** the contractor-on-site milestone, the mobilisation check visits (the first one published to `resident.supervisor@`), and the mobilisation compliance panel (documents still missing, days left).
+**Show:** the contractor-on-site milestone, the mobilisation check visits (the first one published to `resident.supervisor@ubec.test`), and the mobilisation compliance panel (documents still missing, days left).
 
 ### A3. Monitoring and evaluation (process slide: M&E)
 
@@ -117,13 +114,13 @@
 
 ### A3a. Visit planning (redesign R4)
 
-**Login:** `programme.monitor@` (M&E manager). **Open:** Visit planner: officers × days for the week; drag a visit to another day (asks for a note). Side panel: a date proposal waiting (accept it) and a declined visit (reassign it). **Then:** PRG-105 → Visits & reports (Plan tab): the plan with confirmations, the warnings, **Generate from plan**, publish a proposed visit.
+**Login:** `me.officer@ubec.test` (UBEC M&E Officer). **Open:** Visit planner: officers × days for the week; drag a visit to another day (asks for a note). Side panel: a date proposal waiting (accept it) and a declined visit (reassign it). **Then:** PRG-105 → Visits & reports (Plan tab): the plan with confirmations, the warnings, **Generate from plan**, publish a proposed visit.
 
 **Say:** "Each visit's form is frozen when it is published, so the officer answers exactly what was planned. Open findings are added as re-check items to every visit that has not started."
 
 ### A3b. The field visit, on the phone (redesign R5, ~10 min)
 
-**Phone:** signed in as `resident.supervisor@` (step 0.5).
+**Phone:** signed in as `resident.supervisor@ubec.test` (step 0.5). The three M&E roles also sign in on the phone with their web account (same app, same screens): to show an M&E officer's own visit instead, sign in as `me.officer@ubec.test` (PRG-105 routine visit) or `lagos.me@ubec.test` (PRG-221 mobilisation check).
 
 **Say:** "Field staff sign in with their own account and see all their sites at once. Contractors and beneficiaries have no login. Everything you see now also works with no signal."
 
@@ -136,7 +133,7 @@
 7. **Site log.** Back to the project (from Home, tap the PRG-105 card) → Site log: add a photo, a voice note and a typed note. Each is geotagged and saved offline. **Say:** "The site log is for anything seen between visits. A site log photo taken on the visit day can also be picked into the form, and entries can be attached to a report."
 8. **Outbox.** Tap Outbox in the Home header: rows for PRG-105 labelled Photo, Check-in, Visit report and Site log entry, all waiting. Turn airplane mode off and pull down on Home. The outbox empties in order: photos first, then the check-in, then the report. A failed row would show its error and a Retry button.
 
-**Back on the web** as `programme.monitor@`: PRG-105 → Visits & reports → the visit just submitted: answers by section with the photos per unit, the check-in location (flagged if it was outside), **Approve** or **Return**.
+**Back on the web** as `me.officer@ubec.test`: PRG-105 → Visits & reports → the visit just submitted: answers by section with the photos per unit, the check-in location (flagged if it was outside), **Approve** or **Return**.
 
 **Say:** "An accepted visit updates unit progress, raises findings from the form's rules, and emails the contractor the open findings."
 
@@ -149,7 +146,7 @@
 
 ### A3c. Visit forms (redesign R3)
 
-**Login:** `programme.monitor@`. **Open:** Forms & facilities.
+**Login:** `admin@ubec.test` (forms are managed by the administrator). **Open:** Forms & facilities.
 
 **Say:** "Fifty facilities, but nobody wrote fifty forms. Each facility starts from one of four archetype sub-forms, and the M&E team customises only the ones that differ. The fixed sections (health & safety, materials…) are written once and reused by every visit type."
 
@@ -163,7 +160,7 @@
 
 ### A4. Payments (process slide: Payments)
 
-**Login:** `programme.funder@`. **Open:** PRG-105 → Payments.
+**Login:** `admin@ubec.test` (acting for Finance & Accounts). **Open:** PRG-105 → Payments.
 
 **Say:** "Payments are made through your own finance process, outside the platform. Finance records each one here, so progress, retention and the closure checks stay complete. Later the ERP can feed these records directly."
 
@@ -173,19 +170,19 @@
 
 ### A5. Completion (process slide: Completion and handover)
 
-**Login:** `flagship.admin@`. **Open:** PRG-104 → Completion & handover → Certificate tab.
+**Login:** `me.officer@ubec.test`. **Open:** PRG-104 → Completion & handover → Certificate tab.
 
-**Say:** "The Certificate of Completion needs the Head of Physical Planning and the Head of M&E of the owning organisation, and then the beneficiary. The programme administrator has signed; I sign as Head of M&E."
+**Say:** "The Certificate of Completion needs the Head of Physical Planning and the Head of M&E of the owning organisation, and then the beneficiary. The UBEC administrator has signed for Physical Planning; I sign as Head of M&E."
 
-**Click:** sign the "Head of M&E" slot. Then, as `programme.admin@`, record the beneficiary's signed paper copy (upload any PDF, attest). The last signature issues the certificate and its PDF.
+**Click:** sign the "Head of M&E" slot. Then, as `admin@ubec.test`, record the beneficiary's signed paper copy (upload any PDF, attest). The last signature issues the certificate and its PDF.
 
-**Handover:** as `programme.monitor@`, open PRG-104 → Completion & handover → Handover tab → Record handover response: the head teacher accepted with one snag; tick the attestation that it matches the signed copy. Then mark it reviewed: the handover certificate is issued and the handover milestone is done.
+**Handover:** as `me.officer@ubec.test`, open PRG-104 → Completion & handover → Handover tab → Record handover response: the head teacher accepted with one snag; tick the attestation that it matches the signed copy. Then mark it reviewed: the handover certificate is issued and the handover milestone is done.
 
 **Show:** PRG-104 → Overview: the stage bar (Completion current) and the phase action **Start defects liability period**. **Say:** "Before the certificate was issued this button explained why it could not proceed; now it can." (Optional: run it.)
 
 ### A6. Liability period (process slide: Defects liability)
 
-**Login:** `programme.monitor@`. **Open:** PRG-103 → Completion & handover → Defects tab.
+**Login:** `me.officer@ubec.test`. **Open:** PRG-103 → Completion & handover → Defects tab.
 
 **Say:** "Snags from the handover became defect tickets against the contractor. Officers close them on site with photos from the phone; the contractor has no login. Retention is released by recording a retention-release payment; one recorded before the period ends or with defects still open is flagged."
 
@@ -193,33 +190,33 @@
 
 ---
 
-## 3. Storyline B: Co-Funded Delivery Model (15 min)
+## 3. Storyline B: Matching Grants (15 min)
 
 ### B1. Ownership and visibility
 
-**Login:** `north.admin@`, then `south.admin@`. **Click:** Projects.
+**Login:** `kano.admin@ubec.test`, then `lagos.admin@ubec.test`. **Click:** Projects.
 
-**Say:** "Each delivery entity sees only its own projects. The Programme Authority sees everything below it."
+**Say:** "Each SUBEB sees only its own projects. UBEC HQ sees everything below it."
 
 ### B2. Mobilisation overdue and default (process slide: Contractor default)
 
-**Login:** `south.admin@`. **Open:** PRG-221 → Kick-off & mobilisation → Milestones tab.
+**Login:** `lagos.admin@ubec.test`. **Open:** PRG-221 → Kick-off & mobilisation → Milestones tab.
 
-**Say:** "Co-Funded contracts allow 14 days. No officer confirmed the contractor on site, so the milestone went overdue and a default case opened by itself. Legal has reviewed it and served notice. The decision belongs to the delivery entity's executive."
+**Say:** "Matching Grants contracts allow 14 calendar days. No officer confirmed the contractor on site, so the milestone went overdue and a default case opened by itself. Legal has reviewed it and served notice (in the demo the UBEC administrator acts for the Director Legal). Termination is the SUBEB Executive Chairman's decision, taken here by the Lagos SUBEB administrator on his behalf (for Direct Intervention it is the Executive Secretary's)."
 
 **Click:** the default case → decide (for example, a cure period of 7 days).
 
 ### B3. Supervision and visits (process slide: M&E)
 
-**Login:** `programme.monitor@`. **Open:** PRG-211 → Visits & reports.
+**Login:** `me.officer@ubec.test`. **Open:** PRG-211 → Visits & reports.
 
-**Show:** the accepted baseline, the routine visit uploaded late, and in Findings the major finding (work at height without harnesses) open past escalation. On PRG-221 → Visits & reports, the missed quarterly M&E visit. Then, as `programme.admin@`, Settings → Supervisors (was "Inspections & supervisors"): the M&E officer (`me.officer@`) supervises more sites than the Co-Funded limit of 2. The system warns and never blocks. The contractor has no login: it gets the findings by email after each accepted visit.
+**Show:** the accepted baseline, the routine visit uploaded late, and in Findings the major finding (work at height without harnesses) open past escalation. On PRG-221 → Visits & reports, the missed quarterly M&E visit. Then, as `admin@ubec.test`, Settings → Supervisors (was "Inspections & supervisors"): the M&E officer (`me.officer@ubec.test`) supervises more sites than the Matching Grants limit of 2 (a demo value; the manual gives Resident Supervisors 7 to 10 sites). The system warns and never blocks. The contractor has no login: it gets the findings by email after each accepted visit.
 
 ### B4. Closure (process slide: Closure)
 
 **Open:** PRG-241 → Completion & handover → Closure tab.
 
-**Say:** "Closed, rated and two lessons published. Archiving waits for the post-closure evaluation two weeks after closing, and for an audit sign-off that cannot be waived."
+**Say:** "Closed, rated and two lessons published. Archiving waits for the closeout report (final evaluation, lessons learned and beneficiary feedback, uploaded as a document), the post-closure evaluation two weeks after closing, and the Audit Department's sign-off, which cannot be waived."
 
 **Open:** PRG-242 → Completion & handover → Closure tab. **Say:** "This one is archived. The closure pack is one ZIP for the auditor: index, every document and certificate, the payment record, visit summaries, the audit ledger and a check that the ledger chain is intact."
 
@@ -229,19 +226,19 @@
 
 ## 4. Programme KPIs (5 min) (process slide: KPIs per stage)
 
-**Login:** `programme.admin@`. **Click:** KPIs.
+**Login:** `admin@ubec.test`. **Click:** KPIs.
 
 **Say:** "The process flow defines a KPI for each stage. Here they are for everything I can see, against the targets set for each model."
 
 **Show:**
 - The period selector (this quarter by default; switch to this month).
-- Mobilisation: "Contractors mobilised on time" says targets vary. Central is 90% and Co-Funded 85%, with the per-model breakdown underneath.
+- Mobilisation: "Contractors mobilised on time" says targets vary. Direct Intervention is 90% and Matching Grants 85%, with the per-model breakdown underneath.
 - M&E: "Visits conducted vs planned" (PRG-221's missed visit counts against it) and "Sprints verified on time".
 - Click a tile → the contributing projects. Click a project to open it.
-- Filter by Co-Funded and by South.
+- Filter by Matching Grants and by South West.
 - "Not tracked" versus 0%: point at a KPI with nothing to count yet (for example audits done after closure on a type with no closed projects): it shows "not tracked", never 0%.
 - Export CSV.
-- Log in as `north.admin@`: the same page shows only North's project.
+- Log in as `kano.admin@ubec.test`: the same page shows only Kano SUBEB's project.
 
 ---
 
@@ -249,13 +246,13 @@
 
 Change each setting, show the effect, and say whether it applies at once or to new projects. The project type editor (Settings → Project types, regions & documents → Project types) has general fields on top and five tabs: Kick-off & mobilisation, Monitoring, Completion & closure, KPI targets, Advanced.
 
-| Setting | Where (as `programme.admin@`) | Change | Show | Applies |
+| Setting | Where (as `admin@ubec.test`) | Change | Show | Applies |
 | :--- | :--- | :--- | :--- | :--- |
 | **Terminology** | Settings → Tenant Settings → Terminology | "Retention" → "Retention money" | PRG-105 → Payments and PRG-103 → Completion & handover; phone labels too | At once |
-| **Mobilisation days** | Project types → Central → Kick-off & mobilisation tab → "Contractor mobilised on site" | 21 → 28 days | Save (new version). Create a new Central draft (Projects → + New Project), set a planned kick-off on step 2 Contract, and see the deadline at +28 in the milestone preview. PRG-102 keeps +21. | New projects (existing projects keep their version) |
-| **CoC signatories** | Project types → Co-Funded → Completion & closure tab | Add a third slot, e.g. "Programme Authority M&E", scope "Owning organisation or above" | Save. A new Co-Funded project's certificate shows three staff slots. | New projects |
-| **Visit plan** (optional) | Project types → Central → Monitoring tab | Routine visits every 2 weeks → every week | Save. A new Central draft's step 4 Team & visits previews weekly routine visits. | New projects |
-| **KPI targets** (optional) | Project types → Co-Funded → KPI targets tab | Mobilised on time 85 → 95 | KPIs: the Co-Funded figure turns from met to missed | At once |
+| **Mobilisation days** | Project types → Direct Intervention → Kick-off & mobilisation tab → "Contractor mobilised on site" | 21 → 28 days | Save (new version). Create a new Direct Intervention draft (Projects → + New Project), set a planned kick-off on step 2 Contract, and see the deadline at +28 in the milestone preview. PRG-102 keeps +21. | New projects (existing projects keep their version) |
+| **CoC signatories** | Project types → Matching Grants → Completion & closure tab | Add a third slot, e.g. "UBEC State Office M&E", scope "Owning organisation or above" | Save. A new Matching Grants project's certificate shows three staff slots. | New projects |
+| **Visit plan** (optional) | Project types → Direct Intervention → Monitoring tab | Routine visits every week → every 2 weeks | Save. A new Direct Intervention draft's step 4 Team & visits previews fortnightly routine visits. | New projects |
+| **KPI targets** (optional) | Project types → Matching Grants → KPI targets tab | Mobilised on time 85 → 95 | KPIs: the Matching Grants figure turns from met to missed | At once |
 
 **Say:** "Every rule you saw is a setting with today's behaviour as the default. When a type changes, projects already running keep the rules they started with, and that is recorded."
 

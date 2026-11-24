@@ -20,7 +20,7 @@ let app: Express;
 let prisma: PrismaClientType;
 
 const PASSWORD = 'Password123!';
-const PROGRAMME_ADMIN = 'programme.admin@insite.ng';
+const PROGRAMME_ADMIN = 'admin@ubec.test';
 const ids: Record<string, string> = {};
 
 const tokens: Record<string, string> = {};
@@ -304,7 +304,7 @@ describe('Redesign R6a: a draft through the five steps only', () => {
     const created = await createDraft('RSA-603');
     const projectId = created.projectId;
     await addScope(projectId);
-    const resident = await prisma.user.findUniqueOrThrow({ where: { email: 'resident.supervisor@insite.ng' } });
+    const resident = await prisma.user.findUniqueOrThrow({ where: { email: 'resident.supervisor@ubec.test' } });
     const admin = await prisma.user.findUniqueOrThrow({ where: { email: PROGRAMME_ADMIN } });
 
     /** What the web sends per section, built from the current DTO (unchanged values when nothing to set). */
