@@ -99,10 +99,17 @@ export const ProjectTypeSummarySchema = z.object({
 });
 export type ProjectTypeSummary = z.infer<typeof ProjectTypeSummarySchema>;
 
-/** Directory and portfolio map filters (Phase 11). */
+/**
+ * Directory, portfolio map and KPI filters (Phase 11). UBEC IRL: LGA (exact, case ignored), the
+ * project's contractor organisation, intervention year and funding source (exact, case ignored).
+ */
 export const ProjectListFiltersSchema = z.object({
   projectTypeId: z.string().uuid().optional(),
   regionId: z.string().uuid().optional(),
   owningOrganizationId: z.string().uuid().optional(),
+  lga: z.string().trim().min(1).max(120).optional(),
+  contractorOrganizationId: z.string().uuid().optional(),
+  interventionYear: z.coerce.number().int().min(2000).max(2100).optional(),
+  fundingSource: z.string().trim().min(1).max(120).optional(),
 });
 export type ProjectListFilters = z.infer<typeof ProjectListFiltersSchema>;

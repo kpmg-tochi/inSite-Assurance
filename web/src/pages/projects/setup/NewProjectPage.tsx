@@ -18,6 +18,9 @@ const SAMPLE_BASICS: BasicsValues = {
   totalBudgetNgn: "450000000",
   projectTypeId: "",
   regionId: "",
+  interventionYear: "",
+  fundingSource: "",
+  externalReference: "",
 };
 
 /**

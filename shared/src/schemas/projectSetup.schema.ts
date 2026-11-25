@@ -16,6 +16,7 @@ import {
   RegionSummarySchema,
 } from './deliveryModel.schema';
 import { ContractStatusEnum, ProjectContractDetailsDtoSchema, ProjectContractStepSchema } from './contract.schema';
+import { ExternalReferenceSchema, FundingSourceSchema, InterventionYearSchema } from './projectRegister.schema';
 
 /**
  * Staged project creation (Phase 6, decision C; redesign R6a, D-R6.2). A project is created as a
@@ -167,6 +168,11 @@ export const ProjectBasicsStepSchema = z.object({
   projectTypeId: z.string().uuid().nullable().optional(),
   /** Phase 11: region or area from the tenant list. Omitted keeps the current value. */
   regionId: z.string().uuid().nullable().optional(),
+  /** UBEC IRL register fields. Omitted keeps the current value; null clears it. */
+  interventionYear: InterventionYearSchema.nullable().optional(),
+  fundingSource: FundingSourceSchema.nullable().optional(),
+  /** The client's own project ID; unique per workspace (409 EXTERNAL_REFERENCE_TAKEN). */
+  externalReference: ExternalReferenceSchema.nullable().optional(),
 });
 export type ProjectBasicsStep = z.infer<typeof ProjectBasicsStepSchema>;
 
@@ -402,6 +408,12 @@ export const ProjectSetupDtoSchema = z.object({
     siteAddress: z.string().nullable(),
     strategicJustification: z.string().nullable(),
     assumptions: z.string().nullable(),
+    /** UBEC IRL register fields. */
+    interventionYear: z.number().int().nullable(),
+    fundingSource: z.string().nullable(),
+    externalReference: z.string().nullable(),
+    /** Set on projects created by the register import. */
+    importedAt: z.string().nullable(),
   }),
   parties: z.object({
     /** Phase 11 */

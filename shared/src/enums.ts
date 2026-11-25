@@ -800,6 +800,8 @@ export const AuditActionTypeEnum = z.enum([
   'SCOPE_UPDATED',
   'SPRINTS_SAVED',
   'SCOPE_IMPORTED',
+  // UBEC IRL: bulk project register import
+  'PROJECT_REGISTER_IMPORTED',
   // Redesign R3
   'FORM_COMPONENT_SAVED',
   // Redesign R4: visits

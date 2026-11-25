@@ -173,6 +173,7 @@ function ActionSheet({
           caption: batch.caption || `${ticket.reference} verification`,
           // The fix taken at this photo's shutter; none means "location unavailable", never a default.
           fix: photo.gps ?? null,
+          heading: photo.heading ?? null,
           capturedAt: photo.capturedAt,
         });
         ids.push(capture.id);

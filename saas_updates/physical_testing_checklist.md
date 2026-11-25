@@ -130,6 +130,15 @@ Photos must be taken inside the project's site boundary to fill a slot. Unless y
 - [ ] **R5-M-39** Navigation (owner, 2026-11-24): the Profile screen has no project list; Project, Visit and Site log screens have a Home button that returns to Home (calendar and every project). Passes on the emulator; repeat on a device.
 - [ ] **R5-M-37** Permission texts after a native rebuild (the texts are in `app.json`, so they need a new EAS build, not only a JS reload): on first use, the camera, microphone and location prompts name visits, defects and the site log. Check on both platforms.
 
+### 4.10 Photo compression and compass heading (UBEC IRL, 2026-11-25)
+`expo-image-manipulator` is a new native module: these checks need a new development build (S-05), not a JS reload. Without it the camera falls back to the uncompressed photo.
+- [ ] **IRL-M-01** Photo size: take 10 site photos in daylight (a busy scene, a plain wall, a signboard at ~5 m) and 2 indoors in low light on a mid-range Android phone and on an iPhone. Expected: each upload is 1600 px on the long edge and about 150–450 KB (server: `EvidenceMedia.byteSize`; web: open full size and check the dimensions); none above ~600 KB; the signboard lettering is readable at full size; portrait photos stay upright. Record the sizes here to correct the IRL storage sizing.
+- [ ] **IRL-M-02** Integrity after compression: the same photos register without `CLIENT_HASH_MISMATCH`, `SIGNATURE_INVALID` or `IMAGE_NOT_DECODABLE`; two photos of the same scene seconds apart are not flagged as duplicates unless they really are near-identical.
+- [ ] **IRL-M-03** Heading accuracy: stand at a known spot facing a known bearing (use a separate compass or map), take a photo facing N, E, S and W. Expected: the web visit drawer (hover the photo) and the evidence map show "Facing N/E/S/W (…°)" within about 20° once the compass is calibrated (figure-eight motion); the check-in sheet shows the heading under the GPS accuracy. Note whether the phone gave true or magnetic north (`Visit.checkInGeotag.headingReference`).
+- [ ] **IRL-M-04** No compass or no reading: on a phone or emulator without a magnetometer (or with location permission denied), take a photo and check in. Expected: capture is not delayed by more than about a second; the photo shows "Heading not recorded" on the web; check-in and submission still go through.
+- [ ] **IRL-M-05** Offline queue with compressed photos: in airplane mode take 20 photos across a visit, the site log and a defect, then reconnect. Expected: the Outbox drains; each photo uploads once; total data used is roughly 20 × 0.3 MB; the phone's `captures` folder holds the compressed files only (no full-size originals left in the cache after the app restarts).
+- [ ] **IRL-M-06** Upgrade (SQLite v10 → v11): install this build over the previous one with unsent photos queued. Expected: the app opens without a crash; the old photos upload (without a heading); new photos carry one.
+
 ---
 
 ## 5. Retired checks

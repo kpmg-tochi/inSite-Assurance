@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { IncidentCategoryEnum, IncidentSeverityEnum, IncidentStatusEnum } from '../enums';
+import { HeadingDegreesSchema } from './evidence.schema';
 
 export const CreateIncidentReportRequestSchema = z.object({
   /** Client UUID; a repeat returns the existing incident (idempotent). */
@@ -18,6 +19,8 @@ export const CreateIncidentReportRequestSchema = z.object({
     latitude: z.number(),
     longitude: z.number(),
     accuracyMeters: z.number().optional(),
+    /** UBEC IRL: compass heading of the incident photo (optional; stored with the coordinates). */
+    headingDegrees: HeadingDegreesSchema.optional(),
   }).optional(),
 });
 export type CreateIncidentReportRequest = z.infer<typeof CreateIncidentReportRequestSchema>;

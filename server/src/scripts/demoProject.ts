@@ -1,6 +1,8 @@
 import { addDays, DEFAULT_FACILITIES, nextWorkdayOnOrAfter } from "@insite/shared";
 import type { WorkbookBuildData, WorkbookFacility, WorkbookLine, WorkbookSprint, WorkbookUnit } from "../modules/scope/workbook/scopeWorkbook";
 import type { DemoDocumentCode, DemoDocumentContext } from "../db/demoDocuments";
+import type { RegisterRowRaw } from "@insite/shared";
+import type { RegisterWorkbookData } from "../modules/projectRegister/registerWorkbook";
 
 /**
  * The project created live in the UBEC demo (Direct Intervention, Kano): its needs assessment, its
@@ -24,6 +26,9 @@ export const DEMO_PROJECT = {
   typeCode: "CENTRAL",
   budgetNgn: 48_500_000,
   contractSumNgn: 46_490_000,
+  /** UBEC IRL register fields (filled from the needs assessment). */
+  interventionYear: 2026,
+  fundingSource: "UBEC Intervention Fund",
   contractReference: "UBEC/DI/2026/110",
   contractor: "Kurmi Waterworks & Construction Ltd",
   headTeacher: "Mallam Ibrahim Yusuf (Head teacher)",
@@ -96,6 +101,8 @@ export function demoWorkbookData(today: string, generatedAt = new Date()): Workb
       longitude: DEMO_PROJECT.longitude,
       deliveryModel: DEMO_PROJECT.deliveryModel,
       budget: DEMO_PROJECT.budgetNgn,
+      interventionYear: DEMO_PROJECT.interventionYear,
+      fundingSource: DEMO_PROJECT.fundingSource,
       strategicJustification: DEMO_PROJECT.strategicJustification,
       assumptions: DEMO_PROJECT.assumptions,
     },
@@ -160,4 +167,153 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 function fmt(iso: string) {
   const [y, m, d] = iso.split("-");
   return `${d} ${MONTHS[Number(m) - 1]} ${y}`;
+}
+
+// ---------------------------------------------------------------------------
+// UBEC IRL: the project register import (demo pack file 14)
+// ---------------------------------------------------------------------------
+
+export const DEMO_REGISTER_FILE = "14 Project register import.xlsx";
+
+/**
+ * Six projects of the existing UBEC register, in the import template: two not started (drafts), three
+ * ongoing and one completed (live imported projects), Kano and Lagos, Direct Intervention and Matching
+ * Grants. Codes are left blank (numbered after the highest PRG code). Two contractors are new
+ * organisations; "Sahel Build & Civil Works Ltd" is already in the seeded workspace. Dates are relative
+ * to the demo day. Imports cleanly on a freshly seeded database (routes.irl.register.test.ts).
+ */
+export function demoRegisterRows(today: string): RegisterRowRaw[] {
+  const d = (days: number) => addDays(today, days);
+  const DI = "Direct Intervention";
+  const MG = "Matching Grants";
+  return [
+    {
+      externalReference: "UBEC/DI/2026/KN/031",
+      name: "Renovation of a three-classroom block, LGEA Primary School Gwarzo",
+      school: "LGEA Primary School, Gwarzo",
+      state: "Kano",
+      lga: "Gwarzo",
+      projectType: DI,
+      budget: 32_000_000,
+      interventionYear: 2026,
+      fundingSource: "UBEC Intervention Fund",
+      status: "Not started",
+    },
+    {
+      externalReference: "UBEC/MG/2026/LA/012",
+      name: "Perimeter fence and gatehouse, Agege Junior Secondary School",
+      school: "Agege Junior Secondary School",
+      state: "Lagos",
+      lga: "Agege",
+      projectType: MG,
+      owner: "Lagos State Universal Basic Education Board (SUBEB)",
+      budget: 18_500_000,
+      interventionYear: 2026,
+      fundingSource: "Matching grant (SUBEB counterpart)",
+      status: "Not started",
+    },
+    {
+      externalReference: "UBEC/DI/2025/KN/014",
+      name: "Two-classroom block with head teacher's office, Government Primary School Bichi",
+      school: "Government Primary School, Bichi",
+      state: "Kano",
+      lga: "Bichi",
+      siteAddress: "School compound, Bichi town, Bichi LGA, Kano State",
+      latitude: 12.2336,
+      longitude: 8.2412,
+      projectType: DI,
+      contractor: "Sahel Build & Civil Works Ltd",
+      contractSum: 41_200_000,
+      budget: 43_000_000,
+      contractAwardDate: d(-300),
+      contractSignedDate: d(-290),
+      plannedStartDate: d(-270),
+      plannedCompletionDate: d(60),
+      interventionYear: 2025,
+      fundingSource: "UBEC Intervention Fund",
+      status: "Ongoing",
+      percentComplete: 55,
+    },
+    {
+      externalReference: "UBEC/MG/2025/LA/007",
+      name: "WASH facilities, Ikorodu Community Primary School",
+      school: "Ikorodu Community Primary School",
+      state: "Lagos",
+      lga: "Ikorodu",
+      latitude: 6.6194,
+      longitude: 3.5105,
+      projectType: MG,
+      owner: "Lagos State Universal Basic Education Board (SUBEB)",
+      contractor: "Eko Waterline Engineering Ltd",
+      contractSum: 27_800_000,
+      contractAwardDate: d(-200),
+      contractSignedDate: d(-190),
+      plannedStartDate: d(-170),
+      plannedCompletionDate: d(90),
+      interventionYear: 2025,
+      fundingSource: "Matching grant (SUBEB counterpart)",
+      status: "Ongoing",
+      percentComplete: 30,
+    },
+    {
+      externalReference: "UBEC/MG/2025/KN/019",
+      name: "Library and ICT room, Dala Junior Secondary School",
+      school: "Dala Junior Secondary School",
+      state: "Kano",
+      lga: "Dala",
+      latitude: 12.0045,
+      longitude: 8.5011,
+      projectType: MG,
+      owner: "Kano State Universal Basic Education Board (SUBEB)",
+      contractor: "Sahel Build & Civil Works Ltd",
+      contractSum: 36_500_000,
+      contractAwardDate: d(-330),
+      contractSignedDate: d(-320),
+      plannedStartDate: d(-300),
+      plannedCompletionDate: d(30),
+      interventionYear: 2025,
+      fundingSource: "Matching grant (SUBEB counterpart)",
+      status: "Ongoing",
+      percentComplete: 72,
+    },
+    {
+      externalReference: "UBEC/DI/2024/KN/022",
+      name: "Solar-powered borehole, Tudun Wada Model Primary School",
+      school: "Tudun Wada Model Primary School",
+      state: "Kano",
+      lga: "Tudun Wada",
+      latitude: 11.2512,
+      longitude: 8.4058,
+      projectType: DI,
+      contractor: "Gwale Borehole Services Ltd",
+      contractSum: 14_900_000,
+      contractAwardDate: d(-520),
+      contractSignedDate: d(-510),
+      plannedStartDate: d(-490),
+      plannedCompletionDate: d(-60),
+      interventionYear: 2024,
+      fundingSource: "UBEC Intervention Fund",
+      status: "Completed",
+      percentComplete: 100,
+    },
+  ];
+}
+
+/** The register import file as the UBEC workspace's template would hold it (lists as seeded). */
+export function demoRegisterWorkbookData(today: string, generatedAt = new Date()): RegisterWorkbookData {
+  return {
+    generatedAt,
+    brandName: "UBEC",
+    term: "UBEC project ID",
+    states: ["Kaduna", "Kano", "Lagos", "Ogun"],
+    projectTypes: ["Direct Intervention", "Matching Grants"],
+    owners: [
+      "Independent M&E Consultants (COREN-certified)",
+      "Kano State Universal Basic Education Board (SUBEB)",
+      "Lagos State Universal Basic Education Board (SUBEB)",
+      "Universal Basic Education Commission (UBEC)",
+    ],
+    contractors: ["Sahel Build & Civil Works Ltd"],
+    rows: demoRegisterRows(today),
+  };
 }

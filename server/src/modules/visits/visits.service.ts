@@ -118,7 +118,8 @@ export interface VisitListQuery {
   visitKind?: string;
 }
 
-function visitWhere(projectId: string, q: VisitListQuery): Prisma.VisitWhereInput {
+/** The Visits tab's filter (also used by its Excel export). */
+export function visitWhere(projectId: string, q: VisitListQuery): Prisma.VisitWhereInput {
   const where: Prisma.VisitWhereInput = { projectId };
   const date: Prisma.StringFilter = {};
   if (q.from && isIsoCalendarDate(q.from)) date.gte = q.from;

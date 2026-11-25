@@ -1,5 +1,11 @@
 import React, { useMemo, useState } from "react";
-import type { ProjectDeliveryModelFields, ProjectListFilters, ProjectTypeSummary, RegionDto } from "@insite/shared";
+import type {
+  ProjectDeliveryModelFields,
+  ProjectListFilters,
+  ProjectRegisterFilterOptionsDto,
+  ProjectTypeSummary,
+  RegionDto,
+} from "@insite/shared";
 
 const NO_REGIONS: RegionDto[] = [];
 import { CustomSelect } from "../common";
@@ -46,11 +52,17 @@ export function DeliveryModelFilters({
   filters,
   onChange,
   owners,
+  registerOptions,
 }: {
   filters: ProjectListFilters;
   onChange: (next: ProjectListFilters) => void;
   /** Owning organisations present in the list being filtered. */
   owners: Array<{ id: string; name: string }>;
+  /**
+   * UBEC IRL: the project register's extra filters (LGA, contractor, intervention year, funding
+   * source), from GET /projects/register/options. Left out (e.g. the KPI page): not shown.
+   */
+  registerOptions?: ProjectRegisterFilterOptionsDto | null;
 }) {
   const types = useProjectTypesQuery(true).data ?? [];
   const regions = useRegionsQuery(true).data ?? NO_REGIONS;
@@ -64,10 +76,16 @@ export function DeliveryModelFilters({
   const uniqueOwners = useMemo(() => {
     const seen = new Map<string, string>();
     owners.forEach((o) => seen.set(o.id, o.name));
+    registerOptions?.owners.forEach((o) => seen.set(o.id, o.name));
     return [...seen.entries()].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [owners]);
+  }, [owners, registerOptions]);
+  const lgas = registerOptions?.lgas ?? [];
+  const contractors = registerOptions?.contractors ?? [];
+  const years = registerOptions?.interventionYears ?? [];
+  const fundingSources = registerOptions?.fundingSources ?? [];
+  const hasRegisterFilters = lgas.length + contractors.length + years.length + fundingSources.length > 0;
 
-  if (types.length === 0 && regions.length === 0 && uniqueOwners.length === 0) return null;
+  if (types.length === 0 && regions.length === 0 && uniqueOwners.length === 0 && !hasRegisterFilters) return null;
   const set = (key: keyof ProjectListFilters) => (v: string) => onChange({ ...filters, [key]: v || undefined });
 
   return (
@@ -101,6 +119,53 @@ export function DeliveryModelFilters({
             options={[{ value: "", label: "All owners" }, ...uniqueOwners]}
             size="sm"
             searchable={uniqueOwners.length > 8}
+          />
+        </div>
+      )}
+      {lgas.length > 0 && (
+        <div className="w-48">
+          <CustomSelect
+            value={filters.lga ?? ""}
+            onChange={set("lga")}
+            ariaLabel="Filter by LGA"
+            options={[{ value: "", label: "All LGAs" }, ...lgas.map((l) => ({ value: l, label: l }))]}
+            size="sm"
+            searchable={lgas.length > 8}
+          />
+        </div>
+      )}
+      {contractors.length > 0 && (
+        <div className="w-56">
+          <CustomSelect
+            value={filters.contractorOrganizationId ?? ""}
+            onChange={set("contractorOrganizationId")}
+            ariaLabel="Filter by contractor"
+            options={[{ value: "", label: "All contractors" }, ...contractors.map((c) => ({ value: c.id, label: c.name }))]}
+            size="sm"
+            searchable={contractors.length > 8}
+          />
+        </div>
+      )}
+      {years.length > 0 && (
+        <div className="w-40">
+          <CustomSelect
+            value={filters.interventionYear !== undefined ? String(filters.interventionYear) : ""}
+            onChange={(v) => onChange({ ...filters, interventionYear: v ? Number(v) : undefined })}
+            ariaLabel="Filter by intervention year"
+            options={[{ value: "", label: "All years" }, ...years.map((y) => ({ value: String(y), label: String(y) }))]}
+            size="sm"
+          />
+        </div>
+      )}
+      {fundingSources.length > 0 && (
+        <div className="w-56">
+          <CustomSelect
+            value={filters.fundingSource ?? ""}
+            onChange={set("fundingSource")}
+            ariaLabel="Filter by funding source"
+            options={[{ value: "", label: "All funding sources" }, ...fundingSources.map((f) => ({ value: f, label: f }))]}
+            size="sm"
+            searchable={fundingSources.length > 8}
           />
         </div>
       )}

@@ -7,10 +7,11 @@
  */
 import fs from "fs";
 import path from "path";
-import { zonedCalendarDate } from "@insite/shared";
+import { validateRegisterRow, zonedCalendarDate } from "@insite/shared";
 import { buildScopeWorkbook, parseScopeWorkbook } from "../modules/scope/workbook/scopeWorkbook";
 import { renderDemoDocument } from "../db/demoDocuments";
-import { DEMO_LINES, DEMO_PROJECT, DEMO_UNITS, DEMO_WORKBOOK_FILE, demoDates, demoDocumentContext, demoFacilities, demoPackDocuments, demoWorkbookData } from "./demoProject";
+import { DEMO_LINES, DEMO_PROJECT, DEMO_REGISTER_FILE, DEMO_UNITS, DEMO_WORKBOOK_FILE, demoDates, demoDocumentContext, demoFacilities, demoPackDocuments, demoRegisterRows, demoRegisterWorkbookData, demoWorkbookData } from "./demoProject";
+import { buildRegisterWorkbook } from "../modules/projectRegister/registerWorkbook";
 
 const OUT = path.resolve(__dirname, "../../../saas_updates/demo_pack");
 
@@ -39,10 +40,19 @@ async function main() {
     fs.writeFileSync(path.join(OUT, d.file), await renderDemoDocument(d.code, demoDocumentContext(today, d.date)));
   }
 
+  // 3. UBEC IRL: the project register import (rows checked by the shared row rules; the route test
+  // routes.irl.register.test.ts imports the same file on a freshly seeded database).
+  const registerRows = demoRegisterRows(today);
+  const rowErrors = registerRows.flatMap((r, i) => validateRegisterRow(r).issues.map((x) => `row ${i + 1} ${x.column}: ${x.message}`));
+  if (rowErrors.length) throw new Error(`The demo register rows are invalid:\n${rowErrors.join("\n")}`);
+  fs.writeFileSync(path.join(OUT, DEMO_REGISTER_FILE), await buildRegisterWorkbook(demoRegisterWorkbookData(today)));
+
   const dates = demoDates(today);
   console.log(`Demo pack for ${today} written to ${OUT}`);
   console.log(`  ${DEMO_WORKBOOK_FILE}: ${parsed.units.length} units, ${parsed.lines.length} lines (NGN ${total.toLocaleString("en-NG")}), sprint 1 ${dates.sprints[0].startDate}..${dates.sprints[0].endDate}, sprint 2 ${dates.sprints[1].startDate}..${dates.sprints[1].endDate}; ${parsed.warnings.length} warning(s)`);
   for (const d of docs) console.log(`  ${d.file}`);
+  const live = registerRows.filter((r) => r.status !== "Not started").length;
+  console.log(`  ${DEMO_REGISTER_FILE}: ${registerRows.length} projects (${registerRows.length - live} not started, ${live} ongoing or completed)`);
   console.log(`  Project code to type when creating the draft: ${DEMO_PROJECT.code}`);
 }
 

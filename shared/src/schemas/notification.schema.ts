@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ProjectAlertKeyEnum } from './projectAlert.schema';
 
 export const MobileNotificationTypeEnum = z.enum([
   // Phase 10
@@ -9,6 +10,8 @@ export const MobileNotificationTypeEnum = z.enum([
   'VISIT_REMINDER',
   'VISIT_RETURNED',
   'VISIT_APPROVED',
+  // UBEC IRL: early-warning alerts (metadata.alertKey says which)
+  'PROJECT_ALERT',
 ]);
 export type MobileNotificationType = z.infer<typeof MobileNotificationTypeEnum>;
 
@@ -30,6 +33,11 @@ export const MobileNotificationMetadataSchema = z
     /** Redesign R4: the visit a VISIT_* notification is about (action OPEN_VISIT). */
     visitId: z.string().uuid().optional(),
     visitSubmissionId: z.string().uuid().optional(),
+    /**
+     * UBEC IRL: an early-warning alert on the project (STALLED, SITE_UPDATE_OVERDUE). Stored as a
+     * broadcast with action NONE; the app shows it as an alert and opens the project.
+     */
+    alertKey: ProjectAlertKeyEnum.optional(),
   })
   .passthrough();
 export type MobileNotificationMetadata = z.infer<
@@ -81,6 +89,10 @@ export const WebNotificationCategoryEnum = z.enum([
   'VISIT_MISSED',
   'FINDING_ESCALATED',
   'SPRINT_VERIFICATION_DUE',
+  // UBEC IRL early-warning alerts (DELAYED keeps SCHEDULE_BEHIND)
+  'PROJECT_STALLED',
+  'SITE_UPDATE_OVERDUE',
+  'SPEND_AHEAD_OF_PROGRESS',
 ]);
 export type WebNotificationCategory = z.infer<typeof WebNotificationCategoryEnum>;
 

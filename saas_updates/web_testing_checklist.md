@@ -116,6 +116,33 @@ Browser checks of the web portal that automated tests do not cover. Companion to
 | WEB-UBEC-10 | all | Seeded names read UBEC / Kano State SUBEB / Lagos State SUBEB, Direct Intervention / Matching Grants; no "Central", "Co-Funded" or "Programme Authority" on screen. |
 | WEB-UBEC-20 | `admin@ubec.test`, then each roster login | Settings → Users & visibility lists the seven roster users (Hauwa Bello, Aisha Musa, Chidi Okeke, Ngozi Eze, Bisi Adeyemi, Engr. Emeka Obi, Musa Danladi) and Roles lists exactly six: UBEC Administrator, SUBEB Administrator, UBEC M&E Officer, SUBEB M&E Officer, Independent M&E (COREN-certified firm), Resident Supervisor (mobile). The login page quick list shows only the four web logins in roster order. `kano.admin@`/`lagos.admin@` see only their SUBEB's projects; `me.officer@`, `lagos.me@` and `independent.me@` get the Dashboard (no Portfolio, Settings, Audit ledger or Payments) and see only their assigned projects (me.officer@: PRG-102, -103, -104, -105, -211, -221; lagos.me@: PRG-221, -241, -242; independent.me@: PRG-102, -105, -211), with the same lists on the phone. `resident.supervisor@ubec.test` is for the phone only. |
 
+## 6b. UBEC IRL: Excel exports (2026-11-25)
+
+Open each file in Excel (and LibreOffice if available): green title band with amber rule, hint line naming the filters, frozen green headers, banded rows, ₦ and date formats, autofilter.
+
+| Ref | Login | Check |
+| :--- | :--- | :--- |
+| WEB-IRL-EXP-01 | `admin@ubec.test` | PRG-105 → Reports → Visits: "Export to Excel" in the table header downloads `PRG-105 visits <today>.xlsx`; the button shows "Preparing…" while it builds. With the default "Open visits" the file has no accepted or cancelled visits; tick "Include accepted and cancelled", or pick a status and a kind, and the file follows. |
+| WEB-IRL-EXP-02 | same | PRG-211 visits file: the accepted visits show Review "Accepted", reviewed at/by, outcome and findings raised; the late routine visit says "Submitted late: Yes"; check-in times read in Lagos time. |
+| WEB-IRL-EXP-03 | same | Portfolio → Visits (planner): "Export to Excel" in the toolbar downloads `UBEC visits <from> to <to>.xlsx` for the week or 4 weeks shown, with the region, project, officer and kind filters applied (named in the hint line); no cancelled visits. The toolbar wraps at phone width. |
+| WEB-IRL-EXP-04 | `lagos.me@ubec.test` | Planner export holds only PRG-221, -241, -242 visits. |
+| WEB-IRL-EXP-05 | `admin@ubec.test` | PRG-211 → Reports → Findings: "Export to Excel" above the board downloads `PRG-211 findings <today>.xlsx` (open, resolved, dismissed; dismissed rows greyed; escalated finding shows its escalation time). |
+| WEB-IRL-EXP-06 | same | PRG-105 → Payments: "Export to Excel" in the table header downloads `PRG-105 payments <today>.xlsx` with the search, type, sprint and "Exceptions only" filters applied; voided payments greyed with reason; the totals row (voided excluded) matches "Paid to date" and "Net to the contractor". |
+| WEB-IRL-EXP-07 | same | Portfolio → KPIs: "Export to Excel" beside "Export CSV" downloads `UBEC KPIs <from> to <to>.xlsx` (sheets Programme and By project) for the period preset and type/region/owner filters shown; the CSV still works. |
+| WEB-IRL-EXP-08 | a login without the screen's permission (e.g. `me.officer@ubec.test` on payments) | No payments page, so no export; a failed export (e.g. server stopped) shows an error toast, not a broken file. |
+
+## 6c. UBEC IRL: register, bulk import and alerts (2026-11-25)
+
+| Ref | Login | Check |
+| :--- | :--- | :--- |
+| WEB-IRL-REG-01 | `admin@ubec.test` | Portfolio register: LGA, contractor, intervention year and funding source filters narrow the table and stay in the URL; "Year" and "Last update" columns; search finds a project by its UBEC project ID. Known: switching the home tab (Overview → KPIs → back) clears the filters (`useUrlTab` resets every URL parameter). |
+| WEB-IRL-REG-02 | `admin@ubec.test` | Register **Export** → Excel and PDF: the rows and filters match the screen; "Paid to date" present. As `lagos.me@ubec.test`: only its projects, no paid column. |
+| WEB-IRL-REG-03 | `admin@ubec.test` | **Import projects** → download template → upload `saas_updates/demo_pack/14 Project register import.xlsx` → preview shows drafts vs live and assigned codes → confirm. Drafts appear under Drafts; live rows show "reported" progress and the UBEC project ID; their pre-construction milestones are waived with a reason. |
+| WEB-IRL-REG-04 | `admin@ubec.test` | An imported live project with no units accepts a needs assessment import; afterwards progress is computed (no "reported" marker). |
+| WEB-IRL-REG-05 | `admin@ubec.test` | Project setup step 1 and the Overview show intervention year, funding source (suggestions) and UBEC project ID; a duplicate ID is refused. |
+| WEB-IRL-ALR-01 | `admin@ubec.test` | Register stage cells and PRG-105 / PRG-211 Overview show the alert chips (Delayed, Stalled, Site update overdue) with "since" in the tooltip; the portfolio "Behind schedule" figure shows "N projects with early-warning alerts". |
+| WEB-IRL-ALR-02 | `admin@ubec.test` | Notification centre lists the new alert categories with titles and links that open the right page; Settings → Project types → Monitoring shows the alert switches and thresholds. |
+
 ## 7. Known open items
 
 | Ref | Item |

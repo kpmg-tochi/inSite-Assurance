@@ -4,6 +4,7 @@ import {
   CaptureDto,
   CaptureListItemDto,
   canonicalCaptureString,
+  normaliseHeadingDegrees,
   RegisterCaptureRequest,
   RESUBMITTED_AFTER_SESSION_END_FLAG,
 } from '@insite/shared';
@@ -167,6 +168,8 @@ export async function registerCapture(params: {
           longitude: location?.longitude ?? null,
           altitudeMeters: location?.altitudeMeters ?? null,
           gpsAccuracyMeters: location?.accuracyMeters ?? null,
+          // UBEC IRL: stored as sent (wrapped to 0-360); not screened and not signed.
+          headingDegrees: normaliseHeadingDegrees(input.headingDegrees),
           isMockLocation: input.isMockLocation,
           isWithinGeofence: geofence.isWithinGeofence,
           geofenceStatus: geofence.geofenceStatus,

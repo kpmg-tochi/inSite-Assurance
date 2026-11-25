@@ -1,5 +1,7 @@
 # UBEC IRL coverage review
 
+> **Update, 2026-11-25 (after the review):** built before the demo, per the owner: register fields (intervention year, funding source, UBEC project ID), LGA / contractor / year / funding filters, "last update" column, register export (Excel and PDF), **bulk project register import** (drafts and live projects already under way); Excel exports of visits, findings, payments and KPIs; **early-warning alerts** (delayed, stalled, site update overdue, spend ahead of progress) on the web and the phone; photo compression and compass heading. Deferred: sign-in policy (MFA, short-lived sessions, password reset) and SMTP email, plus the gaps in section 3 not listed here (`next_steps/irl_follow_ups.md`). Owner: the stack, hosting package and project code convention are out of scope for now. The tables below describe the state **before** these changes.
+
 **Date:** 2026-11-25. **Source:** `Project Context/UBEC_IRL.xlsx` (sheets IRL, System requirements, Phone specification, What the portal provides; the hidden Server costing sheet read for context). **Platform reviewed:** branch `UBEC` after redesign R7 (uncommitted working tree). Evidence was gathered by reading the code; nothing was run on a device or a server.
 
 ## Summary
@@ -12,8 +14,8 @@
 **Three things in the IRL workbook are wrong about the platform and should be corrected before it goes to UBEC:**
 
 1. **The stack.** The System requirements and Server costing sheets assume a **.NET 10 API on Windows Server / IIS with Microsoft SQL Server**. The platform is **Node.js 24 + Express with PostgreSQL** (Prisma 7), S3-compatible object storage, and a React/Vite web app. Nothing runs on IIS or SQL Server. Rows 1 (application servers), 3 (database), 7 (firewall ports), 10–11 and 14 (monitoring "IIS, SQL Server") and the whole costing sheet (Windows App Service, Azure SQL, RDS SQL Server) need rewriting for Linux (or Windows) hosts running Node, a managed or self-hosted PostgreSQL 13+, and S3-compatible storage.
-2. **Photo size.** The Phone specification says "the app compresses each photo to about 200 KB before upload". It doesn't: the camera saves full-resolution JPEGs at quality 0.82 with no resizing (`mobile/src/components/camera/InSiteCamera.tsx:50,117`), typically several MB. The sizing assumption (0.2 MB per photo) and the storage figures built on it are therefore low by an order of magnitude, unless we add compression (recommended, small change).
-3. **Photo direction.** The phone sheet says the compass "records which direction a photo was taken". The app records GPS position, accuracy, altitude and a mock-location flag, but no heading.
+2. **Photo size.** Fixed 2026-11-25: every in-app photo is now resized to a 1600 px long edge and saved as JPEG quality 0.7 (0.55 if still above 500 KB) before it is stored and hashed; expect about 200–400 KB per photo (estimate; to be measured on a phone, `physical_testing_checklist.md`). The sheet's "about 200 KB" is the low end: size storage at 0.3–0.4 MB per photo. (Before: full-resolution JPEGs at quality 0.82, several MB each.)
+3. **Photo direction.** Fixed 2026-11-25: each geotagged photo, the visit check-in and the submission position record the compass heading (true north when the phone can compute it, else magnetic; null when the phone has no compass or no reading within a second). The portal shows it next to the photo's GPS details, e.g. "Facing NE (47°)". (Before: GPS position, accuracy, altitude and mock flag only.)
 
 ## 1. What the portal provides
 
@@ -46,7 +48,7 @@
 | 12 | Field questionnaire | **Ready**: versioned form library (11 field types, options, required, photo rules, finding rules) | No show/hide (skip) logic |
 | 13 | Roles and responsibilities | **Ready** for roles, approvals and escalations as data | Approval steps have no time limit; escalation exists for findings only. The full role list is deferred until after the demo (`next_steps/role_catalogue_migration_plan.md`) |
 | 14 | Email engine | Resend (HTTPS API) only; one global sender | No **SMTP** adapter (the IRL asks for port 587); no per-tenant sender |
-| 15 | Field devices | Android app via Expo; camera, GPS, offline | Minimum Android is 7.0 (React Native default), far below the sheet's Android 15; no photo compression; push needs FCM credentials configured in EAS (not verified) |
+| 15 | Field devices | Android app via Expo; camera, GPS, offline | Minimum Android is 7.0 (React Native default), far below the sheet's Android 15; photo compression and compass heading added 2026-11-25 (device check owed); push needs FCM credentials configured in EAS (not verified) |
 | 16 | Branding | **Ready**: name, logo URL, colours, tagline, PDF header and footer per tenant | Logo is a URL, not an upload; the platform name is set at build time |
 
 ## 3. Recommended next steps
@@ -57,7 +59,7 @@ Ordered by impact on a UBEC go-live. Sizes: S ≈ a day, M ≈ a few days, L ≈
 | :- | :--- | :- | :--- |
 | 1 | Correct the IRL workbook before sending: stack rows, costing sheet, photo size, compass, minimum Android | S | – |
 | 2 | Hosting package: Dockerfile(s), compose file, install and upgrade guide, backup/restore of PostgreSQL and object storage, `trust proxy`, health and monitoring notes; list the outside services and how to replace them (self-hosted tiles, FCM, SMTP) | L | IRL 1–2 |
-| 3 | Photo compression on the phone (resize to ~1600 px, about 200–300 KB) and the storage sizing updated | S | – |
+| 3 | Photo compression on the phone (resize to ~1600 px, about 200–300 KB) and the storage sizing updated. Compression and compass heading done 2026-11-25 (device check owed); storage sizing still to update in the workbook | S | – |
 | 4 | SMTP mail adapter (port 587) and a password reset flow | S–M | IRL 14 |
 | 5 | Register: LGA and contractor filters, last approved update column, intervention year and funding source fields, configurable project code format, bulk import of active projects | M | IRL 6–7 |
 | 6 | Status and alerts: Stalled / Delayed rules with thresholds, "no approved update for N days" alert, spend-ahead-of-progress check, email digests of alerts | M | IRL 5, 9 |

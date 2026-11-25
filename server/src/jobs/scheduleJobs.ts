@@ -1,6 +1,6 @@
 import { zonedCalendarDate } from '@insite/shared';
 import { prisma } from '../config/prisma';
-import { createWebNotification } from '../modules/notifications/notifications.service';
+import { syncProjectAlerts } from '../modules/alerts/projectAlerts.service';
 import { refreshScheduleBadge } from '../modules/schedule/schedule.service';
 import { LIVE_PROJECT_WHERE } from './cadenceJobs';
 import { JobContext, registerJob, runUnit } from './runner';
@@ -9,8 +9,8 @@ import { JobContext, registerJob, runUnit } from './runner';
  * schedule-variance: once a day per live project (keyed on the project's calendar day), recompute
  * and store the schedule badge from sprints (redesign R2d, D-R2.15). When a project first falls
  * BEHIND (a unit whose end sprint has ended still has a line below 100%), users with
- * sprints:view_status get a web notification; the flag clears when the project recovers, so a
- * later fall alerts again. Projects without sprints get UNSCHEDULED.
+ * sprints:view_status get a web notification (the DELAYED early-warning alert, UBEC IRL); the alert
+ * clears when the project recovers, so a later fall alerts again. Projects without sprints get UNSCHEDULED.
  */
 export async function runScheduleVariance({ now }: JobContext): Promise<void> {
   const projects = await prisma.project.findMany({
@@ -20,31 +20,13 @@ export async function runScheduleVariance({ now }: JobContext): Promise<void> {
   for (const p of projects) {
     const today = zonedCalendarDate(now, p.timezone);
     await runUnit('schedule-variance', `${p.id}:${today}`, async () => {
-      const { status, behindUnitCount, scheduleBehindAlertedAt } = await refreshScheduleBadge(p.id, now);
+      const { status, behindUnitCount } = await refreshScheduleBadge(p.id, now);
+      // UBEC IRL: the behind notification is the DELAYED early-warning alert (sent once per
+      // occurrence, cleared when the project recovers; the type's `monitoring.alerts.delayed` switch).
+      const alerts = await syncProjectAlerts(p.id, now, { keys: ['DELAYED'], behindUnitCount });
       const behind = status === 'BEHIND';
-      if (behind && !scheduleBehindAlertedAt) {
-        await prisma.$transaction(async (tx) => {
-          const claimed = await tx.project.updateMany({
-            where: { id: p.id, scheduleBehindAlertedAt: null },
-            data: { scheduleBehindAlertedAt: now },
-          });
-          if (claimed.count === 0) return;
-          await createWebNotification(tx, {
-            projectId: p.id,
-            targetPermissionKey: 'sprints:view_status',
-            category: 'SCHEDULE_BEHIND',
-            title: `${p.codePrefix} is behind schedule`,
-            description: `${p.name}: ${behindUnitCount} facility unit(s) due by a sprint that has ended are not complete.`,
-            actionUrl: `/app/projects/${p.id}/scope`,
-            metadata: { status, behindUnitCount },
-          });
-        });
-        return `${status} (${behindUnitCount} late unit(s)); alerted`;
-      }
-      if (!behind && scheduleBehindAlertedAt) {
-        await prisma.project.update({ where: { id: p.id }, data: { scheduleBehindAlertedAt: null } });
-      }
-      return behind ? `${status} (${behindUnitCount} late unit(s))` : status;
+      const detail = behind ? `${status} (${behindUnitCount} late unit(s))` : status;
+      return alerts.raised.includes('DELAYED') ? `${detail}; alerted` : detail;
     });
   }
 }

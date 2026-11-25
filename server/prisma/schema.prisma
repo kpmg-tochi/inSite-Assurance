@@ -243,6 +243,8 @@ enum AuditActionType {
   SCOPE_UPDATED
   SPRINTS_SAVED
   SCOPE_IMPORTED
+  // UBEC IRL: bulk project register import
+  PROJECT_REGISTER_IMPORTED
   // Redesign R3: form library
   FORM_COMPONENT_SAVED
   // Redesign R4: visits
@@ -346,6 +348,8 @@ enum MobileNotificationType {
   VISIT_REMINDER
   VISIT_RETURNED
   VISIT_APPROVED
+  // UBEC IRL: early-warning alerts (stalled, site update overdue) for the project's field officers
+  PROJECT_ALERT
 }
 
 enum NotificationActionType {
@@ -570,6 +574,17 @@ model Project {
   totalBudgetNgn          Decimal?      @db.Decimal(18, 2)
   disbursedToDateNgn      Decimal       @default(0) @db.Decimal(18, 2)
   certifiedProgressPct    Decimal       @default(0) @db.Decimal(5, 2)
+  // UBEC IRL (2026-11-25): register fields. Intervention year = the budget year the project is funded from;
+  // funding source = free text with shared suggestions (FUNDING_SOURCE_SUGGESTIONS).
+  interventionYear        Int?
+  fundingSource           String?
+  // The client's own project ID (e.g. UBEC's), kept alongside our code; unique per tenant when set.
+  externalReference       String?
+  // Bulk register import: set on every imported project. Projects already under way are imported live
+  // with the reported % complete (shown until their scope is added) and the status the client reported.
+  importedAt              DateTime?
+  importedProgressPct     Decimal?      @db.Decimal(5, 2)
+  importedStatus          String?
   workdayStartTime        String        @default("08:00")
   workdayEndTime          String        @default("17:00")
   // IANA zone of the project (dates, deadlines, visit days). Defaults to the tenant zone.
@@ -596,6 +611,10 @@ model Project {
   scheduleVarianceComputedAt DateTime?
   // Set when the "behind" web notification went out; cleared when the project recovers.
   scheduleBehindAlertedAt    DateTime?
+  // UBEC IRL early-warning alerts: { [alertKey]: ISO time the alert was raised } for the alerts that are
+  // currently active (stalled, site update overdue, spend ahead of progress); a key is removed when the
+  // condition clears, so each alert is sent once per occurrence.
+  alertStateJson             Json      @default("{}")
 
   // Phase 10: construction phase and retention (dates are YYYY-MM-DD in the project zone).
   constructionPhase               ConstructionPhase @default(ACTIVE_CONSTRUCTION)
@@ -694,6 +713,7 @@ model Project {
   siteLogEntries         SiteLogEntry[]
 
   @@unique([tenantId, codePrefix])
+  @@unique([tenantId, externalReference])
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([monitorOrganizationId])
@@ -887,6 +907,9 @@ model FieldEvidenceLog {
   longitude              Float?
   altitudeMeters         Float?
   gpsAccuracyMeters      Float?
+  // UBEC IRL: compass heading of the camera when the photo was taken (0–360, true or magnetic as the
+  // device reports it; null when the phone has no compass or no reading).
+  headingDegrees         Float?
   isMockLocation         Boolean         @default(false)
   // Server-evaluated. null = no fix or evaluation failed; never the client's claim.
   // isWithinGeofence = INSIDE or WITHIN_TOLERANCE (Phase 6), kept for older readers.

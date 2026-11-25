@@ -353,7 +353,7 @@ describe('UBEC demo: Direct Intervention, live', () => {
     assert.equal(p.totals.lineCount, DEMO_LINES.length);
     assert.equal(p.totals.amountNgn, 44_275_000);
     const fills = (p.projectChanges as Array<{ field: string; action: string }>).filter((c) => c.action === 'FILL').map((c) => c.field).sort();
-    assert.deepEqual(fills, ['geofence', 'lgaLocation', 'school', 'siteAddress', 'strategicJustification', 'assumptions'].sort());
+    assert.deepEqual(fills, ['geofence', 'lgaLocation', 'school', 'siteAddress', 'strategicJustification', 'assumptions', 'interventionYear', 'fundingSource'].sort());
 
     const confirm = await request(app).post(url('/scope/import/confirm')).set(await web(ADMIN)).send({ fileBase64: file, sha256: p.sha256 });
     assert.equal(confirm.status, 200, JSON.stringify(confirm.body));

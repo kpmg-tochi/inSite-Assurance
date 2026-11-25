@@ -1,8 +1,8 @@
 import ExcelJS from 'exceljs';
 import {
   FACILITY_ARCHETYPE_META,
+  FUNDING_SOURCE_SUGGESTIONS,
   FacilityArchetype,
-  isIsoCalendarDate,
   lineAmount,
   normalizeUnitOfMeasure,
   SCOPE_WORKBOOK_COLUMNS,
@@ -15,6 +15,29 @@ import {
   unitNeedsQuantity,
   validateSprints,
 } from '@insite/shared';
+import {
+  CELL_BOX as BOX,
+  DATE_FMT as DATE,
+  DATE_VALIDATION,
+  decimalValidation,
+  headerRow,
+  isoToDate,
+  listRange as colRange,
+  listValidation,
+  MONEY_FMT as MONEY,
+  QTY_FMT as QTY,
+  setRow,
+  SHEET_FONT as FONT,
+  solidFill as solid,
+  tableBody,
+  titleBand,
+  UBEC_SHEET_COLOR as COLOR,
+  UBEC_SHEET_HEADER_ROW,
+  wrappedHeight,
+} from '../../../utils/ubecSheetStyle';
+import { cellText as text, cellValue, findSheet, isBlank, normHeader, parseSheetDate, parseSheetNumber, readTable } from '../../../utils/sheetReader';
+
+export { parseSheetDate, parseSheetNumber };
 
 /**
  * Redesign R2c: the needs-assessment workbook as pure functions over plain data, so the Needs
@@ -92,169 +115,12 @@ export interface WorkbookBuildData {
  * a one-line hint, row 3 the column headers, data from row 4. Files made before the title band had
  * their headers in row 1; the parser finds the header row by name, so both layouts import.
  */
-export const SCOPE_WORKBOOK_HEADER_ROW = 3;
+export const SCOPE_WORKBOOK_HEADER_ROW = UBEC_SHEET_HEADER_ROW;
 export const SCOPE_WORKBOOK_FIRST_DATA_ROW = SCOPE_WORKBOOK_HEADER_ROW + 1;
 const HR = SCOPE_WORKBOOK_HEADER_ROW;
 const FR = SCOPE_WORKBOOK_FIRST_DATA_ROW;
 
-/** UBEC palette (web/src/index.css): dark green surface, deep green primary, amber accent. */
-const COLOR = {
-  navy: 'FF122F2A',
-  primary: 'FF00715D',
-  amber: 'FFFFBF00',
-  ink: 'FF0C201D',
-  white: 'FFFFFFFF',
-  hint: 'FFDCEFE8',
-  band: 'FFEEF6F3',
-  label: 'FFF1F7F5',
-  border: 'FFC5D9D2',
-  headerBorder: 'FF005A4A',
-  calc: 'FFE6E9E8',
-  calcText: 'FF4B5B57',
-} as const;
-
-const solid = (argb: string): ExcelJS.Fill => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
-const line = (argb: string): Partial<ExcelJS.Border> => ({ style: 'thin', color: { argb } });
-const BOX: Partial<ExcelJS.Borders> = { top: line(COLOR.border), left: line(COLOR.border), bottom: line(COLOR.border), right: line(COLOR.border) };
-const HEADER_BOX: Partial<ExcelJS.Borders> = {
-  top: line(COLOR.headerBorder),
-  left: line(COLOR.headerBorder),
-  bottom: line(COLOR.headerBorder),
-  right: line(COLOR.headerBorder),
-};
-const FONT = 'Calibri';
-const MONEY = '"₦"#,##0.00';
-const QTY = '#,##0.00';
-const DATE = 'd mmm yyyy';
-
-/** Row 1: dark green title band with an amber rule; row 2: the sheet's hint on a light green band. */
-function titleBand(ws: ExcelJS.Worksheet, width: number, title: string, hint: string) {
-  const t = ws.getCell(1, 1);
-  t.value = title;
-  t.font = { name: FONT, bold: true, size: 14, color: { argb: COLOR.white } };
-  t.fill = solid(COLOR.navy);
-  t.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-  if (width > 1) ws.mergeCells(1, 1, 1, width);
-  for (let c = 1; c <= width; c++) ws.getCell(1, c).border = { bottom: { style: 'medium', color: { argb: COLOR.amber } } };
-  ws.getRow(1).height = 32;
-
-  const h = ws.getCell(2, 1);
-  h.value = hint;
-  h.font = { name: FONT, italic: true, size: 10, color: { argb: COLOR.ink } };
-  h.fill = solid(COLOR.hint);
-  h.alignment = { vertical: 'middle', horizontal: 'left', indent: 1, wrapText: true };
-  if (width > 1) ws.mergeCells(2, 1, 2, width);
-  ws.getRow(2).height = 30;
-}
-
-/** Row 3: white bold headers on the brand green; title, hint and headers stay in view. */
-function headerRow(ws: ExcelJS.Worksheet, headers: readonly string[], widths: number[]) {
-  headers.forEach((h, i) => {
-    ws.getColumn(i + 1).width = widths[i] ?? 16;
-    const c = ws.getCell(HR, i + 1);
-    c.value = h;
-    c.font = { name: FONT, bold: true, color: { argb: COLOR.white } };
-    c.fill = solid(COLOR.primary);
-    c.border = HEADER_BOX;
-    c.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true, indent: 1 };
-    c.protection = { locked: true };
-  });
-  ws.getRow(HR).height = 24;
-  ws.views = [{ state: 'frozen', ySplit: HR, showGridLines: false }];
-  Object.assign(ws.pageSetup, { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: `1:${HR}` });
-}
-
-interface BodyColumn {
-  numFmt?: string;
-  align?: 'left' | 'center' | 'right';
-  wrap?: boolean;
-  /** Calculated (the BoQ Amount): grey, italic, locked. */
-  calculated?: boolean;
-}
-
-/**
- * Borders, formats and alignment on the pre-sized rows; alternating tints by conditional formatting
- * (MOD(ROW(),2)), so the banding survives sorting and inserted rows and adds one rule, not a fill per cell.
- */
-function tableBody(ws: ExcelJS.Worksheet, columns: BodyColumn[], lastRow: number) {
-  const alignment = (col: BodyColumn): Partial<ExcelJS.Alignment> => {
-    const horizontal = col.align ?? 'left';
-    return { horizontal, indent: horizontal === 'center' ? undefined : 1 };
-  };
-  // Headers line up with their column.
-  columns.forEach((col, i) => {
-    const h = ws.getCell(HR, i + 1);
-    h.alignment = { ...h.alignment, ...alignment(col) };
-  });
-  for (let r = FR; r <= lastRow; r++) {
-    columns.forEach((col, i) => {
-      const cell = ws.getCell(r, i + 1);
-      cell.border = BOX;
-      cell.alignment = { vertical: 'top', ...alignment(col), wrapText: col.wrap || undefined };
-      if (col.numFmt) cell.numFmt = col.numFmt;
-      if (col.calculated) {
-        cell.fill = solid(COLOR.calc);
-        cell.font = { name: FONT, italic: true, color: { argb: COLOR.calcText } };
-        cell.protection = { locked: true };
-      } else {
-        cell.protection = { locked: false };
-      }
-    });
-  }
-  // Tint the input columns only: the calculated column keeps its grey.
-  let first = 0;
-  while (first < columns.length) {
-    if (columns[first].calculated) {
-      first++;
-      continue;
-    }
-    let last = first;
-    while (last + 1 < columns.length && !columns[last + 1].calculated) last++;
-    ws.addConditionalFormatting({
-      ref: `${colLetter(first + 1)}${FR}:${colLetter(last + 1)}${lastRow}`,
-      rules: [
-        {
-          type: 'expression',
-          priority: 1,
-          formulae: ['MOD(ROW(),2)=1'],
-          style: { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: COLOR.band } } },
-        },
-      ],
-    });
-    first = last + 1;
-  }
-}
-
-const colLetter = (n: number) => String.fromCharCode(64 + n);
-
-/** Cell by cell: assigning row.values would drop the cells' styles. */
-function setRow(ws: ExcelJS.Worksheet, r: number, values: ExcelJS.CellValue[]) {
-  values.forEach((v, i) => (ws.getCell(r, i + 1).value = v));
-}
-
-function listValidation(formula: string, error: string): ExcelJS.DataValidation {
-  return { type: 'list', allowBlank: true, formulae: [formula], showErrorMessage: true, errorTitle: 'Not on the list', error };
-}
-
-function decimalValidation(min: number, error: string): ExcelJS.DataValidation {
-  return { type: 'decimal', operator: 'greaterThanOrEqual', allowBlank: true, formulae: [min], showErrorMessage: true, error };
-}
-
-const DATE_VALIDATION: ExcelJS.DataValidation = {
-  type: 'date',
-  operator: 'greaterThan',
-  allowBlank: true,
-  formulae: [new Date(Date.UTC(2000, 0, 1))],
-  showErrorMessage: true,
-  error: 'Enter a date, e.g. 2027-01-04.',
-};
-
-const isoToDate = (iso: string) => new Date(`${iso}T00:00:00Z`);
-/** Lists sheet ranges keep their header in row 1. */
-const colRange = (col: string, n: number) => `$${col}$2:$${col}$${Math.max(2, n + 1)}`;
-
-/** Rough height for a wrapped text cell (not every spreadsheet app grows rows on open). */
-const wrappedHeight = (textLength: number, width: number) => Math.max(18, Math.ceil(textLength / (width * 1.1)) * 15 + 4);
+// Styling helpers: server/src/utils/ubecSheetStyle.ts (shared with the project register workbooks).
 
 export async function buildScopeWorkbook(data: WorkbookBuildData): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
@@ -349,15 +215,17 @@ export async function buildScopeWorkbook(data: WorkbookBuildData): Promise<Buffe
 
   // Lists (hidden, protected): the dropdown sources.
   const lists = wb.addWorksheet(S.lists);
-  lists.columns = [{ header: 'Facilities', width: 34 }, { header: 'Units of measure', width: 18 }, { header: 'Regions', width: 28 }, { header: 'Delivery models', width: 28 }];
+  lists.columns = [{ header: 'Facilities', width: 34 }, { header: 'Units of measure', width: 18 }, { header: 'Regions', width: 28 }, { header: 'Delivery models', width: 28 }, { header: 'Funding sources', width: 36 }];
   data.facilities.forEach((f, i) => (lists.getCell(`A${i + 2}`).value = f.name));
   UNITS_OF_MEASURE.forEach((u, i) => (lists.getCell(`B${i + 2}`).value = u.code));
   data.regions.forEach((r, i) => (lists.getCell(`C${i + 2}`).value = r));
   data.deliveryModels.forEach((m, i) => (lists.getCell(`D${i + 2}`).value = m));
+  FUNDING_SOURCE_SUGGESTIONS.forEach((s, i) => (lists.getCell(`E${i + 2}`).value = s));
   const facilityList = `${S.lists}!${colRange('A', data.facilities.length)}`;
   const uomList = `${S.lists}!${colRange('B', UNITS_OF_MEASURE.length)}`;
   const regionList = `${S.lists}!${colRange('C', data.regions.length)}`;
   const modelList = `${S.lists}!${colRange('D', data.deliveryModels.length)}`;
+  const fundingList = `${S.lists}!${colRange('E', FUNDING_SOURCE_SUGGESTIONS.length)}`;
 
   // Project (label / value)
   const proj = wb.addWorksheet(S.project, { properties: { tabColor: { argb: COLOR.primary } } });
@@ -378,6 +246,11 @@ export async function buildScopeWorkbook(data: WorkbookBuildData): Promise<Buffe
     cell.alignment = { vertical: 'top', horizontal: 'left', indent: 1 };
     if (f.key === 'region' && data.regions.length) cell.dataValidation = listValidation(regionList, 'Choose a region from the list.');
     if (f.key === 'deliveryModel' && data.deliveryModels.length) cell.dataValidation = listValidation(modelList, 'Choose a delivery model from the list.');
+    // UBEC IRL: suggestions only (any other funding source is accepted), and a year from 2000 to 2100.
+    if (f.key === 'fundingSource') cell.dataValidation = { ...listValidation(fundingList, ''), showErrorMessage: false };
+    if (f.key === 'interventionYear') {
+      cell.dataValidation = { type: 'whole', operator: 'between', allowBlank: true, formulae: [2000, 2100], showErrorMessage: true, error: 'Enter a year from 2000 to 2100.' };
+    }
     if (f.key === 'budget') {
       cell.dataValidation = decimalValidation(0, 'Enter the budget as a number.');
       cell.numFmt = MONEY;
@@ -522,124 +395,7 @@ export interface ParsedScopeWorkbook {
   warnings: ScopeWorkbookIssue[];
 }
 
-/** Plain value of a cell (formula results, rich text and hyperlinks unwrapped). */
-function cellValue(value: ExcelJS.CellValue): unknown {
-  if (value === null || value === undefined) return '';
-  if (value instanceof Date) return value;
-  if (typeof value === 'object') {
-    if ('result' in value) return cellValue((value as ExcelJS.CellFormulaValue).result as ExcelJS.CellValue);
-    if ('richText' in value) return value.richText.map((r) => r.text).join('');
-    if ('text' in value) return String((value as { text: unknown }).text);
-    if ('error' in value) return '';
-    return '';
-  }
-  return value;
-}
-
-const text = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? '').trim());
-const normHeader = (h: string) => h.toLowerCase().replace(/[^a-z0-9]/g, '');
-const isBlank = (v: unknown) => v === '' || v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
-
-/** "12,500", "₦8,500,000", 1200.5 → number; '' → null; anything else → NaN. */
-export function parseSheetNumber(raw: unknown): number | null {
-  if (raw === null || raw === undefined) return null;
-  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : NaN;
-  let t = String(raw).trim();
-  if (t === '' || t === '-' || t === '–') return null;
-  t = t.replace(/[^\d.,-]/g, '');
-  if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(t)) t = t.replace(/,/g, '');
-  else if (/^-?\d+,\d{1,2}$/.test(t)) t = t.replace(',', '.');
-  else t = t.replace(/,/g, '');
-  if (t === '' || t === '-') return NaN;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : NaN;
-}
-
-/** A date cell, an Excel serial, "YYYY-MM-DD" or day-first "DD/MM/YYYY" → YYYY-MM-DD; null when unreadable. */
-export function parseSheetDate(raw: unknown): string | null {
-  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw.toISOString().slice(0, 10);
-  if (typeof raw === 'number' && raw > 20000 && raw < 80000) {
-    return new Date(Math.round((raw - 25569) * 86400000)).toISOString().slice(0, 10);
-  }
-  const t = String(raw ?? '').trim();
-  if (isIsoCalendarDate(t)) return t;
-  const m = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
-  if (m) {
-    const iso = `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
-    return isIsoCalendarDate(iso) ? iso : null;
-  }
-  return null;
-}
-
-interface Table {
-  sheet: string;
-  /** Normalised header → column number. */
-  columns: Map<string, number>;
-  rows: Array<{ row: number; get: (header: string) => unknown }>;
-}
-
-/** Rows searched for the header row: the title band and hint sit above it (row 3); older files have it in row 1. */
-const HEADER_SEARCH_ROWS = 10;
-
-function headersOf(ws: ExcelJS.Worksheet, r: number): Map<string, number> {
-  const columns = new Map<string, number>();
-  ws.getRow(r).eachCell({ includeEmpty: false }, (cell, col) => {
-    // A merged title band repeats its text in every cell: only the master cell counts.
-    if (cell.isMerged && cell.master !== cell) return;
-    const h = normHeader(text(cellValue(cell.value)));
-    if (h && !columns.has(h)) columns.set(h, col);
-  });
-  return columns;
-}
-
-/**
- * The header row is the first of the top rows that holds every required header; failing that, the one
- * holding most of them (its missing columns are reported), else row 1.
- */
-function findHeaderRow(ws: ExcelJS.Worksheet, required: string[]): { headerRow: number; columns: Map<string, number> } {
-  let best = { headerRow: 1, columns: headersOf(ws, 1), hits: -1 };
-  for (let r = 1; r <= Math.min(HEADER_SEARCH_ROWS, Math.max(1, ws.rowCount)); r++) {
-    const columns = headersOf(ws, r);
-    const hits = required.filter((h) => columns.has(normHeader(h))).length;
-    if (hits === required.length) return { headerRow: r, columns };
-    if (hits > best.hits && hits > 0) best = { headerRow: r, columns, hits };
-  }
-  return { headerRow: best.headerRow, columns: best.columns };
-}
-
-function readTable(
-  ws: ExcelJS.Worksheet,
-  sheet: string,
-  required: string[],
-  issues: ScopeWorkbookIssue[],
-  /** Computed columns (the Amount formula) that do not make a row non-blank. */
-  computed: string[] = []
-): Table | null {
-  const { headerRow, columns } = findHeaderRow(ws, required);
-  const missing = required.filter((h) => !columns.has(normHeader(h)));
-  for (const h of missing) {
-    issues.push({ sheet, row: headerRow, column: h, code: 'WORKBOOK_COLUMN_MISSING', message: `The ${sheet} sheet has no "${h}" column.` });
-  }
-  if (missing.length) return null;
-  const rows: Table['rows'] = [];
-  for (let r = headerRow + 1; r <= ws.rowCount; r++) {
-    const row = ws.getRow(r);
-    const get = (header: string) => {
-      const c = columns.get(normHeader(header));
-      return c === undefined ? '' : cellValue(row.getCell(c).value);
-    };
-    // A row is blank when every input column is blank (a cleared row can keep a stale Amount result).
-    const skip = new Set(computed.map((h) => columns.get(normHeader(h))));
-    const values = [...columns.values()].filter((c) => !skip.has(c)).map((c) => cellValue(row.getCell(c).value));
-    if (values.every(isBlank)) continue;
-    rows.push({ row: r, get });
-  }
-  return { sheet, columns, rows };
-}
-
-function findSheet(wb: ExcelJS.Workbook, name: string): ExcelJS.Worksheet | undefined {
-  return wb.worksheets.find((w) => normHeader(w.name) === normHeader(name));
-}
+// Reading helpers: server/src/utils/sheetReader.ts (shared with the project register import).
 
 export async function parseScopeWorkbook(buffer: Buffer, context: WorkbookParseContext): Promise<ParsedScopeWorkbook> {
   const issues: ScopeWorkbookIssue[] = [];

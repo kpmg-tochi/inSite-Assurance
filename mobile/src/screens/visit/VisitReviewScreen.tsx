@@ -12,6 +12,8 @@ import { listSiteLogEntries } from '../../storage/siteLogStore';
 import { getOpenDraft, getVisit, getVisitFormByHash, queueVisitSubmission, siteLogAttachmentsByDraft, type CachedVisitForm } from '../../storage/visitStore';
 import { subscribeVisitData } from '../../storage/visitEvents';
 import { acquireFix } from '../../services/locationService';
+import { readHeading } from '../../services/headingService';
+import { geotagFromFix } from '../../utils/headingReadings';
 import { InfoCallout } from '../../components/common';
 import { ChoiceChips, FORM_COLORS, formStyles, requestFormScreen } from '../../components/form';
 import { useDraftEditor } from '../../components/form/useDraftEditor';
@@ -117,14 +119,12 @@ export default function VisitReviewScreen({ route, navigation }: RootStackScreen
     setError(null);
     try {
       setBusy('Getting your position…');
-      const fix = await acquireFix();
+      const [fix, heading] = await Promise.all([acquireFix(), readHeading().catch(() => null)]);
       setBusy('Saving…');
       await saver.flush();
       await queueVisitSubmission(draft.id, {
         confirmedAt: nowIso(),
-        submissionGeotag: fix
-          ? { latitude: fix.latitude, longitude: fix.longitude, accuracyMeters: fix.accuracyMeters, altitudeMeters: fix.altitudeMeters, isMocked: fix.isMocked, capturedAt: fix.capturedAt }
-          : null,
+        submissionGeotag: geotagFromFix(fix, heading),
       });
       navigation.popTo('Visit', { visitId });
     } catch (err) {

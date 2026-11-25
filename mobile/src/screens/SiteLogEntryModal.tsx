@@ -75,6 +75,7 @@ export function SiteLogEntryModal() {
           fileExtension: 'jpg',
           caption: batch.caption || null,
           fix,
+          heading: photo.heading ?? null,
           capturedAt: photo.capturedAt,
         });
         await queueSiteLogEntry({ projectId, kind: 'PHOTO', text: batch.caption || null, captureId: capture.id, fix, capturedAt: photo.capturedAt });

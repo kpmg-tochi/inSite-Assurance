@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { PortfolioOverviewDto, ProjectListFilters } from "@insite/shared";
-import { usePortfolioOverviewQuery } from "../../queries/projects/useProjectsQueries";
+import { usePortfolioOverviewQuery, useProjectRegisterOptionsQuery } from "../../queries/projects/useProjectsQueries";
 import { useAuth } from "../../lib/auth-context";
 import { formatCompactNaira } from "../../lib/formatters";
 import { DeliveryModelFilters } from "../../components/projects/DeliveryModelFilters";
@@ -46,10 +47,81 @@ export function WorkspaceHomePage({ variant, onOpenProject }: { variant: "portfo
   );
 }
 
+/**
+ * UBEC IRL: the register's filters, status button and search live in the URL (replace, not push), so
+ * a reload or a shared link shows the same register. `tab` (the home tab) is left as it is.
+ */
+const FILTER_PARAMS = {
+  projectTypeId: "type",
+  regionId: "region",
+  owningOrganizationId: "owner",
+  lga: "lga",
+  contractorOrganizationId: "contractor",
+  interventionYear: "year",
+  fundingSource: "funding",
+} as const satisfies Record<keyof ProjectListFilters, string>;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const TABLE_FILTERS: readonly ProjectTableFilter[] = ["ongoing", "behind", "completed", "archived", "drafts"];
+
+function useRegisterUrlState() {
+  const [params, setParams] = useSearchParams();
+  const read = (key: keyof ProjectListFilters) => params.get(FILTER_PARAMS[key])?.trim() || undefined;
+  const id = (key: "projectTypeId" | "regionId" | "owningOrganizationId" | "contractorOrganizationId") => {
+    const v = read(key);
+    return v && UUID_RE.test(v) ? v : undefined;
+  };
+  const yearText = read("interventionYear");
+  const year = yearText && /^\d{4}$/.test(yearText) ? Number(yearText) : undefined;
+  const filters: ProjectListFilters = {
+    projectTypeId: id("projectTypeId"),
+    regionId: id("regionId"),
+    owningOrganizationId: id("owningOrganizationId"),
+    lga: read("lga"),
+    contractorOrganizationId: id("contractorOrganizationId"),
+    interventionYear: year !== undefined && year >= 2000 && year <= 2100 ? year : undefined,
+    fundingSource: read("fundingSource"),
+  };
+  // Only the filters in use, so the query key and the export carry no empty keys.
+  (Object.keys(filters) as Array<keyof ProjectListFilters>).forEach((k) => filters[k] === undefined && delete filters[k]);
+  const status = params.get("status") as ProjectTableFilter | null;
+  const tableFilter: ProjectTableFilter = status && TABLE_FILTERS.includes(status) ? status : "all";
+  const search = params.get("q") ?? "";
+
+  const update = useCallback(
+    (change: (next: URLSearchParams) => void) =>
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          change(next);
+          return next;
+        },
+        { replace: true }
+      ),
+    [setParams]
+  );
+  const setFilters = useCallback(
+    (next: ProjectListFilters) =>
+      update((p) => {
+        (Object.keys(FILTER_PARAMS) as Array<keyof ProjectListFilters>).forEach((k) => {
+          const v = next[k];
+          if (v === undefined || v === null || v === "") p.delete(FILTER_PARAMS[k]);
+          else p.set(FILTER_PARAMS[k], String(v));
+        });
+      }),
+    [update]
+  );
+  const setTableFilter = useCallback(
+    (f: ProjectTableFilter) => update((p) => (f === "all" ? p.delete("status") : p.set("status", f))),
+    [update]
+  );
+  const setSearch = useCallback((q: string) => update((p) => (q ? p.set("q", q) : p.delete("q"))), [update]);
+  return { filters, setFilters, tableFilter, setTableFilter, search, setSearch };
+}
+
 function OverviewTab({ variant, onOpenProject }: { variant: "portfolio" | "dashboard"; onOpenProject: (projectId: string) => void }) {
-  const [filters, setFilters] = useState<ProjectListFilters>({});
-  const [tableFilter, setTableFilter] = useState<ProjectTableFilter>("all");
+  const { filters, setFilters, tableFilter, setTableFilter, search, setSearch } = useRegisterUrlState();
   const { data, isLoading, isError, refetch } = usePortfolioOverviewQuery(filters);
+  const registerOptions = useProjectRegisterOptionsQuery().data;
   const [ownersSeen, setOwnersSeen] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
@@ -59,7 +131,7 @@ function OverviewTab({ variant, onOpenProject }: { variant: "portfolio" | "dashb
     }
   }, [data, ownersSeen]);
 
-  const toggle = (f: ProjectTableFilter) => setTableFilter((cur) => (cur === f ? "all" : f));
+  const toggle = (f: ProjectTableFilter) => setTableFilter(tableFilter === f ? "all" : f);
   const stats = useStats(variant, data, tableFilter, toggle);
 
   if (isLoading) {
@@ -86,11 +158,19 @@ function OverviewTab({ variant, onOpenProject }: { variant: "portfolio" | "dashb
         <p className="text-sm text-slate-600">
           {variant === "portfolio" ? "Every project in the programme you can see." : "The projects you are assigned to."} Figures follow the filters.
         </p>
-        <DeliveryModelFilters filters={filters} onChange={setFilters} owners={ownersSeen} />
+        <DeliveryModelFilters filters={filters} onChange={setFilters} owners={ownersSeen} registerOptions={registerOptions} />
       </div>
       <StatStrip stats={stats} label={variant === "portfolio" ? "Portfolio figures" : "Your figures"} />
       <PortfolioMap projects={data.projects} onOpenProject={onOpenProject} />
-      <PortfolioProjectsTable projects={data.projects} filter={tableFilter} onFilterChange={setTableFilter} onOpenProject={onOpenProject} />
+      <PortfolioProjectsTable
+        projects={data.projects}
+        filter={tableFilter}
+        onFilterChange={setTableFilter}
+        onOpenProject={onOpenProject}
+        search={search}
+        onSearchChange={setSearch}
+        registerFilters={filters}
+      />
     </div>
   );
 }
@@ -124,7 +204,15 @@ function useStats(
     label: "Behind schedule",
     value: k.behindScheduleCount,
     tone: k.behindScheduleCount > 0 ? "alert" : "default",
-    detail: k.behindScheduleCount > 0 ? "A unit due by an ended sprint is unfinished" : "No project is behind",
+    detail: (
+      <>
+        {k.behindScheduleCount > 0 ? "A unit due by an ended sprint is unfinished" : "No project is behind"}
+        {/* UBEC IRL: projects with any early-warning alert (delayed, stalled, site update overdue, spend ahead of progress). */}
+        {k.projectsWithAlertsCount > 0 && (
+          <span className="block font-medium text-rose-700">{plural(k.projectsWithAlertsCount, "project")} with early-warning alerts</span>
+        )}
+      </>
+    ),
     onSelect: () => toggle("behind"),
     selected: tableFilter === "behind",
   };

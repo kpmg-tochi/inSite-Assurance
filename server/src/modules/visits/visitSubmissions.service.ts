@@ -8,6 +8,7 @@ import {
   CaptureFact,
   CreateUnscheduledVisitRequest,
   MyVisitsFeedDto,
+  normaliseHeadingDegrees,
   ProjectGeofenceSchema,
   rescheduleWindow,
   sameFormApartFromRechecks,
@@ -87,6 +88,14 @@ function evaluateGeotag(input: SubmissionGeotagInput | null | undefined, project
     altitudeMeters: input.altitudeMeters ?? null,
     isMocked: input.isMocked,
     capturedAt: input.capturedAt,
+    // UBEC IRL: compass heading passed through (wrapped to 0-360); absent for older clients.
+    ...(input.headingDegrees != null
+      ? {
+          headingDegrees: normaliseHeadingDegrees(input.headingDegrees),
+          headingReference: input.headingReference ?? null,
+          headingAccuracyLevel: input.headingAccuracyLevel ?? null,
+        }
+      : {}),
     isWithinGeofence: e.isWithinGeofence,
     geofenceStatus: e.geofenceStatus,
     distanceOutsideMeters: e.distanceOutsideMeters,

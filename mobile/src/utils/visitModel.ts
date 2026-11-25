@@ -5,6 +5,7 @@
  */
 import type {
   GeofenceStatus,
+  HeadingReading,
   VisitConfirmation,
   VisitDto,
   VisitFormAnswerInput,
@@ -35,6 +36,8 @@ export interface VisitLocalState {
     longitude: number | null;
     accuracyMeters: number | null;
     isMocked: boolean;
+    /** UBEC IRL: compass heading at check-in; absent on check-ins stored before it existed. */
+    heading?: HeadingReading | null;
     /** Local preview only; the server evaluates again and its result counts. */
     geofenceStatus: GeofenceStatus | null;
     distanceOutsideMeters: number | null;

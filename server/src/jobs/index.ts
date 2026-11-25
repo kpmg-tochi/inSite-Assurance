@@ -4,6 +4,7 @@ import { registerCloseoutJobs } from './closeoutJobs';
 import { registerContractJobs } from './contractJobs';
 import { registerKpiJobs } from './kpiJobs';
 import { registerVisitJobs } from './visitJobs';
+import { registerAlertJobs } from './alertJobs';
 import { registeredJobs, runJobOnce, startJobRunner } from './runner';
 
 let registered = false;
@@ -17,6 +18,7 @@ export function registerAllJobs(): void {
   registerContractJobs(); // Phase 13
   registerKpiJobs(); // Phase 16
   registerVisitJobs(); // Redesign R4
+  registerAlertJobs(); // UBEC IRL early-warning alerts
   registered = true;
 }
 

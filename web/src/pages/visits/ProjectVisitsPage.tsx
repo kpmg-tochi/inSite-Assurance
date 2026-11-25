@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { z } from "zod";
 import { useSearchParams } from "react-router-dom";
 import { CalendarPlus, ClipboardList, Send, Sparkles } from "lucide-react";
-import { VISIT_KIND_META, VISIT_STATUS_LABELS, VisitKindEnum, VisitStatusEnum, type InspectionFindingDto, type VisitDto } from "@insite/shared";
+import { VISIT_KIND_META, VISIT_STATUS_LABELS, VisitKindEnum, VisitStatusEnum, type InspectionFindingDto, type ProjectVisitsExportQuery, type VisitDto } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth } from "../../lib/auth-context";
 import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
@@ -13,6 +13,8 @@ import { CapturePhoto, CaptureAudio } from "../../components/evidence/CaptureMed
 import { StandardTable, type TableColumnDef } from "../../components/table";
 import { useProjectFindingsQuery, useProjectVisitsQuery, useSiteLogQuery } from "../../queries/visits/useVisitQueries";
 import { useDismissProjectFindingMutation, useGenerateVisitsMutation, usePublishVisitsMutation, useResolveProjectFindingMutation } from "../../mutations/visits/useVisitMutations";
+import { ExportExcelButton } from "../../components/common/ExportExcelButton";
+import { useExportProjectFindingsMutation, useExportProjectVisitsMutation } from "../../mutations/screenExports/useScreenExportMutations";
 import { CreateVisitDialog } from "../../components/visits/VisitDialogs";
 import { VisitDetailPanel } from "../../components/visits/VisitDetailPanel";
 import { ConfirmationText, officersText, primaryButton, secondaryButton, visitKindLabel, WarningsList } from "../../components/visits/visitUi";
@@ -130,6 +132,9 @@ function PlanTab({ projectId, selectedId, onSelect }: { projectId: string; selec
   const q = useProjectVisitsQuery(projectId, { status: status || undefined, visitKind: kind || undefined });
   const publish = usePublishVisitsMutation(projectId);
   const generate = useGenerateVisitsMutation(projectId);
+  const exportVisits = useExportProjectVisitsMutation(projectId);
+  // The file holds what the table shows: "Open visits" leaves out accepted and cancelled ones.
+  const exportStatus = status || (showDone ? undefined : VisitStatusEnum.options.filter((s) => s !== "APPROVED" && s !== "CANCELLED").join(","));
   const visits = useMemo(() => {
     const all = q.data?.visits ?? [];
     return showDone || status ? all : all.filter((v) => !["APPROVED", "CANCELLED"].includes(v.status));
@@ -227,25 +232,32 @@ function PlanTab({ projectId, selectedId, onSelect }: { projectId: string; selec
         title="Visits"
         subtitle={q.data ? `${visits.length} visit${visits.length === 1 ? "" : "s"}` : undefined}
         headerActions={
-          canPlan ? (
-            <>
-              <button
-                type="button"
-                disabled={generate.isPending}
-                onClick={() => generate.mutate({})}
-                className="inline-flex items-center gap-1 rounded-lg border border-white/30 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10 disabled:opacity-50"
-              >
-                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" /> Generate from plan
-              </button>
-              <button
-                type="button"
-                onClick={() => setCreating(true)}
-                className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-navy hover:bg-slate-100"
-              >
-                <CalendarPlus className="w-3.5 h-3.5" aria-hidden="true" /> New visit
-              </button>
-            </>
-          ) : undefined
+          <>
+            <ExportExcelButton
+              onDark
+              pending={exportVisits.isPending}
+              onClick={() => exportVisits.mutate({ status: exportStatus, visitKind: (kind || undefined) as ProjectVisitsExportQuery["visitKind"] })}
+            />
+            {canPlan && (
+              <>
+                <button
+                  type="button"
+                  disabled={generate.isPending}
+                  onClick={() => generate.mutate({})}
+                  className="inline-flex items-center gap-1 rounded-lg border border-white/30 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10 disabled:opacity-50"
+                >
+                  <Sparkles className="w-3.5 h-3.5" aria-hidden="true" /> Generate from plan
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCreating(true)}
+                  className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-navy hover:bg-slate-100"
+                >
+                  <CalendarPlus className="w-3.5 h-3.5" aria-hidden="true" /> New visit
+                </button>
+              </>
+            )}
+          </>
         }
         filters={
           <div className="flex flex-wrap items-center gap-2">
@@ -372,6 +384,7 @@ function FindingCard({ projectId, finding: f }: { projectId: string; finding: In
 
 function FindingsTab({ projectId }: { projectId: string }) {
   const q = useProjectFindingsQuery(projectId);
+  const exportFindings = useExportProjectFindingsMutation(projectId);
   if (q.isLoading) return <Loader />;
   const findings = q.data ?? [];
   const columns = [
@@ -380,18 +393,23 @@ function FindingsTab({ projectId }: { projectId: string }) {
     { key: "DISMISSED", title: "Dismissed" },
   ];
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      {columns.map((c) => {
-        const inColumn = findings.filter((f) => f.status === c.key);
-        return (
-          <section key={c.key} className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm space-y-2">
-            <h2 className="text-xs font-bold text-slate-900 inline-flex items-center gap-1.5">
-              <ClipboardList className="w-3.5 h-3.5" /> {c.title} ({inColumn.length})
-            </h2>
-            {inColumn.length === 0 ? <p className="text-[11px] text-slate-400">None</p> : inColumn.map((f) => <FindingCard key={f.id} projectId={projectId} finding={f} />)}
-          </section>
-        );
-      })}
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <ExportExcelButton pending={exportFindings.isPending} onClick={() => exportFindings.mutate({})} />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {columns.map((c) => {
+          const inColumn = findings.filter((f) => f.status === c.key);
+          return (
+            <section key={c.key} className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm space-y-2">
+              <h2 className="text-xs font-bold text-slate-900 inline-flex items-center gap-1.5">
+                <ClipboardList className="w-3.5 h-3.5" /> {c.title} ({inColumn.length})
+              </h2>
+              {inColumn.length === 0 ? <p className="text-[11px] text-slate-400">None</p> : inColumn.map((f) => <FindingCard key={f.id} projectId={projectId} finding={f} />)}
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }

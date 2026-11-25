@@ -5,7 +5,7 @@ import {
   CreateProjectDraftRequestSchema,
   GeoCoordinateSchema,
   ProjectContractorInputSchema,
-  ProjectListFiltersSchema,
+  ProjectRegisterFiltersSchema,
   UpdateFieldSessionStatusRequestSchema,
 } from '@insite/shared';
 import {
@@ -38,6 +38,7 @@ import {
   removeProjectContractor,
   updateProjectContractor,
 } from './contractorRoutes.service';
+import { buildRegisterPdf, buildRegisterXlsx, getRegisterFilterOptions } from '../projectRegister/registerExport.service';
 import { env } from '../../config/env';
 import { seedDatabase } from '../../db/seedDatabase';
 import { demoRateLimit } from '../../middleware/rateLimit.middleware';
@@ -77,13 +78,54 @@ router.get(
   requireWebAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      res.json({ success: true, data: await getPortfolioOverview(req.webUser!, ProjectListFiltersSchema.parse(req.query)) });
+      res.json({ success: true, data: await getPortfolioOverview(req.webUser!, ProjectRegisterFiltersSchema.parse(req.query)) });
     } catch (error) {
       next(error);
     }
   }
 );
 
+
+// ---------------------------------------------------------------------------
+// UBEC IRL: the project register (filter options and export). Any web user; the caller's visibility.
+// ---------------------------------------------------------------------------
+
+/** GET /api/v1/projects/register/options: LGAs, contractors, years, funding sources and owners of the visible projects. */
+router.get('/register/options', requireWebAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    res.json({ success: true, data: await getRegisterFilterOptions(req.webUser!) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/v1/projects/export.xlsx|.pdf?<register filters>&q=&status=
+ * The register as the caller sees it (same filters); "Paid to date" only with payments:view.
+ */
+router.get('/export.xlsx', requireWebAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { buffer, fileName } = await buildRegisterXlsx(req.webUser!, ProjectRegisterFiltersSchema.parse(req.query));
+    res.attachment(fileName);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(buffer);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/export.pdf', requireWebAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { buffer, fileName } = await buildRegisterPdf(req.webUser!, ProjectRegisterFiltersSchema.parse(req.query));
+    res.attachment(fileName);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(buffer);
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * GET /api/v1/projects
@@ -94,7 +136,7 @@ router.get(
   requireWebAuth,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const projects = await listProjectsForUser(req.webUser!, undefined, ProjectListFiltersSchema.parse(req.query));
+      const projects = await listProjectsForUser(req.webUser!, undefined, ProjectRegisterFiltersSchema.parse(req.query));
       res.json({ success: true, data: projects });
     } catch (error) {
       next(error);

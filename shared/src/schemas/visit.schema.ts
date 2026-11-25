@@ -10,6 +10,7 @@ import {
   VisitKindEnum,
 } from './form.schema';
 import { SubmissionGeotagInputSchema, SubmissionGeotagSchema, CaptureSummarySchema } from './evidence.schema';
+import { ProjectAlertsConfigSchema } from './projectAlert.schema';
 import { ApprovalProgressDtoSchema } from './process.schema';
 import { ProjectGeofenceSchema } from './geofence.schema';
 import { GeofenceStatusEnum } from '../enums';
@@ -118,6 +119,8 @@ export const ProjectTypeMonitoringConfigSchema = z
     sprintVerificationDays: z.number().int().min(0).max(60).default(7),
     /** Email the contractor organisation the open findings after each accepted visit. */
     emailContractorFindingsSummary: z.boolean().default(true),
+    /** UBEC IRL: early-warning alerts (delayed, stalled, site update overdue, spend ahead of progress). */
+    alerts: ProjectAlertsConfigSchema.default({}),
   })
   .superRefine((v, ctx) => {
     const seen = new Set<string>();

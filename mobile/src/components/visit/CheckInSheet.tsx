@@ -11,6 +11,8 @@ import {
   type GeofencePreview,
   type LocationFix,
 } from '../../services/locationService';
+import { readHeading } from '../../services/headingService';
+import { formatHeading, type HeadingReading } from '@insite/shared';
 import { CHECK_IN_ALWAYS_ALLOWED_TEXT, checkInView, timeInZone, type CheckInState } from '../../utils/formUiModel';
 import { formatMobileErrorMessage } from '../../utils/errorFormatter';
 import { FORM_COLORS, formStyles } from '../form/formStyles';
@@ -25,6 +27,8 @@ export interface CheckInSheetProps {
 
 type Reading = {
   fix: LocationFix | null;
+  /** UBEC IRL: compass heading taken with the fix; null when the phone gave none. */
+  heading: HeadingReading | null;
   preview: GeofencePreview | null;
   hasBoundary: boolean;
   permissionGranted: boolean;
@@ -69,10 +73,10 @@ export default function CheckInSheet({ visitId, visible, onClose, onCheckedIn }:
         return;
       }
       const perm = await requestLocationPermission();
-      const fix = perm.granted ? await acquireFix() : null;
+      const [fix, heading] = perm.granted ? await Promise.all([acquireFix(), readHeading().catch(() => null)]) : [null, null];
       const preview = fix ? previewGeofence(fix, v.projectId) : null;
       if (mine !== run.current) return;
-      setPhase({ kind: 'READY', reading: { fix, preview, hasBoundary: Boolean(pack?.geofence), permissionGranted: perm.granted } });
+      setPhase({ kind: 'READY', reading: { fix, heading, preview, hasBoundary: Boolean(pack?.geofence), permissionGranted: perm.granted } });
     } catch (err) {
       if (mine === run.current) setPhase({ kind: 'ERROR', message: formatMobileErrorMessage(err) });
     }
@@ -86,7 +90,7 @@ export default function CheckInSheet({ visitId, visible, onClose, onCheckedIn }:
   const checkIn = async (reading: Reading) => {
     setPhase({ kind: 'SAVING', reading });
     try {
-      await queueCheckIn(visitId, { fix: reading.fix, preview: reading.preview });
+      await queueCheckIn(visitId, { fix: reading.fix, heading: reading.heading, preview: reading.preview });
       onCheckedIn();
     } catch (err) {
       setPhase({ kind: 'ERROR', message: formatMobileErrorMessage(err) });
@@ -143,6 +147,7 @@ export default function CheckInSheet({ visitId, visible, onClose, onCheckedIn }:
             {badge ? <Text style={styles.badge}>Phone preview: {badge}</Text> : null}
             {view.distance ? <Text style={formStyles.meta}>{view.distance}</Text> : null}
             {view.accuracy ? <Text style={formStyles.meta}>{view.accuracy}</Text> : null}
+            {reading.fix && reading.heading ? <Text style={formStyles.meta}>{formatHeading(reading.heading.degrees)}</Text> : null}
             <Text style={[formStyles.meta, { marginTop: 8 }]}>{view.note}</Text>
             <Text style={[formStyles.meta, { marginTop: 8 }]}>{CHECK_IN_ALWAYS_ALLOWED_TEXT}</Text>
             <Text style={[formStyles.meta, { marginTop: 4 }]}>The check-in is saved on the phone and sends when you are online. Once checked in, the form is fixed for this visit.</Text>

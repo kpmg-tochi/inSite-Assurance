@@ -29,10 +29,11 @@ The script overwrites the `.xlsx` and `.pdf` files here (this README is kept). I
 | `11 Mobilisation plan.pdf` | Optional | Documents, type Mobilisation plan |
 | `12 Certificate of Completion - signed paper copy.pdf` | Completion: the beneficiary's slot (live project or PRG-104) | Completion & handover → Certificate → **Record signed copy** |
 | `13 Closeout report.pdf` | Closure: before archiving (PRG-106 or the live project) | Completion & handover → Closure → **Upload closeout report** |
+| `14 Project register import.xlsx` | Bringing the existing register in (any time; independent of PRG-110) | Portfolio → projects table → **Import projects** → choose the file → preview → **Import** |
 
 ## What the workbook contains
 
-Project sheet: name, school "Government Primary School, Dawakin Tofa", region Kano, LGA Dawakin Tofa, site address, GPS 12.1006, 8.3354 (approximate, demo only; the import draws a 150 m radial boundary on it), delivery model Direct Intervention, budget NGN 48,500,000, strategic justification and assumptions.
+Project sheet: name, school "Government Primary School, Dawakin Tofa", region Kano, LGA Dawakin Tofa, site address, GPS 12.1006, 8.3354 (approximate, demo only; the import draws a 150 m radial boundary on it), delivery model Direct Intervention, budget NGN 48,500,000, intervention year 2026, funding source "UBEC Intervention Fund", strategic justification and assumptions.
 
 | Unit ID | Facility | Label | Sprints |
 | :--- | :--- | :--- | :--- |
@@ -55,3 +56,18 @@ Project sheet: name, school "Government Primary School, Dawakin Tofa", region Ka
 Sprints: sprint 1 starts on the first working day 22 days after the run day and lasts 5 weeks; sprint 2 follows for 6 weeks. Suggested contract values for step 2: contract reference `UBEC/DI/2026/110`, contract sum NGN 46,490,000, award date today − 14 days, signed today − 7 days, planned kick-off today. The contractor is a new organisation: type "Kurmi Waterworks & Construction Ltd" and pick **Use "…"**.
 
 The same data drives `server/src/tests/routes.demo.test.ts`, which walks the whole demo through the API on every route-test run.
+
+## What the project register import contains
+
+`14 Project register import.xlsx` is the import template (version `INSITE-REGISTER-v1`) with six projects of the existing register. Codes are blank, so the platform numbers them after the highest PRG code (on a freshly seeded database: PRG-243 to PRG-248). Dates are relative to the run day.
+
+| UBEC project ID | Project | State | Type | Status | Contractor | Result |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| UBEC/DI/2026/KN/031 | Renovation of a three-classroom block, LGEA Primary School Gwarzo | Kano | Direct Intervention | Not started | – | Draft |
+| UBEC/MG/2026/LA/012 | Perimeter fence and gatehouse, Agege JSS | Lagos | Matching Grants (Lagos SUBEB) | Not started | – | Draft |
+| UBEC/DI/2025/KN/014 | Two-classroom block, GPS Bichi | Kano | Direct Intervention | Ongoing, 55% | Sahel Build & Civil Works Ltd (existing) | Live |
+| UBEC/MG/2025/LA/007 | WASH facilities, Ikorodu Community Primary School | Lagos | Matching Grants (Lagos SUBEB) | Ongoing, 30% | Eko Waterline Engineering Ltd (new) | Live |
+| UBEC/MG/2025/KN/019 | Library and ICT room, Dala JSS | Kano | Matching Grants (Kano SUBEB) | Ongoing, 72% | Sahel Build & Civil Works Ltd (existing) | Live |
+| UBEC/DI/2024/KN/022 | Solar-powered borehole, Tudun Wada Model Primary School | Kano | Direct Intervention | Completed, 100% | Gwale Borehole Services Ltd (new) | Live |
+
+The preview shows 2 drafts, 4 live projects and 2 new contractors with no errors. Importing the same file twice is refused: every UBEC project ID is then taken. `server/src/tests/routes.irl.register.test.ts` imports this file on a freshly seeded database on every route-test run.

@@ -257,7 +257,12 @@ export interface PlannerQuery {
   visitKind?: string;
 }
 
-export async function getPlanner(webUser: WebJwtPayload, q: PlannerQuery, now: Date = new Date()): Promise<PlannerDto> {
+/** The planner's period and visit filter (the directory's visibility); also used by its Excel export. */
+export function plannerVisitWhere(
+  webUser: WebJwtPayload,
+  q: PlannerQuery,
+  now: Date = new Date()
+): { from: string; to: string; and: Prisma.ProjectWhereInput[]; where: Prisma.VisitWhereInput } {
   const today = now.toISOString().slice(0, 10);
   const from = q.from && isIsoCalendarDate(q.from) ? q.from : today;
   const to = q.to && isIsoCalendarDate(q.to) && q.to >= from ? q.to : from;
@@ -268,6 +273,11 @@ export async function getPlanner(webUser: WebJwtPayload, q: PlannerQuery, now: D
   const where: Prisma.VisitWhereInput = { project: { AND: and }, plannedDate: { gte: from, lte: to }, status: { not: 'CANCELLED' } };
   if (q.officerId) where.assignees = { some: { userId: q.officerId } };
   if (q.visitKind && VisitKindEnum.safeParse(q.visitKind).success) where.visitKind = q.visitKind as Prisma.VisitWhereInput['visitKind'];
+  return { from, to, and, where };
+}
+
+export async function getPlanner(webUser: WebJwtPayload, q: PlannerQuery, now: Date = new Date()): Promise<PlannerDto> {
+  const { from, to, and, where } = plannerVisitWhere(webUser, q, now);
 
   const [rows, pendingRows, declinedRows] = await Promise.all([
     prisma.visit.findMany({ where, include: VISIT_INCLUDE, orderBy: [{ plannedDate: 'asc' }, { createdAt: 'asc' }], take: 1000 }),

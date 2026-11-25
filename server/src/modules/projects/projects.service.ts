@@ -1,5 +1,6 @@
 import { overdueMilestoneCounts } from '../contracts/milestones.service';
 import { loadProjectStageSummaries } from './projectStage.service';
+import { alertKeysForViewer } from '../alerts/alertView';
 import { Prisma, ProjectStatus } from '@prisma/client';
 import {
   geofenceCentroid,
@@ -13,6 +14,8 @@ import {
   ProjectDeliveryModelFields,
   ProjectGeofenceSchema,
   ProjectListFilters,
+  ProjectRegisterFields,
+  ProjectRegisterFilters,
   verifyPointAgainstGeofence,
   calendarDaysUntil,
   zonedCalendarDate,
@@ -75,7 +78,90 @@ export function deliveryModelFilterWhere(filters: ProjectListFilters = {}): Pris
   if (filters.projectTypeId) out.push({ projectTypeId: filters.projectTypeId });
   if (filters.regionId) out.push({ OR: [{ regionId: filters.regionId }, { region: { parentRegionId: filters.regionId } }] });
   if (filters.owningOrganizationId) out.push({ owningOrganizationId: filters.owningOrganizationId });
+  // UBEC IRL register filters.
+  if (filters.lga) out.push({ lgaLocation: { equals: filters.lga, mode: 'insensitive' } });
+  if (filters.contractorOrganizationId) out.push({ contractors: { some: { organizationId: filters.contractorOrganizationId } } });
+  if (filters.interventionYear) out.push({ interventionYear: filters.interventionYear });
+  if (filters.fundingSource) out.push({ fundingSource: { equals: filters.fundingSource, mode: 'insensitive' } });
   return out;
+}
+
+/**
+ * UBEC IRL: the register's search box and status buttons, server-side (the export applies them;
+ * the web keeps them browser-side for the table so the button counts stay complete).
+ */
+export function registerFilterWhere(filters: ProjectRegisterFilters = {}): Prisma.ProjectWhereInput[] {
+  const out = deliveryModelFilterWhere(filters);
+  const q = filters.q?.trim();
+  if (q) {
+    const has = { contains: q, mode: 'insensitive' as const };
+    out.push({
+      OR: [
+        { name: has },
+        { codePrefix: has },
+        { externalReference: has },
+        { stateLocation: has },
+        { lgaLocation: has },
+        { region: { name: has } },
+        { projectType: { name: has } },
+        { contractors: { some: { organization: { name: has } } } },
+        { beneficiaries: { some: { name: has } } },
+      ],
+    });
+  }
+  switch (filters.status) {
+    case 'ongoing':
+      out.push({ status: 'ACTIVE', constructionPhase: { in: ['ACTIVE_CONSTRUCTION', 'HANDOVER_IN_PROGRESS'] } });
+      break;
+    case 'behind':
+      out.push({ scheduleStatus: 'BEHIND' });
+      break;
+    case 'completed':
+      out.push({ status: 'ACTIVE', constructionPhase: { in: ['RETENTION_PERIOD', 'COMPLETED_CLOSED'] } });
+      break;
+    case 'archived':
+      out.push({ status: 'ARCHIVED' });
+      break;
+  }
+  return out;
+}
+
+/** UBEC IRL: register fields and import markers on every project DTO. */
+export function serializeRegisterFields(project: {
+  interventionYear: number | null;
+  fundingSource: string | null;
+  externalReference: string | null;
+  importedAt: Date | null;
+  importedProgressPct: Prisma.Decimal | null;
+  importedStatus: string | null;
+  _count: { boqItems: number };
+}): ProjectRegisterFields {
+  return {
+    interventionYear: project.interventionYear,
+    fundingSource: project.fundingSource,
+    externalReference: project.externalReference,
+    importedAt: project.importedAt?.toISOString() ?? null,
+    importedProgressPct: project.importedProgressPct === null ? null : Number(project.importedProgressPct),
+    importedStatus: project.importedStatus,
+    progressIsImported: project.importedAt !== null && project.importedProgressPct !== null && project._count.boqItems === 0,
+  };
+}
+
+/** Prisma include for `serializeRegisterFields`. */
+export const REGISTER_COUNT_INCLUDE = { _count: { select: { boqItems: true } } } satisfies Prisma.ProjectInclude;
+
+/**
+ * UBEC IRL: when each project's site was last observed in an approved visit report (the officer's
+ * confirmation time of the latest APPROVED submission). One grouped query.
+ */
+export async function lastApprovedUpdates(projectIds: string[]): Promise<Map<string, Date>> {
+  if (projectIds.length === 0) return new Map();
+  const rows = await prisma.visitSubmission.groupBy({
+    by: ['projectId'],
+    where: { projectId: { in: projectIds }, status: 'APPROVED' },
+    _max: { confirmedAt: true },
+  });
+  return new Map(rows.filter((r) => r._max.confirmedAt).map((r) => [r.projectId, r._max.confirmedAt!]));
 }
 
 const PROJECT_CONTRACTORS_INCLUDE = {
@@ -89,6 +175,7 @@ const PROJECT_CORE_INCLUDE = {
   lenderOrganization: true,
   contractors: PROJECT_CONTRACTORS_INCLUDE,
   tenant: { select: { defaultGeofenceToleranceMeters: true } },
+  ...REGISTER_COUNT_INCLUDE,
 } satisfies Prisma.ProjectInclude;
 
 type ProjectCoreRow = Prisma.ProjectGetPayload<{ include: typeof PROJECT_CORE_INCLUDE }>;
@@ -138,6 +225,7 @@ function serializeProjectCore(project: ProjectCoreRow) {
     archivedAt: project.archivedAt?.toISOString() ?? null,
     createdAt: project.createdAt.toISOString(),
     updatedAt: project.updatedAt.toISOString(),
+    ...serializeRegisterFields(project),
   };
 }
 
@@ -148,14 +236,14 @@ function serializeProjectCore(project: ProjectCoreRow) {
 export async function listProjectsForUser(
   webUser: WebJwtPayload,
   statuses: ProjectStatus[] = ['ACTIVE', 'ARCHIVED'],
-  filters: ProjectListFilters = {}
+  filters: ProjectRegisterFilters = {}
 ) {
   const visibilityWhere = buildProjectVisibilityWhere(webUser, undefined, {
     statuses: statuses.filter((s) => s !== 'DRAFT'),
   });
 
   const projects = await prisma.project.findMany({
-    where: { AND: [visibilityWhere, ...deliveryModelFilterWhere(filters)] },
+    where: { AND: [visibilityWhere, ...registerFilterWhere(filters)] },
     orderBy: { createdAt: 'desc' },
     include: {
       ...PROJECT_CORE_INCLUDE,
@@ -176,9 +264,10 @@ export async function listProjectsForUser(
 
   // Phase 13: overdue contract milestones per project (directory badge).
   // Redesign R6c (D-R6.22): the stage chip, batched.
-  const [overdue, stages] = await Promise.all([
+  const [overdue, stages, lastApproved] = await Promise.all([
     overdueMilestoneCounts(projects),
     loadProjectStageSummaries(projects.map((p) => p.id)),
+    lastApprovedUpdates(projects.map((p) => p.id)),
   ]);
 
   return projects.map((project) => {
@@ -190,6 +279,8 @@ export async function listProjectsForUser(
         project.evidenceLogs[0]?.capturedAtDevice.toISOString() ?? null,
       overdueMilestoneCount: overdue.get(project.id) ?? 0,
       stage: stages.get(project.id) ?? null,
+      activeAlerts: alertKeysForViewer(project, webUser),
+      lastApprovedUpdateAt: lastApproved.get(project.id)?.toISOString() ?? null,
     };
   });
 }
@@ -364,20 +455,22 @@ const DAY_MS = 24 * 3600 * 1000;
  * GET /projects/portfolio/overview: every live project the user can see (same visibility rule as
  * the directory), with a map point per project and portfolio KPIs computed over the filtered set.
  */
-export async function getPortfolioOverview(webUser: WebJwtPayload, filters: ProjectListFilters = {}): Promise<PortfolioOverviewDto> {
+export async function getPortfolioOverview(webUser: WebJwtPayload, filters: ProjectRegisterFilters = {}): Promise<PortfolioOverviewDto> {
   const projects = await prisma.project.findMany({
-    where: { AND: [buildProjectVisibilityWhere(webUser), ...deliveryModelFilterWhere(filters)] },
+    // The register lists live projects; its Archived button (and export) asks for archived ones.
+    where: { AND: [buildProjectVisibilityWhere(webUser, undefined, filters.status === 'archived' ? { statuses: ['ARCHIVED'] } : {}), ...registerFilterWhere(filters)] },
     orderBy: { name: 'asc' },
     include: {
       ...DELIVERY_MODEL_INCLUDE,
       evidenceLogs: { orderBy: { capturedAtDevice: 'desc' }, take: 1, select: { capturedAtDevice: true } },
       // One contractor per project (decision T); the oldest row if a terminated one is kept.
-      contractors: { orderBy: { createdAt: 'asc' }, take: 1, select: { organization: { select: { name: true } } } },
+      contractors: { orderBy: { createdAt: 'asc' }, take: 1, select: { organization: { select: { id: true, name: true } } } },
+      ...REGISTER_COUNT_INCLUDE,
     },
   });
 
   const projectIds = projects.map((p) => p.id);
-  const [stages, findingGroups, openVisits] = await Promise.all([
+  const [stages, findingGroups, openVisits, lastApproved] = await Promise.all([
     loadProjectStageSummaries(projectIds),
     projectIds.length
       ? prisma.finding.groupBy({
@@ -392,6 +485,7 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
           select: { projectId: true, status: true, plannedDate: true },
         })
       : Promise.resolve([]),
+    lastApprovedUpdates(projectIds),
   ]);
   const openFindingsByProject = new Map(findingGroups.map((g) => [g.projectId, g._count._all]));
   const nowDate = new Date();
@@ -423,6 +517,7 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
     openFindingsCount: 0,
     upcomingVisitCount,
     overdueVisitCount,
+    projectsWithAlertsCount: 0,
   };
   let weightedProgress = 0;
 
@@ -449,6 +544,8 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
     if (isOngoingProject(p)) kpis.ongoingCount += 1;
     const openFindingsCount = openFindingsByProject.get(p.id) ?? 0;
     kpis.openFindingsCount += openFindingsCount;
+    const activeAlerts = alertKeysForViewer(p, webUser);
+    if (activeAlerts.length > 0) kpis.projectsWithAlertsCount += 1;
 
     return {
       id: p.id,
@@ -467,8 +564,12 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
       point: geofence ? geofenceCentroid(geofence) : null,
       stage: stages.get(p.id) ?? null,
       contractorName: p.contractors[0]?.organization.name ?? null,
+      contractorOrganizationId: p.contractors[0]?.organization.id ?? null,
+      lastApprovedUpdateAt: lastApproved.get(p.id)?.toISOString() ?? null,
       openFindingsCount,
+      activeAlerts,
       ...serializeDeliveryModel(p),
+      ...serializeRegisterFields(p),
     };
   });
 

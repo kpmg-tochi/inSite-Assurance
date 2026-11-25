@@ -13,6 +13,7 @@ import {
   defaultColors,
   defaultShadow,
 } from "../../styles/commonStyles";
+import { PROJECT_ALERT_BADGE, projectAlertOf } from "../../utils/notificationTarget";
 
 interface NotificationVisualConfig {
   icon: React.ComponentProps<typeof Feather>["name"];
@@ -88,6 +89,15 @@ const NOTIFICATION_VISUALS: Partial<Record<MobileNotificationType, NotificationV
   },
 };
 
+/** UBEC IRL: early-warning alerts on the project (stalled, site update overdue) open the project. */
+const ALERT_VISUAL: Omit<NotificationVisualConfig, "badgeText"> = {
+  icon: "alert-triangle",
+  accentColor: "#B91C1C",
+  iconBg: "#FEE2E2",
+  pillVariant: "warning",
+  ctaLabel: "Open project",
+};
+
 /** Actions that open a screen (the others only mark the notification read). */
 const OPENING_ACTIONS = new Set(["OPEN_VISIT", "OPEN_DEFECTS"]);
 
@@ -107,11 +117,14 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
   projectLabel,
   onPress,
 }) => {
-  const visuals = NOTIFICATION_VISUALS[notification.type] ?? GENERIC_VISUAL;
+  const alertKey = projectAlertOf(notification);
+  const visuals: NotificationVisualConfig = alertKey
+    ? { ...ALERT_VISUAL, badgeText: PROJECT_ALERT_BADGE[alertKey] }
+    : NOTIFICATION_VISUALS[notification.type] ?? GENERIC_VISUAL;
   const elapsedLabel = formatElapsedTime(notification.createdAt);
   const badgeText = visuals.badgeText;
   const showActionButton = Boolean(
-    visuals.ctaLabel && OPENING_ACTIONS.has(notification.actionType),
+    visuals.ctaLabel && (alertKey !== null || OPENING_ACTIONS.has(notification.actionType)),
   );
 
   return (

@@ -31,7 +31,7 @@ export const FINDING_INCLUDE = {
   projectContractor: { select: { organization: { select: { id: true, name: true } } } },
   project: { select: { timezone: true } },
 } satisfies Prisma.FindingInclude;
-type FindingRow = Prisma.FindingGetPayload<{ include: typeof FINDING_INCLUDE }>;
+export type FindingRow = Prisma.FindingGetPayload<{ include: typeof FINDING_INCLUDE }>;
 
 export interface FindingViewer {
   label: string;
@@ -64,14 +64,14 @@ export async function findingViewerFor(
   };
 }
 
-/** Names for visit findings, loaded once per list. */
-interface FindingNames {
+/** Names for visit findings, loaded once per list (also used by the findings export). */
+export interface FindingNames {
   visits: Map<string, { visitKind: string; plannedDate: string }>;
   facilities: Map<string, string>;
   units: Map<string, string>;
 }
 
-async function loadNames(rows: FindingRow[]): Promise<FindingNames> {
+export async function loadNames(rows: FindingRow[]): Promise<FindingNames> {
   const visitIds = [...new Set(rows.map((r) => r.visitId).filter((id): id is string => Boolean(id)))];
   const facilityIds = [...new Set(rows.map((r) => r.facilityId).filter((id): id is string => Boolean(id)))];
   const unitIds = [...new Set(rows.map((r) => r.facilityUnitId).filter((id): id is string => Boolean(id)))];

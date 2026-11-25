@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "AuditActionType" ADD VALUE 'PROJECT_REGISTER_IMPORTED';

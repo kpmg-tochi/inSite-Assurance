@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { CameraType } from 'expo-camera';
+import type { HeadingReading } from '@insite/shared';
 
 export type CameraCaptureType = 'shutter' | 'live';
 
@@ -31,7 +32,11 @@ export interface ImageQualityAssessment {
   isPlaceholderAssessment: boolean;
 }
 
-/** A photo on disk. Never base64: the file is moved into app storage and uploaded from disk. */
+/**
+ * A photo on disk. Never base64: the file is moved into app storage and uploaded from disk.
+ * UBEC IRL: `uri`, `byteSize`, `width` and `height` describe the compressed file (long edge 1600 px,
+ * JPEG 0.7; utils/photoCompression.ts), which is the one hashed, signed and uploaded.
+ */
 export interface CameraCaptureResult {
   uri: string;
   byteSize: number;
@@ -41,6 +46,10 @@ export interface CameraCaptureResult {
   facing: CameraType;
   capturedAt: string;
   gps?: CameraGpsMetadata;
+  /** Compass heading at the shutter (geotagged captures only); null when there was no usable reading. */
+  heading?: HeadingReading | null;
+  /** false when compression failed and the camera's original file was kept. */
+  compressed?: boolean;
   qualityAssessment: ImageQualityAssessment;
 }
 
@@ -65,7 +74,7 @@ export interface InSiteCameraProps {
   allowFlipCamera?: boolean;
   /** Allow toggling flash/torch (default: true). */
   allowFlashToggle?: boolean;
-  /** JPEG compression quality 0..1 (default: 0.82). */
+  /** JPEG quality 0..1 of the camera's own full-size frame (default: 0.82), before the upload compression. */
   jpegQuality?: number;
   /** Optional header title shown in the top camera bar. */
   title?: string;

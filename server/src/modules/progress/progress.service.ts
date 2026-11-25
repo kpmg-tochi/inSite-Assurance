@@ -30,7 +30,13 @@ export async function refreshProjectProgress(tx: Tx, projectId: string): Promise
     weighted += Number(item.budgetedCostNgn) * pct;
     totalBudget += Number(item.budgetedCostNgn);
   }
-  const projectPct = totalBudget > 0 ? round2(weighted / totalBudget) : 0;
+  let projectPct = totalBudget > 0 ? round2(weighted / totalBudget) : 0;
+  if (items.length === 0) {
+    // UBEC IRL: a project imported already under way shows the % reported at import until its scope
+    // is added; then the computed progress replaces it.
+    const imported = await tx.project.findUnique({ where: { id: projectId }, select: { importedProgressPct: true } });
+    if (imported?.importedProgressPct != null) projectPct = round2(Number(imported.importedProgressPct));
+  }
   await tx.project.update({ where: { id: projectId }, data: { certifiedProgressPct: projectPct } });
   await syncActualCompletionDates(tx, projectId);
   return projectPct;

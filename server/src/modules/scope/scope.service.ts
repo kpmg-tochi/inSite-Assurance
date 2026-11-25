@@ -104,10 +104,20 @@ function facilitySummary(u: UnitRow) {
   };
 }
 
+/**
+ * Needs-assessment import is for drafts (D-R2.10) and, UBEC IRL, for a live project created by the
+ * register import that has no scope yet (no facility units and no lines): its first scope comes from
+ * the needs assessment, and the computed progress then replaces the imported %.
+ */
+export function scopeImportAllowed(project: { status: string; importedAt: Date | null }, unitCount: number, lineCount: number): boolean {
+  if (project.status === 'DRAFT') return true;
+  return project.status === 'ACTIVE' && project.importedAt !== null && unitCount === 0 && lineCount === 0;
+}
+
 export async function getProjectScope(projectId: string): Promise<ProjectScopeDto> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { id: true, status: true, timezone: true, totalBudgetNgn: true, projectTypeSnapshotJson: true },
+    select: { id: true, status: true, timezone: true, totalBudgetNgn: true, projectTypeSnapshotJson: true, importedAt: true },
   });
   if (!project) throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   const verificationDays = monitoringConfigOf(project.projectTypeSnapshotJson).sprintVerificationDays;
@@ -187,7 +197,7 @@ export async function getProjectScope(projectId: string): Promise<ProjectScopeDt
       unassignedLineCount: serializedLines.filter((l) => !l.facilityUnitId).length,
     },
     budgetWarning: scopeBudgetWarning(amountNgn, budget),
-    importAllowed: project.status === 'DRAFT',
+    importAllowed: scopeImportAllowed(project, units.length, lines.length),
   };
 }
 

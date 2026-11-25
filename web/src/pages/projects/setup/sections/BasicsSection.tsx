@@ -3,6 +3,7 @@ import { useWatch } from "react-hook-form";
 import { z } from "zod";
 import {
   formatMoney,
+  FUNDING_SOURCE_SUGGESTIONS,
   ProjectBasicsStepSchema,
   type ProjectSetupDto,
   type ProjectTypeDto,
@@ -15,6 +16,7 @@ import {
   useRegionsQuery,
 } from "../../../../queries/deliveryModels/useDeliveryModelQueries";
 import { CustomSelect } from "../../../../components/common";
+import { useTerm } from "../../../../lib/auth-context";
 import { FieldError, visibleError, type ZodForm } from "../../../../lib/forms";
 import {
   choiceOrNull,
@@ -57,6 +59,10 @@ export function basicsFormSchema(opts: { typeRequired: boolean }) {
       : choiceOrNull().pipe(S.projectTypeId),
     /** Phase 11: "" = no region. */
     regionId: choiceOrNull().pipe(S.regionId),
+    /** UBEC IRL register fields: "" clears (null). */
+    interventionYear: numberOrNull("Intervention year").pipe(S.interventionYear),
+    fundingSource: textOrNull().pipe(S.fundingSource),
+    externalReference: textOrNull().pipe(S.externalReference),
   });
 }
 export type BasicsSchema = ReturnType<typeof basicsFormSchema>;
@@ -71,6 +77,9 @@ export const EMPTY_BASICS: BasicsValues = {
   totalBudgetNgn: "",
   projectTypeId: "",
   regionId: "",
+  interventionYear: "",
+  fundingSource: "",
+  externalReference: "",
 };
 
 /** The basics schema for this tenant: the delivery model is required when it has project types. */
@@ -124,6 +133,7 @@ export function BasicsForm({
     ];
   }, [regions]);
   const err = (name: string) => visibleError(form, name);
+  const term = useTerm();
 
   return (
     <StepSection
@@ -267,6 +277,53 @@ export function BasicsForm({
           )}
           <FieldError form={form} name="totalBudgetNgn" />
         </div>
+        <div className="md:col-span-2">
+          <label className={labelClass} htmlFor="basics-external-reference">
+            {term("externalReference")}
+          </label>
+          <input
+            id="basics-external-reference"
+            className={inputClass(Boolean(err("externalReference")))}
+            maxLength={60}
+            {...textProps(form, "externalReference")}
+            disabled={disabled}
+          />
+          <FieldError form={form} name="externalReference" />
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="basics-intervention-year">
+            Intervention year
+          </label>
+          <input
+            id="basics-intervention-year"
+            inputMode="numeric"
+            maxLength={4}
+            placeholder="e.g. 2025"
+            className={inputClass(Boolean(err("interventionYear")))}
+            {...textProps(form, "interventionYear")}
+            disabled={disabled}
+          />
+          <FieldError form={form} name="interventionYear" />
+        </div>
+        <div>
+          <label className={labelClass} htmlFor="basics-funding-source">
+            Funding source
+          </label>
+          <input
+            id="basics-funding-source"
+            list="basics-funding-source-options"
+            maxLength={120}
+            className={inputClass(Boolean(err("fundingSource")))}
+            {...textProps(form, "fundingSource")}
+            disabled={disabled}
+          />
+          <datalist id="basics-funding-source-options">
+            {FUNDING_SOURCE_SUGGESTIONS.map((s) => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+          <FieldError form={form} name="fundingSource" />
+        </div>
         <div className="md:col-span-4">
           <label className={labelClass} htmlFor="basics-description">
             Description
@@ -299,6 +356,9 @@ function basicsFrom(setup: ProjectSetupDto): BasicsValues {
         : String(setup.basics.totalBudgetNgn),
     projectTypeId: setup.basics.projectType?.id ?? "",
     regionId: setup.basics.region?.id ?? "",
+    interventionYear: setup.basics.interventionYear === null ? "" : String(setup.basics.interventionYear),
+    fundingSource: setup.basics.fundingSource ?? "",
+    externalReference: setup.basics.externalReference ?? "",
   };
 }
 
@@ -330,7 +390,14 @@ export function BasicsSection({ projectId, setup, mode, readOnly }: StepProps) {
         setGeneral(null);
         return true;
       } catch (err) {
-        setGeneral(section.showServerErrors(err));
+        const message = section.showServerErrors(err);
+        // UBEC IRL: the client project ID is unique in the workspace.
+        if ((err as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code === "EXTERNAL_REFERENCE_TAKEN") {
+          section.form.setError("externalReference", { type: "server", message: message ?? "Another project already has this ID." });
+          setGeneral(null);
+          return false;
+        }
+        setGeneral(message);
         return false;
       }
     },

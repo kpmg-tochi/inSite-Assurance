@@ -27,7 +27,9 @@ import { seedR2 } from "./seedR2";
 import { seedR3 } from "./seedR3";
 import { seedR4 } from "./seedR4";
 import { seedClosureTwin } from "./seedClosureTwin";
+import { seedRegisterFields } from "./seedRegisterFields";
 import { seedDocumentRegisters } from "./seedDocumentRegisters";
+import { seedAlerts } from "./seedAlerts";
 import { projectObjectPrefix } from "../integrations/storage.service";
 import { seedDaysAgo, seedRecordedPayment } from "./seedPayments";
 let activeSeedPromise: Promise<void> | null = null;
@@ -831,8 +833,12 @@ async function runSeed(): Promise<void> {
   await seedR4();
   // Demo: PRG-106, a Direct Intervention project whose liability period is over, ready to close (table in its header).
   await seedClosureTwin();
+  // UBEC IRL: intervention year, funding source and UBEC project ID on every PRG-* project (one pass).
+  await seedRegisterFields();
   // Demo: coherent document registers on every UBEC project, with specimen PDFs (runs last).
   await seedDocumentRegisters();
+  // UBEC IRL: early-warning alerts from the seeded data, through the alert service (runs last).
+  await seedAlerts();
 
   console.log("✅ Seed complete!");
   console.log(

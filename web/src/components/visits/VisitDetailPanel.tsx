@@ -238,7 +238,7 @@ function SubmissionCard({ projectId, visitId, submission: s, snapshot }: { proje
                             <CaptureAudio key={c.id} projectId={projectId} objectKey={c.objectKey} />
                           ) : (
                             <div key={c.id} className="text-center">
-                              <CapturePhoto projectId={projectId} objectKey={c.objectKey} alt={f.label} className="w-20 h-20" />
+                              <CapturePhoto projectId={projectId} objectKey={c.objectKey} alt={f.label} className="w-20 h-20" meta={c} />
                               {c.unitId && <p className="text-[10px] text-slate-500">{b.units.find((u) => u.id === c.unitId)?.label ?? ""}</p>}
                               {c.isWithinGeofence === false && <p className="text-[10px] font-semibold text-red-700">outside site</p>}
                             </div>
@@ -280,7 +280,7 @@ function SubmissionCard({ projectId, visitId, submission: s, snapshot }: { proje
                 e.kind === "VOICE" ? (
                   <CaptureAudio key={e.id} projectId={projectId} objectKey={e.capture.objectKey} />
                 ) : (
-                  <CapturePhoto key={e.id} projectId={projectId} objectKey={e.capture.objectKey} alt="Site log" className="w-16 h-16" />
+                  <CapturePhoto key={e.id} projectId={projectId} objectKey={e.capture.objectKey} alt="Site log" className="w-16 h-16" meta={e.capture} />
                 )
               ) : (
                 <p key={e.id} className="text-[11px] text-slate-700 rounded-lg bg-slate-50 px-2 py-1">

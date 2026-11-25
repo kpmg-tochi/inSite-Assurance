@@ -25,6 +25,7 @@ import {
   useMarkNotificationReadMutation,
 } from "../queries/notifications/useNotificationQueries";
 import { formatMobileErrorMessage } from "../utils/errorFormatter";
+import { notificationTarget } from "../utils/notificationTarget";
 
 type NotificationListEntry =
   | {
@@ -40,8 +41,8 @@ type NotificationListEntry =
 
 /**
  * Notifications of every project on this account (redesign R5e), unread first. A visit notification
- * opens the visit, a defect notification the project's defects; anything else (including actions of
- * the pre-R5 app) is only marked read.
+ * opens the visit, a defect notification the project's defects, an early-warning alert the project;
+ * anything else (including actions of the pre-R5 app) is only marked read.
  */
 export const NotificationCenterModal: React.FC = () => {
   const navigation =
@@ -79,18 +80,13 @@ export const NotificationCenterModal: React.FC = () => {
         notif = { ...notif, requiresAction: false };
       }
 
-      // Redesign R4/R5b: a visit assigned, changed, reminded, returned or accepted.
-      if (notif.actionType === "OPEN_VISIT" && notif.metadata?.visitId) {
-        navigation.replace("Visit", { visitId: notif.metadata.visitId });
-        return;
-      }
-
-      // Phase 10: defect assigned, fixed, closed or overdue.
-      if (notif.actionType === "OPEN_DEFECTS") {
-        navigation.replace("Defects", { projectId: notif.projectId });
-        return;
-      }
-      // Any other action (including those of the pre-R5 app) has no screen: tapping marks it read.
+      // A visit (R4/R5b), the project's defects (Phase 10) or, for an early-warning alert (UBEC IRL:
+      // stalled, site update overdue), the project. Anything else (including actions of the pre-R5
+      // app) has no screen: tapping marks it read.
+      const target = notificationTarget(notif);
+      if (target?.screen === "Visit") navigation.replace("Visit", { visitId: target.visitId });
+      else if (target?.screen === "Defects") navigation.replace("Defects", { projectId: target.projectId });
+      else if (target?.screen === "Project") navigation.replace("Project", { projectId: target.projectId });
     },
     [markReadMutation, navigation],
   );

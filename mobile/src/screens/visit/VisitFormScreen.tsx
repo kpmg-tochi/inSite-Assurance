@@ -231,6 +231,7 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
           caption: batch.caption || target.title,
           // The fix taken at this photo's shutter; none means "no location", never a default.
           fix: photo.gps ?? null,
+          heading: photo.heading ?? null,
           capturedAt: photo.capturedAt,
         });
         editor.noteCapture(rec);

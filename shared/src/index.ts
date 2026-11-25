@@ -47,6 +47,15 @@ export * from './utils/visitPlan';
 export * from './schemas/projectOverview.schema';
 export * from './utils/projectStage';
 export * from './schemas/projectTypeConfigGroups';
+// UBEC IRL: early-warning alerts
+export * from './schemas/projectAlert.schema';
+export * from './utils/projectAlerts';
+// UBEC IRL: screen exports (.xlsx)
+export * from './schemas/screenExport.schema';
+// UBEC IRL: project register (fields, filters, export, bulk import)
+export * from './schemas/projectRegister.schema';
+export * from './utils/projectRegister';
+export * from './utils/sheetValues';
 
 // Data
 export * from './data/standardsLibrary';
@@ -55,6 +64,7 @@ export * from './data/standardsLibrary';
 export * from './utils/time';
 export * from './utils/calendar';
 export * from './utils/deviceSignature';
+export * from './utils/heading';
 export * from './utils/format';
 export * from './utils/schedule';
 export * from './utils/retention';

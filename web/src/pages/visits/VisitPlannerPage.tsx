@@ -1,13 +1,15 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Repeat } from "lucide-react";
-import { addDays, VISIT_KIND_META, VisitKindEnum, type PlannerDto, type VisitDto } from "@insite/shared";
+import { addDays, VISIT_KIND_META, VisitKindEnum, type PlannerDto, type PlannerVisitsExportQuery, type VisitDto } from "@insite/shared";
 import { useAuth } from "../../lib/auth-context";
 import Loader from "../../components/Loader";
 import { CustomSelect } from "../../components/common";
 import { usePlannerQuery } from "../../queries/visits/useVisitQueries";
 import { useRegionsQuery } from "../../queries/deliveryModels/useDeliveryModelQueries";
 import { EditVisitDialog, ProposalDecisionForm } from "../../components/visits/VisitDialogs";
+import { ExportExcelButton } from "../../components/common/ExportExcelButton";
+import { useExportPlannerVisitsMutation } from "../../mutations/screenExports/useScreenExportMutations";
 import { TAB_LIST_CLASS, tabItemClass } from "../../components/common/Tabs";
 import { primaryButton, secondaryButton, visitKindLabel, VisitStatusChip, WarningsList } from "../../components/visits/visitUi";
 
@@ -41,6 +43,7 @@ export function VisitPlannerPage({ embedded = false }: { embedded?: boolean } = 
   const days = span === "week" ? 7 : 28;
   const end = addDays(start, days - 1);
   const regions = useRegionsQuery();
+  const exportVisits = useExportPlannerVisitsMutation();
   const q = usePlannerQuery({ from: start, to: end, regionId: regionId || undefined, projectId: projectId || undefined, officerId: officerId || undefined, visitKind: visitKind || undefined });
   const data: PlannerDto | undefined = q.data;
   const dates = useMemo(() => Array.from({ length: days }, (_, i) => addDays(start, i)), [start, days]);
@@ -67,7 +70,7 @@ export function VisitPlannerPage({ embedded = false }: { embedded?: boolean } = 
             Every visit across your projects by officer and day.{canPlan ? " Drag a visit to another day to move it." : ""}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button type="button" className={secondaryButton} onClick={() => setStart(addDays(start, -days))} aria-label="Earlier">
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
@@ -84,6 +87,19 @@ export function VisitPlannerPage({ embedded = false }: { embedded?: boolean } = 
               </button>
             ))}
           </div>
+          <ExportExcelButton
+            pending={exportVisits.isPending}
+            onClick={() =>
+              exportVisits.mutate({
+                from: start,
+                to: end,
+                regionId: regionId || undefined,
+                projectId: projectId || undefined,
+                officerId: officerId || undefined,
+                visitKind: (visitKind || undefined) as PlannerVisitsExportQuery["visitKind"],
+              })
+            }
+          />
         </div>
       </div>
 

@@ -12,6 +12,8 @@ export const TERMINOLOGY_DEFAULTS = {
   contractor: { singular: 'Contractor', plural: 'Contractors' },
   beneficiary: { singular: 'Beneficiary', plural: 'Beneficiaries' },
   retention: { singular: 'Retention', plural: 'Retention' },
+  // UBEC IRL: the client's own project ID (Project.externalReference).
+  externalReference: { singular: 'Client project ID', plural: 'Client project IDs' },
 } as const satisfies Record<string, { singular: string; plural: string }>;
 
 export type TerminologyKey = keyof typeof TERMINOLOGY_DEFAULTS;
@@ -24,6 +26,7 @@ export const TERMINOLOGY_KEY_META: Record<TerminologyKey, { label: string; descr
   contractor: { label: 'Contractor', description: 'The firm that builds the works.' },
   beneficiary: { label: 'Beneficiary', description: 'Who the project is for (a school, a community).' },
   retention: { label: 'Retention', description: 'The part of each payment held back until defects are cleared.' },
+  externalReference: { label: 'Client project ID', description: "Your organisation's own reference for a project, kept beside its code (e.g. UBEC project ID)." },
 };
 
 export const TERM_MAX_LENGTH = 40;

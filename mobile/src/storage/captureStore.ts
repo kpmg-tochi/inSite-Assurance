@@ -1,5 +1,5 @@
 import { Directory, File, Paths } from 'expo-file-system';
-import { canonicalCaptureString, type CaptureDto, type CaptureMediaType } from '@insite/shared';
+import { canonicalCaptureString, type CaptureDto, type CaptureMediaType, type HeadingReading } from '@insite/shared';
 import { signWithDeviceKey } from '../security/deviceKey';
 import type { LocationFix } from '../services/locationService';
 import { getDb, newId, nowIso } from './db/database';
@@ -27,6 +27,8 @@ export interface CaptureRecord {
   durationSeconds: number | null;
   caption: string | null;
   fix: LocationFix | null;
+  /** UBEC IRL: compass heading at the shutter (photos); null when none was recorded. */
+  heading: HeadingReading | null;
   capturedAt: string;
   signature: string | null;
   objectKey: string | null;
@@ -54,6 +56,9 @@ type Row = {
   altitude_meters: number | null;
   is_mocked: number;
   location_available: number;
+  heading_degrees?: number | null;
+  heading_reference?: string | null;
+  heading_accuracy_level?: number | null;
   captured_at: string;
   signature: string | null;
   object_key: string | null;
@@ -86,6 +91,14 @@ function map(r: Row): CaptureRecord {
             capturedAt: r.captured_at,
           }
         : null,
+    heading:
+      r.heading_degrees !== null && r.heading_degrees !== undefined
+        ? {
+            degrees: r.heading_degrees,
+            reference: r.heading_reference === 'TRUE' ? 'TRUE' : 'MAGNETIC',
+            accuracyLevel: r.heading_accuracy_level ?? null,
+          }
+        : null,
     capturedAt: r.captured_at,
     signature: r.signature,
     objectKey: r.object_key,
@@ -114,6 +127,8 @@ export interface NewCaptureInput {
   durationSeconds?: number | null;
   /** The GPS fix taken at the shutter, or null when there was none. Never a substitute value. */
   fix: LocationFix | null;
+  /** UBEC IRL: the compass heading at the shutter, or null/absent when there was none. */
+  heading?: HeadingReading | null;
   capturedAt: string;
 }
 
@@ -153,8 +168,9 @@ export async function saveCapture(input: NewCaptureInput): Promise<CaptureRecord
     await db.runAsync(
       `INSERT INTO captures (id, project_id, media_type, mime_type, local_path, byte_size,
          sha256, duration_seconds, caption, latitude, longitude, accuracy_meters, altitude_meters,
-         is_mocked, location_available, captured_at, signature, upload_status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'LOCAL', ?)`,
+         is_mocked, location_available, captured_at, signature, upload_status, created_at,
+         heading_degrees, heading_reference, heading_accuracy_level)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'LOCAL', ?, ?, ?, ?)`,
       [
         id,
         input.projectId,
@@ -174,6 +190,9 @@ export async function saveCapture(input: NewCaptureInput): Promise<CaptureRecord
         input.capturedAt,
         signature,
         now,
+        input.heading?.degrees ?? null,
+        input.heading?.reference ?? null,
+        input.heading?.accuracyLevel ?? null,
       ]
     );
     await enqueue(db, { projectId: input.projectId, kind: 'CAPTURE', entityId: id });

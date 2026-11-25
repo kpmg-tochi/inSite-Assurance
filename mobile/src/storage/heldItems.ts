@@ -111,10 +111,11 @@ async function resubmitCapture(captureId: string): Promise<{ captureId: string; 
     await db.runAsync(
       `INSERT INTO captures (id, project_id, media_type, mime_type, local_path, byte_size,
          sha256, duration_seconds, caption, latitude, longitude, accuracy_meters, altitude_meters,
-         is_mocked, location_available, captured_at, signature, upload_status, resubmitted_from, created_at)
+         is_mocked, location_available, captured_at, signature, upload_status, resubmitted_from, created_at,
+         heading_degrees, heading_reference, heading_accuracy_level)
        SELECT ?, project_id, media_type, mime_type, ?, byte_size, sha256, duration_seconds,
          caption, latitude, longitude, accuracy_meters, altitude_meters, is_mocked, location_available,
-         captured_at, ?, 'LOCAL', id, ?
+         captured_at, ?, 'LOCAL', id, ?, heading_degrees, heading_reference, heading_accuracy_level
        FROM captures WHERE id = ?`,
       [id, dest.uri, signature, nowIso(), captureId]
     );

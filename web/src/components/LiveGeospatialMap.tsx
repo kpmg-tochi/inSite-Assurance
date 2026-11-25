@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from 'react-le
 import { MapPinOff } from 'lucide-react';
 import {
   ProjectGeofenceSchema,
+  formatHeading,
   geofenceModeLabel,
   type CaptureListItemDto,
   type ProjectGeofence,
@@ -329,6 +330,7 @@ export function LiveGeospatialMap({
                 {selectedLog.gpsAccuracyMeters !== null
                   ? `±${selectedLog.gpsAccuracyMeters.toFixed(1)}m GPS`
                   : 'Accuracy unknown'}
+                {selectedLog.mediaType === 'SITE_PHOTO' ? ` · ${formatHeading(selectedLog.headingDegrees)}` : ''}
               </span>
             </div>
           </div>

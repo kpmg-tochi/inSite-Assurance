@@ -15,6 +15,7 @@ import { formLibraryRoutes } from "./modules/forms/formLibrary.routes";
 import { visitFormRoutes } from "./modules/forms/visitForm.routes";
 import { visitsRoutes } from "./modules/visits/visits.routes";
 import { visitPlannerRoutes } from "./modules/visits/visitPlanner.routes";
+import { projectExportRoutes, tenantExportRoutes } from "./modules/exports/screenExports.routes";
 import { siteLogRoutes } from "./modules/site-log/siteLog.routes";
 import { findingsRoutes } from "./modules/findings/findings.routes";
 import { scopeRoutes, scopeWorkbookRoutes } from "./modules/scope/scope.routes";
@@ -33,6 +34,7 @@ import { contractsRoutes } from "./modules/contracts/contracts.routes";
 import { closureTenantRoutes, completionRoutes } from "./modules/completion/completion.routes";
 import { kpiRoutes, projectKpiRoutes } from "./modules/kpis/kpis.routes";
 import { regionsRoutes } from "./modules/regions/regions.routes";
+import { projectRegisterRoutes } from "./modules/projectRegister/projectRegister.routes";
 import { requestContextMiddleware } from "./utils/requestContext";
 import { localStorageRoutes } from "./modules/storage/localStorage.routes";
 import { storageService } from "./integrations/storage.service";
@@ -93,6 +95,9 @@ export function createApp() {
   app.use("/api/v1/projects", boqRoutes);
   app.use("/api/v1/projects", scopeRoutes); // Redesign R2b
   app.use("/api/v1/projects", visitFormRoutes); // Redesign R3c
+  // UBEC IRL: screen exports (.xlsx); before visitsRoutes, whose /visits/:visitId would take the path.
+  app.use("/api/v1/projects", projectExportRoutes);
+  app.use("/api/v1", tenantExportRoutes);
   app.use("/api/v1/projects", visitsRoutes); // Redesign R4
   app.use("/api/v1/projects", siteLogRoutes); // Redesign R4c
   app.use("/api/v1/projects", findingsRoutes); // Redesign R4d
@@ -125,6 +130,7 @@ export function createApp() {
   app.use("/api/v1/facilities", facilitiesRoutes); // Redesign R2a
   app.use("/api/v1/form-library", formLibraryRoutes); // Redesign R3
   app.use("/api/v1/scope-workbook", scopeWorkbookRoutes); // blank needs-assessment workbook
+  app.use("/api/v1/project-register", projectRegisterRoutes); // UBEC IRL: bulk project import
 
   // Development object storage when S3 is not configured (never in production; see env checks).
   if (!storageService.isCloudConfigured() && env.NODE_ENV !== "production") {

@@ -79,6 +79,7 @@ export const SpecialIncidentModal: React.FC = () => {
                   latitude: capturedPhoto.gps.latitude,
                   longitude: capturedPhoto.gps.longitude,
                   accuracyMeters: capturedPhoto.gps.accuracyMeters ?? undefined,
+                  ...(capturedPhoto.heading ? { headingDegrees: capturedPhoto.heading.degrees } : {}),
                 },
               }
             : {}),

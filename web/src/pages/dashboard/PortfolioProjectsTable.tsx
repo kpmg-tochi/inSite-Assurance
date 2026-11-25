@@ -1,9 +1,18 @@
 import React, { useMemo, useState } from "react";
-import { ArrowRight, Plus, Trash2 } from "lucide-react";
-import { isOngoingProject, projectStageChipLabel, type PortfolioOverviewProject } from "@insite/shared";
-import { useAuth } from "../../lib/auth-context";
+import { ArrowRight, FileUp, Plus, Trash2 } from "lucide-react";
+import {
+  isOngoingProject,
+  projectStageChipLabel,
+  type PortfolioOverviewProject,
+  type ProjectListFilters,
+  type ProjectRegisterFilters,
+} from "@insite/shared";
+import { useAuth, useTerm } from "../../lib/auth-context";
 import { useGuardedNavigate } from "../../lib/navigationGuard";
-import { formatCompactNaira } from "../../lib/formatters";
+import { formatCompactNaira, formatDateShort } from "../../lib/formatters";
+import { ProjectRegisterExportMenu } from "../../components/projects/ProjectRegisterExportMenu";
+import { ProjectRegisterImportDialog } from "../../components/projects/ProjectRegisterImportDialog";
+import { ProjectAlertChips } from "../../components/alerts/ProjectAlertChips";
 import { useDraftProjectsQuery } from "../../queries/projects/useProjectSetupQueries";
 import { useDeleteDraftMutation } from "../../mutations/projects/useProjectSetupMutations";
 import { StandardTable, TableActionButton, type TableColumnDef } from "../../components/table";
@@ -48,8 +57,16 @@ export function PortfolioProjectsTable({
   hideCreate = false,
   pageSize,
   selectedId = null,
+  search: controlledSearch,
+  onSearchChange,
+  registerFilters,
 }: {
   projects: PortfolioOverviewProject[];
+  /** UBEC IRL: a controlled search box (the home page keeps it in the URL); left out, the table keeps its own. */
+  search?: string;
+  onSearchChange?: (value: string) => void;
+  /** UBEC IRL: the filters applied to `projects`, passed to the register export (with the status button and search). */
+  registerFilters?: ProjectListFilters;
   filter: ProjectTableFilter;
   onFilterChange: (f: ProjectTableFilter) => void;
   onOpenProject: (projectId: string) => void;
@@ -62,7 +79,11 @@ export function PortfolioProjectsTable({
 }) {
   const { hasPermission } = useAuth();
   const navigate = useGuardedNavigate();
-  const [search, setSearch] = useState("");
+  const [ownSearch, setOwnSearch] = useState("");
+  const search = controlledSearch ?? ownSearch;
+  const setSearch = onSearchChange ?? setOwnSearch;
+  const [importOpen, setImportOpen] = useState(false);
+  const term = useTerm();
   const canCreate = !hideCreate && hasPermission("projects:create");
   const canSeeDrafts = !hideCreate && (hasPermission("projects:create") || hasPermission("projects:edit_baseline"));
   const draftsQuery = useDraftProjectsQuery(canSeeDrafts);
@@ -86,8 +107,17 @@ export function PortfolioProjectsTable({
     return projects.filter((p) => {
       if (!FILTER_TEST[filter](p)) return false;
       if (!q) return true;
-      return [p.name, p.codePrefix, p.stateLocation, p.lgaLocation ?? "", p.region?.name ?? "", p.contractorName ?? "", p.projectType?.name ?? ""]
-        .some((v) => v.toLowerCase().includes(q));
+      return [
+        p.name,
+        p.codePrefix,
+        p.externalReference ?? "",
+        p.primaryBeneficiary?.name ?? "",
+        p.stateLocation,
+        p.lgaLocation ?? "",
+        p.region?.name ?? "",
+        p.contractorName ?? "",
+        p.projectType?.name ?? "",
+      ].some((v) => v.toLowerCase().includes(q));
     });
   }, [projects, filter, q]);
   const draftRows = useMemo(
@@ -128,7 +158,29 @@ export function PortfolioProjectsTable({
       <Plus className="w-3.5 h-3.5" aria-hidden="true" /> New project
     </button>
   ) : undefined;
-  const searchBox = { value: search, onChange: setSearch, placeholder: "Search by name, code, state or contractor" };
+  // UBEC IRL: the register export (what the table shows: filters, status button, search) and the bulk import.
+  const exportFilters: ProjectRegisterFilters = {
+    ...(registerFilters ?? {}),
+    ...(filter !== "all" && filter !== "drafts" ? { status: filter } : {}),
+    ...(search.trim() ? { q: search.trim() } : {}),
+  };
+  const headerActions = hideCreate ? undefined : (
+    <div className="flex flex-wrap items-center gap-2">
+      <ProjectRegisterExportMenu filters={exportFilters} />
+      {canCreate && (
+        <button
+          type="button"
+          onClick={() => setImportOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-white/30 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+        >
+          <FileUp className="w-3.5 h-3.5" aria-hidden="true" /> Import projects
+        </button>
+      )}
+      {newProject}
+      {importOpen && <ProjectRegisterImportDialog onClose={() => setImportOpen(false)} />}
+    </div>
+  );
+  const searchBox = { value: search, onChange: setSearch, placeholder: "Search by name, code, project ID, school, state, LGA or contractor" };
 
   if (filter === "drafts") {
     const draftColumns: TableColumnDef<DraftRow>[] = [
@@ -177,7 +229,7 @@ export function PortfolioProjectsTable({
       <StandardTable<DraftRow>
         title="Projects"
         subtitle="Drafts stay private to the people setting them up until they are made active."
-        headerActions={newProject}
+        headerActions={headerActions}
         search={searchBox}
         filters={filterButtons}
         columns={draftColumns}
@@ -198,6 +250,12 @@ export function PortfolioProjectsTable({
       cell: (p) => (
         <div className="min-w-0 max-w-[300px]">
           <div className="text-[11px] font-semibold text-slate-500 tabular-nums">{p.codePrefix}</div>
+          {p.externalReference && (
+            <div className="text-[11px] text-slate-500 truncate" title={`${term("externalReference")}: ${p.externalReference}`}>
+              <span className="sr-only">{term("externalReference")}: </span>
+              {p.externalReference}
+            </div>
+          )}
           <div className="font-semibold text-slate-900 truncate" title={p.name}>
             {p.name}
           </div>
@@ -206,6 +264,11 @@ export function PortfolioProjectsTable({
       ),
     },
     { id: "type", header: "Type", cell: (p) => <span className="block max-w-[140px] text-slate-700">{p.projectType?.name ?? "–"}</span> },
+    {
+      id: "year",
+      header: <span title="Intervention year">Year</span>,
+      cell: (p) => (p.interventionYear !== null ? <span className="text-slate-700 tabular-nums">{p.interventionYear}</span> : <span className="text-slate-400">–</span>),
+    },
     {
       id: "location",
       header: "Location",
@@ -224,6 +287,11 @@ export function PortfolioProjectsTable({
           <span className="block max-w-[170px] text-slate-700">
             {projectStageChipLabel(p.stage)}
             {p.stage.contractTerminated && <span className="text-rose-700"> · terminated</span>}
+            {p.activeAlerts.length > 0 && (
+              <span className="mt-1 block">
+                <ProjectAlertChips alerts={p.activeAlerts} size="sm" />
+              </span>
+            )}
           </span>
         ) : (
           <span className="text-slate-400">–</span>
@@ -240,7 +308,14 @@ export function PortfolioProjectsTable({
       header: "Progress",
       cell: (p) => (
         <div className="w-28">
-          <div className="text-xs font-semibold text-slate-800 tabular-nums">{Math.round(p.certifiedProgressPct)}%</div>
+          <div className="text-xs font-semibold text-slate-800 tabular-nums">
+            {Math.round(p.certifiedProgressPct)}%
+            {p.progressIsImported && (
+              <span className="ml-1 text-[10px] font-medium text-slate-500" title="Reported at import; replaced by verified progress once the scope is added">
+                reported
+              </span>
+            )}
+          </div>
           <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
             <div className="h-full rounded-full bg-brand-primary" style={{ width: `${Math.min(100, Math.max(0, p.certifiedProgressPct))}%` }} />
           </div>
@@ -261,6 +336,18 @@ export function PortfolioProjectsTable({
       },
     },
     {
+      id: "lastUpdate",
+      header: <span title="Last approved visit report">Last update</span>,
+      cell: (p) =>
+        p.lastApprovedUpdateAt ? (
+          <span className="text-slate-700 whitespace-nowrap" title="Last approved visit report">
+            {formatDateShort(p.lastApprovedUpdateAt)}
+          </span>
+        ) : (
+          <span className="text-slate-400" title="No approved visit report yet">–</span>
+        ),
+    },
+    {
       id: "findings",
       header: "Open findings",
       align: "right",
@@ -277,7 +364,7 @@ export function PortfolioProjectsTable({
     <StandardTable<PortfolioOverviewProject>
       title="Projects"
       subtitle={`${rows.length} of ${projects.length} shown. Select a project to open it.`}
-      headerActions={newProject}
+      headerActions={headerActions}
       search={searchBox}
       filters={filterButtons}
       columns={columns}
@@ -287,7 +374,7 @@ export function PortfolioProjectsTable({
       selectedId={selectedId}
       pageSize={pageSize}
       loading={loading}
-      minWidth="min-w-[980px]"
+      minWidth="min-w-[1180px]"
       emptyState={{
         title: projects.length === 0 ? "No projects yet" : "No projects match",
         description:

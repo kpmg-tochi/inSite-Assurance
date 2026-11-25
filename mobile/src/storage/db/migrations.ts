@@ -394,6 +394,16 @@ DROP TABLE IF EXISTS inspection_drafts;
 DROP TABLE IF EXISTS assurance_submissions;
 `,
   },
+  {
+    // UBEC IRL (2026-11-25): the compass heading at the shutter (degrees, TRUE or MAGNETIC, OS
+    // calibration 0-3). NULL on captures saved before v11 and when the phone gave no usable reading.
+    version: 11,
+    sql: `
+ALTER TABLE captures ADD COLUMN heading_degrees REAL;
+ALTER TABLE captures ADD COLUMN heading_reference TEXT;
+ALTER TABLE captures ADD COLUMN heading_accuracy_level INTEGER;
+`,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { formatHeading } from '@insite/shared';
 import { InSiteCamera } from './InSiteCamera';
 import type { CameraCaptureResult } from './types';
 
@@ -71,7 +72,9 @@ export const SiteEvidenceCameraModal: React.FC<Props> = ({
     setIsTakingPhoto(true);
   };
 
-  const latestGps = capturedPhotos.find((p) => p.gps)?.gps;
+  const latestLocated = capturedPhotos.find((p) => p.gps);
+  const latestGps = latestLocated?.gps;
+  const latestHeading = latestLocated?.heading ? ` · ${formatHeading(latestLocated.heading.degrees)}` : '';
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={resetAndClose}>
@@ -114,7 +117,7 @@ export const SiteEvidenceCameraModal: React.FC<Props> = ({
             </View>
             <Text style={styles.headerSub}>
               {latestGps
-                ? `GPS Locked: ${latestGps.latitude.toFixed(5)}, ${latestGps.longitude.toFixed(5)}`
+                ? `GPS Locked: ${latestGps.latitude.toFixed(5)}, ${latestGps.longitude.toFixed(5)}${latestHeading}`
                 : 'Captured offline · GPS pending'}
             </Text>
           </View>

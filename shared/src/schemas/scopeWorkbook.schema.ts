@@ -38,6 +38,9 @@ export const SCOPE_WORKBOOK_PROJECT_FIELDS = [
   { key: 'longitude', label: 'Longitude' },
   { key: 'deliveryModel', label: 'Delivery model' },
   { key: 'budget', label: 'Budget (NGN)' },
+  // UBEC IRL register fields (files made before them still import: rows are matched by label).
+  { key: 'interventionYear', label: 'Intervention year' },
+  { key: 'fundingSource', label: 'Funding source' },
   { key: 'strategicJustification', label: 'Strategic justification' },
   { key: 'assumptions', label: 'Assumptions' },
 ] as const;

@@ -225,8 +225,7 @@ describe('SQLite migrations', () => {
        VALUES ('d1', 'v1', 'p1', 'QUEUED', 'h', '{}', '2026-11-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z')`
     ).run();
 
-    assert.equal(migrate(db), LATEST_SCHEMA_VERSION);
-    assert.equal(LATEST_SCHEMA_VERSION, 10);
+    assert.equal(migrate(db, 10), 10);
     const ids = (db.prepare('SELECT id FROM outbox ORDER BY id').all() as Array<{ id: string }>).map((r) => r.id);
     assert.deepEqual(ids, ['cap-row', 'defect-row', 'incident-row', 'site-log-row', 'visit-row']);
     for (const t of ['workday_reports', 'server_reports', 'chat_messages', 'wbs_items', 'inspection_drafts', 'assurance_submissions']) {
@@ -238,5 +237,21 @@ describe('SQLite migrations', () => {
     assert.equal((db.prepare('SELECT COUNT(*) AS n FROM visit_drafts').get() as { n: number }).n, 1);
     // "Clear local data" still finds every table it empties.
     for (const t of DATA_TABLES) db.exec(`DELETE FROM ${t}`);
+  });
+
+  it('v11 adds the compass heading columns to captures; a capture saved before keeps NULL', () => {
+    const db = new DatabaseSync(':memory:');
+    assert.equal(migrate(db, 10), 10);
+    db.prepare(
+      `INSERT INTO captures (id, project_id, media_type, mime_type, local_path, byte_size, sha256, location_available, captured_at, created_at)
+       VALUES ('c-old', 'p1', 'SITE_PHOTO', 'image/jpeg', 'file:///c.jpg', 10, 'ab', 1, '2026-11-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z')`
+    ).run();
+    assert.equal(migrate(db), LATEST_SCHEMA_VERSION);
+    assert.equal(LATEST_SCHEMA_VERSION, 11);
+    const cols = columns(db, 'captures');
+    for (const c of ['heading_degrees', 'heading_reference', 'heading_accuracy_level']) assert.ok(cols.includes(c), c);
+    const old = db.prepare('SELECT heading_degrees, heading_reference FROM captures WHERE id = ?').get('c-old') as Record<string, unknown>;
+    assert.equal(old.heading_degrees, null);
+    assert.equal(old.heading_reference, null);
   });
 });

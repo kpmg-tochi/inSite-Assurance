@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { SprintStatusEnum } from './scope.schema';
 import { VisitConfirmationEnum, VisitStatusEnum } from './visit.schema';
 import { VisitKindEnum } from './form.schema';
+import { ProjectAlertKeyEnum } from './projectAlert.schema';
 
 /**
  * Redesign R6c: project stage and the Overview DTO (D-R6.18). The stage is also carried by the
@@ -90,5 +91,9 @@ export const ProjectOverviewDtoSchema = z.object({
   overdueMilestoneCount: z.number().int().nullable(),
   openDefectCount: z.number().int().nullable(),
   openFindingCount: z.number().int().nullable(),
+  /** UBEC IRL: active early-warning alerts (PROJECT_ALERT_KEYS order; spend only for payment viewers). */
+  activeAlerts: z.array(ProjectAlertKeyEnum),
+  /** When each active alert was raised (ISO time). */
+  alertRaisedAt: z.record(ProjectAlertKeyEnum, z.string()),
 });
 export type ProjectOverviewDto = z.infer<typeof ProjectOverviewDtoSchema>;

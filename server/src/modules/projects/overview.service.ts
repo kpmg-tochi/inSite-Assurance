@@ -1,5 +1,7 @@
 import {
+  activeProjectAlertKeys,
   deriveSprintStatus,
+  parseProjectAlertState,
   OPEN_DEFECT_STATUSES,
   unitsActiveInSprint,
   VISIT_KIND_META,
@@ -61,7 +63,7 @@ function visitKindLabel(kind: VisitKind): string {
 export async function getProjectOverview(projectId: string, webUser: WebJwtPayload, now: Date = new Date()): Promise<ProjectOverviewDto> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { id: true, status: true, timezone: true, projectTypeSnapshotJson: true },
+    select: { id: true, status: true, timezone: true, projectTypeSnapshotJson: true, alertStateJson: true },
   });
   if (!project) throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   if (project.status === 'DRAFT') {
@@ -191,6 +193,10 @@ export async function getProjectOverview(projectId: string, webUser: WebJwtPaylo
   candidates.sort((a, b) => a.dueDate.localeCompare(b.dueDate) || (a.kind === 'MILESTONE' ? -1 : 1));
   const nextDeadline = candidates[0] ?? null;
 
+  // UBEC IRL: active early-warning alerts (spend only for payment viewers).
+  const alertState = parseProjectAlertState(project.alertStateJson);
+  const activeAlerts = activeProjectAlertKeys(project.alertStateJson, { status: project.status, canView: (perms) => hasWebPermission(webUser, ...perms) });
+
   return {
     projectId: project.id,
     today,
@@ -202,5 +208,7 @@ export async function getProjectOverview(projectId: string, webUser: WebJwtPaylo
     overdueMilestoneCount: milestones ? milestones.filter((m) => m.dueDate! < today).length : null,
     openDefectCount,
     openFindingCount,
+    activeAlerts,
+    alertRaisedAt: Object.fromEntries(activeAlerts.map((k) => [k, alertState[k]!])),
   };
 }

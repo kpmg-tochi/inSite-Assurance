@@ -1,5 +1,6 @@
 import {
   sprintForDate,
+  type HeadingReading,
   type MyVisitsFeedDto,
   type ProjectGeofence,
   type SubmissionGeotagInput,
@@ -20,6 +21,7 @@ import { getCaptures } from './captureStore';
 import { hydrateBaselinePack } from './baselineStore';
 import { emitVisitDataChanged } from './visitEvents';
 import { previewGeofence, type GeofencePreview, type LocationFix } from '../services/locationService';
+import { geotagFromFix } from '../utils/headingReadings';
 import {
   EMPTY_VISIT_LOCAL_STATE,
   localSnapshotId,
@@ -303,7 +305,10 @@ export async function dismissResponseError(visitId: string): Promise<void> {
  * may be null (no location): the server flags it, never refuses. Returns the clientCheckInId; a second
  * call returns the first check-in's id.
  */
-export async function queueCheckIn(visitId: string, input: { fix: LocationFix | null; preview?: GeofencePreview | null; checkedInAt?: string }): Promise<string> {
+export async function queueCheckIn(
+  visitId: string,
+  input: { fix: LocationFix | null; heading?: HeadingReading | null; preview?: GeofencePreview | null; checkedInAt?: string }
+): Promise<string> {
   const v = await getVisit(visitId);
   if (!v) throw new Error('This visit is no longer on the phone. Refresh your visits.');
   if (v.local.checkIn) return v.local.checkIn.clientCheckInId;
@@ -314,9 +319,7 @@ export async function queueCheckIn(visitId: string, input: { fix: LocationFix | 
   const body: VisitCheckInRequestInput = {
     clientCheckInId,
     checkedInAt,
-    geotag: fix
-      ? { latitude: fix.latitude, longitude: fix.longitude, accuracyMeters: fix.accuracyMeters, altitudeMeters: fix.altitudeMeters, isMocked: fix.isMocked, capturedAt: fix.capturedAt }
-      : null,
+    geotag: geotagFromFix(fix, input.heading ?? null),
   };
   const db = await getDb();
   await db.withTransactionAsync(async () => {
@@ -330,6 +333,7 @@ export async function queueCheckIn(visitId: string, input: { fix: LocationFix | 
         longitude: fix?.longitude ?? null,
         accuracyMeters: fix?.accuracyMeters ?? null,
         isMocked: fix?.isMocked ?? false,
+        heading: fix ? (input.heading ?? null) : null,
         geofenceStatus: preview?.status ?? null,
         distanceOutsideMeters: preview?.distanceOutsideMeters ?? null,
         sent: false,
@@ -357,7 +361,7 @@ export function checkInRequestFor(v: StoredVisit): VisitCheckInRequestInput | nu
     checkedInAt: c.checkedInAt,
     geotag:
       c.latitude !== null && c.longitude !== null
-        ? { latitude: c.latitude, longitude: c.longitude, accuracyMeters: c.accuracyMeters, isMocked: c.isMocked, capturedAt: c.checkedInAt }
+        ? geotagFromFix({ latitude: c.latitude, longitude: c.longitude, accuracyMeters: c.accuracyMeters, isMocked: c.isMocked, capturedAt: c.checkedInAt }, c.heading ?? null)
         : null,
   };
 }

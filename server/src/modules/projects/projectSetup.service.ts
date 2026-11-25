@@ -493,6 +493,10 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
       siteAddress: project.siteAddress,
       strategicJustification: project.strategicJustification,
       assumptions: project.assumptions,
+      interventionYear: project.interventionYear,
+      fundingSource: project.fundingSource,
+      externalReference: project.externalReference,
+      importedAt: project.importedAt?.toISOString() ?? null,
     },
     parties: {
       owningOrganization: project.owningOrganization,
@@ -602,6 +606,7 @@ export async function createProjectDraft(webUser: WebJwtPayload, input: CreatePr
   if (existing) {
     throw new AppError(`A project with code prefix "${input.codePrefix}" already exists`, 409, 'DUPLICATE_PROJECT_PREFIX');
   }
+  if (input.externalReference) await assertExternalReferenceFree(prisma, tenantId, input.externalReference, null);
 
   const projectId = await prisma.$transaction(async (tx) => {
     // Phase 11: a tenant with project types must pick one first.
@@ -632,6 +637,9 @@ export async function createProjectDraft(webUser: WebJwtPayload, input: CreatePr
         description: input.description ?? null,
         totalBudgetNgn: input.totalBudgetNgn,
         regionId: input.regionId ?? null,
+        interventionYear: input.interventionYear ?? null,
+        fundingSource: input.fundingSource ?? null,
+        externalReference: input.externalReference ?? null,
         // Pre-fill the monitor only when the creator's organisation is a monitor.
         monitorOrganizationId: (creatorOrg?.categories as string[] | undefined)?.includes('ADVISORY_MONITOR')
           ? creatorOrg!.id
@@ -682,6 +690,20 @@ function diffFields(before: Record<string, unknown>, after: Record<string, unkno
   return Object.keys(after).filter((k) => JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null));
 }
 
+/**
+ * UBEC IRL: the client's project ID is unique per workspace (case ignored); 409 EXTERNAL_REFERENCE_TAKEN.
+ * The database's unique index is exact; this check also catches a different case.
+ */
+export async function assertExternalReferenceFree(db: Tx | typeof prisma, tenantId: string, externalReference: string, projectId: string | null) {
+  const clash = await db.project.findFirst({
+    where: { tenantId, externalReference: { equals: externalReference.trim(), mode: 'insensitive' }, ...(projectId ? { id: { not: projectId } } : {}) },
+    select: { codePrefix: true },
+  });
+  if (clash) {
+    throw new AppError(`Project ID "${externalReference}" is already used by ${clash.codePrefix}.`, 409, 'EXTERNAL_REFERENCE_TAKEN');
+  }
+}
+
 const saveBasics: StepSaver = async ({ tx, project, webUser, input }) => {
   const data = input as CreateProjectDraftRequest;
   // Phase 11: the type (re-applied on a draft, locked once live) and the region.
@@ -706,6 +728,12 @@ const saveBasics: StepSaver = async ({ tx, project, webUser, input }) => {
       throw new AppError(`A project with code prefix "${data.codePrefix}" already exists`, 409, 'DUPLICATE_PROJECT_PREFIX');
     }
   }
+  // UBEC IRL register fields: omitted keeps, null clears; the client project ID is unique per workspace.
+  const keep = <T>(sent: T | null | undefined, current: T | null): T | null => (sent === undefined ? current : sent);
+  const externalReference = keep(data.externalReference, project.externalReference);
+  if (externalReference && externalReference !== project.externalReference) {
+    await assertExternalReferenceFree(tx, project.tenantId, externalReference, project.id);
+  }
   const before = {
     name: project.name,
     codePrefix: project.codePrefix,
@@ -713,6 +741,9 @@ const saveBasics: StepSaver = async ({ tx, project, webUser, input }) => {
     lgaLocation: project.lgaLocation,
     description: project.description,
     totalBudgetNgn: project.totalBudgetNgn === null ? null : Number(project.totalBudgetNgn),
+    interventionYear: project.interventionYear,
+    fundingSource: project.fundingSource,
+    externalReference: project.externalReference,
   };
   const after = {
     name: data.name,
@@ -721,6 +752,9 @@ const saveBasics: StepSaver = async ({ tx, project, webUser, input }) => {
     lgaLocation: data.lgaLocation ?? null,
     description: data.description ?? null,
     totalBudgetNgn: data.totalBudgetNgn,
+    interventionYear: keep(data.interventionYear, project.interventionYear),
+    fundingSource: keep(data.fundingSource, project.fundingSource),
+    externalReference,
   };
   if (project.status !== 'DRAFT' && after.totalBudgetNgn < Number(project.disbursedToDateNgn)) {
     throw new AppError('The budget cannot be below the amount already disbursed', 409, 'BUDGET_BELOW_DISBURSED');

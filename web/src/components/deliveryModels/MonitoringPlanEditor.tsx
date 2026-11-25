@@ -12,6 +12,7 @@ import {
   type VisitPlanRuleKind,
 } from "@insite/shared";
 import { CustomSelect } from "../common";
+import { AlertRulesEditor } from "./AlertRulesEditor";
 
 /**
  * Redesign R4 (D-R4.10, D-R4.11): the type's `monitoring` key. The visit plan proposes a project's
@@ -154,6 +155,9 @@ export function MonitoringPlanEditor({ value, onChange }: { value: ProjectTypeMo
         <input type="checkbox" checked={value.emailContractorFindingsSummary ?? true} onChange={(e) => onChange({ ...value, emailContractorFindingsSummary: e.target.checked })} />
         Email the contractor the open findings after each accepted visit
       </label>
+      <div className="border-t border-slate-100 pt-3">
+        <AlertRulesEditor value={value.alerts} onChange={(alerts) => onChange({ ...value, alerts })} />
+      </div>
     </section>
   );
 }

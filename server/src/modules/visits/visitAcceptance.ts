@@ -278,6 +278,18 @@ export async function acceptSubmission(
   }
   for (const id of check.signals.unitComplete) progress.set(id, 100);
   if (progress.size) {
+    // UBEC IRL (STALLED alert): record which units this visit moved forward, dated on the visit.
+    const before = await tx.facilityUnit.findMany({ where: { id: { in: [...progress.keys()] }, projectId: s.projectId }, select: { id: true, progressPct: true } });
+    const raisedUnits = before
+      .map((u) => ({ unitId: u.id, from: u.progressPct === null ? null : Number(u.progressPct), to: Math.round(progress.get(u.id)! * 100) / 100 }))
+      .filter((u) => u.to > (u.from ?? 0));
+    if (raisedUnits.length) {
+      await audit('VISIT_UPDATED', `The ${label.toLowerCase()} of ${visit.plannedDate} raised the progress of ${raisedUnits.length} facility unit(s).`, {
+        visitId: visit.id,
+        visitSubmissionId: s.id,
+        progressIncrease: { asOf: visit.plannedDate, units: raisedUnits },
+      });
+    }
     for (const [unitId, pct] of progress) {
       await tx.facilityUnit.updateMany({
         where: { id: unitId, projectId: s.projectId },

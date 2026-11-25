@@ -94,6 +94,8 @@ export function registerOutboxHandlers(): void {
             }
           : null,
         isMockLocation: c.fix?.isMocked ?? false,
+        // UBEC IRL: only sent when recorded, so the request matches older clients otherwise.
+        ...(c.heading ? { headingDegrees: c.heading.degrees } : {}),
         caption: c.caption,
         signature: c.signature,
         resubmittedFromClientCaptureId: c.resubmittedFrom,

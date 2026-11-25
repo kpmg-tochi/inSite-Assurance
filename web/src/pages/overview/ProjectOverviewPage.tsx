@@ -1,6 +1,7 @@
 import type React from "react";
 import { Link } from "react-router-dom";
 import {
+  PROJECT_REGISTER_IMPORT_STATUS_LABELS,
   SCHEDULE_STATUS_META,
   VISIT_CONFIRMATION_LABELS,
   VISIT_KIND_META,
@@ -10,10 +11,11 @@ import {
   type OverviewNextVisit,
   type OverviewSprint,
   type ProjectOverviewDto,
+  type ProjectRegisterImportStatus,
   type SprintStatus,
 } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
-import { formatCompactNaira } from "../../lib/formatters";
+import { formatCompactNaira, formatDateShort } from "../../lib/formatters";
 import { useAuth, useTerm } from "../../lib/auth-context";
 import { LiveGeospatialMap } from "../../components/LiveGeospatialMap";
 import { ProjectKpisCard } from "../../components/kpis/ProjectKpisCard";
@@ -21,6 +23,7 @@ import { OpenDefaultCasesCard } from "../../components/contracts/ContractOvervie
 import { DEFAULT_CASE_VIEW_PERMISSIONS, MILESTONE_VIEW_PERMISSIONS } from "../../components/contracts/contractUi";
 import { ProjectStageBar } from "../../components/overview/ProjectStageBar";
 import { PhaseActions } from "../../components/overview/PhaseActions";
+import { ProjectAlertChips } from "../../components/alerts/ProjectAlertChips";
 import { CloseoutReportPrompt } from "../../components/closure/CloseoutReport";
 import { useProjectOverviewQuery } from "../../queries/projects/useProjectsQueries";
 import { useProjectPaymentsQuery } from "../../queries/payments/usePaymentsQueries";
@@ -249,9 +252,16 @@ function progressCard(project: ProjectSummaryDto, overview: ProjectOverviewDto, 
       span={span}
       title="Progress"
       headline={
-        <span title="Budget-weighted, from accepted visits" className="text-2xl tabular-nums">
-          {project.certifiedProgressPct.toFixed(1)}%
-        </span>
+        project.progressIsImported ? (
+          <span title="Reported at import; replaced by verified progress once the scope is added">
+            <span className="text-2xl tabular-nums">{project.certifiedProgressPct.toFixed(1)}%</span>{" "}
+            <span className="text-xs font-semibold text-slate-500">Reported at import</span>
+          </span>
+        ) : (
+          <span title="Budget-weighted, from accepted visits" className="text-2xl tabular-nums">
+            {project.certifiedProgressPct.toFixed(1)}%
+          </span>
+        )
       }
       lines={[
         badge ? (
@@ -263,6 +273,39 @@ function progressCard(project: ProjectSummaryDto, overview: ProjectOverviewDto, 
       ]}
       link={findings !== null ? { to: `/app/projects/${project.id}/visits?tab=findings`, label: "Findings" } : null}
     />
+  );
+}
+
+/**
+ * UBEC IRL: the project's register details in one line (client project ID, intervention year,
+ * funding source) and, for a project from the register import, when it was imported and what was
+ * reported then. Hidden when none is set.
+ */
+function RegisterDetails({ project }: { project: ProjectSummaryDto }) {
+  const term = useTerm();
+  const items: Array<{ label: string; value: React.ReactNode }> = [];
+  if (project.externalReference) items.push({ label: term("externalReference"), value: project.externalReference });
+  if (project.interventionYear !== null) items.push({ label: "Intervention year", value: project.interventionYear });
+  if (project.fundingSource) items.push({ label: "Funding source", value: project.fundingSource });
+  if (project.importedAt) {
+    const status = project.importedStatus
+      ? (PROJECT_REGISTER_IMPORT_STATUS_LABELS[project.importedStatus as ProjectRegisterImportStatus] ?? project.importedStatus)
+      : null;
+    const reported = [status, project.importedProgressPct !== null ? `${Math.round(project.importedProgressPct)}%` : null].filter(Boolean).join(", ");
+    items.push({ label: "Imported", value: `${formatDateShort(project.importedAt)}${reported ? ` (reported ${reported.toLowerCase()})` : ""}` });
+  }
+  if (items.length === 0) return null;
+  return (
+    <section className="rounded-2xl border border-slate-200/80 bg-white px-4 py-2.5 shadow-sm" aria-label="Register details">
+      <dl className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
+        {items.map((i) => (
+          <div key={i.label} className="flex gap-1.5">
+            <dt className="font-semibold text-slate-500">{i.label}</dt>
+            <dd className="text-slate-800">{i.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 
@@ -311,7 +354,15 @@ export function ProjectOverviewPage({ project, evidenceLogs }: ProjectOverviewPa
           Project stage{overview ? `: ${overview.stage.currentLabel}${overview.stage.subLabel ? ` (${overview.stage.subLabel})` : ""}` : ""}
         </h2>
         {overview ? (
-          <ProjectStageBar stage={overview.stage} />
+          <>
+            <ProjectStageBar stage={overview.stage} />
+            {overview.activeAlerts.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+                <span className="text-xs font-semibold text-slate-700">Early-warning alerts</span>
+                <ProjectAlertChips alerts={overview.activeAlerts} raisedAt={overview.alertRaisedAt} />
+              </div>
+            )}
+          </>
         ) : overviewQuery.isError ? (
           <p className="text-xs text-rose-700">The project stage could not be loaded.</p>
         ) : (
@@ -320,6 +371,8 @@ export function ProjectOverviewPage({ project, evidenceLogs }: ProjectOverviewPa
       </section>
 
       <CloseoutReportPrompt project={project} />
+
+      <RegisterDetails project={project} />
 
       {overview && <div className="grid grid-cols-1 gap-3 md:grid-cols-6">{cards.map((render, i) => render(spans[i]))}</div>}
       {!overview && live && !overviewQuery.isError && (

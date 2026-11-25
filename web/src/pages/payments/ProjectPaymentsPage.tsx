@@ -24,6 +24,8 @@ import { useProjectPaymentsQuery } from "../../queries/payments/usePaymentsQueri
 import { useRecordPaymentMutation, useVoidPaymentMutation } from "../../mutations/payments/usePaymentsMutations";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { PaidVsContractSumBar } from "../../components/payments/PaidVsContractSumBar";
+import { ExportExcelButton } from "../../components/common/ExportExcelButton";
+import { useExportProjectPaymentsMutation } from "../../mutations/screenExports/useScreenExportMutations";
 
 const labelClass = "block text-xs font-semibold text-slate-700 mb-1";
 
@@ -45,6 +47,7 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
   // "" = every sprint, "none" = payments without a sprint, else a sprint id.
   const [sprintFilter, setSprintFilter] = useState("");
   const [exceptionsOnly, setExceptionsOnly] = useState(false);
+  const exportPayments = useExportProjectPaymentsMutation(project.id);
   const s = query.data;
   const sprints = s?.sprints ?? [];
 
@@ -220,15 +223,29 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
           </div>
         }
         headerActions={
-          s?.canRecord && (
-            <button
-              type="button"
-              onClick={() => setRecording(true)}
-              className="inline-flex items-center gap-1 rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-brand-navy hover:bg-slate-100"
-            >
-              <Plus className="w-3.5 h-3.5" /> Record payment
-            </button>
-          )
+          <>
+            <ExportExcelButton
+              onDark
+              pending={exportPayments.isPending}
+              onClick={() =>
+                exportPayments.mutate({
+                  search: search.trim() || undefined,
+                  kind: kindFilter || undefined,
+                  sprint: sprintFilter || undefined,
+                  exceptionsOnly: exceptionsOnly ? "true" : undefined,
+                })
+              }
+            />
+            {s?.canRecord && (
+              <button
+                type="button"
+                onClick={() => setRecording(true)}
+                className="inline-flex items-center gap-1 rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-brand-navy hover:bg-slate-100"
+              >
+                <Plus className="w-3.5 h-3.5" /> Record payment
+              </button>
+            )}
+          </>
         }
         columns={columns}
         data={rows}

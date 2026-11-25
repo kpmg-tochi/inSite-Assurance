@@ -17,6 +17,8 @@ import {
 import { useKpiDashboardQuery } from "../../queries/kpis/useKpiQueries";
 import { DeliveryModelFilters } from "../../components/projects/DeliveryModelFilters";
 import { CustomSelect } from "../../components/common";
+import { ExportExcelButton } from "../../components/common/ExportExcelButton";
+import { useExportKpisMutation } from "../../mutations/screenExports/useScreenExportMutations";
 import { StandardTable, type TableColumnDef } from "../../components/table";
 import Loader from "../../components/Loader";
 import { countText, KPI_STATUS_META, KpiSparkline, targetText } from "../../components/kpis/KpiDisplay";
@@ -286,6 +288,7 @@ export function ProgrammeKpisPage({ onOpenProject }: { onOpenProject: (projectId
   const [custom, setCustom] = useState(() => presetPeriod("THIS_MONTH", today));
   const period = preset === "CUSTOM" ? custom : presetPeriod(preset, today);
   const { data, isLoading, isError, isFetching, refetch } = useKpiDashboardQuery({ ...filters, ...period });
+  const exportXlsx = useExportKpisMutation();
   const [params, setParams] = useSearchParams();
   const selected = params.get("kpi") as KpiKey | null;
   const [ownersSeen, setOwnersSeen] = useState<Array<{ id: string; name: string }>>([]);
@@ -360,6 +363,8 @@ export function ProgrammeKpisPage({ onOpenProject }: { onOpenProject: (projectId
           >
             <Download className="w-3.5 h-3.5" aria-hidden="true" /> Export CSV
           </button>
+          <ExportExcelButton pending={exportXlsx.isPending} onClick={() => exportXlsx.mutate({ ...filters, ...data.period })} />
+
         </div>
       </div>
       {customInvalid && <p className="text-xs text-rose-700">The period must start before it ends.</p>}

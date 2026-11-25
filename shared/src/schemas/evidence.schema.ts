@@ -12,6 +12,10 @@ const Sha256HexSchema = z
   .string()
   .regex(/^[0-9a-fA-F]{64}$/, 'sha256 must be 64 hex characters');
 
+/** Compass heading in degrees clockwise from north (UBEC IRL); 360 is accepted and stored as 0. */
+export const HeadingDegreesSchema = z.number().min(0).max(360);
+export const HeadingReferenceEnum = z.enum(['TRUE', 'MAGNETIC']);
+
 /** Base64 Ed25519 signature over the canonical string (see utils/deviceSignature). */
 export const DeviceSignatureSchema = z.string().min(64).max(200);
 
@@ -44,6 +48,12 @@ export const RegisterCaptureRequestSchema = z.object({
   devicePitchDeg: z.number().nullable().optional(),
   deviceRollDeg: z.number().nullable().optional(),
   deviceAzimuthDeg: z.number().nullable().optional(),
+  /**
+   * UBEC IRL: compass heading of the camera at the shutter, degrees clockwise from north (true north
+   * when the phone could compute it, else magnetic). Optional: older clients and phones without a
+   * compass send nothing. Not part of the signed canonical string (insite.capture.v1).
+   */
+  headingDegrees: HeadingDegreesSchema.nullable().optional(),
   signature: DeviceSignatureSchema.nullable().optional(),
   /**
    * Phase 5 Step 8: the clientCaptureId of the same capture queued under a session that has since
@@ -73,6 +83,8 @@ export const CaptureDtoSchema = z.object({
   latitude: z.number().nullable(),
   longitude: z.number().nullable(),
   gpsAccuracyMeters: z.number().nullable(),
+  /** Compass heading at the shutter (0-360); null when not recorded. Optional for older readers. */
+  headingDegrees: z.number().nullable().optional(),
   isMockLocation: z.boolean(),
   /** null when there was no fix or the geofence could not be evaluated. */
   isWithinGeofence: z.boolean().nullable(),
@@ -122,6 +134,12 @@ export const SubmissionGeotagInputSchema = z.object({
   altitudeMeters: z.number().nullable().optional(),
   isMocked: z.boolean().default(false),
   capturedAt: z.string().datetime(),
+  /** UBEC IRL: compass heading when the position was taken (optional; older clients send none). */
+  headingDegrees: HeadingDegreesSchema.nullable().optional(),
+  /** TRUE when the phone gave true north, MAGNETIC otherwise. */
+  headingReference: HeadingReferenceEnum.nullable().optional(),
+  /** OS compass calibration 0-3 (3 = high); null when the OS reports none. */
+  headingAccuracyLevel: z.number().int().min(0).max(3).nullable().optional(),
 });
 export type SubmissionGeotagInput = z.infer<typeof SubmissionGeotagInputSchema>;
 
@@ -149,6 +167,7 @@ export const CaptureSummarySchema = CaptureDtoSchema.pick({
   latitude: true,
   longitude: true,
   gpsAccuracyMeters: true,
+  headingDegrees: true,
   isMockLocation: true,
   isWithinGeofence: true,
   signatureVerified: true,

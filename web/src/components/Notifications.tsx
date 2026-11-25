@@ -9,6 +9,10 @@ import {
   ExternalLink,
   ShieldAlert,
   ClipboardCheck,
+  Clock,
+  PauseCircle,
+  CalendarX,
+  Banknote,
 } from "lucide-react";
 import { formatElapsedTime, type WebNotificationCategory, type WebNotificationDto } from "@insite/shared";
 import {
@@ -43,6 +47,10 @@ const CATEGORY_LABELS: Partial<Record<WebNotificationCategory, string>> = {
   VISIT_MISSED: "Missed visit",
   FINDING_ESCALATED: "Finding escalated",
   SPRINT_VERIFICATION_DUE: "Sprint to verify",
+  // UBEC IRL early-warning alerts (SCHEDULE_BEHIND is the delayed alert)
+  PROJECT_STALLED: "Stalled project",
+  SITE_UPDATE_OVERDUE: "Site update overdue",
+  SPEND_AHEAD_OF_PROGRESS: "Spend ahead of progress",
 };
 
 interface NotificationsProps {
@@ -111,6 +119,14 @@ export default function Notifications({ projectId }: NotificationsProps) {
         return <ShieldAlert className="w-4 h-4 text-rose-600" />;
       case "VISIT_PENDING_APPROVAL":
         return <ClipboardCheck className="w-4 h-4 text-amber-600" />;
+      case "SCHEDULE_BEHIND":
+        return <Clock className="w-4 h-4 text-rose-600" />;
+      case "PROJECT_STALLED":
+        return <PauseCircle className="w-4 h-4 text-rose-600" />;
+      case "SITE_UPDATE_OVERDUE":
+        return <CalendarX className="w-4 h-4 text-amber-600" />;
+      case "SPEND_AHEAD_OF_PROGRESS":
+        return <Banknote className="w-4 h-4 text-amber-600" />;
       default:
         return <Bell className="w-4 h-4 text-slate-500" />;
     }
@@ -134,7 +150,12 @@ export default function Notifications({ projectId }: NotificationsProps) {
       case "FINDING_ESCALATED":
         return "bg-rose-50 text-rose-800 border-rose-200";
       case "VISIT_PENDING_APPROVAL":
+      case "SITE_UPDATE_OVERDUE":
+      case "SPEND_AHEAD_OF_PROGRESS":
         return "bg-amber-50 text-amber-800 border-amber-200";
+      case "SCHEDULE_BEHIND":
+      case "PROJECT_STALLED":
+        return "bg-rose-50 text-rose-800 border-rose-200";
       default:
         return "bg-slate-50 text-slate-700 border-slate-200";
     }

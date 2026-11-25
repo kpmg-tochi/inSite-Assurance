@@ -88,6 +88,8 @@ export async function seedPhase11(p: { passwordHash: string }) {
       } as unknown as Prisma.InputJsonValue,
       terminologyLabels: {
         funderParty: { singular: "Funding authority", plural: "Funding authorities" },
+        // UBEC IRL: the client's own project ID (Project.externalReference).
+        externalReference: { singular: "UBEC project ID", plural: "UBEC project IDs" },
       } as unknown as Prisma.InputJsonValue,
     },
   });

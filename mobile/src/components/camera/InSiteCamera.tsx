@@ -19,8 +19,9 @@ import {
 } from "react-native";
 import { CameraView, type CameraType, useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
-import { File } from "expo-file-system";
 import { acquireFix } from "../../services/locationService";
+import { readHeading, startHeadingWatch } from "../../services/headingService";
+import { compressPhoto } from "../../services/photoCompressor";
 import { assessCapturedImageQuality } from "./qualityAssessment";
 import type {
   CameraCaptureResult,
@@ -77,6 +78,12 @@ export const InSiteCamera = forwardRef<InSiteCameraHandle, InSiteCameraProps>(
       }
     }, [geoTag]);
 
+    // UBEC IRL: the compass runs while a geotagging camera is open, so the shutter reads it at once.
+    useEffect(() => {
+      if (!geoTag) return;
+      return startHeadingWatch();
+    }, [geoTag]);
+
     const handleCameraReady = useCallback(() => {
       setCameraReady(true);
       onCameraReadyChange?.(true);
@@ -112,42 +119,47 @@ export const InSiteCamera = forwardRef<InSiteCameraHandle, InSiteCameraProps>(
 
         setIsCapturing(true);
         try {
-          const [photo, gps] = await Promise.all([
+          const capturedAt = new Date().toISOString();
+          const [photo, gps, heading] = await Promise.all([
             cameraViewRef.current.takePictureAsync({
               quality: jpegQuality,
               base64: false,
-              exif: true,
+              // EXIF is dropped by the compression below; GPS comes from the location service.
+              exif: false,
             }),
             geoTag ? captureGpsMetadata() : Promise.resolve(undefined),
+            geoTag ? readHeading().catch(() => null) : Promise.resolve(null),
           ]);
 
           if (!photo || !photo.uri) {
             throw new Error("Camera returned an empty image frame.");
           }
 
-          let byteSize = 0;
-          try {
-            byteSize = new File(photo.uri).size;
-          } catch {
-            byteSize = 0;
-          }
-
-          const qualityAssessment = assessCapturedImageQuality({
+          // UBEC IRL: the stored (hashed, signed, uploaded) file is the compressed one.
+          const stored = await compressPhoto({
+            uri: photo.uri,
             width: photo.width,
             height: photo.height,
-            byteSize,
+          });
+
+          const qualityAssessment = assessCapturedImageQuality({
+            width: stored.width,
+            height: stored.height,
+            byteSize: stored.byteSize,
             expectedOrientation: orientation,
           });
 
           const result: CameraCaptureResult = {
-            uri: photo.uri,
-            byteSize,
-            width: photo.width,
-            height: photo.height,
+            uri: stored.uri,
+            byteSize: stored.byteSize,
+            width: stored.width,
+            height: stored.height,
             orientation,
             facing,
-            capturedAt: new Date().toISOString(),
+            capturedAt,
             gps,
+            heading: geoTag ? heading : null,
+            compressed: stored.compressed,
             qualityAssessment,
           };
 

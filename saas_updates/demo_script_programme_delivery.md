@@ -1,7 +1,8 @@
 # Demo script: one school, from needs assessment to closure
 
 **Status:** written 2026-11-25 from the verified API walk-through (`server/src/tests/routes.demo.test.ts`). **Not yet rehearsed in a browser or on a phone.** Rehearse once end to end before the real demo; note anything that differs and fix this file.
-**Length:** about 40 minutes (a 25-minute cut is marked ✂ at the end).
+**Length:** about 45 minutes (a 25-minute cut is marked ✂ at the end).
+**Updated 2026-11-25** for the IRL items built before the demo: bulk project import, register fields and filters, exports, early-warning alerts, photo compression and compass heading.
 **Audience:** UBEC management and the departments in the MoE process design (Physical Planning, M&E, Procurement, Finance & Accounts, Legal, Audit).
 **Everything shown is demo data.** The school, people, contractor and amounts are illustrative; the PDFs carry a "SPECIMEN – demo data" footer.
 
@@ -13,6 +14,7 @@
 | :--- | :--- |
 | The day before | `npm run prisma:seed` (from `server/`); start the API and the web app; sign in once with every login below, web and phone. |
 | **On the demo day** | `npm run demo:pack` (from `server/`). It rebuilds `saas_updates/demo_pack/` with dates relative to today. Run it on a weekday: the demo project works Monday to Friday. Copy the pack to the presenting laptop's desktop. |
+| A few days before | Install a fresh **EAS dev build** of the field app on both phones: photo compression and compass heading need it (an older build still works, but keeps full-size photos and records no heading). |
 | 15 minutes before | Phones on the same network as the API, field app signed in: phone A as `resident.supervisor@ubec.test`, phone B as `independent.me@ubec.test` (one phone works too: sign out and in, about a minute). Mirror the phones on screen. |
 | Browser tabs | Tab 1: `admin@ubec.test` on the Portfolio. Tab 2 (another browser profile or a private window): `me.officer@ubec.test` on the Dashboard. |
 
@@ -38,6 +40,8 @@ Each detail below is planted early and pays off later. Don't point at them; let 
 | The MoE rule: mobilise within three weeks of the kick-off | Act 4: the Resident Supervisor's report closes the mobilisation milestone, dated. Closing: "Contractors mobilised on time" on the KPI page. |
 | The mobilisation agreement's PPE clause (Act 3) | Act 5: the inspector answers "PPE worn: No", and a finding opens by itself and comes back on the next visit. |
 | The kick-off's one-week notice rule | Act 3: the platform refuses short notice unless you record why. Act 6: it refuses to let one person record and approve the same handover. |
+| "The folder arrives late" | Closing: the platform raises the alarm itself (stalled, update overdue, behind), on the web and on the phone. |
+| "Excel is where the work lives today" (Act 1) | Act 1 imports the register from Excel; Act 5 and the closing export back to Excel and PDF in one click. |
 
 ---
 
@@ -54,7 +58,7 @@ Each detail below is planted early and pays off later. Don't point at them; let 
 >
 > Keep your answer. We'll come back to it."
 
-**Show:** the Portfolio (tab 1): the map of Kano and Lagos with project pins and the portfolio cards.
+**Show:** the Portfolio (tab 1): the map of Kano and Lagos with project pins and the portfolio cards. Don't point at the red alert chips in the register yet: they pay off at the end.
 
 **Say:**
 > "This is the programme as the platform sees it. Every pin is a project: Direct Intervention projects that UBEC runs from headquarters, and Matching Grants projects that a SUBEB runs. Every colour is a stage.
@@ -67,17 +71,29 @@ Each detail below is planted early and pays off later. Don't point at them; let 
 
 ---
 
-## Act 1. The need (5 min)
+## Act 1. The need (7 min)
+
+### 1a. The projects you already have (2 min)
+
+**Say:**
+> "Before any new school, a practical question: UBEC already has hundreds of projects running, and today they live in spreadsheets. Day one can't mean retyping them."
+
+**Show** (tab 1, `admin@ubec.test`): Portfolio register → **Import projects** → `14 Project register import.xlsx` from the demo pack → preview: six rows, two **drafts** (not started) and four **live** projects already under way, each with its new code, UBEC project ID and reported % complete → **Import**. In the register, filter by **LGA** or **contractor** to find one; its progress shows "reported" until its first verified visit.
+
+**Say:**
+> "Projects that haven't started arrive as drafts. Projects already on site arrive live, with the percentage UBEC reported and UBEC's own project ID next to ours. From their next verified visit, the platform takes over the figure."
+
+### 1b. A new school (5 min)
 
 **Say:**
 > "Our school is Government Primary School, Dawakin Tofa, in Kano. The State office's needs assessment found what the MoE design asks every school project to cover: toilets, water and power. A toilet block, a motorised borehole and solar power to run it. About forty-four million naira of works."
 
 **Show** (tab 1, `admin@ubec.test`):
 1. Dashboard → projects table → **New project**.
-2. Delivery model **Direct Intervention**. Name "WASH upgrade, Government Primary School Dawakin Tofa", code `PRG-110`, state "Kano State", region Kano, budget 48,500,000. Leave the LGA empty.
+2. Delivery model **Direct Intervention**. Name "WASH upgrade, Government Primary School Dawakin Tofa", code `PRG-110`, UBEC project ID `UBEC/DI/2026/KN/110`, state "Kano State", region Kano, budget 48,500,000. Leave the LGA, intervention year and funding source empty.
 3. Go to step 3, **Scope & sprints** → **Import needs assessment** → `Dawakin Tofa needs assessment.xlsx` from the demo pack.
-4. On the preview, point at: 3 facility units, 8 BoQ lines, NGN 44,275,000, no errors, and the six project fields it will fill (LGA, school, site address, justification, assumptions, site boundary).
-5. **Import and fill 6 project field(s)**.
+4. On the preview, point at: 3 facility units, 8 BoQ lines, NGN 44,275,000, no errors, and the project fields it will fill (LGA, school, site address, intervention year, funding source, justification, assumptions, site boundary).
+5. **Import and fill 8 project field(s)** (the number on the button may differ by one or two if you typed a field the file also carries; that's fine).
 
 **Say:**
 > "That's the needs assessment template, the same file the State offices fill in. It carries the BoQ, the facilities, the sprints and the GPS point of the school. The platform reads it, checks every row and refuses a file it can't trust. Nobody retypes a BoQ.
@@ -150,10 +166,10 @@ Each detail below is planted early and pays off later. Don't point at them; let 
 3. **Review** → **Submit**.
 
 **Say** (while Musa fills the form):
-> "This is the weekly report that used to arrive on paper. Every answer is a question the M&E department wrote once, in the form library. Photos are taken in the app, stamped with time and place, and they can't be picked from the gallery. It works offline: if there's no signal at the school, the report waits on the phone and goes when it can."
+> "This is the weekly report that used to arrive on paper. Every answer is a question the M&E department wrote once, in the form library. Photos are taken in the app, stamped with time, place and the direction the camera was facing, and they can't be picked from the gallery. The app shrinks each one to a few hundred kilobytes, so a weak signal still gets them through. It works offline: if there's no signal at the school, the report waits on the phone and goes when it can."
 
 **Show** (tab 2, Ngozi):
-1. PRG-110 → **Visits** → the submitted check → visit drawer: answers, photos, the check-in inside the boundary → **Approve**.
+1. PRG-110 → **Visits** → the submitted check → visit drawer: answers, photos (hover one: time, GPS accuracy and the direction the camera faced, e.g. "Facing NE (47°)"), the check-in inside the boundary → **Approve**.
 2. Kick-off & mobilisation → **Milestones**: "Contractor mobilised on site" is **done**, dated today. The Overview stage has moved on.
 
 **Say:**
@@ -183,6 +199,7 @@ Each detail below is planted early and pays off later. Don't point at them; let 
 2. PRG-110 → **Visits** → **Findings** tab: a finding is **open**: PPE not worn, minor, raised by the form itself from Engr. Obi's answer.
 3. **Sprints & scope**: the toilet block shows 15%.
 4. Publish the next proposed routine visit and open its form: at the top, a **re-check** of the PPE finding.
+5. Findings tab → **Export to Excel**: the same list, UBEC-styled, ready to attach to a memo. (Visits, payments and KPIs have the same button; the register exports to Excel and PDF.)
 
 **Say:**
 > "Remember the clause in the mobilisation agreement? Nobody had to remember it. The answer 'no' opened a finding, the contractor got an email listing it, and the finding will follow the project. Every next visit asks about it again until someone on site says it's fixed, with a photo. And if it stays open too long, it escalates to the people who can do something about it.
@@ -238,7 +255,15 @@ Each detail below is planted early and pays off later. Don't point at them; let 
 
 ---
 
-## Closing (2 min)
+## Closing (3 min)
+
+**Say:**
+> "One more habit of the folder: it arrives late. You find out a site went quiet when someone finally asks."
+
+**Show:** the Portfolio register: the alert chips on PRG-105 (**Delayed**, **Stalled**, **Site update overdue**) and PRG-211 (**Site update overdue**); the "projects with early-warning alerts" figure. Open the notification bell: the same alerts, each linked to the page that needs action. On phone A, Musa's notifications show the overdue-update alert for his site.
+
+**Say:**
+> "Nobody had to ask. A project with no verified progress for a month is flagged as stalled; a site with no approved report for two weeks is overdue; a project paid ahead of its verified progress is flagged to Finance. The thresholds are set per programme, and the people who can act are told, on the web and on the phone."
 
 **Show:** Programme KPIs (`/app/kpis`): "Contractors mobilised on time", "Visits conducted vs planned", "Reports submitted on time", "Verified on time and to specification", and the monthly trend. These are the KPIs of the MoE process design.
 
@@ -266,6 +291,18 @@ Each detail below is planted early and pays off later. Don't point at them; let 
 | Payments? | Payments stay in UBEC's finance system. The platform records each payment against the project, holds 5% retention and flags exceptions, such as a final payment before the Certificate of Completion. |
 | Matching Grants? | Same platform, different rules on the project type: the SUBEB owns the project, its Executive Chairman decides default cases, and there's a post-closure evaluation and an audit sign-off before archiving. See the optional scene below. |
 | Who can see what? | UBEC HQ sees everything. A SUBEB sees only its own projects. M&E officers and independent monitors see the projects they're assigned to. |
+| Can we bring in our existing projects? | Yes: the register import (Act 1a) takes the whole list from Excel; projects already on site come in live with their reported progress. |
+| Can we get the data out? | Yes: the register to Excel and PDF; visits, findings, payments and KPIs to Excel, each with the filters on screen. UBEC's own report templates come once we receive them (IRL item 11). |
+
+### Not in the platform yet (say so plainly if asked)
+
+| Topic | What to say |
+| :--- | :--- |
+| Sign-in security | Today: password, account lockout after repeated failures, every action in the audit ledger. Before go-live, sign-in will also offer **multi-factor authentication** (an authenticator app, required for administrators) and **short-lived sessions** with automatic sign-out when idle, plus a self-service password reset. |
+| Email | The platform sends email today through a mail service; before go-live it will send through **UBEC's own mail server** (SMTP) from a UBEC address (IRL item 14). |
+| Finance systems | Payments are recorded in the platform today. A feed from UBEC's finance and procurement systems follows once we know which systems they are (IRL item 3). |
+| Hosting | The platform will run on the hosting UBEC chooses; the hosting setup and backup plan follow that decision (IRL items 1–2). |
+| Report templates and statuses | Exports exist; UBEC's report templates, a formal status list (stalled, abandoned) and condition reporting follow UBEC's definitions (IRL items 9–11). |
 
 ## Optional scenes (if time or questions allow)
 
@@ -275,11 +312,12 @@ Each detail below is planted early and pays off later. Don't point at them; let 
 | A missed mobilisation | `lagos.admin@ubec.test` | PRG-221 → Kick-off & mobilisation → the default case waiting at "SUBEB Executive Chairman decision", with the Legal review attached. |
 | A late sprint | `me.officer@ubec.test` | PRG-105 → Sprints & scope: sprint 1 verified PARTLY MET, the BEHIND badge on the directory. |
 | Configuration | `admin@ubec.test` | Forms & facilities (the form library and facility sub-forms); Settings → Project types (visit plan, milestones, closure rules, KPI targets); Settings → Roles. |
-| Payments | `admin@ubec.test` | PRG-106 → Payments: interim and final payments, retention held then released after the liability period. |
+| Payments | `admin@ubec.test` | PRG-106 → Payments: interim and final payments, retention held then released after the liability period; **Export to Excel**. |
+| Alert settings | `admin@ubec.test` | Settings → Project types → Direct Intervention → Monitoring: the early-warning alerts, each with a switch and a threshold, and who receives it. |
 
 ## ✂ The 25-minute cut
 
-Skip the Act 2 document uploads (say they're there), the kick-off notice detour in Act 3 (schedule and record held only), the routine-visit re-check in Act 5 (just show the finding), and the closure pack download in Act 7 (show the button and the checklist). Keep Act 0 and the closing intact: they carry the story.
+Skip Act 1a (mention the register import in one sentence), the Act 2 document uploads (say they're there), the kick-off notice detour in Act 3 (schedule and record held only), the routine-visit re-check in Act 5 (just show the finding), and the closure pack download in Act 7 (show the button and the checklist). Keep Act 0 and the closing intact: they carry the story.
 
 ## If something goes wrong
 
@@ -290,4 +328,5 @@ Skip the Act 2 document uploads (say they're there), the kick-off notice detour 
 | A photo won't upload | Leave it: the report queues on the phone (Outbox) and you can approve it once it lands. Move on to the next scene and come back. |
 | Approve is missing on a submission | Make sure you are in tab 2 (Ngozi) for reports submitted by Musa or Engr. Obi; the person who submitted a report can't approve it. |
 | The code PRG-110 is taken (second run) | Use PRG-111; nothing else depends on the code. Reseed after the demo. |
+| The register import says a project ID already exists (second run) | The file was imported before: reseed, or skip Act 1a and show the projects it created last time. |
 | Anything else | Switch to the seeded PRG-105 (mid-construction, findings, late sprint) and tell the same story there. |

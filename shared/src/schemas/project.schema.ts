@@ -8,6 +8,7 @@ import { ProjectGeofenceSchema } from './geofence.schema';
 import { ScheduleVarianceBadgeSchema } from './schedule.schema';
 import { ProjectBeneficiaryDtoSchema, ProjectTypeSummarySchema, RegionSummarySchema } from './deliveryModel.schema';
 import { ProjectStageSummarySchema } from './projectOverview.schema';
+import { ProjectAlertKeyEnum } from './projectAlert.schema';
 
 /**
  * Phase 11: the delivery-model fields every project list row carries (directory and portfolio
@@ -21,6 +22,26 @@ export const ProjectDeliveryModelFieldsSchema = z.object({
   primaryBeneficiary: ProjectBeneficiaryDtoSchema.nullable().optional(),
 });
 export type ProjectDeliveryModelFields = z.infer<typeof ProjectDeliveryModelFieldsSchema>;
+
+/**
+ * UBEC IRL: register fields on every project DTO (directory, baseline, portfolio rows) and the
+ * markers of a project created by the register import.
+ */
+export const ProjectRegisterFieldsSchema = z.object({
+  interventionYear: z.number().int().nullable(),
+  fundingSource: z.string().nullable(),
+  /** The client's own project ID (shown with the workspace term, e.g. "UBEC project ID"). */
+  externalReference: z.string().nullable(),
+  /** Set when the project came from the register import. */
+  importedAt: z.string().nullable(),
+  /** The % complete reported at import. */
+  importedProgressPct: z.number().nullable(),
+  /** The status reported at import (NOT_STARTED, ONGOING, COMPLETED). */
+  importedStatus: z.string().nullable(),
+  /** True while the progress shown is the imported figure (no scope lines yet). */
+  progressIsImported: z.boolean(),
+});
+export type ProjectRegisterFields = z.infer<typeof ProjectRegisterFieldsSchema>;
 
 // Project creation is staged (Phase 6): see projectSetup.schema.ts for the draft and step schemas.
 
@@ -76,6 +97,7 @@ export const ProjectCoreDtoSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   ...ProjectDeliveryModelFieldsSchema.shape,
+  ...ProjectRegisterFieldsSchema.shape,
 });
 export type ProjectCoreDto = z.infer<typeof ProjectCoreDtoSchema>;
 
@@ -91,6 +113,10 @@ export const ProjectSummaryDtoSchema = ProjectCoreDtoSchema.extend({
   totalBoqItems: z.number().int().optional(),
   opaqueLumpSumCount: z.number().int().optional(),
   lastFieldCaptureAt: z.string().nullable().optional(),
+  /** UBEC IRL: active early-warning alerts (keys in PROJECT_ALERT_KEYS order; spend only for payment viewers). */
+  activeAlerts: z.array(ProjectAlertKeyEnum).optional(),
+  /** UBEC IRL register: when the site was last observed in an approved visit report (its confirmation time). */
+  lastApprovedUpdateAt: z.string().nullable().optional(),
 });
 export type ProjectSummaryDto = z.infer<typeof ProjectSummaryDtoSchema>;
 
@@ -138,7 +164,14 @@ export const PortfolioOverviewProjectSchema = z.object({
   contractorName: z.string().nullable(),
   /** UBEC rebrand: findings with status OPEN. */
   openFindingsCount: z.number().int(),
+  /** UBEC IRL: active early-warning alerts (keys in PROJECT_ALERT_KEYS order; spend only for payment viewers). */
+  activeAlerts: z.array(ProjectAlertKeyEnum),
+  /** UBEC IRL register: the contractor's organisation (contractor filter). */
+  contractorOrganizationId: z.string().uuid().nullable(),
+  /** UBEC IRL register: when the site was last observed in an approved visit report (its confirmation time). */
+  lastApprovedUpdateAt: z.string().nullable(),
   ...ProjectDeliveryModelFieldsSchema.shape,
+  ...ProjectRegisterFieldsSchema.shape,
 });
 export type PortfolioOverviewProject = z.infer<typeof PortfolioOverviewProjectSchema>;
 
@@ -178,6 +211,8 @@ export const PortfolioOverviewKpisSchema = z.object({
   upcomingVisitCount: z.number().int(),
   /** UBEC rebrand: visits MISSED, or PLANNED / IN_PROGRESS with a planned date before today. */
   overdueVisitCount: z.number().int(),
+  /** UBEC IRL: projects in view with at least one active early-warning alert the caller may see. */
+  projectsWithAlertsCount: z.number().int(),
 });
 export type PortfolioOverviewKpis = z.infer<typeof PortfolioOverviewKpisSchema>;
 

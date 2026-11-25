@@ -14,6 +14,9 @@ import {
   ScopeWorkbookPreviewDto,
   ScopeWorkbookProjectChange,
   ScopeWorkbookProjectFieldKey,
+  FundingSourceSchema,
+  InterventionYearSchema,
+  parseSheetNumber,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -21,7 +24,9 @@ import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { applyProjectTypeToProject } from '../projectTypes/projectTypes.service';
 import { ensureFacilities } from '../facilities/facilities.service';
-import { defectItemIds, getProjectScope, lineHasEvidence, runScopeWrite } from './scope.service';
+import { defectItemIds, getProjectScope, lineHasEvidence, runScopeWrite, scopeImportAllowed } from './scope.service';
+import { proposeVisitsFromType } from '../visits/visitPlan.service';
+import { webVisitActor } from '../visits/visitCore';
 import { buildScopeWorkbook, parseScopeWorkbook, ParsedScopeWorkbook, WorkbookFacility } from './workbook/scopeWorkbook';
 
 /**
@@ -50,6 +55,9 @@ const PROJECT_SELECT = {
   siteAddress: true,
   strategicJustification: true,
   assumptions: true,
+  interventionYear: true,
+  fundingSource: true,
+  importedAt: true,
   geofenceGeoJson: true,
   projectTypeId: true,
   owningOrganizationId: true,
@@ -162,6 +170,8 @@ export async function buildProjectScopeWorkbook(projectId: string): Promise<{ bu
       longitude: center?.longitude ?? null,
       deliveryModel: project.projectType?.name ?? null,
       budget: project.totalBudgetNgn === null ? null : Number(project.totalBudgetNgn),
+      interventionYear: project.interventionYear,
+      fundingSource: project.fundingSource,
       strategicJustification: project.strategicJustification,
       assumptions: project.assumptions,
     },
@@ -237,6 +247,20 @@ async function projectFill(db: Db, project: ProjectRow, wb: Partial<Record<Scope
     const current = project[column] ?? null;
     if (compare(column, label(key), v, current, sameText(v, current))) apply.data[column] = v;
   }
+  // UBEC IRL register fields.
+  if (wb.fundingSource) {
+    const f = FundingSourceSchema.safeParse(wb.fundingSource);
+    if (!f.success) warn(label('fundingSource'), 'INVALID_VALUE', `Funding source "${wb.fundingSource}": ${f.error.issues[0]?.message ?? 'invalid'}; ignored.`);
+    else if (compare('fundingSource', label('fundingSource'), f.data, project.fundingSource, sameText(f.data, project.fundingSource))) apply.data.fundingSource = f.data;
+  }
+  if (wb.interventionYear) {
+    const y = InterventionYearSchema.safeParse(parseSheetNumber(wb.interventionYear));
+    if (!y.success) warn(label('interventionYear'), 'INVALID_YEAR', `Intervention year "${wb.interventionYear}" is not a year from 2000 to 2100; ignored.`);
+    else {
+      const current = project.interventionYear === null ? null : String(project.interventionYear);
+      if (compare('interventionYear', label('interventionYear'), String(y.data), current, project.interventionYear === y.data)) apply.data.interventionYear = y.data;
+    }
+  }
   if (wb.school) {
     const current = project.beneficiaries[0]?.name ?? null;
     if (compare('school', label('school'), wb.school, current, sameText(wb.school, current))) apply.schoolName = wb.school;
@@ -268,7 +292,12 @@ async function projectFill(db: Db, project: ProjectRow, wb: Partial<Record<Scope
     });
     if (!type) warn(label('deliveryModel'), 'UNKNOWN_DELIVERY_MODEL', `Delivery model "${wb.deliveryModel}" is not on the list; ignored.`);
     else if (compare('projectTypeId', label('deliveryModel'), type.name, project.projectType?.name ?? null, type.id === project.projectTypeId)) {
-      apply.projectTypeId = type.id;
+      if (project.status === 'DRAFT') apply.projectTypeId = type.id;
+      else {
+        // A live project's type is fixed at activation (PROJECT_TYPE_LOCKED).
+        changes[changes.length - 1].action = 'KEEP';
+        warn(label('deliveryModel'), 'PROJECT_TYPE_LOCKED', 'The delivery model of a live project cannot change; ignored.');
+      }
     }
   }
   if (wb.latitude || wb.longitude) {
@@ -311,10 +340,19 @@ function decode(fileBase64: string): Buffer {
   return buffer;
 }
 
-function assertDraft(project: { status: string }) {
-  if (project.status !== 'DRAFT') {
+/**
+ * Drafts, and (UBEC IRL) live projects created by the register import that have no scope yet
+ * (`scopeImportAllowed`). Other live projects change their scope on the Scope & sprints page.
+ */
+async function assertImportable(db: Db, project: { id: string; status: string; importedAt: Date | null }) {
+  if (project.status === 'DRAFT') return;
+  const [unitCount, lineCount] = await Promise.all([
+    db.facilityUnit.count({ where: { projectId: project.id } }),
+    db.boqItem.count({ where: { projectId: project.id } }),
+  ]);
+  if (!scopeImportAllowed(project, unitCount, lineCount)) {
     throw new AppError(
-      'Needs assessment import is for draft projects. On a live project, change the scope on the Scope & sprints page (every change is audited).',
+      'Needs assessment import is for draft projects (and imported projects without scope). On a live project, change the scope on the Scope & sprints page (every change is audited).',
       409,
       'SCOPE_IMPORT_LIVE_PROJECT'
     );
@@ -323,7 +361,7 @@ function assertDraft(project: { status: string }) {
 
 async function analyse(db: Db, projectId: string, buffer: Buffer, fileName: string | null): Promise<Analysis> {
   const project = await loadProject(db, projectId);
-  assertDraft(project);
+  await assertImportable(db, project);
   const facilities = await tenantFacilities(db, project.tenantId);
   const used = await db.facilityUnit.findMany({ where: { projectId }, select: { facilityId: true }, distinct: ['facilityId'] });
   const parsed = await parseScopeWorkbook(buffer, { facilities, allowedRetiredFacilityIds: new Set(used.map((u) => u.facilityId)) });
@@ -437,7 +475,7 @@ export async function confirmScopeImport(projectId: string, webUser: WebJwtPaylo
     throw new AppError('This is not the file that was previewed. Preview it again before importing.', 409, 'SCOPE_IMPORT_FILE_CHANGED');
   }
   // Refuse a live project before taking the lock (the transaction re-checks).
-  assertDraft(await loadProject(prisma, projectId));
+  await assertImportable(prisma, await loadProject(prisma, projectId));
   let filled: string[] = [];
   await runScopeWrite(projectId, webUser, async (ctx) => {
     const { tx } = ctx;
@@ -502,6 +540,11 @@ export async function confirmScopeImport(projectId: string, webUser: WebJwtPaylo
     }
     if (fill.apply.projectTypeId) {
       await applyProjectTypeToProject(tx, project, fill.apply.projectTypeId, webUser);
+    }
+    // UBEC IRL: an imported live project's first scope brings its sprints: the type's sprint-driven
+    // visits are proposed as on a live sprint save.
+    if (project.status === 'ACTIVE' && parsed.sprints.length) {
+      await proposeVisitsFromType(tx, projectId, { trigger: 'SPRINTS_SAVED', actor: webVisitActor(webUser) });
     }
 
     const t = preview.totals;
