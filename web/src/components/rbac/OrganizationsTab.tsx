@@ -1,6 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { z } from 'zod';
+import { Controller } from 'react-hook-form';
 import { Archive, Building2, ChevronDown, ChevronRight, Pencil, Plus, RotateCcw } from 'lucide-react';
 import {
+  CreateOrganizationRequestSchema,
   ORGANIZATION_CATEGORY_META,
   OrganizationCategoryEnum,
   organizationDescendants,
@@ -9,6 +12,7 @@ import {
   type OrganizationDto,
 } from '@insite/shared';
 import { useAuth } from '../../lib/auth-context';
+import { SubmitButton, useZodForm, visibleError } from '../../lib/forms';
 import { Overlay } from '../common/Overlay';
 import { useOrganizationsQuery } from '../../queries/organizations/useOrganizationQueries';
 import {
@@ -26,17 +30,33 @@ import {
 
 const ALL_TAGS = OrganizationCategoryEnum.options;
 
-type FieldErrors = Partial<Record<'name' | 'categories' | 'registrationNumber' | 'contactEmail' | 'contactPhone', string>>;
+type FieldKey = 'name' | 'categories' | 'registrationNumber' | 'contactEmail' | 'contactPhone' | 'parentOrganizationId';
 
-interface FormState {
-  name: string;
-  categories: OrganizationCategory[];
-  registrationNumber: string;
-  contactEmail: string;
-  contactPhone: string;
-  /** Phase 11: '' for a top-level organisation. */
-  parentOrganizationId: string;
-}
+/** The drawer's inputs, mapped to CreateOrganizationRequestSchema (an update sends the same fields). */
+const OrganizationFormSchema = z
+  .object({
+    name: z.string().trim().min(2, 'Enter the organisation name (at least 2 characters)').max(160, 'Name is too long (at most 160 characters)'),
+    categories: z.array(OrganizationCategoryEnum).min(1, 'Choose at least one tag'),
+    registrationNumber: z.string().trim().max(64, 'Registration number is too long (at most 64 characters)'),
+    contactEmail: z
+      .string()
+      .trim()
+      .max(200, 'Email is too long (at most 200 characters)')
+      .refine((v) => !v || z.string().email().safeParse(v).success, 'Enter a valid email, or leave it empty'),
+    contactPhone: z.string().trim().max(32, 'Phone is too long (at most 32 characters)'),
+    /** Phase 11: '' for a top-level organisation. */
+    parentOrganizationId: z.string(),
+  })
+  .transform((v) => ({
+    name: v.name,
+    categories: v.categories,
+    registrationNumber: v.registrationNumber || null,
+    contactEmail: v.contactEmail || null,
+    contactPhone: v.contactPhone || null,
+    parentOrganizationId: v.parentOrganizationId || null,
+  }))
+  .pipe(CreateOrganizationRequestSchema);
+type FormState = z.input<typeof OrganizationFormSchema>;
 
 const emptyForm: FormState = {
   name: '',
@@ -122,18 +142,19 @@ export function OrganizationsTab() {
   const updateMutation = useUpdateOrganizationMutation();
 
   const [drawer, setDrawer] = useState<{ mode: 'create' } | { mode: 'edit'; org: OrganizationDto } | null>(null);
-  const [form, setForm] = useState<FormState>(emptyForm);
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const orgForm = useZodForm(OrganizationFormSchema, { defaultValues: emptyForm });
+  const form = orgForm.watch();
+  const errorKeys: FieldKey[] = ['name', 'categories', 'registrationNumber', 'contactEmail', 'contactPhone', 'parentOrganizationId'];
+  const errors: Partial<Record<FieldKey, string>> = Object.fromEntries(errorKeys.map((k) => [k, visibleError(orgForm, k)]));
   const [confirming, setConfirming] = useState<OrganizationDto | null>(null);
 
   const openCreate = () => {
-    setForm({ ...emptyForm, categories: tagFilter ? [tagFilter] : [] });
-    setErrors({});
+    orgForm.reset({ ...emptyForm, categories: tagFilter ? [tagFilter] : [] });
     setDrawer({ mode: 'create' });
   };
 
   const openEdit = (org: OrganizationDto) => {
-    setForm({
+    orgForm.reset({
       name: org.name,
       categories: [...org.categories],
       registrationNumber: org.registrationNumber ?? '',
@@ -141,43 +162,31 @@ export function OrganizationsTab() {
       contactPhone: org.contactPhone ?? '',
       parentOrganizationId: org.parentOrganizationId ?? '',
     });
-    setErrors({});
     setDrawer({ mode: 'edit', org });
   };
 
-  const toggleTag = (tag: OrganizationCategory) =>
-    setForm((f) => ({
-      ...f,
-      categories: f.categories.includes(tag) ? f.categories.filter((t) => t !== tag) : [...f.categories, tag],
-    }));
+  const toggleTag = (tag: OrganizationCategory) => {
+    const current = orgForm.getValues('categories');
+    orgForm.setValue('categories', current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag], {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = orgForm.handleSubmit(async (payload) => {
     if (!drawer) return;
-    const local: FieldErrors = {};
-    if (form.name.trim().length < 2) local.name = 'Enter at least 2 characters';
-    if (form.categories.length === 0) local.categories = 'Choose at least one tag';
-    if (Object.keys(local).length) {
-      setErrors(local);
-      return;
-    }
-    const payload = {
-      name: form.name.trim(),
-      categories: form.categories,
-      registrationNumber: form.registrationNumber.trim() || null,
-      contactEmail: form.contactEmail.trim() || null,
-      contactPhone: form.contactPhone.trim() || null,
-      parentOrganizationId: form.parentOrganizationId || null,
-    };
     try {
       if (drawer.mode === 'create') await createMutation.mutateAsync(payload);
       else await updateMutation.mutateAsync({ organizationId: drawer.org.id, payload });
       setDrawer(null);
     } catch (err) {
       // The mutation hook shows the toast; keep the drawer open with field errors.
-      setErrors(serverFieldErrors(err) as FieldErrors);
+      for (const [key, message] of Object.entries(serverFieldErrors(err))) {
+        if (errorKeys.includes(key as FieldKey)) orgForm.setError(key as FieldKey, { type: 'server', message });
+      }
     }
-  };
+  });
 
   const handleArchiveToggle = async () => {
     if (!confirming) return;
@@ -300,7 +309,7 @@ export function OrganizationsTab() {
             Organisations
           </span>
         }
-        subtitle="Monitors, lenders, contractors and other parties used on projects and user accounts."
+        subtitle="Owners, monitors, funders, contractors and other parties used on projects and user accounts."
         headerActions={
           canManage ? (
             <button
@@ -383,14 +392,14 @@ export function OrganizationsTab() {
                 <input
                   id="org-name"
                   type="text"
-                  value={form.name}
+                  {...orgForm.register('name')}
                   maxLength={160}
                   autoFocus
                   aria-invalid={Boolean(errors.name)}
-                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  aria-describedby={errors.name ? 'org-name-error' : undefined}
                   className={fieldClass(Boolean(errors.name))}
                 />
-                {errors.name && <p className="text-[11px] text-rose-600 mt-1">{errors.name}</p>}
+                {errors.name && <p id="org-name-error" className="text-[11px] text-rose-600 mt-1">{errors.name}</p>}
               </div>
 
               <fieldset>
@@ -429,10 +438,10 @@ export function OrganizationsTab() {
                 <input
                   id="org-reg"
                   type="text"
-                  value={form.registrationNumber}
+                  {...orgForm.register('registrationNumber')}
                   maxLength={64}
                   placeholder="e.g. RC 123456"
-                  onChange={(e) => setForm((f) => ({ ...f, registrationNumber: e.target.value }))}
+                  aria-invalid={Boolean(errors.registrationNumber)}
                   className={fieldClass(Boolean(errors.registrationNumber))}
                 />
                 {errors.registrationNumber && (
@@ -448,9 +457,9 @@ export function OrganizationsTab() {
                   <input
                     id="org-email"
                     type="email"
-                    value={form.contactEmail}
+                    {...orgForm.register('contactEmail')}
                     maxLength={200}
-                    onChange={(e) => setForm((f) => ({ ...f, contactEmail: e.target.value }))}
+                    aria-invalid={Boolean(errors.contactEmail)}
                     className={fieldClass(Boolean(errors.contactEmail))}
                   />
                   {errors.contactEmail && <p className="text-[11px] text-rose-600 mt-1">{errors.contactEmail}</p>}
@@ -462,9 +471,9 @@ export function OrganizationsTab() {
                   <input
                     id="org-phone"
                     type="tel"
-                    value={form.contactPhone}
+                    {...orgForm.register('contactPhone')}
                     maxLength={32}
-                    onChange={(e) => setForm((f) => ({ ...f, contactPhone: e.target.value }))}
+                    aria-invalid={Boolean(errors.contactPhone)}
                     className={fieldClass(Boolean(errors.contactPhone))}
                   />
                   {errors.contactPhone && <p className="text-[11px] text-rose-600 mt-1">{errors.contactPhone}</p>}
@@ -473,9 +482,13 @@ export function OrganizationsTab() {
 
               <div className="text-xs">
                 <p className="block font-semibold text-slate-700 mb-1">Part of (parent organisation)</p>
+                <Controller
+                  control={orgForm.control}
+                  name="parentOrganizationId"
+                  render={({ field }) => (
                 <CustomSelect
-                  value={form.parentOrganizationId}
-                  onChange={(v) => setForm((f) => ({ ...f, parentOrganizationId: v }))}
+                  value={field.value}
+                  onChange={(v) => field.onChange(v)}
                   options={[
                     { value: '', label: 'None (top level)' },
                     ...orgs
@@ -489,12 +502,14 @@ export function OrganizationsTab() {
                   searchable
                   size="sm"
                 />
+                  )}
+                />
                 <p className="text-[11px] text-slate-500 mt-1">
                   A subsidiary sits under its flagship. People with organisation-tree visibility see the projects their organisation
                   and everything under it owns. At most five levels.
                 </p>
-                {(errors as Record<string, string>).parentOrganizationId && (
-                  <p className="text-[11px] text-rose-600 mt-1">{(errors as Record<string, string>).parentOrganizationId}</p>
+                {errors.parentOrganizationId && (
+                  <p className="text-[11px] text-rose-600 mt-1">{errors.parentOrganizationId}</p>
                 )}
               </div>
             </div>
@@ -507,13 +522,14 @@ export function OrganizationsTab() {
               >
                 Cancel
               </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 rounded-xl bg-brand-primary text-white text-xs font-semibold hover:bg-brand-hover disabled:opacity-50"
+              <SubmitButton
+                form={orgForm}
+                pending={saving}
+                pendingLabel="Saving..."
+                className="px-4 py-2 rounded-xl bg-brand-primary text-white text-xs font-semibold hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-primary"
               >
-                {saving ? 'Saving...' : drawer.mode === 'create' ? 'Add organisation' : 'Save changes'}
-              </button>
+                {drawer.mode === 'create' ? 'Add organisation' : 'Save changes'}
+              </SubmitButton>
             </div>
           </form>
         </Drawer>

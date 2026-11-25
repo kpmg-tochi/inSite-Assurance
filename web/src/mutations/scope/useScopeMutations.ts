@@ -76,9 +76,9 @@ export const useSaveScopeLineMutation = (projectId: string) =>
 export const useDeleteScopeLineMutation = (projectId: string) =>
   useScopeMutation(projectId, (lineId: string) => deleteScopeLine(projectId, lineId), 'BoQ line removed.', 'Could not remove the line.');
 
-// Redesign R2c: the needs-assessment workbook.
+// Redesign R2c: the needs assessment (.xlsx).
 
-/** Saves the workbook file in the browser. */
+/** Saves the downloaded file in the browser. */
 function saveFile({ blob, fileName }: { blob: Blob; fileName: string }) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -90,30 +90,30 @@ function saveFile({ blob, fileName }: { blob: Blob; fileName: string }) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** The project's workbook, pre-filled with its scope and project details. */
+/** The project's needs assessment, pre-filled with its scope and project details. */
 export const useDownloadScopeWorkbookMutation = (projectId: string) =>
   useMutation({
     mutationFn: () => downloadScopeWorkbook(projectId),
     onSuccess: saveFile,
-    onError: (err) => toast.error(errorMessage(err, 'Could not download the workbook.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not download the needs assessment.')),
   });
 
-/** A blank workbook with the workspace's lists (Settings). */
+/** The blank needs assessment template with the workspace's lists (Forms & facilities). */
 export const useDownloadTenantScopeWorkbookMutation = () =>
   useMutation({
     mutationFn: () => downloadTenantScopeWorkbook(),
     onSuccess: saveFile,
-    onError: (err) => toast.error(errorMessage(err, 'Could not download the workbook.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not download the needs assessment template.')),
   });
 
 /** Parses the file on the server; nothing is saved. */
 export const usePreviewScopeImportMutation = (projectId: string) =>
   useMutation({
     mutationFn: (body: ScopeImportPreviewRequest) => previewScopeImport(projectId, body),
-    onError: (err) => toast.error(errorMessage(err, 'Could not read the workbook.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not read the needs assessment.')),
   });
 
-/** Replaces the draft's scope with the previewed workbook. */
+/** Replaces the draft's scope with the previewed needs assessment. */
 export const useConfirmScopeImportMutation = (projectId: string) => {
   const qc = useQueryClient();
   return useMutation({
@@ -121,10 +121,10 @@ export const useConfirmScopeImportMutation = (projectId: string) => {
     onSuccess: (result) => {
       settle(qc, projectId, result.scope);
       toast.success(
-        `Workbook imported: ${result.scope.totals.lineCount} BoQ line(s) on ${result.scope.totals.unitCount} facility unit(s).` +
+        `Needs assessment imported: ${result.scope.totals.lineCount} BoQ line(s) on ${result.scope.totals.unitCount} facility unit(s).` +
           (result.filledProjectFields.length ? ' Empty project fields were filled from the Project sheet.' : '')
       );
     },
-    onError: (err) => toast.error(errorMessage(err, 'Could not import the workbook.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not import the needs assessment.')),
   });
 };

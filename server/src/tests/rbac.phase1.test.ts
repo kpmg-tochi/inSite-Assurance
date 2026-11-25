@@ -28,7 +28,7 @@ function makeWebUser(overrides: Partial<WebJwtPayload> = {}): WebJwtPayload {
     roleId: 'role-me-lead',
     roleCode: 'ME_EVAL_LEAD',
     roleName: 'Monitoring & Evaluation Lead',
-    permissions: ['projects:view_assigned', 'reports:view_all', 'reports:approve_completion'],
+    permissions: ['projects:view_assigned', 'visits:view', 'visits:review'],
     organizationId: 'org-1111',
     mustChangePassword: false,
     ...overrides,
@@ -53,9 +53,9 @@ describe('Phase 1 Multi-Tenant SaaS & Normalized RBAC', () => {
     assert.equal(hasWebPermission(undefined, 'projects:create'), false);
 
     const meLead = makeWebUser();
-    assert.equal(hasWebPermission(meLead, 'reports:approve_completion'), true);
+    assert.equal(hasWebPermission(meLead, 'visits:review'), true);
     assert.equal(
-      hasWebPermission(meLead, 'tranche:approve_disbursement', 'reports:view_all'),
+      hasWebPermission(meLead, 'tranche:approve_disbursement', 'visits:view'),
       true
     );
     assert.equal(hasWebPermission(meLead, 'roles:create_edit'), false);

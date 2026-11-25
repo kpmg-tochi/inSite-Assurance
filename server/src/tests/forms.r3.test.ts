@@ -323,8 +323,8 @@ describe('Redesign R3: assembleVisitForm', () => {
     assert.ok(!keys.includes('existing-condition'), 'baseline-only field filtered out');
     assert.ok(!keys.includes('delivered-as-specified'), 'final-only field filtered out');
     const workmanship = toilet.fields.find((f) => f.key === 'workmanship-ok')!;
-    assert.equal(workmanship.label, 'Workmanship acceptable on all 3 toilets');
-    assert.equal(workmanship.labelTemplate, 'Workmanship acceptable on all {count} {facility}');
+    assert.equal(workmanship.label, 'Workmanship acceptable (3 toilets)');
+    assert.equal(workmanship.labelTemplate, 'Workmanship acceptable ({count} {facility})');
     assert.equal(workmanship.path, 'f:TOILET/workmanship-ok');
     const photos = toilet.fields.find((f) => f.key === 'progress-photos')!;
     assert.equal(photos.photo?.mode, 'ONE_PER_UNIT');

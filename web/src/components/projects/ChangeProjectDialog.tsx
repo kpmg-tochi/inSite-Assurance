@@ -31,7 +31,7 @@ export function ChangeProjectDialog({ currentProjectId, onClose }: { currentProj
       <div className="overflow-y-auto p-4">
         {isLoading ? (
           <div className="flex justify-center p-10">
-            <Loader />
+            <Loader inline />
           </div>
         ) : isError || !data ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 p-4 text-sm text-rose-700">

@@ -1,11 +1,12 @@
 import React, { useMemo, useState } from "react";
+import { z } from "zod";
 import {
   CONTRACT_MILESTONE_ANCHOR_META,
   ProjectContractStepSchema,
   type ContractMilestoneAnchor,
-  type ProjectContractStep,
   type ProjectSetupDto,
 } from "@insite/shared";
+import { FieldError, visibleError } from "../../../../lib/forms";
 import { useAuth } from "../../../../lib/auth-context";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import { useTenantSettingsQuery } from "../../../../queries/organizations/useOrganizationQueries";
@@ -13,17 +14,16 @@ import { useMilestonesQuery } from "../../../../queries/contracts/useContractQue
 import { apiErrorCode } from "../../../../api/process/processApi";
 import { DaysLeft, MILESTONE_STATUS_META, StatusChip } from "../../../../components/contracts/contractUi";
 import {
-  extractErrors,
-  FieldError,
   inputClass,
   labelClass,
-  NO_ERRORS,
-  parseNumberInput,
+  numberOrNull,
+  setField,
   StepSection,
+  textOrNull,
+  textProps,
   useLatestSetup,
   useRegisterSection,
-  useSyncedState,
-  type FormErrors,
+  useSectionForm,
   type StepProps,
 } from "../setupContext";
 
@@ -46,9 +46,43 @@ function contractFrom(setup: ProjectSetupDto) {
     contractReference: c.contractReference ?? "",
     contractAwardDate: c.contractAwardDate ?? "",
     contractSignedDate: c.contractSignedDate ?? "",
-    contractSum: c.contractSumNgn === null ? "" : String(c.contractSumNgn),
+    contractSumNgn: c.contractSumNgn === null ? "" : String(c.contractSumNgn),
     kickoffDate: c.kickoffDate ?? "",
+    changeReason: "",
   };
+}
+type ContractValues = ReturnType<typeof contractFrom>;
+
+const K = ProjectContractStepSchema.innerType().innerType().shape;
+const DATE_KEYS = ["contractAwardDate", "contractSignedDate", "kickoffDate"] as const;
+
+/**
+ * Form schema: text inputs → `ProjectContractStepSchema` (date order: signed on or after award,
+ * kick-off on or after both). On a live project, moving a date needs a reason (at least 5
+ * characters); the reason is sent only then.
+ */
+function contractFormSchema(opts: { live: boolean; saved: Pick<ContractValues, (typeof DATE_KEYS)[number]> }) {
+  const moved = (v: Pick<ContractValues, (typeof DATE_KEYS)[number]>) => DATE_KEYS.some((k) => (v[k] || "") !== (opts.saved[k] || ""));
+  return z
+    .object({
+      contractReference: textOrNull().pipe(K.contractReference),
+      contractAwardDate: textOrNull().pipe(K.contractAwardDate),
+      contractSignedDate: textOrNull().pipe(K.contractSignedDate),
+      contractSumNgn: numberOrNull("Contract sum").pipe(K.contractSumNgn),
+      kickoffDate: textOrNull().pipe(K.kickoffDate),
+      changeReason: z.string(),
+    })
+    .superRefine((v, ctx) => {
+      const dates = { contractAwardDate: v.contractAwardDate ?? "", contractSignedDate: v.contractSignedDate ?? "", kickoffDate: v.kickoffDate ?? "" };
+      if (opts.live && moved(dates) && v.changeReason.trim().length < 5) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["changeReason"], message: "Say why the dates move (at least 5 characters)" });
+      }
+    })
+    .transform(({ changeReason, ...v }) => {
+      const dates = { contractAwardDate: v.contractAwardDate ?? "", contractSignedDate: v.contractSignedDate ?? "", kickoffDate: v.kickoffDate ?? "" };
+      return { ...v, ...(opts.live && moved(dates) ? { changeReason: changeReason.trim() } : {}) };
+    })
+    .pipe(ProjectContractStepSchema);
 }
 
 export function ContractSection({ projectId, setup, readOnly }: StepProps) {
@@ -58,11 +92,19 @@ export function ContractSection({ projectId, setup, readOnly }: StepProps) {
   const c = setup.contract;
   const live = setup.status !== "DRAFT";
   const initial = useMemo(() => contractFrom(setup), [setup]);
-  const [state, setState, dirty] = useSyncedState(initial);
-  const [changeReason, setChangeReason] = useState("");
-  const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
+  const savedDates = useMemo(
+    () => ({ contractAwardDate: initial.contractAwardDate, contractSignedDate: initial.contractSignedDate, kickoffDate: initial.kickoffDate }),
+    [initial.contractAwardDate, initial.contractSignedDate, initial.kickoffDate]
+  );
+  const schema = useMemo(() => contractFormSchema({ live, saved: savedDates }), [live, savedDates]);
+  // The reason is not part of the saved values: typing one alone does not make the section dirty.
+  const section = useSectionForm(schema, initial, ({ changeReason: _r, ...v }) => JSON.stringify(v));
+  const { form, dirty } = section;
+  const state = section.values as ContractValues;
+  const [general, setGeneral] = useState<string | null>(null);
   const save = useSaveSetupStepMutation(projectId);
   const latest = useLatestSetup(projectId, setup);
+  const err = (name: string) => visibleError(form, name);
   const required = new Set(c.requiredAnchors.map((a) => FIELD_FOR_ANCHOR[a]).filter(Boolean));
   const datesMoved =
     state.contractAwardDate !== initial.contractAwardDate ||
@@ -70,50 +112,32 @@ export function ContractSection({ projectId, setup, readOnly }: StepProps) {
     state.kickoffDate !== initial.kickoffDate;
   const needsReason = live && datesMoved;
   const canMoveDates = !live || hasPermission("milestones:manage");
-  const set = (patch: Partial<typeof state>) => setState((s) => ({ ...s, ...patch }));
 
-  useRegisterSection("contract", dirty, async (opts) => {
-    if (!dirty && !opts?.force) return true;
-    const v = dirty ? state : contractFrom(latest());
-    const fields: Record<string, string> = {};
-    const sum = v.contractSum.trim() ? parseNumberInput(v.contractSum) : null;
-    if (v.contractSum.trim() && (sum === null || sum <= 0)) fields.contractSumNgn = "Enter an amount above zero";
-    if (dirty && needsReason && changeReason.trim().length < 5) fields.changeReason = "Say why the dates move (at least 5 characters)";
-    const body: ProjectContractStep = {
-      contractReference: v.contractReference.trim() || null,
-      contractAwardDate: v.contractAwardDate || null,
-      contractSignedDate: v.contractSignedDate || null,
-      contractSumNgn: sum,
-      kickoffDate: v.kickoffDate || null,
-      ...(dirty && needsReason ? { changeReason: changeReason.trim() } : {}),
-    };
-    const parsed = ProjectContractStepSchema.safeParse(body);
-    if (!parsed.success) {
-      for (const issue of parsed.error.issues) {
-        const key = issue.path.join(".");
-        if (key && !fields[key]) fields[key] = issue.message;
-      }
-    }
-    if (Object.keys(fields).length > 0) {
-      setErrors({ fields, general: "Some fields need attention." });
-      return false;
-    }
-    try {
-      await save.mutateAsync({ sectionId: "contract", body, silent: opts?.silent });
-      setState(contractFrom(latest()));
-      setErrors(NO_ERRORS);
-      setChangeReason("");
-      return true;
-    } catch (err) {
-      const { code } = apiErrorCode(err);
-      if (code === "CHANGE_REASON_REQUIRED") {
-        setErrors({ fields: { changeReason: "Say why the dates move" }, general: "Moving a date on a live project needs a reason." });
+  useRegisterSection(
+    "contract",
+    dirty,
+    async (opts) => {
+      if (!dirty && !opts?.force) return true;
+      const body = await section.submit(dirty ? undefined : contractFrom(latest()));
+      if (!body) return false;
+      try {
+        await save.mutateAsync({ sectionId: "contract", body, silent: opts?.silent });
+        section.reset(contractFrom(latest()));
+        setGeneral(null);
+        return true;
+      } catch (error) {
+        const { code } = apiErrorCode(error);
+        if (code === "CHANGE_REASON_REQUIRED") {
+          form.setError("changeReason", { type: "server", message: "Say why the dates move" });
+          setGeneral("Moving a date on a live project needs a reason.");
+          return false;
+        }
+        setGeneral(section.showServerErrors(error));
         return false;
       }
-      setErrors(extractErrors(err));
-      return false;
-    }
-  });
+    },
+    section
+  );
 
   const dateField = (key: "contractAwardDate" | "contractSignedDate" | "kickoffDate", label: string, help?: string) => (
     <div>
@@ -123,13 +147,13 @@ export function ContractSection({ projectId, setup, readOnly }: StepProps) {
       <input
         id={`contract-${key}`}
         type="date"
-        className={inputClass(Boolean(errors.fields[key]))}
-        value={state[key]}
-        onChange={(e) => set({ [key]: e.target.value } as Partial<typeof state>)}
+        className={inputClass(Boolean(err(key)))}
+        {...textProps(form, key)}
+        onChange={(e) => setField(form, key, e.target.value, true)}
         disabled={readOnly || !canMoveDates}
       />
       {help && <p className="mt-1 text-[11px] text-slate-500">{help}</p>}
-      <FieldError message={errors.fields[key]} />
+      <FieldError form={form} name={key} />
     </div>
   );
 
@@ -143,7 +167,7 @@ export function ContractSection({ projectId, setup, readOnly }: StepProps) {
             : "Contract details for the record. The project type has no contract milestones."
         }
       >
-        {errors.general && <p className="text-xs font-medium text-red-600">{errors.general}</p>}
+        {general && <p className="text-xs font-medium text-red-600">{general}</p>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className={labelClass} htmlFor="contract-ref">
@@ -151,13 +175,12 @@ export function ContractSection({ projectId, setup, readOnly }: StepProps) {
             </label>
             <input
               id="contract-ref"
-              className={inputClass(Boolean(errors.fields.contractReference))}
-              value={state.contractReference}
+              className={inputClass(Boolean(err("contractReference")))}
               maxLength={120}
-              onChange={(e) => set({ contractReference: e.target.value })}
+              {...textProps(form, "contractReference")}
               disabled={readOnly}
             />
-            <FieldError message={errors.fields.contractReference} />
+            <FieldError form={form} name="contractReference" />
           </div>
           <div>
             <label className={labelClass} htmlFor="contract-sum">
@@ -166,12 +189,11 @@ export function ContractSection({ projectId, setup, readOnly }: StepProps) {
             <input
               id="contract-sum"
               inputMode="decimal"
-              className={inputClass(Boolean(errors.fields.contractSumNgn))}
-              value={state.contractSum}
-              onChange={(e) => set({ contractSum: e.target.value })}
+              className={inputClass(Boolean(err("contractSumNgn")))}
+              {...textProps(form, "contractSumNgn")}
               disabled={readOnly}
             />
-            <FieldError message={errors.fields.contractSumNgn} />
+            <FieldError form={form} name="contractSumNgn" />
           </div>
           {dateField("contractAwardDate", "Contract award date")}
           {dateField("contractSignedDate", "Contract signed date", "On or after the award date.")}
@@ -192,14 +214,13 @@ export function ContractSection({ projectId, setup, readOnly }: StepProps) {
             </label>
             <input
               id="contract-reason"
-              className={inputClass(Boolean(errors.fields.changeReason))}
-              value={changeReason}
+              className={inputClass(Boolean(err("changeReason")))}
               maxLength={500}
-              onChange={(e) => setChangeReason(e.target.value)}
+              {...textProps(form, "changeReason")}
               disabled={readOnly}
             />
             <p className="mt-1 text-[11px] text-slate-500">Pending milestones counted from a moved date are re-dated. Completed ones keep their dates. Recorded in the audit ledger.</p>
-            <FieldError message={errors.fields.changeReason} />
+            <FieldError form={form} name="changeReason" />
           </div>
         )}
       </StepSection>

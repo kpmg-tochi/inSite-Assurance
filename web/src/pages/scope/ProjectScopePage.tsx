@@ -7,7 +7,7 @@ import { ProjectStageTabs } from "../../components/projects/ProjectStageTabs";
 /** Redesign R2b: the project's "Scope & sprints" page (replaces "BOQ & hold points"). */
 export function ProjectScopePage({ project }: { project: ProjectSummaryDto }) {
   const { hasPermission } = useAuth();
-  const canEdit = hasPermission("boq:upload_edit") && project.status !== "ARCHIVED";
+  const canEdit = hasPermission("scope:edit") && project.status !== "ARCHIVED";
   return (
     <div className="space-y-4">
       <ProjectStageTabs projectId={project.id} stage={project.stage} />

@@ -72,7 +72,7 @@ export const SETTINGS_ADMIN_PERMISSIONS: readonly string[] = [
  */
 export const STAGE_PAGES = [
   { segment: "kickoff", label: "Kick-off & mobilisation", anyOf: MILESTONE_VIEW_PERMISSIONS },
-  { segment: "scope", label: "Scope & sprints", anyOf: ["boq:view"] as readonly string[] },
+  { segment: "scope", label: "Scope & sprints", anyOf: ["scope:view"] as readonly string[] },
   { segment: "completion", label: "Completion & handover", anyOf: COMPLETION_PAGE_PERMISSIONS },
 ] as const;
 
@@ -140,7 +140,7 @@ export const PROJECT_NAV: readonly NavItem[] = [
     toForProject: (p) => projectPath(p.id, currentStageSegment(p.stage)),
     segments: ["kickoff", "milestones", "scope", "boq", "schedule", "completion", "handover", "retention", "closure"],
     segmentTitles: { kickoff: "Kick-off & mobilisation", scope: "Scope & sprints", completion: "Completion & handover" },
-    anyOf: [...MILESTONE_VIEW_PERMISSIONS, "boq:view", ...COMPLETION_PAGE_PERMISSIONS],
+    anyOf: [...MILESTONE_VIEW_PERMISSIONS, "scope:view", ...COMPLETION_PAGE_PERMISSIONS],
   },
   {
     key: "reports",

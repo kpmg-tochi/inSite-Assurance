@@ -140,7 +140,9 @@ function serializeBase(d: DocumentRow, people: Awaited<ReturnType<typeof peopleF
     signOffCount: currentSignOffs.length,
     signedByMe,
     awaitingSignOff: d.documentType.requiresSignOff && currentSignOffs.length === 0,
-    canSign: Boolean(viewer) && !d.isArchived && !signedByMe && holdsSignOffPermission(viewer!, d.documentType),
+    // Offered only where the type asks for a sign-off (R7: the register no longer shows "Sign off" on "Not needed" rows).
+    canSign:
+      Boolean(viewer) && d.documentType.requiresSignOff && !d.isArchived && !signedByMe && holdsSignOffPermission(viewer!, d.documentType),
   };
 }
 
@@ -577,7 +579,17 @@ export async function storeGeneratedDocument(
  */
 export async function registerUploadedDocumentTx(
   tx: Tx,
-  p: { projectId: string; tenantId: string; typeCode: string; title: string; objectKey: string; note: string | null; uploadedByUserId: string }
+  p: {
+    projectId: string;
+    tenantId: string;
+    typeCode: string;
+    title: string;
+    objectKey: string;
+    note: string | null;
+    uploadedByUserId: string;
+    /** Signs version 1 off in the same transaction (e.g. the officer who attested a signed paper copy). */
+    signOff?: { userId: string; roleId: string | null; organizationId: string | null; statement: string };
+  }
 ): Promise<{ documentId: string; sha256: string }> {
   const file = await inspectUpload(p.projectId, p.tenantId, p.objectKey);
   await ensureDefaultDocumentTypes(tx, p.tenantId);
@@ -598,6 +610,20 @@ export async function registerUploadedDocumentTx(
       versions: { create: { version: 1, ...file, uploadedByUserId: p.uploadedByUserId, note: p.note } },
     },
   });
+  if (p.signOff) {
+    const s = p.signOff;
+    await tx.projectDocumentSignOff.create({
+      data: {
+        documentId: doc.id,
+        version: 1,
+        userId: s.userId,
+        roleId: s.roleId,
+        organizationId: s.organizationId,
+        statement: s.statement,
+        statementHash: signOffStatementHash({ documentId: doc.id, version: 1, versionSha256: file.sha256, userId: s.userId, statement: s.statement }),
+      },
+    });
+  }
   return { documentId: doc.id, sha256: file.sha256 };
 }
 

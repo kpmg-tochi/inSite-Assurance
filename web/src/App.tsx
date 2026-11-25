@@ -12,7 +12,6 @@ import { useGuardedNavigate } from "./lib/navigationGuard";
 import { AppShell } from "./components/AppShell";
 import Loader from "./components/Loader";
 import { LoginPage } from "./pages/auth/LoginPage";
-import { MobileAppPage } from "./pages/public/MobileAppPage";
 import { ProjectOverviewPage } from "./pages/overview/ProjectOverviewPage";
 import { WorkspaceHomePage } from "./pages/dashboard/WorkspaceHomePage";
 import { OrganizationRatingsPage } from "./pages/organizations/OrganizationRatingsPage";
@@ -81,7 +80,7 @@ function ScrollToTopOnNavigate() {
 
 function AuthenticatedWorkspace() {
   const { user, isLoading: authLoading, hasPermission, hasAnyPermission } = useAuth();
-  const canViewReports = hasPermission("reports:view_all");
+  const canViewReports = hasPermission("visits:view");
   // Asks to save first when the setup wizard has unsaved changes (Phase 6).
   const navigate = useGuardedNavigate();
   const location = useLocation();
@@ -139,7 +138,7 @@ function AuthenticatedWorkspace() {
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
-        <Loader size="sm" />
+        <Loader size="sm" inline />
         <span className="text-xs text-slate-500 font-medium">
           Loading {APPLICATION_NAME} Workspace...
         </span>
@@ -242,7 +241,7 @@ function AuthenticatedWorkspace() {
             <Route
               path="projects/:projectId/scope"
               element={
-                <RequirePermission anyOf={["boq:view"]} backTo={projectHome}>
+                <RequirePermission anyOf={["scope:view"]} backTo={projectHome}>
                   <ProjectScopePage project={activeProject} />
                 </RequirePermission>
               }
@@ -319,7 +318,7 @@ function AuthenticatedWorkspace() {
               <div className="bg-white rounded-2xl border border-slate-200/80 p-8 flex flex-col items-center justify-center gap-3 text-xs text-slate-500">
                 {projectsQuery.isLoading ? (
                   <>
-                    <Loader size="sm" />
+                    <Loader size="sm" inline />
                     <span>Loading capital projects...</span>
                   </>
                 ) : (
@@ -361,16 +360,17 @@ function AuthenticatedWorkspace() {
 
 export function App() {
   const { user, isLoading: authLoading } = useAuth();
+  const publicEntry = authLoading ? null : <Navigate to={user ? "/app" : "/login"} replace />;
 
   return (
     <>
       <ScrollToTopOnNavigate />
       <Routes>
-        {/* Public pages (redesign R6f, D-R6.26) */}
-        {/* UBEC rebrand: the portal has no public home page; the root opens the portal (or sign-in). */}
-        <Route path="/" element={<Navigate to="/app" replace />} />
-        <Route path="/about" element={<Navigate to="/app" replace />} />
-        <Route path="/mobile-app" element={<MobileAppPage />} />
+        {/* No public pages (redesign R7, D-R7.15): the old marketing URLs go to sign-in;
+            a signed-in user keeps the normal landing. */}
+        <Route path="/" element={publicEntry} />
+        <Route path="/about" element={publicEntry} />
+        <Route path="/mobile-app" element={publicEntry} />
 
         {/* Login Route */}
         <Route

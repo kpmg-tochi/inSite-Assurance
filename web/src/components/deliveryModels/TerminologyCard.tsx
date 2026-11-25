@@ -1,17 +1,44 @@
-import React, { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { z } from "zod";
 import {
   TERM_MAX_LENGTH,
   TERMINOLOGY_DEFAULTS,
   TERMINOLOGY_KEY_META,
   TERMINOLOGY_KEYS,
+  UpdateTerminologyRequestSchema,
   type TerminologyKey,
   type TerminologyLabels,
 } from "@insite/shared";
 import { useTerminologyQuery } from "../../queries/deliveryModels/useDeliveryModelQueries";
 import { useUpdateTerminologyMutation } from "../../mutations/deliveryModels/useDeliveryModelMutations";
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import Loader from "../Loader";
 
-type Draft = Record<TerminologyKey, { singular: string; plural: string }>;
+const TermInput = z.string().trim().max(TERM_MAX_LENGTH, `Use at most ${TERM_MAX_LENGTH} characters`);
+
+/** One singular/plural pair per key; empty fields use the default word. Mapped to UpdateTerminologyRequestSchema. */
+const TerminologyFormSchema = z
+  .object(
+    Object.fromEntries(TERMINOLOGY_KEYS.map((k) => [k, z.object({ singular: TermInput, plural: TermInput })])) as Record<
+      TerminologyKey,
+      z.ZodObject<{ singular: typeof TermInput; plural: typeof TermInput }>
+    >
+  )
+  .transform((draft) => {
+    const labels: TerminologyLabels = {};
+    for (const k of TERMINOLOGY_KEYS) {
+      const { singular, plural } = draft[k];
+      if (singular) labels[k] = plural ? { singular, plural } : { singular };
+    }
+    return { labels };
+  })
+  .pipe(UpdateTerminologyRequestSchema);
+type Draft = z.input<typeof TerminologyFormSchema>;
+
+const emptyDraft = (labels?: TerminologyLabels): Draft =>
+  Object.fromEntries(
+    TERMINOLOGY_KEYS.map((k) => [k, { singular: labels?.[k]?.singular ?? "", plural: labels?.[k]?.plural ?? "" }])
+  ) as Draft;
 
 /**
  * Phase 11: tenant wording for domain terms. Display only: stored values and API fields
@@ -20,48 +47,34 @@ type Draft = Record<TerminologyKey, { singular: string; plural: string }>;
 export function TerminologyCard() {
   const { data, isLoading } = useTerminologyQuery(true);
   const save = useUpdateTerminologyMutation();
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const form = useZodForm(TerminologyFormSchema, { defaultValues: emptyDraft() });
+  const { register, reset, watch, handleSubmit } = form;
+  const draft = watch();
 
   useEffect(() => {
     if (!data) return;
-    setDraft(
-      Object.fromEntries(
-        TERMINOLOGY_KEYS.map((k) => [k, { singular: data.labels[k]?.singular ?? "", plural: data.labels[k]?.plural ?? "" }])
-      ) as Draft
-    );
-  }, [data]);
+    reset(emptyDraft(data.labels));
+  }, [data, reset]);
 
-  if (isLoading || !data || !draft) {
+  if (isLoading || !data) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200/80 p-6 flex justify-center">
-        <Loader size="sm" />
+        <Loader size="sm" inline />
       </div>
     );
   }
 
-  const set = (k: TerminologyKey, field: "singular" | "plural", value: string) =>
-    setDraft((d) => (d ? { ...d, [k]: { ...d[k], [field]: value } } : d));
-
-  const handleSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    const labels: TerminologyLabels = {};
-    for (const k of TERMINOLOGY_KEYS) {
-      const singular = draft[k].singular.trim();
-      const plural = draft[k].plural.trim();
-      if (singular) labels[k] = plural ? { singular, plural } : { singular };
-    }
-    save.mutate({ labels });
-  };
+  const onSave = handleSubmit((payload) => save.mutate(payload));
 
   // Live preview of a few sentences with the draft words.
   const word = (k: TerminologyKey, plural = false) => {
-    const d = draft[k];
+    const d = draft[k] ?? { singular: "", plural: "" };
     const singular = d.singular.trim() || TERMINOLOGY_DEFAULTS[k].singular;
     return plural ? d.plural.trim() || (d.singular.trim() ? singular : TERMINOLOGY_DEFAULTS[k].plural) : singular;
   };
 
   return (
-    <form onSubmit={handleSave} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-4">
+    <form onSubmit={onSave} noValidate className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-4">
       <div>
         <h3 className="text-sm font-bold text-slate-900">Terminology</h3>
         <p className="text-xs text-slate-500 mt-0.5">
@@ -71,35 +84,43 @@ export function TerminologyCard() {
       </div>
 
       <div className="grid grid-cols-1 gap-2">
-        {TERMINOLOGY_KEYS.map((k) => (
-          <div key={k} className="grid grid-cols-1 md:grid-cols-[220px_1fr_1fr] gap-2 items-start rounded-xl border border-slate-200 p-3 text-xs">
-            <div>
-              <p className="font-semibold text-slate-800">{TERMINOLOGY_KEY_META[k].label}</p>
-              <p className="text-[11px] text-slate-500">{TERMINOLOGY_KEY_META[k].description}</p>
+        {TERMINOLOGY_KEYS.map((k) => {
+          const singularName = `${k}.singular` as const;
+          const pluralName = `${k}.plural` as const;
+          const hasSingular = Boolean(draft[k]?.singular.trim());
+          return (
+            <div key={k} className="grid grid-cols-1 md:grid-cols-[220px_1fr_1fr] gap-2 items-start rounded-xl border border-slate-200 p-3 text-xs">
+              <div>
+                <p className="font-semibold text-slate-800">{TERMINOLOGY_KEY_META[k].label}</p>
+                <p className="text-[11px] text-slate-500">{TERMINOLOGY_KEY_META[k].description}</p>
+              </div>
+              <label className="block font-medium text-slate-700">
+                Singular
+                <input
+                  {...register(singularName)}
+                  {...fieldA11y(form, singularName)}
+                  maxLength={TERM_MAX_LENGTH}
+                  placeholder={TERMINOLOGY_DEFAULTS[k].singular}
+                  className={`mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 ${invalidClass(form, singularName)}`}
+                />
+                <FieldError form={form} name={singularName} />
+              </label>
+              <label className="block font-medium text-slate-700">
+                Plural
+                <input
+                  {...register(pluralName)}
+                  {...fieldA11y(form, pluralName)}
+                  maxLength={TERM_MAX_LENGTH}
+                  placeholder={draft[k]?.singular.trim() || TERMINOLOGY_DEFAULTS[k].plural}
+                  readOnly={!hasSingular}
+                  aria-disabled={!hasSingular || undefined}
+                  className={`mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 read-only:bg-slate-50 ${invalidClass(form, pluralName)}`}
+                />
+                <FieldError form={form} name={pluralName} />
+              </label>
             </div>
-            <label className="block font-medium text-slate-700">
-              Singular
-              <input
-                value={draft[k].singular}
-                maxLength={TERM_MAX_LENGTH}
-                placeholder={TERMINOLOGY_DEFAULTS[k].singular}
-                onChange={(e) => set(k, "singular", e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5"
-              />
-            </label>
-            <label className="block font-medium text-slate-700">
-              Plural
-              <input
-                value={draft[k].plural}
-                maxLength={TERM_MAX_LENGTH}
-                placeholder={draft[k].singular.trim() || TERMINOLOGY_DEFAULTS[k].plural}
-                disabled={!draft[k].singular.trim()}
-                onChange={(e) => set(k, "plural", e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 disabled:bg-slate-50"
-              />
-            </label>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3 text-xs text-slate-700 space-y-1">
@@ -112,13 +133,14 @@ export function TerminologyCard() {
       </div>
 
       <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={save.isPending}
-          className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm disabled:opacity-50"
+        <SubmitButton
+          form={form}
+          pending={save.isPending}
+          pendingLabel="Saving..."
+          className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-primary"
         >
-          {save.isPending ? "Saving..." : "Save terminology"}
-        </button>
+          Save terminology
+        </SubmitButton>
       </div>
     </form>
   );

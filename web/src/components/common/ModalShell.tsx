@@ -113,15 +113,19 @@ export function ModalActions({
   pendingLabel,
   isPending,
   disabled,
+  disabledHint = "Complete the required fields to continue.",
 }: {
   onCancel: () => void;
   submitLabel: string;
   pendingLabel: string;
   isPending: boolean;
   disabled?: boolean;
+  /** Shown beside the buttons while `disabled` (and not pending): why the submit is unavailable. Pass "" to hide. */
+  disabledHint?: string;
 }) {
   return (
-    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+    <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-slate-100">
+      {disabled && !isPending && disabledHint && <span className="mr-auto text-[11px] text-slate-500">{disabledHint}</span>}
       <button
         type="button"
         onClick={onCancel}

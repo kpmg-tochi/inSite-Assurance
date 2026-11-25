@@ -15,13 +15,9 @@ export interface DefaultRoleDefinition {
   permissionKeys: string[];
 }
 
-const FIELD_BASE_PERMISSIONS = [
-  'boq:view',
-  'field:submit_report',
-  'field:raise_incident',
-];
+const FIELD_BASE_PERMISSIONS = ['scope:view', 'visits:view', 'visits:submit'];
 
-export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
+const ROLE_DEFINITIONS: DefaultRoleDefinition[] = [
   {
     name: 'Tenant Super Admin',
     code: 'TENANT_SUPER_ADMIN',
@@ -36,7 +32,7 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
     name: 'Independent Monitor',
     code: 'MONITOR',
     description:
-      'Monitoring and evaluation lead: sets up projects, reviews field reports, runs inspections and drives completion.',
+      'Monitoring and evaluation lead: sets up projects, plans and reviews visits, follows findings and drives completion.',
     surface: 'WEB',
     fieldPersonaType: 'NONE',
     assuranceWeight: 1.0,
@@ -50,23 +46,23 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'projects:manage_standards_docs',
       'facilities:manage', // R2a
       'forms:manage', // R3
-      'boq:view',
-      'boq:upload_edit',
-      'contractors:manage_packages',
-      'schedule:view_variance',
-      'sessions:revoke_device',
-      'reports:view_all',
-      'reports:raise_query',
-      'reports:approve_completion',
+      'scope:view',
+      'scope:edit',
+      'contractors:manage',
+      'sprints:view_status',
+      'users:revoke_device',
+      'visits:view',
+      'visits:review',
+      'incidents:view',
       'payments:view',
       'audit:view_ledger',
       'handover:record_response',
       'handover:review_feedback',
-      'retention:manage_defects',
+      'defects:manage',
       // Phase 14
-      'inspections:submit',
-      'inspections:view',
-      'inspections:manage_findings',
+      'visits:submit',
+      'visits:view',
+      'findings:manage',
       // Redesign R4
       'visits:view',
       'visits:plan',
@@ -99,14 +95,14 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'projects:view_assigned',
       'projects:view_all_tenant',
       'projects:view_portfolio',
-      'boq:view',
-      'schedule:view_variance',
-      'reports:view_all',
+      'scope:view',
+      'sprints:view_status',
+      'visits:view',
       'payments:view',
       'payments:record',
       'audit:view_ledger',
       'handover:review_feedback',
-      'inspections:view',
+      'visits:view',
       'visits:view', // R4
       // Phase 13
       'documents:view',
@@ -131,12 +127,12 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
       'projects:view_assigned',
       'projects:view_organization_tree',
       'projects:view_portfolio',
-      'boq:view',
-      'schedule:view_variance',
-      'reports:view_all',
+      'scope:view',
+      'sprints:view_status',
+      'visits:view',
       'payments:view',
       'audit:view_ledger',
-      'inspections:view',
+      'visits:view',
       // Redesign R4
       'visits:view',
       'findings:receive_escalations',
@@ -164,21 +160,27 @@ export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = [
     name: 'Monitor Inspector (Visiting QS / COREN)',
     code: 'MONITOR_INSPECTOR',
     description:
-      'Visiting Quantity Surveyor or COREN Engineer from the independent monitoring firm (corroboration weight 1.0).',
+      'Visiting Quantity Surveyor or COREN Engineer from the independent monitoring firm: carries out visits on the field app.',
     surface: 'MOBILE',
     fieldPersonaType: 'INDEPENDENT_VERIFIER',
     assuranceWeight: 1.0,
     // Phase 10: verifiers check and close defect rectification during the liability period.
-    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'retention:manage_defects', 'inspections:submit', 'inspections:manage_findings', 'visits:view', 'visits:submit'],
+    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'defects:manage', 'findings:manage'],
   },
   {
     name: 'Independent Resident Clerk of Works',
     code: 'INDEPENDENT_RESIDENT',
     description:
-      'Full-time on-site Resident Clerk of Works or M&E officer overseeing daily quality and compliance (weight 0.85).',
+      'Full-time on-site resident supervisor: carries out visits and keeps the site log on the field app.',
     surface: 'MOBILE',
     fieldPersonaType: 'INDEPENDENT_VERIFIER',
     assuranceWeight: 0.85,
-    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'retention:manage_defects', 'inspections:submit', 'inspections:manage_findings', 'visits:view', 'visits:submit'],
+    permissionKeys: [...FIELD_BASE_PERMISSIONS, 'defects:manage', 'findings:manage'],
   },
 ];
+
+/** Keys are de-duplicated: redesign R7a merged several legacy keys into one. */
+export const DEFAULT_TENANT_ROLES: DefaultRoleDefinition[] = ROLE_DEFINITIONS.map((role) => ({
+  ...role,
+  permissionKeys: [...new Set(role.permissionKeys)],
+}));

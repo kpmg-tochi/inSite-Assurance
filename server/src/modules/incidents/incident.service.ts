@@ -161,7 +161,7 @@ export async function listProjectIncidents(params: {
       params.webUser,
       'incidents:view_confidential',
       'audit:view_ledger',
-      'reports:raise_query'
+      'incidents:view'
     )
   ) {
     // Web users without governance oversight do not see confidential reports at all.

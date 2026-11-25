@@ -7,7 +7,7 @@ const capture = '6f1c2d4e-0000-4000-8000-000000000001';
 
 describe('defect work on mobile (Phase 10, staff-only since R1d)', () => {
   it('shows the Defects entry only after construction and with the permission', () => {
-    const perms = ['field:submit_report', 'retention:manage_defects'];
+    const perms = ['visits:submit', 'defects:manage'];
     assert.equal(showDefectsEntry('ACTIVE_CONSTRUCTION', perms), false);
     assert.equal(showDefectsEntry(undefined, perms), false, 'older packs have no phase');
     assert.equal(showDefectsEntry('HANDOVER_IN_PROGRESS', perms), true);
@@ -16,7 +16,7 @@ describe('defect work on mobile (Phase 10, staff-only since R1d)', () => {
   });
 
   it('the project screen shortcut also appears during construction when defects are open (D-R5.15)', () => {
-    const perms = ['retention:manage_defects'];
+    const perms = ['defects:manage'];
     assert.equal(showDefectsShortcut('ACTIVE_CONSTRUCTION', 0, perms), false);
     assert.equal(showDefectsShortcut('ACTIVE_CONSTRUCTION', 2, perms), true);
     assert.equal(showDefectsShortcut('RETENTION_PERIOD', 0, perms), true);

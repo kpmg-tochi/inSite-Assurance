@@ -1,46 +1,66 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useWatch } from "react-hook-form";
+import { z } from "zod";
 import {
   formatMoney,
-  PROJECT_CODE_PREFIX_REGEX,
-  type ProjectBasicsStep,
+  ProjectBasicsStepSchema,
   type ProjectSetupDto,
   type ProjectTypeDto,
   type RegionDto,
 } from "@insite/shared";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import { useTenantSettingsQuery } from "../../../../queries/organizations/useOrganizationQueries";
-import { useProjectTypesQuery, useRegionsQuery } from "../../../../queries/deliveryModels/useDeliveryModelQueries";
-import { CustomSelect } from "../../../../components/common";
 import {
-  extractErrors,
-  FieldError,
+  useProjectTypesQuery,
+  useRegionsQuery,
+} from "../../../../queries/deliveryModels/useDeliveryModelQueries";
+import { CustomSelect } from "../../../../components/common";
+import { FieldError, visibleError, type ZodForm } from "../../../../lib/forms";
+import {
+  choiceOrNull,
+  FieldError as Note,
   inputClass,
   labelClass,
-  NO_ERRORS,
+  numberOrNull,
   parseNumberInput,
+  setField,
   StepSection,
+  textOrNull,
+  textProps,
   useLatestSetup,
   useRegisterSection,
-  useSyncedState,
-  type FormErrors,
+  useSectionForm,
   type StepProps,
 } from "../setupContext";
 
 const NO_TYPES: ProjectTypeDto[] = [];
 const NO_REGIONS: RegionDto[] = [];
 
-export interface BasicsValues {
-  name: string;
-  codePrefix: string;
-  stateLocation: string;
-  lgaLocation: string;
-  description: string;
-  totalBudget: string;
-  /** Phase 11: "" = no type (only when the tenant has none). */
-  projectTypeId: string;
-  /** Phase 11: "" = no region. */
-  regionId: string;
+const S = ProjectBasicsStepSchema.shape;
+
+/**
+ * The basics form schema: the inputs hold text, the output is the request body
+ * (`ProjectBasicsStepSchema`, which the server validates again). A tenant with project types must
+ * give a new draft one (Phase 11).
+ */
+export function basicsFormSchema(opts: { typeRequired: boolean }) {
+  return z.object({
+    name: S.name,
+    codePrefix: S.codePrefix,
+    stateLocation: S.stateLocation,
+    lgaLocation: textOrNull().pipe(S.lgaLocation),
+    description: textOrNull().pipe(S.description),
+    totalBudgetNgn: numberOrNull("Total budget").pipe(S.totalBudgetNgn),
+    /** Phase 11: "" = no type (only when the tenant has none). */
+    projectTypeId: opts.typeRequired
+      ? z.string().min(1, "Choose the delivery model").pipe(S.projectTypeId)
+      : choiceOrNull().pipe(S.projectTypeId),
+    /** Phase 11: "" = no region. */
+    regionId: choiceOrNull().pipe(S.regionId),
+  });
 }
+export type BasicsSchema = ReturnType<typeof basicsFormSchema>;
+export type BasicsValues = z.input<BasicsSchema>;
 
 export const EMPTY_BASICS: BasicsValues = {
   name: "",
@@ -48,53 +68,35 @@ export const EMPTY_BASICS: BasicsValues = {
   stateLocation: "",
   lgaLocation: "",
   description: "",
-  totalBudget: "",
+  totalBudgetNgn: "",
   projectTypeId: "",
   regionId: "",
 };
 
-/** Client-side checks that mirror the server schema, so errors show before a round trip. */
-export function validateBasics(v: BasicsValues): { body: ProjectBasicsStep | null; fields: Record<string, string> } {
-  const fields: Record<string, string> = {};
-  const budget = parseNumberInput(v.totalBudget);
-  if (v.name.trim().length < 3) fields.name = "Enter at least 3 characters";
-  if (!PROJECT_CODE_PREFIX_REGEX.test(v.codePrefix.trim().toUpperCase())) fields.codePrefix = "Format must be e.g. LKK-402";
-  if (v.stateLocation.trim().length < 2) fields.stateLocation = "Enter the state or region";
-  if (budget === null) fields.totalBudgetNgn = "Enter the total budget";
-  else if (budget <= 0) fields.totalBudgetNgn = "Budget must be above zero";
-  if (Object.keys(fields).length > 0) return { body: null, fields };
-  return {
-    body: {
-      name: v.name.trim(),
-      codePrefix: v.codePrefix.trim().toUpperCase(),
-      stateLocation: v.stateLocation.trim(),
-      lgaLocation: v.lgaLocation.trim() || null,
-      description: v.description.trim() || null,
-      totalBudgetNgn: budget!,
-      projectTypeId: v.projectTypeId || null,
-      regionId: v.regionId || null,
-    },
-    fields,
-  };
+/** The basics schema for this tenant: the delivery model is required when it has project types. */
+export function useBasicsSchema(typeLocked: boolean) {
+  const types = useProjectTypesQuery(false).data ?? NO_TYPES;
+  const typeRequired = !typeLocked && types.length > 0;
+  return useMemo(() => basicsFormSchema({ typeRequired }), [typeRequired]);
 }
 
 /** The basics form, shared by the "new project" page and the basics step. */
 export function BasicsForm({
-  values,
-  onChange,
-  errors,
+  form,
+  general,
   disabled,
   codePrefixLocked,
 }: {
-  values: BasicsValues;
-  onChange: (next: BasicsValues) => void;
-  errors: FormErrors;
+  form: ZodForm<BasicsSchema>;
+  /** Section-level message (a failed save). */
+  general?: string | null;
   disabled?: boolean;
   codePrefixLocked?: boolean;
 }) {
   const settings = useTenantSettingsQuery();
   const currency = settings.data?.defaultCurrency ?? "NGN";
-  const budget = parseNumberInput(values.totalBudget);
+  const values = useWatch({ control: form.control }) as BasicsValues;
+  const budget = parseNumberInput(values.totalBudgetNgn ?? "");
   // Phase 11: the delivery model comes first; a tenant with types must pick one.
   const typesQuery = useProjectTypesQuery(false);
   const regionsQuery = useRegionsQuery(false);
@@ -104,10 +106,12 @@ export function BasicsForm({
   useEffect(() => {
     if (values.projectTypeId || typeLocked || types.length === 0) return;
     const preferred = types.find((t) => t.isDefault) ?? types[0];
-    onChange({ ...values, projectTypeId: preferred.id });
-  }, [types, values, typeLocked, onChange]);
+    setField(form, "projectTypeId", preferred.id);
+  }, [types, values.projectTypeId, typeLocked, form]);
   const regionOptions = useMemo(() => {
-    const top = regions.filter((r) => !r.parentRegionId).sort((a, b) => a.name.localeCompare(b.name));
+    const top = regions
+      .filter((r) => !r.parentRegionId)
+      .sort((a, b) => a.name.localeCompare(b.name));
     return [
       { value: "", label: "No region" },
       ...top.flatMap((r) => [
@@ -119,18 +123,27 @@ export function BasicsForm({
       ]),
     ];
   }, [regions]);
-  const set = (key: keyof BasicsValues) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    onChange({ ...values, [key]: key === "codePrefix" ? e.target.value.toUpperCase() : e.target.value });
+  const err = (name: string) => visibleError(form, name);
 
   return (
-    <StepSection title="Delivery model and project details" description="The delivery model first: it pre-fills the owner, funder and retention. Then what the project is, where it is, and its budget.">
-      {errors.general && <p className="text-xs font-medium text-red-600">{errors.general}</p>}
+    <StepSection
+      title="Delivery model and project details"
+      description="The delivery model first: it pre-fills the owner, funder and retention. Then what the project is, where it is, and its budget."
+    >
+      {general && (
+        <p className="text-xs font-medium text-red-600">{general}</p>
+      )}
       {types.length > 0 && (
         <div>
           <p className={labelClass} id="basics-type-label">
             Delivery model <span className="text-red-500">*</span>
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2" role="radiogroup" aria-labelledby="basics-type-label">
+          <div
+            className="grid grid-cols-1 md:grid-cols-2 gap-2"
+            role="radiogroup"
+            aria-labelledby="basics-type-label"
+            aria-invalid={err("projectTypeId") ? true : undefined}
+          >
             {types.map((t) => {
               const selected = values.projectTypeId === t.id;
               return (
@@ -140,28 +153,30 @@ export function BasicsForm({
                   role="radio"
                   aria-checked={selected}
                   disabled={disabled || typeLocked}
-                  onClick={() => onChange({ ...values, projectTypeId: t.id })}
+                  onClick={() => setField(form, "projectTypeId", t.id, true)}
                   className={`text-left rounded-xl border p-3 transition disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary ${
-                    selected ? "border-brand-primary bg-brand-primary/5 ring-2 ring-brand-primary/20" : "border-slate-200 hover:border-slate-300"
+                    selected
+                      ? "border-brand-primary bg-brand-primary/5 ring-2 ring-brand-primary/20"
+                      : "border-slate-200 hover:border-slate-300"
                   }`}
                 >
                   <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: t.colour ?? "#94a3b8" }} />
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ background: t.colour ?? "#94a3b8" }}
+                    />
                     {t.name}
                   </span>
-                  {t.description && <span className="mt-1 block text-[11px] text-slate-500">{t.description}</span>}
+                  {t.description && (
+                    <span className="mt-1 block text-[11px] text-slate-500">
+                      {t.description}
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
-          <FieldError
-            message={
-              errors.fields.projectTypeId ??
-              (typeLocked
-                ? "Fixed once the project is active."
-                : "Choosing a type applies its workflow and defaults. Values you already saved are kept.")
-            }
-          />
+          <FieldError form={form} name="projectTypeId" />
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -169,8 +184,14 @@ export function BasicsForm({
           <label className={labelClass} htmlFor="basics-name">
             Project name <span className="text-red-500">*</span>
           </label>
-          <input id="basics-name" className={inputClass(Boolean(errors.fields.name))} value={values.name} onChange={set("name")} disabled={disabled} />
-          <FieldError message={errors.fields.name} />
+          <input
+            id="basics-name"
+            className={inputClass(Boolean(err("name")))}
+            maxLength={200}
+            {...textProps(form, "name")}
+            disabled={disabled}
+          />
+          <FieldError form={form} name="name" />
         </div>
         <div>
           <label className={labelClass} htmlFor="basics-code">
@@ -178,41 +199,54 @@ export function BasicsForm({
           </label>
           <input
             id="basics-code"
-            className={`${inputClass(Boolean(errors.fields.codePrefix))} uppercase font-bold`}
-            value={values.codePrefix}
-            onChange={set("codePrefix")}
+            className={`${inputClass(Boolean(err("codePrefix")))} uppercase font-bold`}
+            {...textProps(form, "codePrefix", (v) => v.toUpperCase())}
             maxLength={7}
             placeholder="ABC-123"
             disabled={disabled || codePrefixLocked}
           />
-          <FieldError
-            message={errors.fields.codePrefix ?? (codePrefixLocked ? "Fixed once the project is active." : null)}
-          />
+          <FieldError form={form} name="codePrefix" />
+          {!err("codePrefix") && codePrefixLocked && (
+            <Note message="Fixed once the project is active." />
+          )}
         </div>
         <div className="md:col-span-2">
           <label className={labelClass} htmlFor="basics-state">
             State or region <span className="text-red-500">*</span>
           </label>
-          <input id="basics-state" className={inputClass(Boolean(errors.fields.stateLocation))} value={values.stateLocation} onChange={set("stateLocation")} disabled={disabled} />
-          <FieldError message={errors.fields.stateLocation} />
+          <input
+            id="basics-state"
+            className={inputClass(Boolean(err("stateLocation")))}
+            maxLength={80}
+            {...textProps(form, "stateLocation")}
+            disabled={disabled}
+          />
+          <FieldError form={form} name="stateLocation" />
         </div>
         <div className="md:col-span-2">
           <label className={labelClass} htmlFor="basics-lga">
             Local government area
           </label>
-          <input id="basics-lga" className={inputClass(Boolean(errors.fields.lgaLocation))} value={values.lgaLocation} onChange={set("lgaLocation")} disabled={disabled} />
+          <input
+            id="basics-lga"
+            className={inputClass(Boolean(err("lgaLocation")))}
+            maxLength={120}
+            {...textProps(form, "lgaLocation")}
+            disabled={disabled}
+          />
+          <FieldError form={form} name="lgaLocation" />
         </div>
         {regions.length > 0 && (
           <div className="md:col-span-2">
             <CustomSelect
               label="Region"
-              value={values.regionId}
-              onChange={(v) => onChange({ ...values, regionId: v })}
+              value={values.regionId ?? ""}
+              onChange={(v) => setField(form, "regionId", v, true)}
               options={regionOptions}
               searchable={regions.length > 8}
               disabled={disabled}
+              error={err("regionId")}
             />
-            <FieldError message={errors.fields.regionId} />
           </div>
         )}
         <div className="md:col-span-2">
@@ -222,15 +256,16 @@ export function BasicsForm({
           <input
             id="basics-budget"
             inputMode="decimal"
-            className={inputClass(Boolean(errors.fields.totalBudgetNgn))}
-            value={values.totalBudget}
-            onChange={set("totalBudget")}
+            className={inputClass(Boolean(err("totalBudgetNgn")))}
+            {...textProps(form, "totalBudgetNgn")}
             disabled={disabled}
           />
           {budget !== null && budget > 0 && (
-            <p className="mt-1 text-[11px] text-slate-500">{formatMoney(budget, { currency })}</p>
+            <p className="mt-1 text-[11px] text-slate-500">
+              {formatMoney(budget, { currency })}
+            </p>
           )}
-          <FieldError message={errors.fields.totalBudgetNgn} />
+          <FieldError form={form} name="totalBudgetNgn" />
         </div>
         <div className="md:col-span-4">
           <label className={labelClass} htmlFor="basics-description">
@@ -239,11 +274,12 @@ export function BasicsForm({
           <textarea
             id="basics-description"
             rows={3}
-            className={inputClass(Boolean(errors.fields.description))}
-            value={values.description}
-            onChange={set("description")}
+            maxLength={1000}
+            className={inputClass(Boolean(err("description")))}
+            {...textProps(form, "description")}
             disabled={disabled}
           />
+          <FieldError form={form} name="description" />
         </div>
       </div>
     </StepSection>
@@ -257,7 +293,10 @@ function basicsFrom(setup: ProjectSetupDto): BasicsValues {
     stateLocation: setup.basics.stateLocation ?? "",
     lgaLocation: setup.basics.lgaLocation ?? "",
     description: setup.basics.description ?? "",
-    totalBudget: setup.basics.totalBudgetNgn === null ? "" : String(setup.basics.totalBudgetNgn),
+    totalBudgetNgn:
+      setup.basics.totalBudgetNgn === null
+        ? ""
+        : String(setup.basics.totalBudgetNgn),
     projectTypeId: setup.basics.projectType?.id ?? "",
     regionId: setup.basics.region?.id ?? "",
   };
@@ -266,51 +305,69 @@ function basicsFrom(setup: ProjectSetupDto): BasicsValues {
 /** Section `basics` (step 1 "Project"): delivery model first, then name, code, location and budget. */
 export function BasicsSection({ projectId, setup, mode, readOnly }: StepProps) {
   const initial = useMemo(() => basicsFrom(setup), [setup]);
-  const [values, setValues, dirty] = useSyncedState(initial);
-  const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
+  const codePrefixLocked = mode === "settings" || setup.status !== "DRAFT";
+  const schema = useBasicsSchema(codePrefixLocked);
+  const section = useSectionForm(schema, initial);
+  const { dirty } = section;
+  const [general, setGeneral] = useState<string | null>(null);
   const save = useSaveSetupStepMutation(projectId);
   const latest = useLatestSetup(projectId, setup);
 
-  useRegisterSection("basics", dirty, async (opts) => {
-    if (!dirty && !opts?.force) return true;
-    const { body, fields } = validateBasics(dirty ? values : basicsFrom(latest()));
-    if (!body) {
-      setErrors({ fields, general: "Some fields need attention." });
-      return false;
-    }
-    try {
-      await save.mutateAsync({ sectionId: "basics", body, silent: opts?.silent });
-      setValues(basicsFrom(latest()));
-      setErrors(NO_ERRORS);
-      return true;
-    } catch (err) {
-      setErrors(extractErrors(err));
-      return false;
-    }
-  });
+  useRegisterSection(
+    "basics",
+    dirty,
+    async (opts) => {
+      if (!dirty && !opts?.force) return true;
+      const body = await section.submit(dirty ? undefined : basicsFrom(latest()));
+      if (!body) return false;
+      try {
+        await save.mutateAsync({
+          sectionId: "basics",
+          body,
+          silent: opts?.silent,
+        });
+        section.reset(basicsFrom(latest()));
+        setGeneral(null);
+        return true;
+      } catch (err) {
+        setGeneral(section.showServerErrors(err));
+        return false;
+      }
+    },
+    section,
+  );
 
   const needs = [
     { label: "Site address", value: setup.basics.siteAddress },
-    { label: "Strategic justification", value: setup.basics.strategicJustification },
+    {
+      label: "Strategic justification",
+      value: setup.basics.strategicJustification,
+    },
     { label: "Assumptions", value: setup.basics.assumptions },
   ].filter((n) => n.value);
   return (
     <>
       <BasicsForm
-        values={values}
-        onChange={setValues}
-        errors={errors}
+        form={section.form}
+        general={general}
         disabled={readOnly}
-        codePrefixLocked={mode === "settings" || setup.status !== "DRAFT"}
+        codePrefixLocked={codePrefixLocked}
       />
       {needs.length > 0 && (
         // Redesign R2c: filled from the needs-assessment workbook; read-only for now.
-        <StepSection title="Needs assessment" description="From the needs-assessment workbook.">
+        <StepSection
+          title="Needs assessment"
+          description="From the needs assessment."
+        >
           <dl className="space-y-3">
             {needs.map((n) => (
               <div key={n.label}>
-                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{n.label}</dt>
-                <dd className="text-xs text-slate-800 whitespace-pre-wrap">{n.value}</dd>
+                <dt className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  {n.label}
+                </dt>
+                <dd className="text-xs text-slate-800 whitespace-pre-wrap">
+                  {n.value}
+                </dd>
               </div>
             ))}
           </dl>

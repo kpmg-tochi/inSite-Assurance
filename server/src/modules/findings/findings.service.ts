@@ -18,20 +18,20 @@ import { toCaptureSummary } from '../../utils/serializers';
  * Findings (Phase 14, generalised in redesign R4d). A finding is raised against the project's
  * contractor from a visit answer that a form rule flags (R3 `findingsToRaise`) or by hand from a visit
  * answer (R5f deleted the Phase 14 inspections and their findings). Staff-only (R1d): staff with
- * `inspections:manage_findings` resolve or dismiss them on the web; open findings are re-checked on the next visits (re-check items in the
+ * `findings:manage` resolve or dismiss them on the web; open findings are re-checked on the next visits (re-check items in the
  * frozen form) and resolve when an accepted visit answers "resolved" with a photo. The model keeps its
  * Phase 14 table and name until R7.
  */
 
 type Tx = Prisma.TransactionClient;
 type Db = Tx | typeof prisma;
-const MANAGE = 'inspections:manage_findings';
+const MANAGE = 'findings:manage';
 
 export const FINDING_INCLUDE = {
   projectContractor: { select: { organization: { select: { id: true, name: true } } } },
   project: { select: { timezone: true } },
-} satisfies Prisma.InspectionFindingInclude;
-type FindingRow = Prisma.InspectionFindingGetPayload<{ include: typeof FINDING_INCLUDE }>;
+} satisfies Prisma.FindingInclude;
+type FindingRow = Prisma.FindingGetPayload<{ include: typeof FINDING_INCLUDE }>;
 
 export interface FindingViewer {
   label: string;
@@ -140,7 +140,7 @@ export async function defaultContractorId(db: Db, projectId: string): Promise<st
 }
 
 async function loadFinding(db: Db, projectId: string, findingId: string): Promise<FindingRow> {
-  const f = await db.inspectionFinding.findFirst({ where: { id: findingId, projectId }, include: FINDING_INCLUDE });
+  const f = await db.finding.findFirst({ where: { id: findingId, projectId }, include: FINDING_INCLUDE });
   if (!f) throw new AppError('Finding not found', 404, 'FINDING_NOT_FOUND');
   return f;
 }
@@ -156,10 +156,10 @@ export async function listInspectionFindings(params: {
   visitId?: string;
 }): Promise<InspectionFindingDto[]> {
   const viewer = await findingViewerFor(params.projectId, params.principal);
-  const where: Prisma.InspectionFindingWhereInput = { projectId: params.projectId };
-  if (params.status) where.status = params.status as Prisma.InspectionFindingWhereInput['status'];
+  const where: Prisma.FindingWhereInput = { projectId: params.projectId };
+  if (params.status) where.status = params.status as Prisma.FindingWhereInput['status'];
   if (params.visitId) where.visitId = params.visitId;
-  const rows = await prisma.inspectionFinding.findMany({ where, include: FINDING_INCLUDE, orderBy: [{ status: 'asc' }, { createdAt: 'desc' }], take: 300 });
+  const rows = await prisma.finding.findMany({ where, include: FINDING_INCLUDE, orderBy: [{ status: 'asc' }, { createdAt: 'desc' }], take: 300 });
   const names = await loadNames(rows);
   return Promise.all(rows.map((r) => serializeFinding(r, viewer, names)));
 }
@@ -192,7 +192,7 @@ export async function raiseVisitFinding(params: {
   const answered = ((Array.isArray(submission.answersJson) ? submission.answersJson : []) as VisitFormAnswer[]).some((a) => a.path === input.path);
   if (!answered) throw new AppError('Findings are raised from answered questions', 422, 'VISIT_QUESTION_NOT_ANSWERED');
   const id = await prisma.$transaction(async (tx) => {
-    const f = await tx.inspectionFinding.create({
+    const f = await tx.finding.create({
       data: {
         projectId,
         visitId,
@@ -243,7 +243,7 @@ export async function resolveInspectionFinding(params: {
     throw new AppError('Photos of a fix are taken on a visit (re-check)', 400, 'CAPTURES_NEED_FIELD_APP');
   }
   await prisma.$transaction(async (tx) => {
-    const updated = await tx.inspectionFinding.updateMany({
+    const updated = await tx.finding.updateMany({
       where: { id: findingId, status: 'OPEN' },
       data: {
         status: 'RESOLVED',
@@ -283,7 +283,7 @@ export async function dismissInspectionFinding(params: {
   }
   const before = await loadFinding(prisma, projectId, findingId);
   await prisma.$transaction(async (tx) => {
-    const updated = await tx.inspectionFinding.updateMany({
+    const updated = await tx.finding.updateMany({
       where: { id: findingId, status: 'OPEN' },
       data: { status: 'DISMISSED', resolvedNotes: input.reason, resolvedByUserId: webUser.userId, resolvedByName: viewer.label, resolvedAt: new Date() },
     });

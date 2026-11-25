@@ -1,5 +1,6 @@
 import React, { useMemo, useRef, useState } from "react";
 import { BookOpen, Download, ExternalLink, FileSpreadsheet, FileUp, Pencil, Plus, Trash2 } from "lucide-react";
+import { z } from "zod";
 import {
   DOCUMENT_MODE_META,
   NEEDS_ASSESSMENT_DOC_TYPE_META,
@@ -12,6 +13,7 @@ import {
 } from "@insite/shared";
 import { useAuth } from "../../../../lib/auth-context";
 import { formatDateShort } from "../../../../lib/formatters";
+import { FieldError, SubmitButton, useZodForm, visibleError } from "../../../../lib/forms";
 import { CustomSelect } from "../../../../components/common";
 import { StandardTable, TableActionButton, TableBadge, type TableColumnDef } from "../../../../components/table";
 import { useConfirmDialog } from "../../../../components/process/ConfirmDialog";
@@ -37,10 +39,17 @@ import {
 } from "../../../../mutations/process/useProcessMutations";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import { useDownloadScopeWorkbookMutation } from "../../../../mutations/scope/useScopeMutations";
-import { extractErrors, inputClass, labelClass, StepSection, useRegisterSection, type StepProps } from "../setupContext";
+import { extractErrors, inputClass, labelClass, setField, StepSection, textProps, useRegisterSection, type StepProps } from "../setupContext";
 
 const MAX_DOC_BYTES = 25 * 1024 * 1024;
 const ACCEPT_DOCS = ".pdf,.doc,.docx,.txt,image/jpeg,image/png,image/webp";
+
+/** The needs-assessment upload: a title (3 to 200 characters) and a type; the file is checked apart. */
+const UploadFormSchema = z.object({
+  title: z.string().trim().min(3, "Give the document a title (at least 3 characters)").max(200, "At most 200 characters"),
+  documentType: NeedsAssessmentDocTypeEnum,
+});
+const EMPTY_UPLOAD: z.input<typeof UploadFormSchema> = { title: "", documentType: "COMMUNITY_NEEDS_ASSESSMENT" };
 
 type EditorState =
   | { kind: "new"; initial: StandardFormValue; library: StandardLibraryEntry | null }
@@ -67,7 +76,7 @@ export function StandardsSection({ projectId, setup, readOnly }: StepProps) {
 
   const standardsQuery = useProjectStandardsQuery(projectId, standardsOn);
   const docsQuery = useNeedsAssessmentsQuery(projectId, docsOn);
-  const scopeQuery = useProjectScopeQuery(projectId, standardsOn && hasPermission("boq:view"));
+  const scopeQuery = useProjectScopeQuery(projectId, standardsOn && hasPermission("scope:view"));
   const createStandard = useCreateStandardMutation(projectId);
   const updateStandard = useUpdateStandardMutation(projectId);
   const deleteStandard = useDeleteStandardMutation(projectId);
@@ -85,9 +94,9 @@ export function StandardsSection({ projectId, setup, readOnly }: StepProps) {
   // Upload form
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
-  const [docTitle, setDocTitle] = useState("");
-  const [docType, setDocType] = useState<NeedsAssessmentDocType>("COMMUNITY_NEEDS_ASSESSMENT");
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const uploadForm = useZodForm(UploadFormSchema, { defaultValues: EMPTY_UPLOAD });
+  const docType = uploadForm.watch("documentType") as NeedsAssessmentDocType;
+  const fileError = !file ? null : file.size > MAX_DOC_BYTES ? "The file is larger than 25 MB." : null;
 
   useRegisterSection("standards", false, async (opts) => {
     if (!opts?.force || !stepStatus) return true;
@@ -176,21 +185,17 @@ export function StandardsSection({ projectId, setup, readOnly }: StepProps) {
     },
   ];
 
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) return setUploadError("Choose a file.");
-    if (file.size > MAX_DOC_BYTES) return setUploadError("The file is larger than 25 MB.");
-    if (docTitle.trim().length < 3) return setUploadError("Give the document a title (at least 3 characters).");
-    setUploadError(null);
+  const handleUpload = uploadForm.handleSubmit(async ({ title, documentType }) => {
+    if (!file || fileError) return;
     try {
-      await uploadDoc.mutateAsync({ file, title: docTitle.trim(), documentType: docType });
+      await uploadDoc.mutateAsync({ file, title, documentType });
       setFile(null);
-      setDocTitle("");
+      uploadForm.reset({ ...EMPTY_UPLOAD, documentType });
       if (fileRef.current) fileRef.current.value = "";
     } catch {
       // Toast from the mutation hook.
     }
-  };
+  });
 
   const docColumns: TableColumnDef<NeedsAssessmentDocumentDto>[] = [
     {
@@ -311,14 +316,14 @@ export function StandardsSection({ projectId, setup, readOnly }: StepProps) {
       {docsOn && (
         <div className="space-y-3">
           {/* Redesign: the needs-assessment workbook (scope, sprints, project details). */}
-          {hasPermission("boq:view") && (
+          {hasPermission("scope:view") && (
             <div className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm">
               <div className="flex items-start gap-3">
                 <FileSpreadsheet className="w-5 h-5 text-brand-primary shrink-0 mt-0.5" />
                 <div>
-                  <h3 className="text-xs font-bold text-slate-900">Needs-assessment workbook</h3>
+                  <h3 className="text-xs font-bold text-slate-900">Needs assessment</h3>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Excel workbook for the project details, facility units, BoQ and sprints, with this workspace's lists
+                    Excel file for the project details, facility units, BoQ and sprints, with this workspace's lists
                     and anything already entered for this project. Fill it in, then import it on the Scope &amp; sprints step.
                   </p>
                 </div>
@@ -329,12 +334,12 @@ export function StandardsSection({ projectId, setup, readOnly }: StepProps) {
                 disabled={workbook.isPending}
                 className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
               >
-                <Download className="w-3.5 h-3.5" /> {workbook.isPending ? "Preparing…" : "Download workbook"}
+                <Download className="w-3.5 h-3.5" /> {workbook.isPending ? "Preparing…" : "Download needs assessment"}
               </button>
             </div>
           )}
           {canManage && (
-            <form onSubmit={handleUpload} className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-3">
+            <form onSubmit={handleUpload} noValidate className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-3">
               <h3 className="text-xs font-bold text-slate-900">Upload a needs-assessment document</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                 <div>
@@ -350,34 +355,48 @@ export function StandardsSection({ projectId, setup, readOnly }: StepProps) {
                     onChange={(e) => {
                       const f = e.target.files?.[0] ?? null;
                       setFile(f);
-                      if (f && !docTitle) setDocTitle(f.name.replace(/\.[^.]+$/, ""));
+                      if (f && !uploadForm.getValues("title")) setField(uploadForm, "title", f.name.replace(/\.[^.]+$/, ""), true);
                     }}
+                    aria-invalid={fileError ? true : undefined}
+                    aria-describedby={fileError ? "na-file-error" : undefined}
                   />
+                  {fileError && (
+                    <p id="na-file-error" className="mt-1 text-xs font-medium text-rose-700">
+                      {fileError}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className={labelClass} htmlFor="na-title">
                     Title
                   </label>
-                  <input id="na-title" className={inputClass()} value={docTitle} maxLength={200} onChange={(e) => setDocTitle(e.target.value)} />
+                  <input id="na-title" className={inputClass(Boolean(visibleError(uploadForm, "title")))} maxLength={200} {...textProps(uploadForm, "title")} />
+                  <FieldError form={uploadForm} name="title" />
                 </div>
                 <CustomSelect
                   label="Document type"
                   value={docType}
-                  onChange={setDocType}
+                  onChange={(v) => setField(uploadForm, "documentType", v, true)}
                   options={NeedsAssessmentDocTypeEnum.options.map((t) => ({ value: t, label: NEEDS_ASSESSMENT_DOC_TYPE_META[t].label }))}
                 />
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className="text-[11px] text-slate-500">PDF, Word or image, up to 25 MB.</span>
-                <button
-                  type="submit"
-                  disabled={uploadDoc.isPending || !file}
-                  className="inline-flex items-center gap-1 rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+                <SubmitButton
+                  form={uploadForm}
+                  pending={uploadDoc.isPending}
+                  blocked={!file || Boolean(fileError)}
+                  pendingLabel={
+                    <>
+                      <FileUp className="w-3.5 h-3.5" /> Uploading…
+                    </>
+                  }
+                  hint="Choose a file and give it a title."
+                  className="inline-flex items-center gap-1 rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand-primary"
                 >
-                  <FileUp className="w-3.5 h-3.5" /> {uploadDoc.isPending ? "Uploading…" : "Upload"}
-                </button>
+                  <FileUp className="w-3.5 h-3.5" /> Upload
+                </SubmitButton>
               </div>
-              {uploadError && <p className="text-[11px] font-medium text-red-600">{uploadError}</p>}
             </form>
           )}
           <StandardTable

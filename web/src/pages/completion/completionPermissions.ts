@@ -20,7 +20,7 @@ export const CLOSURE_VIEW_PERMISSIONS = [
 export const HANDOVER_VIEW_PERMISSIONS = ["handover:record_response", "handover:review_feedback"];
 
 /** Defects tab: the server's defect readers (`GET /projects/:id/defects`). */
-export const DEFECT_VIEW_PERMISSIONS = ["retention:manage_defects", "payments:view", "handover:review_feedback"];
+export const DEFECT_VIEW_PERMISSIONS = ["defects:manage", "payments:view", "handover:review_feedback"];
 
 /** The page: the union of the tabs. The certificate is readable by any of them. */
 export const COMPLETION_PAGE_PERMISSIONS = Array.from(

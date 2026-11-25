@@ -1,3 +1,5 @@
+> **Historical (2026-11-25).** This is the original lender-product specification (field evidence and disbursement reconciliation for financiers). It does not describe the platform on the `UBEC` branch. The current product is programme delivery monitoring for UBEC: read `saas_updates/client_flow_redesign.md` (the spec) and `CLAUDE.md` (how it is built). The text below is kept for history only.
+
 # InSite Assurance: Field Evidence & Disbursement Reconciliation Platform (v2.1 Validated Specification)
 
 > **Validation Note:** This specification distinguishes strictly between **verified market facts** (backed by citations `[S1] to [S27]`), **logical engineering constraints**, and **commercial hypotheses/assumptions** (explicitly marked as `[Assumption: To Validate]`).

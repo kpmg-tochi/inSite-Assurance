@@ -1,3 +1,5 @@
+> **Historical (2026-11-25).** This gap analysis was written on the `saas` branch after Phase 10. The redesign (`client_flow_redesign.md`, R1–R7) superseded most of its gaps and proposals; read it as history.
+
 # Process Flow Fit and Gap Analysis: Central and Co-Funded Delivery Models
 
 **Date:** 2026-11-20

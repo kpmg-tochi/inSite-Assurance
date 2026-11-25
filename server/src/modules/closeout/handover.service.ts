@@ -146,6 +146,10 @@ export async function reviewHandoverSubmission(
     const submission = await tx.handoverSubmission.findFirst({ where: { id: submissionId, projectId } });
     if (!submission) throw new AppError('Handover submission not found', 404, 'HANDOVER_SUBMISSION_NOT_FOUND');
     if (submission.reviewedAt) throw new AppError('This submission has already been reviewed', 409, 'HANDOVER_ALREADY_REVIEWED');
+    // Four eyes: the officer who recorded (and attested) the response may not review it. No bypass.
+    if (submission.recordedByUserId === webUser.userId) {
+      throw new AppError('You recorded this handover response, so another officer must review it.', 409, 'SAME_PERSON_REVIEW');
+    }
     const notes = input.notes ? sanitizeHandoverText(input.notes, 2000) : null;
     await tx.handoverSubmission.update({
       where: { id: submission.id },

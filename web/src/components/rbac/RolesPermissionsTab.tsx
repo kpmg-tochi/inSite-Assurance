@@ -10,13 +10,19 @@ import {
   Sparkles,
   Smartphone,
 } from 'lucide-react';
+import { z } from 'zod';
 import {
+  CreateRoleRequestSchema,
   PERMISSION_CATEGORY_META,
+  RoleSurfaceEnum,
+  UpdateRoleRequestSchema,
+  type CreateRoleRequest,
   type PermissionCategory,
   type PermissionDto,
   type RoleDto,
-  type RoleSurface,
+  type UpdateRoleRequest,
 } from '@insite/shared';
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from '../../lib/forms';
 import {
   usePermissionsCatalogQuery,
   useTenantRolesQuery,
@@ -31,14 +37,81 @@ import Loader from '../Loader';
 
 const CATEGORY_ORDER: PermissionCategory[] = [
   'TENANT_ADMIN',
+  'FORMS_FACILITIES',
   'PORTFOLIO_PROJECTS',
-  'BOQ_SCHEDULE',
-  'MOBILIZATION_ASSURANCE',
-  'FIELD_PRESENCE',
-  'REPORT_APPROVALS',
+  'SCOPE_SPRINTS',
+  'CONTRACT_KICKOFF',
+  'VISITS_FINDINGS',
   'PAYMENTS',
-  'AUDIT_CLOSEOUT',
+  'COMPLETION_CLOSURE',
 ];
+
+const normaliseCode = (code: string) => code.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+
+/** The role builder's inputs. The create/update request schemas decide, after the plain-language checks. */
+const RoleFormSchema = z
+  .object({
+    isEdit: z.boolean(),
+    name: z.string().trim().min(2, 'Enter the role name (at least 2 characters)').max(80, 'Role name is too long (at most 80 characters)'),
+    code: z.string(),
+    description: z.string().max(400, 'Description is too long (at most 400 characters)'),
+    surface: RoleSurfaceEnum,
+    assuranceWeight: z.string(),
+    permissionIds: z.array(z.string()).min(1, 'Select at least one permission'),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.isEdit) {
+      const code = normaliseCode(v.code);
+      if (code.length < 2 || code.length > 40) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['code'], message: 'Enter a system code of 2 to 40 letters, numbers or underscores' });
+      }
+    }
+    const weight = Number(v.assuranceWeight);
+    if (!v.assuranceWeight.trim() || !Number.isFinite(weight) || weight < 0.1 || weight > 1) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['assuranceWeight'], message: 'Enter a weight between 0.1 and 1.0' });
+    }
+    const contract = v.isEdit ? UpdateRoleRequestSchema.safeParse(toUpdatePayload(v)) : CreateRoleRequestSchema.safeParse(toCreatePayload(v));
+    if (!contract.success) {
+      for (const issue of contract.error.issues) ctx.addIssue({ code: z.ZodIssueCode.custom, path: issue.path, message: issue.message });
+    }
+  });
+type RoleFormValues = z.input<typeof RoleFormSchema>;
+
+const roleDefaults = (role: RoleDto | null): RoleFormValues => ({
+  isEdit: Boolean(role),
+  name: role?.name ?? '',
+  code: role?.code ?? '',
+  description: role?.description ?? '',
+  surface: role?.surface ?? 'WEB',
+  assuranceWeight: String(role?.assuranceWeight ?? 1.0),
+  permissionIds: role?.permissions.map((p) => p.id) ?? [],
+});
+
+// Every field (MOBILE/BOTH) role is an independent field role; its people sign in with their account.
+const personaFor = (surface: RoleFormValues['surface']) => (surface === 'WEB' ? 'NONE' : 'INDEPENDENT_VERIFIER');
+
+function toUpdatePayload(v: RoleFormValues): UpdateRoleRequest {
+  return {
+    name: v.name.trim(),
+    description: v.description.trim() || null,
+    surface: v.surface,
+    fieldPersonaType: personaFor(v.surface),
+    assuranceWeight: Number(v.assuranceWeight),
+    permissionIds: v.permissionIds,
+  };
+}
+
+function toCreatePayload(v: RoleFormValues): CreateRoleRequest {
+  return {
+    name: v.name.trim(),
+    code: normaliseCode(v.code),
+    description: v.description.trim() || undefined,
+    surface: v.surface,
+    fieldPersonaType: personaFor(v.surface),
+    assuranceWeight: Number(v.assuranceWeight),
+    permissionIds: v.permissionIds,
+  };
+}
 
 export function RolesPermissionsTab() {
   const { data: roles = [], isLoading: rolesLoading } = useTenantRolesQuery(true);
@@ -52,14 +125,11 @@ export function RolesPermissionsTab() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<RoleDto | null>(null);
 
-  const [name, setName] = useState('');
-  const [code, setCode] = useState('');
-  const [description, setDescription] = useState('');
-  const [surface, setSurface] = useState<RoleSurface>('WEB');
-  const [assuranceWeight, setAssuranceWeight] = useState<number>(1.0);
-  const [selectedPermissionIds, setSelectedPermissionIds] = useState<
-    string[]
-  >([]);
+  const form = useZodForm(RoleFormSchema, { defaultValues: roleDefaults(null) });
+  const surface = form.watch('surface');
+  const selectedPermissionIds = form.watch('permissionIds');
+  const setSelectedPermissionIds = (update: (prev: string[]) => string[]) =>
+    form.setValue('permissionIds', update(form.getValues('permissionIds')), { shouldDirty: true, shouldTouch: true, shouldValidate: true });
 
   const permissionsByCategory = useMemo(() => {
     const grouped: Record<string, PermissionDto[]> = {};
@@ -83,23 +153,13 @@ export function RolesPermissionsTab() {
 
   const openCreateDrawer = () => {
     setEditingRole(null);
-    setName('');
-    setCode('');
-    setDescription('');
-    setSurface('WEB');
-    setAssuranceWeight(1.0);
-    setSelectedPermissionIds([]);
+    form.reset(roleDefaults(null));
     setDrawerOpen(true);
   };
 
   const openEditDrawer = (role: RoleDto) => {
     setEditingRole(role);
-    setName(role.name);
-    setCode(role.code);
-    setDescription(role.description || '');
-    setSurface(role.surface);
-    setAssuranceWeight(role.assuranceWeight);
-    setSelectedPermissionIds(role.permissions.map((p) => p.id));
+    form.reset(roleDefaults(role));
     setDrawerOpen(true);
   };
 
@@ -129,41 +189,14 @@ export function RolesPermissionsTab() {
     }
   };
 
-  // Every field (MOBILE/BOTH) role is an independent field role; its people sign in with their account.
-  const fieldPersonaType = surface === 'WEB' ? 'NONE' : 'INDEPENDENT_VERIFIER';
-
-  const handleSaveRole = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (selectedPermissionIds.length === 0) return;
+  const handleSaveRole = form.handleSubmit(async (values) => {
     if (editingRole) {
-      await updateRoleMutation.mutateAsync({
-        roleId: editingRole.id,
-        payload: {
-          name: name.trim(),
-          description: description.trim() || null,
-          surface,
-          fieldPersonaType,
-          assuranceWeight: Number(assuranceWeight),
-          permissionIds: selectedPermissionIds,
-        },
-      });
+      await updateRoleMutation.mutateAsync({ roleId: editingRole.id, payload: toUpdatePayload(values) });
     } else {
-      const normalizedCode = code
-        .trim()
-        .toUpperCase()
-        .replace(/[^A-Z0-9_]/g, '_');
-      await createRoleMutation.mutateAsync({
-        name: name.trim(),
-        code: normalizedCode,
-        description: description.trim() || undefined,
-        surface,
-        fieldPersonaType,
-        assuranceWeight: Number(assuranceWeight),
-        permissionIds: selectedPermissionIds,
-      });
+      await createRoleMutation.mutateAsync(toCreatePayload(values));
     }
     setDrawerOpen(false);
-  };
+  });
 
   const handleDeleteRole = async (role: RoleDto) => {
     if (role.isSystemDefault) return;
@@ -173,7 +206,7 @@ export function RolesPermissionsTab() {
   if (rolesLoading || catalogLoading) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200/80 p-10 flex items-center justify-center gap-3">
-        <Loader size="sm" />
+        <Loader size="sm" inline />
         <span className="text-xs text-slate-500">
           Loading normalized Role &amp; Permission matrix...
         </span>
@@ -317,7 +350,7 @@ export function RolesPermissionsTab() {
             if (e.target === e.currentTarget) setDrawerOpen(false);
           }}
         >
-          <form onSubmit={handleSaveRole} className="flex flex-col h-full">
+          <form onSubmit={handleSaveRole} noValidate className="flex flex-col h-full">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
             <div>
               <div className="text-[10px] font-bold uppercase tracking-wider text-brand-primary">
@@ -347,12 +380,12 @@ export function RolesPermissionsTab() {
                 </label>
                 <input
                   type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  {...form.register('name')}
+                  {...fieldA11y(form, 'name')}
                   placeholder="e.g. M&E Evaluation Lead"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-primary"
+                  className={`w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-primary ${invalidClass(form, 'name')}`}
                 />
+                <FieldError form={form} name="name" />
               </div>
 
               <div>
@@ -361,17 +394,17 @@ export function RolesPermissionsTab() {
                 </label>
                 <input
                   type="text"
-                  required
-                  disabled={Boolean(editingRole)}
-                  value={code}
-                  onChange={(e) =>
-                    setCode(
-                      e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_')
-                    )
-                  }
+                  readOnly={Boolean(editingRole)}
+                  aria-disabled={Boolean(editingRole) || undefined}
+                  {...form.register('code', {
+                    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+                      form.setValue('code', e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_'), { shouldValidate: true }),
+                  })}
+                  {...fieldA11y(form, 'code')}
                   placeholder="ME_EVAL_LEAD"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-brand-primary disabled:bg-slate-100"
+                  className={`w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:border-brand-primary read-only:bg-slate-100 ${invalidClass(form, 'code')}`}
                 />
+                <FieldError form={form} name="code" />
               </div>
 
               <div>
@@ -379,8 +412,7 @@ export function RolesPermissionsTab() {
                   App Surface
                 </label>
                 <select
-                  value={surface}
-                  onChange={(e) => setSurface(e.target.value as RoleSurface)}
+                  {...form.register('surface')}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-primary"
                 >
                   <option value="WEB">WEB (Portal Workspace)</option>
@@ -400,12 +432,11 @@ export function RolesPermissionsTab() {
                       min={0.1}
                       max={1.0}
                       step={0.1}
-                      value={assuranceWeight}
-                      onChange={(e) =>
-                        setAssuranceWeight(Number(e.target.value))
-                      }
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-primary"
+                      {...form.register('assuranceWeight')}
+                      {...fieldA11y(form, 'assuranceWeight')}
+                      className={`w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-primary ${invalidClass(form, 'assuranceWeight')}`}
                     />
+                    <FieldError form={form} name="assuranceWeight" />
                   </div>
                 </>
               )}
@@ -417,11 +448,12 @@ export function RolesPermissionsTab() {
               </label>
               <input
                 type="text"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                {...form.register('description')}
+                {...fieldA11y(form, 'description')}
                 placeholder="Describe responsibilities for this client role..."
-                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-primary"
+                className={`w-full rounded-xl border border-slate-200 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-primary ${invalidClass(form, 'description')}`}
               />
+              <FieldError form={form} name="description" />
             </div>
 
             {/* Live Unlocked Capabilities Summary */}
@@ -529,18 +561,21 @@ export function RolesPermissionsTab() {
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={isSaving || selectedPermissionIds.length === 0}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm disabled:opacity-50"
+            <SubmitButton
+              form={form}
+              pending={isSaving}
+              hint={selectedPermissionIds.length === 0 ? 'Select at least one permission.' : 'Complete the required fields to continue.'}
+              pendingLabel={
+                <>
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Saving...
+                </>
+              }
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-primary"
             >
               <ShieldCheck className="w-3.5 h-3.5" />
-              {isSaving
-                ? 'Saving...'
-                : editingRole
-                  ? 'Save Role Permissions'
-                  : 'Create Role'}
-            </button>
+              {editingRole ? 'Save Role Permissions' : 'Create Role'}
+            </SubmitButton>
           </div>
         </form>
         </Drawer>

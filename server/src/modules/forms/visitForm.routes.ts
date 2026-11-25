@@ -8,7 +8,7 @@ import { buildVisitForm } from './visitForm.service';
 
 /**
  * Redesign R3c (D-R3.23): preview a project's visit form without storing it. Mounted at
- * /api/v1/projects. R4 swaps `inspections:view` for its visit permission.
+ * /api/v1/projects. R4 swaps `visits:view` for its visit permission.
  */
 const router = guardProjectRoutes(Router());
 
@@ -17,7 +17,7 @@ const wrap = (fn: Handler) => (req: Request, res: Response, next: NextFunction) 
 
 router.post(
   '/:projectId/visit-form/preview',
-  requirePermission('forms:manage', 'inspections:view'),
+  requirePermission('forms:manage', 'visits:view'),
   validateBody(PreviewVisitFormRequestSchema),
   wrap(async (req, res) => {
     const built = await buildVisitForm(prisma, String(req.params.projectId), req.body);

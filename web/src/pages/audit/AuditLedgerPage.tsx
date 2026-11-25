@@ -18,6 +18,19 @@ import { ShieldCheck, X, FileText, User, Tag } from "lucide-react";
 
 type AuditLedgerEntry = AuditTrailResponseDto["entries"][number];
 
+type ActorGroup = "WEB_USER" | "FIELD_AGENT" | "SYSTEM";
+
+/** The ledger's actor type, grouped for the filter and badge (legacy automated entries count as system). */
+function actorGroup(actorType: AuditLedgerEntry["actorType"]): ActorGroup {
+  return actorType === "WEB_USER" ? "WEB_USER" : actorType === "FIELD_AGENT" ? "FIELD_AGENT" : "SYSTEM";
+}
+
+const ACTOR_GROUP_LABEL: Record<ActorGroup, string> = {
+  WEB_USER: "Portal user",
+  FIELD_AGENT: "Field agent",
+  SYSTEM: "System",
+};
+
 interface AuditLedgerPageProps {
   project: ProjectSummaryDto;
 }
@@ -52,17 +65,9 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
         entry.summaryText.toLowerCase().includes(term) ||
         entry.actorType.toLowerCase().includes(term);
 
-      const upperActor = entry.actorType.toUpperCase();
+      // Filter on the ledger's actor type only, never on names or role codes.
       const matchesRole =
-        roleFilter === "ALL" ||
-        (roleFilter === "WEB_USER" &&
-          (upperActor.includes("WEB_USER") ||
-            upperActor.includes("MONITOR") ||
-            upperActor.includes("LENDER") ||
-            upperActor.includes("CONTRACTOR"))) ||
-        (roleFilter === "FIELD_AGENT" && upperActor.includes("FIELD_AGENT")) ||
-        (roleFilter === "SYSTEM" &&
-          (upperActor.includes("SYSTEM") || upperActor.includes("RULES")));
+        roleFilter === "ALL" || actorGroup(entry.actorType) === roleFilter;
 
       return matchesSearch && matchesRole;
     });
@@ -88,18 +93,9 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
         "Authenticated portal user, mobile field officer, or system process that committed the event",
       width: "w-56",
         cell: (entry) => {
-        const upperActor = entry.actorType.toUpperCase();
-        let badgeVariant: "info" | "warning" | "success" | "neutral" = "neutral";
-        if (upperActor.includes("WEB_USER") || upperActor.includes("MONITOR")) {
-          badgeVariant = "info";
-        } else if (
-          upperActor.includes("FIELD_AGENT") ||
-          upperActor.includes("CONTRACTOR")
-        ) {
-          badgeVariant = "warning";
-        } else if (upperActor.includes("LENDER")) {
-          badgeVariant = "success";
-        }
+        const group = actorGroup(entry.actorType);
+        const badgeVariant: "info" | "warning" | "neutral" =
+          group === "WEB_USER" ? "info" : group === "FIELD_AGENT" ? "warning" : "neutral";
 
         return (
           <div className="space-y-1">
@@ -108,7 +104,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
             </div>
             <div>
               <TableBadge variant={badgeVariant}>
-                {entry.actorType.replace(/_/g, " ")}
+                {ACTOR_GROUP_LABEL[group]}
               </TableBadge>
             </div>
           </div>
@@ -190,7 +186,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
 
       {isLoading ? (
         <div className="bg-white rounded-2xl border border-slate-200/80 p-10 flex flex-col items-center justify-center gap-3">
-          <Loader size="sm" />
+          <Loader size="sm" inline />
           <span className="text-xs text-slate-500 font-medium">
             Verifying immutable audit chain...
           </span>
@@ -340,7 +336,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
                   </div>
                 </div>
                 <TableBadge variant="neutral">
-                  {selectedEntry.actorType.replace(/_/g, " ")}
+                  {ACTOR_GROUP_LABEL[actorGroup(selectedEntry.actorType)]}
                 </TableBadge>
               </div>
             </div>

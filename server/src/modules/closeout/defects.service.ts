@@ -21,7 +21,7 @@ import { assertModuleOn, projectToday } from './closeoutGate';
 
 /**
  * Defect tickets for the defects liability period (Phase 10 Step 6), staff-only since redesign R1c/R1d
- * (decision P2: the contractor has no login). Staff with retention:manage_defects raise tickets
+ * (decision P2: the contractor has no login). Staff with defects:manage raise tickets
  * against the project's contractor (one per project, decision T), mark them as passed to the
  * contractor (outside the platform), close them with an officer's site photos (from the field app),
  * reopen a ticket awaiting verification, or reject one as not a defect. Photos are Phase 4 captures,
@@ -31,7 +31,7 @@ import { assertModuleOn, projectToday } from './closeoutGate';
 type Tx = Prisma.TransactionClient;
 type Db = Tx | typeof prisma;
 
-const MANAGE = 'retention:manage_defects';
+const MANAGE = 'defects:manage';
 
 /** Who is acting on a defect: a staff web user or an officer's field session. */
 export interface DefectViewer {
@@ -133,7 +133,7 @@ async function notifySessions(tx: Tx, pushes: PushQueue, projectId: string, sess
   }
 }
 
-/** Staff with retention:manage_defects; optionally the verifiers' devices too. */
+/** Staff with defects:manage; optionally the verifiers' devices too. */
 async function notifyMonitors(
   tx: Tx,
   pushes: PushQueue,

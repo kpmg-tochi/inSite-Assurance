@@ -117,7 +117,7 @@ before(async () => {
 
   // R1d: a web user who sees only assigned projects (LKK-402 and ABJ-108). Contractors have no login.
   const viewPermissions = await prisma.permission.findMany({
-    where: { key: { in: ['projects:view_assigned', 'boq:view'] } },
+    where: { key: { in: ['projects:view_assigned', 'scope:view'] } },
     select: { id: true },
   });
   const limitedRole = await prisma.role.create({

@@ -1,7 +1,25 @@
 import React, { useId, useState } from "react";
+import { z } from "zod";
 import { CheckCircle2, Circle, CornerUpLeft, MinusCircle, Timer } from "lucide-react";
-import type { ApprovalProgressDto, ApprovalProgressStep } from "@insite/shared";
+import { ActOnDefaultCaseRequestSchema, type ApprovalProgressDto, type ApprovalProgressStep } from "@insite/shared";
 import { formatDateTimeShort, formatNaira } from "../../lib/formatters";
+import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
+
+/** Approve (notes optional) or return (what must change, required); the chain action contract decides. */
+const ReviewFormSchema = z
+  .object({
+    decision: z.enum(["APPROVE", "RETURN"]),
+    notes: z.string().max(1500, "Keep the notes under 1500 characters."),
+  })
+  .superRefine((v, ctx) => {
+    if (v.decision === "RETURN" && v.notes.trim().length < 5) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["notes"], message: "Say what must change (at least 5 characters)." });
+    }
+    const contract = ActOnDefaultCaseRequestSchema.safeParse({ decision: v.decision, notes: v.notes.trim() || null });
+    if (!contract.success) {
+      for (const issue of contract.error.issues) ctx.addIssue({ code: z.ZodIssueCode.custom, path: issue.path, message: issue.message });
+    }
+  });
 
 const STATE_STYLE: Record<ApprovalProgressStep["state"], { cls: string; icon: React.ReactNode; label: string }> = {
   DONE: { cls: "border-emerald-200 bg-emerald-50 text-emerald-800", icon: <CheckCircle2 className="w-3.5 h-3.5" />, label: "Approved" },
@@ -30,28 +48,25 @@ export function ApprovalProgressBar({
   /** Hide the review buttons (e.g. the current step is handled by another screen such as release). */
   hideActions?: boolean;
 }) {
-  const [mode, setMode] = useState<"idle" | "approve" | "return">("idle");
-  const [notes, setNotes] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [mode, setModeState] = useState<"idle" | "approve" | "return">("idle");
+  const form = useZodForm(ReviewFormSchema, { defaultValues: { decision: "APPROVE", notes: "" } });
   const notesId = useId();
+  const setMode = (next: "idle" | "approve" | "return") => {
+    setModeState(next);
+    if (next !== "idle") form.setValue("decision", next === "return" ? "RETURN" : "APPROVE", { shouldValidate: true });
+  };
   const steps = [...approval.steps].sort((a, b) => a.stepOrder - b.stepOrder);
   const current = steps.find((s) => s.state === "CURRENT");
 
-  const submit = async () => {
-    const trimmed = notes.trim();
-    if (mode === "return" && trimmed.length < 5) {
-      setError("Say what must change (at least 5 characters).");
-      return;
-    }
-    setError(null);
+  const submit = form.handleSubmit(async (values) => {
     try {
-      await onReview?.(mode === "return" ? "RETURN" : "APPROVE", trimmed || null);
-      setMode("idle");
-      setNotes("");
+      await onReview?.(values.decision, values.notes.trim() || null);
+      setModeState("idle");
+      form.reset({ decision: "APPROVE", notes: "" });
     } catch {
       // The mutation hook shows the error.
     }
-  };
+  });
 
   return (
     <div className="rounded-xl border border-slate-200 p-4 space-y-3">
@@ -133,17 +148,17 @@ export function ApprovalProgressBar({
                 id={notesId}
                 rows={3}
                 maxLength={1500}
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs focus:outline-none focus:border-brand-primary"
+                {...form.register("notes")}
+                {...fieldA11y(form, "notes")}
+                className={`w-full rounded-xl border border-slate-300 px-3 py-2 text-xs focus:outline-none focus:border-brand-primary ${invalidClass(form, "notes")}`}
               />
-              {error && <p className="text-[11px] font-medium text-red-600">{error}</p>}
+              <FieldError form={form} name="notes" className="text-[11px]" />
               <div className="flex gap-2">
                 <button
                   type="button"
-                  disabled={isPending}
-                  onClick={submit}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${
+                  disabled={!canSubmit(form, { pending: isPending })}
+                  onClick={() => void submit()}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed ${
                     mode === "return" ? "bg-rose-600 hover:bg-rose-700" : "bg-emerald-600 hover:bg-emerald-700"
                   }`}
                 >
@@ -152,8 +167,8 @@ export function ApprovalProgressBar({
                 <button
                   type="button"
                   onClick={() => {
-                    setMode("idle");
-                    setError(null);
+                    setModeState("idle");
+                    form.clearErrors();
                   }}
                   className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600"
                 >

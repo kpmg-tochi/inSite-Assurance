@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ISO_WEEKDAY_SHORT, VISIT_KIND_META } from "@insite/shared";
+import { ISO_WEEKDAY_SHORT, ProjectVisitsStepSchema, VISIT_KIND_META } from "@insite/shared";
+import { FieldError } from "../../../../lib/forms";
 import { projectSetupKey } from "../../../../queries/projects/useProjectSetupQueries";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import { useVisitOfficersQuery, useVisitPlanPreviewQuery } from "../../../../queries/visits/useVisitQueries";
@@ -8,15 +9,12 @@ import { useSaveVisitOfficersMutation } from "../../../../mutations/visits/useVi
 import { useAuth } from "../../../../lib/auth-context";
 import Loader from "../../../../components/Loader";
 import {
-  extractErrors,
-  FieldError,
   labelClass,
-  NO_ERRORS,
+  setField,
   StepSection,
   useLatestSetup,
   useRegisterSection,
-  useSyncedState,
-  type FormErrors,
+  useSectionForm,
   type StepProps,
 } from "../setupContext";
 
@@ -28,16 +26,20 @@ import {
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
 
-const daysKey = (d: number[]) => JSON.stringify([...d].sort((a, b) => a - b));
+const daysKey = (v: { workWeekDays: number[] }) => JSON.stringify([...v.workWeekDays].sort((a, b) => a - b));
 
 export function VisitsSection({ projectId, setup, readOnly }: StepProps) {
   const { hasPermission } = useAuth();
   const canPlan = hasPermission("visits:plan");
   const queryClient = useQueryClient();
   const latest = useLatestSetup(projectId, setup);
-  const initialDays = setup.visits.workWeekDays;
-  const [days, setDays, daysDirty] = useSyncedState<number[]>(initialDays, daysKey);
-  const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
+  const initialDays = useMemo(() => ({ workWeekDays: setup.visits.workWeekDays }), [setup.visits.workWeekDays]);
+  // Working days are validated against ProjectVisitsStepSchema (at least one day).
+  const section = useSectionForm(ProjectVisitsStepSchema, initialDays, daysKey);
+  const { form } = section;
+  const days = (section.values as { workWeekDays: number[] }).workWeekDays;
+  const daysDirty = section.dirty;
+  const [general, setGeneral] = useState<string | null>(null);
   const save = useSaveSetupStepMutation(projectId);
   const officers = useVisitOfficersQuery(projectId, canPlan);
   const saveOfficers = useSaveVisitOfficersMutation(projectId);
@@ -47,38 +49,41 @@ export function VisitsSection({ projectId, setup, readOnly }: StepProps) {
   const officersDirty = selected !== null && JSON.stringify(selected) !== JSON.stringify(officers.data?.defaultOfficerIds ?? []);
   const dirty = !readOnly && (daysDirty || officersDirty);
 
-  useRegisterSection("visits", dirty, async (opts) => {
-    if (!dirty && !opts?.force) return true;
-    const workWeekDays = daysDirty ? days : latest().visits.workWeekDays;
-    if (workWeekDays.length === 0) {
-      setErrors({ fields: { workWeekDays: "Pick at least one working day" }, general: null });
-      return false;
-    }
-    try {
-      if (daysDirty || opts?.force) await save.mutateAsync({ sectionId: "visits", body: { workWeekDays }, silent: opts?.silent });
-      if (officersDirty && selected) {
-        await saveOfficers.mutateAsync(selected);
-        // Officers are added to the project team: the Team section must see them.
-        await queryClient.invalidateQueries({ queryKey: projectSetupKey(projectId) });
+  useRegisterSection(
+    "visits",
+    dirty,
+    async (opts) => {
+      if (!dirty && !opts?.force) return true;
+      const body = await section.submit(daysDirty ? undefined : { workWeekDays: latest().visits.workWeekDays });
+      if (!body) return false;
+      try {
+        if (daysDirty || opts?.force) await save.mutateAsync({ sectionId: "visits", body, silent: opts?.silent });
+        if (officersDirty && selected) {
+          await saveOfficers.mutateAsync(selected);
+          // Officers are added to the project team: the Team section must see them.
+          await queryClient.invalidateQueries({ queryKey: projectSetupKey(projectId) });
+        }
+        section.reset({ workWeekDays: latest().visits.workWeekDays });
+        setSelected(null);
+        setGeneral(null);
+        return true;
+      } catch (err) {
+        setGeneral(section.showServerErrors(err));
+        return false;
       }
-      setDays(latest().visits.workWeekDays);
-      setSelected(null);
-      setErrors(NO_ERRORS);
-      return true;
-    } catch (err) {
-      setErrors(extractErrors(err));
-      return false;
-    }
-  });
+    },
+    section
+  );
 
   const byDate = useMemo(() => preview.data?.items ?? [], [preview.data]);
-  const toggleDay = (d: number) => setDays((list) => (list.includes(d) ? list.filter((x) => x !== d) : [...list, d].sort((a, b) => a - b)));
+  const toggleDay = (d: number) =>
+    setField(form, "workWeekDays", days.includes(d) ? days.filter((x) => x !== d) : [...days, d].sort((a, b) => a - b), true);
   const toggleOfficer = (id: string) => setSelected(officerIds.includes(id) ? officerIds.filter((x) => x !== id) : [...officerIds, id]);
 
   return (
     <>
       <StepSection title="Visits" description="Who carries out the visits and on which days of the week. Proposed visits get these officers; the first is the lead.">
-        {errors.general && <p className="text-xs font-medium text-red-600">{errors.general}</p>}
+        {general && <p className="text-xs font-medium text-red-600">{general}</p>}
         <fieldset>
           <legend className={labelClass}>Working days</legend>
           <div className="flex flex-wrap gap-2">
@@ -95,7 +100,7 @@ export function VisitsSection({ projectId, setup, readOnly }: StepProps) {
               </button>
             ))}
           </div>
-          <FieldError message={errors.fields.workWeekDays} />
+          <FieldError form={form} name="workWeekDays" />
         </fieldset>
 
         {canPlan ? (

@@ -20,6 +20,7 @@ import { SYSTEM_ACTOR } from "../modules/contracts/milestones.service";
 import { getProcessConfig, writeChainVersion } from "../modules/process/processConfig.service";
 import { PROGRAMME_TENANT_SLUG } from "./seedPhase11";
 import { LAGOS_ADMIN_EMAIL, UBEC_ADMIN_EMAIL, UBEC_ME_EMAIL, UBEC_ROLE } from "./seedUbecRoster";
+import { DemoDocumentContext, demoDocumentTitle, renderDemoDocument } from "./demoDocuments";
 
 /**
  * Phase 13 seed: document types for every tenant; contract milestone templates, kick-off rules,
@@ -128,7 +129,48 @@ export async function payloadFor(email: string): Promise<WebJwtPayload> {
   };
 }
 
-/** A small PDF-like file for the register (written to local storage in development). */
+/** The specimen context of a seeded project (name, school, contractor, contract dates). */
+export async function projectDocumentContext(projectId: string, date: string): Promise<DemoDocumentContext> {
+  const p = await prisma.project.findUniqueOrThrow({
+    where: { id: projectId },
+    select: {
+      name: true,
+      codePrefix: true,
+      stateLocation: true,
+      lgaLocation: true,
+      contractReference: true,
+      contractSumNgn: true,
+      contractAwardDate: true,
+      contractSignedDate: true,
+      kickoffDate: true,
+      beneficiaries: { where: { isPrimary: true }, select: { name: true }, take: 1 },
+      contractors: { select: { organization: { select: { name: true } } }, take: 1 },
+      sprints: { select: { name: true, startDate: true, endDate: true, deliverables: true }, orderBy: { number: "asc" } },
+    },
+  });
+  return {
+    projectName: p.name,
+    projectCode: p.codePrefix,
+    school: p.beneficiaries[0]?.name ?? null,
+    contractor: p.contractors[0]?.organization.name ?? null,
+    contractReference: p.contractReference,
+    contractSumNgn: p.contractSumNgn === null ? null : Number(p.contractSumNgn),
+    state: p.stateLocation,
+    lga: p.lgaLocation,
+    date,
+    awardDate: p.contractAwardDate,
+    signedDate: p.contractSignedDate,
+    kickoffDate: p.kickoffDate,
+    residentSupervisor: "Musa Danladi",
+    meOfficer: "Ngozi Eze",
+    sprints: p.sprints,
+  };
+}
+
+/**
+ * A register document with a specimen PDF for its type (`demoDocuments.ts`), filled from the
+ * project (written to local storage in development).
+ */
 export async function fileDocument(p: {
   tenantId: string;
   projectId: string;
@@ -137,9 +179,12 @@ export async function fileDocument(p: {
   uploadedByUserId: string;
   projectContractorId?: string | null;
   createdAt: Date;
+  /** Overrides on the project's specimen context (e.g. the kick-off date of the minutes). */
+  context?: DemoDocumentContext;
 }) {
   const type = await prisma.documentType.findUniqueOrThrow({ where: { tenantId_code: { tenantId: p.tenantId, code: p.typeCode } } });
-  const body = Buffer.from(`%PDF-1.4\n% ${p.title} (seeded ${p.createdAt.toISOString()})\n%%EOF\n`, "utf8");
+  const context = { ...(await projectDocumentContext(p.projectId, p.createdAt.toISOString().slice(0, 10))), ...(p.context ?? {}) };
+  const body = await renderDemoDocument(p.typeCode, context);
   const objectKey = `${projectObjectPrefix(p.tenantId, p.projectId)}project_document/seed-${crypto.randomUUID()}.pdf`;
   if (!storageService.isCloudConfigured()) await storageService.putLocalObject(objectKey, body, "application/pdf");
   return prisma.projectDocument.create({
@@ -281,12 +326,13 @@ export async function seedPhase13() {
   });
   const contractor102 = await prisma.projectContractor.findFirstOrThrow({ where: { projectId: prg102.id }, include: { organization: true } });
   const beneficiary102 = await prisma.projectBeneficiary.findFirst({ where: { projectId: prg102.id, isPrimary: true } });
-  await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "CONTRACT", title: "Contract UBEC/DI/2026/102", uploadedByUserId: admin.userId, createdAt: daysAgo(30) });
-  await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "ACCEPTANCE_LETTER", title: "Acceptance of award", uploadedByUserId: admin.userId, createdAt: daysAgo(38) });
-  const minutes102 = await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "KICKOFF_MINUTES", title: "Kick-off meeting minutes", uploadedByUserId: admin.userId, createdAt: daysAgo(15) });
+  await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "CONTRACT", title: demoDocumentTitle("CONTRACT", { contractReference: "UBEC/DI/2026/102" }), uploadedByUserId: admin.userId, createdAt: daysAgo(30) });
+  await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "ACCEPTANCE_LETTER", title: demoDocumentTitle("ACCEPTANCE_LETTER", { contractor: contractor102.organization.name }), uploadedByUserId: admin.userId, createdAt: daysAgo(38) });
+  const minutes102 = await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "KICKOFF_MINUTES", title: demoDocumentTitle("KICKOFF_MINUTES", { kickoffDate: kickoff102 }), uploadedByUserId: admin.userId, createdAt: daysAgo(15) });
   await signDocument(minutes102, admin, daysAgo(14));
   await signDocument(minutes102, monitorUser, daysAgo(13));
-  await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "MOBILISATION_AGREEMENT", title: "Mobilisation agreement", uploadedByUserId: admin.userId, projectContractorId: contractor102.id, createdAt: daysAgo(10) });
+  const agreement102 = await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "MOBILISATION_AGREEMENT", title: demoDocumentTitle("MOBILISATION_AGREEMENT"), uploadedByUserId: admin.userId, projectContractorId: contractor102.id, createdAt: daysAgo(10) });
+  await signDocument(agreement102, admin, daysAgo(9));
   await heldKickoff({
     projectId: prg102.id,
     date: kickoff102,
@@ -318,7 +364,7 @@ export async function seedPhase13() {
     },
   });
   const contractor221 = await prisma.projectContractor.findFirstOrThrow({ where: { projectId: prg221.id }, include: { organization: true } });
-  const minutes221 = await fileDocument({ tenantId: programme.id, projectId: prg221.id, typeCode: "KICKOFF_MINUTES", title: "Kick-off meeting minutes", uploadedByUserId: southAdmin.userId, createdAt: daysAgo(19) });
+  const minutes221 = await fileDocument({ tenantId: programme.id, projectId: prg221.id, typeCode: "KICKOFF_MINUTES", title: demoDocumentTitle("KICKOFF_MINUTES", { kickoffDate: kickoff221 }), uploadedByUserId: southAdmin.userId, createdAt: daysAgo(19) });
   await signDocument(minutes221, southAdmin, daysAgo(18));
   await heldKickoff({
     projectId: prg221.id,
@@ -331,7 +377,7 @@ export async function seedPhase13() {
       { group: "BENEFICIARY", name: "Principal, Ikeja Junior Secondary School", email: null },
     ],
   });
-  await fileDocument({ tenantId: programme.id, projectId: prg221.id, typeCode: "ACCEPTANCE_LETTER", title: "Acceptance of award", uploadedByUserId: southAdmin.userId, createdAt: daysAgo(43) });
+  await fileDocument({ tenantId: programme.id, projectId: prg221.id, typeCode: "ACCEPTANCE_LETTER", title: demoDocumentTitle("ACCEPTANCE_LETTER", { contractor: contractor221.organization.name }), uploadedByUserId: southAdmin.userId, createdAt: daysAgo(43) });
   for (const key of ["acceptance-letter", "minutes-approved"]) {
     const m = await prisma.projectContractMilestone.findFirstOrThrow({ where: { projectId: prg221.id, key } });
     await completeMilestone(prg221.id, m.id, southAdmin, null);

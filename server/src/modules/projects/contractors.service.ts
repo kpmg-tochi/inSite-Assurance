@@ -24,7 +24,7 @@ export const CONTRACTOR_INCLUDE = {
       defectTickets: true,
       documents: true,
       defaultCases: true,
-      inspectionFindings: true,
+      findings: true,
       performanceRatings: true,
     },
   },
@@ -37,7 +37,7 @@ const isoDate = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
 /** Work is recorded against the contractor, so it cannot be removed or moved to another organisation. */
 function hasActivity(c: ContractorRow): boolean {
   const n = c._count;
-  return n.defectTickets + n.documents + n.defaultCases + n.inspectionFindings + n.performanceRatings > 0;
+  return n.defectTickets + n.documents + n.defaultCases + n.findings + n.performanceRatings > 0;
 }
 
 export function serializeContractor(c: ContractorRow): ProjectContractorDto {

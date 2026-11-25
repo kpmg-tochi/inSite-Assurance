@@ -37,7 +37,7 @@ export const UBEC_ROLE = {
  * with their web account, `effectiveMobileRole` returns the main role, and
  * `findOrCreateProvisionedSession` opens a field session per visible project.
  */
-const FIELD_PERMISSIONS = ["field:submit_report", "field:raise_incident", "visits:submit"];
+const FIELD_PERMISSIONS = ["visits:submit"];
 const FIELD_ROLE = { surface: "BOTH" as const, fieldPersonaType: "INDEPENDENT_VERIFIER" as const, assuranceWeight: 1.0 };
 
 /** Default roles the UBEC tenant does not use (no roster user holds them). */
@@ -45,15 +45,13 @@ const UNUSED_DEFAULT_ROLE_CODES = ["LENDER", "MONITOR_INSPECTOR"];
 
 /** What every M&E officer does: visits, findings, documents, handover review, defects, CoC signing. */
 const ME_OFFICER_PERMISSIONS = [
-  "boq:view",
-  "schedule:view_variance",
-  "reports:view_all",
-  "reports:raise_query",
-  "reports:approve_completion",
-  "inspections:view",
-  "inspections:submit",
-  "inspections:manage_findings",
+  "scope:view",
+  "sprints:view_status",
   "visits:view",
+  "visits:review",
+  "incidents:view",
+  "visits:submit",
+  "findings:manage",
   "visits:plan",
   "sprints:verify",
   "findings:receive_escalations",
@@ -61,7 +59,7 @@ const ME_OFFICER_PERMISSIONS = [
   "documents:upload",
   "handover:record_response",
   "handover:review_feedback",
-  "retention:manage_defects",
+  "defects:manage",
   "milestones:manage",
   "completion:sign_certificate",
   "contractors:rate_performance",
@@ -82,7 +80,7 @@ export async function tailorUbecRoles(db: Db, tenantId: string): Promise<void> {
     const missing = keys.filter((k) => !permIds.has(k));
     if (missing.length) throw new Error(`UBEC roles: unknown permissions ${missing.join(", ")}`);
     await db.rolePermission.deleteMany({ where: { roleId } });
-    await db.rolePermission.createMany({ data: keys.map((k) => ({ roleId, permissionId: permIds.get(k)! })) });
+    await db.rolePermission.createMany({ data: [...new Set(keys)].map((k) => ({ roleId, permissionId: permIds.get(k)! })) });
   };
   const byCode = async (code: string) => db.role.findUniqueOrThrow({ where: { tenantId_code: { tenantId, code } } });
 
@@ -118,13 +116,11 @@ export async function tailorUbecRoles(db: Db, tenantId: string): Promise<void> {
   });
   await setPermissions(independent.id, [
     "projects:view_assigned",
-    "boq:view",
-    "schedule:view_variance",
-    "reports:view_all",
-    "reports:raise_query",
-    "inspections:view",
-    "inspections:submit",
+    "scope:view",
+    "sprints:view_status",
     "visits:view",
+    "incidents:view",
+    "visits:submit",
     "documents:view",
     "documents:upload",
     "lessons:view",

@@ -1,10 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { Info } from "lucide-react";
+import { z } from "zod";
 import {
+  ContractDefaultApprovalChainSchema,
   defaultContractDefaultChain,
+  ProjectProcessStepSchema,
   validateApprovalChain,
   type ApprovalStepConfig,
-  type ProjectProcessStep,
+  type ProjectProcessConfig,
 } from "@insite/shared";
 import { CustomSelect, type CustomSelectOption } from "../../../../components/common";
 import { ProcessEditor } from "../../../../components/process/ProcessEditor";
@@ -14,20 +17,40 @@ import { useRoleOptions } from "../../../../components/process/useRoleOptions";
 import {
   chainFromDto,
   draftFromTemplate,
-  sameDraft,
   validateProcessDraft,
   type ProcessDraft,
 } from "../../../../components/process/processState";
 import { useWorkflowTemplatesQuery } from "../../../../queries/process/useProcessQueries";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import {
-  extractErrors,
-  NO_ERRORS,
+  setField,
   StepSection,
   useRegisterSection,
-  type FormErrors,
+  useSectionForm,
   type StepProps,
 } from "../setupContext";
+
+/**
+ * Form schema: the step body (`ProjectProcessStepSchema`: switches and the report chain, checked by
+ * the server's chain validator) plus the contractor default chain (`ContractDefaultApprovalChainSchema`),
+ * which is saved through its own endpoint.
+ */
+const ProcessFormSchema = z.object({
+  workflowTemplateId: ProjectProcessStepSchema.shape.workflowTemplateId,
+  config: ProjectProcessStepSchema.shape.config,
+  reportChain: ProjectProcessStepSchema.shape.reportChain,
+  defaultChain: ContractDefaultApprovalChainSchema,
+});
+
+interface ProcessValues {
+  workflowTemplateId: string | null;
+  config: ProjectProcessConfig;
+  reportChain: ApprovalStepConfig[];
+  defaultChain: ApprovalStepConfig[];
+}
+
+const processKey = (v: ProcessValues) => JSON.stringify([v.workflowTemplateId, v.config, v.reportChain]);
+const chainKey = (v: ProcessValues) => JSON.stringify(v.defaultChain);
 
 /**
  * Section `process` ("Advanced"; redesign R6a, D-R6.9; Phase 7): template, process switches and the report approval chain. Phase 13
@@ -35,41 +58,44 @@ import {
  */
 export function ProcessSection({ projectId, setup, mode, readOnly }: StepProps) {
   const process = setup.process;
-  const initial = useMemo<ProcessDraft>(
+  // Phase 13: the contract default chain. A project without one shows the default (saved only if edited).
+  const initial = useMemo<ProcessValues>(
     () => ({
+      workflowTemplateId: process.workflowTemplateId,
       config: { ...process.config },
       reportChain: chainFromDto(process.reportChain),
+      defaultChain: process.contractDefaultChain?.steps.length
+        ? chainFromDto(process.contractDefaultChain)
+        : defaultContractDefaultChain({ hasOwner: Boolean(setup.parties.owningOrganization) }),
     }),
-    [process]
+    [process, setup.parties.owningOrganization]
   );
-  const [draft, setDraft] = useState<ProcessDraft>(initial);
-  const [templateId, setTemplateId] = useState<string | null>(process.workflowTemplateId);
-  const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
+  const section = useSectionForm(ProcessFormSchema, initial, (v) => JSON.stringify([processKey(v), chainKey(v)]));
+  const { form, dirty } = section;
+  const values = section.values as ProcessValues;
+  const draft: ProcessDraft = { config: values.config, reportChain: values.reportChain };
+  const setDraft = (next: ProcessDraft) => {
+    form.setValue("config", next.config, { shouldDirty: true });
+    setField(form, "reportChain", next.reportChain);
+  };
+  const defaultChain = values.defaultChain;
+  const setDefaultChain = (next: ApprovalStepConfig[]) => setField(form, "defaultChain", next);
+  const [general, setGeneral] = useState<string | null>(null);
   const [templateNote, setTemplateNote] = useState<string | null>(null);
   const save = useSaveSetupStepMutation(projectId);
   const templatesQuery = useWorkflowTemplatesQuery(!readOnly);
   const roles = useRoleOptions(
     process.contractDefaultChain ? [process.reportChain, process.contractDefaultChain] : [process.reportChain]
   );
-  // Phase 13: the contract default chain. A project without one shows the default (saved only if edited).
-  const initialDefaultChain = useMemo<ApprovalStepConfig[]>(
-    () =>
-      process.contractDefaultChain?.steps.length
-        ? chainFromDto(process.contractDefaultChain)
-        : defaultContractDefaultChain({ hasOwner: Boolean(setup.parties.owningOrganization) }),
-    [process.contractDefaultChain, setup.parties.owningOrganization]
-  );
-  const [defaultChain, setDefaultChain] = useState<ApprovalStepConfig[]>(initialDefaultChain);
   const defaultChainIssues = [
     ...validateApprovalChain("CONTRACT_DEFAULT", defaultChain),
     ...defaultChain.flatMap((s, i) => (s.label.trim().length < 2 ? [{ code: "LABEL", message: "Name every step.", stepIndex: i }] : [])),
   ];
-  const defaultChainDirty = JSON.stringify(defaultChain) !== JSON.stringify(initialDefaultChain);
+  const defaultChainDirty = chainKey(values) !== chainKey(initial);
   const saveDefaultChain = useSaveContractDefaultChainMutation(projectId);
   const issues = validateProcessDraft(draft);
   // D-R6.9: optional; filled from the type's workflow template, so an untouched draft has nothing to save.
-  const processDirty = !sameDraft(draft, initial) || templateId !== process.workflowTemplateId;
-  const dirty = processDirty || defaultChainDirty;
+  const processDirty = processKey(values) !== processKey(initial);
 
   const templateOptions = useMemo<CustomSelectOption<string>[]>(
     () => [
@@ -85,50 +111,46 @@ export function ProcessSection({ projectId, setup, mode, readOnly }: StepProps) 
   );
 
   const pickTemplate = (id: string) => {
-    setTemplateId(id || null);
+    form.setValue("workflowTemplateId", id || null, { shouldDirty: true });
     setTemplateNote(null);
     const template = templatesQuery.data?.find((t) => t.id === id);
-    if (!template) return;
+    if (!template) {
+      void form.trigger();
+      return;
+    }
     setDraft(draftFromTemplate(template.config));
   };
 
-  const send = async (silent: boolean | undefined) => {
-    const body: ProjectProcessStep = {
-      workflowTemplateId: templateId,
-      config: draft.config,
-      reportChain: draft.reportChain,
-    };
-    await save.mutateAsync({ sectionId: "process", body, silent });
-  };
-
-  useRegisterSection("process", dirty, async (opts) => {
-    if (!dirty && !opts?.force) return true;
-    if (issues.count > 0 || defaultChainIssues.length > 0) {
-      setErrors({ fields: {}, general: "Fix the approval chain issues shown below before saving." });
-      return false;
-    }
-    if (!processDirty && !opts?.force) return saveDefaultChainOnly(opts?.silent);
-    try {
-      await send(opts?.silent);
-      if (defaultChainDirty) await saveDefaultChain.mutateAsync({ steps: defaultChain, silent: true });
-      setErrors(NO_ERRORS);
-      return true;
-    } catch (err) {
-      setErrors(extractErrors(err));
-      return false;
-    }
-  });
-
-  async function saveDefaultChainOnly(silent?: boolean) {
-    try {
-      await saveDefaultChain.mutateAsync({ steps: defaultChain, silent });
-      setErrors(NO_ERRORS);
-      return true;
-    } catch (err) {
-      setErrors(extractErrors(err));
-      return false;
-    }
-  }
+  useRegisterSection(
+    "process",
+    dirty,
+    async (opts) => {
+      if (!dirty && !opts?.force) return true;
+      const out = await section.submit();
+      if (!out) {
+        setGeneral("Fix the approval chain issues shown below before saving.");
+        return false;
+      }
+      try {
+        if (processDirty || opts?.force) {
+          await save.mutateAsync({
+            sectionId: "process",
+            body: { workflowTemplateId: out.workflowTemplateId, config: out.config, reportChain: out.reportChain },
+            silent: opts?.silent,
+          });
+        }
+        // One toast at most: the chain saves silently after the step.
+        if (defaultChainDirty) await saveDefaultChain.mutateAsync({ steps: defaultChain, silent: processDirty || opts?.force ? true : opts?.silent });
+        section.reset(values);
+        setGeneral(null);
+        return true;
+      } catch (err) {
+        setGeneral(section.showServerErrors(err, () => null));
+        return false;
+      }
+    },
+    section
+  );
 
   return (
     <>
@@ -136,12 +158,12 @@ export function ProcessSection({ projectId, setup, mode, readOnly }: StepProps) 
         title="Workflow and process"
         description="Pick a workflow template to pre-fill, then adjust the switches and approval chains for this project."
       >
-        {errors.general && <p className="text-xs font-medium text-red-600">{errors.general}</p>}
+        {general && <p className="text-xs font-medium text-red-600">{general}</p>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
           <div>
             <CustomSelect
               label="Workflow template"
-              value={templateId ?? ""}
+              value={values.workflowTemplateId ?? ""}
               onChange={pickTemplate}
               options={templateOptions}
               disabled={readOnly || templatesQuery.isLoading}

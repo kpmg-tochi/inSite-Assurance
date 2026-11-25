@@ -1,8 +1,11 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { z } from "zod";
+import { Controller } from "react-hook-form";
 import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 import {
   FORM_CODE_REGEX,
   FORM_MAX_TEMPLATE_BLOCKS,
+  SaveVisitFormTemplateRequestSchema,
   VISIT_KIND_META,
   VisitKindEnum,
   type VisitFormBlock,
@@ -11,6 +14,7 @@ import {
 } from "@insite/shared";
 import { useAuth } from "../../lib/auth-context";
 import { useLeaveGuard } from "../../lib/navigationGuard";
+import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import { useFormLibraryQuery } from "../../queries/forms/useFormQueries";
 import { useArchiveVisitFormTemplateMutation, useSaveVisitFormTemplateMutation } from "../../mutations/forms/useFormMutations";
 import { StandardTable, TableActionButton, TableBadge, type TableColumnDef } from "../table";
@@ -32,6 +36,9 @@ interface EditorState {
   visitKind: VisitKind;
   blocks: VisitFormBlock[];
 }
+
+/** The request body the editor's values become. */
+const templateBody = (s: Omit<EditorState, "existingCode">) => ({ code: s.code.trim().toUpperCase(), name: s.name.trim(), visitKind: s.visitKind, blocks: s.blocks });
 
 export function VisitFormTemplatesCard() {
   const { hasPermission } = useAuth();
@@ -139,7 +146,7 @@ export function VisitFormTemplatesCard() {
           onClose={() => setEditing(null)}
           onSave={(s) =>
             save
-              .mutateAsync({ body: { code: s.code.trim().toUpperCase(), name: s.name.trim(), visitKind: s.visitKind, blocks: s.blocks }, existingCode: s.existingCode })
+              .mutateAsync({ body: templateBody(s), existingCode: s.existingCode })
               .then(() => setEditing(null))
           }
         />
@@ -148,6 +155,32 @@ export function VisitFormTemplatesCard() {
     </>
   );
 }
+
+/** The template editor's inputs; the request is then checked against SaveVisitFormTemplateRequestSchema. */
+const TemplateFormSchema = z
+  .object({
+    existingCode: z.string().nullable(),
+    code: z.string(),
+    name: z.string().trim().min(3, "Enter a name (at least 3 characters).").max(160, "Name is too long (at most 160 characters)."),
+    visitKind: VisitKindEnum,
+    blocks: z.array(z.custom<VisitFormBlock>()).min(1, "Add at least one block."),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.existingCode && !FORM_CODE_REGEX.test(v.code.trim().toUpperCase())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["code"], message: "Code: 2 to 40 capital letters, digits or underscores, starting with a letter." });
+    }
+    if (VISIT_KIND_META[v.visitKind].facilityRule === "NONE" && v.blocks.some((b) => b.type === "FACILITIES")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["blocks"],
+        message: `${VISIT_KIND_META[v.visitKind].label} visits have no facility sub-forms: remove that block.`,
+      });
+    }
+    const contract = SaveVisitFormTemplateRequestSchema.safeParse(templateBody(v));
+    if (!contract.success) {
+      for (const issue of contract.error.issues) ctx.addIssue({ code: z.ZodIssueCode.custom, path: issue.path, message: issue.message });
+    }
+  });
 
 function TemplateEditor({
   initial,
@@ -166,26 +199,23 @@ function TemplateEditor({
   onClose: () => void;
   onSave: (s: EditorState) => Promise<unknown>;
 }) {
-  const [s, setS] = useState(initial);
+  const form = useZodForm(TemplateFormSchema, { defaultValues: initial });
+  const s = form.watch() as EditorState;
   const [adding, setAdding] = useState("");
-  const set = (patch: Partial<EditorState>) => setS((x) => ({ ...x, ...patch }));
+  const setBlocks = (blocks: VisitFormBlock[]) => form.setValue("blocks", blocks, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
   const dirty = JSON.stringify(s) !== JSON.stringify(initial);
   const facilitiesAllowed = VISIT_KIND_META[s.visitKind].facilityRule !== "NONE";
   const hasFacilities = s.blocks.some((b) => b.type === "FACILITIES");
   const listed = useMemo(() => new Set(s.blocks.flatMap((b) => (b.type === "SECTION" ? [b.sectionCode] : []))), [s.blocks]);
-  const error = !s.existingCode && !FORM_CODE_REGEX.test(s.code.trim().toUpperCase())
-    ? "Code: 2 to 40 capital letters, digits or underscores."
-    : s.name.trim().length < 3
-      ? "Enter a name (at least 3 characters)."
-      : s.blocks.length === 0
-        ? "Add at least one block."
-        : hasFacilities && !facilitiesAllowed
-          ? `${VISIT_KIND_META[s.visitKind].label} visits have no facility sub-forms: remove that block.`
-          : null;
+  // The first problem in the form, shown next to Save (field errors also show under their input once touched).
+  const errors = form.formState.errors;
+  const error = !form.formState.isValid
+    ? (errors.code?.message ?? errors.name?.message ?? (errors.blocks as { message?: string } | undefined)?.message ?? errors.visitKind?.message ?? "Complete the template.")
+    : null;
   const submit = async () => {
-    if (error) return false;
+    if (!(await form.trigger())) return false;
     try {
-      await onSave(s);
+      await onSave(form.getValues() as EditorState);
       return true;
     } catch {
       return false;
@@ -199,35 +229,49 @@ function TemplateEditor({
   const move = (i: number, d: -1 | 1) => {
     const next = [...s.blocks];
     [next[i], next[i + d]] = [next[i + d], next[i]];
-    set({ blocks: next });
+    setBlocks(next);
   };
 
   return (
-    <ModalShell title={s.existingCode ? `Edit ${initial.name}` : "Add a visit form template"} onClose={close} maxWidth="max-w-2xl">
+    <ModalShell title={initial.existingCode ? `Edit ${initial.name}` : "Add a visit form template"} onClose={close} maxWidth="max-w-2xl">
       <div className="p-5 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="text-[11px] font-semibold text-slate-700">
             Code
             <input
-              className={`${smallInput} font-mono uppercase`}
-              value={s.code}
-              disabled={Boolean(s.existingCode)}
+              className={`${smallInput} font-mono uppercase read-only:bg-slate-50 read-only:text-slate-500 ${invalidClass(form, "code")}`}
+              readOnly={Boolean(initial.existingCode)}
+              aria-disabled={Boolean(initial.existingCode) || undefined}
               maxLength={40}
-              onChange={(e) => set({ code: e.target.value.toUpperCase() })}
+              {...form.register("code", { setValueAs: (v: string) => v.toUpperCase() })}
+              {...fieldA11y(form, "code")}
             />
+            <FieldError form={form} name="code" className="font-normal" />
           </label>
           <label className="text-[11px] font-semibold text-slate-700">
             Name
-            <input className={smallInput} value={s.name} maxLength={160} onChange={(e) => set({ name: e.target.value })} />
+            <input
+              className={`${smallInput} ${invalidClass(form, "name")}`}
+              maxLength={160}
+              {...form.register("name")}
+              {...fieldA11y(form, "name")}
+            />
+            <FieldError form={form} name="name" className="font-normal" />
           </label>
         </div>
-        <CustomSelect
-          label="Visit kind"
-          size="sm"
-          value={s.visitKind}
-          disabled={Boolean(s.existingCode)}
-          onChange={(v) => set({ visitKind: v as VisitKind })}
-          options={VisitKindEnum.options.map((k) => ({ value: k, label: VISIT_KIND_META[k].label, description: VISIT_KIND_META[k].description }))}
+        <Controller
+          control={form.control}
+          name="visitKind"
+          render={({ field }) => (
+            <CustomSelect
+              label="Visit kind"
+              size="sm"
+              value={field.value}
+              disabled={Boolean(initial.existingCode)}
+              onChange={(v) => field.onChange(v as VisitKind)}
+              options={VisitKindEnum.options.map((k) => ({ value: k, label: VISIT_KIND_META[k].label, description: VISIT_KIND_META[k].description }))}
+            />
+          )}
         />
         <div className="space-y-1.5">
           <p className="text-[11px] font-semibold text-slate-700">Blocks, in order</p>
@@ -243,7 +287,7 @@ function TemplateEditor({
               <button type="button" disabled={i === s.blocks.length - 1} onClick={() => move(i, 1)} className="p-1 text-slate-400 disabled:opacity-30" aria-label="Move down">
                 <ChevronDown className="w-4 h-4" />
               </button>
-              <button type="button" onClick={() => set({ blocks: s.blocks.filter((_, j) => j !== i) })} className="p-1 text-slate-400 hover:text-rose-600" aria-label="Remove block">
+              <button type="button" onClick={() => setBlocks(s.blocks.filter((_, j) => j !== i))} className="p-1 text-slate-400 hover:text-rose-600" aria-label="Remove block">
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
@@ -256,7 +300,7 @@ function TemplateEditor({
                   value={adding}
                   placeholder="Add a section…"
                   onChange={(v) => {
-                    if (v) set({ blocks: [...s.blocks, { type: "SECTION", sectionCode: v }] });
+                    if (v) setBlocks([...s.blocks, { type: "SECTION", sectionCode: v }]);
                     setAdding("");
                   }}
                   options={sectionOptions.filter((o) => !listed.has(o.value))}
@@ -264,7 +308,7 @@ function TemplateEditor({
                 />
               </div>
               {facilitiesAllowed && !hasFacilities && (
-                <button type="button" className="text-xs font-semibold text-brand-primary" onClick={() => set({ blocks: [...s.blocks, { type: "FACILITIES" }] })}>
+                <button type="button" className="text-xs font-semibold text-brand-primary" onClick={() => setBlocks([...s.blocks, { type: "FACILITIES" }])}>
                   + Facility sub-forms slot
                 </button>
               )}
@@ -277,7 +321,7 @@ function TemplateEditor({
           <button type="button" className={secondaryButton} onClick={close}>
             Cancel
           </button>
-          <button type="button" className={primaryButton} disabled={pending || Boolean(error) || !dirty} onClick={() => void submit()}>
+          <button type="button" className={primaryButton} disabled={!canSubmit(form, { pending, blocked: !dirty })} onClick={() => void submit()}>
             {pending ? "Saving…" : "Save template"}
           </button>
         </div>

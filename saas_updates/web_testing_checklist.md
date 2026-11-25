@@ -46,7 +46,7 @@ Browser checks of the web portal that automated tests do not cover. Companion to
 | :--- | :--- | :--- |
 | WEB-R6-20 | `admin@ubec.test` | + New Project → lands on `/setup/project#section-parties`. Project step: Central type pre-fills owner and funder; school card before organisations; map pin with the workspace default radius; tolerance and time zone collapsed. Save and continue. |
 | WEB-R6-21 | same | Contract step: contractor (trade pre-filled "Main contract", collapsed), sum, dates, retention; acceptance-letter milestone date shows in the preview; a planned completion before the last sprint shows `PLANNED_COMPLETION_BEFORE_SPRINTS_END` once sprints exist. |
-| WEB-R6-22 | same | Scope & sprints step: download blank and project workbook, import with a deliberate row error (preview shows it, confirm refused), fix and confirm; hand-edit a unit and a line; standards and needs-assessment section below. |
+| WEB-R6-22 | same | Scope & sprints step: download the blank template and the project needs assessment (check the UBEC styling and file names), import with a deliberate row error (preview shows it, confirm refused), fix and confirm; hand-edit a unit and a line; standards and needs-assessment section below. |
 | WEB-R6-23 | same | Team & visits step: add an officer over the site limit → workload warning; visit officers, working days and plan preview; saving officers keeps them on the team. |
 | WEB-R6-24 | same | Review: issues grouped by step with "Fix" links jumping to `#section-<id>`; "not saved" text names the step (`Open step 2 "Contract" and save it.`); activate; lands on the Overview. |
 | WEB-R6-25 | same | "Save and continue" on an untouched required step marks it saved; leaving with unsaved edits prompts once (not twice). Advanced (process) is reachable from the draft and from live settings, under a divider. |
@@ -57,7 +57,7 @@ Browser checks of the web portal that automated tests do not cover. Companion to
 | ID | Login | Check |
 | :--- | :--- | :--- |
 | WEB-R6-30 | `me.officer@ubec.test` | Overview of PRG-102, PRG-105, PRG-104, PRG-103, PRG-242: stage bar matches the seeded stage (states in text, `aria-current="step"`, vertical below 768 px); current sprint (or next/last, or "No sprints yet"); next visit; next deadline with overdue count; budget and paid-vs-contract bar; progress; findings and defects counts; default cases; map; KPIs. No "Geofence & Capture Integrity" or "Latest Reported Capture" card. |
-| WEB-R6-31 | a user without `boq:view` / `visits:view` / payments permissions | The matching Overview cards are absent (not shown as zero). |
+| WEB-R6-31 | a user without `scope:view` / `visits:view` / payments permissions | The matching Overview cards are absent (not shown as zero). |
 | WEB-R6-32 | `me.officer@ubec.test` | Phase action on PRG-104 from the stage bar; refusal text under the button when the CoC gate blocks. |
 | WEB-R6-33 | `admin@ubec.test` | Payments on PRG-105: record an interim payment naming a sprint; final payment before CoC flagged as an exception; void with a reason; filters (type, sprint incl. "No sprint named", exceptions only); Release checks panel; Overview bar updates. Removing a sprint a payment names is refused (`SPRINT_IN_USE`) on Sprints & scope. |
 | WEB-R6-34 | `admin@ubec.test` | Settings → project types: General block, then tabs Kick-off & mobilisation, Monitoring, Completion & closure, KPI targets, Advanced; a validation error shows a count on its tab and in the summary near Save; Save new version; leaving the editor (or switching Settings tab) with unsaved changes prompts. |
@@ -79,7 +79,7 @@ Browser checks of the web portal that automated tests do not cover. Companion to
 | ID | Login | Check |
 | :--- | :--- | :--- |
 | WEB-R2-01 | `admin@ubec.test` | Sprints & scope page on PRG-105: sprints table with derived status, units grouped by facility with sprint range and planned quantity, lines with computed amounts, totals against budget. |
-| WEB-R2-02 | same | Workbook download and import on a draft (preview with grouped lines, row errors and warnings → confirm); import disabled with its reason on a live project. |
+| WEB-R2-02 | same | Needs assessment download and import on a draft (preview with grouped lines, row errors and warnings → confirm); import disabled with its reason on a live project. |
 | WEB-R2-03 | same | Settings → Workspace settings: default geofence radius (20–50,000) pre-fills a new radial boundary. |
 | WEB-R3-01 | `admin@ubec.test` | Forms & facilities: facility sub-forms (archetype default and a facility override, e.g. the programme tenant's customised Toilet), fixed sections, visit form templates, preview; editors guard unsaved changes. |
 | WEB-R3-02 | same | Type editor Monitoring tab → Visit forms picker ("Default" = template whose code is the kind). |

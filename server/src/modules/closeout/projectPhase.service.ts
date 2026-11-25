@@ -50,7 +50,15 @@ export async function acceptedHandover(db: Db, projectId: string) {
 
 async function checkTransition(
   db: Db,
-  project: { id: string; constructionPhase: ConstructionPhase; retentionHeldNgn: Prisma.Decimal; status: string; projectTypeSnapshotJson: Prisma.JsonValue },
+  project: {
+    id: string;
+    constructionPhase: ConstructionPhase;
+    retentionHeldNgn: Prisma.Decimal;
+    status: string;
+    projectTypeSnapshotJson: Prisma.JsonValue;
+    retentionEndDate: string | null;
+    timezone: string;
+  },
   config: ProjectProcessConfig,
   to: ConstructionPhase
 ): Promise<Check> {
@@ -70,6 +78,14 @@ async function checkTransition(
     }
   }
   if (to === 'COMPLETED_CLOSED') {
+    // Owner decision (2026-11-25): a project closes only once its defects liability period has ended.
+    const today = projectToday(project.timezone);
+    if (project.retentionEndDate && today < project.retentionEndDate) {
+      const days = calendarDaysUntil(today, project.retentionEndDate);
+      return no(
+        `The defects liability period runs until ${project.retentionEndDate} (${days} day${days === 1 ? '' : 's'} left). The project can be closed once it has ended.`
+      );
+    }
     const reason = await cocGateReason(db, project.id, 'PROJECT_CLOSE', project.projectTypeSnapshotJson);
     if (reason) return no(reason);
     const pending = await closeBlockedReason(db, project.id);

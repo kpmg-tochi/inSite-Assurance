@@ -6,12 +6,12 @@ import {
   DEFAULT_TENANT_ROLES,
   PerimeterGeofence,
   RadialGeofence,
-  SYSTEM_PERMISSIONS_CATALOG,
   verifyPointAgainstGeofence,
 } from "@insite/shared";
 import { prisma } from "../config/prisma";
 import { recordAuditEvent } from "../modules/audit/audit.service";
 import { provisionDefaultRoles } from "../modules/rbac/rbac.service";
+import { syncPermissionCatalog } from "../modules/rbac/permissionCatalog";
 import { seedFieldAccount } from "./seedFieldAccounts";
 import { evaluateGeofence } from "../utils/geofenceEvaluation";
 import { seedPhase6Projects } from "./seedPhase6";
@@ -26,6 +26,8 @@ import { seedPhase16 } from "./seedPhase16";
 import { seedR2 } from "./seedR2";
 import { seedR3 } from "./seedR3";
 import { seedR4 } from "./seedR4";
+import { seedClosureTwin } from "./seedClosureTwin";
+import { seedDocumentRegisters } from "./seedDocumentRegisters";
 import { projectObjectPrefix } from "../integrations/storage.service";
 import { seedDaysAgo, seedRecordedPayment } from "./seedPayments";
 let activeSeedPromise: Promise<void> | null = null;
@@ -171,7 +173,7 @@ async function runSeed(): Promise<void> {
   await prisma.projectSprint.deleteMany();
   await prisma.facility.deleteMany();
   // Phase 14 findings (R5f deleted site inspections and checklist templates)
-  await prisma.inspectionFinding.deleteMany();
+  await prisma.finding.deleteMany();
   await prisma.incidentReport.deleteMany();
   await prisma.webNotificationRead.deleteMany();
   await prisma.webNotification.deleteMany();
@@ -207,25 +209,14 @@ async function runSeed(): Promise<void> {
   await prisma.organization.deleteMany();
   await prisma.rolePermission.deleteMany();
   await prisma.role.deleteMany();
-  await prisma.permission.deleteMany();
+  // Redesign R7a: permission rows are owned by code (`syncPermissionCatalog`) and never deleted, so
+  // a migration that forgot to remove a key shows up as a key outside the catalogue.
   await prisma.tenant.deleteMany();
 
   const defaultPasswordHash = await bcrypt.hash("Password123!", 10);
 
-  // 0. Seed Canonical System Permissions Catalog
-  const permissionByKey = new Map<string, string>();
-  for (const p of SYSTEM_PERMISSIONS_CATALOG) {
-    const createdPerm = await prisma.permission.create({
-      data: {
-        key: p.key,
-        name: p.name,
-        description: p.description,
-        category: p.category,
-        surface: p.surface,
-      },
-    });
-    permissionByKey.set(p.key, createdPerm.id);
-  }
+  // 0. The permission catalogue (upserted by key, never deleted).
+  await syncPermissionCatalog(prisma);
 
   // 0b. Create Default Multi-Tenant Workspace
   const defaultTenant = await prisma.tenant.create({
@@ -320,7 +311,7 @@ async function runSeed(): Promise<void> {
   const dualPermissionKeys = [
     ...new Set([
       ...DEFAULT_TENANT_ROLES.find((r) => r.code === "LENDER")!.permissionKeys,
-      "reports:raise_query",
+      "incidents:view",
     ]),
   ];
   const dualPermissions = await prisma.permission.findMany({
@@ -838,6 +829,10 @@ async function runSeed(): Promise<void> {
   await seedR3();
   // Redesign R4: visit plans on the programme types, visits, a sprint verification (table in its header).
   await seedR4();
+  // Demo: PRG-106, a Direct Intervention project whose liability period is over, ready to close (table in its header).
+  await seedClosureTwin();
+  // Demo: coherent document registers on every UBEC project, with specimen PDFs (runs last).
+  await seedDocumentRegisters();
 
   console.log("✅ Seed complete!");
   console.log(

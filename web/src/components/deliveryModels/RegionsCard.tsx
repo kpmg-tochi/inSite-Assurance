@@ -1,6 +1,9 @@
 import React, { useMemo, useState } from "react";
+import { z } from "zod";
+import { Controller } from "react-hook-form";
 import { Archive, ArchiveRestore, Pencil, Plus } from "lucide-react";
-import type { RegionDto } from "@insite/shared";
+import { SaveRegionRequestSchema, type RegionDto } from "@insite/shared";
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import { useRegionsQuery } from "../../queries/deliveryModels/useDeliveryModelQueries";
 import { useSaveRegionMutation } from "../../mutations/deliveryModels/useDeliveryModelMutations";
 import { CustomSelect } from "../common";
@@ -8,11 +11,30 @@ import Loader from "../Loader";
 
 const inputCls = "w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs";
 
+/** The region form, mapped to SaveRegionRequestSchema (which still decides). */
+const RegionFormSchema = z
+  .object({
+    name: z.string().trim().min(2, "Enter the region name (at least 2 characters)").max(120, "Name is too long (at most 120 characters)"),
+    code: z
+      .string()
+      .trim()
+      .min(1, "Enter a code, e.g. NW or NW-KANO")
+      .regex(/^[A-Za-z0-9][A-Za-z0-9-]{0,15}$/, "Use up to 16 letters, digits or dashes, starting with a letter or digit"),
+    parentRegionId: z.string(),
+  })
+  .transform((v) => ({ name: v.name, code: v.code.toUpperCase(), parentRegionId: v.parentRegionId || null }))
+  .pipe(SaveRegionRequestSchema);
+
 /** Phase 11: tenant regions and their areas (two levels). */
 export function RegionsCard() {
   const { data: regions = [], isLoading } = useRegionsQuery(true);
   const save = useSaveRegionMutation();
-  const [editing, setEditing] = useState<{ id: string | null; name: string; code: string; parentRegionId: string } | null>(null);
+  const [editing, setEditingState] = useState<{ id: string | null } | null>(null);
+  const form = useZodForm(RegionFormSchema, { defaultValues: { name: "", code: "", parentRegionId: "" } });
+  const setEditing = (next: { id: string | null; name: string; code: string; parentRegionId: string } | null) => {
+    setEditingState(next ? { id: next.id } : null);
+    if (next) form.reset({ name: next.name, code: next.code, parentRegionId: next.parentRegionId });
+  };
 
   const tree = useMemo(() => {
     const top = regions.filter((r) => !r.parentRegionId).sort((a, b) => a.name.localeCompare(b.name));
@@ -24,17 +46,10 @@ export function RegionsCard() {
     ...regions.filter((r) => !r.parentRegionId && r.id !== editing?.id).map((r) => ({ value: r.id, label: r.name })),
   ];
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = form.handleSubmit((payload) => {
     if (!editing) return;
-    save.mutate(
-      {
-        regionId: editing.id,
-        payload: { name: editing.name, code: editing.code, parentRegionId: editing.parentRegionId || null },
-      },
-      { onSuccess: () => setEditing(null) }
-    );
-  };
+    save.mutate({ regionId: editing.id, payload }, { onSuccess: () => setEditing(null) });
+  });
 
   const toggleArchive = (r: RegionDto) =>
     save.mutate({ regionId: r.id, payload: { name: r.name, code: r.code, parentRegionId: r.parentRegionId, isArchived: !r.isArchived } });
@@ -84,23 +99,41 @@ export function RegionsCard() {
       </div>
 
       {editing && (
-        <form onSubmit={submit} className="grid grid-cols-1 md:grid-cols-4 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <form onSubmit={submit} noValidate className="grid grid-cols-1 md:grid-cols-4 gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
           <label className="text-xs font-medium text-slate-700">
             Name
-            <input required minLength={2} maxLength={120} className={inputCls} value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+            <input maxLength={120} className={`${inputCls} ${invalidClass(form, "name")}`} {...form.register("name")} {...fieldA11y(form, "name")} />
+            <FieldError form={form} name="name" />
           </label>
           <label className="text-xs font-medium text-slate-700">
             Code
-            <input required maxLength={16} className={inputCls} value={editing.code} placeholder="e.g. NW or NW-KANO" onChange={(e) => setEditing({ ...editing, code: e.target.value.toUpperCase() })} />
+            <input
+              maxLength={16}
+              className={`${inputCls} uppercase ${invalidClass(form, "code")}`}
+              placeholder="e.g. NW or NW-KANO"
+              {...form.register("code", { setValueAs: (v: string) => v.toUpperCase() })}
+              {...fieldA11y(form, "code")}
+            />
+            <FieldError form={form} name="code" />
           </label>
           <div className="text-xs font-medium text-slate-700">
             Inside
-            <CustomSelect value={editing.parentRegionId} onChange={(v) => setEditing({ ...editing, parentRegionId: v })} options={parentOptions} size="sm" />
+            <Controller
+              control={form.control}
+              name="parentRegionId"
+              render={({ field }) => <CustomSelect value={field.value} onChange={field.onChange} options={parentOptions} size="sm" />}
+            />
           </div>
           <div className="flex items-end gap-2">
-            <button type="submit" disabled={save.isPending} className="rounded-xl bg-brand-primary px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
-              {save.isPending ? "Saving..." : "Save"}
-            </button>
+            <SubmitButton
+              form={form}
+              pending={save.isPending}
+              pendingLabel="Saving..."
+              showHint={false}
+              className="rounded-xl bg-brand-primary px-3 py-2 text-xs font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Save
+            </SubmitButton>
             <button type="button" onClick={() => setEditing(null)} className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700">
               Cancel
             </button>
@@ -110,7 +143,7 @@ export function RegionsCard() {
 
       {isLoading ? (
         <div className="flex justify-center p-4">
-          <Loader size="sm" />
+          <Loader size="sm" inline />
         </div>
       ) : tree.length === 0 ? (
         <p className="text-xs text-slate-500">No regions yet.</p>

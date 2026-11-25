@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Archive, Download, FileSignature, FileUp, X } from "lucide-react";
-import { defaultSignOffStatement, type ProjectDocumentDetailDto } from "@insite/shared";
+import { z } from "zod";
+import { ArchiveProjectDocumentRequestSchema, defaultSignOffStatement, type ProjectDocumentDetailDto } from "@insite/shared";
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import Drawer from "../Drawer";
 import Loader from "../Loader";
 import { useAuth } from "../../lib/auth-context";
@@ -8,6 +10,7 @@ import { formatDateTimeShort } from "../../lib/formatters";
 import { useDocumentTypesQuery, useProjectDocumentQuery } from "../../queries/contracts/useContractQueries";
 import { useArchiveDocumentMutation, useOpenDocumentMutation, useSignDocumentMutation } from "../../mutations/contracts/useContractMutations";
 import { DocumentUploadDialog } from "./DocumentUploadDialog";
+import { canOfferSignOff } from "./documentSignOff";
 import { dangerButton, formatBytes, primaryButton, secondaryButton, shortHash, smallInput, StatusChip } from "../contracts/contractUi";
 
 /**
@@ -33,7 +36,7 @@ export function DocumentDrawer({ projectId, documentId, onClose }: { projectId: 
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-5 space-y-5">
-        {q.isLoading ? <Loader /> : q.data ? <DocumentDetail projectId={projectId} doc={q.data} /> : <p className="text-xs text-slate-500">Could not load the document.</p>}
+        {q.isLoading ? <Loader /> : q.data ? <DocumentDetail key={q.data.id} projectId={projectId} doc={q.data} /> :<p className="text-xs text-slate-500">Could not load the document.</p>}
       </div>
     </Drawer>
   );
@@ -48,10 +51,8 @@ function DocumentDetail({ projectId, doc }: { projectId: string; doc: ProjectDoc
   const types = useDocumentTypesQuery(true, canUpload);
   const [signing, setSigning] = useState(false);
   const defaultStatement = defaultSignOffStatement(doc.title, doc.currentVersion);
-  const [statement, setStatement] = useState(defaultStatement);
   const [versioning, setVersioning] = useState(false);
   const [archiving, setArchiving] = useState(false);
-  const [reason, setReason] = useState("");
   const current = doc.signOffs.filter((s) => s.version === doc.currentVersion);
   const earlier = doc.signOffs.filter((s) => s.version !== doc.currentVersion);
   const allowedMimeTypes = types.data?.find((t) => t.id === doc.documentType.id)?.allowedMimeTypes;
@@ -73,7 +74,7 @@ function DocumentDetail({ projectId, doc }: { projectId: string; doc: ProjectDoc
         <button type="button" className={secondaryButton} disabled={open.isPending} onClick={() => open.mutate({ documentId: doc.id })}>
           <Download className="w-3.5 h-3.5" /> Open current version
         </button>
-        {doc.canSign && !doc.isArchived && !signing && (
+        {canOfferSignOff(doc, hasPermission) && !signing && (
           <button type="button" className={primaryButton} onClick={() => setSigning(true)}>
             <FileSignature className="w-3.5 h-3.5" /> Sign off
           </button>
@@ -91,53 +92,26 @@ function DocumentDetail({ projectId, doc }: { projectId: string; doc: ProjectDoc
       </div>
 
       {signing && (
-        <div className="rounded-xl border border-brand-primary/25 bg-brand-primary/5 p-3 space-y-2">
-          <p className="text-xs font-semibold text-slate-900">Sign off version {doc.currentVersion}</p>
-          <p className="text-[11px] text-slate-600">
-            Your sign-off records your name, role, organisation, the time and this statement against version {doc.currentVersion}. It is
-            an acknowledgement in the platform, not a qualified electronic signature.
-          </p>
-          <textarea rows={3} className={smallInput} value={statement} maxLength={1000} onChange={(e) => setStatement(e.target.value)} aria-label="Statement" />
-          <div className="flex justify-end gap-2">
-            <button type="button" className={secondaryButton} onClick={() => setSigning(false)}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className={primaryButton}
-              disabled={sign.isPending || statement.trim().length < 10}
-              onClick={() =>
-                sign.mutate(
-                  { documentId: doc.id, version: doc.currentVersion, statement: statement.trim() === defaultStatement ? undefined : statement.trim() },
-                  { onSuccess: () => setSigning(false) }
-                )
-              }
-            >
-              {sign.isPending ? "Signing…" : "Confirm sign-off"}
-            </button>
-          </div>
-        </div>
+        <SignOffForm
+          version={doc.currentVersion}
+          defaultStatement={defaultStatement}
+          pending={sign.isPending}
+          onCancel={() => setSigning(false)}
+          onSubmit={(statement) =>
+            sign.mutate(
+              { documentId: doc.id, version: doc.currentVersion, statement: statement === defaultStatement ? undefined : statement },
+              { onSuccess: () => setSigning(false) }
+            )
+          }
+        />
       )}
 
       {archiving && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3 space-y-2">
-          <p className="text-xs font-semibold text-slate-900">Archive this document?</p>
-          <p className="text-[11px] text-slate-600">It stays in the record with its versions and sign-offs, but no longer counts as evidence.</p>
-          <input className={smallInput} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why it is archived" aria-label="Reason" maxLength={500} />
-          <div className="flex justify-end gap-2">
-            <button type="button" className={secondaryButton} onClick={() => setArchiving(false)}>
-              Cancel
-            </button>
-            <button
-              type="button"
-              className={dangerButton}
-              disabled={archive.isPending || reason.trim().length < 5}
-              onClick={() => archive.mutate({ documentId: doc.id, reason: reason.trim() }, { onSuccess: () => setArchiving(false) })}
-            >
-              Archive
-            </button>
-          </div>
-        </div>
+        <ArchiveForm
+          pending={archive.isPending}
+          onCancel={() => setArchiving(false)}
+          onSubmit={(reason) => archive.mutate({ documentId: doc.id, reason }, { onSuccess: () => setArchiving(false) })}
+        />
       )}
 
       <section className="space-y-2">
@@ -198,6 +172,88 @@ function DocumentDetail({ projectId, doc }: { projectId: string; doc: ProjectDoc
         />
       )}
     </>
+  );
+}
+
+/** The sign-off statement: the server accepts 10 to 1000 characters (SignProjectDocumentRequestSchema). */
+const SignOffFormSchema = z.object({
+  statement: z
+    .string()
+    .trim()
+    .min(10, "Write a statement of at least 10 characters")
+    .max(1000, "The statement is too long (at most 1000 characters)"),
+});
+
+function SignOffForm({
+  version,
+  defaultStatement,
+  pending,
+  onCancel,
+  onSubmit,
+}: {
+  version: number;
+  defaultStatement: string;
+  pending: boolean;
+  onCancel: () => void;
+  onSubmit: (statement: string) => void;
+}) {
+  const form = useZodForm(SignOffFormSchema, { defaultValues: { statement: defaultStatement } });
+  return (
+    <form
+      onSubmit={form.handleSubmit((v) => onSubmit(v.statement))}
+      noValidate
+      className="rounded-xl border border-brand-primary/25 bg-brand-primary/5 p-3 space-y-2"
+    >
+      <p className="text-xs font-semibold text-slate-900">Sign off version {version}</p>
+      <p className="text-[11px] text-slate-600">
+        Your sign-off records your name, role, organisation, the time and this statement against version {version}. It is an
+        acknowledgement in the platform, not a qualified electronic signature.
+      </p>
+      <textarea
+        rows={3}
+        className={`${smallInput} ${invalidClass(form, "statement")}`}
+        maxLength={1000}
+        aria-label="Statement"
+        {...form.register("statement")}
+        {...fieldA11y(form, "statement")}
+      />
+      <FieldError form={form} name="statement" />
+      <div className="flex justify-end items-start gap-2">
+        <button type="button" className={secondaryButton} onClick={onCancel}>
+          Cancel
+        </button>
+        <SubmitButton form={form} pending={pending} pendingLabel="Signing…" className={primaryButton}>
+          Confirm sign-off
+        </SubmitButton>
+      </div>
+    </form>
+  );
+}
+
+function ArchiveForm({ pending, onCancel, onSubmit }: { pending: boolean; onCancel: () => void; onSubmit: (reason: string) => void }) {
+  const form = useZodForm(ArchiveProjectDocumentRequestSchema, { defaultValues: { reason: "" } });
+  return (
+    <form onSubmit={form.handleSubmit((v) => onSubmit(v.reason))} noValidate className="rounded-xl border border-rose-200 bg-rose-50/50 p-3 space-y-2">
+      <p className="text-xs font-semibold text-slate-900">Archive this document?</p>
+      <p className="text-[11px] text-slate-600">It stays in the record with its versions and sign-offs, but no longer counts as evidence.</p>
+      <input
+        className={`${smallInput} ${invalidClass(form, "reason")}`}
+        placeholder="Why it is archived"
+        aria-label="Reason"
+        maxLength={500}
+        {...form.register("reason")}
+        {...fieldA11y(form, "reason")}
+      />
+      <FieldError form={form} name="reason" />
+      <div className="flex justify-end items-start gap-2">
+        <button type="button" className={secondaryButton} onClick={onCancel}>
+          Cancel
+        </button>
+        <SubmitButton form={form} pending={pending} hint="Give a reason of at least 5 characters." className={dangerButton}>
+          Archive
+        </SubmitButton>
+      </div>
+    </form>
   );
 }
 

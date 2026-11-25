@@ -12,8 +12,8 @@ import { TableBadge } from "../table";
 import { primaryButton, secondaryButton } from "../contracts/contractUi";
 
 /**
- * Redesign R2c: download the needs-assessment workbook (pre-filled when the project has data) and
- * import a filled one: file → server preview (grouped lines, row errors, warnings) → confirm.
+ * Redesign R2c: download the project's needs assessment (.xlsx, pre-filled when the project has data)
+ * and import a filled one: file → server preview (grouped lines, row errors, warnings) → confirm.
  * Nothing is saved before confirm. Import is for drafts only.
  */
 
@@ -45,8 +45,8 @@ export function ScopeWorkbookToolbar({ projectId, scope, canEdit }: { projectId:
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".xlsx")) return setFileError("Choose the .xlsx workbook.");
-    if (file.size > MAX_BYTES) return setFileError("The workbook is larger than 10 MB.");
+    if (!file.name.toLowerCase().endsWith(".xlsx")) return setFileError("Choose the needs assessment .xlsx file.");
+    if (file.size > MAX_BYTES) return setFileError("The file is larger than 10 MB.");
     setFileError(null);
     const fileBase64 = await readAsBase64(file);
     preview.mutate({ fileBase64, fileName: file.name }, { onSuccess: (result) => setPending({ fileBase64, fileName: file.name, result }) });
@@ -55,17 +55,17 @@ export function ScopeWorkbookToolbar({ projectId, scope, canEdit }: { projectId:
   return (
     <>
       <button type="button" className={secondaryButton} disabled={download.isPending} onClick={() => download.mutate()}>
-        <Download className="w-3.5 h-3.5 inline -mt-0.5" /> {download.isPending ? "Preparing…" : "Download workbook"}
+        <Download className="w-3.5 h-3.5 inline -mt-0.5" /> {download.isPending ? "Preparing…" : "Download needs assessment"}
       </button>
       {scope.projectStatus === "DRAFT" && (
       <button
         type="button"
         className={primaryButton}
         disabled={Boolean(importReason) || preview.isPending}
-        title={importReason ?? "Upload a filled workbook. You will see a preview before anything is saved."}
+        title={importReason ?? "Upload a filled needs assessment (.xlsx). You will see a preview before anything is saved."}
         onClick={() => fileRef.current?.click()}
       >
-        <FileUp className="w-3.5 h-3.5 inline -mt-0.5" /> {preview.isPending ? "Reading…" : "Import workbook"}
+        <FileUp className="w-3.5 h-3.5 inline -mt-0.5" /> {preview.isPending ? "Reading…" : "Import needs assessment"}
       </button>
       )}
       <input ref={fileRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={onFile} />
@@ -90,7 +90,7 @@ function IssueList({ items, tone }: { items: ScopeWorkbookIssue[]; tone: "error"
   return (
     <div className={`rounded-xl border px-3 py-2 ${cls}`}>
       <p className="flex items-center gap-1.5 text-xs font-bold">
-        <Icon className="w-4 h-4" /> {items.length} {tone === "error" ? "error(s): fix them in the workbook and upload it again" : "warning(s)"}
+        <Icon className="w-4 h-4" /> {items.length} {tone === "error" ? "error(s): fix them in the file and upload it again" : "warning(s)"}
       </p>
       <ul className="mt-1 max-h-40 overflow-y-auto space-y-0.5 text-[11px]">
         {items.map((i, n) => (

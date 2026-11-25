@@ -1,7 +1,14 @@
-import React, { useState } from "react";
-import { SPRINT_VERIFICATION_OUTCOME_LABELS, SprintVerificationOutcomeEnum, type SprintVerificationOutcome } from "@insite/shared";
+import { z } from "zod";
+import {
+  SPRINT_VERIFICATION_OUTCOME_LABELS,
+  SprintVerificationOutcomeEnum,
+  VerifySprintRequestSchema,
+  type SprintVerificationViewDto,
+  type VerifySprintRequest,
+} from "@insite/shared";
 import { ModalActions, ModalShell, inputClass } from "../common/ModalShell";
 import Loader from "../Loader";
+import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import { useSprintVerificationQuery } from "../../queries/visits/useVisitQueries";
 import { useVerifySprintMutation } from "../../mutations/visits/useVisitMutations";
 import { visitKindLabel } from "../visits/visitUi";
@@ -12,12 +19,7 @@ import { visitKindLabel } from "../visits/visitUi";
  */
 export function SprintVerifyDialog({ projectId, sprintId, onClose }: { projectId: string; sprintId: string; onClose: () => void }) {
   const q = useSprintVerificationQuery(projectId, sprintId);
-  const verify = useVerifySprintMutation(projectId);
-  const [outcome, setOutcome] = useState<SprintVerificationOutcome | null>(null);
-  const [notes, setNotes] = useState("");
   const v = q.data;
-  const chosen = outcome ?? v?.outcome ?? null;
-  const needsNote = v ? !v.endedYet && notes.trim().length < 3 : false;
   return (
     <ModalShell
       title={v ? `Verify ${v.name}` : "Verify sprint"}
@@ -27,16 +29,10 @@ export function SprintVerifyDialog({ projectId, sprintId, onClose }: { projectId
     >
       {q.isLoading || !v ? (
         <div className="p-6">
-          <Loader />
+          <Loader inline />
         </div>
       ) : (
-        <form
-          className="p-5 space-y-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (chosen) verify.mutate({ sprintId, body: { outcome: chosen, notes: notes.trim() || null } }, { onSuccess: onClose });
-          }}
-        >
+        <div className="p-5 space-y-4">
           {v.deliverables && (
             <div className="rounded-xl bg-slate-50 p-3 text-xs text-slate-700">
               <p className="font-semibold text-slate-900">Deliverables</p>
@@ -87,25 +83,55 @@ export function SprintVerifyDialog({ projectId, sprintId, onClose }: { projectId
             ))}
           </div>
           {v.canVerify ? (
-            <>
-              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Outcome">
-                {SprintVerificationOutcomeEnum.options.map((o) => (
-                  <label key={o} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold ${chosen === o ? "border-brand-primary text-brand-primary" : "border-slate-300 text-slate-700"}`}>
-                    <input type="radio" name="outcome" checked={chosen === o} onChange={() => setOutcome(o)} /> {SPRINT_VERIFICATION_OUTCOME_LABELS[o]}
-                  </label>
-                ))}
-              </div>
-              <label className="block text-xs font-semibold text-slate-700">
-                Notes{!v.endedYet ? " (required: the sprint has not ended)" : ""}
-                <textarea className={`${inputClass} mt-1`} rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-              </label>
-              <ModalActions onCancel={onClose} submitLabel={v.outcome ? "Re-verify" : "Verify"} pendingLabel="Saving…" isPending={verify.isPending} disabled={!chosen || needsNote} />
-            </>
+            <VerifyForm projectId={projectId} sprintId={sprintId} v={v} onClose={onClose} />
           ) : (
             <p className="text-xs text-slate-500">{v.endedYet || v.status !== "UPCOMING" ? "You cannot verify sprints." : "The sprint has not started."}</p>
           )}
-        </form>
+        </div>
       )}
     </ModalShell>
+  );
+}
+
+function VerifyForm({ projectId, sprintId, v, onClose }: { projectId: string; sprintId: string; v: SprintVerificationViewDto; onClose: () => void }) {
+  const verify = useVerifySprintMutation(projectId);
+  const schema = z
+    .object({
+      outcome: SprintVerificationOutcomeEnum.nullable(),
+      notes: z.string().trim().max(2000, "Notes are too long (at most 2000 characters)"),
+    })
+    .superRefine((x, ctx) => {
+      if (!x.outcome) ctx.addIssue({ code: "custom", path: ["outcome"], message: "Choose met, partly met or not met" });
+      if (!v.endedYet && x.notes.length < 3) {
+        ctx.addIssue({ code: "custom", path: ["notes"], message: "The sprint has not ended: say why you verify it now (at least 3 characters)" });
+      }
+    })
+    .transform((x): VerifySprintRequest => ({ outcome: x.outcome!, notes: x.notes || null }))
+    .pipe(VerifySprintRequestSchema);
+  const form = useZodForm(schema, { defaultValues: { outcome: v.outcome ?? null, notes: "" } });
+  const chosen = form.watch("outcome");
+  return (
+    <form className="space-y-4" noValidate onSubmit={form.handleSubmit((body) => verify.mutate({ sprintId, body }, { onSuccess: onClose }))}>
+      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Outcome">
+        {SprintVerificationOutcomeEnum.options.map((o) => (
+          <label key={o} className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-semibold ${chosen === o ? "border-brand-primary text-brand-primary" : "border-slate-300 text-slate-700"}`}>
+            <input type="radio" name="outcome" checked={chosen === o} onChange={() => form.setValue("outcome", o, { shouldValidate: true, shouldTouch: true, shouldDirty: true })} />{" "}
+            {SPRINT_VERIFICATION_OUTCOME_LABELS[o]}
+          </label>
+        ))}
+      </div>
+      <label className="block text-xs font-semibold text-slate-700">
+        Notes{!v.endedYet ? " (required: the sprint has not ended)" : ""}
+        <textarea className={`${inputClass} mt-1 ${invalidClass(form, "notes")}`} rows={3} {...form.register("notes")} {...fieldA11y(form, "notes")} />
+      </label>
+      <FieldError form={form} name="notes" />
+      <ModalActions
+        onCancel={onClose}
+        submitLabel={v.outcome ? "Re-verify" : "Verify"}
+        pendingLabel="Saving…"
+        isPending={verify.isPending}
+        disabled={!canSubmit(form, { pending: verify.isPending })}
+      />
+    </form>
   );
 }

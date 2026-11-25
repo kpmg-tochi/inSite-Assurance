@@ -11,7 +11,7 @@ import {
 } from './contractors.service';
 
 /**
- * Contractor CRUD under /projects/:projectId/contractors (`contractors:manage_packages`). The parties
+ * Contractor CRUD under /projects/:projectId/contractors (`contractors:manage`). The parties
  * step saves the contractor too; these endpoints apply the same rules (one contractor per project).
  */
 

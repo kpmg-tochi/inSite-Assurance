@@ -380,7 +380,7 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
   const [stages, findingGroups, openVisits] = await Promise.all([
     loadProjectStageSummaries(projectIds),
     projectIds.length
-      ? prisma.inspectionFinding.groupBy({
+      ? prisma.finding.groupBy({
           by: ['projectId'],
           where: { projectId: { in: projectIds }, status: 'OPEN' },
           _count: { _all: true },

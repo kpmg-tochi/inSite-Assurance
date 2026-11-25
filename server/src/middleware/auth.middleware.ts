@@ -12,6 +12,7 @@ import {
   type MobileDeviceRow,
   type MobileUserRow,
 } from '../modules/auth/mobileAccess';
+import { webAccessNotAllowed, webSignInAllowed } from '../modules/auth/webAccess';
 
 // ---------------------------------------------------------------------------
 // Token payloads carry identity only. Everything else is loaded per request.
@@ -149,6 +150,8 @@ interface WebContextRecord {
   isActive: boolean;
   tokenVersion: number;
   tenantStatus: string;
+  /** Surface of the main role; MOBILE means no web access (R7). */
+  roleSurface: string;
 }
 
 interface FieldContextRecord {
@@ -211,6 +214,7 @@ async function loadWebContext(userId: string): Promise<WebContextRecord | null> 
         isActive: user.isActive,
         tokenVersion: user.tokenVersion,
         tenantStatus: user.tenant.status,
+        roleSurface: user.role.surface,
         principal: {
           tokenType: 'WEB_USER',
           userId: user.id,
@@ -290,6 +294,10 @@ async function resolveWebPrincipal(req: Request, claims: WebTokenClaims): Promis
   }
   if (ctx.tokenVersion !== claims.tokenVersion) {
     throw new AppError('Session has been revoked. Please sign in again.', 401, 'TOKEN_REVOKED');
+  }
+  // R7: mobile-only roles have no web access, also on tokens issued before the rule or the role change.
+  if (!webSignInAllowed({ surface: ctx.roleSurface, isPlatformSuperAdmin: ctx.principal.isPlatformSuperAdmin })) {
+    throw webAccessNotAllowed();
   }
   if (ctx.tenantStatus === 'SUSPENDED' && !ctx.principal.isPlatformSuperAdmin) {
     throw new AppError('This workspace has been suspended', 403, 'TENANT_SUSPENDED');

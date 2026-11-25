@@ -27,7 +27,7 @@ import { Tx } from './visitCore';
 
 /** Open findings of a project as re-check items, oldest first. */
 export async function recheckInputsForProject(tx: Tx, projectId: string, timezone: string): Promise<RecheckInput[]> {
-  const rows = await tx.inspectionFinding.findMany({
+  const rows = await tx.finding.findMany({
     where: { projectId, status: 'OPEN' },
     orderBy: { createdAt: 'asc' },
     take: 100,

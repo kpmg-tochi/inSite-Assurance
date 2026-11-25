@@ -1,5 +1,7 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { z } from "zod";
+import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import { CONSTRUCTION_PHASE_LABELS, type ConstructionPhase, type ProjectPhaseTransitionDto } from "@insite/shared";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { useProjectPhaseQuery } from "../../queries/closeout/useCloseoutQueries";
@@ -112,6 +114,23 @@ export function PhaseActions({ projectId, projectStatus }: { projectId: string; 
   );
 }
 
+/**
+ * ChangeProjectPhaseRequestSchema for one move: the reason is required (at least 3 characters) to go
+ * back to construction and when overriding; the practical completion date is optional.
+ */
+function phaseChangeFormSchema(transition: ProjectPhaseTransitionDto) {
+  return z
+    .object({
+      override: z.boolean(),
+      reason: z.string().trim().max(1000, "The reason is too long (at most 1000 characters)"),
+      practical: z.string().refine((v) => v === "" || /^\d{4}-\d{2}-\d{2}$/.test(v), "Choose a valid date or leave it empty"),
+    })
+    .superRefine((v, ctx) => {
+      const needsReason = transition.to === "ACTIVE_CONSTRUCTION" || (transition.overridable && v.override);
+      if (needsReason && v.reason.length < 3) ctx.addIssue({ code: "custom", path: ["reason"], message: "Give a reason (at least 3 characters)" });
+    });
+}
+
 export function PhaseChangeModal({
   projectId,
   transition,
@@ -122,41 +141,48 @@ export function PhaseChangeModal({
   onClose: () => void;
 }) {
   const mutation = useChangeProjectPhaseMutation(projectId);
-  const [reason, setReason] = useState("");
-  const [override, setOverride] = useState(false);
-  const [practical, setPractical] = useState("");
+  const schema = useMemo(() => phaseChangeFormSchema(transition), [transition]);
+  const form = useZodForm(schema, { defaultValues: { override: false, reason: "", practical: "" } });
+  const override = form.watch("override");
   const needsReason = transition.to === "ACTIVE_CONSTRUCTION" || (transition.overridable && override);
   const blocked = !transition.allowed && !(transition.overridable && override);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = form.handleSubmit(async ({ reason, override: overridden, practical }) => {
     try {
       await mutation.mutateAsync({
         to: transition.to,
-        reason: reason.trim() || undefined,
-        overrideUndecided: transition.overridable && override ? true : undefined,
+        reason: reason || undefined,
+        overrideUndecided: transition.overridable && overridden ? true : undefined,
         practicalCompletionDate: transition.to === "RETENTION_PERIOD" && practical ? practical : undefined,
       });
       onClose();
     } catch {
       // toasted by the mutation hook
     }
-  };
+  });
 
   return (
     <ModalShell title={PHASE_ACTION_LABEL[transition.to]} subtitle={`Move to ${CONSTRUCTION_PHASE_LABELS[transition.to]}`} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3 p-5 text-xs">
+      <form onSubmit={submit} noValidate className="space-y-3 p-5 text-xs">
         {!transition.allowed && transition.reason && <BlockedNotice>{transition.reason}</BlockedNotice>}
         {transition.overridable && (
           <label className="flex items-start gap-2">
-            <input type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} className="mt-0.5" />
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              {...form.register("override", {
+                // Ticking the override makes the reason required: re-check it.
+                onChange: () => void form.trigger("reason"),
+              })}
+            />
             <span>Continue anyway. The reason is recorded in the audit ledger.</span>
           </label>
         )}
         {transition.to === "RETENTION_PERIOD" && (
           <label className="block space-y-1">
             <span className="font-semibold text-slate-700">Practical completion date</span>
-            <input type="date" value={practical} onChange={(e) => setPractical(e.target.value)} className={inputClass} />
+            <input type="date" className={`${inputClass} ${invalidClass(form, "practical")}`} {...form.register("practical")} {...fieldA11y(form, "practical")} />
+            <FieldError form={form} name="practical" />
             <span className="text-slate-500">Leave empty to use the date the accepted handover was reviewed. The liability period starts on this date.</span>
           </label>
         )}
@@ -169,7 +195,8 @@ export function PhaseChangeModal({
         {(needsReason || transition.to !== "ACTIVE_CONSTRUCTION") && (
           <label className="block space-y-1">
             <span className="font-semibold text-slate-700">Reason{needsReason ? "" : " (optional)"}</span>
-            <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} className={inputClass} maxLength={1000} />
+            <textarea rows={3} className={`${inputClass} ${invalidClass(form, "reason")}`} maxLength={1000} {...form.register("reason")} {...fieldA11y(form, "reason")} />
+            <FieldError form={form} name="reason" />
           </label>
         )}
         <ModalActions
@@ -177,7 +204,7 @@ export function PhaseChangeModal({
           submitLabel={PHASE_ACTION_LABEL[transition.to]}
           pendingLabel="Saving…"
           isPending={mutation.isPending}
-          disabled={blocked || (needsReason && reason.trim().length < 3)}
+          disabled={!canSubmit(form, { pending: mutation.isPending, blocked })}
         />
       </form>
     </ModalShell>

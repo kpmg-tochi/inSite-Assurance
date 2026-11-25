@@ -18,7 +18,7 @@ const supervision = Router();
 /** GET /api/v1/supervision: every supervisor of the tenant with projects, spread and last visits. */
 supervision.get(
   '/',
-  requirePermission('inspections:view'),
+  requirePermission('visits:view'),
   wrap(async (req, res) => {
     res.json({ success: true, data: await getSupervisorWorkloads({ tenantId: req.webUser!.tenantId }) });
   })
@@ -31,7 +31,7 @@ const project = guardProjectRoutes(Router());
 /** GET /projects/:id/supervision/workload?userIds=a,b: workloads as if these users joined this project. */
 project.get(
   '/:projectId/supervision/workload',
-  requirePermission('projects:edit_baseline', 'inspections:view'),
+  requirePermission('projects:edit_baseline', 'visits:view'),
   wrap(async (req, res) => {
     const raw = typeof req.query.userIds === 'string' ? req.query.userIds : '';
     const userIds = raw

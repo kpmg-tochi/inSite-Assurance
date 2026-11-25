@@ -1,10 +1,12 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import { z } from "zod";
 import { Link, useSearchParams } from "react-router-dom";
 import { CalendarClock, CheckCircle2, Circle, Flag } from "lucide-react";
-import { MILESTONE_COMPLETION_MODE_META, type ContractMilestoneDto } from "@insite/shared";
+import { MILESTONE_COMPLETION_MODE_META, WaiveMilestoneRequestSchema, type ContractMilestoneDto } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth } from "../../lib/auth-context";
 import { formatDateTimeShort } from "../../lib/formatters";
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import { useMilestonesQuery } from "../../queries/contracts/useContractQueries";
 import { useCompleteMilestoneMutation, useWaiveMilestoneMutation } from "../../mutations/contracts/useContractMutations";
 import { KpiCard } from "../../components/common";
@@ -128,7 +130,6 @@ export function MilestoneRow({ projectId, m, onOpenCase }: { projectId: string; 
   const complete = useCompleteMilestoneMutation(projectId);
   const waive = useWaiveMilestoneMutation(projectId);
   const [mode, setMode] = useState<"idle" | "complete" | "waive" | "raise">("idle");
-  const [text, setText] = useState("");
   const closed = m.status === "DONE" || m.status === "WAIVED";
   const manual = m.completionMode === "MANUAL";
   // R1e: "Contractor on site" is confirmed by an officer through the same complete action.
@@ -212,7 +213,6 @@ export function MilestoneRow({ projectId, m, onOpenCase }: { projectId: string; 
               disabled={!m.readyToComplete}
               title={m.readyToComplete ? undefined : "The required documents must be in the register and signed off first."}
               onClick={() => {
-                setText("");
                 setMode("complete");
               }}
             >
@@ -224,7 +224,6 @@ export function MilestoneRow({ projectId, m, onOpenCase }: { projectId: string; 
               type="button"
               className={secondaryButton}
               onClick={() => {
-                setText("");
                 setMode("waive");
               }}
             >
@@ -241,33 +240,17 @@ export function MilestoneRow({ projectId, m, onOpenCase }: { projectId: string; 
       )}
 
       {(mode === "complete" || mode === "waive") && (
-        <div className="mt-2 space-y-2 pl-6">
-          <input
-            className={smallInput}
-            value={text}
-            maxLength={1000}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={mode === "complete" ? "Notes (optional)" : "Why the milestone is waived (required)"}
-            aria-label={mode === "complete" ? "Notes" : "Reason"}
-          />
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className={primaryButton}
-              disabled={complete.isPending || waive.isPending || (mode === "waive" && text.trim().length < 5)}
-              onClick={() =>
-                mode === "complete"
-                  ? complete.mutate({ milestoneId: m.id, notes: text.trim() || null }, { onSuccess: () => setMode("idle") })
-                  : waive.mutate({ milestoneId: m.id, reason: text.trim() }, { onSuccess: () => setMode("idle") })
-              }
-            >
-              {mode === "complete" ? "Mark complete" : "Waive milestone"}
-            </button>
-            <button type="button" className={secondaryButton} onClick={() => setMode("idle")}>
-              Cancel
-            </button>
-          </div>
-        </div>
+        <MilestoneActionForm
+          key={mode}
+          mode={mode}
+          pending={complete.isPending || waive.isPending}
+          onCancel={() => setMode("idle")}
+          onSubmit={(text) =>
+            mode === "complete"
+              ? complete.mutate({ milestoneId: m.id, notes: text || null }, { onSuccess: () => setMode("idle") })
+              : waive.mutate({ milestoneId: m.id, reason: text }, { onSuccess: () => setMode("idle") })
+          }
+        />
       )}
 
       {mode === "raise" && (
@@ -280,5 +263,44 @@ export function MilestoneRow({ projectId, m, onOpenCase }: { projectId: string; 
         />
       )}
     </li>
+  );
+}
+
+const CompleteMilestoneFormSchema = z.object({ text: z.string().trim().max(1000, "Notes are too long (at most 1000 characters)") });
+const WaiveMilestoneFormSchema = z.object({ text: WaiveMilestoneRequestSchema.shape.reason });
+
+/** Inline notes (complete) or reason (waive, required) for one milestone. */
+function MilestoneActionForm({
+  mode,
+  pending,
+  onSubmit,
+  onCancel,
+}: {
+  mode: "complete" | "waive";
+  pending: boolean;
+  onSubmit: (text: string) => void;
+  onCancel: () => void;
+}) {
+  const form = useZodForm(mode === "complete" ? CompleteMilestoneFormSchema : WaiveMilestoneFormSchema, { defaultValues: { text: "" } });
+  return (
+    <form onSubmit={form.handleSubmit((v) => onSubmit(v.text))} noValidate className="mt-2 space-y-2 pl-6">
+      <input
+        className={`${smallInput} ${invalidClass(form, "text")}`}
+        maxLength={1000}
+        placeholder={mode === "complete" ? "Notes (optional)" : "Why the milestone is waived (required)"}
+        aria-label={mode === "complete" ? "Notes" : "Reason"}
+        {...form.register("text")}
+        {...fieldA11y(form, "text")}
+      />
+      <FieldError form={form} name="text" />
+      <div className="flex items-start gap-2">
+        <SubmitButton form={form} pending={pending} className={primaryButton} hint="Say why the milestone is waived (at least 5 characters).">
+          {mode === "complete" ? "Mark complete" : "Waive milestone"}
+        </SubmitButton>
+        <button type="button" className={secondaryButton} onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }

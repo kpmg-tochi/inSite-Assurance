@@ -1,11 +1,18 @@
 import React, { useState } from "react";
 import { ClipboardPen, ListChecks, Plus, Trash2 } from "lucide-react";
+import { Controller, useFieldArray } from "react-hook-form";
+import { z } from "zod";
 import {
+  DefectSeverityEnum,
   HANDOVER_DECISION_LABELS,
   HANDOVER_LIMITS,
   HANDOVER_STAKEHOLDER_LABELS,
   HandoverDecisionEnum,
+  HandoverStakeholderTypeEnum,
   RecordHandoverResponseRequestSchema,
+  ReviewHandoverSubmissionRequestSchema,
+  type DefectSeverity,
+  type RecordHandoverResponseInput,
   type HandoverDecision,
   type HandoverStakeholderType,
   type ProjectBeneficiaryDto,
@@ -13,6 +20,7 @@ import {
 } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth } from "../../lib/auth-context";
+import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import Loader from "../../components/Loader";
 import { TableBadge } from "../../components/table/StandardTable";
 import { CustomSelect } from "../../components/common";
@@ -95,7 +103,7 @@ export function HandoverTab({ project }: { project: ProjectSummaryDto }) {
             <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-xs text-slate-500">No responses yet.</div>
           )}
           {submissionsQuery.data?.map((s) => (
-            <SubmissionCard key={s.id} project={project} submission={s} canReview={canReview} canConvert={hasPermission("retention:manage_defects")} />
+            <SubmissionCard key={s.id} project={project} submission={s} canReview={canReview} canConvert={hasPermission("defects:manage")} />
           ))}
         </section>
       )}
@@ -119,15 +127,60 @@ function stakeholderTypeFor(b: ProjectBeneficiaryDto | null): HandoverStakeholde
   return "OTHER";
 }
 
-interface SnagRow {
-  key: number;
-  title: string;
-  location: string;
-  description: string;
-}
+const emptySnag = () => ({ title: "", location: "", description: "" });
 
-let snagSeq = 0;
-const emptySnag = (): SnagRow => ({ key: ++snagSeq, title: "", location: "", description: "" });
+/** A snag row the officer has typed anything into (blank rows are left out of the request). */
+const snagHasContent = (s: { title: string; location: string; description: string }) =>
+  Boolean(s.title.trim() || s.location.trim() || s.description.trim());
+
+/**
+ * The form holds plain inputs; the request is RecordHandoverResponseRequestSchema. Every rule of the
+ * shared schema is applied by parsing the request it would send and copying each issue back onto the
+ * input it came from (snag issues back onto the row the officer typed, blank rows skipped).
+ */
+const RecordResponseFieldsSchema = z.object({
+  stakeholderType: HandoverStakeholderTypeEnum,
+  decision: HandoverDecisionEnum,
+  submitterName: z.string(),
+  submitterRole: z.string(),
+  feedbackText: z.string(),
+  snags: z.array(z.object({ title: z.string(), location: z.string(), description: z.string() })),
+  attest: z.boolean(),
+});
+type RecordResponseFormValues = z.infer<typeof RecordResponseFieldsSchema>;
+
+const RecordResponseFormSchema = RecordResponseFieldsSchema
+  .superRefine((v, ctx) => {
+    const rowIndexes = v.snags.flatMap((s, i) => (snagHasContent(s) ? [i] : []));
+    const parsed = RecordHandoverResponseRequestSchema.safeParse(toHandoverRequest(v));
+    if (parsed.success) return;
+    for (const issue of parsed.error.issues) {
+      const path = [...issue.path];
+      if (path[0] === "snags" && typeof path[1] === "number") path[1] = rowIndexes[path[1]] ?? path[1];
+      ctx.addIssue({ code: "custom", path, message: issue.message });
+    }
+  })
+  .transform((v) => RecordHandoverResponseRequestSchema.parse(toHandoverRequest(v)));
+
+
+function toHandoverRequest(v: RecordResponseFormValues): RecordHandoverResponseInput {
+  return {
+    stakeholderType: v.stakeholderType,
+    decision: v.decision,
+    submitterName: v.submitterName,
+    submitterRole: v.submitterRole,
+    feedbackText: v.feedbackText,
+    snags:
+      v.decision === "ACCEPTED"
+        ? []
+        : v.snags.filter(snagHasContent).map((s) => ({
+            title: s.title,
+            location: s.location.trim() || undefined,
+            description: s.description.trim() || undefined,
+          })),
+    attest: v.attest as true,
+  };
+}
 
 /** Redesign R1d: an officer records the beneficiary's response from the signed paper copy and attests it. */
 function RecordResponseModal({
@@ -141,58 +194,39 @@ function RecordResponseModal({
   onClose: () => void;
 }) {
   const mutation = useRecordHandoverResponseMutation(projectId);
-  const [stakeholderType, setStakeholderType] = useState<HandoverStakeholderType>(stakeholderTypeFor(primaryBeneficiary));
-  const [decision, setDecision] = useState<HandoverDecision>("ACCEPTED");
-  const [submitterName, setSubmitterName] = useState(primaryBeneficiary?.contactName || primaryBeneficiary?.name || "");
-  const [submitterRole, setSubmitterRole] = useState("");
-  const [feedbackText, setFeedbackText] = useState("");
-  const [snags, setSnags] = useState<SnagRow[]>([]);
-  const [attest, setAttest] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const form = useZodForm(RecordResponseFormSchema, {
+    defaultValues: {
+      stakeholderType: stakeholderTypeFor(primaryBeneficiary),
+      decision: "ACCEPTED",
+      submitterName: primaryBeneficiary?.contactName || primaryBeneficiary?.name || "",
+      submitterRole: "",
+      feedbackText: "",
+      snags: [],
+      attest: false,
+    },
+  });
+  const snags = useFieldArray({ control: form.control, name: "snags" });
+  const decision = form.watch("decision");
 
   const withSnags = decision !== "ACCEPTED";
-  const setSnag = (key: number, patch: Partial<SnagRow>) => setSnags((list) => list.map((s) => (s.key === key ? { ...s, ...patch } : s)));
   const chooseDecision = (d: HandoverDecision) => {
-    setDecision(d);
-    if (d === "ACCEPTED_WITH_SNAGS" && snags.length === 0) setSnags([emptySnag()]);
+    form.setValue("decision", d, { shouldValidate: true, shouldDirty: true });
+    if (d === "ACCEPTED_WITH_SNAGS" && snags.fields.length === 0) snags.append(emptySnag(), { shouldFocus: false });
+    // The decision changes what the comments and snags need.
+    void form.trigger(["feedbackText", "snags"]);
   };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsed = RecordHandoverResponseRequestSchema.safeParse({
-      stakeholderType,
-      decision,
-      submitterName,
-      submitterRole,
-      feedbackText,
-      snags: withSnags
-        ? snags
-            .filter((s) => s.title.trim() || s.location.trim() || s.description.trim())
-            .map((s) => ({
-              title: s.title,
-              location: s.location.trim() || undefined,
-              description: s.description.trim() || undefined,
-            }))
-        : [],
-      attest,
-    });
-    if (!parsed.success) {
-      const next: Record<string, string> = {};
-      for (const issue of parsed.error.issues) {
-        const key = issue.path.join(".");
-        if (!next[key]) next[key] = issue.message;
-      }
-      setErrors(next);
-      return;
-    }
-    setErrors({});
+  const submit = form.handleSubmit(async (body) => {
     try {
-      await mutation.mutateAsync(parsed.data);
+      await mutation.mutateAsync(body);
       onClose();
     } catch {
       // toasted by the mutation hook
     }
-  };
+  });
+
+  const snagsRootError = (form.formState.errors.snags as { message?: string; root?: { message?: string } } | undefined);
+  const snagsMessage = snagsRootError?.message ?? snagsRootError?.root?.message;
 
   return (
     <ModalShell title="Record handover response" subtitle="Copy the beneficiary's response from the signed paper copy" onClose={onClose} maxWidth="max-w-2xl">
@@ -217,20 +251,37 @@ function RecordResponseModal({
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1">
             <span className="font-semibold text-slate-700">Name of the person who signed</span>
-            <input value={submitterName} onChange={(e) => setSubmitterName(e.target.value)} className={inputClass} maxLength={120} />
-            <FieldMessage message={errors.submitterName} />
+            <input
+              className={`${inputClass} ${invalidClass(form, "submitterName")}`}
+              maxLength={120}
+              {...form.register("submitterName")}
+              {...fieldA11y(form, "submitterName")}
+            />
+            <FieldError form={form} name="submitterName" />
           </label>
           <label className="space-y-1">
             <span className="font-semibold text-slate-700">Their role</span>
-            <input value={submitterRole} onChange={(e) => setSubmitterRole(e.target.value)} className={inputClass} maxLength={120} placeholder="e.g. Head teacher" />
-            <FieldMessage message={errors.submitterRole} />
+            <input
+              className={`${inputClass} ${invalidClass(form, "submitterRole")}`}
+              maxLength={120}
+              placeholder="e.g. Head teacher"
+              {...form.register("submitterRole")}
+              {...fieldA11y(form, "submitterRole")}
+            />
+            <FieldError form={form} name="submitterRole" />
           </label>
           <label className="space-y-1">
             <span className="font-semibold text-slate-700">Stakeholder</span>
-            <CustomSelect
-              value={stakeholderType}
-              onChange={(v) => setStakeholderType(v as HandoverStakeholderType)}
-              options={Object.entries(HANDOVER_STAKEHOLDER_LABELS).map(([value, label]) => ({ value, label }))}
+            <Controller
+              control={form.control}
+              name="stakeholderType"
+              render={({ field }) => (
+                <CustomSelect
+                  value={field.value}
+                  onChange={(v) => field.onChange(v as HandoverStakeholderType)}
+                  options={Object.entries(HANDOVER_STAKEHOLDER_LABELS).map(([value, label]) => ({ value, label }))}
+                />
+              )}
             />
           </label>
         </div>
@@ -239,12 +290,12 @@ function RecordResponseModal({
           <span className="font-semibold text-slate-700">{decision === "REJECTED" ? "Why the works were not accepted" : "Comments (optional)"}</span>
           <textarea
             rows={4}
-            value={feedbackText}
-            onChange={(e) => setFeedbackText(e.target.value)}
-            className={inputClass}
+            className={`${inputClass} ${invalidClass(form, "feedbackText")}`}
             maxLength={HANDOVER_LIMITS.feedbackMaxLength}
+            {...form.register("feedbackText")}
+            {...fieldA11y(form, "feedbackText")}
           />
-          <FieldMessage message={errors.feedbackText} />
+          <FieldError form={form} name="feedbackText" />
         </label>
 
         {withSnags && (
@@ -253,36 +304,42 @@ function RecordResponseModal({
               <p className="font-semibold text-slate-700">
                 Snags{decision === "REJECTED" ? " (optional)" : ""}
               </p>
-              {snags.length < HANDOVER_LIMITS.maxSnags && (
+              {snags.fields.length < HANDOVER_LIMITS.maxSnags && (
                 <button
                   type="button"
-                  onClick={() => setSnags((list) => [...list, emptySnag()])}
+                  onClick={() => snags.append(emptySnag())}
                   className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 font-semibold text-slate-700 hover:bg-slate-50"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add snag
                 </button>
               )}
             </div>
-            {snags.length === 0 && <p className="text-slate-500">No snags listed.</p>}
-            {snags.map((s, i) => (
-              <div key={s.key} className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-2">
+            {snags.fields.length === 0 && <p className="text-slate-500">No snags listed.</p>}
+            {snags.fields.map((s, i) => (
+              <div key={s.id} className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-2">
                 <label className="space-y-1">
                   <span className="font-semibold text-slate-700">Snag {i + 1}</span>
-                  <input value={s.title} onChange={(e) => setSnag(s.key, { title: e.target.value })} className={inputClass} maxLength={160} placeholder="Short title" />
-                  <FieldMessage message={errors[`snags.${i}.title`]} />
+                  <input
+                    className={`${inputClass} ${invalidClass(form, `snags.${i}.title`)}`}
+                    maxLength={160}
+                    placeholder="Short title"
+                    {...form.register(`snags.${i}.title` as const)}
+                    {...fieldA11y(form, `snags.${i}.title`)}
+                  />
+                  <FieldError form={form} name={`snags.${i}.title`} />
                 </label>
                 <label className="space-y-1">
                   <span className="font-semibold text-slate-700">Location (optional)</span>
-                  <input value={s.location} onChange={(e) => setSnag(s.key, { location: e.target.value })} className={inputClass} maxLength={200} />
+                  <input className={inputClass} maxLength={200} {...form.register(`snags.${i}.location` as const)} />
                 </label>
                 <label className="space-y-1 sm:col-span-2">
                   <span className="font-semibold text-slate-700">Description (optional)</span>
-                  <textarea rows={2} value={s.description} onChange={(e) => setSnag(s.key, { description: e.target.value })} className={inputClass} maxLength={2000} />
+                  <textarea rows={2} className={inputClass} maxLength={2000} {...form.register(`snags.${i}.description` as const)} />
                 </label>
                 <div className="sm:col-span-2 flex justify-end">
                   <button
                     type="button"
-                    onClick={() => setSnags((list) => list.filter((x) => x.key !== s.key))}
+                    onClick={() => snags.remove(i)}
                     className="inline-flex items-center gap-1 font-semibold text-rose-600 hover:underline"
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Remove
@@ -290,24 +347,28 @@ function RecordResponseModal({
                 </div>
               </div>
             ))}
-            <FieldMessage message={errors.snags} />
+            {snagsMessage && (form.formState.isSubmitted || form.formState.dirtyFields.snags) && (
+              <p className="text-[11px] font-medium text-rose-700">{snagsMessage}</p>
+            )}
           </div>
         )}
 
         <label className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <input type="checkbox" checked={attest} onChange={(e) => setAttest(e.target.checked)} className="mt-0.5" />
+          <input type="checkbox" className="mt-0.5" {...form.register("attest")} {...fieldA11y(form, "attest")} />
           <span className="font-semibold text-slate-800">I confirm this matches the signed copy.</span>
         </label>
-        <FieldMessage message={errors.attest} />
+        <FieldError form={form} name="attest" />
 
-        <ModalActions onCancel={onClose} submitLabel="Record response" pendingLabel="Recording…" isPending={mutation.isPending} disabled={!attest} />
+        <ModalActions
+          onCancel={onClose}
+          submitLabel="Record response"
+          pendingLabel="Recording…"
+          isPending={mutation.isPending}
+          disabled={!canSubmit(form, { pending: mutation.isPending })}
+        />
       </form>
     </ModalShell>
   );
-}
-
-function FieldMessage({ message }: { message?: string }) {
-  return message ? <span className="block text-[11px] font-medium text-red-600">{message}</span> : null;
 }
 
 function SubmissionCard({
@@ -322,7 +383,7 @@ function SubmissionCard({
   canConvert: boolean;
 }) {
   const review = useReviewHandoverSubmissionMutation(project.id);
-  const [notes, setNotes] = useState("");
+  const reviewForm = useZodForm(ReviewHandoverSubmissionRequestSchema, { defaultValues: { notes: "" } });
   const [convertOpen, setConvertOpen] = useState(false);
   const openSnags = s.snags.filter((x) => !x.defectTicketId).length;
 
@@ -372,23 +433,30 @@ function SubmissionCard({
         ) : !canReview ? (
           <p className="text-[11px] text-slate-500">Waiting for review.</p>
         ) : (
-          <>
-            <input
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Review notes (optional)"
-              className={`${inputClass} max-w-sm`}
-              maxLength={2000}
-            />
+          <form
+            noValidate
+            className="contents"
+            onSubmit={reviewForm.handleSubmit((v) => review.mutate({ submissionId: s.id, notes: v.notes ?? "" }))}
+          >
+            <span className="w-full max-w-sm">
+              <input
+                placeholder="Review notes (optional)"
+                aria-label="Review notes (optional)"
+                className={`${inputClass} ${invalidClass(reviewForm, "notes")}`}
+                maxLength={2000}
+                {...reviewForm.register("notes")}
+                {...fieldA11y(reviewForm, "notes")}
+              />
+              <FieldError form={reviewForm} name="notes" />
+            </span>
             <button
-              type="button"
-              disabled={review.isPending}
-              onClick={() => review.mutate({ submissionId: s.id, notes })}
-              className="rounded-xl bg-brand-primary px-3 py-2 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+              type="submit"
+              disabled={!canSubmit(reviewForm, { pending: review.isPending })}
+              className="rounded-xl bg-brand-primary px-3 py-2 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Mark reviewed
             </button>
-          </>
+          </form>
         )}
         {canConvert && openSnags > 0 && (
           <button
@@ -405,14 +473,18 @@ function SubmissionCard({
   );
 }
 
+/** ConvertSnagsRequestSchema with the date input's empty value allowed. */
+const ConvertSnagsFormSchema = z.object({
+  severity: DefectSeverityEnum,
+  dueDate: z.string().refine((v) => v === "" || /^\d{4}-\d{2}-\d{2}$/.test(v), "Choose a valid date or leave it empty"),
+});
+
 function ConvertSnagsModal({ project, submission, onClose }: { project: ProjectSummaryDto; submission: HandoverSubmissionDto; onClose: () => void }) {
   const mutation = useConvertSnagsMutation(project.id);
   const contractor = project.contractors[0];
-  const [severity, setSeverity] = useState<"LOW" | "MEDIUM" | "HIGH" | "CRITICAL">("MEDIUM");
-  const [dueDate, setDueDate] = useState("");
+  const form = useZodForm(ConvertSnagsFormSchema, { defaultValues: { severity: "MEDIUM", dueDate: "" } });
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = form.handleSubmit(async ({ severity, dueDate }) => {
     try {
       await mutation.mutateAsync({
         submissionId: submission.id,
@@ -422,26 +494,33 @@ function ConvertSnagsModal({ project, submission, onClose }: { project: ProjectS
     } catch {
       // toasted by the mutation hook
     }
-  };
+  });
 
   return (
     <ModalShell title="Create defect tickets" subtitle={`${submission.snags.filter((s) => !s.defectTicketId).length} snag(s) without a ticket`} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3 p-5 text-xs">
+      <form onSubmit={submit} noValidate className="space-y-3 p-5 text-xs">
         <p className="text-slate-600">
           {contractor ? <>Tickets are raised against {contractor.organizationName}.</> : "The project has no contractor to raise tickets against."}
         </p>
         <div className="grid grid-cols-2 gap-3">
           <label className="space-y-1">
             <span className="font-semibold text-slate-700">Severity</span>
-            <CustomSelect
-              value={severity}
-              onChange={(v) => setSeverity(v as typeof severity)}
-              options={["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((v) => ({ value: v, label: v.charAt(0) + v.slice(1).toLowerCase() }))}
+            <Controller
+              control={form.control}
+              name="severity"
+              render={({ field }) => (
+                <CustomSelect
+                  value={field.value}
+                  onChange={(v) => field.onChange(v as DefectSeverity)}
+                  options={["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((v) => ({ value: v, label: v.charAt(0) + v.slice(1).toLowerCase() }))}
+                />
+              )}
             />
           </label>
           <label className="space-y-1">
             <span className="font-semibold text-slate-700">Due date (optional)</span>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
+            <input type="date" className={`${inputClass} ${invalidClass(form, "dueDate")}`} {...form.register("dueDate")} {...fieldA11y(form, "dueDate")} />
+            <FieldError form={form} name="dueDate" />
           </label>
         </div>
         <ModalActions
@@ -449,7 +528,7 @@ function ConvertSnagsModal({ project, submission, onClose }: { project: ProjectS
           submitLabel="Create tickets"
           pendingLabel="Creating…"
           isPending={mutation.isPending}
-          disabled={!contractor}
+          disabled={!contractor || !canSubmit(form, { pending: mutation.isPending })}
         />
       </form>
     </ModalShell>

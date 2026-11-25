@@ -83,7 +83,7 @@ export const ProjectOverviewDtoSchema = z.object({
   today: z.string(),
   stage: ProjectStageSchema,
   currentSprint: OverviewSprintSchema.nullable(),
-  /** false when the project has no sprints; null when the caller lacks `boq:view`. */
+  /** false when the project has no sprints; null when the caller lacks `scope:view`. */
   hasSprints: z.boolean().nullable(),
   nextVisit: OverviewNextVisitSchema.nullable(),
   nextDeadline: OverviewDeadlineSchema.nullable(),

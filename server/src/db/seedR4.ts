@@ -269,7 +269,7 @@ export async function seedR4(): Promise<void> {
       overrides: ppe ? { [ppe.path]: { value: "NO", comment: "Six workers on the roof without harnesses or helmets." } } : {},
       summary: "Routine visit: roof framing in progress. Unsafe work at height.",
     });
-    await prisma.inspectionFinding.updateMany({ where: { projectId: prg211.id, visitId: major.id, status: "OPEN" }, data: { createdAt: new Date(now.getTime() - 20 * 24 * 3600 * 1000) } });
+    await prisma.finding.updateMany({ where: { projectId: prg211.id, visitId: major.id, status: "OPEN" }, data: { createdAt: new Date(now.getTime() - 20 * 24 * 3600 * 1000) } });
     await runFindingEscalations({ now });
   }
 

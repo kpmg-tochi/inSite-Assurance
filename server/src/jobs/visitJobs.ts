@@ -149,13 +149,13 @@ export async function runVisitDeadlines({ now }: JobContext): Promise<void> {
 
 export async function runFindingEscalations({ now }: JobContext): Promise<void> {
   const projects = await prisma.project.findMany({
-    where: { ...VISIT_PROJECT_WHERE, inspectionFindings: { some: { status: 'OPEN', escalatedAt: null } } },
+    where: { ...VISIT_PROJECT_WHERE, findings: { some: { status: 'OPEN', escalatedAt: null } } },
     select: PROJECT_SELECT,
   });
   for (const p of projects) {
     const today = zonedCalendarDate(now, p.timezone);
     const days = monitoringConfigOf(p.projectTypeSnapshotJson).findingEscalationDays;
-    const findings = await prisma.inspectionFinding.findMany({
+    const findings = await prisma.finding.findMany({
       where: { projectId: p.id, status: 'OPEN', escalatedAt: null },
       select: { id: true, createdAt: true, title: true, description: true, severity: true },
     });
@@ -164,7 +164,7 @@ export async function runFindingEscalations({ now }: JobContext): Promise<void> 
       if (openDays < days) continue;
       await runUnit('finding-escalations', f.id, () =>
         prisma.$transaction(async (tx) => {
-          const claimed = await tx.inspectionFinding.updateMany({ where: { id: f.id, status: 'OPEN', escalatedAt: null }, data: { escalatedAt: now } });
+          const claimed = await tx.finding.updateMany({ where: { id: f.id, status: 'OPEN', escalatedAt: null }, data: { escalatedAt: now } });
           if (claimed.count === 0) return 'closed';
           const what = f.title ?? f.description.slice(0, 120);
           await createWebNotification(tx, {

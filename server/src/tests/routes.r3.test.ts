@@ -2,7 +2,7 @@
  * Redesign R3 route tests: the form library (R3b) and visit form preview and snapshots (R3c).
  *
  * Main tenant: admin@ (platform + tenant super admin), monitor@ (forms:manage), lender@ (neither
- * forms:manage nor project_types:manage, but inspections:view), lto@ (given a role with only
+ * forms:manage nor project_types:manage, but visits:view), lto@ (given a role with only
  * project_types:manage here). Programme tenant (UBEC): admin@ubec.test (forms:manage and
  * project types); PRG-105 (live, sprints, a customised Toilet). LKK-402 (main tenant) has sprint 1
  * units below 100% (the Routine carry-over); EDO-410 has no units (legacy).
@@ -338,7 +338,7 @@ describe('Redesign R3c: visit form preview and snapshots', () => {
 
   it("refuses another tenant's project and callers without the permission", async () => {
     assert.equal((await preview(MONITOR, ids.prg105, { visitKind: 'ROUTINE', visitDate: today() })).status, 404);
-    // lender@ has inspections:view: allowed.
+    // lender@ has visits:view: allowed.
     assert.equal((await preview(LENDER, ids.lkk402, { visitKind: 'ROUTINE', visitDate: today() })).status, 200);
   });
 

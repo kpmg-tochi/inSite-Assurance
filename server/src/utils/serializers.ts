@@ -10,7 +10,7 @@ import { hasWebPermission, WebJwtPayload } from '../middleware/auth.middleware';
 /** Field-session data in responses is limited unless the caller manages field assurance. */
 export function canSeeFieldSessionDetail(webUser?: WebJwtPayload): boolean {
   return Boolean(
-    webUser && hasWebPermission(webUser, 'assurance:review_credentials', 'sessions:revoke_device')
+    webUser && hasWebPermission(webUser, 'users:revoke_device')
   );
 }
 

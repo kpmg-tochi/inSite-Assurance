@@ -1,11 +1,19 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { WebLoginRequestSchema } from "@insite/shared";
+import { FieldError, fieldA11y, invalidClass, useZodForm, zEmail } from "../../lib/forms";
 import { useAuth } from "../../lib/auth-context";
 import { useDemoAccounts } from "../../config/useDemoAccounts";
 import { IS_DEMO_MODE } from "../../config/demoMode";
 import { CustomSelect, type CustomSelectOption } from "../../components/common";
 import { APPLICATION_NAME } from "../../config/appName";
 import { BrandLogo, DEFAULT_FULL_LOGO_URL } from "../../components/BrandLogo";
+
+/** The sign-in contract with plain messages (same rules as the server). */
+const LoginFormSchema = WebLoginRequestSchema.extend({
+  email: zEmail("work email"),
+  password: WebLoginRequestSchema.shape.password.min(1, "Enter your password"),
+});
 
 /**
  * Sign-in (UBEC rebrand): the client's photograph and full logo on the left, a plain form on the
@@ -17,10 +25,36 @@ export function LoginPage() {
   const demo = useDemoAccounts();
   const demoAccounts = demo?.accounts ?? [];
   const [selectedRoleIdx, setSelectedRoleIdx] = useState(0);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const form = useZodForm(LoginFormSchema, { defaultValues: { email: "", password: "" } });
+  const { register, setValue, getValues, handleSubmit } = form;
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  // Credentials the browser autofilled. Chrome hides their values from the page until the user
+  // interacts, so the form looks empty; the CSS autofill animation (index.css) tells us they are
+  // there, and Sign in stays available. The values are read back on submit (a user gesture).
+  const [autofilled, setAutofilled] = useState(false);
+  const onAutofill = (e: React.AnimationEvent<HTMLInputElement>) => {
+    if (e.animationName === "ubec-autofill-start") setAutofilled(true);
+  };
+
+  // Read what is on screen into the form (autofill does not always fire input events).
+  const syncFromInputs = useCallback(() => {
+    const el = formRef.current;
+    if (!el) return;
+    for (const name of ["email", "password"] as const) {
+      const input = el.elements.namedItem(name) as HTMLInputElement | null;
+      if (input && input.value !== getValues(name)) setValue(name, input.value, { shouldValidate: true, shouldTouch: true });
+    }
+  }, [getValues, setValue]);
+
+  useEffect(() => {
+    document.addEventListener("pointerdown", syncFromInputs, true);
+    document.addEventListener("keydown", syncFromInputs, true);
+    return () => {
+      document.removeEventListener("pointerdown", syncFromInputs, true);
+      document.removeEventListener("keydown", syncFromInputs, true);
+    };
+  }, [syncFromInputs]);
 
   const demoAccountOptions: CustomSelectOption<number>[] = useMemo(
     () =>
@@ -35,34 +69,37 @@ export function LoginPage() {
   // Demo builds prefill the first seeded account once the demo module has loaded.
   useEffect(() => {
     if (demo && demo.accounts[0]) {
-      setEmail((prev) => prev || demo.accounts[0].email);
-      setPassword((prev) => prev || demo.password);
+      if (!getValues("email")) setValue("email", demo.accounts[0].email, { shouldValidate: true });
+      if (!getValues("password")) setValue("password", demo.password, { shouldValidate: true });
     }
-  }, [demo]);
+  }, [demo, getValues, setValue]);
 
   const handleSelectSeededAccount = (idx: number) => {
     const acct = demoAccounts[idx];
     if (!acct || !demo) return;
     setSelectedRoleIdx(idx);
-    setEmail(acct.email);
-    setPassword(demo.password);
+    setValue("email", acct.email, { shouldValidate: true });
+    setValue("password", demo.password, { shouldValidate: true });
     setErrorMsg(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitValidated = handleSubmit(async (values) => {
     try {
-      setIsSubmitting(true);
       setErrorMsg(null);
-      await login(email, password);
+      await login(values.email, values.password);
       navigate("/app");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : null;
       setErrorMsg(message || "The portal could not be reached. Check your connection and try again.");
-    } finally {
-      setIsSubmitting(false);
     }
+  });
+
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    syncFromInputs();
+    void submitValidated(e);
   };
+  const { isValid, isSubmitting } = form.formState;
+  const canSignIn = (isValid || autofilled) && !isSubmitting;
 
   const inputClass =
     "w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 transition";
@@ -103,7 +140,7 @@ export function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <form ref={formRef} onSubmit={onSubmit} noValidate className="mt-6 space-y-4">
             <div>
               <label htmlFor="login-email" className="mb-1.5 block text-sm font-medium text-slate-700">
                 Work email
@@ -112,12 +149,13 @@ export function LoginPage() {
                 id="login-email"
                 type="email"
                 autoComplete="username"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                {...register("email")}
+                {...fieldA11y(form, "email")}
+                onAnimationStart={onAutofill}
                 placeholder="name@ubec.gov.ng"
-                className={inputClass}
+                className={`${inputClass} ${invalidClass(form, "email")}`}
               />
+              <FieldError form={form} name="email" />
             </div>
             <div>
               <label htmlFor="login-password" className="mb-1.5 block text-sm font-medium text-slate-700">
@@ -127,19 +165,28 @@ export function LoginPage() {
                 id="login-password"
                 type="password"
                 autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className={inputClass}
+                {...register("password")}
+                {...fieldA11y(form, "password")}
+                onAnimationStart={onAutofill}
+                className={`${inputClass} ${invalidClass(form, "password")}`}
               />
+              <FieldError form={form} name="password" />
             </div>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 disabled:opacity-60"
-            >
-              {isSubmitting ? "Signing in…" : "Sign in"}
-            </button>
+            <div>
+              <button
+                type="submit"
+                disabled={!canSignIn}
+                aria-describedby={!canSignIn && !isSubmitting ? "login-hint" : undefined}
+                className="w-full rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brand-primary"
+              >
+                {isSubmitting ? "Signing in…" : "Sign in"}
+              </button>
+              {!canSignIn && !isSubmitting && (
+                <p id="login-hint" className="mt-1.5 text-xs text-slate-500">
+                  Enter your work email and password.
+                </p>
+              )}
+            </div>
           </form>
 
           {IS_DEMO_MODE && demoAccounts.length > 0 && (

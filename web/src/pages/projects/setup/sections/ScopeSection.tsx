@@ -11,7 +11,7 @@ import { extractErrors, StepSection, useRegisterSection, type StepProps } from "
  */
 export function ScopeSection({ projectId, setup, readOnly }: StepProps) {
   const { hasPermission } = useAuth();
-  const canEdit = !readOnly && hasPermission("boq:upload_edit");
+  const canEdit = !readOnly && hasPermission("scope:edit");
   const save = useSaveSetupStepMutation(projectId);
   const [error, setError] = useState<string | null>(null);
   const status = setup.steps.find((s) => s.stepId === "scope");

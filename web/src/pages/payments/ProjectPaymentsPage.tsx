@@ -1,16 +1,22 @@
-import React, { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Controller } from "react-hook-form";
+import { z } from "zod";
 import { AlertTriangle, CheckCircle2, CircleDashed, Landmark, Plus, Receipt, Wallet } from "lucide-react";
 import {
   PAYMENT_EXCEPTION_LABELS,
   PAYMENT_KIND_LABELS,
   PaymentKindEnum,
+  RecordPaymentRequestSchema,
+  VoidPaymentRequestSchema,
   type PaymentDto,
   type PaymentKind,
   type ProjectPaymentsSummaryDto,
+  type RecordPaymentRequest,
 } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
 import { useTerm } from "../../lib/auth-context";
 import { formatDateShort, formatNaira } from "../../lib/formatters";
+import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm, zDateText, zNumberText } from "../../lib/forms";
 import { CustomSelect, KpiCard } from "../../components/common";
 import { ModalActions, ModalShell, inputClass } from "../../components/common/ModalShell";
 import { StandardTable, TableActionButton, TableBadge, type TableColumnDef } from "../../components/table";
@@ -340,90 +346,153 @@ function RecordPaymentModal({
   const term = useTerm();
   const record = useRecordPaymentMutation(projectId);
   const kinds = PaymentKindEnum.options.filter((k) => retentionOn || k !== "RETENTION_RELEASE");
-  const [kind, setKind] = useState<PaymentKind>("INTERIM");
-  const [paidOn, setPaidOn] = useState(summary.today);
-  const [sprintId, setSprintId] = useState("");
-  const [amount, setAmount] = useState("");
-  const [reference, setReference] = useState("");
-  const [description, setDescription] = useState("");
-  const [heldOverride, setHeldOverride] = useState<string | null>(null);
-  const [overrideReason, setOverrideReason] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const gross = Number(amount);
   const pct = retentionOn ? summary.retentionPercentage ?? 0 : 0;
-  const expectedHeld = kind === "RETENTION_RELEASE" || !(gross > 0) ? 0 : Math.round(gross * pct) / 100;
-  const held = heldOverride !== null && heldOverride !== "" ? Number(heldOverride) : expectedHeld;
-  const changedHeld = kind !== "RETENTION_RELEASE" && heldOverride !== null && heldOverride !== "" && Math.abs(held - expectedHeld) > 0.005;
+  const expectedHeldFor = (kind: PaymentKind, gross: number) => (kind === "RETENTION_RELEASE" || !(gross > 0) ? 0 : Math.round(gross * pct) / 100);
+  /** The held amount typed over the default, when it differs from it (null = the default applies). */
+  const heldChange = (kind: PaymentKind, gross: number, heldOverride: string): number | null => {
+    if (kind === "RETENTION_RELEASE" || heldOverride.trim() === "") return null;
+    const held = Number(heldOverride);
+    return Math.abs(held - expectedHeldFor(kind, gross)) > 0.005 ? held : null;
+  };
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!(gross > 0)) return setError("Enter the amount paid.");
-    if (!reference.trim()) return setError("Enter the payment reference (voucher or transfer number).");
-    if (kind === "RETENTION_RELEASE" && gross > summary.retentionBalanceNgn + 0.005) {
-      return setError(`Only ${formatNaira(summary.retentionBalanceNgn)} is held.`);
-    }
-    if (changedHeld && overrideReason.trim().length < 3) return setError(`Say why the ${term("retention", { lower: true })} differs.`);
-    setError(null);
+  // Built per render: the release limit, the default retention and its wording come from the project.
+  const schema = z
+    .object({
+      kind: PaymentKindEnum,
+      paidOn: zDateText("Payment date"),
+      amount: zNumberText("Amount paid").refine((n) => n > 0, "Enter the amount paid (above zero)"),
+      reference: RecordPaymentRequestSchema.innerType().shape.reference,
+      sprintId: z.string(),
+      description: z.string().trim().max(500, "Note is too long (at most 500 characters)"),
+      heldOverride: z
+        .string()
+        .trim()
+        .refine((v) => v === "" || (/^\d+(\.\d+)?$/.test(v) && Number(v) >= 0), "Enter the amount held as a number, or leave it empty"),
+      overrideReason: z.string().trim().max(500, "Too long (at most 500 characters)"),
+    })
+    .superRefine((v, ctx) => {
+      if (v.kind === "RETENTION_RELEASE" && v.amount > summary.retentionBalanceNgn + 0.005) {
+        ctx.addIssue({ code: "custom", path: ["amount"], message: `Only ${formatNaira(summary.retentionBalanceNgn)} is held` });
+      }
+      const held = heldChange(v.kind, v.amount, v.heldOverride);
+      if (held !== null && held > v.amount) {
+        ctx.addIssue({ code: "custom", path: ["heldOverride"], message: "The amount held cannot be more than the amount paid" });
+      }
+      if (held !== null && v.overrideReason.length < 3) {
+        ctx.addIssue({ code: "custom", path: ["overrideReason"], message: `Say why the ${term("retention", { lower: true })} differs (at least 3 characters)` });
+      }
+    })
+    .transform((v): RecordPaymentRequest => {
+      const held = heldChange(v.kind, v.amount, v.heldOverride);
+      return {
+        kind: v.kind,
+        paidOn: v.paidOn,
+        grossAmountNgn: v.amount,
+        reference: v.reference,
+        description: v.description || null,
+        retentionHeldNgn: held,
+        retentionOverrideReason: held !== null ? v.overrideReason : null,
+        sprintId: v.sprintId || null,
+      };
+    })
+    .pipe(RecordPaymentRequestSchema);
+
+  const form = useZodForm(schema, {
+    defaultValues: { kind: "INTERIM", paidOn: summary.today, amount: "", reference: "", sprintId: "", description: "", heldOverride: "", overrideReason: "" },
+  });
+  const kind = form.watch("kind");
+  const gross = Number(form.watch("amount"));
+  const heldOverride = form.watch("heldOverride");
+  const expectedHeld = expectedHeldFor(kind, gross);
+  const held = heldOverride.trim() !== "" && Number.isFinite(Number(heldOverride)) ? Number(heldOverride) : expectedHeld;
+  const changedHeld = heldChange(kind, Number.isFinite(gross) ? gross : 0, heldOverride) !== null;
+  // The amount drives the default retention, so the override rules follow it.
+  useEffect(() => {
+    if (form.getFieldState("heldOverride").isTouched || form.getFieldState("overrideReason").isTouched) void form.trigger(["heldOverride", "overrideReason"]);
+  }, [form, gross, kind]);
+
+  const submit = form.handleSubmit(async (body) => {
     try {
-      await record.mutateAsync({
-        kind,
-        paidOn,
-        grossAmountNgn: gross,
-        reference: reference.trim(),
-        description: description.trim() || null,
-        retentionHeldNgn: changedHeld ? held : null,
-        retentionOverrideReason: changedHeld ? overrideReason.trim() : null,
-        sprintId: sprintId || null,
-      });
+      await record.mutateAsync(body);
       onClose();
     } catch {
       // Toast from the mutation hook.
     }
-  };
+  });
 
   return (
     <ModalShell title="Record payment" subtitle="A payment already made outside the platform" onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3 p-5">
+      <form onSubmit={submit} noValidate className="space-y-3 p-5">
         <div className="grid gap-3 sm:grid-cols-2">
-          <CustomSelect
-            label="Type"
-            value={kind}
-            onChange={(v) => {
-              setKind(v as PaymentKind);
-              setHeldOverride(null);
-            }}
-            options={kinds.map((k) => ({ value: k, label: PAYMENT_KIND_LABELS[k] }))}
+          <Controller
+            control={form.control}
+            name="kind"
+            render={({ field }) => (
+              <CustomSelect
+                label="Type"
+                value={field.value}
+                onChange={(v) => {
+                  field.onChange(v as PaymentKind);
+                  form.setValue("heldOverride", "", { shouldValidate: true });
+                  void form.trigger("amount");
+                }}
+                options={kinds.map((k) => ({ value: k, label: PAYMENT_KIND_LABELS[k] }))}
+              />
+            )}
           />
           <div>
             <label className={labelClass} htmlFor="pay-date">
               Paid on
             </label>
-            <input id="pay-date" type="date" className={inputClass} value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />
+            <input id="pay-date" type="date" className={`${inputClass} ${invalidClass(form, "paidOn")}`} {...form.register("paidOn")} {...fieldA11y(form, "paidOn")} />
+            <FieldError form={form} name="paidOn" />
           </div>
           <div>
             <label className={labelClass} htmlFor="pay-amount">
               Amount paid (gross)
             </label>
-            <input id="pay-amount" type="number" min="0" step="0.01" className={inputClass} value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <input
+              id="pay-amount"
+              type="number"
+              min="0"
+              step="0.01"
+              className={`${inputClass} ${invalidClass(form, "amount")}`}
+              {...form.register("amount")}
+              {...fieldA11y(form, "amount")}
+            />
+            <FieldError form={form} name="amount" />
           </div>
           <div>
             <label className={labelClass} htmlFor="pay-ref">
               Reference
             </label>
-            <input id="pay-ref" className={inputClass} maxLength={120} value={reference} onChange={(e) => setReference(e.target.value)} placeholder="e.g. PV-2026-0142" />
+            <input
+              id="pay-ref"
+              className={`${inputClass} ${invalidClass(form, "reference")}`}
+              maxLength={120}
+              placeholder="e.g. PV-2026-0142"
+              {...form.register("reference")}
+              {...fieldA11y(form, "reference")}
+            />
+            <FieldError form={form} name="reference" />
           </div>
           {summary.sprints.length > 0 && (
             <div className="sm:col-span-2">
-              <CustomSelect
-                label="Sprint (optional)"
-                hint="The sprint this payment is for. A sprint a payment names cannot be removed later."
-                value={sprintId}
-                onChange={(v) => setSprintId(v)}
-                options={[
-                  { value: "", label: "No sprint" },
-                  ...summary.sprints.map((sp) => ({ value: sp.id, label: `Sprint ${sp.number} · ${sp.name}` })),
-                ]}
+              <Controller
+                control={form.control}
+                name="sprintId"
+                render={({ field }) => (
+                  <CustomSelect
+                    label="Sprint (optional)"
+                    hint="The sprint this payment is for. A sprint a payment names cannot be removed later."
+                    value={field.value}
+                    onChange={field.onChange}
+                    options={[
+                      { value: "", label: "No sprint" },
+                      ...summary.sprints.map((sp) => ({ value: sp.id, label: `Sprint ${sp.number} · ${sp.name}` })),
+                    ]}
+                  />
+                )}
               />
             </div>
           )}
@@ -444,12 +513,13 @@ function RecordPaymentModal({
                   type="number"
                   min="0"
                   step="0.01"
-                  className={inputClass}
+                  className={`${inputClass} ${invalidClass(form, "heldOverride")}`}
                   placeholder={formatNaira(expectedHeld)}
-                  aria-describedby="pay-held-hint"
-                  value={heldOverride ?? ""}
-                  onChange={(e) => setHeldOverride(e.target.value)}
+                  {...form.register("heldOverride")}
+                  {...fieldA11y(form, "heldOverride")}
+                  aria-describedby={fieldA11y(form, "heldOverride")["aria-describedby"] ?? "pay-held-hint"}
                 />
+                <FieldError form={form} name="heldOverride" />
                 <p id="pay-held-hint" className="mt-1 text-[11px] text-slate-500">
                   Leave empty to hold the default amount.
                 </p>
@@ -461,11 +531,12 @@ function RecordPaymentModal({
                   </label>
                   <input
                     id="pay-held-reason"
-                    className={inputClass}
+                    className={`${inputClass} ${invalidClass(form, "overrideReason")}`}
                     maxLength={500}
-                    value={overrideReason}
-                    onChange={(e) => setOverrideReason(e.target.value)}
+                    {...form.register("overrideReason")}
+                    {...fieldA11y(form, "overrideReason")}
                   />
+                  <FieldError form={form} name="overrideReason" />
                 </div>
               )}
             </div>
@@ -478,10 +549,16 @@ function RecordPaymentModal({
           <label className={labelClass} htmlFor="pay-desc">
             Note (optional)
           </label>
-          <input id="pay-desc" className={inputClass} maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <input id="pay-desc" className={`${inputClass} ${invalidClass(form, "description")}`} maxLength={500} {...form.register("description")} {...fieldA11y(form, "description")} />
+          <FieldError form={form} name="description" />
         </div>
-        {error && <p className="text-[11px] font-medium text-red-600">{error}</p>}
-        <ModalActions onCancel={onClose} submitLabel="Record payment" pendingLabel="Recording…" isPending={record.isPending} />
+        <ModalActions
+          onCancel={onClose}
+          submitLabel="Record payment"
+          pendingLabel="Recording…"
+          isPending={record.isPending}
+          disabled={!canSubmit(form, { pending: record.isPending })}
+        />
       </form>
     </ModalShell>
   );
@@ -489,19 +566,18 @@ function RecordPaymentModal({
 
 function VoidPaymentModal({ projectId, payment, onClose }: { projectId: string; payment: PaymentDto; onClose: () => void }) {
   const voidMutation = useVoidPaymentMutation(projectId);
-  const [reason, setReason] = useState("");
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const form = useZodForm(VoidPaymentRequestSchema, { defaultValues: { reason: "" } });
+  const submit = form.handleSubmit(async (body) => {
     try {
-      await voidMutation.mutateAsync({ paymentId: payment.id, body: { reason: reason.trim() } });
+      await voidMutation.mutateAsync({ paymentId: payment.id, body });
       onClose();
     } catch {
       // Toast from the mutation hook.
     }
-  };
+  });
   return (
     <ModalShell title="Void payment" subtitle={`${payment.reference} · ${formatNaira(payment.grossAmountNgn)}`} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3 p-5">
+      <form onSubmit={submit} noValidate className="space-y-3 p-5">
         <p className="text-xs text-slate-600">
           A voided payment stays in the record, crossed out, and stops counting towards the totals. Record the correct payment
           separately.
@@ -512,20 +588,21 @@ function VoidPaymentModal({ projectId, payment, onClose }: { projectId: string; 
           </label>
           <textarea
             id="void-reason"
-            className={inputClass}
+            className={`${inputClass} ${invalidClass(form, "reason")}`}
             rows={3}
             maxLength={500}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
             placeholder="Why is this entry wrong?"
+            {...form.register("reason")}
+            {...fieldA11y(form, "reason")}
           />
+          <FieldError form={form} name="reason" />
         </div>
         <ModalActions
           onCancel={onClose}
           submitLabel="Void payment"
           pendingLabel="Voiding…"
           isPending={voidMutation.isPending}
-          disabled={reason.trim().length < 5}
+          disabled={!canSubmit(form, { pending: voidMutation.isPending })}
         />
       </form>
     </ModalShell>

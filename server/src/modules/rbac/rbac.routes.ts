@@ -155,7 +155,7 @@ router.get(
  */
 router.get(
   '/mobile-devices',
-  requirePermission('sessions:revoke_device', 'users:invite_manage'),
+  requirePermission('users:revoke_device', 'users:invite_manage'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const devices = await listMobileDevicesForTenant(req.webUser!.tenantId);
@@ -172,7 +172,7 @@ router.get(
  */
 router.post(
   '/mobile-devices/:deviceId/revoke',
-  requirePermission('sessions:revoke_device'),
+  requirePermission('users:revoke_device'),
   validateBody(RevokeMobileDeviceRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {

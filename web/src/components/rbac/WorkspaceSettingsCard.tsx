@@ -1,15 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { z } from 'zod';
 import { SlidersHorizontal } from 'lucide-react';
 import {
   COMMON_TIME_ZONES,
   GEOFENCE_MODE_META,
   GeofenceModeEnum,
+  OrgInputModeEnum,
+  UpdateTenantSettingsRequestSchema,
   type GeofenceMode,
   type OrgInputMode,
   type TenantSettingsDto,
 } from '@insite/shared';
 import { useTenantSettingsQuery } from '../../queries/organizations/useOrganizationQueries';
 import { useUpdateTenantSettingsMutation } from '../../mutations/organizations/useOrganizationMutations';
+import { SubmitButton, useZodForm, visibleError } from '../../lib/forms';
 import Loader from '../Loader';
 
 const INPUT_MODES: Array<{ value: OrgInputMode; label: string; description: string }> = [
@@ -50,82 +54,98 @@ const inputClass = (hasError: boolean) =>
     hasError ? 'border-rose-400' : 'border-slate-200'
   }`;
 
+/** A whole number typed into a number input, within [min, max]. Output is a number. */
+const wholeNumberText = (min: number, max: number, message: string) =>
+  z
+    .string()
+    .trim()
+    .refine((v) => v !== '' && Number.isInteger(Number(v)) && Number(v) >= min && Number(v) <= max, message)
+    .transform(Number);
+
+/** The inputs, mapped to UpdateTenantSettingsRequestSchema (which still decides). */
+const WorkspaceSettingsFormSchema = z
+  .object({
+    organizationInputMode: OrgInputModeEnum,
+    enabledGeofenceModes: z.array(GeofenceModeEnum).min(1, 'Enable at least one geofence mode'),
+    defaultGeofenceToleranceMeters: wholeNumberText(0, 1000, 'Enter a whole number from 0 to 1000'),
+    defaultGeofenceRadiusMeters: wholeNumberText(20, 50000, 'Enter a whole number from 20 to 50,000'),
+    visitRescheduleToleranceWorkdays: wholeNumberText(0, 10, 'Enter a whole number from 0 to 10'),
+    defaultCurrency: z.string().trim().regex(/^[A-Za-z]{3}$/, 'Use a 3-letter ISO 4217 code, e.g. NGN'),
+    timezone: z.string().trim().min(1, 'Choose a time zone'),
+  })
+  .transform((v) => ({
+    ...v,
+    // Keep the canonical order so the stored list is stable.
+    enabledGeofenceModes: GeofenceModeEnum.options.filter((m) => v.enabledGeofenceModes.includes(m)),
+    defaultCurrency: v.defaultCurrency.toUpperCase(),
+  }))
+  .pipe(UpdateTenantSettingsRequestSchema);
+type WorkspaceSettingsFormValues = z.input<typeof WorkspaceSettingsFormSchema>;
+
+const formDefaults = (data: TenantSettingsDto | undefined): WorkspaceSettingsFormValues => ({
+  organizationInputMode: data?.organizationInputMode ?? 'BOTH',
+  enabledGeofenceModes: data?.enabledGeofenceModes ?? [],
+  defaultGeofenceToleranceMeters: String(data?.defaultGeofenceToleranceMeters ?? 100),
+  defaultGeofenceRadiusMeters: String(data?.defaultGeofenceRadiusMeters ?? 150),
+  visitRescheduleToleranceWorkdays: String(data?.visitRescheduleToleranceWorkdays ?? 2),
+  defaultCurrency: data?.defaultCurrency ?? '',
+  timezone: data?.timezone ?? '',
+});
+
 /** Tenant-wide defaults used by forms and projects (Phase 6). Requires `tenant:manage_settings`. */
 export function WorkspaceSettingsCard() {
   const { data, isLoading } = useTenantSettingsQuery();
   const saveMutation = useUpdateTenantSettingsMutation();
 
-  const [mode, setMode] = useState<OrgInputMode>('BOTH');
-  const [geofenceModes, setGeofenceModes] = useState<GeofenceMode[]>([]);
-  const [tolerance, setTolerance] = useState('100');
-  const [radius, setRadius] = useState('150');
-  const [visitTolerance, setVisitTolerance] = useState('2');
-  const [currency, setCurrency] = useState('');
-  const [timezone, setTimezone] = useState('');
-  const [errors, setErrors] = useState<FieldErrors>({});
+  const form = useZodForm(WorkspaceSettingsFormSchema, { defaultValues: formDefaults(undefined) });
+  const { register, reset, watch, setValue, setError, handleSubmit, formState } = form;
+  const mode = watch('organizationInputMode');
+  const geofenceModes = watch('enabledGeofenceModes');
 
   useEffect(() => {
     if (!data) return;
-    setMode(data.organizationInputMode);
-    setGeofenceModes(data.enabledGeofenceModes);
-    setTolerance(String(data.defaultGeofenceToleranceMeters));
-    setRadius(String(data.defaultGeofenceRadiusMeters));
-    setVisitTolerance(String(data.visitRescheduleToleranceWorkdays));
-    setCurrency(data.defaultCurrency);
-    setTimezone(data.timezone);
-    setErrors({});
-  }, [data]);
+    reset(formDefaults(data));
+  }, [data, reset]);
 
   if (isLoading || !data) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200/80 p-6 flex justify-center">
-        <Loader size="sm" />
+        <Loader size="sm" inline />
       </div>
     );
   }
 
-  const toggleGeofenceMode = (m: GeofenceMode) =>
-    setGeofenceModes((list) => (list.includes(m) ? list.filter((x) => x !== m) : [...list, m]));
+  // Client checks once touched; server issues (set after a failed save) once submitted.
+  const errors: FieldErrors = {
+    organizationInputMode: visibleError(form, 'organizationInputMode'),
+    enabledGeofenceModes: visibleError(form, 'enabledGeofenceModes'),
+    defaultGeofenceToleranceMeters: visibleError(form, 'defaultGeofenceToleranceMeters'),
+    defaultGeofenceRadiusMeters: visibleError(form, 'defaultGeofenceRadiusMeters'),
+    visitRescheduleToleranceWorkdays: visibleError(form, 'visitRescheduleToleranceWorkdays'),
+    defaultCurrency: visibleError(form, 'defaultCurrency'),
+    timezone: visibleError(form, 'timezone'),
+    _: formState.errors.root?.server?.message,
+  };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const local: FieldErrors = {};
-    const toleranceNum = Number(tolerance);
-    if (geofenceModes.length === 0) local.enabledGeofenceModes = 'Enable at least one geofence mode';
-    if (tolerance.trim() === '' || !Number.isInteger(toleranceNum) || toleranceNum < 0 || toleranceNum > 1000) {
-      local.defaultGeofenceToleranceMeters = 'Enter a whole number from 0 to 1000';
-    }
-    const radiusNum = Number(radius);
-    if (radius.trim() === '' || !Number.isInteger(radiusNum) || radiusNum < 20 || radiusNum > 50000) {
-      local.defaultGeofenceRadiusMeters = 'Enter a whole number from 20 to 50,000';
-    }
-    const visitToleranceNum = Number(visitTolerance);
-    if (visitTolerance.trim() === '' || !Number.isInteger(visitToleranceNum) || visitToleranceNum < 0 || visitToleranceNum > 10) {
-      local.visitRescheduleToleranceWorkdays = 'Enter a whole number from 0 to 10';
-    }
-    if (!/^[A-Za-z]{3}$/.test(currency.trim())) local.defaultCurrency = 'Use a 3-letter ISO 4217 code, e.g. NGN';
-    if (!timezone.trim()) local.timezone = 'Choose a time zone';
-    if (Object.keys(local).length) {
-      setErrors(local);
-      return;
-    }
-    setErrors({});
+  const toggleGeofenceMode = (m: GeofenceMode) =>
+    setValue(
+      'enabledGeofenceModes',
+      geofenceModes.includes(m) ? geofenceModes.filter((x) => x !== m) : [...geofenceModes, m],
+      { shouldDirty: true, shouldTouch: true, shouldValidate: true }
+    );
+
+  const handleSave = handleSubmit(async (payload) => {
     try {
-      await saveMutation.mutateAsync({
-        organizationInputMode: mode,
-        // Keep the canonical order so the stored list is stable.
-        enabledGeofenceModes: GeofenceModeEnum.options.filter((m) => geofenceModes.includes(m)),
-        defaultGeofenceToleranceMeters: toleranceNum,
-        defaultGeofenceRadiusMeters: radiusNum,
-        visitRescheduleToleranceWorkdays: visitToleranceNum,
-        defaultCurrency: currency.trim().toUpperCase(),
-        timezone: timezone.trim(),
-      });
+      await saveMutation.mutateAsync(payload);
     } catch (err) {
       // The mutation hook shows the toast; show field errors here.
-      setErrors(serverFieldErrors(err));
+      for (const [key, message] of Object.entries(serverFieldErrors(err))) {
+        if (!message) continue;
+        if (key === '_' || !(key in formDefaults(undefined))) setError('root.server', { type: 'server', message });
+        else setError(key as keyof WorkspaceSettingsFormValues, { type: 'server', message });
+      }
     }
-  };
+  });
 
   return (
     <form onSubmit={handleSave} noValidate className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-5">
@@ -144,7 +164,7 @@ export function WorkspaceSettingsCard() {
       <fieldset>
         <legend className="text-xs font-semibold text-slate-800">How organisations are entered</legend>
         <p className="text-[11px] text-slate-500 mt-0.5 mb-2">
-          Applies to monitor, lender and contractor fields on projects, and to a user&rsquo;s organisation.
+          Applies to monitor, funder and contractor fields on projects, and to a user&rsquo;s organisation.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
           {INPUT_MODES.map((opt) => {
@@ -158,10 +178,8 @@ export function WorkspaceSettingsCard() {
               >
                 <input
                   type="radio"
-                  name="organizationInputMode"
                   value={opt.value}
-                  checked={checked}
-                  onChange={() => setMode(opt.value)}
+                  {...register('organizationInputMode')}
                   className="mt-0.5 h-4 w-4 border-slate-300 text-brand-primary focus:ring-brand-primary"
                 />
                 <span>
@@ -225,10 +243,9 @@ export function WorkspaceSettingsCard() {
             min={0}
             max={1000}
             step={1}
-            value={tolerance}
+            {...register('defaultGeofenceToleranceMeters')}
             aria-invalid={Boolean(errors.defaultGeofenceToleranceMeters)}
             aria-describedby="ws-tolerance-hint"
-            onChange={(e) => setTolerance(e.target.value)}
             className={inputClass(Boolean(errors.defaultGeofenceToleranceMeters))}
           />
           <p id="ws-tolerance-hint" className="text-[11px] text-slate-500 mt-1">
@@ -250,14 +267,13 @@ export function WorkspaceSettingsCard() {
             min={20}
             max={50000}
             step={1}
-            value={radius}
+            {...register('defaultGeofenceRadiusMeters')}
             aria-invalid={Boolean(errors.defaultGeofenceRadiusMeters)}
             aria-describedby="ws-radius-hint"
-            onChange={(e) => setRadius(e.target.value)}
             className={inputClass(Boolean(errors.defaultGeofenceRadiusMeters))}
           />
           <p id="ws-radius-hint" className="text-[11px] text-slate-500 mt-1">
-            20 to 50,000. A new radial site boundary, and the one made from a workbook's GPS point, start with this radius.
+            20 to 50,000. A new radial site boundary, and the one made from a needs assessment's GPS point, start with this radius.
             Each project can change its own.
           </p>
           {errors.defaultGeofenceRadiusMeters && (
@@ -276,10 +292,9 @@ export function WorkspaceSettingsCard() {
             min={0}
             max={10}
             step={1}
-            value={visitTolerance}
+            {...register('visitRescheduleToleranceWorkdays')}
             aria-invalid={Boolean(errors.visitRescheduleToleranceWorkdays)}
             aria-describedby="ws-visit-tolerance-hint"
-            onChange={(e) => setVisitTolerance(e.target.value)}
             className={inputClass(Boolean(errors.visitRescheduleToleranceWorkdays))}
           />
           <p id="ws-visit-tolerance-hint" className="text-[11px] text-slate-500 mt-1">
@@ -298,11 +313,10 @@ export function WorkspaceSettingsCard() {
             id="ws-currency"
             type="text"
             maxLength={3}
-            value={currency}
+            {...register('defaultCurrency', { setValueAs: (v: string) => v.toUpperCase() })}
             placeholder="NGN"
             aria-invalid={Boolean(errors.defaultCurrency)}
             aria-describedby="ws-currency-hint"
-            onChange={(e) => setCurrency(e.target.value.toUpperCase())}
             className={`${inputClass(Boolean(errors.defaultCurrency))} font-mono uppercase`}
           />
           <p id="ws-currency-hint" className="text-[11px] text-slate-500 mt-1">
@@ -319,12 +333,11 @@ export function WorkspaceSettingsCard() {
             id="ws-timezone"
             type="text"
             list="ws-timezone-options"
-            value={timezone}
+            {...register('timezone')}
             placeholder="Africa/Lagos"
             autoComplete="off"
             aria-invalid={Boolean(errors.timezone)}
             aria-describedby="ws-timezone-hint"
-            onChange={(e) => setTimezone(e.target.value)}
             className={inputClass(Boolean(errors.timezone))}
           />
           <datalist id="ws-timezone-options">
@@ -342,13 +355,15 @@ export function WorkspaceSettingsCard() {
       {errors._ && <p className="text-[11px] text-rose-600">{errors._}</p>}
 
       <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={saveMutation.isPending}
-          className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+        <SubmitButton
+          form={form}
+          pending={saveMutation.isPending}
+          pendingLabel="Saving..."
+          hint="Fix the highlighted settings to save."
+          className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
         >
-          {saveMutation.isPending ? 'Saving...' : 'Save workspace settings'}
-        </button>
+          Save workspace settings
+        </SubmitButton>
       </div>
     </form>
   );

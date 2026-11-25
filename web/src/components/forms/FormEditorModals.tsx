@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from "react";
-import type { FacilityArchetype, FormField } from "@insite/shared";
+import { FormFieldSchema, validateFormFields, type FacilityArchetype, type FormField } from "@insite/shared";
 import { ModalShell } from "../common/ModalShell";
 import { primaryButton, secondaryButton } from "../contracts/contractUi";
 import { useLeaveGuard } from "../../lib/navigationGuard";
 import { useFormComponentVersionsQuery } from "../../queries/forms/useFormQueries";
 import type { FormComponentKind } from "../../api/forms/formsApi";
-import { fieldsAreValid, FormFieldsEditor, fromEditorFields, toEditorFields, type EditorField } from "./FormFieldsEditor";
+import { FormFieldsEditor, fromEditorFields, toEditorFields, type EditorField } from "./FormFieldsEditor";
 import { formatDateTimeShort } from "../../lib/formatters";
 
 /**
@@ -22,6 +22,8 @@ export function FieldsEditorModal({
   header,
   headerValid = true,
   headerDirty = false,
+  headerIssue,
+  requestIssues,
   usageCount,
   pending,
   onClose,
@@ -36,6 +38,10 @@ export function FieldsEditorModal({
   header?: React.ReactNode;
   headerValid?: boolean;
   headerDirty?: boolean;
+  /** Shown next to Save while the header inputs are invalid. */
+  headerIssue?: string;
+  /** The whole save request against its shared schema; messages of what it would refuse. */
+  requestIssues?: (fields: FormField[]) => string[];
   /** Snapshots that use the version being edited: saving creates a new version when above 0. */
   usageCount: number;
   pending: boolean;
@@ -44,8 +50,23 @@ export function FieldsEditorModal({
 }) {
   const [fields, setFields] = useState<EditorField[]>(() => toEditorFields(initialFields));
   const initialJson = useMemo(() => JSON.stringify(initialFields), [initialFields]);
-  const dirty = headerDirty || JSON.stringify(fromEditorFields(fields)) !== initialJson;
-  const valid = headerValid && fieldsAreValid(fields, context);
+  const plain = useMemo(() => fromEditorFields(fields), [fields]);
+  const dirty = headerDirty || JSON.stringify(plain) !== initialJson;
+  // Validated as you edit, with the rules the server runs (shared validateFormFields and schemas).
+  const fieldIssues = useMemo(() => {
+    const out: string[] = [];
+    if (plain.length === 0) out.push("Add at least one question.");
+    for (const i of validateFormFields(plain, { context })) out.push(`Question ${i.index + 1}: ${i.message}`);
+    plain.forEach((f, index) => {
+      const parsed = FormFieldSchema.safeParse(f);
+      if (!parsed.success) out.push(`Question ${index + 1}: ${parsed.error.issues[0]?.message ?? "check this question"}`);
+    });
+    return out;
+  }, [plain, context]);
+  const contractIssues = requestIssues ? requestIssues(plain) : [];
+  const valid = headerValid && fieldIssues.length === 0 && contractIssues.length === 0;
+  const firstIssue = !headerValid ? headerIssue ?? "Complete the fields above." : fieldIssues[0] ?? contractIssues[0];
+  const issueCount = (headerValid ? 0 : 1) + fieldIssues.length + (fieldIssues.length ? 0 : contractIssues.length);
 
   const save = async () => {
     if (!valid) return false;
@@ -73,9 +94,23 @@ export function FieldsEditorModal({
           <button type="button" className={secondaryButton} onClick={close}>
             Cancel
           </button>
-          <button type="button" className={primaryButton} disabled={pending || !valid || !dirty} onClick={() => void save()}>
-            {pending ? "Saving…" : "Save"}
-          </button>
+          <span className="inline-flex flex-col items-end gap-1">
+            <button
+              type="button"
+              className={primaryButton}
+              disabled={pending || !valid || !dirty}
+              aria-describedby={!valid ? "fields-editor-save-hint" : undefined}
+              onClick={() => void save()}
+            >
+              {pending ? "Saving…" : "Save"}
+            </button>
+            {!valid && firstIssue && (
+              <span id="fields-editor-save-hint" className="max-w-sm text-right text-[11px] text-slate-500">
+                Fix to save: {firstIssue}
+                {issueCount > 1 && ` (+${issueCount - 1} more)`}
+              </span>
+            )}
+          </span>
         </div>
       </div>
     </ModalShell>

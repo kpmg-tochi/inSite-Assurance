@@ -18,6 +18,7 @@ import {
 import { CustomSelect } from "../../components/common";
 import { DocumentDrawer } from "../../components/documents/DocumentDrawer";
 import { DocumentUploadDialog } from "../../components/documents/DocumentUploadDialog";
+import { canOfferSignOff } from "../../components/documents/documentSignOff";
 import { useOpenDocumentMutation } from "../../mutations/contracts/useContractMutations";
 
 /**
@@ -159,7 +160,7 @@ export function ProjectDocumentsPage({
           >
             Open
           </TableActionButton>
-          {d.canSign && !d.isArchived && (
+          {canOfferSignOff(d, hasPermission) && (
             <TableActionButton
               variant="primary"
               onClick={() => setParam("documentId", d.id)}

@@ -62,15 +62,19 @@ export type ProjectStatus = z.infer<typeof ProjectStatusEnum>;
 export const ConstructionPhaseEnum = z.enum(['ACTIVE_CONSTRUCTION', 'HANDOVER_IN_PROGRESS', 'RETENTION_PERIOD', 'COMPLETED_CLOSED']);
 export type ConstructionPhase = z.infer<typeof ConstructionPhaseEnum>;
 
+/**
+ * Permission categories follow the programme's flow and the web navigation (redesign R7a). They
+ * group the catalogue in the role editor; nothing checks a category.
+ */
 export const PermissionCategoryEnum = z.enum([
   'TENANT_ADMIN',
+  'FORMS_FACILITIES',
   'PORTFOLIO_PROJECTS',
-  'BOQ_SCHEDULE',
-  'MOBILIZATION_ASSURANCE',
-  'FIELD_PRESENCE',
-  'REPORT_APPROVALS',
+  'SCOPE_SPRINTS',
+  'CONTRACT_KICKOFF',
+  'VISITS_FINDINGS',
   'PAYMENTS',
-  'AUDIT_CLOSEOUT',
+  'COMPLETION_CLOSURE',
 ]);
 export type PermissionCategory = z.infer<typeof PermissionCategoryEnum>;
 
@@ -79,36 +83,36 @@ export const PERMISSION_CATEGORY_META: Record<
   { label: string; description: string }
 > = {
   TENANT_ADMIN: {
-    label: 'Tenant, Roles & Branding',
-    description: 'Manage client white-label branding, custom roles, user invitations, and workflow templates.',
+    label: 'Workspace & access',
+    description: 'Workspace settings and branding, users and roles, organisations, regions, project types, workflow and document types.',
+  },
+  FORMS_FACILITIES: {
+    label: 'Forms & facilities',
+    description: 'The facility catalogue and the visit form library.',
   },
   PORTFOLIO_PROJECTS: {
-    label: 'Portfolio & Project Visibility',
-    description: 'Control project creation, baseline editing, cross-tenant visibility, and executive risk views.',
+    label: 'Portfolio & projects',
+    description: 'Which projects a user sees, the portfolio and KPIs, and creating, setting up and activating projects.',
   },
-  BOQ_SCHEDULE: {
-    label: 'BOQ, Schedule & Contractors',
-    description: 'Upload BOQs, configure hold-points, assign trade contractors, and analyze/refactor schedules.',
+  SCOPE_SPRINTS: {
+    label: 'Scope & sprints',
+    description: 'Sprints, facility units and BoQ lines, the needs assessment template, the schedule status and sprint verification.',
   },
-  MOBILIZATION_ASSURANCE: {
-    label: 'Mobilization & Access Assurance',
-    description: 'Revoke mobile device sessions.',
+  CONTRACT_KICKOFF: {
+    label: 'Contract & kick-off',
+    description: 'The project contractor, contract milestones, the kick-off meeting, default cases and the document register.',
   },
-  FIELD_PRESENCE: {
-    label: 'Field Capture & Site Presence',
-    description: 'Submit field reports and captures from the mobile app.',
-  },
-  REPORT_APPROVALS: {
-    label: 'Report Review & Approvals',
-    description: 'Inspect submitted workday/period reports, raise verification queries, and approve completion.',
+  VISITS_FINDINGS: {
+    label: 'Visits & findings',
+    description: 'Planning, carrying out and reviewing visits; findings, escalations, defects and incidents.',
   },
   PAYMENTS: {
-    label: 'Payments & Retention',
-    description: 'View and record contractor payments made outside the platform, and track retention held and released.',
+    label: 'Payments & retention',
+    description: 'The payment record (payments are made outside the platform), retention held and released, and payment exceptions.',
   },
-  AUDIT_CLOSEOUT: {
-    label: 'Audit, Handover & Retention',
-    description: 'Inspect cryptographic audit logs, record handover responses, and manage retention defects.',
+  COMPLETION_CLOSURE: {
+    label: 'Completion & closure',
+    description: 'Certificates of Completion, handover, the closure checklist and audit, contractor ratings, lessons learned and the audit ledger.',
   },
 };
 
@@ -121,64 +125,60 @@ export interface SystemPermissionCatalogItem {
   unlocksViews: string[];
 }
 
+/**
+ * The one permission catalogue. Code owns the permission rows: `syncPermissionCatalog` (server)
+ * upserts every entry by key at start-up, in the seed and in tenant provisioning, and never
+ * deletes. Renaming or removing a key is migration SQL (redesign R7a), so role grants survive.
+ */
 export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
-  // 1. TENANT_ADMIN
+  // 1. TENANT_ADMIN: Workspace & access
   {
     key: 'tenant:manage_branding',
-    name: 'Manage Tenant White-Label Branding',
-    description: 'Customize organization logo, primary palette, and PDF valuation report headers.',
+    name: 'Manage Workspace Branding',
+    description: 'Change the workspace logo, colours and the header shown on generated PDFs.',
     category: 'TENANT_ADMIN',
     surface: 'WEB',
-    unlocksViews: ['Settings -> Tenant Branding'],
+    unlocksViews: ['Settings -> Branding'],
+  },
+  {
+    key: 'tenant:manage_settings',
+    name: 'Manage Workspace Settings',
+    description: 'Change workspace settings such as currency, timezone, the default site radius, the visit reschedule tolerance and the security policy.',
+    category: 'TENANT_ADMIN',
+    surface: 'WEB',
+    unlocksViews: ['Settings -> Workspace settings'],
   },
   {
     key: 'roles:create_edit',
-    name: 'Create & Customize Roles & Permissions',
-    description: 'Create custom client roles, rename role labels, and assign categorized permissions.',
+    name: 'Create & Edit Roles',
+    description: 'Create roles, rename them and choose their permissions.',
     category: 'TENANT_ADMIN',
     surface: 'WEB',
-    unlocksViews: ['Settings -> Roles & Permissions'],
+    unlocksViews: ['Settings -> Roles & permissions'],
   },
   {
     key: 'users:invite_manage',
     name: 'Manage Users & Project Assignments',
-    description: 'Create tenant users, assign custom roles, and scope user visibility to specific projects.',
+    description: 'Create users, give them a role and assign them to projects.',
     category: 'TENANT_ADMIN',
     surface: 'WEB',
-    unlocksViews: ['Settings -> Users & Visibility'],
+    unlocksViews: ['Settings -> Users & visibility'],
   },
   {
-    key: 'tenant:manage_settings',
-    name: 'Manage Tenant Settings',
-    description: 'Change tenant-wide settings such as currency, timezone and security policy.',
+    key: 'users:revoke_device',
+    name: 'Revoke Field App Devices & Sessions',
+    description: 'See the field app accounts signed in on each project, and revoke or restore a device or a session.',
     category: 'TENANT_ADMIN',
     surface: 'WEB',
-    unlocksViews: ['Settings -> Tenant Settings'],
+    unlocksViews: ['Settings -> Field accounts'],
   },
   {
     key: 'organizations:manage',
     name: 'Manage Organisation Directory',
-    description: 'Add, edit, tag and archive the organisations offered in project and user forms.',
+    description: 'Add, edit, tag and archive the organisations offered in project and user forms, and arrange them in the hierarchy.',
     category: 'TENANT_ADMIN',
     surface: 'WEB',
     unlocksViews: ['Settings -> Organisations'],
-  },
-  {
-    key: 'templates:manage_workflows',
-    name: 'Configure Project Workflow Templates',
-    description: 'Define reusable client workflow templates, required steps, and approval chains.',
-    category: 'TENANT_ADMIN',
-    surface: 'WEB',
-    unlocksViews: ['Workflow Templates'],
-  },
-  // Phase 11: delivery models
-  {
-    key: 'project_types:manage',
-    name: 'Manage Project Types',
-    description: 'Define delivery models (project types): their workflow template, ownership and party rules, and defaults.',
-    category: 'TENANT_ADMIN',
-    surface: 'WEB',
-    unlocksViews: ['Settings -> Project Types'],
   },
   {
     key: 'regions:manage',
@@ -188,321 +188,299 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     surface: 'WEB',
     unlocksViews: ['Settings -> Regions'],
   },
-
-  // 2. PORTFOLIO_PROJECTS
   {
-    key: 'projects:view_assigned',
-    name: 'View Assigned Projects',
-    description: 'View dashboard, map, and baseline details for projects explicitly assigned to the user.',
-    category: 'PORTFOLIO_PROJECTS',
+    key: 'project_types:manage',
+    name: 'Manage Project Types',
+    description: 'Define the project types (delivery models): workflow template, ownership rules, kick-off and milestones, visit plan, closure rules and KPI targets.',
+    category: 'TENANT_ADMIN',
     surface: 'WEB',
-    unlocksViews: ['All Projects (Assigned)', 'Project Dashboard'],
+    unlocksViews: ['Settings -> Project types'],
   },
   {
-    key: 'projects:view_all_tenant',
-    name: 'View All Projects Across Tenant',
-    description: 'Global visibility across every project belonging to the client tenant.',
-    category: 'PORTFOLIO_PROJECTS',
+    key: 'templates:manage_workflows',
+    name: 'Configure Workflow Templates',
+    description: 'Define reusable workflow templates: process switches and the visit review and default case approval chains.',
+    category: 'TENANT_ADMIN',
     surface: 'WEB',
-    unlocksViews: ['All Projects (Tenant-Wide)'],
-  },
-  {
-    key: 'projects:view_organization_tree',
-    name: 'View Projects Owned by My Organisation Tree',
-    description:
-      "See every project owned by the user's organisation or by any organisation below it in the hierarchy (Phase 11).",
-    category: 'PORTFOLIO_PROJECTS',
-    surface: 'WEB',
-    unlocksViews: ['All Projects (Organisation Tree)'],
-  },
-  {
-    key: 'projects:view_portfolio',
-    name: 'View Portfolio Dashboard',
-    description: 'Open the portfolio dashboard: a map of every visible project with portfolio KPI cards.',
-    category: 'PORTFOLIO_PROJECTS',
-    surface: 'WEB',
-    unlocksViews: ['Portfolio Dashboard'],
-  },
-  {
-    key: 'projects:create',
-    name: 'Create & Initialize New Projects',
-    description: 'Create new project baselines, geofences, tranches, and initial BOQ schedules.',
-    category: 'PORTFOLIO_PROJECTS',
-    surface: 'WEB',
-    unlocksViews: ['+ New Project Wizard'],
-  },
-  {
-    key: 'projects:activate',
-    name: 'Activate Draft Projects',
-    description: 'Set a completed draft project live: makes it visible on mobile and in portfolio views.',
-    category: 'PORTFOLIO_PROJECTS',
-    surface: 'WEB',
-    unlocksViews: ['Project setup -> Set project active'],
-  },
-  {
-    key: 'projects:edit_baseline',
-    name: 'Edit Project Baseline, Geofence & Cadence',
-    description: 'Update project parameters, geofence boundaries, and reporting cadence rules.',
-    category: 'PORTFOLIO_PROJECTS',
-    surface: 'WEB',
-    unlocksViews: ['Project Baseline Settings'],
-  },
-  {
-    key: 'projects:manage_standards_docs',
-    name: 'Manage Standards & Needs Assessments',
-    description: 'Upload needs assessment documents and manage engineering standards specs.',
-    category: 'PORTFOLIO_PROJECTS',
-    surface: 'WEB',
-    unlocksViews: ['Standards & Needs Docs'],
-  },
-
-  // 3. BOQ_SCHEDULE
-  {
-    key: 'boq:view',
-    name: 'View Scope & Sprints',
-    description: 'Read the project scope: sprints, facility units and BoQ lines (hold-point flags read-only).',
-    category: 'BOQ_SCHEDULE',
-    surface: 'BOTH',
-    unlocksViews: ['Scope & sprints', 'Mobile WBS Inbox'],
-  },
-  {
-    key: 'boq:upload_edit',
-    name: 'Edit Scope & Sprints',
-    description: 'Edit sprints, facility units and BoQ lines, and import the needs-assessment workbook into a draft.',
-    category: 'BOQ_SCHEDULE',
-    surface: 'WEB',
-    unlocksViews: ['Scope & sprints editing', 'Workbook import'],
-  },
-  {
-    key: 'contractors:manage_packages',
-    name: 'Manage the Project Contractor',
-    description: 'Add, change or remove the project\'s contractor (one per project).',
-    category: 'BOQ_SCHEDULE',
-    surface: 'WEB',
-    unlocksViews: ['Project Contractors'],
-  },
-  {
-    key: 'schedule:view_variance',
-    name: 'View Schedule Status',
-    description: 'See the sprint schedule badge and get the notification when a project falls behind.',
-    category: 'BOQ_SCHEDULE',
-    surface: 'WEB',
-    unlocksViews: ['Schedule badge', 'Behind-schedule notifications'],
-  },
-  {
-    key: 'documents:view',
-    name: 'View Project Documents',
-    description: 'Open the project document register, its versions and sign-offs. Contractors see their own and shared types only.',
-    category: 'PORTFOLIO_PROJECTS',
-    surface: 'WEB',
-    unlocksViews: ['Documents Tab'],
-  },
-  {
-    key: 'documents:upload',
-    name: 'Upload Project Documents',
-    description: 'Add documents and new versions to the project register, and archive them.',
-    category: 'PORTFOLIO_PROJECTS',
-    surface: 'WEB',
-    unlocksViews: ['Documents Tab'],
+    unlocksViews: ['Settings -> Workflow templates'],
   },
   {
     key: 'documents:manage_types',
     name: 'Manage Document Types',
-    description: 'Configure the tenant document types: sign-off, allowed file types and contractor visibility.',
+    description: 'Configure the document types of the register: sign-off, sign-off permission and allowed file types.',
     category: 'TENANT_ADMIN',
     surface: 'WEB',
-    unlocksViews: ['Document Types Settings'],
+    unlocksViews: ['Settings -> Document types'],
   },
-  // Redesign R2a
+
+  // 2. FORMS_FACILITIES: Forms & facilities
   {
     key: 'facilities:manage',
     name: 'Manage Facility Catalogue',
     description: 'Add, rename, re-archetype and retire the facilities that scope lines are tagged with.',
-    category: 'TENANT_ADMIN',
+    category: 'FORMS_FACILITIES',
     surface: 'WEB',
-    unlocksViews: ['Settings -> Facilities'],
+    unlocksViews: ['Forms & facilities -> Facilities'],
   },
-  // Redesign R3
   {
     key: 'forms:manage',
     name: 'Manage Form Library',
     description: 'Build and version the visit form library: fixed sections, facility sub-forms and visit form templates.',
-    category: 'TENANT_ADMIN',
+    category: 'FORMS_FACILITIES',
     surface: 'WEB',
-    unlocksViews: ['Settings -> Forms & facilities'],
-  },
-  {
-    key: 'milestones:manage',
-    name: 'Manage Contract Milestones',
-    description: 'Complete contract milestones and move the anchor dates (contract award, kick-off) they are computed from.',
-    category: 'PORTFOLIO_PROJECTS',
-    surface: 'WEB',
-    unlocksViews: ['Milestones Tab'],
-  },
-  {
-    key: 'milestones:waive',
-    name: 'Waive Contract Milestones',
-    description: 'Waive a contract milestone with a recorded reason.',
-    category: 'PORTFOLIO_PROJECTS',
-    surface: 'WEB',
-    unlocksViews: ['Milestones Tab'],
-  },
-  {
-    key: 'kickoff:manage',
-    name: 'Manage the Kick-off Meeting',
-    description: 'Schedule the kick-off meeting, send the notice, and record attendance, quorum and minutes.',
-    category: 'PORTFOLIO_PROJECTS',
-    surface: 'WEB',
-    unlocksViews: ['Kick-off Meeting'],
-  },
-  {
-    key: 'contracts:raise_default',
-    name: 'Raise and Review Contractor Default Cases',
-    description: 'Open a default case against a contractor and act on its review steps.',
-    category: 'PORTFOLIO_PROJECTS',
-    surface: 'WEB',
-    unlocksViews: ['Default Cases'],
-  },
-  {
-    key: 'contracts:decide_default',
-    name: 'Decide Contractor Default Cases',
-    description: 'Make the final decision on a default case: cure period, extension, termination or closure.',
-    category: 'PORTFOLIO_PROJECTS',
-    surface: 'WEB',
-    unlocksViews: ['Default Cases'],
+    unlocksViews: ['Forms & facilities'],
   },
 
-  // 4. MOBILIZATION_ASSURANCE
+  // 3. PORTFOLIO_PROJECTS: Portfolio & projects
   {
-    key: 'sessions:revoke_device',
-    name: 'Revoke or Restore Mobile Device Sessions',
-    description: 'Manage active mobile field agent sessions and revoke compromised devices.',
-    category: 'MOBILIZATION_ASSURANCE',
+    key: 'projects:view_assigned',
+    name: 'View Assigned Projects',
+    description: 'Open the projects the user is assigned to.',
+    category: 'PORTFOLIO_PROJECTS',
     surface: 'WEB',
-    unlocksViews: ['Settings -> Active Field Personnel'],
+    unlocksViews: ['Projects (assigned)', 'Project Overview'],
+  },
+  {
+    key: 'projects:view_all_tenant',
+    name: 'View Every Project',
+    description: 'See every project in the workspace.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Projects (all)'],
+  },
+  {
+    key: 'projects:view_organization_tree',
+    name: 'View Projects Owned by My Organisation Tree',
+    description: "See every project owned by the user's organisation or by any organisation below it in the hierarchy.",
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Projects (organisation tree)'],
+  },
+  {
+    key: 'projects:view_portfolio',
+    name: 'View Portfolio Dashboard',
+    description: 'Open the portfolio dashboard: a map of every visible project with portfolio cards.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Portfolio'],
+  },
+  {
+    key: 'kpis:view',
+    name: 'View Programme KPIs',
+    description:
+      'Open the Programme KPIs page and the KPI card of a project: stage KPIs over the visible projects, with targets per project type.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Programme KPIs'],
+  },
+  {
+    key: 'projects:create',
+    name: 'Create Projects',
+    description: 'Create draft projects and fill in their setup.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['New project'],
+  },
+  {
+    key: 'projects:activate',
+    name: 'Activate Draft Projects',
+    description: 'Set a completed draft live: visits are proposed, and the project shows in the field app and the portfolio.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Project setup -> Activate'],
+  },
+  {
+    key: 'projects:edit_baseline',
+    name: 'Edit Project Details & Site',
+    description: 'Change project details, the site boundary, working days, the team and the visit settings.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Project settings'],
+  },
+  {
+    key: 'projects:manage_standards_docs',
+    name: 'Manage Standards & Needs Assessments',
+    description: 'Upload needs-assessment documents and manage the standards reference documents of a project.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Project setup -> Standards'],
   },
 
-  // 5. FIELD_PRESENCE
-
+  // 4. SCOPE_SPRINTS: Scope & sprints
   {
-    key: 'field:submit_report',
-    name: 'Capture Field Evidence & Submit Reports',
-    description: 'Capture live geotagged photos, voice notes, and submit period/workday reports.',
-    category: 'FIELD_PRESENCE',
-    surface: 'MOBILE',
-    unlocksViews: ['Mobile WBS Chat & Camera'],
-  },
-  {
-    key: 'field:raise_incident',
-    name: 'Submit Special Incident / Whistleblower Alert',
-    description: 'Escalate safety emergencies, material failures, or confidential disclosures.',
-    category: 'FIELD_PRESENCE',
-    surface: 'MOBILE',
-    unlocksViews: ['Mobile Incident Escalation'],
-  },
-
-  // 6. REPORT_APPROVALS
-  {
-    key: 'reports:view_all',
-    name: 'View Submitted Field Reports',
-    description: 'Inspect submitted workday/period reports, AI assessments, and evidence.',
-    category: 'REPORT_APPROVALS',
-    surface: 'WEB',
-    unlocksViews: ['Daily Reports'],
-  },
-  {
-    key: 'reports:raise_query',
-    name: 'Raise Verification Queries on Reports/IPCs',
-    description: 'Dispatch clarification queries to field WBS chats or IPC line items.',
-    category: 'REPORT_APPROVALS',
-    surface: 'WEB',
-    unlocksViews: ['Raise Query Composer'],
-  },
-  {
-    key: 'reports:respond_query',
-    name: 'Respond to Queries & Resubmit Evidence',
-    description: 'Reply to monitor queries on IPC claims or mobile WBS threads.',
-    category: 'REPORT_APPROVALS',
+    key: 'scope:view',
+    name: 'View Scope & Sprints',
+    description: 'Read the project scope: sprints, facility units and BoQ lines.',
+    category: 'SCOPE_SPRINTS',
     surface: 'BOTH',
-    unlocksViews: ['IPC Query Reply', 'Mobile Revalidation'],
+    unlocksViews: ['Scope & sprints'],
   },
   {
-    key: 'reports:approve_completion',
-    name: 'Approve Field Reports as Completed',
-    description: 'Sign off submitted field reports when report approval gating is enabled.',
-    category: 'REPORT_APPROVALS',
+    key: 'scope:edit',
+    name: 'Edit Scope & Sprints',
+    description: 'Edit sprints, facility units and BoQ lines, and import a needs assessment into a draft.',
+    category: 'SCOPE_SPRINTS',
     surface: 'WEB',
-    unlocksViews: ['Report Approval Queue'],
-  },
-  // Phase 14: site inspections
-  {
-    key: 'inspections:submit',
-    name: 'Submit Site Inspection Reports',
-    description: 'Complete a checklist inspection (baseline, routine, mobilisation check, final evaluation) on mobile or web.',
-    category: 'REPORT_APPROVALS',
-    surface: 'BOTH',
-    unlocksViews: ['Mobile Inspection Flow', 'Inspections Tab'],
+    unlocksViews: ['Scope & sprints editing', 'Needs assessment import'],
   },
   {
-    key: 'inspections:view',
-    name: 'View Site Inspections',
-    description: 'See inspection reports, their answers and photos, findings and the supervision workload view.',
-    category: 'REPORT_APPROVALS',
+    key: 'sprints:view_status',
+    name: 'View Schedule Status',
+    description: 'See the sprint schedule badge and get the notification when a project falls behind.',
+    category: 'SCOPE_SPRINTS',
     surface: 'WEB',
-    unlocksViews: ['Inspections Tab', 'Supervisors View'],
-  },
-  {
-    key: 'inspections:manage_findings',
-    name: 'Raise and Close Inspection Findings',
-    description: 'Raise findings from failed inspection items, and resolve or dismiss them. Contractors resolve their own.',
-    category: 'REPORT_APPROVALS',
-    surface: 'BOTH',
-    unlocksViews: ['Findings Board', 'Mobile Findings'],
-  },
-
-  // Redesign R4: visits, sprint verification, finding escalation
-  {
-    key: 'visits:view',
-    name: 'View Visits',
-    description: 'See the visit plan and planner, visit forms, submissions, comments and the site log.',
-    category: 'REPORT_APPROVALS',
-    surface: 'BOTH',
-    unlocksViews: ['Visits Tab', 'Visit Planner'],
-  },
-  {
-    key: 'visits:plan',
-    name: 'Plan Visits',
-    description: 'Create, generate, publish, move, reassign and cancel visits, and accept or reject date proposals from officers.',
-    category: 'REPORT_APPROVALS',
-    surface: 'WEB',
-    unlocksViews: ['Visit Planner editing'],
-  },
-  {
-    key: 'visits:submit',
-    name: 'Carry Out Visits',
-    description: 'Respond to assigned visits (confirm, move, propose, decline), check in and submit visit forms from the field app.',
-    category: 'REPORT_APPROVALS',
-    surface: 'MOBILE',
-    unlocksViews: ['Mobile Visits'],
+    unlocksViews: ['Schedule badge', 'Behind-schedule notifications'],
   },
   {
     key: 'sprints:verify',
     name: 'Verify Sprints',
     description: 'Record whether an ended sprint was met, partly met or not met.',
-    category: 'REPORT_APPROVALS',
+    category: 'SCOPE_SPRINTS',
     surface: 'WEB',
     unlocksViews: ['Scope & sprints verification'],
+  },
+
+  // 5. CONTRACT_KICKOFF: Contract & kick-off
+  {
+    key: 'contractors:manage',
+    name: 'Manage the Project Contractor',
+    description: "Add, change or remove the project's contractor (one per project).",
+    category: 'CONTRACT_KICKOFF',
+    surface: 'WEB',
+    unlocksViews: ['Project setup -> Contractor'],
+  },
+  {
+    key: 'milestones:manage',
+    name: 'Manage Contract Milestones',
+    description: 'Complete contract milestones and move the anchor dates (contract award, kick-off) they are computed from.',
+    category: 'CONTRACT_KICKOFF',
+    surface: 'WEB',
+    unlocksViews: ['Kick-off & mobilisation -> Milestones'],
+  },
+  {
+    key: 'milestones:waive',
+    name: 'Waive Contract Milestones',
+    description: 'Waive a contract milestone with a recorded reason.',
+    category: 'CONTRACT_KICKOFF',
+    surface: 'WEB',
+    unlocksViews: ['Kick-off & mobilisation -> Milestones'],
+  },
+  {
+    key: 'kickoff:manage',
+    name: 'Manage the Kick-off Meeting',
+    description: 'Schedule the kick-off meeting, send the notice, and record attendance, quorum and minutes.',
+    category: 'CONTRACT_KICKOFF',
+    surface: 'WEB',
+    unlocksViews: ['Kick-off & mobilisation -> Kick-off'],
+  },
+  {
+    key: 'contracts:raise_default',
+    name: 'Raise and Review Contractor Default Cases',
+    description: 'Open a default case against the contractor and act on its review steps.',
+    category: 'CONTRACT_KICKOFF',
+    surface: 'WEB',
+    unlocksViews: ['Default cases'],
+  },
+  {
+    key: 'contracts:decide_default',
+    name: 'Decide Contractor Default Cases',
+    description: 'Make the final decision on a default case: cure period, extension, termination or closure.',
+    category: 'CONTRACT_KICKOFF',
+    surface: 'WEB',
+    unlocksViews: ['Default cases'],
+  },
+  {
+    key: 'documents:view',
+    name: 'View Project Documents',
+    description: 'Open the project document register, its versions and sign-offs.',
+    category: 'CONTRACT_KICKOFF',
+    surface: 'WEB',
+    unlocksViews: ['Documents'],
+  },
+  {
+    key: 'documents:upload',
+    name: 'Upload Project Documents',
+    description: 'Add documents and new versions to the project register, and archive them.',
+    category: 'CONTRACT_KICKOFF',
+    surface: 'WEB',
+    unlocksViews: ['Documents'],
+  },
+
+  // 6. VISITS_FINDINGS: Visits & findings
+  {
+    key: 'visits:view',
+    name: 'View Visits',
+    description: 'See the visit plan and planner, visit forms, submissions and their evidence, comments, the site log and the supervision workload.',
+    category: 'VISITS_FINDINGS',
+    surface: 'BOTH',
+    unlocksViews: ['Visits', 'Visit planner', 'Settings -> Supervisors'],
+  },
+  {
+    key: 'visits:plan',
+    name: 'Plan Visits',
+    description: 'Create, generate, publish, move, reassign and cancel visits, and accept or reject date proposals from officers.',
+    category: 'VISITS_FINDINGS',
+    surface: 'WEB',
+    unlocksViews: ['Visit planner editing'],
+  },
+  {
+    key: 'visits:submit',
+    name: 'Carry Out Visits',
+    description: 'Respond to assigned visits (confirm, move, propose, decline), check in, submit visit forms and keep the site log from the field app.',
+    category: 'VISITS_FINDINGS',
+    surface: 'MOBILE',
+    unlocksViews: ['Field app -> Visits'],
+  },
+  {
+    key: 'visits:review',
+    name: 'Review Visit Submissions',
+    description: 'Accept or return submitted visits on the review chain (the default step of the visit review chain).',
+    category: 'VISITS_FINDINGS',
+    surface: 'WEB',
+    unlocksViews: ['Visit review'],
+  },
+  {
+    key: 'findings:manage',
+    name: 'Raise and Close Findings',
+    description: 'Raise findings on a visit submission, and resolve or dismiss them.',
+    category: 'VISITS_FINDINGS',
+    surface: 'WEB',
+    unlocksViews: ['Visits -> Findings'],
   },
   {
     key: 'findings:receive_escalations',
     name: 'Receive Finding Escalations',
     description: 'Be notified when a finding stays open past the escalation period.',
-    category: 'REPORT_APPROVALS',
+    category: 'VISITS_FINDINGS',
     surface: 'WEB',
     unlocksViews: ['Notifications'],
   },
+  {
+    key: 'defects:manage',
+    name: 'Manage Defect Tickets',
+    description: 'Raise, assign and verify defect tickets in the liability period; officers close them with site photos from the field app.',
+    category: 'VISITS_FINDINGS',
+    surface: 'BOTH',
+    unlocksViews: ['Completion & handover -> Defects', 'Field app -> Defects'],
+  },
+  {
+    key: 'incidents:view',
+    name: 'View & Follow Up Incidents',
+    description: 'See the incidents raised from the field app on a project and be notified of new ones.',
+    category: 'VISITS_FINDINGS',
+    surface: 'WEB',
+    unlocksViews: ['Incidents'],
+  },
+  {
+    key: 'incidents:view_confidential',
+    name: 'View Confidential Reporter Identity',
+    description: 'See who reported a confidential incident disclosure. Grant sparingly.',
+    category: 'VISITS_FINDINGS',
+    surface: 'WEB',
+    unlocksViews: ['Incidents -> Reporter identity'],
+  },
 
-  // 7. PAYMENTS (redesign R1b: payments are made outside the platform and recorded here)
+  // 7. PAYMENTS: Payments & retention
   {
     key: 'payments:view',
     name: 'View Payments & Retention',
@@ -520,185 +498,126 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
     unlocksViews: ['Payments -> Record payment'],
   },
 
-  // 8. AUDIT_CLOSEOUT
-  {
-    key: 'incidents:view_confidential',
-    name: 'View Confidential Whistleblower Identity',
-    description: 'See the reporter identity on confidential whistleblower disclosures. Grant sparingly.',
-    category: 'AUDIT_CLOSEOUT',
-    surface: 'WEB',
-    unlocksViews: ['Incidents -> Reporter identity'],
-  },
-  {
-    key: 'audit:view_ledger',
-    name: 'Inspect Cryptographic Audit Ledger',
-    description: 'View immutable SHA-256 hash-chained governance events and resolve incidents.',
-    category: 'AUDIT_CLOSEOUT',
-    surface: 'WEB',
-    unlocksViews: ['Audit Ledger'],
-  },
-  {
-    key: 'handover:record_response',
-    name: 'Record Handover Responses',
-    description: "Record the beneficiary's handover response from the signed paper copy.",
-    category: 'AUDIT_CLOSEOUT',
-    surface: 'WEB',
-    unlocksViews: ['Project Handover Console'],
-  },
-  {
-    key: 'handover:review_feedback',
-    name: 'Review Stakeholder Handover Feedback',
-    description: 'Inspect stakeholder sign-offs, uploaded handover reports, and recordings.',
-    category: 'AUDIT_CLOSEOUT',
-    surface: 'WEB',
-    unlocksViews: ['Handover Feedback Viewer'],
-  },
-  {
-    key: 'retention:manage_defects',
-    name: 'Manage Retention Period Defect Tickets',
-    description: 'Log, assign, and verify maintenance/defect tickets during the retention period.',
-    category: 'AUDIT_CLOSEOUT',
-    surface: 'BOTH',
-    unlocksViews: ['Retention & Defects Console'],
-  },
-  // Phase 15: Certificate of Completion and closure governance
+  // 8. COMPLETION_CLOSURE: Completion & closure
   {
     key: 'completion:draft_certificate',
     name: 'Draft Certificates of Completion',
     description: "Draft the Certificate of Completion (scope and completion date) and record the beneficiary's signed paper copy.",
-    category: 'AUDIT_CLOSEOUT',
+    category: 'COMPLETION_CLOSURE',
     surface: 'WEB',
-    unlocksViews: ['Handover -> Completion'],
+    unlocksViews: ['Completion & handover -> Certificate'],
   },
   {
     key: 'completion:sign_certificate',
     name: 'Sign Certificates of Completion',
     description: 'Sign a Certificate of Completion in a signatory slot the project type opens to this permission.',
-    category: 'AUDIT_CLOSEOUT',
+    category: 'COMPLETION_CLOSURE',
     surface: 'WEB',
-    unlocksViews: ['Handover -> Completion'],
+    unlocksViews: ['Completion & handover -> Certificate'],
   },
   {
     key: 'completion:revoke_certificate',
     name: 'Revoke Certificates of Completion',
     description: 'Revoke an issued certificate with a reason, before the handover is accepted.',
-    category: 'AUDIT_CLOSEOUT',
+    category: 'COMPLETION_CLOSURE',
     surface: 'WEB',
-    unlocksViews: ['Handover -> Completion'],
+    unlocksViews: ['Completion & handover -> Certificate'],
+  },
+  {
+    key: 'handover:record_response',
+    name: 'Record Handover Responses',
+    description: "Record the beneficiary's handover response from the signed paper copy.",
+    category: 'COMPLETION_CLOSURE',
+    surface: 'WEB',
+    unlocksViews: ['Completion & handover -> Handover'],
+  },
+  {
+    key: 'handover:review_feedback',
+    name: 'Review Handover Responses',
+    description: 'Review a recorded handover response; accepting it issues the handover certificate. The person who recorded a response cannot review it.',
+    category: 'COMPLETION_CLOSURE',
+    surface: 'WEB',
+    unlocksViews: ['Completion & handover -> Handover'],
   },
   {
     key: 'closure:manage_checklist',
     name: 'Manage the Closure Checklist',
     description: 'Tick manual closure items and waive items with a reason.',
-    category: 'AUDIT_CLOSEOUT',
+    category: 'COMPLETION_CLOSURE',
     surface: 'WEB',
-    unlocksViews: ['Closure Tab'],
+    unlocksViews: ['Completion & handover -> Closure'],
   },
   {
     key: 'closure:audit_signoff',
     name: 'Sign Off the Closure Audit',
     description: 'Record the audit sign-off item of the closure checklist.',
-    category: 'AUDIT_CLOSEOUT',
+    category: 'COMPLETION_CLOSURE',
     surface: 'WEB',
-    unlocksViews: ['Closure Tab'],
+    unlocksViews: ['Completion & handover -> Closure'],
   },
   {
     key: 'closure:export_pack',
     name: 'Export the Closure Pack',
-    description: 'Build the closure pack (index, documents, certificates, valuations, inspections and the verified audit ledger) for audit.',
-    category: 'AUDIT_CLOSEOUT',
+    description: 'Build the closure pack (index, documents, certificates, visit summaries and the verified audit ledger) for audit.',
+    category: 'COMPLETION_CLOSURE',
     surface: 'WEB',
-    unlocksViews: ['Closure Tab'],
+    unlocksViews: ['Completion & handover -> Closure'],
   },
   {
     key: 'contractors:rate_performance',
     name: 'Rate Contractor Performance',
-    description: 'Rate each contractor at completion and after closure, and see contractor ratings across projects.',
-    category: 'AUDIT_CLOSEOUT',
+    description: 'Rate the contractor at completion and after closure, and see contractor ratings across projects.',
+    category: 'COMPLETION_CLOSURE',
     surface: 'WEB',
-    unlocksViews: ['Closure Tab', 'Organisation Ratings'],
+    unlocksViews: ['Completion & handover -> Closure', 'Organisation ratings'],
   },
   {
     key: 'lessons:manage',
     name: 'Record Lessons Learned',
     description: 'Write, edit and publish lessons learned on a project.',
-    category: 'AUDIT_CLOSEOUT',
+    category: 'COMPLETION_CLOSURE',
     surface: 'WEB',
-    unlocksViews: ['Closure Tab'],
+    unlocksViews: ['Completion & handover -> Closure'],
   },
   {
     key: 'lessons:view',
     name: 'Browse Lessons Learned',
-    description: 'Browse the tenant library of published lessons learned.',
-    category: 'AUDIT_CLOSEOUT',
+    description: 'Browse the library of published lessons learned.',
+    category: 'COMPLETION_CLOSURE',
     surface: 'WEB',
-    unlocksViews: ['Lessons Learned Library'],
+    unlocksViews: ['Lessons learned'],
   },
-  // Phase 16: programme KPIs
   {
-    key: 'kpis:view',
-    name: 'View Programme KPIs',
-    description:
-      'Open the Programme KPIs page and the KPI card of a project: stage KPIs over the visible projects, with targets per project type.',
-    category: 'PORTFOLIO_PROJECTS',
+    key: 'audit:view_ledger',
+    name: 'View the Audit Ledger',
+    description: 'View the hash-chained audit ledger and resolve incidents.',
+    category: 'COMPLETION_CLOSURE',
     surface: 'WEB',
-    unlocksViews: ['Programme KPIs'],
+    unlocksViews: ['Audit ledger', 'Incidents'],
   },
 ];
 
 /**
- * 1b. Nigerian & Configurable Professional Regulatory License Types
+ * Redesign R7a: permission keys renamed or removed. Applied to existing databases by migration
+ * `20261225090000_r7a_permission_catalogue` (row renamed in place, or grants moved to the new key);
+ * kept here for tests and the configuration reference. A `null` target means removed.
  */
-export const ProfessionalLicenseTypeEnum = z.enum([
-  'QSRBN',  // Quantity Surveyors Registration Board of Nigeria
-  'COREN',  // Council for the Regulation of Engineering in Nigeria
-  'ARCON',  // Architects Registration Council of Nigeria
-  'CORBON', // Council of Registered Builders of Nigeria
-  'ICAN',   // Institute of Chartered Accountants of Nigeria
-  'OTHER',  // Other accredited professional body
-]);
-export type ProfessionalLicenseType = z.infer<typeof ProfessionalLicenseTypeEnum>;
-
-export const PROFESSIONAL_LICENSE_META: Record<
-  ProfessionalLicenseType,
-  { code: ProfessionalLicenseType; fullName: string; displayPrefix: string; exampleNumber: string }
-> = {
-  QSRBN: {
-    code: 'QSRBN',
-    fullName: 'Quantity Surveyors Registration Board of Nigeria',
-    displayPrefix: 'QSRBN Reg. No.',
-    exampleNumber: '3842',
-  },
-  COREN: {
-    code: 'COREN',
-    fullName: 'Council for the Regulation of Engineering in Nigeria',
-    displayPrefix: 'COREN Reg. No.',
-    exampleNumber: 'R.49201',
-  },
-  ARCON: {
-    code: 'ARCON',
-    fullName: 'Architects Registration Council of Nigeria',
-    displayPrefix: 'ARCON Reg. No.',
-    exampleNumber: 'F/2914',
-  },
-  CORBON: {
-    code: 'CORBON',
-    fullName: 'Council of Registered Builders of Nigeria',
-    displayPrefix: 'CORBON Reg. No.',
-    exampleNumber: 'B.1840',
-  },
-  ICAN: {
-    code: 'ICAN',
-    fullName: 'Institute of Chartered Accountants of Nigeria',
-    displayPrefix: 'ICAN Membership No.',
-    exampleNumber: 'MB/049120',
-  },
-  OTHER: {
-    code: 'OTHER',
-    fullName: 'Other Accredited Regulatory Body',
-    displayPrefix: 'License No.',
-    exampleNumber: 'REG-1001',
-  },
+export const RENAMED_PERMISSION_KEYS: Readonly<Record<string, string | null>> = {
+  'boq:view': 'scope:view',
+  'boq:upload_edit': 'scope:edit',
+  'schedule:view_variance': 'sprints:view_status',
+  'contractors:manage_packages': 'contractors:manage',
+  'sessions:revoke_device': 'users:revoke_device',
+  'retention:manage_defects': 'defects:manage',
+  'inspections:manage_findings': 'findings:manage',
+  'reports:approve_completion': 'visits:review',
+  'reports:raise_query': 'incidents:view',
+  'field:submit_report': 'visits:submit',
+  'inspections:submit': 'visits:submit',
+  'reports:view_all': 'visits:view',
+  'inspections:view': 'visits:view',
+  'field:raise_incident': null,
+  'reports:respond_query': null,
 };
 
 /**

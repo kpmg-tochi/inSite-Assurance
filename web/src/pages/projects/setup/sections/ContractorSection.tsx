@@ -1,23 +1,30 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
-import { TRADE_CODE_REGEX, type OrganizationRef, type ProjectContractorSection, type ProjectSetupDto } from "@insite/shared";
+import { z } from "zod";
+import {
+  OrganizationRefSchema,
+  ProjectContractorInputSchema,
+  ProjectContractorSectionSchema,
+  type OrganizationRef,
+  type ProjectSetupDto,
+} from "@insite/shared";
+import { FieldError, visibleError } from "../../../../lib/forms";
 import { OrganizationInput } from "../../../../components/organizations/OrganizationInput";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import { useAuth } from "../../../../lib/auth-context";
 import { useDefaultCasesQuery } from "../../../../queries/contracts/useContractQueries";
 import { DEFAULT_CASE_VIEW_PERMISSIONS, StatusChip } from "../../../../components/contracts/contractUi";
 import {
-  extractErrors,
-  FieldError,
   inputClass,
   labelClass,
-  NO_ERRORS,
+  setField,
   StepSection,
+  textOrNull,
+  textProps,
   useLatestSetup,
   useRegisterSection,
-  useSyncedState,
-  type FormErrors,
+  useSectionForm,
   type StepProps,
 } from "../setupContext";
 
@@ -57,39 +64,67 @@ function contractorFrom(setup: ProjectSetupDto): ContractorRow | null {
   };
 }
 
-const contractorKey = (c: ContractorRow | null) =>
+interface ContractorValues {
+  contractor: ContractorRow | null;
+}
+
+const valuesFrom = (setup: ProjectSetupDto): ContractorValues => ({ contractor: contractorFrom(setup) });
+
+const contractorKey = ({ contractor: c }: ContractorValues) =>
   JSON.stringify(c ? (({ organizationName: _n, hasActivity: _h, terminated: _t, ...rest }) => rest)(c) : null);
 
-function buildBody(c: ContractorRow | null): { body: ProjectContractorSection | null; fields: Record<string, string> } {
-  const fields: Record<string, string> = {};
-  if (c) {
-    if (!c.organization) fields["contractors.0.organization"] = "Choose or enter the contractor";
-    if (c.tradeCategory.trim().length < 2) fields["contractors.0.tradeCategory"] = "Enter the trade";
-    if (!TRADE_CODE_REGEX.test(c.tradeCode.trim().toUpperCase())) fields["contractors.0.tradeCode"] = "2 to 6 letters or digits";
-    if (c.plannedMobilizationDate && c.plannedCompletionDate && c.plannedCompletionDate < c.plannedMobilizationDate) {
-      fields["contractors.0.plannedCompletionDate"] = "Must be on or after the planned mobilisation date";
-    }
-  }
-  if (Object.keys(fields).length > 0) return { body: null, fields };
-  return {
-    body: {
-      contractors: c
-        ? [
-            {
-              ...(c.id ? { id: c.id } : {}),
-              organization: c.organization!,
-              tradeCategory: c.tradeCategory.trim(),
-              tradeCode: c.tradeCode.trim().toUpperCase(),
-              allocatedBudgetNgn: c.allocatedBudgetNgn,
-              plannedMobilizationDate: c.plannedMobilizationDate,
-              plannedCompletionDate: c.plannedCompletionDate || null,
-            },
-          ]
-        : [],
-    },
-    fields,
-  };
-}
+const C = ProjectContractorInputSchema.shape;
+
+/**
+ * Form schema: the request body (`ProjectContractorSectionSchema`, at most one contractor) built from
+ * the form's one optional row. Planned completion must not be before the planned mobilisation.
+ */
+const ContractorFormSchema = z
+  .object({
+    contractor: z
+      .object({
+        id: C.id,
+        organization: OrganizationRefSchema.nullable().refine((v) => v !== null, "Choose or enter the contractor"),
+        organizationName: z.string().nullable(),
+        tradeCategory: C.tradeCategory,
+        tradeCode: C.tradeCode,
+        allocatedBudgetNgn: C.allocatedBudgetNgn,
+        plannedMobilizationDate: C.plannedMobilizationDate,
+        plannedCompletionDate: textOrNull().pipe(C.plannedCompletionDate),
+        hasActivity: z.boolean(),
+        terminated: z.boolean(),
+      })
+      .superRefine((c, ctx) => {
+        if (c.plannedMobilizationDate && c.plannedCompletionDate && c.plannedCompletionDate < c.plannedMobilizationDate) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["plannedCompletionDate"],
+            message: "Must be on or after the planned mobilisation date",
+          });
+        }
+      })
+      .nullable(),
+  })
+  .transform(({ contractor: c }) => ({
+    contractors: c
+      ? [
+          {
+            ...(c.id ? { id: c.id } : {}),
+            organization: c.organization as OrganizationRef,
+            tradeCategory: c.tradeCategory,
+            tradeCode: c.tradeCode,
+            allocatedBudgetNgn: c.allocatedBudgetNgn,
+            plannedMobilizationDate: c.plannedMobilizationDate,
+            plannedCompletionDate: c.plannedCompletionDate,
+          },
+        ]
+      : [],
+  }))
+  .pipe(ProjectContractorSectionSchema);
+
+/** Server paths ("contractors.0.tradeCode") → form fields ("contractor.tradeCode"). */
+const contractorPath = (path: string) =>
+  path === "contractors" ? "contractor" : path.replace(/^contractors\.0(\.organization)?(\..*)?$/, (_m, org, rest) => (org ? "contractor.organization" : `contractor${rest ?? ""}`));
 
 /**
  * Section `contractor` (step 2 "Contract"; redesign R6a, D-R6.4 and D-R6.7): the one contractor
@@ -103,13 +138,18 @@ export function ContractorSection({ projectId, setup, readOnly }: StepProps) {
     { openOnly: true },
     setup.status !== "DRAFT" && hasAnyPermission(...DEFAULT_CASE_VIEW_PERMISSIONS)
   );
-  const initial = useMemo(() => contractorFrom(setup), [setup]);
-  const [row, setRow, dirty] = useSyncedState(initial, contractorKey);
-  const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
+  const initial = useMemo(() => valuesFrom(setup), [setup]);
+  const section = useSectionForm(ContractorFormSchema, initial, contractorKey);
+  const { form, dirty } = section;
+  const row = (section.values as ContractorValues).contractor;
+  const [general, setGeneral] = useState<string | null>(null);
   const save = useSaveSetupStepMutation(projectId);
   const latest = useLatestSetup(projectId, setup);
+  const err = (name: string) => visibleError(form, name);
+  // The trade opens on an error and stays open while it is fixed.
+  const [tradeOpen, setTradeOpen] = useState(false);
 
-  const patch = (p: Partial<ContractorRow>) => setRow((c) => (c ? { ...c, ...p } : c));
+  const setRow = (next: ContractorRow | null) => setField(form, "contractor", next);
   const add = () =>
     setRow({
       organization: null,
@@ -122,23 +162,25 @@ export function ContractorSection({ projectId, setup, readOnly }: StepProps) {
       terminated: false,
     });
 
-  useRegisterSection("contractor", dirty, async (opts) => {
-    if (!dirty && !opts?.force) return true;
-    const { body, fields } = buildBody(dirty ? row : contractorFrom(latest()));
-    if (!body) {
-      setErrors({ fields, general: "Some fields need attention." });
-      return false;
-    }
-    try {
-      await save.mutateAsync({ sectionId: "contractor", body, silent: opts?.silent });
-      setRow(contractorFrom(latest()));
-      setErrors(NO_ERRORS);
-      return true;
-    } catch (err) {
-      setErrors(extractErrors(err));
-      return false;
-    }
-  });
+  useRegisterSection(
+    "contractor",
+    dirty,
+    async (opts) => {
+      if (!dirty && !opts?.force) return true;
+      const body = await section.submit(dirty ? undefined : valuesFrom(latest()));
+      if (!body) return false;
+      try {
+        await save.mutateAsync({ sectionId: "contractor", body, silent: opts?.silent });
+        section.reset(valuesFrom(latest()));
+        setGeneral(null);
+        return true;
+      } catch (error) {
+        setGeneral(section.showServerErrors(error, contractorPath));
+        return false;
+      }
+    },
+    section
+  );
 
   const c = row;
   const locked = readOnly || Boolean(c?.terminated);
@@ -161,7 +203,7 @@ export function ContractorSection({ projectId, setup, readOnly }: StepProps) {
         )
       }
     >
-      {errors.general && <p className="text-xs font-medium text-red-600">{errors.general}</p>}
+      {general && <p className="text-xs font-medium text-red-600">{general}</p>}
       {!c && <p className="text-xs text-slate-500">No contractor yet.</p>}
       {c && (
         <div className={`rounded-xl border p-3 space-y-3 ${c.terminated ? "border-rose-200 bg-rose-50/30" : "border-slate-200"}`}>
@@ -182,8 +224,11 @@ export function ContractorSection({ projectId, setup, readOnly }: StepProps) {
                 tag="CONTRACTOR"
                 value={c.organization}
                 selectedName={c.organizationName}
-                onChange={(v) => patch({ organization: v, organizationName: null })}
-                error={errors.fields["contractors.0.organization"]}
+                onChange={(v) => {
+                  form.setValue("contractor.organizationName", null);
+                  setField(form, "contractor.organization", v, true);
+                }}
+                error={err("contractor.organization")}
                 disabled={locked || c.hasActivity}
               />
             </div>
@@ -192,13 +237,12 @@ export function ContractorSection({ projectId, setup, readOnly }: StepProps) {
               <input
                 id="contractor-completion"
                 type="date"
-                className={inputClass(Boolean(errors.fields["contractors.0.plannedCompletionDate"]))}
-                value={c.plannedCompletionDate}
-                onChange={(e) => patch({ plannedCompletionDate: e.target.value })}
+                className={inputClass(Boolean(err("contractor.plannedCompletionDate")))}
+                {...textProps(form, "contractor.plannedCompletionDate")}
+                onChange={(e) => setField(form, "contractor.plannedCompletionDate", e.target.value, true)}
                 disabled={locked}
-                aria-describedby={errors.fields["contractors.0.plannedCompletionDate"] ? "contractor-completion-error" : undefined}
               />
-              <FieldError id="contractor-completion-error" message={errors.fields["contractors.0.plannedCompletionDate"]} />
+              <FieldError form={form} name="contractor.plannedCompletionDate" />
             </div>
             {!readOnly && (
               <div className="md:col-span-3 flex items-center pt-1 md:pt-6">
@@ -216,7 +260,8 @@ export function ContractorSection({ projectId, setup, readOnly }: StepProps) {
           </div>
           <details
             className="rounded-xl border border-slate-200 px-3 py-2"
-            open={Boolean(errors.fields["contractors.0.tradeCategory"] || errors.fields["contractors.0.tradeCode"])}
+            open={tradeOpen || Boolean(err("contractor.tradeCategory") || err("contractor.tradeCode"))}
+            onToggle={(e) => setTradeOpen(e.currentTarget.open)}
           >
             <summary className="cursor-pointer text-xs font-semibold text-slate-700">
               Trade: {c.tradeCategory || "not set"} ({c.tradeCode || "–"})
@@ -226,30 +271,29 @@ export function ContractorSection({ projectId, setup, readOnly }: StepProps) {
                 <label className={labelClass} htmlFor="contractor-trade">Trade</label>
                 <input
                   id="contractor-trade"
-                  className={inputClass(Boolean(errors.fields["contractors.0.tradeCategory"]))}
-                  value={c.tradeCategory}
-                  onChange={(e) => patch({ tradeCategory: e.target.value })}
+                  className={inputClass(Boolean(err("contractor.tradeCategory")))}
+                  maxLength={80}
+                  {...textProps(form, "contractor.tradeCategory")}
                   disabled={locked}
                 />
-                <FieldError message={errors.fields["contractors.0.tradeCategory"]} />
+                <FieldError form={form} name="contractor.tradeCategory" />
               </div>
               <div>
                 <label className={labelClass} htmlFor="contractor-trade-code">Trade code</label>
                 <input
                   id="contractor-trade-code"
-                  className={`${inputClass(Boolean(errors.fields["contractors.0.tradeCode"]))} uppercase font-semibold`}
-                  value={c.tradeCode}
+                  className={`${inputClass(Boolean(err("contractor.tradeCode")))} uppercase font-semibold`}
                   maxLength={6}
-                  onChange={(e) => patch({ tradeCode: e.target.value.toUpperCase() })}
+                  {...textProps(form, "contractor.tradeCode", (v) => v.toUpperCase())}
                   disabled={locked}
                 />
-                <FieldError message={errors.fields["contractors.0.tradeCode"]} />
+                <FieldError form={form} name="contractor.tradeCode" />
               </div>
             </div>
           </details>
         </div>
       )}
-      <FieldError message={errors.fields.contractors} />
+      <FieldError form={form} name="contractor" />
     </StepSection>
   );
 }

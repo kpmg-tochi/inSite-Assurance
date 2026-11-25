@@ -23,7 +23,7 @@ const refreshForms = (projectId: string) => async (tx: Parameters<typeof refresh
 
 router.get(
   '/:projectId/findings',
-  requirePermission('inspections:view', 'inspections:manage_findings', 'visits:view'),
+  requirePermission('visits:view', 'findings:manage'),
   wrap(async (req, res) => {
     const data = await listInspectionFindings({
       projectId: String(req.params.projectId),
@@ -37,7 +37,7 @@ router.get(
 
 router.post(
   '/:projectId/findings/:findingId/resolve',
-  requirePermission('inspections:manage_findings'),
+  requirePermission('findings:manage'),
   validateBody(ResolveInspectionFindingRequestSchema),
   wrap(async (req, res) => {
     const projectId = String(req.params.projectId);
@@ -54,7 +54,7 @@ router.post(
 
 router.post(
   '/:projectId/findings/:findingId/dismiss',
-  requirePermission('inspections:manage_findings'),
+  requirePermission('findings:manage'),
   validateBody(DismissInspectionFindingRequestSchema),
   wrap(async (req, res) => {
     const projectId = String(req.params.projectId);

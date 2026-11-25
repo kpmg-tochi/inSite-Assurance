@@ -29,6 +29,8 @@ import { rateContractor, tenantRatingCriteria } from "../modules/completion/rati
 import { createLesson, publishLesson } from "../modules/completion/lessons.service";
 import { LAGOS_SUBEB_NAME, PROGRAMME_TENANT_SLUG } from "./seedPhase11";
 import { LAGOS_ADMIN_EMAIL, LAGOS_ME_EMAIL, UBEC_ADMIN_EMAIL, UBEC_ME_EMAIL, UBEC_ROLE } from "./seedUbecRoster";
+import { renderDemoDocument } from "./demoDocuments";
+import { projectDocumentContext } from "./seedPhase13";
 
 /**
  * Phase 15 seed: closure rules on both programme project types (default CoC slots, every gate on,
@@ -48,7 +50,8 @@ const BEFORE_CLOSE: ClosureChecklistItemTemplateInput[] = [
   { key: "coc-filed", label: "Certificate of Completion filed and signed", kind: "DOCUMENT_TYPE", documentTypeCode: "COMPLETION_CERTIFICATE" },
   { key: "handover-certificate", label: "Handover certificate filed", kind: "DOCUMENT_TYPE", documentTypeCode: "HANDOVER_CERTIFICATE" },
   { key: "contractors-rated", label: "Contractors rated at completion", kind: "CONTRACTOR_RATINGS", ratingStage: "COMPLETION" },
-  { key: "lessons-learned", label: "Lessons learned published", kind: "LESSONS_LEARNED" },
+  // No "Lessons learned published" item: for UBEC the closeout report carries the lessons (the project
+  // page has no lessons panel), so the item could only be waived (found in the R7 demo dry run).
   { key: "as-built", label: "As-built drawings and O&M manuals handed over", kind: "MANUAL" },
 ];
 
@@ -213,7 +216,8 @@ const addHours = (d: Date, h: number) => new Date(d.getTime() + h * 3_600_000);
 
 /** Writes the beneficiary's signed paper copy where an upload would land; returns its object key. */
 export async function paperCopy(tenantId: string, projectId: string, label: string) {
-  const body = Buffer.from(`%PDF-1.4\n% ${label}: Certificate of Completion signed on paper by the beneficiary (seed)\n%%EOF\n`, "utf8");
+  const context = await projectDocumentContext(projectId, zonedCalendarDate(new Date(), "Africa/Lagos"));
+  const body = await renderDemoDocument("COC_SIGNED_COPY", { ...context, beneficiarySignatory: label });
   const key = `${projectObjectPrefix(tenantId, projectId)}project_document/seed-coc-${crypto.randomUUID()}.pdf`;
   await storageService.putServerObject(key, body, "application/pdf");
   return key;
@@ -422,5 +426,9 @@ export async function seedPhase15() {
     await publishLesson(prg241.id, created.id, southAdmin);
   }
   await completeClosureItem(prg241.id, "BEFORE_CLOSE", "as-built", southAdmin, "As-built drawings and O&M manuals received by the school.");
+  // Seed-only shortcut: closing waits for the end of the defects liability period (owner decision
+  // 2026-11-25). This story is built in one day, so the period is ended yesterday; PRG-106
+  // (seedClosureTwin) carries a realistic 12-month history. The seed replacement rebuilds the timeline.
+  await prisma.project.update({ where: { id: prg241.id }, data: { retentionEndDate: addDays(today, -1) } });
   await changeProjectPhase({ projectId: prg241.id, webUser: admin, input: { to: "COMPLETED_CLOSED" } });
 }

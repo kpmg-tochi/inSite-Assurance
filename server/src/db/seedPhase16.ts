@@ -28,7 +28,8 @@ import {
   UBEC_ME_EMAIL,
   UBEC_ROLE,
 } from "./seedUbecRoster";
-import { fileDocument, heldKickoff, labelDefaultCaseChain, payloadFor } from "./seedPhase13";
+import { fileDocument, heldKickoff, labelDefaultCaseChain, payloadFor, projectDocumentContext } from "./seedPhase13";
+import { demoDocumentTitle, DemoDocumentCode, renderDemoDocument } from "./demoDocuments";
 import { acceptedHandover, approvedFinalEvaluation, paperCopy } from "./seedPhase15";
 
 /**
@@ -47,6 +48,9 @@ import { acceptedHandover, approvedFinalEvaluation, paperCopy } from "./seedPhas
  * | In retention with a defect                      | PRG-103 (DI, Kano)               | defect added
  * | Closed, post-closure evaluation pending         | PRG-241 (MG, Lagos SUBEB)        |
  * | Closed and archived with a closure pack         | PRG-242 (MG, Lagos SUBEB)        | new
+ * | Liability period over, ready to close (demo)     | PRG-106 (DI, Kano)               | seedClosureTwin
+ *
+ * Document registers (titles, specimen PDFs, sign-offs per stage) are completed by seedDocumentRegisters.
  *
  * Also: KPI targets on both project types (written without a version bump, as Phases 13–15 do),
  * the mobile-only Resident Supervisor (UBEC roster; R1d: contractors have no login), PRG-104's beneficiary handover response left for the demo to record (no public link), and
@@ -81,10 +85,7 @@ const geofence = (label: string, latitude: number, longitude: number): RadialGeo
  * development), as the closure checklist's before-archive item expects.
  */
 async function uploadCloseoutReport(tenantId: string, projectId: string, uploader: WebJwtPayload, school: string) {
-  const body = Buffer.from(`%PDF-1.4
-% Closeout report: ${school} (seed)
-%%EOF
-`, "utf8");
+  const body = await renderDemoDocument("CLOSEOUT_REPORT", await projectDocumentContext(projectId, zonedCalendarDate(new Date(), "Africa/Lagos")));
   const objectKey = `${projectObjectPrefix(tenantId, projectId)}project_document/seed-closeout-${crypto.randomUUID()}.pdf`;
   await storageService.putServerObject(objectKey, body, "application/pdf");
   const type = await prisma.documentType.findUniqueOrThrow({ where: { tenantId_code: { tenantId, code: "CLOSEOUT_REPORT" } } });
@@ -216,7 +217,7 @@ export async function seedPhase16() {
       tenantId: programme.id,
       projectId,
       typeCode: "KICKOFF_MINUTES",
-      title: "Kick-off meeting minutes",
+      title: demoDocumentTitle("KICKOFF_MINUTES", { kickoffDate: kickoff }),
       uploadedByUserId: invitees[0].userId,
       createdAt: new Date(`${addDays(kickoff, 2)}T10:00:00.000Z`),
     });
@@ -243,7 +244,7 @@ export async function seedPhase16() {
           tenantId: programme.id,
           projectId,
           typeCode: code,
-          title: (await prisma.documentType.findUniqueOrThrow({ where: { tenantId_code: { tenantId: programme.id, code } } })).name,
+          title: demoDocumentTitle(code as DemoDocumentCode, { ...(await projectDocumentContext(projectId, addDays(done, -1))), residentSupervisor: "Musa Danladi" }),
           uploadedByUserId: invitees[0].userId,
           projectContractorId: m.projectContractorId,
           createdAt: new Date(`${addDays(done, -1)}T10:00:00.000Z`),
@@ -433,6 +434,10 @@ export async function seedPhase16() {
   });
   await publishLesson(prg242.id, lesson.id, southAdmin);
   await completeClosureItem(prg242.id, "BEFORE_CLOSE", "as-built", southAdmin, "As-built drawings and O&M manuals received by the school.");
+  // Seed-only shortcut: closing waits for the end of the defects liability period (owner decision
+  // 2026-11-25). This story is built in one day, so the period is ended yesterday; PRG-106
+  // (seedClosureTwin) carries a realistic 12-month history. The seed replacement rebuilds the timeline.
+  await prisma.project.update({ where: { id: prg242.id }, data: { retentionEndDate: addDays(today, -1) } });
   await changeProjectPhase({ projectId: prg242.id, webUser: admin, input: { to: "COMPLETED_CLOSED" } });
   await fileDocument({
     tenantId: programme.id,

@@ -97,7 +97,7 @@ describe('Redesign R5a: mobile baseline pack v2', () => {
   });
 
   it('open findings match the project and carry facility names', async () => {
-    const open = await prisma.inspectionFinding.findMany({ where: { projectId: ids.prg105, status: 'OPEN' } });
+    const open = await prisma.finding.findMany({ where: { projectId: ids.prg105, status: 'OPEN' } });
     const res = await pack(ids.prg105);
     const p = res.body.data as MobileBaselinePack;
     assert.equal(p.openFindings.length, open.length);

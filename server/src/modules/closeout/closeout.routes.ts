@@ -99,7 +99,7 @@ router.post(
   })
 );
 
-/** Turns the submission's snags into defect tickets (also needs retention:manage_defects). */
+/** Turns the submission's snags into defect tickets (also needs defects:manage). */
 router.post(
   '/:projectId/handover/submissions/:submissionId/defects',
   requirePermission('handover:review_feedback'),
@@ -116,15 +116,15 @@ router.post(
 // Defect tickets (web and mobile)
 // ---------------------------------------------------------------------------
 
-/** Field sessions need retention:manage_defects on their role to see defects at all. */
+/** Field sessions need defects:manage on their role to see defects at all. */
 function requireFieldDefectPermission(req: Request) {
-  if (req.fieldAgent && !req.fieldAgent.permissions.includes('retention:manage_defects')) {
-    throw new AppError('Access requires permission(s): retention:manage_defects', 403, 'FORBIDDEN_PERMISSION');
+  if (req.fieldAgent && !req.fieldAgent.permissions.includes('defects:manage')) {
+    throw new AppError('Access requires permission(s): defects:manage', 403, 'FORBIDDEN_PERMISSION');
   }
 }
 
-const defectReaders = requireAnyAuthWithWebPermission('retention:manage_defects', 'payments:view', 'handover:review_feedback');
-const defectWriters = requireAnyAuthWithWebPermission('retention:manage_defects');
+const defectReaders = requireAnyAuthWithWebPermission('defects:manage', 'payments:view', 'handover:review_feedback');
+const defectWriters = requireAnyAuthWithWebPermission('defects:manage');
 
 router.get(
   '/:projectId/defects',
@@ -148,7 +148,7 @@ router.get(
 
 router.post(
   '/:projectId/defects',
-  requirePermission('retention:manage_defects'),
+  requirePermission('defects:manage'),
   validateBody(CreateDefectTicketRequestSchema),
   wrap(async (req, res) => {
     const viewer = defectViewerFor(req);
@@ -158,7 +158,7 @@ router.post(
 
 router.post(
   '/:projectId/defects/:ticketId/assign',
-  requirePermission('retention:manage_defects'),
+  requirePermission('defects:manage'),
   validateBody(AssignDefectTicketRequestSchema),
   wrap(async (req, res) => {
     const viewer = defectViewerFor(req);
@@ -179,7 +179,7 @@ router.post(
 
 router.post(
   '/:projectId/defects/:ticketId/reject',
-  requirePermission('retention:manage_defects'),
+  requirePermission('defects:manage'),
   validateBody(RejectDefectTicketRequestSchema),
   wrap(async (req, res) => {
     const viewer = defectViewerFor(req);
@@ -193,7 +193,7 @@ router.post(
 
 router.get(
   '/:projectId/retention',
-  requirePermission('retention:manage_defects', 'payments:view', 'payments:record', 'audit:view_ledger'),
+  requirePermission('defects:manage', 'payments:view', 'payments:record', 'audit:view_ledger'),
   wrap(async (req, res) => {
     res.json({ success: true, data: await getRetentionSummary(p(req, 'projectId'), req.webUser!) });
   })

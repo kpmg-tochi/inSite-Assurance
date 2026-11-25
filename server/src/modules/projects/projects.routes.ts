@@ -258,7 +258,7 @@ router.get(
 /** POST /api/v1/projects/:projectId/contractors */
 router.post(
   '/:projectId/contractors',
-  requirePermission('contractors:manage_packages'),
+  requirePermission('contractors:manage'),
   validateBody(ProjectContractorInputSchema.omit({ id: true })),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -273,7 +273,7 @@ router.post(
 /** PATCH /api/v1/projects/:projectId/contractors/:contractorId */
 router.patch(
   '/:projectId/contractors/:contractorId',
-  requirePermission('contractors:manage_packages'),
+  requirePermission('contractors:manage'),
   validateBody(ProjectContractorInputSchema.omit({ id: true })),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -293,7 +293,7 @@ router.patch(
 /** DELETE /api/v1/projects/:projectId/contractors/:contractorId (refused with sessions or claims) */
 router.delete(
   '/:projectId/contractors/:contractorId',
-  requirePermission('contractors:manage_packages'),
+  requirePermission('contractors:manage'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       await removeProjectContractor(String(req.params.projectId), String(req.params.contractorId), req.webUser!);
@@ -352,7 +352,7 @@ router.post(
  */
 router.get(
   '/:projectId/field-sessions',
-  requirePermission('sessions:revoke_device'),
+  requirePermission('users:revoke_device'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const sessions = await listProjectFieldSessions(
@@ -372,7 +372,7 @@ router.get(
  */
 router.patch(
   '/:projectId/field-sessions/:sessionId/status',
-  requirePermission('sessions:revoke_device'),
+  requirePermission('users:revoke_device'),
   validateBody(UpdateFieldSessionStatusRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {

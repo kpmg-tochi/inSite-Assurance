@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Star } from "lucide-react";
+import { z } from "zod";
+import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import {
   CONTRACTOR_RATING_STAGE_META,
   type ContractorRatingStage,
@@ -98,6 +100,21 @@ export function ContractorRatingsPanel({ projectId, readOnly = false }: { projec
   );
 }
 
+/** RateContractorRequestSchema: every criterion scored 1 to 5, comments up to 2000 characters. */
+function rateFormSchema(criteria: ProjectRatingsDto["criteria"]) {
+  return z.object({
+    scores: z.object(
+      Object.fromEntries(
+        criteria.map((c) => [
+          c.key,
+          z.number({ required_error: `Score ${c.label.toLowerCase()}`, invalid_type_error: `Score ${c.label.toLowerCase()}` }).int().min(1).max(5),
+        ])
+      ) as Record<string, z.ZodNumber>
+    ),
+    comments: z.string().trim().max(2000, "The comments are too long (at most 2000 characters)"),
+  });
+}
+
 function RateModal({
   projectId,
   criteria,
@@ -112,31 +129,32 @@ function RateModal({
   onClose: () => void;
 }) {
   const rate = useRateContractorMutation(projectId);
-  const [scores, setScores] = useState<Record<string, number>>({});
-  const [comments, setComments] = useState("");
-  const complete = criteria.every((c) => scores[c.key]);
+  const schema = useMemo(() => rateFormSchema(criteria), [criteria]);
+  const form = useZodForm(schema, { defaultValues: { scores: {}, comments: "" } });
+  const scores = form.watch("scores");
   return (
     <ModalShell title={`Rate ${contractor.organizationName}`} subtitle={CONTRACTOR_RATING_STAGE_META[stage].label} onClose={onClose}>
       <form
         className="space-y-3 p-5"
-        onSubmit={(e) => {
-          e.preventDefault();
+        noValidate
+        onSubmit={form.handleSubmit((v) =>
           rate.mutate(
             {
               projectContractorId: contractor.projectContractorId,
               stage,
-              criteria: criteria.map((c) => ({ key: c.key, score: scores[c.key] })),
-              comments: comments.trim() || null,
+              criteria: criteria.map((c) => ({ key: c.key, score: v.scores[c.key] })),
+              comments: v.comments || null,
             },
             { onSuccess: onClose }
-          );
-        }}
+          )
+        )}
       >
         {criteria.map((c) => (
           <div key={c.key} className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-xs">
               <div className="font-semibold text-slate-800">{c.label}</div>
               {c.description && <div className="text-[11px] text-slate-500">{c.description}</div>}
+              <FieldError form={form} name={`scores.${c.key}`} />
             </div>
             <div className="flex gap-1" role="radiogroup" aria-label={c.label}>
               {[1, 2, 3, 4, 5].map((n) => (
@@ -144,10 +162,10 @@ function RateModal({
                   key={n}
                   type="button"
                   role="radio"
-                  aria-checked={scores[c.key] === n}
-                  onClick={() => setScores((s) => ({ ...s, [c.key]: n }))}
+                  aria-checked={scores?.[c.key] === n}
+                  onClick={() => form.setValue(`scores.${c.key}`, n, { shouldValidate: true, shouldDirty: true, shouldTouch: true })}
                   className={`h-7 w-7 rounded-lg border text-xs font-semibold ${
-                    scores[c.key] === n ? "border-brand-primary bg-brand-primary text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    scores?.[c.key] === n ? "border-brand-primary bg-brand-primary text-white" : "border-slate-200 text-slate-600 hover:bg-slate-50"
                   }`}
                 >
                   {n}
@@ -156,8 +174,23 @@ function RateModal({
             </div>
           </div>
         ))}
-        <textarea value={comments} onChange={(e) => setComments(e.target.value)} rows={3} className={inputClass} placeholder="Comments (optional)" maxLength={2000} />
-        <ModalActions onCancel={onClose} submitLabel="Save rating" pendingLabel="Saving…" isPending={rate.isPending} disabled={!complete} />
+        <textarea
+          rows={3}
+          className={`${inputClass} ${invalidClass(form, "comments")}`}
+          placeholder="Comments (optional)"
+          aria-label="Comments (optional)"
+          maxLength={2000}
+          {...form.register("comments")}
+          {...fieldA11y(form, "comments")}
+        />
+        <FieldError form={form} name="comments" />
+        <ModalActions
+          onCancel={onClose}
+          submitLabel="Save rating"
+          pendingLabel="Saving…"
+          isPending={rate.isPending}
+          disabled={!canSubmit(form, { pending: rate.isPending })}
+        />
       </form>
     </ModalShell>
   );

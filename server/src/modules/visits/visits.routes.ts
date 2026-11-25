@@ -216,7 +216,7 @@ router.post(
 
 router.post(
   '/:projectId/visits/:visitId/findings',
-  requirePermission('inspections:manage_findings'),
+  requirePermission('findings:manage'),
   validateBody(RaiseVisitFindingRequestSchema),
   wrap(async (req, res) => {
     const projectId = p(req, 'projectId');
@@ -282,7 +282,7 @@ router.post(
 
 router.post(
   '/:projectId/visits/:visitId/submissions/:submissionId/review',
-  requirePermission('visits:view', 'reports:approve_completion'),
+  requirePermission('visits:view', 'visits:review'),
   validateBody(ReviewVisitSubmissionRequestSchema),
   wrap(async (req, res) => {
     const data = await reviewVisitSubmission({

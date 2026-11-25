@@ -43,7 +43,7 @@ export function RatingCriteriaCard() {
   if (query.isLoading || !rows) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200/80 p-6 flex justify-center">
-        <Loader />
+        <Loader inline />
       </div>
     );
   }
@@ -130,7 +130,7 @@ export function RatingCriteriaCard() {
           <button
             type="submit"
             disabled={save.isPending || Boolean(problem)}
-            className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm disabled:opacity-50"
+            className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-primary"
           >
             {save.isPending ? "Saving…" : "Save criteria"}
           </button>

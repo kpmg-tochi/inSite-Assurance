@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useFieldArray } from "react-hook-form";
+import { z } from "zod";
 import { Link } from "react-router-dom";
 import { CheckCircle2, Mail, Plus, Trash2, Users, XCircle } from "lucide-react";
 import {
@@ -6,6 +8,8 @@ import {
   KickoffStakeholderGroupEnum,
   kickoffQuorumMet,
   type KickoffInviteeInput,
+  type RecordKickoffHeldRequest,
+  type SaveKickoffMeetingRequest,
   type KickoffMeetingDto,
   type KickoffStakeholderGroup,
   type ContractMilestoneDto,
@@ -15,6 +19,7 @@ import {
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth } from "../../lib/auth-context";
 import { formatDateTimeShort } from "../../lib/formatters";
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import { apiErrorCode } from "../../api/process/processApi";
 import { useKickoffQuery, useMilestonesQuery } from "../../queries/contracts/useContractQueries";
 import {
@@ -31,13 +36,6 @@ import { NOTICE_STATUS_META, primaryButton, secondaryButton, sectionClass, small
  * Phase 13: the kick-off meeting record: invitees by stakeholder group, the notice (one email per
  * invitee), attendance with quorum per required group, and the minutes document.
  */
-
-interface InviteeRow extends KickoffInviteeInput {
-  key: string;
-}
-
-let seq = 0;
-const nextKey = () => `inv-${++seq}`;
 
 /** ISO date-time to the value of a datetime-local input (browser zone). */
 function toLocalInput(iso: string | null | undefined): string {
@@ -187,10 +185,70 @@ function KickoffBody({ projectId, k }: { projectId: string; k: ProjectKickoffDto
   );
 }
 
+const isDateTimeLocal = (v: string) => Boolean(v) && !Number.isNaN(new Date(v).getTime());
+
+const InviteeFormSchema = z.object({
+  /** The saved invitee's id (absent for a new row). Not called `id`: the field array keys rows by `id`. */
+  inviteeId: z.string().optional(),
+  stakeholderGroup: KickoffStakeholderGroupEnum,
+  name: z.string().trim().min(2, "Enter the name (at least 2 characters)").max(160, "Name is too long (at most 160 characters)"),
+  email: z
+    .string()
+    .trim()
+    .max(200, "Email is too long (at most 200 characters)")
+    .refine((v) => !v || z.string().email().safeParse(v).success, "Enter a valid email address or leave it empty"),
+  phone: z.string().trim().max(32, "Phone is too long (at most 32 characters)"),
+  organizationId: z.string().nullable().optional(),
+  userId: z.string().nullable().optional(),
+});
+
+const MeetingFormSchema = z
+  .object({
+    scheduledAt: z.string().refine(isDateTimeLocal, "Set the date and time"),
+    location: z.string().trim().max(300, "Location is too long (at most 300 characters)"),
+    virtualLink: z
+      .string()
+      .trim()
+      .max(500, "Link is too long (at most 500 characters)")
+      .refine((v) => !v || z.string().url().safeParse(v).success, "Enter the full link, starting with https://, or leave it empty"),
+    agendaDocumentId: z.string().nullable(),
+    agendaTitle: z.string().nullable(),
+    invitees: z.array(InviteeFormSchema).min(1, "Invite at least one person"),
+  })
+  .transform(
+    (v): SaveKickoffMeetingRequest => ({
+      scheduledAt: fromLocalInput(v.scheduledAt),
+      location: v.location || null,
+      virtualLink: v.virtualLink || null,
+      agendaDocumentId: v.agendaDocumentId,
+      invitees: v.invitees.map((i) => ({
+        ...(i.inviteeId ? { id: i.inviteeId } : {}),
+        stakeholderGroup: i.stakeholderGroup,
+        name: i.name,
+        email: i.email || null,
+        phone: i.phone || null,
+        organizationId: i.organizationId ?? null,
+        userId: i.userId ?? null,
+      })),
+    })
+  );
+type MeetingFormValues = z.input<typeof MeetingFormSchema>;
+type InviteeFormValues = z.input<typeof InviteeFormSchema>;
+
+const toInviteeRow = (i: KickoffInviteeInput): InviteeFormValues => ({
+  inviteeId: i.id,
+  stakeholderGroup: i.stakeholderGroup,
+  name: i.name,
+  email: i.email ?? "",
+  phone: i.phone ?? "",
+  organizationId: i.organizationId ?? null,
+  userId: i.userId ?? null,
+});
+
 function MeetingForm({ projectId, k, canManage }: { projectId: string; k: ProjectKickoffDto; canManage: boolean }) {
   const save = useSaveKickoffMutation(projectId);
   const m = k.meeting;
-  const initial = useMemo(
+  const initial = useMemo<MeetingFormValues>(
     () => ({
       scheduledAt: m ? toLocalInput(m.scheduledAt) : k.plannedKickoffDate ? `${k.plannedKickoffDate}T10:00` : "",
       location: m?.location ?? "",
@@ -208,44 +266,23 @@ function MeetingForm({ projectId, k, canManage }: { projectId: string; k: Projec
             userId: i.userId,
           }))
         : k.suggestedInvitees
-      ).map<InviteeRow>((i) => ({ ...i, key: nextKey() })),
+      ).map(toInviteeRow),
     }),
     [k, m]
   );
-  const [state, setState] = useState(initial);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => setState(initial), [initial]);
+  const form = useZodForm(MeetingFormSchema, { defaultValues: initial });
+  const invitees = useFieldArray({ control: form.control, name: "invitees" });
+  useEffect(() => form.reset(initial), [form, initial]);
   const disabled = !canManage || save.isPending;
-  const strip = (s: typeof state) => ({ ...s, agendaTitle: null, invitees: s.invitees.map(({ key: _k, ...rest }) => rest) });
-  const dirty = JSON.stringify(strip(state)) !== JSON.stringify(strip(initial));
+  // The briefing pack's title is display only: choosing a document is the change.
+  const dirty = form.formState.isDirty;
+  const agendaDocumentId = form.watch("agendaDocumentId");
+  const agendaTitle = form.watch("agendaTitle");
 
-  const setInvitee = (key: string, patch: Partial<InviteeRow>) =>
-    setState((s) => ({ ...s, invitees: s.invitees.map((i) => (i.key === key ? { ...i, ...patch } : i)) }));
-
-  const submit = () => {
-    if (!state.scheduledAt) return setError("Set the date and time.");
-    if (state.invitees.length === 0) return setError("Invite at least one person.");
-    const bad = state.invitees.findIndex((i) => i.name.trim().length < 2);
-    if (bad >= 0) return setError(`Enter a name for invitee ${bad + 1}.`);
-    const badEmail = state.invitees.findIndex((i) => i.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(i.email.trim()));
-    if (badEmail >= 0) return setError(`Check the email address of invitee ${badEmail + 1}.`);
-    setError(null);
-    save.mutate({
-      scheduledAt: fromLocalInput(state.scheduledAt),
-      location: state.location.trim() || null,
-      virtualLink: state.virtualLink.trim() || null,
-      agendaDocumentId: state.agendaDocumentId,
-      invitees: state.invitees.map(({ key: _k, ...i }) => ({
-        ...i,
-        name: i.name.trim(),
-        email: i.email?.trim() || null,
-        phone: i.phone?.trim() || null,
-      })),
-    });
-  };
+  const submit = form.handleSubmit((body) => save.mutate(body));
 
   return (
-    <section className={sectionClass} aria-label="Meeting">
+    <form onSubmit={submit} noValidate className={sectionClass} aria-label="Meeting">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-slate-900 inline-flex items-center gap-2">
           <Users className="w-4 h-4 text-brand-primary" /> {m ? "Meeting" : "Schedule the meeting"}
@@ -257,39 +294,53 @@ function MeetingForm({ projectId, k, canManage }: { projectId: string; k: Projec
           <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="ko-when">
             Date and time
           </label>
-          <input id="ko-when" type="datetime-local" className={smallInput} value={state.scheduledAt} onChange={(e) => setState((s) => ({ ...s, scheduledAt: e.target.value }))} disabled={disabled} />
+          <input id="ko-when" type="datetime-local" className={`${smallInput} ${invalidClass(form, "scheduledAt")}`} disabled={disabled} {...form.register("scheduledAt")} {...fieldA11y(form, "scheduledAt")} />
+          <FieldError form={form} name="scheduledAt" />
           <p className="mt-1 text-[11px] text-slate-500">In your browser's time zone.</p>
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="ko-where">
             Location
           </label>
-          <input id="ko-where" className={smallInput} value={state.location} maxLength={300} onChange={(e) => setState((s) => ({ ...s, location: e.target.value }))} disabled={disabled} />
+          <input id="ko-where" className={`${smallInput} ${invalidClass(form, "location")}`} maxLength={300} disabled={disabled} {...form.register("location")} {...fieldA11y(form, "location")} />
+          <FieldError form={form} name="location" />
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="ko-link">
             Online meeting link (optional)
           </label>
-          <input id="ko-link" className={smallInput} value={state.virtualLink} maxLength={500} placeholder="https://" onChange={(e) => setState((s) => ({ ...s, virtualLink: e.target.value }))} disabled={disabled} />
+          <input
+            id="ko-link"
+            className={`${smallInput} ${invalidClass(form, "virtualLink")}`}
+            maxLength={500}
+            placeholder="https://"
+            disabled={disabled}
+            {...form.register("virtualLink")}
+            {...fieldA11y(form, "virtualLink")}
+          />
+          <FieldError form={form} name="virtualLink" />
         </div>
       </div>
       <DocumentPicker
         projectId={projectId}
         typeCode="KICKOFF_BRIEFING_PACK"
         label="Briefing pack (sent with the notice)"
-        value={state.agendaDocumentId}
-        currentTitle={state.agendaTitle}
-        onChange={(id, title) => setState((s) => ({ ...s, agendaDocumentId: id, agendaTitle: title }))}
+        value={agendaDocumentId}
+        currentTitle={agendaTitle}
+        onChange={(id, title) => {
+          form.setValue("agendaDocumentId", id, { shouldDirty: true, shouldValidate: true });
+          form.setValue("agendaTitle", title);
+        }}
         disabled={disabled}
       />
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold text-slate-900">Invitees ({state.invitees.length})</h3>
+          <h3 className="text-xs font-bold text-slate-900">Invitees ({invitees.fields.length})</h3>
           {canManage && (
             <button
               type="button"
-              onClick={() => setState((s) => ({ ...s, invitees: [...s.invitees, { key: nextKey(), stakeholderGroup: "OTHER", name: "", email: null, phone: null }] }))}
+              onClick={() => invitees.append({ stakeholderGroup: "OTHER", name: "", email: "", phone: "", organizationId: null, userId: null })}
               className="inline-flex items-center gap-1 text-[11px] font-semibold text-brand-primary hover:underline"
             >
               <Plus className="w-3 h-3" /> Add invitee
@@ -308,10 +359,10 @@ function MeetingForm({ projectId, k, canManage }: { projectId: string; k: Projec
               </tr>
             </thead>
             <tbody>
-              {state.invitees.map((i) => (
-                <tr key={i.key}>
+              {invitees.fields.map((row, index) => (
+                <tr key={row.id} className="align-top">
                   <td className="py-1 pr-2">
-                    <select className={smallInput} value={i.stakeholderGroup} onChange={(e) => setInvitee(i.key, { stakeholderGroup: e.target.value as KickoffStakeholderGroup })} disabled={disabled} aria-label="Group">
+                    <select className={smallInput} disabled={disabled} aria-label="Group" {...form.register(`invitees.${index}.stakeholderGroup`)}>
                       {KickoffStakeholderGroupEnum.options.map((g) => (
                         <option key={g} value={g}>
                           {KICKOFF_STAKEHOLDER_GROUP_META[g].label}
@@ -320,17 +371,42 @@ function MeetingForm({ projectId, k, canManage }: { projectId: string; k: Projec
                     </select>
                   </td>
                   <td className="py-1 pr-2">
-                    <input className={smallInput} value={i.name} maxLength={160} onChange={(e) => setInvitee(i.key, { name: e.target.value })} disabled={disabled} aria-label="Name" />
+                    <input
+                      className={`${smallInput} ${invalidClass(form, `invitees.${index}.name`)}`}
+                      maxLength={160}
+                      disabled={disabled}
+                      aria-label="Name"
+                      {...form.register(`invitees.${index}.name`)}
+                      {...fieldA11y(form, `invitees.${index}.name`)}
+                    />
+                    <FieldError form={form} name={`invitees.${index}.name`} />
                   </td>
                   <td className="py-1 pr-2">
-                    <input className={smallInput} type="email" value={i.email ?? ""} maxLength={200} onChange={(e) => setInvitee(i.key, { email: e.target.value || null })} disabled={disabled} aria-label="Email" />
+                    <input
+                      className={`${smallInput} ${invalidClass(form, `invitees.${index}.email`)}`}
+                      type="email"
+                      maxLength={200}
+                      disabled={disabled}
+                      aria-label="Email"
+                      {...form.register(`invitees.${index}.email`)}
+                      {...fieldA11y(form, `invitees.${index}.email`)}
+                    />
+                    <FieldError form={form} name={`invitees.${index}.email`} />
                   </td>
                   <td className="py-1 pr-2">
-                    <input className={smallInput} value={i.phone ?? ""} maxLength={32} onChange={(e) => setInvitee(i.key, { phone: e.target.value || null })} disabled={disabled} aria-label="Phone" />
+                    <input
+                      className={`${smallInput} ${invalidClass(form, `invitees.${index}.phone`)}`}
+                      maxLength={32}
+                      disabled={disabled}
+                      aria-label="Phone"
+                      {...form.register(`invitees.${index}.phone`)}
+                      {...fieldA11y(form, `invitees.${index}.phone`)}
+                    />
+                    <FieldError form={form} name={`invitees.${index}.phone`} />
                   </td>
                   <td className="py-1">
                     {canManage && (
-                      <button type="button" onClick={() => setState((s) => ({ ...s, invitees: s.invitees.filter((x) => x.key !== i.key) }))} className="text-rose-600" aria-label="Remove invitee">
+                      <button type="button" onClick={() => invitees.remove(index)} className="text-rose-600" aria-label="Remove invitee">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -340,30 +416,41 @@ function MeetingForm({ projectId, k, canManage }: { projectId: string; k: Projec
             </tbody>
           </table>
         </div>
+        {invitees.fields.length === 0 && <p className="text-xs font-medium text-rose-700">Invite at least one person.</p>}
       </div>
-      {error && <p className="text-xs font-medium text-rose-600">{error}</p>}
       {canManage && (
-        <div className="flex items-center justify-end gap-2">
-          {dirty && m && <span className="text-[11px] text-amber-700">Unsaved changes</span>}
-          <button type="button" className={primaryButton} disabled={save.isPending || (!dirty && Boolean(m))} onClick={submit}>
-            {save.isPending ? "Saving…" : m ? "Save changes" : "Save meeting"}
-          </button>
+        <div className="flex items-start justify-end gap-2">
+          {dirty && m && <span className="pt-2 text-[11px] text-amber-700">Unsaved changes</span>}
+          <SubmitButton
+            form={form}
+            pending={save.isPending}
+            blocked={!dirty && Boolean(m)}
+            pendingLabel="Saving…"
+            hint="Set the date and time and a name for every invitee; check the email addresses and link."
+            className={primaryButton}
+          >
+            {m ? "Save changes" : "Save meeting"}
+          </SubmitButton>
         </div>
       )}
-    </section>
+    </form>
   );
 }
+
+const ShortNoticeFormSchema = z.object({
+  reason: z.string().trim().min(5, "Say why short notice is acceptable (at least 5 characters)").max(500, "Too long (at most 500 characters)"),
+});
 
 function NoticeSection({ projectId, meeting, canManage }: { projectId: string; meeting: KickoffMeetingDto; canManage: boolean }) {
   const send = useSendKickoffNoticeMutation(projectId);
   const [waiver, setWaiver] = useState<{ daysLeft: number | null; leadDays: number | null } | null>(null);
-  const [reason, setReason] = useState("");
+  const waiverForm = useZodForm(ShortNoticeFormSchema, { defaultValues: { reason: "" } });
 
   const sendNotice = async (waiveLeadTimeReason?: string) => {
     try {
       await send.mutateAsync(waiveLeadTimeReason ? { waiveLeadTimeReason } : {});
       setWaiver(null);
-      setReason("");
+      waiverForm.reset({ reason: "" });
     } catch (err) {
       const { code, details } = apiErrorCode(err);
       if (code === "NOTICE_LEAD_TIME_SHORT") {
@@ -400,21 +487,33 @@ function NoticeSection({ projectId, meeting, canManage }: { projectId: string; m
         whether anyone opened it.
       </p>
       {waiver && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2 text-xs text-amber-900">
+        <form
+          onSubmit={waiverForm.handleSubmit((v) => sendNotice(v.reason))}
+          noValidate
+          className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2 text-xs text-amber-900"
+        >
           <p>
             The notice should go out at least {waiver.leadDays ?? meeting.noticeLeadDays} day(s) before the meeting
             {waiver.daysLeft !== null ? `; only ${waiver.daysLeft} day(s) remain` : ""}. To send it anyway, record why.
           </p>
-          <input className={smallInput} value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} placeholder="Why short notice is acceptable" aria-label="Reason" />
-          <div className="flex gap-2">
-            <button type="button" className={primaryButton} disabled={send.isPending || reason.trim().length < 5} onClick={() => sendNotice(reason.trim())}>
+          <input
+            className={`${smallInput} ${invalidClass(waiverForm, "reason")}`}
+            maxLength={500}
+            placeholder="Why short notice is acceptable"
+            aria-label="Reason"
+            {...waiverForm.register("reason")}
+            {...fieldA11y(waiverForm, "reason")}
+          />
+          <FieldError form={waiverForm} name="reason" />
+          <div className="flex items-start gap-2">
+            <SubmitButton form={waiverForm} pending={send.isPending} className={primaryButton} hint="Say why short notice is acceptable.">
               Send with short notice
-            </button>
+            </SubmitButton>
             <button type="button" className={secondaryButton} onClick={() => setWaiver(null)}>
               Cancel
             </button>
           </div>
-        </div>
+        </form>
       )}
       <ul className="divide-y divide-slate-100">
         {meeting.invitees.map((i) => {
@@ -465,33 +564,68 @@ function QuorumList({ required, attendedGroups, invited }: { required: KickoffSt
 function RecordHeldSection({ projectId, k, meeting }: { projectId: string; k: ProjectKickoffDto; meeting: KickoffMeetingDto }) {
   const record = useRecordKickoffHeldMutation(projectId);
   const [open, setOpen] = useState(false);
-  const [heldAt, setHeldAt] = useState(toLocalInput(meeting.scheduledAt));
-  const [attended, setAttended] = useState<Record<string, boolean>>(() => Object.fromEntries(meeting.invitees.map((i) => [i.id, i.attended ?? false])));
-  const [minutesId, setMinutesId] = useState<string | null>(meeting.minutesDocumentId);
-  const [minutesTitle, setMinutesTitle] = useState<string | null>(meeting.minutesDocumentTitle);
-  const [waiverReason, setWaiverReason] = useState("");
   const [serverMissing, setServerMissing] = useState<string[] | null>(null);
-  const [moveAnchor, setMoveAnchor] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const required = meeting.requiredStakeholderGroups.length ? meeting.requiredStakeholderGroups : k.requiredStakeholderGroups;
-  const attendedGroups = meeting.invitees.filter((i) => attended[i.id]).map((i) => i.stakeholderGroup);
+  const groupsAttended = (attended: Record<string, boolean>) => meeting.invitees.filter((i) => attended[i.id]).map((i) => i.stakeholderGroup);
+
+  // Built per render: quorum depends on the invitees and on the server's answer (the resolver reads the latest schema).
+  const schema = z
+    .object({
+      heldAt: z.string().refine(isDateTimeLocal, "Set when the meeting was held"),
+      attended: z.record(z.boolean()),
+      minutesDocumentId: z.string().nullable(),
+      minutesTitle: z.string().nullable(),
+      quorumWaivedReason: z.string().trim().max(500, "Too long (at most 500 characters)"),
+      moveAnchor: z.boolean(),
+    })
+    .superRefine((v, ctx) => {
+      const met = kickoffQuorumMet(required, groupsAttended(v.attended));
+      if ((!met || serverMissing) && v.quorumWaivedReason.length < 5) {
+        ctx.addIssue({ code: "custom", path: ["quorumWaivedReason"], message: "Quorum is not met: say why the meeting still counts (at least 5 characters)" });
+      }
+    })
+    .transform((v): RecordKickoffHeldRequest => {
+      const met = kickoffQuorumMet(required, groupsAttended(v.attended));
+      const heldDay = v.heldAt.slice(0, 10);
+      const differs = Boolean(k.plannedKickoffDate && heldDay && heldDay !== k.plannedKickoffDate);
+      return {
+        heldAt: fromLocalInput(v.heldAt),
+        attendance: meeting.invitees.map((i) => ({ inviteeId: i.id, attended: Boolean(v.attended[i.id]) })),
+        minutesDocumentId: v.minutesDocumentId,
+        ...(!met || serverMissing ? { quorumWaivedReason: v.quorumWaivedReason || undefined } : {}),
+        moveKickoffAnchor: differs ? v.moveAnchor : true,
+      };
+    });
+  const form = useZodForm(schema, {
+    defaultValues: {
+      heldAt: toLocalInput(meeting.scheduledAt),
+      attended: Object.fromEntries(meeting.invitees.map((i) => [i.id, i.attended ?? false])),
+      minutesDocumentId: meeting.minutesDocumentId,
+      minutesTitle: meeting.minutesDocumentTitle,
+      quorumWaivedReason: "",
+      moveAnchor: true,
+    },
+  });
+  // The server can still refuse quorum: re-check the reason against the new rule.
+  useEffect(() => {
+    void form.trigger();
+  }, [form, serverMissing]);
+
+  const heldAt = form.watch("heldAt");
+  const attended = form.watch("attended");
+  const minutesId = form.watch("minutesDocumentId");
+  const minutesTitle = form.watch("minutesTitle");
+  const attendedGroups = groupsAttended(attended);
   const quorumMet = kickoffQuorumMet(required, attendedGroups);
   const heldDate = heldAt.slice(0, 10);
   const dateDiffers = Boolean(k.plannedKickoffDate && heldDate && heldDate !== k.plannedKickoffDate);
 
-  const submit = async () => {
-    if (!heldAt) return setError("Set when the meeting was held.");
-    if (!quorumMet && waiverReason.trim().length < 5) return setError("Quorum is not met: record why the meeting still counts (at least 5 characters).");
+  const submit = form.handleSubmit(async (body) => {
     setError(null);
     try {
-      await record.mutateAsync({
-        heldAt: fromLocalInput(heldAt),
-        attendance: meeting.invitees.map((i) => ({ inviteeId: i.id, attended: Boolean(attended[i.id]) })),
-        minutesDocumentId: minutesId,
-        ...(!quorumMet || serverMissing ? { quorumWaivedReason: waiverReason.trim() || undefined } : {}),
-        moveKickoffAnchor: dateDiffers ? moveAnchor : true,
-      });
+      await record.mutateAsync(body);
     } catch (err) {
       const { code, details } = apiErrorCode(err);
       if (code === "QUORUM_NOT_MET") {
@@ -502,7 +636,7 @@ function RecordHeldSection({ projectId, k, meeting }: { projectId: string; k: Pr
         );
       }
     }
-  };
+  });
 
   if (!open) {
     return (
@@ -515,14 +649,15 @@ function RecordHeldSection({ projectId, k, meeting }: { projectId: string; k: Pr
   }
 
   return (
-    <section className={sectionClass} aria-label="Record the meeting">
+    <form onSubmit={submit} noValidate className={sectionClass} aria-label="Record the meeting">
       <h2 className="text-sm font-bold text-slate-900">Record the meeting as held</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="ko-held">
             Held at
           </label>
-          <input id="ko-held" type="datetime-local" className={smallInput} value={heldAt} onChange={(e) => setHeldAt(e.target.value)} />
+          <input id="ko-held" type="datetime-local" className={`${smallInput} ${invalidClass(form, "heldAt")}`} {...form.register("heldAt")} {...fieldA11y(form, "heldAt")} />
+          <FieldError form={form} name="heldAt" />
         </div>
         <DocumentPicker
           projectId={projectId}
@@ -532,14 +667,14 @@ function RecordHeldSection({ projectId, k, meeting }: { projectId: string; k: Pr
           value={minutesId}
           currentTitle={minutesTitle}
           onChange={(id, title) => {
-            setMinutesId(id);
-            setMinutesTitle(title);
+            form.setValue("minutesDocumentId", id, { shouldDirty: true, shouldValidate: true });
+            form.setValue("minutesTitle", title);
           }}
         />
       </div>
       {dateDiffers && (
         <label className="flex items-start gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 p-3 text-xs text-slate-700">
-          <input type="checkbox" className="mt-0.5" checked={moveAnchor} onChange={(e) => setMoveAnchor(e.target.checked)} />
+          <input type="checkbox" className="mt-0.5" {...form.register("moveAnchor")} />
           <span>
             <span className="font-semibold">Move the kick-off date to {heldDate}?</span>
             <span className="block text-[11px] text-slate-500">
@@ -554,7 +689,11 @@ function RecordHeldSection({ projectId, k, meeting }: { projectId: string; k: Pr
           {meeting.invitees.map((i) => (
             <li key={i.id}>
               <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700">
-                <input type="checkbox" checked={Boolean(attended[i.id])} onChange={(e) => setAttended((a) => ({ ...a, [i.id]: e.target.checked }))} />
+                <input
+                  type="checkbox"
+                  checked={Boolean(attended[i.id])}
+                  onChange={(e) => form.setValue("attended", { ...form.getValues("attended"), [i.id]: e.target.checked }, { shouldDirty: true, shouldValidate: true })}
+                />
                 <span className="font-semibold">{i.name}</span>
                 <span className="text-slate-500">· {KICKOFF_STAKEHOLDER_GROUP_META[i.stakeholderGroup].label}</span>
               </label>
@@ -571,19 +710,32 @@ function RecordHeldSection({ projectId, k, meeting }: { projectId: string; k: Pr
           <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="ko-waiver">
             Why the meeting counts without quorum
           </label>
-          <input id="ko-waiver" className={smallInput} value={waiverReason} maxLength={500} onChange={(e) => setWaiverReason(e.target.value)} />
+          <input
+            id="ko-waiver"
+            className={`${smallInput} ${invalidClass(form, "quorumWaivedReason")}`}
+            maxLength={500}
+            {...form.register("quorumWaivedReason")}
+            {...fieldA11y(form, "quorumWaivedReason")}
+          />
+          <FieldError form={form} name="quorumWaivedReason" />
         </div>
       )}
       {error && <p className="text-xs font-medium text-rose-600">{error}</p>}
-      <div className="flex justify-end gap-2">
+      <div className="flex items-start justify-end gap-2">
         <button type="button" className={secondaryButton} onClick={() => setOpen(false)}>
           Cancel
         </button>
-        <button type="button" className={primaryButton} disabled={record.isPending} onClick={submit}>
-          {record.isPending ? "Saving…" : "Record as held"}
-        </button>
+        <SubmitButton
+          form={form}
+          pending={record.isPending}
+          pendingLabel="Saving…"
+          hint={!quorumMet || serverMissing ? "Set when it was held and say why it counts without quorum." : "Set when the meeting was held."}
+          className={primaryButton}
+        >
+          Record as held
+        </SubmitButton>
       </div>
-    </section>
+    </form>
   );
 }
 

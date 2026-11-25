@@ -5,10 +5,15 @@ import {
   LESSON_STAGE_META,
   LessonCategoryEnum,
   LessonStageEnum,
+  SaveLessonRequestSchema,
   type LessonCategory,
   type LessonDto,
   type LessonStage,
+  type SaveLessonRequestInput,
 } from "@insite/shared";
+import { Controller } from "react-hook-form";
+import { z } from "zod";
+import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import Loader from "../Loader";
 import { CustomSelect } from "../common";
 import { useAuth } from "../../lib/auth-context";
@@ -120,76 +125,119 @@ export function LessonsPanel({ projectId, defaultStage, readOnly = false }: { pr
   );
 }
 
+const splitTags = (text: string) =>
+  text
+    .split(",")
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean);
+
+/** SaveLessonRequestSchema with the tags typed as one comma-separated text. */
+const LessonFormSchema = SaveLessonRequestSchema.omit({ tags: true })
+  .extend({ tagsText: z.string(), sharedWithContractor: z.boolean() })
+  .superRefine((v, ctx) => {
+    const tags = SaveLessonRequestSchema.shape.tags.safeParse(splitTags(v.tagsText));
+    if (!tags.success) {
+      const issue = tags.error.issues[0];
+      const message = issue?.code === "too_big" ? "Use at most 10 tags" : `${issue?.message ?? "Check the tags"} (up to 40 characters each)`;
+      ctx.addIssue({ code: "custom", path: ["tagsText"], message });
+    }
+  })
+  .transform(({ tagsText, ...rest }): SaveLessonRequestInput => ({ ...rest, tags: splitTags(tagsText) }));
+
 function LessonModal({ projectId, lesson, defaultStage, onClose }: { projectId: string; lesson: LessonDto | null; defaultStage: LessonStage; onClose: () => void }) {
   const save = useSaveLessonMutation(projectId);
-  const [category, setCategory] = useState<LessonCategory>(lesson?.category ?? "SITE_DELIVERY");
-  const [stage, setStage] = useState<LessonStage>(lesson?.stage ?? defaultStage);
-  const [title, setTitle] = useState(lesson?.title ?? "");
-  const [description, setDescription] = useState(lesson?.description ?? "");
-  const [recommendation, setRecommendation] = useState(lesson?.recommendation ?? "");
-  const [tags, setTags] = useState((lesson?.tags ?? []).join(", "));
-  const [shared, setShared] = useState(lesson?.sharedWithContractor ?? false);
+  const form = useZodForm(LessonFormSchema, {
+    defaultValues: {
+      category: lesson?.category ?? "SITE_DELIVERY",
+      stage: lesson?.stage ?? defaultStage,
+      title: lesson?.title ?? "",
+      description: lesson?.description ?? "",
+      recommendation: lesson?.recommendation ?? "",
+      tagsText: (lesson?.tags ?? []).join(", "),
+      sharedWithContractor: lesson?.sharedWithContractor ?? false,
+    },
+  });
   return (
     <ModalShell title={lesson ? "Edit lesson" : "New lesson"} onClose={onClose} maxWidth="max-w-2xl">
-      <form
-        className="space-y-3 p-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          save.mutate(
-            {
-              lessonId: lesson?.id,
-              body: {
-                category,
-                stage,
-                title: title.trim(),
-                description: description.trim(),
-                recommendation: recommendation.trim(),
-                tags: tags
-                  .split(",")
-                  .map((t) => t.trim().toLowerCase())
-                  .filter(Boolean),
-                sharedWithContractor: shared,
-              },
-            },
-            { onSuccess: onClose }
-          );
-        }}
-      >
+      <form className="space-y-3 p-5" noValidate onSubmit={form.handleSubmit((body) => save.mutate({ lessonId: lesson?.id, body }, { onSuccess: onClose }))}>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-[11px] font-semibold text-slate-600">
             Category
-            <CustomSelect
-              value={category}
-              onChange={(v) => setCategory(v as LessonCategory)}
-              options={LessonCategoryEnum.options.map((o) => ({ value: o, label: LESSON_CATEGORY_META[o].label }))}
+            <Controller
+              control={form.control}
+              name="category"
+              render={({ field }) => (
+                <CustomSelect
+                  value={field.value}
+                  onChange={(v) => field.onChange(v as LessonCategory)}
+                  options={LessonCategoryEnum.options.map((o) => ({ value: o, label: LESSON_CATEGORY_META[o].label }))}
+                />
+              )}
             />
           </label>
           <label className="block text-[11px] font-semibold text-slate-600">
             Stage
-            <CustomSelect value={stage} onChange={(v) => setStage(v as LessonStage)} options={LessonStageEnum.options.map((o) => ({ value: o, label: LESSON_STAGE_META[o].label }))} />
+            <Controller
+              control={form.control}
+              name="stage"
+              render={({ field }) => (
+                <CustomSelect
+                  value={field.value}
+                  onChange={(v) => field.onChange(v as LessonStage)}
+                  options={LessonStageEnum.options.map((o) => ({ value: o, label: LESSON_STAGE_META[o].label }))}
+                />
+              )}
+            />
           </label>
         </div>
         <label className="block text-[11px] font-semibold text-slate-600">
           Title
-          <input value={title} onChange={(e) => setTitle(e.target.value)} className={`${inputClass} mt-1`} minLength={5} maxLength={200} required />
+          <input className={`${inputClass} mt-1 ${invalidClass(form, "title")}`} maxLength={200} {...form.register("title")} {...fieldA11y(form, "title")} />
+          <FieldError form={form} name="title" />
         </label>
         <label className="block text-[11px] font-semibold text-slate-600">
           What happened
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className={`${inputClass} mt-1`} minLength={20} maxLength={4000} required />
+          <textarea
+            rows={4}
+            className={`${inputClass} mt-1 ${invalidClass(form, "description")}`}
+            maxLength={4000}
+            {...form.register("description")}
+            {...fieldA11y(form, "description")}
+          />
+          <FieldError form={form} name="description" />
         </label>
         <label className="block text-[11px] font-semibold text-slate-600">
           What to do next time
-          <textarea value={recommendation} onChange={(e) => setRecommendation(e.target.value)} rows={3} className={`${inputClass} mt-1`} minLength={10} maxLength={4000} required />
+          <textarea
+            rows={3}
+            className={`${inputClass} mt-1 ${invalidClass(form, "recommendation")}`}
+            maxLength={4000}
+            {...form.register("recommendation")}
+            {...fieldA11y(form, "recommendation")}
+          />
+          <FieldError form={form} name="recommendation" />
         </label>
         <label className="block text-[11px] font-semibold text-slate-600">
           Tags (comma separated)
-          <input value={tags} onChange={(e) => setTags(e.target.value)} className={`${inputClass} mt-1`} placeholder="e.g. wash, procurement" />
+          <input
+            className={`${inputClass} mt-1 ${invalidClass(form, "tagsText")}`}
+            placeholder="e.g. wash, procurement"
+            {...form.register("tagsText")}
+            {...fieldA11y(form, "tagsText")}
+          />
+          <FieldError form={form} name="tagsText" />
         </label>
         <label className="flex items-center gap-2 text-xs text-slate-700">
-          <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
+          <input type="checkbox" {...form.register("sharedWithContractor")} />
           Share with the contractor once published (they are notified)
         </label>
-        <ModalActions onCancel={onClose} submitLabel={lesson ? "Save" : "Save draft"} pendingLabel="Saving…" isPending={save.isPending} />
+        <ModalActions
+          onCancel={onClose}
+          submitLabel={lesson ? "Save" : "Save draft"}
+          pendingLabel="Saving…"
+          isPending={save.isPending}
+          disabled={!canSubmit(form, { pending: save.isPending })}
+        />
       </form>
     </ModalShell>
   );

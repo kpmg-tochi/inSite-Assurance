@@ -212,7 +212,7 @@ describe('Phase 9 after redesign R2d', () => {
       assert.ok(after.scheduleBehindAlertedAt);
       const alerts = await prisma.webNotification.findMany({ where: { projectId: lkk.id, category: 'SCHEDULE_BEHIND' } });
       assert.equal(alerts.length, 1);
-      assert.equal(alerts[0].targetPermissionKey, 'schedule:view_variance');
+      assert.equal(alerts[0].targetPermissionKey, 'sprints:view_status');
       assert.equal(alerts[0].actionUrl, `/app/projects/${lkk.id}/scope`);
       const abj = await prisma.project.findFirstOrThrow({ where: { tenantId: ids.tenant, codePrefix: 'ABJ-108' } });
       assert.equal(await prisma.webNotification.count({ where: { projectId: abj.id, category: 'SCHEDULE_BEHIND' } }), 0);

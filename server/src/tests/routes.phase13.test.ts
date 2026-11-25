@@ -137,7 +137,7 @@ before(async () => {
       code: 'P13_CONTRACTOR_STAFF',
       surface: 'WEB',
       rolePermissions: {
-        create: ['projects:view_assigned', 'boq:view', 'documents:view', 'documents:upload'].map((key) => ({
+        create: ['projects:view_assigned', 'scope:view', 'documents:view', 'documents:upload'].map((key) => ({
           permission: { connect: { key } },
         })),
       },

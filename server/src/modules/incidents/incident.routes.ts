@@ -52,7 +52,7 @@ router.get(
 
 router.patch(
   "/:projectId/incidents/:incidentId/status",
-  requirePermission("audit:view_ledger", "reports:raise_query"),
+  requirePermission("audit:view_ledger", "incidents:view"),
   validateBody(UpdateIncidentStatusRequestSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {

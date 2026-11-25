@@ -113,7 +113,7 @@ Photos must be taken inside the project's site boundary to fill a slot. Unless y
 - [ ] **R5-M-27** In a photo slot, "Pick from site log" with an unsent site log photo from the check-in day. Expected: it fills the slot and leaves the site log; a sent entry is not offered there, only "attach" on the review screen.
 
 ### 4.7 Defects, incidents, notifications
-- [ ] **R5-M-28** Defects (a role with `retention:manage_defects`, on a project past construction or with open defects; assign the account to PRG-103 on the web if needed): close a defect with photos offline, then online; reopen one. Expected: the web defect board follows.
+- [ ] **R5-M-28** Defects (a role with `defects:manage`, on a project past construction or with open defects; assign the account to PRG-103 on the web if needed): close a defect with photos offline, then online; reopen one. Expected: the web defect board follows.
 - [ ] **R5-M-29** ~~Project → Report an incident.~~ Not ready: the shortcut is hidden (2026-11-24) because the web portal has no incident screen and the server alerts nobody. Re-enable in `ProjectScreen.tsx` once the portal reads incidents.
 - [ ] **R5-M-30** Push with the app in the background: publish a visit to the officer on the web, and let a reminder fire for an unconfirmed visit. Expected: a push arrives; tapping it opens that visit.
 - [ ] **R5-M-31** Notification centre across projects: generate notifications on two projects. Expected: one list merging every project; a project that fails to load shows a warning instead of hiding the rest; a visit notification opens the visit, a defect one opens Defects; old notification types show as "Update".

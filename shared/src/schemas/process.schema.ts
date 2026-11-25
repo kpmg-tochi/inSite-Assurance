@@ -59,7 +59,7 @@ export const PROCESS_TOGGLE_META: Record<
 // Approval chains
 // ---------------------------------------------------------------------------
 
-export const REPORT_APPROVAL_PERMISSION_KEY = 'reports:approve_completion';
+export const REPORT_APPROVAL_PERMISSION_KEY = 'visits:review';
 /** Phase 13: the last step of the contract default chain. */
 export const DEFAULT_DECISION_PERMISSION_KEY = 'contracts:decide_default';
 export const DEFAULT_REVIEW_PERMISSION_KEY = 'contracts:raise_default';

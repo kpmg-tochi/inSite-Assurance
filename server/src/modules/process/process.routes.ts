@@ -137,7 +137,7 @@ router.post(
 // Standards are read by field users too; writes need manage_standards_docs.
 router.get(
   '/:projectId/standards',
-  requireAnyAuthWithWebPermission('boq:view', 'projects:manage_standards_docs'),
+  requireAnyAuthWithWebPermission('scope:view', 'projects:manage_standards_docs'),
   wrap(async (req, res) => {
     res.json({ success: true, data: await listProjectStandards(p(req, 'projectId')) });
   })

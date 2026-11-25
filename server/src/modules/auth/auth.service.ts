@@ -29,6 +29,7 @@ import { primaryCategory, resolveOrganization } from '../organizations/organizat
 import { recordAuditEvent } from '../audit/audit.service';
 import { parseTenantBranding } from '../rbac/rbac.service';
 import { parseDevicePublicKey } from '../../utils/deviceSignature';
+import { assertWebSignInAllowed } from './webAccess';
 
 export const WEB_USER_AUTH_INCLUDE = {
   organization: true,
@@ -96,7 +97,18 @@ export function serializeWebUserProfile(user: LoadedWebUser): WebUserProfile {
   };
 }
 
-function issueWebToken(user: { id: string; tenantId: string; tokenVersion: number }) {
+/**
+ * Every web token goes through here (sign-in, password change, demo registration), so none is issued
+ * to a user whose main role is mobile-only (R7: 403 WEB_ACCESS_NOT_ALLOWED).
+ */
+function issueWebToken(user: {
+  id: string;
+  tenantId: string;
+  tokenVersion: number;
+  isPlatformSuperAdmin: boolean;
+  role: { surface: string };
+}) {
+  assertWebSignInAllowed({ surface: user.role.surface, isPlatformSuperAdmin: user.isPlatformSuperAdmin });
   return signWebUserToken({
     userId: user.id,
     tenantId: user.tenantId,

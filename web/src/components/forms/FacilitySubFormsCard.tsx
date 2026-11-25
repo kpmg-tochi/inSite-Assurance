@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import {
   FACILITY_ARCHETYPE_META,
   FacilityArchetypeEnum,
+  SaveFacilitySubFormRequestSchema,
   type FacilityArchetype,
   type FacilityEffectiveSubForm,
   type FacilitySubFormDto,
@@ -174,6 +175,10 @@ export function FacilitySubFormsCard() {
               ? { name: editing.archetype === "SUPPLY_INSTALLATION" ? "Pupils' furniture" : editing.archetype === "UTILITIES" ? "Borehole" : editing.archetype === "EXTERNAL_WORKS" ? "Fence" : "Toilet", archetype: editing.archetype }
               : { name: editing.facility.name, pluralName: editing.facility.pluralName, archetype: editing.facility.archetype }
           }
+          requestIssues={(fields) => {
+            const parsed = SaveFacilitySubFormRequestSchema.safeParse({ fields });
+            return parsed.success ? [] : parsed.error.issues.map((i) => i.message);
+          }}
           usageCount={editing.subForm.usageCount}
           pending={save.isPending}
           onClose={() => setEditing(null)}

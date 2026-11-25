@@ -1,6 +1,6 @@
 # Next step: refuse web sign-in for mobile-only roles
 
-**Raised:** 2026-11-24 (owner, UBEC rebrand). **Status:** not started; deliberately left for later.
+**Raised:** 2026-11-24 (owner, UBEC rebrand). **Status:** done in redesign R7b (2026-11-25): `server/src/modules/auth/webAccess.ts`, checked when a web token is issued and on every web request; tests `webSignIn.r7.test.ts`, `routes.r7b.test.ts`, `routes.r4.test.ts`. The sign-in page needed no change (it shows the server message). Kept for history.
 
 ## The rule
 

@@ -1,14 +1,19 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Plus, RotateCcw } from "lucide-react";
+import { Controller } from "react-hook-form";
+import { z } from "zod";
 import {
   DEFECT_STATUS_LABELS,
+  DefectSeverityEnum,
+  type CreateDefectTicketInput,
   type DefectSeverity,
   type DefectStatus,
   type DefectTicketDto,
 } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth, useTerm } from "../../lib/auth-context";
+import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import Loader from "../../components/Loader";
 import { CustomSelect } from "../../components/common";
 import { TableBadge } from "../../components/table/StandardTable";
@@ -88,7 +93,7 @@ function DefectBoard({
     if (focusFound && focusTicketId) document.getElementById(`defect-${focusTicketId}`)?.scrollIntoView({ block: "center" });
   }, [focusFound, focusTicketId]);
   // Defects are staff-only (R1c): the liable party is always the project's one contractor.
-  const canRaise = hasPermission("retention:manage_defects");
+  const canRaise = hasPermission("defects:manage");
 
   return (
     <section className="space-y-3">
@@ -192,65 +197,101 @@ function SmallButton({ onClick, children }: { onClick: () => void; children: Rea
   );
 }
 
+/** An optional date input: empty, or YYYY-MM-DD. */
+const optionalDate = z.string().refine((v) => v === "" || /^\d{4}-\d{2}-\d{2}$/.test(v), "Choose a valid date or leave it empty");
+
+/** The raise form; same limits as CreateDefectTicketRequestSchema, with plain-words messages. */
+const RaiseDefectFormSchema = z
+  .object({
+    title: z.string().trim().min(3, "Give the defect a title of at least 3 characters").max(160, "The title is too long (at most 160 characters)"),
+    description: z
+      .string()
+      .trim()
+      .min(3, "Describe the defect in at least 3 characters")
+      .max(4000, "The description is too long (at most 4000 characters)"),
+    severity: DefectSeverityEnum,
+    location: z.string().trim().max(200, "The location is too long (at most 200 characters)"),
+    dueDate: optionalDate,
+  })
+  .transform(
+    (v): CreateDefectTicketInput => ({
+      title: v.title,
+      description: v.description,
+      severity: v.severity,
+      location: v.location || undefined,
+      dueDate: v.dueDate || null,
+    })
+  );
+
 function RaiseDefectModal({ project, onClose }: { project: ProjectSummaryDto; onClose: () => void }) {
   const mutation = useCreateDefectTicketMutation(project.id);
   const term = useTerm();
   const contractor = project.contractors[0];
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    severity: "MEDIUM" as DefectSeverity,
-    location: "",
-    dueDate: "",
+  const form = useZodForm(RaiseDefectFormSchema, {
+    defaultValues: { title: "", description: "", severity: "MEDIUM", location: "", dueDate: "" },
   });
-  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = form.handleSubmit(async (body) => {
     try {
-      await mutation.mutateAsync({
-        title: form.title,
-        description: form.description,
-        severity: form.severity,
-        location: form.location || undefined,
-        dueDate: form.dueDate || null,
-      });
+      await mutation.mutateAsync(body);
       onClose();
     } catch {
       // toasted by the mutation hook
     }
-  };
+  });
   return (
     <ModalShell
       title="Raise a defect"
       subtitle={contractor ? `Against ${contractor.organizationName}` : `The project has no ${term("contractor", { lower: true })}`}
       onClose={onClose}
     >
-      <form onSubmit={submit} className="space-y-3 p-5 text-xs">
+      <form onSubmit={submit} noValidate className="space-y-3 p-5 text-xs">
         <label className="block space-y-1">
           <span className="font-semibold text-slate-700">Title</span>
-          <input required minLength={3} value={form.title} onChange={(e) => set("title", e.target.value)} className={inputClass} maxLength={160} />
+          <input className={`${inputClass} ${invalidClass(form, "title")}`} maxLength={160} {...form.register("title")} {...fieldA11y(form, "title")} />
+          <FieldError form={form} name="title" />
         </label>
         <label className="block space-y-1">
           <span className="font-semibold text-slate-700">Description</span>
-          <textarea required minLength={3} rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} className={inputClass} maxLength={4000} />
+          <textarea
+            rows={3}
+            className={`${inputClass} ${invalidClass(form, "description")}`}
+            maxLength={4000}
+            {...form.register("description")}
+            {...fieldA11y(form, "description")}
+          />
+          <FieldError form={form} name="description" />
         </label>
         <div className="grid grid-cols-2 gap-3">
-          <CustomSelect
-            label="Severity"
-            value={form.severity}
-            onChange={(v) => set("severity", v as DefectSeverity)}
-            options={["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((v) => ({ value: v, label: v.charAt(0) + v.slice(1).toLowerCase() }))}
+          <Controller
+            control={form.control}
+            name="severity"
+            render={({ field }) => (
+              <CustomSelect
+                label="Severity"
+                value={field.value}
+                onChange={(v) => field.onChange(v as DefectSeverity)}
+                options={["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((v) => ({ value: v, label: v.charAt(0) + v.slice(1).toLowerCase() }))}
+              />
+            )}
           />
           <label className="space-y-1">
             <span className="font-semibold text-slate-700">Location (optional)</span>
-            <input value={form.location} onChange={(e) => set("location", e.target.value)} className={inputClass} maxLength={200} />
+            <input className={`${inputClass} ${invalidClass(form, "location")}`} maxLength={200} {...form.register("location")} {...fieldA11y(form, "location")} />
+            <FieldError form={form} name="location" />
           </label>
           <label className="space-y-1">
             <span className="font-semibold text-slate-700">Due date (optional)</span>
-            <input type="date" value={form.dueDate} onChange={(e) => set("dueDate", e.target.value)} className={inputClass} />
+            <input type="date" className={`${inputClass} ${invalidClass(form, "dueDate")}`} {...form.register("dueDate")} {...fieldA11y(form, "dueDate")} />
+            <FieldError form={form} name="dueDate" />
           </label>
         </div>
-        <ModalActions onCancel={onClose} submitLabel="Raise defect" pendingLabel="Raising…" isPending={mutation.isPending} disabled={!contractor} />
+        <ModalActions
+          onCancel={onClose}
+          submitLabel="Raise defect"
+          pendingLabel="Raising…"
+          isPending={mutation.isPending}
+          disabled={!contractor || !canSubmit(form, { pending: mutation.isPending })}
+        />
       </form>
     </ModalShell>
   );
@@ -262,43 +303,54 @@ const ACTION_TITLE: Record<TicketAction["kind"], string> = {
   reject: "Not a defect",
 };
 
+/**
+ * One form for the three web actions: assign (optional due date), reopen (what is still wrong, at
+ * least 5 characters, VerifyDefectTicketRequestSchema) and not a defect (a reason of at least 5
+ * characters, RejectDefectTicketRequestSchema).
+ */
+const TicketActionFormSchema = z
+  .object({
+    kind: z.enum(["assign", "verify", "reject"]),
+    dueDate: optionalDate,
+    notes: z.string().trim().max(2000, "Too long (at most 2000 characters)"),
+  })
+  .superRefine((v, ctx) => {
+    if (v.kind === "verify" && v.notes.length < 5) ctx.addIssue({ code: "custom", path: ["notes"], message: "Say what is still wrong (at least 5 characters)" });
+    if (v.kind === "reject" && v.notes.length < 5) ctx.addIssue({ code: "custom", path: ["notes"], message: "Give a reason of at least 5 characters" });
+  });
+
 function TicketActionModal({ project, action, onClose }: { project: ProjectSummaryDto; action: TicketAction; onClose: () => void }) {
   const mutation = useDefectActionMutation(project.id);
   const t = action.ticket;
-  const [dueDate, setDueDate] = useState(t.dueDate ?? "");
-  const [notes, setNotes] = useState("");
+  const form = useZodForm(TicketActionFormSchema, { defaultValues: { kind: action.kind, dueDate: t.dueDate ?? "", notes: "" } });
   // Closing needs the officer's site photos, so it is done from the field app; the web can only reopen.
   const verifyDecision = "REOPEN" as const;
 
-  const invalid =
-    (action.kind === "reject" && notes.trim().length < 5) ||
-    (action.kind === "verify" && notes.trim().length < 5);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = form.handleSubmit(async ({ dueDate, notes }) => {
     const body =
       action.kind === "assign"
         ? { kind: "assign" as const, body: { dueDate: dueDate || null } }
         : action.kind === "verify"
-          ? { kind: "verify" as const, body: { decision: verifyDecision, notes: notes.trim(), captureIds: [] } }
-          : { kind: "reject" as const, body: { reason: notes.trim() } };
+          ? { kind: "verify" as const, body: { decision: verifyDecision, notes, captureIds: [] } }
+          : { kind: "reject" as const, body: { reason: notes } };
     try {
       await mutation.mutateAsync({ ticketId: t.id, action: body });
       onClose();
     } catch {
       // toasted by the mutation hook
     }
-  };
+  });
 
   return (
     <ModalShell title={ACTION_TITLE[action.kind]} subtitle={`${t.reference} · ${t.title}`} onClose={onClose}>
-      <form onSubmit={submit} className="space-y-3 p-5 text-xs">
+      <form onSubmit={submit} noValidate className="space-y-3 p-5 text-xs">
         {action.kind === "assign" && (
           <>
             <p className="text-slate-600">Record that this defect was passed to {t.contractorName}.</p>
             <label className="block space-y-1">
               <span className="font-semibold text-slate-700">Due date (optional)</span>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputClass} />
+              <input type="date" className={`${inputClass} ${invalidClass(form, "dueDate")}`} {...form.register("dueDate")} {...fieldA11y(form, "dueDate")} />
+              <FieldError form={form} name="dueDate" />
             </label>
           </>
         )}
@@ -313,11 +365,24 @@ function TicketActionModal({ project, action, onClose }: { project: ProjectSumma
             <span className="font-semibold text-slate-700">
               {action.kind === "reject" ? "Reason" : "What is still wrong"}
             </span>
-            <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} maxLength={2000} />
+            <textarea
+              rows={3}
+              className={`${inputClass} ${invalidClass(form, "notes")}`}
+              maxLength={2000}
+              {...form.register("notes")}
+              {...fieldA11y(form, "notes")}
+            />
+            <FieldError form={form} name="notes" />
           </label>
         )}
         {action.kind === "reject" && <BlockedNotice>The ticket is closed as not a defect. The reason is recorded in the audit ledger.</BlockedNotice>}
-        <ModalActions onCancel={onClose} submitLabel={action.kind === "verify" ? "Reopen" : ACTION_TITLE[action.kind]} pendingLabel="Saving…" isPending={mutation.isPending} disabled={invalid} />
+        <ModalActions
+          onCancel={onClose}
+          submitLabel={action.kind === "verify" ? "Reopen" : ACTION_TITLE[action.kind]}
+          pendingLabel="Saving…"
+          isPending={mutation.isPending}
+          disabled={!canSubmit(form, { pending: mutation.isPending })}
+        />
       </form>
     </ModalShell>
   );

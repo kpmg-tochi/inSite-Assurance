@@ -272,7 +272,7 @@ describe('Redesign R4a: visits, type plans and generators', () => {
     const sprints = scope.body.data.sprints as Array<{ id: string; name: string; startDate: string; endDate: string; deliverables: string }>;
     const last = sprints[sprints.length - 1];
     const longer = sprints.map((s) => ({ id: s.id, name: s.name, startDate: s.startDate, endDate: s.id === last.id ? addDays(last.endDate, 42) : s.endDate, deliverables: s.deliverables }));
-    // Sprints are edited by the administrator (the UBEC M&E officer has no boq:upload_edit).
+    // Sprints are edited by the administrator (the UBEC M&E officer has no scope:edit).
     const saved = await request(app).put(`/api/v1/projects/${ids.prg105}/scope/sprints`).set(await web('admin@ubec.test')).send({ sprints: longer });
     assert.equal(saved.status, 200, JSON.stringify(saved.body));
     const after = await prisma.visit.findMany({ where: { projectId: ids.prg105 }, select: { id: true, status: true, generatorKey: true, plannedDate: true } });
@@ -708,11 +708,17 @@ describe('Redesign R4d: approval, findings loop, progress, milestones', () => {
       assert.equal(sub.body.data.status, 'PENDING_APPROVAL');
       assert.ok(await prisma.webNotification.findFirst({ where: { category: 'VISIT_PENDING_APPROVAL', metadata: { path: ['visitSubmissionId'], equals: sub.body.data.id } } }));
 
+      // R7: the resident is mobile-only, so there is no web session to approve from...
+      const selfSignIn = await request(app).post('/api/v1/auth/login').send({ email: 'resident.supervisor@ubec.test', password: PASSWORD });
+      assert.equal(selfSignIn.status, 403, JSON.stringify(selfSignIn.body));
+      assert.equal(selfSignIn.body.error.code, 'WEB_ACCESS_NOT_ALLOWED');
+      // ...and the field token cannot reach the review route either.
       const self = await request(app)
         .post(`/api/v1/projects/${ids.prg105}/visits/${v.id}/submissions/${sub.body.data.id}/review`)
-        .set(await web('resident.supervisor@ubec.test'))
+        .set(o.auth)
         .send({ decision: 'APPROVE' });
       assert.equal(self.status, 403, JSON.stringify(self.body));
+      assert.equal((await prisma.visitSubmission.findUniqueOrThrow({ where: { id: sub.body.data.id } })).status, 'PENDING_APPROVAL');
 
       const returned = await request(app)
         .post(`/api/v1/projects/${ids.prg105}/visits/${v.id}/submissions/${sub.body.data.id}/review`)
@@ -772,7 +778,7 @@ describe('Redesign R4d: approval, findings loop, progress, milestones', () => {
       .send(submitBody(form, { answers: answerAll(form.snapshot, { [ff!.field.path]: { value: ff!.value, comment: 'Workers without helmets' } }) }));
     assert.equal(sub.status, 201, JSON.stringify(sub.body));
     assert.equal(sub.body.data.findingIds.length, 1);
-    const finding = await prisma.inspectionFinding.findUniqueOrThrow({ where: { id: sub.body.data.findingIds[0] } });
+    const finding = await prisma.finding.findUniqueOrThrow({ where: { id: sub.body.data.findingIds[0] } });
     assert.equal(finding.visitSubmissionId, sub.body.data.id);
     assert.equal(finding.questionKey, ff!.field.path);
     assert.equal(finding.status, 'OPEN');
@@ -803,7 +809,7 @@ describe('Redesign R4d: approval, findings loop, progress, milestones', () => {
       .set(o.auth)
       .send(submitBody(waitingForm, { answers: answerAll(waitingForm.snapshot, { [recheck!.path]: { value: 'NO', comment: 'Still no helmets' } }) }));
     assert.equal(notYet.status, 201, JSON.stringify(notYet.body));
-    const counted = await prisma.inspectionFinding.findUniqueOrThrow({ where: { id: finding.id } });
+    const counted = await prisma.finding.findUniqueOrThrow({ where: { id: finding.id } });
     assert.equal(counted.status, 'OPEN');
     assert.equal(counted.recheckCount, 1);
 
@@ -817,7 +823,7 @@ describe('Redesign R4d: approval, findings loop, progress, milestones', () => {
       .set(o.auth)
       .send(submitBody(nextForm, { answers: answerAll(nextForm.snapshot, { [r2.path]: { value: 'YES', comment: null, captures: [{ clientCaptureId: photo, unitId: null, kind: 'PHOTO' }] } }) }));
     assert.equal(done.status, 201, JSON.stringify(done.body));
-    const resolved = await prisma.inspectionFinding.findUniqueOrThrow({ where: { id: finding.id } });
+    const resolved = await prisma.finding.findUniqueOrThrow({ where: { id: finding.id } });
     assert.equal(resolved.status, 'RESOLVED');
     assert.equal(resolved.resolutionCaptureIds.length, 1);
     const list = await request(app).get(`/api/v1/projects/${ids.prg105}/findings?visitId=${v.id}`).set(await web(P_MONITOR));
@@ -834,7 +840,7 @@ describe('Redesign R4d: approval, findings loop, progress, milestones', () => {
     const other = await plannedVisit(o, { daysAhead: 1 });
     const otherForm = await formOf(ids.prg105, other.id, o.auth);
     const ff = findingField(otherForm.snapshot)!;
-    await prisma.inspectionFinding.updateMany({ where: { projectId: ids.prg105, questionKey: ff.field.path, status: 'OPEN' }, data: { status: 'DISMISSED' } });
+    await prisma.finding.updateMany({ where: { projectId: ids.prg105, questionKey: ff.field.path, status: 'OPEN' }, data: { status: 'DISMISSED' } });
     await request(app)
       .post(`/api/v1/projects/${ids.prg105}/visits/${other.id}/submissions`)
       .set(o.auth)
@@ -849,11 +855,11 @@ describe('Redesign R4d: approval, findings loop, progress, milestones', () => {
   it('escalates an old open finding once', async () => {
     const { runJobOnce, registerAllJobs } = await import('../jobs');
     registerAllJobs();
-    const finding = await prisma.inspectionFinding.findFirstOrThrow({ where: { projectId: ids.prg105, status: 'OPEN', visitId: { not: null } } });
-    await prisma.inspectionFinding.update({ where: { id: finding.id }, data: { createdAt: new Date(Date.now() - 30 * 24 * 3600 * 1000), escalatedAt: null } });
+    const finding = await prisma.finding.findFirstOrThrow({ where: { projectId: ids.prg105, status: 'OPEN', visitId: { not: null } } });
+    await prisma.finding.update({ where: { id: finding.id }, data: { createdAt: new Date(Date.now() - 30 * 24 * 3600 * 1000), escalatedAt: null } });
     await runJobOnce('finding-escalations');
     await runJobOnce('finding-escalations');
-    assert.ok((await prisma.inspectionFinding.findUniqueOrThrow({ where: { id: finding.id } })).escalatedAt);
+    assert.ok((await prisma.finding.findUniqueOrThrow({ where: { id: finding.id } })).escalatedAt);
     assert.equal(await prisma.webNotification.count({ where: { category: 'FINDING_ESCALATED', metadata: { path: ['findingId'], equals: finding.id } } }), 1);
   });
 

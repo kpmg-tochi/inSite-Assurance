@@ -351,7 +351,7 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
   if (!legacyLive) {
     const s = scope.summary;
     if (s.sprintCount === 0) scopeIssues.push({ code: 'SPRINT_REQUIRED', message: 'Add at least one sprint.', field: 'sprints' });
-    if (s.lineCount === 0) scopeIssues.push({ code: 'SCOPE_REQUIRED', message: 'Add the BoQ lines (by hand or from the workbook).', field: 'lines' });
+    if (s.lineCount === 0) scopeIssues.push({ code: 'SCOPE_REQUIRED', message: 'Add the BoQ lines (by hand or from the needs assessment).', field: 'lines' });
     if (s.unassignedLineCount > 0) {
       scopeIssues.push({
         code: 'LINE_UNIT_REQUIRED',

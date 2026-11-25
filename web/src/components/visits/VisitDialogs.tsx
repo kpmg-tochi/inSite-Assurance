@@ -1,10 +1,13 @@
-import React, { useMemo, useState } from "react";
-import { VISIT_KIND_META, VisitKindEnum, type VisitDto, type VisitKind } from "@insite/shared";
+import { useEffect, useMemo } from "react";
+import { Controller } from "react-hook-form";
+import { z } from "zod";
+import { CancelVisitRequestSchema, CreateVisitRequestSchema, VISIT_KIND_META, VisitKindEnum, type VisitDto, type VisitKind } from "@insite/shared";
 import { ModalActions, ModalShell, inputClass } from "../common/ModalShell";
 import { CustomSelect } from "../common";
+import { FieldError, SubmitButton, canSubmit, fieldA11y, invalidClass, useZodForm, zDateText } from "../../lib/forms";
 import { useVisitOfficersQuery } from "../../queries/visits/useVisitQueries";
 import { useProjectScopeQuery } from "../../queries/scope/useScopeQueries";
-import { useCancelVisitMutation, useCreateVisitMutation, useUpdateVisitMutation } from "../../mutations/visits/useVisitMutations";
+import { useCancelVisitMutation, useCreateVisitMutation, useDecideProposalMutation, useUpdateVisitMutation } from "../../mutations/visits/useVisitMutations";
 
 /** Redesign R4: create, edit (move, reassign, facilities) and cancel dialogs for a visit. */
 
@@ -71,48 +74,106 @@ function FacilityPicker({ projectId, value, onChange }: { projectId: string; val
   );
 }
 
+const OfficersField = z.array(z.object({ userId: z.string(), isLead: z.boolean() }));
+
+const CreateVisitFormSchema = z
+  .object({
+    visitKind: VisitKindEnum,
+    plannedDate: zDateText("Date"),
+    assignees: OfficersField,
+    pickedFacilityIds: z.array(z.string()),
+    proposed: z.boolean(),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.proposed && v.assignees.length === 0) {
+      ctx.addIssue({ code: "custom", path: ["assignees"], message: "Pick at least one officer to publish the visit, or save it as proposed" });
+    }
+    if (VISIT_KIND_META[v.visitKind].facilityRule === "PICKED" && v.pickedFacilityIds.length === 0) {
+      ctx.addIssue({ code: "custom", path: ["pickedFacilityIds"], message: "Pick at least one facility to check" });
+    }
+  })
+  .transform((v) => ({ ...v, pickedFacilityIds: VISIT_KIND_META[v.visitKind].facilityRule === "PICKED" ? v.pickedFacilityIds : [] }))
+  .pipe(CreateVisitRequestSchema);
+
 export function CreateVisitDialog({ projectId, onClose, defaultDate }: { projectId: string; onClose: () => void; defaultDate?: string }) {
   const create = useCreateVisitMutation(projectId);
-  const [visitKind, setVisitKind] = useState<VisitKind>("ROUTINE");
-  const [plannedDate, setPlannedDate] = useState(defaultDate ?? "");
-  const [assignees, setAssignees] = useState<Officers>([]);
-  const [picked, setPicked] = useState<string[]>([]);
-  const [proposed, setProposed] = useState(false);
-  const adHoc = VISIT_KIND_META[visitKind].facilityRule === "PICKED";
-  const blocked = !plannedDate || (!proposed && assignees.length === 0) || (adHoc && picked.length === 0);
+  const form = useZodForm(CreateVisitFormSchema, {
+    defaultValues: { visitKind: "ROUTINE", plannedDate: defaultDate ?? "", assignees: [], pickedFacilityIds: [], proposed: false },
+  });
+  const adHoc = VISIT_KIND_META[form.watch("visitKind")].facilityRule === "PICKED";
+  const proposed = form.watch("proposed");
+  // These switch rules on or off for other fields: re-check them so their messages stay current.
+  useEffect(() => {
+    void form.trigger(["assignees", "pickedFacilityIds"]);
+  }, [form, proposed, adHoc]);
   return (
     <ModalShell title="New visit" subtitle="Plan a visit by hand. Published visits go to their officers with a frozen form." onClose={onClose}>
-      <form
-        className="p-5 space-y-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          create.mutate({ visitKind, plannedDate, assignees, pickedFacilityIds: adHoc ? picked : [], proposed }, { onSuccess: onClose });
-        }}
-      >
-        <CustomSelect
-          label="Visit kind"
-          value={visitKind}
-          onChange={(v) => setVisitKind(v as VisitKind)}
-          options={VisitKindEnum.options.map((k) => ({ value: k, label: VISIT_KIND_META[k].label }))}
+      <form className="p-5 space-y-3" noValidate onSubmit={form.handleSubmit((body) => create.mutate(body, { onSuccess: onClose }))}>
+        <Controller
+          control={form.control}
+          name="visitKind"
+          render={({ field }) => (
+            <CustomSelect
+              label="Visit kind"
+              value={field.value}
+              onChange={(v) => field.onChange(v as VisitKind)}
+              options={VisitKindEnum.options.map((k) => ({ value: k, label: VISIT_KIND_META[k].label }))}
+            />
+          )}
         />
         <label className="block text-xs font-semibold text-slate-700">
           Date
-          <input type="date" className={`${inputClass} mt-1`} value={plannedDate} onChange={(e) => setPlannedDate(e.target.value)} required />
+          <input type="date" className={`${inputClass} mt-1 ${invalidClass(form, "plannedDate")}`} {...form.register("plannedDate")} {...fieldA11y(form, "plannedDate")} />
         </label>
+        <FieldError form={form} name="plannedDate" />
         {adHoc && (
           <div className="space-y-1">
             <p className="text-xs font-semibold text-slate-700">Facilities to check</p>
-            <FacilityPicker projectId={projectId} value={picked} onChange={setPicked} />
+            <Controller
+              control={form.control}
+              name="pickedFacilityIds"
+              render={({ field }) => (
+                <FacilityPicker
+                  projectId={projectId}
+                  value={field.value}
+                  onChange={(v) => {
+                    field.onChange(v);
+                    field.onBlur();
+                  }}
+                />
+              )}
+            />
+            <FieldError form={form} name="pickedFacilityIds" />
           </div>
         )}
         <div className="space-y-1">
           <p className="text-xs font-semibold text-slate-700">Officers</p>
-          <OfficerPicker projectId={projectId} value={assignees} onChange={setAssignees} />
+          <Controller
+            control={form.control}
+            name="assignees"
+            render={({ field }) => (
+              <OfficerPicker
+                projectId={projectId}
+                value={field.value}
+                onChange={(v) => {
+                  field.onChange(v);
+                  field.onBlur();
+                }}
+              />
+            )}
+          />
+          <FieldError form={form} name="assignees" />
         </div>
         <label className="inline-flex items-center gap-2 text-xs text-slate-700">
-          <input type="checkbox" checked={proposed} onChange={(e) => setProposed(e.target.checked)} /> Save as proposed (publish later)
+          <input type="checkbox" {...form.register("proposed")} /> Save as proposed (publish later)
         </label>
-        <ModalActions onCancel={onClose} submitLabel={proposed ? "Propose" : "Plan and publish"} pendingLabel="Saving…" isPending={create.isPending} disabled={blocked} />
+        <ModalActions
+          onCancel={onClose}
+          submitLabel={proposed ? "Propose" : "Plan and publish"}
+          pendingLabel="Saving…"
+          isPending={create.isPending}
+          disabled={!canSubmit(form, { pending: create.isPending })}
+        />
       </form>
     </ModalShell>
   );
@@ -120,17 +181,42 @@ export function CreateVisitDialog({ projectId, onClose, defaultDate }: { project
 
 export function EditVisitDialog({ projectId, visit, onClose, defaultDate }: { projectId: string; visit: VisitDto; onClose: () => void; defaultDate?: string }) {
   const update = useUpdateVisitMutation(projectId);
-  const [plannedDate, setPlannedDate] = useState(defaultDate ?? visit.plannedDate);
-  const [assignees, setAssignees] = useState<Officers>(visit.assignees.map((a) => ({ userId: a.userId, isLead: a.isLead })));
-  const [picked, setPicked] = useState<string[]>(visit.pickedFacilityIds);
-  const [note, setNote] = useState("");
   const adHoc = VISIT_KIND_META[visit.visitKind].facilityRule === "PICKED";
-  const moved = plannedDate !== visit.plannedDate;
   const published = visit.status === "PLANNED";
-  const needsNote = published && moved && note.trim().length < 3;
+  const schema = z
+    .object({
+      plannedDate: zDateText("Date"),
+      note: z.string().trim().max(1000, "Too long (at most 1000 characters)"),
+      assignees: OfficersField,
+      pickedFacilityIds: z.array(z.string()),
+    })
+    .superRefine((v, ctx) => {
+      if (published && v.plannedDate !== visit.plannedDate && v.note.length < 3) {
+        ctx.addIssue({ code: "custom", path: ["note"], message: "Say why the visit moves (at least 3 characters)" });
+      }
+      if (published && v.assignees.length === 0) ctx.addIssue({ code: "custom", path: ["assignees"], message: "A published visit needs at least one officer" });
+      if (adHoc && v.pickedFacilityIds.length === 0) ctx.addIssue({ code: "custom", path: ["pickedFacilityIds"], message: "Pick at least one facility to check" });
+    });
+  const form = useZodForm(schema, {
+    defaultValues: {
+      plannedDate: defaultDate ?? visit.plannedDate,
+      note: "",
+      assignees: visit.assignees.map((a) => ({ userId: a.userId, isLead: a.isLead })),
+      pickedFacilityIds: visit.pickedFacilityIds,
+    },
+  });
+  const plannedDate = form.watch("plannedDate");
+  const assignees = form.watch("assignees");
+  const picked = form.watch("pickedFacilityIds");
+  const moved = plannedDate !== visit.plannedDate;
+  // Moving the date can make the note required (or not): re-check it.
+  useEffect(() => {
+    void form.trigger("note");
+  }, [form, moved]);
   const sameOfficers =
     assignees.length === visit.assignees.length && assignees.every((a) => visit.assignees.some((b) => b.userId === a.userId && b.isLead === a.isLead));
   const samePicked = picked.length === visit.pickedFacilityIds.length && picked.every((p) => visit.pickedFacilityIds.includes(p));
+  const unchanged = !moved && sameOfficers && samePicked;
   return (
     <ModalShell
       title={`${VISIT_KIND_META[visit.visitKind].label} · ${visit.plannedDate}`}
@@ -139,71 +225,160 @@ export function EditVisitDialog({ projectId, visit, onClose, defaultDate }: { pr
     >
       <form
         className="p-5 space-y-3"
-        onSubmit={(e) => {
-          e.preventDefault();
+        noValidate
+        onSubmit={form.handleSubmit((v) =>
           update.mutate(
             {
               visitId: visit.id,
               body: {
-                ...(moved ? { plannedDate } : {}),
-                ...(!sameOfficers ? { assignees } : {}),
-                ...(adHoc && !samePicked ? { pickedFacilityIds: picked } : {}),
-                note: note.trim() || null,
+                ...(moved ? { plannedDate: v.plannedDate } : {}),
+                ...(!sameOfficers ? { assignees: v.assignees } : {}),
+                ...(adHoc && !samePicked ? { pickedFacilityIds: v.pickedFacilityIds } : {}),
+                note: v.note || null,
               },
             },
             { onSuccess: onClose }
-          );
-        }}
+          )
+        )}
       >
         <label className="block text-xs font-semibold text-slate-700">
           Date
-          <input type="date" className={`${inputClass} mt-1`} value={plannedDate} onChange={(e) => setPlannedDate(e.target.value)} required />
+          <input type="date" className={`${inputClass} mt-1 ${invalidClass(form, "plannedDate")}`} {...form.register("plannedDate")} {...fieldA11y(form, "plannedDate")} />
         </label>
+        <FieldError form={form} name="plannedDate" />
         {published && moved && (
-          <label className="block text-xs font-semibold text-slate-700">
-            Why it moves
-            <input className={`${inputClass} mt-1`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Told to the officers" />
-          </label>
+          <>
+            <label className="block text-xs font-semibold text-slate-700">
+              Why it moves
+              <input className={`${inputClass} mt-1 ${invalidClass(form, "note")}`} placeholder="Told to the officers" {...form.register("note")} {...fieldA11y(form, "note")} />
+            </label>
+            <FieldError form={form} name="note" />
+          </>
         )}
         {adHoc && (
           <div className="space-y-1">
             <p className="text-xs font-semibold text-slate-700">Facilities to check</p>
-            <FacilityPicker projectId={projectId} value={picked} onChange={setPicked} />
+            <Controller
+              control={form.control}
+              name="pickedFacilityIds"
+              render={({ field }) => (
+                <FacilityPicker
+                  projectId={projectId}
+                  value={field.value}
+                  onChange={(v) => {
+                    field.onChange(v);
+                    field.onBlur();
+                  }}
+                />
+              )}
+            />
+            <FieldError form={form} name="pickedFacilityIds" />
           </div>
         )}
         <div className="space-y-1">
           <p className="text-xs font-semibold text-slate-700">Officers</p>
-          <OfficerPicker projectId={projectId} value={assignees} onChange={setAssignees} />
+          <Controller
+            control={form.control}
+            name="assignees"
+            render={({ field }) => (
+              <OfficerPicker
+                projectId={projectId}
+                value={field.value}
+                onChange={(v) => {
+                  field.onChange(v);
+                  field.onBlur();
+                }}
+              />
+            )}
+          />
+          <FieldError form={form} name="assignees" />
         </div>
         <ModalActions
           onCancel={onClose}
           submitLabel="Save"
           pendingLabel="Saving…"
           isPending={update.isPending}
-          disabled={needsNote || (!moved && sameOfficers && samePicked) || (published && assignees.length === 0)}
+          disabled={!canSubmit(form, { pending: update.isPending, blocked: unchanged })}
         />
       </form>
     </ModalShell>
   );
 }
 
+const RejectProposalFormSchema = z.object({
+  note: z.string().trim().min(3, "Say why the date stays (at least 3 characters)").max(1000, "Too long (at most 1000 characters)"),
+});
+
+/**
+ * Accept an officer's date proposal, or reject it with a note (required). Used by the visit drawer
+ * and the planner's side panel.
+ */
+export function ProposalDecisionForm({
+  projectId,
+  visitId,
+  changeId,
+  acceptLabel,
+  placeholder,
+  inputClassName,
+  className,
+  acceptClassName,
+  rejectClassName,
+}: {
+  projectId: string;
+  visitId: string;
+  changeId: string;
+  acceptLabel: string;
+  placeholder: string;
+  inputClassName: string;
+  className: string;
+  acceptClassName: string;
+  rejectClassName: string;
+}) {
+  const decide = useDecideProposalMutation(projectId);
+  const form = useZodForm(RejectProposalFormSchema, { defaultValues: { note: "" } });
+  return (
+    <form
+      className={className}
+      noValidate
+      onSubmit={form.handleSubmit((v) => decide.mutate({ visitId, changeId, body: { decision: "REJECT", note: v.note } }))}
+    >
+      <button
+        type="button"
+        className={acceptClassName}
+        disabled={decide.isPending}
+        onClick={() => decide.mutate({ visitId, changeId, body: { decision: "ACCEPT" } })}
+      >
+        {acceptLabel}
+      </button>
+      <span className="flex-1 min-w-[6rem]">
+        <input className={`w-full ${inputClassName} ${invalidClass(form, "note")}`} placeholder={placeholder} aria-label="Reject note" {...form.register("note")} {...fieldA11y(form, "note")} />
+        <FieldError form={form} name="note" />
+      </span>
+      <SubmitButton form={form} pending={decide.isPending} showHint={false} className={rejectClassName}>
+        Reject
+      </SubmitButton>
+    </form>
+  );
+}
+
 export function CancelVisitDialog({ projectId, visit, onClose }: { projectId: string; visit: VisitDto; onClose: () => void }) {
   const cancel = useCancelVisitMutation(projectId);
-  const [reason, setReason] = useState("");
+  const form = useZodForm(CancelVisitRequestSchema, { defaultValues: { reason: "" } });
   return (
     <ModalShell title="Cancel visit" subtitle={`${VISIT_KIND_META[visit.visitKind].label} · ${visit.plannedDate}`} onClose={onClose}>
-      <form
-        className="p-5 space-y-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          cancel.mutate({ visitId: visit.id, body: { reason: reason.trim() } }, { onSuccess: onClose });
-        }}
-      >
+      <form className="p-5 space-y-3" noValidate onSubmit={form.handleSubmit((body) => cancel.mutate({ visitId: visit.id, body }, { onSuccess: onClose }))}>
         <label className="block text-xs font-semibold text-slate-700">
           Reason
-          <input className={`${inputClass} mt-1`} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Told to the officers" />
+          <input className={`${inputClass} mt-1 ${invalidClass(form, "reason")}`} placeholder="Told to the officers" {...form.register("reason")} {...fieldA11y(form, "reason")} />
         </label>
-        <ModalActions onCancel={onClose} submitLabel="Cancel visit" pendingLabel="Cancelling…" isPending={cancel.isPending} disabled={reason.trim().length < 3} />
+        <FieldError form={form} name="reason" />
+        <ModalActions
+          onCancel={onClose}
+          submitLabel="Cancel visit"
+          pendingLabel="Cancelling…"
+          isPending={cancel.isPending}
+          disabled={!canSubmit(form, { pending: cancel.isPending })}
+        />
       </form>
     </ModalShell>
   );

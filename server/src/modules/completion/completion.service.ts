@@ -519,6 +519,7 @@ export async function recordBeneficiarySignature(projectId: string, webUser: Web
       const refusal = staffSlotRefusal(cert, slot, webUser, parties);
       if (refusal) throw new AppError(refusal, refusal.includes('needs') ? 403 : 409, refusal.includes('needs') ? 'COC_CANNOT_SIGN' : 'COC_SLOT_SIGNED');
       const project = await tx.project.findUniqueOrThrow({ where: { id: projectId }, select: { tenantId: true } });
+      const statement = input.statement ?? defaultBeneficiaryAttestation(cert.certificateNumber, input.beneficiaryName);
       const doc = await registerUploadedDocumentTx(tx, {
         projectId,
         tenantId: project.tenantId,
@@ -527,8 +528,9 @@ export async function recordBeneficiarySignature(projectId: string, webUser: Web
         objectKey: input.objectKey,
         note: 'beneficiary signed copy',
         uploadedByUserId: webUser.userId,
+        // R7: the recorder's attestation is the sign-off, so the register does not show the copy as awaiting one.
+        signOff: { userId: webUser.userId, roleId: webUser.roleId, organizationId: webUser.organizationId, statement },
       });
-      const statement = input.statement ?? defaultBeneficiaryAttestation(cert.certificateNumber, input.beneficiaryName);
       const statementHash = crypto
         .createHash('sha256')
         .update(`${cert.id}|${cert.certificateNumber}|${slot.key}|beneficiary|${input.beneficiaryName}|${doc.sha256}|${webUser.userId}|${statement}`)

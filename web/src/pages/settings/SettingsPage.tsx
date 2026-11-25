@@ -1,4 +1,6 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
+import { ChangePasswordFormSchema } from "../auth/ChangePasswordPage";
 import { ProjectTypesTab } from "../../components/deliveryModels/ProjectTypesTab";
 import { SupervisorsCard } from "../../components/supervision/SupervisorsCard";
 import { RegionsCard } from "../../components/deliveryModels/RegionsCard";
@@ -118,8 +120,8 @@ export function SettingsPage({ project }: SettingsPageProps) {
   const canSeeTenantTab = canManageBranding || canManageSettings;
   const canManageOrganizations = hasPermission("organizations:manage");
   const canManageWorkflows = hasPermission("templates:manage_workflows");
-  const canRevokeDevices = hasPermission("sessions:revoke_device");
-  const canViewRoster = hasPermission("sessions:revoke_device");
+  const canRevokeDevices = hasPermission("users:revoke_device");
+  const canViewRoster = hasPermission("users:revoke_device");
   const canSeeAccessTab = canViewRoster;
   // Phase 11: delivery models (project types and regions). The Direct Intervention and Matching
   // Grants rules are project types.
@@ -132,7 +134,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
   // The facility catalogue and the form library (UBEC: back in Settings from /app/forms).
   const canSeeFormsTab = hasPermission("facilities:manage") || hasPermission("forms:manage");
   // Phase 14: the supervisors view (redesign R5f: the legacy inspection settings are gone).
-  const canSeeSupervisorsTab = hasPermission("inspections:view");
+  const canSeeSupervisorsTab = hasPermission("visits:view");
 
   const tabAccess: Record<SettingsTab, boolean> = {
     users: canManageUsers,
@@ -310,11 +312,9 @@ export function SettingsPage({ project }: SettingsPageProps) {
     [canRevokeDevices],
   );
 
-  // Account / Security Form State
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [savingPassword, setSavingPassword] = useState(false);
+  // Account / Security form: the change-password contract plus the confirmation.
+  const passwordDefaults = { currentPassword: "", newPassword: "", confirmPassword: "" };
+  const passwordForm = useZodForm(ChangePasswordFormSchema, { defaultValues: passwordDefaults });
 
   const handleToggleAgentStatus = async (
     agentId: string,
@@ -327,28 +327,14 @@ export function SettingsPage({ project }: SettingsPageProps) {
     });
   };
 
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentPassword || !newPassword) {
-      toast.error("Please enter your current and new password.");
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error("New password and confirmation do not match.");
-      return;
-    }
+  const handlePasswordSubmit = passwordForm.handleSubmit(async (values) => {
     try {
-      setSavingPassword(true);
-      await changePassword({ currentPassword, newPassword });
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      await changePassword({ currentPassword: values.currentPassword, newPassword: values.newPassword });
+      passwordForm.reset(passwordDefaults);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not change your password.");
-    } finally {
-      setSavingPassword(false);
     }
-  };
+  });
 
   const passwordInput =
     "w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-brand-primary";
@@ -480,6 +466,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
 
               <form
                 onSubmit={handlePasswordSubmit}
+                noValidate
                 className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-4"
                 aria-labelledby="settings-password-heading"
               >
@@ -502,10 +489,11 @@ export function SettingsPage({ project }: SettingsPageProps) {
                       id="settings-current-password"
                       type="password"
                       autoComplete="current-password"
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      className={passwordInput}
+                      {...passwordForm.register("currentPassword", { onChange: () => void passwordForm.trigger("newPassword") })}
+                      {...fieldA11y(passwordForm, "currentPassword")}
+                      className={`${passwordInput} ${invalidClass(passwordForm, "currentPassword")}`}
                     />
+                    <FieldError form={passwordForm} name="currentPassword" />
                   </div>
 
                   <div>
@@ -516,10 +504,11 @@ export function SettingsPage({ project }: SettingsPageProps) {
                       id="settings-new-password"
                       type="password"
                       autoComplete="new-password"
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className={passwordInput}
+                      {...passwordForm.register("newPassword", { onChange: () => void passwordForm.trigger("confirmPassword") })}
+                      {...fieldA11y(passwordForm, "newPassword")}
+                      className={`${passwordInput} ${invalidClass(passwordForm, "newPassword")}`}
                     />
+                    <FieldError form={passwordForm} name="newPassword" />
                   </div>
 
                   <div>
@@ -530,20 +519,23 @@ export function SettingsPage({ project }: SettingsPageProps) {
                       id="settings-confirm-password"
                       type="password"
                       autoComplete="new-password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={passwordInput}
+                      {...passwordForm.register("confirmPassword")}
+                      {...fieldA11y(passwordForm, "confirmPassword")}
+                      className={`${passwordInput} ${invalidClass(passwordForm, "confirmPassword")}`}
                     />
+                    <FieldError form={passwordForm} name="confirmPassword" />
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={savingPassword}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition shadow-xs disabled:opacity-50"
-                >
-                  {savingPassword ? "Changing…" : "Change password"}
-                </button>
+                <div className="[&>span]:items-start">
+                  <SubmitButton
+                    form={passwordForm}
+                    pendingLabel="Changing…"
+                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition shadow-xs disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-800"
+                  >
+                    Change password
+                  </SubmitButton>
+                </div>
               </form>
             </div>
           )}

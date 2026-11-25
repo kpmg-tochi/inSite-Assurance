@@ -59,7 +59,7 @@ export async function getSprintVerification(projectId: string, sprintId: string,
       include: { visit: { select: { id: true, visitKind: true, plannedDate: true } } },
       orderBy: { visit: { plannedDate: 'desc' } },
     }),
-    prisma.inspectionFinding.findMany({ where: { projectId, status: 'OPEN', facilityId: { in: facilityIds } }, orderBy: { createdAt: 'asc' } }),
+    prisma.finding.findMany({ where: { projectId, status: 'OPEN', facilityId: { in: facilityIds } }, orderBy: { createdAt: 'asc' } }),
     sprint.verifiedByUserId ? prisma.user.findUnique({ where: { id: sprint.verifiedByUserId }, select: { fullName: true } }) : null,
   ]);
   const snapshots = new Map<string, ReturnType<typeof VisitFormSnapshotSchema.safeParse>>();

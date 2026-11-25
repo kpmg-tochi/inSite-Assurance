@@ -2,7 +2,7 @@
  * Phase 10: defect work on mobile (pure; tested in Node). Staff-only since redesign R1c/R1d.
  *
  * The Defects entry appears once a project is in handover or later and the session's role holds
- * retention:manage_defects. An officer closes an open or assigned ticket with site photos, or
+ * defects:manage. An officer closes an open or assigned ticket with site photos, or
  * closes or reopens one awaiting verification. Whether the person may act on a given ticket is
  * decided by the server (each ticket carries its allowed actions); the app only shows those.
  */
@@ -10,19 +10,19 @@
 export const DEFECT_PHASES = ['HANDOVER_IN_PROGRESS', 'RETENTION_PERIOD', 'COMPLETED_CLOSED'] as const;
 
 export function showDefectsEntry(phase: string | null | undefined, permissions: string[] | null | undefined): boolean {
-  return Boolean(phase && (DEFECT_PHASES as readonly string[]).includes(phase) && permissions?.includes('retention:manage_defects'));
+  return Boolean(phase && (DEFECT_PHASES as readonly string[]).includes(phase) && permissions?.includes('defects:manage'));
 }
 
 /**
  * Redesign R5b (D-R5.15): the project screen offers Defects when the project is past construction
- * or already has open defects, and the role holds retention:manage_defects.
+ * or already has open defects, and the role holds defects:manage.
  */
 export function showDefectsShortcut(
   phase: string | null | undefined,
   openDefectCount: number | null | undefined,
   permissions: string[] | null | undefined
 ): boolean {
-  if (!permissions?.includes('retention:manage_defects')) return false;
+  if (!permissions?.includes('defects:manage')) return false;
   return showDefectsEntry(phase, permissions) || (openDefectCount ?? 0) > 0;
 }
 

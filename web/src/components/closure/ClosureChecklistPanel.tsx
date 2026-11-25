@@ -2,10 +2,13 @@ import React, { useState } from "react";
 import { CheckCircle2, Circle, MinusCircle } from "lucide-react";
 import {
   CLOSURE_ITEM_KIND_META,
+  WaiveClosureItemRequestSchema,
   type ClosureChecklistItemDto,
   type ClosureChecklistList,
   type ProjectClosureChecklistDto,
 } from "@insite/shared";
+import { z } from "zod";
+import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import { ModalActions, ModalShell, inputClass } from "../common/ModalShell";
 import { useCompleteClosureItemMutation, useWaiveClosureItemMutation } from "../../mutations/closure/useClosureMutations";
 
@@ -111,38 +114,49 @@ function ItemRow({ projectId, item }: { projectId: string; item: ClosureChecklis
   );
 }
 
+/** Waive: WaiveClosureItemRequestSchema (a reason of at least 5 characters). Mark done: optional notes. */
+const ItemFormSchema = z
+  .object({
+    mode: z.enum(["complete", "waive"]),
+    text: z.string().trim().max(1000, "Too long (at most 1000 characters)"),
+  })
+  .superRefine((v, ctx) => {
+    if (v.mode !== "waive") return;
+    const reason = WaiveClosureItemRequestSchema.shape.reason.safeParse(v.text);
+    if (!reason.success) ctx.addIssue({ code: "custom", path: ["text"], message: `${reason.error.issues[0]?.message ?? "Say why the item is waived"} (at least 5 characters)` });
+  });
+
 function ItemModal({ projectId, item, mode, onClose }: { projectId: string; item: ClosureChecklistItemDto; mode: "complete" | "waive"; onClose: () => void }) {
   const complete = useCompleteClosureItemMutation(projectId);
   const waive = useWaiveClosureItemMutation(projectId);
-  const [text, setText] = useState("");
+  const form = useZodForm(ItemFormSchema, { defaultValues: { mode, text: "" } });
   const pending = complete.isPending || waive.isPending;
   return (
     <ModalShell title={mode === "waive" ? `Waive "${item.label}"` : item.kind === "AUDIT_SIGNOFF" ? "Audit sign-off" : `Mark "${item.label}" done`} onClose={onClose} maxWidth="max-w-md">
       <form
         className="space-y-3 p-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (mode === "waive") waive.mutate({ list: item.list, itemKey: item.key, reason: text.trim() }, { onSuccess: onClose });
-          else complete.mutate({ list: item.list, itemKey: item.key, notes: text.trim() || null }, { onSuccess: onClose });
-        }}
+        noValidate
+        onSubmit={form.handleSubmit(({ text }) => {
+          if (mode === "waive") waive.mutate({ list: item.list, itemKey: item.key, reason: text }, { onSuccess: onClose });
+          else complete.mutate({ list: item.list, itemKey: item.key, notes: text || null }, { onSuccess: onClose });
+        })}
       >
         <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
           rows={3}
-          className={inputClass}
+          className={`${inputClass} ${invalidClass(form, "text")}`}
           aria-label={mode === "waive" ? "Reason for waiving" : "Notes"}
           placeholder={mode === "waive" ? "Why is it waived? (recorded in the audit ledger)" : "Notes (optional)"}
-          required={mode === "waive"}
-          minLength={mode === "waive" ? 5 : undefined}
           maxLength={1000}
+          {...form.register("text")}
+          {...fieldA11y(form, "text")}
         />
+        <FieldError form={form} name="text" />
         <ModalActions
           onCancel={onClose}
           submitLabel={mode === "waive" ? "Waive item" : item.kind === "AUDIT_SIGNOFF" ? "Sign off" : "Mark done"}
           pendingLabel="Saving…"
           isPending={pending}
-          disabled={mode === "waive" && text.trim().length < 5}
+          disabled={!canSubmit(form, { pending })}
         />
       </form>
     </ModalShell>

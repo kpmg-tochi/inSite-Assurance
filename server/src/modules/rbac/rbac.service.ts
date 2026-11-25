@@ -30,6 +30,7 @@ import { primaryCategory, resolveOrganization } from '../organizations/organizat
 import { recordAuditEvent } from '../audit/audit.service';
 import { seedStarterTemplates } from '../process/workflowTemplates.service';
 import { sendPushToMobileUser } from '../../integrations/push.service';
+import { syncPermissionCatalog } from './permissionCatalog';
 
 type Tx = Prisma.TransactionClient;
 
@@ -964,6 +965,7 @@ export async function createTenantWithDefaults(webUser: WebJwtPayload, input: Cr
       },
     });
 
+    await syncPermissionCatalog(tx); // Redesign R7a: the catalogue rows exist before roles grant them.
     const roles = await provisionDefaultRoles(tx, tenant.id);
     // Phase 7: the three starter workflow templates.
     await seedStarterTemplates(tx, tenant.id);

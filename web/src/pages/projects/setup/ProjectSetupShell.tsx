@@ -47,19 +47,21 @@ export function ProjectSetupShell({ mode }: { mode: SetupMode }) {
 
   const handlesRef = useRef(new Map<string, SectionHandle>());
   const [dirtyIds, setDirtyIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [invalidIds, setInvalidIds] = useState<ReadonlySet<string>>(() => new Set());
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const register = useCallback((sectionId: ProjectSetupSectionId, handle: SectionHandle | null) => {
     if (handle) handlesRef.current.set(sectionId, handle);
     else handlesRef.current.delete(sectionId);
-    const want = Boolean(handle?.dirty);
-    setDirtyIds((prev) => {
+    const toggle = (want: boolean) => (prev: ReadonlySet<string>) => {
       if (prev.has(sectionId) === want) return prev;
       const next = new Set(prev);
       if (want) next.add(sectionId);
       else next.delete(sectionId);
       return next;
-    });
+    };
+    setDirtyIds(toggle(Boolean(handle?.dirty)));
+    setInvalidIds(toggle(Boolean(handle && !handle.valid)));
   }, []);
   const dirty = dirtyIds.size > 0;
 
@@ -87,6 +89,16 @@ export function ProjectSetupShell({ mode }: { mode: SetupMode }) {
     [sectionIds, setup]
   );
 
+  /** Sections on the step whose fields are invalid (owner, 2026-11-24: Save and Continue wait for them). */
+  const invalidOnStep = useMemo(() => (readOnly ? [] : sectionIds.filter((id) => invalidIds.has(id))), [invalidIds, readOnly, sectionIds]);
+  const blocked = invalidOnStep.length > 0;
+
+  /** Shows a section's field errors and moves to it. */
+  const showSection = useCallback((sectionId: string) => {
+    handlesRef.current.get(sectionId)?.reveal();
+    scrollToSection(sectionId);
+  }, []);
+
   /**
    * Saves the step's dirty sections in order (and, with `includeUnsaved`, its never-saved required
    * sections with their current values). One success toast at most: every save but the last is silent.
@@ -100,6 +112,12 @@ export function ProjectSetupShell({ mode }: { mode: SetupMode }) {
         return h.dirty || (includeUnsaved && unsavedRequired.includes(id as ProjectSetupSectionId));
       });
       if (queue.length === 0) return true;
+      // Nothing is saved while a section to save has invalid fields: show them instead.
+      const invalid = queue.find((id) => !handlesRef.current.get(id)?.valid);
+      if (invalid) {
+        showSection(invalid);
+        return false;
+      }
       setSaving(true);
       try {
         for (let i = 0; i < queue.length; i++) {
@@ -118,7 +136,7 @@ export function ProjectSetupShell({ mode }: { mode: SetupMode }) {
         setSaving(false);
       }
     },
-    [readOnly, sectionIds, unsavedRequired]
+    [readOnly, sectionIds, unsavedRequired, showSection]
   );
 
   // Leaving through the sidebar, a link or a header button asks to save first.
@@ -204,6 +222,7 @@ export function ProjectSetupShell({ mode }: { mode: SetupMode }) {
     if (await saveSections({ silent: true, includeUnsaved })) navigate(`${base}/${route}`);
   };
   const continueLabel = !readOnly && (dirty || unsavedRequired.length > 0) ? "Save and continue" : "Continue";
+  const sectionTitle = (id: string) => setup.steps.find((s) => s.stepId === id)?.title ?? id;
 
   const StepComponent = step.component;
 
@@ -340,7 +359,8 @@ export function ProjectSetupShell({ mode }: { mode: SetupMode }) {
                     <button
                       type="button"
                       onClick={() => saveSections({ silent: false, includeUnsaved: false })}
-                      disabled={!dirty || saving}
+                      disabled={!dirty || saving || blocked}
+                      aria-describedby={blocked ? "setup-invalid-hint" : undefined}
                       className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     >
                       Save
@@ -350,7 +370,8 @@ export function ProjectSetupShell({ mode }: { mode: SetupMode }) {
                     <button
                       type="button"
                       onClick={() => go(next.route, true)}
-                      disabled={saving}
+                      disabled={saving || blocked}
+                      aria-describedby={blocked ? "setup-invalid-hint" : undefined}
                       className="inline-flex items-center gap-1 rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
                     >
                       {continueLabel} <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
@@ -358,6 +379,24 @@ export function ProjectSetupShell({ mode }: { mode: SetupMode }) {
                   )}
                 </div>
               </div>
+            )}
+            {step.id !== "review" && blocked && (
+              <p id="setup-invalid-hint" role="status" className="text-right text-[11px] text-slate-600">
+                Fix the highlighted fields in{" "}
+                {invalidOnStep.map((id, i) => (
+                  <React.Fragment key={id}>
+                    {i > 0 && (i === invalidOnStep.length - 1 ? " and " : ", ")}
+                    <button
+                      type="button"
+                      onClick={() => showSection(id)}
+                      className="font-semibold text-rose-700 underline hover:text-rose-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary rounded"
+                    >
+                      {sectionTitle(id)}
+                    </button>
+                  </React.Fragment>
+                ))}
+                .
+              </p>
             )}
           </div>
         </div>

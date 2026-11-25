@@ -317,7 +317,7 @@ export function ProgrammeKpisPage({ onOpenProject }: { onOpenProject: (projectId
   if (isLoading) {
     return (
       <div className="flex justify-center p-10">
-        <Loader />
+        <Loader inline />
       </div>
     );
   }

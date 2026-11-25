@@ -117,7 +117,7 @@ async function approvalFor(s: SubmissionRow, viewer: WebJwtPayload | null): Prom
 export async function serializeSubmission(s: SubmissionRow, viewer: WebJwtPayload | null): Promise<VisitSubmissionDto> {
   const answers = (Array.isArray(s.answersJson) ? s.answersJson : []) as VisitFormAnswer[];
   const byCapture = new Map(s.captures.map((c) => [c.clientCaptureId, c]));
-  const findings = await prisma.inspectionFinding.findMany({ where: { visitSubmissionId: s.id }, select: { id: true } });
+  const findings = await prisma.finding.findMany({ where: { visitSubmissionId: s.id }, select: { id: true } });
   const photoGaps = (Array.isArray(s.integrityFlags) ? s.integrityFlags : []) as VisitSubmissionDto['photoGaps'];
   return {
     id: s.id,
@@ -539,7 +539,7 @@ async function recheckInputsForProjectAnyStatus(tx: Tx, projectId: string, timez
   // A finding closed since the phone built its form still re-checks the way it was built.
   const closed = ids.filter((id) => !byId.has(id));
   if (closed.length) {
-    const rows = await tx.inspectionFinding.findMany({ where: { id: { in: closed }, projectId } });
+    const rows = await tx.finding.findMany({ where: { id: { in: closed }, projectId } });
     for (const f of rows) {
       const text = f.description.trim();
       byId.set(f.id, {
@@ -620,7 +620,7 @@ export async function getMyVisits(userId: string, tenantId: string, q: { from?: 
     serializeVisits(prisma, rows),
     prisma.project.findMany({ where: { id: { in: projectIds } }, select: { id: true, codePrefix: true, name: true, constructionPhase: true, timezone: true } }),
     prisma.projectSprint.findMany({ where: { projectId: { in: projectIds } }, select: { projectId: true, number: true, name: true, startDate: true, endDate: true } }),
-    prisma.inspectionFinding.groupBy({ by: ['projectId'], where: { projectId: { in: projectIds }, status: 'OPEN' }, _count: { _all: true } }),
+    prisma.finding.groupBy({ by: ['projectId'], where: { projectId: { in: projectIds }, status: 'OPEN' }, _count: { _all: true } }),
     prisma.visit.findMany({
       where: { ...mine, projectId: { in: projectIds }, status: 'PLANNED', plannedDate: { gte: today } },
       select: { projectId: true, plannedDate: true },

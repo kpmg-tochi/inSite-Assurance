@@ -213,11 +213,35 @@ interface EditorIssue {
   message: string;
 }
 
+const NO_ISSUES: EditorIssue[] = [];
+
+/** Plain-language checks on inputs the payload turns into numbers (the shared schema would say "NaN"). */
+function draftIssues(d: Draft): EditorIssue[] {
+  const out: EditorIssue[] = [];
+  const pct = d.retentionPct.trim();
+  if (pct !== "" && !(Number.isFinite(Number(pct)) && Number(pct) >= 0 && Number(pct) <= 20)) {
+    out.push({ section: "completion", message: "Retention: enter a percentage from 0 to 20, or leave it empty." });
+  }
+  const months = d.retentionMonths.trim();
+  if (months !== "" && !(Number.isInteger(Number(months)) && Number(months) >= 0 && Number(months) <= 60)) {
+    out.push({ section: "completion", message: "Defects liability period: enter whole months from 0 to 60, or leave it empty." });
+  }
+  return out;
+}
+
+/** Validation issues of the draft: plain checks first, then the save payload against SaveProjectTypeRequestSchema. */
+function issuesForDraft(d: Draft): EditorIssue[] {
+  const local = draftIssues(d);
+  const shared = issuesFor(payloadFrom(d), local.length > 0);
+  return [...local, ...shared];
+}
+
 /** Validation issues of the save payload, each placed in the general block or a tab. */
-function issuesFor(payload: SaveProjectTypeRequestInput): EditorIssue[] {
+function issuesFor(payload: SaveProjectTypeRequestInput, skipPayments = false): EditorIssue[] {
   const parsed = SaveProjectTypeRequestSchema.safeParse(payload);
   if (parsed.success) return [];
-  return parsed.error.issues.map((i) => {
+  const relevant = skipPayments ? parsed.error.issues.filter((i) => !(i.path[0] === "config" && i.path[1] === "payments")) : parsed.error.issues;
+  return relevant.map((i) => {
     const section = projectTypeEditorSectionForPath(i.path);
     const [root, key, index, field] = i.path;
     if (root === "config" && key === "contractMilestones" && typeof index === "number") {
@@ -261,12 +285,15 @@ function ProjectTypeEditor({
   const save = useSaveProjectTypeMutation();
   const requestLeave = useGuardedAction();
   const [draft, setDraft] = useState<Draft>(initial);
-  const [issues, setIssues] = useState<EditorIssue[]>([]);
+  const [attempted, setAttempted] = useState(false);
   const [tab, setTab] = useState<ProjectTypeConfigGroupId>("kickoff");
 
   const set = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const initialJson = useMemo(() => JSON.stringify(payloadFrom(initial)), [initial]);
   const dirty = JSON.stringify(payloadFrom(draft)) !== initialJson;
+  // Validated as you edit; listed in their tabs once something changed (or a save was tried).
+  const liveIssues = useMemo(() => issuesForDraft(draft), [draft]);
+  const issues = dirty || attempted ? liveIssues : NO_ISSUES;
   const orgOptions = useMemo(() => orgs.map((o) => ({ value: o.id, label: o.name })), [orgs]);
   const allowedSet = new Set(draft.allowedOwnerIds ?? []);
 
@@ -279,8 +306,8 @@ function ProjectTypeEditor({
   /** Validates and saves; resolves false when it could not (errors shown, first tab with errors opened). */
   const saveDraft = useCallback(async (): Promise<boolean> => {
     const payload = payloadFrom(draft);
-    const found = issuesFor(payload);
-    setIssues(found);
+    const found = issuesForDraft(draft);
+    setAttempted(true);
     if (found.length > 0) {
       const firstTab = found.find((i) => i.section !== "general")?.section;
       if (firstTab && !found.some((i) => i.section === "general")) setTab(firstTab as ProjectTypeConfigGroupId);
@@ -538,9 +565,22 @@ function ProjectTypeEditor({
         <button type="button" onClick={close} className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700">
           Cancel
         </button>
-        <button type="submit" disabled={save.isPending} className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">
-          {save.isPending ? "Saving..." : draft.id ? "Save new version" : "Create project type"}
-        </button>
+        <span className="inline-flex flex-col items-end gap-1">
+          <button
+            type="submit"
+            disabled={save.isPending || liveIssues.length > 0}
+            aria-describedby={liveIssues.length > 0 ? "pt-save-hint" : undefined}
+            className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {save.isPending ? "Saving..." : draft.id ? "Save new version" : "Create project type"}
+          </button>
+          {liveIssues.length > 0 && (
+            <span id="pt-save-hint" className="max-w-md text-right text-[11px] text-slate-500">
+              Fix to save: {liveIssues[0].message}
+              {liveIssues.length > 1 && ` (+${liveIssues.length - 1} more)`}
+            </span>
+          )}
+        </span>
       </div>
     </form>
   );

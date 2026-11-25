@@ -1,29 +1,33 @@
 import React, { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { z } from "zod";
 import {
   BENEFICIARY_TYPE_META,
   BeneficiaryTypeEnum,
+  OrganizationRefSchema,
+  ProjectBeneficiaryInputSchema,
+  ProjectPartiesStepSchema,
   type BeneficiaryType,
   type OrganizationRef,
-  type ProjectPartiesStep,
   type ProjectSetupDto,
 } from "@insite/shared";
+import { FieldError, visibleError } from "../../../../lib/forms";
 import { OrganizationInput } from "../../../../components/organizations/OrganizationInput";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import { useOrganizationsQuery } from "../../../../queries/organizations/useOrganizationQueries";
 import { CustomSelect } from "../../../../components/common";
 import { useTerm } from "../../../../lib/auth-context";
 import {
-  extractErrors,
-  FieldError,
+  choiceOrNull,
   inputClass,
   labelClass,
-  NO_ERRORS,
+  setField,
   StepSection,
+  textOrNull,
+  textProps,
   useLatestSetup,
   useRegisterSection,
-  useSyncedState,
-  type FormErrors,
+  useSectionForm,
   type StepProps,
 } from "../setupContext";
 
@@ -51,6 +55,52 @@ interface PartiesValues {
 
 let rowSeq = 0;
 const newKey = () => `row-${++rowSeq}`;
+
+const B = ProjectBeneficiaryInputSchema.shape;
+
+/**
+ * Form schema: the rows hold text; the output is the request body (`ProjectPartiesStepSchema`: one
+ * primary, names, a valid contact email). Display-only fields (row key, organisation names) are
+ * dropped. `contractors` is never sent: the contractor section owns it (D-R6.4).
+ */
+const PartiesFormSchema = z
+  .object({
+    owner: choiceOrNull().pipe(ProjectPartiesStepSchema.shape.owningOrganizationId),
+    beneficiaries: z.array(
+      z.object({
+        key: z.string(),
+        id: B.id,
+        name: B.name,
+        beneficiaryType: B.beneficiaryType,
+        contactName: textOrNull().pipe(B.contactName),
+        contactEmail: textOrNull().pipe(z.string().email("Enter an email address").max(200).nullable()),
+        contactPhone: textOrNull().pipe(B.contactPhone),
+        address: textOrNull().pipe(B.address),
+        isPrimary: z.boolean(),
+      })
+    ),
+    monitor: OrganizationRefSchema.nullable(),
+    monitorName: z.string().nullable(),
+    lender: OrganizationRefSchema.nullable(),
+    lenderName: z.string().nullable(),
+  })
+  .transform((v) => ({
+    owningOrganizationId: v.owner,
+    beneficiaries: v.beneficiaries.map(({ key: _k, ...b }) => b),
+    monitorOrganization: v.monitor,
+    lenderOrganization: v.lender,
+  }))
+  .pipe(ProjectPartiesStepSchema);
+
+/** Server paths → form fields. */
+const partiesPath = (path: string) =>
+  path === "owningOrganizationId"
+    ? "owner"
+    : path.startsWith("monitorOrganization")
+      ? "monitor"
+      : path.startsWith("lenderOrganization")
+        ? "lender"
+        : path;
 
 function partiesFrom(setup: ProjectSetupDto): PartiesValues {
   const p = setup.parties;
@@ -101,92 +151,63 @@ export function PartiesSection({ projectId, setup, readOnly }: StepProps) {
     return options;
   }, [orgsQuery.data, rules.allowedOwningOrganizationIds, setup.parties.owningOrganization]);
   const initial = useMemo(() => partiesFrom(setup), [setup]);
-  const [state, setState, dirty] = useSyncedState(initial, partiesKey);
-  const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
+  const section = useSectionForm(PartiesFormSchema, initial, partiesKey);
+  const { form, dirty } = section;
+  const state = section.values as PartiesValues;
+  const [general, setGeneral] = useState<string | null>(null);
   const save = useSaveSetupStepMutation(projectId);
   const latest = useLatestSetup(projectId, setup);
+  const err = (name: string) => visibleError(form, name);
 
+  const setBeneficiaries = (next: BeneficiaryRow[], touch = false) => setField(form, "beneficiaries", next, touch);
   const setBeneficiary = (key: string, patch: Partial<BeneficiaryRow>) =>
-    setState((s) => ({
-      ...s,
-      beneficiaries: s.beneficiaries.map((b) => {
+    setBeneficiaries(
+      state.beneficiaries.map((b) => {
         if (b.key === key) return { ...b, ...patch };
         if (patch.isPrimary) return { ...b, isPrimary: false };
         return b;
-      }),
-    }));
+      })
+    );
   const addBeneficiary = () =>
-    setState((s) => ({
-      ...s,
-      beneficiaries: [
-        ...s.beneficiaries,
-        {
-          key: newKey(),
-          name: "",
-          beneficiaryType: "SCHOOL" as BeneficiaryType,
-          contactName: "",
-          contactEmail: "",
-          contactPhone: "",
-          address: "",
-          isPrimary: s.beneficiaries.length === 0,
-        },
-      ],
-    }));
-  const removeBeneficiary = (key: string) =>
-    setState((s) => {
-      const rest = s.beneficiaries.filter((b) => b.key !== key);
-      // Keep one primary.
-      if (rest.length && !rest.some((b) => b.isPrimary)) rest[0] = { ...rest[0], isPrimary: true };
-      return { ...s, beneficiaries: rest };
-    });
-
-  const buildBody = (v: PartiesValues): { body: ProjectPartiesStep | null; fields: Record<string, string> } => {
-    const fields: Record<string, string> = {};
-    v.beneficiaries.forEach((b, i) => {
-      if (b.name.trim().length < 2) fields[`beneficiaries.${i}.name`] = "Enter the name";
-      if (b.contactEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.contactEmail.trim())) {
-        fields[`beneficiaries.${i}.contactEmail`] = "Enter an email address";
-      }
-    });
-    if (Object.keys(fields).length > 0) return { body: null, fields };
-    return {
-      body: {
-        owningOrganizationId: v.owner || null,
-        beneficiaries: v.beneficiaries.map((b) => ({
-          ...(b.id ? { id: b.id } : {}),
-          name: b.name.trim(),
-          beneficiaryType: b.beneficiaryType,
-          contactName: b.contactName.trim() || null,
-          contactEmail: b.contactEmail.trim() || null,
-          contactPhone: b.contactPhone.trim() || null,
-          address: b.address.trim() || null,
-          isPrimary: b.isPrimary,
-        })),
-        monitorOrganization: v.monitor,
-        lenderOrganization: v.lender,
-        // `contractors` omitted: the contractor section owns it (D-R6.4).
+    setBeneficiaries([
+      ...state.beneficiaries,
+      {
+        key: newKey(),
+        name: "",
+        beneficiaryType: "SCHOOL" as BeneficiaryType,
+        contactName: "",
+        contactEmail: "",
+        contactPhone: "",
+        address: "",
+        isPrimary: state.beneficiaries.length === 0,
       },
-      fields,
-    };
+    ]);
+  const removeBeneficiary = (key: string) => {
+    const rest = state.beneficiaries.filter((b) => b.key !== key);
+    // Keep one primary.
+    if (rest.length && !rest.some((b) => b.isPrimary)) rest[0] = { ...rest[0], isPrimary: true };
+    setBeneficiaries(rest, true);
   };
 
-  useRegisterSection("parties", dirty, async (opts) => {
-    if (!dirty && !opts?.force) return true;
-    const { body, fields } = buildBody(dirty ? state : partiesFrom(latest()));
-    if (!body) {
-      setErrors({ fields, general: "Some fields need attention." });
-      return false;
-    }
-    try {
-      await save.mutateAsync({ sectionId: "parties", body, silent: opts?.silent });
-      setState(partiesFrom(latest()));
-      setErrors(NO_ERRORS);
-      return true;
-    } catch (err) {
-      setErrors(extractErrors(err));
-      return false;
-    }
-  });
+  useRegisterSection(
+    "parties",
+    dirty,
+    async (opts) => {
+      if (!dirty && !opts?.force) return true;
+      const body = await section.submit(dirty ? undefined : partiesFrom(latest()));
+      if (!body) return false;
+      try {
+        await save.mutateAsync({ sectionId: "parties", body, silent: opts?.silent });
+        section.reset(partiesFrom(latest()));
+        setGeneral(null);
+        return true;
+      } catch (error) {
+        setGeneral(section.showServerErrors(error, partiesPath));
+        return false;
+      }
+    },
+    section
+  );
 
   const beneficiaryWord = term("beneficiary", { lower: true });
   return (
@@ -206,7 +227,7 @@ export function PartiesSection({ projectId, setup, readOnly }: StepProps) {
           )
         }
       >
-        {errors.general && <p className="text-xs font-medium text-red-600">{errors.general}</p>}
+        {general && <p className="text-xs font-medium text-red-600">{general}</p>}
         {state.beneficiaries.length === 0 && <p className="text-xs text-slate-500">None yet.</p>}
         <div className="space-y-3">
           {[...state.beneficiaries]
@@ -222,13 +243,12 @@ export function PartiesSection({ projectId, setup, readOnly }: StepProps) {
                     </label>
                     <input
                       id={fid("name")}
-                      className={inputClass(Boolean(errors.fields[`beneficiaries.${i}.name`]))}
-                      value={b.name}
+                      className={inputClass(Boolean(err(`beneficiaries.${i}.name`)))}
                       maxLength={200}
-                      onChange={(e) => setBeneficiary(b.key, { name: e.target.value })}
+                      {...textProps(form, `beneficiaries.${i}.name`)}
                       disabled={readOnly}
                     />
-                    <FieldError message={errors.fields[`beneficiaries.${i}.name`]} />
+                    <FieldError form={form} name={`beneficiaries.${i}.name`} />
                   </div>
                   <div className="md:col-span-2">
                     <CustomSelect
@@ -242,28 +262,30 @@ export function PartiesSection({ projectId, setup, readOnly }: StepProps) {
                   </div>
                   <div className="md:col-span-3">
                     <label className={labelClass} htmlFor={fid("contact")}>Contact name</label>
-                    <input id={fid("contact")} className={inputClass(false)} value={b.contactName} maxLength={160} onChange={(e) => setBeneficiary(b.key, { contactName: e.target.value })} disabled={readOnly} />
+                    <input id={fid("contact")} className={inputClass(Boolean(err(`beneficiaries.${i}.contactName`)))} maxLength={160} {...textProps(form, `beneficiaries.${i}.contactName`)} disabled={readOnly} />
+                    <FieldError form={form} name={`beneficiaries.${i}.contactName`} />
                   </div>
                   <div className="md:col-span-3">
                     <label className={labelClass} htmlFor={fid("email")}>Contact email</label>
                     <input
                       id={fid("email")}
                       type="email"
-                      className={inputClass(Boolean(errors.fields[`beneficiaries.${i}.contactEmail`]))}
-                      value={b.contactEmail}
+                      className={inputClass(Boolean(err(`beneficiaries.${i}.contactEmail`)))}
                       maxLength={200}
-                      onChange={(e) => setBeneficiary(b.key, { contactEmail: e.target.value })}
+                      {...textProps(form, `beneficiaries.${i}.contactEmail`)}
                       disabled={readOnly}
                     />
-                    <FieldError message={errors.fields[`beneficiaries.${i}.contactEmail`]} />
+                    <FieldError form={form} name={`beneficiaries.${i}.contactEmail`} />
                   </div>
                   <div className="md:col-span-3">
                     <label className={labelClass} htmlFor={fid("phone")}>Contact phone</label>
-                    <input id={fid("phone")} className={inputClass(false)} value={b.contactPhone} maxLength={32} onChange={(e) => setBeneficiary(b.key, { contactPhone: e.target.value })} disabled={readOnly} />
+                    <input id={fid("phone")} className={inputClass(Boolean(err(`beneficiaries.${i}.contactPhone`)))} maxLength={32} {...textProps(form, `beneficiaries.${i}.contactPhone`)} disabled={readOnly} />
+                    <FieldError form={form} name={`beneficiaries.${i}.contactPhone`} />
                   </div>
                   <div className="md:col-span-6">
                     <label className={labelClass} htmlFor={fid("address")}>Address</label>
-                    <input id={fid("address")} className={inputClass(false)} value={b.address} maxLength={400} onChange={(e) => setBeneficiary(b.key, { address: e.target.value })} disabled={readOnly} />
+                    <input id={fid("address")} className={inputClass(Boolean(err(`beneficiaries.${i}.address`)))} maxLength={400} {...textProps(form, `beneficiaries.${i}.address`)} disabled={readOnly} />
+                    <FieldError form={form} name={`beneficiaries.${i}.address`} />
                   </div>
                   <div className="md:col-span-3 flex items-center gap-4 pt-1 md:pt-6">
                     <label className="inline-flex items-center gap-2 text-xs text-slate-700">
@@ -280,7 +302,7 @@ export function PartiesSection({ projectId, setup, readOnly }: StepProps) {
               );
             })}
         </div>
-        <FieldError message={errors.fields.beneficiaries} />
+        <FieldError form={form} name="beneficiaries" />
       </StepSection>
 
       <StepSection
@@ -292,20 +314,23 @@ export function PartiesSection({ projectId, setup, readOnly }: StepProps) {
             <CustomSelect
               label={`Owning organisation${rules.owningOrganizationRequired ? " *" : ""}`}
               value={state.owner}
-              onChange={(v) => setState((s) => ({ ...s, owner: v }))}
+              onChange={(v) => setField(form, "owner", v, true)}
               options={ownerOptions}
               searchable={ownerOptions.length > 8}
               disabled={readOnly}
+              error={err("owner")}
             />
-            <FieldError message={errors.fields.owningOrganizationId} />
           </div>
           <OrganizationInput
             label={`${term("monitorParty")} organisation${rules.monitorRequired ? "" : " (optional)"}`}
             tag="ADVISORY_MONITOR"
             value={state.monitor}
             selectedName={state.monitorName}
-            onChange={(v) => setState((s) => ({ ...s, monitor: v, monitorName: null }))}
-            error={errors.fields.monitorOrganization}
+            onChange={(v) => {
+              form.setValue("monitorName", null);
+              setField(form, "monitor", v, true);
+            }}
+            error={err("monitor")}
             disabled={readOnly}
           />
           <OrganizationInput
@@ -313,8 +338,11 @@ export function PartiesSection({ projectId, setup, readOnly }: StepProps) {
             tag="FINANCIER_LENDER"
             value={state.lender}
             selectedName={state.lenderName}
-            onChange={(v) => setState((s) => ({ ...s, lender: v, lenderName: null }))}
-            error={errors.fields.lenderOrganization}
+            onChange={(v) => {
+              form.setValue("lenderName", null);
+              setField(form, "lender", v, true);
+            }}
+            error={err("lender")}
             disabled={readOnly}
           />
         </div>

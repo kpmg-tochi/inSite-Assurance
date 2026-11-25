@@ -218,7 +218,7 @@ describe('organisation hierarchy', () => {
 
 describe('organisation-tree visibility', () => {
   it('flagship sees all subsidiaries’ projects; a subsidiary sees its own; a sibling sees neither', async () => {
-    assert.deepEqual(await codesVisibleTo(FLAGSHIP), ['PRG-102', 'PRG-103', 'PRG-104', 'PRG-105', 'PRG-211', 'PRG-221', 'PRG-241', 'PRG-242']);
+    assert.deepEqual(await codesVisibleTo(FLAGSHIP), ['PRG-102', 'PRG-103', 'PRG-104', 'PRG-105', 'PRG-106', 'PRG-211', 'PRG-221', 'PRG-241', 'PRG-242']);
     assert.deepEqual(await codesVisibleTo(NORTH), ['PRG-211']);
     assert.deepEqual(await codesVisibleTo(SOUTH), ['PRG-221', 'PRG-241', 'PRG-242']);
   });
@@ -268,7 +268,7 @@ describe('filters', () => {
   it('filters by type, region (with its areas) and owner', async () => {
     assert.deepEqual(await codesVisibleTo(FLAGSHIP, `?projectTypeId=${ids.coFunded}`), ['PRG-211', 'PRG-221', 'PRG-241', 'PRG-242']);
     const north = await prisma.region.findFirstOrThrow({ where: { code: 'N' } });
-    assert.deepEqual(await codesVisibleTo(FLAGSHIP, `?regionId=${north.id}`), ['PRG-102', 'PRG-103', 'PRG-105', 'PRG-211']);
+    assert.deepEqual(await codesVisibleTo(FLAGSHIP, `?regionId=${north.id}`), ['PRG-102', 'PRG-103', 'PRG-105', 'PRG-106', 'PRG-211']);
     assert.deepEqual(await codesVisibleTo(FLAGSHIP, `?owningOrganizationId=${ids.south}`), ['PRG-221', 'PRG-241', 'PRG-242']);
   });
 });
@@ -290,7 +290,7 @@ describe('organisation scope on approval steps', () => {
       roleId: u.roleId,
       roleCode: u.role.code,
       roleName: u.role.name,
-      permissions: [...u.role.rolePermissions.map((rp) => rp.permission.key), 'reports:approve_completion'],
+      permissions: [...u.role.rolePermissions.map((rp) => rp.permission.key), 'visits:review'],
       organizationId: u.organizationId,
       mustChangePassword: false,
     };
@@ -301,7 +301,7 @@ describe('organisation scope on approval steps', () => {
   // PRG-102: step 2 FUNDER).
   const step = (label: string, organizationScope: 'ANY' | 'PROJECT_OWNER' | 'PROJECT_OWNER_OR_ANCESTOR' | 'FUNDER') => ({
     label,
-    requiredPermissionKey: 'reports:approve_completion',
+    requiredPermissionKey: 'visits:review',
     requiredRoleId: null,
     minAmountThresholdNgn: null,
     isSystemStep: false,
@@ -515,14 +515,14 @@ describe('cross-project web notifications (projectId = all)', () => {
     const { createWebNotification } = await import('../modules/notifications/notifications.service');
     const northNote = await createWebNotification(prisma, {
       projectId: ids['PRG-211'],
-      targetPermissionKey: 'reports:view_all',
+      targetPermissionKey: 'visits:view',
       category: 'VISIT_PENDING_APPROVAL',
       title: 'North item',
       description: 'For the north entity',
     });
     const southNote = await createWebNotification(prisma, {
       projectId: ids['PRG-221'],
-      targetPermissionKey: 'reports:view_all',
+      targetPermissionKey: 'visits:view',
       category: 'VISIT_PENDING_APPROVAL',
       title: 'South item',
       description: 'For the south entity',
@@ -578,9 +578,10 @@ describe('portfolio dashboard', () => {
 
     const flagship = await request(app).get('/api/v1/projects/portfolio/overview').set(await login(FLAGSHIP));
     // Phase 15 added PRG-103 (liability period) and PRG-241 (closed); Phase 16 PRG-104 (CoC pending) and
-    // PRG-105 (under construction); PRG-242 is archived, so not on the map.
-    assert.equal(flagship.body.data.kpis.projectCount, 7);
-    assert.equal(flagship.body.data.kpis.totalCommitmentNgn, 240_000_000 + 70_000_000 + 85_000_000 + 150_000_000 + 64_000_000 + 165_000_000 + 210_000_000);
+    // PRG-105 (under construction); the demo closure twin PRG-106 (liability period over); PRG-242 is
+    // archived, so not on the map.
+    assert.equal(flagship.body.data.kpis.projectCount, 8);
+    assert.equal(flagship.body.data.kpis.totalCommitmentNgn, 240_000_000 + 70_000_000 + 85_000_000 + 150_000_000 + 64_000_000 + 165_000_000 + 210_000_000 + 98_000_000);
     assert.equal(flagship.body.data.kpis.quietSiteCount, 4, 'no captures yet on the seeded projects under construction');
 
     const filtered = await request(app)
@@ -628,7 +629,7 @@ describe('portfolio dashboard', () => {
 
     // Open findings per project and in total.
     for (const row of rows) {
-      const open = await prisma.inspectionFinding.count({ where: { projectId: row.id, status: 'OPEN' } });
+      const open = await prisma.finding.count({ where: { projectId: row.id, status: 'OPEN' } });
       assert.equal(row.openFindingsCount, open, row.codePrefix);
     }
     assert.equal(kpis.openFindingsCount, rows.reduce((s, r) => s + r.openFindingsCount, 0));
@@ -730,7 +731,7 @@ describe('UBEC roster: SUBEB administrators see only their jurisdiction', () => 
 
 describe('UBEC roster: M&E officers see only the projects they are assigned to', () => {
   for (const [email, listed, notAssigned] of [
-    ['me.officer@ubec.test', ['PRG-102', 'PRG-103', 'PRG-104', 'PRG-105', 'PRG-211', 'PRG-221'], ['PRG-241', 'PRG-242']],
+    ['me.officer@ubec.test', ['PRG-102', 'PRG-103', 'PRG-104', 'PRG-105', 'PRG-106', 'PRG-211', 'PRG-221'], ['PRG-241', 'PRG-242']],
     ['lagos.me@ubec.test', ['PRG-221', 'PRG-241', 'PRG-242'], ['PRG-105', 'PRG-211']],
     ['independent.me@ubec.test', ['PRG-102', 'PRG-105', 'PRG-211'], ['PRG-103', 'PRG-221']],
   ] as const) {

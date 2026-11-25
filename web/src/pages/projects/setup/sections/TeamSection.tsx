@@ -2,17 +2,16 @@ import React, { useMemo, useState } from "react";
 import { Search, Smartphone } from "lucide-react";
 import { useTeamOptionsQuery } from "../../../../queries/projects/useProjectSetupQueries";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
-import type { ProjectSetupDto } from "@insite/shared";
+import { ProjectTeamStepSchema, type ProjectSetupDto } from "@insite/shared";
 import { TeamWorkloadNotice } from "../../../../components/supervision/SupervisorsCard";
+import { FieldError } from "../../../../lib/forms";
 import {
-  extractErrors,
   inputClass,
-  NO_ERRORS,
+  setField,
   StepSection,
   useLatestSetup,
   useRegisterSection,
-  useSyncedState,
-  type FormErrors,
+  useSectionForm,
   type StepProps,
 } from "../setupContext";
 
@@ -26,8 +25,11 @@ const teamKey = (v: { userIds: string[] }) => JSON.stringify([...v.userIds].sort
 export function TeamSection({ projectId, setup, readOnly }: StepProps) {
   const options = useTeamOptionsQuery(projectId);
   const initial = useMemo(() => teamFrom(setup), [setup]);
-  const [state, setState, dirty] = useSyncedState(initial, teamKey);
-  const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
+  // Validated against ProjectTeamStepSchema (user ids, at most 500).
+  const section = useSectionForm(ProjectTeamStepSchema, initial, teamKey);
+  const { form, dirty } = section;
+  const state = section.values as { userIds: string[] };
+  const [general, setGeneral] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const save = useSaveSetupStepMutation(projectId);
   const latest = useLatestSetup(projectId, setup);
@@ -37,28 +39,36 @@ export function TeamSection({ projectId, setup, readOnly }: StepProps) {
   );
   const creatorId = setup.createdByUserId;
 
-  useRegisterSection("team", dirty, async (opts) => {
-    if (!dirty && !opts?.force) return true;
-    try {
-      await save.mutateAsync({ sectionId: "team", body: dirty ? state : teamFrom(latest()), silent: opts?.silent });
-      setState(teamFrom(latest()));
-      setErrors(NO_ERRORS);
-      return true;
-    } catch (err) {
-      setErrors(extractErrors(err));
-      return false;
-    }
-  });
+  useRegisterSection(
+    "team",
+    dirty,
+    async (opts) => {
+      if (!dirty && !opts?.force) return true;
+      const body = await section.submit(dirty ? undefined : teamFrom(latest()));
+      if (!body) return false;
+      try {
+        await save.mutateAsync({ sectionId: "team", body, silent: opts?.silent });
+        section.reset(teamFrom(latest()));
+        setGeneral(null);
+        return true;
+      } catch (err) {
+        setGeneral(section.showServerErrors(err));
+        return false;
+      }
+    },
+    section
+  );
 
   const toggleUser = (id: string) =>
-    setState((s) => ({ ...s, userIds: s.userIds.includes(id) ? s.userIds.filter((x) => x !== id) : [...s.userIds, id] }));
+    setField(form, "userIds", state.userIds.includes(id) ? state.userIds.filter((x) => x !== id) : [...state.userIds, id], true);
   return (
     <div className="space-y-5">
       <StepSection
         title="People with access"
         description="Web users assigned to this project. People in a pre-provisioned mobile role see the project on their phone once it is active."
       >
-        {errors.general && <p className="text-xs font-medium text-red-600">{errors.general}</p>}
+        {general && <p className="text-xs font-medium text-red-600">{general}</p>}
+        <FieldError form={form} name="userIds" />
         <div className="relative max-w-sm">
           <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
           <input className={`${inputClass()} pl-8`} value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search people" aria-label="Search people" />

@@ -13,7 +13,7 @@ const router = guardProjectRoutes(Router());
 /** GET /api/v1/projects/:projectId/boq/revisions (legacy BOQ revisions, read-only). */
 router.get(
   '/:projectId/boq/revisions',
-  requireAnyAuthWithWebPermission('boq:view'),
+  requireAnyAuthWithWebPermission('scope:view'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       res.json({ success: true, data: await listBoqRevisions(String(req.params.projectId)) });

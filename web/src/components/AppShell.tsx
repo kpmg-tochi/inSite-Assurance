@@ -464,13 +464,6 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
             >
               Account and password
             </Link>
-            <Link
-              to="/mobile-app"
-              onClick={() => setOpen(false)}
-              className="block w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-slate-700 hover:bg-slate-100 transition"
-            >
-              Mobile app
-            </Link>
           </div>
 
           <div className="pt-1 mt-1 border-t border-slate-100">

@@ -154,19 +154,19 @@ describe('Phase 7', { concurrency: false }, () => {
       const gone = await request(app)
         .put(`/api/v1/projects/${ids.lkk}/process/chains/DISBURSEMENT`)
         .set(admin)
-        .send({ steps: [{ label: 'QS approval', requiredPermissionKey: 'reports:approve_completion' }] });
+        .send({ steps: [{ label: 'QS approval', requiredPermissionKey: 'visits:review' }] });
       assert.equal(gone.status, 404, 'redesign R1b: the disbursement chain no longer exists');
       const bad = await request(app)
         .put(`/api/v1/projects/${ids.lkk}/process/chains/REPORT`)
         .set(admin)
-        .send({ steps: [{ label: 'System step', requiredPermissionKey: 'reports:approve_completion', isSystemStep: true }] });
+        .send({ steps: [{ label: 'System step', requiredPermissionKey: 'visits:review', isSystemStep: true }] });
       assert.equal(bad.status, 422, JSON.stringify(bad.body));
 
       const before = (await request(app).get(`/api/v1/projects/${ids.lkk}/process`).set(admin)).body.data;
       const ok = await request(app)
         .put(`/api/v1/projects/${ids.lkk}/process/chains/REPORT`)
         .set(admin)
-        .send({ steps: [{ label: 'QS approval', requiredPermissionKey: 'reports:approve_completion' }] });
+        .send({ steps: [{ label: 'QS approval', requiredPermissionKey: 'visits:review' }] });
       assert.equal(ok.status, 200, JSON.stringify(ok.body));
       assert.equal(ok.body.data.reportChain.version, before.reportChain.version + 1);
       assert.ok(await prisma.approvalStep.findFirst({ where: { projectId: ids.lkk, chainType: 'REPORT', version: before.reportChain.version, isActive: false } }));

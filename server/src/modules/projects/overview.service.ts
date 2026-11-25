@@ -36,11 +36,11 @@ export const OVERVIEW_MILESTONE_PERMISSIONS = [
 /** Who reads visits (R4 `GET /projects/:id/visits`). */
 export const OVERVIEW_VISIT_PERMISSIONS = ['visits:view'];
 /** Who reads findings (R4 `GET /projects/:id/findings`). */
-export const OVERVIEW_FINDING_PERMISSIONS = ['inspections:view', 'inspections:manage_findings', 'visits:view'];
+export const OVERVIEW_FINDING_PERMISSIONS = ['visits:view', 'findings:manage'];
 /** Who reads defects (staff-only since R1c/R1d). */
-export const OVERVIEW_DEFECT_PERMISSIONS = ['retention:manage_defects'];
+export const OVERVIEW_DEFECT_PERMISSIONS = ['defects:manage'];
 /** Who reads sprints and scope. */
-export const OVERVIEW_SCOPE_PERMISSIONS = ['boq:view'];
+export const OVERVIEW_SCOPE_PERMISSIONS = ['scope:view'];
 
 /** Visits still to be carried out or corrected. */
 const NEXT_VISIT_STATUSES = ['PLANNED', 'IN_PROGRESS', 'RETURNED'] as const;
@@ -117,7 +117,7 @@ export async function getProjectOverview(projectId: string, webUser: WebJwtPaylo
           select: { id: true, visitKind: true, plannedDate: true, submissionDeadline: true },
         })
       : Promise.resolve(null),
-    can.findings ? prisma.inspectionFinding.count({ where: { projectId, status: OPEN_FINDING_STATUS } }) : Promise.resolve(null),
+    can.findings ? prisma.finding.count({ where: { projectId, status: OPEN_FINDING_STATUS } }) : Promise.resolve(null),
     can.defects
       ? prisma.retentionDefectTicket.count({ where: { projectId, status: { in: OPEN_DEFECT_STATUSES } } })
       : Promise.resolve(null),

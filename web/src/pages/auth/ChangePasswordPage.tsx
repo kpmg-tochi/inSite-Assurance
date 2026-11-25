@@ -1,7 +1,24 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import { z } from "zod";
 import { ChangePasswordRequestSchema } from "@insite/shared";
 import { useAuth } from "../../lib/auth-context";
 import { BrandLogo } from "../../components/BrandLogo";
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
+
+/** The change-password contract plus the confirmation field (the server never sees it). */
+export const ChangePasswordFormSchema = z
+  .object({ currentPassword: z.string(), newPassword: z.string(), confirmPassword: z.string() })
+  .superRefine((v, ctx) => {
+    const parsed = ChangePasswordRequestSchema.safeParse({ currentPassword: v.currentPassword, newPassword: v.newPassword });
+    if (!parsed.success) {
+      for (const issue of parsed.error.issues) ctx.addIssue({ code: z.ZodIssueCode.custom, path: issue.path, message: issue.message });
+    }
+    if (!v.confirmPassword) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["confirmPassword"], message: "Type the new password again" });
+    } else if (v.confirmPassword !== v.newPassword) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["confirmPassword"], message: "New password and confirmation do not match." });
+    }
+  });
 
 /**
  * Shown instead of the workspace while `user.mustChangePassword` is set (accounts created by an
@@ -9,33 +26,20 @@ import { BrandLogo } from "../../components/BrandLogo";
  */
 export function ChangePasswordPage() {
   const { user, changePassword, logout } = useAuth();
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const form = useZodForm(ChangePasswordFormSchema, {
+    defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
+  });
+  const { register, handleSubmit, trigger } = form;
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = handleSubmit(async (values) => {
     setError(null);
-    if (newPassword !== confirmPassword) {
-      setError("New password and confirmation do not match.");
-      return;
-    }
-    const parsed = ChangePasswordRequestSchema.safeParse({ currentPassword, newPassword });
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "Invalid password.");
-      return;
-    }
     try {
-      setSubmitting(true);
-      await changePassword(parsed.data);
+      await changePassword({ currentPassword: values.currentPassword, newPassword: values.newPassword });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not change your password.");
-    } finally {
-      setSubmitting(false);
     }
-  };
+  });
 
   const inputClass =
     "w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-brand-primary";
@@ -43,7 +47,8 @@ export function ChangePasswordPage() {
   return (
     <div className="min-h-screen bg-surface-canvas flex items-center justify-center p-6">
       <form
-        onSubmit={handleSubmit}
+        onSubmit={onSubmit}
+        noValidate
         className="max-w-sm w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4"
       >
         <BrandLogo className="h-12 w-12" />
@@ -60,33 +65,36 @@ export function ChangePasswordPage() {
           <input
             type="password"
             autoComplete="current-password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            className={inputClass}
+            {...register("currentPassword", { onChange: () => void trigger("newPassword") })}
+            {...fieldA11y(form, "currentPassword")}
+            className={`${inputClass} ${invalidClass(form, "currentPassword")}`}
           />
+          <FieldError form={form} name="currentPassword" />
         </label>
         <label className="block space-y-1">
           <span className="text-xs font-semibold text-slate-700">New password</span>
           <input
             type="password"
             autoComplete="new-password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            className={inputClass}
+            {...register("newPassword", { onChange: () => void trigger("confirmPassword") })}
+            {...fieldA11y(form, "newPassword")}
+            className={`${inputClass} ${invalidClass(form, "newPassword")}`}
           />
           <span className="text-[11px] text-slate-400">
             At least 10 characters, with a letter and a number.
           </span>
+          <FieldError form={form} name="newPassword" />
         </label>
         <label className="block space-y-1">
           <span className="text-xs font-semibold text-slate-700">Confirm new password</span>
           <input
             type="password"
             autoComplete="new-password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className={inputClass}
+            {...register("confirmPassword")}
+            {...fieldA11y(form, "confirmPassword")}
+            className={`${inputClass} ${invalidClass(form, "confirmPassword")}`}
           />
+          <FieldError form={form} name="confirmPassword" />
         </label>
 
         {error && (
@@ -103,13 +111,13 @@ export function ChangePasswordPage() {
           >
             Sign out
           </button>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-bold disabled:opacity-50"
+          <SubmitButton
+            form={form}
+            pendingLabel="Saving..."
+            className="px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-primary"
           >
-            {submitting ? "Saving..." : "Save password"}
-          </button>
+            Save password
+          </SubmitButton>
         </div>
       </form>
     </div>

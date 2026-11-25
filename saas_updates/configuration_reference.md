@@ -237,47 +237,115 @@ Approval chain additions:
 | Visits (redesign R4) | Project → Visits & reports (`/visits`, tabs Plan, Findings, Site log; Findings also in the sidebar); Workspace → Visit planner (`/app/visits`) | Create, generate, publish, move, reassign and cancel visits; accept or reject officers' date proposals; review submissions; findings and the site log. Officers respond, check in and submit from the phone only. | P3, P5 |
 | Sprint verification (redesign R4) | Sprints & scope → Verify | Met, partly met or not met once a sprint has started (early needs a note). Drives the sprint status (Late, Verified), the schedule badge and the on-time KPI. | Decision V |
 | Scope & sprints (redesign R2) | Step 3 Scope & sprints (route `scope`; `/setup/boq` opens it) and the project page Sprints & scope (`/scope`) | Sprints (name, dates, deliverables; any length, gaps allowed, no overlaps; numbered by date), facility units (a facility, a label such as "Ground floor male toilet", start and end sprint, planned quantity for supply items) and BoQ lines (item no., unit, description, unit of measure, quantity, rate; amount = quantity × rate, computed by the server). Lines take their planned dates from their unit's sprints; the project's planned start and end follow the first and last sprint. To activate: at least one sprint and one line, every line on a unit, every unit with both sprints. On a live project every change is audited; units and lines with field evidence cannot be removed, nor a sprint a unit starts or ends in. | Decision R |
-| Needs-assessment workbook (redesign R2) | Step 3 Scope & sprints → Download workbook / Import workbook | Excel workbook with the workspace's live lists (facilities, units of measure, regions, delivery models), pre-filled from the project. Import is for drafts: preview first (lines by facility and sprint, row errors, warnings such as the total being above the budget), then confirm; confirm replaces the draft's sprints, units and lines and fills only the project fields that are empty (a primary school beneficiary, region, LGA, site address, budget, delivery model, a radial site boundary of the workspace default radius from the GPS point, strategic justification, assumptions). A blank workbook (the workspace's lists only) downloads from Forms & facilities → Facilities; a project's own workbook also downloads from the "Needs assessment and standards" section of step 3. Live projects change scope on the Sprints & scope page instead. | Decision Y |
+| Needs assessment template (redesign R2; named and UBEC-styled in R7) | Step 3 Scope & sprints → Download needs assessment / Import needs assessment | Excel file (title band, green header row, banded rows; files in the older layout still import) with the workspace's live lists (facilities, units of measure, regions, delivery models), pre-filled from the project. Import is for drafts: preview first (lines by facility and sprint, row errors, warnings such as the total being above the budget), then confirm; confirm replaces the draft's sprints, units and lines and fills only the project fields that are empty (a primary school beneficiary, region, LGA, site address, budget, delivery model, a radial site boundary of the workspace default radius from the GPS point, strategic justification, assumptions). The blank "UBEC needs assessment template" (the workspace's lists only) downloads from Forms & facilities → Facilities → Download template; a project's own "<code> needs assessment" file also downloads from the "Needs assessment and standards" section of step 3. Live projects change scope on the Sprints & scope page instead. | Decision Y |
 | Retention percentage and liability period | Step 2 Contract → Retention and defects liability (section id `facility`) | Held from each recorded payment; changes apply to later payments. | Decision Q |
 | Payments | Project → Payments | Record interim, final and retention-release payments made outside the platform, optionally naming a sprint (a sprint a payment names cannot be removed); void a wrong entry with a reason. Exceptions are flagged, not blocked. Filters (kind, sprint, exceptions only), a paid-against-contract-sum bar (also on the Overview) and a Release checks panel (CoC issued, liability period end, open defects). | Decision Q |
 | Project stage and phase changes (redesign R6c) | Project → Overview | The stage bar (Kick-off, Mobilisation, Construction, Completion, Closure) is derived, not set. The phase actions under it ("Start handover", "Start defects liability period", "Close the project") change the construction phase; a blocked action shows why (for example the CoC gate). | G6 |
 
 ---
 
-## 6. Permissions added in Phases 11–16
+## 6. Permission catalogue (redesign R7a)
 
-Default roles: **TSA** Tenant Super Admin, **MON** Independent Monitor, **LEN** Lender/funder, **OA** Organisation Administrator. The Tenant Super Admin holds every permission except the segregated disbursement ones.
-**UBEC demo tenant (seed only, `server/src/db/seedUbecRoster.ts`; `shared/src/defaultRoles.ts` unchanged).** Six roles: UBEC Administrator (code `TENANT_SUPER_ADMIN`, every permission), SUBEB Administrator (`ORGANIZATION_ADMIN`, the default Organisation Administrator set: organisation tree, portfolio, audit ledger, `payments:view`, default case decision, CoC signature), UBEC M&E Officer (`UBEC_ME_OFFICER`) and SUBEB M&E Officer (`SUBEB_ME_OFFICER`), both seeing only the projects they are assigned to (`projects:view_assigned`, on web and phone): visits (view, plan), report approval, findings and escalations, sprint verification, documents (view, upload), handover review and response, defects, milestones, CoC signature, contractor ratings, lessons, KPIs, and no portfolio, audit ledger, payments, baseline edit or Settings permissions; Independent M&E (COREN-certified firm) (`MONITOR`, assigned projects only, read-mostly: visits, findings, documents view/upload, KPIs); Resident Supervisor (`INDEPENDENT_RESIDENT`, mobile only). The three M&E roles have surface Both (provisioned: the same account signs in on the field app; field persona Independent verifier, with `visits:submit`, `field:submit_report`, `field:raise_incident`). The lender, lender technical officer, monitor inspector and legal officer roles are not created for this tenant.
+The catalogue lives in `SYSTEM_PERMISSIONS_CATALOG` (`shared/src/enums.ts`). Code owns the permission rows: `syncPermissionCatalog` upserts every entry at server start, in the seed and when a tenant is provisioned, and never deletes; renames and removals are migration SQL (`20261225090000_r7a_permission_catalogue`), so a renamed key keeps its row and every role that held it, default or custom, keeps it. Categories follow the programme flow and only group the role editor.
 
-| Phase | Permission | What it allows |
+**Roles.** The UBEC demo uses six roles, applied to its tenant by the seed (`tailorUbecRoles` in `server/src/db/seedUbecRoster.ts`); the shared defaults (`shared/src/defaultRoles.ts`: Tenant Super Admin, Independent Monitor, Funder / Finance Officer, Organisation Administrator, Monitor Inspector, Independent Resident) still serve the legacy test tenant. Role codes are unchanged. The final role set is decided after the demo and promoted to the shared defaults then (`next_steps/role_catalogue_migration_plan.md`).
+
+| UBEC role (code) | Surface | Permissions in short |
 | :--- | :--- | :--- |
-| 11 | `project_types:manage` | Define delivery models. |
-| R4 | `visits:view` | See visits, the planner, submissions, findings on visits and the site log (MON, LEN, OA, field roles). |
-| R4 | `visits:plan` | Create, generate, publish, move, reassign and cancel visits; decide date proposals (MON, TSA). |
-| R4 | `visits:submit` | Field roles: respond to their visits, check in and submit (Monitor Inspector, Independent Resident). |
-| R4 | `sprints:verify` | Verify sprints (MON, TSA). |
-| R4 | `findings:receive_escalations` | Notified of escalated findings (TSA, OA). |
-| 11 | `regions:manage` | Manage regions and areas. |
-| 11 | `projects:view_organization_tree` | See projects owned by the user's organisation or below it. |
-| 11 | `projects:view_portfolio` | Portfolio dashboard (map and portfolio KPI cards). |
-| 13 | `documents:view`, `documents:upload`, `documents:manage_types` | Document register and document types. |
-| 13 | `milestones:manage`, `milestones:waive` | Complete and waive contract milestones; move anchor dates. |
-| 13 | `kickoff:manage` | Schedule the kick-off, send the notice, record attendance and minutes. |
-| 13 | `contracts:raise_default`, `contracts:decide_default` | Open and review default cases; make the final decision. |
-| 14 | `inspections:view`, `inspections:manage_findings` | See and manage findings (also the visit form preview with `inspections:view`). `inspections:submit` covered Phase 14 site inspections, which R5f removes; R7's role catalogue settles it. (`inspections:manage_templates` was removed in R3e.) |
-| 15 | `completion:draft_certificate`, `completion:sign_certificate`, `completion:revoke_certificate` | Certificate of Completion. |
-| 15 | `closure:manage_checklist`, `closure:audit_signoff`, `closure:export_pack` | Closure checklist, audit sign-off, closure pack. |
-| 15 | `contractors:rate_performance` | Rate contractors and see ratings across projects. |
-| 15 | `lessons:manage`, `lessons:view` | Record and browse lessons learned. |
-| 16 | `kpis:view` | Programme KPIs page and the project KPI card (TSA, MON, LEN, OA). |
-| R2 | `facilities:manage` | Manage the facility catalogue (TSA, MON). Scope and sprints use `boq:view` and `boq:upload_edit` until the R7 role rework. |
-| R3 | `forms:manage` | Build the form library (TSA, MON; roles that held `inspections:manage_templates` got it). Reading the library also works with `project_types:manage` (type editor picker); the visit form preview also with `inspections:view`. |
+| UBEC Administrator (`TENANT_SUPER_ADMIN`) | Web | Every permission. Acts for the functions without a login (Director Legal, Executive Secretary, Procurement, Finance & Accounts, Audit). |
+| SUBEB Administrator (`ORGANIZATION_ADMIN`) | Web | Organisation tree, portfolio, KPIs, audit ledger, `payments:view`, visits view, finding escalations, documents, milestones (manage, waive), kick-off, default cases (raise, decide), CoC (draft, sign, revoke), closure checklist and pack, ratings, lessons. |
+| UBEC M&E Officer (`UBEC_ME_OFFICER`), SUBEB M&E Officer (`SUBEB_ME_OFFICER`) | Both | Assigned projects only. Scope view, schedule status, visits (view, plan, review, submit), findings and escalations, `incidents:view`, sprint verification, documents (view, upload), handover (record, review), defects, milestones, CoC signature, ratings, lessons, KPIs. |
+| Independent M&E, COREN-certified firm (`MONITOR`) | Both | Assigned projects only. Scope view, schedule status, visits (view, submit), `incidents:view`, documents (view, upload), lessons, KPIs. |
+| Resident Supervisor (`INDEPENDENT_RESIDENT`) | Field app | Visits (view, submit), scope view, findings, defects. Web sign-in refused (below). |
 
-Redesign R1d removed `field:join_project` and `assurance:review_credentials`, and renamed `handover:manage_links` to `handover:record_response` (record the beneficiary's handover response from the signed copy). The default roles `CONTRACTOR` (web) and `CONTRACTOR_ENGINEER` (mobile) are gone: contractors have no login (decision P2). Every mobile role signs in with an account.
+**Rules that hold whatever the role (redesign R7b).**
+- A user whose main role's surface is Field app (Resident Supervisor) cannot sign in on the web: 403 `WEB_ACCESS_NOT_ALLOWED`, and web tokens issued earlier stop working. Roles with surface Both use the same credentials on the web and the field app. Platform super admins are never refused.
+- The person who recorded a handover response cannot review it: 409 `SAME_PERSON_REVIEW`. Another holder of `handover:review_feedback` reviews it.
 
-Redesign R1e removed `projects:view_executive_matrix` (the executive risk matrix; `/app/executive` opens the portfolio), `mobilization:manage_roster`, `mobilization:configure_reminders`, `presence:view_telemetry`, `presence:manage_noshow_alerts` and `field:manual_checkin`, with morning briefs, telemetry, the participant roster and attendance alerts. (Excusing a missed workday report needed `reports:approve_completion` until R5f removed workday reports.) The milestone reminder offsets (7, 3 and 1 days before due) are fixed until the R4 deadline settings; their editor went with the roster.
+### 6.1 Catalogue
 
-Redesign R2d removed `schedule:catch_up_refactor`, `schedule:approve_refactor` (schedule revisions), `schedule:propose_programme` (the programme of works is now a document whose sign-off accepts it; its document type needs a sign-off) and `boq:configure_hold_points` (the hold-point flags themselves go in R5f). `schedule:view_variance` now means: see the sprint schedule badge and get the behind-schedule notification.
+| Category | Key | Name | Surface | Legacy default roles holding it |
+| :--- | :--- | :--- | :--- | :--- |
+| Workspace & access | `tenant:manage_branding` | Manage Workspace Branding | Web | – |
+| Workspace & access | `tenant:manage_settings` | Manage Workspace Settings | Web | – |
+| Workspace & access | `roles:create_edit` | Create & Edit Roles | Web | – |
+| Workspace & access | `users:invite_manage` | Manage Users & Project Assignments | Web | – |
+| Workspace & access | `users:revoke_device` | Revoke Field App Devices & Sessions | Web | MONITOR |
+| Workspace & access | `organizations:manage` | Manage Organisation Directory | Web | – |
+| Workspace & access | `regions:manage` | Manage Regions | Web | – |
+| Workspace & access | `project_types:manage` | Manage Project Types | Web | – |
+| Workspace & access | `templates:manage_workflows` | Configure Workflow Templates | Web | – |
+| Workspace & access | `documents:manage_types` | Manage Document Types | Web | – |
+| Forms & facilities | `facilities:manage` | Manage Facility Catalogue | Web | MONITOR |
+| Forms & facilities | `forms:manage` | Manage Form Library | Web | MONITOR |
+| Portfolio & projects | `projects:view_assigned` | View Assigned Projects | Web | MONITOR, LENDER, ORGANIZATION_ADMIN |
+| Portfolio & projects | `projects:view_all_tenant` | View Every Project | Web | MONITOR, LENDER |
+| Portfolio & projects | `projects:view_organization_tree` | View Projects Owned by My Organisation Tree | Web | ORGANIZATION_ADMIN |
+| Portfolio & projects | `projects:view_portfolio` | View Portfolio Dashboard | Web | MONITOR, LENDER, ORGANIZATION_ADMIN |
+| Portfolio & projects | `kpis:view` | View Programme KPIs | Web | MONITOR, LENDER, ORGANIZATION_ADMIN |
+| Portfolio & projects | `projects:create` | Create Projects | Web | MONITOR |
+| Portfolio & projects | `projects:activate` | Activate Draft Projects | Web | MONITOR |
+| Portfolio & projects | `projects:edit_baseline` | Edit Project Details & Site | Web | MONITOR |
+| Portfolio & projects | `projects:manage_standards_docs` | Manage Standards & Needs Assessments | Web | MONITOR |
+| Scope & sprints | `scope:view` | View Scope & Sprints | Both | MONITOR, LENDER, ORGANIZATION_ADMIN, MONITOR_INSPECTOR, INDEPENDENT_RESIDENT |
+| Scope & sprints | `scope:edit` | Edit Scope & Sprints | Web | MONITOR |
+| Scope & sprints | `sprints:view_status` | View Schedule Status | Web | MONITOR, LENDER, ORGANIZATION_ADMIN |
+| Scope & sprints | `sprints:verify` | Verify Sprints | Web | MONITOR |
+| Contract & kick-off | `contractors:manage` | Manage the Project Contractor | Web | MONITOR |
+| Contract & kick-off | `milestones:manage` | Manage Contract Milestones | Web | MONITOR, ORGANIZATION_ADMIN |
+| Contract & kick-off | `milestones:waive` | Waive Contract Milestones | Web | ORGANIZATION_ADMIN |
+| Contract & kick-off | `kickoff:manage` | Manage the Kick-off Meeting | Web | MONITOR, ORGANIZATION_ADMIN |
+| Contract & kick-off | `contracts:raise_default` | Raise and Review Contractor Default Cases | Web | MONITOR, ORGANIZATION_ADMIN |
+| Contract & kick-off | `contracts:decide_default` | Decide Contractor Default Cases | Web | ORGANIZATION_ADMIN |
+| Contract & kick-off | `documents:view` | View Project Documents | Web | MONITOR, LENDER, ORGANIZATION_ADMIN |
+| Contract & kick-off | `documents:upload` | Upload Project Documents | Web | MONITOR, ORGANIZATION_ADMIN |
+| Visits & findings | `visits:view` | View Visits | Both | MONITOR, LENDER, ORGANIZATION_ADMIN, MONITOR_INSPECTOR, INDEPENDENT_RESIDENT |
+| Visits & findings | `visits:plan` | Plan Visits | Web | MONITOR |
+| Visits & findings | `visits:submit` | Carry Out Visits | Field app | MONITOR, MONITOR_INSPECTOR, INDEPENDENT_RESIDENT |
+| Visits & findings | `visits:review` | Review Visit Submissions | Web | MONITOR |
+| Visits & findings | `findings:manage` | Raise and Close Findings | Web | MONITOR, MONITOR_INSPECTOR, INDEPENDENT_RESIDENT |
+| Visits & findings | `findings:receive_escalations` | Receive Finding Escalations | Web | ORGANIZATION_ADMIN |
+| Visits & findings | `defects:manage` | Manage Defect Tickets | Both | MONITOR, MONITOR_INSPECTOR, INDEPENDENT_RESIDENT |
+| Visits & findings | `incidents:view` | View & Follow Up Incidents | Web | MONITOR |
+| Visits & findings | `incidents:view_confidential` | View Confidential Reporter Identity | Web | – |
+| Payments & retention | `payments:view` | View Payments & Retention | Web | MONITOR, LENDER, ORGANIZATION_ADMIN |
+| Payments & retention | `payments:record` | Record & Void Payments | Web | LENDER |
+| Completion & closure | `completion:draft_certificate` | Draft Certificates of Completion | Web | MONITOR, ORGANIZATION_ADMIN |
+| Completion & closure | `completion:sign_certificate` | Sign Certificates of Completion | Web | ORGANIZATION_ADMIN |
+| Completion & closure | `completion:revoke_certificate` | Revoke Certificates of Completion | Web | ORGANIZATION_ADMIN |
+| Completion & closure | `handover:record_response` | Record Handover Responses | Web | MONITOR |
+| Completion & closure | `handover:review_feedback` | Review Handover Responses | Web | MONITOR, LENDER |
+| Completion & closure | `closure:manage_checklist` | Manage the Closure Checklist | Web | MONITOR, ORGANIZATION_ADMIN |
+| Completion & closure | `closure:audit_signoff` | Sign Off the Closure Audit | Web | LENDER |
+| Completion & closure | `closure:export_pack` | Export the Closure Pack | Web | MONITOR, LENDER, ORGANIZATION_ADMIN |
+| Completion & closure | `contractors:rate_performance` | Rate Contractor Performance | Web | MONITOR, ORGANIZATION_ADMIN |
+| Completion & closure | `lessons:manage` | Record Lessons Learned | Web | MONITOR, ORGANIZATION_ADMIN |
+| Completion & closure | `lessons:view` | Browse Lessons Learned | Web | MONITOR, LENDER, ORGANIZATION_ADMIN |
+| Completion & closure | `audit:view_ledger` | View the Audit Ledger | Web | MONITOR, LENDER, ORGANIZATION_ADMIN |
+
+### 6.2 Keys renamed or removed in the redesign
+
+Renamed in R7a (migration `20261225090000_r7a_permission_catalogue`; also `RENAMED_PERMISSION_KEYS` in shared). Where two old keys map to one new key, holders of either hold the new one. `reports:raise_query` became `incidents:view` (it only gated incidents), so no role gained visit review.
+
+| Old key | New key |
+| :--- | :--- |
+| `boq:view` | `scope:view` |
+| `boq:upload_edit` | `scope:edit` |
+| `schedule:view_variance` | `sprints:view_status` |
+| `contractors:manage_packages` | `contractors:manage` |
+| `sessions:revoke_device` | `users:revoke_device` |
+| `retention:manage_defects` | `defects:manage` |
+| `inspections:manage_findings` | `findings:manage` |
+| `reports:approve_completion` | `visits:review` |
+| `reports:raise_query` | `incidents:view` |
+| `field:submit_report` | `visits:submit` |
+| `inspections:submit` | `visits:submit` |
+| `reports:view_all` | `visits:view` |
+| `inspections:view` | `visits:view` |
+| `field:raise_incident` | removed |
+| `reports:respond_query` | removed |
+
+Removed earlier: R1d `field:join_project`, `assurance:review_credentials` (and `handover:manage_links` renamed to `handover:record_response`; the contractor roles are gone, decision P2); R1e `projects:view_executive_matrix`, `mobilization:manage_roster`, `mobilization:configure_reminders`, `presence:view_telemetry`, `presence:manage_noshow_alerts`, `field:manual_checkin`; R2d `schedule:catch_up_refactor`, `schedule:approve_refactor`, `schedule:propose_programme`, `boq:configure_hold_points`; R3e `inspections:manage_templates` (its holders got `forms:manage`).
 
 ---
 
@@ -304,7 +372,7 @@ The catalogue is fixed in code; tenants set targets and visibility only (section
 | Closure | Verified on time and to specification | CoC completion date ≤ planned end, no major issues in the final evaluation | Yes | ≥ 80% |
 | Closure | Handed over on time after the CoC | Handover milestone done by its due date | Yes | ≥ 90% |
 | Closure | Full closure documentation | Every document item of the closure checklists filed (liability period or closed) | No | ≥ 100% |
-| Closure | Lessons learned documented | Closed projects with a published lesson | No | ≥ 100% |
+| Closure | Lessons learned documented | Closed projects with the closeout report filed (it carries the lessons; R7) | No | ≥ 100% |
 | Closure | Audited after closure | Audit sign-off item done (closed projects whose checklists include one) | No | ≥ 100% |
 | Schedule | Projects on schedule | Schedule badge on track or complete (computed from sprints and, since R4, their verification) | No | ≥ 80% |
 

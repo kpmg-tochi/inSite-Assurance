@@ -167,7 +167,7 @@ export const DEFAULT_FORM_LIBRARY: DefaultFormLibrary = {
         signal: { kind: 'UNIT_COMPLETE', when: { equals: 'complete' } },
       },
       { key: 'percent-complete', label: '% complete', type: 'PERCENTAGE', visitKinds: PROGRESS, signal: { kind: 'PERCENT_COMPLETE' } },
-      yesNo('workmanship-ok', 'Workmanship acceptable on all {count} {facility}', {
+      yesNo('workmanship-ok', 'Workmanship acceptable ({count} {facility})', {
         visitKinds: PROGRESS,
         rules: [photo(NO), comment(NO), finding(NO, 'MAJOR')],
       }),

@@ -14,6 +14,7 @@ import ExcelJS from 'exceljs';
 import type { Express } from 'express';
 import request from 'supertest';
 import { DEFAULT_FACILITIES } from '@insite/shared';
+import { SCOPE_WORKBOOK_FIRST_DATA_ROW as FR } from '../modules/scope/workbook/scopeWorkbook';
 
 type PrismaClientType = typeof import('../config/prisma')['prisma'];
 
@@ -386,7 +387,7 @@ describe('Redesign R2b: scope on a live project (PRG-105)', () => {
     assert.equal(changed[0].after.endDate, '2099-12-31');
   });
 
-  it('refuses writes without boq:upload_edit', async () => {
+  it('refuses writes without scope:edit', async () => {
     const res = await request(app)
       .post(scopeUrl(ids.live, '/lines'))
       .set(await web('independent.me@ubec.test'))
@@ -398,6 +399,9 @@ describe('Redesign R2b: scope on a live project (PRG-105)', () => {
 // ---------------------------------------------------------------------------
 // R2c: the needs-assessment workbook
 // ---------------------------------------------------------------------------
+
+/** Content-Disposition of the last downloadWorkbook call. */
+let lastDisposition = '';
 
 async function downloadWorkbook(projectId: string, email = MONITOR): Promise<ExcelJS.Workbook> {
   const res = await request(app)
@@ -411,9 +415,28 @@ async function downloadWorkbook(projectId: string, email = MONITOR): Promise<Exc
     });
   assert.equal(res.status, 200, String(res.body));
   assert.match(String(res.headers['content-type']), /spreadsheetml/);
+  lastDisposition = String(res.headers['content-disposition']);
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(res.body as ArrayBuffer);
   return wb;
+}
+
+/** Instructions sheet value next to a label (Version, Generated, Project). */
+function instructionsValue(wb: ExcelJS.Workbook, label: string): unknown {
+  let value: unknown;
+  wb.getWorksheet('Instructions')!.eachRow((row) => {
+    if (row.getCell(1).value === label) value = row.getCell(2).value;
+  });
+  return value;
+}
+
+/** Column A of a data sheet below the header row. */
+function firstColumn(wb: ExcelJS.Workbook, sheet: string): string[] {
+  const out: string[] = [];
+  wb.getWorksheet(sheet)!.getColumn(1).eachCell((c, row) => {
+    if (row >= FR && c.value !== null && c.value !== '') out.push(String(c.value));
+  });
+  return out;
 }
 
 async function toBase64(wb: ExcelJS.Workbook) {
@@ -440,12 +463,12 @@ function fill(wb: ExcelJS.Workbook, opts: { lines?: Array<unknown[]>; projectNam
   setProject('Strategic justification', 'Overcrowded classrooms; no toilets.');
   setProject('Assumptions', 'Site is free of encumbrances.');
   const sprints = wb.getWorksheet('Sprints')!;
-  sprints.getRow(2).values = [1, 'Substructure', new Date(Date.UTC(2027, 0, 4)), new Date(Date.UTC(2027, 1, 26)), 'Foundations'];
-  sprints.getRow(3).values = [2, 'Superstructure', '2027-03-01', '30/04/2027', 'Frame and roof'];
+  sprints.getRow(FR).values = [1, 'Substructure', new Date(Date.UTC(2027, 0, 4)), new Date(Date.UTC(2027, 1, 26)), 'Foundations'];
+  sprints.getRow(FR + 1).values = [2, 'Superstructure', '2027-03-01', '30/04/2027', 'Frame and roof'];
   const units = wb.getWorksheet('Facility units')!;
-  units.getRow(2).values = ['U01', 'Classroom', 'Block A classroom 1', null, null, 1, 2];
-  units.getRow(3).values = ['U02', 'Toilet', 'Ground floor male toilet', null, null, 2, 2];
-  units.getRow(4).values = ['U03', "Pupils' furniture", 'Desks and chairs', 120, 'nr', 2, 2];
+  units.getRow(FR).values = ['U01', 'Classroom', 'Block A classroom 1', null, null, 1, 2];
+  units.getRow(FR + 1).values = ['U02', 'Toilet', 'Ground floor male toilet', null, null, 2, 2];
+  units.getRow(FR + 2).values = ['U03', "Pupils' furniture", 'Desks and chairs', 120, 'nr', 2, 2];
   const boq = wb.getWorksheet('BoQ')!;
   const lines = opts.lines ?? [
     ['1.1', 'U01', 'Foundations in reinforced concrete', 'm3', 40, 150_000, 1], // the Amount cell is ignored
@@ -453,7 +476,7 @@ function fill(wb: ExcelJS.Workbook, opts: { lines?: Array<unknown[]>; projectNam
     ['2.1', 'U02', 'Sanitary fittings', 'nr', 6, 85_000],
     ['3.1', 'U03', 'Supply of desks and chairs', 'set', 120, 45_000],
   ];
-  lines.forEach((l, i) => (boq.getRow(i + 2).values = l as ExcelJS.CellValue[]));
+  lines.forEach((l, i) => (boq.getRow(i + FR).values = l as ExcelJS.CellValue[]));
 }
 
 describe('Redesign R2c: needs-assessment workbook', () => {
@@ -468,9 +491,14 @@ describe('Redesign R2c: needs-assessment workbook', () => {
     ids.wbDraft = res.body.data.projectId;
   });
 
-  it('downloads a blank workbook with the tenant facilities in the list', async () => {
+  it('downloads the project needs assessment (named after the project) with the tenant facilities in the list', async () => {
     const wb = await downloadWorkbook(ids.wbDraft);
-    assert.equal(wb.getWorksheet('Instructions')!.getCell('B3').value, 'INSITE-SCOPE-v1');
+    assert.match(lastDisposition, /^attachment; filename="RTS-202 needs assessment\.xlsx"/);
+    assert.equal(instructionsValue(wb, 'Version'), 'INSITE-SCOPE-v1');
+    assert.equal(instructionsValue(wb, 'Project'), 'RTS-202 · R2 workbook draft');
+    // Long workspace name without an acronym: no prefix on the title band.
+    assert.equal(wb.getWorksheet('BoQ')!.getCell('A1').value, 'Needs assessment · BoQ');
+    assert.equal(wb.getWorksheet('BoQ')!.getCell(`A${FR - 1}`).value, 'Item no.');
     const lists = wb.getWorksheet('Lists')!;
     const names: string[] = [];
     lists.getColumn(1).eachCell((c, row) => {
@@ -590,13 +618,9 @@ describe('Redesign R2c: needs-assessment workbook', () => {
 
   it('round-trips the draft and a re-import replaces its scope', async () => {
     const wb = await downloadWorkbook(ids.wbDraft);
-    const units: string[] = [];
-    wb.getWorksheet('Facility units')!.getColumn(1).eachCell((c, row) => {
-      if (row > 1) units.push(String(c.value));
-    });
-    assert.deepEqual(units, ['U01', 'U02', 'U03']);
+    assert.deepEqual(firstColumn(wb, 'Facility units'), ['U01', 'U02', 'U03']);
     const boq = wb.getWorksheet('BoQ')!;
-    for (const r of [3, 4, 5]) {
+    for (const r of [FR + 1, FR + 2, FR + 3]) {
       for (const c of ['A', 'B', 'C', 'D', 'E', 'F']) boq.getCell(`${c}${r}`).value = null;
     }
     const b64 = await toBase64(wb);
@@ -614,7 +638,7 @@ describe('Redesign R2c: needs-assessment workbook', () => {
     assert.deepEqual(res.body.data.filledProjectFields, [], 'everything was filled the first time');
   });
 
-  it('a blank workspace workbook (Settings) downloads for any web user and imports into a draft', async () => {
+  it('the blank needs assessment template (Forms & facilities) downloads for any web user and imports into a draft', async () => {
     const res = await request(app)
       .get('/api/v1/scope-workbook')
       .set(await web(LENDER))
@@ -625,11 +649,12 @@ describe('Redesign R2c: needs-assessment workbook', () => {
         r.on('end', () => cb(null, Buffer.concat(chunks)));
       });
     assert.equal(res.status, 200);
-    assert.match(String(res.headers['content-disposition']), /needs-assessment-workbook\.xlsx/);
+    assert.match(String(res.headers['content-disposition']), /^attachment; filename="Needs assessment template\.xlsx"/, 'long workspace name: neutral name');
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(res.body as ArrayBuffer);
-    assert.equal(wb.getWorksheet('Instructions')!.getCell('B5').value, '(blank workbook)');
-    assert.equal(wb.getWorksheet('BoQ')!.getCell('A2').value, null, 'nothing pre-filled');
+    assert.equal(instructionsValue(wb, 'Project'), '(blank template)');
+    assert.equal(wb.getWorksheet('Instructions')!.getCell('A1').value, 'Needs assessment template');
+    assert.equal(wb.getWorksheet('BoQ')!.getCell(`A${FR}`).value, null, 'nothing pre-filled');
     fill(wb);
     const preview = await request(app)
       .post(scopeUrl(ids.wbDraft, '/import/preview'))
@@ -638,15 +663,18 @@ describe('Redesign R2c: needs-assessment workbook', () => {
     assert.equal(preview.status, 200, JSON.stringify(preview.body));
     assert.deepEqual(preview.body.data.issues, []);
     assert.equal((await request(app).get('/api/v1/scope-workbook')).status, 401);
+
+    // UBEC: the acronym names the file and the title bands.
+    const ubec = await request(app).get('/api/v1/scope-workbook').set(await web(PROGRAMME_ADMIN));
+    assert.equal(ubec.status, 200);
+    assert.match(String(ubec.headers['content-disposition']), /^attachment; filename="UBEC needs assessment template\.xlsx"/);
   });
 
   it('refuses import on a live project; its workbook downloads pre-filled', async () => {
     const wb = await downloadWorkbook(ids.live, PROGRAMME_ADMIN);
-    const units: string[] = [];
-    wb.getWorksheet('Facility units')!.getColumn(1).eachCell((c, row) => {
-      if (row > 1) units.push(String(c.value));
-    });
-    assert.deepEqual(units, ['U01', 'U02']);
+    assert.match(lastDisposition, /^attachment; filename="PRG-105 needs assessment\.xlsx"/);
+    assert.equal(wb.getWorksheet('Facility units')!.getCell('A1').value, 'UBEC · Needs assessment · Facility units');
+    assert.deepEqual(firstColumn(wb, 'Facility units'), ['U01', 'U02']);
     const b64 = await toBase64(wb);
     const preview = await request(app).post(scopeUrl(ids.live, '/import/preview')).set(await web(PROGRAMME_ADMIN)).send({ fileBase64: b64 });
     assert.equal(preview.status, 409);

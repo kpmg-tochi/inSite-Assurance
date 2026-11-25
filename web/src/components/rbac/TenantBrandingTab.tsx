@@ -1,6 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { z } from 'zod';
 import { Palette, Building2, Plus, CheckCircle2 } from 'lucide-react';
+import { CreateTenantRequestSchema, UpdateTenantBrandingRequestSchema, type TenantDto } from '@insite/shared';
 import { applyTenantBranding, useAuth } from '../../lib/auth-context';
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm, zEmail } from '../../lib/forms';
 import {
   useAllTenantsQuery,
   useCurrentTenantQuery,
@@ -12,6 +15,71 @@ import {
 import Loader from '../Loader';
 import { APPLICATION_NAME } from "../../config/appName";
 
+const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
+const hexText = (label: string) => z.string().trim().regex(HEX_RE, `Enter the ${label} as # and six hex digits, e.g. #00338D`);
+const maxText = (label: string, max: number) => z.string().trim().max(max, `${label} is too long (at most ${max} characters)`);
+
+/** Branding inputs, mapped to UpdateTenantBrandingRequestSchema (which still decides). */
+const BrandingFormSchema = z
+  .object({
+    name: z.string().trim().min(2, 'Enter the workspace name (at least 2 characters)').max(160, 'Workspace name is too long (at most 160 characters)'),
+    logoUrl: maxText('Logo URL', 500),
+    primaryColorHex: hexText('primary colour'),
+    navyColorHex: hexText('navy colour'),
+    tagline: maxText('Tagline', 120),
+    pdfHeaderTitle: maxText('PDF header title', 160),
+    pdfFooterDisclaimer: maxText('PDF footer disclaimer', 500),
+  })
+  .transform((v) => ({
+    name: v.name || undefined,
+    // Currency and time zone are workspace settings (Phase 6), not branding.
+    brandingConfig: {
+      logoUrl: v.logoUrl || null,
+      primaryColorHex: v.primaryColorHex,
+      navyColorHex: v.navyColorHex,
+      tagline: v.tagline || undefined,
+      pdfHeaderTitle: v.pdfHeaderTitle || undefined,
+      pdfFooterDisclaimer: v.pdfFooterDisclaimer || undefined,
+    },
+  }))
+  .pipe(UpdateTenantBrandingRequestSchema);
+
+const brandingDefaults = (tenant: TenantDto | undefined): z.input<typeof BrandingFormSchema> => ({
+  name: tenant?.name ?? '',
+  logoUrl: tenant?.brandingConfig?.logoUrl || '',
+  primaryColorHex: tenant?.brandingConfig?.primaryColorHex || '#00338D',
+  navyColorHex: tenant?.brandingConfig?.navyColorHex || '#0C233C',
+  tagline: tenant?.brandingConfig?.tagline || '',
+  pdfHeaderTitle: tenant?.brandingConfig?.pdfHeaderTitle || '',
+  pdfFooterDisclaimer: tenant?.brandingConfig?.pdfFooterDisclaimer || '',
+});
+
+/** New client tenant inputs, mapped to CreateTenantRequestSchema (which still decides). */
+const NewTenantFormSchema = z
+  .object({
+    name: z.string().trim().min(2, 'Enter the client tenant name (at least 2 characters)').max(160, 'Tenant name is too long (at most 160 characters)'),
+    slug: z.string().trim().min(1, 'Enter a slug').regex(/^[a-z0-9-]+$/, 'Use lowercase letters, numbers and hyphens only'),
+    primaryColorHex: hexText('brand colour'),
+    adminFullName: z.string().trim().refine((v) => !v || (v.length >= 2 && v.length <= 120), 'Enter 2 to 120 characters, or leave it empty'),
+    adminEmail: z.string().trim().refine((v) => !v || zEmail().safeParse(v).success, 'Enter a valid email, or leave it empty'),
+    adminPassword: z.string().refine((v) => !v || v.length >= 8, 'Enter at least 8 characters, or leave it empty'),
+  })
+  .transform((v) => ({
+    name: v.name,
+    slug: v.slug.toLowerCase(),
+    defaultCurrency: 'NGN',
+    timezone: 'Africa/Lagos',
+    brandingConfig: {
+      primaryColorHex: v.primaryColorHex,
+      navyColorHex: '#0C233C',
+      tagline: 'Capital Projects Assurance Platform',
+    },
+    adminFullName: v.adminFullName || undefined,
+    adminEmail: v.adminEmail || undefined,
+    adminPassword: v.adminPassword || undefined,
+  }))
+  .pipe(CreateTenantRequestSchema);
+
 export function TenantBrandingTab() {
   const { user, refreshUser } = useAuth();
   const { data: tenant, isLoading } = useCurrentTenantQuery(true);
@@ -22,53 +90,33 @@ export function TenantBrandingTab() {
   const updateBrandingMutation = useUpdateTenantBrandingMutation();
   const createTenantMutation = useCreateTenantMutation();
 
-  const [tenantName, setTenantName] = useState('');
-  const [logoUrl, setLogoUrl] = useState('');
-  const [primaryColorHex, setPrimaryColorHex] = useState('#00338D');
-  const [navyColorHex, setNavyColorHex] = useState('#0C233C');
-  const [tagline, setTagline] = useState('');
-  const [pdfHeaderTitle, setPdfHeaderTitle] = useState('');
-  const [pdfFooterDisclaimer, setPdfFooterDisclaimer] = useState('');
+  const brandingForm = useZodForm(BrandingFormSchema, { defaultValues: brandingDefaults(undefined) });
+  const { register, reset, watch, setValue } = brandingForm;
+  const tenantName = watch('name');
+  const logoUrl = watch('logoUrl');
+  const tagline = watch('tagline');
+  const primaryColorHex = watch('primaryColorHex');
+  const navyColorHex = watch('navyColorHex');
 
-  // Platform Super Admin Tenant Provisioning State
-  const [newName, setNewName] = useState('');
-  const [newSlug, setNewSlug] = useState('');
-  const [newPrimaryHex, setNewPrimaryHex] = useState('#00338D');
-  const [newAdminName, setNewAdminName] = useState('');
-  const [newAdminEmail, setNewAdminEmail] = useState('');
-  const [newAdminPassword, setNewAdminPassword] = useState('');
+  // Platform Super Admin Tenant Provisioning
+  const tenantForm = useZodForm(NewTenantFormSchema, {
+    defaultValues: { name: '', slug: '', primaryColorHex: '#00338D', adminFullName: '', adminEmail: '', adminPassword: '' },
+  });
+  const newPrimaryHex = tenantForm.watch('primaryColorHex');
 
   useEffect(() => {
     if (!tenant) return;
-    setTenantName(tenant.name);
-    setLogoUrl(tenant.brandingConfig?.logoUrl || '');
-    setPrimaryColorHex(tenant.brandingConfig?.primaryColorHex || '#00338D');
-    setNavyColorHex(tenant.brandingConfig?.navyColorHex || '#0C233C');
-    setTagline(tenant.brandingConfig?.tagline || '');
-    setPdfHeaderTitle(tenant.brandingConfig?.pdfHeaderTitle || '');
-    setPdfFooterDisclaimer(tenant.brandingConfig?.pdfFooterDisclaimer || '');
-  }, [tenant]);
+    reset(brandingDefaults(tenant));
+  }, [tenant, reset]);
 
-  const handleSaveBranding = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const updated = await updateBrandingMutation.mutateAsync({
-      name: tenantName.trim() || undefined,
-      // Currency and time zone are workspace settings (Phase 6), not branding.
-      brandingConfig: {
-        logoUrl: logoUrl.trim() || null,
-        primaryColorHex,
-        navyColorHex,
-        tagline: tagline.trim() || undefined,
-        pdfHeaderTitle: pdfHeaderTitle.trim() || undefined,
-        pdfFooterDisclaimer: pdfFooterDisclaimer.trim() || undefined,
-      },
-    });
+  const handleSaveBranding = brandingForm.handleSubmit(async (payload) => {
+    const updated = await updateBrandingMutation.mutateAsync(payload);
     applyTenantBranding(updated.brandingConfig);
     await refreshUser();
-  };
+  });
 
   // Live preview: the colours apply to this page as you edit and revert if you leave unsaved.
-  const validHex = (h: string) => /^#[0-9A-Fa-f]{6}$/.test(h);
+  const validHex = (h: string) => HEX_RE.test(h);
   useEffect(() => {
     if (!tenant) return;
     if (validHex(primaryColorHex) && validHex(navyColorHex)) applyTenantBranding({ primaryColorHex, navyColorHex });
@@ -82,32 +130,18 @@ export function TenantBrandingTab() {
     []
   );
 
-  const handleCreateTenant = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await createTenantMutation.mutateAsync({
-      name: newName.trim(),
-      slug: newSlug.trim().toLowerCase(),
-      defaultCurrency: 'NGN',
-      timezone: 'Africa/Lagos',
-      brandingConfig: {
-        primaryColorHex: newPrimaryHex,
-        navyColorHex: '#0C233C',
-        tagline: 'Capital Projects Assurance Platform',
-      },
-      adminFullName: newAdminName.trim() || undefined,
-      adminEmail: newAdminEmail.trim() || undefined,
-      adminPassword: newAdminPassword || undefined,
-    });
-    setNewName('');
-    setNewSlug('');
-    setNewAdminName('');
-    setNewAdminEmail('');
-  };
+  const handleCreateTenant = tenantForm.handleSubmit(async (payload) => {
+    await createTenantMutation.mutateAsync(payload);
+    tenantForm.reset({ ...tenantForm.getValues(), name: '', slug: '', adminFullName: '', adminEmail: '' });
+  });
+
+  const setColour = (name: 'primaryColorHex' | 'navyColorHex', value: string) =>
+    setValue(name, value, { shouldDirty: true, shouldTouch: true, shouldValidate: true });
 
   if (isLoading) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200/80 p-10 flex items-center justify-center gap-3">
-        <Loader size="sm" />
+        <Loader size="sm" inline />
         <span className="text-xs text-slate-500">
           Loading white-label tenant theme configuration...
         </span>
@@ -119,6 +153,7 @@ export function TenantBrandingTab() {
     <div className="space-y-4">
       <form
         onSubmit={handleSaveBranding}
+        noValidate
         className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-4"
       >
         <div className="flex items-start justify-between gap-4">
@@ -146,11 +181,11 @@ export function TenantBrandingTab() {
             </label>
             <input
               type="text"
-              required
-              value={tenantName}
-              onChange={(e) => setTenantName(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              {...register('name')}
+              {...fieldA11y(brandingForm, 'name')}
+              className={`w-full rounded-xl border border-slate-200 px-3 py-2 ${invalidClass(brandingForm, 'name')}`}
             />
+            <FieldError form={brandingForm} name="name" />
           </div>
 
           <div>
@@ -159,11 +194,12 @@ export function TenantBrandingTab() {
             </label>
             <input
               type="text"
-              value={tagline}
-              onChange={(e) => setTagline(e.target.value)}
+              {...register('tagline')}
+              {...fieldA11y(brandingForm, 'tagline')}
               placeholder="Shown under the workspace name"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              className={`w-full rounded-xl border border-slate-200 px-3 py-2 ${invalidClass(brandingForm, 'tagline')}`}
             />
+            <FieldError form={brandingForm} name="tagline" />
           </div>
 
           <div>
@@ -172,11 +208,12 @@ export function TenantBrandingTab() {
             </label>
             <input
               type="text"
-              value={logoUrl}
-              onChange={(e) => setLogoUrl(e.target.value)}
+              {...register('logoUrl')}
+              {...fieldA11y(brandingForm, 'logoUrl')}
               placeholder="https://..."
-              className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              className={`w-full rounded-xl border border-slate-200 px-3 py-2 ${invalidClass(brandingForm, 'logoUrl')}`}
             />
+            <FieldError form={brandingForm} name="logoUrl" />
           </div>
 
           <div className="rounded-xl border border-slate-200 p-3">
@@ -210,18 +247,19 @@ export function TenantBrandingTab() {
             <div className="flex items-center gap-2">
               <input
                 type="color"
-                value={primaryColorHex}
-                onChange={(e) => setPrimaryColorHex(e.target.value.toUpperCase())}
+                aria-label="Primary colour picker"
+                value={validHex(primaryColorHex) ? primaryColorHex : '#000000'}
+                onChange={(e) => setColour('primaryColorHex', e.target.value.toUpperCase())}
                 className="h-9 w-12 rounded-lg border border-slate-200 cursor-pointer"
               />
               <input
                 type="text"
-                pattern="^#[0-9A-Fa-f]{6}$"
-                value={primaryColorHex}
-                onChange={(e) => setPrimaryColorHex(e.target.value)}
-                className="flex-1 rounded-xl border border-slate-200 px-3 py-2 font-mono"
+                {...register('primaryColorHex')}
+                {...fieldA11y(brandingForm, 'primaryColorHex')}
+                className={`flex-1 rounded-xl border border-slate-200 px-3 py-2 font-mono ${invalidClass(brandingForm, 'primaryColorHex')}`}
               />
             </div>
+            <FieldError form={brandingForm} name="primaryColorHex" />
           </div>
 
           <div>
@@ -231,18 +269,19 @@ export function TenantBrandingTab() {
             <div className="flex items-center gap-2">
               <input
                 type="color"
-                value={navyColorHex}
-                onChange={(e) => setNavyColorHex(e.target.value.toUpperCase())}
+                aria-label="Navy colour picker"
+                value={validHex(navyColorHex) ? navyColorHex : '#000000'}
+                onChange={(e) => setColour('navyColorHex', e.target.value.toUpperCase())}
                 className="h-9 w-12 rounded-lg border border-slate-200 cursor-pointer"
               />
               <input
                 type="text"
-                pattern="^#[0-9A-Fa-f]{6}$"
-                value={navyColorHex}
-                onChange={(e) => setNavyColorHex(e.target.value)}
-                className="flex-1 rounded-xl border border-slate-200 px-3 py-2 font-mono"
+                {...register('navyColorHex')}
+                {...fieldA11y(brandingForm, 'navyColorHex')}
+                className={`flex-1 rounded-xl border border-slate-200 px-3 py-2 font-mono ${invalidClass(brandingForm, 'navyColorHex')}`}
               />
             </div>
+            <FieldError form={brandingForm} name="navyColorHex" />
           </div>
 
           <div className="md:col-span-2">
@@ -251,11 +290,12 @@ export function TenantBrandingTab() {
             </label>
             <input
               type="text"
-              value={pdfHeaderTitle}
-              onChange={(e) => setPdfHeaderTitle(e.target.value)}
+              {...register('pdfHeaderTitle')}
+              {...fieldA11y(brandingForm, 'pdfHeaderTitle')}
               placeholder="e.g. Programme Delivery Monitoring"
-              className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              className={`w-full rounded-xl border border-slate-200 px-3 py-2 ${invalidClass(brandingForm, 'pdfHeaderTitle')}`}
             />
+            <FieldError form={brandingForm} name="pdfHeaderTitle" />
           </div>
 
           <div className="md:col-span-2">
@@ -264,25 +304,30 @@ export function TenantBrandingTab() {
             </label>
             <textarea
               rows={2}
-              value={pdfFooterDisclaimer}
-              onChange={(e) => setPdfFooterDisclaimer(e.target.value)}
+              {...register('pdfFooterDisclaimer')}
+              {...fieldA11y(brandingForm, 'pdfFooterDisclaimer')}
               placeholder="Confidential — Prepared for authorized facility stakeholders..."
-              className="w-full rounded-xl border border-slate-200 px-3 py-2"
+              className={`w-full rounded-xl border border-slate-200 px-3 py-2 ${invalidClass(brandingForm, 'pdfFooterDisclaimer')}`}
             />
+            <FieldError form={brandingForm} name="pdfFooterDisclaimer" />
           </div>
         </div>
 
         <div className="flex justify-end pt-2 border-t border-slate-100">
-          <button
-            type="submit"
-            disabled={updateBrandingMutation.isPending}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm disabled:opacity-50"
+          <SubmitButton
+            form={brandingForm}
+            pending={updateBrandingMutation.isPending}
+            pendingLabel={
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Applying Branding...
+              </>
+            }
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-primary"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
-            {updateBrandingMutation.isPending
-              ? 'Applying Branding...'
-              : 'Save & Apply Tenant Branding'}
-          </button>
+            Save & Apply Tenant Branding
+          </SubmitButton>
         </div>
       </form>
 
@@ -329,74 +374,99 @@ export function TenantBrandingTab() {
 
           <form
             onSubmit={handleCreateTenant}
+            noValidate
             className="pt-4 border-t border-slate-200 space-y-3 text-xs"
           >
             <div className="font-bold text-slate-800">
               Provision New Client Tenant
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <input
-                type="text"
-                required
-                placeholder="Client Tenant Name (e.g. InfraCorp)"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                className="rounded-xl border border-slate-200 px-3 py-2"
-              />
-              <input
-                type="text"
-                required
-                placeholder="slug (e.g. infracorp)"
-                value={newSlug}
-                onChange={(e) =>
-                  setNewSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))
-                }
-                className="rounded-xl border border-slate-200 px-3 py-2 font-mono"
-              />
+              <div>
+                <input
+                  type="text"
+                  placeholder="Client Tenant Name (e.g. InfraCorp)"
+                  aria-label="Client tenant name"
+                  {...tenantForm.register('name')}
+                  {...fieldA11y(tenantForm, 'name')}
+                  className={`w-full rounded-xl border border-slate-200 px-3 py-2 ${invalidClass(tenantForm, 'name')}`}
+                />
+                <FieldError form={tenantForm} name="name" />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  placeholder="slug (e.g. infracorp)"
+                  aria-label="Slug"
+                  {...tenantForm.register('slug', {
+                    onChange: (e: { target: { value: string } }) =>
+                      tenantForm.setValue('slug', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'), { shouldValidate: true }),
+                  })}
+                  {...fieldA11y(tenantForm, 'slug')}
+                  className={`w-full rounded-xl border border-slate-200 px-3 py-2 font-mono ${invalidClass(tenantForm, 'slug')}`}
+                />
+                <FieldError form={tenantForm} name="slug" />
+              </div>
               <div className="flex items-center gap-2">
                 <span className="text-slate-500">Brand:</span>
                 <input
                   type="color"
+                  aria-label="Brand colour"
                   value={newPrimaryHex}
-                  onChange={(e) => setNewPrimaryHex(e.target.value.toUpperCase())}
+                  onChange={(e) => tenantForm.setValue('primaryColorHex', e.target.value.toUpperCase(), { shouldValidate: true })}
                   className="h-9 w-12 rounded-lg border border-slate-200 cursor-pointer"
                 />
                 <span className="font-mono text-slate-600">{newPrimaryHex}</span>
               </div>
-              <input
-                type="text"
-                placeholder="Initial Admin Name (optional)"
-                value={newAdminName}
-                onChange={(e) => setNewAdminName(e.target.value)}
-                className="rounded-xl border border-slate-200 px-3 py-2"
-              />
-              <input
-                type="email"
-                placeholder="Initial Admin Email (optional)"
-                value={newAdminEmail}
-                onChange={(e) => setNewAdminEmail(e.target.value)}
-                className="rounded-xl border border-slate-200 px-3 py-2"
-              />
-              <input
-                type="text"
-                placeholder="Temporary password (changed at first sign-in)"
-                value={newAdminPassword}
-                onChange={(e) => setNewAdminPassword(e.target.value)}
-                className="rounded-xl border border-slate-200 px-3 py-2"
-              />
+              <div>
+                <input
+                  type="text"
+                  placeholder="Initial Admin Name (optional)"
+                  aria-label="Initial admin name"
+                  {...tenantForm.register('adminFullName')}
+                  {...fieldA11y(tenantForm, 'adminFullName')}
+                  className={`w-full rounded-xl border border-slate-200 px-3 py-2 ${invalidClass(tenantForm, 'adminFullName')}`}
+                />
+                <FieldError form={tenantForm} name="adminFullName" />
+              </div>
+              <div>
+                <input
+                  type="email"
+                  placeholder="Initial Admin Email (optional)"
+                  aria-label="Initial admin email"
+                  {...tenantForm.register('adminEmail')}
+                  {...fieldA11y(tenantForm, 'adminEmail')}
+                  className={`w-full rounded-xl border border-slate-200 px-3 py-2 ${invalidClass(tenantForm, 'adminEmail')}`}
+                />
+                <FieldError form={tenantForm} name="adminEmail" />
+              </div>
+              <div>
+                <input
+                  type="text"
+                  placeholder="Temporary password (changed at first sign-in)"
+                  aria-label="Temporary password"
+                  {...tenantForm.register('adminPassword')}
+                  {...fieldA11y(tenantForm, 'adminPassword')}
+                  className={`w-full rounded-xl border border-slate-200 px-3 py-2 ${invalidClass(tenantForm, 'adminPassword')}`}
+                />
+                <FieldError form={tenantForm} name="adminPassword" />
+              </div>
             </div>
 
             <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={createTenantMutation.isPending}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-navy hover:bg-slate-800 text-white text-xs font-semibold transition disabled:opacity-50"
+              <SubmitButton
+                form={tenantForm}
+                pending={createTenantMutation.isPending}
+                pendingLabel={
+                  <>
+                    <Plus className="w-3.5 h-3.5" />
+                    Provisioning Tenant...
+                  </>
+                }
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-navy hover:bg-slate-800 text-white text-xs font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-navy"
               >
                 <Plus className="w-3.5 h-3.5" />
-                {createTenantMutation.isPending
-                  ? 'Provisioning Tenant...'
-                  : 'Provision New Tenant'}
-              </button>
+                Provision New Tenant
+              </SubmitButton>
             </div>
           </form>
         </div>

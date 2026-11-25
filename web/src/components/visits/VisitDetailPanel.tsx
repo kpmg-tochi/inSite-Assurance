@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import { z } from "zod";
 import { CheckCircle2, MapPin, X } from "lucide-react";
 import {
+  AddVisitCommentRequestSchema,
   VISIT_OVERALL_FINDING_LABELS,
   VISIT_SUBMISSION_STATUS_LABELS,
   type VisitDetailDto,
@@ -8,20 +10,25 @@ import {
   type VisitSubmissionDto,
 } from "@insite/shared";
 import { useAuth } from "../../lib/auth-context";
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import Loader from "../Loader";
 import { CaptureAudio, CapturePhoto } from "../evidence/CaptureMedia";
 import { FormSnapshotView } from "../forms/FormSnapshotView";
 import { useVisitDetailQuery } from "../../queries/visits/useVisitQueries";
 import {
   useAddVisitCommentMutation,
-  useDecideProposalMutation,
   usePublishVisitsMutation,
   useRaiseVisitFindingMutation,
   useRebuildVisitFormMutation,
   useReviewVisitSubmissionMutation,
 } from "../../mutations/visits/useVisitMutations";
-import { CancelVisitDialog, EditVisitDialog } from "./VisitDialogs";
+import { CancelVisitDialog, EditVisitDialog, ProposalDecisionForm } from "./VisitDialogs";
 import { ConfirmationText, officersText, primaryButton, secondaryButton, visitKindLabel, VisitStatusChip } from "./visitUi";
+
+/** Return notes: the shared review rule for RETURN (at least 5 characters). */
+const ReturnSubmissionFormSchema = z.object({
+  notes: z.string().trim().min(5, "Say what the officer must change (at least 5 characters)").max(1500, "Too long (at most 1500 characters)"),
+});
 
 /**
  * Redesign R4: one visit (project Visits page drawer): plan, date history, submissions with answers
@@ -50,9 +57,7 @@ export function VisitDetailPanel({ projectId, visitId, onClose }: { projectId: s
   const canPlan = hasPermission("visits:plan");
   const publish = usePublishVisitsMutation(projectId);
   const rebuild = useRebuildVisitFormMutation(projectId);
-  const decide = useDecideProposalMutation(projectId);
   const [dialog, setDialog] = useState<"edit" | "cancel" | null>(null);
-  const [rejectNote, setRejectNote] = useState("");
   const [showForm, setShowForm] = useState(false);
   if (q.isLoading) return <Loader />;
   if (!q.data) return null;
@@ -122,31 +127,18 @@ export function VisitDetailPanel({ projectId, visitId, onClose }: { projectId: s
             <span className="font-semibold">{pending.byName}</span> proposes {pending.toDate} (now {pending.fromDate}): {pending.comment}
           </p>
           {canPlan && (
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className={primaryButton}
-                disabled={decide.isPending}
-                onClick={() => decide.mutate({ visitId: v.id, changeId: pending.id, body: { decision: "ACCEPT" } })}
-              >
-                Accept {pending.toDate}
-              </button>
-              <input
-                className="flex-1 min-w-[10rem] rounded-xl border border-slate-300 px-3 py-1.5 text-xs"
-                value={rejectNote}
-                onChange={(e) => setRejectNote(e.target.value)}
-                placeholder="Why the date stays"
-                aria-label="Reject note"
-              />
-              <button
-                type="button"
-                className={secondaryButton}
-                disabled={decide.isPending || rejectNote.trim().length < 3}
-                onClick={() => decide.mutate({ visitId: v.id, changeId: pending.id, body: { decision: "REJECT", note: rejectNote.trim() } })}
-              >
-                Reject
-              </button>
-            </div>
+            <ProposalDecisionForm
+              key={pending.id}
+              projectId={projectId}
+              visitId={v.id}
+              changeId={pending.id}
+              acceptLabel={`Accept ${pending.toDate}`}
+              placeholder="Why the date stays"
+              className="flex flex-wrap items-start gap-2"
+              inputClassName="min-w-[10rem] rounded-xl border border-slate-300 px-3 py-1.5 text-xs"
+              acceptClassName={primaryButton}
+              rejectClassName={secondaryButton}
+            />
           )}
         </div>
       )}
@@ -191,8 +183,8 @@ function SubmissionCard({ projectId, visitId, submission: s, snapshot }: { proje
   const review = useReviewVisitSubmissionMutation(projectId);
   const raise = useRaiseVisitFindingMutation(projectId);
   const { hasPermission } = useAuth();
-  const canRaise = hasPermission("inspections:manage_findings") && s.status !== "RETURNED";
-  const [returnNotes, setReturnNotes] = useState("");
+  const canRaise = hasPermission("findings:manage") && s.status !== "RETURNED";
+  const returnForm = useZodForm(ReturnSubmissionFormSchema, { defaultValues: { notes: "" } });
   const answers = new Map(s.answers.map((a) => [a.path, a]));
   const gaps = new Set(s.photoGaps.map((g) => g.path));
   const blocks = snapshot?.blocks ?? [];
@@ -311,7 +303,11 @@ function SubmissionCard({ projectId, visitId, submission: s, snapshot }: { proje
             ))}
           </ol>
           {s.approval.canAct ? (
-            <div className="flex flex-wrap items-center gap-2">
+            <form
+              className="flex flex-wrap items-start gap-2"
+              noValidate
+              onSubmit={returnForm.handleSubmit((body) => review.mutate({ visitId, submissionId: s.id, body: { decision: "RETURN", notes: body.notes } }))}
+            >
               <button
                 type="button"
                 disabled={review.isPending}
@@ -320,22 +316,20 @@ function SubmissionCard({ projectId, visitId, submission: s, snapshot }: { proje
               >
                 <CheckCircle2 className="w-3.5 h-3.5" /> Approve
               </button>
-              <input
-                className="flex-1 min-w-[12rem] rounded-xl border border-slate-300 px-3 py-1.5 text-xs"
-                value={returnNotes}
-                onChange={(e) => setReturnNotes(e.target.value)}
-                placeholder="What the officer must change"
-                aria-label="Return notes"
-              />
-              <button
-                type="button"
-                disabled={review.isPending || returnNotes.trim().length < 5}
-                onClick={() => review.mutate({ visitId, submissionId: s.id, body: { decision: "RETURN", notes: returnNotes.trim() } })}
-                className={secondaryButton}
-              >
+              <span className="flex-1 min-w-[12rem]">
+                <input
+                  className={`w-full rounded-xl border border-slate-300 px-3 py-1.5 text-xs ${invalidClass(returnForm, "notes")}`}
+                  placeholder="What the officer must change"
+                  aria-label="Return notes"
+                  {...returnForm.register("notes")}
+                  {...fieldA11y(returnForm, "notes")}
+                />
+                <FieldError form={returnForm} name="notes" />
+              </span>
+              <SubmitButton form={returnForm} pending={review.isPending} showHint={false} className={secondaryButton}>
                 Return
-              </button>
-            </div>
+              </SubmitButton>
+            </form>
           ) : (
             s.approval.cannotActReason && s.status === "PENDING_APPROVAL" && <p className="text-[11px] text-slate-500">{s.approval.cannotActReason}</p>
           )}
@@ -347,7 +341,7 @@ function SubmissionCard({ projectId, visitId, submission: s, snapshot }: { proje
 
 function Comments({ projectId, visitId, comments }: { projectId: string; visitId: string; comments: VisitDetailDto["comments"] }) {
   const add = useAddVisitCommentMutation(projectId);
-  const [text, setText] = useState("");
+  const form = useZodForm(AddVisitCommentRequestSchema, { defaultValues: { text: "" } });
   return (
     <div className="space-y-2">
       <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Comments</h3>
@@ -360,16 +354,24 @@ function Comments({ projectId, visitId, comments }: { projectId: string; visitId
         ))}
       </ul>
       <form
-        className="flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          add.mutate({ visitId, text: text.trim() }, { onSuccess: () => setText("") });
-        }}
+        className="flex items-start gap-2"
+        noValidate
+        onSubmit={form.handleSubmit((body) => add.mutate({ visitId, text: body.text }, { onSuccess: () => form.reset({ text: "" }) }))}
       >
-        <input className="flex-1 rounded-xl border border-slate-300 px-3 py-1.5 text-xs" value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a comment" aria-label="Comment" />
-        <button type="submit" className={secondaryButton} disabled={add.isPending || text.trim().length === 0}>
+        <span className="flex-1">
+          <input
+            className={`w-full rounded-xl border border-slate-300 px-3 py-1.5 text-xs ${invalidClass(form, "text")}`}
+            maxLength={2000}
+            placeholder="Add a comment"
+            aria-label="Comment"
+            {...form.register("text")}
+            {...fieldA11y(form, "text")}
+          />
+          <FieldError form={form} name="text" />
+        </span>
+        <SubmitButton form={form} pending={add.isPending} showHint={false} className={secondaryButton}>
           Add
-        </button>
+        </SubmitButton>
       </form>
     </div>
   );

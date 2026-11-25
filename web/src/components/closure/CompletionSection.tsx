@@ -7,13 +7,17 @@ import {
   COMPLETION_CERTIFICATE_STATUS_META,
   defaultBeneficiaryAttestation,
   defaultCocStatement,
+  RecordBeneficiarySignatureRequestSchema,
+  RevokeCompletionCertificateRequestSchema,
   type CocSlotDto,
   type CompletionCertificateDto,
   type CompletionCertificateStatus,
   type ProjectCompletionDto,
 } from "@insite/shared";
 import Loader from "../Loader";
+import { z } from "zod";
 import { useAuth } from "../../lib/auth-context";
+import { FieldError, SubmitButton, canSubmit, fieldA11y, invalidClass, useZodForm, zDateText } from "../../lib/forms";
 import { useConfirmDialog } from "../process/ConfirmDialog";
 import { ModalActions, ModalShell, inputClass } from "../common/ModalShell";
 import { StatusText, type StatusTone } from "../common/StatusText";
@@ -161,10 +165,24 @@ function FinalEvaluationLine({ projectId, completion }: { projectId: string; com
   );
 }
 
+/**
+ * Draft and edit: DraftCompletionCertificateRequestSchema / UpdateCompletionCertificateRequestSchema,
+ * with the scope required here (the field is pre-filled) and no future completion date.
+ */
+const CertificateDraftFormSchema = z.object({
+  completionDate: zDateText("date of completion").refine((d) => d <= todayIso(), "The date of completion cannot be in the future"),
+  scopeSummary: z
+    .string()
+    .trim()
+    .min(20, "Describe the completed scope in at least 20 characters")
+    .max(4000, "The scope is too long (at most 4000 characters)"),
+});
+
 function DraftPanel({ projectId, completion }: { projectId: string; completion: ProjectCompletionDto }) {
   const draft = useDraftCertificateMutation(projectId);
-  const [date, setDate] = useState(todayIso());
-  const [scope, setScope] = useState(completion.suggestedScopeSummary);
+  const form = useZodForm(CertificateDraftFormSchema, {
+    defaultValues: { completionDate: todayIso(), scopeSummary: completion.suggestedScopeSummary },
+  });
   if (!completion.canDraft) {
     return (
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
@@ -173,30 +191,39 @@ function DraftPanel({ projectId, completion }: { projectId: string; completion: 
     );
   }
   return (
-    <form
-      className="space-y-3 rounded-xl border border-slate-200 p-3"
-      onSubmit={(e) => {
-        e.preventDefault();
-        draft.mutate({ completionDate: date, scopeSummary: scope.trim() || undefined });
-      }}
-    >
+    <form className="space-y-3 rounded-xl border border-slate-200 p-3" noValidate onSubmit={form.handleSubmit((v) => draft.mutate(v))}>
       <div className="text-xs font-semibold text-slate-800">Draft the certificate</div>
       <label className="block text-[11px] font-semibold text-slate-600">
         Date of completion
-        <input type="date" max={todayIso()} value={date} onChange={(e) => setDate(e.target.value)} className={`${inputClass} mt-1 max-w-[12rem]`} required />
+        <input
+          type="date"
+          max={todayIso()}
+          className={`${inputClass} mt-1 max-w-[12rem] ${invalidClass(form, "completionDate")}`}
+          {...form.register("completionDate")}
+          {...fieldA11y(form, "completionDate")}
+        />
+        <FieldError form={form} name="completionDate" />
       </label>
       <label className="block text-[11px] font-semibold text-slate-600">
         Scope of works completed
-        <textarea value={scope} onChange={(e) => setScope(e.target.value)} rows={4} className={`${inputClass} mt-1`} minLength={20} maxLength={4000} required />
+        <textarea
+          rows={4}
+          className={`${inputClass} mt-1 ${invalidClass(form, "scopeSummary")}`}
+          maxLength={4000}
+          {...form.register("scopeSummary")}
+          {...fieldA11y(form, "scopeSummary")}
+        />
+        <FieldError form={form} name="scopeSummary" />
       </label>
       <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={draft.isPending}
-          className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+        <SubmitButton
+          form={form}
+          pending={draft.isPending}
+          pendingLabel="Drafting…"
+          className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {draft.isPending ? "Drafting…" : "Draft certificate"}
-        </button>
+          Draft certificate
+        </SubmitButton>
       </div>
     </form>
   );
@@ -234,25 +261,40 @@ function CertificatePanel({ projectId, cert }: { projectId: string; cert: Comple
 
 function EditDraft({ projectId, cert, onDone }: { projectId: string; cert: CompletionCertificateDto; onDone: () => void }) {
   const update = useUpdateCertificateMutation(projectId);
-  const [date, setDate] = useState(cert.completionDate);
-  const [scope, setScope] = useState(cert.scopeSummary);
+  const form = useZodForm(CertificateDraftFormSchema, {
+    defaultValues: { completionDate: cert.completionDate, scopeSummary: cert.scopeSummary },
+  });
   return (
-    <form
-      className="space-y-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        update.mutate({ completionDate: date, scopeSummary: scope.trim() }, { onSuccess: onDone });
-      }}
-    >
-      <input type="date" max={todayIso()} value={date} onChange={(e) => setDate(e.target.value)} className={`${inputClass} max-w-[12rem]`} required />
-      <textarea value={scope} onChange={(e) => setScope(e.target.value)} rows={4} className={inputClass} minLength={20} maxLength={4000} required />
-      <div className="flex justify-end gap-2">
+    <form className="space-y-2" noValidate onSubmit={form.handleSubmit((v) => update.mutate(v, { onSuccess: onDone }))}>
+      <input
+        type="date"
+        max={todayIso()}
+        aria-label="Date of completion"
+        className={`${inputClass} max-w-[12rem] ${invalidClass(form, "completionDate")}`}
+        {...form.register("completionDate")}
+        {...fieldA11y(form, "completionDate")}
+      />
+      <FieldError form={form} name="completionDate" />
+      <textarea
+        rows={4}
+        aria-label="Scope of works completed"
+        className={`${inputClass} ${invalidClass(form, "scopeSummary")}`}
+        maxLength={4000}
+        {...form.register("scopeSummary")}
+        {...fieldA11y(form, "scopeSummary")}
+      />
+      <FieldError form={form} name="scopeSummary" />
+      <div className="flex justify-end items-start gap-2">
         <button type="button" onClick={onDone} className="rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600">
           Cancel
         </button>
-        <button type="submit" disabled={update.isPending} className="rounded-xl bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
+        <SubmitButton
+          form={form}
+          pending={update.isPending}
+          className="rounded-xl bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+        >
           Save draft
-        </button>
+        </SubmitButton>
       </div>
     </form>
   );
@@ -321,42 +363,67 @@ function SlotRow({ projectId, cert, slot }: { projectId: string; cert: Completio
   );
 }
 
+/** RecordBeneficiarySignatureRequestSchema without the server-side keys (slot, object key, statement). */
+const BeneficiaryFormSchema = RecordBeneficiarySignatureRequestSchema.pick({ beneficiaryName: true, beneficiaryRole: true }).extend({
+  attest: z.boolean().refine((v) => v, "Confirm the attestation"),
+});
+
 function BeneficiaryModal({ projectId, cert, slot, onClose }: { projectId: string; cert: CompletionCertificateDto; slot: CocSlotDto; onClose: () => void }) {
   const record = useRecordBeneficiaryMutation(projectId);
-  const [name, setName] = useState("");
-  const [role, setRole] = useState("");
+  const form = useZodForm(BeneficiaryFormSchema, { defaultValues: { beneficiaryName: "", beneficiaryRole: "", attest: false } });
   const [file, setFile] = useState<File | null>(null);
-  const [attest, setAttest] = useState(false);
   const [progress, setProgress] = useState(0);
+  const name = form.watch("beneficiaryName");
   return (
     <ModalShell title={`Record ${slot.label}`} subtitle={cert.certificateNumber} onClose={onClose}>
       <form
         className="space-y-3 p-5"
-        onSubmit={(e) => {
-          e.preventDefault();
+        noValidate
+        onSubmit={form.handleSubmit((v) => {
           if (!file) return;
-          record.mutate({ slotKey: slot.key, beneficiaryName: name.trim(), beneficiaryRole: role.trim(), file, onProgress: setProgress }, { onSuccess: onClose });
-        }}
+          record.mutate({ slotKey: slot.key, beneficiaryName: v.beneficiaryName, beneficiaryRole: v.beneficiaryRole, file, onProgress: setProgress }, { onSuccess: onClose });
+        })}
       >
         <p className="text-xs text-slate-600">Upload a scan of the certificate the beneficiary signed on paper. It is filed in the document register as the beneficiary signed copy.</p>
         <label className="block text-[11px] font-semibold text-slate-600">
           Name of the person who signed
-          <input value={name} onChange={(e) => setName(e.target.value)} className={`${inputClass} mt-1`} minLength={2} maxLength={160} required />
+          <input
+            className={`${inputClass} mt-1 ${invalidClass(form, "beneficiaryName")}`}
+            maxLength={160}
+            {...form.register("beneficiaryName")}
+            {...fieldA11y(form, "beneficiaryName")}
+          />
+          <FieldError form={form} name="beneficiaryName" />
         </label>
         <label className="block text-[11px] font-semibold text-slate-600">
           Their position
-          <input value={role} onChange={(e) => setRole(e.target.value)} className={`${inputClass} mt-1`} placeholder="e.g. Head teacher" minLength={2} maxLength={160} required />
+          <input
+            className={`${inputClass} mt-1 ${invalidClass(form, "beneficiaryRole")}`}
+            placeholder="e.g. Head teacher"
+            maxLength={160}
+            {...form.register("beneficiaryRole")}
+            {...fieldA11y(form, "beneficiaryRole")}
+          />
+          <FieldError form={form} name="beneficiaryRole" />
         </label>
         <label className="block text-[11px] font-semibold text-slate-600">
           Signed copy (PDF or image)
-          <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="mt-1 block text-xs" required />
+          <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="mt-1 block text-xs" />
+          {!file && form.formState.isValid && <span className="mt-1 block font-normal text-slate-500">Choose the scan of the signed copy.</span>}
         </label>
         <label className="flex items-start gap-2 text-xs text-slate-700">
-          <input type="checkbox" checked={attest} onChange={(e) => setAttest(e.target.checked)} className="mt-0.5" />
+          <input type="checkbox" className="mt-0.5" {...form.register("attest")} {...fieldA11y(form, "attest")} />
           <span>{defaultBeneficiaryAttestation(cert.certificateNumber, name.trim() || "the beneficiary")}</span>
         </label>
+        <FieldError form={form} name="attest" />
         {record.isPending && progress > 0 && progress < 1 && <p className="text-[11px] text-slate-500">Uploading… {Math.round(progress * 100)}%</p>}
-        <ModalActions onCancel={onClose} submitLabel="Record signature" pendingLabel="Recording…" isPending={record.isPending} disabled={!attest || !file} />
+        <ModalActions
+          onCancel={onClose}
+          submitLabel="Record signature"
+          pendingLabel="Recording…"
+          isPending={record.isPending}
+          disabled={!canSubmit(form, { pending: record.isPending, blocked: !file })}
+        />
       </form>
     </ModalShell>
   );
@@ -364,22 +431,31 @@ function BeneficiaryModal({ projectId, cert, slot, onClose }: { projectId: strin
 
 function RevokeModal({ projectId, cert, onClose }: { projectId: string; cert: CompletionCertificateDto; onClose: () => void }) {
   const revoke = useRevokeCertificateMutation(projectId);
-  const [reason, setReason] = useState("");
+  const form = useZodForm(RevokeCompletionCertificateRequestSchema, { defaultValues: { reason: "" } });
   return (
     <ModalShell title={`Revoke ${cert.certificateNumber}`} onClose={onClose} maxWidth="max-w-md">
-      <form
-        className="space-y-3 p-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          revoke.mutate(reason.trim(), { onSuccess: onClose });
-        }}
-      >
+      <form className="space-y-3 p-5" noValidate onSubmit={form.handleSubmit((v) => revoke.mutate(v.reason, { onSuccess: onClose }))}>
         <p className="text-xs text-slate-600">
           The certificate and its PDF are withdrawn, milestones that counted from it lose their date, and the gates it opened close again until a new
           certificate is issued. This cannot be done once the handover is accepted.
         </p>
-        <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} className={inputClass} placeholder="Why is it revoked?" minLength={10} maxLength={1000} required />
-        <ModalActions onCancel={onClose} submitLabel="Revoke certificate" pendingLabel="Revoking…" isPending={revoke.isPending} disabled={reason.trim().length < 10} />
+        <textarea
+          rows={3}
+          className={`${inputClass} ${invalidClass(form, "reason")}`}
+          placeholder="Why is it revoked?"
+          aria-label="Reason"
+          maxLength={1000}
+          {...form.register("reason")}
+          {...fieldA11y(form, "reason")}
+        />
+        <FieldError form={form} name="reason" />
+        <ModalActions
+          onCancel={onClose}
+          submitLabel="Revoke certificate"
+          pendingLabel="Revoking…"
+          isPending={revoke.isPending}
+          disabled={!canSubmit(form, { pending: revoke.isPending })}
+        />
       </form>
     </ModalShell>
   );

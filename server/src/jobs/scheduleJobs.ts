@@ -9,7 +9,7 @@ import { JobContext, registerJob, runUnit } from './runner';
  * schedule-variance: once a day per live project (keyed on the project's calendar day), recompute
  * and store the schedule badge from sprints (redesign R2d, D-R2.15). When a project first falls
  * BEHIND (a unit whose end sprint has ended still has a line below 100%), users with
- * schedule:view_variance get a web notification; the flag clears when the project recovers, so a
+ * sprints:view_status get a web notification; the flag clears when the project recovers, so a
  * later fall alerts again. Projects without sprints get UNSCHEDULED.
  */
 export async function runScheduleVariance({ now }: JobContext): Promise<void> {
@@ -31,7 +31,7 @@ export async function runScheduleVariance({ now }: JobContext): Promise<void> {
           if (claimed.count === 0) return;
           await createWebNotification(tx, {
             projectId: p.id,
-            targetPermissionKey: 'schedule:view_variance',
+            targetPermissionKey: 'sprints:view_status',
             category: 'SCHEDULE_BEHIND',
             title: `${p.codePrefix} is behind schedule`,
             description: `${p.name}: ${behindUnitCount} facility unit(s) due by a sprint that has ended are not complete.`,

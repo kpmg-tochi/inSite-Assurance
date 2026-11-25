@@ -181,7 +181,7 @@ export async function createWebNotification(
   const created = await db.webNotification.create({
     data: {
       projectId: input.projectId,
-      targetPermissionKey: input.targetPermissionKey ?? 'reports:view_all',
+      targetPermissionKey: input.targetPermissionKey ?? 'visits:view',
       targetRoleId: input.targetRoleId ?? null,
       targetOrganizationId: input.targetOrganizationId ?? null,
       hideFromProjectContractors: input.hideFromProjectContractors ?? false,

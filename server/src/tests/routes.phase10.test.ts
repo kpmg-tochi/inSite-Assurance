@@ -209,6 +209,16 @@ describe('Phase 10: handover responses recorded by staff (R1d)', () => {
     const early = await request(app).post(`/api/v1/projects/${ids.ogn}/phase`).set(monitor).send({ to: 'RETENTION_PERIOD' });
     assert.equal(early.status, 409, 'not reviewed yet');
 
+    // R7: the monitor recorded it and holds handover:review_feedback too, but may not review it.
+    const bySelf = await request(app).post(`/api/v1/projects/${ids.ogn}/handover/submissions/${sub.id}/review`).set(monitor).send({ notes: 'Fine.' });
+    assert.equal(bySelf.status, 409, JSON.stringify(bySelf.body));
+    assert.equal(bySelf.body.error.code, 'SAME_PERSON_REVIEW');
+    assert.equal(bySelf.body.error.message, 'You recorded this handover response, so another officer must review it.');
+    const untouched = await prisma.handoverSubmission.findUniqueOrThrow({ where: { id: sub.id } });
+    assert.equal(untouched.reviewedAt, null);
+    assert.equal(await prisma.auditLog.count({ where: { projectId: ids.ogn, action: 'HANDOVER_REVIEWED' } }), 0);
+
+    // A different user with the permission reviews it.
     const reviewed = await request(app).post(`/api/v1/projects/${ids.ogn}/handover/submissions/${sub.id}/review`).set(lender).send({ notes: 'Accepted; one snag.' });
     assert.equal(reviewed.status, 200, JSON.stringify(reviewed.body));
     assert.ok(reviewed.body.data.reviewedAt);
@@ -217,7 +227,7 @@ describe('Phase 10: handover responses recorded by staff (R1d)', () => {
     assert.equal(await prisma.auditLog.count({ where: { projectId: ids.ogn, action: 'HANDOVER_REVIEWED' } }), 1);
 
     const byLender = await request(app).post(`/api/v1/projects/${ids.ogn}/handover/submissions/${sub.id}/defects`).set(lender).send({});
-    assert.equal(byLender.status, 403, 'creating tickets needs retention:manage_defects');
+    assert.equal(byLender.status, 403, 'creating tickets needs defects:manage');
     const converted = await request(app).post(`/api/v1/projects/${ids.ogn}/handover/submissions/${sub.id}/defects`).set(monitor).send({ severity: 'LOW' });
     assert.equal(converted.status, 201, JSON.stringify(converted.body));
     assert.deepEqual(converted.body.data, { created: 1, skipped: 0 });
@@ -279,7 +289,7 @@ describe('Phase 10: defect tickets (staff-only, R1c/R1d)', () => {
     assert.equal(reminders.length, 1, 'one staff summary per day');
     assert.match(reminders[0].description, /DEF-001/);
     assert.equal(reminders[0].targetOrganizationId, null);
-    assert.equal(reminders[0].targetPermissionKey, 'retention:manage_defects');
+    assert.equal(reminders[0].targetPermissionKey, 'defects:manage');
   });
 
   it('the web cannot close an open ticket; the officer closes it on site with photos; awaiting tickets reopen with a reason', async () => {

@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import { z } from "zod";
 import { Plus } from "lucide-react";
-import { FORM_CODE_REGEX, type FormSectionDto } from "@insite/shared";
+import { FORM_CODE_REGEX, FORM_GUIDANCE_MAX, SaveFormSectionRequestSchema, type FormField, type FormSectionDto } from "@insite/shared";
+import { FieldError, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import { useAuth } from "../../lib/auth-context";
 import { useFormLibraryQuery } from "../../queries/forms/useFormQueries";
 import { useArchiveFormSectionMutation, useSaveFormSectionMutation } from "../../mutations/forms/useFormMutations";
@@ -13,6 +15,20 @@ import { FieldsEditorModal, VersionsModal } from "./FormEditorModals";
  * built form used is never edited: saving creates a new version. A section listed by a live template
  * cannot be archived.
  */
+
+/** The section's own inputs (code, title, description); the fields are checked by the editor modal. */
+const SectionHeaderSchema = z
+  .object({
+    isNew: z.boolean(),
+    code: z.string(),
+    title: z.string().trim().min(2, "Enter the section title (at least 2 characters).").max(160, "Title is too long (at most 160 characters)."),
+    description: z.string().trim().max(FORM_GUIDANCE_MAX, `Description is too long (at most ${FORM_GUIDANCE_MAX} characters).`),
+  })
+  .superRefine((v, ctx) => {
+    if (v.isNew && !FORM_CODE_REGEX.test(v.code.trim().toUpperCase())) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["code"], message: "Code: 2 to 40 capital letters, digits or underscores, starting with a letter." });
+    }
+  });
 
 interface Editing {
   existing: FormSectionDto | null;
@@ -27,17 +43,14 @@ export function FormSectionsCard() {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [versions, setVersions] = useState<FormSectionDto | null>(null);
   const [showArchived, setShowArchived] = useState(false);
-  const [code, setCode] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const headerForm = useZodForm(SectionHeaderSchema, { defaultValues: { isNew: true, code: "", title: "", description: "" } });
+  const { code, title, description } = headerForm.watch();
 
   if (!canManage) return null;
   const rows = (q.data?.sections ?? []).filter((s) => showArchived || !s.isArchived);
 
   const open = (s: FormSectionDto | null) => {
-    setCode(s?.code ?? "");
-    setTitle(s?.title ?? "");
-    setDescription(s?.description ?? "");
+    headerForm.reset({ isNew: !s, code: s?.code ?? "", title: s?.title ?? "", description: s?.description ?? "" });
     setEditing({ existing: s });
   };
 
@@ -98,28 +111,46 @@ export function FormSectionsCard() {
   ];
 
   const existing = editing?.existing ?? null;
-  const codeValid = FORM_CODE_REGEX.test(code.trim().toUpperCase());
+  const sectionBody = (fields: FormField[]) => ({
+    code: existing?.code ?? code.trim().toUpperCase(),
+    title: title.trim(),
+    description: description.trim() || null,
+    fields,
+  });
   const header = (
     <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] gap-3">
       <label className="text-[11px] font-semibold text-slate-700">
         Code
         <input
-          className={`${smallInput} font-mono uppercase`}
-          value={code}
-          disabled={Boolean(existing)}
+          className={`${smallInput} font-mono uppercase read-only:bg-slate-50 read-only:text-slate-500 ${invalidClass(headerForm, "code")}`}
+          readOnly={Boolean(existing)}
+          aria-disabled={Boolean(existing) || undefined}
           maxLength={40}
           placeholder="SITE_SECURITY"
-          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          {...headerForm.register("code", { setValueAs: (v: string) => v.toUpperCase() })}
+          {...fieldA11y(headerForm, "code")}
         />
-        {!existing && code && !codeValid && <span className="text-rose-600 font-normal">2–40 capitals, digits or _</span>}
+        <FieldError form={headerForm} name="code" className="font-normal" />
       </label>
       <label className="text-[11px] font-semibold text-slate-700">
         Title
-        <input className={smallInput} value={title} maxLength={160} onChange={(e) => setTitle(e.target.value)} />
+        <input
+          className={`${smallInput} ${invalidClass(headerForm, "title")}`}
+          maxLength={160}
+          {...headerForm.register("title")}
+          {...fieldA11y(headerForm, "title")}
+        />
+        <FieldError form={headerForm} name="title" className="font-normal" />
       </label>
       <label className="sm:col-span-2 text-[11px] font-semibold text-slate-700">
         Description (optional)
-        <input className={smallInput} value={description} maxLength={1000} onChange={(e) => setDescription(e.target.value)} />
+        <input
+          className={`${smallInput} ${invalidClass(headerForm, "description")}`}
+          maxLength={1000}
+          {...headerForm.register("description")}
+          {...fieldA11y(headerForm, "description")}
+        />
+        <FieldError form={headerForm} name="description" className="font-normal" />
       </label>
     </div>
   );
@@ -156,15 +187,20 @@ export function FormSectionsCard() {
           context="SECTION"
           initialFields={existing?.fields ?? []}
           header={header}
-          headerValid={(Boolean(existing) || codeValid) && title.trim().length >= 2}
+          headerValid={headerForm.formState.isValid}
+          headerIssue={Object.values(headerForm.formState.errors)[0]?.message?.toString() ?? "Enter the section code and title."}
           headerDirty={!existing || title !== existing.title || description !== (existing.description ?? "")}
+          requestIssues={(fields) => {
+            const parsed = SaveFormSectionRequestSchema.safeParse(sectionBody(fields));
+            return parsed.success ? [] : parsed.error.issues.map((i) => i.message);
+          }}
           usageCount={existing?.usageCount ?? 0}
           pending={save.isPending}
           onClose={() => setEditing(null)}
           onSave={(fields) =>
             save
               .mutateAsync({
-                body: { code: existing?.code ?? code.trim().toUpperCase(), title: title.trim(), description: description.trim() || null, fields },
+                body: sectionBody(fields),
                 existingCode: existing?.code ?? null,
               })
               .then(() => setEditing(null))

@@ -65,7 +65,7 @@ function OverviewTab({ variant, onOpenProject }: { variant: "portfolio" | "dashb
   if (isLoading) {
     return (
       <div className="flex justify-center p-10">
-        <Loader />
+        <Loader inline />
       </div>
     );
   }

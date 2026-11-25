@@ -1,21 +1,30 @@
-import React, { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Controller, useFieldArray } from "react-hook-form";
+import { z } from "zod";
 import { AlertTriangle, CalendarRange, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   addDays,
+  CreateFacilityUnitRequestSchema,
+  CreateScopeLineRequestSchema,
   FACILITY_ARCHETYPE_META,
+  FACILITY_UNIT_CODE_REGEX,
   lineAmount,
+  SaveSprintsRequestSchema,
   SPRINT_VERIFICATION_OUTCOME_LABELS,
   UNITS_OF_MEASURE,
   unitNeedsQuantity,
   validateSprints,
+  type CreateFacilityUnitRequest,
   type FacilityDto,
   type FacilityUnitDto,
   type ProjectScopeDto,
   type ProjectSprintDto,
+  type SaveSprintsRequest,
   type ScopeLineDto,
   type SprintStatus,
 } from "@insite/shared";
 import { formatDateShort, formatNaira } from "../../lib/formatters";
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm, visibleError, zChoice, zNumberText } from "../../lib/forms";
 import { useProjectScopeQuery } from "../../queries/scope/useScopeQueries";
 import { useFacilitiesQuery } from "../../queries/facilities/useFacilityQueries";
 import {
@@ -158,7 +167,7 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
     <div className="space-y-4">
       {dialog}
       {verifying && <SprintVerifyDialog projectId={projectId} sprintId={verifying} onClose={() => setVerifying(null)} />}
-      {/* One summary: the total leads, the counts support it, the workbook sits beside it. */}
+      {/* One summary: the total leads, the counts support it, the needs assessment sits beside it. */}
       <section aria-label="Scope summary" className="bg-white rounded-2xl border border-slate-200/80 shadow-sm px-5 py-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0">
@@ -399,48 +408,53 @@ function LinesTable({
 // Editors
 // ---------------------------------------------------------------------------
 
-interface SprintRow {
-  key: string;
-  id?: string;
-  name: string;
-  startDate: string;
-  endDate: string;
-  deliverables: string;
-  locked: boolean;
-}
+const SprintRowFormSchema = z.object({
+  /** The saved sprint's id (absent for a new row). Not called `id`: the field array keys rows by `id`. */
+  sprintId: z.string().optional(),
+  name: z.string().trim().max(120, "Name is too long (at most 120 characters)"),
+  startDate: z.string(),
+  endDate: z.string(),
+  deliverables: z.string().trim().max(4000, "Deliverables are too long (at most 4000 characters)"),
+  locked: z.boolean(),
+});
+
+/** The shared sprint rules (names, dates, no overlaps) as form errors on the row and field. */
+const SprintsFormSchema = z
+  .object({ sprints: z.array(SprintRowFormSchema) })
+  .superRefine((v, ctx) => {
+    for (const issue of validateSprints(v.sprints)) {
+      ctx.addIssue({ code: "custom", path: ["sprints", issue.index ?? 0, issue.field ?? "name"], message: issue.message });
+    }
+  })
+  .transform((v): SaveSprintsRequest => ({
+    sprints: v.sprints.map((r) => ({ id: r.sprintId, name: r.name, startDate: r.startDate, endDate: r.endDate, deliverables: r.deliverables })),
+  }))
+  .pipe(SaveSprintsRequestSchema);
 
 function SprintsEditor({ projectId, scope, onClose }: { projectId: string; scope: ProjectScopeDto; onClose: () => void }) {
   const save = useSaveSprintsMutation(projectId);
   const live = scope.projectStatus !== "DRAFT";
-  const [rows, setRows] = useState<SprintRow[]>(() =>
-    scope.sprints.map((s) => ({
-      key: s.id,
-      id: s.id,
-      name: s.name,
-      startDate: s.startDate,
-      endDate: s.endDate,
-      deliverables: s.deliverables,
-      locked: live && s.referencedByUnits,
-    })),
-  );
-  const issues = validateSprints(rows);
-  const set = (key: string, patch: Partial<SprintRow>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+  const form = useZodForm(SprintsFormSchema, {
+    defaultValues: {
+      sprints: scope.sprints.map((s) => ({
+        sprintId: s.id,
+        name: s.name,
+        startDate: s.startDate,
+        endDate: s.endDate,
+        deliverables: s.deliverables,
+        locked: live && s.referencedByUnits,
+      })),
+    },
+  });
+  const rows = useFieldArray({ control: form.control, name: "sprints" });
+  const values = form.watch("sprints");
+  const issues = validateSprints(values);
   const add = () => {
-    const last = [...rows].sort((a, b) => a.endDate.localeCompare(b.endDate)).at(-1);
+    const last = [...values].sort((a, b) => a.endDate.localeCompare(b.endDate)).at(-1);
     const start = last?.endDate ? addDays(last.endDate, 1) : scope.today;
-    setRows((rs) => [
-      ...rs,
-      { key: `new-${Date.now()}`, name: `Sprint ${rs.length + 1}`, startDate: start, endDate: addDays(start, 27), deliverables: "", locked: false },
-    ]);
+    rows.append({ name: `Sprint ${values.length + 1}`, startDate: start, endDate: addDays(start, 27), deliverables: "", locked: false });
   };
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (issues.length) return;
-    save.mutate(
-      { sprints: rows.map((r) => ({ id: r.id, name: r.name.trim(), startDate: r.startDate, endDate: r.endDate, deliverables: r.deliverables.trim() })) },
-      { onSuccess: onClose },
-    );
-  };
+  const submit = form.handleSubmit((body) => save.mutate(body, { onSuccess: onClose }));
   return (
     <ModalShell
       title="Edit sprints"
@@ -448,44 +462,55 @@ function SprintsEditor({ projectId, scope, onClose }: { projectId: string; scope
       onClose={onClose}
       maxWidth="max-w-4xl"
     >
-      <form onSubmit={submit} className="p-5 space-y-3">
+      <form onSubmit={submit} noValidate className="p-5 space-y-3">
         <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
-          {rows.length === 0 && <p className="text-xs text-slate-500">No sprints. Add the first one.</p>}
-          {rows.map((r, index) => {
+          {rows.fields.length === 0 && <p className="text-xs text-slate-500">No sprints. Add the first one.</p>}
+          {rows.fields.map((r, index) => {
             const rowIssues = issues.filter((i) => i.index === index);
+            const locked = values[index]?.locked ?? false;
             return (
-              <div key={r.key} className="rounded-xl border border-slate-200 p-3 space-y-2">
+              <div key={r.id} className="rounded-xl border border-slate-200 p-3 space-y-2">
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_150px_150px_auto] gap-2 items-end">
                   <label className="text-[11px] font-semibold text-slate-700">
                     Name
-                    <input className={smallInput} value={r.name} maxLength={120} onChange={(e) => set(r.key, { name: e.target.value })} />
+                    <input
+                      className={`${smallInput} ${rowIssues.some((i) => i.field === "name") ? "border-rose-400" : ""}`}
+                      maxLength={120}
+                      aria-invalid={rowIssues.some((i) => i.field === "name") || undefined}
+                      {...form.register(`sprints.${index}.name`)}
+                    />
                   </label>
                   <label className="text-[11px] font-semibold text-slate-700">
                     Start
-                    <input type="date" className={smallInput} value={r.startDate} onChange={(e) => set(r.key, { startDate: e.target.value })} />
+                    <input
+                      type="date"
+                      className={`${smallInput} ${rowIssues.some((i) => i.field === "startDate") ? "border-rose-400" : ""}`}
+                      aria-invalid={rowIssues.some((i) => i.field === "startDate") || undefined}
+                      {...form.register(`sprints.${index}.startDate`)}
+                    />
                   </label>
                   <label className="text-[11px] font-semibold text-slate-700">
                     End
-                    <input type="date" className={smallInput} value={r.endDate} onChange={(e) => set(r.key, { endDate: e.target.value })} />
+                    <input
+                      type="date"
+                      className={`${smallInput} ${rowIssues.some((i) => i.field === "endDate") ? "border-rose-400" : ""}`}
+                      aria-invalid={rowIssues.some((i) => i.field === "endDate") || undefined}
+                      {...form.register(`sprints.${index}.endDate`)}
+                    />
                   </label>
                   <button
                     type="button"
                     className="p-2 text-slate-500 hover:text-rose-600 disabled:opacity-30"
-                    disabled={r.locked}
-                    title={r.locked ? "A facility unit starts or ends in this sprint" : "Remove sprint"}
-                    onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
+                    disabled={locked}
+                    title={locked ? "A facility unit starts or ends in this sprint" : "Remove sprint"}
+                    onClick={() => rows.remove(index)}
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
                 <label className="block text-[11px] font-semibold text-slate-700">
                   Deliverables
-                  <textarea
-                    className={`${smallInput} min-h-[44px]`}
-                    value={r.deliverables}
-                    maxLength={4000}
-                    onChange={(e) => set(r.key, { deliverables: e.target.value })}
-                  />
+                  <textarea className={`${smallInput} min-h-[44px]`} maxLength={4000} {...form.register(`sprints.${index}.deliverables`)} />
                 </label>
                 {rowIssues.map((i) => (
                   <p key={`${i.code}-${i.field}`} className="text-[11px] font-medium text-rose-600">
@@ -502,13 +527,13 @@ function SprintsEditor({ projectId, scope, onClose }: { projectId: string; scope
         {!live && scope.sprints.some((s) => s.referencedByUnits) && (
           <p className="text-[11px] text-slate-500">Removing a sprint clears it from the units that start or end in it.</p>
         )}
-        <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+        <div className="flex items-start justify-end gap-2 pt-3 border-t border-slate-100">
           <button type="button" className={secondaryButton} onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className={primaryButton} disabled={save.isPending || issues.length > 0}>
-            {save.isPending ? "Saving…" : "Save sprints"}
-          </button>
+          <SubmitButton form={form} pending={save.isPending} pendingLabel="Saving…" hint="Fix the sprints marked in red." className={primaryButton}>
+            Save sprints
+          </SubmitButton>
         </div>
       </form>
     </ModalShell>
@@ -529,14 +554,6 @@ function UnitEditor({
   onClose: () => void;
 }) {
   const save = useSaveFacilityUnitMutation(projectId);
-  const [facilityId, setFacilityId] = useState(unit?.facility.id ?? "");
-  const [label, setLabel] = useState(unit?.label ?? "");
-  const [code, setCode] = useState(unit?.code ?? "");
-  const [startSprintId, setStart] = useState(unit?.startSprintId ?? "");
-  const [endSprintId, setEnd] = useState(unit?.endSprintId ?? "");
-  const [plannedQuantity, setQty] = useState(unit?.plannedQuantity?.toString() ?? "");
-  const [quantityUnit, setQtyUnit] = useState(unit?.quantityUnit ?? "nr");
-  const [error, setError] = useState<string | null>(null);
 
   const facilityOptions = useMemo(() => {
     const list = facilities.map((f) => ({ value: f.id, label: f.name, description: `${f.code} · ${FACILITY_ARCHETYPE_META[f.archetype].label}` }));
@@ -545,8 +562,67 @@ function UnitEditor({
     }
     return list;
   }, [facilities, unit]);
-  const archetype = facilities.find((f) => f.id === facilityId)?.archetype ?? (unit?.facility.id === facilityId ? unit.facility.archetype : undefined);
-  const needsQty = archetype ? unitNeedsQuantity(archetype) : false;
+  const archetypeOf = (facilityId: string) =>
+    facilities.find((f) => f.id === facilityId)?.archetype ?? (unit?.facility.id === facilityId ? unit.facility.archetype : undefined);
+  const needsQtyFor = (facilityId: string) => {
+    const archetype = archetypeOf(facilityId);
+    return archetype ? unitNeedsQuantity(archetype) : false;
+  };
+
+  // Built per render: the quantity rule depends on the facility's archetype and the sprint order on the project's sprints.
+  const schema = z
+    .object({
+      facilityId: zChoice("facility"),
+      label: CreateFacilityUnitRequestSchema.shape.label,
+      code: z
+        .string()
+        .trim()
+        .refine((v) => !v || FACILITY_UNIT_CODE_REGEX.test(v), "Unit ID: up to 20 letters, digits, dots, dashes or underscores, e.g. U01"),
+      startSprintId: z.string(),
+      endSprintId: z.string(),
+      plannedQuantity: z.string().trim(),
+      quantityUnit: z.string(),
+    })
+    .superRefine((v, ctx) => {
+      if (needsQtyFor(v.facilityId)) {
+        const qty = Number(v.plannedQuantity);
+        if (v.plannedQuantity === "" || !Number.isFinite(qty) || qty <= 0) {
+          ctx.addIssue({ code: "custom", path: ["plannedQuantity"], message: "Enter the planned quantity of this supply item (above zero)" });
+        }
+      }
+      const s = scope.sprints.find((x) => x.id === v.startSprintId);
+      const en = scope.sprints.find((x) => x.id === v.endSprintId);
+      if (s && en && s.number > en.number) ctx.addIssue({ code: "custom", path: ["endSprintId"], message: "The end sprint cannot be before the start sprint" });
+    })
+    .transform((v): CreateFacilityUnitRequest => {
+      const needsQty = needsQtyFor(v.facilityId);
+      return {
+        facilityId: v.facilityId,
+        label: v.label,
+        ...(v.code ? { code: v.code.toUpperCase() } : {}),
+        startSprintId: v.startSprintId || null,
+        endSprintId: v.endSprintId || null,
+        plannedQuantity: needsQty ? Number(v.plannedQuantity) : null,
+        quantityUnit: needsQty ? (v.quantityUnit as (typeof UNITS_OF_MEASURE)[number]["code"]) : null,
+      };
+    });
+  const form = useZodForm(schema, {
+    defaultValues: {
+      facilityId: unit?.facility.id ?? "",
+      label: unit?.label ?? "",
+      code: unit?.code ?? "",
+      startSprintId: unit?.startSprintId ?? "",
+      endSprintId: unit?.endSprintId ?? "",
+      plannedQuantity: unit?.plannedQuantity?.toString() ?? "",
+      quantityUnit: unit?.quantityUnit ?? "nr",
+    },
+  });
+  const needsQty = needsQtyFor(form.watch("facilityId"));
+  // A facility change can switch the quantity rule on or off: re-check it.
+  useEffect(() => {
+    void form.trigger("plannedQuantity");
+  }, [form, needsQty]);
+
   const sprintOptions = [
     { value: "", label: "Not set" },
     ...scope.sprints.map((s) => ({ value: s.id, label: `${s.number} · ${s.name}`, description: `${formatDateShort(s.startDate)} – ${formatDateShort(s.endDate)}` })),
@@ -559,74 +635,120 @@ function UnitEditor({
     }
   })();
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!facilityId) return setError("Choose the facility.");
-    if (label.trim().length < 2) return setError("Enter a label, e.g. Ground floor male toilet.");
-    const qty = plannedQuantity.trim() === "" ? null : Number(plannedQuantity);
-    if (needsQty && !(qty !== null && qty > 0)) return setError("Enter the planned quantity of this supply item.");
-    const s = scope.sprints.find((x) => x.id === startSprintId);
-    const en = scope.sprints.find((x) => x.id === endSprintId);
-    if (s && en && s.number > en.number) return setError("The end sprint cannot be before the start sprint.");
-    setError(null);
-    const body = {
-      facilityId,
-      label: label.trim(),
-      ...(code.trim() ? { code: code.trim().toUpperCase() } : {}),
-      startSprintId: startSprintId || null,
-      endSprintId: endSprintId || null,
-      plannedQuantity: needsQty ? qty : null,
-      quantityUnit: needsQty ? (quantityUnit as (typeof UNITS_OF_MEASURE)[number]["code"]) : null,
-    };
-    save.mutate(unit ? { id: unit.id, update: body } : { create: body }, { onSuccess: onClose });
-  };
+  const submit = form.handleSubmit((body) => save.mutate(unit ? { id: unit.id, update: body } : { create: body }, { onSuccess: onClose }));
 
   return (
     <ModalShell title={unit ? `Edit ${unit.code}` : "Add a facility unit"} onClose={onClose} maxWidth="max-w-lg">
-      <form onSubmit={submit} className="p-5 space-y-3">
-        <CustomSelect label="Facility" value={facilityId} onChange={setFacilityId} options={facilityOptions} searchable size="sm" placeholder="Choose a facility" />
+      <form onSubmit={submit} noValidate className="p-5 space-y-3">
+        <Controller
+          control={form.control}
+          name="facilityId"
+          render={({ field }) => (
+            <CustomSelect
+              label="Facility"
+              value={field.value}
+              onChange={(v) => {
+                field.onChange(v);
+                field.onBlur();
+              }}
+              error={visibleError(form, "facilityId")}
+              options={facilityOptions}
+              searchable
+              size="sm"
+              placeholder="Choose a facility"
+            />
+          )}
+        />
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px] gap-3">
           <label className="text-xs font-semibold text-slate-700">
             Label
-            <input className={smallInput} value={label} maxLength={160} placeholder="Ground floor male toilet" onChange={(e) => setLabel(e.target.value)} />
+            <input
+              className={`${smallInput} ${invalidClass(form, "label")}`}
+              maxLength={160}
+              placeholder="Ground floor male toilet"
+              {...form.register("label")}
+              {...fieldA11y(form, "label")}
+            />
+            <FieldError form={form} name="label" />
           </label>
           <label className="text-xs font-semibold text-slate-700">
             Unit ID
             <input
-              className={`${smallInput} font-mono uppercase`}
-              value={code}
+              className={`${smallInput} font-mono uppercase ${invalidClass(form, "code")}`}
               maxLength={20}
               placeholder={unit ? undefined : `Auto (${nextCode})`}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              {...form.register("code", { setValueAs: (v: string) => v.toUpperCase() })}
+              {...fieldA11y(form, "code")}
             />
+            <FieldError form={form} name="code" />
           </label>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <CustomSelect label="Start sprint" value={startSprintId} onChange={setStart} options={sprintOptions} size="sm" />
-          <CustomSelect label="End sprint" value={endSprintId} onChange={setEnd} options={sprintOptions} size="sm" />
+          <Controller
+            control={form.control}
+            name="startSprintId"
+            render={({ field }) => <CustomSelect label="Start sprint" value={field.value} onChange={field.onChange} options={sprintOptions} size="sm" />}
+          />
+          <Controller
+            control={form.control}
+            name="endSprintId"
+            render={({ field }) => (
+              <CustomSelect
+                label="End sprint"
+                value={field.value}
+                onChange={(v) => {
+                  field.onChange(v);
+                  field.onBlur();
+                }}
+                error={visibleError(form, "endSprintId")}
+                options={sprintOptions}
+                size="sm"
+              />
+            )}
+          />
         </div>
         {needsQty && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <label className="text-xs font-semibold text-slate-700">
               Planned quantity
-              <input type="number" min={0} step="any" className={smallInput} value={plannedQuantity} onChange={(e) => setQty(e.target.value)} />
+              <input
+                type="number"
+                min={0}
+                step="any"
+                className={`${smallInput} ${invalidClass(form, "plannedQuantity")}`}
+                {...form.register("plannedQuantity")}
+                {...fieldA11y(form, "plannedQuantity")}
+              />
+              <FieldError form={form} name="plannedQuantity" />
             </label>
-            <CustomSelect label="Unit of measure" value={quantityUnit} onChange={setQtyUnit} options={UOM_OPTIONS} size="sm" />
+            <Controller
+              control={form.control}
+              name="quantityUnit"
+              render={({ field }) => <CustomSelect label="Unit of measure" value={field.value} onChange={field.onChange} options={UOM_OPTIONS} size="sm" />}
+            />
           </div>
         )}
-        {error && <p className="text-xs font-medium text-rose-600">{error}</p>}
-        <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+        <div className="flex items-start justify-end gap-2 pt-3 border-t border-slate-100">
           <button type="button" className={secondaryButton} onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className={primaryButton} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : "Save unit"}
-          </button>
+          <SubmitButton form={form} pending={save.isPending} pendingLabel="Saving…" className={primaryButton}>
+            Save unit
+          </SubmitButton>
         </div>
       </form>
     </ModalShell>
   );
 }
+
+const LineFormSchema = z.object({
+  facilityUnitId: zChoice("facility unit"),
+  wbsCode: CreateScopeLineRequestSchema.shape.wbsCode,
+  description: CreateScopeLineRequestSchema.shape.description,
+  unit: z.string().trim().min(1, "Choose the unit of measure").max(32),
+  quantity: zNumberText("Quantity").refine((n) => n > 0, "Quantity must be above zero"),
+  rate: zNumberText("Rate").refine((n) => n >= 0, "The rate cannot be negative"),
+});
 
 function LineEditor({
   projectId,
@@ -642,60 +764,83 @@ function LineEditor({
   onClose: () => void;
 }) {
   const save = useSaveScopeLineMutation(projectId);
-  const [facilityUnitId, setUnitId] = useState(unitId ?? line?.facilityUnitId ?? "");
-  const [wbsCode, setWbs] = useState(line?.wbsCode ?? "");
-  const [description, setDescription] = useState(line?.description ?? "");
-  const [uom, setUom] = useState(line?.unit ?? "m2");
-  const [quantity, setQuantity] = useState(line?.totalQuantity?.toString() ?? "");
-  const [rate, setRate] = useState(line?.rateNgn?.toString() ?? "");
-  const [error, setError] = useState<string | null>(null);
+  const form = useZodForm(LineFormSchema, {
+    defaultValues: {
+      facilityUnitId: unitId ?? line?.facilityUnitId ?? "",
+      wbsCode: line?.wbsCode ?? "",
+      description: line?.description ?? "",
+      unit: line?.unit ?? "m2",
+      quantity: line?.totalQuantity?.toString() ?? "",
+      rate: line?.rateNgn?.toString() ?? "",
+    },
+  });
+  const uom = form.watch("unit");
 
   const unitOptions = scope.units.map((u) => ({ value: u.id, label: `${u.code} · ${u.label}`, description: u.facility.name }));
   const uomOptions = UNITS_OF_MEASURE.some((u) => u.code === uom) ? UOM_OPTIONS : [{ value: uom, label: `${uom} (not on the list)` }, ...UOM_OPTIONS];
-  const q = Number(quantity);
-  const r = Number(rate);
+  const q = Number(form.watch("quantity"));
+  const r = Number(form.watch("rate"));
   const amount = Number.isFinite(q) && Number.isFinite(r) ? lineAmount(q, r) : 0;
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!facilityUnitId) return setError("Choose the facility unit.");
-    if (!wbsCode.trim()) return setError("Enter the item no.");
-    if (description.trim().length < 3) return setError("Enter a description of at least 3 characters.");
-    if (!(q > 0)) return setError("The quantity must be above zero.");
-    if (!(r >= 0) || rate.trim() === "") return setError("Enter the rate.");
-    setError(null);
-    const body = { facilityUnitId, wbsCode: wbsCode.trim(), description: description.trim(), totalQuantity: q, rateNgn: r };
+  const submit = form.handleSubmit((v) => {
+    const body = { facilityUnitId: v.facilityUnitId, wbsCode: v.wbsCode, description: v.description, totalQuantity: v.quantity, rateNgn: v.rate };
     save.mutate(
       line
-        ? { id: line.id, update: { ...body, unit: uom } }
-        : { create: { ...body, unit: uom as (typeof UNITS_OF_MEASURE)[number]["code"] } },
+        ? { id: line.id, update: { ...body, unit: v.unit } }
+        : { create: { ...body, unit: v.unit as (typeof UNITS_OF_MEASURE)[number]["code"] } },
       { onSuccess: onClose },
     );
-  };
+  });
 
   return (
     <ModalShell title={line ? `Edit line ${line.wbsCode}` : "Add a BoQ line"} onClose={onClose} maxWidth="max-w-lg">
-      <form onSubmit={submit} className="p-5 space-y-3">
-        <CustomSelect label="Facility unit" value={facilityUnitId} onChange={setUnitId} options={unitOptions} searchable size="sm" placeholder="Choose a unit" />
+      <form onSubmit={submit} noValidate className="p-5 space-y-3">
+        <Controller
+          control={form.control}
+          name="facilityUnitId"
+          render={({ field }) => (
+            <CustomSelect
+              label="Facility unit"
+              value={field.value}
+              onChange={(v) => {
+                field.onChange(v);
+                field.onBlur();
+              }}
+              error={visibleError(form, "facilityUnitId")}
+              options={unitOptions}
+              searchable
+              size="sm"
+              placeholder="Choose a unit"
+            />
+          )}
+        />
         <div className="grid grid-cols-1 sm:grid-cols-[120px_1fr] gap-3">
           <label className="text-xs font-semibold text-slate-700">
             Item no.
-            <input className={`${smallInput} font-mono`} value={wbsCode} maxLength={32} onChange={(e) => setWbs(e.target.value)} />
+            <input className={`${smallInput} font-mono ${invalidClass(form, "wbsCode")}`} maxLength={32} {...form.register("wbsCode")} {...fieldA11y(form, "wbsCode")} />
+            <FieldError form={form} name="wbsCode" />
           </label>
           <label className="text-xs font-semibold text-slate-700">
             Description
-            <input className={smallInput} value={description} maxLength={600} onChange={(e) => setDescription(e.target.value)} />
+            <input className={`${smallInput} ${invalidClass(form, "description")}`} maxLength={600} {...form.register("description")} {...fieldA11y(form, "description")} />
+            <FieldError form={form} name="description" />
           </label>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <CustomSelect label="Unit of measure" value={uom} onChange={setUom} options={uomOptions} size="sm" />
+          <Controller
+            control={form.control}
+            name="unit"
+            render={({ field }) => <CustomSelect label="Unit of measure" value={field.value} onChange={field.onChange} options={uomOptions} size="sm" />}
+          />
           <label className="text-xs font-semibold text-slate-700">
             Quantity
-            <input type="number" min={0} step="any" className={smallInput} value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+            <input type="number" min={0} step="any" className={`${smallInput} ${invalidClass(form, "quantity")}`} {...form.register("quantity")} {...fieldA11y(form, "quantity")} />
+            <FieldError form={form} name="quantity" />
           </label>
           <label className="text-xs font-semibold text-slate-700">
             Rate (NGN)
-            <input type="number" min={0} step="any" className={smallInput} value={rate} onChange={(e) => setRate(e.target.value)} />
+            <input type="number" min={0} step="any" className={`${smallInput} ${invalidClass(form, "rate")}`} {...form.register("rate")} {...fieldA11y(form, "rate")} />
+            <FieldError form={form} name="rate" />
           </label>
         </div>
         <p className="text-xs text-slate-600">
@@ -705,14 +850,13 @@ function LineEditor({
         {line?.hasEvidence && (
           <p className="text-[11px] text-slate-500">This line has field evidence: its quantity cannot go below the work already done.</p>
         )}
-        {error && <p className="text-xs font-medium text-rose-600">{error}</p>}
-        <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+        <div className="flex items-start justify-end gap-2 pt-3 border-t border-slate-100">
           <button type="button" className={secondaryButton} onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className={primaryButton} disabled={save.isPending}>
-            {save.isPending ? "Saving…" : "Save line"}
-          </button>
+          <SubmitButton form={form} pending={save.isPending} pendingLabel="Saving…" className={primaryButton}>
+            Save line
+          </SubmitButton>
         </div>
       </form>
     </ModalShell>

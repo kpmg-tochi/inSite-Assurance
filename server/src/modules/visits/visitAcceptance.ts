@@ -204,11 +204,11 @@ export async function acceptSubmission(
   const raised: string[] = [];
   const fields = new Map(snapshot.blocks.flatMap((b) => b.fields.map((f) => [f.path, { f, b }] as const)));
   for (const fr of check.findingsToRaise) {
-    const open = await tx.inspectionFinding.count({ where: { projectId: s.projectId, questionKey: fr.path, status: 'OPEN' } });
+    const open = await tx.finding.count({ where: { projectId: s.projectId, questionKey: fr.path, status: 'OPEN' } });
     if (open > 0) continue;
     const block = fields.get(fr.path)?.b;
     const comment = answers.find((a) => a.path === fr.path)?.comment?.trim();
-    const finding = await tx.inspectionFinding.create({
+    const finding = await tx.finding.create({
       data: {
         projectId: s.projectId,
         visitId: visit.id,
@@ -234,12 +234,12 @@ export async function acceptSubmission(
   // 2. Re-check outcomes: "resolved" closes the finding with the answer's photos; otherwise it is counted.
   const resolved: string[] = [];
   for (const r of check.recheckResults) {
-    const finding = await tx.inspectionFinding.findFirst({ where: { id: r.recheckId, projectId: s.projectId, status: 'OPEN' } });
+    const finding = await tx.finding.findFirst({ where: { id: r.recheckId, projectId: s.projectId, status: 'OPEN' } });
     if (!finding) continue;
     const answer = answers.find((a) => a.path === `r:${r.recheckId}`);
     if (r.resolved) {
       const photoIds = s.captures.filter((c) => c.visitAnswerPath === `r:${r.recheckId}`).map((c) => c.id);
-      await tx.inspectionFinding.update({
+      await tx.finding.update({
         where: { id: finding.id },
         data: {
           status: 'RESOLVED',
@@ -255,7 +255,7 @@ export async function acceptSubmission(
       });
       resolved.push(finding.id);
     } else {
-      await tx.inspectionFinding.update({ where: { id: finding.id }, data: { recheckCount: { increment: 1 }, lastRecheckedSubmissionId: s.id, lastRecheckedAt: now } });
+      await tx.finding.update({ where: { id: finding.id }, data: { recheckCount: { increment: 1 }, lastRecheckedSubmissionId: s.id, lastRecheckedAt: now } });
     }
   }
   if (resolved.length) {
@@ -325,7 +325,7 @@ export async function acceptSubmission(
   // 5. Contractor email (after commit).
   const config = monitoringConfigOf(s.project.projectTypeSnapshotJson);
   if (config.emailContractorFindingsSummary) {
-    const open = await tx.inspectionFinding.count({ where: { projectId: s.projectId, status: 'OPEN' } });
+    const open = await tx.finding.count({ where: { projectId: s.projectId, status: 'OPEN' } });
     if (open > 0 || resolved.length > 0) ctx.outbox.emails.push({ projectId: s.projectId, submissionId: s.id });
   }
 
@@ -359,8 +359,8 @@ export async function sendFindingsSummary(projectId: string, submissionId: strin
   });
   const contractor = s.project.contractors[0]?.organization ?? null;
   const [open, resolvedHere] = await Promise.all([
-    prisma.inspectionFinding.findMany({ where: { projectId, status: 'OPEN' }, orderBy: { createdAt: 'asc' }, take: 100 }),
-    prisma.inspectionFinding.findMany({ where: { projectId, status: 'RESOLVED', lastRecheckedSubmissionId: submissionId } }),
+    prisma.finding.findMany({ where: { projectId, status: 'OPEN' }, orderBy: { createdAt: 'asc' }, take: 100 }),
+    prisma.finding.findMany({ where: { projectId, status: 'RESOLVED', lastRecheckedSubmissionId: submissionId } }),
   ]);
   const ids = [...open, ...resolvedHere];
   const [facilities, units] = await Promise.all([

@@ -50,7 +50,7 @@ export async function getProjectBaselinePack(projectId: string, now: Date = new 
       },
       orderBy: [{ facility: { sortOrder: 'asc' } }, { sortOrder: 'asc' }, { code: 'asc' }],
     }),
-    prisma.inspectionFinding.findMany({ where: { projectId, status: 'OPEN' }, orderBy: { createdAt: 'asc' } }),
+    prisma.finding.findMany({ where: { projectId, status: 'OPEN' }, orderBy: { createdAt: 'asc' } }),
     prisma.retentionDefectTicket.count({ where: { projectId, status: { in: OPEN_DEFECT_STATUSES } } }),
     prisma.projectContractMilestone.findMany({
       where: { projectId, completionMode: 'AUTO_CONTRACTOR_ON_SITE', status: { notIn: ['DONE', 'WAIVED'] } },

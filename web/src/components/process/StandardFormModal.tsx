@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import { z } from "zod";
+import { Controller } from "react-hook-form";
 import { AlertTriangle } from "lucide-react";
 import {
   ProjectStandardInputSchema,
@@ -10,6 +11,7 @@ import {
   type StandardLibraryEntry,
 } from "@insite/shared";
 import { CustomSelect } from "../common";
+import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm, visibleError } from "../../lib/forms";
 import { ModalShell, ModalActions, inputClass } from "../common/ModalShell";
 
 export interface StandardFormValue {
@@ -47,6 +49,26 @@ const splitCodes = (text: string) =>
     .map((c) => c.trim())
     .filter(Boolean);
 
+/** The modal's inputs, mapped to ProjectStandardInputSchema (which still decides). */
+const StandardFormSchema = z
+  .object({
+    code: z.string().trim().min(1, "Enter a code, e.g. NIS 444"),
+    title: z.string().trim().min(3, "Enter a title (at least 3 characters)"),
+    category: StandardCategoryEnum,
+    specificationText: z.string().trim().min(10, "Describe the requirement (at least 10 characters)"),
+    applicableWbsCodesText: z.string(),
+    isMandatory: z.boolean(),
+  })
+  .transform((v) => ({
+    code: v.code,
+    title: v.title,
+    category: v.category,
+    specificationText: v.specificationText,
+    applicableWbsCodes: splitCodes(v.applicableWbsCodesText),
+    isMandatory: v.isMandatory,
+  }))
+  .pipe(ProjectStandardInputSchema);
+
 /** Add or edit a project standard. Library entries arrive pre-filled and stay editable. */
 export function StandardFormModal({
   title,
@@ -67,41 +89,24 @@ export function StandardFormModal({
   onCancel: () => void;
   onSubmit: (input: ProjectStandardInput) => Promise<void>;
 }) {
-  const [form, setForm] = useState<StandardFormValue>(initial);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const form = useZodForm(StandardFormSchema, { defaultValues: initial });
+  const { register } = form;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsed = ProjectStandardInputSchema.safeParse({
-      code: form.code,
-      title: form.title,
-      category: form.category,
-      specificationText: form.specificationText,
-      applicableWbsCodes: splitCodes(form.applicableWbsCodesText),
-      isMandatory: form.isMandatory,
-    });
-    if (!parsed.success) {
-      const errs: Record<string, string> = {};
-      for (const issue of parsed.error.issues) {
-        const key = String(issue.path[0] ?? "form");
-        if (!errs[key]) errs[key] = issue.message;
-      }
-      setFieldErrors(errs);
-      return;
-    }
-    setFieldErrors({});
+  const handleSubmit = form.handleSubmit(async (input) => {
     try {
-      await onSubmit(parsed.data);
+      await onSubmit(input);
     } catch {
       // The mutation hook shows the error.
     }
-  };
+  });
 
-  const err = (k: string) => (fieldErrors[k] ? <p className="mt-1 text-[11px] font-medium text-red-600">{fieldErrors[k]}</p> : null);
+  // The BoQ item list is one text field; the contract's per-item issues are shown under it.
+  const itemsError = (form.formState.errors as Record<string, { message?: string } | undefined>).applicableWbsCodes;
+  const err = (k: "code" | "title" | "specificationText") => <FieldError form={form} name={k} className="text-[11px]" />;
 
   return (
     <ModalShell title={title} onClose={onCancel} maxWidth="max-w-2xl">
-      <form onSubmit={handleSubmit} className="p-5 space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="p-5 space-y-4">
         {fromLibrary && (
           <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] text-amber-900">
             <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
@@ -116,23 +121,29 @@ export function StandardFormModal({
             <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="std-code">
               Code
             </label>
-            <input id="std-code" className={inputClass} value={form.code} maxLength={40} onChange={(e) => setForm({ ...form, code: e.target.value })} />
+            <input id="std-code" className={`${inputClass} ${invalidClass(form, "code")}`} maxLength={40} {...register("code")} {...fieldA11y(form, "code")} />
             {err("code")}
           </div>
           <div className="md:col-span-2">
             <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="std-title">
               Title
             </label>
-            <input id="std-title" className={inputClass} value={form.title} maxLength={200} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+            <input id="std-title" className={`${inputClass} ${invalidClass(form, "title")}`} maxLength={200} {...register("title")} {...fieldA11y(form, "title")} />
             {err("title")}
           </div>
         </div>
-        <CustomSelect
-          label="Category"
-          value={form.category}
-          onChange={(v) => setForm({ ...form, category: v })}
-          options={StandardCategoryEnum.options.map((c) => ({ value: c, label: STANDARD_CATEGORY_META[c].label }))}
-          error={fieldErrors.category}
+        <Controller
+          control={form.control}
+          name="category"
+          render={({ field }) => (
+            <CustomSelect
+              label="Category"
+              value={field.value}
+              onChange={field.onChange}
+              options={StandardCategoryEnum.options.map((c) => ({ value: c, label: STANDARD_CATEGORY_META[c].label }))}
+              error={visibleError(form, "category")}
+            />
+          )}
         />
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="std-text">
@@ -141,9 +152,9 @@ export function StandardFormModal({
           <textarea
             id="std-text"
             rows={5}
-            className={inputClass}
-            value={form.specificationText}
-            onChange={(e) => setForm({ ...form, specificationText: e.target.value })}
+            className={`${inputClass} ${invalidClass(form, "specificationText")}`}
+            {...register("specificationText")}
+            {...fieldA11y(form, "specificationText")}
           />
           <p className="mt-1 text-[11px] text-slate-500">
             Write numeric rules in full, e.g. "slump 75 ± 25 mm", "cube strength minimum 25 N/mm²".
@@ -159,8 +170,7 @@ export function StandardFormModal({
             className={inputClass}
             list="std-items-suggestions"
             placeholder="Leave empty for the whole project, e.g. 02, 03.1"
-            value={form.applicableWbsCodesText}
-            onChange={(e) => setForm({ ...form, applicableWbsCodesText: e.target.value })}
+            {...register("applicableWbsCodesText")}
           />
           <datalist id="std-items-suggestions">
             {itemSuggestions.map((c) => (
@@ -171,13 +181,17 @@ export function StandardFormModal({
           {fromLibrary && fromLibrary.suggestedFor.length > 0 && (
             <p className="mt-1 text-[11px] text-slate-500">Typically used for: {fromLibrary.suggestedFor.join(", ")}.</p>
           )}
-          {err("applicableWbsCodes")}
+          {itemsError && form.formState.dirtyFields.applicableWbsCodesText && (
+            <p className="mt-1 text-[11px] font-medium text-red-600">
+              {itemsError.message ?? "Each item no. must be 1 to 40 characters, at most 200 items."}
+            </p>
+          )}
         </div>
         <label className="flex items-center gap-2 text-xs text-slate-700">
-          <input type="checkbox" className="h-4 w-4 accent-brand-primary" checked={form.isMandatory} onChange={(e) => setForm({ ...form, isMandatory: e.target.checked })} />
+          <input type="checkbox" className="h-4 w-4 accent-brand-primary" {...register("isMandatory")} />
           Mandatory (otherwise advisory)
         </label>
-        <ModalActions onCancel={onCancel} submitLabel="Save standard" pendingLabel="Saving…" isPending={isPending} />
+        <ModalActions onCancel={onCancel} submitLabel="Save standard" pendingLabel="Saving…" isPending={isPending} disabled={!canSubmit(form)} />
       </form>
     </ModalShell>
   );

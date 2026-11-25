@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import { z } from "zod";
 import { ArrowLeft, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import {
   SaveWorkflowTemplateRequestSchema,
@@ -6,6 +7,7 @@ import {
   type WorkflowTemplateDto,
 } from "@insite/shared";
 import { formatDateShort } from "../../lib/formatters";
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import { StandardTable, TableActionButton, TableBadge, type TableColumnDef } from "../table";
 import { useWorkflowTemplatesQuery } from "../../queries/process/useProcessQueries";
 import {
@@ -24,6 +26,21 @@ function toRequest(t: WorkflowTemplateDto, patch: Partial<SaveWorkflowTemplateRe
   return { name: t.name, description: t.description, isDefault: t.isDefault, config: t.config, ...patch };
 }
 
+/** The template's own fields; the process draft is checked with the same validator as the server. */
+const TemplateFieldsSchema = z.object({
+  name: z.string().trim().min(3, "Name the template (3 to 120 characters).").max(120, "Name the template (3 to 120 characters)."),
+  description: z.string().trim().max(1000, "Description is too long (at most 1000 characters)."),
+  isDefault: z.boolean(),
+});
+type TemplateFields = z.input<typeof TemplateFieldsSchema>;
+
+const templateRequest = (v: TemplateFields, draft: ProcessDraft) => ({
+  name: v.name,
+  description: v.description.trim() || null,
+  isDefault: v.isDefault,
+  config: { process: draft.config, reportChain: draft.reportChain },
+});
+
 function TemplateEditor({
   template,
   onDone,
@@ -31,27 +48,29 @@ function TemplateEditor({
   template: WorkflowTemplateDto | null;
   onDone: () => void;
 }) {
-  const [name, setName] = useState(template?.name ?? "");
-  const [description, setDescription] = useState(template?.description ?? "");
-  const [isDefault, setIsDefault] = useState(template?.isDefault ?? false);
+  const form = useZodForm(TemplateFieldsSchema, {
+    defaultValues: { name: template?.name ?? "", description: template?.description ?? "", isDefault: template?.isDefault ?? false },
+  });
   const [draft, setDraft] = useState<ProcessDraft>(template ? draftFromTemplate(template.config) : defaultProcessDraft());
   const [error, setError] = useState<string | null>(null);
   const roles = useRoleOptions();
   const saveMutation = useSaveWorkflowTemplateMutation();
   const issues = validateProcessDraft(draft);
+  // The whole request against the contract, so the button stays off while anything would be refused.
+  const contract = SaveWorkflowTemplateRequestSchema.safeParse(templateRequest(form.watch(), draft));
+  const blockedReason =
+    issues.count > 0
+      ? "Fix the approval chain issues shown below."
+      : !contract.success && form.formState.isValid
+        ? contract.error.issues[0]?.message ?? "Check the process settings."
+        : null;
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = form.handleSubmit(async (values) => {
     if (issues.count > 0) {
       setError("Fix the approval chain issues shown below.");
       return;
     }
-    const parsed = SaveWorkflowTemplateRequestSchema.safeParse({
-      name,
-      description: description.trim() || null,
-      isDefault,
-      config: { process: draft.config, reportChain: draft.reportChain },
-    });
+    const parsed = SaveWorkflowTemplateRequestSchema.safeParse(templateRequest(values, draft));
     if (!parsed.success) {
       const first = parsed.error.issues[0];
       setError(first.path[0] === "name" ? "Name the template (3 to 120 characters)." : first.message);
@@ -64,10 +83,10 @@ function TemplateEditor({
     } catch {
       // Toast from the mutation hook.
     }
-  };
+  });
 
   return (
-    <form onSubmit={submit} className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-5">
+    <form onSubmit={submit} noValidate className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm space-y-5">
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
         <div>
           <button type="button" onClick={onDone} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary hover:underline">
@@ -85,17 +104,19 @@ function TemplateEditor({
           <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="tpl-name">
             Name
           </label>
-          <input id="tpl-name" className={inputCls} value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
+          <input id="tpl-name" className={`${inputCls} ${invalidClass(form, "name")}`} maxLength={120} {...form.register("name")} {...fieldA11y(form, "name")} />
+          <FieldError form={form} name="name" />
         </div>
         <label className="flex items-center gap-2 self-end text-xs text-slate-700">
-          <input type="checkbox" className="h-4 w-4 accent-brand-primary" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
+          <input type="checkbox" className="h-4 w-4 accent-brand-primary" {...form.register("isDefault")} />
           Default for new projects
         </label>
         <div className="md:col-span-2">
           <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="tpl-desc">
             Description
           </label>
-          <textarea id="tpl-desc" rows={2} className={inputCls} value={description} maxLength={1000} onChange={(e) => setDescription(e.target.value)} />
+          <textarea id="tpl-desc" rows={2} className={`${inputCls} ${invalidClass(form, "description")}`} maxLength={1000} {...form.register("description")} {...fieldA11y(form, "description")} />
+          <FieldError form={form} name="description" />
         </div>
       </div>
       <ProcessEditor draft={draft} onChange={setDraft} issues={issues} roles={roles} />
@@ -103,13 +124,19 @@ function TemplateEditor({
         <button type="button" onClick={onDone} className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
           Cancel
         </button>
-        <button
-          type="submit"
-          disabled={saveMutation.isPending}
-          className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
-        >
-          {saveMutation.isPending ? "Saving…" : "Save template"}
-        </button>
+        <span className="inline-flex flex-col items-end gap-1">
+          <SubmitButton
+            form={form}
+            pending={saveMutation.isPending}
+            blocked={Boolean(blockedReason)}
+            pendingLabel="Saving…"
+            hint="Name the template to save it."
+            className="rounded-xl bg-brand-primary px-4 py-2 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-primary"
+          >
+            Save template
+          </SubmitButton>
+          {blockedReason && <span className="text-[11px] text-slate-500">{blockedReason}</span>}
+        </span>
       </div>
     </form>
   );

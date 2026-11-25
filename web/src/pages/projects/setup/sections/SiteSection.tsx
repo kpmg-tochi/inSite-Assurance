@@ -1,24 +1,26 @@
 import React, { useMemo, useState } from "react";
+import { z } from "zod";
 import {
   COMMON_TIME_ZONES,
   ProjectGeofenceSchema,
+  ProjectSiteStepSchema,
   type ProjectGeofenceInput,
   type ProjectSetupDto,
-  type ProjectSiteStepInput,
 } from "@insite/shared";
+import { FieldError, visibleError } from "../../../../lib/forms";
 import { GeofenceEditor } from "../../../../components/geofence/GeofenceEditor";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import {
   extractErrors,
-  FieldError,
   inputClass,
   labelClass,
-  NO_ERRORS,
+  numberOrNull,
+  setField,
   StepSection,
+  textProps,
   useLatestSetup,
   useRegisterSection,
-  useSyncedState,
-  type FormErrors,
+  useSectionForm,
   type StepProps,
 } from "../setupContext";
 
@@ -26,10 +28,29 @@ function siteFrom(setup: ProjectSetupDto) {
   return {
     geofence: (setup.site.geofence as ProjectGeofenceInput | null) ?? null,
     // "" = use the tenant default.
-    tolerance: setup.site.geofenceToleranceMeters === null ? "" : String(setup.site.geofenceToleranceMeters),
+    geofenceToleranceMeters: setup.site.geofenceToleranceMeters === null ? "" : String(setup.site.geofenceToleranceMeters),
     timezone: setup.site.timezone,
   };
 }
+
+const TOLERANCE_MESSAGE = "Whole metres from 0 to 1000, or leave empty for the workspace default";
+
+/**
+ * Form schema: the boundary (`ProjectGeofenceSchema`; the editor explains its issue in plain words),
+ * the tolerance typed as text (empty = workspace default) and the time zone → `ProjectSiteStepSchema`.
+ */
+const SiteFormSchema = z
+  .object({
+    geofence: ProjectGeofenceSchema.nullable(),
+    geofenceToleranceMeters: numberOrNull("Tolerance").pipe(
+      z.number().int(TOLERANCE_MESSAGE).min(0, TOLERANCE_MESSAGE).max(1000, TOLERANCE_MESSAGE).nullable()
+    ),
+    timezone: ProjectSiteStepSchema.shape.timezone,
+  })
+  .pipe(ProjectSiteStepSchema);
+
+/** Server paths → form fields (a boundary issue is shown under the editor). */
+const sitePath = (path: string) => (path.startsWith("geofence.") ? "geofence" : path);
 
 /**
  * Section `site` (step 1 "Project": "Location"): the site boundary (a radial pin starts at the
@@ -37,46 +58,43 @@ function siteFrom(setup: ProjectSetupDto) {
  */
 export function SiteSection({ projectId, setup, readOnly }: StepProps) {
   const initial = useMemo(() => siteFrom(setup), [setup]);
-  const [state, setState, dirty] = useSyncedState(initial);
-  const [errors, setErrors] = useState<FormErrors>(NO_ERRORS);
+  const section = useSectionForm(SiteFormSchema, initial);
+  const { form, dirty } = section;
+  const state = section.values as ReturnType<typeof siteFrom>;
+  const [general, setGeneral] = useState<string | null>(null);
   const save = useSaveSetupStepMutation(projectId);
   const latest = useLatestSetup(projectId, setup);
+  const err = (name: string) => visibleError(form, name);
   const tenantDefault = setup.site.tenantDefaultToleranceMeters;
-  const toleranceValue = state.tolerance.trim() === "" ? tenantDefault : Number(state.tolerance);
+  const toleranceValue = state.geofenceToleranceMeters.trim() === "" ? tenantDefault : Number(state.geofenceToleranceMeters);
   const zones = COMMON_TIME_ZONES.includes(state.timezone) ? COMMON_TIME_ZONES : [state.timezone, ...COMMON_TIME_ZONES];
+  // "Location: advanced" opens on an error and stays open while it is fixed.
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  useRegisterSection("site", dirty, async (opts) => {
-    if (!dirty && !opts?.force) return true;
-    const v = dirty ? state : siteFrom(latest());
-    const fields: Record<string, string> = {};
-    if (v.geofence) {
-      const parsed = ProjectGeofenceSchema.safeParse(v.geofence);
-      if (!parsed.success) fields.geofence = parsed.error.issues[0]?.message ?? "The geofence is not valid";
-    }
-    const tol = v.tolerance.trim() === "" ? null : Number(v.tolerance);
-    if (tol !== null && (!Number.isInteger(tol) || tol < 0 || tol > 1000)) {
-      fields.geofenceToleranceMeters = "Whole metres from 0 to 1000, or leave empty for the workspace default";
-    }
-    if (Object.keys(fields).length > 0) {
-      setErrors({ fields, general: "Some fields need attention." });
-      return false;
-    }
-    const body: ProjectSiteStepInput = { geofence: v.geofence, geofenceToleranceMeters: tol, timezone: v.timezone };
-    try {
-      await save.mutateAsync({ sectionId: "site", body, silent: opts?.silent });
-      setState(siteFrom(latest()));
-      setErrors(NO_ERRORS);
-      return true;
-    } catch (err) {
-      setErrors(extractErrors(err));
-      return false;
-    }
-  });
+  useRegisterSection(
+    "site",
+    dirty,
+    async (opts) => {
+      if (!dirty && !opts?.force) return true;
+      const body = await section.submit(dirty ? undefined : siteFrom(latest()));
+      if (!body) return false;
+      try {
+        await save.mutateAsync({ sectionId: "site", body, silent: opts?.silent });
+        section.reset(siteFrom(latest()));
+        setGeneral(null);
+        return true;
+      } catch (error) {
+        const message = section.showServerErrors(error, sitePath);
+        // Field errors show on their fields; a message without them shows under the editor.
+        setGeneral(Object.keys(extractErrors(error).fields).length > 0 ? null : message);
+        return false;
+      }
+    },
+    section
+  );
 
-  const geofenceError =
-    errors.fields.geofence ??
-    Object.entries(errors.fields).find(([k]) => k.startsWith("geofence."))?.[1] ??
-    (errors.general && !Object.keys(errors.fields).length ? errors.general : null);
+  // The editor explains an invalid shape itself; this shows a failed save's message.
+  const geofenceError = err("geofence") ?? general;
 
   return (
     <div className="space-y-5">
@@ -86,7 +104,7 @@ export function SiteSection({ projectId, setup, readOnly }: StepProps) {
       >
         <GeofenceEditor
           value={state.geofence}
-          onChange={(geofence) => setState((s) => ({ ...s, geofence }))}
+          onChange={(geofence) => setField(form, "geofence", geofence, true)}
           enabledModes={setup.site.enabledGeofenceModes}
           lockedMode={setup.site.geofenceMode}
           toleranceMeters={Number.isFinite(toleranceValue) ? toleranceValue : 0}
@@ -98,7 +116,8 @@ export function SiteSection({ projectId, setup, readOnly }: StepProps) {
 
       <details
         className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-sm"
-        open={Boolean(errors.fields.geofenceToleranceMeters || errors.fields.timezone)}
+        open={advancedOpen || Boolean(err("geofenceToleranceMeters") || err("timezone"))}
+        onToggle={(e) => setAdvancedOpen(e.currentTarget.open)}
       >
         <summary className="cursor-pointer text-sm font-bold text-slate-900">Location: advanced</summary>
         <p className="mt-1 text-[11px] text-slate-500">Tolerance outside the boundary and the project time zone.</p>
@@ -110,17 +129,16 @@ export function SiteSection({ projectId, setup, readOnly }: StepProps) {
             <input
               id="site-tolerance"
               inputMode="numeric"
-              className={inputClass(Boolean(errors.fields.geofenceToleranceMeters))}
-              value={state.tolerance}
+              className={inputClass(Boolean(err("geofenceToleranceMeters")))}
+              {...textProps(form, "geofenceToleranceMeters")}
               placeholder={`Workspace default: ${tenantDefault} m`}
-              onChange={(e) => setState((s) => ({ ...s, tolerance: e.target.value }))}
               disabled={readOnly}
             />
             <p className="mt-1 text-[11px] text-slate-500">
               A position this far outside the boundary still counts, and is noted on the capture or check-in. Leave empty to use
               the workspace default ({tenantDefault} m).
             </p>
-            <FieldError message={errors.fields.geofenceToleranceMeters} />
+            <FieldError form={form} name="geofenceToleranceMeters" />
           </div>
           <div>
             <label className={labelClass} htmlFor="site-timezone">
@@ -128,9 +146,9 @@ export function SiteSection({ projectId, setup, readOnly }: StepProps) {
             </label>
             <select
               id="site-timezone"
-              className={inputClass(Boolean(errors.fields.timezone))}
-              value={state.timezone}
-              onChange={(e) => setState((s) => ({ ...s, timezone: e.target.value }))}
+              className={inputClass(Boolean(err("timezone")))}
+              {...textProps(form, "timezone")}
+              onChange={(e) => setField(form, "timezone", e.target.value, true)}
               disabled={readOnly}
             >
               {zones.map((z) => (
@@ -142,7 +160,7 @@ export function SiteSection({ projectId, setup, readOnly }: StepProps) {
             <p className="mt-1 text-[11px] text-slate-500">
               Dates on this project (visit days, deadlines, milestones) are counted in this zone.
             </p>
-            <FieldError message={errors.fields.timezone} />
+            <FieldError form={form} name="timezone" />
           </div>
         </div>
       </details>

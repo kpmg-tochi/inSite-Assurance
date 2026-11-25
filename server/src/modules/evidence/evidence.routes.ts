@@ -34,7 +34,7 @@ async function projectTenantId(projectId: string): Promise<string> {
  */
 router.get(
   '/:projectId/evidence',
-  requirePermission('reports:view_all'),
+  requirePermission('visits:view'),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const projectId = String(req.params.projectId);

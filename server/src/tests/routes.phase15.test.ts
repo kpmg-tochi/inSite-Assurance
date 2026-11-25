@@ -148,13 +148,13 @@ async function acceptedEvaluation(visitKind: 'FINAL_EVALUATION' | 'POST_CLOSURE_
 
 /** An accepted handover response, reviewed through the real route (issues the handover certificate). */
 async function acceptHandover(projectId: string) {
-  const monitor = await prisma.user.findUniqueOrThrow({ where: { email: 'monitor@insite.ng' } });
-  // R1d: recorded by staff from the signed copy (no public link).
+  // R1d: recorded by staff from the signed copy (no public link); R7: by someone other than the reviewer.
+  const recorder = await prisma.user.findUniqueOrThrow({ where: { email: 'admin@insite.ng' } });
   const submission = await prisma.handoverSubmission.create({
     data: {
       projectId,
       stakeholderType: 'END_USER',
-      recordedByUserId: monitor.id,
+      recordedByUserId: recorder.id,
       decision: 'ACCEPTED_WITH_SNAGS',
       submitterName: 'Mrs Bello',
       submitterRole: 'Head teacher',
@@ -213,7 +213,7 @@ before(async () => {
       code: 'P15_CONTRACTOR_STAFF',
       surface: 'WEB',
       rolePermissions: {
-        create: ['projects:view_assigned', 'boq:view', 'documents:view', 'documents:upload', 'inspections:view', 'retention:manage_defects'].map(
+        create: ['projects:view_assigned', 'scope:view', 'documents:view', 'documents:upload', 'visits:view', 'defects:manage'].map(
           (key) => ({ permission: { connect: { key } } })
         ),
       },
@@ -506,6 +506,8 @@ describe('Phase 15', () => {
     assert.equal((await phase('HANDOVER_IN_PROGRESS', ids.open)).status, 200);
     assert.equal((await acceptHandover(ids.open)).status, 200);
     assert.equal((await phase('RETENTION_PERIOD', ids.open)).status, 200);
+    // Closing waits for the end of the defects liability period (R7, owner decision 2026-11-25).
+    await prisma.project.update({ where: { id: ids.open }, data: { retentionEndDate: addDays(today, -1) } });
     const close = await phase('COMPLETED_CLOSED', ids.open);
     assert.equal(close.status, 200, JSON.stringify(close.body));
   });
@@ -527,6 +529,12 @@ describe('Phase 15', () => {
     assert.equal(items.find((i) => i.key === 'ratings')!.status, 'PENDING');
     assert.match(items.find((i) => i.key === 'ratings')!.detail!, /0 of 1/);
     assert.equal(items.find((i) => i.key === 'as-built')!.canComplete, true);
+    // R7: the liability period is checked first; closing waits until it has ended.
+    await prisma.project.update({ where: { id: ids.project }, data: { retentionEndDate: addDays(today, 30) } });
+    const early = await phase('COMPLETED_CLOSED');
+    assert.equal(early.status, 409);
+    assert.match(early.body.error.message, /defects liability period runs until .* \(30 days left\)/);
+    await prisma.project.update({ where: { id: ids.project }, data: { retentionEndDate: addDays(today, -1) } });
     const close = await phase('COMPLETED_CLOSED');
     assert.equal(close.status, 409);
     assert.match(close.body.error.message, /closure item/);

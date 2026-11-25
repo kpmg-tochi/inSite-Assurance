@@ -1,11 +1,14 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { Controller } from "react-hook-form";
+import { z } from "zod";
 import { Gavel, Plus } from "lucide-react";
-import type { ContractorDefaultCaseDto } from "@insite/shared";
+import { RaiseDefaultCaseRequestSchema, type ContractorDefaultCaseDto, type RaiseDefaultCaseRequest } from "@insite/shared";
 import { ModalShell } from "../common/ModalShell";
 import { CustomSelect } from "../common";
 import Loader from "../Loader";
 import { useAuth } from "../../lib/auth-context";
 import { formatDateShort } from "../../lib/formatters";
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm, visibleError, zChoice } from "../../lib/forms";
 import { useDefaultCasesQuery, useMilestonesQuery, useMobilisationComplianceQuery } from "../../queries/contracts/useContractQueries";
 import { useRaiseDefaultCaseMutation } from "../../mutations/contracts/useContractMutations";
 import { DEFAULT_CASE_STATUS_META, primaryButton, secondaryButton, sectionClass, smallInput, StatusChip } from "./contractUi";
@@ -77,6 +80,14 @@ function CaseRow({ c, onOpen }: { c: ContractorDefaultCaseDto; onOpen: () => voi
   );
 }
 
+const RaiseCaseFormSchema = z
+  .object({
+    projectContractorId: zChoice("contractor"),
+    milestoneId: z.string(),
+    summary: RaiseDefaultCaseRequestSchema.shape.summary,
+  })
+  .transform((v): RaiseDefaultCaseRequest => ({ ...v, milestoneId: v.milestoneId || null }));
+
 export function RaiseDefaultCaseDialog({
   projectId,
   onClose,
@@ -93,10 +104,10 @@ export function RaiseDefaultCaseDialog({
   const compliance = useMobilisationComplianceQuery(projectId);
   const milestones = useMilestonesQuery(projectId);
   const raise = useRaiseDefaultCaseMutation(projectId);
-  const [contractorId, setContractorId] = useState(defaultContractorId ?? "");
-  const [milestoneId, setMilestoneId] = useState(defaultMilestoneId ?? "");
-  const [summary, setSummary] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const form = useZodForm(RaiseCaseFormSchema, {
+    defaultValues: { projectContractorId: defaultContractorId ?? "", milestoneId: defaultMilestoneId ?? "", summary: "" },
+  });
+  const contractorId = form.watch("projectContractorId");
 
   const contractors = (compliance.data ?? []).filter((r) => r.contractStatus === "ACTIVE");
   const milestoneOptions = useMemo(
@@ -110,52 +121,61 @@ export function RaiseDefaultCaseDialog({
     [milestones.data, contractorId]
   );
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!contractorId) return setError("Choose the contractor.");
-    if (summary.trim().length < 10) return setError("Describe the default in at least 10 characters.");
-    setError(null);
-    raise.mutate(
-      { projectContractorId: contractorId, summary: summary.trim(), milestoneId: milestoneId || null },
-      {
-        onSuccess: (c) => {
-          onClose();
-          onRaised?.(c.id);
-        },
-      }
-    );
-  };
+  const submit = form.handleSubmit((body) =>
+    raise.mutate(body, {
+      onSuccess: (c) => {
+        onClose();
+        onRaised?.(c.id);
+      },
+    })
+  );
 
   return (
     <ModalShell title="Raise a default case" subtitle="Goes through the project's default case chain" onClose={onClose} maxWidth="max-w-lg">
-      <form onSubmit={submit} className="p-5 space-y-4">
-        <CustomSelect
-          label="Contractor"
-          value={contractorId}
-          onChange={(v) => setContractorId(v)}
-          options={contractors.map((r) => ({
-            value: r.projectContractorId,
-            label: `${r.organizationName} (${r.tradeCode})`,
-            disabled: Boolean(r.openDefaultCaseId),
-            badge: r.openDefaultCaseId ? "Case open" : undefined,
-          }))}
-          placeholder={compliance.isLoading ? "Loading contractors…" : "Choose the contractor"}
+      <form onSubmit={submit} noValidate className="p-5 space-y-4">
+        <Controller
+          control={form.control}
+          name="projectContractorId"
+          render={({ field }) => (
+            <CustomSelect
+              label="Contractor"
+              value={field.value}
+              onChange={(v) => {
+                field.onChange(v);
+                field.onBlur();
+              }}
+              error={visibleError(form, "projectContractorId")}
+              options={contractors.map((r) => ({
+                value: r.projectContractorId,
+                label: `${r.organizationName} (${r.tradeCode})`,
+                disabled: Boolean(r.openDefaultCaseId),
+                badge: r.openDefaultCaseId ? "Case open" : undefined,
+              }))}
+              placeholder={compliance.isLoading ? "Loading contractors…" : "Choose the contractor"}
+            />
+          )}
         />
-        <CustomSelect label="Milestone (optional)" value={milestoneId} onChange={(v) => setMilestoneId(v)} options={milestoneOptions} searchable={milestoneOptions.length > 8} />
+        <Controller
+          control={form.control}
+          name="milestoneId"
+          render={({ field }) => (
+            <CustomSelect label="Milestone (optional)" value={field.value} onChange={field.onChange} options={milestoneOptions} searchable={milestoneOptions.length > 8} />
+          )}
+        />
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="case-summary">
             What is the default?
           </label>
-          <textarea id="case-summary" rows={4} maxLength={2000} className={smallInput} value={summary} onChange={(e) => setSummary(e.target.value)} />
+          <textarea id="case-summary" rows={4} maxLength={2000} className={`${smallInput} ${invalidClass(form, "summary")}`} {...form.register("summary")} {...fieldA11y(form, "summary")} />
+          <FieldError form={form} name="summary" />
         </div>
-        {error && <p className="text-xs font-medium text-rose-600">{error}</p>}
         <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-          <button type="button" className={secondaryButton} onClick={onClose}>
+          <button type="button" className={`${secondaryButton} self-start`} onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className={primaryButton} disabled={raise.isPending}>
-            {raise.isPending ? "Opening…" : "Open the case"}
-          </button>
+          <SubmitButton form={form} pending={raise.isPending} pendingLabel="Opening…" className={primaryButton}>
+            Open the case
+          </SubmitButton>
         </div>
       </form>
     </ModalShell>

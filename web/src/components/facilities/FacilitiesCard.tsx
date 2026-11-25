@@ -1,6 +1,9 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { z } from "zod";
+import { Controller } from "react-hook-form";
 import { Download, Plus } from "lucide-react";
 import {
+  CreateFacilityRequestSchema,
   FACILITY_ARCHETYPE_META,
   FACILITY_CODE_REGEX,
   FacilityArchetypeEnum,
@@ -8,6 +11,7 @@ import {
   type FacilityDto,
 } from "@insite/shared";
 import { useAuth } from "../../lib/auth-context";
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import { useFacilitiesQuery } from "../../queries/facilities/useFacilityQueries";
 import { useSaveFacilityMutation } from "../../mutations/facilities/useFacilityMutations";
 import { useDownloadTenantScopeWorkbookMutation } from "../../mutations/scope/useScopeMutations";
@@ -19,7 +23,7 @@ import { primaryButton, secondaryButton, smallInput } from "../contracts/contrac
 /**
  * Redesign R2a: the tenant facility catalogue. Scope lines are tagged with these facilities through
  * facility units. A retired facility stays on the projects that use it and leaves the pickers and
- * the workbook; a code is locked once a unit uses it.
+ * the needs assessment template; a code is locked once a unit uses it.
  */
 
 const ARCHETYPE_OPTIONS = FacilityArchetypeEnum.options.map((a) => ({
@@ -38,6 +42,15 @@ interface EditorState {
   /** Units use it: the code is locked. */
   codeLocked: boolean;
 }
+
+/** The request body the editor's values become (create and update send the same fields). */
+const facilityBody = (s: Omit<EditorState, "id" | "codeLocked">) => ({
+  code: s.code.trim().toUpperCase(),
+  name: s.name.trim(),
+  pluralName: s.pluralName.trim() || null,
+  category: s.category.trim() || null,
+  archetype: s.archetype,
+});
 
 const blank = (): EditorState => ({ id: null, code: "", name: "", pluralName: "", category: "", archetype: "BUILDING_WORKS", codeLocked: false });
 
@@ -175,10 +188,10 @@ export function FacilitiesCard() {
               type="button"
               onClick={() => workbook.mutate()}
               disabled={workbook.isPending}
-              title="A blank needs-assessment workbook with this workspace's facilities, units of measure, regions and delivery models"
+              title="The blank needs assessment template (Excel) with this workspace's facilities, units of measure, regions and delivery models"
               className="inline-flex items-center gap-1 rounded-xl bg-white/90 px-3 py-1.5 text-xs font-bold text-brand-navy hover:bg-slate-100 disabled:opacity-60"
             >
-              <Download className="w-3.5 h-3.5" /> {workbook.isPending ? "Preparing…" : "Download workbook"}
+              <Download className="w-3.5 h-3.5" /> {workbook.isPending ? "Preparing…" : "Download template"}
             </button>
             <button
               type="button"
@@ -202,13 +215,7 @@ export function FacilitiesCard() {
           pending={save.isPending}
           onClose={() => setEditing(null)}
           onSave={(s) => {
-            const body = {
-              code: s.code.trim().toUpperCase(),
-              name: s.name.trim(),
-              pluralName: s.pluralName.trim() || null,
-              category: s.category.trim() || null,
-              archetype: s.archetype,
-            };
+            const body = facilityBody(s);
             save.mutate(s.id ? { id: s.id, update: body } : { create: body }, { onSuccess: () => setEditing(null) });
           }}
         />
@@ -216,6 +223,27 @@ export function FacilitiesCard() {
     </>
   );
 }
+
+/** The editor's inputs; the request built from them is checked against CreateFacilityRequestSchema. */
+const FacilityFormSchema = z
+  .object({
+    id: z.string().nullable(),
+    codeLocked: z.boolean(),
+    code: z
+      .string()
+      .trim()
+      .refine((v) => FACILITY_CODE_REGEX.test(v.toUpperCase()), "Code: 2 to 40 capital letters, digits or underscores, starting with a letter, e.g. ASSEMBLY_HALL."),
+    name: z.string().trim().min(2, "Enter a name (at least 2 characters).").max(120, "Name is too long (at most 120 characters)."),
+    pluralName: z.string().trim().max(120, "Plural is too long (at most 120 characters)."),
+    category: z.string().trim().max(80, "Category is too long (at most 80 characters)."),
+    archetype: FacilityArchetypeEnum,
+  })
+  .superRefine((v, ctx) => {
+    const contract = CreateFacilityRequestSchema.safeParse(facilityBody(v));
+    if (!contract.success) {
+      for (const issue of contract.error.issues) ctx.addIssue({ code: z.ZodIssueCode.custom, path: issue.path, message: issue.message });
+    }
+  });
 
 function FacilityEditor({
   initial,
@@ -228,21 +256,13 @@ function FacilityEditor({
   onClose: () => void;
   onSave: (s: EditorState) => void;
 }) {
-  const [s, setS] = useState(initial);
-  const [error, setError] = useState<string | null>(null);
-  const set = (patch: Partial<EditorState>) => setS((x) => ({ ...x, ...patch }));
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!FACILITY_CODE_REGEX.test(s.code.trim().toUpperCase())) return setError("Code: 2 to 40 capital letters, digits or underscores, e.g. ASSEMBLY_HALL.");
-    if (s.name.trim().length < 2) return setError("Enter a name.");
-    setError(null);
-    onSave(s);
-  };
+  const form = useZodForm(FacilityFormSchema, { defaultValues: initial });
+  const { register } = form;
+  const submit = form.handleSubmit((s) => onSave(s));
 
   return (
-    <ModalShell title={s.id ? `Edit ${initial.name}` : "Add a facility"} onClose={onClose} maxWidth="max-w-lg">
-      <form onSubmit={submit} className="p-5 space-y-4">
+    <ModalShell title={initial.id ? `Edit ${initial.name}` : "Add a facility"} onClose={onClose} maxWidth="max-w-lg">
+      <form onSubmit={submit} noValidate className="p-5 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="fac-code">
@@ -250,20 +270,29 @@ function FacilityEditor({
             </label>
             <input
               id="fac-code"
-              className={`${smallInput} font-mono uppercase`}
-              value={s.code}
+              className={`${smallInput} font-mono uppercase read-only:bg-slate-50 read-only:text-slate-500 ${invalidClass(form, "code")}`}
               maxLength={40}
-              disabled={s.codeLocked}
+              readOnly={initial.codeLocked}
+              aria-disabled={initial.codeLocked || undefined}
               placeholder="ASSEMBLY_HALL"
-              onChange={(e) => set({ code: e.target.value.toUpperCase() })}
+              {...register("code", { setValueAs: (v: string) => v.toUpperCase() })}
+              {...fieldA11y(form, "code")}
             />
-            {s.codeLocked && <p className="mt-1 text-[11px] text-slate-500">Facility units use this code, so it cannot change.</p>}
+            <FieldError form={form} name="code" />
+            {initial.codeLocked && <p className="mt-1 text-[11px] text-slate-500">Facility units use this code, so it cannot change.</p>}
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="fac-name">
               Name
             </label>
-            <input id="fac-name" className={smallInput} value={s.name} maxLength={120} onChange={(e) => set({ name: e.target.value })} />
+            <input
+              id="fac-name"
+              className={`${smallInput} ${invalidClass(form, "name")}`}
+              maxLength={120}
+              {...register("name")}
+              {...fieldA11y(form, "name")}
+            />
+            <FieldError form={form} name="name" />
           </div>
         </div>
         <div>
@@ -272,20 +301,27 @@ function FacilityEditor({
           </label>
           <input
             id="fac-plural"
-            className={smallInput}
-            value={s.pluralName}
+            className={`${smallInput} ${invalidClass(form, "pluralName")}`}
             maxLength={120}
             placeholder="Only when the plain plural is wrong, e.g. Staff quarters"
-            onChange={(e) => set({ pluralName: e.target.value })}
+            {...register("pluralName")}
+            {...fieldA11y(form, "pluralName")}
           />
+          <FieldError form={form} name="pluralName" />
           <p className="mt-1 text-[11px] text-slate-500">Used by form questions such as "Are all {"{count} {facility}"} roofed?".</p>
         </div>
-        <CustomSelect
-          label="Archetype"
-          value={s.archetype}
-          onChange={(v) => set({ archetype: v as FacilityArchetype })}
-          options={ARCHETYPE_OPTIONS}
-          size="sm"
+        <Controller
+          control={form.control}
+          name="archetype"
+          render={({ field }) => (
+            <CustomSelect
+              label="Archetype"
+              value={field.value}
+              onChange={(v) => field.onChange(v as FacilityArchetype)}
+              options={ARCHETYPE_OPTIONS}
+              size="sm"
+            />
+          )}
         />
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="fac-category">
@@ -293,21 +329,21 @@ function FacilityEditor({
           </label>
           <input
             id="fac-category"
-            className={smallInput}
-            value={s.category}
+            className={`${smallInput} ${invalidClass(form, "category")}`}
             maxLength={80}
             placeholder="Buildings, Furniture, Equipment…"
-            onChange={(e) => set({ category: e.target.value })}
+            {...register("category")}
+            {...fieldA11y(form, "category")}
           />
+          <FieldError form={form} name="category" />
         </div>
-        {error && <p className="text-xs font-medium text-rose-600">{error}</p>}
         <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
           <button type="button" className={secondaryButton} onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className={primaryButton} disabled={pending}>
-            {pending ? "Saving…" : "Save facility"}
-          </button>
+          <SubmitButton form={form} pending={pending} pendingLabel="Saving…" className={primaryButton}>
+            Save facility
+          </SubmitButton>
         </div>
       </form>
     </ModalShell>

@@ -273,7 +273,12 @@ describe('Phase 16: KPI functions', () => {
     );
 
     assert.equal(run('lessons_documented', facts()), null);
-    assert.deepEqual(run('lessons_documented', facts({ constructionPhase: 'COMPLETED_CLOSED', publishedLessonCount: 2 })), { numerator: 1, denominator: 1 });
+    // R7: lessons are documented in the closeout report; published lessons alone do not count.
+    assert.deepEqual(run('lessons_documented', facts({ constructionPhase: 'COMPLETED_CLOSED', publishedLessonCount: 2 })), { numerator: 0, denominator: 1 });
+    assert.deepEqual(
+      run('lessons_documented', facts({ constructionPhase: 'COMPLETED_CLOSED', documentTypeCodes: new Set(['CLOSEOUT_REPORT']) })),
+      { numerator: 1, denominator: 1 }
+    );
 
     assert.equal(run('audited_post_closure', facts({ constructionPhase: 'COMPLETED_CLOSED' })), null); // no audit item
     assert.deepEqual(run('audited_post_closure', facts({ constructionPhase: 'COMPLETED_CLOSED' }, closure)), { numerator: 0, denominator: 1 });

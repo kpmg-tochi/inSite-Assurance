@@ -1,13 +1,17 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { z } from "zod";
+import { Controller } from "react-hook-form";
 import { Plus } from "lucide-react";
 import {
   DOCUMENT_MIME_TYPES,
   DOCUMENT_TYPE_CODE_REGEX,
+  SaveDocumentTypeRequestSchema,
   SYSTEM_PERMISSIONS_CATALOG,
   type DocumentTypeDto,
   type SaveDocumentTypeRequestInput,
 } from "@insite/shared";
 import { useAuth } from "../../lib/auth-context";
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import { useDocumentTypesQuery } from "../../queries/contracts/useContractQueries";
 import { useSaveDocumentTypeMutation } from "../../mutations/contracts/useContractMutations";
 import { StandardTable, TableActionButton, TableBadge, type TableColumnDef } from "../table";
@@ -197,6 +201,28 @@ export function DocumentTypesCard() {
   );
 }
 
+/** The editor's inputs; the request built from them is checked against SaveDocumentTypeRequestSchema. */
+const DocumentTypeFormSchema = z
+  .object({
+    id: z.string().nullable(),
+    code: z
+      .string()
+      .trim()
+      .refine((v) => DOCUMENT_TYPE_CODE_REGEX.test(v.toUpperCase()), "Code: 2 to 40 capital letters, digits or underscores, e.g. SITE_PLAN."),
+    name: z.string().trim().min(2, "Enter a name (at least 2 characters).").max(120, "Name is too long (at most 120 characters)."),
+    description: z.string().trim().max(500, "Description is too long (at most 500 characters)."),
+    visibleToContractors: z.boolean(),
+    requiresSignOff: z.boolean(),
+    signOffPermissionKey: z.string(),
+    allowedMimeTypes: z.array(z.string()),
+  })
+  .superRefine((v, ctx) => {
+    const contract = SaveDocumentTypeRequestSchema.safeParse(toBody(v));
+    if (!contract.success) {
+      for (const issue of contract.error.issues) ctx.addIssue({ code: z.ZodIssueCode.custom, path: issue.path, message: issue.message });
+    }
+  });
+
 function DocumentTypeEditor({
   initial,
   pending,
@@ -208,21 +234,14 @@ function DocumentTypeEditor({
   onClose: () => void;
   onSave: (s: EditorState) => void;
 }) {
-  const [s, setS] = useState(initial);
-  const [error, setError] = useState<string | null>(null);
-  const set = (patch: Partial<EditorState>) => setS((x) => ({ ...x, ...patch }));
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!DOCUMENT_TYPE_CODE_REGEX.test(s.code.trim().toUpperCase())) return setError("Code: 2 to 40 capital letters, digits or underscores, e.g. SITE_PLAN.");
-    if (s.name.trim().length < 2) return setError("Enter a name.");
-    setError(null);
-    onSave(s);
-  };
+  const form = useZodForm(DocumentTypeFormSchema, { defaultValues: initial });
+  const { register } = form;
+  const s = form.watch();
+  const submit = form.handleSubmit((values) => onSave(values));
 
   return (
-    <ModalShell title={s.id ? `Edit ${initial.name}` : "Add a document type"} onClose={onClose} maxWidth="max-w-lg">
-      <form onSubmit={submit} className="p-5 space-y-4">
+    <ModalShell title={initial.id ? `Edit ${initial.name}` : "Add a document type"} onClose={onClose} maxWidth="max-w-lg">
+      <form onSubmit={submit} noValidate className="p-5 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="dt-code">
@@ -230,38 +249,48 @@ function DocumentTypeEditor({
             </label>
             <input
               id="dt-code"
-              className={`${smallInput} font-mono uppercase`}
-              value={s.code}
+              className={`${smallInput} font-mono uppercase read-only:bg-slate-50 read-only:text-slate-500 ${invalidClass(form, "code")}`}
               maxLength={40}
-              disabled={Boolean(s.id)}
+              readOnly={Boolean(initial.id)}
+              aria-disabled={Boolean(initial.id) || undefined}
               placeholder="SITE_PLAN"
-              onChange={(e) => set({ code: e.target.value.toUpperCase() })}
+              {...register("code", { setValueAs: (v: string) => v.toUpperCase() })}
+              {...fieldA11y(form, "code")}
             />
-            {s.id && <p className="mt-1 text-[11px] text-slate-500">Codes do not change: project types refer to them.</p>}
+            <FieldError form={form} name="code" />
+            {initial.id && <p className="mt-1 text-[11px] text-slate-500">Codes do not change: project types refer to them.</p>}
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="dt-name">
               Name
             </label>
-            <input id="dt-name" className={smallInput} value={s.name} maxLength={120} onChange={(e) => set({ name: e.target.value })} />
+            <input id="dt-name" className={`${smallInput} ${invalidClass(form, "name")}`} maxLength={120} {...register("name")} {...fieldA11y(form, "name")} />
+            <FieldError form={form} name="name" />
           </div>
         </div>
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1" htmlFor="dt-desc">
             Description (optional)
           </label>
-          <input id="dt-desc" className={smallInput} value={s.description} maxLength={500} onChange={(e) => set({ description: e.target.value })} />
+          <input
+            id="dt-desc"
+            className={`${smallInput} ${invalidClass(form, "description")}`}
+            maxLength={500}
+            {...register("description")}
+            {...fieldA11y(form, "description")}
+          />
+          <FieldError form={form} name="description" />
         </div>
         <div className="space-y-2">
           <label className="flex items-start gap-2 text-xs text-slate-700">
-            <input type="checkbox" className="mt-0.5" checked={s.visibleToContractors} onChange={(e) => set({ visibleToContractors: e.target.checked })} />
+            <input type="checkbox" className="mt-0.5" {...register("visibleToContractors")} />
             <span>
               <span className="font-semibold">Shared with contractors</span>
               <span className="block text-[11px] text-slate-500">Contractor users see documents of this type tied to their organisation.</span>
             </span>
           </label>
           <label className="flex items-start gap-2 text-xs text-slate-700">
-            <input type="checkbox" className="mt-0.5" checked={s.requiresSignOff} onChange={(e) => set({ requiresSignOff: e.target.checked })} />
+            <input type="checkbox" className="mt-0.5" {...register("requiresSignOff")} />
             <span>
               <span className="font-semibold">Needs a sign-off</span>
               <span className="block text-[11px] text-slate-500">A document of this type is not complete evidence until someone signs off its current version.</span>
@@ -269,13 +298,12 @@ function DocumentTypeEditor({
           </label>
         </div>
         {s.requiresSignOff && (
-          <CustomSelect
-            label="Who may sign off"
-            value={s.signOffPermissionKey}
-            onChange={(v) => set({ signOffPermissionKey: v })}
-            options={PERMISSION_OPTIONS}
-            searchable
-            size="sm"
+          <Controller
+            control={form.control}
+            name="signOffPermissionKey"
+            render={({ field }) => (
+              <CustomSelect label="Who may sign off" value={field.value} onChange={field.onChange} options={PERMISSION_OPTIONS} searchable size="sm" />
+            )}
           />
         )}
         <fieldset>
@@ -288,7 +316,11 @@ function DocumentTypeEditor({
                   type="checkbox"
                   checked={s.allowedMimeTypes.includes(m)}
                   onChange={(e) =>
-                    set({ allowedMimeTypes: e.target.checked ? [...s.allowedMimeTypes, m] : s.allowedMimeTypes.filter((x) => x !== m) })
+                    form.setValue(
+                      "allowedMimeTypes",
+                      e.target.checked ? [...s.allowedMimeTypes, m] : s.allowedMimeTypes.filter((x) => x !== m),
+                      { shouldDirty: true, shouldValidate: true }
+                    )
                   }
                 />
                 {MIME_LABEL[m]}
@@ -296,14 +328,13 @@ function DocumentTypeEditor({
             ))}
           </div>
         </fieldset>
-        {error && <p className="text-xs font-medium text-rose-600">{error}</p>}
         <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
           <button type="button" className={secondaryButton} onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className={primaryButton} disabled={pending}>
-            {pending ? "Saving…" : "Save type"}
-          </button>
+          <SubmitButton form={form} pending={pending} pendingLabel="Saving…" className={primaryButton}>
+            Save type
+          </SubmitButton>
         </div>
       </form>
     </ModalShell>

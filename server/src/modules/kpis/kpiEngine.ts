@@ -237,9 +237,10 @@ export const KPI_FUNCTIONS: Record<KpiKey, KpiFn> = {
     if (f.constructionPhase !== 'RETENTION_PERIOD' && !CLOSED(f)) return null;
     return one(codes.every((c) => f.documentTypeCodes.has(c)));
   },
+  // R7 (owner decision 2026-11-25): lessons are documented in the closeout report, not the lessons library.
   lessons_documented: (f) => {
     if (!CLOSED(f)) return null;
-    return one(f.publishedLessonCount > 0);
+    return one(f.documentTypeCodes.has('CLOSEOUT_REPORT'));
   },
   audited_post_closure: (f) => {
     const closure = f.typeConfig?.closure;

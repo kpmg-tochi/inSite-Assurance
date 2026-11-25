@@ -20,9 +20,11 @@ import {
  * Redesign R2c: the needs-assessment workbook as pure functions over plain data, so the Needs
  * Assessment module can build and read the same workbook without a project.
  * - buildScopeWorkbook: Instructions (version stamp), Project, Facility units, BoQ, Sprints and a
- *   hidden, protected Lists sheet that feeds the dropdowns.
- * - parseScopeWorkbook: finds columns by header name, checks the stamp and re-validates every row
- *   (dropdowns can be bypassed by pasting). Amounts are always recomputed.
+ *   hidden, protected Lists sheet that feeds the dropdowns. Users see it as the "Needs assessment
+ *   template" (blank) or the project's "Needs assessment"; UBEC styling (title bands, brand headers,
+ *   banded rows, protected Amount formula).
+ * - parseScopeWorkbook: finds the header row and the columns by header name, checks the stamp and
+ *   re-validates every row (dropdowns can be bypassed by pasting). Amounts are always recomputed.
  */
 
 const S = SCOPE_WORKBOOK_SHEETS;
@@ -67,8 +69,10 @@ export interface WorkbookLine {
 
 export interface WorkbookBuildData {
   generatedAt: Date;
-  /** e.g. "PRG-101 · Kaduna Model School"; null for a blank needs-assessment workbook. */
+  /** e.g. "PRG-101 · Kaduna Model School"; null for the blank needs-assessment template. */
   title: string | null;
+  /** Short workspace name for the title bands (e.g. "UBEC"); omitted when the name is long. */
+  brandName?: string | null;
   project: Partial<Record<ScopeWorkbookProjectFieldKey, string | number | null>>;
   /** Active facilities (the dropdown). */
   facilities: Array<Pick<WorkbookFacility, 'code' | 'name'>>;
@@ -83,16 +87,149 @@ export interface WorkbookBuildData {
 // Generator
 // ---------------------------------------------------------------------------
 
-const HEADER_FILL: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8E4FF' } };
+/**
+ * Layout of the data sheets (Project, Facility units, BoQ, Sprints): row 1 is the title band, row 2
+ * a one-line hint, row 3 the column headers, data from row 4. Files made before the title band had
+ * their headers in row 1; the parser finds the header row by name, so both layouts import.
+ */
+export const SCOPE_WORKBOOK_HEADER_ROW = 3;
+export const SCOPE_WORKBOOK_FIRST_DATA_ROW = SCOPE_WORKBOOK_HEADER_ROW + 1;
+const HR = SCOPE_WORKBOOK_HEADER_ROW;
+const FR = SCOPE_WORKBOOK_FIRST_DATA_ROW;
 
+/** UBEC palette (web/src/index.css): dark green surface, deep green primary, amber accent. */
+const COLOR = {
+  navy: 'FF122F2A',
+  primary: 'FF00715D',
+  amber: 'FFFFBF00',
+  ink: 'FF0C201D',
+  white: 'FFFFFFFF',
+  hint: 'FFDCEFE8',
+  band: 'FFEEF6F3',
+  label: 'FFF1F7F5',
+  border: 'FFC5D9D2',
+  headerBorder: 'FF005A4A',
+  calc: 'FFE6E9E8',
+  calcText: 'FF4B5B57',
+} as const;
+
+const solid = (argb: string): ExcelJS.Fill => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+const line = (argb: string): Partial<ExcelJS.Border> => ({ style: 'thin', color: { argb } });
+const BOX: Partial<ExcelJS.Borders> = { top: line(COLOR.border), left: line(COLOR.border), bottom: line(COLOR.border), right: line(COLOR.border) };
+const HEADER_BOX: Partial<ExcelJS.Borders> = {
+  top: line(COLOR.headerBorder),
+  left: line(COLOR.headerBorder),
+  bottom: line(COLOR.headerBorder),
+  right: line(COLOR.headerBorder),
+};
+const FONT = 'Calibri';
+const MONEY = '"₦"#,##0.00';
+const QTY = '#,##0.00';
+const DATE = 'd mmm yyyy';
+
+/** Row 1: dark green title band with an amber rule; row 2: the sheet's hint on a light green band. */
+function titleBand(ws: ExcelJS.Worksheet, width: number, title: string, hint: string) {
+  const t = ws.getCell(1, 1);
+  t.value = title;
+  t.font = { name: FONT, bold: true, size: 14, color: { argb: COLOR.white } };
+  t.fill = solid(COLOR.navy);
+  t.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+  if (width > 1) ws.mergeCells(1, 1, 1, width);
+  for (let c = 1; c <= width; c++) ws.getCell(1, c).border = { bottom: { style: 'medium', color: { argb: COLOR.amber } } };
+  ws.getRow(1).height = 32;
+
+  const h = ws.getCell(2, 1);
+  h.value = hint;
+  h.font = { name: FONT, italic: true, size: 10, color: { argb: COLOR.ink } };
+  h.fill = solid(COLOR.hint);
+  h.alignment = { vertical: 'middle', horizontal: 'left', indent: 1, wrapText: true };
+  if (width > 1) ws.mergeCells(2, 1, 2, width);
+  ws.getRow(2).height = 30;
+}
+
+/** Row 3: white bold headers on the brand green; title, hint and headers stay in view. */
 function headerRow(ws: ExcelJS.Worksheet, headers: readonly string[], widths: number[]) {
-  ws.columns = headers.map((h, i) => ({ header: h, key: `c${i}`, width: widths[i] ?? 16 }));
-  const row = ws.getRow(1);
-  row.font = { bold: true };
-  row.eachCell((c) => {
-    c.fill = HEADER_FILL;
+  headers.forEach((h, i) => {
+    ws.getColumn(i + 1).width = widths[i] ?? 16;
+    const c = ws.getCell(HR, i + 1);
+    c.value = h;
+    c.font = { name: FONT, bold: true, color: { argb: COLOR.white } };
+    c.fill = solid(COLOR.primary);
+    c.border = HEADER_BOX;
+    c.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true, indent: 1 };
+    c.protection = { locked: true };
   });
-  ws.views = [{ state: 'frozen', ySplit: 1 }];
+  ws.getRow(HR).height = 24;
+  ws.views = [{ state: 'frozen', ySplit: HR, showGridLines: false }];
+  Object.assign(ws.pageSetup, { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: `1:${HR}` });
+}
+
+interface BodyColumn {
+  numFmt?: string;
+  align?: 'left' | 'center' | 'right';
+  wrap?: boolean;
+  /** Calculated (the BoQ Amount): grey, italic, locked. */
+  calculated?: boolean;
+}
+
+/**
+ * Borders, formats and alignment on the pre-sized rows; alternating tints by conditional formatting
+ * (MOD(ROW(),2)), so the banding survives sorting and inserted rows and adds one rule, not a fill per cell.
+ */
+function tableBody(ws: ExcelJS.Worksheet, columns: BodyColumn[], lastRow: number) {
+  const alignment = (col: BodyColumn): Partial<ExcelJS.Alignment> => {
+    const horizontal = col.align ?? 'left';
+    return { horizontal, indent: horizontal === 'center' ? undefined : 1 };
+  };
+  // Headers line up with their column.
+  columns.forEach((col, i) => {
+    const h = ws.getCell(HR, i + 1);
+    h.alignment = { ...h.alignment, ...alignment(col) };
+  });
+  for (let r = FR; r <= lastRow; r++) {
+    columns.forEach((col, i) => {
+      const cell = ws.getCell(r, i + 1);
+      cell.border = BOX;
+      cell.alignment = { vertical: 'top', ...alignment(col), wrapText: col.wrap || undefined };
+      if (col.numFmt) cell.numFmt = col.numFmt;
+      if (col.calculated) {
+        cell.fill = solid(COLOR.calc);
+        cell.font = { name: FONT, italic: true, color: { argb: COLOR.calcText } };
+        cell.protection = { locked: true };
+      } else {
+        cell.protection = { locked: false };
+      }
+    });
+  }
+  // Tint the input columns only: the calculated column keeps its grey.
+  let first = 0;
+  while (first < columns.length) {
+    if (columns[first].calculated) {
+      first++;
+      continue;
+    }
+    let last = first;
+    while (last + 1 < columns.length && !columns[last + 1].calculated) last++;
+    ws.addConditionalFormatting({
+      ref: `${colLetter(first + 1)}${FR}:${colLetter(last + 1)}${lastRow}`,
+      rules: [
+        {
+          type: 'expression',
+          priority: 1,
+          formulae: ['MOD(ROW(),2)=1'],
+          style: { fill: { type: 'pattern', pattern: 'solid', bgColor: { argb: COLOR.band } } },
+        },
+      ],
+    });
+    first = last + 1;
+  }
+}
+
+const colLetter = (n: number) => String.fromCharCode(64 + n);
+
+/** Cell by cell: assigning row.values would drop the cells' styles. */
+function setRow(ws: ExcelJS.Worksheet, r: number, values: ExcelJS.CellValue[]) {
+  values.forEach((v, i) => (ws.getCell(r, i + 1).value = v));
 }
 
 function listValidation(formula: string, error: string): ExcelJS.DataValidation {
@@ -109,47 +246,105 @@ const DATE_VALIDATION: ExcelJS.DataValidation = {
   allowBlank: true,
   formulae: [new Date(Date.UTC(2000, 0, 1))],
   showErrorMessage: true,
-  error: 'Enter a date (YYYY-MM-DD).',
+  error: 'Enter a date, e.g. 2027-01-04.',
 };
 
 const isoToDate = (iso: string) => new Date(`${iso}T00:00:00Z`);
+/** Lists sheet ranges keep their header in row 1. */
 const colRange = (col: string, n: number) => `$${col}$2:$${col}$${Math.max(2, n + 1)}`;
+
+/** Rough height for a wrapped text cell (not every spreadsheet app grows rows on open). */
+const wrappedHeight = (textLength: number, width: number) => Math.max(18, Math.ceil(textLength / (width * 1.1)) * 15 + 4);
 
 export async function buildScopeWorkbook(data: WorkbookBuildData): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'InSite Assurance';
+  wb.creator = data.brandName ?? 'InSite Assurance';
   wb.created = data.generatedAt;
+  wb.title = data.title ? `Needs assessment · ${data.title}` : 'Needs assessment template';
+
+  const brand = data.brandName ? `${data.brandName} · ` : '';
+  const docName = data.title ? 'Needs assessment' : 'Needs assessment template';
+  const subject = data.title ?? 'Blank template';
+  const sheetTitle = (sheet: string) => `${brand}${docName} · ${sheet}`;
+  const hint = (text: string) => `${subject}  |  ${text}`;
 
   // Instructions
-  const ins = wb.addWorksheet(S.instructions);
-  ins.columns = [{ width: 26 }, { width: 100 }];
-  ins.getCell('A1').value = 'Needs-assessment workbook';
-  ins.getCell('A1').font = { bold: true, size: 14 };
+  const ins = wb.addWorksheet(S.instructions, { properties: { tabColor: { argb: COLOR.navy } } });
+  ins.columns = [{ width: 24 }, { width: 100 }];
+  ins.views = [{ showGridLines: false }];
+  titleBand(ins, 2, `${brand}${docName}`, data.title ?? 'Blank template: one file per project. Fill it in and import it on the project.');
   const meta: Array<[string, string]> = [
     ['Version', SCOPE_WORKBOOK_VERSION],
     ['Generated', data.generatedAt.toISOString().slice(0, 10)],
-    ['Project', data.title ?? '(blank workbook)'],
+    ['Project', data.title ?? '(blank template)'],
   ];
   meta.forEach(([k, v], i) => {
-    ins.getCell(`A${i + 3}`).value = k;
-    ins.getCell(`A${i + 3}`).font = { bold: true };
-    ins.getCell(`B${i + 3}`).value = v;
+    const r = i + 4;
+    const key = ins.getCell(`A${r}`);
+    key.value = k;
+    key.font = { name: FONT, bold: true, color: { argb: COLOR.ink } };
+    key.fill = solid(COLOR.label);
+    key.border = BOX;
+    key.alignment = { vertical: 'middle', indent: 1 };
+    const val = ins.getCell(`B${r}`);
+    val.value = v;
+    val.border = BOX;
+    val.alignment = { vertical: 'middle', indent: 1 };
   });
+
+  const section = (r: number, label: string) => {
+    const c = ins.getCell(`A${r}`);
+    c.value = label;
+    c.font = { name: FONT, bold: true, color: { argb: COLOR.white } };
+    c.fill = solid(COLOR.primary);
+    c.alignment = { vertical: 'middle', indent: 1 };
+    ins.mergeCells(r, 1, r, 2);
+    ins.getRow(r).height = 22;
+  };
   const steps = [
     'Project: fill in the project details. On a draft, empty project fields take these values; existing values are not overwritten.',
     'Sprints: one row per sprint, numbered 1, 2, 3… in date order. Sprints may differ in length and leave gaps, but may not overlap.',
     'Facility units: one row per physical facility on site (e.g. "Ground floor male toilet"). Pick the facility from the list. Give each unit its own Unit ID (U01, U02…). Supply items (furniture, equipment) need a quantity.',
-    'BoQ: one row per bill line. Pick the Unit ID of the facility unit it belongs to and the unit of measure. Amount is quantity × rate and is recomputed on upload.',
-    'Do not rename the sheets or the column headers. Columns may be reordered.',
-    'Upload the file on the project\'s "Scope & sprints" step. You will see a preview with any errors before anything is saved.',
-    'Drawings and other attachments go to the project documents, not this workbook.',
+    'BoQ: one row per bill line. Pick the Unit ID of the facility unit it belongs to and the unit of measure. Rates and amounts are in naira. Amount is quantity × rate and is recomputed on upload.',
+    'Do not rename the sheets or the column headers, and keep the title rows above the headers.',
+    'Import the file on the project\'s "Scope & sprints" step (Import needs assessment). You will see a preview with any errors before anything is saved.',
+    'Drawings and other attachments go to the project documents, not this file.',
   ];
-  ins.getCell('A8').value = 'How to fill it in';
-  ins.getCell('A8').font = { bold: true };
+  section(8, 'How to fill it in');
   steps.forEach((t, i) => {
-    ins.getCell(`A${i + 9}`).value = `${i + 1}.`;
-    ins.getCell(`B${i + 9}`).value = t;
-    ins.getCell(`B${i + 9}`).alignment = { wrapText: true, vertical: 'top' };
+    const r = i + 9;
+    const n = ins.getCell(`A${r}`);
+    n.value = `${i + 1}.`;
+    n.alignment = { vertical: 'top', horizontal: 'center' };
+    const b = ins.getCell(`B${r}`);
+    b.value = t;
+    b.alignment = { wrapText: true, vertical: 'top', indent: 1 };
+    for (const c of [n, b]) {
+      c.border = BOX;
+      if (i % 2 === 1) c.fill = solid(COLOR.band);
+    }
+    ins.getRow(r).height = wrappedHeight(t.length, 100);
+  });
+  const keyRow = 9 + steps.length + 1;
+  section(keyRow, 'Colour key');
+  const key: Array<[string, ExcelJS.Fill | null, string]> = [
+    ['Input', null, 'White and light green rows: enter data here. Cells with a list arrow take a value from the list.'],
+    ['Calculated', solid(COLOR.calc), 'Grey cells are calculated (the BoQ Amount) and protected. The sheet has no password (Review → Unprotect Sheet).'],
+    ['Headers', solid(COLOR.primary), 'Green header row: the importer reads the columns by these names.'],
+  ];
+  key.forEach(([label, fill, t], i) => {
+    const r = keyRow + 1 + i;
+    const a = ins.getCell(`A${r}`);
+    a.value = label;
+    a.border = BOX;
+    a.alignment = { vertical: 'middle', horizontal: 'center' };
+    if (fill) a.fill = fill;
+    a.font = label === 'Headers' ? { name: FONT, bold: true, color: { argb: COLOR.white } } : label === 'Calculated' ? { name: FONT, italic: true, color: { argb: COLOR.calcText } } : { name: FONT };
+    const b = ins.getCell(`B${r}`);
+    b.value = t;
+    b.border = BOX;
+    b.alignment = { wrapText: true, vertical: 'middle', indent: 1 };
+    ins.getRow(r).height = wrappedHeight(t.length, 100);
   });
 
   // Lists (hidden, protected): the dropdown sources.
@@ -165,73 +360,110 @@ export async function buildScopeWorkbook(data: WorkbookBuildData): Promise<Buffe
   const modelList = `${S.lists}!${colRange('D', data.deliveryModels.length)}`;
 
   // Project (label / value)
-  const proj = wb.addWorksheet(S.project);
-  headerRow(proj, ['Field', 'Value'], [28, 60]);
+  const proj = wb.addWorksheet(S.project, { properties: { tabColor: { argb: COLOR.primary } } });
+  titleBand(proj, 2, sheetTitle(S.project), hint('Empty project fields on a draft take these values.'));
+  headerRow(proj, ['Field', 'Value'], [30, 70]);
   SCOPE_WORKBOOK_PROJECT_FIELDS.forEach((f, i) => {
-    const r = i + 2;
-    proj.getCell(`A${r}`).value = f.label;
-    proj.getCell(`A${r}`).font = { bold: true };
-    const v = data.project[f.key];
-    if (v !== null && v !== undefined && v !== '') proj.getCell(`B${r}`).value = v;
+    const r = i + FR;
+    const label = proj.getCell(`A${r}`);
+    label.value = f.label;
+    label.font = { name: FONT, bold: true, color: { argb: COLOR.ink } };
+    label.fill = solid(COLOR.label);
+    label.border = BOX;
+    label.alignment = { vertical: 'top', indent: 1 };
     const cell = proj.getCell(`B${r}`);
+    const v = data.project[f.key];
+    if (v !== null && v !== undefined && v !== '') cell.value = v;
+    cell.border = BOX;
+    cell.alignment = { vertical: 'top', horizontal: 'left', indent: 1 };
     if (f.key === 'region' && data.regions.length) cell.dataValidation = listValidation(regionList, 'Choose a region from the list.');
     if (f.key === 'deliveryModel' && data.deliveryModels.length) cell.dataValidation = listValidation(modelList, 'Choose a delivery model from the list.');
-    if (f.key === 'budget') cell.dataValidation = decimalValidation(0, 'Enter the budget as a number.');
+    if (f.key === 'budget') {
+      cell.dataValidation = decimalValidation(0, 'Enter the budget as a number.');
+      cell.numFmt = MONEY;
+    }
     if (f.key === 'latitude' || f.key === 'longitude') {
       cell.dataValidation = { type: 'decimal', operator: 'between', allowBlank: true, formulae: [-180, 180], showErrorMessage: true, error: 'Enter decimal degrees.' };
+      cell.numFmt = '0.000000';
     }
-    if (f.key === 'strategicJustification' || f.key === 'assumptions') cell.alignment = { wrapText: true, vertical: 'top' };
+    if (f.key === 'strategicJustification' || f.key === 'assumptions') {
+      cell.alignment = { wrapText: true, vertical: 'top', horizontal: 'left', indent: 1 };
+      proj.getRow(r).height = Math.max(60, wrappedHeight(String(v ?? '').length, 70));
+    }
   });
 
   // Facility units
-  const units = wb.addWorksheet(S.units);
-  headerRow(units, SCOPE_WORKBOOK_COLUMNS.units, [10, 30, 40, 12, 14, 12, 12]);
+  const unitsLast = ROWS.units + HR;
+  const units = wb.addWorksheet(S.units, { properties: { tabColor: { argb: COLOR.primary } } });
+  titleBand(units, SCOPE_WORKBOOK_COLUMNS.units.length, sheetTitle(S.units), hint('One row per physical facility on site. Supply items need a quantity.'));
+  headerRow(units, SCOPE_WORKBOOK_COLUMNS.units, [12, 32, 44, 14, 16, 14, 14]);
+  tableBody(units, [{ align: 'center' }, {}, { wrap: true }, { numFmt: QTY, align: 'right' }, { align: 'center' }, { align: 'center' }, { align: 'center' }], unitsLast);
   data.units.forEach((u, i) => {
-    units.getRow(i + 2).values = [u.code, u.facilityName, u.label, u.plannedQuantity ?? null, u.quantityUnit ?? null, u.startSprint ?? null, u.endSprint ?? null];
+    setRow(units, i + FR, [u.code, u.facilityName, u.label, u.plannedQuantity ?? null, u.quantityUnit ?? null, u.startSprint ?? null, u.endSprint ?? null]);
   });
-  const sprintList = `${S.sprints}!$A$2:$A$${ROWS.sprints + 1}`;
-  for (let r = 2; r <= ROWS.units + 1; r++) {
+  const sprintsLast = ROWS.sprints + HR;
+  const sprintList = `${S.sprints}!$A$${FR}:$A$${sprintsLast}`;
+  for (let r = FR; r <= unitsLast; r++) {
     units.getCell(`B${r}`).dataValidation = listValidation(facilityList, 'Choose a facility from the list.');
     units.getCell(`D${r}`).dataValidation = decimalValidation(0, 'Enter the quantity as a number.');
     units.getCell(`E${r}`).dataValidation = listValidation(uomList, 'Choose a unit of measure from the list.');
     units.getCell(`F${r}`).dataValidation = listValidation(sprintList, 'Choose a sprint number from the Sprints sheet.');
     units.getCell(`G${r}`).dataValidation = listValidation(sprintList, 'Choose a sprint number from the Sprints sheet.');
   }
+  units.autoFilter = { from: { row: HR, column: 1 }, to: { row: HR, column: SCOPE_WORKBOOK_COLUMNS.units.length } };
 
-  // BoQ
-  const boq = wb.addWorksheet(S.boq);
-  headerRow(boq, SCOPE_WORKBOOK_COLUMNS.boq, [10, 10, 60, 16, 12, 16, 18]);
+  // BoQ: Amount is a protected formula; input columns (also below the pre-sized rows) stay editable.
+  const boqLast = Math.max(ROWS.boq, data.lines.length) + HR;
+  const boq = wb.addWorksheet(S.boq, { properties: { tabColor: { argb: COLOR.primary } } });
+  for (let c = 1; c <= 6; c++) boq.getColumn(c).protection = { locked: false };
+  titleBand(boq, SCOPE_WORKBOOK_COLUMNS.boq.length, sheetTitle(S.boq), hint('One row per bill line. Rates and amounts in naira; Amount = Quantity × Rate (grey, calculated).'));
+  headerRow(boq, SCOPE_WORKBOOK_COLUMNS.boq, [11, 11, 60, 16, 14, 18, 20]);
+  for (const r of [1, 2]) for (let c = 1; c <= 7; c++) boq.getCell(r, c).protection = { locked: true };
+  tableBody(
+    boq,
+    [{ align: 'left' }, { align: 'center' }, { wrap: true }, { align: 'center' }, { numFmt: QTY, align: 'right' }, { numFmt: MONEY, align: 'right' }, { numFmt: MONEY, align: 'right', calculated: true }],
+    boqLast
+  );
   data.lines.forEach((l, i) => {
-    boq.getRow(i + 2).values = [l.wbsCode, l.unitCode, l.description, l.unit, l.totalQuantity, l.rateNgn];
+    setRow(boq, i + FR, [l.wbsCode, l.unitCode, l.description, l.unit, l.totalQuantity, l.rateNgn]);
   });
-  const unitIdList = `'${S.units}'!$A$2:$A$${ROWS.units + 1}`;
-  for (let r = 2; r <= Math.max(ROWS.boq, data.lines.length) + 1; r++) {
+  const unitIdList = `'${S.units}'!$A$${FR}:$A$${unitsLast}`;
+  for (let r = FR; r <= boqLast; r++) {
     boq.getCell(`B${r}`).dataValidation = listValidation(unitIdList, 'Choose a Unit ID from the Facility units sheet.');
     boq.getCell(`D${r}`).dataValidation = listValidation(uomList, 'Choose a unit of measure from the list.');
     boq.getCell(`E${r}`).dataValidation = decimalValidation(0, 'Enter the quantity as a number.');
     boq.getCell(`F${r}`).dataValidation = decimalValidation(0, 'Enter the rate as a number.');
-    const line = data.lines[r - 2];
+    const ln = data.lines[r - FR];
     boq.getCell(`G${r}`).value = {
       formula: `IF(OR(E${r}="",F${r}=""),"",E${r}*F${r})`,
-      result: line ? lineAmount(line.totalQuantity, line.rateNgn) : '',
+      result: ln ? lineAmount(ln.totalQuantity, ln.rateNgn) : '',
     } as ExcelJS.CellFormulaValue;
-    boq.getCell(`G${r}`).numFmt = '#,##0.00';
-    boq.getCell(`F${r}`).numFmt = '#,##0.00';
   }
+  boq.autoFilter = { from: { row: HR, column: 1 }, to: { row: HR, column: SCOPE_WORKBOOK_COLUMNS.boq.length } };
+  // No password: it guards the formulas against slips; rows can still be added, deleted, sorted and filtered.
+  await boq.protect('', {
+    selectLockedCells: true,
+    selectUnlockedCells: true,
+    formatCells: true,
+    formatColumns: true,
+    formatRows: true,
+    insertRows: true,
+    deleteRows: true,
+    sort: true,
+    autoFilter: true,
+  });
 
   // Sprints
-  const sprints = wb.addWorksheet(S.sprints);
-  headerRow(sprints, SCOPE_WORKBOOK_COLUMNS.sprints, [8, 30, 14, 14, 70]);
+  const sprints = wb.addWorksheet(S.sprints, { properties: { tabColor: { argb: COLOR.primary } } });
+  titleBand(sprints, SCOPE_WORKBOOK_COLUMNS.sprints.length, sheetTitle(S.sprints), hint('One row per sprint, numbered 1, 2, 3… in date order; sprints may not overlap.'));
+  headerRow(sprints, SCOPE_WORKBOOK_COLUMNS.sprints, [8, 32, 16, 16, 70]);
+  tableBody(sprints, [{ align: 'center' }, {}, { numFmt: DATE, align: 'center' }, { numFmt: DATE, align: 'center' }, { wrap: true }], sprintsLast);
   data.sprints.forEach((s, i) => {
-    sprints.getRow(i + 2).values = [s.number, s.name, isoToDate(s.startDate), isoToDate(s.endDate), s.deliverables];
+    setRow(sprints, i + FR, [s.number, s.name, isoToDate(s.startDate), isoToDate(s.endDate), s.deliverables]);
   });
-  for (let r = 2; r <= ROWS.sprints + 1; r++) {
+  for (let r = FR; r <= sprintsLast; r++) {
     sprints.getCell(`A${r}`).dataValidation = { type: 'whole', operator: 'greaterThanOrEqual', allowBlank: true, formulae: [1], showErrorMessage: true, error: 'Sprint numbers are 1, 2, 3…' };
-    for (const c of ['C', 'D']) {
-      sprints.getCell(`${c}${r}`).dataValidation = DATE_VALIDATION;
-      sprints.getCell(`${c}${r}`).numFmt = 'yyyy-mm-dd';
-    }
-    sprints.getCell(`E${r}`).alignment = { wrapText: true, vertical: 'top' };
+    for (const c of ['C', 'D']) sprints.getCell(`${c}${r}`).dataValidation = DATE_VALIDATION;
   }
 
   // Lists last in the tab order, hidden and protected (no password: it guards against slips, not people).
@@ -346,6 +578,35 @@ interface Table {
   rows: Array<{ row: number; get: (header: string) => unknown }>;
 }
 
+/** Rows searched for the header row: the title band and hint sit above it (row 3); older files have it in row 1. */
+const HEADER_SEARCH_ROWS = 10;
+
+function headersOf(ws: ExcelJS.Worksheet, r: number): Map<string, number> {
+  const columns = new Map<string, number>();
+  ws.getRow(r).eachCell({ includeEmpty: false }, (cell, col) => {
+    // A merged title band repeats its text in every cell: only the master cell counts.
+    if (cell.isMerged && cell.master !== cell) return;
+    const h = normHeader(text(cellValue(cell.value)));
+    if (h && !columns.has(h)) columns.set(h, col);
+  });
+  return columns;
+}
+
+/**
+ * The header row is the first of the top rows that holds every required header; failing that, the one
+ * holding most of them (its missing columns are reported), else row 1.
+ */
+function findHeaderRow(ws: ExcelJS.Worksheet, required: string[]): { headerRow: number; columns: Map<string, number> } {
+  let best = { headerRow: 1, columns: headersOf(ws, 1), hits: -1 };
+  for (let r = 1; r <= Math.min(HEADER_SEARCH_ROWS, Math.max(1, ws.rowCount)); r++) {
+    const columns = headersOf(ws, r);
+    const hits = required.filter((h) => columns.has(normHeader(h))).length;
+    if (hits === required.length) return { headerRow: r, columns };
+    if (hits > best.hits && hits > 0) best = { headerRow: r, columns, hits };
+  }
+  return { headerRow: best.headerRow, columns: best.columns };
+}
+
 function readTable(
   ws: ExcelJS.Worksheet,
   sheet: string,
@@ -354,18 +615,14 @@ function readTable(
   /** Computed columns (the Amount formula) that do not make a row non-blank. */
   computed: string[] = []
 ): Table | null {
-  const columns = new Map<string, number>();
-  ws.getRow(1).eachCell({ includeEmpty: false }, (cell, col) => {
-    const h = normHeader(text(cellValue(cell.value)));
-    if (h && !columns.has(h)) columns.set(h, col);
-  });
+  const { headerRow, columns } = findHeaderRow(ws, required);
   const missing = required.filter((h) => !columns.has(normHeader(h)));
   for (const h of missing) {
-    issues.push({ sheet, row: 1, column: h, code: 'WORKBOOK_COLUMN_MISSING', message: `The ${sheet} sheet has no "${h}" column.` });
+    issues.push({ sheet, row: headerRow, column: h, code: 'WORKBOOK_COLUMN_MISSING', message: `The ${sheet} sheet has no "${h}" column.` });
   }
   if (missing.length) return null;
   const rows: Table['rows'] = [];
-  for (let r = 2; r <= ws.rowCount; r++) {
+  for (let r = headerRow + 1; r <= ws.rowCount; r++) {
     const row = ws.getRow(r);
     const get = (header: string) => {
       const c = columns.get(normHeader(header));
@@ -393,7 +650,7 @@ export async function parseScopeWorkbook(buffer: Buffer, context: WorkbookParseC
     if (!(buffer.length > 2 && buffer[0] === 0x50 && buffer[1] === 0x4b)) throw new Error('not a zip');
     await wb.xlsx.load(buffer as unknown as ArrayBuffer);
   } catch {
-    issues.push({ sheet: '', row: null, column: null, code: 'WORKBOOK_UNREADABLE', message: 'This is not an .xlsx workbook. Download the workbook and fill it in.' });
+    issues.push({ sheet: '', row: null, column: null, code: 'WORKBOOK_UNREADABLE', message: 'This is not an .xlsx file. Download the needs assessment template and fill it in.' });
     return result;
   }
 
@@ -411,8 +668,8 @@ export async function parseScopeWorkbook(buffer: Buffer, context: WorkbookParseC
       column: 'Version',
       code: 'WORKBOOK_VERSION_MISMATCH',
       message: result.version
-        ? `This workbook is version "${result.version}"; this platform reads "${SCOPE_WORKBOOK_VERSION}". Download a new workbook.`
-        : 'This is not the scope workbook (no version stamp). Download the workbook and fill it in.',
+        ? `This needs assessment file is version "${result.version}"; this platform reads "${SCOPE_WORKBOOK_VERSION}". Download a new needs assessment template.`
+        : 'This is not a needs assessment file (no version stamp). Download the needs assessment template and fill it in.',
     });
     return result;
   }

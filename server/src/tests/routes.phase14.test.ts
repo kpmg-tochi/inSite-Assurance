@@ -77,9 +77,9 @@ describe('Phase 14', () => {
       // The UBEC M&E officer (me.officer@ubec.test).
       const officer = rows.find((s) => s.fullName === 'Ngozi Eze');
       assert.ok(officer, 'the seeded M&E officer is a supervisor');
-      // PRG-102, PRG-211, PRG-221, PRG-103 (liability period), PRG-104 and PRG-105 (Phase 16); closed
-      // PRG-241 and archived PRG-242 do not count.
-      assert.equal(officer.activeProjectCount, 6);
+      // PRG-102, PRG-211, PRG-221, PRG-103 (liability period), PRG-104 and PRG-105 (Phase 16), PRG-106
+      // (demo closure twin, liability period); closed PRG-241 and archived PRG-242 do not count.
+      assert.equal(officer.activeProjectCount, 7);
       assert.equal(officer.overSiteLimit, true);
       assert.equal(officer.overSpread, true);
       assert.ok(officer.spreadKm > 500);

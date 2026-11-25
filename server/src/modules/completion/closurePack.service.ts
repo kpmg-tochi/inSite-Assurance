@@ -278,7 +278,7 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
           })
         )
       : [];
-    const findings = await prisma.inspectionFinding.findMany({ where: { visitSubmissionId: s.id }, select: { description: true, severity: true, status: true } });
+    const findings = await prisma.finding.findMany({ where: { visitSubmissionId: s.id }, select: { description: true, severity: true, status: true } });
     const label = VISIT_KIND_META[s.visit.visitKind as VisitKind].label;
     add(
       `visits/${s.visit.plannedDate}-${s.visit.visitKind.toLowerCase()}-${s.visit.id.slice(0, 8)}.pdf`,
@@ -329,7 +329,7 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
   const [milestones, defects, findingsOpen, ratings, coc] = await Promise.all([
     prisma.projectContractMilestone.findMany({ where: { projectId }, orderBy: [{ sortOrder: 'asc' }] }),
     prisma.retentionDefectTicket.groupBy({ by: ['status'], where: { projectId }, _count: true }),
-    prisma.inspectionFinding.count({ where: { projectId, status: { not: 'RESOLVED' } } }).catch(() => 0),
+    prisma.finding.count({ where: { projectId, status: { not: 'RESOLVED' } } }).catch(() => 0),
     prisma.contractorPerformanceRating.findMany({ where: { projectId }, select: { overallScore: true } }),
     prisma.completionCertificate.findFirst({ where: { projectId, status: 'ISSUED' } }),
   ]);

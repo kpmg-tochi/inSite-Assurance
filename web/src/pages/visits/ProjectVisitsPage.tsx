@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from "react";
+import { z } from "zod";
 import { useSearchParams } from "react-router-dom";
 import { CalendarPlus, ClipboardList, Send, Sparkles } from "lucide-react";
 import { VISIT_KIND_META, VISIT_STATUS_LABELS, VisitKindEnum, VisitStatusEnum, type InspectionFindingDto, type VisitDto } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth } from "../../lib/auth-context";
+import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import Loader from "../../components/Loader";
 import { CustomSelect } from "../../components/common";
 import { TAB_LIST_CLASS, tabItemClass } from "../../components/common/Tabs";
@@ -289,11 +291,17 @@ function PlanTab({ projectId, selectedId, onSelect }: { projectId: string; selec
 // Findings
 // ---------------------------------------------------------------------------
 
+/** One note for both actions: what was done (resolve) or why it is dismissed. Both need 5 characters. */
+const FindingNotesFormSchema = z.object({
+  notes: z.string().trim().min(5, "Say what was done, or why it is dismissed (at least 5 characters)").max(1000, "Too long (at most 1000 characters)"),
+});
+
 function FindingCard({ projectId, finding: f }: { projectId: string; finding: InspectionFindingDto }) {
   const resolve = useResolveProjectFindingMutation(projectId);
   const dismiss = useDismissProjectFindingMutation(projectId);
-  const [notes, setNotes] = useState("");
-  const where = [f.facilityName, f.unitLabel].filter(Boolean).join(" · ");
+  const form = useZodForm(FindingNotesFormSchema, { defaultValues: { notes: "" } });
+  const pending = resolve.isPending || dismiss.isPending;
+  const where =[f.facilityName, f.unitLabel].filter(Boolean).join(" · ");
   return (
     <div className="rounded-xl border border-slate-200 p-3 text-xs space-y-1.5">
       <div className="flex items-center justify-between gap-2">
@@ -324,19 +332,39 @@ function FindingCard({ projectId, finding: f }: { projectId: string; finding: In
         </div>
       )}
       {(f.canResolve || f.canDismiss) && (
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <input className="flex-1 min-w-[10rem] rounded-xl border border-slate-300 px-3 py-1.5 text-xs" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What was done, or why it is dismissed" aria-label="Notes" />
+        <form
+          className="flex flex-wrap items-start gap-2 pt-1"
+          noValidate
+          onSubmit={form.handleSubmit((v) => (f.canResolve ? resolve.mutate({ findingId: f.id, notes: v.notes }) : dismiss.mutate({ findingId: f.id, body: { reason: v.notes } })))}
+        >
+          <span className="flex-1 min-w-[10rem]">
+            <input
+              className={`w-full rounded-xl border border-slate-300 px-3 py-1.5 text-xs ${invalidClass(form, "notes")}`}
+              placeholder="What was done, or why it is dismissed"
+              aria-label="Notes"
+              {...form.register("notes")}
+              {...fieldA11y(form, "notes")}
+            />
+            <FieldError form={form} name="notes" />
+          </span>
           {f.canResolve && (
-            <button type="button" disabled={resolve.isPending || notes.trim().length < 5} onClick={() => resolve.mutate({ findingId: f.id, notes: notes.trim() })} className={primaryButton}>
+            <SubmitButton form={form} pending={pending} showHint={false} className={primaryButton}>
               Resolve
-            </button>
+            </SubmitButton>
           )}
           {f.canDismiss && (
-            <button type="button" disabled={dismiss.isPending || notes.trim().length < 5} onClick={() => dismiss.mutate({ findingId: f.id, body: { reason: notes.trim() } })} className={secondaryButton}>
+            <SubmitButton
+              form={form}
+              pending={pending}
+              showHint={false}
+              type="button"
+              onClick={form.handleSubmit((v) => dismiss.mutate({ findingId: f.id, body: { reason: v.notes } }))}
+              className={secondaryButton}
+            >
               Dismiss
-            </button>
+            </SubmitButton>
           )}
-        </div>
+        </form>
       )}
     </div>
   );

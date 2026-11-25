@@ -57,21 +57,32 @@ export const deleteScopeLine = async (projectId: string, lineId: string) => {
   return data.data;
 };
 
-// Redesign R2c: the needs-assessment workbook.
+// Redesign R2c: the needs assessment (.xlsx).
 
-/** Downloads the .xlsx (pre-filled when the project has data). */
+/** The download name from Content-Disposition (filename* first, for non-ASCII names). */
+function attachmentName(disposition: string, fallback: string): string {
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      // fall through to the plain name
+    }
+  }
+  return /filename="([^"]+)"/.exec(disposition)?.[1] ?? fallback;
+}
+
+/** The project's needs assessment ("PRG-101 needs assessment.xlsx"), pre-filled when the project has data. */
 export const downloadScopeWorkbook = async (projectId: string) => {
   const res = await api.get<Blob>(`${base(projectId)}/workbook`, { responseType: 'blob' });
-  const disposition = String(res.headers['content-disposition'] ?? '');
-  const fileName = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'scope-workbook.xlsx';
+  const fileName = attachmentName(String(res.headers['content-disposition'] ?? ''), 'Needs assessment.xlsx');
   return { blob: res.data, fileName };
 };
 
-/** A blank workbook with the workspace's lists (Settings); it imports into any draft. */
+/** The blank needs assessment template with the workspace's lists (Forms & facilities); it imports into any draft. */
 export const downloadTenantScopeWorkbook = async () => {
   const res = await api.get<Blob>('/scope-workbook', { responseType: 'blob' });
-  const disposition = String(res.headers['content-disposition'] ?? '');
-  const fileName = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'needs-assessment-workbook.xlsx';
+  const fileName = attachmentName(String(res.headers['content-disposition'] ?? ''), 'Needs assessment template.xlsx');
   return { blob: res.data, fileName };
 };
 

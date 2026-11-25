@@ -107,7 +107,7 @@ describe('Phase 16: programme KPI dashboard', () => {
   it('tracks every catalogue KPI on the seeded programme, with targets', async () => {
     const d = await dashboard('admin@ubec.test');
     assert.deepEqual(d.period, period);
-    assert.equal(d.projectCount, 8); // live and archived; drafts are left out
+    assert.equal(d.projectCount, 9); // live and archived (incl. the demo closure twin PRG-106); drafts are left out
     assert.ok(!d.projects.some((p) => p.codePrefix === 'PRG-101' || p.codePrefix === 'PRG-201'));
     assert.deepEqual(
       d.kpis.map((k) => k.key),
@@ -119,7 +119,8 @@ describe('Phase 16: programme KPI dashboard', () => {
     // Redesign R1b: financial utilisation reads the recorded payments (disbursedToDateNgn).
     const utilisation = kpi(d, 'financial_utilisation');
     assert.ok(utilisation.numerator > 0, 'PRG-105 has a recorded interim payment');
-    assert.equal(kpi(d, 'lessons_documented').value, 100);
+    // R7: lessons are documented in the closeout report: PRG-242 has filed it, PRG-241's is still pending.
+    assert.equal(kpi(d, 'lessons_documented').value, 50);
     assert.equal(kpi(d, 'audited_post_closure').numerator, 1); // PRG-242 signed off, PRG-241 pending
     assert.equal(kpi(d, 'audited_post_closure').denominator, 2);
     assert.equal(row(d, 'PRG-242').values.verified_on_time.value, 0); // completed after the planned end
@@ -156,7 +157,7 @@ describe('Phase 16: programme KPI dashboard', () => {
     const south = await dashboard('lagos.admin@ubec.test');
     assert.deepEqual(south.projects.map((p) => p.codePrefix).sort(), ['PRG-221', 'PRG-241', 'PRG-242']);
     const ubec = await dashboard('admin@ubec.test');
-    assert.equal(ubec.projectCount, 8);
+    assert.equal(ubec.projectCount, 9);
   });
 
   it('never reports an untracked KPI as 0: the project has no cell for it', async () => {

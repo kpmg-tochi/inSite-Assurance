@@ -7,8 +7,7 @@ import Loader from "../../components/Loader";
 import { CustomSelect } from "../../components/common";
 import { usePlannerQuery } from "../../queries/visits/useVisitQueries";
 import { useRegionsQuery } from "../../queries/deliveryModels/useDeliveryModelQueries";
-import { useDecideProposalMutation } from "../../mutations/visits/useVisitMutations";
-import { EditVisitDialog } from "../../components/visits/VisitDialogs";
+import { EditVisitDialog, ProposalDecisionForm } from "../../components/visits/VisitDialogs";
 import { TAB_LIST_CLASS, tabItemClass } from "../../components/common/Tabs";
 import { primaryButton, secondaryButton, visitKindLabel, VisitStatusChip, WarningsList } from "../../components/visits/visitUi";
 
@@ -188,8 +187,6 @@ export function VisitPlannerPage({ embedded = false }: { embedded?: boolean } = 
 }
 
 function ProposalItem({ item, canPlan }: { item: PlannerDto["pendingProposals"][number]; canPlan: boolean }) {
-  const decide = useDecideProposalMutation(item.visit.projectId);
-  const [note, setNote] = useState("");
   return (
     <li className="rounded-xl border border-slate-200 p-2 text-xs space-y-1">
       <p className="font-semibold text-slate-900">
@@ -199,20 +196,17 @@ function ProposalItem({ item, canPlan }: { item: PlannerDto["pendingProposals"][
         {item.change.byName}: {item.change.fromDate} → {item.change.toDate}. {item.change.comment}
       </p>
       {canPlan && (
-        <div className="flex flex-wrap gap-1">
-          <button type="button" className={primaryButton} disabled={decide.isPending} onClick={() => decide.mutate({ visitId: item.visit.id, changeId: item.change.id, body: { decision: "ACCEPT" } })}>
-            Accept
-          </button>
-          <input className="flex-1 min-w-[6rem] rounded-xl border border-slate-300 px-2 py-1 text-xs" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why not" aria-label="Reject note" />
-          <button
-            type="button"
-            className={secondaryButton}
-            disabled={decide.isPending || note.trim().length < 3}
-            onClick={() => decide.mutate({ visitId: item.visit.id, changeId: item.change.id, body: { decision: "REJECT", note: note.trim() } })}
-          >
-            Reject
-          </button>
-        </div>
+        <ProposalDecisionForm
+          projectId={item.visit.projectId}
+          visitId={item.visit.id}
+          changeId={item.change.id}
+          acceptLabel="Accept"
+          placeholder="Why not"
+          className="flex flex-wrap items-start gap-1"
+          inputClassName="rounded-xl border border-slate-300 px-2 py-1 text-xs"
+          acceptClassName={primaryButton}
+          rejectClassName={secondaryButton}
+        />
       )}
     </li>
   );

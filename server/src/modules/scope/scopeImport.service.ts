@@ -58,7 +58,7 @@ const PROJECT_SELECT = {
   region: { select: { name: true } },
   projectType: { select: { name: true } },
   beneficiaries: { where: { isPrimary: true }, select: { name: true }, take: 1 },
-  tenant: { select: { enabledGeofenceModes: true, defaultGeofenceRadiusMeters: true } },
+  tenant: { select: { name: true, enabledGeofenceModes: true, defaultGeofenceRadiusMeters: true } },
 } satisfies Prisma.ProjectSelect;
 type ProjectRow = Prisma.ProjectGetPayload<{ select: typeof PROJECT_SELECT }>;
 
@@ -84,12 +84,32 @@ function radialCenter(geofence: unknown): { latitude: number; longitude: number 
 // ---------------------------------------------------------------------------
 
 /**
- * A blank workbook with the workspace's live lists (Settings, and the Needs Assessment module
- * later). It imports into any draft like a project's own download.
+ * Short workspace name for the title bands and the template's file name: the acronym in brackets
+ * ("Universal Basic Education Commission (UBEC)" → "UBEC"), else a short name, else none.
+ */
+export function workspaceShortName(name: string | null | undefined): string | null {
+  const t = (name ?? '').trim();
+  const acronym = /\(([A-Za-z0-9&.-]{2,12})\)\s*$/.exec(t)?.[1];
+  if (acronym) return acronym;
+  return t && t.length <= 24 ? t : null;
+}
+
+/** "UBEC needs assessment template.xlsx"; "Needs assessment template.xlsx" when the name is long. */
+export function templateFileName(tenantName: string | null | undefined): string {
+  const short = workspaceShortName(tenantName);
+  return short ? `${short} needs assessment template.xlsx` : 'Needs assessment template.xlsx';
+}
+
+/** "PRG-101 needs assessment.xlsx". */
+export const projectNeedsAssessmentFileName = (codePrefix: string) => `${codePrefix} needs assessment.xlsx`;
+
+/**
+ * The blank "Needs assessment template" with the workspace's live lists (Forms & facilities, and
+ * the Needs Assessment module later). It imports into any draft like a project's own download.
  */
 export async function buildTenantScopeWorkbook(tenantId: string): Promise<{ buffer: Buffer; fileName: string }> {
   const [tenant, facilities, regions, types] = await Promise.all([
-    prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { slug: true } }),
+    prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { name: true } }),
     tenantFacilities(prisma, tenantId),
     prisma.region.findMany({ where: { tenantId, isArchived: false }, orderBy: { name: 'asc' }, select: { name: true } }),
     prisma.projectType.findMany({ where: { tenantId, isActive: true }, orderBy: { name: 'asc' }, select: { name: true } }),
@@ -97,6 +117,7 @@ export async function buildTenantScopeWorkbook(tenantId: string): Promise<{ buff
   const buffer = await buildScopeWorkbook({
     generatedAt: new Date(),
     title: null,
+    brandName: workspaceShortName(tenant.name),
     project: {},
     facilities: facilities.filter((f) => !f.isRetired),
     regions: regions.map((r) => r.name),
@@ -105,7 +126,7 @@ export async function buildTenantScopeWorkbook(tenantId: string): Promise<{ buff
     units: [],
     lines: [],
   });
-  return { buffer, fileName: `${tenant.slug}-needs-assessment-workbook.xlsx` };
+  return { buffer, fileName: templateFileName(tenant.name) };
 }
 
 export async function buildProjectScopeWorkbook(projectId: string): Promise<{ buffer: Buffer; fileName: string }> {
@@ -130,6 +151,7 @@ export async function buildProjectScopeWorkbook(projectId: string): Promise<{ bu
   const buffer = await buildScopeWorkbook({
     generatedAt: new Date(),
     title: `${project.codePrefix} · ${project.name}`,
+    brandName: workspaceShortName(project.tenant.name),
     project: {
       name: project.name,
       school: project.beneficiaries[0]?.name ?? null,
@@ -165,7 +187,7 @@ export async function buildProjectScopeWorkbook(projectId: string): Promise<{ bu
       rateNgn: Number(l.rateNgn),
     })),
   });
-  return { buffer, fileName: `${project.codePrefix}-scope-workbook.xlsx` };
+  return { buffer, fileName: projectNeedsAssessmentFileName(project.codePrefix) };
 }
 
 // ---------------------------------------------------------------------------
@@ -198,7 +220,7 @@ async function projectFill(db: Db, project: ProjectRow, wb: Partial<Record<Scope
     const action: ScopeWorkbookProjectChange['action'] = currentValue === null || currentValue === '' ? 'FILL' : equal ? 'SAME' : 'KEEP';
     changes.push({ field, label: fieldLabel, workbookValue, currentValue, action });
     if (action === 'KEEP') {
-      warn(fieldLabel, 'PROJECT_FIELD_DIFFERS', `${fieldLabel}: the workbook says "${workbookValue}" but the project has "${currentValue}". The project value is kept.`);
+      warn(fieldLabel, 'PROJECT_FIELD_DIFFERS', `${fieldLabel}: the needs assessment says "${workbookValue}" but the project has "${currentValue}". The project value is kept.`);
     }
     return action === 'FILL';
   };
@@ -284,7 +306,7 @@ interface Analysis {
 
 function decode(fileBase64: string): Buffer {
   const buffer = Buffer.from(fileBase64, 'base64');
-  if (buffer.length > SCOPE_WORKBOOK_MAX_BYTES) throw new AppError('The workbook is larger than 10 MB', 413, 'FILE_TOO_LARGE');
+  if (buffer.length > SCOPE_WORKBOOK_MAX_BYTES) throw new AppError('The needs assessment file is larger than 10 MB', 413, 'FILE_TOO_LARGE');
   if (buffer.length === 0) throw new AppError('The file is empty', 400, 'EMPTY_FILE');
   return buffer;
 }
@@ -292,7 +314,7 @@ function decode(fileBase64: string): Buffer {
 function assertDraft(project: { status: string }) {
   if (project.status !== 'DRAFT') {
     throw new AppError(
-      'Workbook import is for draft projects. On a live project, change the scope on the Scope & sprints page (every change is audited).',
+      'Needs assessment import is for draft projects. On a live project, change the scope on the Scope & sprints page (every change is audited).',
       409,
       'SCOPE_IMPORT_LIVE_PROJECT'
     );
@@ -421,7 +443,7 @@ export async function confirmScopeImport(projectId: string, webUser: WebJwtPaylo
     const { tx } = ctx;
     const { project, parsed, fill, preview } = await analyse(tx, projectId, buffer, input.fileName ?? null);
     if (preview.issues.length) {
-      throw new AppError(`The workbook has ${preview.issues.length} error(s). Fix them and upload it again.`, 422, 'SCOPE_IMPORT_INVALID', {
+      throw new AppError(`The needs assessment has ${preview.issues.length} error(s). Fix them and upload it again.`, 422, 'SCOPE_IMPORT_INVALID', {
         issues: preview.issues,
       });
     }
@@ -490,7 +512,7 @@ export async function confirmScopeImport(projectId: string, webUser: WebJwtPaylo
       actorDisplayName: `${webUser.fullName} (${webUser.roleName})`,
       action: 'SCOPE_IMPORTED',
       summaryText:
-        `Imported the scope workbook${input.fileName ? ` "${input.fileName}"` : ''}: ${t.sprintCount} sprint(s), ${t.unitCount} facility unit(s), ` +
+        `Imported the needs assessment${input.fileName ? ` "${input.fileName}"` : ''}: ${t.sprintCount} sprint(s), ${t.unitCount} facility unit(s), ` +
         `${t.lineCount} BoQ line(s) totalling ${money(t.amountNgn)}` +
         `${preview.replaces.lineCount || preview.replaces.unitCount || preview.replaces.sprintCount ? ' (replacing the earlier scope)' : ''}` +
         `${filled.length ? `; filled project fields: ${filled.join(', ')}` : ''}.`,

@@ -1,13 +1,27 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Controller } from 'react-hook-form';
+import { z } from 'zod';
 import { UserPlus, Smartphone } from 'lucide-react';
 import {
+  AssignUserProjectsRequestSchema,
+  CreateTenantUserRequestSchema,
   ORGANIZATION_CATEGORY_META,
   OrganizationCategoryEnum,
-  type OrganizationCategory,
   type OrganizationRef,
   type RoleDto,
   type TenantUserDto,
 } from '@insite/shared';
+import {
+  FieldError,
+  SubmitButton,
+  fieldA11y,
+  invalidClass,
+  useZodForm,
+  visibleError,
+  zChoice,
+  zEmail,
+  type AnyForm,
+} from '../../lib/forms';
 import {
   useTenantRolesQuery,
   useTenantUsersQuery,
@@ -26,6 +40,59 @@ import { OrganizationInput } from '../organizations/OrganizationInput';
 const isProvisionedRole = (role: RoleDto | undefined) =>
   Boolean(role && role.surface !== 'WEB');
 
+/** Optional phone: empty, or the format the server accepts. */
+const PhoneText = z
+  .string()
+  .trim()
+  .refine((v) => !v || /^\+?[0-9 ()-]{7,20}$/.test(v), 'Enter a phone number of 7 to 20 digits, e.g. +234 803 000 0000, or leave it empty');
+
+/** Add a user: the inputs, mapped to CreateTenantUserRequestSchema (which still decides). */
+const CreateUserFormSchema = z
+  .object({
+    fullName: z.string().trim().min(2, 'Enter the full name (at least 2 characters)').max(120, 'Full name is too long (at most 120 characters)'),
+    email: zEmail('work email'),
+    password: z.string().min(8, 'Enter a temporary password of at least 8 characters'),
+    roleId: zChoice('role'),
+    organization: z
+      .custom<OrganizationRef | null>()
+      .refine((v) => Boolean(v && (v.id || v.name?.trim())), 'Choose or enter an organisation')
+      .refine((v) => !v || Boolean(v.id) || ((v.name ?? '').trim().length >= 2 && (v.name ?? '').trim().length <= 160), 'Enter the organisation name (2 to 160 characters)'),
+    organizationCategory: OrganizationCategoryEnum,
+    mobileRoleId: z.string(),
+    phoneNumber: PhoneText,
+    projectIds: z.array(z.string()),
+  })
+  .transform((v) => ({
+    fullName: v.fullName,
+    email: v.email,
+    password: v.password,
+    roleId: v.roleId,
+    ...(v.organization?.id ? { organizationId: v.organization.id } : { organizationName: (v.organization?.name ?? '').trim() }),
+    organizationCategory: v.organizationCategory,
+    mobileRoleId: v.mobileRoleId || null,
+    phoneNumber: v.phoneNumber || null,
+    projectIds: v.projectIds,
+  }))
+  .pipe(CreateTenantUserRequestSchema);
+
+/** Edit role and projects: the inputs, mapped to AssignUserProjectsRequestSchema. */
+const EditUserFormSchema = z
+  .object({
+    roleId: zChoice('role'),
+    isActive: z.boolean(),
+    mobileRoleId: z.string(),
+    phoneNumber: PhoneText,
+    projectIds: z.array(z.string()),
+  })
+  .transform((v) => ({
+    roleId: v.roleId,
+    isActive: v.isActive,
+    mobileRoleId: v.mobileRoleId || null,
+    phoneNumber: v.phoneNumber || null,
+    projectIds: v.projectIds,
+  }))
+  .pipe(AssignUserProjectsRequestSchema);
+
 /**
  * Mobile access (Phase 5): a separate mobile role, or none. When the main role is
  * itself a mobile role, it already gives mobile sign-in.
@@ -33,11 +100,10 @@ const isProvisionedRole = (role: RoleDto | undefined) =>
 function MobileAccessFields(props: {
   provisionedRoles: RoleDto[];
   mainRole: RoleDto | undefined;
-  mobileRoleId: string;
-  onMobileRoleId: (id: string) => void;
-  phoneNumber: string;
-  onPhoneNumber: (value: string) => void;
+  /** A form with `mobileRoleId` and `phoneNumber` text fields. */
+  form: AnyForm;
 }) {
+  const { form } = props;
   const mainGivesAccess = isProvisionedRole(props.mainRole);
   return (
     <div className="rounded-xl border border-slate-200 p-3 space-y-2.5">
@@ -48,8 +114,7 @@ function MobileAccessFields(props: {
       <div>
         <label className="block font-semibold text-slate-700 mb-1">Mobile role</label>
         <select
-          value={props.mobileRoleId}
-          onChange={(e) => props.onMobileRoleId(e.target.value)}
+          {...form.register('mobileRoleId')}
           className="w-full rounded-xl border border-slate-200 px-3 py-2"
         >
           <option value="">{mainGivesAccess ? 'Same as main role' : 'None (no mobile sign-in)'}</option>
@@ -69,11 +134,12 @@ function MobileAccessFields(props: {
         <label className="block font-semibold text-slate-700 mb-1">Phone number</label>
         <input
           type="tel"
-          value={props.phoneNumber}
-          onChange={(e) => props.onPhoneNumber(e.target.value)}
+          {...form.register('phoneNumber')}
+          {...fieldA11y(form, 'phoneNumber')}
           placeholder="+234 803 000 0000"
-          className="w-full rounded-xl border border-slate-200 px-3 py-2"
+          className={`w-full rounded-xl border border-slate-200 px-3 py-2 ${invalidClass(form, 'phoneNumber')}`}
         />
+        <FieldError form={form} name="phoneNumber" />
       </div>
     </div>
   );
@@ -105,100 +171,71 @@ export function UsersVisibilityTab() {
   const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<TenantUserDto | null>(null);
 
-  // Create User State
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [roleId, setRoleId] = useState('');
-  const [organization, setOrganization] = useState<OrganizationRef | null>(null);
-  const [organizationError, setOrganizationError] = useState<string | null>(null);
-  const [organizationCategory, setOrganizationCategory] =
-    useState<OrganizationCategory>('ADVISORY_MONITOR');
-  const [createProjectIds, setCreateProjectIds] = useState<string[]>([]);
-  const [mobileRoleId, setMobileRoleId] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  // Add user form
+  const createForm = useZodForm(CreateUserFormSchema, {
+    defaultValues: {
+      fullName: '',
+      email: '',
+      password: '',
+      roleId: '',
+      organization: null,
+      organizationCategory: 'ADVISORY_MONITOR',
+      mobileRoleId: '',
+      phoneNumber: '',
+      projectIds: [],
+    },
+  });
+  const createRoleId = createForm.watch('roleId');
+  const createProjectIds = createForm.watch('projectIds');
 
-  // Edit User Assignments State
-  const [editRoleId, setEditRoleId] = useState('');
-  const [editIsActive, setEditIsActive] = useState(true);
-  const [editProjectIds, setEditProjectIds] = useState<string[]>([]);
-  const [editMobileRoleId, setEditMobileRoleId] = useState('');
-  const [editPhoneNumber, setEditPhoneNumber] = useState('');
+  // Edit role and projects form
+  const editForm = useZodForm(EditUserFormSchema, {
+    defaultValues: { roleId: '', isActive: true, mobileRoleId: '', phoneNumber: '', projectIds: [] },
+  });
+  const editRoleId = editForm.watch('roleId');
+  const editProjectIds = editForm.watch('projectIds');
 
   const openCreateModal = () => {
-    setFullName('');
-    setEmail('');
-    setPassword('');
-    setRoleId(roles[0]?.id || '');
-    setOrganization(null);
-    setOrganizationError(null);
-    setOrganizationCategory('ADVISORY_MONITOR');
-    setCreateProjectIds([]);
-    setMobileRoleId('');
-    setPhoneNumber('');
+    createForm.reset({
+      fullName: '',
+      email: '',
+      password: '',
+      roleId: roles[0]?.id || '',
+      organization: null,
+      organizationCategory: 'ADVISORY_MONITOR',
+      mobileRoleId: '',
+      phoneNumber: '',
+      projectIds: [],
+    });
     setCreateDrawerOpen(true);
   };
 
   const openEditUser = (target: TenantUserDto) => {
     setEditingUser(target);
-    setEditRoleId(target.roleId);
-    setEditIsActive(target.isActive);
-    setEditProjectIds(target.projectAssignments.map((a) => a.projectId));
-    setEditMobileRoleId(target.mobileRoleId ?? '');
-    setEditPhoneNumber(target.phoneNumber ?? '');
-  };
-
-  const toggleProject = (
-    list: string[],
-    setList: React.Dispatch<React.SetStateAction<string[]>>,
-    projectId: string
-  ) => {
-    setList(
-      list.includes(projectId)
-        ? list.filter((id) => id !== projectId)
-        : [...list, projectId]
-    );
-  };
-
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!roleId) return;
-    if (!organization || (!organization.id && !organization.name?.trim())) {
-      setOrganizationError('Choose or enter an organisation');
-      return;
-    }
-    setOrganizationError(null);
-    await createUserMutation.mutateAsync({
-      fullName: fullName.trim(),
-      email: email.trim(),
-      password,
-      roleId,
-      ...(organization.id
-        ? { organizationId: organization.id }
-        : { organizationName: (organization.name ?? '').trim() }),
-      organizationCategory,
-      mobileRoleId: mobileRoleId || null,
-      phoneNumber: phoneNumber.trim() || null,
-      projectIds: createProjectIds,
+    editForm.reset({
+      roleId: target.roleId,
+      isActive: target.isActive,
+      projectIds: target.projectAssignments.map((a) => a.projectId),
+      mobileRoleId: target.mobileRoleId ?? '',
+      phoneNumber: target.phoneNumber ?? '',
     });
+  };
+
+  const toggleProject = (form: typeof createForm | typeof editForm, list: string[], projectId: string) => {
+    const next = list.includes(projectId) ? list.filter((id) => id !== projectId) : [...list, projectId];
+    (form as AnyForm).setValue('projectIds', next, { shouldDirty: true, shouldValidate: true });
+  };
+
+  const handleCreateUser = createForm.handleSubmit(async (payload) => {
+    await createUserMutation.mutateAsync(payload);
     setCreateDrawerOpen(false);
-  };
+  });
 
-  const handleSaveAssignments = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveAssignments = editForm.handleSubmit(async (payload) => {
     if (!editingUser) return;
-    await assignProjectsMutation.mutateAsync({
-      userId: editingUser.id,
-      payload: {
-        roleId: editRoleId || undefined,
-        isActive: editIsActive,
-        mobileRoleId: editMobileRoleId || null,
-        phoneNumber: editPhoneNumber.trim() || null,
-        projectIds: editProjectIds,
-      },
-    });
+    await assignProjectsMutation.mutateAsync({ userId: editingUser.id, payload });
     setEditingUser(null);
-  };
+  });
 
   const term = search.trim().toLowerCase();
   const searched = users.filter(
@@ -342,7 +379,7 @@ export function UsersVisibilityTab() {
             if (e.target === e.currentTarget) setCreateDrawerOpen(false);
           }}
         >
-          <form onSubmit={handleCreateUser} className="flex flex-col h-full">
+          <form onSubmit={handleCreateUser} noValidate className="flex flex-col h-full">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
             <h3 className="text-sm font-bold text-slate-900">Add a user</h3>
             <button
@@ -361,11 +398,11 @@ export function UsersVisibilityTab() {
               </label>
               <input
                 type="text"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2"
+                {...createForm.register('fullName')}
+                {...fieldA11y(createForm, 'fullName')}
+                className={`w-full rounded-xl border border-slate-200 px-3 py-2 ${invalidClass(createForm, 'fullName')}`}
               />
+              <FieldError form={createForm} name="fullName" />
             </div>
 
             <div>
@@ -374,11 +411,11 @@ export function UsersVisibilityTab() {
               </label>
               <input
                 type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2"
+                {...createForm.register('email')}
+                {...fieldA11y(createForm, 'email')}
+                className={`w-full rounded-xl border border-slate-200 px-3 py-2 ${invalidClass(createForm, 'email')}`}
               />
+              <FieldError form={createForm} name="email" />
             </div>
 
             <div>
@@ -387,12 +424,11 @@ export function UsersVisibilityTab() {
               </label>
               <input
                 type="text"
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-2"
+                {...createForm.register('password')}
+                {...fieldA11y(createForm, 'password')}
+                className={`w-full rounded-xl border border-slate-200 px-3 py-2 ${invalidClass(createForm, 'password')}`}
               />
+              <FieldError form={createForm} name="password" />
             </div>
 
             <div>
@@ -400,28 +436,35 @@ export function UsersVisibilityTab() {
                 Role Assignment *
               </label>
               <select
-                required
-                value={roleId}
-                onChange={(e) => setRoleId(e.target.value)}
+                {...createForm.register('roleId')}
+                {...fieldA11y(createForm, 'roleId')}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2"
               >
+                {roles.length === 0 && <option value="">No roles yet</option>}
                 {roles.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.name} ({r.code})
                   </option>
                 ))}
               </select>
+              <FieldError form={createForm} name="roleId" />
             </div>
 
             <div className="space-y-2.5">
-              <OrganizationInput
-                label="Organisation *"
-                value={organization}
-                onChange={(next) => {
-                  setOrganization(next);
-                  if (next) setOrganizationError(null);
-                }}
-                error={organizationError}
+              <Controller
+                control={createForm.control}
+                name="organization"
+                render={({ field }) => (
+                  <OrganizationInput
+                    label="Organisation *"
+                    value={field.value ?? null}
+                    onChange={(next) => {
+                      field.onChange(next);
+                      field.onBlur();
+                    }}
+                    error={visibleError(createForm, 'organization') ?? null}
+                  />
+                )}
               />
               <div>
                 <label htmlFor="new-user-org-tag" className="block font-semibold text-slate-700 mb-1">
@@ -429,12 +472,7 @@ export function UsersVisibilityTab() {
                 </label>
                 <select
                   id="new-user-org-tag"
-                  value={organizationCategory}
-                  onChange={(e) =>
-                    setOrganizationCategory(
-                      e.target.value as OrganizationCategory
-                    )
-                  }
+                  {...createForm.register('organizationCategory')}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2"
                 >
                   {OrganizationCategoryEnum.options.map((c) => (
@@ -451,11 +489,8 @@ export function UsersVisibilityTab() {
 
             <MobileAccessFields
               provisionedRoles={provisionedRoles}
-              mainRole={roleById.get(roleId)}
-              mobileRoleId={mobileRoleId}
-              onMobileRoleId={setMobileRoleId}
-              phoneNumber={phoneNumber}
-              onPhoneNumber={setPhoneNumber}
+              mainRole={roleById.get(createRoleId)}
+              form={createForm}
             />
 
             <div className="pt-2">
@@ -471,13 +506,7 @@ export function UsersVisibilityTab() {
                     <input
                       type="checkbox"
                       checked={createProjectIds.includes(p.id)}
-                      onChange={() =>
-                        toggleProject(
-                          createProjectIds,
-                          setCreateProjectIds,
-                          p.id
-                        )
-                      }
+                      onChange={() => toggleProject(createForm, createProjectIds, p.id)}
                       className="h-4 w-4 rounded-sm border-slate-300 text-brand-primary"
                     />
                     <span className="font-semibold text-brand-primary">
@@ -498,13 +527,14 @@ export function UsersVisibilityTab() {
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={createUserMutation.isPending}
-              className="px-4 py-2 rounded-xl bg-brand-primary text-white text-xs font-semibold hover:bg-brand-hover disabled:opacity-50"
+            <SubmitButton
+              form={createForm}
+              pending={createUserMutation.isPending}
+              pendingLabel="Adding…"
+              className="px-4 py-2 rounded-xl bg-brand-primary text-white text-xs font-semibold hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-primary"
             >
-              {createUserMutation.isPending ? 'Adding…' : 'Add user'}
-            </button>
+              Add user
+            </SubmitButton>
           </div>
         </form>
         </Drawer>
@@ -519,6 +549,7 @@ export function UsersVisibilityTab() {
         >
           <form
             onSubmit={handleSaveAssignments}
+            noValidate
             className="flex flex-col h-full"
           >
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">
@@ -543,8 +574,8 @@ export function UsersVisibilityTab() {
                   Assigned Tenant Role
                 </label>
                 <select
-                  value={editRoleId}
-                  onChange={(e) => setEditRoleId(e.target.value)}
+                  {...editForm.register('roleId')}
+                  {...fieldA11y(editForm, 'roleId')}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2"
                 >
                   {roles.map((r) => (
@@ -558,17 +589,13 @@ export function UsersVisibilityTab() {
               <MobileAccessFields
                 provisionedRoles={provisionedRoles}
                 mainRole={roleById.get(editRoleId)}
-                mobileRoleId={editMobileRoleId}
-                onMobileRoleId={setEditMobileRoleId}
-                phoneNumber={editPhoneNumber}
-                onPhoneNumber={setEditPhoneNumber}
+                form={editForm}
               />
 
               <label className="flex items-center gap-2 p-3 rounded-xl border border-slate-200 bg-slate-50 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={editIsActive}
-                  onChange={(e) => setEditIsActive(e.target.checked)}
+                  {...editForm.register('isActive')}
                   className="h-4 w-4 rounded-sm border-slate-300 text-brand-primary"
                 />
                 <span className="font-semibold text-slate-800">
@@ -589,9 +616,7 @@ export function UsersVisibilityTab() {
                       <input
                         type="checkbox"
                         checked={editProjectIds.includes(p.id)}
-                        onChange={() =>
-                          toggleProject(editProjectIds, setEditProjectIds, p.id)
-                        }
+                        onChange={() => toggleProject(editForm, editProjectIds, p.id)}
                         className="h-4 w-4 rounded-sm border-slate-300 text-brand-primary"
                       />
                       <span className="font-semibold text-brand-primary">
@@ -612,15 +637,14 @@ export function UsersVisibilityTab() {
               >
                 Cancel
               </button>
-              <button
-                type="submit"
-                disabled={assignProjectsMutation.isPending}
-                className="px-4 py-2 rounded-xl bg-brand-primary text-white text-xs font-semibold hover:bg-brand-hover disabled:opacity-50"
+              <SubmitButton
+                form={editForm}
+                pending={assignProjectsMutation.isPending}
+                pendingLabel="Saving..."
+                className="px-4 py-2 rounded-xl bg-brand-primary text-white text-xs font-semibold hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-primary"
               >
-                {assignProjectsMutation.isPending
-                  ? 'Saving...'
-                  : 'Save role and projects'}
-              </button>
+                Save role and projects
+              </SubmitButton>
             </div>
           </form>
         </Drawer>
