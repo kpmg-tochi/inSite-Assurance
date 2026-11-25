@@ -30,8 +30,8 @@ export function ScopeSection({ projectId, setup, readOnly }: StepProps) {
 
   return (
     <StepSection
-      title="Scope & sprints"
-      description="Plan the sprints, add a facility unit for each facility on site, and list its BoQ lines. Amounts are quantity × rate."
+      title="BoQ & work phases"
+      description="Plan the work phases, add a facility unit for each facility on site, and list its BoQ lines. Amounts are quantity × rate."
     >
       {status && status.issues.length > 0 && setup.status === "DRAFT" && (
         <ul className="mb-3 space-y-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">

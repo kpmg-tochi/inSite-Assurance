@@ -26,11 +26,11 @@ const sectionCls = "rounded-2xl border border-slate-200 bg-white p-4 space-y-3";
 const label = "text-xs font-medium text-slate-700 mb-1 block";
 
 const NUMBERS: Array<{ key: keyof ProjectTypeMonitoringConfigInput; label: string; hint: string; fallback: number }> = [
-  { key: "submissionDeadlineDays", label: "Submit within (days)", hint: "Calendar days after the visit date.", fallback: 7 },
+  { key: "submissionDeadlineDays", label: "Submit the monitoring report within (days)", hint: "Calendar days after the visit date.", fallback: 7 },
   { key: "unconfirmedReminderDays", label: "Remind unconfirmed (days before)", hint: "Officers who have not confirmed get a reminder.", fallback: 2 },
   { key: "findingEscalationDays", label: "Escalate findings after (days)", hint: "Open findings are escalated once.", fallback: 14 },
   { key: "noVisitWarningWeeks", label: "Warn after no visit for (weeks)", hint: "Planner warning only.", fallback: 4 },
-  { key: "sprintVerificationDays", label: "Verify sprints within (days)", hint: "After a sprint ends; late after that.", fallback: 7 },
+  { key: "sprintVerificationDays", label: "Verify work phases within (days)", hint: "After a work phase ends; late after that.", fallback: 7 },
 ];
 
 function ruleKey(kind: VisitKind, taken: string[]): string {
@@ -88,7 +88,7 @@ export function MonitoringPlanEditor({ value, onChange }: { value: ProjectTypeMo
             )}
             {r.kind === "EVERY_N_WEEKS_IN_SPRINTS" && (
               <label className="md:col-span-2">
-                <span className={label}>Sprint numbers (empty = all)</span>
+                <span className={label}>Work phase numbers (empty = all)</span>
                 <input
                   className={inputCls}
                   value={(r.sprintNumbers ?? []).join(", ")}

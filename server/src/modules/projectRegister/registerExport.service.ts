@@ -1,9 +1,14 @@
 import {
+  formatProjectCode,
+  fundingSourceLabel,
+  lgaByCode,
   PortfolioOverviewProject,
   ProjectRegisterFilterOptionsDto,
   ProjectRegisterFilters,
   projectStageChipLabel,
   resolveTerminology,
+  stateByCode,
+  zoneName,
   zonedCalendarDate,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
@@ -83,7 +88,7 @@ async function loadRegister(webUser: WebJwtPayload, filters: ProjectRegisterFilt
     : [];
   const sumById = new Map(sums.map((s) => [s.id, s.contractSumNgn === null ? null : Number(s.contractSumNgn)]));
   const rows: RegisterRow[] = [...overview.projects]
-    .sort((a, b) => a.codePrefix.localeCompare(b.codePrefix))
+    .sort((a, b) => a.codePrefix.localeCompare(b.codePrefix, undefined, { numeric: true }))
     .map((p) => ({ p, contractSumNgn: sumById.get(p.id) ?? null }));
   return {
     rows,
@@ -105,8 +110,13 @@ async function describeFilters(tenantId: string, f: ProjectRegisterFilters): Pro
   ]);
   const parts = [
     type && `Type: ${type.name}`,
-    region && `Region: ${region.name}`,
+    region && `Programme zone: ${region.name}`,
     f.lga && `LGA: ${f.lga}`,
+    // Client demo updates C1/C4
+    f.zone && `Zone: ${zoneName(f.zone) ?? f.zone}`,
+    f.stateCode && `State: ${stateByCode(f.stateCode)?.name ?? f.stateCode}`,
+    f.lgaCode && `LGA: ${lgaByCode(f.lgaCode)?.name ?? f.lgaCode}`,
+    f.fundingSourceCode && `Funding source: ${fundingSourceLabel(f.fundingSourceCode) ?? f.fundingSourceCode}`,
     owner && `Owner: ${owner.name}`,
     contractor && `Contractor: ${contractor.name}`,
     f.interventionYear && `Intervention year: ${f.interventionYear}`,
@@ -127,17 +137,23 @@ const scheduleText = (p: PortfolioOverviewProject) => p.scheduleVariance?.label 
 const stageText = (p: PortfolioOverviewProject) =>
   p.stage ? `${projectStageChipLabel(p.stage)}${p.stage.contractTerminated ? ' (contract terminated)' : ''}` : '';
 const regionText = (p: PortfolioOverviewProject) => p.region?.name ?? p.stateLocation ?? '';
+/** Client demo updates C1/C3: zone and state from the national codes; codes as people read them. */
+const zoneText = (p: PortfolioOverviewProject) => zoneName(p.zone) ?? '';
+const stateText = (p: PortfolioOverviewProject) => stateByCode(p.stateCode)?.name ?? '';
+const codeText = (p: PortfolioOverviewProject) => formatProjectCode(p.codePrefix);
 
 export async function buildRegisterXlsx(webUser: WebJwtPayload, filters: ProjectRegisterFilters): Promise<{ buffer: Buffer; fileName: string }> {
   const now = new Date();
   const { rows, tenant, brand, zone, term, canSeePaid } = await loadRegister(webUser, filters);
   const filterText = await describeFilters(webUser.tenantId, filters);
   const columns: ExportColumn<RegisterRow>[] = [
-    { header: 'Code', width: 11, value: (r) => r.p.codePrefix },
+    { header: 'Code', width: 18, value: (r) => codeText(r.p) },
     { header: term, width: 22, value: (r) => r.p.externalReference },
     { header: 'Project', width: 40, wrap: true, value: (r) => r.p.name },
     { header: 'School', width: 30, wrap: true, value: (r) => r.p.primaryBeneficiary?.name ?? null },
-    { header: 'State / region', width: 16, value: (r) => regionText(r.p) },
+    { header: 'Zone', width: 14, value: (r) => zoneText(r.p) || null },
+    { header: 'State', width: 14, value: (r) => stateText(r.p) || null },
+    { header: 'Programme zone', width: 16, value: (r) => regionText(r.p) },
     { header: 'LGA', width: 16, value: (r) => r.p.lgaLocation },
     { header: 'Type', width: 20, value: (r) => r.p.projectType?.name ?? null },
     { header: 'Owner', width: 22, wrap: true, value: (r) => r.p.owningOrganization?.name ?? null },
@@ -196,8 +212,9 @@ export async function buildRegisterPdf(webUser: WebJwtPayload, filters: ProjectR
   const branding = parseTenantBranding(tenant.brandingConfig);
   const lastUpdate = (p: PortfolioOverviewProject) => (p.lastApprovedUpdateAt ? zonedCalendarDate(new Date(p.lastApprovedUpdateAt), zone) : '');
   const columns: Array<RegisterPdfColumn & { value: (r: RegisterRow) => string }> = [
-    { header: `Code\n${term}`, weight: 9, value: (r) => [r.p.codePrefix, r.p.externalReference].filter(Boolean).join('\n') },
+    { header: `Code\n${term}`, weight: 9, value: (r) => [codeText(r.p), r.p.externalReference].filter(Boolean).join('\n') },
     { header: 'Project / school', weight: 17, value: (r) => [r.p.name, r.p.primaryBeneficiary?.name].filter(Boolean).join('\n') },
+    { header: 'Zone · State', weight: 8, value: (r) => [zoneText(r.p), stateText(r.p)].filter(Boolean).join('\n') },
     { header: 'State · LGA', weight: 8, value: (r) => [regionText(r.p), r.p.lgaLocation].filter(Boolean).join(' · ') },
     { header: 'Type / owner', weight: 10, value: (r) => [r.p.projectType?.name, r.p.owningOrganization?.name].filter(Boolean).join('\n') },
     { header: 'Contractor', weight: 10, value: (r) => r.p.contractorName ?? '' },

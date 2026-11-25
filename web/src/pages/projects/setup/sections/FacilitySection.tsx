@@ -39,7 +39,7 @@ const FacilityFormSchema = z
       .object({
         // The shared rules with plain-words messages; the final pipe checks the request shape again.
         retentionPercentage: numberOrNull("Retention").pipe(z.number().min(0, "0 to 20").max(20, "0 to 20").nullable()),
-        retentionDurationMonths: numberOrNull("Liability period").pipe(
+        retentionDurationMonths: numberOrNull("Defects liability period").pipe(
           z.number().int("1 to 60 months").min(1, "1 to 60 months").max(60, "1 to 60 months").nullable()
         ),
         retentionReleaseAtCompletionPct: numberOrNull("Release at completion")
@@ -48,7 +48,7 @@ const FacilityFormSchema = z
       })
       .superRefine((r, ctx) => {
         if (r.retentionPercentage && !r.retentionDurationMonths) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["retentionDurationMonths"], message: "Set the liability period" });
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["retentionDurationMonths"], message: "Set the defects liability period" });
         }
       }),
   })
@@ -107,7 +107,7 @@ export function FacilitySection({ projectId, setup, readOnly }: StepProps) {
 
   return (
     <StepSection
-      title={`${term("retention")} and defects liability`}
+      title={`${term("retention")} and defects liability period`}
       description="Payments to the contractor are made outside the platform and recorded on the Payments page. Retention is held from each recorded payment at this rate."
     >
       {!retentionOn ? (

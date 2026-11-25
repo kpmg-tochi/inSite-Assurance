@@ -1,9 +1,17 @@
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import type { FindingsExportQuery, KpiQuery, PaymentsExportQuery, PlannerVisitsExportQuery, ProjectVisitsExportQuery } from '@insite/shared';
+import type {
+  FindingsExportQuery,
+  KpiQuery,
+  PaymentsExportQuery,
+  PlannerVisitsExportQuery,
+  PortfolioPaymentsQuery,
+  ProjectVisitsExportQuery,
+} from '@insite/shared';
 import {
   exportKpis,
   exportPlannerVisits,
+  exportPortfolioPayments,
   exportProjectFindings,
   exportProjectPayments,
   exportProjectVisits,
@@ -48,3 +56,6 @@ export const useExportProjectPaymentsMutation = (projectId: string) =>
   useXlsxExport((q: PaymentsExportQuery) => exportProjectPayments(projectId, q), 'payments');
 
 export const useExportKpisMutation = () => useXlsxExport((q: Partial<KpiQuery>) => exportKpis(q), 'KPIs');
+
+export const useExportPortfolioPaymentsMutation = () =>
+  useXlsxExport((q: Partial<PortfolioPaymentsQuery>) => exportPortfolioPayments(q), 'payments');

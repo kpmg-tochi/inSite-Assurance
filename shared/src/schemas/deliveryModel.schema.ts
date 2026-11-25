@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { BeneficiaryTypeEnum } from '../enums';
+import { NigeriaLgaCodeSchema, NigeriaZoneCodeEnum } from '../data/nigeriaAdminAreas';
 
 /**
  * Delivery models (Phase 11): regions, beneficiaries and the project-type summary carried on
@@ -111,5 +112,10 @@ export const ProjectListFiltersSchema = z.object({
   contractorOrganizationId: z.string().uuid().optional(),
   interventionYear: z.coerce.number().int().min(2000).max(2100).optional(),
   fundingSource: z.string().trim().min(1).max(120).optional(),
+  /** Client demo updates C1/C4: zone (derived from the state), state and LGA codes, funding source code. */
+  zone: NigeriaZoneCodeEnum.optional(),
+  stateCode: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/).optional(),
+  lgaCode: NigeriaLgaCodeSchema.optional(),
+  fundingSourceCode: z.string().trim().toUpperCase().regex(/^[A-Z_]{2,40}$/).optional(),
 });
 export type ProjectListFilters = z.infer<typeof ProjectListFiltersSchema>;

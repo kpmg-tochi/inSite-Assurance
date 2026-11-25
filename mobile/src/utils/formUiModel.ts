@@ -105,7 +105,7 @@ export function fieldRuleNotes(field: VisitFormSnapshotField, answer: VisitFormA
   const t = triggeredRules(field, answer);
   const commentNeeded = t.requireComment || t.quantityAbovePlanned;
   let commentLabel = 'Comment (optional)';
-  if (t.requireComment && field.recheck) commentLabel = 'Why is it not resolved? (needed)';
+  if (t.requireComment && field.recheck) commentLabel = 'Why is it not rectified? (needed)';
   else if (t.requireComment) commentLabel = 'Comment (needed for this answer)';
   else if (t.quantityAbovePlanned) commentLabel = `More than the planned ${formatQuantity(field.plannedQuantity ?? 0)}: say why (needed)`;
   return {
@@ -253,12 +253,12 @@ export function formAccess(
   }
   const returned = v.visit.status === 'RETURNED';
   if (latest?.status === 'REFUSED' && !returned) {
-    return { mode: 'READ_ONLY', draft: latest, title: 'Not accepted', message: latest.lastError ?? 'The server did not accept this report.', canCopy: canSubmit && !v.local.createError };
+    return { mode: 'READ_ONLY', draft: latest, title: 'Not accepted', message: latest.lastError ?? 'The server did not accept this monitoring report.', canCopy: canSubmit && !v.local.createError };
   }
   if (latest?.status === 'SENT' && !returned) {
-    return { mode: 'READ_ONLY', draft: latest, title: 'Sent', message: 'The server has this report.', canCopy: false };
+    return { mode: 'READ_ONLY', draft: latest, title: 'Sent', message: 'The server has this monitoring report.', canCopy: false };
   }
-  if (!canSubmit) return { mode: 'BLOCKED', title: 'Not available', message: 'Your role on this project does not submit visit reports.' };
+  if (!canSubmit) return { mode: 'BLOCKED', title: 'Not available', message: 'Your role on this project does not submit monitoring reports.' };
   if (v.local.createError) return { mode: 'BLOCKED', title: 'Visit not created', message: v.local.createError };
   if (returned) return { mode: 'START', correction: true };
   if (!['PLANNED', 'IN_PROGRESS', 'MISSED'].includes(v.visit.status)) {
@@ -306,7 +306,7 @@ export function reviewIssueGroups(screens: Pick<FormScreen, 'key' | 'title'>[], 
     if (issues?.length) out.push({ screenKey: s.key, screenIndex: i, title: s.title, issues });
   });
   const own = check.byScreen.get(REVIEW_SCREEN_KEY);
-  if (own?.length) out.push({ screenKey: REVIEW_SCREEN_KEY, screenIndex: null, title: 'Report summary', issues: own });
+  if (own?.length) out.push({ screenKey: REVIEW_SCREEN_KEY, screenIndex: null, title: 'Monitoring report summary', issues: own });
   return out;
 }
 
@@ -328,7 +328,7 @@ export function visitDayFor(v: Pick<StoredVisit, 'local'>, timeZone: string | nu
 }
 
 export const PICK_FROM_SITE_LOG_EXPLANATION =
-  'Only photos taken today for this project that have not been sent to the site log yet can be used here. A picked photo leaves the site log and becomes part of this report. Photos already sent stay in the site log: attach their entries to the report on the review page instead.';
+  'Only photos taken today for this project that have not been sent to the site log yet can be used here. A picked photo leaves the site log and becomes part of this monitoring report. Photos already sent stay in the site log: attach their entries to the monitoring report on the review page instead.';
 
 /** Photos of the visit day already sent (or being sent) to the site log, which cannot be picked. */
 export function sentPhotosOfDay(dayEntries: SiteLogRecord[], pickable: SiteLogRecord[]): number {
@@ -350,7 +350,7 @@ const KIND_LABELS: Record<SiteLogRecord['kind'], string> = { PHOTO: 'Photo', VOI
 export function siteLogEntryLabel(e: Pick<SiteLogRecord, 'kind' | 'status' | 'text'>): { kind: string; status: string; text: string | null } {
   return {
     kind: KIND_LABELS[e.kind],
-    status: e.status === 'SENT' ? 'Sent' : e.status === 'MOVED_TO_FORM' ? 'Used in a report' : 'Waiting to send',
+    status: e.status === 'SENT' ? 'Sent' : e.status === 'MOVED_TO_FORM' ? 'Used in a monitoring report' : 'Waiting to send',
     text: e.text,
   };
 }

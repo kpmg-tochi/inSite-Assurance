@@ -43,15 +43,15 @@ export const PROCESS_TOGGLE_META: Record<
 > = {
   requireReportApproval: {
     label: 'Report approval',
-    description: 'Visit reports are accepted only after every step of the report approval chain approves them.',
+    description: 'Monitoring reports are accepted only after every step of the report approval chain approves them.',
   },
   enableHandoverModule: {
     label: 'Stakeholder handover',
-    description: 'Send stakeholders a secure link to accept the works, accept with snags or reject. Off: hidden and refused.',
+    description: 'Send stakeholders a secure link to accept the works, accept with punch list items or reject. Off: hidden and refused.',
   },
   enableRetentionModule: {
     label: 'Retention and defects',
-    description: 'Hold a percentage of every recorded payment, track defects in the liability period and record the retention release when they clear.',
+    description: 'Hold a percentage of every recorded payment, track defects in the defects liability period and record the retention release when they clear.',
   },
 };
 

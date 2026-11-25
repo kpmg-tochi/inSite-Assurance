@@ -23,6 +23,7 @@ import { acquireFix } from "../../services/locationService";
 import { readHeading, startHeadingWatch } from "../../services/headingService";
 import { compressPhoto } from "../../services/photoCompressor";
 import { assessCapturedImageQuality } from "./qualityAssessment";
+import { PHOTO_SAFEGUARDING_HINT } from "../../utils/personaCopy";
 import type {
   CameraCaptureResult,
   CameraFlashSetting,
@@ -335,6 +336,19 @@ export const InSiteCamera = forwardRef<InSiteCameraHandle, InSiteCameraProps>(
           </View>
         )}
 
+        {/* Safeguarding hint (client demo updates C6); above the shutter when there is one. */}
+        {captureType !== "shutter" && (
+          <View
+            style={[
+              styles.bottomBar,
+              orientation === "landscape" && styles.bottomBarLandscape,
+            ]}
+            pointerEvents="none"
+          >
+            <Text style={styles.hintText}>{PHOTO_SAFEGUARDING_HINT}</Text>
+          </View>
+        )}
+
         {/* Bottom Shutter Bar (Only shown when captureType === 'shutter') */}
         {captureType === "shutter" && (
           <View
@@ -343,6 +357,9 @@ export const InSiteCamera = forwardRef<InSiteCameraHandle, InSiteCameraProps>(
               orientation === "landscape" && styles.bottomBarLandscape,
             ]}
           >
+            <Text style={styles.hintText} accessibilityRole="text">
+              {PHOTO_SAFEGUARDING_HINT}
+            </Text>
             <TouchableOpacity
               style={[
                 styles.shutterOuter,
@@ -511,6 +528,16 @@ const styles = StyleSheet.create({
   },
   bottomBarLandscape: {
     bottom: 16,
+  },
+  hintText: {
+    color: "#E2E8F0",
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 9999,
+    fontSize: 11,
+    fontWeight: "600",
+    overflow: "hidden",
   },
   liveOnlyBadge: {
     color: "#E2E8F0",

@@ -28,7 +28,7 @@ export function MobilisationCompliancePanel({ projectId, bare = false }: { proje
           <tr className="text-left text-[11px] uppercase tracking-wide text-slate-500 border-b border-slate-100">
             <th className="py-2 pr-3 font-semibold">Contractor</th>
             <th className="py-2 pr-3 font-semibold">Mobilisation deadline</th>
-            <th className="py-2 pr-3 font-semibold">On site</th>
+            <th className="py-2 pr-3 font-semibold">Mobilised to site</th>
             <th className="py-2 pr-3 font-semibold">Documents missing</th>
             <th className="py-2 font-semibold">Default case</th>
           </tr>
@@ -49,7 +49,7 @@ export function MobilisationCompliancePanel({ projectId, bare = false }: { proje
         <h2 className="text-sm font-bold text-slate-900 inline-flex items-center gap-2">
           <Truck className="w-4 h-4 text-brand-primary" /> Contractor mobilisation
         </h2>
-        <p className="text-[11px] text-slate-500">A contractor counts as mobilised once an officer marks the "Contractor on site" milestone complete.</p>
+        <p className="text-[11px] text-slate-500">A contractor counts as mobilised once an officer marks the "Mobilised to site" milestone complete.</p>
       </div>
       {body}
     </section>
@@ -83,7 +83,7 @@ function Row({ projectId, r }: { projectId: string; r: MobilisationComplianceRow
       <td className="py-2.5 pr-3 align-top">
         {r.onSite ? (
           <span className="text-emerald-700 font-semibold">
-            On site{m?.completedAt ? <span className="block font-normal text-[11px] text-slate-500">Confirmed {formatDateTimeShort(m.completedAt)}</span> : null}
+            Mobilised{m?.completedAt ? <span className="block font-normal text-[11px] text-slate-500">Confirmed {formatDateTimeShort(m.completedAt)}</span> : null}
           </span>
         ) : (
           <span className="text-slate-500">Not yet</span>

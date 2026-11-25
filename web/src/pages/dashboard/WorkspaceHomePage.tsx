@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { PortfolioOverviewDto, ProjectListFilters } from "@insite/shared";
+import { FundingSourceCodeEnum, lgaByCode, NigeriaZoneCodeEnum, stateByCode, type PortfolioOverviewDto, type ProjectListFilters } from "@insite/shared";
 import { usePortfolioOverviewQuery, useProjectRegisterOptionsQuery } from "../../queries/projects/useProjectsQueries";
 import { useAuth } from "../../lib/auth-context";
 import { formatCompactNaira } from "../../lib/formatters";
@@ -12,14 +12,17 @@ import { VisitPlannerPage } from "../visits/VisitPlannerPage";
 import { StatStrip, type Stat } from "./StatStrip";
 import { PortfolioMap } from "./PortfolioMap";
 import { PortfolioProjectsTable, type ProjectTableFilter } from "./PortfolioProjectsTable";
+import { PortfolioPaymentsTab } from "./PortfolioPaymentsTab";
 
-type HomeTab = "overview" | "kpis" | "visits";
+type HomeTab = "overview" | "kpis" | "visits" | "payments";
 
 /**
  * The workspace home (UBEC rebrand). "portfolio" is the programme admins' Portfolio
  * (`projects:view_portfolio`); "dashboard" is everyone else's Dashboard, over the projects they are
  * assigned to. Both: an Overview tab (headline figures, the map, the projects table: the only way
- * into a project), a KPIs tab (`kpis:view`) and a Visits tab (the visit planner, `visits:view`).
+ * into a project), a KPIs tab (`kpis:view`), a Visits tab (the visit planner, `visits:view`) and a
+ * Payments tab (client demo updates G.2: every payment in the period across the visible projects,
+ * `payments:view`).
  */
 export function WorkspaceHomePage({ variant, onOpenProject }: { variant: "portfolio" | "dashboard"; onOpenProject: (projectId: string) => void }) {
   const { hasPermission } = useAuth();
@@ -29,6 +32,7 @@ export function WorkspaceHomePage({ variant, onOpenProject }: { variant: "portfo
         { id: "overview" as const, label: "Overview" },
         ...(hasPermission("kpis:view") ? [{ id: "kpis" as const, label: "KPIs" }] : []),
         ...(hasPermission("visits:view") ? [{ id: "visits" as const, label: "Visits" }] : []),
+        ...(hasPermission("payments:view") ? [{ id: "payments" as const, label: "Payments" }] : []),
       ] satisfies { id: HomeTab; label: string }[],
     [hasPermission]
   );
@@ -42,6 +46,7 @@ export function WorkspaceHomePage({ variant, onOpenProject }: { variant: "portfo
         {tab === "overview" && <OverviewTab variant={variant} onOpenProject={onOpenProject} />}
         {tab === "kpis" && <ProgrammeKpisPage onOpenProject={onOpenProject} />}
         {tab === "visits" && <VisitPlannerPage embedded />}
+        {tab === "payments" && <PortfolioPaymentsTab onOpenProject={onOpenProject} />}
       </TabPanel>
     </div>
   );
@@ -59,6 +64,11 @@ const FILTER_PARAMS = {
   contractorOrganizationId: "contractor",
   interventionYear: "year",
   fundingSource: "funding",
+  // Client demo updates (wave 1): zone / state / LGA codes and the funding source code.
+  zone: "zone",
+  stateCode: "state",
+  lgaCode: "lgaCode",
+  fundingSourceCode: "fundingCode",
 } as const satisfies Record<keyof ProjectListFilters, string>;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TABLE_FILTERS: readonly ProjectTableFilter[] = ["ongoing", "behind", "completed", "archived", "drafts"];
@@ -72,6 +82,8 @@ function useRegisterUrlState() {
   };
   const yearText = read("interventionYear");
   const year = yearText && /^\d{4}$/.test(yearText) ? Number(yearText) : undefined;
+  const state = stateByCode(read("stateCode"));
+  const lga = lgaByCode(read("lgaCode"));
   const filters: ProjectListFilters = {
     projectTypeId: id("projectTypeId"),
     regionId: id("regionId"),
@@ -80,6 +92,11 @@ function useRegisterUrlState() {
     contractorOrganizationId: id("contractorOrganizationId"),
     interventionYear: year !== undefined && year >= 2000 && year <= 2100 ? year : undefined,
     fundingSource: read("fundingSource"),
+    // Client demo updates (wave 1): known codes only; an LGA must be in the chosen state.
+    zone: NigeriaZoneCodeEnum.safeParse(read("zone")?.toUpperCase()).data,
+    stateCode: state?.code,
+    lgaCode: lga && (!state || lga.stateCode === state.code) ? lga.code : undefined,
+    fundingSourceCode: FundingSourceCodeEnum.safeParse(read("fundingSourceCode")?.toUpperCase()).data,
   };
   // Only the filters in use, so the query key and the export carry no empty keys.
   (Object.keys(filters) as Array<keyof ProjectListFilters>).forEach((k) => filters[k] === undefined && delete filters[k]);
@@ -158,7 +175,7 @@ function OverviewTab({ variant, onOpenProject }: { variant: "portfolio" | "dashb
         <p className="text-sm text-slate-600">
           {variant === "portfolio" ? "Every project in the programme you can see." : "The projects you are assigned to."} Figures follow the filters.
         </p>
-        <DeliveryModelFilters filters={filters} onChange={setFilters} owners={ownersSeen} registerOptions={registerOptions} />
+        <DeliveryModelFilters filters={filters} onChange={setFilters} owners={ownersSeen} registerOptions={registerOptions} register />
       </div>
       <StatStrip stats={stats} label={variant === "portfolio" ? "Portfolio figures" : "Your figures"} />
       <PortfolioMap projects={data.projects} onOpenProject={onOpenProject} />
@@ -206,7 +223,7 @@ function useStats(
     tone: k.behindScheduleCount > 0 ? "alert" : "default",
     detail: (
       <>
-        {k.behindScheduleCount > 0 ? "A unit due by an ended sprint is unfinished" : "No project is behind"}
+        {k.behindScheduleCount > 0 ? "A unit due by an ended work phase is unfinished" : "No project is behind"}
         {/* UBEC IRL: projects with any early-warning alert (delayed, stalled, site update overdue, spend ahead of progress). */}
         {k.projectsWithAlertsCount > 0 && (
           <span className="block font-medium text-rose-700">{plural(k.projectsWithAlertsCount, "project")} with early-warning alerts</span>

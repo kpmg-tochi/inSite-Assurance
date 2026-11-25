@@ -29,7 +29,7 @@ export function CompletionHandoverPage({ project }: { project: ProjectSummaryDto
     { id: "certificate", label: "Certificate" },
     ...(config?.enableHandoverModule && hasAnyPermission(...HANDOVER_VIEW_PERMISSIONS) ? [{ id: "handover" as const, label: "Handover" }] : []),
     ...(config?.enableRetentionModule && hasAnyPermission(...DEFECT_VIEW_PERMISSIONS) ? [{ id: "defects" as const, label: "Defects" }] : []),
-    ...(hasAnyPermission(...CLOSURE_VIEW_PERMISSIONS) ? [{ id: "closure" as const, label: "Closure" }] : []),
+    ...(hasAnyPermission(...CLOSURE_VIEW_PERMISSIONS) ? [{ id: "closure" as const, label: "Project closure" }] : []),
   ];
   const [active, setActive] = useUrlTab(tabs.map((t) => t.id));
 

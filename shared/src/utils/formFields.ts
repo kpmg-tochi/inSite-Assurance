@@ -168,7 +168,7 @@ export function validateFormFields(
         if (message) add('SIGNAL_CONDITION_INVALID', `${name}: ${message}`, 'signal');
       }
       if (CAPTURE.includes(f.type)) add('SIGNAL_TYPE', `${name}: photo and voice questions cannot give a signal`, 'signal');
-      if (s.kind === 'CONTRACTOR_ON_SITE' && f.type !== 'YES_NO') add('SIGNAL_TYPE', `${name}: "contractor on site" needs a yes/no question`, 'signal');
+      if (s.kind === 'CONTRACTOR_ON_SITE' && f.type !== 'YES_NO') add('SIGNAL_TYPE', `${name}: "mobilised to site" needs a yes/no question`, 'signal');
       if (s.kind === 'PERCENT_COMPLETE' && f.type !== 'PERCENTAGE') add('SIGNAL_TYPE', `${name}: "% complete" needs a percentage question`, 'signal');
       if (s.kind === 'QUANTITY_DELIVERED' && !(f.type === 'NUMBER' && f.boundedByPlannedQuantity)) {
         add('SIGNAL_TYPE', `${name}: "quantity delivered" needs a number bounded by the planned quantity`, 'signal');

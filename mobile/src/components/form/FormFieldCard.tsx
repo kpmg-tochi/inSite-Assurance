@@ -45,8 +45,8 @@ export function FormFieldCard(props: FormFieldCardProps) {
   const [commentOpened, setCommentOpened] = useState(false);
   const unitLabel = unitLabelFor(field, block);
   const recheck = field.recheck;
-  const question = recheck ? 'Resolved?' : field.label;
-  const a11yLabel = [unitLabel, recheck ? `Re-check: ${recheck.title}. Resolved?` : field.label].filter(Boolean).join(', ');
+  const question = recheck ? 'Rectified?' : field.label;
+  const a11yLabel = [unitLabel, recheck ? `Follow-up check: ${recheck.title}. Rectified?` : field.label].filter(Boolean).join(', ');
   const value = answer?.value ?? null;
   const notes = fieldRuleNotes(field, answer);
   const photoModel = photoFieldModel(field, answer, facts);
@@ -113,7 +113,7 @@ export function FormFieldCard(props: FormFieldCardProps) {
     <View style={formStyles.card} testID={`field-${field.path}`}>
       {recheck ? (
         <>
-          <Text style={formStyles.unitTag}>Re-check · {recheckMetaText(field)}</Text>
+          <Text style={formStyles.unitTag}>Follow-up check · {recheckMetaText(field)}</Text>
           <Text style={formStyles.label}>{recheck.title}</Text>
           {unitLabel ? <Text style={formStyles.meta}>{unitLabel}</Text> : null}
           {field.guidance ? <Text style={formStyles.meta}>{field.guidance}</Text> : null}

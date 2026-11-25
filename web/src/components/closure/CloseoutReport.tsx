@@ -58,7 +58,7 @@ export function CloseoutReportUploadDialog({ projectId, onClose }: { projectId: 
       projectId={projectId}
       defaultTypeCode={CLOSEOUT_REPORT_TYPE_CODE}
       lockType
-      defaultTitle="Closeout report"
+      defaultTitle="Lessons learned report"
       // The before-archive checklist item reads the register.
       onUploaded={() => qc.invalidateQueries({ queryKey: closureChecklistKey(projectId) })}
       onClose={onClose}
@@ -84,7 +84,7 @@ export function CloseoutReportCard({ project }: { project: ProjectSummaryDto }) 
   } else if (closeout.isError) {
     body = (
       <p className="text-xs text-rose-700">
-        The closeout report could not be loaded.{" "}
+        The lessons learned report could not be loaded.{" "}
         <button type="button" onClick={() => closeout.refetch()} className="font-semibold underline">
           Try again
         </button>
@@ -121,22 +121,22 @@ export function CloseoutReportCard({ project }: { project: ProjectSummaryDto }) 
       </div>
     );
   } else if (archived) {
-    body = <p className="text-xs text-slate-500">No closeout report was uploaded before the project was archived.</p>;
+    body = <p className="text-xs text-slate-500">No lessons learned report was uploaded before the project was archived.</p>;
   } else if (!closeout.canUpload) {
-    body = <p className="text-xs text-slate-500">No closeout report has been uploaded yet.</p>;
+    body = <p className="text-xs text-slate-500">No lessons learned report has been uploaded yet.</p>;
   } else if (closeout.typeAvailable === false) {
     body = (
       <p className="text-xs text-slate-500">
-        No closeout report has been uploaded yet, and this workspace has no "Closeout report" document type to file it under. Ask an
+        No lessons learned report has been uploaded yet, and this workspace has no "Lessons learned report" document type to file it under. Ask an
         administrator to add it.
       </p>
     );
   } else {
     body = (
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-slate-500">No closeout report has been uploaded yet.</p>
+        <p className="text-xs text-slate-500">No lessons learned report has been uploaded yet.</p>
         <button type="button" className={primaryButton} onClick={() => setUploading(true)}>
-          <FileUp className="h-3.5 w-3.5" aria-hidden="true" /> Upload closeout report
+          <FileUp className="h-3.5 w-3.5" aria-hidden="true" /> Upload lessons learned report
         </button>
       </div>
     );
@@ -146,7 +146,7 @@ export function CloseoutReportCard({ project }: { project: ProjectSummaryDto }) 
     <section id="closeout-report" className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5" aria-labelledby="closeout-report-heading">
       <div>
         <h2 id="closeout-report-heading" className="text-sm font-bold text-slate-900">
-          Closeout report
+          Lessons learned report
         </h2>
         <p className="text-[11px] text-slate-500">
           One document with {CLOSEOUT_REPORT_HOLDS}, filed in the project register.
@@ -155,7 +155,7 @@ export function CloseoutReportCard({ project }: { project: ProjectSummaryDto }) 
       {body}
       {report && closeout.otherCount > 0 && (
         <p className="text-[11px] text-slate-500">
-          {closeout.otherCount} earlier closeout report{closeout.otherCount === 1 ? " is" : "s are"} in the{" "}
+          {closeout.otherCount} earlier lessons learned report{closeout.otherCount === 1 ? " is" : "s are"} in the{" "}
           <Link to={`/app/projects/${project.id}/documents`} className="font-semibold text-brand-primary hover:underline">
             documents register
           </Link>
@@ -188,7 +188,7 @@ export function CloseoutReportPrompt({ project }: { project: ProjectSummaryDto }
         <FileUp className="mt-0.5 h-4 w-4 shrink-0 text-brand-primary" aria-hidden="true" />
         <div>
           <h2 id="closeout-prompt-heading" className="text-sm font-bold text-slate-900">
-            Upload the closeout report
+            Upload the lessons learned report
           </h2>
           <p className="text-xs text-slate-600">
             It holds {CLOSEOUT_REPORT_HOLDS}.{" "}
@@ -199,7 +199,7 @@ export function CloseoutReportPrompt({ project }: { project: ProjectSummaryDto }
         </div>
       </div>
       <button type="button" className={primaryButton} onClick={() => setUploading(true)}>
-        Upload closeout report
+        Upload lessons learned report
       </button>
       {uploading && <CloseoutReportUploadDialog projectId={project.id} onClose={() => setUploading(false)} />}
     </section>

@@ -275,7 +275,7 @@ function TemplateEditor({
         />
         <div className="space-y-1.5">
           <p className="text-[11px] font-semibold text-slate-700">Blocks, in order</p>
-          <p className="text-[11px] text-slate-500">Header first (from the visit), then these blocks, then any re-check items, then the summary.</p>
+          <p className="text-[11px] text-slate-500">Header first (from the visit), then these blocks, then any follow-up check items, then the summary.</p>
           {s.blocks.map((b, i) => (
             <div key={b.type === "SECTION" ? b.sectionCode : "facilities"} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
               <span className={`flex-1 text-xs ${b.type === "FACILITIES" ? "font-bold text-brand-primary" : "text-slate-800"}`}>

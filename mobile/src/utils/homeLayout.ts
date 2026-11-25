@@ -6,6 +6,8 @@
  */
 import {
   daysBetween,
+  formatProjectCode,
+  parseLotBatchCode,
   sprintForDate,
   unitsActiveInSprint,
   VISIT_KIND_META,
@@ -59,7 +61,10 @@ export function mobilisationProgress(m: MobileBaselinePack['mobilisation'], toda
 
 export interface ProjectCardModel {
   projectId: string;
+  /** The code as people read it ("LOT 5 BATCH 7"; older codes as stored). */
   code: string;
+  /** From a lot/batch code (the lot's year); null for older codes. */
+  interventionYear: number | null;
   name: string;
   school: string | null;
   address: string | null;
@@ -68,7 +73,7 @@ export interface ProjectCardModel {
   stageLabel: string | null;
   /** The sprint covering today (or the latest started); null before sprint 1 or without sprints. */
   currentSprint: BaselineSprint | null;
-  /** "Sprint 3 of 5", "Starts 2026-12-01" or null. */
+  /** "Work phase 3 of 5", "Work phase 1 starts Sun 1 Nov" or null. */
   sprintText: string | null;
   nextSprint: BaselineSprint | null;
   /** Units whose start–end sprints cover the current sprint. */
@@ -99,15 +104,16 @@ export function projectCardModel(
   const next = sprints.find((s) => s.startDate > today) ?? null;
   const units = pack?.facilityUnits ?? [];
   let sprintText: string | null = null;
-  if (current) sprintText = `Sprint ${current.number} of ${sprints.length}`;
-  else if (next) sprintText = `Sprint ${next.number} starts ${formatDay(next.startDate)}`;
+  if (current) sprintText = `Work phase ${current.number} of ${sprints.length}`;
+  else if (next) sprintText = `Work phase ${next.number} starts ${formatDay(next.startDate)}`;
   const mine = views.filter((v) => v.projectId === base.projectId);
   const upcoming = mine
     .filter((v) => !v.submitted && (v.status === 'PLANNED' || v.status === 'IN_PROGRESS') && v.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date))[0];
   return {
     projectId: base.projectId,
-    code: pack?.codePrefix ?? base.code,
+    code: formatProjectCode(pack?.codePrefix ?? base.code),
+    interventionYear: interventionYearOfCode(pack?.codePrefix ?? base.code),
     name: pack?.name ?? base.name,
     school: pack?.school ?? null,
     address: pack?.address ?? null,
@@ -126,6 +132,11 @@ export function projectCardModel(
     mobilisation: mobilisationProgress(pack?.mobilisation ?? null, today),
     packMissing: !pack,
   };
+}
+
+/** The intervention year a lot/batch code carries ("2026-LOT-5-BATCH-7" → 2026); null for older codes. */
+export function interventionYearOfCode(code: string | null | undefined): number | null {
+  return parseLotBatchCode(code)?.year ?? null;
 }
 
 /** Units grouped by facility, in pack order (project screen). */

@@ -223,7 +223,7 @@ function recheckField(r: RecheckInput): VisitFormSnapshotField {
     path: `r:${r.id}`,
     key: r.id,
     type: 'YES_NO',
-    label: `Re-check: ${r.title}. Resolved?`,
+    label: `Follow-up check: ${r.title}. Rectified?`,
     labelTemplate: null,
     guidance: r.description,
     required: true,
@@ -252,8 +252,8 @@ function recheckBlock(rechecks: RecheckInput[]): VisitFormSnapshotBlock {
   return {
     key: 'r',
     kind: 'RECHECK',
-    title: 'Re-check open findings',
-    description: 'Was each finding resolved? A photo is needed when it was, a comment when it was not.',
+    title: 'Follow-up check on open findings',
+    description: 'Was each finding rectified? A photo is needed when it was, a comment when it was not.',
     sectionCode: null,
     facility: null,
     units: [],
@@ -312,8 +312,8 @@ export function assembleVisitForm(input: AssembleVisitFormInput): { snapshot: Vi
       code: 'NO_SPRINT_FOR_DATE',
       message:
         input.sprints.length === 0
-          ? 'The project has no sprints, so no facilities are included.'
-          : `No sprint has started by ${input.visitDate}, so no facilities are included.`,
+          ? 'The project has no work phases, so no facilities are included.'
+          : `No work phase has started by ${input.visitDate}, so no facilities are included.`,
       facilityId: null,
     });
   }
@@ -689,7 +689,7 @@ export function validateVisitAnswers(
       if (!conditionMet(rule.when, f, value)) continue;
       if (rule.then === 'REQUIRE_PHOTO' && photos.length === 0) photoGaps.push({ path: f.path, unitId: f.unitId, code: 'PHOTO_REQUIRED_BY_RULE' });
       if (rule.then === 'REQUIRE_COMMENT' && !hasComment(a?.comment)) {
-        errors.push({ path: f.path, code: 'COMMENT_REQUIRED', message: f.recheck ? 'Say why it is not resolved' : 'Add a comment for this answer' });
+        errors.push({ path: f.path, code: 'COMMENT_REQUIRED', message: f.recheck ? 'Say why it is not rectified' : 'Add a comment for this answer' });
       }
       if (rule.then === 'RAISE_FINDING' && rule.severity) {
         findingsToRaise.push({

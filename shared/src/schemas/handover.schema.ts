@@ -22,7 +22,7 @@ export type HandoverDecision = z.infer<typeof HandoverDecisionEnum>;
 
 export const HANDOVER_DECISION_LABELS: Record<HandoverDecision, string> = {
   ACCEPTED: 'Accepted',
-  ACCEPTED_WITH_SNAGS: 'Accepted with snags',
+  ACCEPTED_WITH_SNAGS: 'Accepted with punch list items',
   REJECTED: 'Rejected',
 };
 
@@ -32,7 +32,7 @@ export const HANDOVER_LIMITS = {
 } as const;
 
 export const HandoverSnagInputSchema = z.object({
-  title: z.string().trim().min(2, 'Give the snag a short title').max(160),
+  title: z.string().trim().min(2, 'Give the punch list item a short title').max(160),
   location: z.string().trim().max(200).optional(),
   description: z.string().trim().max(2000).optional(),
 });
@@ -52,7 +52,7 @@ export const RecordHandoverResponseRequestSchema = z
   })
   .superRefine((v, ctx) => {
     if (v.decision === 'ACCEPTED_WITH_SNAGS' && v.snags.length === 0) {
-      ctx.addIssue({ code: 'custom', path: ['snags'], message: 'List at least one snag' });
+      ctx.addIssue({ code: 'custom', path: ['snags'], message: 'List at least one punch list item' });
     }
     if (v.decision === 'REJECTED' && v.feedbackText.trim().length < 10) {
       ctx.addIssue({ code: 'custom', path: ['feedbackText'], message: 'Record why the works were not accepted' });

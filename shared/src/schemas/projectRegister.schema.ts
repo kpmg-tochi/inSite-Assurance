@@ -34,6 +34,77 @@ export const FUNDING_SOURCE_SUGGESTIONS = [
   'Development partner',
 ] as const;
 
+/**
+ * Client demo updates C4: the funding source as a fixed list (UBEC fund components and programmes).
+ * Stored as `Project.fundingSourceCode`; `Project.fundingSource` keeps the text (the label, or
+ * "label: detail" for a development partner or "Other"), so screens reading the text still work.
+ */
+export const FundingSourceCodeEnum = z.enum([
+  'MATCHING_GRANT',
+  'DIRECT_INTERVENTION',
+  'GOOD_PERFORMANCE_FUND',
+  'SPECIAL_NEEDS_FUND',
+  'CONSTITUENCY_PROJECTS',
+  'ZONAL_INTERVENTION',
+  'NORTH_EAST_INTERVENTION',
+  'DEVELOPMENT_PARTNER',
+  'OTHER',
+]);
+export type FundingSourceCode = z.infer<typeof FundingSourceCodeEnum>;
+
+export interface FundingSourceOption {
+  code: FundingSourceCode;
+  label: string;
+  /** The form asks for a detail (partner name, or what "Other" is). */
+  needsDetail: boolean;
+}
+
+export const FUNDING_SOURCES: readonly FundingSourceOption[] = [
+  { code: 'MATCHING_GRANT', label: 'Matching Grant', needsDetail: false },
+  { code: 'DIRECT_INTERVENTION', label: 'Direct Intervention (Educational Imbalance Fund)', needsDetail: false },
+  { code: 'GOOD_PERFORMANCE_FUND', label: 'Good Performance Fund', needsDetail: false },
+  { code: 'SPECIAL_NEEDS_FUND', label: 'Special Needs Education Fund', needsDetail: false },
+  { code: 'CONSTITUENCY_PROJECTS', label: 'Constituency Projects', needsDetail: false },
+  { code: 'ZONAL_INTERVENTION', label: 'Zonal Intervention Projects (ZIP)', needsDetail: false },
+  { code: 'NORTH_EAST_INTERVENTION', label: 'North East Intervention', needsDetail: false },
+  { code: 'DEVELOPMENT_PARTNER', label: 'Development partner', needsDetail: true },
+  { code: 'OTHER', label: 'Other', needsDetail: true },
+];
+
+export function fundingSourceLabel(code: string | null | undefined): string | null {
+  return FUNDING_SOURCES.find((f) => f.code === code)?.label ?? null;
+}
+
+/** The text stored in `Project.fundingSource` for a code (and its detail, when the code takes one). */
+export function fundingSourceText(code: FundingSourceCode, detail?: string | null): string {
+  const option = FUNDING_SOURCES.find((f) => f.code === code)!;
+  const d = detail?.trim();
+  return option.needsDetail && d ? `${option.label}: ${d}` : option.label;
+}
+
+/** Maps a label, code or older free text onto a code (register import); null when unknown. */
+export function fundingSourceCodeFromText(text: string | null | undefined): FundingSourceCode | null {
+  if (!text) return null;
+  const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const n = norm(text);
+  if (!n) return null;
+  for (const f of FUNDING_SOURCES) {
+    if (norm(f.code) === n || norm(f.label) === n) return f.code;
+  }
+  for (const f of FUNDING_SOURCES) {
+    if (f.needsDetail && n.startsWith(norm(f.label))) return f.code;
+  }
+  if (n.includes('matching')) return 'MATCHING_GRANT';
+  if (n.includes('imbalance') || n.includes('direct intervention') || n.includes('intervention fund')) return 'DIRECT_INTERVENTION';
+  if (n.includes('special needs')) return 'SPECIAL_NEEDS_FUND';
+  if (n.includes('good performance')) return 'GOOD_PERFORMANCE_FUND';
+  if (n.includes('constituency')) return 'CONSTITUENCY_PROJECTS';
+  if (n.includes('zonal') || n === 'zip') return 'ZONAL_INTERVENTION';
+  if (n.includes('north east')) return 'NORTH_EAST_INTERVENTION';
+  if (n.includes('partner') || n.includes('besda') || n.includes('world bank')) return 'DEVELOPMENT_PARTNER';
+  return null;
+}
+
 /** The client's own project ID (e.g. UBEC/DI/2025/KN/014); unique per workspace when set. */
 export const ExternalReferenceSchema = z
   .string()

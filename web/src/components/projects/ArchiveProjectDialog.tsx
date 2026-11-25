@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { Archive, X } from "lucide-react";
 import { z } from "zod";
+import { formatProjectCode } from "@insite/shared";
 import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import { Overlay } from "../common/Overlay";
 import { useArchiveProjectMutation } from "../../mutations/projects/useProjectSetupMutations";
@@ -67,7 +68,7 @@ export function ArchiveProjectDialog({
           <div className="flex items-center gap-2">
             <Archive className="w-4 h-4 text-rose-600" />
             <h2 id="archive-project-title" className="text-sm font-bold text-slate-900">
-              Archive {codePrefix}?
+              Archive {formatProjectCode(codePrefix)}?
             </h2>
           </div>
           <button type="button" onClick={onClose} disabled={archive.isPending} aria-label="Close">

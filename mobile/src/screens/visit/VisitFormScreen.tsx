@@ -3,7 +3,7 @@ import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacit
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { VISIT_KIND_META, type VisitFormAnswerInput, type VisitFormSnapshotField } from '@insite/shared';
+import { formatProjectCode, VISIT_KIND_META, type VisitFormAnswerInput, type VisitFormSnapshotField } from '@insite/shared';
 import type { RootStackScreenProps } from '../../navigation/types';
 import { useProfile } from '../../context/ProfileContext';
 import { hydrateBaselinePack } from '../../storage/baselineStore';
@@ -117,7 +117,7 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
             const detail = await refreshVisitDetail(v.projectId, v.serverId);
             await startCorrectionDraft(v.id, detail);
           } catch (err) {
-            return setPhase({ kind: 'BLOCKED', title: 'Returned for correction', message: `Connect to the internet to download the returned report. ${formatMobileErrorMessage(err)}` });
+            return setPhase({ kind: 'BLOCKED', title: 'Returned for correction', message: `Connect to the internet to download the returned monitoring report. ${formatMobileErrorMessage(err)}` });
           }
         } else {
           try {
@@ -131,14 +131,14 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
       }
 
       if (access.mode === 'BLOCKED') return setPhase({ kind: 'BLOCKED', title: access.title, message: access.message });
-      if (access.mode === 'START') return setPhase({ kind: 'BLOCKED', title: 'Form not ready', message: 'The report could not be started. Try again.' });
+      if (access.mode === 'START') return setPhase({ kind: 'BLOCKED', title: 'Form not ready', message: 'The monitoring report could not be started. Try again.' });
 
       let stored = access.draft;
       if (access.mode === 'EDIT') {
         // D-R5.19: the visit's form changed since this draft started.
         const state = await draftFormState(v.id);
         if (state.kind === 'FORM_MISSING') {
-          return setPhase({ kind: 'BLOCKED', title: 'Form not on this phone', message: 'The form for this report is not on the phone. Connect once to download it.' });
+          return setPhase({ kind: 'BLOCKED', title: 'Form not on this phone', message: 'The form for this monitoring report is not on the phone. Connect once to download it.' });
         }
         if (state.kind === 'REBUILT') {
           await remapOpenDraftToCurrentForm(v.id);
@@ -146,7 +146,7 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
         }
       }
       const form = await getVisitFormByHash(v.id, stored.draft.formHash);
-      if (!form) return setPhase({ kind: 'BLOCKED', title: 'Form not on this phone', message: 'The form of this report is no longer on the phone.' });
+      if (!form) return setPhase({ kind: 'BLOCKED', title: 'Form not on this phone', message: 'The form of this monitoring report is no longer on the phone.' });
 
       const facts = await captureFactsFor(answerCaptureIds(stored.draft.answers), v.projectId);
       const check = checkDraft(form.snapshot, stored.draft, facts);
@@ -364,7 +364,7 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
       </TouchableOpacity>
       <Text style={styles.title} accessibilityRole="header">
         {kindLabel}
-        {data ? ` · ${data.visit.visit.projectCode}` : ''}
+        {data ? ` · ${formatProjectCode(data.visit.visit.projectCode)}` : ''}
       </Text>
       {data && screen ? (
         <Text style={styles.subtitle}>
@@ -435,11 +435,11 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
               <View style={formStyles.row}>
                 {data.readOnly.canCopy && (
                   <TouchableOpacity style={formStyles.primaryButton} onPress={() => void copyRefused()} accessibilityRole="button">
-                    <Text style={formStyles.primaryButtonText}>Start a new report from this one</Text>
+                    <Text style={formStyles.primaryButtonText}>Start a new monitoring report from this one</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity style={formStyles.secondaryButton} onPress={() => void removeRefused()} accessibilityRole="button">
-                  <Text style={formStyles.secondaryButtonText}>Delete this report</Text>
+                  <Text style={formStyles.secondaryButtonText}>Delete this monitoring report</Text>
                 </TouchableOpacity>
               </View>
             )}

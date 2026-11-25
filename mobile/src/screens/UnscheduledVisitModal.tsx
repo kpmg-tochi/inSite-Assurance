@@ -16,6 +16,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { adHocAvailable, adHocFacilityChoices } from '../utils/visitForm';
 import { projectToday } from '../utils/visitCalendar';
 import { personaCopy } from '../utils/personaCopy';
+import { formatProjectCode } from '@insite/shared';
 import { formatDay } from '../utils/visitText';
 import { formatMobileErrorMessage } from '../utils/errorFormatter';
 
@@ -108,7 +109,7 @@ export function UnscheduledVisitModal() {
     >
       <Text style={visitUiStyles.body}>{copy.unscheduledVisitHelp}</Text>
       {eligible.length === 0 ? (
-        <EmptyStateCard title="You cannot record visits" description="Your role on these projects does not include submitting visit reports." />
+        <EmptyStateCard title="You cannot record visits" description="Your role on these projects does not include submitting monitoring reports." />
       ) : (
         <>
           {eligible.length > 1 && (
@@ -122,11 +123,11 @@ export function UnscheduledVisitModal() {
                     onPress={() => chooseProject(p.projectId)}
                     accessibilityRole="radio"
                     accessibilityState={{ checked: on }}
-                    accessibilityLabel={`${p.projectCodePrefix}, ${p.projectName}`}
+                    accessibilityLabel={`${formatProjectCode(p.projectCodePrefix)}, ${p.projectName}`}
                   >
                     <Feather name={on ? 'check-circle' : 'circle'} size={18} color={on ? primaryColor : '#94A3B8'} />
                     <View style={styles.optionTexts}>
-                      <Text style={visitUiStyles.strong}>{p.projectCodePrefix}</Text>
+                      <Text style={visitUiStyles.strong}>{formatProjectCode(p.projectCodePrefix)}</Text>
                       <Text style={visitUiStyles.muted}>{p.projectName}</Text>
                     </View>
                   </TouchableOpacity>

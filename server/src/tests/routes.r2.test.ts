@@ -526,7 +526,7 @@ describe('Redesign R2c: needs-assessment workbook', () => {
     assert.equal(p.totals.amountNgn, 6_000_000 + 2_700_000 + 510_000 + 5_400_000);
     assert.deepEqual(
       p.groups.map((g: { facilityCode: string; sprintLabel: string }) => `${g.facilityCode}:${g.sprintLabel}`),
-      ['CLASSROOM:Sprints 1–2', 'TOILET:Sprint 2', 'PUPILS_FURNITURE:Sprint 2']
+      ['CLASSROOM:Work phases 1–2', 'TOILET:Work phase 2', 'PUPILS_FURNITURE:Work phase 2']
     );
     const action = Object.fromEntries(p.projectChanges.map((c: { field: string; action: string }) => [c.field, c.action]));
     assert.equal(action.name, 'KEEP');

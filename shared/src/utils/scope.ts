@@ -35,8 +35,8 @@ export interface SprintLike {
 export function validateSprints(sprints: SprintLike[]): ScopeIssue[] {
   const issues: ScopeIssue[] = [];
   sprints.forEach((s, index) => {
-    const label = s.name?.trim() || `Sprint ${index + 1}`;
-    if (!s.name?.trim()) issues.push({ code: 'SPRINT_NAME_REQUIRED', message: 'Name the sprint.', index, field: 'name' });
+    const label = s.name?.trim() || `Work phase ${index + 1}`;
+    if (!s.name?.trim()) issues.push({ code: 'SPRINT_NAME_REQUIRED', message: 'Name the work phase.', index, field: 'name' });
     if (!isIsoCalendarDate(s.startDate)) {
       issues.push({ code: 'SPRINT_DATE_INVALID', message: `${label}: the start date is not a valid date.`, index, field: 'startDate' });
     }
@@ -57,8 +57,8 @@ export function validateSprints(sprints: SprintLike[]): ScopeIssue[] {
     if (cur.s.startDate <= prev.s.endDate) {
       issues.push({
         code: 'SPRINT_OVERLAP',
-        message: `${cur.s.name || `Sprint ${cur.index + 1}`} (${cur.s.startDate} to ${cur.s.endDate}) overlaps ${
-          prev.s.name || `Sprint ${prev.index + 1}`
+        message: `${cur.s.name || `Work phase ${cur.index + 1}`} (${cur.s.startDate} to ${cur.s.endDate}) overlaps ${
+          prev.s.name || `Work phase ${prev.index + 1}`
         } (${prev.s.startDate} to ${prev.s.endDate}).`,
         index: cur.index,
         field: 'startDate',
@@ -106,10 +106,10 @@ export function validateUnits(units: UnitLike[], opts: { requireSprints?: boolea
     const s = u.startSprintNumber ?? null;
     const e = u.endSprintNumber ?? null;
     if (s !== null && e !== null && s > e) {
-      issues.push({ code: 'UNIT_SPRINT_ORDER', message: `${name} ends in sprint ${e}, before it starts in sprint ${s}.`, index, field: 'endSprint' });
+      issues.push({ code: 'UNIT_SPRINT_ORDER', message: `${name} ends in work phase ${e}, before it starts in work phase ${s}.`, index, field: 'endSprint' });
     }
     if (opts.requireSprints && (s === null || e === null)) {
-      issues.push({ code: 'UNIT_SPRINTS_REQUIRED', message: `${name} needs a start and an end sprint.`, index, field: s === null ? 'startSprint' : 'endSprint' });
+      issues.push({ code: 'UNIT_SPRINTS_REQUIRED', message: `${name} needs a start and an end work phase.`, index, field: s === null ? 'startSprint' : 'endSprint' });
     }
     if (unitNeedsQuantity(u.archetype) && !(typeof u.plannedQuantity === 'number' && u.plannedQuantity > 0)) {
       issues.push({ code: 'UNIT_QUANTITY_REQUIRED', message: `${name} is a supply item: enter the planned quantity.`, index, field: 'plannedQuantity' });

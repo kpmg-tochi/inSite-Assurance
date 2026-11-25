@@ -111,8 +111,8 @@ export function isPostConstructionPhase(phase: ConstructionPhase | string | null
 }
 
 export const CONSTRUCTION_PHASE_LABELS: Record<ConstructionPhase, string> = {
-  ACTIVE_CONSTRUCTION: 'Construction',
+  ACTIVE_CONSTRUCTION: 'Execution',
   HANDOVER_IN_PROGRESS: 'Handover',
-  RETENTION_PERIOD: 'Defects liability',
+  RETENTION_PERIOD: 'Defects liability period',
   COMPLETED_CLOSED: 'Closed',
 };

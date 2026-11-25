@@ -197,6 +197,8 @@ function AuthenticatedWorkspace() {
         <Route path="projects" element={<Navigate to={home} replace />} />
         <Route path="kpis" element={<Navigate to={`${home}?tab=kpis`} replace />} />
         <Route path="visits" element={<Navigate to={`${home}?tab=visits`} replace />} />
+        {/* Client demo updates G.2: the programme-wide payments are a tab of the home page. */}
+        <Route path="payments" element={<Navigate to={`${home}?tab=payments`} replace />} />
         <Route path="lessons" element={<Navigate to={home} replace />} />
         <Route path="forms" element={<Navigate to="/app/settings?tab=forms" replace />} />
         <Route path="executive" element={<Navigate to={home} replace />} />

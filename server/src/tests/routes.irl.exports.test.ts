@@ -101,7 +101,7 @@ const VISIT_HEADERS = [
   'Planned date',
   'Original date',
   'Visit kind',
-  'Sprint',
+  'Work phase',
   'Status',
   'Confirmation',
   'Lead officer',
@@ -283,11 +283,11 @@ describe('UBEC IRL exports: findings', () => {
       'Visit date',
       'Raised at',
       'Raised by',
-      'Re-checks',
-      'Last re-checked',
+      'Follow-up checks',
+      'Last follow-up check',
       'Escalated at',
-      'Resolved / dismissed at',
-      'Resolved / dismissed by',
+      'Rectified / dismissed at',
+      'Rectified / dismissed by',
       'Notes',
       'Contractor',
     ]);
@@ -301,7 +301,7 @@ describe('UBEC IRL exports: findings', () => {
     const row = rows.find((r) => r.Question === escalated.title && r['Escalated at'] instanceof Date);
     assert.ok(row, 'the escalated finding has its escalation time');
     assert.equal(row!.Severity, escalated.severity.charAt(0) + escalated.severity.slice(1).toLowerCase());
-    assert.equal(row!['Re-checks'], escalated.recheckCount);
+    assert.equal(row!['Follow-up checks'], escalated.recheckCount);
     assert.ok(row!['Visit date'] instanceof Date);
   });
 
@@ -349,7 +349,7 @@ describe('UBEC IRL exports: payments', () => {
       'Type',
       'Reference',
       'Description',
-      'Sprint',
+      'Work phase',
       'Gross amount',
       'Retention held',
       'Retention released',

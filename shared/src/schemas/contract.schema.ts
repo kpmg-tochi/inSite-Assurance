@@ -36,24 +36,24 @@ export interface DefaultDocumentTypeDefinition {
 
 /** Document types every tenant starts with. Codes are stable: project types and milestones refer to them. */
 export const DEFAULT_DOCUMENT_TYPES: DefaultDocumentTypeDefinition[] = [
-  { code: 'CONTRACT', name: 'Contract', description: 'The signed contract agreement.', visibleToContractors: true, requiresSignOff: false },
+  { code: 'CONTRACT', name: 'Signed contract', description: 'The signed contract agreement.', visibleToContractors: true, requiresSignOff: false },
   { code: 'AWARD_LETTER', name: 'Award letter', description: 'Letter of award to the contractor.', visibleToContractors: true, requiresSignOff: false },
   { code: 'ACCEPTANCE_LETTER', name: 'Acceptance letter', description: "The contractor's acceptance of the award.", visibleToContractors: true, requiresSignOff: false },
   { code: 'KICKOFF_BRIEFING_PACK', name: 'Kick-off briefing pack', description: 'Agenda and briefing pack sent with the kick-off notice.', visibleToContractors: true, requiresSignOff: false },
-  { code: 'KICKOFF_NOTICE_RECEIPT', name: 'Kick-off notice receipt', description: 'Proof that the kick-off notice was delivered (when not sent through the platform).', visibleToContractors: false, requiresSignOff: false },
-  { code: 'KICKOFF_MINUTES', name: 'Kick-off minutes', description: 'Minutes of the kick-off meeting, signed off by attendees.', visibleToContractors: true, requiresSignOff: true },
+  { code: 'KICKOFF_NOTICE_RECEIPT', name: 'Evidence of receipt (kick-off notification)', description: 'Proof that the kick-off notice was delivered (when not sent through the platform).', visibleToContractors: false, requiresSignOff: false },
+  { code: 'KICKOFF_MINUTES', name: 'Kick-off meeting minutes', description: 'Minutes of the kick-off meeting, signed off by attendees.', visibleToContractors: true, requiresSignOff: true },
   { code: 'MOBILISATION_AGREEMENT', name: 'Mobilisation agreement', description: 'Agreement on how and when the contractor mobilises.', visibleToContractors: true, requiresSignOff: true },
   { code: 'MOBILISATION_PLAN', name: 'Mobilisation plan', description: "The contractor's plan for people, plant and materials.", visibleToContractors: true, requiresSignOff: false },
   { code: 'PROGRAMME_OF_WORKS', name: 'Programme of works', description: "The contractor's programme of works. Signing it off accepts the programme.", visibleToContractors: true, requiresSignOff: true },
   { code: 'LETTER_OF_INTRODUCTION', name: 'Letter of introduction', description: 'Introduces the contractor to the beneficiary and community.', visibleToContractors: true, requiresSignOff: false },
   { code: 'SITE_POSSESSION_FORM', name: 'Site possession form', description: 'Records that the site was handed to the contractor.', visibleToContractors: true, requiresSignOff: true },
-  { code: 'SUPERVISOR_ASSIGNMENT', name: 'Supervisor assignment', description: 'Names the supervisor assigned to the site.', visibleToContractors: true, requiresSignOff: false },
+  { code: 'SUPERVISOR_ASSIGNMENT', name: 'Supervisor assignment record', description: 'Names the supervisor assigned to the site.', visibleToContractors: true, requiresSignOff: false },
   { code: 'CP_EVIDENCE', name: 'Condition precedent evidence', description: 'Evidence that a condition precedent is satisfied.', visibleToContractors: false, requiresSignOff: false },
-  { code: 'COMPLETION_CERTIFICATE', name: 'Certificate of completion', description: 'Certificate of completion of the works.', visibleToContractors: true, requiresSignOff: true },
+  { code: 'COMPLETION_CERTIFICATE', name: 'Certificate of Completion (CoC)', description: 'Certificate of Completion of the works.', visibleToContractors: true, requiresSignOff: true },
   { code: 'HANDOVER_CERTIFICATE', name: 'Handover certificate', description: 'Certificate of handover to the beneficiary.', visibleToContractors: true, requiresSignOff: true },
   { code: 'FINAL_EVALUATION_REPORT', name: 'Final evaluation report', description: 'Final evaluation of the project.', visibleToContractors: false, requiresSignOff: false },
-  { code: 'CLOSEOUT_REPORT', name: 'Closeout report', description: 'The closeout report: final evaluation summary, lessons learned and beneficiary feedback.', visibleToContractors: false, requiresSignOff: false },
-  { code: 'CLOSURE_FILE', name: 'Closure file', description: 'The project closure file.', visibleToContractors: false, requiresSignOff: false },
+  { code: 'CLOSEOUT_REPORT', name: 'Lessons learned report', description: 'Final evaluation summary, lessons learned and beneficiary feedback.', visibleToContractors: false, requiresSignOff: false },
+  { code: 'CLOSURE_FILE', name: 'Project closure file', description: 'The project closure file.', visibleToContractors: false, requiresSignOff: false },
   { code: 'OTHER', name: 'Other', description: 'Any other project document.', visibleToContractors: false, requiresSignOff: false },
 ];
 
@@ -269,10 +269,10 @@ export const CONTRACT_MILESTONE_ANCHOR_META: Record<ContractMilestoneAnchor, { l
 
 export const MILESTONE_COMPLETION_MODE_META: Record<MilestoneCompletionMode, { label: string; description: string }> = {
   MANUAL: { label: 'Completed by a person', description: 'Completed by someone with milestones:manage once its documents are in place.' },
-  AUTO_CONTRACTOR_ON_SITE: { label: 'Contractor on site', description: 'An officer confirms the contractor is on site (redesign R1e; mobilisation check visits complete it in R4).' },
+  AUTO_CONTRACTOR_ON_SITE: { label: 'Mobilised to site', description: 'Completed when an officer confirms the contractor has mobilised to site, or an accepted mobilisation check says so.' },
   AUTO_KICKOFF_NOTICE_SENT: { label: 'Kick-off notice sent', description: 'Completed when the kick-off notice goes out through the platform.' },
   AUTO_KICKOFF_QUORUM: { label: 'Kick-off held', description: 'Completed when the kick-off is recorded as held with quorum (or a waiver).' },
-  AUTO_SCHEDULE_BASELINE_SET: { label: 'Programme accepted', description: 'Completed when a programme of works document is signed off.' },
+  AUTO_SCHEDULE_BASELINE_SET: { label: 'Programme of works accepted', description: 'Completed when a programme of works document is signed off.' },
   AUTO_COC_ISSUED: { label: 'Certificate issued', description: 'Completed when the Certificate of Completion is issued (reopened if it is revoked).' },
   AUTO_HANDOVER_ACCEPTED: { label: 'Handover accepted', description: 'Completed when an accepted handover response is reviewed (the handover certificate is issued).' },
   AUTO_FINAL_EVALUATION_APPROVED: {

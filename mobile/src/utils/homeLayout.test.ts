@@ -2,7 +2,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { MobileBaselinePack } from '@insite/shared';
-import { homeMode, mobilisationProgress, projectCardModel, unitsByFacility } from './homeLayout';
+import { homeMode, interventionYearOfCode, mobilisationProgress, projectCardModel, unitsByFacility } from './homeLayout';
 import { isCurrentPack, normaliseBaselinePack } from './baselinePack';
 import { visitView } from './visitCalendar';
 import { IDS, storedVisit, uuid } from './__fixtures__/visitFixtures';
@@ -63,7 +63,7 @@ describe('project card', () => {
     assert.equal(card.code, 'PRG-105');
     assert.equal(card.school, 'Government Primary School, Zaria');
     assert.equal(card.stageLabel, 'Construction');
-    assert.equal(card.sprintText, 'Sprint 1 of 2');
+    assert.equal(card.sprintText, 'Work phase 1 of 2');
     assert.deepEqual(card.unitsInSprint.map((u) => u.code), ['U01', 'U02']);
     assert.equal(card.openFindingCount, 1);
     assert.equal(card.openDefectCount, 2);
@@ -75,12 +75,24 @@ describe('project card', () => {
 
   it('before sprint 1 says when it starts; without a pack only the name is known', () => {
     const early = projectCardModel({ projectId: IDS.project, code: 'X', name: 'Y' }, pack(), [], '2026-10-20');
-    assert.equal(early.sprintText, 'Sprint 1 starts Sun 1 Nov');
+    assert.equal(early.sprintText, 'Work phase 1 starts Sun 1 Nov');
     assert.deepEqual(early.unitsInSprint, []);
     const none = projectCardModel({ projectId: IDS.project, code: 'PRG-102', name: 'Other school' }, null, [], TODAY);
     assert.equal(none.packMissing, true);
     assert.equal(none.code, 'PRG-102');
+    assert.equal(none.interventionYear, null);
     assert.equal(none.sprintText, null);
+  });
+
+  it('shows a lot/batch code as "LOT 5 BATCH 7" with its intervention year; older codes as stored', () => {
+    const lot = projectCardModel({ projectId: IDS.project, code: 'X', name: 'Y' }, pack({ codePrefix: '2026-LOT-5-BATCH-7' }), [], TODAY);
+    assert.equal(lot.code, 'LOT 5 BATCH 7');
+    assert.equal(lot.interventionYear, 2026);
+    const old = projectCardModel({ projectId: IDS.project, code: 'X', name: 'Y' }, pack(), [], TODAY);
+    assert.equal(old.code, 'PRG-105');
+    assert.equal(old.interventionYear, null);
+    assert.equal(interventionYearOfCode('2027-LOT-1-BATCH-2'), 2027);
+    assert.equal(interventionYearOfCode(null), null);
   });
 
   it('closure stages show their sub-label', () => {

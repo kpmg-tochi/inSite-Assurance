@@ -193,7 +193,7 @@ export function ProcessSection({ projectId, setup, mode, readOnly }: StepProps) 
               <div className="flex items-start gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 p-3 text-[11px] text-brand-navy">
                 <Info className="w-4 h-4 shrink-0 text-brand-primary" />
                 <span>
-                  Chain and setting changes apply to new items only. Visit reports already in approval finish on the
+                  Chain and setting changes apply to new items only. Monitoring reports already in approval finish on the
                   chain they started with.
                 </span>
               </div>

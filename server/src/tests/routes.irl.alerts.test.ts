@@ -120,7 +120,7 @@ describe('UBEC IRL early-warning alerts', () => {
     assert.equal(byCategory.get('PROJECT_STALLED')?.actionUrl, `/app/projects/${projectId}/scope`);
     assert.equal(byCategory.get('SITE_UPDATE_OVERDUE')?.targetPermissionKey, 'visits:plan');
     assert.equal(byCategory.get('SITE_UPDATE_OVERDUE')?.actionUrl, `/app/projects/${projectId}/visits`);
-    assert.match(byCategory.get('SITE_UPDATE_OVERDUE')!.title, /PRG-105: site update overdue/);
+    assert.match(byCategory.get('SITE_UPDATE_OVERDUE')!.title, /PRG-105: monitoring overdue/);
 
     // Field officers: one broadcast per field alert, and a push per officer that opens the project.
     const mobile = await mobileAlerts();

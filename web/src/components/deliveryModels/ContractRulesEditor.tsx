@@ -147,7 +147,7 @@ export function ContractRulesEditor({ value, onChange }: { value: ContractRules;
                       className={inputCls}
                       value={m.label}
                       maxLength={160}
-                      placeholder="e.g. Contractor mobilised on site"
+                      placeholder="e.g. Mobilised to site"
                       onChange={(e) =>
                         update(i, { label: e.target.value, ...(keyTouched.has(i) ? {} : { key: keyFromLabel(e.target.value, otherKeys) }) })
                       }

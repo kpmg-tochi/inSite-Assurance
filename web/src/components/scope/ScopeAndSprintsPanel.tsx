@@ -64,7 +64,7 @@ const UOM_OPTIONS = UNITS_OF_MEASURE.map((u) => ({ value: u.code as string, labe
 
 function sprintRange(u: FacilityUnitDto) {
   if (u.startSprintNumber === null || u.endSprintNumber === null) return null;
-  return u.startSprintNumber === u.endSprintNumber ? `Sprint ${u.startSprintNumber}` : `Sprints ${u.startSprintNumber}–${u.endSprintNumber}`;
+  return u.startSprintNumber === u.endSprintNumber ? `Work phase ${u.startSprintNumber}` : `Work phases ${u.startSprintNumber}–${u.endSprintNumber}`;
 }
 
 export interface ScopeAndSprintsPanelProps {
@@ -95,7 +95,7 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
   }, [scope?.lines]);
 
   if (q.isLoading) return <Loader />;
-  if (!scope) return <p className="text-sm text-rose-600">Could not load the scope.</p>;
+  if (!scope) return <p className="text-sm text-rose-600">Could not load the BoQ and work phases.</p>;
 
   const live = scope.projectStatus !== "DRAFT";
   const unitsById = new Map(scope.units.map((u) => [u.id, u]));
@@ -117,7 +117,7 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
 
   const sprintColumns: TableColumnDef<ProjectSprintDto>[] = [
     { id: "n", header: "No.", width: "w-14", cell: (s) => <span className="text-xs font-bold tabular-nums">{s.number}</span> },
-    { id: "name", header: "Sprint", cell: (s) => <span className="text-xs font-semibold text-slate-900">{s.name}</span> },
+    { id: "name", header: "Work phase", cell: (s) => <span className="text-xs font-semibold text-slate-900">{s.name}</span> },
     {
       id: "dates",
       header: "Dates",
@@ -168,13 +168,13 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
       {dialog}
       {verifying && <SprintVerifyDialog projectId={projectId} sprintId={verifying} onClose={() => setVerifying(null)} />}
       {/* One summary: the total leads, the counts support it, the needs assessment sits beside it. */}
-      <section aria-label="Scope summary" className="bg-white rounded-2xl border border-slate-200/80 shadow-sm px-5 py-4">
+      <section aria-label="BoQ summary" className="bg-white rounded-2xl border border-slate-200/80 shadow-sm px-5 py-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-600">Scope total</p>
+            <p className="text-xs font-medium text-slate-600">BoQ total</p>
             <p className="mt-0.5 text-2xl font-bold tracking-tight tabular-nums text-slate-900">{formatNaira(scope.totals.amountNgn)}</p>
             <p className="mt-1 text-sm text-slate-600">
-              {countOf(scope.totals.sprintCount, "sprint")} · {countOf(scope.totals.unitCount, "facility unit")} · {countOf(scope.totals.lineCount, "BoQ line")}
+              {countOf(scope.totals.sprintCount, "work phase")} · {countOf(scope.totals.unitCount, "facility unit")} · {countOf(scope.totals.lineCount, "BoQ line")}
               {scope.budgetNgn !== null &&
                 (scope.budgetNgn === scope.totals.amountNgn ? " · matches the budget" : ` · budget ${formatNaira(scope.budgetNgn)}`)}
             </p>
@@ -199,7 +199,7 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
       )}
 
       <StandardTable<ProjectSprintDto>
-        title="Sprints"
+        title="Work phases"
         subtitle="Named periods with deliverables. They may differ in length and leave gaps, but may not overlap. Numbers follow the dates."
         headerActions={
           !readOnly && (
@@ -208,7 +208,7 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
               onClick={() => setSprintsOpen(true)}
               className="inline-flex items-center gap-1 rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-brand-navy hover:bg-slate-100"
             >
-              <CalendarRange className="w-3.5 h-3.5" /> Edit sprints
+              <CalendarRange className="w-3.5 h-3.5" /> Edit work phases
             </button>
           )
         }
@@ -216,7 +216,7 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
         data={scope.sprints}
         keyExtractor={(s) => s.id}
         minWidth="min-w-[720px]"
-        emptyState={{ title: "No sprints yet", description: "Add the sprints before you plan the facility units." }}
+        emptyState={{ title: "No work phases yet", description: "Add the work phases before you plan the facility units." }}
       />
 
       <section className="rounded-2xl border border-slate-200 bg-white">
@@ -224,7 +224,7 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
           <div>
             <h3 className="text-sm font-bold text-slate-900">Facility units and BoQ lines</h3>
             <p className="text-[11px] text-slate-500">
-              Each unit is one physical facility on site (e.g. "Ground floor male toilet"). Its lines take their planned dates from its sprints.
+              Each unit is one physical facility on site (e.g. "Ground floor male toilet"). Its lines take their planned dates from its work phases.
             </p>
           </div>
           {!readOnly && (
@@ -260,7 +260,7 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
                         <span className="font-semibold text-slate-800">{u.label}</span>
                         <span className="text-slate-500">
                           {" · "}
-                          {range ?? <span className="text-rose-600 font-semibold">No sprints</span>}
+                          {range ?? <span className="text-rose-600 font-semibold">No work phases</span>}
                           {u.plannedQuantity !== null && ` · ${u.plannedQuantity.toLocaleString()} ${u.quantityUnit ?? ""}`}
                         </span>
                       </div>
@@ -452,19 +452,19 @@ function SprintsEditor({ projectId, scope, onClose }: { projectId: string; scope
   const add = () => {
     const last = [...values].sort((a, b) => a.endDate.localeCompare(b.endDate)).at(-1);
     const start = last?.endDate ? addDays(last.endDate, 1) : scope.today;
-    rows.append({ name: `Sprint ${values.length + 1}`, startDate: start, endDate: addDays(start, 27), deliverables: "", locked: false });
+    rows.append({ name: `Work phase ${values.length + 1}`, startDate: start, endDate: addDays(start, 27), deliverables: "", locked: false });
   };
   const submit = form.handleSubmit((body) => save.mutate(body, { onSuccess: onClose }));
   return (
     <ModalShell
-      title="Edit sprints"
-      subtitle={live ? "Moving a sprint moves the planned dates of its units' lines. The change is audited." : "Sprints are numbered by their dates when saved."}
+      title="Edit work phases"
+      subtitle={live ? "Moving a work phase moves the planned dates of its units' lines. The change is audited." : "Work phases are numbered by their dates when saved."}
       onClose={onClose}
       maxWidth="max-w-4xl"
     >
       <form onSubmit={submit} noValidate className="p-5 space-y-3">
         <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
-          {rows.fields.length === 0 && <p className="text-xs text-slate-500">No sprints. Add the first one.</p>}
+          {rows.fields.length === 0 && <p className="text-xs text-slate-500">No work phases. Add the first one.</p>}
           {rows.fields.map((r, index) => {
             const rowIssues = issues.filter((i) => i.index === index);
             const locked = values[index]?.locked ?? false;
@@ -502,7 +502,7 @@ function SprintsEditor({ projectId, scope, onClose }: { projectId: string; scope
                     type="button"
                     className="p-2 text-slate-500 hover:text-rose-600 disabled:opacity-30"
                     disabled={locked}
-                    title={locked ? "A facility unit starts or ends in this sprint" : "Remove sprint"}
+                    title={locked ? "A facility unit starts or ends in this work phase" : "Remove work phase"}
                     onClick={() => rows.remove(index)}
                   >
                     <Trash2 className="w-4 h-4" />
@@ -522,17 +522,17 @@ function SprintsEditor({ projectId, scope, onClose }: { projectId: string; scope
           })}
         </div>
         <button type="button" className={secondaryButton} onClick={add}>
-          <Plus className="w-3.5 h-3.5 inline -mt-0.5" /> Add sprint
+          <Plus className="w-3.5 h-3.5 inline -mt-0.5" /> Add work phase
         </button>
         {!live && scope.sprints.some((s) => s.referencedByUnits) && (
-          <p className="text-[11px] text-slate-500">Removing a sprint clears it from the units that start or end in it.</p>
+          <p className="text-[11px] text-slate-500">Removing a work phase clears it from the units that start or end in it.</p>
         )}
         <div className="flex items-start justify-end gap-2 pt-3 border-t border-slate-100">
           <button type="button" className={secondaryButton} onClick={onClose}>
             Cancel
           </button>
-          <SubmitButton form={form} pending={save.isPending} pendingLabel="Saving…" hint="Fix the sprints marked in red." className={primaryButton}>
-            Save sprints
+          <SubmitButton form={form} pending={save.isPending} pendingLabel="Saving…" hint="Fix the work phases marked in red." className={primaryButton}>
+            Save work phases
           </SubmitButton>
         </div>
       </form>
@@ -592,7 +592,7 @@ function UnitEditor({
       }
       const s = scope.sprints.find((x) => x.id === v.startSprintId);
       const en = scope.sprints.find((x) => x.id === v.endSprintId);
-      if (s && en && s.number > en.number) ctx.addIssue({ code: "custom", path: ["endSprintId"], message: "The end sprint cannot be before the start sprint" });
+      if (s && en && s.number > en.number) ctx.addIssue({ code: "custom", path: ["endSprintId"], message: "The end work phase cannot be before the start work phase" });
     })
     .transform((v): CreateFacilityUnitRequest => {
       const needsQty = needsQtyFor(v.facilityId);
@@ -687,14 +687,14 @@ function UnitEditor({
           <Controller
             control={form.control}
             name="startSprintId"
-            render={({ field }) => <CustomSelect label="Start sprint" value={field.value} onChange={field.onChange} options={sprintOptions} size="sm" />}
+            render={({ field }) => <CustomSelect label="Start work phase" value={field.value} onChange={field.onChange} options={sprintOptions} size="sm" />}
           />
           <Controller
             control={form.control}
             name="endSprintId"
             render={({ field }) => (
               <CustomSelect
-                label="End sprint"
+                label="End work phase"
                 value={field.value}
                 onChange={(v) => {
                   field.onChange(v);

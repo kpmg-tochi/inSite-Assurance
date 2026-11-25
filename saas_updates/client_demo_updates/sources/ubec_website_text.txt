@@ -1,0 +1,1679 @@
+326034	Cannot call a class as a function
+326414	Super expression must either be null or a function
+327015	Derived constructors may only return object or undefined
+327136	this hasn't been initialised - super() hasn't been called
+327833	@@toPrimitive must return a primitive value.
+329936	variableWidth is not supported in case of rows > 1 or slidesPerRow > 1
+331358	Office of the Executive Secretary
+331452	Office of the Executive Secretary
+331541	Office of the Deputy Executive Secretary (Technical)
+331666	Special Projects Unit (World Bank)
+331780	Department of Academic Services
+331858	Department of Administration and General Services
+331959	Department of Corporate Communications
+332051	Department of Legal/Risk Management
+332126	Department of Finance and Accounts
+332206	Department of Human Resources
+332274	Department of Internal Audit
+332346	Department of Physical Planning
+332424	Department of Procurement
+332490	Department of Planning, Research & Statistics
+332593	Department of Monitoring and Evaluation
+332683	Department of Social Mobilization
+332765	Department of Special Programmes & Early Childhood
+332879	Department of Teacher Professional Development
+332987	Department of Data, Digital Platform and Analytics
+333559	Tenders and Procurement
+353680	topbar__main__right__links__item alt active
+355453	Failed to inspect element style
+356724	You tried to return focus to
+356757	but it is not in the DOM anymore
+359469	react-modal: No elements were found for selector
+359776	react-modal: App element is not defined.
+359884	This is needed so screen readers don't see main content
+359942	when modal is opened. It is not recommended, but you can opt-out
+361371	Cannot call a class as a function
+364228	Cannot call a class as a function
+364308	this hasn't been initialised - super() hasn't been called
+364492	Super expression must either be null or a function, not
+371667	Can only polyfill class components
+372473	Unsafe legacy lifecycles will not be called for components using new component APIs.
+372575	but also contains the following legacy lifecycles:
+372695	The above lifecycles should be removed. Learn more about this warning here: https://fb.me/react-async-component-lifecycle-hooks
+373036	Cannot polyfill getSnapshotBeforeUpdate() for components that do not define componentDidUpdate() on the prototype
+374319	Cannot call a class as a function
+374399	this hasn't been initialised - super() hasn't been called
+374583	Super expression must either be null or a function, not
+375470	React-Modal: "parentSelector" prop did not returned any DOM element. Make sure that the parent element is unmounted to avoid any memory leaks.
+382748	Executive Secretary Office
+424028	Can not rewrite read-only method '
+429202	Object iterator must return a key-value pair
+429573	parser must be boolean|regexp|function
+434106	target must be an object
+434417	visitor must be a function
+434590	Blob is not supported. Use a Buffer instead.
+434738	Blob is not supported. Use a Buffer instead.
+434848	Object is too deeply nested (
+435748	Circular reference detected in
+435983	data must be an object
+439342	FormData field is too deeply nested (
+442482	Request failed with status code
+455877	Request body larger than maxBodyLength limit
+456403	)&&Dl(t)>w)throw new oc(
+456428	maxContentLength size of
+457059	Stream request bodies are not supported by the current fetch implementation
+458052	maxContentLength size of
+458396	maxContentLength size of
+458793	maxContentLength size of
+460397	is not supported by the environment
+460435	is not available in the build
+460482	There is no suitable adapter to dispatch the request
+460596	as no adapter specified
+461887	has been deprecated since v
+461920	and will be removed in the near future
+462134	options must be an object
+465613	executor must be a function.
+476751	Private Mail Box: 5086
+477714	The Universal Basic Education Commission (UBEC) is a Federal Governments Agency saddled with the responsibility for coordinating all aspects of UBE programme implementation.
+479986	, All rights reserved.
+480307	Federal Ministry of Education
+480407	National Population Commission
+480472	KOICA – Korea International Cooperation Agency
+480930	Trusted by Leading Global and Local Partners
+482926	aos: MutationObserver is not supported on this browser, code mutations observing has been disabled. You may have to call "refreshHard()" by yourself.
+488949	Cannot call a class as a function
+498089	Ensure Access to Education
+498123	Provide free, compulsory, and quality basic education from early childhood through junior secondary level.
+500172	Reduce Illiteracy and Inequality
+500212	Bridge educational gaps, reduce disparities, and promote equal learning opportunities across Nigeria.
+500364	Strengthen Education Systems
+500400	Coordinate with states and stakeholders to improve learning outcomes, infrastructure, and overall education delivery.
+501135	Universal Basic Education Commission (UBEC)
+501250	The Universal Basic Education Commission (UBEC) is a Federal Governments Agency saddled with the responsibility for coordinating all aspects of UBE programme implementation. The Universal Basic Education Programme was introduced in 1999 by the Federal Government of Nigeria as a reform programme aimed at providing greater access to, and ensuring quality of basic education throughout Nigeria.
+501961	Empowering Every Nigerian Child with Quality Basic Education
+502097	The Universal Basic Education Commission (UBEC) is Nigeria's federal agency responsible for coordinating and implementing the Universal Basic Education programme, ensuring access to free and compulsory education for every child.
+504074	Empowering millions of Nigerian children through quality basic education
+539092	Swiper Loop Warning: The number of slides is not even to slidesPerGroup, loop mode may not function properly. You need to add more slides (or make duplicates, or empty slides)
+539384	Swiper Loop Warning: The number of slides is not even to grid.rows, loop mode may not function properly. You need to add more slides (or make duplicates, or empty slides)
+540783	Swiper Loop Warning: The number of slides is not enough for loop mode, it will be disabled or not function properly. You need to add more slides (or make duplicates) or lower the values of slidesPerView and slidesPerGroup parameters
+558189	resize orientationchange observerUpdate
+589318	toEdge fromEdge lock unlock
+598008	Education for Every Nigerian Child
+598107	UBEC coordinates and drives the Universal Basic Education programme across Nigeria from early childhood care to junior secondary school ensuring access and quality for millions of learners nationwide.
+623933	not found. Did you forget to load it?
+624077	use moment.updateLocale(localeName, config) to change an existing locale. moment.defineLocale(localeName, config) should only be used for creating a new locale See http://momentjs.com/guides/#/warnings/define-locale/ for more info.
+628438	value provided is not in a recognized RFC2822 or ISO format. moment construction falls back to js Date(), which is not reliable across all browsers and versions. Non RFC2822/ISO date formats are discouraged. Please refer to http://momentjs.com/guides/#/warnings/js-date/ for more info.
+632578	moment().min is deprecated, use moment.max instead. http://momentjs.com/guides/#/warnings/min-max/
+632784	moment().max is deprecated, use moment.min instead. http://momentjs.com/guides/#/warnings/min-max/
+637953	(period, number) is deprecated. Please use moment().
+638010	(number, period). See http://momentjs.com/guides/#/warnings/add-inverted-param/ for more info.
+641454	ddd MMM DD YYYY HH:mm:ss [GMT]ZZ
+642863	moment().lang() is deprecated. Instead, use moment().localeData() to get the language configuration. Use moment().locale() to change languages.
+651966	Coordinated Universal Time
+653422	dates accessor is deprecated. Use date instead.
+653490	months accessor is deprecated. Use month instead
+653558	years accessor is deprecated. Use year instead
+653622	moment().zone is deprecated, use moment().utcOffset instead. http://momentjs.com/guides/#/warnings/zone/
+653753	isDSTShifted is deprecated. See http://momentjs.com/guides/#/warnings/dst-shifted/ for more information
+655634	moment.lang is deprecated. Use moment.locale instead.
+655709	moment.langData is deprecated. Use moment.localeData instead.
+659960	toIsoString() is deprecated. Please use toISOString() instead (notice the capitals)
+667421	Latest updates, events and announcements from the Universal Basic Education Commission
+669189	Total Enrolment of students
+669244	Total number of schools
+669297	Total Number of teachers
+669595	Education For All is The
+669693	Responsibility of All
+670207	Join Us Today • Join Us Today •\xA0
+670718	Join us to make education accessible to every child. Our mission is to empower communities, teachers, and students so that learning becomes a reality for all. With your support, we can create classrooms full of opportunity and bright futures.
+675298	Access a collection of scholarly publications and research papers on basic education policies, innovations, and best practices across Nigeria.
+677345	Explore comprehensive reports detailing UBEC's activities, impact assessments, and progress on national education programs.
+681040	Learn about the UBEC Matching Grant program, including funding guidelines, allocation details, and how states can access and utilize grants effectively.
+681824	Active programmes through which the Commission delivers its mandate to improve basic education outcomes across Nigeria.
+683030	Browse ongoing and completed UBEC projects aimed at improving access, infrastructure, and quality in basic education.
+684536	Download bid documents for ongoing and recent tender notices published by the Universal Basic Education Commission.
+686392	Access an organized archive of UBEC publications, policy documents, guidelines, and other key reference materials.
+687313	Unlocking opportunities through universal, free, and compulsory education for all.
+690767	Early Child Care Development
+690804	Early Child Care Development
+690840	Pre–primary education is the education given to younger learners before the age of entering primary education (6 years). Early childhood education or pre-primary education is defined by the National Policy on Education.
+691178	The Universal Basic Education COMMISSION, UBEC, came as a replacement of the Universal Primary Education and intended to enhance the success of the first nine years of schooling. The UBE involves 6 years of Primary School.
+691468	Junior Secondary Education
+691503	Junior Secondary Education
+691537	Junior Secondary is a phase of education in state secondary schools for Years 12, 13 and 14, which helps to ensure the bridge between primary and secondary school is safe, strong and consistent for all students.
+692296	Providing structured and inclusive basic education that supports children from early learning through primary and junior secondary levels, ensuring a strong and continuous foundation for lifelong learning.
+693253	FG Education Intervention
+693286	The Federal Government's intervention shall provide assistance to the States and Local Governments in Nigeria for the purposes of uniform and qualitative basic education throughout Nigeria.
+693491	Universal Basic Education for All
+693532	Every Government in Nigeria shall provide free, compulsory and universal basic education for every child of primary and junior secondary school age.
+693696	Parental Responsibility for Education
+693904	Stakeholder Responsibility in Education
+693951	The stakeholders in education in a Local Government Area shall ensure that every parent or person who has the care and custody of a child performs the duty imposed on him/her under the Universal Basic Education Act, 2004.
+694188	Automatic Transition to JSS
+694609	JSS–SSS disarticulation Policy
+694647	The Secondary School system should be restructured so as to ensure that the JSS component is disarticulated from the SSS as stipulated in the National Policy on Education (NPE).
+694870	To be a world class education intervention and regulatory agency for the promotion of uniform, qualitative and functional basic education in Nigeria.
+695060	To operate as an intervention, coordinating and monitoring Agency to progressively improve the capacity of states, local Government Agencies and communities in the provision of unfettered access to high qualitative basic education in Nigeria
+695336	Honesty and Accountability, Integrity and Transparency, Teamwork with Commitment
+695535	The Universal Basic Commission Commissions (UBEC) is Federal Governments Agency saddled with the responsibility for coordinating all aspects of UBE program implementation.
+695960	Key Issues in the Compulsory, Free Universal Basic Education Act 2004
+696162	The Universal Basic Education (UBE) Program was introduced in 1999 by the Federal Government of Nigeria as a reform program aimed at providing greater access to, and ensuring quality of basic education throughout Nigeria. The UBE Program objectives include:
+697998	Organogram of the Education Management Structure
+698121	Department of Planning, Research and Statistics
+698183	Department of Quality Assurance
+698229	Department of Academic Services
+698275	Department of Physical Planning
+698393	Office of the Deputy Executive
+698471	Leading technical operations of the Universal Basic Education Programme
+698971	Coordinates the Technical Departments of the Commission, namely:
+699378	Formulating and coordinating the execution of policy guidelines for the successful operation of the UBE Programme nationwide.
+699771	Ensuring the timely receipt of block grant from the Federal Government and allocating same to States, and other related agencies implementing the UBE Programme in accordance with an approved formula.
+700282	Advising the Federal Government, through the Honorable Minister of Education, on the effective funding and orderly development of basic education in Nigeria.
+700724	Ensuring efficient collation and preparation of periodic master plans for a balanced and coordinated development of basic education in Nigeria.
+701133	Ensuring effective monitoring of Federal Government inputs into the implementation of basic education.
+701555	Presenting periodic progress reports on the implementation of the UBE Programme to Mr. President through the Honorable Minister of Education.
+701928	Liaising with the Honorable Minister of Education on matters of implementation, funding and general management of the UBE Programme.
+702402	Liaising with the Presidency and National Assembly from time to time on the funding and implementation of the programme.
+702800	Sustaining cordial relationship and cooperation with SUBEBs, State Governments and other stakeholders.
+703167	Pursuing enrolment campaigns and other programmes meant to achieve UBE set objectives and goals.
+703500	Office of the Executive
+703559	Driving the mandate of the Universal Basic Education Programme across Nigeria
+704027	The Executive Secretary is the Chief Executive Officer who manages the general administration of the Commission and works closely with the Board and Management to achieve the overall mandate of the UBE programme in Nigeria.
+704279	He reports to the Honorable Minister of Education and is assisted by two Deputy Executive Secretaries (Technical and Services) who support in carrying out the duties of the Office.
+704882	Key responsibilities of the Office of the Executive Secretary
+705675	Coordinates and draws up guidelines on the utilization of the Federal Government Intervention Funds by States in the provision of Instructional Materials using the 15% of the 2% Federal Government's Consolidated Revenue Fund (CRF) for the UBE Programme.
+705943	Stimulates and facilitates the provision of functional libraries and classroom collections of supplementary readers for all UBE target groups for the enhancement of learning-to-learn skills and a reading habit for life-long literacy.
+706191	Stimulates and sensitizes the State on their roles and responsibilities on Agricultural Education enterprises (School-to-farm) to have value for the 2% Counterpart Fund disbursed for that purpose.
+706402	Participates in the BESDA Result Area 2 through provision, distribution and verification of the utilization of literacy materials in basic education programme.
+706576	Ensures compliance with the necessary policies and guidelines as they affect the Department and other UBE related matters.
+706713	Serves as desk for participation in the Joint Consultative Committees on Education/National Council on Education meetings (JCCE/NCE).
+706861	Liaises with relevant agencies and Parastatals in developing and reviewing pre-primary, primary and junior secondary school curricula and other learning materials in consonance with the UBE Act 2004.
+707075	Promotes the development of activities on physical, health education and sports in the UBE Programme.
+707191	Promotes the development of Guidance and Counselling services in the UBE Programme.
+707290	Carries out any other assignment as directed by the Executive Secretary and the Management.
+707391	ADMINISTRATION AND GENERAL SERVICES
+707527	Training and retraining of staff of the Public Relations and Protocol Units, especially newly recruited staff.
+707652	Development and production of UBE TV jingles in English and other major language variations (Hausa, Yoruba, Igbo, Pidgin English).
+707797	Production of weekly UBE TV and Radio Documentaries.
+707864	Structured feature writing on UBEC intervention/UBE issues in major national and regional newspapers.
+707980	UBE newspaper publicity on UBE funding, deliverables, contemporary issues and adverts.
+708081	Printing of a quarterly UBEC in-house newsmagazine.
+708147	Printing and dissemination of UBE posters and other advocacy messages on the UBE programmes to mass audience using bulk SMS.
+708286	Active engagement on social media accounts with the public (Facebook, Twitter and Instagram).
+708394	Liaising between the Commission and the Federal Ministry of Education on SERVICOM matters.
+708500	Representing the Commission in the Ministerial SERVICOM Unit quarterly meetings.
+708596	Monitoring and updating the activities of State and Zonal offices on service delivery.
+708698	Formulating, implementing and reviewing the Commission's Service Charter.
+708787	Processing reports from State and Zonal Offices on the response of stakeholders on UBEC service delivery.
+708902	DATA, DIGITAL PLATFORM AND ANALYTICS
+708963	Setting up standards and monitoring the progress of the Computer Centres at the SUBEBs and FCT-UBEB.
+709078	Organizing and initiating Computer literacy training for all users of Information Communication Technology (ICT).
+709206	Management of the Commission's websites and ICT needs.
+709275	Serving as linkage to collaborating agencies and other stakeholders on ICT development, data management and other related issues.
+709419	Advising Management on the acquisition, maintenance, utilization and updating of ICT facilities in the Commission.
+709543	FINANCE AND ACCOUNTS
+709588	Record-keeping, payment of staff salaries and overhead, preparation of Annual Budget, and preparation of Annual Financial Statements and reports.
+709748	Fund disbursement to States and other providers of Basic Education.
+709830	Financial Monitoring of States and SUBEBs.
+709887	Sourcing of funds and payment of Zonal Intervention Projects (ZIP).
+709969	Processing and payment of Constituency Projects.
+710032	Payment of Federal Teachers' Scheme participants' monthly allowances (Primary and JSS).
+710168	Leading UBEC's implementation of the HOPE Education Programme focused on improving access, quality and learning outcomes in basic education.
+710323	Coordinating interventions in basic education under the Human Capital Opportunity for Equity (HOPE) initiative.
+710449	Liaising with state education authorities, development partners and federal agencies on programme design, implementation and reporting.
+710599	Monitoring and evaluating programme activities to ensure compliance with results frameworks and Disbursement-Linked Indicators (DLIs).
+710748	Providing technical and operational support to SUBEBs on programme readiness and implementation.
+710894	Coordinating UBEC implementation of the HOPE-GOV Programme in collaboration with the National Program Coordination Unit (NPCU) at the Federal Ministry of Budget and Economic Planning, and other partners.
+711112	Facilitating stakeholder engagement and serving as UBEC's liaison with relevant federal ministries, development partners and state actors involved in HOPE-GOV implementation.
+711301	Ensuring alignment of HOPE-GOV implementation with broader education reforms and promoting sustainable adoption of improved fiscal and governance practices across UBEC and SUBEBs.
+711495	Providing technical and operational guidance to States to support compliance with eligibility requirements, planning and budgeting standards, and access to education financing.
+711686	Supporting capacity building for states to improve programme readiness, meet reform conditions and institutionalize Public Financial Management (PFM) practices in basic education.
+711880	Supporting reforms to improve recruitment, equitable deployment and performance management of basic education teachers, particularly in underserved areas.
+712049	Strengthening the predictability, efficiency and strategic allocation of basic education funds by supporting improvements in budgeting, fund flow mechanisms and resource utilization.
+712246	Enhancing transparency and accountability in financial transfers, procurement processes and payroll management within the basic education sector.
+712406	Monitoring the publication of core fiscal data, budget credibility and the effective use of basic education allocations by states.
+712552	Tracking and reporting on Disbursement-Linked Indicators (DLIs) and coordinating UBEC's input to the Annual Performance Assessments (APA) conducted by the Independent Verification Agent (IVA).
+712794	Handling of Staff Appointments, Promotions and Disciplinary issues.
+712876	Verification of Assets and update of Assets Register.
+712944	Processing applications for Secondment, Transfers, Upgrading, Conversions of Staff, Regularization and Merger of Service, request for Seminars and Workshops both locally and internationally.
+713149	General maintenance of office equipment, furniture and provisions of other related utility services.
+713264	Coordination of Staff Welfare such as National Housing Fund, Code of Conduct Bureau, National Health Insurance Scheme (NHIS), etc.
+713409	Regulating Staff Training and Development.
+713466	Issuance of Job Orders and Local Purchase Orders (LPOs) on behalf of the Commission for the purchase of goods and services.
+713604	Reviewing training and manpower development policy for the Commission.
+713689	Liaising with Pension Fund Administrations (PFAs) in updating Staff Retirement Savings Accounts (RSAs).
+713808	Assisting in the review of administrative, welfare and motivation development policy for UBEC.
+713918	Liaising with the Federal Mortgage Bank of Nigeria (FMBN) on National Housing Fund (NHF) Deductions/Remittances.
+714079	Application of all internal controls and necessary Audit checks in the financial and administrative activities of the Commission.
+714223	Ensuring that annual approved budgets are adhered to during implementation.
+714313	Quarterly Financial Monitoring and Auditing of all SUBEBs' Intervention Fund accounts, books and records in conjunction with Finance and Accounts staff.
+714480	Development and critique of a new Audit Procedural Manual in collaboration with UBEC Auditors, Finance & Accounts staff, and representatives of the Auditor-General and Accountant-General.
+714682	Compliance Audit of TPD and Special Education Funds disbursed to SUBEBs towards ensuring compliance with utilization guidelines during implementation.
+714847	Post-Audit Review of UBEC Accounts and Operations, covering all accounts domiciled in the Commission for UBE Intervention Fund, Constituency Projects and International Donor accounts.
+715045	Independent Monitoring of Instructional Materials supplied to SUBEBs, ensuring supply contracts conform to specifications, quality, quantity and cost through physical inspection.
+715238	Ensuring that conditions for disbursements and utilization of the Intervention Fund are duly followed by UBEC and SUBEBs.
+715369	LEGAL AND RISK MANAGEMENT
+715419	Proffering legal advice to the Commission and in some instances to State Universal Basic Education Boards.
+715540	Drafting and executing legal instruments entered into by the Commission, including agreements with development partners wishing to intervene in basic education.
+715715	Liaising with Insurance Companies and Banks on the confirmation of Contractors' Advance Payment Guarantees and Performance Securities, and liaising with appropriate departments and consultants on contract/project matters.
+715951	Alternative Dispute Resolution and handling other controversies without resorting to litigation.
+716062	Liaising between the Commission and Security Agencies, e.g. EFCC, ICPC, Nigeria Police Force, etc.
+716175	Serving as final signatory to States' Action Plans.
+716241	Performing any other additional duties assigned by the Executive Secretary.
+716326	MONITORING AND EVALUATION
+716376	Quality Assurance — appraising school effectiveness and efficiency through teaching and learning and quality of provisions in schools.
+716525	Prescribing, monitoring and maintaining minimum standards in basic education provisions.
+716628	Assessment of learning achievements at the Basic Education level in Nigeria (e.g. National Assessment of Learning Achievements in Basic Education — NALABE), determining normative indices for evaluating learners' performance.
+716867	Development and application of the Unified National Continuous Assessment Programme (UNCAP) in Nigeria at the Basic Education level.
+717014	Liaising with other UBEC Departments in the development of appropriate instruments for evaluating their field activities.
+717150	Collaborating with various Development Partners in the monitoring of assisted programmes and projects in Basic Education Institutions.
+717299	Co-ordinating activities of Zonal and State Offices.
+717366	Receiving and collating the Quarterly Administrative Reports from the Zonal Offices.
+717465	Facilitating meetings of SUBEB Chairmen with UBEC Management.
+717542	Facilitating meetings of Zonal Directors/State Coordinators.
+717618	Investigating and reporting on allegations/complaints concerning the Zonal/State Offices.
+717723	Carrying out any assignment that may be directed by the Executive Secretary and/or Management.
+717869	Setting up of minimum standards for Basic Education infrastructure, subject to periodic review.
+717979	Assessment and vetting of the infrastructural component of SUBEBs' Action Plans for accessing FGN-UBE Matching Grant and Special Education Fund.
+718138	Participating in the Monitoring/Supervision of Approved UBEC/SUBEB executed projects.
+718238	Participating in the preparation of short, medium and long-term budgets for the Commission.
+718344	Carrying out market surveys for basic construction materials with a view to updating cost norms and setting cost-specific benchmarks for each SUBEB.
+718507	Participating in the monitoring of Special Education Projects and Donor Agencies' projects when the need arises.
+718634	Attending to major maintenance of UBEC building facilities when the need arises.
+718729	Providing briefs and coordinating the activities of Consultants engaged by the Commission for different projects.
+718857	Creating and updating records for UBEC/SUBEBs projects in terms of approved proposals and confirmed deliverables after conducting routine project and Specialized Monitoring.
+719046	Supervision of Direct Intervention and Constituency Projects through the Residency Supervision arrangement.
+719163	PLANNING, RESEARCH AND STATISTICS
+719221	Coordinating the development of UBEC Action, Strategic and Rolling Plans.
+719309	Coordinating UBEC's Work Plan and Budget.
+719365	Organizing quarterly In-house Seminars for UBEC staff.
+719434	Coordinating Action Research in identified areas of Basic Education.
+719517	Collecting, collating and editing of UBEC publications (Annual Report, UBE Journal and Basic Educationist).
+719639	Managing research and development components of projects assisted by International Development Partners (IDPs).
+719765	Collaborating with the BESDA Project to assist SUBEBs in finalizing the development of their States' Medium Term Basic Education Strategic Plans (SMTBESPs).
+719936	Continuous collaboration with IDPs and other stakeholders, especially SUBEBs/FCT-UBEB, on Strategic Planning.
+720060	Monitoring and Evaluation of SMTBESPs.
+720114	Development of the 10-year UBEC Road Map.
+720171	Serving as a Secretariat for the Inter-Departmental Committee on Research and as Technical Partners on special research assignments.
+720319	Providing professional advice and technical services for National Personnel Audit (NPA) activities.
+720434	Serving as a link between collaborating agencies and other stakeholders on data generation and dissemination.
+720559	Providing professional and technical support to other departments/units and SUBEBs on routine Planning, data generation and analysis.
+720708	Carrying out any other functions as may be assigned by the Executive Secretary from time to time.
+720851	Conduct of Needs Analysis.
+720892	Preparation of UBEC procurement plans.
+720945	Advertising/Soliciting for Tenders or proposals for the conduct of procurement processes.
+721049	Conducting market surveys.
+721150	Serving as Secretariat of the UBEC Tenders Board.
+721214	Recommending awards to the Tenders Board.
+721485	Reporting of procurement activities carried out to Management and other bodies such as Anti-graft agencies, NGOs and CSOs when the need arises.
+721644	Conduct of Procurement Audit.
+721689	Advising the Executive Secretary on issues of procurement.
+721763	Carrying out any other duty that may be assigned by the Executive Secretary or the Tenders Board.
+721914	Initiating Social Mobilization policies and programmes, including advocacy, sensitization and mobilization for effective and quality basic education delivery.
+722087	Community empowerment through Self-Help projects and mobilization to promote access, enrolment, improvement and ownership of the UBE programme.
+722245	Orientating stakeholders on understanding the Commission's policies and programmes and their responsibilities in supporting and ensuring the success of the programmes.
+722427	Initiating contacts and programmes for broadening networks of partnerships with CSOs and other stakeholders at the grassroots level for resource mobilization, participation and proactive implementation.
+722644	Initiating programmes and policies aimed at mainstreaming Out-of-School Children into basic education schools.
+722769	Promoting new attitudes and culture for the attainment of the goals and objectives of the UBE programme.
+722888	Encouraging formal and non-formal education through public enlightenment activities, publications, etc.
+723006	Liaising with other departments in UBEC and other MDAs for effective mobilization on all basic education-related programmes, e.g. Girl Child Education, Education of Street Children, Disadvantaged Children and the Home-Grown School Feeding and Health Programme.
+723281	Liaising with and coordinating the efforts of Sister Education Agencies such as NTI, NERDC, NCCE, NABTEB, ADNF, and International Development Partners (IDPs) and NGOs in the design, production and distribution of public enlightenment materials on UBE.
+723548	Encouraging and promoting the formation and establishment of Community-Based Organizations in support of UBEC, such as School-Based Management Committees (SBMCs).
+723726	Initiating National, State and Community-based school enrolment campaigns.
+723816	Initiating intervention programmes for the North-East Education Reconstruction Initiative.
+723922	Initiating and implementing programmes such as HIV/AIDS Awareness Campaign and capacity building for States, LGAs and communities/schools.
+724076	Researching into, monitoring and evaluating advocacy and mobilization strategies.
+724173	Carrying out any other activities that may be assigned to the department.
+724256	SPECIAL PROGRAMMES AND EARLY CHILDHOOD
+724319	Coordinate and monitor the implementation of all Commission's intervention programmes in Special Needs Education to ensure that children with special needs are provided equal opportunities to acquire basic education.
+724550	Guide the implementation of Early Childhood Care Development and Education (ECCDE) to ensure that children are introduced to schooling procedures at an early stage to aid sustainability, retention and completion in school.
+724787	Organize and ensure successful implementation of Vocational/Technical Education (VTE) and Second Chance Education to ensure that learners are presented with entrepreneurial/life skills opportunities while in schools.
+725018	Conduct yearly Needs Assessment activities to ensure proper planning in the implementation of Special Needs Education programmes.
+725162	Advise the Commission on the provision of appropriate instructional Assistive Technologies, Instructional Materials, Infrastructural facilities and equipment for effective implementation of Special Needs Education programmes.
+725402	Collaborate with relevant Departments and Agencies on the development of frameworks and training of SUBEBs in the implementation of ECCDE.
+725555	Implement policy direction and activities geared towards inclusiveness and acquisition of practical entrepreneurial skills at the Basic Education sub-sector.
+725727	Collaborate with relevant Departments and Agencies in the provision of adequate facilities for effective teaching and learning in Public and Private Special/Inclusive schools, ECCDE Centres and Vocational/Technical and Second Chance Centres.
+725983	Synergize efforts with relevant Departments and Agencies on the training of Teachers of Special/Inclusive Schools, ECCDE Centres, Vocational/Technical and Second Chance Schools/Centres.
+726184	Promote awareness of Departmental activities and Programmes by engaging relevant stakeholders through meetings/workshops, advocacy and sensitization.
+726349	Initiate activities and programmes that would enhance the achievement of the Commission's objectives and mandate.
+726478	Advise the Commission on how to solicit support from International Development Partners and philanthropists for the implementation of Special Needs Education, ECCDE and Vocational/Technical and Second Chance Education.
+726706	NORTH EAST ZONAL OFFICE
+726754	Attending UBEC management meetings and SUBEB Chairmen quarterly meetings.
+726842	Serving as liaison between UBEC line departments and Zonal and State office staff.
+726939	Conveying information from Headquarters to State Coordinators.
+727016	Overseeing the administrative and technical activities of the Zone and State offices.
+727116	Harmonizing all Zonal and State office administrative reports.
+727193	Consolidating monitoring and evaluation reports from 1st and 2nd tranche activities.
+727292	Attending handing-over of Direct Intervention and Constituency projects.
+727379	Updating quarterly reports on projects, instructional materials and trainings and their corresponding impacts within the Zone.
+727520	Liaising with SUBEBs on UBE activities and programmes for collaboration.
+727608	Preparing and submitting state-level monitoring and administrative reports.
+727699	Monitoring and conducting site verification of SUBEB Matching Grant Action Plans before approval.
+727812	Supervising Direct Intervention and Constituency projects within the Zone.
+727902	Monitoring of Quality Assurance, school examinations and school resumptions.
+727994	Verifying instructional materials supplied at SUBEBs and schools.
+728075	Any other duty that may be assigned by the Executive Secretary.
+728148	SOUTH SOUTH ZONAL OFFICE
+728197	Coordinating, monitoring, evaluating and supervising the utilization of Federal, State, Local Government and NGO inputs in the implementation of Basic Education delivery across Akwa Ibom, Bayelsa, Cross River, Delta, Edo and Rivers States.
+728451	Collecting information on Basic Schools in liaison with relevant private, governmental organizations and International Development Partners for effective delivery of the UBE programme.
+728650	Participating in the implementation of all UBEC departmental programmes, including those from the ES Office, Administration, Academic Services, Monitoring and Evaluation, Human Resources, Planning Research and Statistics, Teacher Professional Development, Data/Digital Platform and Analytics, Social Mobilization, Finance and Accounts, Physical Planning, Internal Audit, Procurement and Legal and Risk Management.
+729078	Matching Grant Project Monitoring.
+729127	Constituency Project Monitoring.
+729174	Direct Intervention Project Monitoring.
+729228	Quality Assurance follow-up monitoring.
+729348	Advocacy and Sensitization on enrolment drive.
+729410	Coordinating and supervising the implementation of UBEC programmes across State offices in the zone.
+729558	Coordinating, monitoring, evaluating and supervising the utilization of Federal, State, Local Government and Non-Governmental Organizations' inputs into the implementation of Basic Education delivery within the zone.
+729789	Collecting information on Basic Schools in liaison with relevant private and governmental organizations and International Development Partners for effective delivery of the UBE programme.
+729991	Serving as the operational link between UBEC Headquarters and key stakeholders, including SUBEBs, UBEC State Offices, schools, Local Government Education Authorities, communities and development partners.
+730210	Participating in the implementation of all UBEC departmental programmes across the zone, including programmes from the ES Office, Administration, Academic Services, Monitoring and Evaluation, Human Resources, Planning Research and Statistics, Teacher Professional Development, Data/Digital Platform and Analytics, Social Mobilization, Finance and Accounts, Physical Planning, Internal Audit, Procurement, and Legal and Risk Management.
+730660	Monitoring and conducting site verification of SUBEB Matching Grant Action Plans before approval, and supervising Direct Intervention and Constituency projects within the zone.
+730851	Monitoring of Quality Assurance, including Continuous Quality Assurance, General Quality Assurance follow-up, school examinations and school resumptions.
+731019	Liaising with SUBEBs on UBE activities and programmes for collaboration, and conveying information and directives from UBEC Headquarters to State Coordinators and SUBEB staff.
+731209	Harmonizing, consolidating and submitting Zonal and State administrative and monitoring reports to UBEC Headquarters on a quarterly basis.
+731362	Vetting Zonal and State office payments and retirements, and verifying instructional materials supplied to SUBEBs and schools.
+731504	Liaising with SUBEB EMIS desk officers to obtain validated basic education data and ensuring that SUBEB Basic Education Action Plans (BEAPs) are derived from their Medium Term Basic Education Strategic Plans.
+731728	Monitoring and mentoring School-Based Management Committees (SBMC) projects and programmes, and supporting SUBEB Social Mobilization departments on advocacy and enrolment drive campaigns.
+731931	Liaising with SUBEB ICT desks to ensure effective utilization of smart boards and digital equipment, and reporting on the status of Digital Learning Centres.
+732104	Liaising with SUBEB legal, procurement and special education desk officers to ensure proper site documentation, contractor compliance, and inclusivity in basic education.
+732290	Obtaining and disseminating information on physical projects, general Zonal and State activities, sensitization, training and sporting activities through appropriate communication channels.
+732495	Carrying out any other duty that may be assigned by the Executive Secretary, the Zonal Director, or the relevant Departmental Director at UBEC Headquarters.
+732947	Constituency Projects from October 2020 till date
+733264	Instructional materials from October 2020 till date
+733698	Direct/Special Intervention from October 2020 till date
+733920	Consultants for North East Intervention projects from October 2020 till date
+734297	Boy/Girl Child programmes from December 2020 till date
+734601	Construction of UBEC Vocational Schools from October 2020 till date
+734946	Construction of Modified Second Chance Schools from October 2020 till date
+735305	Construction of UBEC ECCDE Centers from October 2020 till date
+735643	Insured the Commission's assets for the year 2020 (February 2020 – March 2021)
+736151	The primary role of the Legal Unit is to interpret laws and instruments entered into/executed by the Commission and in the event of any litigation, represent the Commission in Court(s) through external solicitors. It is directly supervised by the Special Adviser to the Executive Secretary.
+736781	The primary role of the Legal Unit is to interpret laws and instruments entered into/executed by the Commission and in the event of any litigation, represent the Commission in Court(s) through external solicitors.
+737023	It is directly supervised by the Special Adviser to the Executive Secretary.
+737127	LEGAL AND RISK MANAGEMENT
+737486	Documentation of Contract Agreement(s) on:
+737888	State Education Program Investment Project
+737951	System Strengthening Focus
+737986	A result-based financing project piloted in Anambra, Bauchi and Ekiti States. Funds are disbursed after States achieve pre-determined Disbursement Linked Indicators (DLIs). Additional Financing extends to 6 North East States.
+738220	Need-based teacher deployment
+738295	Measurement of student learning
+738378	Global Partnership for Education
+738452	A $100M grant aimed at assisting Nigeria to achieve Education For All goals through increased access and improved quality in basic education across five northern States.
+738630	Girl-child enrolment via Conditional Cash Transfers
+738706	Teacher Professional Development
+738786	Better Education Service Delivery for All
+738870	A $611M Program for Results operation supporting the Ministry's Ministerial Strategic Plan to address Out of School Children across 17 States with the highest numbers.
+739046	Girl-child enrolment via Conditional Cash Transfers
+739122	Teacher Professional Development
+739240	Special Projects Unit
+739632	The Special Projects Unit is domiciled in the Office of the Executive Secretary. It coordinates activities of all International Development Partners and Donor Agencies involved in the implementation of basic education programmes in Nigeria.
+740249	The Unit is headed by a Deputy Director/Coordinator, Special Projects who reports directly to the Executive Secretary. He, however, works closely with other Heads of Departments and their relevant Technical Officers. He is assisted by three Project Officers and an Assistant Chief Confidential Secretary.
+740750	World Bank Partnerships
+740986	Major World Bank-supported projects coordinated by the Special Projects Unit.
+742155	Early Childhood Care Development and Education (ECCDE), Primary and Junior Secondary School (JSS)
+742280	Joint Consultative Committee on Education (JCCE) and the National Council on Education (NCE)
+742400	Guidance and Counseling
+742426	Physical and Health Education / Sports Development
+742479	President's Schools Debate
+742508	Continental Education Strategies for Africa (CESA) Desk
+743021	The Department of Academic Services came into existence in 2004 after a major restructuring of the UBE programme following the signing into law of the UBE Act in May, 2004. The Department is vested with the responsibility of coordinating curriculum development, Early Childhood Care Development and Education (ECCDE), provision of instructional materials, library development, sports development, Agricultural Science and Education, Guidance and Counseling, quiz and debate, coordinating the participation of the Commission at the Joint Consultative Committee Meetings (JCCE) as well as the National Council on Education (NCE) meeting amongst others.
+744046	The Department is headed by a Director and assisted by a Deputy Director. It comprises three Units, each segregated into sections for efficiency and optimal performance.
+744457	Academic Planning Unit
+744921	Education Support Services Unit
+747405	Efficient and effective management of both human and material resources of the Commission.
+747510	Handling Senior Staff Matters such as Appointments, Promotions and Discipline.
+747603	Processing applications for Secondment, Transfers, Upgrading, Conversions, Regularization and Merger of Service.
+747730	General maintenance of equipment, furniture and provision of utility services for better service delivery.
+747851	Liaising with relevant agencies on staff welfare — FMBN, Code of Conduct Bureau, NHIS, etc.
+747957	Organizing training and manpower development programmes for staff.
+748038	Serving as Secretariat for UBEC Board and its Standing Committees, as well as the Management Committee.
+748156	Making purchases, issuing Job Orders and LPOs, and auctioning unserviceable furniture and equipment.
+748271	Assisting in the review of administrative, welfare and manpower development policies.
+748372	Liaising with PFAs to update Staff Retirement Savings Accounts (RSAs).
+748552	Administration and General services
+749090	The Department of Administration and General services provides routine assistance to the Chief Executive in the administration of the Commission, particularly in ensuring that matters affecting the Organization and Staff are handled and processed in accordance with the provisions of the Public Service Rules, Circulars, Extant Rules and the Commission's Staff Conditions of Service.
+749502	Being a supportive department, all its functions are geared towards assisting other Departments to ensure the effective implementation of the UBE programme through general administrative duties relating to the control and coordination of personnel and equipment.
+750461	The Department is headed by a Director assisted by a Deputy Director, with five specialized units.
+753725	Supporting the effective implementation of the UBE Programme
+754288	The Department of Administration and Supplies provides routine assistance to the Chief Executive in the administration of the Commission particularly in ensuring that matters affecting the Organization and Staff are handled and processed in accordance with the provisions of the Public Service Rules, Circulars, Extant Rules and the Commission's Staff Conditions of Service.
+754691	The Department carries out general administrative duties bothering on the control and coordination of personnel and equipment. Being a supportive department, all its functions are geared towards assisting other Departments to ensure the effective implementation of the UBE programme.
+755775	The Department is headed by a Director assisted by a Deputy Director, with five specialized units.
+756280	The Department of Finance & Accounts provides routine assistance to the Chief Executive in the administration of the Commission particularly in ensuring that matters affecting the Organization and Staff are handled and processed in accordance with the provisions of the Public Service Rules, Circulars, Extant Rules and the Commission's Staff Conditions of Service.
+756648	The Department carries out general administrative duties bothering on the control and coordination of personnel and equipment. Being a supportive department, all its functions are geared towards assisting other Departments to ensure the effective implementation of the UBE programme.
+756952	Expenditure Control Unit
+757882	Financial & Fiscal Reporting Unit
+758685	Matching Grants Disbursed
+758742	Special Education Fund
+758796	Teacher Development Fund
+758891	UBE Matching Grants Disbursement
+759033	UBE Matching Grants/Paris Club Counterpart Fund to 29 States and FCT.
+760116	Special Education Fund Disbursement
+760260	Special Education Fund to 21 States and registered NGOs.
+761196	Teacher Professional Development Fund
+761343	for training of teachers and Education Managers to 36 States, FCT and implementing agencies.
+762446	for training of teachers and Education Managers to 36 States, FCT and implementing agencies.
+763001	Total Disbursed to Agencies
+764025	Ensuring fiscal transparency, accountability and probity in the administration of UBE funds
+765464	Headed by a Director and assisted by 3 Deputy Directors and 5 Assistant Directors.
+766302	FINANCE AND ACCOUNTS
+768027	The Department of Administration and Supplies provides routine assistance to the Chief Executive in the administration of the Commission particularly in ensuring that matters affecting the Organization and Staff are handled and processed in accordance with the provisions of the Public Service Rules, Circulars, Extant Rules and the Commission's Staff Conditions of Service.
+768404	The Department carries out general administrative duties bothering on the control and coordination of personnel and equipment. Being a supportive department, all its functions are geared towards assisting other Departments to ensure the effective implementation of the UBE programme.
+770343	Efficient and effective management of both human and material resources of the Commission
+772006	The Department is headed by a Director assisted by a Deputy Director, with five specialized units.
+772514	Prepayment and System Audit Unit
+772853	Budget Monitoring / Forensic Audit Unit
+773382	Ensuring accountability, transparency, and financial integrity across the Commission
+773998	The Universal Basic Education Commission, which is an agency of the Federal Government, having a self-accounting status has a responsibility under FR1602 (iiii) and FR 1701 to fully constitute an Internal Audit which is a custodian of Internal control to provide a complete and continuous audit of accounts and records of Revenue and Expenditure, assets, allocated and unallocated stores, where applicable. FR1701 defines Internal Audit as a managerial control which functions by measuring and evaluating the effectiveness of the Internal Control system.
+774631	Generally, under FR1703 every Internal Audit, reports directly to the Chief Executive of the organization. Thus, the Department of Internal Audit of the Commission reports directly to the Executive Secretary.
+775815	The Department is headed by a Director who is assisted by a Deputy Director. It is made up of two units, namely:
+776312	The Department of Physical Planning coordinates the intervention of infrastructural development in order to ensure the delivery of qualitative basic education in the 36 States and FCT. The interventions are provided by Donor Agencies, Corporate Organizations and Federal Government using different models. This is achieved through the activities and programmes of the Department.
+776694	Most of the staff have been posted to the six (6) geo-political zones across the country to serve as resident supervisors/monitors for the various interventions and capital projects in the States.
+776899	Headed by a Director
+776945	Resident supervisors in all 36 States & FCT
+777782	Quantity Surveying Unit
+778180	Constituency Projects Supervised (2019)
+778246	North East Intervention Projects
+778306	ZIP Constituency Projects (2018)
+778535	Coordinating infrastructural development for qualitative basic education across Nigeria
+780047	Resident supervisors report to both the Director of Physical Planning and the Zonal Director of the States where they are posted.
+782109	Agricultural Education Training Programme
+782447	Better Education Services Delivery for All
+783367	Ensuring transparent, efficient and compliant procurement across the UBE programme
+783923	The Department of Procurement is responsible for ensuring transparent, efficient and compliant procurement processes in support of the Universal Basic Education programme. The Department coordinates procurement activities and helps ensure that resources required for the effective implementation of UBE interventions are acquired in accordance with approved guidelines and procedures.
+784375	A key area of the Department is the Instructional Materials Unit, which coordinates the procurement, distribution, monitoring and evaluation of instructional resources across the UBE programme. Through its various sections and related procurement activities, the Department supports the availability of essential educational resources and contributes to the effective delivery of quality basic education across Nigeria.
+785798	Instructional Materials Unit
+785906	Sections within the Unit
+786080	The Instructional Materials Unit is responsible for coordinating the procurement, distribution, monitoring and evaluation of instructional resources across the UBE programme. The unit comprises the following sections:
+786804	The Planning, Research and Statistics (PRS) Department is a 'Think Tank' of the Commission charged with the responsibility of providing technical and professional support services to the Commission and other basic education stakeholders towards improved efficient and effective service delivery.
+787102	The Department is responsible for the development of strategic plans for the advancement of Basic Education through careful and analytical research. Through its Education Management Information System (EMIS) Unit, it ensures that educational data is collected, stored and retrieved in a timely and accurate manner for educational planning and decision making.
+787482	Education Management Information System & Statistics
+787906	Research and Publications
+788748	The Think Tank of the Commission — driving data-informed decisions for basic education
+790226	The Department is headed by the Director and is assisted by a Deputy Director and an Assistant Director. It comprises 4 Units:
+790796	PLANNING, RESEARCH AND STATISTICS
+790854	Monitoring and Evaluation
+792182	Ensuring high-quality basic education through appropriate quality assurance mechanisms nationwide
+792795	The Department of Quality Assurance is one of the 11 departments of the Commission. It is charged with the responsibility of ensuring high quality basic education through appropriate quality assurance mechanisms as well as prescribing, monitoring, evaluating, and maintaining Minimum Standards — especially in the area of teaching and learning — in basic education institutions.
+793248	Quality Assurance processes and practices are dynamic and provide the needed guidance and support to schools for consistent improvement in access and quality of education services. These are carried out through appraising school effectiveness in the areas of teaching and learning, school administration and facilities, as well as outcomes for learners.
+794420	The Department has three units, each headed by the most senior officer in the unit.
+794845	MONITORING AND EVALUATION
+795676	Open Schooling Programme
+795974	Rapid Response Initiative
+797275	States & FCT Covered in SBMC-SIP Monitoring
+797387	PPP Stakeholder Organisations Supported
+797570	Mobilizing communities and stakeholders for quality universal basic education across Nigeria
+798178	The Social Mobilization Department is saddled with, among other responsibilities, carrying out mass mobilization, advocacy and sensitization of the general public, forging partnerships with stakeholders in basic education as well as disseminating various messages of the UBE programme to the general public.
+798560	This is aimed at increasing awareness, community empowerment, ownership and participation of stakeholders to achieve the overall objectives of the compulsory, free universal basic education in Nigeria.
+799687	As at December 2020, the Department had seven (7) Units with their corresponding Sections.
+801777	Pilot States Reached
+801827	Disbursed to IQTE Schools
+801988	Coordinating targeted interventions to bring marginalised children into quality basic education
+802599	The Department of Special Programmes has the mandate to coordinate and implement all Special Interventions to address the challenges of Out-of-School Children in the country. This includes the Girl-Child in Northern Nigeria, Boy-Child drop-out in the South-South and South-East Geo-Political zones, internally displaced children, and the Almajiri Qur'anic and itinerant children who are predominantly found in Northern Nigeria.
+803101	Through targeted interventions, the Department works collaboratively with SUBEBs, communities, and development partners to bring marginalised children into the formal education system and provide them with quality basic education opportunities that lay the foundation for lifelong learning.
+804450	The Department has 3 major units, each focused on a critical dimension of Out-of-School Children interventions.
+804903	SPECIAL PROGRAMMES AND EARLY CHILDHOOD
+805317	Teacher Professional Development
+805650	Innovation and Instructional Technology
+806360	Coordinate Teacher Professional Development interventions across the 36 States and FCT.
+806462	Support States in identifying teacher training needs and developing appropriate programmes.
+806568	Develop and update guidelines for the implementation of TPD interventions.
+806657	Monitor and assess the implementation and impact of teacher development programmes.
+806755	Promote the integration of technology and innovative approaches into teaching and learning.
+806861	Support digital learning, online professional development and communities of practice.
+806962	Coordinate teacher development interventions with development partners and other stakeholders.
+807071	Provide technical support to SUBEBs and other basic education stakeholders.
+807231	Department of Teacher
+807303	Strengthening teacher capacity, professional development and digital learning across Nigeria's basic education sector.
+807937	The Department of Teacher Professional Development (DTPD) coordinates initiatives that strengthen the capacity, professionalism and effectiveness of teachers and education managers in Nigeria's basic education sector.
+808229	The Department works with State Universal Basic Education Boards (SUBEBs), the FCT UBEB, government agencies and development partners to support effective teacher professional development, instructional innovation and digital learning.
+809695	The activities of the Department are coordinated through three functional units focused on teacher development, instructional innovation and digital learning.
+810589	The Department coordinates teacher professional development, supports instructional innovation and promotes digital learning across Nigeria's basic education sector.
+811099	Geopolitical Zonal Offices
+811147	State Offices Nationwide
+811194	Plus Federal Capital Territory
+811803	Uyo, Akwa Ibom State
+812079	Benue, FCT, Kogi, Kwara, Nasarawa, Niger and Plateau
+812210	Adamawa, Borno, Bauchi, Gombe, Taraba and Yobe
+812336	Jigawa, Kano, Kaduna, Katsina, Kebbi, Sokoto and Zamfara
+812468	Abia, Anambra, Ebonyi, Enugu and Imo
+812553	Uyo, Akwa Ibom State
+812583	Akwa Ibom, Bayelsa, Cross River, Delta, Edo and Rivers
+812713	Ekiti, Lagos, Ogun, Ondo, Osun and Oyo
+812855	Opposite Former Deputy Governor Office Shendam Road, Lafia, Nasarawa State
+813087	Opposite Aper Aku Stadium, P.M.B. 102106, Makurdi
+813151	Mr Emmanuel Baba Idzi
+813268	19 Offa Road, Old Herald Building, GRA, Ilorin
+813491	Mrs Esther Tella Eyinade
+813606	IBB Way, Off Adankolo Junction, Opposite Dominion Guest Inn, Lokoja, Kogi State
+813700	Ayeni Moses Kolawole (Ag.)
+813811	No. 2 Mu'azu Mohammed Road, Opposite Nigerian Postal Services, Along Government House, Minna
+813918	Mr. George Maxwell Oboh (Ag.)
+814042	National Assembly Quarters, Apo Zone B, Garki, Abuja
+814221	Along Federal Low-Cost Road, Near Sarinawa Global Concept Ltd, Murtala Mohammed Way, 0170 Bauchi, Bauchi State
+814343	Abdullahi Shehu Jarma (Ag.)
+814501	No 36 Kashim Ibrahim Way, P.M.B. 1221, Yola
+814559	Hajiya Amina Dahiru Tafida
+814689	Education Resource Centre Compound adjacent GGC., Maiduguri
+814867	UBEC State Office, Dr Goodluck Ebele Jonathan Road, Off Dukku Road, P.M.B. 0170, Gombe
+815075	Off Donga Road, Adjacent to Centre for Quranic and Islamic Studies, P.M.B. 1100, Jalingo
+815287	Behind Ministry of Works, Along Gashua Road, Damaturu
+815593	Muhammad Ibrahim Gana
+815707	Audu Bako Secretariat, SUBEB Premises, Kano
+815892	UBEC Katsina SUBEB Premises, Muhammadu Dikko Road, KofarSauri, Katsina State
+816103	Block 11, Shehu Kangiwa Secretariat, P.M.B. 2420, Sokoto
+816284	Opposite Maharazu Primary School, Unguwar Gwaza, Gusau
+816353	Mohammed Nafiu Yusuf
+816547	Muhammad Abdullahi Song
+816674	No. 5 Suleiman Ahmad Road, Gesse Phase II, Birnin Kebbi, Kebbi State
+816906	Adjacent to Imo SUBEB Premises, Port-Harcourt Road, Owerri
+817104	Ebonyi SUBEB Premises, Along Abakaliki-Enugu Road, Abakaliki
+817353	Mr Innocent Onyeabor
+817476	Anambra SUBEB Premises, Opposite Judiciary, Aroma Quarters, Awka
+817555	Nnamdi Kingsley Nlewedin (Ag.)
+817682	No. 73, Umuokpara Street, Off Niger Road, Amuzukwu Layout, Umuahia, Abia State
+817890	Uyo, Akwa Ibom State
+817958	Mr. Udoh Akpanosson Essien (Ag.)
+818111	No. 45 Mission Road, by Emokpae Primary School Premises, Benin City
+818309	Opposite Agudama-Epie Secondary School, P.M.B. 48, Agudama-Epie, Yenagoa
+818516	Cross River SUBEB Premises, 120 Murtala Highway, Calabar
+818587	Dr. Omuta Christopher O.
+818711	No. 10 Maryam Ndidi Babangida Way, Asaba, Delta State
+818908	Inside Gov't Girls Secondary School, Rumuokwuta, Port Harcourt, Rivers State
+818999	Ajulo Micheal Temitope (Ag.)
+819163	QTR 817, Ikolaba Road, beside Association for Reproductive and Family Health, Ikolaba GRA, Ibadan
+819608	MKO Abiola Way, Ijeun-titun, P.M.B. 2103, Abeokuta
+819673	Badmus Shola Ishaq (Ag.)
+819792	Federal Ministry of Works, Housing and Urban Development Complex, Behind Tafawa Balewa Square
+820012	Opposite Adebare Specialist Hospital, KLM 4 Gbongan/Ibadan Road, Oshogbo, Osun State
+820111	Dada Adeniyi Kehinde (Ag.)
+820237	Quarter 153, Poartson, Oda Road Opposite National Library, Akure, Ondo State
+820328	Mrs. Adams Olanike Adams
+823029	The UBEC Zonal Offices serve as a linkage between the Headquarters and the UBEC State Offices, SUBEBs and other stakeholders. The Commission has 6 Zonal Offices which carry out the functions of the various Departments and Units in the 6 geopolitical zones while also managing the various State offices under them.
+823411	UBEC has an office in the 36 States and the FCT which liaise with SUBEBs and all other basic education stakeholders. The table below shows the locations of the Zonal/State Offices.
+824932	Locations and Coverage Areas
+825090	Locations of the UBEC Zonal Offices and the States covered under each zone across Nigeria's six geopolitical regions.
+827728	Each Zonal Office is headed by a
+827806	while the State Offices are headed by Officers of the cadre of
+827982	Principal Quality Assurance Officer
+829072	Headed by a Director
+829620	Asst. Director / Principal QA Officer
+830090	Contact information for all UBEC Zonal Directors and State Coordinators across Nigeria.
+832819	Active Tender Notices
+832867	Bilingual Boarding Schools
+833028	Procurement of Equipment, Furniture and Fittings for Thirty (30) Bilingual Education Boarding Schools in the Nine (9) Participating States
+833458	Procurement of Instructional Materials and Supplies for the Thirty (30) Bilingual Education Boarding Schools in the Nine Participating States
+833892	Construction of Three (3) Bilingual Education Boarding Schools in Adamawa State
+834189	Construction of Three (3) Bilingual Education Boarding Schools in Borno State
+834480	Construction of Three (3) Bilingual Education Boarding Schools in Gombe State
+834771	Construction of Four (4) Bilingual Education Boarding Schools in Kaduna State
+835064	Construction of Three (3) Bilingual Education Boarding Schools in Kwara State
+835355	Construction of Three (3) Bilingual Education Boarding Schools in Nasarawa State
+835655	Construction of Three (3) Bilingual Education Boarding Schools in Osun State
+835944	Construction of Four (4) Bilingual Education Boarding Schools in Kano State
+836237	Construction of Four (4) Bilingual Education Boarding Schools in Niger State
+838726	Download bid documents for ongoing and recent tender notices published by the Universal Basic Education Commission.
+839635	All tenders are published in accordance with the Public Procurement Act 2007. Click the download button to access the full bid document for each tender.
+840191	Download the relevant bid document below, complete all required sections, and submit your bid in accordance with the instructions contained in the document. For enquiries, contact the Procurement Department via info@ubec.gov.ng.
+842761	Total Documents Available
+842860	Most Recent Data Year
+843254	Accessed Matching Grant from (2005 – 2023)
+843418	Disbursements of Matching Grant to States
+843641	Matching Grant Receipts (2005 – 2021)
+843839	Lodgement of State Counterpart Fund by States (2005 – 2021)
+844078	FGN-UBE Intervention Funds Disbursements / Utilisation from 2005–2019
+844353	Matching Grant Allocations (2005 – 2021) by Political Zone
+844875	Status of BESDA Funds Disbursement to the States
+845072	FGN-UBE Intervention Funds Disbursements / Utilisation
+845330	Matching Grant Receipts (2005 – 2021)
+845903	Unaccessed Matching Grant from (2005 – 2023)
+846080	Unaccessed Matching Grant from (2005 – 2021)
+846289	Un-accessed Matching Grant (2005 – 2021) by Political Zone
+846527	Un-accessed Special Education Fund (2005 – 2021)
+846760	Special Needs Education
+847140	Special Education Receipts (2005 – 2021)
+847348	Teacher Professional Development
+847694	2009 – 2021 Receipts for Teacher Professional Development
+847930	2009 – 2021 Un-accessed for Teacher Professional Development
+848172	2009 – 2021 Disbursement for Teacher Professional Development
+850073	Access official documents on FGN-UBE Intervention Fund disbursements, allocations, receipts and utilisation reports from 2005 to date.
+851132	The Matching Grant is the principal funding mechanism through which the Federal Government of Nigeria, via UBEC, disburses UBE Intervention Funds to State Universal Basic Education Boards (SUBEBs). The Fund operates on a 50:50 counterpart arrangement — for every naira disbursed by the Federal Government, States are required to provide an equal contribution.
+851568	This page provides access to official documents covering disbursements, state receipts, counterpart fund lodgements, and unaccessed grants from 2005 to 2023, as well as records for Special Needs Education funding and Teacher Professional Development allocations.
+852331	Browse and download official UBEC Matching Grant documents across all categories. All files are available in Word Document (.doc) format.
+855073	Journal Volumes Published
+855124	Journals Available to Download
+855231	Most Recent Digest Issue
+855277	UBE Journal — A Journal of Basic Education in Nigeria
+855510	UBE Journal — A Journal of Basic Education in Nigeria
+855711	UBE Journal — A Journal of Basic Education in Nigeria
+855893	UBE Journal — A Journal of Basic Education in Nigeria
+856075	The Basic Educationist Magazine
+856268	The Basic Educationist Magazine
+858107	Access the UBE Journal — a peer-reviewed publication on Basic Education in Nigeria — and browse issues of The Basic Educationist Magazine.
+858976	Browse and download official UBEC journals and digest publications. All documents are available as downloadable files.
+860112	— A peer-reviewed Journal of Basic Education in Nigeria, published periodically by the Universal Basic Education Commission to advance research and discourse on basic education delivery across the country.
+863884	4th Quarter 2025 Key Performance Report (October – December 2025)
+864493	10-Year UBE Roadmap (2021–2030)
+864631	Summary of 2018 National Assessment on Learning Achievement in Basic Education in Nigeria
+864829	2022/2023 National Personnel Audit (NPA) Report
+864975	National Report on Cluster-Based
+865875	Summary of Report of 2017 National Assessment of Learning Achievement in Basic Education in Nigeria
+866023	Report of 2017 National Assessment of Learning Achievement in Basic Education in Nigeria — Primary 6
+866172	Report of 2017 National Assessment of Learning Achievement in Basic Education in Nigeria — Primary 5
+866321	Report of 2017 National Assessment of Learning Achievement in Basic Education in Nigeria — JSS3
+866465	Report of 2017 National Assessment of Learning Achievement in Basic Education in Nigeria — JSS2
+866729	2014 Annual Report Harmonised
+866860	Foreword — 2014 Annual Report August
+866998	Edited Annual Report 2016
+867125	2016 Special Education Mid-Term Monitoring (8th–10th August 2018)
+867292	Report of a One-Day World Bank Mission on BESDA PforR Operations — Sokoto State, July 30 2018
+867487	Report of a Two-Day World Bank Mission on BESDA PforR Operations — Kebbi State, July 31–August 1 2018
+867690	Report of BESDA PforR Meeting — Ministry of Education, Kano State, September 6 2018
+867875	Report of BESDA PforR Meeting — Ministry of Education, Science and Technology, Kaduna State, August 9–10 2018
+868086	Report of BESDA PforR Meeting — Ministry of Education, Jigawa State, September 4–5 2018
+868275	Report of Two-Day Meeting of Technical Committee on Inter-Agency Collaboration for Quality Basic Education in Nigeria
+868494	BESDA Operation Governors — July 5
+869451	Opening session of the 4-day Master Trainers training
+869540	Participants from crisis-affected states in session
+869626	Facilitators presenting psychosocial skills module
+869710	UNICEF and UBEC officials at the training
+869786	Group exercise on managing traumatized pupils
+869866	Certification of state master trainers
+869922	Psychosocial Support Skills
+869974	Children in Emergencies
+870006	Modern pedagogy and learner-centred approaches
+870055	Field-trips, story-telling and drama activities
+870105	Contributions from Historical Society of Nigeria
+870156	Train-the-Trainer rollout across 36 States & FCT
+871426	Official reports, research publications and programme documents from the Universal Basic Education Commission
+871934	Download official UBEC reports and publications.
+874865	UBEC Trains Education Secretaries on School Effectiveness
+875081	In a bid to improve school effectiveness and familiarize Education Secretaries with their roles on smooth implementation of the UBE programme, the Commission conducted a 3-day workshop across the 6 Geopolitical Zones on Improving School Effectiveness.
+875361	The aim of the training was to expose Education Secretaries to important components of the UBE programme as well as the School Based Teacher Professional Development Model. A team of dedicated UBEC staff (Teacher Development) were deployed to the Six (6) geopolitical zones to coordinate and monitor the training and to also provide support to resource persons and quality assurance officers assigned for effective and efficient conduct of the 3-day training.
+875849	The training was conducted in 6 centres in the 6 Geopolitical Zones on 22 – 24 September 2021 (for South South – (Akwaibom), South East (Enugu), South West (Ibadan) and North Central (Nasarawa) zones) and on 27 – 29 September 2021 (for North East (Bauchi) and North West (Kaduna)). Facilitators for the training were experts drawn from similar trainings recently concluded by ESSPIN and Teacher Development Programme of the UKAID. Officers from the Quality Assurance Department of the Commission also sensitized the Education Secretaries on quality assurance methods.
+876445	The 3-day workshop included a flag-off ceremony held in Lafia, Nasarawa State. The Flag-off ceremony had in attendance the Executive Governor of Nasarawa State, Governor Abdullahi Sule, the Chairman, Governing Board Universal Basic Education Commission (UBEC) Prof. Adamu Kyuka Usman, the Executive Secretary, UBEC, Dr. Hamid Bobboyi, among others.
+876822	The UBEC Board Chairman stressed the need for education secretaries to implement knowledge and skills gained at the workshop for school improvement and the provision of quality education to the Nigerian children as an enduring legacy for the future generation.
+877111	In the same vein, the Executive Secretary reiterated that the ultimate goal of the basic education programme is ensuring that all children of school age, irrespective of background, attain a minimum of ten years of quality basic education. He emphasized the relevance of education secretaries in the implementation of basic education programme and the efforts of the Commission at improving the quality of education through capacity building of teachers in the 36 States and FCT from 2015 till date.
+877639	He further stressed the challenge of delay in accessing and implementation of TPD funds by the States and the need for measures to be taken in facilitating this process.
+877837	In closing, the Executive Secretary pleaded with all stakeholders to join the Commission in ensuring the delivery of quality education in Nigeria.
+879036	UBEC Conducts Impact Assessment of Jolly Phonics and SMASE Programmes
+879264	As part of measures to enhance the quality of education in Nigeria, the Commission has been supporting the implementation of Strengthening Mathematics and Science Education (SMASE) and Jolly Phonics in the 36 States and FCT under its Teacher Professional Development programme over the past five years. These programmes among others are the Commission’s notable initiatives aimed at improving the capacity of in-service teachers on effective teaching and learning of literacy, numeracy and sciences for improved learning outcomes in basic education schools across the country.
+881069	The report of the impact assessment of Jolly Phonics and SMASE is envisaged to guide the Commission in her quest to redefine and improve the quality of teaching and learning of literacy, numeracy and sciences with a view to promoting effective schooling. Key areas lacking in the implementation of these two programmes will equally be reviewed and resolved for improved educational outcomes.
+882768	UBEC Partners UNICEF Train Teachers in Crisis Areas on Psychosocial Support Skills and Managing Children in Emergencies
+883046	As part of efforts to ensure that learners and teachers in crisis areas access the needed psychosocial support and recovery skills, the Commission in collaboration with other government agencies and international development partners developed a training manual and handbook on Psychosocial Support and Managing Children in Emergencies.
+885115	UBEC Develops Training Manual for History Teachers in Basic Education Schools
+885351	As part of concerted efforts to ensure the reintroduction of History into the Basic Education Curriculum, the Commission has developed a training manual for History Teachers to redefine the teaching and learning of History in Basic Education Schools across the 36 states and the FCT.
+885663	Following the reintroduction of History into the basic education curriculum, the Commission was saddled with the responsibility of ensuring effective implementation of this mandate, in achieving this, a stakeholders Meeting was held to discuss the reintroduction of History in the basic education curriculum. Based on the recommendations from the meeting, a writer’s workshop was conducted for the development of a manual for training and retraining of History Teachers in basic schools.
+886179	The manual is a product of collective intellectual ingenuity and erudition of academics, historians and educational consultants drawn from reputable tertiary institutions in Nigeria, the Historical Society of Nigeria (HSN), organized private sector and UBEC. The manual incorporates modern pedagogy and learner-centred approaches for effective and efficient teaching of History. It included a range of beyond-the-classroom activities such as field-trips, story-telling, drama among others that will reinforce the delivery of the History curriculum with a view to making the teaching-learning experience fun, practical and permanent.
+886840	Meanwhile, the Commission is already making plans to disseminate the content of the manual through a Step down training which includes a Train-the-Trainer workshop, and Cascading workshop across the 36 states and the FCT. The training is expected to acquaint History Teachers and para-historians in basic education schools with the content of the manual for improved and result-oriented delivery of the History curriculum.
+887291	The Executive Secretary, Dr Hammid Bobboyi, in his remark believes that the reintroduction of History into the Basic Education Curricular will strengthen national consciousness, patriotism and help the younger generation acquire relevant knowledge of their country and localities, their cultural norms, values, heroes and legends for meaningful contributions to the development of the country.
+888279	Community Empowerment and Development School-Based Management Committee – School Improvement Programme
+888390	SBMC-SIP encourages community participation and ownership of schools. The Commission, through the programme, disburses funds directly to SBMCs for the improvement of infrastructure, learning materials and equipment in schools. The overall import is to increase access to education, qualitative education and achieving equity in the provision of Basic Education in Nigeria.
+888781	Activities Carried Out
+888818	Disbursed the 1st tranche support funds under the Micro, Macro and Special Cases projects to 2,461 school/communities.
+888939	Organized SBMC workshop to train Master Trainers using the SBMC Guidelines, SBMC Trainers Manual, Mentoring and Monitoring Pack, and SBMC-SIP Implementation Manual.
+889106	Cascaded the SBMC training at State level to selected beneficiary schools and LGEA SBMC Desk officers.
+889211	Conducted Mid-term monitoring to SBMC-SIP beneficiary schools to ascertain 75% and above project execution/implementation for second tranche payment.
+889363	Disbursed 25% support funds to selected SBMC-SIP beneficiary schools recommended for payment after mid-term monitoring in the 36 States and FCT.
+889510	Conducted final monitoring of all SBMC-SIP beneficiary schools to determine the level of project completion.
+890013	Special Needs Education
+890045	Special Needs Education is one of the key programmes of the Commission aimed at bridging the education gap between children with psycho-social, mental or physical challenges in basic education delivery. The Commission supports states and private providers to ensure that children with special needs acquire basic education and are adequately catered for, irrespective of their psycho-physical conditions.
+890468	Activities Carried Out
+890505	Verified information of private providers of education for children with special needs that applied for 2018 support fund.
+890630	Facilitated the disbursement of 2018 Special Needs Education support fund to eligible SUBEBs.
+890726	Facilitated the disbursement of the first and second tranche of funds to eligible schools/centres from the 2018 Special Needs Education Intervention Fund.
+891250	Open Schooling Programme
+891283	The Open Schooling Programme promotes enrolment, retention and completion of basic education through a flexible education system that allows learners to learn in a conducive local environment at an agreed time with the community, away from the conventional schooling system and using Information and Communication Technology tools.
+891633	Activities Carried Out
+891670	Organized a 2-day preparatory meeting of stakeholders comprising SUBEB Chairmen from the six (6) Pilot States, Content Developers and Centre Managers to acquaint them on their expected roles and responsibilities.
+891885	Organized a 5-day training for Content Developers and Centre Managers on the Open School Programme.
+891987	Commenced Content Development for the Open Schooling Programme.
+892053	Conducted virtual meetings between Federal Ministry of Education, Content Developers, Centre Managers, UBEC and Commonwealth of Learning (COL) to map out implementation strategies due to the COVID-19 pandemic.
+892594	Rapid Response Initiative — Enrolment Drive
+892646	The Department organized a three-day capacity building workshop for UBEC's Social Mobilization Officers and SUBEBs' Enrolment Drive Desk Officers in the 36 States and FCT, aimed at driving out-of-school children into formal schooling.
+893233	To continuously enhance stakeholder partnerships in UBE delivery, the Commission has established partnerships with different NGOs, the Organised Private Sector and line Ministries interested in supporting basic education delivery.
+893520	Initiated partnership arrangements with the Organised Private Sector.
+893592	Initiated the development of a framework on stakeholder engagement in Basic Education delivery.
+893690	Recommended support for programmes initiated by stakeholders intervening in basic education delivery including:
+893815	Access to Humanitarian Assistance and Development Initiative (AHDI)
+893885	Africa Support and Empowerment Initiative
+893929	National Association of the Blind (NAB)
+893971	I Am The Future of Nigeria Youth Initiative
+894558	IQTE Almajiri Programme
+894589	The Integrated Quranic and Tsangaya Education (IQTE) programme integrates western education with Quranic learning to support the education of Almajiri children within the UBE framework.
+895101	Federal Teacher Scheme (FTS)
+895137	The Federal Teacher Scheme deploys qualified graduates as teachers to underserved communities to address the critical shortage of qualified teachers in basic education institutions.
+895712	Skill "G" promotes Science & Technology, Mathematics, Engineering, and Technical & Vocational Education from Primary to Tertiary levels, building a foundation for educational development in Nigeria.
+896250	Subsequent disbursement of funds to 2017/2018 selected beneficiary schools recommended for payment after monitoring of project execution.
+896390	Preparation and commencement of 2019 SBMC-SIP activities for the year 2020.
+896522	Development of Framework on Public and Private Partnership and stakeholders' engagement in basic education delivery.
+896641	Engagement with PPP stakeholders to further strengthen synergy among stakeholders.
+896781	Completion of Zonal Enrolment Drive in outstanding States.
+896882	Conduct of training of Master Trainers on project implementation to build capacity at the State level.
+896987	Advocacy and sensitization of grassroot stakeholders on SBMC-SIP project concept, selection and implementation procedures.
+897112	Verification of schools selected for 2019 projects in dire need of the SBMC-SIP intervention.
+897208	Disbursement of project implementation support funds to SUBEBs and LGEAs.
+897284	Cluster-based training of Project Implementation Sub-Committees (PISCs) under the 2019 SBMC-SIP.
+897432	Disbursement of 1st and 2nd tranche of project implementation support funds to beneficiary schools/communities.
+897546	Conduct of Mid-Term and Final Monitoring of 2019 SBMC-SIP projects.
+897616	Completion, certification and utilization of all 2019 SBMC-SIP projects.
+897745	Meeting with various categories of stakeholders.
+897796	Presentation, editing and printing of the PPP Framework and distribution to partners.
+897884	Development of PPP Trainers' Guide and Training of Trainers on Framework implementation.
+897975	Implementation of PPP activities to ensure continuity and evidence-based results.
+898059	Supervision, reportage and documentation of PPP Report.
+898117	Recognition and Award to major players in basic education delivery.
+899208	Initiatives and programmes driving access, quality, equity and community participation in Basic Education delivery across Nigeria.
+899715	Active programmes through which the Commission delivers its mandate to improve basic education outcomes across Nigeria.
+901368	BESDA — World Bank Programme
+901728	Better Education Service Delivery for All — Program-for-Results (PforR)
+901876	World Bank-supported operation in partnership with the Federal Ministry of Education. Effective 22nd January 2018.
+902231	Total Operation Value
+902393	Better Education Service Delivery for All, Program-for-Results (PforR) is a World Bank-supported operational project requested by the Federal Ministry of Education in support of its Ministerial Strategic Plan (MSP) 2016–2019. The operation supports Pillar I of the MSP — Out-of-School Children — and focuses on 17 States with the highest number of out-of-school children.
+906740	GPE/NIPEP Grant Value
+906831	International Development Partners
+906891	Local Government Partners
+906938	The World Bank — State Education Program Investment Project
+907320	The World Bank has been a long-time partner and is currently supporting the State Education Programme Investment Project in Nigeria. This is an innovation project being piloted in three States: Anambra, Bauchi and Ekiti States. Under this project, funds are disbursed to States after they have achieved and accomplished some pre-determined performance indicators called Disbursement Linked Indicators (DLIs), making it a result-based financing project. UBEC, as the statutory Agency charged with coordinating Basic Education in Nigeria, has a major role to play.
+908266	Need-based teacher deployment in participating States.
+908323	School-level management and accountability improvements.
+908382	Measurement of student learning outcomes in participating States.
+908465	AF Focus States (North-East & Original Pilots)
+908601	The institutional arrangement for SEPIP designates UBEC as a Technical Assistance Provider to the implementing States and the main Monitoring & Evaluation outfit for the project.
+908795	Global Partnership for Education / Nigerian Partnership for Education Project
+909279	The Global Partnership for Education (GPE) operates under World Bank supervision. The GPE/NIPEP is a $100 million US Dollars grant aimed at assisting Nigeria to achieve Education For All (EFA) goals through increased access and improved quality in basic education. The Financing Agreement was signed and ratified by the Federal Ministry of Finance in November 2015, and the project is at various stages of implementation across five States.
+910067	Increasing girl-child enrolment and retention through Conditional Cash Transfers (CCT).
+910157	Strengthening School Based Management Committees (SBMCs).
+910217	Teacher Professional Development (TPD), especially on classroom management.
+910398	UBEC is designated as a Technical Assistance Provider to the implementing states and the main Monitoring & Evaluation outfit for the project.
+910572	Japan International Cooperation Agency
+910977	Korea International Cooperation Agency
+911884	International Bank for Reconstruction and Development
+912314	John D. and Catherine T. MacArthur Foundation
+912710	Federal Ministry of Education
+913095	National Bureau of Statistics
+913581	National Population Commission
+914417	Global and local partnerships that strengthen UBEC's mandate to deliver quality, equitable basic education for all children in Nigeria.
+915208	World Bank Partnerships
+915379	UBEC serves as a key Technical Assistance provider and Monitoring & Evaluation outfit across World Bank-supported education programmes in Nigeria.
+918080	International Development Partners
+918270	Global organisations that collaborate with UBEC to strengthen basic education delivery, capacity building, and programme monitoring across Nigeria.
+919518	Federal government agencies collaborating with UBEC in planning, data collection and programme coordination for basic education delivery.
+920295	Total Documents Available
+920396	Most Recent Data Year
+920700	2010 Basic Education Profile Facts & Figures — South South Zone
+920815	2010 Basic Education Profile Facts & Figures — South East Zone
+920929	2010 Basic Education Profile Facts & Figures — North West Zone
+921043	2010 Basic Education Profile Facts & Figures — North East Zone
+921157	2010 Basic Education Profile Facts & Figures — North Central Zone
+921274	2010 Basic Education Profile Facts & Figures — National and Regional
+921400	Compendium of Public Schools Basic Education Profile & Indicators in Nigeria 2018
+921586	Compendium of Public and Private Schools Basic Education Profile & Indicators in Nigeria 2018
+921784	Compendium of Private Schools Basic Education Profile & Indicators in Nigeria 2018
+921977	2022 Basic Education Primary School List
+922125	2022 Basic Education Junior Secondary School List
+922285	2013/2014 Number of Junior Secondary School Teachers by Highest Qualification by State
+922396	2013/2014 Number of Primary School Teachers by Highest Qualification by State
+922504	2022 Digest of Public Schools
+922637	2022 Digest of Private Schools
+922772	2022 Digest of Public and Private Schools
+922929	2019 and 2020 Digest of Statistics — Volume I
+923092	2019 and 2020 Digest of Statistics — Volume II
+923257	2019 and 2020 Digest of Statistics — Volume III
+923430	2013/2014 students enrolment jss by state, classes and gender
+923633	2013/2014 number of eccde/pre-primary teachers by highest qualification by stater
+923856	2010/2011 primary teachers by qualification by state
+924050	2010/2011 jss teachers by qualification by state
+924240	2010/2011 students enrolment in jss by state, class and gender
+924444	2010/2011 ecd/pre-primary teachers by qualification by state
+924646	2011/2012 jss teachers by qualification by state
+924836	2011/2012 students enrolment jss by state, classes and gender
+925039	2011/2012 pre-primary teachers by qualification by state
+925238	2012/2013 pre-primary schools teachers by qualifications by state
+925446	2012/2013 pupils enrolment in eccde centres/pre-primary by state
+925653	2011/2012 primary teachers by qualification by state
+925848	2012/2013 pupils enrolment in primary schools by state
+926045	2012/2013 junior secondary schools teachers by qualifications by state
+926258	2012/2013 primary schools teachers by qualifications by state
+926455	COMPENDIUM OF PRIVATE SCHOOLS BASIC EDUCATION PROFILE & INDICATORS IN NIGERIA 2018
+926642	COMPENDIUM OF PUBLIC AND PRIVATE SCHOOLS BASIC EDUCATION PROFILE & INDICATORS IN NIGERIA 2018
+926840	COMPENDIUM OF PUBLIC SCHOOLS BASIC EDUCATION PROFILE & INDICATORS IN NIGERIA 2018
+927956	Basic Education School List
+928344	Digest of Statistics
+931121	Access official UBEC statistical publications, school lists, fact sheets, compendiums and state action plan data for basic education in Nigeria.
+932056	Earliest Publication Year
+932110	Most Recent Publication
+932175	,"Finance and Accounts":
+932298	,"Planning, Research and Statistics":
+932354	,"Administrations and Supplies":
+932439	,"Executive Secretary Office":
+932588	,"Administrations and Supplies":
+932638	,"Executive Secretary Office":
+932756	10-Year UBE Roadmap (2021-2030)
+932798	10-Year UBE Roadmap (2021-2030)
+932838	Department of Planning, Research and Statistics
+933019	Department of Planning, Research and Statistics
+933198	Department of Academic Services
+933232	Department of Administrations and Supplies
+933277	Department of Finance and Accounts
+933314	Department of Internal Audit
+933345	Department of Physical Planning
+933379	Department of Planning, Research and Statistics
+933429	Department of Procurement
+933457	Department of Quality Assurance
+933491	Department of Social Mobilization
+933527	Department of Special Programmes
+933562	Department of Teacher Development
+933598	Executive Secretary Office
+933779	Department of Academic Services
+933813	Department of Administrations and Supplies
+933858	Department of Finance and Accounts
+933895	Department of Internal Audit
+933926	Department of Physical Planning
+933960	Department of Planning, Research and Statistics
+934010	Department of Procurement
+934038	Department of Quality Assurance
+934072	Department of Social Mobilization
+934108	Department of Special Programmes
+934143	Department of Teacher Development
+934179	Executive Secretary Office
+934299	4th QUARTER 2025 KEY PERFORMANCE REPORT (October – December 2025)
+934495	Accessed Matching Grant 2005-2023
+934548	Department of Finance and Accounts
+934682	Climate Change Education Handbook
+934726	Climate Change Education Handbook
+934768	Department of Teacher Development
+934930	COMMUNIQUE AT THE END OF A 2-DAY STAKEHOLDER ENGAGEMENT ON MORAL REGENERATION AND REORIENTATION IN BASIC EDUCATION
+935064	Department of Teacher Development
+935205	Communique Emanating from the 2 Day National Conference on Teacher Professional Development
+935316	Department of Teacher Development
+935585	Early Warning Handbook
+935618	Early Warning Handbook
+935649	Department of Teacher Development
+935801	Guidelines for MM SBMC in Nigeria
+935854	Department of Social Mobilization
+936004	LaNA 2023 LINKING STUDY RESULTS
+936220	Department of Teacher Development
+936359	MANUAL FOR SCHOOL SUPPORT SERVICES
+936413	Department of Teacher Development
+936561	Manual on training teachers in areas of Emmergency
+936622	Manual on training teachers in areas of Emmergency
+936681	Department of Teacher Development
+936841	NIGERIA HOPE-QUALITY BASIC EDUCATION FOR ALL PROGRAM-FOR-RESULTS (HOPE-EDU PforR)
+936933	FEDERAL REPUBLIC OF NIGERIA WORLD BANK PROGRAM-FOR-RESULTS FINANCING NIGERIA HOPE-QUALITY BASIC EDUCATION FOR ALL PROGRAM-FOR-RESULTS …
+937172	Occupational Health and Safety (OHS) Manual
+937226	Occupational Health and Safety (OHS) Staff Manual
+937388	Quality Assurance Framework and Policy Thrust for the Utilization of 2% QA Allocation
+937493	Department of Quality Assurance
+937604	SBMC Operational Guide
+937646	Department of Social Mobilization
+937785	School Base Management Committee SIP
+937841	Department of Social Mobilization
+937994	School Based Training Manual
+938042	Department of Teacher Development
+938184	Teachers Handbook on Psychosocial Support
+938245	Department of Teacher Development
+938457	Department of Teacher Development
+938615	UBE JOURNAL VOLUME 7
+938655	Department of Planning, Research and Statistics
+938796	UBE JOURNAL VOLUME 8
+938836	Department of Planning, Research and Statistics
+938977	Unaccessed Matching Grant 2005-2023
+939032	Department of Finance and Accounts
+939178	UNICEF NIGERIA SCHOOLS VIOLENCE
+939220	UNICEF NIGERIA SCHOOLS VIOLENCE
+939260	Department of Teacher Development
+941408	Browse, search and download official UBEC publications — reports, handbooks, manuals, frameworks and more — from departments across the Commission.
+942330	Use the search box to find the document you need. Click any column header to sort.
+946053	Try adjusting your search or clearing the category filter.
+947214	Monthly Reports Published
+947269	Total Funds Disbursed
+948971	Science and Mathematics Teachers trained on effective utilization of SKILL 'G' Kits.
+949077	Agricultural Science Teachers and SUBEBs' Desk Officers trained on the Agricultural and Education Training Programme (AETP) implementation approach.
+949246	Teachers of operational UBE Model Smart Schools trained on Design Thinking, Coding, Robotics and Artificial Intelligence (DTCRA).
+949396	Teachers underwent Leadership Training on Project Management Consultancy (PMC) — including infrastructure, capacity building, content development and performance evaluation — for Smart School Administrators in Bauchi, Ekiti, Nasarawa, Kano, Kwara States and the FCT, in collaboration with KOICA.
+949712	Teachers of Six KOICA-Supported Smart Schools trained on digital educational content creation for 21st-century smart education best practices.
+949876	Basic Education and Arabic Teachers trained on modern methods of teaching Arabic/Qur'anic Education, literacy & numeracy skills, school records management, and lesson plan preparation.
+952271	Trained master trainers on Learning Through Play (Reggio Emilia and Child-Centred Approaches) in 36 States and FCT for ECCDE implementation in Abuja.
+952423	Carried out Final Monitoring of 22 BESDA projects in 17 Focus States.
+952501	Most schools had inadequate or poor-condition infrastructure.
+952565	Different renovation priorities across visited schools.
+952623	Insufficient learning materials in several schools.
+952683	Conduct comprehensive infrastructure assessment for all special needs schools.
+952764	Provide regular maintenance schedules and allocate additional maintenance funds.
+952847	Develop a plan for adequate resources and renovate based on individual school needs.
+953502	Phone Repair Equipment
+955863	Phone Repair Equipment
+959352	Monthly highlights of UBEC's infrastructure delivery, funds disbursement, capacity building, and programme implementation across Nigeria's 36 States and the FCT.
+960088	Monthly Performance Reports
+960235	Navigate between monthly reports or scroll through all performance highlights below.
+960633	Key Performance Report
+960970	96 ECCDE Centres Established in Primary Schools
+961094	51 JS/Vocational Schools Established to Increase Enrolment, Retention & Completion
+961253	Constructed, Rehabilitated & Supplied to Basic Education Schools
+961396	Matching Grant Counterpart Fund — ₦8,747,358,603.18 Disbursed to 3 States
+962015	Key Performance Report
+962097	UBEC Officers Trained on SBMC Operational Documents
+962300	Trainings conducted in Kano (Northern Phase) and Akwa Ibom (Southern Phase).
+962587	Matching Grant Disbursements to SUBEBs
+962835	A) Schools Closer to Communities (Minimum Standard):
+963088	C) Constructing, Renovating & Equipping Educational Facilities:
+963398	Key Performance Report
+963478	FGN/UBE Intervention Fund — ₦8,053,365,283.82 Disbursed to 5 SUBEBs
+963681	Counterpart Fund Lodgments — ₦5,973,384,297.58 from 3 States
+963872	External Audit Engagement
+963909	Engaged External Auditors for audit of 2023 financial statements, transactions and records of FGN/UBE Intervention Funds.
+964190	Educational Facilities Constructed, Renovated & Equipped — 36 States & FCT
+964620	Special Education Schools in Adamawa, Akwa Ibom, Anambra, Benue, Kano, Oyo and FCT for renovation across the six geopolitical zones.
+964893	⚠ Challenges (Special Education School Verification)
+965278	Key Performance Report
+965635	SUBEB SBMC Desk Officers and
+965707	UBEC SMOs trained on the 2023/2024 SBMC-SIP Implementation.
+965908	Received lodgment of Counterpart Fund of
+966006	from Benue SUBEB for 1st–4th Quarters 2024.
+966189	Conducted Action Plan Defense for Cross River and Delta SUBEBs.
+966392	Conducted Leadership Training for Headteachers of
+966485	Effective Schools Programme (ESP)/E-learning Centres in FCT.
+966687	Conducted Digital Library & Education Resources Management Workshop for
+967114	Key Performance Report
+967194	FGN/UBE Intervention Fund — ₦27,834,945,383.05 Disbursed to 9 SUBEBs
+967399	Counterpart Fund Lodgments Received from 9 SUBEBs
+967663	Educational Facilities Constructed & Equipped to Minimum Standards — 36 States & FCT
+967930	Conducted a 4-day Workshop on Curriculum Review and Development of Teachers' Guide on Design Thinking, Robotics and Artificial Intelligence (DTCRAI) in FCT.
+968144	Construction of a Block of (2) Classrooms Office/Store with Furniture
+968304	Construction of a Block of Two (2) Classrooms with Office & Store and Supply of Furniture
+968512	Construction of a Block of Two (2) Classrooms with Office & Store and Supply of Furniture
+968613	St. Andrews Anglican Primary School, Odooro, Ikole
+968729	Construction of a Block of Two (2) Classrooms with Office & Store and Supply of Furniture
+968830	C.A.MC Primary School, Kajola Street, Ilawe-Ekiti
+968945	Construction of a Block of Two (2) Classrooms with Office & Store and Supply of Furniture
+969046	Lapandimtai Primary School, Kaltungo LGA
+969152	Construction of a Block of Two (2) Classrooms with Office & Store and Supply of Furniture
+969253	Kaci Primary School, Dutse
+969346	Construction of a Block of Two (2) Classrooms with Office & Store and Supply of Furniture
+969447	Imam Hassan Primary School, K. Hausa
+969550	Construction of a Block of Two (2) Classrooms with Office & Store and Supply of Furniture
+969651	Kulttu Primary School, Garki
+969746	Construction of a Block of Two (2) Classrooms with Office & Store and Supply of Furniture
+969847	Junior Arabic Secondary School, Garki
+969952	Construction of a Block of Two (2) Classrooms with Office & Store and Supply of Furniture
+970053	Galadanchi Primary School, Rigim
+970153	Construction of a Block of (2) Classrooms Office/Store with Furniture
+970234	Nasarawa Dantakari Primary School, Dandume LGA
+970349	Construction of a Block of (2) Classrooms Office/Store with Furniture
+970430	Malisa Primary School, Gwandu
+970526	Construction of a Block of (2) Classrooms Office/Store with Furniture
+970714	Construction of a Block of (2) Classrooms Office/Store with Furniture
+970795	St Joseph Primary School / Itedo Makuta, Isanlu, Yagba-East L.G.
+970925	Construction of a Block of (2) Classrooms Office/Store with Furniture
+971006	PCMC Primary School, Nagazi Uvete, Adavi L.G.
+973746	Tracking the construction and rehabilitation of basic education facilities across states through constituency project interventions.
+974605	Construction and rehabilitation projects carried out across states under the constituency project intervention programme.
+975017	Search by school, location, state…
+978574	Construction of a Block of (2) Classrooms Office/Store with Furniture
+978655	Unguwar Gwaza Primary School
+978736	Construction of a Block of (2) Classrooms Office/Store with Furniture
+978817	Janyau Fulani Primary School
+978898	Construction of a Block of (2) Classrooms Office/Store with Furniture
+978979	Janyau Primary School
+979053	Construction of a Block of (2) Classrooms Office/Store with Furniture
+979134	Runji Primary School
+979207	Construction of a Block of (2) Classrooms Office/Store with Furniture
+979288	Furfuri Primary School
+979363	Construction of a Block of (2) Classrooms Office/Store with Furniture
+979444	Dangaladima Waziri Primary School
+979530	Construction of a Block of (2) Classrooms Office/Store with Furniture
+979611	Nizzamiya Primary School
+979688	Construction of a Block of (2) Classrooms Office/Store with Furniture
+979769	Central Model Primary School, Yusufari LGA
+979864	Construction of a Block of (2) Classrooms Office/Store with Furniture
+979945	Buni-Yadi Central Primary School
+980031	Construction of a Block of (2) Classrooms Office/Store with Furniture
+980112	Damagun Central Primary School, Fune LGA
+980206	Construction of a Block of (2) Classrooms Office/Store with Furniture
+980287	Gaba Tasha Primary School, Fune LGA
+980376	Construction of a Block of (2) Classrooms Office/Store with Furniture
+980457	Garbawa Primary School, Potiskum LGA
+980547	Construction of a Block of (2) Classrooms Office/Store with Furniture
+980628	Korkaye Primary School, Jalingo LGA
+980717	Construction of a Block of (2) Classrooms Office/Store with Furniture
+980798	Kumbo East Primary School, Donga LGA
+980888	Construction of a Block of (2) Classrooms Office/Store with Furniture
+980969	Labani Primary School, Silame LGA
+981056	Construction of a Block of (2) Classrooms Office/Store with Furniture
+981137	Balle Primary School, Gudu LGA
+981221	Construction of a Block of (2) Classrooms Office/Store with Furniture
+981302	Community Primary School, Rumuoparaobiakpor
+981399	Construction of a Block of (2) Classrooms Office/Store with Furniture
+981555	Construction of a Block of (2) Classrooms Office/Store with Furniture
+981636	LEA Primary School Zalli, Kanam LGEA
+981726	Construction of a Block of (2) Classrooms Office/Store with Furniture
+981807	LEA Primary School Mun Bayan, Kanam LGEA
+981901	Construction of a Block of (2) Classrooms Office/Store with Furniture
+981982	LEA Primary School Gwarlak, Kanam LGEA
+982074	Construction of a Block of (2) Classrooms Office/Store with Furniture
+982155	LEA Primary School Rikkos, Jos North LGEA
+982250	Construction of a Block of (2) Classrooms Office/Store with Furniture
+982331	LEA Primary School Mwell, Kanke LGEA
+982421	Construction of a Block of (2) Classrooms Office/Store with Furniture
+982502	LEA Primary School Bwadak, Kanam LGEA
+982593	Construction of a Block of (2) Classrooms Office/Store with Furniture
+982674	A.D.S Primary School, Akota, Ogbom Osho
+982767	Construction of a Block of (2) Classrooms Office/Store with Furniture
+982848	Baptist Basic School, Itaso
+982929	Construction of a Block of (2) Classrooms Office/Store with Furniture
+983010	Agborikin Comprehensive High School, Ilepa, Ikare, Akoko North
+983126	Construction of a Block of (2) Classrooms Office/Store with Furniture
+983207	Central Primary School, Lapai
+983290	Construction of a Block of (2) Classrooms Office/Store with Furniture
+983371	Emilugi Primary School
+983447	Construction of a Block of (2) Classrooms Office/Store with Furniture
+983528	Edozhigi Primary School
+983605	Construction of a Block of (2) Classrooms Office/Store with Furniture
+983686	L.E.A Primary School, Mokwa
+983767	Construction of a Block of (2) Classrooms Office/Store with Furniture
+983848	Model Primary School, Shiroro
+983931	Construction of a Block of (2) Classrooms Office/Store with Furniture
+984012	Kobo Primary School, Lapai
+984090	Construction of a Block of (2) Classrooms Office/Store with Furniture
+984171	L.E.A Primary School, Dabam
+984250	Construction of a Block of (2) Classrooms Office/Store with Furniture
+984331	Umar Audi Primary School, Tunga Minna
+984420	Construction of a Block of (2) Classrooms Office/Store with Furniture
+984501	Gov't Junior Secondary School, Karshi
+984593	Construction of a Block of (2) Classrooms Office/Store with Furniture
+984674	LEA Primary School, Karshi
+984755	Construction of a Block of (2) Classrooms Office/Store with Furniture
+984836	LEA Primary School, Karu
+984915	Construction of a Block of (2) Classrooms Office/Store with Furniture
+984996	Kuchikau Primary School, Karu
+985080	Construction of a Block of (2) Classrooms Office/Store with Furniture
+985161	LEA Primary School, Lafia
+985241	Construction of a Block of (2) Classrooms Office/Store with Furniture
+985322	RCM Primary School, Awoyaya, Ibeju-Lekki
+986427	Construction and rehabilitation of basic education infrastructure across Nigeria's 36 States and FCT
+987273	Construction and rehabilitation projects executed under the UBE programme. All 41 listed projects are 100% completed.
+988199	Search location or state…
+990625	No projects match your filter.
+991641	Something went wrong. Please try again later.
+995049	We'd love to hear from you. Reach our team via the form below or visit our offices in Wuse Zone 4, Abuja.
+995570	Reach out to us through any of the channels below. Our team typically responds within 24 business hours.
+996335	Fill in the form and our team will get back to you as soon as possible.
+996761	Thank you for reaching out. Our team will review your message and respond as soon as possible.
+997125	Message sent successfully
+997194	Contact form submission failed:
+999011	What is your message about?
+999551	Write your message here...
+999981	Years of Compulsory Education
+1000039	Year UBE Was Launched
+1000087	FG Consolidated Revenue Fund for UBE
+1000151	About the UBE Programme
+1000553	What is Universal Basic Education Programme?
+1000664	UBE is an educational reform programme of the Nigerian Government that provides free, compulsory, and continuous 9-year education in two levels:
+1000865	6 years of Primary Education
+1000923	3 years of Junior Secondary Education for all school-aged children
+1001016	What constitutes the UBE programme?
+1001118	There are 3 components of the UBE programme:
+1001219	Early Childhood Care and Development Education (ECCDE)
+1001303	6-year Primary Education
+1001357	3-year Junior Secondary School (JSS) Education
+1001430	When was UBE launched?
+1001565	by President Olusegun Obasanjo in Sokoto, Sokoto State.
+1001643	What is the legal framework for the implementation of the UBE programme?
+1001751	The legal framework for the UBE programme is the
+1001852	, signed into law in May 2004 by President Obasanjo.
+1001926	When did UBE take-off effectively?
+1001996	UBE programme took off effectively with the signing of the UBE Act in April 2004. However, implementation started in earnest in
+1002173	with the appropriation of the UBE fund to the Commission and subsequent disbursement to States.
+1002291	Is it a new educational policy?
+1002358	No. UBE is not a new educational policy. It is provided within the context of the
+1002475	6-3-3-4 National Policy of Education
+1002516	. Its introduction is a reinforcement of the 6-3-3-4 policy on education.
+1002611	Why didn't the UBE programme take-off immediately after the launch in 1999?
+1002720	UBE could not take-off immediately after its launch as it did not have legal backing. Nonetheless, many UBE-related activities were carried out in the areas of social mobilization, infrastructural development, and provision of instructional materials.
+1002992	Who are the beneficiaries of the UBE programme?
+1003106	The beneficiaries of the UBE programme are:
+1003429	for Primary School Education
+1003582	for Junior Secondary School
+1003638	Why the 9-year continuous Basic Education?
+1003716	At the moment, completion of primary school alone does not equip a child with the necessary life skills to become self-reliant. For any Nigerian child to be considered functionally literate and numerate, he or she must successfully complete
+1003992	9 years of schooling
+1004041	Is ECCDE also compulsory?
+1004102	No, ECCDE is not compulsory. What is compulsory is
+1004251	3 years of JSS Education
+1004280	. However, parents are strongly encouraged to register their children in ECCDE Centres, and Government is expected to provide quality ECCDE Centres.
+1004822	Who implements the UBE programme?
+1004891	The implementation of UBE programme resides with
+1004997	in conformity with the provisions of the 1999 Constitution and the relevant sections of the UBE Act 2004.
+1005126	What is the role of the Federal Government in implementing UBE?
+1005225	The role of the Federal Government in the implementation of UBE is to ensure
+1005354	and maintenance of uniform standards, as well as general coordination of programme implementation.
+1005476	How is the UBE Programme funded?
+1005544	The UBE Programme is funded by
+1005610	States and Local Governments
+1005643	with support from the Federal Government through its intervention fund.
+1005738	What is the nature of the Federal Government's support to the States?
+1005843	As provided by the UBE Act 2004, the Federal Government has set aside
+1005945	2% of its Consolidated Revenue Fund (CRF)
+1005991	to support States in the implementation of the UBE programme.
+1006076	What does the 2% of the CRF amount to?
+1006150	The amount differs from year to year depending on the Federal Government's yearly revenue profile. The cumulative statutory releases of 2% CRF from
+1006450	In what manner is the 2% CRF distributed to States?
+1006568	The 2% CRF is disbursed to the States in the following proportions:
+1006866	Fund to address Educational Imbalance among and within States
+1007023	Instructional Materials Funds
+1007147	Incentive to States for Good Performance
+1007282	Funds for the education of the Physically and Mentally Challenged Children
+1007451	Funds for Monitoring of UBE Programmes
+1007699	Funds for Teacher Professional Development
+1007771	What are States expected to do to qualify to access the Federal Government's UBE Intervention Fund?
+1007937	Among other things, States are expected to:
+1008037	Replicate the UBE Act at the State level and set up a State Universal Basic Education Board
+1008158	Provide Matching Grants to Federal Government's intervention funds
+1008254	Draw up State UBE Action Plans
+1008314	Establish adequate mechanisms for programme implementation, monitoring and evaluation
+1008427	What is Matching Grant?
+1008486	Matching Grant is a fund contributed by both Federal and State Governments on an
+1008713	In which areas is the Matching Grant utilized?
+1008826	The Matching Grant is to be utilized in the implementation of programmes under the three key components:
+1008987	Early Childhood Care and Development Education (ECCDE)
+1009118	Junior Secondary School (JSS) Education
+1009575	How free is the UBE Programme?
+1009674	The UBE Act provides that the following should be provided
+1009883	Textbooks in 4 and 5 core subject areas of Primary and JSS respectively
+1009984	Classrooms and other infrastructural facilities within States
+1010073	Which core subjects will textbooks be provided free of charge?
+1010231	(a) Four core subjects in Primary Schools:
+1010572	(b) Five core subjects in Junior Secondary Schools:
+1010899	Is the existing curriculum going to change as a result of the introduction of the UBE Programme?
+1011031	Yes, the curriculum has been changed. A new
+1011110	9-year Basic Education Curriculum
+1011188	What are the new areas of emphasis in the new 9-year Basic Education Curriculum?
+1011514	Teaching of Thinking
+1011819	What is the mode of assessment in the UBE Programme?
+1011936	School-based Continuous Assessment (CA)
+1011980	is the dominant mode of assessment under the UBE Programme. It determines the progress of the child from one level to another — failure to meet certain conditions will require a child to repeat a level.
+1012206	Who conducts the examination leading to the Basic Education Certificate at the end of JSS 3?
+1012334	The school-based Continuous Assessment constitutes
+1012453	of the overall student assessment, while an external examination conducted by State Ministries of Education and moderated by an approved national examination body accounts for the remaining
+1012736	What is the position of Common Entrance Examination and the School Leaving Certificate under UBE?
+1012921	no First School Leaving Certificate
+1012961	. The Common Entrance Examination for admission into JSS has been discontinued with effect from 2006. A certificate is only issued at the end of JSS III, known as the
+1013163	Basic Education Certificate (BEC)
+1013225	How will Primary 6 pupils be placed in JSS?
+1013302	Each State Ministry of Education and FCT is required to provide a space for every child who has successfully completed Primary 6 into any of the three Junior Secondary Schools of his or her choice. Where there is no vacancy, the state authorities shall offer a space in the nearest available school.
+1013623	What will classes in Primary and JSS be called?
+1013706	There is no change of name for classes. They will still be called
+1013898	How does the UBE Commission ensure quality in training and retraining of teachers?
+1014047	Only accredited institutions are engaged in the training and retraining of teachers, including:
+1014199	Colleges of Education
+1014250	Departments/Faculties of Education of Universities
+1014427	What is the quality assurance framework under UBE?
+1014513	To ensure quality, a
+1014569	Continuous Assessment Instrument
+1014606	has been standardized and applied nationally with effect from September 2007.
+1015101	How will UBE be implemented under the existing 6-year Secondary School arrangement?
+1015220	Under the new UBE system, JSS should be
+1015318	— this is referred to as disarticulation. The two levels should have separate locations and infrastructure. The existing 6-year Secondary Education arrangement is in contradiction with the 6-3-3-4 policy and is to be discontinued.
+1015572	When did the policy on disarticulation come into effect?
+1015664	In 2004, the National Council on Education agreed on a
+1015754	five-year disarticulation plan
+1015789	. The disarticulation commenced in 2004 and was expected to be completed by both public and private sector providers in due course.
+1015943	What steps is the Federal Government taking to ensure the successful implementation of UBE?
+1016096	Providing Matching Grants to States as FG-UBE intervention funds
+1016190	Providing funds to address educational imbalance in educationally disadvantaged areas
+1016305	Supporting SUBEBs in delivering education for children with special needs
+1016408	Investing MDG funds in provision of science kits, teacher quality improvement and recruitment under the FTS programme
+1016555	Implementing quarterly Action Plans to ensure funds are applied to priority areas
+1016666	Maintaining an all-embracing procedure for monitoring utilisation of disbursed funds
+1016775	What is the assurance of the success of the UBE programme?
+1016895	UBE is interlinked with NEEDS, SEEDS, Education For All (EFA), and Millennium Development Goals
+1017020	Programme implementation is inclusive of all segments of society — Federal and State governments, International Development Partners, Private Sector, NGOs, CSOs, and other stakeholders
+1017234	Basic Education stakeholders have accepted the programme and are working to assume ownership as a sustainable mechanism for combating illiteracy and poverty
+1017420	Necessary funds are being injected for capacity building, monitoring, evaluation and constant review of project performance
+1017568	How do Private Operators of Basic Education fit into the UBE Programme?
+1017706	There are certain basic expectations on Private Operators of Basic Education Institutions:
+1017853	Disarticulating JSS from SSS to ensure two separate administrations
+1017950	Implementation of the 9-year Basic Education curriculum
+1018035	Ensuring employment of qualified teachers and their continuous professional development
+1018152	Providing standard infrastructure
+1018215	Subjecting their institutions to periodic inspection by state/federal inspectorate services
+1018334	Will private sector providers access the UBE Intervention Fund?
+1018470	Private sector providers will not access the FGN UBE intervention funds because they charge tuition and other fees, which is contrary to the provisions of the UBE Act.
+1018661	What happens to Primary 6 completers in private primary schools that do not have JSS?
+1018829	have the responsibility of placing such students in existing JSS schools.
+1018926	Are private basic education service providers allowed to conduct entrance examinations?
+1019049	Yes, they are free to conduct Entrance Examinations for selecting candidates for ECCDE, Primary or JSS schools. However, admission into JSS must take cognizance of the candidate's
+1019290	from his/her previous institution.
+1019348	How is the Matching Grant applied?
+1019418	The Matching Grant is to be applied in line with the
+1019506	priority basic education needs
+1019579	What is the quality assurance framework under the Universal Basic Education Programme?
+1019701	To ensure quality, a
+1019757	Continuous Assessment Instrument
+1019794	has been standardized and is applied nationally with effect from September 2007.
+1020303	Answers to the most common questions about the Universal Basic Education Programme, its funding, implementation and structure.
+1022246	Still have questions?
+1022330	Can't find the answer you're looking for? Reach out to the UBEC team directly and we'll be happy to help.
+1022937	Dr. Fayemi Kayode visit to UBEC — group photo
+1023028	Dr. Fayemi Kayode visit to UBEC — officials
+1023117	Dr. Fayemi Kayode visit to UBEC — address
+1023204	Dr. Fayemi Kayode visit to UBEC — session
+1023294	MacArthur Foundation collaboration — meeting
+1023387	MacArthur Foundation collaboration — participants
+1023485	MacArthur Foundation collaboration — discussion
+1023581	MacArthur Foundation collaboration — presentation
+1023678	Courtesy call from Governor Gaduje — arrival
+1023770	Courtesy call from Governor Gaduje — delegation
+1023865	Courtesy call from Governor Gaduje — address
+1023957	Courtesy call from Governor Gaduje — handshake
+1024051	Courtesy call from Governor Gaduje — group
+1024141	Courtesy call from Governor Gaduje — officials
+1024235	Courtesy call from Governor Gaduje — meeting room
+1024332	Courtesy call from Governor Gaduje — seated
+1024422	Free feeding in schools — programme session
+1024512	Free feeding in schools — stakeholders
+1026105	A visual record of UBEC's activities, events, and milestones
+1028027	Deploying AI-driven solutions to enhance teaching, learning, and operational efficiency across basic education.
+1028188	Centralising data collection, analytics, and visualization to power evidence-based decisions in education.
+1028343	Ensuring UBEC adheres to the Nigeria Data Protection Act (NDPA) and other relevant ICT regulations.
+1028499	Managing the full ICT lifecycle and monitoring ICT Centres at SUBEBs and LGEAs nationwide.
+1028700	Data, Digital Platform and Analytics
+1028751	Driving UBEC's digital evolution through data, AI, and ICT infrastructure
+1029257	The Department of Data, Digital Platform and Analytics is a new department at UBEC, created as a result of the institutional assessment conducted by KPMG, which led to changes in the Commission's operating structure.
+1029538	The objective of the department is to lead UBEC's digital evolution by integrating data-driven strategies, AI innovation, and robust ICT infrastructure to transform basic education delivery and enhance operational efficiency.
+1030040	Strategic Focus Areas
+1030191	The department operates across four core pillars to advance digital transformation at UBEC
+1030695	DATA, DIGITAL PLATFORM AND ANALYTICS
+1031162	The Department of Data, Digital Platform and Analytics is committed to leading UBEC's digital evolution. By integrating cutting-edge data-driven strategies, artificial intelligence innovation, and a robust ICT infrastructure, the department aims to transform basic education delivery across Nigeria and significantly enhance operational efficiency at the Commission.
+1032448	Office of the Executive Secretary
+1032522	A Senior Education Specialist with the World Bank, bringing more than 24 years of experience driving impactful programmes in education for human and economic development, working across Nigeria, Ghana, Somalia, Kenya, the USA, and the United Kingdom.
+1032775	With over 15 years of hands-on experience at the World Bank, Garba has consistently led end-to-end design and management of education programmes and reforms, from conceptualization to completion and impact assessment.
+1032995	She previously worked on the team that met the Millennium Development Goals (MDGs) targets in Nigeria and consulted for the World Bank, DFID, BOND-UK, Regent Foundation, and Muslim Aid Organization.
+1033210	🎓 B.A. English & Computer Studies — Petra American University, Jordan (2000)
+1033290	🎓 M.A. International Development — University of Birmingham, UK (2007)
+1033377	Rasaq Olajuwon Akinyemi M.
+1033418	Deputy Executive Secretary (Technical)
+1033470	Office of the Deputy Executive Secretary (Technical)
+1033566	A seasoned public servant with over 20 years of experience in various Ministries, Departments, and Agencies (MDAs) in Lagos State civil service. Born in Badagry Local Government, Lagos State, he had his early education at L.A. Primary School, Ajido, and later attended Iworo Ajido Model College, Badagry.
+1033873	He rose through the ranks to become a Director in the Lagos State Government, serving in various capacities. His expertise and dedication led to his appointment as Deputy Executive Secretary (Technical) at UBEC in March 2025.
+1034115	🎓 B.A. Business Administration — Ogun State University
+1034173	🎓 M.A. Public Administration — University of Lagos
+1034240	Hadiza Hashidu Abdullah
+1034420	Hadiza Hashidu Abdallah is the Director of Administration & General Services at the Universal Basic Education Commission, with over 15 years of experience in public-sector administration and human capital management.
+1034639	She has undertaken a range of professional and leadership development programmes in Nigeria and internationally, including administrative training at the Administrative Staff College of Nigeria (ASCON), leadership training at the National Institute for Policy and Strategic Studies (NIPSS), and programmes relating to the integration of the Almajiri system into basic education.
+1035020	Her areas of expertise include human resource policy, performance management, staff welfare, recruitment, discipline, organisational restructuring and compliance with Public Service Rules and civil service reforms. She is committed to strengthening institutional capacity and building high-performing teams in support of UBEC's mandate.
+1035373	🎓 Master's Degree in Political Science and Administration
+1035434	🎓 Doctoral Studies in Governance, Peace and Conflict Resolution (ongoing)
+1035511	🏅 Member, Nigerian Institute of Management
+1035743	Blessing Ndaluakwu Obinatu
+1035901	Mrs. Blessing Ndaluakwu Obinatu is an accomplished education professional and public-sector leader who currently serves as Director of Academic Services at UBEC. She has over two decades of experience in Nigeria's basic education sector and has demonstrated strong leadership in education planning, curriculum-related initiatives and programme implementation.
+1036263	Her professional experience spans curriculum development and implementation, Early Childhood Care, Development and Education (ECCDE), instructional materials, STEAM education and national education policy coordination. She has contributed to the development and implementation of educational initiatives, the production and distribution of instructional materials, and the promotion of innovative approaches to teaching and learning.
+1036699	Mrs. Obinatu has also participated in the Joint Consultative Committee on Education and National Council on Education activities and was part of the International Visitors Leadership Programme in the United States focused on repositioning the Peace Education Curriculum.
+1036986	🎓 Bachelor's Degree in Mathematics
+1037024	🎓 Postgraduate Diploma in Education (Guidance and Counselling)
+1037090	🎓 Master's Degree in Science Education
+1037132	🎓 PhD in Science Education (concluded, awaiting results)
+1037238	Director, Monitoring and Evaluation
+1037287	Monitoring and Evaluation
+1037357	Dr. (Mrs.) Aisha Abiola Abdul is a seasoned education leader with over 27 years of experience in basic education policy, quality assurance and programme management in Nigeria. She currently serves as Director of Monitoring and Evaluation at UBEC, providing strategic leadership for assessment, quality assurance and programme performance functions.
+1037708	Prior to her current role, she held senior positions within NPEC and UBEC, including leadership of state and zonal offices, the Department of Special Programmes and the HOPE Education Programme. In these roles, she contributed to national initiatives in Early Childhood Care, Development and Education, Special Needs Education and Technical and Vocational Education and Training. She also served as Secretary to the National Council on Education and the Joint Consultative Committee on Education.
+1038207	Dr. Abdul is an alumna of Harvard University and has authored papers on education financing, school effectiveness and Universal Basic Education implementation.
+1038383	🎓 PhD in Educational Management — University of Ilorin
+1038441	🎓 Master of Education in Educational Management — University of Ilorin
+1038548	🏅 Fellow, Chartered Institute of Human Resource Management (FCIHRM)
+1038664	Ag. Director, Teachers Development Programme
+1038722	Teachers Development Programme
+1038963	Arc. Nuraddeen Ibrahim is an experienced architect and public-sector project management professional with over two decades of service at UBEC. He has worked across the Department of Physical Planning and Procurement Unit and has contributed extensively to the planning, coordination and supervision of education infrastructure projects.
+1039302	He joined UBEC through the National Youth Service Scheme in 2001 and subsequently continued his career with the Commission. His responsibilities have included serving as Technical Officer and National Project Coordinator for the Islamic Development Bank Bilingual Education Project.
+1039587	Arc. Nuraddeen has coordinated and supervised numerous education infrastructure projects across Nigeria, including UBEC Model Schools, Smart Schools, Vocational Schools, ECCDE Schools, Junior Girls Model Schools, Alternative High Schools for Girls and the renovation of public schools.
+1039889	🎓 Bachelor's Degree in Architecture — Ahmadu Bello University, Zaria
+1039961	🎓 Master's Degree in Architecture — Ahmadu Bello University, Zaria
+1040031	🏅 Fellow, Nigerian Institute of Architects (FNIA)
+1040084	🏅 Registered Member, Architects Registration Council of Nigeria
+1040295	Sahabo Basadu is an accomplished educator and researcher with a strong commitment to teaching, language studies and educational development. He brings practical teaching experience together with advanced knowledge in educational planning, policy strategy and leadership.
+1040568	His professional capacity has been further strengthened through attendance at the National Institute for Policy and Strategic Studies (NIPSS), where he obtained a certificate in the Policy Strategy and Leadership Course (PSLC), as well as specialized training in Monitoring and Evaluation (M&E), equipping him to assess and improve educational programmes and policies.
+1040939	With a diverse academic background and a record of continuous professional development, Sahabo combines pedagogical expertise with a vision to contribute meaningfully to the improvement of education systems and policies in Nigeria.
+1041187	🎓 Master's Degree in Educational Planning (in progress)
+1041246	🎓 Postgraduate Diploma in Education (PGDE)
+1041292	🎓 Bachelor's Degree in Languages and Linguistics
+1041344	🎓 Nigeria Certificate in Education (NCE)
+1041388	🎓 Grade II Teachers Certificate
+1041423	🏅 Certificate in Policy Strategy and Leadership Course (PSLC) — National Institute for Policy and Strategic Studies (NIPSS)
+1041550	🏅 Certificate in Monitoring and Evaluation (M&E)
+1041752	Jaafaru Garba Ridwan is the Director of Internal Audit at the Universal Basic Education Commission. He is an experienced public-sector audit and financial management professional with over three decades of service in the education sector and extensive expertise in audit, financial verification, compliance and internal controls.
+1042084	He joined the National Primary Education Commission (NPEC) as a Senior Accountant in 1994 and subsequently served with the Universal Basic Education Programme and UBEC. Over the course of his career, he has developed extensive knowledge of UBEC financial guidelines, due process requirements and financial accountability mechanisms.
+1042419	His career highlights include leading state-level audit and verification exercises, identifying control gaps and recommending corrective measures, strengthening compliance with financial and procurement procedures, mentoring staff and contributing to the development and review of audit manuals.
+1042731	🎓 Bachelor's Degree in Business Administration
+1042781	🎓 Master's Degree in International Affairs and Diplomacy
+1042841	🏅 Associate, Institute of Financial Accountants (AFA)
+1042898	🏅 Certified National Accountant (CAN)
+1042939	🏅 Fellow, Institute of Certified Public Accountants (FCPA)
+1043168	Ademola Sekinat Abiola
+1043330	Mrs. Abiola S. Ademola is a seasoned legal practitioner and public-sector legal strategist with over 23 years of post-call experience in national policy, institutional reform, governance and legal advisory services.
+1043548	She has extensive experience within the Federal Public Service, having served in the Federal Ministry of Justice and provided legal support to several government institutions, including the Office of the Secretary to the Government of the Federation, the Federal Ministry of Agriculture, the Ministry of Industry, Trade and Investment, and the Federal Ministry of Finance.
+1043923	Her professional experience includes legislative drafting, legal advisory services, bilateral and multilateral negotiations, public-sector governance, institutional coordination, contracts, concessions and dispute resolution. She has represented Nigeria at several international fora, including the United Nations General Assembly Sixth Committee, the African Commission on Human and Peoples' Rights and UNCITRAL sessions.
+1044385	🎓 B.L (Barrister at Law)
+1044413	🏅 MCIArb — Member, Chartered Institute of Arbitrators (UK)
+1044475	🏅 Member, Nigerian Bar Association
+1044568	Ag. Director, Social Programme & Early Child Development
+1044638	Social Programme & Early Child Development
+1044729	Dr. Chijioke Josephine Onwuzurike is an experienced education management professional who has served at the Universal Basic Education Commission for over 26 years. She currently serves as Director of Social Programme & Early Child Development, where she coordinates initiatives covering Early Childhood Care, Development and Education (ECCDE), Special and Inclusive Education, and Alternative Education for the Girl Child.
+1045154	Her professional experience focuses on policy coordination, standards development, programme implementation and stakeholder engagement, with particular attention to expanding access to quality basic education for vulnerable and underserved learners.
+1045406	Dr. Onwuzurike has contributed to initiatives aimed at strengthening foundational literacy and numeracy and promoting inclusive, equitable and child-friendly learning opportunities. Her work supports UBEC's broader mandate of ensuring that children, particularly those in vulnerable circumstances, have access to quality basic education.
+1045906	Mr. Abubakar Adamu is a seasoned financial management professional with over two decades of experience spanning public-sector financial management, donor-funded projects, accounting, auditing and institutional administration.
+1046134	He has extensive experience in the financial management of externally assisted projects, particularly in the water supply and sanitation sector, and has served in various capacities involving project implementation, financial management, monitoring, supervision, coordination and administration. His previous engagements include the Federal Ministry of Water Resources, Federal Ministry of Agriculture and Rural Development, Nigerian Institute of Animal Science, National Food Reserve Agency, Federal Ministry of Finance, Budget and National Planning, the Office of the Accountant-General of the Federation and other public-sector institutions.
+1046795	🎓 Bachelor of Science in Accounting
+1046834	🎓 Master of Business Administration (MBA)
+1046879	🏅 Fellow, Certified National Accountant of Nigeria (FCNA)
+1046940	🏅 Fellow, Certified Public Accountant of Nigeria (FCPA)
+1046999	🏅 Fellow, Institute of Chartered Economists of Nigeria
+1047057	🏅 Member, Chartered Institute of Taxation of Nigeria
+1047113	🏅 Member, Nigerian Institute of Management
+1047255	HOU, Public Private Engagement & Partnership
+1047374	Bar. Ahmed Nasiru Abubakar
+1047447	Better Education Service Delivery for All – Additional Financing (BESDA-AF)
+1047572	Ahmed Nasiru Abubakar is the Director and National Coordinator of the BESDA-AF Programme at UBEC. He is a lawyer, Solicitor and Advocate of the Supreme Court of Nigeria, and a Project Management Professional with over three decades of experience spanning legal practice, international banking, real estate management, administration and social mobilisation.
+1047932	He joined UBEC in 2008 and has served in several capacities, including Chief Administrative Officer, Head of the SERVICOM Unit, Deputy Director of Social Mobilisation and Special Projects, and Director. He also served as Head of the Coordination Support Team of the Better Education Service Delivery for All (BESDA) and previously as Director National Coordinator of the HOPE-GOV Unit.
+1048320	He has undertaken further studies and professional training in artificial intelligence, cybersecurity, public administration, project management, governance and leadership. He is a member of the Nigerian Bar Association and other professional and alumni organisations.
+1048605	🎓 LL.B — Law Degree, called to the Nigerian Bar (1991)
+1048663	🏅 Project Management Professional (PMP)
+1048706	🏅 Member, Nigerian Bar Association
+1048928	Engr. Yau Isa Garba is the Director of the Department of Data, Digital Platforms and Analytics (DDPA) at the Universal Basic Education Commission (UBEC), on secondment from the National Information Technology Development Agency (NITDA). He provides leadership in the application of data, digital technologies, analytics and innovation to strengthen the Commission's operations and support the transformation of basic education delivery.
+1049367	Prior to joining UBEC, he served as the pioneer National Director of the National Centre for Artificial Intelligence and Robotics (NCAIR), where he led initiatives in artificial intelligence, robotics and STEM education. His professional experience spans academia and industry, with expertise in information technology systems, data analytics and digital innovation.
+1049736	Engr. Garba's work at UBEC focuses on advancing digital transformation, strengthening data-driven decision-making and leveraging technology to improve the efficiency and effectiveness of basic education delivery.
+1049965	🏅 Project Management Professional (PMP) — Project Management Institute (PMI)
+1050184	HOPE Education Programme
+1050253	Mr. Aleshin Olumayowa Tolulope is a Director at UBEC currently serving as head of the HOPE Education Programme. He is an education professional with extensive experience in teaching, teacher development and education programme management.
+1050494	He began his career as a classroom teacher of English Language at the International School, University of Ibadan, in 1994. He joined UBEC in 2002 and subsequently rose through various positions, including Acting Director and Director of Teacher Development, and National Programme Coordinator of BESDA-AF before his current appointment.
+1050833	Mr. Aleshin is an alumnus of the Blavatnik School of Government at the University of Oxford through the AIG Public Leaders Programme. He holds postgraduate qualifications and has published papers and authored books. His professional interests include quality, efficiency and effectiveness in education programme delivery.
+1051171	🎓 Postgraduate Qualifications in Education
+1051217	🏅 Alumnus — Blavatnik School of Government, University of Oxford (AIG Public Leaders Programme)
+1051497	Mrs. Zipporah K. Panguru is an experienced education planning and management professional with over two decades of progressive experience in basic education administration, policy development, research and programme implementation at UBEC. She currently serves as Director of Planning, Research and Statistics.
+1051810	She previously served as Acting Director of Academic Services and has developed broad expertise in educational planning, research coordination, policy implementation, monitoring and evaluation, project management, institutional capacity development and stakeholder engagement.
+1052089	She has participated in numerous national and international professional development programmes and served on high-level committees contributing to the advancement of basic education in Nigeria. Her work reflects a strong commitment to evidence-based planning, strategic collaboration, institutional development and effective programme delivery.
+1052451	🎓 Bachelor of Science in Education (Biology) — Ahmadu Bello University, Zaria
+1052532	🎓 Master's Degree in Educational Planning and Management — International Institute for Educational Planning (IIEP), Paris
+1052671	Dr. Ibrahim Bala Bakari
+1052709	National project coordinator Islamic development bank (IsDB)
+1052783	Islamic Development Bank (IsDB) Programme
+1053138	North Central Zonal Office
+1053206	Elder Edward Ukwumonu Abalaka is the Zonal Director of the North Central Zonal Office of the Universal Basic Education Commission. He is an experienced accounting professional with a long-standing career in public-sector financial management.
+1053451	He joined the service of the National Primary Education Commission (NPEC) in 1995 and has since built extensive experience within the basic education sector. His professional background includes accounting, financial administration and related management responsibilities.
+1053726	In his current role, he contributes to the coordination and oversight of UBEC activities within the North Central Zone, supporting the Commission's mandate of promoting effective implementation of Universal Basic Education programmes across the region.
+1053995	🎓 Higher National Diploma in Accountancy
+1054039	🎓 Master of Business Administration (MBA)
+1054084	🏅 Certified National Accountant
+1054133	Abdullahi Shehu Jarma
+1054209	North East Zonal Office
+1054281	Alh. Abdullahi Shehu Jarma is the Zonal Director of the North East Zonal Office of the Universal Basic Education Commission. He is an experienced public-sector finance and administration professional with a long-standing career in accounting, internal audit and the management of basic education programmes.
+1054591	He joined the defunct National Primary Education Commission (NPEC) and subsequently UBEC in 1994 as an Accountant II. Over the course of his career, he served in several positions within the Finance and Accounts Department, rising to the position of Chief Accountant before moving to the Internal Audit Department in 2015.
+1054916	He subsequently served as Deputy Director of Internal Audit and was posted to the North East Zone in 2021, where he served as Acting Director before becoming the substantive Zonal Director.
+1055122	🎓 Bachelor's Degree in Business Administration — University of Maiduguri
+1055198	🏅 Certified National Accountant
+1055247	Muhammad Ibrahim Gana
+1055323	North West Zonal Office
+1055397	Mohammed Gumsumi Ibrahim Gana is the Acting Director of the North West Zonal Office of the Universal Basic Education Commission (UBEC), Kaduna. He is a seasoned public-sector finance and audit professional with extensive experience in auditing, accounting and the management of basic education programmes.
+1055705	He began his career with the Office of the State Auditor General, Borno State, on 9th October 1996 as an Audit Officer II, GL 08. He subsequently rose through the ranks to become Chief Auditor, GL 14, with effect from 1st January 2008.
+1055943	In 2009, he transferred his service to the Universal Basic Education Commission (UBEC) as a Principal Internal Auditor, GL 12. He continued to progress within the Commission and was promoted to Deputy Director, GL 16, with effect from 1st January 2022. He currently serves as the Acting Director of the North West Zonal Office in Kaduna.
+1056283	Throughout his career, he has attended several professional courses and training programmes both within Nigeria and abroad, strengthening his expertise in his professional field.
+1056478	🎓 Bachelor's Degree in Economics — University of Maiduguri
+1056540	🎓 Master's Degree in Public Sector Accounting (MIPSA) — Nasarawa State University
+1056625	🏅 Associate Member, Association of National Accountants of Nigeria (ANAN)
+1056702	🏅 Member, Chartered Institute of Taxation of Nigeria (CITN)
+1056765	🏅 Member, Nigerian Economic Society (NES)
+1056810	🏅 Certified Auditor of the Federal Government of Nigeria
+1056884	Isaac Onuoha Ichenwo
+1056959	South East Zonal Office
+1057061	Udoh Akpanossom Essien
+1057139	South South Zonal Office
+1057244	Beatrice Ebomolu Okei
+1057320	South West Zonal Office
+1057393	Mrs. Beatrice Ebomolu Okei is an experienced education administrator and monitoring and evaluation specialist who currently serves as Zonal Director of the South West Zonal Office of UBEC.
+1057584	She previously served as Acting Director of both the South West and South South Zones and coordinated the UBEC Edo State Office for over a decade. Her career includes extensive experience in the implementation, monitoring and evaluation of education programmes at national and state levels.
+1057877	Mrs. Okei has also developed considerable expertise in stakeholder engagement, advocacy and community mobilisation, particularly in working with community- and faith-based organisations to promote school enrolment and retention, address the challenge of out-of-school children and strengthen community participation in the delivery of quality basic education.
+1058253	🎓 Bachelor of Science in Education in Geography
+1058304	🎓 Master of Education in Measurement and Evaluation
+1058359	🏅 Registered Member, Teachers Registration Council of Nigeria
+1058443	Sen. Umaru Tanko Al-Makura
+1058506	UBEC Governing Board
+1058605	Dr. Aisha Garba Mohammed
+1058670	UBEC Governing Board
+1058738	A Senior Education Specialist with the World Bank, bringing more than 24 years of experience driving impactful programmes in education for human and economic development, working across Nigeria, Ghana, Somalia, Kenya, the USA, and the United Kingdom.
+1058991	With over 15 years of hands-on experience at the World Bank, Garba has consistently led end-to-end design and management of education programmes and reforms, from conceptualization to completion and impact assessment.
+1059211	She previously worked on the team that met the Millennium Development Goals (MDGs) targets in Nigeria and consulted for the World Bank, DFID, BOND-UK, Regent Foundation, and Muslim Aid Organization.
+1059426	🎓 B.A. English & Computer Studies — Petra American University, Jordan (2000)
+1059506	🎓 M.A. International Development — University of Birmingham, UK (2007)
+1059665	UBEC Governing Board
+1059738	Dr. Folake Olatunji-David is Acting Permanent Secretary (Accounting Officer) of the Federal Ministry of Education, Federal Republic of Nigeria, overseeing all departments, agencies, parastatals, budget and donor coordination. She serves on the Governing Boards of UBEC, NECO and NgREN, and on the Governing Council of the Federal University of Technology, Minna.
+1060103	With more than 25 years of leadership in basic education, she served as Director of Basic Education (2019–2026), leading national strategy on Universal Basic Education, Early Childhood Care, Development and Education (ECCDE), inclusive education and out-of-school children, and as National Coordinator for Impact Evaluation across the six geo-political zones. She has also been Focal Person for NACTEST/CVE, the Violence Against Children Survey and the Post-Disaster Needs Assessment.
+1060590	She led two Global Partnership for Education (GPE) programmes totalling USD 225 million: as M&E Coordinator of the USD 100 million NIPEP (2015–2019), improving quality access for girls in five North-West states with CSO third-party monitoring, and as National Programme Coordinator of the USD 125 million GPE-TESS (2022–2025), transforming basic education in Oyo, Adamawa and Katsina.
+1060977	Nigeria's Focal Point for GPE and ADEA since 2021, she is a regular speaker at UKFIET, UNGA side events, the Education World Forum in London, the ADEA Triennales and the What Works Hub at Oxford.
+1061189	🎓 PhD in Adult Education (Management & Evaluation) — University of Lagos
+1061265	🎓 M.Ed — University of Benin
+1061297	🎓 B.Ed Political Science
+1061540	UBEC Governing Board
+1061630	Arc. Uchendu Ikechi Mbaegbulem
+1061701	UBEC Governing Board
+1061775	Arc. Uchendu Ikechi Mbaegbulem Wogu was born on 28 August 1963 in Umuahia. He attended St. Silas Primary School, Old Umuahia, and Zik Avenue Primary School, Enugu, before entering Federal Government College Enugu in 1974, where he graduated with a WAEC School Certificate in 1979.
+1062058	He was admitted in 1981 to study Architecture at the University of Nigeria, Enugu Campus. After earning his bachelor's degree in 1985, he completed his master's degree in 1987 with distinction, setting new department records and earning several awards. He completed the compulsory NYSC in 1988, serving in the Physical Planning Department of the Federal University of Technology, Akure, Ondo State.
+1062459	As a young architect he worked in a number of reputable firms across the country, including Ella Waziri Associates, Mass Design and Associates, Urban Design Associates, Pentagon Consultants and New Order Partnerships. In 1998 he joined Fougerolle Nigeria Limited as Chief Architect, heading the design studio in Abuja, where he worked on major construction projects including the Federal Ministry of Finance project.
+1062878	He joined the public service in January 2003 as Assistant Chief Architect in the Operations Department of the Education Tax Fund (ETF), now the Tertiary Education Trust Fund (TETFund). He rose through the ranks, gaining experience across Operations, Physical Infrastructure Projects, the General Services Division of HR, ICT, Research and Development, SERVICOM and Public Affairs, inspecting and monitoring infrastructure projects in public educational institutions in all 36 states and travelling widely to advance tertiary education development in Nigeria and Africa. He retired as Director, Executive Secretary's Office (DESO), on 28 August 2023, after almost 21 years of service marked by integrity, patriotism and purpose-driven leadership.
+1063626	He is currently a member of the Governing Board of UBEC, representing the South-East Zone and serving as Chairman of the Programmes Committee. Arc. Wogu has been honoured with several awards by the church, his community, youth organisations and academic circles. He is an artist, philanthropist, mentor and music lover, and is married with four children.
+1063997	🎓 Bachelor's Degree in Architecture (1985) — University of Nigeria, Enugu Campus
+1064081	🎓 Master's Degree in Architecture (1987, with distinction) — University of Nigeria, Enugu Campus
+1064181	🏅 Fellow, Nigerian Institute of Architects (FNIA)
+1064234	🏅 Balanced Scorecard Professional (BSCP)
+1064575	🏅 Alumnus, National Institute for Policy and Strategic Studies (NIPSS), Kuru
+1064717	UBEC Governing Board
+1064876	UBEC Governing Board
+1064953	Prof. Paul Ibukun-Olu Bolorunduro is a Fisheries and Aquaculture consultant, formerly with the National Agricultural Extension and Research Liaison Services (NAERLS), Ahmadu Bello University, Zaria. He is a committed agrifood systems and interdisciplinary specialist with highly proficient skills in personnel, resources and research management, and extensive local and international experience in fisheries research, extension and training.
+1065397	He has had over 40 years of uninterrupted career in the Nigerian Agricultural Research System, traversing three agricultural research institutes (LCRI, NIFFR and NAERLS), five universities (ABU, KSU, UMYU, FUDMA and FUD) and three international CGIAR centres: IITA, WorldFish and AfricaRice. Administratively, he was Provost of the Federal Fisheries School, Baga, Borno State (1988–1991), Programme Leader for Livestock and Fisheries at NAERLS (2005–2016), pioneer Head of the Department of Fisheries and Aquaculture at ABU, Zaria (2016–2021), and Director of Research, Planning, Monitoring and Evaluation at NAERLS (2020–2024).
+1066028	Prof. Bolorunduro has made significant contributions to fisheries and aquaculture development in Nigeria and the West African sub-region, building the capacities of extension workers and value chain actors and backstopping them with simple extension manuals, bulletins, guides, posters, leaflets, and radio and TV broadcasts and documentaries. He was Agricultural Innovation Specialist for the EU-funded DeSIRA Integrated Rice-Fish Farming Project in Liberia (2022–2023) and has served as a consultant to national and international organisations including the World Bank, FAO, WorldFish, AGRA, PCD-UK, FARA, IFDC/IFAD, Synergos, NCX, CREID, WinRock and NAGB.
+1066689	He has been the fisheries focal person for Michigan State University's Research Supporting African MSMEs to Provide Safe and Nutritious Food (RSM2SNF) in Nigeria since 2021, and represents Nigeria in the aquaculture working group of the Fisheries Committee for West Central Gulf of Guinea (FCWC).
+1066988	A veteran consultant-trainer with CSS for over eight years, he voluntarily retired from the public service in December 2024. He is currently CEO of Pinnacle Prime Ventures and Agricultural Consultants Limited in Abuja, with a focus on agrifood systems, environmental studies, project management and capacity building for agribusiness value chain actors and other stakeholders.
+1067413	🎓 MBA — Ahmadu Bello University (ABU)
+1067469	🏅 Fellow, Fisheries Society of Nigeria (FfS)
+1067517	🏅 Distinguished Fellow, Chartered Institute of Information and Strategy Management (FCIISM)
+1067612	🏅 Fellow, Chartered Institute of Global Communication and Diplomacy (FCIGCD)
+1067692	🏅 Member, World Aquaculture Society
+1067806	UBEC Governing Board
+1067900	Prof. Muhammad Lawan Mahmoud, MNI
+1067974	UBEC Governing Board
+1068139	UBEC Governing Board
+1068288	UBEC Governing Board
+1068442	UBEC Governing Board
+1068504	Mrs. Ibiwunmi Akinnola is an educationist, entrepreneur and advocate for children, women and underserved communities, with more than 25 years of experience across education, business and community development. She is the South-West Representative on the Governing Board of the Universal Basic Education Commission (UBEC), Chair of the Establishment Committee and a member of UBEC's Ministerial Implementation and Monitoring Committee.
+1068941	From 2002 to 2010 she founded Child Centre Preschool and After-school, which provided early-years and after-school education, including support for children with autism and other special educational needs. She has trained more than 300 school leaders, administrators and teachers, and in 2008 Child Centre received the PEEL Star Head Teacher Award as the only preschool recognised at the event.
+1069338	Her education work includes participating in the Federal Ministry of Education's Vision 2020 in Abuja and the Oyo State Education Summit, and serving as a Technical Planning Committee member, Rapporteur and plenary presenter at the 3rd Lagos State Education Summit. She was the only external consultant to Ondo State SUBEB for the UBEC 2014 Teachers' Professional Development Programme, and an educational consultant to the Ajapaworld Financial Literacy Club, developed in partnership with UNICEF and with the approval of Lagos State SUBEB.
+1069881	Mrs. Akinnola is the founder of Cherith Child, a non-profit established in 2011 to advocate for underserved children and their mothers, support widows and their children, and promote practical education and economic empowerment.
+1070112	She has held several leadership roles at the International Women's Society of Nigeria, including President in 2020. Her other service includes membership of the ANWBN Governance and Constitution Committee, the WEOG Advisory Board and the Lagos State Ikoyi/Obalende Local Government Chairman's Advisory Council, where she leads on Education Access and School Facelift under the ELEVATE Agenda. She is a Life Member of WIMBIZ and served on its 2018 CEO Committee.
+1070590	🎓 Master of Arts in Education (Innovation in Learning and Teaching) — University of South Wales, UK
+1070693	🎓 Nursery Foundation Teaching Certificate (ages 0–6) — Montessori Centre International, London
+1070791	🏅 Advanced Diploma in Transformational Leadership — RILA
+1070851	🏅 WIMBIZ Women in Politics Mentoring Programme Certificate
+1070913	🏅 Certificate in Public Leadership — SPPG
+1071090	Providing strategic leadership and oversight to advance UBEC's mission and educational development
+1073185	Providing strategic leadership and oversight to advance UBEC's mission and educational development
+1074934	Universal Basic Education Commission Leadership
+1075127	Universal Basic Education Commission Governing Board
+1075191	View All Board Members
+1077067	Detailed profile information will be available shortly.
+1077704	Human Capital Opportunity for Equity – Education
+1077761	The HOPE Education Programme is a World Bank-supported results-based financing initiative implemented by UBEC to improve access, quality and learning outcomes in basic education across Nigeria. Operating under the broader Human Capital Opportunity for Equity (HOPE) framework, the programme targets systemic improvements in the delivery of basic education at the federal and state levels. It works through SUBEBs and state-level education institutions to strengthen school-level performance, expand equitable access to quality learning, and improve foundational literacy and numeracy. Disbursements under the programme are linked to verified achievements against a defined results framework, ensuring accountability and measurable impact across all 36 states and the Federal Capital Territory.
+1078579	Coordinating and managing the implementation of the HOPE Education Programme across all 36 states and the FCT, in alignment with the programme's results framework and Disbursement-Linked Indicators (DLIs).
+1078799	Providing strategic leadership and technical oversight for initiatives aimed at improving access, quality and learning outcomes in basic education at the federal and state levels.
+1078993	Liaising with SUBEBs, state education authorities, development partners and federal agencies on programme design, implementation and performance reporting.
+1079163	Supporting states in strengthening school-level performance, foundational literacy and numeracy, and the quality of teaching and learning in basic education institutions.
+1079348	Monitoring and evaluating programme activities to ensure compliance with results frameworks, and coordinating with the Independent Verification Agent (IVA) for performance assessments.
+1079547	Facilitating the development and implementation of state-level education improvement plans in alignment with HOPE Education programme objectives.
+1079707	Promoting equitable access to quality basic education, particularly for underserved and vulnerable learners, including out-of-school children and children with special needs.
+1079896	Providing technical and operational support to SUBEBs on programme readiness, capacity development and compliance with funding guidelines.
+1080049	Preparing and submitting programme progress reports, performance data and implementation updates to UBEC Management and development partners.
+1080206	Carrying out any other functions as may be assigned by the Executive Secretary in furtherance of the programme's objectives.
+1080398	Human Capital Opportunity for Equity – Governance
+1080456	The HOPE Governance Programme is a World Bank-supported initiative coordinated by UBEC through its HOPE-GOV Unit, established under the Office of the Executive Secretary. Building on the States Fiscal Transparency, Accountability and Sustainability (SFTAS) reforms, the programme focuses on improving the strategic allocation and accountable management of education financing and human resources at the federal and state levels. It promotes transparency, budget credibility and payroll integrity in the basic education sector, while supporting states in meeting Disbursement-Linked Indicators (DLIs) and compliance requirements. The programme works in collaboration with the National Program Coordination Unit (NPCU) at the Federal Ministry of Budget and Economic Planning and coordinates with the Independent Verification Agent (IVA) to ensure verified, results-based performance across all participating states.
+1081394	Coordinating UBEC's implementation of the HOPE-GOV Programme in collaboration with the National Program Coordination Unit (NPCU) at the Federal Ministry of Budget and Economic Planning, and other partners.
+1081614	Facilitating stakeholder engagement and serving as UBEC's liaison with relevant federal ministries, development partners and state actors involved in HOPE-GOV implementation.
+1081803	Ensuring alignment of HOPE-GOV implementation with broader education reforms and promoting sustainable adoption of improved fiscal and governance practices across UBEC and SUBEBs.
+1081997	Providing technical and operational guidance to states to support compliance with eligibility requirements, planning and budgeting standards, and access to education financing.
+1082188	Supporting capacity building for states to improve programme readiness, meet reform conditions and institutionalize Public Financial Management (PFM) practices in basic education.
+1082382	Supporting reforms to improve recruitment, equitable deployment and performance management of basic education teachers, particularly in underserved areas.
+1082551	Strengthening the predictability, efficiency and strategic allocation of basic education funds by supporting improvements in budgeting, fund flow mechanisms and resource utilization.
+1082748	Enhancing transparency and accountability in financial transfers, procurement processes and payroll management within the basic education sector.
+1082908	Monitoring the publication of core fiscal data, budget credibility and the effective use of basic education allocations by states.
+1083054	Tracking and reporting on Disbursement-Linked Indicators (DLIs) and coordinating UBEC's input to the Annual Performance Assessments (APA) conducted by the Independent Verification Agent (IVA).
+1083281	UBEC–IsDB Bilingual Education Project
+1083327	The UBEC–Islamic Development Bank (IsDB) Bilingual Education Project (BEP – NGA0056) is a strategic intervention of the Federal Government of Nigeria, implemented by the Universal Basic Education Commission (UBEC) with financing support from the Islamic Development Bank (IsDB). With a total project value of approximately US$98 million, the Project is designed to improve access to quality basic education, particularly for Out-of-School Children, including children within the traditional Islamic/Qur’anic education system, by integrating formal basic education with Arabic and Islamic education in a modern, inclusive and technology-enabled learning environment.
+1084017	Constructing and operationalising 30 modern Bilingual Education Boarding Schools across nine participating States to expand access to quality basic education.
+1084190	Expanding educational opportunities for Out-of-School Children, particularly learners within traditional Islamic and Qur’anic education systems.
+1084349	Integrating formal basic education with Arabic and Islamic education through an adapted bilingual curriculum that combines English, Arabic, Islamic Studies and mainstream basic education subjects.
+1084560	Developing and providing bilingual curricula, textbooks, Teachers' Guides, Arabic and Islamic Studies materials and other instructional resources.
+1084721	Supporting ICT-enabled teaching and learning through ICT laboratories, computers, tablets, laptops, interactive whiteboards, smart learning systems, projectors, multimedia equipment and Mobile Device Management systems.
+1084955	Promoting Technical and Vocational Education and Training (TVET) by equipping learners with practical, technical and entrepreneurial skills through specialised vocational facilities and equipment.
+1085166	Strengthening the capacity of teachers, school administrators and education managers through professional development and capacity-building programmes.
+1085332	Providing essential school infrastructure and operational facilities, including classrooms, hostels, staff accommodation, water and sanitation facilities, administrative buildings, furniture, student lockers, vehicles and other supporting infrastructure.
+1085601	Supporting sustainable school operations through solar and backup power systems and other renewable-energy solutions.
+1085734	Coordinating implementation through the National Coordination Unit (NCU) in UBEC and nine State Project Management Units (PMUs), in collaboration with participating State Governments and other stakeholders.
+1085956	Supporting the transition from infrastructure development to full school operationalisation through learner enrolment and mobilisation, deployment of teaching and non-teaching personnel, installation of ICT and TVET equipment, distribution of learning materials and establishment of effective school management and maintenance arrangements.
+1086312	Monitoring project implementation and promoting institutional sustainability, State ownership, community engagement and improved access to quality basic education.
+1086536	Better Education Service Delivery for All – Additional Financing
+1086609	The Better Education Service Delivery for All – Additional Financing (BESDA-AF) Programme is a World Bank-financed initiative implemented by UBEC with the primary objective of reducing the number of out-of-school children in Nigeria and improving learning outcomes in basic education. The programme provides targeted support to states with the highest concentrations of out-of-school children, focusing on increasing enrolment, improving retention and strengthening the quality of teaching and learning at the basic education level. BESDA-AF works through SUBEBs and LGEAs to support school-level interventions, teacher development, structured pedagogy and the distribution of learning materials. It also assists states in the development and implementation of their Medium Term Basic Education Strategic Plans (SMTBESPs), and links disbursements to verified, results-based indicators.
+1087519	Coordinating the national implementation of the BESDA-AF programme in collaboration with participating states, SUBEBs, the World Bank and other relevant development partners.
+1087708	Supporting states with the highest concentrations of out-of-school children to develop and implement evidence-based strategies for increasing school enrolment and retention.
+1087896	Facilitating the provision and distribution of learning materials, including literacy and numeracy resources, to schools in beneficiary states.
+1088054	Supporting the implementation of structured pedagogy and foundational literacy and numeracy programmes in basic education schools.
+1088199	Coordinating teacher professional development activities, including training and capacity building for teachers in participating states.
+1088350	Assisting SUBEBs in the development and finalization of Medium Term Basic Education Strategic Plans (SMTBESPs) and monitoring their implementation.
+1088512	Supporting states in meeting Disbursement-Linked Indicators (DLIs) and programme compliance requirements in line with the programme's results framework.
+1088679	Monitoring and evaluating programme activities across participating states to ensure results-based delivery and accountability in the use of programme funds.
+1088851	Engaging development partners, state education authorities and other stakeholders on programme implementation, progress and performance reporting.
+1089013	Preparing and submitting programme reports, data and updates to UBEC Management and the World Bank, and carrying out any other duties as assigned by the Executive Secretary.
+1089232	Current Programme Data:
+1091881	[Tawk-messenger-react warn]: You didn't specified 'propertyId' property in the plugin.
+1092013	[Tawk-messenger-react warn]: You didn't specified 'widgetId' property in the plugin.
+1102886	Share on LiveJournal
+1117994	x.hashtags is not an array
+1118044	x.related is not an array
+1123508	Expected reducePropsToState to be a function.
+1123593	Expected handleStateChangeOnClient to be a function.
+1123697	Expected mapStateOnServer to either be undefined or a function.
+1123875	Expected WrappedComponent to be a React component.
+1124172	You may only call rewind() on the server. Call peek() to read the current state.
+1126331	react-fast-compare cannot handle circular refs
+1126562	Object.assign cannot be called with null or undefined
+1128574	Cannot call a class as a function
+1129092	Super expression must either be null or a function, not
+1129507	this hasn't been initialised - super() hasn't been called
+1130655	should be of type "Array". Instead found type "
+1137086	/> elements are self-closing and can not contain children. Refer to our API for more information.
+1143610	A comprehensive digital transformation of public basic education schools — integrating reliable internet connectivity, devices and e-learning platforms into everyday school life.
+1143801	The Smart Schools initiative represents UBEC's commitment to building fully connected, technology-enabled learning environments across Nigeria's public basic education schools. The programme equips schools with the infrastructure, devices and platforms needed to bring digital learning into every classroom.
+1144111	Through the initiative, participating schools receive reliable internet connectivity, computer laboratories, digital management systems for administration, and access to curated e-learning content aligned with the national curriculum. Teachers are trained to integrate these tools into their daily instruction.
+1144424	The initiative targets underserved schools in both urban and rural areas, ensuring that geography and socioeconomic background do not determine a child's access to quality, technology-enhanced education. It is implemented in collaboration with SUBEBs, development partners and state education authorities.
+1144743	Reliable broadband internet connectivity for school administration and learning
+1144825	Provision of computers and digital devices for students and teachers
+1144896	E-learning content aligned to the national basic education curriculum
+1144968	Digital school management and record-keeping systems
+1145023	Teacher capacity development in ICT integration
+1145087	Digital Learning Centers
+1145165	Dedicated technology hubs that give students and teachers access to computers, multimedia resources and digital skills training within or adjacent to their schools.
+1145342	Digital Learning Centers are purpose-built or retrofitted facilities that serve as technology hubs within or near basic education schools. Each centre is equipped with computers, high-speed internet, multimedia stations and instructional software, providing a dedicated environment for digital learning outside the regular classroom.
+1145678	The centres serve multiple functions — supporting curriculum-aligned computer-based learning, providing a venue for digital skills training for both students and teachers, and hosting community digital literacy programmes during non-school hours.
+1145927	UBEC's Digital Learning Centers are strategically located to maximize access across communities, with particular attention to areas where household technology access is limited. The centres are managed by trained ICT coordinators and maintained to a defined operational standard.
+1146220	Fully equipped computer laboratories with internet access
+1146280	Multimedia and audio-visual learning resources
+1146329	Digital skills and coding programmes for students
+1146381	Dual-use model — school hours and community access
+1146434	Trained ICT coordinators for day-to-day management
+1146563	Modernised classroom environments fitted with projectors, audio systems and connected learning tools that transform the daily teaching and learning experience.
+1146735	Smart Classrooms bring technology directly into the learning environment, transforming conventional classrooms into dynamic, interactive spaces without requiring students to leave for a computer lab. Each Smart Classroom is fitted with a projector or display system, audio equipment, a teacher station and connectivity tools.
+1147063	The initiative enables teachers to deliver multimedia-rich lessons, display content from textbooks and digital resources simultaneously, use student response systems for real-time assessment, and record lessons for students who were absent or need to review material.
+1147333	Smart Classrooms are designed to integrate seamlessly with existing school timetables and curriculum content. UBEC works with SUBEBs and teacher development partners to ensure that every classroom fitted under the initiative is accompanied by structured professional development so teachers can make full use of the technology.
+1147674	Projectors and display systems for multimedia instruction
+1147734	Integrated audio systems for clear classroom communication
+1147795	Teacher workstations with curriculum-aligned digital content
+1147858	Student response and real-time assessment tools
+1147908	Lesson recording and content replay capability
+1147971	Smart Interactive Boards
+1148049	High-definition interactive display boards that replace traditional chalkboards, enabling touch-based, multimedia-rich instruction and whole-class collaboration.
+1148223	Smart Interactive Boards are the centrepiece of UBEC's classroom modernisation effort — large-format, touch-enabled displays that replace the conventional chalkboard with an interactive, multimedia learning surface. Teachers can write, draw, display images, play videos, run simulations and access online content directly on the board.
+1148561	The boards support whole-class collaboration, allowing students to interact with the display, contribute to digital notes and work through problems together in real time. Built-in software tools include digital rulers, protractors, graph tools, annotation layers and subject-specific applications covering Mathematics, English, Science and Social Studies.
+1148919	UBEC provides interactive boards alongside structured teacher training, installation support and a warranty and maintenance arrangement with the supplying partners. The boards are designed to be durable, suited to Nigeria's power environment, and compatible with both solar and grid electricity.
+1149228	Large-format touch-enabled interactive display surface
+1149285	Built-in subject tools: maths, science, language and social studies
+1149355	Annotation, recording and replay of board sessions
+1149408	Compatible with solar and grid power
+1149447	Accompanied by structured teacher training and technical support
+1149640	Transforming Nigeria's basic education schools through technology, connectivity and digital innovation
+1151173	Transforming Nigeria's basic education through technology and digital innovation
+1152898	Learn about UBEC’s mandate and its role in delivering quality basic education across Nigeria.
+1153140	The Universal Basic Education Commission (UBEC) is a statutory body established under the
+1153265	Compulsory, Free Universal Basic Education and Other Related Matters Act, 2004 (UBE Act, 2004)
+1153364	. The Commission is responsible for coordinating, regulating, monitoring, and supporting the effective implementation of the Universal Basic Education programme across Nigeria.
+1153572	The UBE Act provides for
+1153632	nine years of compulsory and free basic education
+1153686	, comprising six years of primary education and three years of junior secondary education, as a fundamental right for children.
+1154014	Policy Formulation and Standards
+1154075	UBEC formulates policy guidelines for the effective implementation of the Universal Basic Education programme and prescribes minimum standards for basic education nationwide. The Commission also monitors compliance with these standards.
+1154341	Funding and Resource Allocation
+1154401	The Commission receives federal block grants and allocates funds to States, Local Governments, and other relevant implementing agencies in accordance with approved guidelines and funding formulas. UBEC also monitors the utilisation of funds to ensure that resources are applied for their intended purposes.
+1154737	Planning and Development
+1154790	UBEC works with States, Local Governments, and other stakeholders to develop periodic plans for the balanced and coordinated development of basic education. The Commission also advises the Federal Government on funding requirements and the orderly development of basic education.
+1155099	Curriculum and Quality Assurance
+1155160	The Commission supports the development and dissemination of curricula, syllabi, instructional materials, and other learning resources for basic education. It promotes the use of approved national curricula across early childhood care and development centres, primary schools, and junior secondary schools.
+1155496	Teacher and Personnel Development
+1155558	UBEC collaborates with States and Local Governments to conduct personnel audits and supports capacity-building and professional development programmes for teachers, education managers, and other personnel involved in basic education delivery.
+1155830	Data, Research and Policy Support
+1155892	The Commission maintains a comprehensive basic education data bank and conducts research to generate evidence that supports effective policy formulation, planning, implementation, and improvement of basic education.
+1156137	Partnership and Stakeholder Engagement
+1156204	UBEC coordinates basic education activities with non-governmental organisations, development partners, donor agencies, and other stakeholders. The Commission also promotes mass mobilisation and public sensitisation to encourage community participation and ownership of basic education initiatives.
+1156531	Monitoring and Accountability
+1156589	UBEC monitors the implementation of projects and programmes funded through federal intervention, assesses compliance with approved plans, and promotes transparency and accountability in the utilisation of basic education resources.
+1157019	Through its statutory mandate, UBEC works to promote
+1157107	equitable access to quality basic education
+1157155	, address educational disparities, strengthen teaching and learning, and support the development of an inclusive and effective basic education system across Nigeria.
+1157352	The Commission's mandate contributes to Nigeria's commitment to
+1157451	inclusive and equitable quality education
+1157497	and supports national human capital development through improved access, quality, and learning opportunities for all.
+1160370	No documents available.
+1160836	Access UBEC guidelines, standards and frameworks for the effective implementation of basic education across Nigeria.
+1161466	Name of requester is required
+1161631	Phone number is required
+1161698	Organisation name is required
+1161764	Event name is required
+1161827	Event description is required
+1161884	Start date is required
+1161930	End date is required
+1162007	End date cannot be before start date
+1162071	Start time is required
+1162117	End time is required
+1162240	End time must be after start time
+1162902	Book the Digital Resource Centre
+1162963	Complete the form below to submit a request for the use of the UBEC Digital Resource Centre.
+1163555	Enter your full name
+1164262	Enter your phone number
+1164641	Enter organisation name
+1165515	Description of Event
+1165641	Briefly describe the event
+1167743	DRC Booking Request:
+1167795	Booking request submitted successfully
+1167868	DRC booking submission failed:
+1168000	Submit Booking Request
+1168203	A modern facility for teacher professional development, digital education, research, innovation and educational events.
+1168692	Your browser does not support the video tag.
+1168944	UBEC Digital Resource Centre (DRC)
+1169007	The UBEC Digital Resource Centre (DRC) is a state-of-the-art facility established to support teacher professional development and capacity building in basic education. It provides a modern environment for training, collaboration, research and innovation in digital education.
+1169311	The Centre is equipped with dedicated training halls and a 300+ capacity auditorium with multi-projection screens and a professional media control room, providing an ideal environment for large-scale training, conferences and educational events.
+1169585	The DRC serves as a hub for strengthening digital capacity, fostering innovation and supporting the transformation of teaching and learning in Nigeria's basic education sector.
+1170054	Equipped for conferences, training and educational events.
+1170418	What the DRC Supports
+1170468	The Centre provides infrastructure, technology and support for a wide range of education and digital development activities.
+1170821	Teacher Professional Development
+1170882	Providing a modern facility for training, capacity building and continuous professional development of teachers.
+1171162	Smart Education Initiatives
+1171218	Supporting UBEC's Smart Schools, Smart Classrooms and Interactive Board initiatives through training, demonstrations and technical engagement.
+1171597	Promoting research, experimentation and innovation in digital education and Artificial Intelligence.
+1171926	Providing a modern venue for conferences, workshops, seminars and other education-sector engagements.
+1172318	Plan Your Event at the DRC
+1172373	Submit a booking request or download the official payment rate for the use of the UBEC Digital Resource Centre.
+1172787	Download Payment Rate PDF

@@ -242,7 +242,7 @@ describe('R6c: stage on list rows (D-R6.22)', () => {
     assert.equal(byCode.get('PRG-104')?.stage?.current, 'COMPLETION');
     assert.deepEqual(byCode.get('PRG-103')?.stage, {
       current: 'CLOSURE',
-      currentLabel: 'Closure',
+      currentLabel: 'Project closure',
       subLabel: 'Defects liability period',
       contractTerminated: false,
     });

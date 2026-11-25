@@ -510,7 +510,7 @@ function ProjectTypeEditor({
               <Toggle label={`${term("monitorParty")} required`} checked={draft.monitorRequired} onChange={(v) => set({ monitorRequired: v })} />
               <Toggle label={`${term("funderParty")} required`} checked={draft.funderRequired} onChange={(v) => set({ funderRequired: v })} />
               <Toggle label={`At least one ${term("beneficiary", { lower: true })} required`} checked={draft.beneficiaryRequired} onChange={(v) => set({ beneficiaryRequired: v })} />
-              <Toggle label="Region required" checked={draft.regionRequired} onChange={(v) => set({ regionRequired: v })} />
+              <Toggle label="Zone / State required" checked={draft.regionRequired} onChange={(v) => set({ regionRequired: v })} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <CustomSelect

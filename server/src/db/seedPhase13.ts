@@ -55,7 +55,7 @@ const DIRECT_INTERVENTION: ContractMilestoneTemplateInput[] = [
   },
   {
     key: "contractor-mobilised",
-    label: "Contractor mobilised on site",
+    label: "Mobilised to site",
     anchor: "KICKOFF",
     offsetValue: 21,
     completionMode: "AUTO_CONTRACTOR_ON_SITE",

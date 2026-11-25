@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveTerminology } from '@insite/shared';
-import { personaCopy } from './personaCopy';
+import { PHOTO_SAFEGUARDING_HINT, personaCopy } from './personaCopy';
 
 describe('persona copy (D-R5.23)', () => {
   it('every persona reads the same visit wording; there are no persona branches', () => {
@@ -16,6 +16,18 @@ describe('persona copy (D-R5.23)', () => {
     assert.equal(v.checkInButton, 'Check in');
     assert.equal(v.startFormButton, 'Start the visit form');
     assert.match(v.unscheduledVisitHelp, /Ad hoc/);
+  });
+
+  it('uses the UBEC glossary: monitoring visits and monitoring reports, never "visit report"', () => {
+    const v = personaCopy('INDEPENDENT_VERIFIER');
+    assert.equal(v.homeSubtitle, 'Your monitoring visits');
+    assert.match(v.outboxEmptyDescription, /monitoring report/);
+    const all = Object.values(v).join(' ').toLowerCase();
+    for (const word of ['visit report', 'sprint', 're-check']) assert.ok(!all.includes(word), `copy contains "${word}"`);
+  });
+
+  it('the camera safeguarding hint (C6)', () => {
+    assert.equal(PHOTO_SAFEGUARDING_HINT, 'Photograph the works, not pupils');
   });
 
   it('takes the tenant terms for the contractor, beneficiary and funder', () => {

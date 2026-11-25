@@ -4,8 +4,8 @@ Browser checks of the web portal that automated tests do not cover. Companion to
 
 | | |
 | :--- | :--- |
-| **Covers** | Redesign R2 (scope, facilities), R3 (form library), R4 (visits), R5f (old-app removals, web side), R6 (web shell) |
-| **Last updated** | 2026-11-24 |
+| **Covers** | Redesign R2 (scope, facilities), R3 (form library), R4 (visits), R5f (old-app removals, web side), R6 (web shell), UBEC IRL, client demo wave 1 (section 6d) |
+| **Last updated** | 2026-11-25 |
 | **Needs** | API and web dev servers running against a freshly seeded database (`npm run prisma:seed` from `server/`); Playwright MCP; logins with `Password123!` |
 
 ---
@@ -142,6 +142,22 @@ Open each file in Excel (and LibreOffice if available): green title band with am
 | WEB-IRL-REG-05 | `admin@ubec.test` | Project setup step 1 and the Overview show intervention year, funding source (suggestions) and UBEC project ID; a duplicate ID is refused. |
 | WEB-IRL-ALR-01 | `admin@ubec.test` | Register stage cells and PRG-105 / PRG-211 Overview show the alert chips (Delayed, Stalled, Site update overdue) with "since" in the tooltip; the portfolio "Behind schedule" figure shows "N projects with early-warning alerts". |
 | WEB-IRL-ALR-02 | `admin@ubec.test` | Notification centre lists the new alert categories with titles and links that open the right page; Settings → Project types → Monitoring shows the alert switches and thresholds. |
+
+## 6d. Client demo wave 1 (2026-11-25)
+
+Needs the overlay seed (`cd server && SEED_PROFILE=ubec-demo npm run prisma:seed`) and a demo web build (`VITE_DEMO_MODE=true` in `web/.env`). Logins and stories: [client_demo_updates/demo_accounts.md](client_demo_updates/demo_accounts.md); the walkthrough these checks follow: [client_demo_updates/demo_script_wave1.md](client_demo_updates/demo_script_wave1.md) (working plan 4.3).
+
+| Ref | Login | Check |
+| :--- | :--- | :--- |
+| WEB-DEMO1-01 | `es@ubec.test` | User menu → **Switch user** lists the cast (Executive Secretary, Director Physical Planning, Finance Officer, M&E Officer); one click signs in as each and the page reloads as that person (a normal password sign-in, decision W1.9). In a build without `VITE_DEMO_MODE` the entry is absent. |
+| WEB-DEMO1-02 | each cast member | Along the walkthrough (portfolio, register, new project, payments, Monitoring, BoQ & work phases, the visit drawer) no screen says "sprint", "construction" (as a stage or phase; "Construction of …" in project names is fine) or "region". Note every leftover with its page. |
+| WEB-DEMO1-03 | `es@ubec.test` | Register codes read "LOT n BATCH m" with an **Intervention year** column; older codes (if any) show as stored. The map has pins in all six zones (North Central, North West, North East, South West, South East, South South); the archived Rivers project shows or the gap is noted. |
+| WEB-DEMO1-04 | `es@ubec.test` | Register filters **Zone**, **State**, **LGA**: Zone North West → Kano, Kaduna and Sokoto projects only, map follows; State Kano → the two Kano projects; the LGA list offers only that State's LGAs; filters stay in the URL across a reload; the register export (Excel, PDF) follows them. |
+| WEB-DEMO1-05 | `dpp@ubec.test` | **New project**: State dropdown (37 entries), zone shown from the State, LGA dropdown limited to the State; intervention year offers only the current and next year; lot picker lists the year's lots and previews "Will be LOT n BATCH m" (new lot: the next lot number); funding source dropdown (Development partner and Other ask for detail). Created draft shows the previewed code. Two drafts created in a row in the same lot get consecutive batches. |
+| WEB-DEMO1-06 | `finance@ubec.test` | Project **Payments** (Demo 1): period filter This/Last month, This/Last quarter, a picked quarter, this/picked fiscal year, custom range, all time; the list and totals follow; the export holds the same rows; the period stays in the URL. |
+| WEB-DEMO1-07 | `finance@ubec.test` | Portfolio → **Payments** tab: default this fiscal year; cards (gross, retention held, released, net, count, exceptions, paid vs contract sum, paid vs % complete) match the list below them; zone/State/LGA, delivery model, year, funding source, kind and exceptions-only filters narrow cards and list; the Kaduna final-before-CoC exception is listed; **Export to Excel** matches the screen. `/app/payments` opens this tab. |
+| WEB-DEMO1-08 | `me.officer@ubec.test`, `lagos.me@ubec.test` | Without `payments:view` there is no Payments tab; a SUBEB M&E officer sees only its own projects on the map and in the register. |
+| WEB-DEMO1-09 | `me.officer@ubec.test` | Demo 1 → **Monitoring**: publish today's visit to the Resident Supervisor; after the phone submits it (PHY-DEMO1-02), the **monitoring report** opens in the drawer with photos and heading, **Approve** works, and progress on **BoQ & work phases** follows. |
 
 ## 7. Known open items
 

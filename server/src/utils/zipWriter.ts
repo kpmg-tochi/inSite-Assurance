@@ -46,7 +46,7 @@ export class ZipFileWriter {
   }
 
   private write(buf: Buffer) {
-    if (this.offset + buf.length > this.maxBytes) throw new Error(`The closure pack would exceed ${Math.round(this.maxBytes / 1024 / 1024)} MB.`);
+    if (this.offset + buf.length > this.maxBytes) throw new Error(`The project closure file would exceed ${Math.round(this.maxBytes / 1024 / 1024)} MB.`);
     fs.writeSync(this.fd, buf);
     this.hash.update(buf);
     this.offset += buf.length;

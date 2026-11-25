@@ -323,8 +323,8 @@ export function StandardsSection({ projectId, setup, readOnly }: StepProps) {
                 <div>
                   <h3 className="text-xs font-bold text-slate-900">Needs assessment</h3>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Excel file for the project details, facility units, BoQ and sprints, with this workspace's lists
-                    and anything already entered for this project. Fill it in, then import it on the Scope &amp; sprints step.
+                    Excel file for the project details, facility units, BoQ and work phases, with this workspace's lists
+                    and anything already entered for this project. Fill it in, then import it on the BoQ &amp; work phases step.
                   </p>
                 </div>
               </div>

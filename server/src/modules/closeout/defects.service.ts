@@ -67,7 +67,7 @@ export async function liableContractorId(db: Db, projectId: string): Promise<str
 async function assertDefectPhase(db: Db, projectId: string) {
   const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, select: { constructionPhase: true } });
   if (project.constructionPhase !== 'HANDOVER_IN_PROGRESS' && project.constructionPhase !== 'RETENTION_PERIOD') {
-    throw new AppError('Defect tickets are raised during handover and the defects liability period.', 409, 'PROJECT_PHASE_NOT_DEFECTS');
+    throw new AppError('Defects are raised during handover and the defects liability period.', 409, 'PROJECT_PHASE_NOT_DEFECTS');
   }
 }
 
@@ -247,7 +247,7 @@ async function serializeTickets(
       actions: {
         assign: gate([
           [staff, 'You cannot manage defects on this project.'],
-          [openOrAssigned, 'Only an open ticket can be assigned.'],
+          [openOrAssigned, 'Only an open defect can be assigned.'],
         ]),
         verify: gate([
           [staff, 'You cannot manage defects on this project.'],
@@ -257,7 +257,7 @@ async function serializeTickets(
         ]),
         reject: gate([
           [staff, 'You cannot manage defects on this project.'],
-          [openOrAssigned, 'Only an open ticket can be rejected.'],
+          [openOrAssigned, 'Only an open defect can be rejected.'],
         ]),
       },
     };
@@ -267,7 +267,7 @@ async function serializeTickets(
 async function loadTicket(db: Db, projectId: string, ticketId: string) {
   const ticket = await db.retentionDefectTicket.findFirst({ where: { id: ticketId, projectId }, include: TICKET_INCLUDE });
   if (!ticket) {
-    throw new AppError('Defect ticket not found', 404, 'DEFECT_TICKET_NOT_FOUND');
+    throw new AppError('Defect not found', 404, 'DEFECT_TICKET_NOT_FOUND');
   }
   return ticket;
 }
@@ -414,7 +414,7 @@ export async function assignDefectTicket(projectId: string, ticketId: string, vi
     await tx.$queryRaw`SELECT id FROM "retention_defect_tickets" WHERE id = ${ticketId}::uuid FOR UPDATE`;
     const ticket = await loadTicket(tx, projectId, ticketId);
     if (ticket.status !== 'OPEN' && ticket.status !== 'ASSIGNED') {
-      throw new AppError('Only an open ticket can be assigned', 409, 'DEFECT_TICKET_NOT_OPEN');
+      throw new AppError('Only an open defect can be assigned', 409, 'DEFECT_TICKET_NOT_OPEN');
     }
     const updated = await tx.retentionDefectTicket.update({
       where: { id: ticket.id },
@@ -450,7 +450,7 @@ export async function verifyDefectTicket(projectId: string, ticketId: string, vi
     const awaiting = ticket.status === 'RECTIFIED_PENDING_VERIFICATION';
     const openOrAssigned = ticket.status === 'OPEN' || ticket.status === 'ASSIGNED';
     if (!awaiting && !(close && openOrAssigned)) {
-      throw new AppError('Nothing is waiting for verification on this ticket', 409, 'DEFECT_TICKET_NOT_RECTIFIED');
+      throw new AppError('Nothing is waiting for verification on this defect', 409, 'DEFECT_TICKET_NOT_RECTIFIED');
     }
     if (close && input.captureIds.length === 0) {
       throw new AppError('Closing a defect needs your photos of the repair.', 422, 'VERIFICATION_EVIDENCE_REQUIRED');
@@ -502,7 +502,7 @@ export async function rejectDefectTicket(projectId: string, ticketId: string, vi
     await tx.$queryRaw`SELECT id FROM "retention_defect_tickets" WHERE id = ${ticketId}::uuid FOR UPDATE`;
     const ticket = await loadTicket(tx, projectId, ticketId);
     if (ticket.status !== 'OPEN' && ticket.status !== 'ASSIGNED') {
-      throw new AppError('Only an open ticket can be rejected', 409, 'DEFECT_TICKET_NOT_OPEN');
+      throw new AppError('Only an open defect can be rejected', 409, 'DEFECT_TICKET_NOT_OPEN');
     }
     await tx.retentionDefectTicket.update({
       where: { id: ticket.id },
@@ -542,7 +542,7 @@ export async function createTicketsFromSnags(
       : [];
     const wanted = input.snagIndexes ?? snags.map((_, i) => i);
     for (const i of wanted) {
-      if (i < 0 || i >= snags.length) throw new AppError('Snag not found on this submission', 404, 'SNAG_NOT_FOUND');
+      if (i < 0 || i >= snags.length) throw new AppError('Punch list item not found on this submission', 404, 'SNAG_NOT_FOUND');
     }
     const existing = await tx.retentionDefectTicket.findMany({
       where: { sourceHandoverSubmissionId: submission.id },

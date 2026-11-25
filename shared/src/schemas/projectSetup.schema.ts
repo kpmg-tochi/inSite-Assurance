@@ -16,7 +16,14 @@ import {
   RegionSummarySchema,
 } from './deliveryModel.schema';
 import { ContractStatusEnum, ProjectContractDetailsDtoSchema, ProjectContractStepSchema } from './contract.schema';
-import { ExternalReferenceSchema, FundingSourceSchema, InterventionYearSchema } from './projectRegister.schema';
+import {
+  ExternalReferenceSchema,
+  FundingSourceCodeEnum,
+  FundingSourceSchema,
+  InterventionYearSchema,
+} from './projectRegister.schema';
+import { LotChoiceSchema, ProjectLotRefSchema } from './lot.schema';
+import { NigeriaLgaCodeSchema, NigeriaStateCodeSchema, NigeriaZoneCodeEnum } from '../data/nigeriaAdminAreas';
 
 /**
  * Staged project creation (Phase 6, decision C; redesign R6a, D-R6.2). A project is created as a
@@ -31,7 +38,8 @@ import { ExternalReferenceSchema, FundingSourceSchema, InterventionYearSchema } 
  * 4 Team & visits, 5 Review), plus the optional "Advanced" entry listed under a divider.
  */
 
-export const PROJECT_CODE_PREFIX_REGEX = /^[A-Z0-9]{3}-[0-9]{3}$/;
+/** `AAA-999` (older codes, e.g. PRG-102) or the UBEC lot/batch form `2026-LOT-5-BATCH-7` (client demo updates C3). */
+export const PROJECT_CODE_PREFIX_REGEX = /^(?:[A-Z0-9]{3}-[0-9]{3}|\d{4}-LOT-\d+-BATCH-\d+)$/;
 
 export const ProjectSetupSectionIdEnum = z.enum([
   'basics',
@@ -72,9 +80,9 @@ export const PROJECT_SETUP_SECTIONS: ProjectSetupSectionDefinition[] = [
   // Phase 13. Required (server-computed) when the project type has contract milestones or documents needed before activation.
   { id: 'contract', title: 'Contract and kick-off', stepId: 'contract', required: false, order: 50, description: 'Contract dates, sum and planned kick-off' },
   // Redesign R1b: the section keeps the retention settings (id "facility" kept: setupState uses it).
-  { id: 'facility', title: 'Retention and defects liability', stepId: 'contract', required: false, order: 60, description: 'Retention percentage and defects liability period' },
+  { id: 'facility', title: 'Retention and defects liability period', stepId: 'contract', required: false, order: 60, description: 'Retention percentage and defects liability period' },
   // Redesign R2b: facility units, scope lines and sprints (replaces the BOQ step).
-  { id: 'scope', title: 'Scope & sprints', stepId: 'scope', required: true, order: 70, description: 'Sprints, facility units and BoQ lines' },
+  { id: 'scope', title: 'BoQ & work phases', stepId: 'scope', required: true, order: 70, description: 'Work phases, facility units and BoQ lines' },
   // Phase 7: required when the process configuration sets standards or needs assessments to
   // REQUIRED_AT_CREATION, hidden when both are off (server-computed).
   { id: 'standards', title: 'Needs assessment and standards', stepId: 'scope', required: false, order: 80, description: 'Needs-assessment documents and project standards' },
@@ -109,7 +117,7 @@ const sectionsOf = (stepId: ProjectSetupWizardStepId) =>
 export const PROJECT_SETUP_STEPS: ProjectSetupStepDefinition[] = [
   { id: 'project', title: 'Project', route: 'project', order: 1, sectionIds: sectionsOf('project'), settingsOnly: false, description: 'What, where and for whom' },
   { id: 'contract', title: 'Contract', route: 'contract', order: 2, sectionIds: sectionsOf('contract'), settingsOnly: false, description: 'Contractor, contract dates and retention' },
-  { id: 'scope', title: 'Scope & sprints', route: 'scope', order: 3, sectionIds: sectionsOf('scope'), settingsOnly: false, description: 'Sprints, facility units, BoQ and needs assessment' },
+  { id: 'scope', title: 'BoQ & work phases', route: 'scope', order: 3, sectionIds: sectionsOf('scope'), settingsOnly: false, description: 'Work phases, facility units, BoQ and needs assessment' },
   { id: 'team', title: 'Team & visits', route: 'team', order: 4, sectionIds: sectionsOf('team'), settingsOnly: false, description: 'People with access and the visit plan' },
   { id: 'review', title: 'Review', route: 'review', order: 5, sectionIds: [], settingsOnly: false, description: 'Check and set the project active' },
   { id: 'advanced', title: 'Advanced', route: 'advanced', order: 100, sectionIds: sectionsOf('advanced'), settingsOnly: true, description: 'Workflow template, process switches and approval chains' },
@@ -159,8 +167,12 @@ export const ProjectBasicsStepSchema = z.object({
     .string()
     .trim()
     .toUpperCase()
-    .regex(PROJECT_CODE_PREFIX_REGEX, 'Format must be e.g. LKK-402 or ABJ-105'),
-  stateLocation: z.string().trim().min(2, 'Enter the state or region').max(80),
+    .regex(PROJECT_CODE_PREFIX_REGEX, 'Format must be e.g. LKK-402 or ABJ-105')
+    // Client demo updates C3: omitted when the server assigns the code from `lotChoice` (create)
+    // or keeps the current one (save). Without either, create answers 400 PROJECT_CODE_REQUIRED.
+    .optional(),
+  /** Free text for older screens. Optional since C1: the server writes the state's name when `stateCode` is sent. */
+  stateLocation: z.string().trim().min(2, 'Enter the state').max(80).optional(),
   lgaLocation: z.string().trim().max(120).nullable().optional(),
   description: z.string().trim().max(1000).nullable().optional(),
   totalBudgetNgn: z.number({ invalid_type_error: 'Enter the total budget' }).positive('Budget must be above zero'),
@@ -173,6 +185,23 @@ export const ProjectBasicsStepSchema = z.object({
   fundingSource: FundingSourceSchema.nullable().optional(),
   /** The client's own project ID; unique per workspace (409 EXTERNAL_REFERENCE_TAKEN). */
   externalReference: ExternalReferenceSchema.nullable().optional(),
+  /**
+   * Client demo updates (wave 1). Omitted keeps the current value; null clears it.
+   * - stateCode / lgaCode: national reference data (zone derived from the state); the server also
+   *   writes stateLocation / lgaLocation text for older screens. The LGA must be in the state
+   *   (422 LGA_NOT_IN_STATE).
+   * - lotChoice: on create (or on a draft without a lot) the server assigns
+   *   `{interventionYear}-LOT-{lot}-BATCH-{batch}` as the code; needs interventionYear
+   *   (422 INTERVENTION_YEAR_REQUIRED); a lotId of another year or tenant is 422 LOT_NOT_FOUND.
+   * - fundingSourceCode: FUNDING_SOURCES; `fundingSource` then carries the detail for a development
+   *   partner or "Other", and the server stores the text (fundingSourceText).
+   * - interventionYear: on create and when changed on a draft, one of allowedInterventionYears
+   *   (422 INTERVENTION_YEAR_NOT_ALLOWED); imported projects keep theirs.
+   */
+  stateCode: NigeriaStateCodeSchema.nullable().optional(),
+  lgaCode: NigeriaLgaCodeSchema.nullable().optional(),
+  lotChoice: LotChoiceSchema.optional(),
+  fundingSourceCode: FundingSourceCodeEnum.nullable().optional(),
 });
 export type ProjectBasicsStep = z.infer<typeof ProjectBasicsStepSchema>;
 
@@ -414,6 +443,15 @@ export const ProjectSetupDtoSchema = z.object({
     externalReference: z.string().nullable(),
     /** Set on projects created by the register import. */
     importedAt: z.string().nullable(),
+    /** Client demo updates (wave 1); optional in the contract, the server fills every one. */
+    stateCode: z.string().nullable().optional(),
+    lgaCode: z.string().nullable().optional(),
+    zone: NigeriaZoneCodeEnum.nullable().optional(),
+    fundingSourceCode: FundingSourceCodeEnum.nullable().optional(),
+    lot: ProjectLotRefSchema.nullable().optional(),
+    batchNumber: z.number().int().nullable().optional(),
+    /** The years the intervention year dropdown offers (allowed years plus the saved one). */
+    interventionYearOptions: z.array(z.number().int()).optional(),
   }),
   parties: z.object({
     /** Phase 11 */

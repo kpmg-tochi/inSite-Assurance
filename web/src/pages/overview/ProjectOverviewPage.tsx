@@ -110,10 +110,10 @@ function Card({
 }
 
 function sprintCard(projectId: string, sprint: OverviewSprint | null, hasSprints: boolean, span: string) {
-  const title = sprint?.relation === "NEXT" ? "Next sprint" : sprint?.relation === "LAST" ? "Last sprint" : "Current sprint";
-  const link = { to: `/app/projects/${projectId}/scope`, label: "Scope & sprints" };
+  const title = sprint?.relation === "NEXT" ? "Next work phase" : sprint?.relation === "LAST" ? "Last work phase" : "Current work phase";
+  const link = { to: `/app/projects/${projectId}/scope`, label: "BoQ & work phases" };
   if (!hasSprints || !sprint) {
-    return <Card key="sprint" span={span} title="Current sprint" headline="No sprints yet" lines={["Plan sprints to schedule the work."]} link={link} />;
+    return <Card key="sprint" span={span} title="Current work phase" headline="No work phases yet" lines={["Plan work phases to schedule the work."]} link={link} />;
   }
   const status = SPRINT_STATUS[sprint.status];
   const outcome = sprint.verificationOutcome ? OUTCOME[sprint.verificationOutcome] : null;
@@ -122,7 +122,7 @@ function sprintCard(projectId: string, sprint: OverviewSprint | null, hasSprints
       key="sprint"
       span={span}
       title={title}
-      headline={`Sprint ${sprint.number} of ${sprint.totalSprints}${sprint.name ? ` · ${sprint.name}` : ""}`}
+      headline={`Work phase ${sprint.number} of ${sprint.totalSprints}${sprint.name ? ` · ${sprint.name}` : ""}`}
       lines={[
         fmtRange(sprint.startDate, sprint.endDate),
         <StateText key="s" tone={outcome?.tone ?? status.tone}>
@@ -185,7 +185,7 @@ function deadlineCard(projectId: string, deadline: OverviewDeadline | null, over
         deadline.overdue ? (
           <StateText key="d" tone="bad">Overdue since {fmtDay(deadline.dueDate)}</StateText>
         ) : (
-          `${deadline.kind === "MILESTONE" ? "Milestone due" : "Visit report due"} ${fmtDay(deadline.dueDate)}`
+          `${deadline.kind === "MILESTONE" ? "Milestone due" : "Monitoring report due"} ${fmtDay(deadline.dueDate)}`
         ),
         overdueLine,
       ]}
@@ -266,7 +266,7 @@ function progressCard(project: ProjectSummaryDto, overview: ProjectOverviewDto, 
       lines={[
         badge ? (
           <StateText key="s" tone={SCHEDULE_TONE[SCHEDULE_STATUS_META[badge.status].tone]}>
-            {badge.status === "UNSCHEDULED" ? "No sprints to schedule against" : `Schedule: ${badge.label.toLowerCase()}`}
+            {badge.status === "UNSCHEDULED" ? "No work phases to schedule against" : `Schedule: ${badge.label.toLowerCase()}`}
           </StateText>
         ) : null,
         counts.length ? counts.join(" · ") : null,
@@ -351,7 +351,7 @@ export function ProjectOverviewPage({ project, evidenceLogs }: ProjectOverviewPa
 
       <section className="rounded-2xl border border-slate-200/80 bg-white px-4 py-4 shadow-sm sm:px-5" aria-labelledby="overview-stage-heading">
         <h2 id="overview-stage-heading" className="sr-only">
-          Project stage{overview ? `: ${overview.stage.currentLabel}${overview.stage.subLabel ? ` (${overview.stage.subLabel})` : ""}` : ""}
+          Project cycle{overview ? `: ${overview.stage.currentLabel}${overview.stage.subLabel ? ` (${overview.stage.subLabel})` : ""}` : ""}
         </h2>
         {overview ? (
           <>
@@ -364,7 +364,7 @@ export function ProjectOverviewPage({ project, evidenceLogs }: ProjectOverviewPa
             )}
           </>
         ) : overviewQuery.isError ? (
-          <p className="text-xs text-rose-700">The project stage could not be loaded.</p>
+          <p className="text-xs text-rose-700">The project cycle could not be loaded.</p>
         ) : (
           <div className="h-14 animate-pulse rounded-xl bg-slate-100 motion-reduce:animate-none" />
         )}

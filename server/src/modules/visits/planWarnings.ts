@@ -117,7 +117,7 @@ export async function officerWarnings(db: Db, userIds: string[], now: Date = new
       if (regions.size > 1) {
         warnings.push({
           code: 'OFFICER_TWO_REGIONS_SAME_DAY',
-          message: `${name} has visits in ${regions.size} regions on ${date}.`,
+          message: `${name} has visits in ${regions.size} zones or states on ${date}.`,
           projectId: null,
           visitId: null,
           userId,

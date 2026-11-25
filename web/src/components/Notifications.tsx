@@ -36,21 +36,21 @@ const CATEGORY_LABELS: Partial<Record<WebNotificationCategory, string>> = {
   CONTRACT_DEFAULT_CASE: "Default case",
   DOCUMENT_SIGN_OFF: "Document sign-off",
   COMPLETION_CERTIFICATE: "Certificate of Completion",
-  CLOSURE: "Closure",
+  CLOSURE: "Project closure",
   LESSON_SHARED: "Lesson learned",
   PAYMENT_EXCEPTION: "Payment exception",
   // Redesign R4
   VISIT_RESCHEDULED: "Visit moved",
   VISIT_DATE_PROPOSED: "New visit date proposed",
   VISIT_DECLINED: "Visit declined",
-  VISIT_PENDING_APPROVAL: "Visit awaiting approval",
+  VISIT_PENDING_APPROVAL: "Monitoring report awaiting approval",
   VISIT_MISSED: "Missed visit",
   FINDING_ESCALATED: "Finding escalated",
-  SPRINT_VERIFICATION_DUE: "Sprint to verify",
+  SPRINT_VERIFICATION_DUE: "Work phase to verify",
   // UBEC IRL early-warning alerts (SCHEDULE_BEHIND is the delayed alert)
   PROJECT_STALLED: "Stalled project",
-  SITE_UPDATE_OVERDUE: "Site update overdue",
-  SPEND_AHEAD_OF_PROGRESS: "Spend ahead of progress",
+  SITE_UPDATE_OVERDUE: "Monitoring overdue",
+  SPEND_AHEAD_OF_PROGRESS: "Paid ahead of work done",
 };
 
 interface NotificationsProps {

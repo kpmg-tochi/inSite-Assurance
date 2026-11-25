@@ -240,7 +240,7 @@ export async function resolveInspectionFinding(params: {
   const before = await loadFinding(prisma, projectId, findingId);
   if (!viewer.canManage) throw new AppError(`Access requires permission(s): ${MANAGE}`, 403, 'FORBIDDEN_PERMISSION');
   if (input.clientCaptureIds.length) {
-    throw new AppError('Photos of a fix are taken on a visit (re-check)', 400, 'CAPTURES_NEED_FIELD_APP');
+    throw new AppError('Photos of a fix are taken on a visit (follow-up check)', 400, 'CAPTURES_NEED_FIELD_APP');
   }
   await prisma.$transaction(async (tx) => {
     const updated = await tx.finding.updateMany({

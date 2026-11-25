@@ -1,0 +1,3382 @@
+Construction, Renovation and WASH Manual
+
+UNIVERSAL BASIC EDUCATION COMMISSION
+                          (UBEC)
+
+CONSTRUCTION, RENOVATION & WASH MANUAL
+                      FOR SBMC - SIP
+
+                                                  1st Edition
+
+                                          MARCH 2026
+
+UBEC ­ Construction, Renovation & Wash Manual         Page 1 of 114
+Construction, Renovation and WASH Manual
+
+PREFACE
+
+The Universal Basic Education Commission (UBEC) is proud to present the Construction Manual
+for Basic Education Infrastructure. This document represents a fundamental cornerstone of our
+mission to provide quality, accessible, and conducive learning environments for every Nigerian
+child. The availability of safe, functional, and well-equipped school infrastructure is not merely
+a matter of convenience; it is a prerequisite for achieving equitable and inclusive education for
+all.
+
+The Compulsory, Free Universal Basic Education Act of 2004 established the framework for a
+nationwide revitalization of basic education. A critical component of this revitalization is the
+provision and maintenance of high-quality school infrastructure, which directly impacts student
+attendance, teacher retention, and overall learning outcomes. This manual has been
+meticulously developed to serve as the definitive guide for all stakeholders involved in the
+design, construction, and rehabilitation of basic education facilities.
+
+This manual is designed for a diverse audience, including architects, engineers, contractors,
+state education boards, local government authorities, and community leaders. It outlines the
+minimum standards, technical specifications, and best practices for constructing new
+classrooms, and providing essential amenities such as furniture, libraries, and laboratories. By
+adhering to these guidelines, we can ensure consistency in quality, optimize the use of public
+funds, and create a sustainable infrastructure that will serve generations to come.
+
+We are deeply grateful for the technical expertise and collaborative spirit of all our partners,
+including the State Universal Basic Education Boards (SUBEBs), professional bodies, and
+development partners, whose invaluable contributions have made this comprehensive guide a
+reality. This manual is a living document that will be updated periodically to reflect the latest
+advancements in construction technology and sustainability.
+
+It is our firm belief that investing in school infrastructure is one of the most impactful ways to
+secure a brighter future for our children. We urge all stakeholders to embrace these standards
+and work collectively to build a resilient and robust basic education system for Nigeria.
+
+Thank you.
+
+Aisha Garba
+
+Executive Secretary
+Universal Basic Education Commission (UBEC)
+Abuja, Nigeria
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 2 of 114
+Construction, Renovation and WASH Manual
+
+TABLE OF CONTENTS
+
+1.0 INTRODUCTION ....................................................................................... 10
+   1.1 RESPONSIBILITIES ........................................................................................ 10
+   1.2 What is SBMC-SIP? ....................................................................................... 11
+   1.3 School Improvement Programme (SIP)............................................................ 11
+
+2.0 PRE-CONSTRUCTION ACTIVITIES ............................................................. 12
+   2.1 SITE INVESTIGATION AND SURVEY ................................................................. 12
+   2.2 SITE PREPARATION........................................................................................ 12
+   2.3 STORAGE OF MATERIALS ............................................................................... 12
+   2.4 SITE SECURITY .............................................................................................. 12
+
+PART I: CONSTRUCTION MANUAL ...................................................................... 13
+3.0 CONSTRUCTION MATERIALS .................................................................... 14
+
+   3.1 WATER ......................................................................................................... 14
+   3.2 CEMENT ....................................................................................................... 14
+   3.3 BLOCKS........................................................................................................ 15
+
+      3.3.1 SANDCRETE BLOCKS ............................................................................. 15
+      3.3.2 COMPRESSED STABILIZED EARTH BLOCKS (CSEB)................................... 15
+      3.3.3 INTERLOCKING STABILIZED SOIL BLOCKS (ISSB)...................................... 16
+      3.3.4 CLAY BRICKS ......................................................................................... 16
+      3.3.5 REINFORCED CONCRETE....................................................................... 16
+      3.3.6 AGGREGATE .......................................................................................... 17
+      3.3.7 REINFORCEMENT .................................................................................. 18
+4.0 CONSTRUCTION ACTIVITIES .................................................................... 19
+   SETTING OUT .......................................................................................................... 19
+   4.1 SUB STRUCTURE........................................................................................... 20
+      4.1.1 EXCAVATION .......................................................................................... 20
+      4.1.2 FOUNDATION ........................................................................................ 21
+      4.1.3 FOUNDATION WALLS ............................................................................. 22
+      4.1.4 MORTAR ................................................................................................ 22
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 3 of 114
+Construction, Renovation and WASH Manual
+
+      4.1.5 FOUNDATION REINFORCEMENT ............................................................. 23
+      4.1.6 BACKFILLING AND COMPACTION ........................................................... 24
+      4.1.7 GROUND FLOOR SLAB ........................................................................... 24
+5.0 SUPERSTRUCTURE .................................................................................. 26
+   5.1 FORMWORK ................................................................................................. 26
+   5.2 STRIPPING OF FORMWORK ........................................................................... 27
+   5.3 REINFORCEMENT ......................................................................................... 27
+   5.4 COLUMN REINFORCEMENT........................................................................... 28
+   5.5 BEAM REINFORCEMENT ................................................................................ 29
+   5.6 CONCRETE WORK ........................................................................................ 29
+   5.7 ROOFING ..................................................................................................... 30
+6.0 FINISHES ................................................................................................. 33
+   6.1 PLASTERING ................................................................................................. 33
+   6.2 JOINING BRICKWORK.................................................................................... 33
+   6.3 PAINTING ..................................................................................................... 34
+7.0 QUALITY ASSURANCES ............................................................................ 36
+   7.1 CEMENT ....................................................................................................... 36
+   7.2 TESTING COARSE AGGREGATE ...................................................................... 36
+      7.2.1 STOCKPILES .......................................................................................... 36
+      7.2.2 SAMPLING DIRECTLY FROM A TRUCK ...................................................... 37
+      7.2.3 TESTING PROCEDURE ............................................................................ 37
+      7.2.4 DETERMINATION OF FLAKINESS INDEX................................................... 38
+   7.3 TESTING FINE AGGREGATE ............................................................................ 39
+8.0 SPECIFICATION SUMMARY....................................................................... 40
+   8.1 FOUNDATIONS ............................................................................................. 40
+   8.2 SUPERSTRUCTURE ....................................................................................... 41
+   8.3 REINFORCED CONCRETE.............................................................................. 41
+   8.4 ROOF ........................................................................................................... 42
+   8.5 BUILDING FLOORS........................................................................................ 43
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 4 of 114
+Construction, Renovation and WASH Manual
+
+   8.6 BUILDING WALLS.......................................................................................... 43
+   8.7 RENDERING/PLASTERING ............................................................................. 43
+   8.8 CEILINGS ..................................................................................................... 44
+   8.9 DOORS AND WINDOWS ................................................................................ 44
+   8.10 VENTILATION ................................................................................................ 44
+   8.11 STAIRWAYS ................................................................................................... 44
+   8.12 SAFETY AND ACCESSIBILITY FEATURES.......................................................... 45
+   8.13 PAINT ........................................................................................................... 45
+   8.14 SEWAGE DRAINAGE SYSTEM ......................................................................... 46
+   8.15 STORMWATER DRAINAGE SYSTEM ................................................................. 46
+   8.16 WATER SUPPLY ............................................................................................. 46
+   8.17 TOILET FIXTURES........................................................................................... 47
+   8.18 TOILET FINISHINGS ....................................................................................... 47
+   8.19 ELECTRICAL SYSTEM ..................................................................................... 47
+   8.20 POWER SUPPLY SYSTEMS.............................................................................. 48
+   8.21 FURNITURE AND EQUIPMENT REQUIREMENTS ............................................... 48
+
+      8.21.1 CLASSROOM FURNITURE AND EQUIPMENT ............................................ 48
+      8.21.2 ADMINISTRATIVE FURNITURE AND EQUIPMENT ....................................... 49
+      8.21.3 LABORATORIES FURNITURE AND EQUIPMENT ......................................... 50
+      8.21.4 ECCDE FURNITURE AND EQUIPMENT ..................................................... 50
+PART II: RENOVATION MANUAL.......................................................................... 51
+1.0 INTRODUCTION ....................................................................................... 52
+   1.1. PHASE 1: PLANNING AND PREPARATION........................................................ 52
+   1.2. PHASE 2: TIMELINE & COMMUNICATION PLAN ............................................... 52
+   1.3. PHASE 3: EXECUTION AND CONSTRUCTION .................................................. 53
+   1.4. PHASE 4: FINAL WALKTHROUGH & MAINTENANCE ......................................... 53
+2.0 SITE PREPARATION .................................................................................. 54
+   2.1 STORAGE OF MATERIALS ............................................................................... 54
+   2.2. SITE SECURITY .............................................................................................. 54
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 5 of 114
+Construction, Renovation and WASH Manual
+
+   2.3. DEMOLITION WORKS .................................................................................... 54
+3.0 ROOF COVERING ..................................................................................... 55
+
+   3.1 INITIAL INSPECTION ...................................................................................... 55
+   3.2. SAFETY ......................................................................................................... 55
+   3.3. DE - ROOFING THE DAMAGED SHEETS ........................................................... 56
+   3.4. AVOID COMMON MISTAKES ........................................................................... 56
+   3.5. REPLACING NEW SHEETS.............................................................................. 56
+   3.6. SEAL & FLASH ............................................................................................... 57
+   3.7. CLEAN & PROTECT ........................................................................................ 57
+   3.8. MINOR REPAIR .............................................................................................. 57
+   3.9. ESSENTIAL MATERIALS FOR REPAIR ............................................................... 58
+   3.9.1. ROOFING SHEET ....................................................................................... 58
+   3.9.2. FASTENING MATERIALS.............................................................................. 58
+   3.9.3. WATERPROOFING & PROTECTION .............................................................. 59
+   3.9.4. SAFETY & HANDLING GEARS ...................................................................... 59
+   3.10. ESSENTIAL TOOLS FOR REPAIR .................................................................. 60
+   3.10.1. MANUAL TOOLS ........................................................................................ 60
+   3.10.2. CLEANING & FINISHING TOOLS.................................................................. 60
+4.0 ROOF STRUCTURE .................................................................................. 61
+   4.1 STEEL TRUSS ................................................................................................ 61
+   4.2.1. ROUTINE INSPECTION ............................................................................... 61
+   4.2.2. STRUCTURAL ASSESSMENT ....................................................................... 61
+   4.2.3. RUST TREATMENT & PROTECTIVE COATING................................................. 61
+   4.2.4. REPAIR DAMAGED MEMBERS ..................................................................... 62
+   4.2.5. DOCUMENTATION & MONITORING ............................................................. 62
+   4.2.6. ROUTINE INSPECTION CHECKLIST FOR STEEL TRUSSES & ROOFING ........... 63
+   4.3. TIMBER TRUSSES .......................................................................................... 64
+   4.3.1. INITIAL ASSESSMENT AND DIAGNOSIS ....................................................... 64
+   4.3.2. REPAIR & REINFORCEMENT TECHNIQUE .................................................... 65
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 6 of 114
+Construction, Renovation and WASH Manual
+
+   4.3.3. PROTECTIVE TREATMENT & PREVENTION.................................................... 66
+   4.3.4. MATERIALS & TOOLS FOR REPAIRS ............................................................. 66
+5.0 CEILING................................................................................................... 69
+   5.1 INITIAL ASSESMENT AND PREPARATION......................................................... 69
+   5.2. ADDRESSING SAGGING & STRUCTURAL ISSUES ............................................. 70
+   5.3. REPAIRING MINOR DAMAGE AND FINISHING.................................................. 70
+   5.4. REPLACING NEW CEILING BOARDS ............................................................... 71
+   5.5. LONG-TERM PROTECTION ............................................................................. 72
+6.0 WALLS ..................................................................................................... 73
+   6.1 INITIAL ASSESSMENT .................................................................................... 73
+   6.2. DEMOLITION AND CLEANING ........................................................................ 73
+   6.3. PLANNING.................................................................................................... 74
+   6.4. DEMOLITION AND SURFACE PREPARATION.................................................... 74
+   6.5. PLASTERING & SMOOTHING .......................................................................... 75
+   6.6. PAINTING & FINISHING.................................................................................. 75
+   6.7. FURNITURE & FIXTURE .................................................................................. 76
+7.0 DOORS & WINDOWS................................................................................ 76
+   7.1 INITIAL ASSESSMENT & PLANNING ................................................................ 76
+   7.2. REMOVAL & INSTALLATION ............................................................................ 77
+   7.3. FINISHING & SEALING ................................................................................... 78
+8.0 FLOOR ..................................................................................................... 78
+   8.1 TERRAZO ...................................................................................................... 78
+   8.2.1. INITIAL ASSESSMENT AND PREPARATION ................................................... 78
+   8.2.2. REPAIRING DAMAGED FLOOR .................................................................... 79
+   8.2.3. GRINDING & POLISHING............................................................................ 80
+   8.2.4. SEALING & FINISHING ............................................................................... 80
+   8.3. GLAZED TILES............................................................................................... 80
+   8.3.1. INITIAL ASSESSMENT AND CLEANING ........................................................ 81
+   8.3.2. REPAIRING DAMAGED TILES....................................................................... 81
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 7 of 114
+Construction, Renovation and WASH Manual
+
+9.0 FURNITURE.............................................................................................. 82
+   9.1 ASSESSMENT & IDENTIFICATION OF DAMAGE.............................................. 82
+   9.2. PLANNING & PRIORITIZATION........................................................................ 83
+   9.3. EXECUTION .................................................................................................. 83
+
+10.0 WATER SUPPLY ........................................................................................ 85
+   10.1 ASSESSMENT & SITUATION ANALYSIS .......................................................... 85
+   10.2. PLANNING & SOLUTION DESIGN ................................................................ 85
+   10.3. IMPLEMENTATION & CAPACITY BUILDING ................................................... 86
+   10.4. MONITORING & EVALUATION ..................................................................... 86
+   10.5. BOREHOLE REHABILITATION...................................................................... 87
+   10.5.1. INITIAL ASSESSMENT & DIAGNOSIS ............................................................ 87
+   10.5.2. IDENTIFYING THE CAUSES OF FAILURE....................................................... 88
+   10.5.3. DEVELOPING & EXECUTING THE REHABILITATION PLAN.............................. 88
+   10.5.4. POST-REHABILITATION AND SUSTAINABILITY .............................................. 89
+
+PART III: WASH (Water, Sanitation, Hygiene) ....................................................... 90
+9.0 PRE-CONSTRUCTION ACTIVITIES ............................................................. 91
+
+   9.1 SITE INVESTIGATION AND SURVEY ................................................................. 91
+10.0 SOURCE OF WATER SUPPLY ..................................................................... 92
+
+   10.1 PIPED WATER SUPPLY ................................................................................... 92
+   10.2 BOREHOLES ................................................................................................. 92
+
+      10.2.1 HANDHELD PUMP.................................................................................. 93
+      10.2.2 MOTORIZED BOREHOLE ­ ELECTRIC POWERED....................................... 93
+      10.2.3 MOTORIZED BOREHOLE ­ SOLAR POWERED ........................................... 94
+      10.2.4 PROTECTED DEEP WELL ......................................................................... 94
+      10.2.5 RAINWATER HARVESTING....................................................................... 95
+11.0 WATER STORAGE ..................................................................................... 96
+   11.1 OVERHEAD TANK (GEEPEE PVC) .................................................................... 96
+   .............................................................................................................................. 96
+   11.2 GROUND-LEVEL RESERVOIRS TANK............................................................... 97
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 8 of 114
+Construction, Renovation and WASH Manual
+
+   11.3 OVERHEAD TANK SUPPORTS ......................................................................... 98
+   11.4 REINFORCED CONCRETE FRAME STRUCTURE ............................................... 99
+   11.5 BLOCK WALL SUPPORT ............................................................................... 100
+   11.6 STEEL STANCHIONS.................................................................................... 101
+12.0 SAFEGUARDS ........................................................................................ 104
+   12.1 CHAIN LINKED ­ FENCE .............................................................................. 104
+   12.2 SOLAR STREET LAMPS................................................................................. 105
+13.0 QUALITY ASSURANCE MEASURES .......................................................... 106
+   13.1 QUALITY ASSURANCE DURING PLANNING & DESIGN ................................... 106
+   13.2 QUALITY ASSURANCE DURING INSTALLATION & CONSTRUCTION ................. 106
+   13.3 QUALITY ASSURANCE DURING COMMISSIONING AND HANDOVER .............. 107
+14.0 TOILETS ................................................................................................. 108
+   14.1 LOCATION & ACCESS .................................................................................. 108
+   14.2 GENDER ­ DISAGGREGATED FACILITIES ....................................................... 108
+   14.3 MINIMUM ACCESSIBILITY FEATURES............................................................ 108
+   14.4 FLUSH TOILETS ........................................................................................... 109
+   14.5 VENTILATED IMPROVED PIT(VIP) LATRINES. .................................................. 109
+   14.6 FETCHING & HAND WASHING POINT ........................................................... 110
+15.0 SPECIFICATION SUMMARY..................................................................... 111
+   15.1 SOURCE OF WATER..................................................................................... 111
+   15.2 WATER STORAGE ........................................................................................ 111
+   15.3 OVERHEAD TANK SUPPORT ......................................................................... 111
+   15.4 SAFEGUARDS ............................................................................................. 112
+   15.5 TOILET ........................................................................................................ 112
+   15.6 FETCHING & HAND WASHING POINT ........................................................... 112
+16.0 CONCLUSION ........................................................................................ 113
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 9 of 114
+Construction, Renovation and WASH Manual
+
+1.0 INTRODUCTION
+
+The construction manual contains the technical specifications for the work to be done at di erent
+stages of the project. It is a supporting document that the SBMC and Contractor shall rely on to
+carry out the construction activities under the project. The construction manual is to be read
+and used in conjunction with the approved working drawings.
+
+The designs have been made for classroom blocks, multipurpose hall, Admin building,
+Laboratory/ICT Room, WASH facilities and perimeter fence etc. They are to be built with sand
+Crete blocks, Compressed Stabilized Earth Bricks, Burnt Clay Bricks etc.
+
+The Construction manual and the technical specifications contained in it have been made in
+such a way that it can be understood by both technical and non-technical people engaged in the
+construction activities. The objective of the Construction Manual is to ensure that the buildings
+are constructed as specified in the drawings and to the quality required.
+
+The construction manual has been laid out to follow the construction process from site
+investigation and takeover; use of Materials tools, ironmongery, masonry and concrete works,
+carpentry, roofing to finishing works.
+
+1.1 RESPONSIBILITIES
+
+The Department of Physical Planning of the participating SUBEBs and LGEAs shall be largely
+responsible for the supervision of the projects. The staff involved shall have the technical
+knowledge to guide the contractors towards realizing the objectives of the projects.
+
+The National UBEC Physical Planning Department shall be responsible for the Approval of all the
+SIPs, Drawings, Specifications and BOQs
+
+Due to the close relationship between design and construction, the construction of the schools
+should rely heavily on the working drawings and documents. These include detailed architecture,
+structural, M&E drawings and bill of quantities. The drawings must be followed strictly. However,
+where any deviation arises, approval must be obtained from UBEC Physical Planning Unit.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 10 of 114
+Construction, Renovation and WASH Manual
+
+1.2 What is SBMC-SIP?
+
+The School-Based Management Committee (SBMC) is a community­school governance structure
+established to strengthen partnership, accountability, and local ownership of school improvement.
+As explained in the SBMC­SIP Implementation Manual, global experience shows that when school
+communities are actively involved in planning and managing physical improvements, schools
+achieve better outcomes. The SBMC serves as a bridge between the school and the community,
+ensuring that construction and renovation projects are not seen as external impositions, but as
+community-owned assets.
+
+In the context of this manual covering construction, renovation, and rehabilitation, the SBMC is vital
+because physical interventions require:
+
+     Agreed Priorities: Deciding which classrooms or blocks require the most urgent structural
+         attention.
+
+     Oversight and Quality Assurance: Providing local monitoring to ensure that contractors or
+         voluntary labor meet the technical specifications outlined in this manual.
+
+     Protection of Assets: Mobilizing the community to prevent vandalism and theft of
+         construction materials and finished buildings.
+
+     Maintenance Planning: Establishing a routine schedule to ensure that new roofs, floors, and
+         walls do not fall back into disrepair.
+
+1.3 School Improvement Programme (SIP)
+
+The School Improvement Programme (SIP) is a key pillar for improving education quality by identifying
+a school's academic and priority goals. Within this framework, the SBMC­SIP approach supports the
+execution of community-initiated priority projects. This manual provides the technical roadmap for
+the infrastructure component of the SIP, specifically:
+
+     Construction Works: Building additional classrooms, libraries, and perimeter fencing to
+         expand access.
+
+     Renovation/Rehabilitation: Re-roofing, flooring, and finishing dilapidated or abandoned
+         structures to restore a conducive learning environment.
+
+By situating these physical works within the SIP process, this manual ensures that every brick laid
+and every roof repaired contributes to a long-term, community-led vision for school development.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 11 of 114
+Construction, Renovation and WASH Manual
+
+2.0 PRE-CONSTRUCTION ACTIVITIES
+
+2.1 SITE INVESTIGATION AND SURVEY
+The identified sites for the schools shall have a Condition Survey done for Topographic(to
+determine the accurate natural and man-made features, elevations, and contours of the site)
+and Geotechnical (to determine the physical and mechanical properties of the soil and rock
+beneath the surface) Investigations to confirm or identify stability and potential problems. The
+results from these shall be used by the physical planning departments of the participatory states
+to adapt the prototype designs to the specific site conditions of the project sites with reference
+to the foundation designs. The results shall also help to indicate the location of the proposed
+buildings on the site.
+
+2.2 SITE PREPARATION
+Prior to construction, the site shall be prepared to include the following:
+Temporary Fencing or Barriers to be erected around the building site from the existing school to
+enable them to function without hindrance, for safety concerns.
+Identifying areas to be used for temporary accommodation like the site o ice, storage shed in
+addition to areas for waste storage and disposal.
+Identifying and preparing areas for the storage of materials like cement, aggregates and other
+construction materials.
+
+2.3 STORAGE OF MATERIALS
+Materials for the Construction shall be stored in Safe Place
+
+2.4 SITE SECURITY
+The primary objectives of site security shall be:
+Security against theft.
+Security from opportunistic vandals.
+Each site has its own unique requirement for security. Perimeter fencing, internal site
+protection, day and night security may all be necessary.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 12 of 114
+Part I. Construction Manual
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 13 of 114
+Part I. Construction Manual
+
+3.0 CONSTRUCTION MATERIALS
+The major materials to be used include Water, Cement, Soft and Hard aggregates, Sand Crete
+blocks, Compressed Stabilized Earth Bricks, Burnt Clay Bricks, Reinforcement Bars and Wire
+mesh.
+Others include Timber which shall be used for Formwork and Roofing, Aluminum Roofing Sheets
+and Steel for Windows and Doors.
+The main material for the finishes shall be Gloss and Emulsion Paint on plastered walls for Sand
+Crete blocks; Lacquer for burnt clay bricks and Stabilized Earth Blocks. Tyrolean and Textured
+Paints should also be used.
+
+3.1 WATER
+The quality of water used in construction has a direct impact on the strength of important
+elements in the works.
+Water used in construction should have the following properties:
+It should be potable [fit for human consumption]
+It should be clean and free from impurities.
+It should be transparent, colorless and odorless.
+There should be no vegetable growth or organic materials.
+It should not appear oily nor contain salt.
+It should not smell bad nor have a bitter taste.
+
+3.2 CEMENT
+Cement shall be Ordinary Portland Cement (OPC) or Pozzolana Cement.
+Cement shall be delivered to site in sound and properly sealed bags of 50kg weight; legibly
+marked with the manufacturer's name and registered trademark. They shall be well protected
+during transit and in storage. The cement bags shall be stored in dry, leak and moisture proof
+storage areas. Cement in damaged or broken bags shall not be used in the construction works.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 14 of 114
+Part I. Construction Manual
+
+Figure 1: Sample of Sealed 50kg OPC Cement Bag  Figure 2: Sample of Sealed 50kg Pozzolana Cement
+Bag
+
+3.3 BLOCKS
+
+3.3.1 SANDCRETE BLOCKS
+Hollow sand Crete blocks are precast masonry units made from a mixture of cement, sand,
+and water, molded with hollow cores to reduce weight and improve insulation. They must meet
+dimensional, strength, and durability standards set by building codes such as BS 6073 (1981)
+and Nigerian Industrial Standards (NIS 87:2000)
+Standard sizes (NIS 87:2000):
+
+      450 mm × 225 mm × 225 mm (9-inch block)
+      450 mm × 225 mm × 150 mm (6-inch block)
+      450 mm × 225 mm × 100 mm (4-inch block)
+
+Blocks shall be laid in stretcher bond with mortar joints binding them together
+
+      Figure 3: Sample of Vibrated Hollow Sand Crete Block 450mm × 225mm x 225mm (9-inch block)
+
+3.3.2 COMPRESSED STABILIZED EARTH BLOCKS (CSEB)
+Compressed Stabilized Earth Blocks (CSEBs) under specification 3.3.2 are soil-based masonry
+units stabilized with cement or lime, mechanically compressed, and cured to achieve strength
+and durability. Shall be Solid Rectangular Blocks. Blocks come in 290 mm × 140 mm × 90 mm (varies
+by press type); blocks shall be laid stretcher bond with mortar joints binding them together.
+
+            Figure 4: Sample of COMPRESSED STABILIZED EARTH BLOCKS (CSEB)
+
+UBEC ­ Construction, Renovation & Wash Manual                              Page 15 of 114
+Part I. Construction Manual
+
+3.3.3 INTERLOCKING STABILIZED SOIL BLOCKS (ISSB)
+Interlocking Stabilized Soil Blocks (ISSBs) are defined as compressed soil blocks stabilized with
+cement or lime, designed with grooves and projections that allow them to interlock without thick
+mortar joints. Blocks come in 140mm x 290mm x 95mm, as Solid Rectangular Blocks with
+interlocking features; blocks shall be laid by dry stacking method.
+
+Figure 5: Sample Interlocking Stabilized Soil Blocks (CSEB) 140mm x 290mm x 95mm
+
+3.3.4 CLAY BRICKS
+Clay bricks are made from Natural clay or shale, sometimes with additives like sand or fly ash,
+Molded or extruded, dried, and fired in kilns at 900­1,100°C. Clay bricks can be solid or hollow core.
+Hollow core clay bricks of 310mm x 175mm x 145mm shall be used in the Construction and laid in
+stretcher bond with mortar joints binding them together.
+
+Figure 6: Sample of Hollow Burnt Clay Bricks 310mm x 175mm x 145mm
+
+3.3.5 REINFORCED CONCRETE
+Reinforced Concrete is a composite material and formed using cement, aggregates, water and
+Steel. A common ratio of 1:2:4 and 1:3:6 shall be used for Construction.
+1:2:4 mix ratio shall be used for Foundation, Columns, Lintels, Beams and Suspended Slabs
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 16 of 114
+Part I. Construction Manual
+
+1:3:6 Mix ratio for Blinding and oversite concrete.
+Concrete shall be Reinforced using Steel Rods, Wires, Mesh or Cables to form a single structural
+element
+
+Figure 7: Sample of Reinforced Concrete
+
+3.3.6 AGGREGATE
+Aggregates are inert granular materials such as sand, gravel or crushed stone that along with water
+and cement are essential ingredients in concrete. They are used in construction as a means of
+stabilizing and reinforcement.
+Shape and Size of Aggregates: Aggregate shall be Irregular in shape.
+3/4" (19mm) size shall be used for Reinforced Concrete in Columns, Beams and Suspended
+Floors
+1 1/2" (37.5mm) shall be used for Foundation and Oversite Concrete
+
+Figure 8: Sample of Aggregate Types & Sizes    Page 17 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+Part I. Construction Manual
+
+3.3.7 REINFORCEMENT
+Reinforcing Materials shall be Deformed High Tensile steel, commonly Used sizes are Y10, Y12,
+Y16, Y20, Y25
+
+Figure 9: Sample of Reinforcement Bar Types & Sizes
+
+                                                  Figure 10: Sample of A142 BRC Mesh  Page 18 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+Part I. Construction Manual
+
+4.0 CONSTRUCTION ACTIVITIES
+The Construction Activities will focus on the Setting Out, Substructure, Super Structure and
+Finishing Works
+
+SETTING OUT
+The setting out shall be done using the building plans and necessary material like pegs, nails, line,
+tape etc. The first task to set is to establish a baseline which serves as a reference from which all
+the corners of the building are located on the ground. The position of the baseline should be
+clearly marked out on-site so that it can be reestablished when required. A long, sturdy tape
+should be used for on-site measurements [30m would be suitable].
+After the baseline has been set, marked and checked, the main lines of the building can be set
+out. Each corner of the building shall be marked with a nail on the horizontal timber The setting out
+shall be carried out by a Site Engineer.
+
+Figure 11: Sample of Building Setting Out
+
+All Centre lines and wall lines shall be marked with nails and clearly labelled. The setting out
+lines shall be checked for right angles and correct lengths to avoid errors. This can be done by
+using 3-4-5 method which is an application of the Pythagoras theorem.
+
+ Figure 12: Sample of Setting out. Corner plumb check (Pythagoras Theorem  Page 19 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+Part I. Construction Manual
+
+After the setting out of the building lines has been completed and checked, the contractor shall
+ensure that the positions are transferred to the ground; using a spirit level to ensure that it is
+plumb. This layout of trenches establishes the excavation size, shape, direction as well as the
+width and position of walls. This should be double checked for accuracy before excavation for
+foundation trenches and column bases can begin. For excavation, the sides of the trenches
+must be plumb and must be consistently checked.
+
+At the completion of establishing the wall/column positions, dry sand or similar material can be
+used to mark them out on the ground using a spirit level to transfer the positions from the line to
+the ground. As an alternative, a pickaxe or spade can be used to mark them out on the ground.
+
+Precautions should be taken when setting out; correct measurement of distances, use of level
+either dumpy level or mason's level, use of correct plumb and checking distances from at least
+two independent measurements shall be employed.
+
+4.1 SUB STRUCTURE
+
+4.1.1 EXCAVATION
+
+After the foundation lines have been marked out, the next step of construction is the excavation
+which shall generally be done by hand using picks, shovels and wheelbarrows. The excavation
+shall be done to ensure a hard and stable surface for the foundation to avoid future structural
+settlement.
+
+Excavated soil required for backfill, or to be used in other parts of the project, shall be stockpiled
+on the site for subsequent use. Excess material that is not needed shall be evacuated from the
+site; it shall be taken o site immediately to create room for other activities. Excavation must be
+done to the depth indicated in the drawings. It is very important that the foundation of the
+building shall rest on a stable surface of good bearing capacity. This must have been established
+by the site investigation that was carried out prior to construction works.
+
+                                              Figure 13: Sample of Excavation  Page 20 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+Part I. Construction Manual
+
+4.1.2 FOUNDATION
+The Foundation Type to be used will be determined by a Site-Specific Geotechnical
+Investigation, this will determine the Soil Bearing Capacity, Water Table Levels and Soil Type.
+Types of foundation to be adopted will include Strip, Isolated, Stepped, Combined Footing or
+Ground Beams depending on the results of the Geotechnical Investigation of the Subsoil.
+
+Figure 14: Sample of Strip footing
+Figure 15: Sample of Isolated or Pad footing
+
+Figure 16: Sample of Stepped footing
+
+Figure 17: Sample of Combined footing          Page 21 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+Part I. Construction Manual
+
+The foundation's dimensions shall be checked for square. The 3-4-5 method shall be used to
+confirm the square corners.
+For foundations with larger surface areas, multiples of the 3-4-5 method shall be used. From
+each square foundation corner, 3 meters shall be measured along the edge and a mark made.
+From the same starting point, 4 meters shall be measured along the other axis, and the
+foundation edge shall be marked. The diagonal distance between the two points shall be
+measured until it is 5 meters.
+Any length other than 5 metres, means that the foundation is out of square and the alignment of
+the blocks shall be adjusted in reference to the foundation line.
+Depending on the situation, other multiples of the 3-4-5 method may be used. To adjust, a single
+reference point that is easily seen and accessed should be chosen and all measurements
+adjusted from there.
+
+4.1.3 FOUNDATION WALLS
+Block walls in foundations shall be laid in bonds with mortar joints binding the component units.
+The Walls are to be filled Solid with concrete. To ensure that the walls are laid in a straight line,
+the use of a string as guide is encouraged.
+
+Figure 18: Sample of Block Walls in Foundation
+
+4.1.4 MORTAR
+
+Mortar which is formed by the addition of water to a mixture of cement and sand [1 part cement
+to 3 parts sand] shall be used in laying the blockwork. The mortar to be used in the construction
+work should be able to adhere to the blocks easily; it should be relatively dense but not dry. The
+mortar should be water resistant, easily workable in site conditions. The water content in mortar
+should be adequate to produce plastic, spreadable paste.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 22 of 114
+Part I. Construction Manual
+
+The masonry mortar should be properly cured to slow down the drying of the mortar resulting in
+a stronger bond and more durable structure. The thickness of the mortar bed shall not be less
+than 10mm and shall not be less than 25% of the total volume of the brick work.
+
+Figure 19: Sample of Mortar for Brick or Block Laying
+
+4.1.5 FOUNDATION REINFORCEMENT
+
+The typical reinforcement details shall indicate the number of reinforcements, type, diameter and length of
+reinforcement (top and bottom reinforcements for Slabs & Vertical Reinforcements for Columns).
+The Column Reinforcement shall also include the Stirrups which will act to hold the Main Reinforcements
+together.
+The Foundation Reinforcement shall consist of the Column Base and Column Starters Reinforcement. The
+Column Base Reinforcement shall consist of Y12 Bars placed at 150mm c/c spacing both ways. The Base
+Reinforcement will be placed in such a manner that there will form a basket.
+The base reinforcement must be placed on Concrete biscuits to give the reinforcement adequate concrete
+cover.
+
+Figure 20: Sample of Foundation Reinforcement showing Base & Columns Starters Reinforcement
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 23 of 114
+Part I. Construction Manual
+
+4.1.6 BACKFILLING AND COMPACTION
+
+When the foundation walls have reached the specified floor level height, the backfilling shall be
+done. Laterite and sharp sand may be used to fill the internal part of the foundation.
+
+Hardcore like broken stone, bricks or concrete which are hard and do not readily absorb water
+or deteriorate shall form part of the infill materials. The hardcore shall be spread until it is roughly
+level and rammed until it forms a compact bed for the oversite concrete. The hardcore bed shall
+be 300mm thick.
+
+The backfill material shall be laid in layers of about 200mm and compacted before laying the
+succeeding layer. The surface voids in each layer shall be filled with sand or stone dust. The top
+surface of the hardcore shall be sealed with a thin layer of sharp sand blinding.
+
+Figure 21: Sample of Backfilling & Compaction
+
+4.1.7 GROUND FLOOR SLAB
+
+The Concrete thickness shall be 150mm thick; using 1:3:6 Mix ratio. The floor slab for a
+classroom or block of building shall be cast in one go and consistently to ensure a cohesive
+single bonded unit and checked for level while casting and floating.
+
+The slab thickness, sand blinding, wire mesh as well as the damp proof membrane [DPM] shall
+be allowed for when laying the hardcore so that the space left shall accommodate all of them.
+The Damp Proof Membrane shall be made of 1200 gauge(300microns) thick black low density
+polyethylene sheet.
+
+Care must be taken to ensure that there are no holes or tears in the sheets that could allow the
+entrance of water and that there is su icient overlap of sheets of at least 150mm to maintain
+the structural integrity. The damp proof membrane [DPM] shall be continuous with the damp
+proof course [DPC] placed on the foundation walls and bent at the walls vertically to cover the
+slab area
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 24 of 114
+Part I. Construction Manual
+
+Figure 22: Sample of Ground Floor Slab Preparation and Casting
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 25 of 114
+Part I. Construction Manual
+
+5.0 SUPERSTRUCTURE
+The walls shall be erected following the curing of the slab. The walls shall be constructed with
+bricks or blocks laid with mortar [1 part cement: 3 parts waters]. It is important that all the walls
+are plumbed. This should be consistently checked throughout the construction work. This can
+be achieved with the use of steel profiles or spirit levels.
+Lintels and columns shall be of reinforced concrete and shall also be plumbed throughout.
+
+Figure 23: Sample of Superstructure Brick wall & Block wall
+
+5.1 FORMWORK
+
+The formwork to be used in this project shall be made from treated timber. It is necessary that
+the outline of any formwork is plumb and square. The formwork for the ground floor slab is quite
+simple and is made up of 1 x 12 x 12 timber planks fixed at the edges of the slab and braced with
+props.
+
+For elevated beams and slabs, the formwork is made from 1 x 12 x 12 timber planks and
+dimensioned lumber members as vertical supports or props to hold the wood in place during
+the pouring and curing process. For the lintels and the corridor columns, the timber formwork
+shall have smooth and even surfaces on all faces which encounter concrete.
+
+It is possible to reuse the timber formwork if handled with care as the sizes of the structural
+members in this project are mostly the same. They are also repeated as much as possible and
+this results in the economic use of materials and fast construction. However, the formwork
+should not be removed until the concrete has attained a strength of at least twice the strength
+needed to support the existing load during construction.
+
+To ensure the success of formwork in construction works, it is important that the following
+should be done:
+
+The structural integrity of the formwork shall be verified before the concrete is cast.
+
+The formwork shall not be overloaded during the casting of concrete
+
+It is important that the concrete achieves minimum strength before the formwork is
+removed/stripped.
+
+UBEC ­ Construction, Renovation & Wash Manual                Page 26 of 114
+Part I. Construction Manual
+
+Before use, the formwork components shall be inspected and defective components removed
+or repaired.
+The formwork shall be inspected to confirm that it has been properly set up for the work required.
+
+5.2 STRIPPING OF FORMWORK
+The vertical faces of formwork for columns and beams [which bear no loads but are used only
+to retain the concrete] can be striped within 16 to 24 hours of casting. The formwork shall be
+stripped after 7 days. After stripping, the concrete shall continue to be cured.
+The stripping of the formwork prematurely may be dangerous and may also a ect the quality of
+the concrete finish. The stripping time depends on the temperature, strength of the concrete
+and the type of concrete component.
+
+Figure 24: Sample of Lintel Beams & Column Formwork
+
+5.3 REINFORCEMENT
+
+The typical reinforcement details shall indicate the number of reinforcements, type, diameter
+and length of reinforcement (top and bottom reinforcements for Beams & Vertical
+Reinforcements for Columns). The Reinforcement shall also include the Stirrups, which will act
+to hold the Main Reinforcements together.
+
+The reinforcement details shall be as contained in the structural drawings; the drawings shall
+include a bar bending schedule which shall specify bar length, number, position and shape of
+bar. It is important that the drawings are adhered to.
+
+UBEC ­ Construction, Renovation & Wash Manual        Page 27 of 114
+Part I. Construction Manual
+
+Table: 1 Steel Reinforcement for Use in Classroom Block Building:
+
+S/NBR  STRUCTURAL ELEMENT TYPE OF BARS USED    STIRRUPS
+3                                              Y10@300mm c/c Spacing
+4      Column (230mm x 230mm) 4Y16             Y10@300mm c/c Spacing
+5                                              Y10@300mm c/c Spacing
+       Lintels(230mm x 230mm) 4Y12(2T, 2B)
+
+       Roof Beams(230mm x 2Y12T
+
+       300mm)                2Y16B
+
+5.4 COLUMN REINFORCEMENT
+
+Column Reinforcements shall be 4 Numbers of 16mm Diameter Bars (4Y16) placed
+longitudinally and held together with Stirrups of Y10@300 c/c spacing. The Reinforcements shall
+be placed with concrete biscuits of 20mm thickness to give su icient concrete cover to the
+steel.
+
+                             Figure 25: Sample of Column Reinforcement
+
+UBEC ­ Construction, Renovation & Wash Manual                           Page 28 of 114
+Part I. Construction Manual
+
+5.5 BEAM REINFORCEMENT
+Lintel Beams shall have 4 Numbers of 12mm Diameter (4Y12 Bars, 2 Top, 2 Bottom)
+Reinforcements placed horizontally and held together with Stirrups of Y10@300mm c/c
+spacing.
+Roof Beams shall have 4 Numbers (2Y12 Bars Top, 2Y16 Bars Bottom) Reinforcements placed
+horizontally and held together with Stirrups of Y10@300mm c/c spacing.
+The Reinforcements shall be placed with concrete biscuits of 20mm thickness to give su icient
+concrete cover to the steel.
+
+Figure 26: Sample of Beam Reinforcement
+
+5.6 CONCRETE WORK
+Reinforced Concrete shall be 1:2:4 mix for Columns, Lintels and Roof Beams.
+
+UBEC ­ Construction, Renovation & Wash Manual                                Page 29 of 114
+Part I. Construction Manual
+
+Concrete Casting shall be done in one go and consistently to ensure a cohesive single bonded
+unit and checked for level while casting and floating.
+
+Concreting work must not be done during Rainfall.
+
+Prior to Casting, the following should be carried out:
+
+     Check Reinforcement to be properly fixed and braced in position
+     Formworks to be securely fastened and adequately braced to withstand the anticipated
+
+         load
+     Concrete Materials (Water, Sand, Aggregate and Cement) should be on site.
+     Concrete Mixing Machine to be readily available on site
+     Poker Vibrator to be available
+     Adequate Manpower to be available
+     Site Supervisor to check to ensure Compliance
+     While casting the following should be adhered to: Mixing of Materials to be properly done
+
+         in the right ratio
+     Concrete to be placed evenly across the area
+     Concrete to be properly vibrated to eliminate air pockets
+
+5.7 ROOFING
+
+The roof trusses shall be placed on the roof beam after it has fully cured to guard against
+a ecting the structural integrity of the beam. Prior to the construction and placement of the
+trusses, it is convenient to mark out their locations as set out in the drawings. They shall be
+properly anchored in place ready to receive the roofing sheets.
+
+Hardwood Timber Roof trusses shall comprise 50mm x 75mm, 50mm x 100mm, 50mm x 150,
+25mm x 300mm shall be used in this project.
+
+The trusses shall be adequately braced to stabilize the building and to ensure a satisfactory roof
+line for completion, the supporting structure must be plumbed to subsequently achieve a level
+ceiling line. Care must be taken to ensure that the supporting structures like the walls, beams
+etc. are adequately designed and stable.
+
+The roof trusses shall be treated with specified wood treatment against termites, stored and
+protected from the weather before and after installation. The installation of the roof covering
+shall be done within a week or two of erecting the roof trusses. For all the roof components to
+work, they must be square, parallel, level and fixed down properly.
+
+The roof covering for this project shall be 0.55mm oven-baked colored long span corrugated
+aluminium sheets. They shall be installed in accordance with the design and established
+building practices.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 30 of 114
+Part I. Construction Manual
+
+Below are specifications for the Roof Trusses:
+50mm x 75mm ­ Purlins
+50mm x 100mm Struts
+50mm x 150mm - Kingpost
+50mm x 150mm - Rafters
+50mm x 150mm - Tie Beams
+25mm x 300mm - Fascia Boards
+
+                                                                        Figure 27: Sample Roof Truss
+
+Corrugated long span aluminum roofing sheets [0.55mm thick] of good quality shall be used
+over the roof trusses and purlins. The roofing sheets shall be laid in runs starting from the eaves
+and in the corners away from the direction of prevailing winds. When laying the first few sheets,
+they should not be fully fixed until they have been correctly aligned. The row of sheets is to
+extend over the bottom purlins and eaves so that rainwater drains into the gutter or beyond the
+wall.
+
+The roofing sheets shall be overlapped by the next sheet in the run by a minimum of one profile
+or corrugation. For best results, Silicon and stitching screws shall be used when overlapping
+sheets to ensure a robust weather resistant joint on side laps.
+
+For the end laps, a minimum sheet over sheet overlap of 250mm is to be allowed for where the
+sheets lap and this lap must be supported underneath by a purlin. Ridge caps shall be laid over
+the sheets at the ridge and fixed according to the technical drawings. The aluminum sheets shall
+be fastened to the roof trusses with screws and washers with a bonded neoprene pad that
+compresses to seal with the roof sheet. Fascia & Ext Ceiling shall be Aluminium Cladding while
+Verenda Ceiling shall be Aluminium Cladding
+
+UBEC ­ Construction, Renovation & Wash Manual   Page 31 of 114
+Part I. Construction Manual
+
+                             Figure 28: Sample Roof Covering
+
+UBEC ­ Construction, Renovation & Wash Manual                 Page 32 of 114
+Part I. Construction Manual
+
+6.0 FINISHES
+
+6.1 PLASTERING
+
+The plaster surface shall be relatively smooth and finished true and plumb to the degree of
+smoothness specified. The sand for the plaster shall be tested for impurities, silt content and
+particle size. Only a small proportion of clay can be tolerated in sand used in plaster. The soil
+content shall be less than 8% and an accurate mix ratio must be used. A suitable measuring
+container for the plaster ingredients should be used.
+
+To ensure the quality of the plaster mix, using a mixer machine is preferable if not essential. However,
+where this is not available, hand mixing can be done on a clean, non-absorbent area; that is not
+directly on the ground nor contaminated with soil. Care must be taken to mix the dry cement and
+sand not less than three times to get all the materials finely blended to a uniform color.
+
+Water shall be added slowly until the mix reaches a consistency suitable for plaster. Note that as
+little water as possible should be used to bring the plaster to a consistency that makes it possible to
+be applied easily. Excess water may cause trouble due to segregation, di iculty to apply, loss of
+plaster droppings and excessive shrinkage. The water used for plaster should be potable [fit for
+drinking].
+
+The plaster is to be used shortly after mixing; within 30 - 40 minutes of adding water. Before any
+plastering starts, all surfaces shall be prepared to assure uniform thickness of plaster. Dust, loose
+materials and mortar that can interfere with bonding should be removed. The surface to be plastered
+shall also be cleaned and kept wet before plastering commences. Plaster thickness should be
+between 12mm and 15mm and as uniform as possible. Plasters should be cured for several days;
+two to three times daily until the plaster is hardened.
+
+6.2 JOINING BRICKWORK.
+
+In exposed masonry, joints provide spots and areas from where rainwater and dampness can get into
+the building. Jointing is the finishing of mortar joints in brick masonry construction. It is a process of
+removing semi set mortar to a depth of 10mm to 20mm and filing it with fresh mortar in desired shape.
+If needed, the fresh mortar could contain a colouring pigment to enhance the brickwork.
+
+In this project, the brickwork shall be finished with recessed jointing. This shall be done at the same
+time as the brickwork. The joints are filled with mortar and then pushed back to 5mm or more using
+the appropriate tools. The excess mortar is removed and the surface is finished and cured for about
+ten days
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 33 of 114
+Part I. Construction Manual
+
+                                   Figure 29: Sample of Wall Plastering
+
+6.3 PAINTING
+
+Prior to painting, the wall surface shall be prepared to remove dirt, oil, dust, loose cement, mortar
+etc. to ensure good adhesion. Any cracks and holes found on the walls shall be treated and filled
+properly. For fresh painting, the surfaces to be painted shall be primed. Two coats of paint shall be
+applied after the primer. For metal surfaces, cleaning and preparation of the metal is important.
+Prime coats of red oxide shall first be applied to impede the corrosion of ferrous metals as well as
+provide the necessary adhesion required. The first and second coats of gloss paint of approved
+colours shall be applied.
+
+Painting Scheme shall be:
+Fascia - Gloss
+Walls Internal - Emulsion
+Walls External - Emulsion or Tyrolean
+Skirting (1500) ­ Gloss
+
+Figure 30: Sample of Painting on Brick Wall  Figure 31: Sample of Painting on plastered
+Wall
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 34 of 114
+Part I. Construction Manual
+
+Figure 32: Sample of Tyrolean on Wall          Figure 33: Sample of plastered
+Wall
+
+Figure 34: Sample of Internal Wall Painting
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 35 of 114
+Part I. Construction Manual
+
+7.0 QUALITY ASSURANCES
+
+7.1 CEMENT
+Cement is a key ingredient in making concrete. It is often necessary to perform cement quality tests
+on-site to ensure that the quality of cement delivered to the site is adequate.These tests should
+include the following:
+
+Date of Manufacturing - The strength of cement reduces with age, therefore, the date of
+manufacturing of cement on the bags should be checked.
+
+Cement Color - The color of cement should be uniform. It should be typical cement
+colour which is grey colour with a light greenish shade.
+
+Hard Lumps formed - Cement should be free from hard lumps which are usually formed
+by the absorption of moisture from the atmosphere. Where lumps are found and they do
+not become powdery when rubbed between the fingers, the cement is already set and
+should be discarded.
+
+Temperature inside cement Bag - If the hand is plunged into a bag of cement, it should
+be cool inside the cement bag.
+
+Smoothness Test- Touching and rubbing cement between the fingers should give a smooth
+feeling. Roughness indicates adulteration with sand.
+
+Water Sinking Test- If a small quantity of cement is thrown into the water, it should float
+some time before finally sinking.
+
+7.2 TESTING COARSE AGGREGATE
+Aggregates should be tested to ascertain their quality and suitability for particular types of
+concrete work. Before conducting any test on aggregates, the first thing to do is sampling.
+Sampling can also be used to determine the quality of aggregates to be used. It is the most
+important step in ensuring quality. A sample should truly represent the total material being
+checked. There are several methods of sampling, and they include:
+
+7.2.1 STOCKPILES
+Obtaining unbiased samples from stockpiles is often di icult due to segregation of materials
+when they have been stockpiled. Suitable power equipment like a bucket loader will make the
+process easier and give a better representative sample as the loader can get samples from
+di erent layers and angles of the stockpile. These can be combined and mixed in a smaller pile to
+form the sample.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 36 of 114
+Part I. Construction Manual
+
+However, if the sampling has to be done manually, materials should be taken at least in three
+increments: from the top, middle and bottom of the pile. A board should be inserted vertically
+into the pile just above the sampling point to help in preventing more material from falling into
+the sampling area. The outer layer should be removed and the increments from the material left
+collected with a shovel. Before testing, the field sample shall be reduced to appropriate testing
+sizes either by splitting or quartering.
+
+7.2.2 SAMPLING DIRECTLY FROM A TRUCK
+Sampling from a truck is not recommended because factors like segregation or particle
+breakdown during transportation, loading and unloading may influence the gradation of the
+material. Therefore, such sampling should be done at the point of delivery.
+To do this, three portions of material should be taken from locations across the truck dump: one
+portion from the front corner, one portion from the opposite corner and another portion from
+the top of the dumped load. Take additional material from the Centre of the dumped load if
+needed to meet the minimum sample size. The portions should be mixed to form a
+representative sample from the truck.
+For fine aggregates, a shovel or sampling tube should be used to obtain approximately equal
+portions from six or more locations. The portions should be combined to form a composite
+sample.
+
+7.2.3 TESTING PROCEDURE
+For testing, the following tools are required:
+·Sieve or fly screen
+·Balance
+·Sample Splitter
+·Oven or metallic dish
+·Washing container
+·Spoon
+Table 2: Test specimen shall be a representative sample based on the following Procedure
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 37 of 114
+Part I. Construction Manual
+
+Record weights to the nearest 0.1g.
+
+Dry the sample at a temperature of230 + 90 F (110 + 50 C) for about40mins. Weigh and record as
+original weight of sample.
+
+Place the sample into the washing container and add su icient water to cover.
+
+Stir and agitate the sample with the spoon until all the fines are in suspension.
+
+Slowly decant the water into the stacked No. 200 sieve or fly screen, being careful not to lose the
+coarser material of the sample.
+
+Add a second change of water to the sample in the washing container and stir, agitate and
+decant. Repeat this process until the wash water is clear.
+
+Wash any remaining material on the sieve back into the sample. Do not decant any water from the
+container except through a No. 200 sieve or screen to avoid loss of material. Any remaining
+water should be evaporated by the drying procedure.
+
+Dry the sample at a temperature of 230 + 90F (110 + 50 C). Weigh and record as weight after
+wash.
+
+7.2.4 DETERMINATION OF FLAKINESS INDEX
+
+Flakiness and the shape of coarse aggregate have an appreciable e ect on the work ability of
+concrete.
+
+Flakiness is considered a source of weakness. Flaky aggregate is defined as an aggregate
+particle with a least thickness less than 0.6 of the mean of the smallest sieve size through which
+the particle passes and the largest sieve size on which the particle is retained. The flaky index of
+a material is the percentage by weight o laky particles ina sample.
+
+The purpose of the test for flakiness is to determine the flakiness index of a sample of coarse
+aggregate.
+
+The test is not applicable to sizes smaller than 6.3mm. The test is carried out using a specified
+metal thickness gauge. A given sample of aggregates; each fraction at least a minimum of 200
+pieces can be used. The pieces of aggregate are made to pass through the gauge and weighed.
+The total amount should be weighed to an accuracy of 0.1% of the weight of the samples taken.
+The flakiness index is calculated by expressing the weight of flaky particles as a percentage of
+the total weight of the sample. The maximum allowable limit of the flaky particles in the mix is 30%.
+If it is more than this, then the mix is not suitable for construction purposes.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 38 of 114
+Part I. Construction Manual
+
+7.3 TESTING FINE AGGREGATE
+
+Fine aggregates are principally sand. They are small size filler materials in construction. They
+are particles that pass through 4.75mm sieve and retain on 0.075mm sieve. They fill the voids
+between the coarse aggregate in concrete and bulk the concrete, helping to increase the
+workability of concrete.
+
+Fine aggregate to be used in concrete and masonry works should be well graded, clean - free
+from lumps, organic matter etc. It should be free from clay, mica and soft flaky particles. It
+should also be strong, angular and durable, not react with cement after mixing and should not
+absorb more than 5% of water. For any concrete mix, the specific gravity a ine aggregate should
+be about 2.7.
+
+Sand can come as fine sand or coarse sand. Fine sand has 90% of its particles size between
+0.25mm and 0.06mm while coarse sand has 90% of its particles size between 2.0mm and
+0.5mm.
+
+There are simple tests that can be carried out to determine the quality of sand on site. For example,
+to test the presence of clay in the sand, the following procedure should be followed:
+
+A glass should be¾ filled with water and sand added to it.
+
+It should be vigorously shaken and the sand allowed to settle.
+
+The glass should be checked if a layer has been formed on the sand.
+
+The thickness of the layer should indicate the percentage of clay present in the sand. Good
+quality sand should have less than 8% of clay in it. A quick way to test clay is to hold some dry
+sand and drop it. If the sand sticks to your palm, then it contains clay.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 39 of 114
+Part I. Construction Manual
+
+8.0 SPECIFICATION SUMMARY
+
+8.1 FOUNDATIONS
+All foundations must be appropriately designed based on geotechnical soil investigation reports as
+per soil conditions on site.
+Strip Foundation: for bungalows e.g. classroom blocks, toilets, gate houses, fencing, generator
+houses, etc. The strip can be linear or stepped depending on the nature of the land. Not to be used
+for storey buildings.
+Pad Foundation: simple footing (either isolated or combined) for storey buildings i.e. buildings with
+suspended floors and bungalows if necessary.
+Raft or Mat Foundation: for areas with low soil bearing capacity regardless of building type, as
+recommended by the structural engineer.
+Pile Foundation: for areas with very weak soils. Deep foundations by driving piles for load transfer to
+deeper soil layers or rock due to weak soil. Not recommended for standard basic education
+infrastructure due to high-cost implications and skill requirements.
+
+Figure 35: Sample image of Foundation Types    Page 40 of 114
+UBEC ­ Construction, Renovation & Wash Manual
+Part I. Construction Manual
+
+8.2 SUPERSTRUCTURE
+
+A reinforced concrete framed superstructure comprising inter-connected structural members such
+as columns, beams, and lintels, designed to provide structural strength, stability, and e ective load
+distribution for bungalow buildings. In this system, the principal superstructure activities include the
+erection of reinforced concrete columns, construction of beams, installation of lintels and ring
+beams, and blockwork for wall enclosure and partitioning. The structural frame forms the primary
+load-bearing skeleton of the building, transferring loads from the roof structure through the beams
+and columns down to the foundation, while the blockwork functions mainly as non-load-bearing
+infill. This system improves structural integrity, durability, and resistance to structural distress.
+
+Figure 36: Sample image of Frame Structure
+
+8.3 REINFORCED CONCRETE
+
+Table 3: Standard Mix Ratios for Reinforced Concrete
+
+S/N Grade Mix    Ratio Strength Uses
+
+        (Cement:         (MPa)
+
+        Sand:
+
+        Aggregate)
+
+1  M5   1:5:10           5 MPa                        Non-structural work, leveling surfaces
+
+2  M10  1:3:6            10 MPa                       Pathways, flooring, blinding concrete
+
+3  M15  1:2:4            15 MPa                       Foundation footings, Lintels, Beams, Columns
+
+4  M20  1:1.5.3          20 MPa                       Slabs, beams, columns
+                         25 MPa                       Structural beams, slabs, Industrial Structure
+5  M25  1:1:2
+
+UBEC ­ Construction, Renovation & Wash Manual         Page 41 of 114
+Part I. Construction Manual
+
+8.4 ROOF
+Roof Type: Hip Roof (symmetrical shape) i.e. roof with four (4) sloping sides. The slope should be
+between 20-30o as determined by design considerations.
+
+                  Figure 37: Sample image of HIP Roof
+
+ROOF COVERING
+
+Table 4: Roof Covering Material
+
+New Construction                 Major Renovation Minor Renovation
+
+0.7mm thick long aluminum 0.55mm thick long Repair of existing roof covering or if
+
+sheets (corrugated, oven- span           aluminum replacement is required, then 0.55
+
+baked).                          sheet.        aluminum sheets.
+
+ROOFING SHEET COLOUR: Clear light colors are recommended for temperature control. Example:
+a white roof reflects about 80% of sunlight, whereas dark red/green roof reflects 30% of sunlight. The
+lower the reflectance, the more heat the roof absorbs. This means that a dark roof can raise indoor
+temperatures by 5­10°C more than a white roof, especially in poorly insulated buildings.
+
+Eaves: projection of 600mm ­ 1000mm against the slope, constructed with aluminum sheets. Fascia
+is to be constructed with Aluminum or Reinforced Concrete.
+
+                  Figure 37: Sample image of Roofing Sheet
+
+UBEC ­ Construction, Renovation & Wash Manual                       Page 42 of 114
+Part I. Construction Manual
+
+ROOF MEMEBERS
+Table 5: Roof Members
+
+New Construction                            Major Renovation  Minor Renovation
+                                                              Repairs of existing
+Well-seasoned & treated wood (timber) for Seasoned timber     members with good
+                                                              treatment.
+building spans less than 7m and galvanized
+
+steel trusses for spans exceeding 7m.
+
+Below are specifications for the Roof Trusses:
+    o 50mm x 75mm ­ Purlins
+    o 50mm x 100mm Struts
+    o 50mm x 150mm - Kingpost
+    o 50mm x 150mm ­ Rafters
+    o 50mm x 150mm - Tie Beams
+    o 25mm x 300mm - Fascia Boards
+
+                                                      Figure 38: Sample image of Roof members
+
+8.5 BUILDING FLOORS
+
+Table 6: Floor Specifications
+
+New Construction Renovation
+
+25mm thick Terrazzo 25mm thick Terrazzo flooring or 150mm reinforced (BRC mesh)
+
+flooring                     concrete slab with Hardcore of 300mm depth, compacted earth-fill
+
+                             to make up level foundation.
+
+8.6 BUILDING WALLS
+   I. Sandcrete Blocks: Standard sizes (NIS 87:2000):
+              o 450 mm × 225 mm × 225 mm (9-inch block)
+              o 450 mm × 225 mm × 150 mm (6-inch block)
+              o 450 mm × 225 mm × 100 mm (4-inch block)
+
+  II. Compressed Stabilized Earth Blocks (CSEB) 290 mm × 140 mm × 90 mm
+
+ III. Interlocking Stabilized Soil Blocks (ISSB) 140mm x 290mm x 95mm
+
+8.7 RENDERING/PLASTERING
+15mm thickness internally, 25mm externally in a mix ratio of 1:6.
+
+UBEC ­ Construction, Renovation & Wash Manual                            Page 43 of 114
+Part I. Construction Manual
+
+8.8 CEILINGS
+
+   I. Internal Ceiling: Hard board ceiling (Brazilian standard) or SON-approved fibre-cement
+         ceiling for termite-infested areas.
+
+  II. External Ceiling: same roofing sheet material applied for so its and corridors.
+
+8.9 DOORS AND WINDOWS
+
+Black hollow steel square pipe frame (50mm x 50mm x 3mm); 2.0mm checkered steel plate;
+180º Hinges.
+
+DOOR: Tropical steel door size 1000 - 1200mm x 2100mm high including lockset complete. The
+base of the door frame should be buried in the floor for ease of access by persons with
+disabilities.
+
+WINDOW: Tropical steel window size 1200mm x 1200mm high complete with burglar proof bars
+(vertical & horizontal). Fixed light glass should be provided above each window for additional
+natural lighting.
+
+8.10 VENTILATION
+Transversal direction is recommended.
+
+8.11 STAIRWAYS
+Table 7: Stairway Specifications
+ Design & Construction
+
+Width      Minimum clear width of 1.2 meters to allow safe two-way passage
+
+Riser      Minimum of 125mm and maximum of 175mm. 150mm. Use uniform dimensions
+           should be used throughout the flight to prevent tripping.
+
+Thread     Minimum of 275mm but 300mm is recommended with uniform dimensions as well
+           throughout the flight.
+
+Landing    Same minimum width as the stairway. This should be introduced at every 12 steps or
+           change in direction.
+
+Headroom   Minimum vertical clearance of 2.2meters above each step is recommended.
+
+Slope      Stair slope should not exceed an angle of 35 degrees.
+
+Materials
+
+Structure  The steps to access the building should be reinforced concrete with chamfered edges.
+           Sand Crete blocks are not to be used. Alternatively, steel frame with anti-slip surface
+           can be used for stairs.
+
+UBEC ­ Construction, Renovation & Wash Manual                               Page 44 of 114
+Part I. Construction Manual
+
+Finish       Non-slip tiles (unglazed), textured concrete, or rubberized coating.
+
+Edge Protection Contrasting colour strips on tread edges is recommended for better visibility.
+
+Durability   Materials must be resistant to weather and suitable for indoor or outdoor use
+             depending on location and climate.
+
+8.12 SAFETY AND ACCESSIBILITY FEATURES
+
+Table 8: Safety & Accessibility Specifications
+
+Placement & In well-tra icked, visible areas and should naturally connect to safe assembly/muster
+
+Integration  points. Avoid placement near hazardous zones and at least one stairway must serve
+             as an emergency exit route.
+
+Handrails    Install on both sides of the stairway at a height of 850mm ­ 1meter from nosing of
+             thread. The rails must be continuous and easy to grip.
+
+Guardrails   Required for stairways with open sides. Spacing of vertical balusters at no more than
+             100mm apart. Lower spacing should be considered especially for ECCDE and Primary.
+
+Signage      and Directional and caution signs should always be installed at stair entrances. Where
+Lighting             stairway is steep or narrow although not recommended, this should be indicated in
+                     addition to directional signs. Adequate lighting should be provided to illuminate all
+                     steps.
+
+Alternative  Ramps or elevators must be provided for PwDs where stairs are the primary access.
+Access       Use high-contrast colours for treads and risers to assist visually impaired users.
+             Tactile strips or indicators can be installed at the top and bottom of the stairway for
+             orientation.
+
+8.13 PAINT
+
+Table 9: Painting Specifications
+ Lower Portion Tyrolean or Gloss finish at 900mm from ground level (externally) and
+                          Gloss paint 1.5m from floor level (internally).
+
+ Upper Portion High-quality emulsion paint to ceiling level both internally and
+                          externally to be applied as two undercoats and one final coat.
+
+                          Tyrolean (externally)
+
+UBEC ­ Construction, Renovation & Wash Manual                                      Page 45 of 114
+Part I. Construction Manual
+
+8.14 SEWAGE DRAINAGE SYSTEM
+
+Table 10: Sewage Drainage system Specifications
+
+Type         Must be a closed, sanitary sewer system connected to a septic tank or
+
+             municipal sewage line.
+
+Capacity     Designed to accommodate the maximum number of students and sta .
+
+Materials    Use durable, non-corrosive PVC or HDPE pipes with proper sealing.
+
+Ventilation  Include vent pipes to prevent buildup of gases.
+
+Maintenance  Provide inspection chambers at regular intervals for easy maintenance.
+Access       Septic tanks and soakaways must be accessible to pool trucks.
+
+Environmental Must meet applicable national environmental sanitation standards.
+Compliance
+
+8.15 STORMWATER DRAINAGE SYSTEM
+
+Table 11: Stormwater Drainage system Specifications
+
+Design       Surface and subsurface drainage systems be designed specific to each site
+
+             condition to prevent flooding.
+
+Slope        Proper grading around buildings to direct water away from foundations.
+
+Channels Use concrete or reinforced open channels with covers for safety.
+
+Capacity Able to handle peak rainfall events typical of the region.
+
+Discharge Must lead to a safe outfall point, such as a soakaway or municipal storm
+                   drain.
+
+8.16 WATER SUPPLY
+
+Table 12: Water Supply Specifications
+
+Source       Borehole, public water supply, Deep Water Wells or treated rainwater
+
+             harvesting system.
+
+Storage      Overhead tanks with a minimum capacity of 3,000litres per 100 students.
+
+Distribution Piped system with taps at strategic locations (classrooms, toilets,
+                    kitchens).
+
+UBEC ­ Construction, Renovation & Wash Manual                        Page 46 of 114
+Part I. Construction Manual
+
+Quality    Water must be potable and meet WHO standards.
+Backup     Manual hand-pump or alternative source in case of system failure.
+
+8.17 TOILET FIXTURES
+
+Table 13: Toilet Fixtures Specifications
+
+Type       Flush toilets or ventilated improved pit latrines (VIP) where water is scarce.
+
+Ratio      Minimum of 1 toilet per 25 for Girls, 1:40 for Boys + 1 Urinals; separate
+           facilities for boys, girls, and sta .
+
+Accessibility At least one toilet per block must be accessible to persons with special
+                     needs
+
+Fixtures   Include handwashing basins, urinals (for boys), and water taps.
+
+Durability Use ceramic or stainless-steel fixtures for longevity.
+
+8.18 TOILET FINISHINGS
+
+Table 14: Toilet Finishing Specifications
+
+Flooring   Non-slip, water-resistant tiles or concrete with epoxy coating.
+
+Walls      Tiled or painted with washable, Mold-resistant paint up to at least 1.5
+           meters.
+
+Ventilation Natural or mechanical ventilation to reduce odour and moisture.
+
+Lighting   Adequate natural light or electric lighting for visibility.
+
+Doors      Lockable doors with privacy latches; durable and easy to clean.
+
+8.19 ELECTRICAL SYSTEM
+
+Table 15: Electrical System Specifications
+
+Wiring:    Concealed copper wiring with proper insulation and circuit breakers.
+
+Safety:    Earth leakage circuit breakers (ELCB) and surge protectors.
+
+Fixtures:  Energy-e icient LED lighting in classrooms, o ices, and toilets.
+
+UBEC ­ Construction, Renovation & Wash Manual                           Page 47 of 114
+Part I. Construction Manual
+
+ Switches & Child-safe, mounted at appropriate heights.
+ Sockets:
+
+8.20 POWER SUPPLY SYSTEMS
+
+Table 16: Electrical System Specifications
+ Primary Source Connection to national grid where available.
+
+Backup        Solar power system or generator with capacity to power essential
+              services.
+
+Distribution  Separate circuits for lighting, fans, and heavy equipment.
+
+Security      Power systems must be housed in secure, ventilated enclosures.
+
+Sustainability Encourage use of renewable energy sources like solar panels.
+
+8.21 FURNITURE AND EQUIPMENT REQUIREMENTS
+
+Wood materials: well-seasoned & polished Mahogany, Omo, Iroko, Masonia, Pinc or Obeche,
+Ashuwella
+
+8.21.1 CLASSROOM FURNITURE AND EQUIPMENT
+
+Table 17: Classroom Furniture Specifications                Teachers Equipment
+                   Pupils
+
+ECCDE         Round table with 5 chairs                     Chair and   Kindergarten bed
+Primary                                                     table with
+                    2-seater desk with storage              drawer      2100mm       wide
+JSS                     compartment ­ hardwood afara or
+                        Ashuwella HDF wood top with 50mm x              magnetic board
+                        3mm black round metal pipe frame
+                        (highly recommended)                            complete with duster
+
+                    Single seater plastic table/chair with              and markers
+                        storage
+
+Pupils with special needs to be provided with adapted furniture items.
+
+UBEC ­ Construction, Renovation & Wash Manual                           Page 48 of 114
+Part I. Construction Manual
+
+                             Figure 39: Sample image of Classroom Furniture
+
+8.21.2 ADMINISTRATIVE FURNITURE AND EQUIPMENT
+
+Table 18: Administrative Furniture & Equipment Specifications
+
+Space              Furniture Items                                            Equipment
+
+Reception Area     desk with storage, waiting chairs (minimum of 4), visitor
+                   logbook station, display rack for school brochures or
+                   notices                                                    Desktop/Laptop
+
+Principal       /  Executive Table, Ergonomic Swivel Chair, minimum of 2      computer        with
+                   Visitors' Chairs., lockable filing cabinet, bookshelf or
+Headmaster's       document rack, notice board, fridge                        accessories     for
+
+O ice              Semi-Executive Table with ergonomic chair, 2 Visitors'     administrative use,
+                   Chairs, lockable filing cabinet, bookshelf or document
+                   rack, notice board                                         printer, photocopier,
+
+Vice Principal's   single tables or shared workstation, comfortable chairs    telephone or intercom
+O ice              with back support, lockers for personal items, whiteboard
+                   or corkboard for announcements                             system, wall clock,
+
+                                                                              fire extinguisher, first
+
+                                                                              aid kit
+
+Sta Room
+
+UBEC ­ Construction, Renovation & Wash Manual                                          Page 49 of 114
+Part I. Construction Manual
+
+8.21.3 LABORATORIES FURNITURE AND EQUIPMENT
+
+Table 19: Laboratory furniture & Equipment Specifications
+
+SCIENCE LABORATORY
+
+Furniture Items                                  Equipment
+
+ Workbenches:                Chemical-resistant
+
+surfaces for science labs                         Basic lab kits (beakers, test tubes, Bunsen
+
+ Stools/Chairs: Adjustable or fixed-height, burners, etc.)
+
+non-slip base                                     Safety gear (goggles, gloves, lab coats)
+
+ Storage Cabinets: Lockable units for  Sink with running water
+
+chemicals, tools, and equipment                   Fire blanket and extinguisher
+
+ Demonstration               Table:  For  First aid box
+
+supervisor/teacher-led experiments
+
+ICT LABORATORY                                   Equipment
+
+ Furniture Items
+
+ Tables: Computer Desks (single or shared)  Computers (minimum 1 per 3 students)
+
+with cable management                             Projector or smart board
+
+ Chairs: Adjustable or fixed-height, non-slip  Surge protectors and UPS units
+
+base                                              Internet access (where feasible)
+
+ Storage Cabinets: Lockable units for  Software for coding, typing, and basic digital
+
+chemicals, tools, and equipment                  literacy
+
+LIBRARY FURNITURE AND EQUIPMENT                  Equipment
+
+ Furniture Items
+
+ Reading tables (4-in-1 demarcated table
+
+  with 4 comfortable chairs as a set)
+                                                               Cataloguing system (manual or digital with
+
+ Chairs with lumbar support
+                                                                 barcode scanner)
+
+ Bookshelves (adjustable and labelled by
+                                                               Desktop computer for librarian use
+
+  category)
+                                                               Wall clock
+
+ Librarian's desk and chair
+                                                               Fire extinguisher
+
+ Magazine and newspaper rack
+                                                               Ventilation system (fans or AC units)
+
+ Quiet reading corner with cushions or
+
+beanbags (optional)
+
+8.21.4 ECCDE FURNITURE AND EQUIPMENT
+
+100% plastic furniture for ECCDE using PVC materials that meet requirements for health, safety and
+security of pupils. Adequate security such as wire fencing must be provided around all play areas.
+
+UBEC ­ Construction, Renovation & Wash Manual                                    Page 50 of 114
+Part II. Renovation Manual
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 51 of 114
+Part II. Renovation Manual
+
+1.0 INTRODUCTION
+
+The renovation manual will provide a guide that o ers comprehensive details of school
+infrastructure improvements. It outlines a systematic process from initial planning and
+budgeting to final execution and finishing touches. The manual will cover 4 key phases and
+9 Key Elements, the phases to be covered are:
+
+ Phase 1 - Planning & Preparation,
+
+ Phase 2 - Timeline & Communication Plan,
+
+ Phase 3 - Execution and Construction,
+
+ Phase 4 - Final Walkthrough and Maintenance.
+
+1.1. PHASE 1: PLANNING AND PREPARATION
+ This phase is the most critical for the success of the project. It defines the vision and
+ sets the foundation for subsequent steps.
+ The phase will define the following:
+       Goals: Create a prioritized list of needs versus wants.
+       Establish a Realistic Budget: Research the average costs for similar projects in
+            your area and factor in all potential expenses, including:
+             Materials & Fixtures: cost of all items.
+             Labor Costs: artisans, suppliers, contractors, designers, etc.
+             Contingency Fund: Set aside 10-20% of your total budget for unexpected
+                 issues.
+       Designs, details, specifications & BOQs: Produce working drawings and Bills of
+            Quantity for all intended work.
+
+1.2. PHASE 2: TIMELINE & COMMUNICATION PLAN
+       Create a Timeline and Communication Plan:
+             Work with LGEA/SUBEB to develop a school improvement plan (SIP)
+             establish a realistic schedule that includes start and end dates for each
+                 phase of the project. Maintain open and consistent communication with all
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 52 of 114
+  Part II. Renovation Manual
+
+                 stakeholders to stay informed about progress and address any issues
+                 promptly.
+1.3. PHASE 3: EXECUTION AND CONSTRUCTION
+ This is the physical part of the renovation; activities here include the following:
+       Demolition: This is the first and often messiest step. It involves tearing down old
+            structures, removing fixtures, and clearing the space.
+       Structural and Systems Work: This is the "behind the walls" phase. It includes
+            any structural modifications (e.g., knocking down a wall), as well as plumbing,
+            electrical, and HVAC rough-ins. It is essential to complete this work before moving
+            on to finishes to avoid costly rework.
+       Insulation and Drywall: Once the structural work is complete, insulation is
+            installed, followed by hanging, taping, and sanding drywall to create smooth
+            surfaces for painting.
+       Finishes and Fixtures: This is where the aesthetic vision takes shape.
+               o Painting and Flooring: Painting walls and ceilings, and then installing new
+
+                   flooring.
+               o Fixture Installation: Installing lights, faucets, sinks, toilets, and other fixtures.
+
+1.4. PHASE 4: FINAL WALKTHROUGH & MAINTENANCE
+       Final Walkthrough: Conduct a thorough walkthrough with your contractor to
+            identify any remaining issues or touch-ups that need to be addressed.
+       Cleanup: A final, deep clean of the renovated space.
+       Long-Term Maintenance: Understand how to maintain your new fixtures and
+            finishes. Keep all warranties and manuals in a safe place.
+
+ The 9 Key Elements are: Roof Covering, Roof Structure, Ceiling, Walls, Doors &
+ Windows, Floor, Painting, Furniture. and Water Supply.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 53 of 114
+  Part II. Renovation Manual
+
+ 2.0 SITE PREPARATION
+
+ Site preparation for renovation works shall include the following:
+      1. Temporary fencing or barriers shall be erected around the building site from the
+            existing school to enable it to function without hindrance for safety concerns.
+      2. Identifying areas to be used for temporary accommodation, such as the site
+            o ice and storage shed, in addition to areas for waste storage and disposal.
+      3. Identifying and preparing areas for the storage of materials, such as cement,
+            aggregates, and other construction materials.
+
+ 2.1STORAGE OF MATERIALS
+ Materials for the construction shall be stored in Safe Place
+2.2. SITE SECURITY
+ The site shall be secured against theft from opportunistic vandals.
+ Each site has its own unique requirements for security. Perimeter fencing, internal site
+ protection, and day/night security may all be necessary.
+2.3. DEMOLITION WORKS
+
+       Carefully take down damaged roofing members (covering, structures, and other
+          supporting elements) and set them aside.
+
+       Remove all damaged Noggins/ Ceiling Joist, Ceiling Board and set them aside for
+          SBMC. Hack out damaged terrazzo and remove it off-site.
+
+       Scrape out damaged plaster from cracked walls and remove it off-site.
+       Site clearance and remove debris off-site.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 54 of 114
+Part II. Renovation Manual
+
+3.0 ROOF COVERING
+
+The roofing sheet renovation process is a delicate but essential task to preserve the
+integrity of the building. Renovation or rehabilitation of roofing sheets involves either
+the repair or replacement of leaking or damaged roofing sheets.
+Major damage or leakages will require outright removal and replacement of the
+sheet(s) minor damages will be fixed with either the use of sealants or by covering the
+damaged areas with sheets.
+Here's a step-by-step guide that must be followed:
+3.1INITIAL INSPECTION
+ Check for rust, leaks, loose fasteners, or sagging sheets.
+ Identify sheets that need replacement versus those that can be repaired.
+
+                                             Figure 1: Sample image of roof inspection
+
+3.2. SAFETY
+  Use harnesses, gloves, and non-slip footwear.
+  Ensure scaffolding or ladders are secure.
+
+                                      Figure 2: Sample Image of Safety Gear and Ladder  Page 55 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+  Part II. Renovation Manual
+
+3.3. DE - ROOFING THE DAMAGED SHEETS
+  Unscrew fasteners carefully to avoid damaging adjacent sheets.
+  Remove ridge caps and flashing if necessary.
+
+                                           Figure 3: Sample of De-Roofing Damaged Sheets
+
+3.4. AVOID COMMON MISTAKES
+  Don't rush the removal--warped sheets can cause injury or damage.
+  Avoid stepping directly on unsupported sheets.
+
+3.5. REPLACING NEW SHEETS
+  Align sheets properly to maintain water flow direction.
+  Use recommended screws and washers to prevent leaks.
+
+                                            Figure 4: Sample of replacing new sheets.     Page 56 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+  Part II. Renovation Manual
+
+3.6. SEAL & FLASH
+  Apply sealant at joints and overlaps.
+  Reinstall ridge caps and flashing to prevent water ingress.
+
+                                          Figure 5: Sample of sealing of joints & overlaps
+
+3.7. CLEAN & PROTECT
+  Wash down the roof to remove debris and metal filings.
+  Apply anti-rust primer or a protective coating if needed.
+
+                                              Figure 6: Sample of cleaning sheets of debris
+
+3.8. MINOR REPAIR
+  Cut out the damaged sheet and replace it.
+
+                                           Figure 7: Sample image of Minor Sheet Repair      Page 57 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+   Part II. Renovation Manual
+
+3.9. ESSENTIAL MATERIALS FOR REPAIR
+
+3.9.1. ROOFING SHEET
+  Longspan Roofing Sheets: Choose based on your preference.
+   Aluminum (lightweight, rust-resistant)
+   Alozinc or Alosteel (durable and cost-e ective)
+
+        Figure 8: Sample of Long-span sheet
+
+3.9.2.  FASTENING MATERIALS
+
+ Roofing screws or nails with washers: rust-resistant, self-drilling screws with rubber
+     washers to prevent leaks.
+
+ Ridge caps and flashings for sealing roof edges and joints
+
+                                           Figure 9: Sample of Nails, Ridge Caps & Flashing  Page 58 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+   Part II. Renovation Manual
+
+3.9.3. WATERPROOFING & PROTECTION
+   Roof Underlayment / Deck Protection: A moisture barrier layer between the sheathing
+       and roofing sheets.
+   Leak Barrier Membrane: Especially important around valleys, ridges, and penetrations.
+   Sealants or Bitumen Tape: For sealing overlaps and screw holes.
+
+                                              Figure 10: Sample Waterproofing & Protection
+
+3.9.4. SAFETY & HANDLING GEARS
+   Safety harness and helmet.
+   Non-slip boots and gloves.
+   Ladder or sca olding.
+   Measuring tape and chalk line.
+   Tin snips or metal-cutting tools.
+
+Figure 11: Sample of Safety & Handling Gears (Harness, Gloves, Boots, Ladder, Tapes & Snips)
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 59 of 114
+   Part II. Renovation Manual
+
+3.10. ESSENTIAL TOOLS FOR REPAIR
+3.10.1. MANUAL TOOLS
+
+   Roofing Hammer or Hatchet for driving nails and prying up old fasteners.
+   Utility Knife to cut underlayment or trim sealant tape.
+   Tape Measure & Chalk Line for accurate layout and alignment of sheets.
+   Pry Bar or Crowbar helps remove old sheets and nails cleanly.
+   Tin Snips or Metal Shears for cutting roofing sheets to size.
+
+                                   Figure 12: Sample of Manual Tools (Hammer, Knife, Tape, Crowbar)
+
+3.10.2. CLEANING & FINISHING TOOLS
+   Broom or Blower: To clear debris and metal filings after installation.
+   Sealant Gun: For applying waterproof sealants at joints and overlaps.
+
+                     Figure 13: Sample of Finishing Tools (Blower, Broom, Sealant Gun)  Page 60 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+   Part II. Renovation Manual
+
+ 4.0 ROOF STRUCTURE
+
+  Roof structure shall be made of either steel or timber. Rehabilitation shall involve either
+  maintenance or replacement of truss members.
+  4.1STEEL TRUSS
+  Maintaining steel trusses is essential for the structural integrity and longevity of the
+  buildings, especially in climates like Nigeria's, where humidity and seasonal rains can
+  accelerate corrosion.
+  The maintenance or rehabilitation process shall involve the following:
+4.2.1. ROUTINE INSPECTION
+   Look for rust, cracks, loose bolts, and deformation.
+   Pay special attention to joints, welds, and gusset plates.
+
+                                   Figure 14: Sample image of routine inspection of steel truss
+
+4.2.2. STRUCTURAL ASSESSMENT
+   Check for sagging, bowing, or stress fractures.
+   Use manual load calculations to verify structural performance.
+
+4.2.3. RUST TREATMENT & PROTECTIVE COATING
+   Clean rusted areas with wire brushes or grinders.
+   Apply anti-corrosion primer and repaint with protective coatings.
+
+                                    Figure 15: Sample image of rust treatment of steel truss  Page 61 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+   Part II. Renovation Manual
+
+4.2.4. REPAIR DAMAGED MEMBERS
+   Replace or reinforce cracked or bent truss components.
+   Use sistering techniques or add support plates.
+   Weld new members or splice damaged sections.
+   Ensure welds are clean and structurally sound.
+
+                           Figure 16: Sample image of repair of damaged members of steel truss
+
+4.2.5. DOCUMENTATION & MONITORING
+   Keep a log of inspections, repairs, and material replacements.
+   Schedule periodic checks--especially after storms or heavy loads.
+   Truss repair highlights the importance of structural engineering and documentation
+       during unexpected truss repairs.
+  Steel trusses are strong, but they demand attention. Regular maintenance not only
+  prevents costly damage but also ensures safety for everyone under the roof.
+
+Figure 17: Sample image of documentation & monitoring of steel truss
+
+UBEC ­ Construction, Renovation & Wash Manual                         Page 62 of 114
+   Part II. Renovation Manual
+
+4.2.6. ROUTINE INSPECTION CHECKLIST FOR STEEL TRUSSES & ROOFING
+  STRUCTURAL INTEGRITY
+       Check for visible rust or corrosion on truss members and joints
+       Inspect for cracks, bends, or deformation in steel components
+       Verify that gusset plates are secure and undamaged
+       Ensure bolts, welds, and fasteners are tight and intact
+       Look for sagging or misalignment in truss spans
+       Confirm trusses are plumb and level using a laser or string line
+  ROOFING SYSTEM
+       Examine roofing sheets for leaks, holes, or rust patches
+       Check for loose or missing screws and washers
+       Inspect ridge caps and flashing for proper sealing
+       Look for water stains or mold on ceilings and walls below
+       Ensure gutters and downspouts are clear and draining properly
+  SAFETY & SUPPORT
+       Confirm access ladders and sca olding are secure and safe
+       Check for fall protection systems (harnesses, anchor points)
+       Inspect roof walkways or platforms for stability
+  ENVIRONMENTAL EXPOSURE
+       Assess areas exposed to rain, wind, or direct sun for accelerated wear
+       Look for vegetation growth (e.g., moss, algae) on roofing sheets
+       Check for bird nests or animal intrusion in truss cavities
+  DOCUMENTATION & FOLLOW-UP
+       Record inspection date, findings, and photos
+       Note any repairs needed or completed
+       Schedule the next inspection (typically every 6­12 months)
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 63 of 114
+   Part II. Renovation Manual
+
+       Contact a structural engineer if major damage or deflection is found
+
+4.3. TIMBER TRUSSES
+  Rehabilitating timber trusses is a delicate but essential process to restore structural
+  integrity, especially in aging buildings or those exposed to moisture and termite damage.
+
+  It is a multi-step process that requires thorough assessment, proper repair techniques,
+  and preventative measures. It is often a task for a professional structural engineer or
+  contractor, especially for significant damage.
+
+  Here is a general breakdown of the process:
+
+4.3.1. INITIAL ASSESSMENT AND DIAGNOSIS
+  The trusses shall be adequately braced to stabilize the building and to ensure a
+  satisfactory roof line for completion; the supporting structure must be plumbed to
+  subsequently achieve a level ceiling line. Care must be taken to ensure that the
+  supporting structures, like the walls and beams, are adequately designed and stable.
+
+  The first and most crucial step is to identify the root cause and extent of the damage.
+  This involves a visual inspection and, for more complex cases, non-destructive testing
+  (NDT) to evaluate the timber's integrity. Common issues to look for include:
+
+   Moisture Damage: This is the most common cause of failure, leading to rot and decay.
+       Signs include discoloration, a musty odor, or soft, spongy wood.
+
+   Insect Infestation: Termites, carpenter ants, and other wood-boring insects can
+       compromise the structural integrity of the wood. Look for sawdust, hollow-sounding
+       areas, or visible galleries.
+
+   Structural Failures: This can be caused by improper installation, overloading, or natural
+       aging. Signs include sagging, cracking, splitting, or joint failure.
+
+Figure 18: Sample Image of Initial Assessment of Timber Roof Truss
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 64 of 114
+   Part II. Renovation Manual
+
+4.3.2. REPAIR & REINFORCEMENT TECHNIQUE
+  Based on the assessment, a specific repair method is chosen. The goal is to restore the
+  truss to its original strength and capacity.
+   Replacing Damaged Sections: For localized damage such as rot or decay, the a ected
+       portion of the timber is cut out and replaced with a new piece of timber. The new piece
+       is then joined to the existing truss using Scarfe joints, which are secured with bolts,
+       screws, or high-tensile steel bars.
+
+                           Figure 19: Sample Image of Repair of Damaged Section of Timber Roof Truss
+
+ Reinforcement with Steel Plates: For more severe damage or to strengthen a
+     weakened area, steel plates can be used. These plates are bolted or welded onto the
+     timber members, providing additional support and stability. This is an e ective and cost-
+     e icient method for reinforcing key joints.
+
+Figure 20: Sample Image of Reinforcement with Steel Plates.
+
+UBEC ­ Construction, Renovation & Wash Manual                Page 65 of 114
+   Part II. Renovation Manual
+
+   Epoxy Resin Injection: For cracks or splits, a special epoxy resin can be injected into
+       the fissures. The resin fills the crack and hardens, creating a strong bond that restores
+       the timber's strength without the need for major replacement.
+
+   Adding Bracing: Additional diagonal or horizontal braces can be installed to provide
+       extra support and distribute the load more evenly across the truss members, especially
+       in cases of sagging.
+
+4.3.3. PROTECTIVE TREATMENT & PREVENTION
+  Once the repairs are complete, it is essential to protect the truss from future damage.
+
+   Moisture Control: This is critical. Ensure the roof has proper ventilation and that there
+       are no leaks. A moisture barrier or a water-resistant coating can be applied to the timber.
+
+   Pest Control: Applying insect-resistant treatments to the wooden members can prevent
+       future infestations.
+
+   Regular Inspections: Routine inspections (at least twice a year) are key to catching
+       small issues before they become major problems.
+
+4.3.4. MATERIALS & TOOLS FOR REPAIRS
+   New Timber: For replacing decayed, rotted, or insect-damaged sections, It's crucial to
+       use timber of the same species and moisture content as the original to prevent future
+       warping and ensure a strong bond.
+
+   Steel Plates and Fasteners: Metal plates (gussets) are used to reinforce weakened
+       joints or to splice new timber sections to old ones. They are typically secured with bolts,
+       screws, or nails.
+
+                                Figure 21: Sample image reinforcement with steel plates.
+
+ High-Quality Adhesives and Resins: Structural adhesives, such as epoxy resin, are
+     injected into cracks and fissures to bond the timber back together. This is a non-invasive
+     way to restore strength to split or cracked members.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 66 of 114
+Part II. Renovation Manual
+
+                                           Figure 22: Sample Image of High-Quality Adhesives
+
+ Steel Rods: For more significant structural reinforcement, steel rods can be used,
+     particularly in combination with epoxy resin injection to strengthen the timber and
+     provide additional load-bearing capacity.
+
+                                           Figure 23: Sample Image of Steel Rods
+
+ Wood Preservatives: These are essential for preventing rot, decay, and insect
+     infestation (e.g., from termites). They are applied to the timber to create a protective
+     barrier.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 67 of 114
+Part II. Renovation Manual
+
+                                           Figure 24: Sample Image of Wood Preservative
+
+ Moisture Barriers and Sealants: These materials are used to prevent water ingress,
+     which is the primary cause of timber decay. They can be applied to joints and
+     connections or used to line areas where timber meets masonry.
+
+                            Figure 25: Sample of Moisture Barriers
+
+UBEC ­ Construction, Renovation & Wash Manual                       Page 68 of 114
+Part II. Renovation Manual
+
+5.0 CEILING
+
+Renovating ceiling boards in Nigerian schools is a vital part of upgrading learning
+environments, especially in older buildings where the infrastructure has deteriorated
+due to age, weather, or poor initial construction.
+
+The process for rehabilitating hardwood ceiling boards in Nigeria involves a series of
+steps to address common issues like sagging, cracks, moisture damage, and termite
+infestation, and to restore the wood's aesthetic appeal.
+
+Here is a general process to follow:
+
+5.1INITIAL ASSESMENT AND PREPARATION
+ Inspection: Carefully inspect the ceiling for signs of damage. This includes sagging
+
+     boards, cracks, water stains, mold, or signs of pest infestation. The source of any water
+     damage (e.g., a roof leak) must be identified and fixed before proceeding.
+
+                     Figure 26: Sample image of the assessment of the damaged ceiling.
+
+ PLANNING
+             o Determine the scope: full replacement vs. partial repair.
+             o Budgeting and sourcing materials: common options include Brazilian
+                  Standard Ceiling Boards, ½ inch plywood board, PVC, gypsum, or fiber cement
+                  boards.
+
+ Demolition and Site Preparation
+             o Carefully remove damaged ceiling boards, rafters, noggings, and fascia.
+             o Dispose of old materials or salvage reusable ones.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 69 of 114
+  Part II. Renovation Manual
+
+               o Prepare the site for installation, may include cleaning, leveling, and reinforcing
+                   the roof structure.
+
+5.2. ADDRESSING SAGGING & STRUCTURAL ISSUES
+  Reinforcement: Sagging boards are a common issue. You can address this by pushing
+      the boards back up to the ceiling joists using a prop or jack. Once they are flush, secure
+      them to the joists with screws to prevent them from sagging again.
+
+  Replacing Damaged Boards: For boards that are severely damaged by rot or pests, the
+      best solution is to remove and replace them. You will need to carefully cut out the old
+      board and install a new, matching piece of timber.
+
+                                  Figure 27: Sample image of the replacement of the damaged ceiling.
+
+5.3. REPAIRING MINOR DAMAGE AND FINISHING
+  Filling Cracks and Gouges: Small cracks, holes, and gouges can be repaired using a
+      wax-based wood filler or epoxy. Apply the filler, let it cure, and then sand the area to make
+      it flush with the rest of the board.
+
+Figure 28: Sample image of filling cracks & gouges in the damaged ceiling.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 70 of 114
+  Part II. Renovation Manual
+
+  Staining or Painting: Once the repairs are complete, you can restore the ceiling's
+      appearance. You can either apply a new stain to highlight the wood's natural grain or
+      paint it for a cleaner, more modern look. When painting, it is advisable to use a primer
+      first to prevent the wood from showing through.
+
+                           Figure 29: Sample image of staining & painting of the repaired ceiling.
+
+5.4. REPLACING NEW CEILING BOARDS
+  Measure and cut new boards to fit.
+  Secure them using nails, screws, or adhesive, depending on the material.
+  Seal joints and edges to prevent dust and pests.
+
+Figure 30: Sample image of installing new ceiling boards.
+
+UBEC ­ Construction, Renovation & Wash Manual              Page 71 of 114
+  Part II. Renovation Manual
+
+5.5. LONG-TERM PROTECTION
+  Protective Coatings: To ensure the longevity of the ceiling, apply a protective coating.
+      This can be a sealant or a varnish that helps to protect the wood from moisture, UV rays,
+      and general wear and tear. Water-based acrylic paints are a good, durable choice for this
+      purpose.
+  Ventilation: Proper ventilation is crucial, especially in humid environments, to prevent
+      moisture buildup, which can lead to mold and rot. Consider installing fans or ensuring
+      adequate airflow to the area.
+  Finishing Touches:
+               o Paint or coat the ceiling for aesthetics and durability.
+               o Install lighting fixtures and ensure electrical safety.
+               o Final inspection to ensure compliance with safety standards.
+
+                                       Figure 31: Sample image of paint materials to use for the ceiling.
+
+Figure 32: Sample image of Nogging & Ceiling Installation
+
+UBEC ­ Construction, Renovation & Wash Manual              Page 72 of 114
+Part II. Renovation Manual
+
+6.0 WALLS
+
+Renovating classroom walls in Nigeria is a systematic approach that addresses structural
+issues, improves aesthetics, and ensures a safe and conducive learning environment. The
+process often varies depending on the scale of the project, from simple repainting to
+major structural rehabilitation.
+
+6.1INITIAL ASSESSMENT
+This is the most critical phase. A comprehensive assessment of the classroom walls is
+conducted to identify the type and extent of damage. Common issues include:
+
+      o Cracks and Voids: Often caused by soil instability, especially in areas with
+          expansive soil, or by foundation issues.
+
+      o Peeling Paint and Mold: Resulting from poor ventilation, humidity, and water
+          infiltration.
+
+      o Structural Damage: In severe cases, walls may be in a state of disrepair, requiring
+          more extensive work.
+
+                                       Figure 33: Sample image of the assessment of damaged walls.
+
+6.2. DEMOLITION AND CLEANING
+
+o Remove damaged plaster, old paint, and any loose bricks.
+o Clean the surface thoroughly to prepare for repairs or repainting.
+
+UBEC ­ Construction, Renovation & Wash Manual                         Page 73 of 114
+  Part II. Renovation Manual
+
+6.3. PLANNING
+          Based on this assessment, a detailed renovation plan is created, which includes:
+          o Budgeting: Estimating the cost of materials and labour.
+          o Timeline: Creating a schedule to minimize disruption to classes. Projects are
+               often planned during school holidays.
+          o Material Sourcing: Identifying and acquiring the necessary materials, with an
+               emphasis on durability and local availability.
+
+6.4. DEMOLITION AND SURFACE PREPARATION
+  Demolition: This involves removing any old, dilapidated wall finishes, such as plaster
+      that is peeling or crumbling. It also includes the removal of old fixtures, such as
+      chalkboards, electrical outlets, or windows if they are being replaced.
+  Cleaning: The walls are thoroughly cleaned to remove dirt, dust, and any debris.
+  Repairing Cracks and Holes
+          o Cracks are widened and then filled with a cement and sand mixture. For a
+               smoother finish, a plastering or screeding compound is applied to create a
+               uniform surface. This step is crucial for preventing future cracks from
+               reappearing.
+          o Rebuild or reinforce weak sections using cement blocks or concrete.
+          o Apply waterproofing solutions if moisture is a recurring issue.
+
+Figure 34: Sample image of the repaired cracked or damaged wall.
+
+UBEC ­ Construction, Renovation & Wash Manual                     Page 74 of 114
+  Part II. Renovation Manual
+
+6.5. PLASTERING & SMOOTHING
+  Re-plaster walls to create a smooth, even surface.
+  Allow proper curing time to prevent future cracks.
+  Screeding: A thinner layer of plaster of Paris (POP) screed may be applied to the
+      plastered walls for a perfectly smooth finish before painting. This is a common practice
+      in Nigeria to achieve a high-quality final look.
+
+                                      Figure 35: Sample image of the plastering of the repaired wall.
+
+6.6. PAINTING & FINISHING
+
+  Painting: This is the final and most visible part of the renovation. A durable, washable
+      emulsion paint is typically used for internal walls to withstand wear and tear. A primer or
+      undercoat is often applied first to ensure the paint adheres properly and lasts longer.
+
+  Choose bright, non-toxic paints to enhance the learning atmosphere.
+
+                                          Figure 36: Sample image of the painted wall.  Page 75 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+  Part II. Renovation Manual
+
+6.7. FURNITURE & FIXTURE
+
+  Windows and Doors: New doors and windows, often made of aluminum, are installed.
+  Electrical Wiring: Ensure new wiring, switches, and outlets are installed and properly
+
+       encased.
+  Teaching Boards: Reinstall shelves, modern whiteboards, or chalkboards on the newly
+
+       renovated walls.
+
+ 7.0 DOORS & WINDOWS
+
+ The process for renovating classroom doors and windows in Nigeria is a systematic
+ approach that focuses on improving security, durability, and the overall learning environment.
+ The process typically involves an assessment of the existing structures, followed by the
+ replacement or repair of the old doors and windows with modern, more resilient materials.
+
+ Here is a general breakdown of the process:
+
+ 7.1INITIAL ASSESSMENT & PLANNING
+  Inspection: A thorough inspection is conducted to identify the condition of the existing
+
+      doors and windows. This includes checking for rot, rust, loose hinges, broken glass, or
+      security vulnerabilities. Purpose made steel standard doors and windows made of
+      50mm x 50mm x 2mm Black Holow Pipes for the frames, with 2mm checker metal
+      sheets for the panels with vents, and an anti-corrosive paint finish complete with fittings
+      are currently being used.
+
+  Material Selection: Purpose-made steel standard doors and windows made of 50mm x
+      50mm x 2mm Black Holow Pipes for the frames, with 2mm checker metal sheets for the
+      panels with vents, and an anti-corrosive paint finish complete with fittings are currently
+      being used.
+
+  Measurements and Budgeting: Accurate measurements of the existing openings are
+      taken. A budget is then created, which includes the cost of new materials, labor for
+      installation, and any necessary repairs to the surrounding wall structure.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 76 of 114
+  Part II. Renovation Manual
+
+                                     
+
+                       Figure 37: Sample image of the initial assessment (images of door & window samples)
+
+7.2. REMOVAL & INSTALLATION
+  Demolition: Old doors and windows, along with their frames, are carefully removed.
+      This process must be done to avoid damaging the surrounding wall, as this would require
+      additional plastering work.
+  Frame Installation: The new frames, made of 50mm x 50mm x 2mm Black Holow Pipes,
+      are fitted into the prepared openings. These are secured with screws and anchors, and
+      the gaps between the frame and the wall are filled with cement mortar or a sealant for a
+      secure, weatherproof fit.
+  Door and Window Installation: The new doors and window sashes are then installed
+      into the frames. This involves fitting the hinges, locks, and handles. For windows, the
+      glass panels are secured in place with rubber or silicone gaskets.
+
+Figure 38: Sample image of fixing frames and panels for Doors & Windows
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 77 of 114
+   Part II. Renovation Manual
+
+7.3. FINISHING & SEALING
+   Plastering and Painting: Any minor damage to the wall around the new frames is
+       repaired with a plaster and sand mixture. Once dry, the area is repainted to match the
+       rest of the wall, ensuring a clean and finished look.
+
+   Sealing: The joints between the new frames and the wall are sealed with silicone sealant
+       to prevent water infiltration and dust from entering the classroom. This is a crucial step
+       for long-term durability and is especially important in Nigeria's humid climate.
+
+  Hardware Installation: All door and window hardware, including locks, handles, and
+  catches, are installed and tested to ensure they are functional and secure.
+
+ 8.0 FLOOR
+
+  Two types of floor finishes are generally used: Terrazzo and Glazed Tiles.
+
+  Terrazzo floor finish is used in high-tra ic study areas such as classrooms, halls, laboratories,
+  workshops, etc.
+
+  Ceramic glazed tiles are used mostly in medium to low tra ic areas such as administrative
+  buildings, libraries, toilets, etc.
+
+  8.1 TERRAZO
+  Renovating a terrazzo floor is a multi-step process that restores the floor's original
+  appearance and durability. Due to the high-traffic nature of classrooms, the focus is on a
+  long-lasting, hard-wearing finish. The process involves a combination of cleaning,
+  repairing, and professional-grade polishing.
+
+  Here is a breakdown of the process:
+
+8.2.1. INITIAL ASSESSMENT AND PREPARATION
+       Inspection: The first step is to thoroughly inspect the floor to assess the extent of the
+           damage. This includes identifying deep cracks, dullness, chips, uneven surfaces, and
+           areas with severe staining or wear. Identify areas needing patching or deeper grinding.
+           The condition of the terrazzo will determine the intensity of the grinding and polishing
+           process.
+
+       Cleaning and Removal: Before any work begins, the floor must be cleaned to remove
+           all dirt, dust, and debris. Any existing waxes, sealers, or coatings are stripped using a
+           floor stripper or by the initial grinding process.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 78 of 114
+Part II. Renovation Manual
+
+                            Figure 39: Sample image of initial assessment of damaged terrazzo floor
+
+8.2.2. REPAIRING DAMAGED FLOOR
+   Minor Cracks and Voids: Small cracks and chips are filled with a patch material that is
+       color-matched to the existing terrazzo binder and aggregate. The patch is then leveled
+       with the surrounding floor. For best results, the patch material should have the same
+       composition as the original terrazzo (e.g., cement-based for a cementitious floor).
+
+   Grouting: If the floor has many small pinholes or voids, a grout is applied to fill them in
+       and create a smooth, continuous surface.
+
+                            Figure 40: Sample image of the repair of a damaged terrazzo floor
+
+ Major Damages: For major damage to the floor, the entire floor is hacked o and debris
+     is removed from the site. In situ terrazzo paving is laid in 1200 x 1200mm panel divided
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 79 of 114
+   Part II. Renovation Manual
+
+       with and including 3mm ebonite dividing strips, including additional strips around the
+       perimeter, polishing with carborundum, and treating with an approved hardener.
+
+8.2.3. GRINDING & POLISHING
+  This is the most critical phase of the renovation, typically performed with heavy-duty
+  grinding machines with diamond-impregnated pads.
+
+       Grinding: The process begins with a coarse-grit diamond pad (e.g., 30-70 grit) to
+           remove the top, worn-out layer of the terrazzo. This step levels the floor, removes
+           stains, and prepares it for polishing. This is often a wet process to reduce dust.
+
+       Honing and Polishing: The floor is then ground with progressively finer grits of
+           diamond pads. The process may go from 100 grit up to 3000 grit or higher to achieve
+           the desired level of shine. The polishing process smooths the surface and brings out
+           the natural luster of the stone chips.
+
+8.2.4. SEALING & FINISHING
+   Sealing: Once the floor is polished, a protective sealer is applied. This is a crucial step
+       for terrazzo in a classroom environment. The sealer penetrates the surface, protecting it
+       from stains, spills, and everyday wear and tear. Water-based sealers are recommended
+       as they are environmentally friendly and do not yellow over time.
+
+   Optional Coating: For a high-gloss finish, a layer of wax or a more durable urethane
+       coating can be applied. However, polishing alone can provide a mirror-like shine that
+       requires less maintenance than a waxed finish.
+
+                       Figure 41: Sample image of Terrazzo Floor Casting, washing, and polishing.
+
+8.3. GLAZED TILES
+ Renovation of glazed tile shall involve either minor repair to cracked or broken tiles or major
+ repair, which will involve outright replacement of the tiles due to deterioration.
+
+ The process involves a combination of cleaning, repairing, and professional-grade
+ polishing.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 80 of 114
+   Part II. Renovation Manual
+
+  Here is a breakdown of the process:
+
+8.3.1. INITIAL ASSESSMENT AND CLEANING
+   Inspect for Damage: The first step is to check for any physical damage, such as cracks,
+       chips, or loose tiles. This determines if simple restoration is enough or if more intensive
+       repair is needed.
+
+   Deep Cleaning: Over time, glazed tiles can lose their shine due to accumulated dirt and
+       grime. Deep cleaning involves using a degreaser or a mild soap with warm water. For
+       tougher stains, a paste of baking soda and vinegar can be e ective. Avoid using abrasive
+       cleaners or tools that can scratch the glazed surface.
+
+   Grout Cleaning: Grout lines often get discolored with dirt and mold. A mixture of baking
+       soda and vinegar or a commercial grout cleaner can be scrubbed into the grout lines
+       with a sti brush to lift stains.
+
+   Remove old silicone or sealants around tile edges.
+
+  Etch the tile surface lightly to help new coatings bond properly.
+
+8.3.2. REPAIRING DAMAGED TILES
+       Fixing Cracks and Chips: For hairline cracks or small chips, a common and e ective
+           repair method is to use a two-part epoxy resin. The epoxy is applied to the damaged
+           area, then smoothed and left to dry. Once cured, the repaired area can be painted
+           with a color-matched paint to blend it with the rest of the tile.
+
+       Replacing Damaged Tiles: If a tile is severely cracked, shattered, or has significant
+           damage, it should be replaced. This involves carefully removing the old grout around
+           the tile, using a chisel and hammer to break up and remove the tile, and then cleaning
+           the underlying substrate. A new, matching tile is then laid and grouted.
+
+                     Figure 42: Image of Initial Assessment & Fixing of Damaged Tiles  Page 81 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+Part II. Renovation Manual
+
+9.0 FURNITURE
+
+The process for rehabilitating damaged classroom furniture in Nigeria typically involves
+a multi-faceted approach, ranging from simple maintenance to more extensive repairs
+and, in some cases, a decision to replace the furniture. While there may not be one
+single, universal manual for all of Nigeria, a general process can be outlined based on
+common practices and needs.
+
+9.1 ASSESSMENT & IDENTIFICATION OF DAMAGE
+ Inspection: The first step is a thorough inspection of all furniture in the classroom. This
+
+     can be done by teachers, school administrators, or a dedicated maintenance team.
+ Damage Checklist: Create a checklist to systematically identify di erent types of
+
+     damage, such as:
+             o Structural issues: Wobbly legs, loose joints, missing screws or bolts, and
+                  broken frames.
+             o Surface damage: Scratches, gra iti, pen marks, peeling laminate, deep
+                  grooves, or cracks.
+             o Material-specific issues: Rust on metal frames, rotting wood, splintered
+                  edges, or damaged upholstery.
+
+ Documentation: Document the condition of each piece of furniture. This can be a
+     simple log that notes the type of damage and the required repair. This data is crucial for
+     planning and budgeting.
+
+Figure 43: Image of Initial Assessment & Damaged Furniture
+
+UBEC ­ Construction, Renovation & Wash Manual               Page 82 of 114
+  Part II. Renovation Manual
+
+9.2. PLANNING & PRIORITIZATION
+  Triage: Not all furniture can or should be repaired. The assessment helps to categorize
+      the furniture into:
+               o Minor Repair: Pieces that can be fixed with simple tools and materials (e.g.,
+                   tightening a screw, cleaning a stain).
+               o Major Repair: Pieces requiring more extensive work, such as welding a broken
+                   metal frame or replacing a large section of wood.
+               o Replacement: Furniture that is beyond economical repair or poses a safety
+                   risk to students (e.g., severe structural failure, major cracks in the wood).
+  Budgeting: Based on the assessment, a budget can be allocated for the necessary
+      materials and labor. This can be a major challenge in many Nigerian schools, and
+      community-based solutions or fundraising may be necessary.
+  Seasonal Maintenance: It is recommended to have a maintenance schedule. Summer
+      breaks, for example, are an ideal time for major repairs and refinishing, while minor tasks
+      can be handled on a seasonal or even weekly basis.
+
+9.3. EXECUTION
+  DIY/School-Based Repair: For minor to moderate damage, schools can often perform
+      the repairs themselves.
+               o Cleaning: Use appropriate cleaners to remove stains, dirt, and gra iti.
+               o Sanding and Refinishing: For wooden furniture, sanding can remove surface
+                   imperfections and prepare the surface for a new protective coat of paint or
+                   varnish. This not only improves aesthetics but also prevents further decay.
+               o Tightening and Replacement: Use screwdrivers and wrenches to tighten
+                   loose bolts and screws. If fasteners are missing, they should be replaced.
+               o Patching and Filling: Use wood filler or other suitable materials to fill in
+                   gouges or holes in wooden desks and chairs.
+  Professional Repair or Manufacturing: For more complex repairs or when a school
+      lacks the necessary tools, it may be necessary to engage professional welders,
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 83 of 114
+Part II. Renovation Manual
+
+     carpenters, or local furniture makers. This is often the case with broken metal frames,
+     which are a common problem with locally made wooden and metal furniture.
+ Replacement: When furniture is beyond repair, it must be replaced. This is a critical step
+     to ensure a safe learning environment. In Nigeria, a common practice is to have local
+     artisans or manufacturers create new furniture that is more durable and ergonomic.
+
+Figure 44: Image of DIY School-Based Repair    Figure 45: Image of Furniture Repair
+
+Figure 46: Image of Furniture Frame Repair     Figure 47: Image of Replacement Furniture
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 84 of 114
+Part II. Renovation Manual
+
+10.0 WATER SUPPLY
+
+Rehabilitation of water supply facilities in Nigerian schools is a comprehensive and multi-
+step process that often involves collaboration between government bodies, non-profit
+organizations, and local communities. The goal is not just to fix a broken system but to
+ensure long-term sustainability and promote healthy habits. Here is a general outline of the
+process:
+
+ 10.1 ASSESSMENT & SITUATION ANALYSIS
+  Initial Survey: A detailed assessment is conducted to identify schools with inadequate
+
+      or non-functional water, sanitation, and hygiene (WASH) facilities. This survey evaluates
+      the existing water sources (e.g., boreholes, wells, and rainwater harvesting systems) and
+      their condition.
+
+  Water Quality Testing: The quality of the available water is tested to determine if it is
+      safe for drinking. This is a crucial step to identify contamination issues that may not be
+      obvious.
+
+  Infrastructure Evaluation: The assessment looks at the overall infrastructure, including
+      the functionality of hand pumps, the integrity of pipes, the condition of storage tanks,
+      and the availability of handwashing facilities and latrines.
+
+  Community and School-based Assessment: The number of students and sta
+      a ected is documented. It's also important to engage with the school management,
+      teachers, and students to understand their daily challenges and hygiene practices.
+
+10.2. PLANNING & SOLUTION DESIGN
+  Prioritization: Based on the needs assessment, schools are prioritized for intervention.
+      Factors considered include the severity of the water issue, the number of students
+      impacted, and the potential for a sustainable solution.
+
+  Tailored Solutions: The plan is customized for each school. This might involve:
+
+               o Rehabilitation: Repairing or renovating existing facilities. This is often
+                   preferred if the existing infrastructure is still salvageable and the cost of repair
+                   is not more than 30% of a new facility. Examples include repairing a broken
+                   hand pump or replacing damaged pipes.
+
+               o Upgrading: This involves replacing a faulty component with a new, more
+                   e icient one or adding new features. For example, replacing a hand pump with
+                   a solar-powered borehole.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 85 of 114
+  Part II. Renovation Manual
+
+               o New Installation: In cases where the existing facility is beyond repair, a new
+                   water source (e.g., a new borehole or well) is installed.
+
+  Sustainability Planning: A key aspect of this stage is planning for the long term. This
+      includes creating a maintenance plan, identifying a responsible body (e.g., a school
+      WASH committee), and securing a budget for future repairs and operations.
+
+10.3. IMPLEMENTATION & CAPACITY BUILDING
+  Procurement and Construction: Necessary equipment and materials are procured,
+      and local contractors or experts are engaged for the installation and construction work.
+      This ensures that the solutions are durable and adhere to quality standards.
+
+  Training and Education: This is a vital component. It's not enough to provide the
+      facilities; the users must be empowered to manage and maintain them.
+
+               o Maintenance Training: School sta and community members are trained on
+                   the operation and routine maintenance of the new or rehabilitated water
+                   facilities. This is where concepts like VLOM (Village Level Operation and
+                   Maintenance) come into play, where trained mechanics and caretakers are
+                   equipped to handle repairs.
+
+               o Hygiene Promotion: Students and sta receive training on proper hygiene
+                   practices, such as handwashing with soap. This is often integrated into the
+                   curriculum to promote long-term behavioral change.
+
+  Community Ownership: A crucial step for sustainability is to foster a sense of
+      ownership among the school and surrounding community. This can be achieved by
+      having them contribute to the project (e.g., through labor or a financial contribution for
+      future maintenance).
+
+10.4. MONITORING & EVALUATION
+  Regular Inspections: A monitoring framework is established to regularly check the
+      functionality of the facilities. This includes monitoring water quality and the overall state
+      of the infrastructure.
+
+  Data Collection: Data is collected on student health and attendance to measure the
+      impact of improved WASH facilities on the learning environment.
+
+  Feedback Loop: The monitoring and evaluation process provides a feedback loop to
+      address any new problems that arise and to refine strategies for future projects. This
+      ensures that the implemented solutions remain e ective and sustainable.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 86 of 114
+   Part II. Renovation Manual
+
+  By following this comprehensive process, schools in Nigeria can move from having non-
+  functional or unsafe water sources to having reliable, sustainable, and safe water facilities
+  that support a healthier and more productive learning environment.
+
+10.5. BOREHOLE REHABILITATION
+  Rehabilitation of borehole infrastructure in Nigerian schools is a critical and specialized
+  undertaking. It involves a systematic approach to diagnose the problem, implement a
+  solution, and ensure the long-term sustainability of the water source. This process is
+  essential to move from the common cycle of borehole failure to a reliable, safe, and clean
+  water supply for students and sta .
+
+  Here is a detailed breakdown of the process:
+
+10.5.1. INITIAL ASSESSMENT & DIAGNOSIS
+  This is the most crucial step, as it determines the feasibility and scope of the rehabilitation.
+  It requires a professional to identify the root cause of the failure.
+
+   Consultation: Engage with school management, teachers, and students to understand
+       the history of the borehole. Questions to ask include: When was it last functional? What
+       were the first signs of failure (e.g., reduced yield, muddy water, pump noise)?
+
+   Physical Inspection: A visual inspection of the above-ground components is
+       performed. This includes checking the wellhead, hand pump (if applicable), power
+       source (solar panels, generator), and any visible pipes or fittings for damage.
+
+   Downhole Investigation: For a comprehensive diagnosis, a professional (e.g., a
+       hydrogeologist or borehole expert) will use specialized tools. This may include:
+
+               o Submersible Camera: A camera is lowered into the borehole to visually
+                    inspect the casing, screens, and the bottom of the well for signs of damage,
+                    silt, or blockages.
+
+               o Pumping Test: This involves measuring the water level and flow rate under
+                    specific conditions to determine the aquifer's yield and the borehole's
+                    performance. A decline in performance is a key indicator of a problem.
+
+               o Water Quality Test: A water sample is taken and tested for chemical,
+                    physical, and biological parameters. Common issues include high iron
+                    content, turbidity, and bacterial contamination.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 87 of 114
+   Part II. Renovation Manual
+
+10.5.2. IDENTIFYING THE CAUSES OF FAILURE
+  Based on the diagnosis, the cause of the borehole failure can be determined. Common
+  causes in Nigeria include:
+
+   Mechanical Failure: This is often related to the pump or pipework. It could be due to a
+       worn-out pump, a broken pipe, or a damaged riser.
+
+   Physical Clogging: Sediment, sand, or silt from the aquifer can enter the borehole,
+       filling the well and blocking the screen. This is a very common problem, especially in
+       older or poorly constructed boreholes.
+
+   Chemical and Biological Issues:
+
+               o Incrustation: The buildup of mineral deposits like iron or calcium carbonate
+                    on the well screens and casing can reduce water flow.
+
+               o Biofouling: The growth of bacteria and other microorganisms can create a
+                    slimy film that clogs the well screen.
+
+   Hydrological Failure: This is when the aquifer itself is no longer producing enough
+       water. This could be due to over-pumping, seasonal changes, or a poorly sited borehole
+       from the start.
+
+10.5.3. DEVELOPING & EXECUTING THE REHABILITATION PLAN
+  The rehabilitation plan is customized based on the identified cause of failure. The goal is to
+  restore the borehole's capacity to produce water.
+
+       Mechanical Cleaning (Jetting and Brushing): For physical clogging, high-pressure
+           jetting with water or compressed air is used to blast sediment and debris from the
+           borehole. A specialized brush may also be used to scrub the casing and screen.
+
+       Chemical Treatment: If incrustation or biofouling is the problem, a chemical
+           solution (often a mild acid or chlorine solution) is injected into the borehole to
+           dissolve the mineral deposits or kill the bacteria. This requires precise calculation
+           and handling by professionals.
+
+       Pump and Pipe Repair/Replacement: The hand pump, submersible pump, and/or
+           any damaged pipes are repaired or replaced.
+
+       New Well Screen Installation: If the original well screen is severely damaged or
+           corroded, a new, smaller-diameter screen can be installed inside the existing casing
+           to act as a new water intake. This process is known as relining.
+
+UBEC ­ Construction, Renovation & Wash Manual  Page 88 of 114
+   Part II. Renovation Manual
+
+       Re-development: After cleaning, the borehole is "developed" by pumping it at a high
+           rate to remove any remaining debris and to stimulate the flow of water from the
+           aquifer.
+
+10.5.4. POST-REHABILITATION AND SUSTAINABILITY
+  Rehabilitation is not a one-time fix. For long-term sustainability, a robust management and
+  maintenance plan is essential.
+
+       Disinfection: After all repairs are complete, the borehole must be disinfected using
+           a chlorine solution to kill any bacteria introduced during the rehabilitation process.
+
+       Final Water Quality Testing: A final water sample is taken to confirm that the water
+           is safe for drinking.
+
+       Formation of a School WASH Committee: The school should form a committee of
+           teachers, students, and community members to oversee the borehole.
+
+       Maintenance Fund: A system for collecting and managing a maintenance fund is
+           critical. This could be a small contribution from the school or community to cover the
+           costs of future repairs and spare parts.
+
+       Training and Capacity Building: The WASH committee members are trained in
+           routine maintenance, such as reporting problems early, basic repairs, and proper
+           hygiene practices to prevent contamination.
+
+       Regular Monitoring: Establish a schedule for periodic monitoring of the borehole's
+           performance and water quality to catch issues before they escalate.
+
+Figure 48: Sample Image of Borehole Assessment & Rehabilitation
+
+UBEC ­ Construction, Renovation & Wash Manual                    Page 89 of 114
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+                                               Page 90 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+9.0 PRE-CONSTRUCTION ACTIVITIES
+
+9.1 SITE INVESTIGATION AND SURVEY
+
+The identified sites for the schools shall have a Condition Survey done, to confirm or identify
+potential problems; this will include:
+
+             I. Assessment of Existing Water Source (Types of sources, Physical Condition,
+                   yield and Capacity, Accessibility & Safety of location for Use
+
+            II. Assessment of Pumping Mechanism, Storage Infrastructure, and Distribution
+                   Network
+
+           III. Water Quality and Potability Check (Visual and Odor check, On-Site Testing,
+                   Laboratory Analysis, Contamination Risk)
+
+          IV. Demand Analysis and Compliance Verification
+          V. Geophysical Investigation, primarily to map what lies beneath the ground
+
+                   without digging or drilling.
+
+                                               Page 91 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+10.0 SOURCE OF WATER SUPPLY
+
+The source of water supply shall include Public Mains, Boreholes, Protected Deep Water Wells
+and Rainwater.
+
+10.1 PIPED WATER SUPPLY
+Water Sourced from piped water supply from public water works managed by a Utility
+Company such as State Water Board.
+
+Fig.1 Typical Public Mains Water Network  Fig.2 Typical Point of Connection to Public
+Mains
+
+10.2 BOREHOLES
+
+Borehole Shall either be Handheld Pump or Motorized (electric or solar powered) Requirement
+includes:
+
+   I. Hydrogeological/Geophysical investigation to determine appropriate Depth and Type of
+         Protective Casing to preserve the underlying formation
+
+  II. Drilling at suitable Depth to a diameter to install 6 and 5/8" diameter API casing
+ III. The Borehole shall be Provided with well head with opening for pipe connection and
+
+         pump cable, Cement grouting and concrete platform ground well head
+
+         Figure 3: Typical Geophysical Survey on site, schematic for Drilling & Borehole Drilling Rig
+                                                                                                   Page 92 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+10.2.1 HANDHELD PUMP
+The Deep well hand pump shall be used for this Project; The manual pump will be installed on
+top of the borehole, allowing users to manually extract water by pumping the handle
+
+          Figure 4: Typical schematic & Pictures of Deep well Handheld Pump
+
+10.2.2 MOTORIZED BOREHOLE ­ ELECTRIC POWERED
+
+This motorized system will utilize Electricity to Power the pump, to extract water from
+boreholes. The components will include Electric Pump and cables for electrical retrofit. Pump
+Specification is dependent on depth of water. This will vary in di erent depths as indicated on
+the specification table below:
+
+          Table 1: Electric Submersible Pump Specification for Borehole Depths
+
+BOREHOLE  ENERGY SOURCE                        SUBMERSIBLE PUMP SPECIFICATION
+  DEPTH
+
+ 75m       Electricity - AC Source              1hp ­1NR Pedrollo
+          Voltage:220-240v, 50Hz               submersible stainless
+
+                                                    steel pump.
+
+76m        Electricity - AC Source               1.5hp ­1hp ­1NR
+          Voltage:220-240v, 50Hz               Pedrollo submersible
+                                               stainless steel pump
+
+                                                                      Page 93 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+10.2.3 MOTORIZED BOREHOLE ­ SOLAR POWERED
+This motorized system will utilize Solar system as source of energy. The components will
+include Solar Pump, Panels and cables for electrical retrofit. Pump Specification is dependent
+of depth of water. This will vary in di erent depths as indicated on the specification table
+below:
+
+                   Table 2: Solar Powered System Specification for Borehole Depths
+
+10.2.4 PROTECTED DEEP WELL
+
+  The well shall be of Minimum of 900mm diameter and adequate depth for Su icient Water Yield.
+ The wells are to be cased with Concrete Rings and Covered with either concrete, Steel or Wooden
+
+                                                           Covers
+
+Figure 5: Deep Well with concrete ring         Fig 6: Deep Well with concrete covering
+
+                                               Page 94 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+10.2.5 RAINWATER HARVESTING
+
+Rainwater harvesting (RWH) is a process of capturing and storing rain for non-potable use, reducing
+dependence on unreliable or costly water sources especially for rural and semi-urban schools.
+The Collected water is to be used for toilet flushing, cleaning, handwashing, and garden
+irrigation. Tanks are to be positioned near toilets and ECCDE units to ensure easy access for
+hygiene needs.
+
+              Table 3: Components of Rainwater Harvester
+
+ELEMENTS                                    Key Components
+
+Gutters &     Durable PVC or galvanized iron gutters connected to roof edges; slope >1%
+Downpipes     for water flow.
+
+Storage Tank  Minimum 5,000 ­ 10,000 liters capacity; above or underground, UV-
+              resistant, with screened inlet.
+
+First Flush Diverter Prevents debris or contaminated initial rain from entering storage.
+
+Tap Points    Install taps at child-accessible height; lockable to prevent misuse.
+
+              Figure 7: Schematics of a Rainwater harvesting system
+
+ Figure 8: Installed rainwater harvesting system                     Page 95 of 114
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+11.0 WATER STORAGE
+
+Water shall be stored in either Overhead Tanks (GeePee PVC recommended), Ground-Level
+Reservoirs (Brick wall Tanks) and Rainwater Harvesting Tanks. Minimum tank Capacity shall be
+3,000L for Overhead Tanks; 15,000L for Ground-Level Reservoirs. Rainwater harvesting Tanks will
+vary in size depending on the intended use
+
+11.1 OVERHEAD TANK (GEEPEE PVC)
+
+Technical Specifications:
+
+    o Capacity: 3,000 liters
+    o Material: Food-grade, non-toxic polyethylene
+    o Design: Cylindrical with a solid, round base
+    o Dimensions:
+    o Height: Approximately 5 feet 3 inches
+    o Diameter: Approximately 5 feet
+
+Color: Typically, black or blue (may vary by vendor)
+
+Key Features
+
+    o Durability: Made from UV-stabilized plastic to resist sunlight and prevent algae growth
+    o Weather Resistance: All-weather proof, suitable for outdoor installation
+    o Hygiene: Safe for drinking water; smooth surface allows easy cleaning
+    o Installation: Designed for flat surface placement with a stable base
+    o Versatility: Suitable for: Drinking water storage, Use in Schools, hotels, hospitals, housing
+
+         estates
+
+    Figure 9: Sample Geepee PVC Tank, grade tank material certified to AS/NZS 4766. It's also UV
+resistant
+
+                                               Page 96 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+11.2 GROUND-LEVEL RESERVOIRS TANK
+Shall be made from Solid Brick walls laid in stretcher bonds, with internal walls plastered and either
+rendered smoothly or tiled with glazed ceramic to retain water for Use. The Tanks shall either be
+Square, Rectangular or Circular depending on land availability. The Minimum tank Capacity shall be
+15,000L
+
+Figure 10: Sample image of Square or Rectangular Brick wall Tank
+
+Figure 11: Sample image of Circular Brick wall Tank
+
+                                                                  Page 97 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+11.3 OVERHEAD TANK SUPPORTS
+
+Overhead Tanks should be either Reinforced Concrete Frame structure, Block wall or Steel
+Stanchion.
+
+           Table 4: Components of Overhead Water Tank
+
+ELEMENT          COMPONENTS
+
+                 o 2800mm Length x 2800mm Breadth x 100mmthick Concrete
+                      Slab
+
+REINFORCED       o 230mm wide x 350mm Deep RC beam
+CONCRETE FRAME   o 230mm x 230mm CoLumns
+STRUCTURE        o 230mm x 230mm Tie Beams
+
+                 o 1000mm x 1000mm x 300mm Deep Column Footing
+
+                 o Steel Ladder for Climbing
+
+                 o 2800mm Length x 2800mm Breadth x 100mmthick Concrete
+                      Slab
+
+                 o 230mm wide x 350mm Deep RC Beam
+
+BLOCKWALL        o 230mm Block wall laid with stretcher bond
+                 o Block-walls at corners filled solidly to act as Column supports
+
+                 o 230mm x 690mm Strip Footing in Foundation
+
+                 o Steel Ladder for Climbing
+
+                 o Solar Panel support made from 40mm x 40mm x 5mm hollow
+                      section
+
+                 o Guard Rails supports made from 50mm x 50mm x 5mm
+                      hollow section
+
+STEEL STANCHION  o Tank platform made from 5mm thick chequer plate or 50mm x
+                      50mm x 5mm thick galvanized weld mesh with 6mm fillet
+                      weld on supporting secondary beam.
+
+                 o IPE 160x82x20.1kg/m primary beam and IPE
+                      120x64x13.2kg/m secondary Beam at 300 c/c
+
+                 o Horizontal struts and diagonal bracing EX. 50x50x6mm
+
+                 o 150x200x6mm thick gusset plate weighing 31.40kg/m2
+
+                 o 152X152X30Kg/m UC Universal Column
+
+                                                                 Page 98 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+                                            o 1000mm x 1000mm x 300mm Deep Column Footing
+                                            o Steel Ladder for climbing.
+
+11.4 REINFORCED CONCRETE FRAME STRUCTURE
+This shall consist of Columns, Beams and Slab platform built as a Concrete frame to sit the
+Storage tank.
+The components shall include the following:
+
+    o 2800mm Length x 2800mm Breadth x 100mmthick Concrete Slab
+    o 230mm wide x 350mm Deep RC beam
+    o 230mm x 230mm Columns
+    o 230mm x 230mm Tie Beams
+    o 1000mm x 1000mm x 300mm Deep Column Footing
+    o Steel Ladder for Climbing
+    o Height ­ 6000mm
+
+Figure 12: Sample image of Reinforced Concrete Frame Structure Support
+
+                                               Page 99 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+11.5 BLOCK WALL SUPPORT
+Block wall supports are built of hollow blocks laid in stretcher bonds; the cavities at the edge
+or corners of the walls are filled solidly with reinforced concrete, acting as columns.
+The Roof Beam sits directly on the block wall and carries the slab platform. Wall Finish shall
+either be Paint or Tile. Components of the block wall support include:
+
+     o 2800mm Length x 2800mm Breadth x 100mmthick Concrete Slab
+     o 230mm wide x 350mm Deep RC Beam
+     o 230mm Block wall laid with stretcher bond
+     o Block walls at corners filled solidly to act as Column supports
+
+    o 230mm x 690mm Strip Footing in Foundation
+    o Steel Ladder for Climbing
+
+Figure 13: Sample images of Constructed Blok wall Tank Support
+
+                                                                Page 100 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+11.6 STEEL STANCHIONS
+Steel Stanchions are made of Universal Channel (UC) sections for vertical support members,
+Angle Irons for braces and tie beams. The platforms are made of BRC Mesh or 2mm thick flat
+plates; Ladders are provided for climbing. The rest platform is fitted with braces to act as barriers
+against movement of the Tank or individual on routine maintenance work.
+The structural elements include the foundation details and Steel stanchion members.
+Foundation includes the Column studs with holding down bolts and tie beams
+
+Figure 14: Sample images of Steel Stanchion foundation details
+
+                                                                Page 101 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+Stanchion
+Components shall include:
+
+     o Solar Panel support made from 40mm x 40mm x 5mm Angle Iron
+     o Guard Rails supports made from 50mm x 50mm x 5mm Angle Iron
+     o Tank platform made from 5mm thick chequer plate or 50mm x 50mm x 5mm thick galvanized
+
+          weld mesh with 6mm fillet weld on supporting secondary beam.
+     o IPE 160x82x20.1kg/m primary beam and IPE 120x64x13.2kg/m secondary Beam at 300 c/c
+     o Horizontal struts and diagonal bracing EX. 50x50x5mm Angle Iron
+     o 150x200x6mm thick gusset plate weighing 31.40kg/m2
+     o 152X152X30Kg/m UC Universal Column
+
+    o 1000mm x 1000mm x 300mm Deep Column Footing
+    o Steel Ladder for climbing.
+
+         Figure 15: Sample schematics diagram of Steel Stanchion with member details:
+                                                                                                 Page 102 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+         Figure 16: Sample Images of Steel Stanchion with Storage Tank and Solar Panels
+installed
+
+                                                                                                 Page 103 of 114
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+12.0 SAFEGUARDS
+
+12.1 CHAIN LINKED ­ FENCE
+
+Chain linked ­ fence shall be provided for safeguards. The components will include the
+following:
+
+              o Weld Mesh/Chain-Link with Concrete Base: A combination of a low-rise
+                   concrete plinth (e.g., 600mm/2 feet) topped with heavy-gauge weld mesh or
+                   durable chain-link fencing (e.g., 2.4mm wire thickness, 50x50mm mesh size)
+                   o ers good visibility for external monitoring while providing robust physical
+                   security. This option is often more a ordable than a full block wall and allows for
+                   natural light and air circulation.
+
+              o Barbed Wire/Razor Wire Topping: For enhanced deterrence, a topping of three
+                   to five strands of barbed wire or concertina razor wire can be installed on top of
+                   the fence, angled outwards. Crucially, for primary and junior secondary schools,
+                   this must be installed at a height that prevents direct contact by pupils / students
+                   within the school premises, ideally above 2.7 meters (9 feet) from the internal
+                   ground level, or positioned solely on the external side where possible.
+
+                                    Figure 17: Sample of Chain link - fence  Page 104 of 114
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+12.2 SOLAR STREET LAMPS
+Solar Street lamps shall be installed on the stanchion at a height not less than 6000mm to
+provide light at night. This will be required for safeguards and for routine maintenance.
+1 No. pole mounted 360w LED solar-powered lighting system will be installed to illuminate the
+surroundings
+
+       Figure 18: Sample of Solar Lamp mounted on steel stanchion to illuminate
+surrounding
+
+                                               Page 105 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+13.0 QUALITY ASSURANCE MEASURES
+
+13.1 QUALITY ASSURANCE DURING PLANNING & DESIGN
+
+                 Table 5: QA Table: During Planning & Design
+
+QA Measure            Description                                     Compliance Tool
+
+Geophysical Survey    Mandatory execution of Vertical Electrical      UBEC Checklist: Verification of
+Mandate               Sounding (VES) or Electrical Resistivity        submitted Geo-Survey Report and
+                      Tomography (ERT) before borehole drilling.      certified drill point coordinates.
+
+Design Specification  Review of pump sizing, solar array capacity,    Design Sign-O Sheet: Signed by a
+Review                and tank volume against Student-to-Capacity     COREN-registered Engineer confirming
+                      Ratios. The design must guarantee a minimum     compliance with the minimum daily yield
+                      of 5 liters per student per day.                volume.
+
+Setback Verification  Confirmation that the proposed water source     Site Plan & Survey: Map submitted
+                      (borehole/well) is located a minimum of 30      showing setbacks verified against the
+                      meters away from any contamination source       actual site boundaries.
+                      (latrines, soak away pits, waste areas) as per
+                      the National Building Code.
+
+13.2 QUALITY ASSURANCE DURING INSTALLATION & CONSTRUCTION
+
+                 Table 6: QA Table: During Project Execution
+
+QA Measure            Description                                     Compliance Tool
+
+Material              All critical components--casing, screens,       Delivery Notes and QA Log: Site
+Certification         pipes, cement, and solar panels--must be        Supervisor checks product labeling
+                      accompanied by manufacturer warranties          against SON specifications upon delivery.
+                      and Standards Organization of Nigeria
+                      (SON) compliance certificates.
+
+Grouting Integrity    Verification that the borehole annular space    Drilling Log: Contractor must record the
+                      is sealed with cement-bentonite grout from      volume and depth of grout application,
+                      the surface to at least 10 meters depth.        verified by the Site Engineer.
+
+Panel and Stand       Inspection of the solar panel mounting          Installation Checklist: Specific check-o
+Security              structure (galvanized steel) to confirm it is   for panel anti-theft bolts and concrete
+                      robust, correctly anchored in concrete, and     base dimensions.
+                      secured with anti-theft measures.
+
+WASH Point            Direct inspection that handwashing stations     Facility Walkthrough Checklist:
+Verification          are installed adjacent to latrine blocks and    Completed upon plumbing final fix.
+                      that the student-to-Tap Ratio of 1:20 is met
+                      for the end-user points.
+
+                                                                                       Page 106 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+13.3 QUALITY ASSURANCE DURING COMMISSIONING AND HANDOVER
+
+            Table 7: QA Table: During Completion
+
+QA Measure               Description                                 Compliance Tool
+
+Yield and Pump Testing   Mandatory 24-hour continuous pump test      Certified Pump Test Report: Signed by the
+                         conducted to measure static water level     contractor and witnessed by the SUBEB or
+                         recovery and sustained yield rate.          LGEA Technical O icer.
+
+Water Quality Testing    Water samples must be submitted to a        Potability Certificate: Formal certificate
+                         certified, independent laboratory for       from a recognized laboratory confirming
+                         bacteriological and physicochemical         the water meets WHO/Nigerian drinking
+                         analysis.                                   standards.
+
+Sustainability Training  Formal training provided to the School      Handover Certificate & Training Log:
+                         Based Management Committee (SBMC)           Signed by a minimum of five SBMC
+                         on routine operations, security, and minor  members and the contractor, confirming
+                         fault troubleshooting.                      receipt of the system manual.
+
+Final Acceptance         Formal client acceptance is granted only    Site Acceptance Certificate: Signed by
+                         upon clearance of the Punch List and        the School Head and the LGEA or SUBEB
+                         issuance of the Site Acceptance             Project Manager, initiating the
+                         Certificate.                                contractor's one-year warranty period.
+
+                                                                                      Page 107 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+14.0 TOILETS
+
+Toilets shall be Flush or VIP Latrines. Choices should be selected based on local conditions (e.g.
+water availability, soil type, climate) and all systems should be designed for easy maintenance, safe
+waste disposal and odor control
+
+14.1 LOCATION & ACCESS
+
+     o Separate blocks for boys & girls located at least 20-30m away from the nearest learning area
+     o 4-8 cabins with clear signage and each with an external hands-washing area (equal in number of
+
+          WCs or pits)
+     o Dedicated cabin plus access ramps in each block for people with disabilities.
+     o Entrance 900mm; turning space Ø1.5m; grab bars 900mm long; knee clearance 635mm
+
+14.2 GENDER ­ DISAGGREGATED FACILITIES
+Urinals for Boys while for girls, menstrual hygiene-friendly features can encourage school
+attendance and ensure dignity for menstruating students. These include:
+
+     o Adequate water supply for washing and hygiene with wall hangers and clothes washing points.
+     o Covered disposal bins or other sanitary pads management solution.
+     o Privacy features such as doors with internal locks, adequate lighting, shower cabin, etc.
+     o 1 Toilet per 25 Girls, 1 Toilet per 40 Boys + 1 Unrinal
+
+14.3 MINIMUM ACCESSIBILITY FEATURES
+
+        Table 8: Toilet Accessibility Features
+
+Facility Space   Ramp Door            Handrails   Signage         Flooring Toilet
+Type                           Width
+
+Toilet           Step-   900mm        Grab bars   "Accessible"    Slip-    Mirrors,
+Block            free,                900mm       sign + Braille  resist;  basins at
+        1.8m x   Ramped               long; knee  Interior door   full     0.7­0.9m
+        1.8m     access               clearance   sign with       turning  height
+        Minimum                       635mm       Braille         radius   1.8×1.8m;
+                                                                           grab rails;
+                                                                           480­
+                                                                           500mm
+                                                                           seat
+
+                                                                  Page 108 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+14.4 FLUSH TOILETS
+Flush Toilets shall be deployed in areas with reliable water supply at a ratio of 1: 25 for girls, 1:40 for
+boys. A Toilet Pedestal shall be installed in one cubicle for people with special needs, while Squat
+will be installed in the remaining cubicle
+
+                  Figure 19: Sample schematic diagram of Flush Toilet
+
+14.5 VENTILATED IMPROVED PIT(VIP) LATRINES.
+Ventilated Improved Pit (VIP) Latrines shall be deployed in areas with limited water supply at a ratio
+of 2:40 pupils. A Toilet Pedestal shall be installed in one cubicle for people with disability while Squat
+will be installed in the remaining cubicle.
+
+                  Figure 20: Sample schematic diagram of VIP Latrines  Page 109 of 114
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+14.6 FETCHING & HAND WASHING POINT
+    Fetching Point and Hand Washing Stations should be installed at an accessible child-
+    friendly height, within easy reach for children with disabilities (universal design). Height of
+    700mm above finished floor level is recommended. 5 Points will be provided with tippy taps
+    or low flow taps. The Fetching point will be built with block wall and tiled with glazed ceramic.
+
+Figure 21: Sample of Schematic and images of Fetching & Hand-washing Points
+
+                                               Page 110 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+15.0 SPECIFICATION SUMMARY
+
+15.1 SOURCE OF WATER
+
+    o Piped Water Supply e.g. connection to Water Board
+    o Boreholes ­ Motorized (Solar or Electric Powered) or Deep well Hand Pump drilled to
+
+         suitable depth with su icient water yield
+    o Protected Deep water well of 900mm diameter with concrete casing and either
+
+         wooden, steel or concrete cover
+    o Rainwater Harvesting. Rainwater harvested using drainpipes of either PVC, Zinc or
+
+         Aluminum materials and collected to a storage tank of either PVC or Metal.
+
+15.2 WATER STORAGE
+
+    o Overhead Water Tank shall be either PVC Or Steel Tank, for PVC GeePee tanks are
+         recommended and minimum tank capacity shall be 3,000 Litres
+
+    o Ground water reservoir shall be made from solid brick walls either rendered smoothly or
+         tiled with glazed ceramic to retain water for Use. Shape shall be square, rectangular or
+         Circular. Tank Capacity shall not be less than 15,000 Litres
+
+15.3 OVERHEAD TANK SUPPORT
+
+Overhead Water Tank support shall either be Reinforced Concrete Frame structure, Block wall
+support structure or Steel Stanchion
+
+    o Reinforced Concrete Frame structure shall consist of Platform slab, Supporting and Tie
+         Beams and Columns. Steel ladders will be provided for climbing
+
+    o Block wall Supports are built of hollow blocks laid in stretcher bonds; the cavities at the
+         edge or corners of the walls are filled solidly with reinforced concrete, acting as columns
+
+    o Steel Stanchion made of 152X152X30Kg/m UC Universal Column as primary support,
+         IPE 160x82x20.1kg/m primary beam and IPE 120x64x13.2kg/m secondary Beam at 300
+         c/c, 150x200x6mm thick gusset plate weighing 31.40kg/m2, horizontal struts and
+         diagonal bracing EX. 50x50x5mm Angle Iron, tank platform made from 5mm thick
+         chequer plate or 50mm x 50mm x 5mm thick galvanized weld mesh with 6mm fillet weld
+         on supporting secondary beam, guard Rails supports made from 50mm x 50mm x 5mm
+         Angle Iron, solar Panel support made from 40mm x 40mm x 5mm Angle Iron and climbing
+         ladder
+
+                                               Page 111 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+15.4 SAFEGUARDS
+Weld Mesh/Chain-Link with Concrete Base: A combination of a low-rise concrete plinth (e.g.,
+600mm/2 feet) topped with heavy-gauge weld mesh or durable chain-link fencing (e.g., 2.4mm
+wire thickness, 50x50mm mesh size)
+Barbed Wire/Razor Wire Topping: Topping of three to five strands of barbed wire or concertina
+razor installed on top of the fence, angled outwards. Installed 2.7 meters (9 feet) from the
+internal ground level or positioned solely on the external side where possible. Diameter of Razor
+coil wire should not be less than 600mm diameter.
+
+15.5 TOILET
+    Toilets shall be Flush or VIP Latrines.
+    o Separate blocks for boys & girls located at least 20-30m away from the nearest learning
+         area
+    o 4-7 cabins with clear signage and each with an external hands-washing area (equal in
+         number of WCs or pits)
+    o Dedicated cabin plus access ramps in each for people with disabilities
+    o Urinals for Boys while for girls, menstrual hygiene-friendly features
+
+15.6 FETCHING & HAND WASHING POINT
+The Fetching point will be built with block wall and tiled with glazed ceramic. 5 Points will be
+provided with tippy taps or low flow taps. Height of 700mm above finished floor level is
+recommended
+
+                                               Page 112 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+16.0 CONCLUSION
+
+This manual is set out as a practical guide for carrying out construction works,
+renovation/rehabilitation works, and WASH (Water, Sanitation and Hygiene) interventions
+under the project. It is designed to support the School-Based Management Committee (SBMC),
+the Project Implementation Sub-Committee (PISC), and designated supervisors in executing
+all on-site activities correctly, efficiently, and to the highest standards of quality, safety, and
+functionality.
+
+It is important that this manual is not used in isolation, but as a supporting document throughout
+planning, implementation, supervision, and completion of works. Accordingly, it should be read
+and applied in conjunction with all relevant project documents, including:
+
+     Approved working drawings and technical specifications, to ensure structural integrity,
+         correct detailing, and compliance with required standards;
+
+     SBMC­SIP implementation guidelines and the School Development Plan (SDP), to
+         promote transparency, community ownership, accountability, and sustainability of project
+         outcomes; and
+
+     any other approved project instructions and records necessary for proper understanding,
+         coordination, and implementation of activities on site.
+
+By applying the guidance in this manual alongside the above documents, stakeholders will ensure
+that every project deliverable--whether a newly constructed facility, a successfully
+rehabilitated structure, or a functional water and sanitation service--contributes
+meaningfully to a safe, healthy, inclusive, and conducive learning environment. Proper adherence
+to these procedures will also strengthen long-term maintenance culture and help the community
+protect and sustain the infrastructure and WASH facilities for lasting benefit.
+
+                                               Page 113 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+PART III WASH (WATER, SANITATION, HYGIENE)
+
+                                                      REFERENCES
+
+Aggregates.https://www.cement.org/cement-concrete/concrete-materials/aggregates.Viewed on
+02/09/21
+Concrete rebar: Everything you need to know [plus 8 Main Types]. https://www.gra-
+rock.com/post/guide-toconcrete-rebar.Viewed on 06/09/21
+Construction site security https://www.buildersengineer.info/2013/12/construction-site-
+security.html.Viewed on 28/08/21
+Field test of cement. https://civiltoday.com/civil-engineering-materials/cement/14-cement-field-
+tests. Viewed on 02/09/21
+Flakiness Index Test for Aggregates.https://www.engineeringcivil.com/flakiness-index-test-for-
+aggregates.html.Viewed on 03/09/21
+Formwork stripping time for di erent structural elements.
+https://www.designfloor.org/formwork/.Viewed on 04/09/21
+Testing construction materials. https://www.designingbuildings.co.uk/wiki/Testing-
+constructionmaterials#Testing_bricks. Viewed on 02/09/21
+Universal Basic Education Commission (UBEC)(2018). Revised Minimum Standards for Basic
+Education in Nigeria. Federal Ministry of Education
+
+World Bank Assisted Adolescent Girls Initiative for Learning and Empowerment (AGILE Project) 2023
+Construction Manual
+
+                                               Page 114 of 114
+
+UBEC ­ Construction, Renovation & Wash Manual
+

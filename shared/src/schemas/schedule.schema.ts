@@ -16,7 +16,7 @@ export const SCHEDULE_STATUS_META: Record<ScheduleStatusValue, { label: string; 
   AHEAD: { label: 'Ahead', tone: 'positive' },
   BEHIND: { label: 'Behind', tone: 'critical' },
   COMPLETE: { label: 'Complete', tone: 'positive' },
-  UNSCHEDULED: { label: 'No sprints', tone: 'muted' },
+  UNSCHEDULED: { label: 'No work phases', tone: 'muted' },
 };
 
 /** The badge shown on the directory, dashboard and portfolio map. */

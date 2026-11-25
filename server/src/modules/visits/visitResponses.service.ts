@@ -125,7 +125,7 @@ export async function respondToVisit(params: {
             const window = rescheduleWindow(v.originalPlannedDate, tenant.visitRescheduleToleranceWorkdays, project.workWeekDays, sprints);
             const why =
               check.reason === 'OTHER_SPRINT'
-                ? 'That date is in another sprint.'
+                ? 'That date is in another work phase.'
                 : check.reason === 'NOT_A_WORKDAY'
                   ? 'That date is not a working day.'
                   : `That date is more than ${tenant.visitRescheduleToleranceWorkdays} working day(s) from the original date.`;

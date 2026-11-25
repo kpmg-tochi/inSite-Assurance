@@ -27,7 +27,7 @@ export interface OutboxItem {
 }
 
 export const OUTBOX_KIND_LABELS: Record<OutboxKind, string> = {
-  VISIT_SUBMISSION: 'Visit report',
+  VISIT_SUBMISSION: 'Monitoring report',
   VISIT_CHECK_IN: 'Check-in',
   VISIT_RESPONSE: 'Visit response',
   UNSCHEDULED_VISIT: 'Unscheduled visit',
@@ -125,8 +125,8 @@ export function outboxItemActions(item: OutboxItem): OutboxItemActions {
 /** The confirmation shown before a removal. */
 export const OUTBOX_REMOVE_TEXT: Record<OutboxRemoveAction, { button: string; title: string; message: string }> = {
   DELETE_REFUSED_REPORT: {
-    button: 'Delete report',
-    title: 'Delete this visit report?',
+    button: 'Delete monitoring report',
+    title: 'Delete this monitoring report?',
     message: 'The server refused it, so it can never be sent. It is removed from this phone.',
   },
   DISCARD_RESPONSE: {

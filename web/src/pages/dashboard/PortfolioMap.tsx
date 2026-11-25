@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip, useMap } from "react-leaflet";
-import type { PortfolioOverviewProject, ScheduleStatusValue } from "@insite/shared";
+import { formatProjectCode, type PortfolioOverviewProject, type ScheduleStatusValue } from "@insite/shared";
 import { NEUTRAL_BOUNDS, type LatLngTuple } from "../../components/geofence/geofenceGeometry";
 
 /** Marker colour per schedule status. On track and complete differ in hue and in the legend's words. */
@@ -57,11 +57,14 @@ export function PortfolioMap({ projects, onOpenProject }: { projects: PortfolioO
                 pathOptions={{ color: "#ffffff", weight: 2, fillColor: style.color, fillOpacity: 0.95 }}
               >
                 <Tooltip direction="top" offset={[0, -6]}>
-                  {p.codePrefix} · {p.name}
+                  {formatProjectCode(p.codePrefix)} · {p.name}
                 </Tooltip>
                 <Popup>
                   <div className="min-w-[200px] space-y-1.5 font-sans">
-                    <p className="text-[11px] font-semibold text-slate-500 tabular-nums">{p.codePrefix}</p>
+                    <p className="text-[11px] font-semibold text-slate-500 tabular-nums">
+                      {formatProjectCode(p.codePrefix)}
+                      {p.interventionYear !== null && <span className="font-medium"> · Intervention year {p.interventionYear}</span>}
+                    </p>
                     <p className="text-sm font-semibold text-slate-900 leading-snug">{p.name}</p>
                     <p className="text-xs text-slate-600">
                       {style.label} · {Math.round(p.certifiedProgressPct)}% complete

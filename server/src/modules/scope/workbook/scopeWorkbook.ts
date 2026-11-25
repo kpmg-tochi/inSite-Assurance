@@ -169,11 +169,11 @@ export async function buildScopeWorkbook(data: WorkbookBuildData): Promise<Buffe
   };
   const steps = [
     'Project: fill in the project details. On a draft, empty project fields take these values; existing values are not overwritten.',
-    'Sprints: one row per sprint, numbered 1, 2, 3… in date order. Sprints may differ in length and leave gaps, but may not overlap.',
+    'Sprints (work phases): one row per work phase, numbered 1, 2, 3… in date order. Work phases may differ in length and leave gaps, but may not overlap.',
     'Facility units: one row per physical facility on site (e.g. "Ground floor male toilet"). Pick the facility from the list. Give each unit its own Unit ID (U01, U02…). Supply items (furniture, equipment) need a quantity.',
     'BoQ: one row per bill line. Pick the Unit ID of the facility unit it belongs to and the unit of measure. Rates and amounts are in naira. Amount is quantity × rate and is recomputed on upload.',
     'Do not rename the sheets or the column headers, and keep the title rows above the headers.',
-    'Import the file on the project\'s "Scope & sprints" step (Import needs assessment). You will see a preview with any errors before anything is saved.',
+    'Import the file on the project\'s "BoQ & work phases" step (Import needs assessment). You will see a preview with any errors before anything is saved.',
     'Drawings and other attachments go to the project documents, not this file.',
   ];
   section(8, 'How to fill it in');
@@ -244,7 +244,7 @@ export async function buildScopeWorkbook(data: WorkbookBuildData): Promise<Buffe
     if (v !== null && v !== undefined && v !== '') cell.value = v;
     cell.border = BOX;
     cell.alignment = { vertical: 'top', horizontal: 'left', indent: 1 };
-    if (f.key === 'region' && data.regions.length) cell.dataValidation = listValidation(regionList, 'Choose a region from the list.');
+    if (f.key === 'region' && data.regions.length) cell.dataValidation = listValidation(regionList, 'Choose a zone or state from the list.');
     if (f.key === 'deliveryModel' && data.deliveryModels.length) cell.dataValidation = listValidation(modelList, 'Choose a delivery model from the list.');
     // UBEC IRL: suggestions only (any other funding source is accepted), and a year from 2000 to 2100.
     if (f.key === 'fundingSource') cell.dataValidation = { ...listValidation(fundingList, ''), showErrorMessage: false };
@@ -280,8 +280,8 @@ export async function buildScopeWorkbook(data: WorkbookBuildData): Promise<Buffe
     units.getCell(`B${r}`).dataValidation = listValidation(facilityList, 'Choose a facility from the list.');
     units.getCell(`D${r}`).dataValidation = decimalValidation(0, 'Enter the quantity as a number.');
     units.getCell(`E${r}`).dataValidation = listValidation(uomList, 'Choose a unit of measure from the list.');
-    units.getCell(`F${r}`).dataValidation = listValidation(sprintList, 'Choose a sprint number from the Sprints sheet.');
-    units.getCell(`G${r}`).dataValidation = listValidation(sprintList, 'Choose a sprint number from the Sprints sheet.');
+    units.getCell(`F${r}`).dataValidation = listValidation(sprintList, 'Choose a work phase number from the Sprints sheet.');
+    units.getCell(`G${r}`).dataValidation = listValidation(sprintList, 'Choose a work phase number from the Sprints sheet.');
   }
   units.autoFilter = { from: { row: HR, column: 1 }, to: { row: HR, column: SCOPE_WORKBOOK_COLUMNS.units.length } };
 
@@ -328,14 +328,14 @@ export async function buildScopeWorkbook(data: WorkbookBuildData): Promise<Buffe
 
   // Sprints
   const sprints = wb.addWorksheet(S.sprints, { properties: { tabColor: { argb: COLOR.primary } } });
-  titleBand(sprints, SCOPE_WORKBOOK_COLUMNS.sprints.length, sheetTitle(S.sprints), hint('One row per sprint, numbered 1, 2, 3… in date order; sprints may not overlap.'));
+  titleBand(sprints, SCOPE_WORKBOOK_COLUMNS.sprints.length, sheetTitle(S.sprints), hint('One row per work phase, numbered 1, 2, 3… in date order; work phases may not overlap.'));
   headerRow(sprints, SCOPE_WORKBOOK_COLUMNS.sprints, [8, 32, 16, 16, 70]);
   tableBody(sprints, [{ align: 'center' }, {}, { numFmt: DATE, align: 'center' }, { numFmt: DATE, align: 'center' }, { wrap: true }], sprintsLast);
   data.sprints.forEach((s, i) => {
     setRow(sprints, i + FR, [s.number, s.name, isoToDate(s.startDate), isoToDate(s.endDate), s.deliverables]);
   });
   for (let r = FR; r <= sprintsLast; r++) {
-    sprints.getCell(`A${r}`).dataValidation = { type: 'whole', operator: 'greaterThanOrEqual', allowBlank: true, formulae: [1], showErrorMessage: true, error: 'Sprint numbers are 1, 2, 3…' };
+    sprints.getCell(`A${r}`).dataValidation = { type: 'whole', operator: 'greaterThanOrEqual', allowBlank: true, formulae: [1], showErrorMessage: true, error: 'Work phase numbers are 1, 2, 3…' };
     for (const c of ['C', 'D']) sprints.getCell(`${c}${r}`).dataValidation = DATE_VALIDATION;
   }
 
@@ -470,9 +470,9 @@ export async function parseScopeWorkbook(buffer: Buffer, context: WorkbookParseC
           issues.push({ sheet: S.sprints, row: r.row, column, code, message: `Row ${r.row}: ${message}` });
           ok = false;
         };
-        if (number === null || Number.isNaN(number) || !Number.isInteger(number) || number < 1) bad('No.', 'INVALID_SPRINT_NUMBER', 'the sprint number must be 1, 2, 3…');
-        else if (sprintNumbers.has(number)) bad('No.', 'DUPLICATE_SPRINT_NUMBER', `sprint ${number} appears twice.`);
-        if (!name) bad('Name', 'MISSING_VALUE', 'name the sprint.');
+        if (number === null || Number.isNaN(number) || !Number.isInteger(number) || number < 1) bad('No.', 'INVALID_SPRINT_NUMBER', 'the work phase number must be 1, 2, 3…');
+        else if (sprintNumbers.has(number)) bad('No.', 'DUPLICATE_SPRINT_NUMBER', `work phase ${number} appears twice.`);
+        if (!name) bad('Name', 'MISSING_VALUE', 'name the work phase.');
         if (!startDate) bad('Start date', 'BAD_DATE', `"${text(r.get('Start date'))}" is not a date.`);
         if (!endDate) bad('End date', 'BAD_DATE', `"${text(r.get('End date'))}" is not a date.`);
         if (number !== null && !Number.isNaN(number)) sprintNumbers.add(number);
@@ -491,7 +491,7 @@ export async function parseScopeWorkbook(buffer: Buffer, context: WorkbookParseC
       const byNumber = [...parsed].sort((a, b) => a.number - b.number);
       const byDate = [...parsed].sort((a, b) => a.startDate.localeCompare(b.startDate));
       if (byNumber.some((s, i) => byDate[i] !== s)) {
-        issues.push({ sheet: S.sprints, row: null, column: 'No.', code: 'SPRINT_NUMBER_ORDER', message: 'Sprint numbers must follow the dates: sprint 1 first, then 2, 3…' });
+        issues.push({ sheet: S.sprints, row: null, column: 'No.', code: 'SPRINT_NUMBER_ORDER', message: 'Work phase numbers must follow the dates: work phase 1 first, then 2, 3…' });
       }
       result.sprints = byNumber.map(({ row: _row, ...s }) => s);
     }
@@ -538,7 +538,7 @@ export async function parseScopeWorkbook(buffer: Buffer, context: WorkbookParseC
         if (isBlank(raw)) return null;
         const n = parseSheetNumber(raw);
         if (n === null || Number.isNaN(n) || !Number.isInteger(n)) {
-          bad(column, 'INVALID_SPRINT_NUMBER', `${column.toLowerCase()} "${text(raw)}" must be a sprint number.`);
+          bad(column, 'INVALID_SPRINT_NUMBER', `${column.toLowerCase()} "${text(raw)}" must be a work phase number.`);
           return null;
         }
         if (!sprintNumbers.has(n)) {
@@ -550,7 +550,7 @@ export async function parseScopeWorkbook(buffer: Buffer, context: WorkbookParseC
       const startSprint = sprintRef('Start sprint');
       const endSprint = sprintRef('End sprint');
       if (startSprint !== null && endSprint !== null && startSprint > endSprint) {
-        bad('End sprint', 'UNIT_SPRINT_ORDER', `the unit ends in sprint ${endSprint}, before it starts in sprint ${startSprint}.`);
+        bad('End sprint', 'UNIT_SPRINT_ORDER', `the unit ends in work phase ${endSprint}, before it starts in work phase ${startSprint}.`);
       }
       if (ok && facility) {
         result.units.push({

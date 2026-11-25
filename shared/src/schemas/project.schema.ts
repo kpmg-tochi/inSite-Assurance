@@ -9,6 +9,8 @@ import { ScheduleVarianceBadgeSchema } from './schedule.schema';
 import { ProjectBeneficiaryDtoSchema, ProjectTypeSummarySchema, RegionSummarySchema } from './deliveryModel.schema';
 import { ProjectStageSummarySchema } from './projectOverview.schema';
 import { ProjectAlertKeyEnum } from './projectAlert.schema';
+import { FundingSourceCodeEnum } from './projectRegister.schema';
+import { NigeriaZoneCodeEnum } from '../data/nigeriaAdminAreas';
 
 /**
  * Phase 11: the delivery-model fields every project list row carries (directory and portfolio
@@ -40,6 +42,16 @@ export const ProjectRegisterFieldsSchema = z.object({
   importedStatus: z.string().nullable(),
   /** True while the progress shown is the imported figure (no scope lines yet). */
   progressIsImported: z.boolean(),
+  /**
+   * Client demo updates (wave 1): national reference codes (C1), the zone derived from the state,
+   * the funding source code (C4) and the lot/batch numbers (C3). Null on older projects.
+   */
+  stateCode: z.string().nullable(),
+  lgaCode: z.string().nullable(),
+  zone: NigeriaZoneCodeEnum.nullable(),
+  fundingSourceCode: FundingSourceCodeEnum.nullable(),
+  lotNumber: z.number().int().nullable(),
+  batchNumber: z.number().int().nullable(),
 });
 export type ProjectRegisterFields = z.infer<typeof ProjectRegisterFieldsSchema>;
 

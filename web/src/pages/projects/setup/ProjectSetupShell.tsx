@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, Archive, ArrowLeft, ArrowRight, CheckCircle2, Circle, Loader2 } from "lucide-react";
-import type { ProjectSetupSectionId } from "@insite/shared";
+import { formatProjectCode, type ProjectSetupSectionId } from "@insite/shared";
 import { useLeaveGuard, type LeaveGuard } from "../../../lib/navigationGuard";
 import { ArchiveProjectDialog } from "../../../components/projects/ArchiveProjectDialog";
 import { useAuth } from "../../../lib/auth-context";
@@ -273,7 +273,7 @@ export function ProjectSetupShell({ mode }: { mode: SetupMode }) {
               <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" /> {setup.status === "DRAFT" ? "Drafts" : "Overview"}
             </Link>
             <h1 className="mt-1 text-lg font-bold text-slate-900">
-              {setup.basics.name} <span className="font-mono text-sm text-slate-500">{setup.basics.codePrefix}</span>
+              {setup.basics.name} <span className="font-mono text-sm text-slate-500">{formatProjectCode(setup.basics.codePrefix)}</span>
             </h1>
             <p className="text-xs text-slate-500">
               {setup.status === "DRAFT"

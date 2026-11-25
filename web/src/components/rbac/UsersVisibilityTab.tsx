@@ -7,6 +7,7 @@ import {
   CreateTenantUserRequestSchema,
   ORGANIZATION_CATEGORY_META,
   OrganizationCategoryEnum,
+  formatProjectCode,
   type OrganizationRef,
   type RoleDto,
   type TenantUserDto,
@@ -286,7 +287,7 @@ export function UsersVisibilityTab() {
         u.hasAllTenantProjects ? (
           <span className="text-slate-800">All projects</span>
         ) : u.projectAssignments.length > 0 ? (
-          <span className="text-slate-800">{u.projectAssignments.map((pa) => pa.projectCodePrefix || pa.projectId.slice(0, 8)).join(', ')}</span>
+          <span className="text-slate-800">{u.projectAssignments.map((pa) => formatProjectCode(pa.projectCodePrefix) || pa.projectId.slice(0, 8)).join(', ')}</span>
         ) : (
           <span className="text-amber-800">No projects assigned</span>
         ),
@@ -510,7 +511,7 @@ export function UsersVisibilityTab() {
                       className="h-4 w-4 rounded-sm border-slate-300 text-brand-primary"
                     />
                     <span className="font-semibold text-brand-primary">
-                      {p.codePrefix}
+                      {formatProjectCode(p.codePrefix)}
                     </span>
                     <span className="text-slate-700 truncate">{p.name}</span>
                   </label>
@@ -620,7 +621,7 @@ export function UsersVisibilityTab() {
                         className="h-4 w-4 rounded-sm border-slate-300 text-brand-primary"
                       />
                       <span className="font-semibold text-brand-primary">
-                        {p.codePrefix}
+                        {formatProjectCode(p.codePrefix)}
                       </span>
                       <span className="text-slate-700 truncate">{p.name}</span>
                     </label>

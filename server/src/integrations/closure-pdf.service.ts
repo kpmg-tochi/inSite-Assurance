@@ -181,7 +181,7 @@ export function generateHandoverCertificatePdf(input: HandoverCertificatePdfInpu
     line(doc, 'Decision', input.decision);
     line(doc, 'Accepted by', `${input.submitterName} (${input.submitterRole})`);
     line(doc, 'Response received', formatDateTimeInZone(input.submittedAtIso, b.timeZone));
-    line(doc, 'Snags recorded', String(input.snagCount));
+    line(doc, 'Punch list items recorded', String(input.snagCount));
     section(doc, 'Review');
     line(doc, 'Reviewed by', input.reviewedByName);
     line(doc, 'Reviewed', formatDateTimeInZone(input.reviewedAtIso, b.timeZone));
@@ -192,8 +192,8 @@ export function generateHandoverCertificatePdf(input: HandoverCertificatePdfInpu
       .fillColor('#334155')
       .text(
         input.snagCount > 0
-          ? 'The works were handed over to the beneficiary with the snags listed in the response; these are tracked as defects during the liability period.'
-          : 'The works were handed over to the beneficiary without recorded snags.'
+          ? 'The works were handed over to the beneficiary with the punch list items listed in the response; these are tracked as defects during the defects liability period.'
+          : 'The works were handed over to the beneficiary without recorded punch list items.'
       );
     footer(doc, b);
   });
@@ -217,8 +217,8 @@ export interface ClosureIndexPdfInput {
 
 export function generateClosureIndexPdf(input: ClosureIndexPdfInput): Promise<Buffer> {
   const b = input.branding;
-  return render('Closure pack index', b.tenantName, (doc) => {
-    header(doc, b, 'Project Closure Pack');
+  return render('Project closure file index', b.tenantName, (doc) => {
+    header(doc, b, 'Project Closure File');
     section(doc, '1. Project');
     for (const [k, v] of input.project) line(doc, k, v);
     section(doc, '2. Parties');

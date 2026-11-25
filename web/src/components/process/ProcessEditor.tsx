@@ -46,11 +46,11 @@ export function ProcessEditor({
       {chainNote}
 
       <Block
-        title="Visit report approval chain"
+        title="Monitoring report approval chain"
         description={
           draft.config.requireReportApproval
-            ? "Each submitted visit report goes through these steps in order before it is accepted. One person cannot act on two steps in a row."
-            : "Report approval is off: visit reports are accepted when submitted, and this chain is not used until it is turned on."
+            ? "Each submitted monitoring report goes through these steps in order before it is accepted. One person cannot act on two steps in a row."
+            : "Report approval is off: monitoring reports are accepted when submitted, and this chain is not used until it is turned on."
         }
       >
         <ApprovalChainEditor

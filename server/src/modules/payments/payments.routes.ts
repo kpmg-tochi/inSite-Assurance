@@ -1,5 +1,5 @@
 import { NextFunction, Request, RequestHandler, Response, Router } from 'express';
-import { RecordPaymentRequestSchema, VoidPaymentRequestSchema } from '@insite/shared';
+import { ProjectPaymentsQuerySchema, RecordPaymentRequestSchema, VoidPaymentRequestSchema } from '@insite/shared';
 import { guardProjectRoutes } from '../../utils/accessControl';
 import { requirePermission } from '../../middleware/auth.middleware';
 import { validateBody } from '../../middleware/validate.middleware';
@@ -19,7 +19,7 @@ router.get(
   '/:projectId/payments',
   requirePermission('payments:view', 'payments:record'),
   wrap(async (req, res) => {
-    res.json({ success: true, data: await getProjectPayments(p(req, 'projectId'), req.webUser!) });
+    res.json({ success: true, data: await getProjectPayments(p(req, 'projectId'), req.webUser!, ProjectPaymentsQuerySchema.parse(req.query)) });
   })
 );
 

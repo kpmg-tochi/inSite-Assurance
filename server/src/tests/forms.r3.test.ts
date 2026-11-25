@@ -371,7 +371,7 @@ describe('Redesign R3: assembleVisitForm', () => {
     const last = snapshot.blocks[snapshot.blocks.length - 1];
     assert.equal(last.kind, 'RECHECK');
     assert.equal(last.fields[0].path, `r:${recheck.id}`);
-    assert.equal(last.fields[0].label, 'Re-check: Cracked lintel. Resolved?');
+    assert.equal(last.fields[0].label, 'Follow-up check: Cracked lintel. Rectified?');
   });
 
   it('refuses a form larger than the cap', () => {

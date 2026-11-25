@@ -1,4 +1,5 @@
 import { PROJECT_CODE_PREFIX_REGEX } from '../schemas/projectSetup.schema';
+import { LEGACY_PROJECT_CODE_REGEX } from './projectCode';
 import {
   ExternalReferenceSchema,
   FundingSourceSchema,
@@ -250,7 +251,8 @@ export function validateRegisterRow(raw: RegisterRowRaw): { values: RegisterRowV
 /** "PRG-104" → { prefix: "PRG", number: 104 }; null when not a project code. */
 export function splitProjectCode(code: string): { prefix: string; number: number } | null {
   const c = code.trim().toUpperCase();
-  if (!PROJECT_CODE_PREFIX_REGEX.test(c)) return null;
+  // Series numbering applies to the older AAA-999 form only (lot/batch codes are numbered by lot).
+  if (!LEGACY_PROJECT_CODE_REGEX.test(c)) return null;
   return { prefix: c.slice(0, 3), number: Number(c.slice(4)) };
 }
 

@@ -9,7 +9,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { MobileNotificationDto } from "@insite/shared";
+import { formatProjectCode, type MobileNotificationDto } from "@insite/shared";
 import {
   EmptyStateCard,
   InfoCallout,
@@ -51,7 +51,7 @@ export const NotificationCenterModal: React.FC = () => {
   const { account, projects } = useProfile();
   const projectIds = useMemo(() => projects.map((p) => p.projectId), [projects]);
   const projectLabel = useMemo(
-    () => new Map(projects.map((p) => [p.projectId, p.projectCodePrefix])),
+    () => new Map(projects.map((p) => [p.projectId, formatProjectCode(p.projectCodePrefix)])),
     [projects],
   );
 
@@ -124,7 +124,7 @@ export const NotificationCenterModal: React.FC = () => {
       subtitle={
         unreadCount > 0
           ? `${unreadCount} unread update${unreadCount === 1 ? "" : "s"} across your projects`
-          : "Updates on your visits across your projects."
+          : "Updates on your monitoring visits across your projects."
       }
       rightAction={<IconButton icon="close" onPress={onClose} />}
       contentContainerStyle={styles.layoutContent}

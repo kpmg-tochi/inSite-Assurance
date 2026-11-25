@@ -21,6 +21,9 @@ import {
   zonedCalendarDate,
   addDays,
   isOngoingProject,
+  FundingSourceCodeEnum,
+  zoneOfState,
+  statesOfZone,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -83,6 +86,11 @@ export function deliveryModelFilterWhere(filters: ProjectListFilters = {}): Pris
   if (filters.contractorOrganizationId) out.push({ contractors: { some: { organizationId: filters.contractorOrganizationId } } });
   if (filters.interventionYear) out.push({ interventionYear: filters.interventionYear });
   if (filters.fundingSource) out.push({ fundingSource: { equals: filters.fundingSource, mode: 'insensitive' } });
+  // Client demo updates C1/C4: zone (the states of the zone), state and LGA codes, funding source code.
+  if (filters.zone) out.push({ stateCode: { in: statesOfZone(filters.zone).map((s) => s.code) } });
+  if (filters.stateCode) out.push({ stateCode: filters.stateCode });
+  if (filters.lgaCode) out.push({ lgaCode: filters.lgaCode });
+  if (filters.fundingSourceCode) out.push({ fundingSourceCode: filters.fundingSourceCode });
   return out;
 }
 
@@ -99,6 +107,8 @@ export function registerFilterWhere(filters: ProjectRegisterFilters = {}): Prism
       OR: [
         { name: has },
         { codePrefix: has },
+        // C3: "LOT 5 BATCH 7" as shown finds the stored 2026-LOT-5-BATCH-7.
+        { codePrefix: { contains: q.replace(/\s+/g, '-'), mode: 'insensitive' as const } },
         { externalReference: has },
         { stateLocation: has },
         { lgaLocation: has },
@@ -134,8 +144,14 @@ export function serializeRegisterFields(project: {
   importedAt: Date | null;
   importedProgressPct: Prisma.Decimal | null;
   importedStatus: string | null;
+  stateCode: string | null;
+  lgaCode: string | null;
+  fundingSourceCode: string | null;
+  batchNumber: number | null;
+  lot?: { number: number } | null;
   _count: { boqItems: number };
 }): ProjectRegisterFields {
+  const fundingCode = FundingSourceCodeEnum.safeParse(project.fundingSourceCode);
   return {
     interventionYear: project.interventionYear,
     fundingSource: project.fundingSource,
@@ -144,11 +160,21 @@ export function serializeRegisterFields(project: {
     importedProgressPct: project.importedProgressPct === null ? null : Number(project.importedProgressPct),
     importedStatus: project.importedStatus,
     progressIsImported: project.importedAt !== null && project.importedProgressPct !== null && project._count.boqItems === 0,
+    // Client demo updates (wave 1)
+    stateCode: project.stateCode,
+    lgaCode: project.lgaCode,
+    zone: zoneOfState(project.stateCode),
+    fundingSourceCode: fundingCode.success ? fundingCode.data : null,
+    lotNumber: project.lot?.number ?? null,
+    batchNumber: project.batchNumber,
   };
 }
 
 /** Prisma include for `serializeRegisterFields`. */
-export const REGISTER_COUNT_INCLUDE = { _count: { select: { boqItems: true } } } satisfies Prisma.ProjectInclude;
+export const REGISTER_COUNT_INCLUDE = {
+  _count: { select: { boqItems: true } },
+  lot: { select: { number: true } },
+} satisfies Prisma.ProjectInclude;
 
 /**
  * UBEC IRL: when each project's site was last observed in an approved visit report (the officer's

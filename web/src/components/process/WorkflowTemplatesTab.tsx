@@ -174,7 +174,7 @@ export function WorkflowTemplatesTab() {
       width: "w-48",
       cell: (t) => (
         <span className="text-[11px] text-slate-600">
-          {t.config.process.requireReportApproval ? `Visit reports: ${t.config.reportChain.length} step(s)` : "Report approval off"}
+          {t.config.process.requireReportApproval ? `Monitoring reports: ${t.config.reportChain.length} step(s)` : "Report approval off"}
         </span>
       ),
     },

@@ -477,7 +477,7 @@ function SamplePreview({ fields, context, facility }: { fields: FormField[]; con
         subForms: context === "SUBFORM" ? [{ id: SAMPLE_IDS[6], subjectKey: "PREVIEW", version: 1, fields }] : [],
         facilities: [{ id: SAMPLE_IDS[1], code: "PREVIEW", name: facility.name, pluralName: facility.pluralName ?? null, archetype: facility.archetype, sortOrder: 0, subFormId: SAMPLE_IDS[6] }],
         units,
-        sprints: [{ id: SAMPLE_IDS[2], number: 1, name: "Sprint 1", startDate: "2026-01-01", endDate: "2026-01-31", deliverables: "" }],
+        sprints: [{ id: SAMPLE_IDS[2], number: 1, name: "Work phase 1", startDate: "2026-01-01", endDate: "2026-01-31", deliverables: "" }],
         pickedFacilityIds: [SAMPLE_IDS[1]],
       }).snapshot;
     } catch {

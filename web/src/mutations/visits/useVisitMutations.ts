@@ -152,7 +152,7 @@ export const useRaiseVisitFindingMutation = (projectId: string) => {
     onSuccess: () => {
       invalidateVisits(qc, projectId);
       qc.invalidateQueries({ queryKey: projectFindingsKey(projectId) });
-      toast.success('Finding raised; the next visits re-check it.');
+      toast.success('Finding raised; the next visits include a follow-up check.');
     },
     onError: (err) => toast.error(errorMessage(err, 'Could not raise the finding.')),
   });
@@ -165,9 +165,9 @@ export const useResolveProjectFindingMutation = (projectId: string) => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: projectFindingsKey(projectId) });
       invalidateVisits(qc, projectId);
-      toast.success('Finding resolved.');
+      toast.success('Finding rectified.');
     },
-    onError: (err) => toast.error(errorMessage(err, 'Could not resolve the finding.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not mark the finding rectified.')),
   });
 };
 
@@ -206,6 +206,6 @@ export const useVerifySprintMutation = (projectId: string) => {
       qc.invalidateQueries({ queryKey: ['project-scope', projectId] });
       toast.success(`${v.name} verified.`);
     },
-    onError: (err) => toast.error(errorMessage(err, 'Could not verify the sprint.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not verify the work phase.')),
   });
 };

@@ -82,11 +82,11 @@ export const useConvertSnagsMutation = (projectId: string) => {
       invalidateCloseout(queryClient, projectId);
       toast.success(
         result.created > 0
-          ? `${result.created} defect ticket(s) created${result.skipped ? `; ${result.skipped} already had one` : ''}.`
-          : 'Every snag already has a defect ticket.'
+          ? `${result.created} defect(s) created${result.skipped ? `; ${result.skipped} already had one` : ''}.`
+          : 'Every punch list item already has a defect.'
       );
     },
-    onError: (err) => toast.error(errorMessage(err, 'Could not create defect tickets.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not create the defects.')),
   });
 };
 

@@ -72,19 +72,19 @@ export interface VisitKindMeta {
 export const VISIT_KIND_META: Record<VisitKind, VisitKindMeta> = {
   MOBILISATION_CHECK: {
     label: 'Mobilisation check',
-    description: 'Contractor on site, personnel, equipment, materials, letter presented. No facility sub-forms.',
+    description: 'Contractor mobilised to site, personnel, equipment, materials, letter presented. No facility sub-forms.',
     facilityRule: 'NONE',
     recheckByDefault: false,
   },
   BASELINE: {
-    label: 'Baseline',
+    label: 'Baseline monitoring',
     description: 'Existing condition of every facility in scope.',
     facilityRule: 'ALL',
     recheckByDefault: false,
   },
   ROUTINE: {
     label: 'Routine',
-    description: 'Units active in the sprint covering the visit date, plus earlier units not yet reported complete.',
+    description: 'Units active in the work phase covering the visit date, plus earlier units not yet reported complete.',
     facilityRule: 'SPRINT',
     recheckByDefault: true,
   },
@@ -214,7 +214,7 @@ export const FormSignalKindEnum = z.enum(['UNIT_COMPLETE', 'CONTRACTOR_ON_SITE',
 export type FormSignalKind = z.infer<typeof FormSignalKindEnum>;
 export const FORM_SIGNAL_LABELS: Record<FormSignalKind, string> = {
   UNIT_COMPLETE: 'Unit reported complete',
-  CONTRACTOR_ON_SITE: 'Contractor on site',
+  CONTRACTOR_ON_SITE: 'Mobilised to site',
   PERCENT_COMPLETE: 'Progress (% complete)',
   QUANTITY_DELIVERED: 'Quantity delivered',
   OVERALL_FINDING: 'Overall finding',

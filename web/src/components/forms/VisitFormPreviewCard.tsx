@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { z } from "zod";
 import { Controller } from "react-hook-form";
 import { Eye } from "lucide-react";
-import { PreviewVisitFormRequestSchema, VISIT_KIND_META, VisitKindEnum, type VisitKind } from "@insite/shared";
+import { PreviewVisitFormRequestSchema, formatProjectCode, VISIT_KIND_META, VisitKindEnum, type VisitKind } from "@insite/shared";
 import { useProjectsQuery } from "../../queries/projects/useProjectsQueries";
 import { useProjectScopeQuery } from "../../queries/scope/useScopeQueries";
 import { usePreviewVisitFormMutation } from "../../mutations/forms/useFormMutations";
@@ -63,7 +63,7 @@ export function VisitFormPreviewCard() {
     return [...map.values()];
   }, [scope.data]);
 
-  const projectOptions = (projects.data ?? []).map((p) => ({ value: p.id, label: `${p.codePrefix} · ${p.name}` }));
+  const projectOptions = (projects.data ?? []).map((p) => ({ value: p.id, label: `${formatProjectCode(p.codePrefix)} · ${p.name}` }));
   const build = form.handleSubmit((v) => preview.mutate({ projectId: v.projectId, body: previewBody(v) }));
 
   return (

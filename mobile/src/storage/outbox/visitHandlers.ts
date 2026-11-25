@@ -76,9 +76,9 @@ export function registerVisitHandlers(): void {
   // snapshot id of a phone-built Ad hoc form and the site log server ids are filled in here.
   registerOutboxHandler('VISIT_SUBMISSION', async (row) => {
     const q = await getQueuedSubmission(row.entityId);
-    if (!q?.request) throw new LocalPermanentError('This report is no longer on the phone.');
+    if (!q?.request) throw new LocalPermanentError('This monitoring report is no longer on the phone.');
     if (q.status === 'SENT') return;
-    if (q.status === 'REFUSED') throw new LocalPermanentError(q.lastError ?? 'This report was refused by the server.');
+    if (q.status === 'REFUSED') throw new LocalPermanentError(q.lastError ?? 'This monitoring report was refused by the server.');
     const v = await getVisit(q.request.visitId);
     if (!v) throw new LocalPermanentError('This visit is no longer on the phone.');
     if (!v.serverId) throw new NotReadyError('VISIT_NOT_CREATED', 'The unscheduled visit has not reached the server yet.');

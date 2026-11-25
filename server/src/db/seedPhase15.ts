@@ -58,7 +58,7 @@ const BEFORE_CLOSE: ClosureChecklistItemTemplateInput[] = [
 /** UBEC rebrand: lessons learned come in the closeout report, uploaded per project (both types). */
 const CLOSEOUT_REPORT_ITEM: ClosureChecklistItemTemplateInput = {
   key: "closeout-report",
-  label: "Closeout report filed (final evaluation, lessons learned, beneficiary feedback)",
+  label: "Lessons learned report filed (final evaluation, lessons learned, beneficiary feedback)",
   kind: "DOCUMENT_TYPE",
   documentTypeCode: "CLOSEOUT_REPORT",
 };

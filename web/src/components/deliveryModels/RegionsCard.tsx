@@ -14,7 +14,7 @@ const inputCls = "w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-x
 /** The region form, mapped to SaveRegionRequestSchema (which still decides). */
 const RegionFormSchema = z
   .object({
-    name: z.string().trim().min(2, "Enter the region name (at least 2 characters)").max(120, "Name is too long (at most 120 characters)"),
+    name: z.string().trim().min(2, "Enter the zone or state name (at least 2 characters)").max(120, "Name is too long (at most 120 characters)"),
     code: z
       .string()
       .trim()
@@ -42,7 +42,7 @@ export function RegionsCard() {
   }, [regions]);
 
   const parentOptions = [
-    { value: "", label: "None (top-level region)" },
+    { value: "", label: "None (top-level zone)" },
     ...regions.filter((r) => !r.parentRegionId && r.id !== editing?.id).map((r) => ({ value: r.id, label: r.name })),
   ];
 
@@ -86,8 +86,8 @@ export function RegionsCard() {
     <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-sm space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-bold text-slate-900">Regions</h3>
-          <p className="text-xs text-slate-500 mt-0.5">Regions and the areas inside them. Projects can be placed in either, and filtered by region.</p>
+          <h3 className="text-sm font-bold text-slate-900">Zones / States</h3>
+          <p className="text-xs text-slate-500 mt-0.5">Zones and the states inside them. Projects can be placed in either, and filtered by zone.</p>
         </div>
         <button
           type="button"
@@ -146,7 +146,7 @@ export function RegionsCard() {
           <Loader size="sm" inline />
         </div>
       ) : tree.length === 0 ? (
-        <p className="text-xs text-slate-500">No regions yet.</p>
+        <p className="text-xs text-slate-500">No zones or states yet.</p>
       ) : (
         <ul className="divide-y divide-slate-100">
           {tree.map(({ region, areas }) => (

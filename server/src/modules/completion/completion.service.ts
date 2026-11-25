@@ -287,7 +287,7 @@ const DRAFTABLE_PHASES = ['ACTIVE_CONSTRUCTION', 'HANDOVER_IN_PROGRESS'];
 async function draftRefusal(db: Db, projectId: string, config: ProjectTypeClosureConfig, evaluationId: string | null): Promise<string | null> {
   const project = await db.project.findUniqueOrThrow({ where: { id: projectId }, select: { status: true, constructionPhase: true } });
   if (project.status !== 'ACTIVE') return 'Only an active project gets a Certificate of Completion.';
-  if (!DRAFTABLE_PHASES.includes(project.constructionPhase)) return 'A certificate is drafted during construction or handover.';
+  if (!DRAFTABLE_PHASES.includes(project.constructionPhase)) return 'A certificate is drafted during execution or handover.';
   if (await db.completionCertificate.count({ where: { projectId, status: { in: [...LIVE_STATUSES] } } })) return 'The project already has a certificate.';
   if (config.requireFinalEvaluationBeforeCoc && !evaluationId) {
     return 'An accepted final evaluation visit is needed before the certificate can be drafted.';

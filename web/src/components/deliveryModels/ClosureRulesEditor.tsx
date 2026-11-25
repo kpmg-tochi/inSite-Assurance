@@ -70,7 +70,7 @@ export function ClosureRulesEditor({ value, onChange }: { value: ClosureRules; o
             <input
               className={`${inputCls} md:col-span-4`}
               value={slot.label}
-              placeholder="e.g. Head of Physical Planning"
+              placeholder="e.g. Director, Physical Planning"
               onChange={(e) => setSlot(i, { label: e.target.value })}
               onBlur={() => !slot.key && setSlot(i, { key: keyFrom(slot.label, slots.map((s) => s.key), "slot") })}
             />

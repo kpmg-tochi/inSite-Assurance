@@ -15,6 +15,7 @@ import { captureDisplayUri, getCaptures, type CaptureRecord } from '../storage/c
 import { geofenceBadgeText } from '../services/locationService';
 import type { RootStackParamList } from '../navigation/types';
 import { personaCopy } from '../utils/personaCopy';
+import { formatProjectCode } from '@insite/shared';
 import { formatTime, siteLogStateBadge } from '../utils/visitText';
 import type { SiteLogRecord } from '../utils/siteLog';
 
@@ -60,7 +61,7 @@ export function SiteLogScreen() {
   return (
     <GradientHeaderLayout
       title="Site log"
-      subtitle={data?.pack?.codePrefix ?? project?.projectCodePrefix}
+      subtitle={formatProjectCode(data?.pack?.codePrefix ?? project?.projectCodePrefix)}
       leftAction={<BackButton onPress={() => navigation.goBack()} />}
       rightAction={<HomeButton onPress={() => navigation.popTo('Home')} />}
       contentContainerStyle={styles.body}

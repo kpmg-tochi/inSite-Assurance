@@ -595,7 +595,7 @@ export function answersFromReturnedSubmission(
   const refs = fieldsByPath(next);
   for (const a of serverAnswers) {
     if (a.captures.length && refs.has(a.path)) {
-      dropped.push({ path: a.path, label: refs.get(a.path)!.field.label, reason: 'Photos and voice notes must be taken again for the corrected report' });
+      dropped.push({ path: a.path, label: refs.get(a.path)!.field.label, reason: 'Photos and voice notes must be taken again for the corrected monitoring report' });
     }
   }
   return { answers, dropped };

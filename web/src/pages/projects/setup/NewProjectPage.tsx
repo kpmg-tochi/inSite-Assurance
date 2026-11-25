@@ -1,26 +1,29 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { IS_DEMO_MODE } from "../../../config/demoMode";
 import { useGuardedNavigate } from "../../../lib/navigationGuard";
-import { SubmitButton, useZodForm } from "../../../lib/forms";
+import { SubmitButton, useZodForm, type AnyForm } from "../../../lib/forms";
 import { useCreateProjectDraftMutation } from "../../../mutations/projects/useProjectSetupMutations";
-import { BasicsForm, EMPTY_BASICS, useBasicsSchema, type BasicsValues } from "./sections/BasicsSection";
-import { applyServerErrors } from "./setupContext";
+import { projectLotsKey } from "../../../queries/projectLots";
+import {
+  BasicsForm,
+  CREATE_RULES,
+  EMPTY_BASICS,
+  showBasicsServerErrors,
+  useBasicsSchema,
+  type BasicsValues,
+} from "./sections/BasicsSection";
 
 /** Demo-only sample values; never in non-demo bundles (Vite folds IS_DEMO_MODE). */
 const SAMPLE_BASICS: BasicsValues = {
+  ...EMPTY_BASICS,
   name: "Sample Rural Health Centre Upgrade",
-  codePrefix: "SMP-101",
-  stateLocation: "Kaduna State",
-  lgaLocation: "Kaduna North",
+  stateCode: "KD",
+  lgaCode: "KD-KADUNA-NORTH",
   description: "Sample project for demonstrations.",
   totalBudgetNgn: "450000000",
-  projectTypeId: "",
-  regionId: "",
-  interventionYear: "",
-  fundingSource: "",
-  externalReference: "",
 };
 
 /**
@@ -28,11 +31,13 @@ const SAMPLE_BASICS: BasicsValues = {
  * the wizard then opens at /app/projects/:projectId/setup/project (redesign R6a, D-R6.8) for the
  * school, organisations and location, and the remaining steps. The button stays disabled until the
  * details pass `CreateProjectDraftRequestSchema` (and a delivery model is chosen when the tenant has
- * project types).
+ * project types). Client demo updates C3: the person picks the intervention year and a lot; the
+ * server assigns the code (e.g. 2026-LOT-5-BATCH-7, shown as LOT 5 BATCH 7).
  */
 export function NewProjectPage() {
   const navigate = useGuardedNavigate();
-  const schema = useBasicsSchema(false);
+  const queryClient = useQueryClient();
+  const schema = useBasicsSchema(false, CREATE_RULES);
   const form = useZodForm(schema, { defaultValues: EMPTY_BASICS });
   const [general, setGeneral] = useState<string | null>(null);
   const create = useCreateProjectDraftMutation();
@@ -44,9 +49,11 @@ export function NewProjectPage() {
   const submit = form.handleSubmit(async (body) => {
     try {
       const setup = await create.mutateAsync(body);
+      // The lot's project count and next batch (or a new lot) changed.
+      void queryClient.invalidateQueries({ queryKey: projectLotsKey });
       navigate(`/app/projects/${setup.projectId}/setup/project#section-parties`);
     } catch (err) {
-      setGeneral(applyServerErrors(form, err));
+      setGeneral(showBasicsServerErrors(form as unknown as AnyForm, err));
     }
   });
 
@@ -66,7 +73,8 @@ export function NewProjectPage() {
           <button
             type="button"
             onClick={() => {
-              form.reset({ ...SAMPLE_BASICS, projectTypeId: form.getValues("projectTypeId") });
+              const keep = form.getValues();
+              form.reset({ ...SAMPLE_BASICS, projectTypeId: keep.projectTypeId, interventionYear: keep.interventionYear });
               void form.trigger();
             }}
             className="rounded-xl border border-dashed border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
@@ -75,7 +83,7 @@ export function NewProjectPage() {
           </button>
         )}
       </div>
-      <BasicsForm form={form} general={general} disabled={create.isPending} />
+      <BasicsForm form={form} general={general} disabled={create.isPending} rules={CREATE_RULES} />
       <div className="flex justify-end">
         <SubmitButton
           form={form}

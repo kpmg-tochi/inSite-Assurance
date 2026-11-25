@@ -2,7 +2,7 @@ import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-q
 import { toast } from 'sonner';
 import { PAYMENT_KIND_LABELS, type RecordPaymentRequest, type VoidPaymentRequest } from '@insite/shared';
 import { recordPayment, voidPayment } from '../../api/payments/paymentsApi';
-import { projectPaymentsKey } from '../../queries/payments/usePaymentsQueries';
+import { portfolioPaymentsKey, projectPaymentsKey } from '../../queries/payments/usePaymentsQueries';
 import { retentionSummaryKey } from '../../queries/closeout/useCloseoutQueries';
 
 /** Mutation hooks own their toasts; pages must not toast again. */
@@ -10,6 +10,7 @@ const errorMessage = (err: unknown, fallback: string) => (err as { message?: str
 
 function invalidatePayments(queryClient: QueryClient, projectId: string) {
   queryClient.invalidateQueries({ queryKey: projectPaymentsKey(projectId) });
+  queryClient.invalidateQueries({ queryKey: portfolioPaymentsKey });
   queryClient.invalidateQueries({ queryKey: retentionSummaryKey(projectId) });
   queryClient.invalidateQueries({ queryKey: ['projects'] });
   queryClient.invalidateQueries({ queryKey: ['web-notifications'] });

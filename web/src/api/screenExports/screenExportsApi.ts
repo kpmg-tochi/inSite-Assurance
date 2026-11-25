@@ -1,4 +1,11 @@
-import type { FindingsExportQuery, KpiQuery, PaymentsExportQuery, PlannerVisitsExportQuery, ProjectVisitsExportQuery } from '@insite/shared';
+import type {
+  FindingsExportQuery,
+  KpiQuery,
+  PaymentsExportQuery,
+  PlannerVisitsExportQuery,
+  PortfolioPaymentsQuery,
+  ProjectVisitsExportQuery,
+} from '@insite/shared';
 import { api } from '../../config/apiConfig';
 
 /**
@@ -63,3 +70,6 @@ export const exportProjectPayments = (projectId: string, query: PaymentsExportQu
   downloadXlsx(`/projects/${projectId}/payments/export.xlsx`, query, 'Payments.xlsx');
 
 export const exportKpis = (query: Partial<KpiQuery>) => downloadXlsx('/kpis/export.xlsx', query, 'Programme KPIs.xlsx');
+
+/** Client demo updates G.2: the portfolio Payments tab (sheets Summary and Payments). */
+export const exportPortfolioPayments = (query: Partial<PortfolioPaymentsQuery>) => downloadXlsx('/payments/export.xlsx', query, 'Payments.xlsx');

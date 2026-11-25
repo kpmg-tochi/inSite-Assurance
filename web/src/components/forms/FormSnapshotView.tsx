@@ -105,7 +105,7 @@ function FieldRow({ f }: { f: VisitFormSnapshotField }) {
           {f.label}
           {f.required && <span className="text-rose-500"> *</span>}
         </p>
-        <span className="shrink-0 font-mono text-[10px] text-slate-400">{f.path.startsWith("r:") ? "re-check" : f.key}</span>
+        <span className="shrink-0 font-mono text-[10px] text-slate-400">{f.path.startsWith("r:") ? "follow-up check" : f.key}</span>
       </div>
       {f.guidance && <p className="text-[11px] text-slate-500 mt-0.5">{f.guidance}</p>}
       <div className="mt-1.5">
@@ -156,8 +156,8 @@ export function FormSnapshotView({ snapshot, showHeader = true }: { snapshot: Vi
           </p>
           <p className="mt-0.5">
             {snapshot.context.sprint
-              ? `Sprint ${snapshot.context.sprint.number}: ${snapshot.context.sprint.name} (${snapshot.context.sprint.startDate} to ${snapshot.context.sprint.endDate})`
-              : "No sprint for this date"}
+              ? `Work phase ${snapshot.context.sprint.number}: ${snapshot.context.sprint.name} (${snapshot.context.sprint.startDate} to ${snapshot.context.sprint.endDate})`
+              : "No work phase for this date"}
             {" · "}
             Template {snapshot.sources.template.code} v{snapshot.sources.template.version} · {fieldCount} questions
           </p>

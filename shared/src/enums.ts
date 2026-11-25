@@ -33,7 +33,7 @@ export type OrganizationCategory = z.infer<typeof OrganizationCategoryEnum>;
 
 /** Display label per organisation tag (Phase 6: an organisation can carry several tags). */
 export const ORGANIZATION_CATEGORY_META: Record<OrganizationCategory, { label: string }> = {
-  ADVISORY_MONITOR: { label: 'Independent monitor' },
+  ADVISORY_MONITOR: { label: 'Independent M&E firm' },
   FINANCIER_LENDER: { label: 'Lender / financier' },
   CONTRACTOR: { label: 'Contractor' },
   CLIENT_OWNER: { label: 'Client / owner' },
@@ -84,7 +84,7 @@ export const PERMISSION_CATEGORY_META: Record<
 > = {
   TENANT_ADMIN: {
     label: 'Workspace & access',
-    description: 'Workspace settings and branding, users and roles, organisations, regions, project types, workflow and document types.',
+    description: 'Workspace settings and branding, users and roles, organisations, zones and states, project types, workflow and document types.',
   },
   FORMS_FACILITIES: {
     label: 'Forms & facilities',
@@ -95,8 +95,8 @@ export const PERMISSION_CATEGORY_META: Record<
     description: 'Which projects a user sees, the portfolio and KPIs, and creating, setting up and activating projects.',
   },
   SCOPE_SPRINTS: {
-    label: 'Scope & sprints',
-    description: 'Sprints, facility units and BoQ lines, the needs assessment template, the schedule status and sprint verification.',
+    label: 'BoQ & work phases',
+    description: 'Work phases, facility units and BoQ lines, the needs assessment template, the schedule status and work phase verification.',
   },
   CONTRACT_KICKOFF: {
     label: 'Contract & kick-off',
@@ -182,8 +182,8 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   },
   {
     key: 'regions:manage',
-    name: 'Manage Regions',
-    description: 'Add, rename and archive the regions and areas projects can be placed in.',
+    name: 'Manage Zones & States',
+    description: 'Add, rename and archive the zones and states projects can be placed in.',
     category: 'TENANT_ADMIN',
     surface: 'WEB',
     unlocksViews: ['Settings -> Regions'],
@@ -309,35 +309,35 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   // 4. SCOPE_SPRINTS: Scope & sprints
   {
     key: 'scope:view',
-    name: 'View Scope & Sprints',
-    description: 'Read the project scope: sprints, facility units and BoQ lines.',
+    name: 'View BoQ & Work Phases',
+    description: 'Read the project scope: work phases, facility units and BoQ lines.',
     category: 'SCOPE_SPRINTS',
     surface: 'BOTH',
-    unlocksViews: ['Scope & sprints'],
+    unlocksViews: ['BoQ & work phases'],
   },
   {
     key: 'scope:edit',
-    name: 'Edit Scope & Sprints',
-    description: 'Edit sprints, facility units and BoQ lines, and import a needs assessment into a draft.',
+    name: 'Edit BoQ & Work Phases',
+    description: 'Edit work phases, facility units and BoQ lines, and import a needs assessment into a draft.',
     category: 'SCOPE_SPRINTS',
     surface: 'WEB',
-    unlocksViews: ['Scope & sprints editing', 'Needs assessment import'],
+    unlocksViews: ['BoQ & work phases editing', 'Needs assessment import'],
   },
   {
     key: 'sprints:view_status',
     name: 'View Schedule Status',
-    description: 'See the sprint schedule badge and get the notification when a project falls behind.',
+    description: 'See the work phase schedule badge and get the notification when a project falls behind.',
     category: 'SCOPE_SPRINTS',
     surface: 'WEB',
     unlocksViews: ['Schedule badge', 'Behind-schedule notifications'],
   },
   {
     key: 'sprints:verify',
-    name: 'Verify Sprints',
-    description: 'Record whether an ended sprint was met, partly met or not met.',
+    name: 'Verify Work Phases',
+    description: 'Record whether an ended work phase was met, partly met or not met.',
     category: 'SCOPE_SPRINTS',
     surface: 'WEB',
-    unlocksViews: ['Scope & sprints verification'],
+    unlocksViews: ['BoQ & work phases verification'],
   },
 
   // 5. CONTRACT_KICKOFF: Contract & kick-off
@@ -457,8 +457,8 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   },
   {
     key: 'defects:manage',
-    name: 'Manage Defect Tickets',
-    description: 'Raise, assign and verify defect tickets in the liability period; officers close them with site photos from the field app.',
+    name: 'Manage Defects',
+    description: 'Raise, assign and verify defects in the defects liability period; officers close them with site photos from the field app.',
     category: 'VISITS_FINDINGS',
     surface: 'BOTH',
     unlocksViews: ['Completion & handover -> Defects', 'Field app -> Defects'],
@@ -557,8 +557,8 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   },
   {
     key: 'closure:export_pack',
-    name: 'Export the Closure Pack',
-    description: 'Build the closure pack (index, documents, certificates, visit summaries and the verified audit ledger) for audit.',
+    name: 'Export the Project Closure File',
+    description: 'Build the project closure file (index, documents, certificates, monitoring report summaries and the verified audit ledger) for audit.',
     category: 'COMPLETION_CLOSURE',
     surface: 'WEB',
     unlocksViews: ['Completion & handover -> Closure'],
@@ -802,6 +802,8 @@ export const AuditActionTypeEnum = z.enum([
   'SCOPE_IMPORTED',
   // UBEC IRL: bulk project register import
   'PROJECT_REGISTER_IMPORTED',
+  // Client demo updates C3: project lots
+  'PROJECT_LOT_CREATED',
   // Redesign R3
   'FORM_COMPONENT_SAVED',
   // Redesign R4: visits

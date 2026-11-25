@@ -126,7 +126,7 @@ function ImportPreviewModal({
     <ModalShell title="Import preview" subtitle={`${fileName} · nothing is saved until you confirm`} onClose={onClose} maxWidth="max-w-4xl">
       <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-          <Tile label="Sprints" value={String(t.sprintCount)} />
+          <Tile label="Work phases" value={String(t.sprintCount)} />
           <Tile label="Facility units" value={String(t.unitCount)} />
           <Tile label="BoQ lines" value={String(t.lineCount)} />
           <Tile label="Total" value={formatNaira(t.amountNgn)} hint={t.budgetNgn !== null ? `Budget ${formatNaira(t.budgetNgn)}` : undefined} />
@@ -141,12 +141,12 @@ function ImportPreviewModal({
 
         {preview.groups.length > 0 && (
           <section>
-            <h4 className="text-xs font-bold text-slate-900 mb-1">Lines by facility and sprint</h4>
+            <h4 className="text-xs font-bold text-slate-900 mb-1">Lines by facility and work phase</h4>
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-[10px] uppercase tracking-wide text-slate-500">
                   <th className="py-1 pr-2">Facility</th>
-                  <th className="py-1 pr-2">Sprints</th>
+                  <th className="py-1 pr-2">Work phases</th>
                   <th className="py-1 pr-2">Units</th>
                   <th className="py-1 pr-2 text-right">Lines</th>
                   <th className="py-1 text-right">Amount</th>
@@ -169,7 +169,7 @@ function ImportPreviewModal({
 
         {preview.sprints.length > 0 && (
           <section>
-            <h4 className="text-xs font-bold text-slate-900 mb-1">Sprints</h4>
+            <h4 className="text-xs font-bold text-slate-900 mb-1">Work phases</h4>
             <ul className="text-xs text-slate-700 space-y-0.5">
               {preview.sprints.map((s) => (
                 <li key={s.number}>
@@ -199,7 +199,7 @@ function ImportPreviewModal({
 
         {replacing && (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-            Confirming replaces this draft's current scope: {preview.replaces.sprintCount} sprint(s), {preview.replaces.unitCount} unit(s) and{" "}
+            Confirming replaces this draft's current scope: {preview.replaces.sprintCount} work phase(s), {preview.replaces.unitCount} unit(s) and{" "}
             {preview.replaces.lineCount} line(s).
           </p>
         )}

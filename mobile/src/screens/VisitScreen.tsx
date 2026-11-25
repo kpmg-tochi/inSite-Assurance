@@ -3,7 +3,7 @@ import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Toast from 'react-native-toast-message';
-import { VISIT_SUBMISSION_STATUS_LABELS, type VisitDetailDto } from '@insite/shared';
+import { formatProjectCode, VISIT_SUBMISSION_STATUS_LABELS, type VisitDetailDto } from '@insite/shared';
 import { EmptyStateCard, GradientHeaderLayout, InfoCallout, InSiteLoader } from '../components/common';
 import { BackButton, HomeButton, PrimaryButton } from '../components/inputs/Buttons';
 import CheckInSheet from '../components/visit/CheckInSheet';
@@ -169,7 +169,7 @@ export function VisitScreen() {
       if (!open && s.status === 'RETURNED') {
         if (!v.serverId) throw new Error('This visit has not reached the server yet.');
         const d = detail ?? (await refreshVisitDetail(v.projectId, v.serverId).catch(() => null));
-        if (!d) throw new Error('Connect to the internet to load the returned report, then try again.');
+        if (!d) throw new Error('Connect to the internet to load the returned monitoring report, then try again.');
         const { dropped } = await startCorrectionDraft(v.id, d);
         if (dropped.length > 0) {
           Alert.alert('Take these again', `Photos and voice notes cannot be reused in a correction:\n${droppedText(dropped)}`);
@@ -188,7 +188,7 @@ export function VisitScreen() {
     });
 
   const removeRefused = (d: StoredVisitDraft) =>
-    Alert.alert('Delete this report?', 'It was refused by the server and will be removed from this phone.', [
+    Alert.alert('Delete this monitoring report?', 'It was refused by the server and will be removed from this phone.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => void run(() => deleteDraft(d.draft.id)) },
     ]);
@@ -213,7 +213,7 @@ export function VisitScreen() {
   return (
     <GradientHeaderLayout
       title={view.kindLabel}
-      subtitle={`${s.projectCode} · ${s.projectName}`}
+      subtitle={`${formatProjectCode(s.projectCode)} · ${s.projectName}`}
       leftAction={<BackButton onPress={() => navigation.goBack()} />}
       rightAction={<HomeButton onPress={() => navigation.popTo('Home')} />}
       contentContainerStyle={styles.body}
@@ -221,7 +221,7 @@ export function VisitScreen() {
       <StatusBadges badges={visitBadges(view)} />
       {v.local.createError ? <InfoCallout variant="warning" title="The server refused this visit" description={v.local.createError} /> : null}
       {v.local.removedFromFeedAt ? (
-        <InfoCallout variant="warning" title="No longer in your visits" description="The server no longer lists this visit for you. Your report on this phone is kept." />
+        <InfoCallout variant="warning" title="No longer in your visits" description="The server no longer lists this visit for you. Your monitoring report on this phone is kept." />
       ) : null}
       {v.local.responseError ? (
         <TouchableOpacity onPress={() => void dismissResponseError(v.id)} accessibilityRole="button" accessibilityLabel="Dismiss this message">
@@ -233,13 +233,13 @@ export function VisitScreen() {
         </TouchableOpacity>
       ) : null}
 
-      <SectionCard title="Visit">
+      <SectionCard title="Monitoring visit">
         <DetailLine label={copy.beneficiaryLabel} value={pack?.school} />
         <DetailLine label="Date" value={`${formatDay(view.date, true)}${view.datePending ? ' (move waiting to send)' : ''}`} />
         {s.originalPlannedDate !== s.plannedDate ? <DetailLine label="First planned" value={formatDay(s.originalPlannedDate, true)} /> : null}
-        <DetailLine label="Report due" value={s.submissionDeadline ? formatDay(s.submissionDeadline, true) : null} />
+        <DetailLine label="Monitoring report due" value={s.submissionDeadline ? formatDay(s.submissionDeadline, true) : null} />
         <DetailLine label="Officers" value={s.assignees.map((a) => (a.isLead ? `${a.fullName} (lead)` : a.fullName)).join(', ')} />
-        {s.sprint ? <DetailLine label="Sprint" value={`Sprint ${s.sprint.number}: ${s.sprint.name}`} /> : null}
+        {s.sprint ? <DetailLine label="Work phase" value={`Work phase ${s.sprint.number}: ${s.sprint.name}`} /> : null}
         {deliverables ? <DetailLine label="Deliverables" value={deliverables} /> : null}
         {checkInText ? <DetailLine label="Check-in" value={checkInText} /> : null}
       </SectionCard>
@@ -287,7 +287,7 @@ export function VisitScreen() {
       {!canSubmit ? <Text style={visitUiStyles.muted}>Your role on this project can view visits but not submit them.</Text> : null}
 
       {open?.status === 'QUEUED' && (
-        <SectionCard title="Report saved" subtitle={copy.waitingToSend}>
+        <SectionCard title="Monitoring report saved" subtitle={copy.waitingToSend}>
           <Text style={visitUiStyles.body}>
             {queued?.status === 'DEAD' || queued?.status === 'HELD'
               ? `Not sent: ${queued.lastError ?? 'the server refused it.'} Open the outbox to retry.`
@@ -300,17 +300,17 @@ export function VisitScreen() {
       )}
 
       {refused.map((d) => (
-        <SectionCard key={d.draft.id} title="Report refused" subtitle={`Last changed ${formatTime(d.updatedAt)}`}>
-          <Text style={visitUiStyles.errorText}>{d.lastError ?? 'The server refused this report.'}</Text>
+        <SectionCard key={d.draft.id} title="Monitoring report refused" subtitle={`Last changed ${formatTime(d.updatedAt)}`}>
+          <Text style={visitUiStyles.errorText}>{d.lastError ?? 'The server refused this monitoring report.'}</Text>
           <View style={visitUiStyles.row}>
-            {!open && startable && <OutlineButton text="Copy into a new report" icon="copy" onPress={() => void copyRefused(d)} disabled={working} />}
+            {!open && startable && <OutlineButton text="Copy into a new monitoring report" icon="copy" onPress={() => void copyRefused(d)} disabled={working} />}
             <OutlineButton text="Delete" icon="trash-2" tone="danger" onPress={() => removeRefused(d)} disabled={working} />
           </View>
         </SectionCard>
       ))}
 
       {sent.length > 0 && (
-<Text style={visitUiStyles.muted}>Report sent from this phone, {formatTime(sent[0].updatedAt)}.</Text>
+<Text style={visitUiStyles.muted}>Monitoring report sent from this phone, {formatTime(sent[0].updatedAt)}.</Text>
       )}
 
       <SectionCard
@@ -326,7 +326,7 @@ export function VisitScreen() {
       </SectionCard>
 
       {(rechecks.length > 0 || s.recheckCount > 0) && (
-        <SectionCard title="Findings to re-check" subtitle={rechecks.length === 0 ? `${s.recheckCount} in the form` : null}>
+        <SectionCard title="Follow-up checks" subtitle={rechecks.length === 0 ? `${s.recheckCount} in the form` : null}>
           {rechecks.map((f) => (
             <View key={f.path} style={styles.item}>
               <Text style={visitUiStyles.strong}>

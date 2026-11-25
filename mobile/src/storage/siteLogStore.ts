@@ -160,13 +160,13 @@ export async function takeSiteLogPhotoIntoDraft(entryId: string, draftId: string
       return;
     }
     if (row.status !== 'QUEUED' || row.server_id) {
-      problem = 'This photo is already in the site log on the server. Attach the entry to the report instead, or take a new photo.';
+      problem = 'This photo is already in the site log on the server. Attach the entry to the monitoring report instead, or take a new photo.';
       return;
     }
     const withdrawn = await deletePendingRows(db, 'SITE_LOG_ENTRY', entryId);
     const latest = await latestRowFor('SITE_LOG_ENTRY', entryId);
     if (withdrawn === 0 && latest) {
-      problem = 'This photo is being sent to the site log. Attach the entry to the report instead, or take a new photo.';
+      problem = 'This photo is being sent to the site log. Attach the entry to the monitoring report instead, or take a new photo.';
       return;
     }
     await db.runAsync(`UPDATE site_log_entries SET status = 'MOVED_TO_FORM', moved_to_draft_id = ?, updated_at = ? WHERE id = ?`, [draftId, nowIso(), entryId]);

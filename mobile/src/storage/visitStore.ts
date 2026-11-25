@@ -698,7 +698,7 @@ export async function saveDraft(draft: VisitDraft): Promise<void> {
     `UPDATE visit_drafts SET draft_json = ?, form_snapshot_id = ?, form_hash = ?, updated_at = ? WHERE id = ? AND status = 'DRAFT'`,
     [JSON.stringify(next), next.formSnapshotId, next.formHash, now, draft.id]
   );
-  if (r.changes === 0) throw new Error('This report was already submitted and can no longer change.');
+  if (r.changes === 0) throw new Error('This monitoring report was already submitted and can no longer change.');
   emitVisitDataChanged('drafts');
 }
 
@@ -723,14 +723,14 @@ export async function queueVisitSubmission(
   opts: { confirmedAt?: string; submissionGeotag?: SubmissionGeotagInput | null } = {}
 ): Promise<void> {
   const stored = await getDraft(draftId);
-  if (!stored) throw new Error('This report is no longer on the phone.');
+  if (!stored) throw new Error('This monitoring report is no longer on the phone.');
   if (stored.status !== 'DRAFT') return;
   const draft = stored.draft;
   const v = await getVisit(draft.visitId);
   if (!v) throw new Error('This visit is no longer on the phone. Refresh your visits.');
   if (v.local.createError) throw new Error(v.local.createError);
   const form = await getVisitFormByHash(v.id, draft.formHash);
-  if (!form) throw new Error('The form of this report is not on the phone any more. Refresh and start again.');
+  if (!form) throw new Error('The form of this monitoring report is not on the phone any more. Refresh and start again.');
   const captureIds = answerCaptureIds(draft.answers);
   const facts = await captureFactsFor(captureIds, v.projectId);
   const check = checkDraft(form.snapshot, draft, facts);
@@ -880,7 +880,7 @@ export async function remapOpenDraftToCurrentForm(visitId: string): Promise<Drop
  */
 export async function copyRefusedDraft(draftId: string): Promise<{ draft: StoredVisitDraft; dropped: DroppedAnswer[] }> {
   const refused = await getDraft(draftId);
-  if (!refused || refused.status !== 'REFUSED') throw new Error('Only a refused report can be copied.');
+  if (!refused || refused.status !== 'REFUSED') throw new Error('Only a refused monitoring report can be copied.');
   const [oldForm, current] = await Promise.all([getVisitFormByHash(refused.draft.visitId, refused.draft.formHash), getVisitForm(refused.draft.visitId)]);
   if (!current) throw new Error('The form for this visit is not on the phone yet. Connect once to download it.');
   const { draft: moved, dropped } = remapDraftOntoSnapshot(
@@ -907,7 +907,7 @@ export async function copyRefusedDraft(draftId: string): Promise<{ draft: Stored
  */
 export async function startCorrectionDraft(visitId: string, detail: VisitDetailDto): Promise<{ draft: StoredVisitDraft; dropped: DroppedAnswer[] }> {
   const returned = [...detail.submissions].filter((s) => s.status === 'RETURNED').sort((a, b) => b.revisionNumber - a.revisionNumber)[0];
-  if (!returned) throw new Error('This visit has no report returned for correction.');
+  if (!returned) throw new Error('This visit has no monitoring report returned for correction.');
   await applyServerVisit(visitId, detail.visit);
   const current = await getVisitForm(visitId);
   if (!current) throw new Error('The form for this visit is not on the phone yet. Connect once to download it.');

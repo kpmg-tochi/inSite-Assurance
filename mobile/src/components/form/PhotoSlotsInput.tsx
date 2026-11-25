@@ -3,6 +3,7 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { captureDisplayUri, type CaptureRecord } from '../../storage/captureStore';
 import { PHOTO_STATUS_TEXT, type PhotoFieldModel, type PhotoSlot } from '../../utils/visitForm';
 import { photoSlotText, photosLeft, type SlotTone } from '../../utils/formUiModel';
+import { PHOTO_SAFEGUARDING_HINT } from '../../utils/personaCopy';
 import { FORM_COLORS, formStyles } from './formStyles';
 
 export interface PhotoSlotsInputProps {
@@ -43,6 +44,7 @@ export function PhotoSlotsInput({ label, model, captures, readOnly, onTake, onRe
           {model.geotagRequired ? ', taken on site' : ''}.
         </Text>
       ) : null}
+      {!readOnly ? <Text style={formStyles.meta}>{PHOTO_SAFEGUARDING_HINT}.</Text> : null}
       {model.slots.map((slot) => {
         const text = photoSlotText(slot, model);
         const left = photosLeft(slot, model);

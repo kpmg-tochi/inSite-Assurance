@@ -3,7 +3,7 @@ import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { formatElapsedTime } from '@insite/shared';
+import { formatElapsedTime, formatProjectCode } from '@insite/shared';
 import { EmptyStateCard, GradientHeaderLayout, InfoCallout, InSiteLoader, Pill, type PillVariant } from '../components/common';
 import { IconButton } from '../components/inputs/Buttons';
 import { OutlineButton, SectionCard, visitUiStyles } from '../components/visit/VisitUi';
@@ -53,7 +53,7 @@ export const OutboxModal: React.FC = () => {
     reload();
   }, [status.pendingCount, status.deadCount, status.isSyncing, reload]);
 
-  const names = useMemo(() => new Map(projects.map((p) => [p.projectId, `${p.projectCodePrefix} · ${p.projectName}`])), [projects]);
+  const names = useMemo(() => new Map(projects.map((p) => [p.projectId, `${formatProjectCode(p.projectCodePrefix)} · ${p.projectName}`])), [projects]);
   const groups = useMemo(() => groupOutboxItems(items ?? [], (id) => names.get(id) ?? null), [items, names]);
   const total = items?.length ?? 0;
 

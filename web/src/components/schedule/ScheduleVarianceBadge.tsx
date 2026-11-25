@@ -47,7 +47,7 @@ export function ScheduleBadge({ badge, size = "sm" }: { badge: Badge | null | un
       status={badge.status}
       label={badge.label}
       size={size}
-      title={`Schedule from sprints: behind when a unit due by an ended sprint is not complete${computed}`}
+      title={`Schedule from work phases: behind when a unit due by an ended work phase is not complete${computed}`}
     />
   );
 }

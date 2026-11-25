@@ -87,9 +87,9 @@ const RETRYABLE_CODES = new Set([
 /** Redesign R5: fixed messages for the visit app's permanent refusals (D-R5.11, D-R5.19, D-R5.20). */
 export const VISIT_CHANGED_RESPONSE_MESSAGE = 'This visit changed since you responded. Refresh and respond again.';
 export const FORM_SNAPSHOT_STALE_MESSAGE =
-  'The visit form was rebuilt after it was downloaded, so this report was not sent. Your answers are kept on this phone: open the visit to move them onto the new form and submit again.';
+  'The visit form was rebuilt after it was downloaded, so this monitoring report was not sent. Your answers are kept on this phone: open the visit to move them onto the new form and submit again.';
 export const VISIT_ALREADY_SUBMITTED_MESSAGE =
-  'Another officer already submitted this visit, so your report was not sent. It stays on this phone until you delete it.';
+  'Another officer already submitted this visit, so your monitoring report was not sent. It stays on this phone until you delete it.';
 export const UNSCHEDULED_FORM_STALE_MESSAGE =
   'The Ad hoc form on this phone no longer matches the project forms, so the unscheduled visit was not created. Refresh, then start the unscheduled visit again.';
 

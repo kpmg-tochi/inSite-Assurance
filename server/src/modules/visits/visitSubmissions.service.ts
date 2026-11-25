@@ -470,7 +470,7 @@ export async function createUnscheduledVisit(projectId: string, f: FieldAgentJwt
   const outside = input.pickedFacilityIds.filter((id) => !inScope.has(id));
   if (outside.length) throw new AppError('Pick facilities that have units on this project', 422, 'FACILITY_NOT_IN_SCOPE', { facilityIds: outside });
   const allRechecks = await prisma.$transaction((tx) => recheckInputsForProjectAnyStatus(tx, projectId, project.timezone, input.recheckIds));
-  if (allRechecks.length !== new Set(input.recheckIds).size) throw new AppError('A re-check item is not a finding of this project', 409, 'FORM_SNAPSHOT_STALE');
+  if (allRechecks.length !== new Set(input.recheckIds).size) throw new AppError('A follow-up check item is not a finding of this project', 409, 'FORM_SNAPSHOT_STALE');
   const builtAt = new Date();
   let snapshot;
   try {

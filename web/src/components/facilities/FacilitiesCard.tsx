@@ -188,7 +188,7 @@ export function FacilitiesCard() {
               type="button"
               onClick={() => workbook.mutate()}
               disabled={workbook.isPending}
-              title="The blank needs assessment template (Excel) with this workspace's facilities, units of measure, regions and delivery models"
+              title="The blank needs assessment template (Excel) with this workspace's facilities, units of measure, zones / states and delivery models"
               className="inline-flex items-center gap-1 rounded-xl bg-white/90 px-3 py-1.5 text-xs font-bold text-brand-navy hover:bg-slate-100 disabled:opacity-60"
             >
               <Download className="w-3.5 h-3.5" /> {workbook.isPending ? "Preparing…" : "Download template"}

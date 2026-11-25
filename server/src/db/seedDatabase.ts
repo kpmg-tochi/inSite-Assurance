@@ -30,6 +30,7 @@ import { seedClosureTwin } from "./seedClosureTwin";
 import { seedRegisterFields } from "./seedRegisterFields";
 import { seedDocumentRegisters } from "./seedDocumentRegisters";
 import { seedAlerts } from "./seedAlerts";
+import { seedDemoOverlay } from "./seedDemoOverlay";
 import { projectObjectPrefix } from "../integrations/storage.service";
 import { seedDaysAgo, seedRecordedPayment } from "./seedPayments";
 let activeSeedPromise: Promise<void> | null = null;
@@ -206,6 +207,7 @@ async function runSeed(): Promise<void> {
   await prisma.auditLog.deleteMany();
   await prisma.userProjectAssignment.deleteMany();
   await prisma.project.deleteMany();
+  await prisma.projectLot.deleteMany(); // client demo updates C3 (projects point at lots)
   await prisma.user.deleteMany();
   await prisma.organization.updateMany({ data: { parentOrganizationId: null } });
   await prisma.organization.deleteMany();
@@ -839,6 +841,9 @@ async function runSeed(): Promise<void> {
   await seedDocumentRegisters();
   // UBEC IRL: early-warning alerts from the seeded data, through the alert service (runs last).
   await seedAlerts();
+  // Client demo updates: SEED_PROFILE=ubec-demo adds the demo overlay (story table in its header).
+  // Tests and the default profile keep the normal seed.
+  if (process.env.SEED_PROFILE === "ubec-demo") await seedDemoOverlay();
 
   console.log("✅ Seed complete!");
   console.log(

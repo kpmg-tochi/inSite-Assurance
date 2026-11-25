@@ -102,7 +102,7 @@ describe('inline rules', () => {
     const path = findPath((f) => f.recheck !== null);
     const { field: f } = field(path);
     assert.match(recheckMetaText(f)!, /^Finding · (Major|Minor) · raised 2026-11-1\d$/);
-    assert.equal(fieldRuleNotes(f, setAnswerValue([], path, 'NO')[0]).commentLabel, 'Why is it not resolved? (needed)');
+    assert.equal(fieldRuleNotes(f, setAnswerValue([], path, 'NO')[0]).commentLabel, 'Why is it not rectified? (needed)');
     assert.equal(fieldRuleNotes(f, setAnswerValue([], path, 'YES')[0]).photoNeeded, true);
   });
 

@@ -28,7 +28,7 @@ export function ClosurePackPanel({ projectId }: { projectId: string }) {
         <div className="flex items-start gap-2">
           <Archive className="mt-0.5 h-4 w-4 text-brand-primary" />
           <div>
-            <h2 className="text-sm font-bold text-slate-900">Closure pack</h2>
+            <h2 className="text-sm font-bold text-slate-900">Project closure file</h2>
             <p className="text-[11px] text-slate-500">
               A ZIP for audit: index, every current document, the certificates, the payment record, visit summaries and the audit ledger with its
               chain verification. Filed in the register as a closure file.
@@ -41,12 +41,12 @@ export function ClosurePackPanel({ projectId }: { projectId: string }) {
           onClick={() => request.mutate()}
           className="rounded-xl bg-brand-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
         >
-          {busy ? "Building…" : "Export closure pack"}
+          {busy ? "Building…" : "Export the project closure file"}
         </button>
       </div>
       {query.isLoading && <Loader />}
-      {query.isError && <p className="text-xs text-rose-700">Earlier closure packs could not be loaded.</p>}
-      {query.data && query.data.length === 0 && <p className="text-xs text-slate-500">No closure pack has been exported yet.</p>}
+      {query.isError && <p className="text-xs text-rose-700">Earlier project closure files could not be loaded.</p>}
+      {query.data && query.data.length === 0 && <p className="text-xs text-slate-500">No project closure file has been exported yet.</p>}
       {query.data && query.data.length > 0 && (
         <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
           {query.data.map((e) => (

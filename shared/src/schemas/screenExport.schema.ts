@@ -59,5 +59,12 @@ export const PaymentsExportQuerySchema = z.object({
   sprint: z.union([z.literal('none'), z.string().uuid()]).optional(),
   /** "true": live payments with at least one exception. */
   exceptionsOnly: z.enum(['true', 'false']).optional(),
+  /** Client demo updates G.1: paid on or after / on or before (inclusive, YYYY-MM-DD). */
+  from: IsoDate.optional(),
+  to: IsoDate.optional(),
 });
 export type PaymentsExportQuery = z.infer<typeof PaymentsExportQuerySchema>;
+
+/** GET /projects/:id/payments (G.1: the list filters move to the server; every key optional, as before). */
+export const ProjectPaymentsQuerySchema = PaymentsExportQuerySchema;
+export type ProjectPaymentsQuery = PaymentsExportQuery;

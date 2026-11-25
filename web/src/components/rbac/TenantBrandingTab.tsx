@@ -165,7 +165,7 @@ export function TenantBrandingTab() {
               </h3>
             </div>
             <p className="text-xs text-slate-500 mt-1">
-              Customize portal colors, sidebar workspace branding, and the headers of generated PDFs (certificates, closure packs)
+              Customize portal colors, sidebar workspace branding, and the headers of generated PDFs (certificates, project closure files)
               for <span className="font-semibold text-slate-700">{tenant?.name}</span>.
             </p>
           </div>

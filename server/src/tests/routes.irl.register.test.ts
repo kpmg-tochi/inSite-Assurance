@@ -15,7 +15,10 @@ import assert from 'node:assert/strict';
 import type { Express } from 'express';
 import request from 'supertest';
 import ExcelJS from 'exceljs';
-import { splitProjectCode, zonedCalendarDate, type RegisterRowRaw } from '@insite/shared';
+import { allowedInterventionYears, splitProjectCode, zonedCalendarDate, type RegisterRowRaw } from '@insite/shared';
+
+// Client demo updates D5: new and changed drafts take the current or next fiscal year (January start).
+const [THIS_YEAR, NEXT_YEAR] = allowedInterventionYears(zonedCalendarDate(new Date(), 'Africa/Lagos'));
 import { DEMO_REGISTER_FILE, demoRegisterRows, demoRegisterWorkbookData, demoWorkbookData } from '../scripts/demoProject';
 
 type PrismaClientType = typeof import('../config/prisma')['prisma'];
@@ -112,9 +115,9 @@ describe('UBEC IRL register fields', () => {
       const saved = await request(app)
         .put(`/api/v1/projects/${id}/setup/basics`)
         .set(h)
-        .send({ ...basics, interventionYear: 2027, fundingSource: 'Development partner', externalReference: ref });
+        .send({ ...basics, interventionYear: NEXT_YEAR, fundingSource: 'Development partner', externalReference: ref });
       assert.equal(saved.status, 200, JSON.stringify(saved.body));
-      assert.equal(saved.body.data.basics.interventionYear, 2027);
+      assert.equal(saved.body.data.basics.interventionYear, NEXT_YEAR);
       assert.equal(saved.body.data.basics.fundingSource, 'Development partner');
       assert.equal(saved.body.data.basics.externalReference, ref);
 
@@ -134,7 +137,7 @@ describe('UBEC IRL register fields', () => {
     const list = (await request(app).get('/api/v1/projects').set(h)).body.data as Array<Record<string, unknown>>;
     const row = list.find((p) => p.codePrefix === 'PRG-102')!;
     assert.equal(row.externalReference, 'TEST/PRG-102');
-    assert.equal(row.interventionYear, 2027);
+    assert.equal(row.interventionYear, NEXT_YEAR);
     assert.equal(row.progressIsImported, false);
     // Created with the fields.
     const created = await request(app).post('/api/v1/projects').set(h).send({
@@ -143,7 +146,7 @@ describe('UBEC IRL register fields', () => {
       stateLocation: 'Kano',
       totalBudgetNgn: 1_000_000,
       projectTypeId: (await prisma.projectType.findFirstOrThrow({ where: { tenantId: ids.tenant, code: 'CENTRAL' } })).id,
-      interventionYear: 2026,
+      interventionYear: THIS_YEAR,
       fundingSource: 'Special intervention',
       externalReference: 'TEST/NEW',
     });

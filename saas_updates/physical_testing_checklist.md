@@ -139,6 +139,13 @@ Photos must be taken inside the project's site boundary to fill a slot. Unless y
 - [ ] **IRL-M-05** Offline queue with compressed photos: in airplane mode take 20 photos across a visit, the site log and a defect, then reconnect. Expected: the Outbox drains; each photo uploads once; total data used is roughly 20 × 0.3 MB; the phone's `captures` folder holds the compressed files only (no full-size originals left in the cache after the app restarts).
 - [ ] **IRL-M-06** Upgrade (SQLite v10 → v11): install this build over the previous one with unsent photos queued. Expected: the app opens without a crash; the old photos upload (without a heading); new photos carry one.
 
+### 4.11 Client demo wave 1 (2026-11-25)
+Labels and codes only (JavaScript), so a JS reload in Expo Go or the dev build is enough; the emulator's preview APK needs a rebuild to show them (working plan section 10). Needs the overlay seed (`SEED_PROFILE=ubec-demo`); account `resident.supervisor@ubec.test`.
+- [ ] **PHY-DEMO1-01** Labels: Home, Project, Visit, VisitForm, VisitReview, Site log, Defects and Notifications use the glossary (work phase, Execution, monitoring report, follow-up check, rectified, punch list item, Mobilised to site, Defects liability period, Monitoring overdue). Expected: no "sprint", "construction" (as a stage), "re-check", "snag" or "region" on any screen. Note leftovers with the screen name.
+- [ ] **PHY-DEMO1-02** Codes: project cards on Home, the Project header and the visit screens show "LOT n BATCH m" for the overlay's projects with "Intervention year" on the card and the Project screen (older codes as stored, no year); the same visit published on the web (WEB-DEMO1-09) appears, is confirmed, checked in and submitted.
+- [ ] **PHY-DEMO1-03** Camera hint: opening the in-app camera from the visit form, the site log, a defect and an incident shows "Photograph the works, not pupils"; it does not cover the shutter or the frame, in portrait and landscape.
+- [ ] **PHY-DEMO1-04** Follow-up check: a visit form with an open finding shows "Follow-up check: … Rectified?" with the answers "Rectified" / "Not rectified", and the review screen repeats them.
+
 ---
 
 ## 5. Retired checks

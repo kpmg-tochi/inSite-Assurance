@@ -375,7 +375,7 @@ function TicketActionModal({ project, action, onClose }: { project: ProjectSumma
             <FieldError form={form} name="notes" />
           </label>
         )}
-        {action.kind === "reject" && <BlockedNotice>The ticket is closed as not a defect. The reason is recorded in the audit ledger.</BlockedNotice>}
+        {action.kind === "reject" && <BlockedNotice>The defect is closed as not a defect. The reason is recorded in the audit ledger.</BlockedNotice>}
         <ModalActions
           onCancel={onClose}
           submitLabel={action.kind === "verify" ? "Reopen" : ACTION_TITLE[action.kind]}

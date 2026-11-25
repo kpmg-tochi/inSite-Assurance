@@ -307,7 +307,7 @@ export async function saveSprints(projectId: string, webUser: WebJwtPayload, inp
     const existing = await tx.projectSprint.findMany({ where: { projectId }, orderBy: { number: 'asc' } });
     const byId = new Map(existing.map((s) => [s.id, s]));
     for (const s of input.sprints) {
-      if (s.id && !byId.has(s.id)) throw new AppError('Sprint not found', 404, 'SPRINT_NOT_FOUND');
+      if (s.id && !byId.has(s.id)) throw new AppError('Work phase not found', 404, 'SPRINT_NOT_FOUND');
     }
     const keptIds = new Set(input.sprints.map((s) => s.id).filter(Boolean) as string[]);
     const removed = existing.filter((s) => !keptIds.has(s.id));
@@ -318,7 +318,7 @@ export async function saveSprints(projectId: string, webUser: WebJwtPayload, inp
       });
       if (used) {
         throw new AppError(
-          `Unit ${used.code} (${used.label}) starts or ends in a sprint you removed. Move the unit first.`,
+          `Unit ${used.code} (${used.label}) starts or ends in a work phase you removed. Move the unit first.`,
           409,
           'SPRINT_IN_USE'
         );
@@ -332,7 +332,7 @@ export async function saveSprints(projectId: string, webUser: WebJwtPayload, inp
       });
       if (paid) {
         throw new AppError(
-          `Payment ${paid.reference} is recorded against sprint ${paid.sprint!.number} (${paid.sprint!.name}). A sprint a payment names cannot be removed.`,
+          `Payment ${paid.reference} is recorded against work phase ${paid.sprint!.number} (${paid.sprint!.name}). A work phase a payment names cannot be removed.`,
           409,
           'SPRINT_IN_USE'
         );
@@ -428,7 +428,7 @@ function quantityFields(archetype: FacilityArchetype, plannedQuantity: number | 
 
 function assertSprintOrder(start: number | null, end: number | null) {
   if (start !== null && end !== null && start > end) {
-    throw new AppError(`The unit cannot end (sprint ${end}) before it starts (sprint ${start}).`, 422, 'UNIT_SPRINT_ORDER');
+    throw new AppError(`The unit cannot end (work phase ${end}) before it starts (work phase ${start}).`, 422, 'UNIT_SPRINT_ORDER');
   }
 }
 

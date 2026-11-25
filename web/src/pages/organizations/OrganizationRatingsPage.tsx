@@ -1,7 +1,7 @@
 import React from "react";
 import { useParams } from "react-router-dom";
 import { Star } from "lucide-react";
-import { CONTRACTOR_RATING_STAGE_META } from "@insite/shared";
+import { CONTRACTOR_RATING_STAGE_META, formatProjectCode } from "@insite/shared";
 import Loader from "../../components/Loader";
 import { ScoreStars } from "../../components/closure/ContractorRatingsPanel";
 import { useOrganizationRatingsQuery } from "../../queries/closure/useClosureQueries";
@@ -61,7 +61,7 @@ export function OrganizationRatingsPage() {
               {d.ratings.map((r) => (
                 <tr key={r.id} className="align-top">
                   <td className="px-4 py-2 font-semibold text-slate-800">
-                    {r.projectCode} <span className="font-normal text-slate-500">{r.projectName}</span>
+                    {formatProjectCode(r.projectCode)} <span className="font-normal text-slate-500">{r.projectName}</span>
                   </td>
                   <td className="px-4 py-2">{CONTRACTOR_RATING_STAGE_META[r.stage].label}</td>
                   <td className="px-4 py-2 font-semibold">{r.overallScore.toFixed(2)}</td>

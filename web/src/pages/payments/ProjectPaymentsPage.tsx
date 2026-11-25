@@ -10,6 +10,8 @@ import {
   VoidPaymentRequestSchema,
   type PaymentDto,
   type PaymentKind,
+  type PeriodSelection,
+  type ProjectPaymentsQuery,
   type ProjectPaymentsSummaryDto,
   type RecordPaymentRequest,
 } from "@insite/shared";
@@ -26,8 +28,22 @@ import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { PaidVsContractSumBar } from "../../components/payments/PaidVsContractSumBar";
 import { ExportExcelButton } from "../../components/common/ExportExcelButton";
 import { useExportProjectPaymentsMutation } from "../../mutations/screenExports/useScreenExportMutations";
+import { PeriodFilter, browserToday, periodQuery, usePeriodUrlState } from "../../components/common/PeriodFilter";
 
 const labelClass = "block text-xs font-semibold text-slate-700 mb-1";
+
+/** The project page shows every payment until a period is chosen (G.1). */
+const DEFAULT_PERIOD: PeriodSelection = { preset: "ALL" };
+
+/** The search box, sent to the server once typing pauses. */
+function useDebounced<T>(value: T, ms = 300): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return debounced;
+}
 
 /**
  * Payments (redesign R1b). Contractor payments are made outside the platform; finance records each
@@ -37,31 +53,50 @@ const labelClass = "block text-xs font-semibold text-slate-700 mb-1";
  */
 export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto }) {
   const term = useTerm();
-  const query = useProjectPaymentsQuery(project.id);
   const process = useProjectProcess(project.id);
   const retentionOn = process.data?.config.enableRetentionModule ?? false;
   const [recording, setRecording] = useState(false);
   const [voiding, setVoiding] = useState<PaymentDto | null>(null);
   const [search, setSearch] = useState("");
   const [kindFilter, setKindFilter] = useState<"" | PaymentKind>("");
-  // "" = every sprint, "none" = payments without a sprint, else a sprint id.
+  // "" = every work phase, "none" = payments without one, else a sprint id.
   const [sprintFilter, setSprintFilter] = useState("");
   const [exceptionsOnly, setExceptionsOnly] = useState(false);
+  const [period, setPeriod] = usePeriodUrlState(DEFAULT_PERIOD);
+  // Today and the fiscal year start come with the payments (the tenant's); the browser's date until then.
+  const [calendar, setCalendar] = useState({ today: browserToday(), fiscalYearStartMonth: 1 });
+  const debouncedSearch = useDebounced(search.trim());
+  // G.1: the filters and the period apply on the server, so the export and the screen agree.
+  const filters = useMemo<ProjectPaymentsQuery>(() => {
+    const q: ProjectPaymentsQuery = {
+      search: debouncedSearch || undefined,
+      kind: kindFilter || undefined,
+      sprint: sprintFilter || undefined,
+      exceptionsOnly: exceptionsOnly ? "true" : undefined,
+      ...periodQuery(period, calendar.today, calendar.fiscalYearStartMonth),
+    };
+    (Object.keys(q) as Array<keyof ProjectPaymentsQuery>).forEach((k) => q[k] === undefined && delete q[k]);
+    return q;
+  }, [debouncedSearch, kindFilter, sprintFilter, exceptionsOnly, period, calendar]);
+  const query = useProjectPaymentsQuery(project.id, true, filters);
   const exportPayments = useExportProjectPaymentsMutation(project.id);
   const s = query.data;
   const sprints = s?.sprints ?? [];
+  useEffect(() => {
+    if (s && (s.today !== calendar.today || (s.fiscalYearStartMonth ?? 1) !== calendar.fiscalYearStartMonth)) {
+      setCalendar({ today: s.today, fiscalYearStartMonth: s.fiscalYearStartMonth ?? 1 });
+    }
+  }, [s, calendar]);
 
-  const rows = useMemo(() => {
-    const t = search.trim().toLowerCase();
-    return (s?.payments ?? []).filter(
-      (p) =>
-        (!t || p.reference.toLowerCase().includes(t) || (p.description ?? "").toLowerCase().includes(t)) &&
-        (!kindFilter || p.kind === kindFilter) &&
-        (!sprintFilter || (sprintFilter === "none" ? p.sprint === null : p.sprint?.id === sprintFilter)) &&
-        (!exceptionsOnly || (!p.voided && p.exceptions.length > 0))
-    );
-  }, [s?.payments, search, kindFilter, sprintFilter, exceptionsOnly]);
-  const filtered = Boolean(kindFilter || sprintFilter || exceptionsOnly || search.trim());
+  const rows = s?.payments ?? [];
+  const filtered = Object.keys(filters).length > 0;
+  const live = rows.filter((p) => !p.voided);
+  const sumOf = (f: (p: PaymentDto) => number) => live.reduce((t, p) => t + f(p), 0);
+  const matchTotals = {
+    gross: sumOf((p) => (p.kind === "RETENTION_RELEASE" ? 0 : p.grossAmountNgn)),
+    held: sumOf((p) => (p.kind === "RETENTION_RELEASE" ? 0 : p.retentionHeldNgn)),
+    net: sumOf((p) => p.netAmountNgn),
+  };
 
   const columns: TableColumnDef<PaymentDto>[] = [
     { id: "date", header: "Paid on", width: "w-28", cell: (p) => <span className="text-xs tabular-nums">{p.paidOn}</span> },
@@ -85,12 +120,12 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
       ? [
           {
             id: "sprint",
-            header: "Sprint",
+            header: "Work phase",
             width: "w-32",
             cell: (p: PaymentDto) =>
               p.sprint ? (
                 <span className="text-xs text-slate-700" title={p.sprint.name}>
-                  Sprint {p.sprint.number}
+                  Work phase {p.sprint.number}
                   <span className="block truncate text-[11px] text-slate-500">{p.sprint.name}</span>
                 </span>
               ) : (
@@ -184,10 +219,11 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
 
       <StandardTable<PaymentDto>
         title="Payment record"
-        subtitle={`${filtered ? `${rows.length} of ${s?.payments.length ?? 0}` : rows.length} payment(s)${s && s.exceptionCount > 0 ? ` · ${s.exceptionCount} exception(s)` : ""}`}
+        subtitle={`${rows.length} payment(s)${filtered ? " match" : ""}${s && s.exceptionCount > 0 ? ` · ${s.exceptionCount} exception(s) on the project` : ""}`}
         search={{ value: search, onChange: setSearch, placeholder: "Search references" }}
         filters={
           <div className="flex flex-wrap items-center gap-3">
+            <PeriodFilter value={period} onChange={setPeriod} today={calendar.today} fiscalYearStartMonth={calendar.fiscalYearStartMonth} />
             <div className="w-44">
               <CustomSelect
                 ariaLabel="Payment type"
@@ -205,13 +241,13 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
             {sprints.length > 0 && (
               <div className="w-48">
                 <CustomSelect
-                  ariaLabel="Sprint"
+                  ariaLabel="Work phase"
                   value={sprintFilter}
                   onChange={(v) => setSprintFilter(v)}
                   options={[
-                    { value: "", label: "All sprints" },
-                    { value: "none", label: "No sprint named" },
-                    ...sprints.map((sp) => ({ value: sp.id, label: `Sprint ${sp.number} · ${sp.name}` })),
+                    { value: "", label: "All work phases" },
+                    { value: "none", label: "No work phase named" },
+                    ...sprints.map((sp) => ({ value: sp.id, label: `Work phase ${sp.number} · ${sp.name}` })),
                   ]}
                   size="sm"
                 />
@@ -227,14 +263,7 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
             <ExportExcelButton
               onDark
               pending={exportPayments.isPending}
-              onClick={() =>
-                exportPayments.mutate({
-                  search: search.trim() || undefined,
-                  kind: kindFilter || undefined,
-                  sprint: sprintFilter || undefined,
-                  exceptionsOnly: exceptionsOnly ? "true" : undefined,
-                })
-              }
+              onClick={() => exportPayments.mutate({ ...filters, search: search.trim() || undefined })}
             />
             {s?.canRecord && (
               <button
@@ -251,9 +280,17 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
         data={rows}
         keyExtractor={(p) => p.id}
         loading={query.isLoading}
+        footer={
+          filtered && live.length > 0 ? (
+            <p className="text-[11px] text-slate-600">
+              Matching payments (voided excluded): paid {formatNaira(matchTotals.gross)}
+              {retentionOn ? ` · ${term("retention", { lower: true })} held ${formatNaira(matchTotals.held)}` : ""} · net {formatNaira(matchTotals.net)}
+            </p>
+          ) : undefined
+        }
         emptyState={
-          filtered && (s?.payments.length ?? 0) > 0
-            ? { title: "No payments match", description: "Clear the search or filters to see every payment." }
+          filtered
+            ? { title: "No payments match", description: "Clear the search, filters or period to see every payment." }
             : { title: "No payments recorded", description: "Recorded payments appear here with their checks." }
         }
       />
@@ -312,7 +349,7 @@ function ReleaseChecks({ s }: { s: ProjectPaymentsSummaryDto }) {
         ? s.retentionPeriodEnded
           ? `Ended ${s.retentionPeriodEnd}`
           : `Ends ${s.retentionPeriodEnd}`
-        : "No end date yet (set when the liability period starts)",
+        : "No end date yet (set when the defects liability period starts)",
     },
     {
       key: "defects",
@@ -500,13 +537,13 @@ function RecordPaymentModal({
                 name="sprintId"
                 render={({ field }) => (
                   <CustomSelect
-                    label="Sprint (optional)"
-                    hint="The sprint this payment is for. A sprint a payment names cannot be removed later."
+                    label="Work phase (optional)"
+                    hint="The work phase this payment is for. A work phase a payment names cannot be removed later."
                     value={field.value}
                     onChange={field.onChange}
                     options={[
-                      { value: "", label: "No sprint" },
-                      ...summary.sprints.map((sp) => ({ value: sp.id, label: `Sprint ${sp.number} · ${sp.name}` })),
+                      { value: "", label: "No work phase" },
+                      ...summary.sprints.map((sp) => ({ value: sp.id, label: `Work phase ${sp.number} · ${sp.name}` })),
                     ]}
                   />
                 )}

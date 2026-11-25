@@ -7,6 +7,12 @@ import { resolveTerm, resolveTerminology, type FieldPersonaType, type ResolvedTe
  * funder and the beneficiary come from `useActiveBranding().terminology`.
  */
 
+/**
+ * Safeguarding at schools (client demo updates C6): shown in the in-app camera and in photo help
+ * text. Without a full stop so it reads as a hint in the camera; help text adds one.
+ */
+export const PHOTO_SAFEGUARDING_HINT = 'Photograph the works, not pupils';
+
 export interface PersonaCopy {
   /** Home header subtitle. */
   homeSubtitle: string;
@@ -43,17 +49,17 @@ export function personaCopy(
   const terms = terminology ?? resolveTerminology({});
   const funder = resolveTerm(terms, 'funderParty', { lower: true });
   return {
-    homeSubtitle: 'Your site visits',
+    homeSubtitle: 'Your monitoring visits',
     myProjectsTitle: 'My projects',
-    noVisitsOnDay: 'No visits on this day.',
+    noVisitsOnDay: 'No monitoring visits on this day.',
     unscheduledVisitButton: 'Unscheduled visit',
-    unscheduledVisitHelp: 'Record a visit that was not planned. It is saved as an Ad hoc visit.',
+    unscheduledVisitHelp: 'Record a monitoring visit that was not planned. It is saved as an Ad hoc visit.',
     checkInButton: 'Check in',
     startFormButton: 'Start the visit form',
     resumeFormButton: 'Resume the visit form',
     correctFormButton: 'Correct and resubmit',
     waitingToSend: 'Waiting to send',
-    outboxEmptyDescription: 'Every visit report, check-in, response and site log entry from this phone has been accepted by the server.',
+    outboxEmptyDescription: 'Every monitoring report, check-in, response and site log entry from this phone has been accepted by the server.',
     siteLogSubtitle: 'Photos, voice notes and notes from site. Saved on this phone and sent when you are online.',
     contractorLabel: resolveTerm(terms, 'contractor'),
     beneficiaryLabel: resolveTerm(terms, 'beneficiary'),

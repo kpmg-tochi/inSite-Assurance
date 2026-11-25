@@ -86,7 +86,7 @@ describe('deriveProjectStage', () => {
     assert.equal(retention.current, 'CLOSURE');
     assert.equal(retention.subLabel, 'Defects liability period');
     assert.equal(retention.stages[4].enteredAt, '2026-10-01T08:00:00.000Z');
-    assert.equal(projectStageChipLabel(retention), 'Closure · Defects liability period');
+    assert.equal(projectStageChipLabel(retention), 'Project closure · Defects liability period');
 
     const closed = deriveProjectStage({ ...base, constructionPhase: 'COMPLETED_CLOSED' });
     assert.equal(closed.subLabel, 'Closed');

@@ -28,7 +28,7 @@ import { workspaceShortName } from '../scope/scopeImport.service';
 import { visitWhere } from '../visits/visits.service';
 import { plannerVisitWhere } from '../visits/visitResponses.service';
 import { FINDING_INCLUDE, FindingRow, loadNames } from '../findings/findings.service';
-import { getProjectPayments } from '../payments/payments.service';
+import { filterPayments, getProjectPayments } from '../payments/payments.service';
 import { getKpiDashboard, safeZone } from '../kpis/kpis.service';
 
 /**
@@ -147,7 +147,7 @@ function visitColumns(withProject: boolean): ExportColumn<VisitLine>[] {
     { header: 'Planned date', width: 14, format: 'date', value: (l) => dateCell(l.v.plannedDate) },
     { header: 'Original date', width: 14, format: 'date', value: (l) => dateCell(l.v.originalPlannedDate) },
     { header: 'Visit kind', width: 22, value: (l) => VISIT_KIND_META[l.v.visitKind as VisitKind]?.label ?? l.v.visitKind },
-    { header: 'Sprint', width: 20, value: (l) => (l.v.sprint ? `Sprint ${l.v.sprint.number}${JOIN}${l.v.sprint.name}` : null) },
+    { header: 'Work phase', width: 20, value: (l) => (l.v.sprint ? `Work phase ${l.v.sprint.number}${JOIN}${l.v.sprint.name}` : null) },
     { header: 'Status', width: 17, value: (l) => VISIT_STATUS_LABELS[l.v.status as VisitStatus] ?? l.v.status },
     { header: 'Confirmation', width: 15, value: (l) => VISIT_CONFIRMATION_LABELS[l.v.confirmation] },
     { header: 'Lead officer', width: 22, value: (l) => l.v.assignees.find((a) => a.isLead)?.user.fullName ?? l.v.assignees[0]?.user.fullName ?? null },
@@ -220,7 +220,7 @@ export async function buildPlannerVisitsExport(webUser: WebJwtPayload, q: Planne
     q.officerId ? prisma.user.findFirst({ where: { id: q.officerId, tenantId: webUser.tenantId }, select: { fullName: true } }) : null,
   ]);
   const filters = [
-    region && `Region: ${region.name}`,
+    region && `Zone: ${region.name}`,
     project && `Project: ${project.codePrefix}`,
     officer && `Officer: ${officer.fullName}`,
     visitFilterText({ visitKind: q.visitKind }),
@@ -253,9 +253,9 @@ export async function buildPlannerVisitsExport(webUser: WebJwtPayload, q: Planne
 // Findings
 // ---------------------------------------------------------------------------
 
-const FINDING_STATUS_LABELS: Record<FindingRow['status'], string> = { OPEN: 'Open', RESOLVED: 'Resolved', DISMISSED: 'Dismissed' };
+const FINDING_STATUS_LABELS: Record<FindingRow['status'], string> = { OPEN: 'Open', RESOLVED: 'Rectified', DISMISSED: 'Dismissed' };
 
-/** GET /projects/:id/findings/export.xlsx: the Findings tab (open, resolved and dismissed). */
+/** GET /projects/:id/findings/export.xlsx: the Findings tab (open, rectified and dismissed). */
 export async function buildProjectFindingsExport(projectId: string, webUser: WebJwtPayload, q: FindingsExportQuery, now = new Date()): Promise<XlsxFile> {
   const project = await loadProjectHeader(projectId);
   const brand = workspaceShortName(project.tenant.name);
@@ -276,11 +276,11 @@ export async function buildProjectFindingsExport(projectId: string, webUser: Web
     { header: 'Visit date', width: 14, format: 'date', value: (f) => dateCell(visitOf(f)?.plannedDate ?? zonedCalendarDate(f.createdAt, zone)) },
     { header: 'Raised at', width: 18, format: 'datetime', value: (f) => dateTimeCell(f.createdAt, zone) },
     { header: 'Raised by', width: 22, value: (f) => f.raisedByName ?? 'Visit form rule' },
-    { header: 'Re-checks', width: 10, format: 'integer', value: (f) => f.recheckCount },
-    { header: 'Last re-checked', width: 18, format: 'datetime', value: (f) => dateTimeCell(f.lastRecheckedAt, zone) },
+    { header: 'Follow-up checks', width: 10, format: 'integer', value: (f) => f.recheckCount },
+    { header: 'Last follow-up check', width: 18, format: 'datetime', value: (f) => dateTimeCell(f.lastRecheckedAt, zone) },
     { header: 'Escalated at', width: 18, format: 'datetime', value: (f) => dateTimeCell(f.escalatedAt, zone) },
-    { header: 'Resolved / dismissed at', width: 18, format: 'datetime', value: (f) => dateTimeCell(f.resolvedAt, zone) },
-    { header: 'Resolved / dismissed by', width: 22, value: (f) => f.resolvedByName },
+    { header: 'Rectified / dismissed at', width: 18, format: 'datetime', value: (f) => dateTimeCell(f.resolvedAt, zone) },
+    { header: 'Rectified / dismissed by', width: 22, value: (f) => f.resolvedByName },
     { header: 'Notes', width: 40, wrap: true, value: (f) => f.resolvedNotes },
     { header: 'Contractor', width: 26, value: (f) => f.projectContractor?.organization.name ?? 'Monitoring side' },
   ];
@@ -294,7 +294,7 @@ export async function buildProjectFindingsExport(projectId: string, webUser: Web
         title: titleOf(brand, 'Findings', project.codePrefix),
         hint: hintOf(
           project.name,
-          q.status ? `Status: ${FINDING_STATUS_LABELS[q.status]}` : 'Open, resolved and dismissed',
+          q.status ? `Status: ${FINDING_STATUS_LABELS[q.status]}` : 'Open, rectified and dismissed',
           `${rows.length} finding(s)`,
           `Times in ${zone}`,
           generatedLine(now, zone, webUser.fullName)
@@ -313,33 +313,25 @@ export async function buildProjectFindingsExport(projectId: string, webUser: Web
 // Payments
 // ---------------------------------------------------------------------------
 
-/** The payment record's own filter (ProjectPaymentsPage), applied server-side. */
-export function filterPayments(payments: PaymentDto[], q: PaymentsExportQuery): PaymentDto[] {
-  const t = (q.search ?? '').trim().toLowerCase();
-  return payments.filter(
-    (p) =>
-      (!t || p.reference.toLowerCase().includes(t) || (p.description ?? '').toLowerCase().includes(t)) &&
-      (!q.kind || p.kind === q.kind) &&
-      (!q.sprint || (q.sprint === 'none' ? p.sprint === null : p.sprint?.id === q.sprint)) &&
-      (q.exceptionsOnly !== 'true' || (!p.voided && p.exceptions.length > 0))
-  );
-}
+/** The payment record's own filter, now in the payments service (GET /projects/:id/payments uses it too). */
+export { filterPayments };
 
 const roundNgn = (n: number) => Math.round(n * 100) / 100;
 
 /** GET /projects/:id/payments/export.xlsx: the payment record with a totals row (voided entries excluded). */
 export async function buildProjectPaymentsExport(projectId: string, webUser: WebJwtPayload, q: PaymentsExportQuery, now = new Date()): Promise<XlsxFile> {
-  const [project, summary] = await Promise.all([loadProjectHeader(projectId), getProjectPayments(projectId, webUser)]);
+  const [project, summary] = await Promise.all([loadProjectHeader(projectId), getProjectPayments(projectId, webUser, q)]);
   const brand = workspaceShortName(project.tenant.name);
   const zone = safeZone(project.timezone);
-  const rows = filterPayments(summary.payments, q);
+  // The service applies the record's filters (G.1): `payments` holds the matching rows.
+  const rows = summary.payments;
   const isRelease = (p: PaymentDto) => p.kind === 'RETENTION_RELEASE';
   const columns: ExportColumn<PaymentDto>[] = [
     { header: 'Paid on', width: 14, format: 'date', value: (p) => dateCell(p.paidOn) },
     { header: 'Type', width: 18, value: (p) => PAYMENT_KIND_LABELS[p.kind] },
     { header: 'Reference', width: 18, value: (p) => p.reference },
     { header: 'Description', width: 30, wrap: true, value: (p) => p.description },
-    { header: 'Sprint', width: 20, value: (p) => (p.sprint ? `Sprint ${p.sprint.number}${JOIN}${p.sprint.name}` : null) },
+    { header: 'Work phase', width: 20, value: (p) => (p.sprint ? `Work phase ${p.sprint.number}${JOIN}${p.sprint.name}` : null) },
     { header: 'Gross amount', width: 17, format: 'money', value: (p) => (isRelease(p) ? null : p.grossAmountNgn) },
     { header: 'Retention held', width: 16, format: 'money', value: (p) => (isRelease(p) ? null : p.retentionHeldNgn) },
     { header: 'Retention released', width: 17, format: 'money', value: (p) => (isRelease(p) ? p.grossAmountNgn : null) },
@@ -369,7 +361,8 @@ export async function buildProjectPaymentsExport(projectId: string, webUser: Web
   const filters = [
     q.search?.trim() && `Search: "${q.search.trim()}"`,
     q.kind && `Type: ${PAYMENT_KIND_LABELS[q.kind]}`,
-    q.sprint && (q.sprint === 'none' ? 'No sprint named' : `Sprint: ${summary.sprints.find((s) => s.id === q.sprint)?.number ?? '?'}`),
+    (q.from || q.to) && `Paid ${q.from ?? '…'} to ${q.to ?? '…'}`,
+    q.sprint && (q.sprint === 'none' ? 'No work phase named' : `Work phase: ${summary.sprints.find((s) => s.id === q.sprint)?.number ?? '?'}`),
     q.exceptionsOnly === 'true' && 'Exceptions only',
   ].filter(Boolean);
   const money = (n: number | null) => (n === null ? 'not set' : `₦${n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
@@ -434,7 +427,7 @@ export async function buildKpiExport(webUser: WebJwtPayload, q: KpiQuery, now = 
     q.regionId ? prisma.region.findFirst({ where: { id: q.regionId, tenantId: webUser.tenantId }, select: { name: true } }) : null,
     q.owningOrganizationId ? prisma.organization.findFirst({ where: { id: q.owningOrganizationId, tenantId: webUser.tenantId }, select: { name: true } }) : null,
   ]);
-  const filters = [type && `Type: ${type.name}`, region && `Region: ${region.name}`, owner && `Owner: ${owner.name}`].filter(Boolean);
+  const filters = [type && `Type: ${type.name}`, region && `Zone: ${region.name}`, owner && `Owner: ${owner.name}`].filter(Boolean);
   const { from, to } = data.period;
   const baseHint = (count: string) =>
     hintOf(`${from} to ${to} (${zone})`, filters.length ? filters.join('; ') : 'All projects in view', count, generatedLine(now, zone, webUser.fullName));
@@ -465,7 +458,7 @@ export async function buildKpiExport(webUser: WebJwtPayload, q: KpiQuery, now = 
     { header: 'Project code', width: 13, value: (l) => l.codePrefix },
     { header: 'Project', width: 30, wrap: true, value: (l) => l.name },
     { header: 'Project type', width: 20, value: (l) => l.projectTypeName },
-    { header: 'Region', width: 16, value: (l) => l.regionName },
+    { header: 'Zone', width: 16, value: (l) => l.regionName },
     { header: 'Owner', width: 22, value: (l) => l.owningOrganizationName },
     { header: 'Stage', width: 20, value: (l) => KPI_STAGE_META[KPI_BY_KEY[l.key].stage].label },
     { header: 'KPI', width: 44, wrap: true, value: (l) => KPI_BY_KEY[l.key].label },

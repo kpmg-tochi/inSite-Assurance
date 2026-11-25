@@ -53,6 +53,7 @@ export function ProjectCard({
           </View>
           <Text style={styles.name}>{model.name}</Text>
           {model.school && model.school !== model.name ? <Text style={styles.meta}>{model.school}</Text> : null}
+          {model.interventionYear != null ? <Text style={styles.meta}>Intervention year {model.interventionYear}</Text> : null}
         </View>
         <Feather name="chevron-right" size={18} color="#64748B" />
       </TouchableOpacity>
@@ -92,7 +93,7 @@ export function ProjectCard({
           {model.currentSprint && (
             <View style={styles.block}>
               <Text style={styles.blockTitle}>
-                Sprint {model.currentSprint.number}: {model.currentSprint.name}
+                Work phase {model.currentSprint.number}: {model.currentSprint.name}
               </Text>
               <Text style={styles.meta}>
                 {formatDay(model.currentSprint.startDate)} – {formatDay(model.currentSprint.endDate)}
@@ -102,7 +103,7 @@ export function ProjectCard({
           )}
           {model.unitsInSprint.length > 0 && (
             <View style={styles.block}>
-              <Text style={styles.blockTitle}>Units in this sprint</Text>
+              <Text style={styles.blockTitle}>Units in this work phase</Text>
               {model.unitsInSprint.map((u) => (
                 <Text key={u.id} style={styles.body}>
                   {u.facilityName} · {u.label}

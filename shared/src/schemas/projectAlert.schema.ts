@@ -28,7 +28,7 @@ export interface ProjectAlertMeta {
 export const PROJECT_ALERT_META: Record<ProjectAlertKey, ProjectAlertMeta> = {
   DELAYED: {
     label: 'Delayed',
-    description: 'Behind schedule: a facility unit due by a sprint that has ended is not complete.',
+    description: 'Behind schedule: a facility unit due by a work phase that has ended is not complete.',
     webCategory: 'SCHEDULE_BEHIND',
     notifyPermission: 'sprints:view_status',
     notifiesFieldOfficers: false,
@@ -43,7 +43,7 @@ export const PROJECT_ALERT_META: Record<ProjectAlertKey, ProjectAlertMeta> = {
     viewPermissions: null,
   },
   SITE_UPDATE_OVERDUE: {
-    label: 'Site update overdue',
+    label: 'Monitoring overdue',
     description: 'No visit has been accepted for longer than the type allows.',
     webCategory: 'SITE_UPDATE_OVERDUE',
     notifyPermission: 'visits:plan',
@@ -51,7 +51,7 @@ export const PROJECT_ALERT_META: Record<ProjectAlertKey, ProjectAlertMeta> = {
     viewPermissions: null,
   },
   SPEND_AHEAD_OF_PROGRESS: {
-    label: 'Spend ahead of progress',
+    label: 'Paid ahead of work done',
     description: 'The share of the contract sum paid is further ahead of the % complete than the type allows.',
     webCategory: 'SPEND_AHEAD_OF_PROGRESS',
     notifyPermission: 'payments:view',

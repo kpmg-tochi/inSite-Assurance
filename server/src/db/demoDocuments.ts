@@ -157,7 +157,7 @@ function specFor(code: DemoDocumentCode, c: DemoDocumentContext): Spec {
         ],
         bullets: [
           "Introductions: UBEC State Office, M&E, contractor, school management and community",
-          "Scope of works, sprints and the programme of works",
+          "Scope of works, work phases and the programme of works",
           `Mobilisation: personnel, equipment and site office within ${days} days`,
           "Health and safety on site, including PPE for every worker",
           "Visits, reporting and the letter of introduction to the head teacher",
@@ -183,7 +183,7 @@ function specFor(code: DemoDocumentCode, c: DemoDocumentContext): Spec {
           ["Present", "UBEC State Office (owner), UBEC M&E, the contractor, the head teacher (beneficiary)"],
         ],
         bullets: [
-          "The scope, contract sum and sprints were presented and accepted by all parties.",
+          "The scope, contract sum and work phases were presented and accepted by all parties.",
           `The contractor confirmed it will mobilise within ${days} days: site office, signboard, key personnel and equipment.`,
           "PPE (helmets, boots, high-visibility vests) is mandatory for every worker on site; checked on every visit.",
           "The school will keep pupils clear of the works area; the contractor will fence or hoard the site.",
@@ -229,8 +229,8 @@ function specFor(code: DemoDocumentCode, c: DemoDocumentContext): Spec {
       return {
         title: "Programme of works",
         ref: `${w.ref}/POW`,
-        paragraphs: [`The contractor's programme for ${w.project}${w.code}, by sprint. Weather float is included for the rainy season.`],
-        table: { head: ["Sprint", "Dates", "Deliverables"], rows: rows.length ? rows : [["Sprint 1", "[dates]", "Substructure and borehole drilling"], ["Sprint 2", "[dates]", "Superstructure, installation and testing"]], widths: [80, 150, 253] },
+        paragraphs: [`The contractor's programme for ${w.project}${w.code}, by work phase. Weather float is included for the rainy season.`],
+        table: { head: ["Work phase", "Dates", "Deliverables"], rows: rows.length ? rows : [["Work phase 1", "[dates]", "Substructure and borehole drilling"], ["Work phase 2", "[dates]", "Superstructure, installation and testing"]], widths: [80, 150, 253] },
         signatures: [`Prepared by: site engineer, ${w.contractor}`, "Accepted for UBEC: Resident Supervisor"],
       };
     }
@@ -264,7 +264,7 @@ function specFor(code: DemoDocumentCode, c: DemoDocumentContext): Spec {
         ref: `${w.ref}/SUP`,
         paragraphs: [
           `${c.residentSupervisor ?? "The UBEC Resident Supervisor"} is assigned as Resident Supervisor for ${w.project}${w.code} at ${w.school}, with effect from ${demoDate(c.date)}.`,
-          "Duties: the mobilisation check, weekly supervision visits recorded in the field app, confirming the contractor's progress against the sprints, and reporting findings to the UBEC M&E Officer.",
+          "Duties: the mobilisation check, weekly supervision visits recorded in the field app, confirming the contractor's progress against the work phases, and reporting findings to the UBEC M&E Officer.",
           c.meOfficer ? `Reports are reviewed by the UBEC M&E Officer, ${c.meOfficer}.` : "Reports are reviewed by the UBEC M&E Officer.",
         ],
         signatures: ["Director, Physical Planning, UBEC"],
@@ -286,8 +286,8 @@ function specFor(code: DemoDocumentCode, c: DemoDocumentContext): Spec {
         ],
         bullets: scope,
         signatures: [
-          "Head of Physical Planning, UBEC",
-          "Head of M&E, UBEC",
+          "Director, Physical Planning, UBEC",
+          "Director, Monitoring & Evaluation, UBEC",
           code === "COC_SIGNED_COPY" ? `For the beneficiary: ${c.beneficiarySignatory ?? "Head teacher"} (signed on paper)` : "For the beneficiary institution",
         ],
       };
@@ -307,12 +307,12 @@ function specFor(code: DemoDocumentCode, c: DemoDocumentContext): Spec {
           ["Evaluated on", demoDate(c.date)],
           ["Overall", "Delivered to specification; facilities in use"],
         ],
-        bullets: ["Every facility unit inspected and photographed.", "No outstanding major findings.", "Beneficiary satisfied with the works; minor snags tracked as defects."],
+        bullets: ["Every facility unit inspected and photographed.", "No outstanding major findings.", "Beneficiary satisfied with the works; minor punch list items tracked as defects."],
         signatures: ["UBEC M&E Officer"],
       };
     case "CLOSEOUT_REPORT":
       return {
-        title: "Project closeout report",
+        title: "Lessons learned report",
         ref: `${w.ref}/CLO`,
         facts: [
           ["Project", `${w.project}${w.code}`],
@@ -322,7 +322,7 @@ function specFor(code: DemoDocumentCode, c: DemoDocumentContext): Spec {
         ],
         bullets: [
           "Final evaluation: works delivered to specification; all facilities in use.",
-          "Defects liability: defects raised at handover closed with site photographs.",
+          "Defects liability period: defects raised at handover closed with site photographs.",
           "Payments: final payment and retention release recorded; no exceptions outstanding.",
           "Lessons learned: plan the rainy season into the programme of works; check PPE from the first visit.",
           "Beneficiary feedback: the school reports the facilities are in daily use.",
@@ -454,7 +454,7 @@ export function demoDocumentTitle(code: DemoDocumentCode, c: DemoDocumentContext
     case "MOBILISATION_PLAN":
       return "Contractor's mobilisation plan";
     case "PROGRAMME_OF_WORKS":
-      return "Programme of works, by sprint";
+      return "Programme of works, by work phase";
     case "LETTER_OF_INTRODUCTION":
       return "Letter of introduction to the Head Teacher";
     case "SITE_POSSESSION_FORM":
@@ -472,9 +472,9 @@ export function demoDocumentTitle(code: DemoDocumentCode, c: DemoDocumentContext
     case "FINAL_EVALUATION_REPORT":
       return school ? `Final evaluation report, ${school}` : "Final evaluation report";
     case "CLOSEOUT_REPORT":
-      return school ? `Closeout report: ${school}` : "Closeout report";
+      return school ? `Lessons learned report: ${school}` : "Lessons learned report";
     case "CLOSURE_FILE":
-      return "Closure file";
+      return "Project closure file";
     default:
       return "Project document";
   }

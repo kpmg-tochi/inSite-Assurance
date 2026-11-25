@@ -117,7 +117,13 @@ export const ProjectPaymentsSummaryDtoSchema = z.object({
   sprints: z.array(PaymentSprintRefSchema),
   exceptionCount: z.number().int(),
   canRecord: z.boolean(),
+  /**
+   * Client demo updates G.1: with `from` / `to` (or other filters) on the query, `payments` holds the
+   * matching payments only; the totals above stay the project's to date.
+   */
   payments: z.array(PaymentDtoSchema),
+  /** G.1: the tenant's fiscal year start (1–12), for the period filter's quarters and years. */
+  fiscalYearStartMonth: z.number().int().optional(),
 });
 export type ProjectPaymentsSummaryDto = z.infer<typeof ProjectPaymentsSummaryDtoSchema>;
 

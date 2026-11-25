@@ -27,11 +27,11 @@ export interface ProjectStageFacts {
 export const PROJECT_STAGE_ORDER: ProjectStageKey[] = ['KICKOFF', 'MOBILISATION', 'CONSTRUCTION', 'COMPLETION', 'CLOSURE'];
 
 export const PROJECT_STAGE_LABELS: Record<ProjectStageKey, string> = {
-  KICKOFF: 'Kick-off',
-  MOBILISATION: 'Mobilisation',
-  CONSTRUCTION: 'Construction',
-  COMPLETION: 'Completion',
-  CLOSURE: 'Closure',
+  KICKOFF: 'Kick-off meeting',
+  MOBILISATION: 'Site mobilisation',
+  CONSTRUCTION: 'Execution',
+  COMPLETION: 'Completion & handover',
+  CLOSURE: 'Project closure',
 };
 
 function currentStage(f: ProjectStageFacts): ProjectStageKey {
@@ -107,7 +107,7 @@ export function deriveProjectStage(f: ProjectStageFacts): ProjectStage {
   };
 }
 
-/** The small chip on lists and the header: "Construction", "Closure · Archived". */
+/** The small chip on lists and the header: "Execution", "Project closure · Archived". */
 export function projectStageChipLabel(stage: Pick<ProjectStage, 'currentLabel' | 'subLabel'>): string {
   return stage.subLabel ? `${stage.currentLabel} · ${stage.subLabel}` : stage.currentLabel;
 }

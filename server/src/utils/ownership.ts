@@ -37,8 +37,8 @@ export async function loadFacilityUnitInProject(db: Db, projectId: string, unitI
 
 /** Redesign R2b: a sprint of the project. */
 export async function loadSprintInProject(db: Db, projectId: string, sprintId: string) {
-  assertUuid(sprintId, 'Sprint', 'SPRINT_NOT_FOUND');
+  assertUuid(sprintId, 'Work phase', 'SPRINT_NOT_FOUND');
   const sprint = await db.projectSprint.findFirst({ where: { id: sprintId, projectId } });
-  if (!sprint) throw notFound('Sprint', 'SPRINT_NOT_FOUND');
+  if (!sprint) throw notFound('Work phase', 'SPRINT_NOT_FOUND');
   return sprint;
 }

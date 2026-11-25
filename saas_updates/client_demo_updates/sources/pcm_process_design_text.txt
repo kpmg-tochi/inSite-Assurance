@@ -1,0 +1,3168 @@
+
+
+===== PAGE 1 =====
+1Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Institutional
+Diagnostic Review
+February 2026
+Universal Basic Education Commission (UBEC)
+Project Cycle Redesign
+Draft Report for Discussion Purposes Only
+
+===== PAGE 2 =====
+2Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Outline
+01 Introduction
+Project Cycle Redesign
+- Direct Intervention
+- Matching Grants
+Next Steps
+02
+03
+
+===== PAGE 3 =====
+3Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Introduction 1/2
+❑ The Universal Basic Education Commission (UBEC) is mandated to plan, finance,
+procure, supervise, monitor, and evaluate education-related infrastructure and service
+projects in line with national regulations and established governance frameworks. To
+strengthen consistency and accountability in project delivery, UBEC has developed
+this Project Cycle Manual.
+❑ This manual documents the policies, control techniques, and processes governing the
+end-to-end lifecycle of projects implemented under UBEC’s Direct Intervention and
+Matching Grants programmes. It is designed to guide the performance of all activities
+across the project delivery chain and to support management and staff responsible for
+executing, monitoring, and reporting on core project functions.
+❑ Specifically, the manual provides clarity on:
+o The policies and control techniques to be applied uniformly across all phases
+of UBEC projects.
+o The processes and activities involved in the full project lifecycle, from Needs
+Assessment to Project Closure, for both Direct Intervention and Matching
+Grants projects.
+o The execution of core processes, including mandatory steps, responsibilities,
+approvals, input/output documents, and key performance indicators
+(KPIs).
+
+===== PAGE 4 =====
+4Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Introduction 2/2
+❑ The purpose of this Project Cycle Manual is to establish a standardized framework for the planning and execution of UBEC-funded
+projects. It ensures that all interventions under the Direct Intervention and Matching Grants programmes are delivered with consistency,
+transparency, and accountability.
+❑ Specifically, the manual is intended to:
+o Provide a clear operational reference for UBEC management and staff involved in project delivery.
+o Strengthen compliance with national regulations, procurement laws, and UBEC guidelines.
+o Enhance efficiency by eliminating duplication, ambiguity, and gaps in processes.
+o Promote timely, value-driven delivery of education infrastructure and services.
+o Ensure audit-readiness and effective documentation across the entire project lifecycle.
+❑ Each process in the manual is organised under clearly defined components:
+o Policies & Control techniques: Rules or principles that guide how a process must be carried out
+o Description: A brief explanation of the process
+o Responsibility: The departments/roles in charge of performing or overseeing the process
+o Input document: Documents or information needed before the process can start
+o Output document: Documents produced after completing the process
+o Timeline: How long the process should take or the deadline for completion
+o KPIs: Measures used to track how well the process is being performed
+Note: This manual will be reviewed periodically to accommodate changes in legal and regulatory requirements, the introduction of new tools and systems, operational lessons learned, updates in
+UBEC policy direction, and improvements in project delivery best practices. Reviewing, updating and ensuring the availability of this manual is the responsibility of the Director of Monitoring and
+Evalaution after due approval from the Executive Secretary
+
+===== PAGE 5 =====
+5Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Direct Interventions
+
+===== PAGE 6 =====
+6Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process owner: Director Physical Planning
+Notes
+Direct Interventions– Process flow
+Direct Intervention Process Flow
+1. The needs assessment and monitoring & evaluation data are uploaded and tracked on UBEC’s online portal
+2. The procurement plan is based on the approved budget for the year
+3. The procurement process is conducted in accordance with the Public Procurement Act and concludes with the award of the contract
+4. If the contractor fails to mobilise to site within three weeks after the project kick-off meeting, the Director of Physical Planning should notify the Director of Legal, and, subject to the approval of the ES, the Director of Legal
+should initiate the contract termination procedure
+Start Needs
+Assessment
+Budget
+Preparation
+Procurement
+Process3 A
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+A End
+Approve
+needs?
+End
+No
+Director Physical Planning Director, Finance and Accounts Director Procurement
+Project
+Kick-off
+meeting
+Mobilise
+to site in
+3 weeks
+End4
+No
+State/Zonal Physical Planning Officers Director Physical Planning Director Monitoring and Evaluation Director Procurement
+Yes
+Yes
+Online
+platform1
+Procurement
+Plan2
+Director Procurement
+Online
+platform1
+
+===== PAGE 7 =====
+7Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Direct Intervention
+Introduction
+This process covers all activities involved in executing and delivering Direct Interventions Projects. This process comprises the following sub-processes:
+• Needs Assessment
+• Budget Preparation
+• Procurement Planning
+• Procurement Process
+• Project Kick-off meeting
+• Site Mobilisation
+• Monitoring & Evaluation
+• Project Closure
+Policies and Control Techniques
+No Policy Description/ Control Techniques
+1 Needs Assessment
+• All Needs Assessment Reports shall be officially submitted to the Department of Physical Planning for review by 31st of September in each
+year for the succeeding year.
+• Needs assessment reports shall include, at a minimum, BoQs, strategic justification for the project, design drawings, underlying
+assumptions, cost estimates, geographic and site information, and any other relevant data necessary to support informed project
+planning and decision-making.
+• Every identified need for school infrastructure projects shall be designed to include essential facilities such as toilets, solar power systems,
+boreholes, water, sanitation, and hygiene (WASH) facilities and other critical components necessary for a functional and safe learning
+environment.
+
+===== PAGE 8 =====
+8Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Direct Intervention
+Policies and Control Techniques
+No Policy Description/ Control Techniques
+1 Needs Assessment Cont’d
+• All records (data, stakeholder inputs, validation reports, cost estimates, prioritisation outcomes) shall be uploaded to UBEC’s central
+repository within stipulated timelines.
+• Project prioritisation shall be based on an approved weighted scoring framework comprising two core dimensions, Impact (60%) and Ease of
+Implementation (40%)
+• The Prioritised Project Portfolio shall cover, amongst others, the list of prioritised projects and intervention areas, the business case for
+each intervention, the location of the projects and their impact potential, the potential benefits to target beneficiaries, cost estimates
+with estimated completion timelines, and the recommended intervention strategies
+• Only validated and prioritised projects within UBEC’s mandate shall be integrated into the budget.
+• The report shall be submitted to Office of the Executive Secretary for review and approval by 31st of October in each year for inclusion in the
+list of projects to be executed in the following/ subsequent year.
+2 Budget Preparation
+• Budgets must be anchored on approved needs assessments to ensure interventions directly address gaps in basic education
+infrastructure, and learning outcomes
+• Each phase of the budget preparation (collation, cost consolidation, internal review, approval, integration) shall be guided by clearly defined
+timeframe, clear responsibilities and other KPIs to track compliance and performance
+• A steering committee shall be commissioned to review the draft budget in line with procurement rules, technical feasibility, and funding ceilings
+before approval.
+• All cost inputs shall be prepared in line with UBEC’s standards (templates, assumptions, funding ceilings) and submitted to the steering
+committee within 2 weeks of receiving the approved prioritised project portfolio for the year
+• The project cost shall include the cost of supervision and monitoring throughout the project lifecycle.
+
+===== PAGE 9 =====
+9Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Direct Intervention
+Policies and Control Techniques
+No Policy Description/ Control Techniques
+2 Budget Preparation cont’d
+• Budget approval and review by the management shall be concluded within 1 week of receiving the draft budget
+• UBEC’s approved intervention budget shall be integrated into the consolidated annual National Education Sector budget in compliance with
+national budget preparation requirements.
+• Final submission to the MOE shall be tracked through timestamps and acknowledgement receipts to ensure submission within the Ministry’s
+timeline
+3 Procurement Planning
+• Procurement planning shall commence only after the Commission receives the nationally approved UBEC intervention budget
+• Procurement plan shall be derived from the nationally approved UBEC intervention budget, ensuring no project is planned outside appropriated
+ceilings
+• Procurement requirements must be defined clearly including scope, timelines, and methods to ensure interventions are responsive to
+actual needs and aligned with UBEC guidelines and the Public Procurement Act
+• The Director of Procurement shall review and sign the draft procurement plan before sending to the management for approval
+• The ES shall approve the annual procurement plan to confirm strategic alignment, readiness for implementation, and resource capacity
+(evaluation teams, legal support, contract management) within 1 week of receiving the request
+• Approved procurement plans must be published as required by law, serving as the guiding document for all procurement activities
+4 Procurement Process
+• All procurement activities must strictly adhere to the Public Procurement Act, UBEC procurement guidelines, and national fiscal
+discipline standards
+• Bidding documents shall be prepared within 2 weeks of publishing the procurement plan by the procurement department in collaboration
+with the physical planning departments. This will include, but not be limited to, instructions to bidders, eligibility criteria, drawings, technical
+specifications, BOQs, general conditions of contracts, etc.
+
+===== PAGE 10 =====
+10Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Direct Intervention
+Policies and Control Techniques
+No Policy Description/ Control Techniques
+4 Procurement Process Cont’d
+• The corporate communications department shall advertise procurement opportunities publicly within 2 weeks of receiving final bidding
+documents. The advertisement shall be in at least 2 national dailies, UBEC website and the procurement portal in line with the PPA.
+• Late bid submissions shall be returned unopened with timestamps to ensure transparency and fairness
+• Bid opening shall occur on the same day as the submission deadline or, at the most, the day after, to safeguard transparency and public
+credibility
+• Bid opening reports shall be signed by the director of procurement and uploaded/published on the procurement portal within 24 hours
+• The Bid Evaluation Committee will be appointed by Executive Management and include representatives from Physical Planning, Procurement,
+Finance & Accounts, Monitoring & Evaluation, and Legal/Risk Management.
+• Bid evaluation committee members will be required to sign/attest to conflict of interest (COI) declaration before evaluation begins to prevent
+undue influence and insider advantage
+• Standard UBEC evaluation templates (scoring sheets, compliance matrix, financial evaluation sheets) shall be used by the evaluation committee
+in their assessments
+• Bidders must be verified through site visits, financial checks, and reference validation to ensure credibility and capacity, this should conducted by
+the Audit department
+• Contract awards must be approved by the appropriate authorities (Tender Board, BPP, FEC where applicable)
+• The Commission shall issue an award letter to the successful bidder within 1 week of the contract award
+• The successful bidder/ contractor shall provide an acceptance letter within 3 days of award.
+
+===== PAGE 11 =====
+11Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Direct Intervention
+Policies and Control Techniques
+No Policy Description/ Control Techniques
+5 Project Kick-off meeting
+• Project kick-off briefing pack and meeting notification (agenda, date, time, etc.) shall be sent to all relevant stakeholders within 1 week of
+contract execution by the contractor. Key stakeholders to be notified shall include;
+o Awarded Contractor
+o UBEC State/Zonal representatives
+o UBEC HQ units (Finance, M&E, Legal)
+o SUBEB State representatives
+o Beneficiary representatives
+• Project Kick-off notifications shall be sent at least 1 week before the meeting and through approved channels (emails and official letters) with
+evidence of receipt documented.
+• Project kick-off meetings shall be held only when the minimum quorum, defined as the presence of at least one authorised representative
+from each identified stakeholder group, is attained
+• All kick-off deliverables shall be documented, approved, and signed by all key stakeholders in attendance as the official record for project
+commencement
+6 Site Mobilisation
+• UBEC, through the Physical Planning Department in collaboration with the Procurement and Monitoring & Evaluation Departments, shall ensure
+that all required mobilisation documentation is complete, accurate, and duly filed before any contractor is permitted to mobilise to site.
+• UBEC shall issue a formal letter introducing the contractor and Resident Supervisor to the beneficiary school to authorise lawful site access and
+confirm project commencement within 1 week of the project kick-off meeting.
+• Resident Supervisors at the State/Zonal Offices shall be assigned to oversee project supervision, with each supervisor responsible for a
+maximum of seven (7) to ten (10) sites at a time, located within close geographical proximity. This will ensure effective oversight, quality
+control, and timely reporting.
+
+===== PAGE 12 =====
+12Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Direct Intervention
+Policies and Control Techniques
+No Policy Description/ Control Techniques
+6 Site Mobilisation Cont’d
+• Mobility vehicles and transportation allowances shall be provided to Resident Supervisors and other relevant UBEC State/Zonal officers to
+facilitate effective site supervision, monitoring, evaluation, and timely coverage of key project milestones
+• Contractors shall mobilise to site within the agreed mobilisation timeframe, which shall not exceed three (3) weeks from the date of contract
+award
+• The Resident Supervisor shall undertake continuous monitoring during the mobilisation period to confirm that the Contractor has commenced
+work in accordance with the approved schedule and applicable standards.
+• Where the Contractor fails to mobilise to site within the agreed timeframe, such default shall be referred to the Legal Department, in line with the
+conditions of the project contract as approved by the Executive Secretary, for appropriate action.
+7 Monitoring & Evaluation (M&E)
+• Project supervision shall be conducted by the relevant State/ Zonal Office’s Resident Supervisors on a weekly basis or as required, and
+reports from such supervision activities shall be uploaded to the designated monitoring portal in accordance with prescribed reporting templates
+• Project monitoring and evaluation shall be conducted on a quarterly basis, or as otherwise required by the Monitoring & Evaluation
+Department. This will be done in collaboration with the Physical Planning Department and relevant State SUBEB technical representatives, to
+ensure adequate project oversight, data integrity, and informed decision-making.
+• The monitoring checklist to assess per visit shall include but not limited to progress vs work program, quality of workmanship, material
+standards, health & safety compliance, valuation of works done, environmental safeguards, etc.
+• Reports from monitoring and evaluation exercises shall be uploaded to the designated monitoring portal within one (1) week of the site visit
+and shall include supporting evidence, such as geo-tagged photographs
+
+===== PAGE 13 =====
+13Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Direct Intervention
+Policies and Control Techniques
+No Policy Description/ Control Techniques
+7 Monitoring & Evaluation (M&E) Cont’d
+• An online monitoring dashboard shall be maintained for all UBEC direct intervention projects to provide real-time visibility into project progress,
+compliance, risks, and utilisation of resources.
+• Funding and mobility support shall be provided to the Monitoring & Evaluation Department and collaborating units to facilitate timely, effective,
+and uninterrupted monitoring and evaluation activities.
+• Independent monitoring and evaluation of projects shall also be conducted as required by COREN-certified firms, engaged to provide objective
+oversight, verify compliance with technical standards, and ensure the quality, safety, and timely execution of infrastructure projects
+• A final evaluation shall be conducted at project completion by the Monitoring and Evaluation (M&E) Department, in collaboration with the
+Resident Supervisor, to confirm that all deliverables meet approved quality standards, technical specifications, and contractual requirements
+prior to project handover.
+• The M&E department shall document and institutionalise lessons learned from each project, with structured internal circulation to guide
+continuous improvement in future interventions.
+8 Project Closure
+• UBEC shall issue a Certificate of Completion (CoC) to the contractor only after the project has been fully verified as completed in line with
+contract specifications, standards, timelines, and quality requirements.
+• No project shall proceed to handover, final payment, or closure without an approved Certificate of Completion (CoC) duly signed off by relevant
+department heads and beneficiary institution.
+• A formal project handover ceremony shall be conducted to formally handover completed project to the beneficiary school/community within 1
+week of CoC issuance.
+
+===== PAGE 14 =====
+14Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Needs Assessment
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeframe KPI
+1 Data
+Gathering
+• This phase focuses on identifying
+intervention areas and projects by
+drawing on multiple data sources,
+such as:
+✓ Previously budgeted but unfunded
+initiatives
+✓ Projects excluded during earlier
+prioritisation exercises
+✓ Insights from field visits conducted
+by UBEC staff, and feedback from
+monitoring teams that flagged gaps
+in past assessments
+✓ Direct requests from Presidency,
+local communities, state
+governments and resident
+engineer assessment from zonal
+and state offices
+• All inputs are subsequently
+consolidated into a central online
+repository
+• Physical
+Planning
+Department
+• Past budget
+submissions
+• Monitoring
+reports,
+• Field visit
+logs*
+• Requests
+from relevant
+stakeholders
+• Consolidated
+needs
+repository
+• Preliminary
+needs report
+• 8 weeks/
+As required
+• Accuracy and
+completeness of
+data on relevant
+projects: > 90%
+• Latest date to
+complete data
+gathering as an
+input into Needs
+Assessment
+Report: 30th May
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+*The Physical Planning Department, in collaboration with the Monitoring and Evaluation Department, should develop a uniform template for field visits
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 15 =====
+15Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Needs Assessment
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeframe KPI
+2 Stakeholder
+Engagement
+• This phase focuses on
+engaging relevant stakeholders
+based on the outcome of data
+gathering report to secure state-
+level buy-in and ownership.
+• Critical stakeholders to be
+engaged include SUBEB
+Chairmen, Directors of Physical
+Planning or PRS at the State
+and Zonal levels, etc.
+• Physical
+Planning
+Department
+• Stakeholder
+list
+• Preliminary
+needs report
+• Stakeholder
+engagement
+summary
+• Updated
+consolidated
+needs
+repository
+< 4 weeks • Number of
+stakeholders
+consulted: > 90%
+• Latest date to
+complete
+stakeholder
+engagement as input
+into Needs
+Assessment Report:
+30th June
+3 Validation
+and Review
+• This phase centers on
+independently verifying and
+validating the identified projects
+and intervention areas, drawing
+on stakeholder inputs and the
+consolidated data gathering
+report.
+• The objective is to ensure that
+only feasible and properly
+validated interventions advance
+to the costing stage
+• Monitoring
+and
+Evaluation
+Department
+• Stakeholder
+Engagement
+summary.
+• Consolidated
+needs
+repository
+• Validated
+Project List
+• 4 weeks • Percentage of
+projects validated:
+> 80%
+• Latest date to
+complete data
+validation and
+review: 30th July
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 16 =====
+16Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Needs Assessment
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeframe KPI
+4 Market
+Assessment/
+Project
+costing
+• At this phase, validated projects
+progress to a rigorous financial
+and technical review, where
+market trends, UBEC’s cost
+standards, and local conditions
+are synthesized to produce
+credible and strategically
+grounded budgets.
+• Physical
+Planning
+Department
+• Validated
+project list
+• UBEC
+costing
+templates
+• Cost Estimate
+Report
+• 2 weeks • Accuracy and
+completeness of the
+market assessment
+report
+5 Project
+Prioritisation
+• The Steering Committee applies a
+strategic prioritization framework
+to rank projects according to their
+alignment with institutional
+objectives, potential impact, equity
+considerations, and
+implementation readiness. This
+approach ensures that funding is
+directed toward the most
+transformative and achievable
+interventions
+• UBEC Steering
+Committee*
+• Cost
+estimate
+report,
+• Validated
+project list
+• Prioritised
+Project
+Portfolio
+• 1 week • Quality of Prioritised
+projects
+• Number of complaint
+received: < 10%
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+Needs Assessment
+*This committee will be headed by the ES and members will be appointed from all relevant departments (Physical Planning, Procurement, Finance & Accounts)
+
+===== PAGE 17 =====
+17Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Needs Assessment
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeframe KPI
+6 Approval and
+integration
+into Budget
+• The final phase involves
+submitting the prioritised
+projects for management review
+and ES’ approval and
+integrating them into UBEC’s
+annual budget.
+• This step ensures alignment
+with fiscal planning and
+readiness for procurement and
+implementation.
+• Procurement
+Department
+• Prioritised
+project
+portfolio
+• Approved
+Projects &
+Implementati
+on Schedule
+• 1 week • Budget adherence
+• Latest date to
+complete
+submission of final
+needs assessment
+report for inclusion
+in the budget: 31st
+October
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 18 =====
+18Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description– Budget Preparation
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeline KPI
+1 Collation of
+Prioritised
+Projects
+• This phase begins with the prioritised
+project portfolio from the needs
+assessment workflow.
+• Projects are systematically collated
+and aligned with UBEC’s budget
+framework, ensuring consistency with
+funding ceilings, strategic priorities,
+and intervention categories
+• Finance &
+Accounts
+Department
+• Prioritised
+project
+portfolio
+(Approved)
+• Draft project
+budget
+framework
+• 2 weeks • Timeliness of
+budget cycle
+development
+• % of projects
+correctly
+captured
+2 Cost
+Consolidation
+• Drawing from validated cost estimates,
+the Finance team consolidates project
+costs, adjusts for inflation, and applies
+UBEC’s standard costing benchmarks.
+• This ensures consistency and
+accuracy across all interventions.
+• Finance &
+Accounts
+Department
+• Cost
+estimate
+reports,
+• UBEC
+costing
+templates
+• Consolidate
+d cost
+schedule
+• 1week • Timeliness of
+budget cycle
+development
+3 Internal
+Review
+• A review of the draft budgets is carried
+out to ensure compliance with the
+Public Procurement Act, fiscal
+discipline, and technical feasibility.
+• Physical
+Planning
+Department
+• Consolidat
+ed cost
+schedule
+• Validated
+draft budget
+• 1 week • % compliance
+with
+procurement
+rules
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+*This timeline captures up to final UBEC intervention budget submission to the Federal Ministry of Education, excluding national appropriation timelines
+Needs Assessment
+
+===== PAGE 19 =====
+19Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description– Budget Preparation
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeline KPI
+4 Management
+Approval
+• The validated budget draft is submitted
+to UBEC Management for approval.
+• This step ensures strategic alignment
+with UBEC’s annual work plan and
+national education priorities before
+submission to the Federal Ministry of
+Education
+• UBEC
+Executive
+Management
+• Validated
+draft
+budget
+• Managemen
+t-approved
+budget
+• 1 week • Approval
+turnaround
+time
+5 Integration
+into Annual
+Budget
+• The approved UBEC intervention
+budget is integrated into the
+consolidated annual budget, ready for
+submission to the Federal Ministry of
+Education and subsequent
+appropriation by the National
+Assembly.
+• Finance &
+Accounts
+Department
+• Manageme
+nt-
+approved
+budget
+• Final UBEC
+intervention
+budget
+• 1 week* • Timeliness of
+budget cycle
+development
+Needs
+Assessment
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+*This timeline captures up to final UBEC intervention budget submission to the Federal Ministry of Education, excluding national appropriation timelines
+
+===== PAGE 20 =====
+20Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description– Procurement Plan
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeline KPI
+1 Extraction of
+Approved
+Projects
+• This phase starts with the nationally
+approved UBEC intervention budget.
+• Projects are extracted and categorised
+by type (works, goods, services) and
+funding ceilings to form the basis of
+procurement planning.
+• Procurement
+Department
+• Approved
+UBEC
+intervention
+budget
+• List of
+approved
+projects by
+category
+• 1 week • Timeliness of
+approved
+project list
+extraction
+post-
+appropriation
+2 Procurement
+Needs
+Analysis
+• Using the approved project list, UBEC
+identifies procurement requirements.
+• This includes defining scope, timelines,
+and procurement methods in line with
+the Public Procurement Act and UBEC
+guidelines.
+• Procurement
+Department
+• List of
+approved
+projects
+• Draft
+procurement
+requirements
+matrix
+• 1 week • %
+completeness
+of
+requirements
+3 Drafting of
+Procurement
+Plan
+• Based on validated requirements, UBEC
+prepares the annual procurement plan.
+• Projects are packaged into lots,
+procurement methods are assigned
+(open bidding, selective, etc.), and
+allocations are aligned with approved
+budgets.
+• Procurement
+Department
+• Draft
+procurement
+requirements
+matrix,
+• UBEC
+procurement
+guidelines
+• Draft annual
+procurement
+plan
+• 2 weeks • % compliance
+with
+procurement
+rules
+Needs
+Assessment
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+
+===== PAGE 21 =====
+21Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description– Procurement Plan
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeline KPI
+4 Management
+Approval
+• The draft procurement plan is
+submitted to UBEC Management
+for approval.
+• This ensures strategic alignment
+with UBEC’s annual work plan
+and readiness for
+implementation.
+• Executive
+Management
+• Draft
+procurement
+plan
+• Management-
+approved
+procurement
+plan
+• 1 week • Approval
+turnaround
+time
+5 Publication &
+Implementation
+• The approved procurement plan
+is published (as required by law)
+and serves as the guiding
+document for all procurement
+activities during the year,
+ensuring transparency and
+accountability.
+• Procurement
+Department
+• Management-
+approved
+procurement
+plan
+• Published
+annual
+procurement
+plan
+• 1 week • Timeliness of
+publication
+Needs
+Assessment
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+
+===== PAGE 22 =====
+22Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description– Procurement Process
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input document Output
+document Timeline KPI
+1 Procurement
+Initiation
+• This phase begins with the approved
+procurement plan.
+• UBEC initiates procurement activities
+by preparing bidding documents in
+line with the Public Procurement Act,
+ensuring transparency and fairness.
+• Procurement
+Department
+• Approved
+Procurement
+Plan
+• UBEC
+templates
+• Bidding
+documents
+• 2 week • % compliance
+with PPA
+requirements
+2 Advertisement
+& Invitation
+• UBEC advertises procurement
+opportunities publicly (national dailies,
+UBEC website, procurement portal) as
+required by the Act.
+• Invitations to bid are issued to ensure
+open competition.
+• Procurement
+Department
+• Bidding
+documents
+• Public
+advertiseme
+nt &
+invitation
+notice
+• 2 weeks • Timeliness of
+advert/
+publication
+3 Bid
+Submission &
+Opening
+• Bidders submit proposals within the
+stipulated timeframe.
+• UBEC conducts public bid opening
+sessions, documenting all
+submissions to ensure transparency
+and compliance with the Act.
+• Procurement
+Department
+• Bidders’
+submissions,
+• Advertisement
+notice
+• Bid opening
+report
+• 1 week • # of bids
+received &
+opened
+Needs
+Assessment
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+
+===== PAGE 23 =====
+23Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description– Procurement Process
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeline KPI
+4 Bid Evaluation • UBEC’s Evaluation Committee assesses
+bids based on technical capacity, financial
+strength, and compliance with
+specifications.
+• Evaluation is based on the criteria set in
+the bidding documents and the
+Procurement Act.
+• Evaluation
+Committee*
+• Bidders’
+submissions
+,
+• Bid opening
+report
+• Evaluation
+report
+• 1 week • % of bids
+evaluated
+within
+timeline
+5 Due Diligence &
+Clarification
+• UBEC conducts due diligence checks
+(site visits, financial verification,
+references) to confirm bidder claims.
+Clarifications are sought where
+necessary, in line with the Act’s
+provisions.
+• Procurement
+Department
+• Evaluation
+report,
+• Bidder
+documentati
+on
+• Due
+diligence
+report
+• 1 week • % of
+bidders
+verified
+6 Contract Award
+Recommendation
+• Based on evaluation and due diligence,
+UBEC prepares a recommendation for
+contract award.
+• This is submitted to the Bureau of Public
+Procurement (BPP) for “No Objection”
+clearance, as mandated by the Act.
+• Evaluation
+committee
+• Due
+diligence
+report,
+• Evaluation
+report
+• Contract
+award
+recommend
+ation
+• 1 week • % of
+recommen
+dations
+cleared by
+BPP
+Needs
+Assessment
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+*This committee comprises of members appointed from all relevant departments (Physical Planning, Procurement, Finance & Accounts) to ensure fair representation and fairness in decision making
+
+===== PAGE 24 =====
+24Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description– Procurement Process
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeline KPI
+7 Approval &
+Contract
+Award
+• With BPP clearance, UBEC Management
+approves and issues formal contract awards
+to successful bidders. Contracts are signed
+in compliance with the Act’s requirements.
+• Tender Board approves the most
+appropriate contractor based on bid
+evaluation ranking. For projects above a
+certain threshold or scale, approval from the
+Federal Executive Council (FEC) is required
+• Tender
+Board/ FEC
+• BPP
+• Contract
+award
+recommend
+ation, BPP
+clearance
+• Approval
+Letter
+• Signed
+contracts
+• 1 week • Timeliness of
+approval
+8 Publication
+of Award &
+Notification
+to UBEC
+State &
+Zonal
+Offices
+• UBEC notifies relevant State/Zonal offices
+and publishes contract award details
+(contractor name, contract sum, project
+description) on its website and procurement
+portal, as required by the Act, to ensure
+transparency and accountability.
+• Procurement
+department
+• Signed
+contracts
+• Published
+contract
+award notice
+• Letter of
+Introduction
+• 1 week • % of awards
+published
+9 Letter of
+Introduction
+• UBEC issues a formal letter of introduction
+to the contractor, addressed to the
+beneficiary school.
+• This letter confirms the contractor’s
+engagement and authorises access to the
+site.
+• Physical
+planning
+Department
+• Signed
+contracts,
+• Supervisor
+assignment
+• Letter of
+introduction
+to contractor
+• 1 week • % of letters
+issued on
+time
+Needs
+Assessment
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+
+===== PAGE 25 =====
+25Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description– Project Kick-off meeting
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input document Output
+document Timeline KPI
+1 Meeting
+Preparation
+• UBEC prepares the agenda,
+collates contract documents,
+and identifies key issues to be
+addressed (scope, timelines,
+deliverables, compliance
+requirements).
+• UBEC
+State/Zonal
+Offices
+• Executed contract
+• Contract award
+notice
+• Project documents
+(drawings, BOQ,
+technical
+specifications, etc.)
+• Kick-off
+meeting
+agenda &
+briefing
+pack
+• 1 week • % of
+contracts
+with
+agenda
+prepared
+2 Stakeholder
+Notification
+• Contractors, UBEC technical
+staff, relevant UBEC units
+(Finance, M&E, Legal), and
+state beneficiary
+representatives are formally
+invited.
+• Notifications will meeting
+objectives, required
+documentation, and
+expectations.
+• UBEC
+State/Zonal
+Offices
+• Kick-off meeting
+agenda
+• Invitation
+letters /
+notifications
+• 1 week • Timeliness
+of
+notification
+s
+Needs
+Assessment
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+
+===== PAGE 26 =====
+26Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description– Project Kick-off meeting
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input document Output
+document Timeline KPI
+3 Kick-Off
+Meeting
+Session
+• The meeting is convened with
+UBEC, contractors, and state
+beneficiary representatives.
+• Discussions cover: project scope,
+timelines, deliverables, reporting
+requirements, compliance with the
+Public Procurement Act, and
+mobilisation expectations.
+• Roles of UBEC, SUBEB and
+contractors are clarified, and
+mobilisation agreements are
+discussed and agreed during this
+session.
+• UBEC
+State/Zonal
+Offices
+• Meeting agenda
+• Executed contract
+• Contractor profile
+• Kick-off
+meeting
+minutes &
+mobilisation
+agreement
+• 1 day • Attendance
+rate
+4 Document
+ation &
+Sign-Off
+• Meeting outcomes are
+documented, signed by UBEC,
+contractors, and state beneficiary
+representatives, and filed for audit
+purposes. This serves as the
+official record of project
+commencement.
+• UBEC
+State/Zonal
+Offices
+• Kick-off meeting
+minutes,
+• Mobilisation
+agreement
+• Signed
+kick-off
+report
+• 1 week • % of
+meetings
+documented
+& signed
+Needs
+Assessment
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+
+===== PAGE 27 =====
+27Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description– Site Mobilisation
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeline KPI
+1 Resident
+Supervisor
+Assignment
+• UBEC shall assign resident
+supervisors (technical staff) to
+project sites, with a supervision
+ratio of not more than one engineer
+to 7–10 projects located within
+close proximity.
+• The supervisor is responsible for
+day-to-day oversight, reporting
+progress, and ensuring compliance
+with UBEC standards
+• Physical
+Planning
+Department
+• Mobilisation
+documentati
+on
+• Supervisor
+assignment
+record
+• 1 week • % of projects
+with
+supervisors
+assigned
+2 Deployment to
+Site
+• Contractors mobilise personnel,
+equipment, and materials to site.
+• The resident supervisor verifies
+initial deployment and ensures the
+contractor presents the letter of
+introduction to the school
+authorities.
+• Contractors &
+Resident
+Supervisor
+• Mobilisation
+plan,
+• Letter of
+introduction
+• Site
+mobilisation
+report
+• 1 week • % of
+contractors
+mobilised on
+time
+Needs
+Assessment
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+
+===== PAGE 28 =====
+28Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description– Site Mobilisation
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input
+document Output document Timeline KPI
+3 Mobilisation
+Check
+• UBEC conducts routine checks within
+the agreed mobilisation period (every
+two weeks or twice a month) to
+confirm that contractors have resumed
+work on site.
+• Any delays or non-compliance are
+flagged for corrective action.
+• Monitoring &
+Evaluation
+Department
+• Site
+mobilisation
+report,
+• Supervisor
+updates
+• Mobilisation
+compliance
+report
+• Continu
+ous
+• % of
+contractors
+meeting
+mobilisation
+deadline
+Needs
+Assessment
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+
+===== PAGE 29 =====
+29Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description– Monitoring & Evaluation
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeline KPI
+1 Monitoring
+Framework
+Setup
+• UBEC establishes the monitoring
+framework, including indicators,
+reporting templates, online reporting
+platform access, and visit frequency
+(e.g., minimum 1 site visit per week or 2
+per month depending on project scale).
+• Monitoring &
+Evaluation
+Department
+• Mobilisation
+records
+• Monitoring
+framework
+• Online
+reporting
+templates
+• 1 week • % of
+projects
+with
+framework
+established
+2 Baseline
+Data
+Collection
+• UBEC collects baseline data at project
+sites (photos, site conditions, timelines,
+contractor readiness).
+• This data is uploaded to the online
+platform to serve as a reference point
+for future evaluations.
+• Resident
+Supervisors &
+M&E officer
+• Reporting
+templates
+• Baseline
+monitoring
+report (online
+& offline)
+• 1 week • % of sites
+with
+baseline
+data
+uploaded
+3 Routine
+Monitoring
+Visits
+• Supervisors conduct scheduled site
+visits (minimum once per week or twice
+per month) to track progress against
+agreed timelines and deliverables.
+• Findings are documented and uploaded
+to the online platform for transparency.
+• Resident
+Supervisors &
+M&E officer
+• Monitoring
+framework,
+• Baseline data
+• Routine
+monitoring
+reports
+(online
+platform)
+• Weekly /
+Bi-mont
+hly
+• % of visits
+conducted
+vs planned
+Needs
+Assessment
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+
+===== PAGE 30 =====
+30Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description– Monitoring & Evaluation
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeline KPI
+4 Online
+Reporting &
+Dashboard
+• Contractors and supervisors submit
+progress updates via UBEC’s online
+reporting platform. Dashboards are
+generated to track performance
+indicators, financial utilisation, and
+compliance in real time
+• UBEC M&E
+department &
+ICT Support
+• Routine
+monitoring
+reports,
+contractor
+updates
+• Online
+dashboard &
+consolidated
+progress
+reports
+• Continu
+ous
+• % of reports
+submitted
+online
+• Timeliness
+of report
+submission
+5 Final
+Evaluation &
+Handover
+• At project completion, UBEC conducts a
+final evaluation to verify deliverables,
+quality standards, and compliance with
+contract terms. Reports are
+documented, uploaded online, and filed
+for audit.
+• UBEC M&E
+Department &
+Resident
+Supervisors
+• Contractor
+reports
+• Final
+evaluation
+report.
+• End of
+project
+• % of
+projects
+delivered to
+specification
+Needs
+Assessment
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+
+===== PAGE 31 =====
+31Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description– Project Closure
+Direct Intervention Process Flow
+S/N Phase Description Responsibility Input document Output document Timeline KPI
+1 Completion
+Verification &
+Finalisation
+• The contract submits project
+completion report
+• UBEC’s resident supervisor and M&E
+Unit verify that all deliverables meet
+specifications, timelines, and quality
+standards..
+• UBEC ensures all project records
+(contracts, monitoring reports,
+evaluation findings, site photos,
+financial records) are compiled and
+filed.
+• Documentation is uploaded to the
+online platform for transparency and
+audit purposes.
+• Resident
+Supervisor &
+UBEC M&E
+Department
+• Contractor
+completion
+notice, project
+specifications
+• Monitoring
+reports,
+evaluation
+reports,
+• Financial
+records
+• Completion
+certificate
+• 1 week • % of projects
+verified on
+time
+• % of projects
+with full
+documentation
+2 Beneficiary
+Handover
+• UBEC formally hands over the
+completed project to the beneficiary
+school/community.
+• A handover ceremony or meeting is
+conducted, and signed handover
+certificates are issued to confirm
+transfer of responsibility.
+• UBEC Zonal
+and State
+offices
+• Completion
+verification
+report, closure
+file
+• Signed
+handover
+certificate
+• 1 day • % of projects
+handed over
+Needs
+Assessment
+Procurement
+Plan
+Procurement
+Process
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+Budget
+Preparation
+Project Kick-
+off meeting
+
+===== PAGE 32 =====
+32Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Project Delivery - Matching Grant
+(SUBEB-led)
+
+===== PAGE 33 =====
+33Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process owner: Director Physical Planning
+Notes
+Matching Grants – Process flow
+Matching Grants Process Flow
+1. The procurement process is conducted in accordance with the Public Procurement Act and concludes with the award of the contract
+2. If the contractor fails to mobilise to site within three weeks after the project kick-off meeting, the Director of Physical Planning should notify the Director of Legal, and, subject to the approval of the ES, the Director of Legal
+should initiate the contract termination procedure
+3. The monitoring and evaluation data are uploaded and tracked on UBEC’s online portal
+Start Needs Assessment
+Basic
+Education
+Action Plan
+Procurement
+Process1 A
+Site
+Mobilisation
+Monitoring
+&
+Evaluation
+Project
+Closure
+A End
+Director Physical Planning, SUBEB Director Physical Planning, SUBEB Director Procurement, SUBEB
+Project
+Kick-off
+meeting
+Mobilise
+to site in
+3 weeks
+End2
+No
+Director Planning, Research & Statistic Director Physical Planning Director Monitor and Evaluation Director Procurement
+Yes
+Online
+platform3
+Approve
+BEAP?
+End
+No
+Yes
+
+===== PAGE 34 =====
+34Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Matching Grants
+Introduction
+This process covers all activities involved in executing and delivering Direct Interventions Projects. This process comprises the following sub-processes:
+• Needs Assessment
+• Basic Education Action Plan (BEAP)
+• Procurement Process
+• Project Kick-off meeting
+• Site Mobilisation
+• Monitoring & Evaluation
+• Project Closure
+Policies and Control Techniques
+No Policy Description/ Control Techniques
+1 Needs Assessment
+• The Director, Physical Planning (SUBEB) shall issue an annual Needs Assessment circular by 31 July of each year, setting scope, templates,
+timelines, and minimum data requirements for the succeeding year
+• All Needs Assessment Reports shall be officially submitted to the Department of Physical Planning for review by 31st of September in each
+year for the succeeding year.
+• Needs assessment reports shall include, at a minimum, BoQs, strategic justification for the project, design drawings, underlying
+assumptions, cost estimates, geographic and site information, and any other relevant data necessary to support informed project
+planning and decision-making.
+
+===== PAGE 35 =====
+35Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Matching Grants
+Policies and Control Techniques
+No Policy Description/ Control Techniques
+1 Needs Assessment Cont’d
+• Every identified need for school infrastructure projects shall be designed to include essential facilities such as toilets, solar power systems,
+boreholes, water, sanitation, and hygiene (WASH) facilities and other critical components necessary for a functional and safe learning
+environment.
+• Project prioritisation shall be based on an approved weighted scoring framework comprising two core dimensions, Impact (60%) and Ease of
+Implementation (40%)
+• The Prioritised Project Portfolio shall cover, amongst others, the list of prioritised projects and intervention areas, the business case for
+each intervention, the location of the projects and their impact potential, the potential benefits to target beneficiaries, cost estimates
+with estimated completion timelines, and the recommended intervention strategies
+• The consolidated Needs Assessment Report shall be submitted to the SUBEB Chairman for endorsement by 30 October annually
+• Only validated and prioritised projects shall be integrated into the Basic Education Action Plan (BEAPs) for the year.
+2 Basic Education Action Plan (BEAP)
+• BEAPs must originate from approved project needs identified through state-level assessments, ensuring interventions directly address
+infrastructure, teacher development, and learning gaps
+• Draft BEAPs must comply with UBEC’s guidelines, covering project nature, scope, and timelines
+• The Basic Education Action Plan shall reflect balanced allocation across senatorial zones and communities, promoting inclusivity and fairness in
+resource deployment
+• All BEAPs shall be submitted electronically through UBEC’s designated online portal to ensure uniformity, transparency, and ease
+of tracking
+
+===== PAGE 36 =====
+36Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Matching Grants
+Policies and Control Techniques
+No Policy Description/ Control Techniques
+2 Basic Education Action Plan (BEAP) cont’d
+• UBEC shall review the submitted BEAPs through desk analysis and physical site visits, checking feasibility, cost accuracy, and alignment
+with budget ceilings. The draft BEAP shall be submitted to UBEC HQ by 15 November each year
+• SUBEB shall revise and resubmit the BEAP within 5 working days of receiving comments
+• Final BEAPs require UBEC executive management approval to ensure consistency with national education priorities before implementation.no
+later than 30 November each year
+3 Procurement Process
+• All procurement activities must strictly adhere to the Public Procurement Act, and other relevant procurement guidelines
+• Bidding documents shall be prepared within 2 weeks of publishing the procurement plan by the procurement department in collaboration
+with the physical planning departments. This will include, but not be limited to, instructions to bidders, eligibility criteria, drawings, technical
+specifications, BOQs, general conditions of contracts, etc.
+• The corporate communications department shall advertise procurement opportunities publicly within 2 weeks of receiving final bidding
+documents. The advertisement shall be in at least 2 national dailies, SUBEB website and the procurement portal in line with the PPA.
+• Late bid submissions shall be returned unopened with timestamps to ensure transparency and fairness
+• Bid opening shall occur on the same day as the submission deadline or, at the most, the day after, to safeguard transparency and public
+credibility
+• Bid opening reports shall be signed by the director of procurement and uploaded/published on the procurement portal within 24 hours
+• The Bid Evaluation Committee will be appointed by Executive Chairman and include representatives from Physical Planning, Procurement,
+Finance & Accounts, Monitoring & Evaluation, and Legal/Risk Management.
+
+===== PAGE 37 =====
+37Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Matching Grants
+Policies and Control Techniques
+No Policy Description/ Control Techniques
+3 Procurement Process (cont’d)
+• Bid evaluation committee members will be required to sign/attest to conflict of interest (COI) declaration before evaluation begins to prevent
+undue influence and insider advantage
+• Standard evaluation templates (scoring sheets, compliance matrix, financial evaluation sheets) shall be used by the evaluation committee in their
+assessments
+• Bidders must be verified through site visits, financial checks, and reference validation to ensure credibility and capacity, this should conducted by
+the Audit department
+• Contract awards must be approved by the appropriate authorities (Tender Board, where applicable)
+• The Commission shall issue an award letter to the successful bidder within 1 week of the contract award
+• The successful bidder/ contractor shall provide an acceptance letter within 3 days of award.
+4 Project kick-off meeting
+• Project kick-off briefing pack and meeting notification (agenda, date, time, etc.) shall be sent to all relevant stakeholders within 1 week of
+contract execution by the contractor. Key stakeholders to be notified shall include;
+o Awarded Contractor
+o UBEC State/Zonal representatives
+o Beneficiary representatives
+• Project Kick-off notifications shall be sent at least 1 week before the meeting and through approved channels (emails and official letters) with
+evidence of receipt documented.
+• Project kick-off meetings shall be held only when the minimum quorum, defined as the presence of at least one authorised representative
+from each identified stakeholder group, is attained
+• All kick-off deliverables shall be documented, approved, and signed by all key stakeholders in attendance as the official record for project
+commencement.
+
+===== PAGE 38 =====
+38Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Matching Grants
+Policies and Control Techniques
+No Policy Description/ Control Techniques
+4 Project kick-off meeting (cont’d)
+• Contractors shall submit a detailed programme of works and mobilisation plan at or before the kick-off meeting
+• Minutes of the kick-off meeting shall be approved and uploaded to the central repository within 3 working days
+5 Site Mobilisation
+• Contractors shall mobilise to site within 14 calendar days of the project kick-off meeting
+• The Resident Supervisor shall undertake continuous monitoring during the mobilisation period to confirm that the Contractor has commenced
+work in accordance with the approved schedule and applicable standards.
+• Where the Contractor fails to mobilise to site within the agreed timeframe, such default shall be referred to the Legal Department, in line with the
+conditions of the project contract as approved by the Executive Chairman, for appropriate action.
+6 Monitoring and Evaluation
+• Project supervision shall be conducted by the Resident Supervisors on a weekly basis or as required, and reports from such supervision
+activities shall be uploaded to the designated monitoring portal in accordance with prescribed reporting templates
+• Project monitoring and evaluation shall be conducted on a quarterly basis, or as otherwise required by the Monitoring & Evaluation
+Department. This will be done in collaboration with the Physical Planning Department and UBEC Zonal/State technical representatives, to
+ensure adequate project oversight, data integrity, and informed decision-making.
+• The monitoring checklist to assess per visit shall include but not limited to progress vs work program, quality of workmanship, material standards,
+health & safety compliance, valuation of works done, environmental safeguards, etc.
+• Reports from monitoring and evaluation exercises shall be uploaded to the designated monitoring portal within one (1) week of the site visit
+and shall include supporting evidence, such as geo-tagged photographs
+
+===== PAGE 39 =====
+39Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Matching Grants
+Policies and Control Techniques
+No Policy Description/ Control Techniques
+6 Monitoring and Evaluation Cont’d
+• Funding and mobility support shall be provided to the Monitoring & Evaluation Department and collaborating units to facilitate timely, effective,
+and uninterrupted monitoring and evaluation activities.
+• Independent monitoring and evaluation of projects shall also be conducted as required by COREN-certified firms, engaged to provide objective
+oversight, verify compliance with technical standards, and ensure the quality, safety, and timely execution of infrastructure projects
+• A final evaluation shall be conducted at project completion by the Monitoring and Evaluation (M&E) Department, in collaboration with the
+Resident Supervisor, to confirm that all deliverables meet approved quality standards, technical specifications, and contractual requirements
+prior to project handover.
+• The M&E department shall document and institutionalise lessons learned from each project, with structured internal circulation to guide
+continuous improvement in future interventions.
+7 Project Closure
+• SUBEB shall issue a Certificate of Completion (CoC) to the contractor only after the project has been fully verified as completed in line with
+contract specifications, standards, timelines, and quality requirements.
+• No project shall proceed to handover, final payment, or closure without an approved Certificate of Completion (CoC) duly signed off by relevant
+department heads and beneficiary institution.
+• A formal project handover ceremony shall be conducted to formally handover completed project to the beneficiary school/community within 1
+week of CoC issuance.
+
+===== PAGE 40 =====
+40Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Needs Assessment
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input document Output
+document Timeline KPI
+1 Needs
+identification
+& data
+gathering
+• This phase involves identifying
+infrastructure and programme needs
+through school and community
+requests, LGA education plans,
+SUBEB field observations, and
+relevant State/Federal policy priorities.
+• Consolidate identified needs into a
+single State-level repository
+• Physical
+Planning
+Department
+• School /
+community
+requests
+• LGA education
+plan
+• Policy directives
+• Field visit logs
+• Consolidat
+ed needs
+repository
+• 8 weeks • Percentage
+completeness
+of data
+2 Field
+assessment
+& verification
+• Based on consolidated needs, a
+physical assessment is conducted to
+schools and communities to assess
+infrastructure condition, enrolment
+pressure, WASH facilities, learning
+spaces, and programme gaps, and to
+verify the existence and severity of
+identified needs.
+• Physical
+Planning
+Department
+• Consolidated
+Needs repository
+• Assessment
+schedule
+• Validated
+project
+needs
+• 6 weeks • Percentage
+of verified
+need
+3 Market
+assessment/
+project
+costing
+• With validated projects in hand, the
+Finance and Technical teams assess
+market conditions and estimate costs,
+in line with the UBEC’s guidelines
+• Physical
+Planning
+Department
+• Validated project
+list
+• UBEC guidelines
+• Cost
+estimate
+report
+• 2 weeks • Timeliness of
+cost estimate
+report
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 41 =====
+41Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Needs Assessment
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input document Output
+document Timeline KPI
+4 Prioritisation
+of needs
+• Based on the project cost and
+feasibility data of validated
+projects, the steering committee at
+the state level rank projects based
+on strategic fit, impact, equity, and
+ease of implementation.
+• This ensures that the most
+valuable and achievable
+interventions are positioned for
+matching grants funding.
+• SUBEB
+Steering
+Committee
+• Cost estimate
+report,
+• Validated project
+list
+• Prioritised
+Project
+Portfolio
+• 1 week • Number of
+matching
+grants
+projects
+approved
+5 SUBEB
+management
+review
+• Review and approve the prioritised
+needs list to confirm strategic
+alignment, feasibility, and
+readiness for submission under
+the matching grants programme
+• SUBEB
+Management
+• Prioritised Project
+Portfolio
+• Approved
+project list
+• 1 week • TAT of
+management
+approval
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 42 =====
+42Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Basic Education Action Plan
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeline KPI
+1 Drafting of
+Action Plan
+• This phase begins with the approved
+project needs being translated into a
+draft Basic Education Action Plan
+(BEAP), in line with UBEC guidelines.
+• The BEAP is expected to provide
+insights on the following- nature of the
+projects and programmes, locations,
+scope, indicative timelines, procurement
+plans, and cost assumptions.
+• Physical
+Planning
+Department
+• Approved
+Project lists
+• Draft BEAP* • 4 weeks • Percentage of
+prioritised
+needs
+included
+2 BEAP
+submission
+to UBEC
+• SUBEB submits the final Basic
+Education Action Plan (BEAP) to UBEC
+for approval.
+• SUBEB • Updated
+draft BEAP
+• BEAP • 1 week • Timeliness of
+BEAP
+submission
+3 Review and
+Validation
+• UBEC reviews submitted BEAPs,
+validating projects against its budget
+framework through desk analysis and
+physical visits. The review checks
+distribution across senatorial zones,
+cost, feasibility, site condition, scope
+accuracy and ease of implementation.
+• Physical
+Planning
+Department
+• BEAP • Comments/
+Feedback on
+BEAP
+• 2 weeks • Timeliness of
+BEAP review
+and validation
+*The draft BEAP includes a procurement plan prepared in line with the Public Procurement Act and UBEC guidelines
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 43 =====
+43Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Basic Education Action Plan
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeline KPI
+4 Final
+submissio
+n/resubmi
+ssion
+• Following the review, SUBEB
+incorporates UBEC’s feedback
+and resubmits for approval.
+• Physical
+Planning
+Department
+(SUBEB)
+• UBEC-
+reviewed
+BEAP
+• Revised BEAP • 2- 3 weeks
+(iterative)
+• Average
+turnaround time
+(days) for BEAP
+revisions
+following receipt
+of UBEC review
+comments
+5 BEAP
+Approval
+• Approve the BEAP, ensuring
+alignment with strategic
+education goals
+• UBEC
+executive
+management
+• Final revised
+BEAP
+• Approved
+BEAP
+• 1 week • TAT of BEAP
+approval
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 44 =====
+44Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Procurement Process
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeline KPI
+1 Procurement
+Initiation
+• This phase begins with the
+approved BEAP.
+• SUBEB initiates procurement
+activities by preparing bidding
+documents in line with the Public
+Procurement Act, ensuring
+transparency and fairness.
+• Procurement
+Department
+(SUBEB)
+• Approved
+BEAP
+• Bidding
+documents
+• 2 week • % compliance
+with PPA
+requirements
+2 Advertisement
+& Invitation
+• SUBEB advertises procurement
+opportunities publicly (national
+dailies, applicable procurement
+portal) as required by the Act.
+• Invitations to bid are issued to
+ensure open competition.
+• Corporate
+Communicati
+ons
+Department
+• Bidding
+documents
+• Public
+advertisement
+& invitation
+notice
+• 2 weeks • Timeliness of
+advert/
+publication
+3 Bid
+Submission &
+Opening
+• Bidders submit proposals within
+the stipulated timeframe.
+• SUBEB conducts public bid
+opening sessions, documenting all
+submissions to ensure
+transparency and compliance with
+the Act.
+• Procurement
+Department
+• Bidders’
+submissions,
+• Advertisement
+notice
+• Bid opening
+report
+• 1 week • # of bids
+received &
+opened
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 45 =====
+45Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Procurement Process
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input document Output
+document Timeline KPI
+4 Bid
+Evaluation
+• SUBEB’s Evaluation Committee
+assesses bids based on technical
+capacity, financial strength, and
+compliance with specifications.
+• Evaluation follows criteria set in the
+bidding documents and the
+Procurement Act.
+• Evaluation
+Committee
+• Bidders’
+submissions,
+• Bid opening
+report
+• Evaluation
+report
+• 1 week • % of bids
+evaluated
+within
+timeline
+5 Due
+Diligence &
+Clarification
+• SUBEB conducts due diligence checks
+(site visits, financial verification,
+references) to confirm bidder claims.
+Clarifications are sought where
+necessary, in line with the Act’s
+provisions.
+• Procurement
+Department
+• Evaluation
+report,
+• Bidder
+documentation
+• Due
+diligence
+report
+• 1 week • % of
+bidders
+verified
+6 Contract
+Award
+Recommen
+dation
+• Based on evaluation and due diligence,
+SUBEB prepares a recommendation
+for contract award. This is submitted to
+the Bureau of Public Procurement
+(BPP) for “No Objection” clearance, as
+mandated by the Act.
+• Evaluation
+committee
+• Due diligence
+report,
+• Evaluation
+report
+• Contract
+award
+recommen
+dation
+• 1 week • % of
+recommen
+dations
+cleared by
+BPP
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 46 =====
+46Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Procurement Process
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeline KPI
+7 Approval &
+Contract
+Award
+• With BPP clearance, SUBEB
+Management approves and issues
+formal contract awards to
+successful bidders. Contracts are
+signed in compliance with the Act’s
+requirements.
+• Procurement
+department
+• Contract
+award
+recommendati
+on, BPP
+clearance
+• Approval
+Letter
+• Signed
+contracts
+• 1 week • Timeliness
+of approval
+8 Publication
+of Award
+• SUBEB publishes contract award
+details (contractor name, contract
+sum, project description) on its
+website and procurement portal (if
+applicable), as required by the Act,
+to ensure transparency and
+accountability.
+• Procurement
+department
+• Signed
+contracts
+• Published
+contract
+award notice
+• 1 week • % of
+awards
+published
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 47 =====
+47Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Project Kick-off meeting
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input document Output
+document Timeline KPI
+1 Meeting
+Preparation
+• SUBEB prepares the agenda, collates
+contract documents, and identifies key
+issues to be addressed (scope,
+timelines, deliverables, compliance
+requirements).
+• Planning
+Research and
+Statistics
+Department
+• Executed contract
+• Contract award
+notice
+• Project documents
+(drawings, BOQ,
+technical
+specifications, etc.)
+• Kick-off
+meeting
+agenda &
+briefing
+pack
+• 1 week • % of
+contracts
+with agenda
+prepared
+2 Stakeholder
+Notification
+• Contractors, UBEC representatives,
+relevant SUBEB departments, Local
+Government Education Secretaries,
+and beneficiary representatives are
+formally invited. Notifications include
+meeting objectives, required
+documentation, and expectations.
+• Planning
+Research and
+Statistics
+Department
+• Kick-off meeting
+agenda
+• Invitation
+letters /
+notifications
+• 1 week • Timeliness
+of
+notifications
+3 Kick-Off
+Meeting
+Session
+• The meeting discussion covers project
+scope, timelines, deliverables, reporting
+requirements, and mobilisation
+expectations. It also clarifies the roles
+of SUBEB, UBEC, and contractors, with
+mobilisation agreements reached
+during the session.
+• Planning
+Research and
+Statistics
+Department
+• Meeting agenda
+• Executed contract
+• Contractor profile
+• Kick-off
+meeting
+minutes
+• 1 day • Attendance
+rate
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 48 =====
+48Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Project Kick-off meeting
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input document Output
+document Timeline KPI
+4 Documentation
+& Sign-Off
+• Meeting outcomes are
+documented, signed by
+SUBEB, UBEC, contractors,
+and beneficiary
+representatives, and filed for
+audit purposes. This serves as
+the official record of project
+commencement.
+• Monitoring
+and
+Evaluation
+Department
+• Kick-off meeting
+minutes
+• Signed
+kick-off
+report
+• 1 week • Timeliness of
+filed and signed
+documentation
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 49 =====
+49Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Site Mobilisation
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input document Output
+document Timeline KPI
+1 Documentation
+Completion
+• This phase begins with the signed
+contract and kick-off meeting
+records. SUBEB ensures all
+required documentation (contracts,
+mobilisation agreement, site
+possession forms, monitoring
+templates) is completed and filed
+before mobilisation.
+• Monitoring
+and
+Evaluation
+Department
+• Signed
+contracts,
+• Kick-off meeting
+minutes
+• Complete
+mobilisation
+documentation
+set
+• 1 week • % of projects
+with full
+documentation
+2 Resident
+Supervisor
+assignment and
+Contractor’s
+Introduction
+• SUBEB assigns a resident
+supervisor (technical staff) to each
+project site. The supervisor is
+responsible for day-to-day
+oversight, reporting progress, and
+ensuring compliance with SUBEB/
+UBEC standards. An introduction
+letter addressed to the beneficiary
+school is issued to the contractor to
+authorise site access.
+• Physical
+Planning
+Department
+• Mobilisation
+documentation
+• Supervisor
+assignment
+record
+• Letter of
+introduction to
+contractor
+• 1 week • % of projects
+with
+supervisors
+assigned
+• % of letters
+issued on time
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 50 =====
+50Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Site Mobilisation
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input document Output
+document Timeline KPI
+4 Deployment
+to Site
+• Contractors submit an introductory
+letter to the school authorities and
+mobilise personnel, equipment, and
+materials to site.
+• Resident
+Supervisor
+• Mobilisation
+plan,
+• Letter of
+introduction
+• Site
+mobilisation
+report
+• 1 week • % of
+contractors
+mobilised on
+time
+5 Mobilisation
+Check
+• SUBEB and UBEC state officers
+conducts routine checks within the
+agreed mobilisation period to confirm
+that contractors have resumed work
+on site. Any delays or non-compliance
+are flagged for corrective action.
+• Monitoring &
+Evaluation
+Department
+• Site
+mobilisation
+report,
+• Supervisor
+updates
+• Mobilisation
+compliance
+report
+• Continuous • Timeliness of
+mobilisation
+check
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 51 =====
+51Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Monitoring and Evaluation
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input document Output
+document Timeline KPI
+1 Monitoring
+Framework
+Setup
+• SUBEB in establishes the monitoring
+framework, including indicators, reporting
+templates, online reporting platform
+access, and visit frequency (e.g.,
+minimum 1 site visit per week or 2 per
+month depending on project scale).
+• Monitoring &
+Evaluation
+Department
+• Mobilisation
+records
+• Monitoring
+framework
+• Online
+reporting
+templates
+• 1 week • % of
+projects with
+framework
+established
+2 Baseline
+Data
+Collection
+• SUBEB collects baseline data at project
+sites (photos, site conditions, timelines,
+contractor readiness). This data is
+uploaded to the online platform to serve
+as a reference point for future
+evaluations.
+• Project
+Supervisors
+• Reporting
+template
+• Baseline
+monitoring
+report
+(online &
+offline)
+• 1 week • % of sites
+with
+baseline
+data
+uploaded
+3 Routine
+Monitoring
+Visits
+• Supervisors and UBEC state
+representatives conduct scheduled site
+visits (minimum once per week or twice
+per month) to track progress against
+agreed timelines and deliverables.
+• Findings are documented and uploaded
+to the online platform for transparency.
+• Project
+Supervisors
+• Monitoring
+framework,
+• Baseline data
+• Routine
+monitoring
+reports
+(offline and
+online
+platform)
+• Weekly /
+Bi-monthly
+• % of visits
+conducted
+vs planned
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 52 =====
+52Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Description – Monitoring and Evaluation
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input document Output
+document Timeline KPI
+4 Project
+Reporting
+• Contractors submit progress reports to
+SUBEB to ensure that performance
+indicators, financial utilisation and
+compliance are being tracked.
+• SUBEB M &
+E department
+• Routine
+monitoring
+reports,
+contractor
+updates
+• Online
+dashboard &
+consolidated
+progress
+reports
+• Continuo
+us
+• % of reports
+submitted
+online
+• Timeliness of
+report
+submission
+5 Final
+Evaluation
+& Handover
+• At project completion, SUBEB in
+collaboration with UBEC state
+representatives conducts a final
+evaluation to verify deliverables, quality
+standards, and compliance with contract
+terms.
+• Reports are documented, uploaded
+online, and filed for audit.
+• SUBEB M&E
+Department
+• Contractor
+reports
+• Final
+evaluation
+report.
+• End of
+project
+• % of projects
+delivered to
+specification
+6 Lessons
+Learned &
+Feedback
+• SUBEB consolidates lessons learned
+from monitoring reports and evaluations.
+Feedback is shared with contractors and
+internal units to improve future
+interventions..
+• Monitoring &
+Evaluation
+Department
+• Final
+evaluation
+report,
+• Online
+dashboard
+• Lessons
+learned
+report &
+feedback
+summary
+• Post-proj
+ect
+• % of
+recommendati
+ons
+implemented
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 53 =====
+53Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Delivery – Project Closure
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input document Output
+document Timeline KPI
+1 Completion
+Verification
+• The contract submits project
+completion report
+• SUBEB and UBEC’s state
+representatives verify that all
+deliverables meet specifications,
+and quality standards..
+• M&E Department • Contractor
+completion
+notice, project
+specifications
+• Completion
+certificate
+• 1 week • % of projects
+verified on
+time
+2 Documentation
+Finalisation
+• SUBEB ensures all project records
+(contracts, monitoring reports,
+evaluation findings, site photos,
+financial records) are compiled and
+filed. Documentation is uploaded to
+the online platform for transparency
+and audit purposes.
+• Monitoring &
+Evaluation
+department
+• Monitoring &
+evaluation
+reports
+• Financial
+records
+• Complete
+project
+closure file
+• 1 week • % of projects
+with full
+documentati
+on
+3 Beneficiary
+Handover
+• SUBEB formally hands over the
+completed project to the beneficiary
+school/community. A handover
+ceremony or meeting is conducted,
+and signed handover certificates
+are issued to confirm the transfer of
+responsibility.
+• SUBEB state
+executives
+• Completion
+verification
+report, closure
+file
+• Signed
+handover
+certificate
+• 1 week • % of projects
+handed over
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 54 =====
+54Document Classification: KPMG Confidential
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent
+member firms affiliated with KPMG International Limited, a private English company limited by guarantee. All rights reserved.
+Process Delivery – Project Closure
+Matching Grants Process Flow
+S/N Phase Description Responsibility Input
+document
+Output
+document Timeline KPI
+4 Post-Closure
+Evaluation
+• SUBEB and UBEC state
+representatives conducts a
+post-closure evaluation to capture
+lessons learned, beneficiary
+feedback, and contractor
+performance ratings. Findings are
+documented and uploaded to the
+online platform to inform future
+interventions.
+• SUBEB M&E
+Department
+• Closure file,
+handover
+certificate,
+beneficiary
+feedback
+• Post-closur
+e evaluation
+report
+• 2 week • % of lessons
+learned
+documented
+5 Archiving &
+Audit
+• All closure documents are archived in
+SUBEB and UBEC’s records
+management system. Audit teams
+review the closure file to ensure
+compliance with the Public
+Procurement Act and UBEC
+guidelines.
+• Audit
+Department
+• Project
+closure file,
+evaluation
+reports
+• Archived
+closure
+records
+• Contin
+uous
+• % of projects
+audited
+post-closure
+BEAP Procurement
+Process
+Site
+Mobilisation
+Monitoring &
+Evaluation
+Project
+Closure
+Project Kick-
+off meeting
+Needs Assessment
+
+===== PAGE 55 =====
+DISCLAIMERS
+This presentation is made by KPMG Advisory Services, a Nigerian partnership, member firm of the KPMG global organization of independent member firms affiliated with KPMG International
+Limited, a private English company limited by guarantee. KPMG International provides no client services. No member firm has any authority to obligate or bind KPMG International or any other
+member firm vis-à-vis third parties, nor does KPMG International have any such authority to obligate or bind any member firm.
+This presentation contains confidential material proprietary to KPMG Advisory Services. The materials, ideas, and concepts contained herein are to be used exclusively to assist the Universal
+Basic Education Commission.
+This information and the ideas herein may not be disclosed to anyone outside UBEC or be used for any other purpose, except with the prior consent of KPMG Advisory Services.
+© 2026 KPMG Advisory Services, a partnership registered in Nigeria and a member firm of the KPMG global organisation of independent member firms affiliated with KPMG International
+Limited, a private English company limited by guarantee. All rights reserved.
+Document Classification: KPMG Confidential

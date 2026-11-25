@@ -50,7 +50,7 @@ function useScopeMutation<V>(projectId: string, fn: (v: V) => Promise<ProjectSco
 }
 
 export const useSaveSprintsMutation = (projectId: string) =>
-  useScopeMutation(projectId, (body: SaveSprintsRequest) => saveSprints(projectId, body), 'Sprints saved.', 'Could not save the sprints.');
+  useScopeMutation(projectId, (body: SaveSprintsRequest) => saveSprints(projectId, body), 'Work phases saved.', 'Could not save the work phases.');
 
 export const useSaveFacilityUnitMutation = (projectId: string) =>
   useScopeMutation(

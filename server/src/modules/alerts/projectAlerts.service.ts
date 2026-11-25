@@ -109,8 +109,8 @@ function copyFor(p: AlertProject, e: ProjectAlertEvaluation, behindUnitCount: nu
         title: `${p.codePrefix} is behind schedule`,
         description:
           behindUnitCount !== undefined
-            ? `${p.name}: ${behindUnitCount} facility unit(s) due by a sprint that has ended are not complete.`
-            : `${p.name}: facility units due by a sprint that has ended are not complete.`,
+            ? `${p.name}: ${behindUnitCount} facility unit(s) due by a work phase that has ended are not complete.`
+            : `${p.name}: facility units due by a work phase that has ended are not complete.`,
         actionUrl: `/app/projects/${p.id}/scope`,
       };
     case 'STALLED':
@@ -125,17 +125,17 @@ function copyFor(p: AlertProject, e: ProjectAlertEvaluation, behindUnitCount: nu
       };
     case 'SITE_UPDATE_OVERDUE':
       return {
-        title: `${p.codePrefix}: site update overdue`,
+        title: `${p.codePrefix}: monitoring overdue`,
         description: `${p.name}: no visit has been accepted for ${e.days} days (alert after ${e.limit}). Plan or complete a visit.`,
         actionUrl: `/app/projects/${p.id}/visits`,
         mobile: {
-          title: `${p.codePrefix}: site update overdue`,
+          title: `${p.codePrefix}: monitoring overdue`,
           message: `No visit on ${p.codePrefix} has been accepted for ${e.days} days. Submit your next visit, or record an ad hoc visit.`,
         },
       };
     case 'SPEND_AHEAD_OF_PROGRESS':
       return {
-        title: `${p.codePrefix}: spend ahead of progress`,
+        title: `${p.codePrefix}: paid ahead of work done`,
         description: `${p.name}: ${e.spendPct}% of the contract sum is paid against ${e.progressPct}% complete, ${e.gapPoints} points ahead (alert above ${e.limit}).`,
         actionUrl: `/app/projects/${p.id}/payments`,
       };

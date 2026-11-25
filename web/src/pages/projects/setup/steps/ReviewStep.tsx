@@ -6,6 +6,7 @@ import {
   ISO_WEEKDAY_SHORT,
   PROJECT_SETUP_STEPS,
   formatMoney,
+  formatProjectCode,
   geofenceModeLabel,
   type ActivationIssue,
   type ProjectSetupDto,
@@ -23,7 +24,7 @@ function summaryFor(sectionId: string, s: ProjectSetupDto, currency: string, ter
   switch (sectionId) {
     case "basics":
       return [
-        `${s.basics.name} (${s.basics.codePrefix})${s.basics.projectType ? ` · ${s.basics.projectType.name}` : ""}`,
+        `${s.basics.name} (${formatProjectCode(s.basics.codePrefix)})${s.basics.projectType ? ` · ${s.basics.projectType.name}` : ""}`,
         [s.basics.stateLocation, s.basics.lgaLocation].filter(Boolean).join(", ") || "No location",
         s.basics.totalBudgetNgn ? formatMoney(s.basics.totalBudgetNgn, { currency }) : "No budget",
       ];
@@ -61,12 +62,12 @@ function summaryFor(sectionId: string, s: ProjectSetupDto, currency: string, ter
       if (!s.process.config.enableRetentionModule) return [`${term("retention")} off`];
       return [
         r.retentionPercentage ? `${r.retentionPercentage}% held from each payment` : "No retention percentage set",
-        r.retentionDurationMonths ? `${r.retentionDurationMonths}-month defects liability period` : "No liability period set",
+        r.retentionDurationMonths ? `${r.retentionDurationMonths}-month defects liability period` : "No defects liability period set",
       ];
     }
     case "scope":
       return [
-        `${s.scope.sprintCount} sprint(s), ${s.scope.unitCount} facility unit(s)`,
+        `${s.scope.sprintCount} work phase(s), ${s.scope.unitCount} facility unit(s)`,
         `${s.scope.lineCount} BoQ line(s), ${formatMoney(s.scope.totalBudgetedCostNgn, { currency })}`,
       ];
     case "standards":

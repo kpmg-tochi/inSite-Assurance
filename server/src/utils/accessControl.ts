@@ -231,7 +231,7 @@ function fieldPhaseRefusal(phase: ConstructionPhase, req: Request): AppError | n
   const path = (req.originalUrl || '').split('?')[0];
   if (FIELD_DEFECT_WORK_RE.test(path)) return null;
   return new AppError(
-    'Construction on this project has ended. Only defect work can be recorded now.',
+    'Execution on this project has ended. Only defect work can be recorded now.',
     409,
     'PROJECT_CONSTRUCTION_ENDED'
   );

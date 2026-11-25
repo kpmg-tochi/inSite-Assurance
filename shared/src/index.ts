@@ -56,6 +56,12 @@ export * from './schemas/screenExport.schema';
 export * from './schemas/projectRegister.schema';
 export * from './utils/projectRegister';
 export * from './utils/sheetValues';
+// Client demo updates (wave 1): reference data, project codes and lots, fiscal periods, portfolio payments
+export * from './data/nigeriaAdminAreas';
+export * from './utils/projectCode';
+export * from './schemas/lot.schema';
+export * from './utils/fiscalYear';
+export * from './schemas/portfolioPayments.schema';
 
 // Data
 export * from './data/standardsLibrary';

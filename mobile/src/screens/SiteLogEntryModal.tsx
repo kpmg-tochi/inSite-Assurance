@@ -15,6 +15,8 @@ import { captureCurrentGeotag, type LocationFix } from '../services/locationServ
 import type { RootStackParamList } from '../navigation/types';
 import { SITE_LOG_NOTE_MAX } from '../utils/siteLog';
 import { formatMobileErrorMessage } from '../utils/errorFormatter';
+import { PHOTO_SAFEGUARDING_HINT } from '../utils/personaCopy';
+import { formatProjectCode } from '@insite/shared';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Kind = 'PHOTO' | 'VOICE' | 'NOTE';
@@ -136,7 +138,7 @@ export function SiteLogEntryModal() {
     <>
       <GradientHeaderLayout
         title="Site log"
-        subtitle={project ? `${project.projectCodePrefix} · ${KIND_LABEL[kind]}` : KIND_LABEL[kind]}
+        subtitle={project ? `${formatProjectCode(project.projectCodePrefix)} · ${KIND_LABEL[kind]}` : KIND_LABEL[kind]}
         rightAction={<IconButton icon="close" text="Close" onPress={close} />}
         contentContainerStyle={styles.body}
       >
@@ -163,7 +165,7 @@ export function SiteLogEntryModal() {
         </View>
 
         {kind === 'PHOTO' && (
-          <SectionCard title="Photo" subtitle="Taken with the in-app camera; each photo keeps the location of its shutter.">
+          <SectionCard title="Photo" subtitle={`Taken with the in-app camera; each photo keeps the location of its shutter. ${PHOTO_SAFEGUARDING_HINT}.`}>
             <PrimaryButton text="Open the camera" onPress={() => setCameraOpen(true)} disabled={Boolean(busy)} />
           </SectionCard>
         )}
@@ -199,7 +201,7 @@ export function SiteLogEntryModal() {
 
       <SiteEvidenceCameraModal
         visible={cameraOpen}
-        title={project ? `${project.projectCodePrefix} site log` : 'Site log'}
+        title={project ? `${formatProjectCode(project.projectCodePrefix)} site log` : 'Site log'}
         onSubmit={(batch) => void onPhotos(batch)}
         onClose={() => setCameraOpen(false)}
       />

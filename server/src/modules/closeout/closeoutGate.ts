@@ -42,7 +42,7 @@ export async function assertAnyCloseoutModuleOn(projectId: string, db?: Db): Pro
 export async function assertConstructionOngoing(projectId: string, what: string, db: Db = prisma) {
   const project = await db.project.findUnique({ where: { id: projectId }, select: { constructionPhase: true } });
   if (project && (project.constructionPhase === 'RETENTION_PERIOD' || project.constructionPhase === 'COMPLETED_CLOSED')) {
-    throw new AppError(`Construction on this project has ended: ${what} can no longer be submitted.`, 409, 'PROJECT_CONSTRUCTION_ENDED');
+    throw new AppError(`Execution on this project has ended: ${what} can no longer be submitted.`, 409, 'PROJECT_CONSTRUCTION_ENDED');
   }
 }
 

@@ -91,7 +91,7 @@ async function uploadCloseoutReport(tenantId: string, projectId: string, uploade
   const type = await prisma.documentType.findUniqueOrThrow({ where: { tenantId_code: { tenantId, code: "CLOSEOUT_REPORT" } } });
   await registerProjectDocument(projectId, uploader, {
     documentTypeId: type.id,
-    title: `Closeout report: ${school}`,
+    title: `Lessons learned report: ${school}`,
     objectKey,
     note: "Final evaluation summary, lessons learned and beneficiary feedback.",
   });

@@ -298,7 +298,7 @@ export function WorkspaceSettingsCard() {
             className={inputClass(Boolean(errors.visitRescheduleToleranceWorkdays))}
           />
           <p id="ws-visit-tolerance-hint" className="text-[11px] text-slate-500 mt-1">
-            0 to 10. An officer may move a visit this many working days either side of its original date, within the same sprint, without asking. Further moves are proposed to the manager.
+            0 to 10. An officer may move a visit this many working days either side of its original date, within the same work phase, without asking. Further moves are proposed to the manager.
           </p>
           {errors.visitRescheduleToleranceWorkdays && (
             <p className="text-[11px] text-rose-600 mt-1">{errors.visitRescheduleToleranceWorkdays}</p>

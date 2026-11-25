@@ -88,7 +88,7 @@ export async function requestClosurePack(projectId: string, webUser: WebJwtPaylo
   const id = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Project" WHERE id = ${projectId}::uuid FOR UPDATE`;
     const running = await tx.closurePackExport.count({ where: { projectId, status: { in: ['QUEUED', 'RUNNING'] } } });
-    if (running) throw new AppError('A closure pack is already being built for this project.', 409, 'CLOSURE_PACK_IN_PROGRESS');
+    if (running) throw new AppError('A project closure file is already being built for this project.', 409, 'CLOSURE_PACK_IN_PROGRESS');
     const row = await tx.closurePackExport.create({ data: { projectId, requestedByUserId: webUser.userId } });
     return row.id;
   });
@@ -136,7 +136,7 @@ export async function runClosurePackExport(exportId: string): Promise<void> {
           projectId: row.projectId,
           tenantId: project.tenantId,
           typeCode: 'CLOSURE_FILE',
-          title: `Closure pack ${project.codePrefix} ${zonedCalendarDate(new Date(), project.timezone)}`,
+          title: `Project closure file ${project.codePrefix} ${zonedCalendarDate(new Date(), project.timezone)}`,
           file: { filePath: zipPath, byteSize: finished.byteSize, sha256: finished.sha256, mimeType: 'application/zip', extension: 'zip' },
           uploadedByUserId: row.requestedByUserId,
           note: `${finished.entryCount} files; audit chain ${result.chainVerified ? 'verified' : 'NOT verified'}`,
@@ -353,7 +353,7 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
     { path: 'certificates/', description: 'Certificate of Completion and handover certificate.' },
     { path: 'documents/<type>/', description: 'Current version of every document in the register.' },
     { path: 'payments/payment-record.csv', description: 'Every recorded payment, voided ones included.' },
-    { path: 'visits/', description: 'One summary per submitted visit.' },
+    { path: 'visits/', description: 'One summary per monitoring report.' },
     { path: 'audit/audit-ledger.csv', description: 'The project audit ledger with entry hashes.' },
     { path: 'audit/chain-verification.json', description: 'Result of the hash chain verification.' },
   ];
@@ -362,7 +362,7 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
     project: [
       ['Project', `[${project.codePrefix}] ${project.name}`],
       ['Project type', project.projectType?.name ?? null],
-      ['Region', project.region?.name ?? null],
+      ['Zone / State', project.region?.name ?? null],
       ['Location', [project.lgaLocation, project.stateLocation].filter(Boolean).join(', ') || null],
       ['Status', `${project.status.toLowerCase()} · ${CONSTRUCTION_PHASE_LABELS[project.constructionPhase]}`],
       ['Contract reference', project.contractReference],
@@ -387,14 +387,14 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
       ['Retention percentage', project.retentionPercentage !== null ? `${Number(project.retentionPercentage)}%` : '—'],
       ['Held', money(project.retentionHeldNgn, currency)],
       ['Released', money(project.retentionReleasedNgn, currency)],
-      ['Liability period', project.retentionStartDate ? `${project.retentionStartDate} to ${project.retentionEndDate ?? '—'}` : '—'],
+      ['Defects liability period', project.retentionStartDate ? `${project.retentionStartDate} to ${project.retentionEndDate ?? '—'}` : '—'],
     ],
     kpis: [
       ['Progress', `${Number(project.certifiedProgressPct)}%`],
       ['Paid to date (net of retention)', money(project.disbursedToDateNgn, currency)],
       ['Schedule', project.scheduleStatus ? SCHEDULE_STATUS_META[project.scheduleStatus as ScheduleStatusValue]?.label ?? project.scheduleStatus : '—'],
       ['Contract milestones done', `${milestones.filter((m) => m.status === 'DONE' || m.status === 'WAIVED').length} of ${milestones.length}`],
-      ['Visits submitted', String(submissions.length)],
+      ['Monitoring reports submitted', String(submissions.length)],
       ['Open findings', String(findingsOpen)],
       ['Defects closed / open', `${defectCount(['VERIFIED_CLOSED', 'REJECTED_NOT_A_DEFECT'])} / ${defectCount(['OPEN', 'ASSIGNED', 'RECTIFIED_PENDING_VERIFICATION'])}`],
       ['Average contractor rating', avgRating ? `${avgRating} of 5 (${ratings.length} rating(s))` : '—'],

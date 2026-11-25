@@ -176,7 +176,7 @@ export function LiveGeospatialMap({
               {(
                 [
                   ['ALL', 'All captures'],
-                  ['INDEPENDENT', 'Independent monitors'],
+                  ['INDEPENDENT', 'Independent M&E firm'],
                   ['FLAGGED', 'Flagged'],
                 ] as const
               ).map(([key, label]) => (
@@ -298,7 +298,7 @@ export function LiveGeospatialMap({
               <span className="text-[10px] uppercase tracking-wider text-white/70 font-semibold">
                 Site Pin ·{' '}
                 {selectedLog.reporterRoleName ||
-                  (selectedLog.fieldPersonaType === 'INDEPENDENT_VERIFIER' ? 'Independent' : 'Field officer')}
+                  (selectedLog.fieldPersonaType === 'INDEPENDENT_VERIFIER' ? 'Independent M&E firm' : 'Field officer')}
               </span>
               <span className="text-[10px] text-white/55">
                 {formatDateTimeShort(selectedLog.capturedAt)}

@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Download, FileUp, XCircle } from "lucide-react";
 import {
+  formatProjectCode,
   PROJECT_REGISTER_IMPORT_STATUS_LABELS,
   PROJECT_REGISTER_MAX_BYTES,
   PROJECT_REGISTER_MAX_ROWS,
@@ -209,7 +210,7 @@ function PreviewBody({ preview, confirmIssues }: { preview: ProjectRegisterImpor
                 <tr key={r.row} className={r.issues.length > 0 ? "bg-rose-50/60" : undefined}>
                   <td className="px-2 py-1.5 tabular-nums text-slate-500">{r.row}</td>
                   <td className="px-2 py-1.5 whitespace-nowrap">
-                    {r.code ? <span className="font-mono font-semibold text-slate-800">{r.code}</span> : <span className="text-slate-400">–</span>}
+                    {r.code ? <span className="font-mono font-semibold text-slate-800">{formatProjectCode(r.code)}</span> : <span className="text-slate-400">–</span>}
                     {r.code && r.codeAssigned && (
                       <span className="ml-1 text-[10px] font-semibold text-slate-500" title="The file's code was blank or already used: the next free code is given.">
                         (auto)
@@ -293,7 +294,7 @@ function ImportResult({ result, onClose }: { result: ProjectRegisterImportResult
             {result.created.map((c) => (
               <li key={c.id} className="flex items-center justify-between gap-3 px-3 py-2">
                 <span className="min-w-0">
-                  <span className="font-mono font-semibold text-slate-700">{c.code}</span> <span className="text-slate-900">{c.name}</span>
+                  <span className="font-mono font-semibold text-slate-700">{formatProjectCode(c.code)}</span> <span className="text-slate-900">{c.name}</span>
                 </span>
                 <button
                   type="button"
@@ -301,7 +302,7 @@ function ImportResult({ result, onClose }: { result: ProjectRegisterImportResult
                   className="shrink-0 rounded text-xs font-semibold text-brand-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
                 >
                   {c.mode === "DRAFT" ? "Continue setup" : "Open"}
-                  <span className="sr-only"> {c.code}</span>
+                  <span className="sr-only"> {formatProjectCode(c.code)}</span>
                 </button>
               </li>
             ))}

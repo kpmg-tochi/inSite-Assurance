@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Repeat } from "lucide-react";
-import { addDays, VISIT_KIND_META, VisitKindEnum, type PlannerDto, type PlannerVisitsExportQuery, type VisitDto } from "@insite/shared";
+import { addDays, formatProjectCode, VISIT_KIND_META, VisitKindEnum, type PlannerDto, type PlannerVisitsExportQuery, type VisitDto } from "@insite/shared";
 import { useAuth } from "../../lib/auth-context";
 import Loader from "../../components/Loader";
 import { CustomSelect } from "../../components/common";
@@ -49,7 +49,7 @@ export function VisitPlannerPage({ embedded = false }: { embedded?: boolean } = 
   const dates = useMemo(() => Array.from({ length: days }, (_, i) => addDays(start, i)), [start, days]);
   const projects = useMemo(() => {
     const map = new Map<string, string>();
-    for (const v of data?.visits ?? []) map.set(v.projectId, `${v.projectCode} · ${v.projectName}`);
+    for (const v of data?.visits ?? []) map.set(v.projectId, `${formatProjectCode(v.projectCode)} · ${v.projectName}`);
     return [...map.entries()];
   }, [data]);
   const rows = useMemo(() => {
@@ -108,7 +108,7 @@ export function VisitPlannerPage({ embedded = false }: { embedded?: boolean } = 
           <CustomSelect
             value={regionId}
             onChange={(v) => setRegionId(String(v))}
-            options={[{ value: "", label: "All regions" }, ...(regions.data ?? []).filter((r) => !r.isArchived).map((r) => ({ value: r.id, label: r.parentRegionName ? `${r.parentRegionName} · ${r.name}` : r.name }))]}
+            options={[{ value: "", label: "All zones / states" }, ...(regions.data ?? []).filter((r) => !r.isArchived).map((r) => ({ value: r.id, label: r.parentRegionName ? `${r.parentRegionName} · ${r.name}` : r.name }))]}
           />
         </div>
         <div className="w-56">
@@ -174,7 +174,7 @@ export function VisitPlannerPage({ embedded = false }: { embedded?: boolean } = 
                               className="mb-1 rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1 hover:border-brand-primary cursor-grab"
                             >
                               <Link to={`/app/projects/${v.projectId}/visits?visitId=${v.id}`} className="block">
-                                <p className="font-semibold text-slate-800 truncate">{v.projectCode}</p>
+                                <p className="font-semibold text-slate-800 truncate">{formatProjectCode(v.projectCode)}</p>
                                 <p className="text-[10px] text-slate-600 truncate">{visitKindLabel(v.visitKind)}</p>
                               </Link>
                               <div className="mt-0.5 flex items-center gap-1">
@@ -206,7 +206,7 @@ function ProposalItem({ item, canPlan }: { item: PlannerDto["pendingProposals"][
   return (
     <li className="rounded-xl border border-slate-200 p-2 text-xs space-y-1">
       <p className="font-semibold text-slate-900">
-        {item.visit.projectCode} · {visitKindLabel(item.visit.visitKind)}
+        {formatProjectCode(item.visit.projectCode)} · {visitKindLabel(item.visit.visitKind)}
       </p>
       <p className="text-slate-600">
         {item.change.byName}: {item.change.fromDate} → {item.change.toDate}. {item.change.comment}
@@ -254,7 +254,7 @@ function ProposalsPanel({ data, canPlan }: { data: PlannerDto | undefined; canPl
             {declines.map((d) => (
               <li key={d.visit.id} className="rounded-xl border border-red-100 bg-red-50/40 p-2 text-xs">
                 <Link to={`/app/projects/${d.visit.projectId}/visits?visitId=${d.visit.id}`} className="font-semibold text-slate-900 hover:underline">
-                  {d.visit.projectCode} · {visitKindLabel(d.visit.visitKind)} · {d.visit.plannedDate}
+                  {formatProjectCode(d.visit.projectCode)} · {visitKindLabel(d.visit.visitKind)} · {d.visit.plannedDate}
                 </Link>
                 <p className="text-slate-600">
                   {d.byName}: {d.comment}

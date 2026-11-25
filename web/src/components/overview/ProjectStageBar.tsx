@@ -54,7 +54,7 @@ function Checkpoint({ state }: { state: ProjectStageState }) {
 export function ProjectStageBar({ stage }: { stage: ProjectStage }) {
   const last = stage.stages.length - 1;
   return (
-    <ol className="flex flex-col sm:flex-row" aria-label="Project stages">
+    <ol className="flex flex-col sm:flex-row" aria-label="Project cycle">
       {stage.stages.map((s, i) => {
         const terminated = s.state === "CURRENT" && stage.flags.contractTerminated;
         const date = dateLine(s);

@@ -58,8 +58,8 @@ async function notifyPendingApproval(tx: Tx, s: { id: string; projectId: string;
     targetPermissionKey: step.requiredPermissionKey,
     targetRoleId: step.requiredRoleId,
     category: 'VISIT_PENDING_APPROVAL',
-    title: `Visit awaiting ${step.label} · ${label}`,
-    description: `${s.reporterName}'s ${label.toLowerCase()} is waiting for "${step.label}" (step ${step.stepOrder} of ${steps.length}).`,
+    title: `Monitoring report awaiting ${step.label} · ${label}`,
+    description: `${s.reporterName}'s monitoring report (${label.toLowerCase()}) is waiting for "${step.label}" (step ${step.stepOrder} of ${steps.length}).`,
     actionUrl: `/app/projects/${s.projectId}/visits?visitId=${s.visitId}`,
     metadata: { visitId: s.visitId, visitSubmissionId: s.id, stepOrder: step.stepOrder, chainVersion: version },
   });
@@ -243,7 +243,7 @@ export async function acceptSubmission(
         where: { id: finding.id },
         data: {
           status: 'RESOLVED',
-          resolvedNotes: answer?.comment?.trim() || `Resolved on the ${label.toLowerCase()} of ${visit.plannedDate}.`,
+          resolvedNotes: answer?.comment?.trim() || `Rectified on the ${label.toLowerCase()} of ${visit.plannedDate}.`,
           resolutionCaptureIds: photoIds,
           resolvedByUserId: s.submittedByUserId,
           resolvedByName: s.reporterName,
@@ -306,7 +306,7 @@ export async function acceptSubmission(
       projectId: s.projectId,
       mode: 'AUTO_CONTRACTOR_ON_SITE',
       at: visitDay(visit.plannedDate),
-      notes: `Contractor on site at the mobilisation check of ${visit.plannedDate}.`,
+      notes: `Contractor mobilised to site, confirmed at the mobilisation check of ${visit.plannedDate}.`,
       actor: { actorType: ctx.actor.actorType, actorId: ctx.actor.actorId, actorDisplayName: ctx.actor.actorDisplayName, userId: ctx.actor.userId },
     });
     const later = await tx.visit.findMany({

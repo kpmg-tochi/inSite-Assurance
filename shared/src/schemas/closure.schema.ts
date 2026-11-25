@@ -50,8 +50,8 @@ export type CocSignatorySlotInput = z.input<typeof CocSignatorySlotSchema>;
 
 /** The default slots (decision O / Q5): two owner-organisation admins and the beneficiary. */
 export const DEFAULT_COC_SIGNATORIES: CocSignatorySlotInput[] = [
-  { key: 'head-physical-planning', label: 'Head of Physical Planning', organizationScope: 'PROJECT_OWNER' },
-  { key: 'head-me', label: 'Head of M&E', organizationScope: 'PROJECT_OWNER' },
+  { key: 'head-physical-planning', label: 'Director, Physical Planning', organizationScope: 'PROJECT_OWNER' },
+  { key: 'head-me', label: 'Director, Monitoring & Evaluation', organizationScope: 'PROJECT_OWNER' },
   { key: 'beneficiary', label: 'Beneficiary institution', isBeneficiary: true, organizationScope: 'ANY' },
 ];
 
@@ -67,7 +67,7 @@ export type ClosureGate = z.infer<typeof ClosureGateEnum>;
 
 export const CLOSURE_GATE_META: Record<ClosureGate, { label: string; description: string }> = {
   HANDOVER_TO_RETENTION: {
-    label: 'Liability period',
+    label: 'Defects liability period',
     description: 'The project cannot move from handover into its defects liability period without an issued certificate.',
   },
   FINAL_PAYMENT: {
@@ -75,7 +75,7 @@ export const CLOSURE_GATE_META: Record<ClosureGate, { label: string; description
     description:
       'A final payment or retention release recorded without an issued certificate is flagged as an exception (payments are made outside the platform).',
   },
-  PROJECT_CLOSE: { label: 'Closure', description: 'The project cannot be closed without an issued certificate.' },
+  PROJECT_CLOSE: { label: 'Project closure', description: 'The project cannot be closed without an issued certificate.' },
 };
 
 export const ClosureChecklistItemKindEnum = z.enum([
@@ -100,7 +100,7 @@ export const AUTOMATIC_CLOSURE_ITEM_KINDS: ClosureChecklistItemKind[] = [
 
 export const CLOSURE_ITEM_KIND_META: Record<ClosureChecklistItemKind, { label: string; description: string }> = {
   DOCUMENT_TYPE: { label: 'Document in the register', description: 'Done when a document of the type is filed (and signed, if required).' },
-  INSPECTION_VISIT_TYPE: { label: 'Visit accepted', description: 'Done when a visit of the kind is accepted.' },
+  INSPECTION_VISIT_TYPE: { label: 'Visit accepted', description: 'Done when a monitoring report for a visit of the kind is accepted.' },
   CONTRACT_MILESTONE: { label: 'Contract milestone done', description: 'Done when the contract milestone is done or waived.' },
   CONTRACTOR_RATINGS: { label: 'Contractors rated', description: 'Done when every contractor on the project has a rating at the stage.' },
   LESSONS_LEARNED: { label: 'Lessons published', description: 'Done when the project has at least one published lesson.' },
@@ -539,11 +539,11 @@ export const LessonStageEnum = z.enum(['PRE_CONSTRUCTION', 'MOBILISATION', 'CONS
 export type LessonStage = z.infer<typeof LessonStageEnum>;
 
 export const LESSON_STAGE_META: Record<LessonStage, { label: string }> = {
-  PRE_CONSTRUCTION: { label: 'Before construction' },
+  PRE_CONSTRUCTION: { label: 'Before execution' },
   MOBILISATION: { label: 'Mobilisation' },
-  CONSTRUCTION: { label: 'Construction' },
+  CONSTRUCTION: { label: 'Execution' },
   HANDOVER: { label: 'Handover' },
-  LIABILITY_PERIOD: { label: 'Liability period' },
+  LIABILITY_PERIOD: { label: 'Defects liability period' },
   POST_CLOSURE: { label: 'After closure' },
 };
 

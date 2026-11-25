@@ -49,7 +49,7 @@ export const useSaveRegionMutation = () => {
       queryClient.invalidateQueries({ queryKey: ['regions'] });
       toast.success(args.regionId ? `Saved ${region.name}.` : `Added ${region.name}.`);
     },
-    onError: (err: Error) => toast.error(err?.message || 'Could not save the region.'),
+    onError: (err: Error) => toast.error(err?.message || 'Could not save the zone or state.'),
   });
 };
 

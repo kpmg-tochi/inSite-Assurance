@@ -227,7 +227,7 @@ export async function previewVisitPlan(projectId: string, now: Date = new Date()
   const today = projectToday(project, now);
   const { ctx, mobilised } = await planContextFor(prisma, projectId, now);
   if (project.status === 'DRAFT') assumptions.push(`Dates assume the project is activated today (${today}).`);
-  if (ctx.sprints.length === 0) assumptions.push('The project has no sprints yet: sprint-driven visits are dated from the planned end date, if any.');
+  if (ctx.sprints.length === 0) assumptions.push('The project has no work phases yet: visits tied to work phases are dated from the planned end date, if any.');
   if (!ctx.mobilisationDueDate) assumptions.push('Mobilisation checks run every interval until the contractor is on site; the mobilisation milestone has no due date yet.');
   const active = rules.filter((r) => (project.status === 'DRAFT' ? isActivationRule(r) : true));
   const existing = new Set(

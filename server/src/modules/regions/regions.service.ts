@@ -55,14 +55,14 @@ export async function listRegions(tenantId: string, includeArchived: boolean): P
 
 async function assertValidParent(tx: Tx, tenantId: string, regionId: string | null, parentRegionId: string | null) {
   if (!parentRegionId) return;
-  if (parentRegionId === regionId) throw new AppError('A region cannot be inside itself', 422, 'REGION_PARENT_SELF');
+  if (parentRegionId === regionId) throw new AppError('A zone or state cannot be inside itself', 422, 'REGION_PARENT_SELF');
   const parent = await tx.region.findFirst({ where: { id: parentRegionId, tenantId }, select: { parentRegionId: true } });
-  if (!parent) throw new AppError('Parent region not found', 404, 'REGION_NOT_FOUND');
+  if (!parent) throw new AppError('Parent zone not found', 404, 'REGION_NOT_FOUND');
   if (parent.parentRegionId) {
-    throw new AppError('Regions have two levels: an area can only sit inside a top-level region.', 422, 'REGION_TOO_DEEP');
+    throw new AppError('There are two levels: a state can only sit inside a zone.', 422, 'REGION_TOO_DEEP');
   }
   if (regionId && (await tx.region.count({ where: { parentRegionId: regionId } })) > 0) {
-    throw new AppError('This region has areas, so it cannot become an area itself.', 422, 'REGION_TOO_DEEP');
+    throw new AppError('This zone has states, so it cannot become a state itself.', 422, 'REGION_TOO_DEEP');
   }
 }
 
@@ -71,7 +71,7 @@ async function saveRegion(webUser: WebJwtPayload, input: SaveRegionRequest, regi
   try {
     const id = await prisma.$transaction(async (tx) => {
       const before = regionId ? await tx.region.findFirst({ where: { id: regionId, tenantId } }) : null;
-      if (regionId && !before) throw new AppError('Region not found', 404, 'REGION_NOT_FOUND');
+      if (regionId && !before) throw new AppError('Zone or state not found', 404, 'REGION_NOT_FOUND');
       const parentRegionId = input.parentRegionId === undefined ? before?.parentRegionId ?? null : input.parentRegionId;
       await assertValidParent(tx, tenantId, regionId, parentRegionId);
       const data = {
@@ -101,7 +101,7 @@ async function saveRegion(webUser: WebJwtPayload, input: SaveRegionRequest, regi
     return serializeRegion(row);
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-      throw new AppError(`A region with code "${input.code}" already exists`, 409, 'REGION_CODE_EXISTS');
+      throw new AppError(`A zone or state with code "${input.code}" already exists`, 409, 'REGION_CODE_EXISTS');
     }
     throw error;
   }
@@ -114,7 +114,7 @@ export const updateRegion = (webUser: WebJwtPayload, regionId: string, input: Sa
 /** A region chosen for a project: must be in the tenant; archived only if the project already had it. */
 export async function assertRegionUsable(db: Db, tenantId: string, regionId: string, currentRegionId: string | null) {
   const region = await db.region.findFirst({ where: { id: regionId, tenantId }, select: { id: true, isArchived: true, name: true } });
-  if (!region) throw new AppError('Region not found in this workspace', 404, 'REGION_NOT_FOUND');
+  if (!region) throw new AppError('Zone or state not found in this workspace', 404, 'REGION_NOT_FOUND');
   if (region.isArchived && region.id !== currentRegionId) {
     throw new AppError(`"${region.name}" is archived and cannot be chosen`, 409, 'REGION_ARCHIVED');
   }

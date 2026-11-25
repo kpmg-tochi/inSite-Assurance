@@ -9,7 +9,7 @@ import { useChangeProjectPhaseMutation } from "../../mutations/closeout/useClose
 import { ModalShell, ModalActions, BlockedNotice, inputClass } from "../common/ModalShell";
 
 export const PHASE_ACTION_LABEL: Record<ConstructionPhase, string> = {
-  ACTIVE_CONSTRUCTION: "Back to construction",
+  ACTIVE_CONSTRUCTION: "Back to execution",
   HANDOVER_IN_PROGRESS: "Start the handover",
   RETENTION_PERIOD: "Start the defects liability period",
   COMPLETED_CLOSED: "Close the project",
@@ -25,7 +25,7 @@ function fixLinkFor(projectId: string, reason: string | null): { to: string; lab
   if (/Certificate of Completion/i.test(reason)) return { to: `${base}/completion?tab=certificate`, label: "Open the Certificate tab" };
   if (/accept the works|handover/i.test(reason)) return { to: `${base}/completion?tab=handover`, label: "Open the Handover tab" };
   if (/Retention is still held|retention release/i.test(reason)) return { to: `${base}/payments`, label: "Open Payments" };
-  if (/can be closed|can be archived|checklist/i.test(reason)) return { to: `${base}/completion?tab=closure`, label: "Open the Closure tab" };
+  if (/can be closed|can be archived|checklist/i.test(reason)) return { to: `${base}/completion?tab=closure`, label: "Open the Project closure tab" };
   return null;
 }
 
@@ -89,7 +89,7 @@ export function PhaseActions({ projectId, projectStatus }: { projectId: string; 
                         <span className="font-semibold text-slate-900">Next step:</span> {PHASE_ACTION_LABEL[t.to].toLowerCase()}.
                       </>
                     ) : (
-                      "If handover started too early, move the project back to construction."
+                      "If handover started too early, move the project back to execution."
                     )}
                   </p>
                 )}
@@ -183,14 +183,14 @@ export function PhaseChangeModal({
             <span className="font-semibold text-slate-700">Practical completion date</span>
             <input type="date" className={`${inputClass} ${invalidClass(form, "practical")}`} {...form.register("practical")} {...fieldA11y(form, "practical")} />
             <FieldError form={form} name="practical" />
-            <span className="text-slate-500">Leave empty to use the date the accepted handover was reviewed. The liability period starts on this date.</span>
+            <span className="text-slate-500">Leave empty to use the date the accepted handover was reviewed. The defects liability period starts on this date.</span>
           </label>
         )}
         {transition.to === "HANDOVER_IN_PROGRESS" && (
           <p className="text-slate-600">You can then record the beneficiary's handover response from the signed paper copy.</p>
         )}
         {transition.to === "RETENTION_PERIOD" && (
-          <p className="text-slate-600">Construction progress is no longer recorded. Field users can still record defect work.</p>
+          <p className="text-slate-600">Execution progress is no longer recorded. Field users can still record defect work.</p>
         )}
         {(needsReason || transition.to !== "ACTIVE_CONSTRUCTION") && (
           <label className="block space-y-1">

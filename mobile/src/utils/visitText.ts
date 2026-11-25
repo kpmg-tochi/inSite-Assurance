@@ -99,7 +99,7 @@ export function visitBadges(v: VisitView): StatusBadge[] {
   if (v.status === 'CANCELLED') return [{ text: 'Cancelled', tone: 'gray' }];
   if (v.status === 'APPROVED') out.push({ text: 'Accepted', tone: 'positive' });
   else if (v.status === 'SUBMITTED') out.push({ text: 'Awaiting approval', tone: 'info' });
-  else if (v.submitted) out.push({ text: 'Report saved', tone: 'info' });
+  else if (v.submitted) out.push({ text: 'Monitoring report saved', tone: 'info' });
   else if (v.returned) out.push({ text: 'Returned for correction', tone: 'negative' });
   else if (v.status === 'MISSED') out.push({ text: 'Missed', tone: 'negative' });
   else if (v.overdue) out.push({ text: 'Overdue', tone: 'negative' });
@@ -122,8 +122,8 @@ export function siteLogStateBadge(
   entry: { status: 'QUEUED' | 'SENT' | 'MOVED_TO_FORM'; attachedSubmissionId: string | null },
   row: { status: 'PENDING' | 'DONE' | 'DEAD' | 'HELD'; lastError: string | null } | null
 ): StatusBadge {
-  if (entry.status === 'MOVED_TO_FORM') return { text: 'Used in a visit report', tone: 'gray' };
-  if (entry.status === 'SENT') return { text: entry.attachedSubmissionId ? 'Sent, attached to a report' : 'Sent', tone: 'positive' };
+  if (entry.status === 'MOVED_TO_FORM') return { text: 'Used in a monitoring report', tone: 'gray' };
+  if (entry.status === 'SENT') return { text: entry.attachedSubmissionId ? 'Sent, attached to a monitoring report' : 'Sent', tone: 'positive' };
   if (row?.status === 'DEAD') return { text: `Not sent: ${row.lastError ?? 'refused by the server'}`, tone: 'negative' };
   if (row?.status === 'HELD') return { text: 'Held: open the outbox', tone: 'negative' };
   if (row?.lastError) return { text: `Waiting to send (last try failed: ${row.lastError})`, tone: 'warning' };

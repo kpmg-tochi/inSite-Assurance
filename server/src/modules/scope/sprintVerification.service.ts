@@ -24,7 +24,7 @@ import { monitoringConfigOf } from '../visits/visitCore';
 
 async function loadSprint(projectId: string, sprintId: string) {
   const sprint = await prisma.projectSprint.findFirst({ where: { id: sprintId, projectId } });
-  if (!sprint) throw new AppError('Sprint not found', 404, 'SPRINT_NOT_FOUND');
+  if (!sprint) throw new AppError('Work phase not found', 404, 'SPRINT_NOT_FOUND');
   return sprint;
 }
 
@@ -128,14 +128,14 @@ export async function verifySprint(projectId: string, sprintId: string, webUser:
   await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "project_sprints" WHERE id = ${sprintId}::uuid AND "projectId" = ${projectId}::uuid FOR UPDATE`;
     const sprint = await tx.projectSprint.findFirst({ where: { id: sprintId, projectId } });
-    if (!sprint) throw new AppError('Sprint not found', 404, 'SPRINT_NOT_FOUND');
+    if (!sprint) throw new AppError('Work phase not found', 404, 'SPRINT_NOT_FOUND');
     const project = await tx.project.findUniqueOrThrow({ where: { id: projectId }, select: { timezone: true, status: true } });
-    if (project.status !== 'ACTIVE') throw new AppError('Sprints are verified on live projects', 409, 'PROJECT_NOT_ACTIVE');
+    if (project.status !== 'ACTIVE') throw new AppError('Work phases are verified on live projects', 409, 'PROJECT_NOT_ACTIVE');
     const today = zonedCalendarDate(now, project.timezone);
-    if (today < sprint.startDate) throw new AppError('A sprint can be verified once it has started', 409, 'SPRINT_NOT_STARTED');
+    if (today < sprint.startDate) throw new AppError('A work phase can be verified once it has started', 409, 'SPRINT_NOT_STARTED');
     const notes = input.notes?.trim() || null;
     if (today <= sprint.endDate && (notes ?? '').length < 3) {
-      throw new AppError('This sprint has not ended yet: say why it is verified early', 422, 'NOTE_REQUIRED');
+      throw new AppError('This work phase has not ended yet: say why it is verified early', 422, 'NOTE_REQUIRED');
     }
     await tx.projectSprint.update({
       where: { id: sprintId },

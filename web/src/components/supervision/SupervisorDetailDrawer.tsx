@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, X } from "lucide-react";
-import type { SupervisorWorkloadDto } from "@insite/shared";
+import { formatProjectCode, type SupervisorWorkloadDto } from "@insite/shared";
 import Drawer from "../Drawer";
 import { supervisorWarnings } from "./supervisorWarnings";
 
@@ -81,7 +81,7 @@ export function SupervisorDetailDrawer({
                 <li key={p.projectId} className="flex items-start justify-between gap-3 px-3 py-2">
                   <div className="min-w-0">
                     <Link to={`/app/projects/${p.projectId}/visits`} className="font-semibold text-slate-900 hover:underline">
-                      {p.codePrefix}
+                      {formatProjectCode(p.codePrefix)}
                     </Link>
                     <p className="truncate text-slate-600">{p.name}</p>
                   </div>

@@ -74,7 +74,7 @@ export function HandoverTab({ project }: { project: ProjectSummaryDto }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <p className="text-xs text-slate-500">
-          Record whether the beneficiary accepted the works, accepted them with snags, or rejected them.
+          Record whether the beneficiary accepted the works, accepted them with punch list items, or rejected them.
         </p>
         {canRecord && (
           <button
@@ -91,7 +91,7 @@ export function HandoverTab({ project }: { project: ProjectSummaryDto }) {
 
       {canRecord && !inHandover && phaseQuery.data && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-          Responses can be recorded only while the project is in handover. Start the handover from the stage bar on the project Overview.
+          Responses can be recorded only while the project is in handover. Start the handover from the project Overview.
         </div>
       )}
 
@@ -302,7 +302,7 @@ function RecordResponseModal({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="font-semibold text-slate-700">
-                Snags{decision === "REJECTED" ? " (optional)" : ""}
+                Punch list items{decision === "REJECTED" ? " (optional)" : ""}
               </p>
               {snags.fields.length < HANDOVER_LIMITS.maxSnags && (
                 <button
@@ -310,15 +310,15 @@ function RecordResponseModal({
                   onClick={() => snags.append(emptySnag())}
                   className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  <Plus className="h-3.5 w-3.5" /> Add snag
+                  <Plus className="h-3.5 w-3.5" /> Add punch list item
                 </button>
               )}
             </div>
-            {snags.fields.length === 0 && <p className="text-slate-500">No snags listed.</p>}
+            {snags.fields.length === 0 && <p className="text-slate-500">No punch list items listed.</p>}
             {snags.fields.map((s, i) => (
               <div key={s.id} className="grid gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-2">
                 <label className="space-y-1">
-                  <span className="font-semibold text-slate-700">Snag {i + 1}</span>
+                  <span className="font-semibold text-slate-700">Punch list item {i + 1}</span>
                   <input
                     className={`${inputClass} ${invalidClass(form, `snags.${i}.title`)}`}
                     maxLength={160}
@@ -406,7 +406,7 @@ function SubmissionCard({
 
       {s.snags.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold text-slate-700">Snags ({s.snags.length})</p>
+          <p className="text-xs font-semibold text-slate-700">Punch list items ({s.snags.length})</p>
           <ul className="space-y-2">
             {s.snags.map((snag) => (
               <li key={snag.index} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
@@ -415,7 +415,7 @@ function SubmissionCard({
                     {snag.title}
                     {snag.location && <span className="font-normal text-slate-500"> · {snag.location}</span>}
                   </p>
-                  {snag.defectTicketId && <TableBadge variant="info">Defect ticket raised</TableBadge>}
+                  {snag.defectTicketId && <TableBadge variant="info">Defect raised</TableBadge>}
                 </div>
                 {snag.description && <p className="mt-1 text-xs text-slate-600">{snag.description}</p>}
               </li>
@@ -464,7 +464,7 @@ function SubmissionCard({
             onClick={() => setConvertOpen(true)}
             className="ml-auto inline-flex items-center gap-1 rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
           >
-            <ListChecks className="h-4 w-4" /> Create defect tickets from {openSnags} snag(s)
+            <ListChecks className="h-4 w-4" /> Create defects from {openSnags} punch list item(s)
           </button>
         )}
       </footer>
@@ -497,10 +497,10 @@ function ConvertSnagsModal({ project, submission, onClose }: { project: ProjectS
   });
 
   return (
-    <ModalShell title="Create defect tickets" subtitle={`${submission.snags.filter((s) => !s.defectTicketId).length} snag(s) without a ticket`} onClose={onClose}>
+    <ModalShell title="Create defects" subtitle={`${submission.snags.filter((s) => !s.defectTicketId).length} punch list item(s) without a defect`} onClose={onClose}>
       <form onSubmit={submit} noValidate className="space-y-3 p-5 text-xs">
         <p className="text-slate-600">
-          {contractor ? <>Tickets are raised against {contractor.organizationName}.</> : "The project has no contractor to raise tickets against."}
+          {contractor ? <>Defects are raised against {contractor.organizationName}.</> : "The project has no contractor to raise defects against."}
         </p>
         <div className="grid grid-cols-2 gap-3">
           <label className="space-y-1">
@@ -525,7 +525,7 @@ function ConvertSnagsModal({ project, submission, onClose }: { project: ProjectS
         </div>
         <ModalActions
           onCancel={onClose}
-          submitLabel="Create tickets"
+          submitLabel="Create defects"
           pendingLabel="Creating…"
           isPending={mutation.isPending}
           disabled={!contractor || !canSubmit(form, { pending: mutation.isPending })}

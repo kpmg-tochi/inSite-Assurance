@@ -3,7 +3,14 @@ import ExcelJS from 'exceljs';
 import { ContractMilestoneStatus, MilestoneCompletionMode, Prisma } from '@prisma/client';
 import {
   assignRegisterCodes,
+  buildLotBatchCode,
+  findLgaByName,
+  findStateByName,
+  fundingSourceCodeFromText,
   GeofenceMode,
+  type LotBatchCode,
+  NIGERIA_STATES,
+  parseLotBatchCode,
   partyRulesFor,
   PROJECT_REGISTER_COLUMNS,
   PROJECT_REGISTER_IMPORT_STATUS_LABELS,
@@ -40,6 +47,7 @@ import { proposeVisitsFromType } from '../visits/visitPlan.service';
 import { webVisitActor } from '../visits/visitCore';
 import { workspaceShortName } from '../scope/scopeImport.service';
 import { buildRegisterWorkbook, registerTemplateFileName } from './registerWorkbook';
+import { findOrCreateLotByNumber, lockProjectLots } from '../projectLots/projectLots.service';
 
 /**
  * UBEC IRL (owner decisions 2026-11-25): bulk import of the project register, modelled on the needs
@@ -131,7 +139,8 @@ export async function buildRegisterTemplate(tenantId: string): Promise<{ buffer:
     generatedAt: new Date(),
     brandName: workspaceShortName(ctx.tenant.name),
     term: ctx.term,
-    states: ctx.states.map((s) => s.name),
+    // Client demo updates C1: the workspace's states plus Nigeria's states (both are accepted on import).
+    states: [...new Map([...ctx.states.map((s) => s.name), ...NIGERIA_STATES.map((s) => s.name)].map((n) => [n.toLowerCase(), n])).values()],
     projectTypes: ctx.types.map((t) => t.name),
     owners: ctx.orgs.filter((o) => !o.isArchived).map((o) => o.name),
     contractors: ctx.orgs.filter((o) => !o.isArchived && (o.categories as string[]).includes('CONTRACTOR')).map((o) => o.name),
@@ -150,6 +159,13 @@ interface PlannedRow {
   code: string | null;
   regionId: string | null;
   stateLocation: string;
+  /** Client demo updates C1/C4: national codes matched from the State and LGA names; funding code from the text. */
+  stateCode: string | null;
+  lgaCode: string | null;
+  fundingSourceCode: string | null;
+  /** C3: a lot/batch code in the file (its lot is found or created on confirm). */
+  lot: LotBatchCode | null;
+  interventionYear: number | null;
   type: Context['types'][number] | null;
   ownerId: string | null;
   contractor: { id: string | null; name: string } | null;
@@ -234,7 +250,36 @@ async function analyse(db: Db, tenantId: string, buffer: Buffer, fileName: strin
   const newContractors = new Set<string>();
 
   const validated = rows.map((r) => ({ ...r, ...validateRegisterRow(r.raw) }));
-  const codes = assignRegisterCodes(validated.map((v) => ({ code: v.values.code })), ctx.existingCodes);
+  // C3: lot/batch codes are numbered within their lot (a taken one gets the lot's next batch); the
+  // older codes keep the series numbering.
+  const lotCodes = validated.map((v) => parseLotBatchCode(v.values.code));
+  const legacy = assignRegisterCodes(
+    validated.filter((_, i) => !lotCodes[i]).map((v) => ({ code: v.values.code })),
+    ctx.existingCodes
+  );
+  // Free lot codes in the file are reserved first (as assignRegisterCodes does for the older form).
+  const takenCodes = new Set(ctx.existingCodes.map((c) => c.trim().toUpperCase()));
+  const reservedLot = new Set<number>();
+  validated.forEach((v, i) => {
+    if (lotCodes[i] && !takenCodes.has(v.values.code!)) {
+      takenCodes.add(v.values.code!);
+      reservedLot.add(i);
+    }
+  });
+  let legacyIndex = 0;
+  const codes = validated.map((v, i) => {
+    const lc = lotCodes[i];
+    if (!lc) return { ...legacy[legacyIndex++], lot: null as LotBatchCode | null };
+    if (reservedLot.has(i)) return { code: v.values.code, assigned: false, note: null, lot: lc };
+    let highest = 0;
+    for (const c of takenCodes) {
+      const t = parseLotBatchCode(c);
+      if (t && t.year === lc.year && t.lot === lc.lot) highest = Math.max(highest, t.batch);
+    }
+    const code = buildLotBatchCode(lc.year, lc.lot, highest + 1);
+    takenCodes.add(code);
+    return { code, assigned: true, note: `${v.values.code} is already used; the project is numbered ${code}.`, lot: { ...lc, batch: highest + 1 } };
+  });
 
   const plan: PlannedRow[] = validated.map((v, i) => {
     const issues: ProjectRegisterIssue[] = v.issues.map((x) => ({ sheet, row: v.row, column: x.column === 'Client project ID' ? ctx.term : x.column, code: x.code, message: `Row ${v.row}: ${x.message}` }));
@@ -258,15 +303,28 @@ async function analyse(db: Db, tenantId: string, buffer: Buffer, fileName: strin
       else refsInFile.set(key, v.row);
     }
 
-    // State (region)
+    // State (region), and since client demo updates C1 the national state and LGA codes: a state
+    // that is not a region of the workspace is accepted when it is one of Nigeria's states.
     let regionId: string | null = null;
     let stateLocation = x.state ?? '';
+    const nationalState = findStateByName(x.state);
     if (x.state && ctx.regions.length) {
       const region = byName(ctx.states, x.state) ?? byName(ctx.regions, x.state);
-      if (!region) bad('State', 'UNKNOWN_STATE', `"${x.state}" is not a state on the list.`);
-      else {
+      if (region) {
         regionId = region.id;
         stateLocation = region.name;
+      } else if (nationalState) stateLocation = nationalState.name;
+      else bad('State', 'UNKNOWN_STATE', `"${x.state}" is not a state on the list.`);
+    } else if (nationalState) stateLocation = nationalState.name;
+    const stateCode = nationalState?.code ?? null;
+    const lgaCode = stateCode ? (findLgaByName(stateCode, x.lga)?.code ?? null) : null;
+
+    // C3: a lot/batch code names its intervention year: a blank year takes it, a different one is refused.
+    let interventionYear = x.interventionYear;
+    if (assigned.lot) {
+      if (interventionYear === null) interventionYear = assigned.lot.year;
+      else if (interventionYear !== assigned.lot.year) {
+        bad('Intervention year', 'CODE_YEAR_MISMATCH', `The code ${assigned.code} is for ${assigned.lot.year}, but the intervention year is ${interventionYear}.`);
       }
     }
 
@@ -323,6 +381,12 @@ async function analyse(db: Db, tenantId: string, buffer: Buffer, fileName: strin
       code: assigned.code,
       regionId,
       stateLocation,
+      stateCode,
+      lgaCode,
+      // C4: unknown text is kept with no code (decision B1: no error).
+      fundingSourceCode: fundingSourceCodeFromText(x.fundingSource),
+      lot: assigned.lot,
+      interventionYear,
       type,
       ownerId,
       contractor,
@@ -341,7 +405,7 @@ async function analyse(db: Db, tenantId: string, buffer: Buffer, fileName: strin
         contractorIsNew,
         contractSumNgn: x.contractSumNgn,
         budgetNgn: x.budgetNgn,
-        interventionYear: x.interventionYear,
+        interventionYear,
         fundingSource: x.fundingSource,
         status: x.status,
         mode: live ? 'LIVE' : 'DRAFT',
@@ -392,6 +456,8 @@ export async function confirmRegisterImport(webUser: WebJwtPayload, input: Proje
     async (tx) => {
       // One import at a time per workspace: codes and client project IDs are checked against the database.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`project-register:${tenantId}`}))`;
+      // C3: lot/batch codes in the file are checked and lots created under the lot lock.
+      await lockProjectLots(tx, tenantId);
       const { preview, plan, ctx } = await analyse(tx, tenantId, buffer, input.fileName ?? null);
       if (!preview.canConfirm) {
         throw new AppError(
@@ -452,6 +518,15 @@ async function createImportedProject(
         })
       : null;
 
+  const lot = p.lot
+    ? await findOrCreateLotByNumber(tx, {
+        tenantId: webUser.tenantId,
+        interventionYear: p.lot.year,
+        number: p.lot.lot,
+        titleIfNew: x.name,
+        actor: { userId: webUser.userId, displayName: `${webUser.fullName} (${webUser.roleName})` },
+      })
+    : null;
   const project = await tx.project.create({
     data: {
       tenantId: webUser.tenantId,
@@ -462,12 +537,17 @@ async function createImportedProject(
       codePrefix: p.code!,
       stateLocation: p.stateLocation,
       lgaLocation: x.lga,
+      stateCode: p.stateCode,
+      lgaCode: p.lgaCode,
+      fundingSourceCode: p.fundingSourceCode,
+      lotId: lot?.id ?? null,
+      batchNumber: lot ? p.lot!.batch : null,
       totalBudgetNgn: x.budgetNgn,
       regionId: p.regionId,
       siteAddress: x.siteAddress,
       owningOrganizationId: p.ownerId,
       monitorOrganizationId: args.monitorId,
-      interventionYear: x.interventionYear,
+      interventionYear: p.interventionYear,
       fundingSource: x.fundingSource,
       externalReference: x.externalReference,
       contractSumNgn: x.contractSumNgn,

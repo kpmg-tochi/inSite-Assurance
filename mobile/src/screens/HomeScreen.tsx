@@ -244,7 +244,7 @@ export function HomeScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void onRefresh()} />}
         >
           {loading && !data ? (
-            <InSiteLoader size="md" label="Loading your visits..." />
+            <InSiteLoader size="md" label="Loading your monitoring visits..." />
           ) : projects.length === 0 ? (
             <EmptyStateCard
               title="No projects assigned"

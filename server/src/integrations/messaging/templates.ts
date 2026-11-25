@@ -92,7 +92,7 @@ export interface MinutesSignOffData {
 }
 
 export function minutesSignOff(ctx: TemplateContext, d: MinutesSignOffData): RenderedMessage {
-  const subject = `${d.projectCode}: please sign off the kick-off minutes`;
+  const subject = `${d.projectCode}: please sign off the kick-off meeting minutes`;
   const text = [
     `Hello ${d.recipientName},`,
     '',
@@ -101,12 +101,12 @@ export function minutesSignOff(ctx: TemplateContext, d: MinutesSignOffData): Ren
     '',
     ctx.tenantName,
   ].join('\n');
-  const html = layout(ctx, 'Please sign off the kick-off minutes', [
+  const html = layout(ctx, 'Please sign off the kick-off meeting minutes', [
     `Hello ${esc(d.recipientName)},`,
     `The minutes of the <strong>${esc(d.projectName)}</strong> kick-off meeting ("${esc(d.minutesTitle)}") are ready. Please read and sign them off.`,
     `<a href="${esc(d.documentsUrl)}" style="display:inline-block;background:${esc(ctx.brandColor)};color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold">Open the minutes</a>`,
   ]);
-  return { subject, text, html, pushBody: `Please sign off the ${d.projectName} kick-off minutes.` };
+  return { subject, text, html, pushBody: `Please sign off the ${d.projectName} kick-off meeting minutes.` };
 }
 
 // ---------------------------------------------------------------------------
@@ -118,7 +118,7 @@ export function findingsSummary(ctx: TemplateContext, d: FindingsSummaryEmailDat
   const subject = `${d.projectCode}: findings after the ${d.visitLabel.toLowerCase()} of ${d.visitDate}`;
   const where = (f: { facility: string | null; unit: string | null }) => [f.facility, f.unit].filter(Boolean).join(', ') || 'Project';
   const openLines = d.open.map(
-    (f) => `${where(f)}: ${f.title} (${f.severity.toLowerCase()}, raised ${f.raisedDate}${f.timesRechecked ? `, re-checked ${f.timesRechecked} time(s)` : ''}). ${f.description}`
+    (f) => `${where(f)}: ${f.title} (${f.severity.toLowerCase()}, raised ${f.raisedDate}${f.timesRechecked ? `, ${f.timesRechecked} follow-up check(s)` : ''}). ${f.description}`
   );
   const resolvedLines = d.resolved.map((f) => `${where(f)}: ${f.title}`);
   const intro = `The monitoring team visited ${d.projectName} (${d.projectCode}) on ${d.visitDate} (${d.visitLabel.toLowerCase()}).`;
@@ -127,7 +127,7 @@ export function findingsSummary(ctx: TemplateContext, d: FindingsSummaryEmailDat
     '',
     d.open.length ? `Open findings to correct (${d.open.length}):` : 'There are no open findings.',
     ...openLines.map((l) => `- ${l}`),
-    ...(d.resolved.length ? ['', `Resolved on this visit (${d.resolved.length}):`, ...resolvedLines.map((l) => `- ${l}`)] : []),
+    ...(d.resolved.length ? ['', `Rectified on this visit (${d.resolved.length}):`, ...resolvedLines.map((l) => `- ${l}`)] : []),
     '',
     'The next visits will check the open findings again.',
   ].join('\n');
@@ -135,7 +135,7 @@ export function findingsSummary(ctx: TemplateContext, d: FindingsSummaryEmailDat
   const html = layout(ctx, subject, [
     esc(intro),
     d.open.length ? `<strong>Open findings to correct (${d.open.length})</strong>${list(openLines)}` : 'There are no open findings.',
-    ...(d.resolved.length ? [`<strong>Resolved on this visit (${d.resolved.length})</strong>${list(resolvedLines)}`] : []),
+    ...(d.resolved.length ? [`<strong>Rectified on this visit (${d.resolved.length})</strong>${list(resolvedLines)}`] : []),
     'The next visits will check the open findings again.',
   ]);
   return { subject, text, html };

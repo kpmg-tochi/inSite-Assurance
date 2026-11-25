@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 export const TERMINOLOGY_DEFAULTS = {
   funderParty: { singular: 'Funder', plural: 'Funders' },
-  monitorParty: { singular: 'Independent monitor', plural: 'Independent monitors' },
+  monitorParty: { singular: 'Independent M&E firm', plural: 'Independent M&E firms' },
   contractor: { singular: 'Contractor', plural: 'Contractors' },
   beneficiary: { singular: 'Beneficiary', plural: 'Beneficiaries' },
   retention: { singular: 'Retention', plural: 'Retention' },

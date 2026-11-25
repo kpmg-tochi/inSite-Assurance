@@ -1,8 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { ArrowRight, FileUp, Plus, Trash2 } from "lucide-react";
 import {
+  formatProjectCode,
   isOngoingProject,
+  lgaByCode,
+  parseLotBatchCode,
   projectStageChipLabel,
+  stateByCode,
+  zoneName,
   type PortfolioOverviewProject,
   type ProjectListFilters,
   type ProjectRegisterFilters,
@@ -33,6 +38,15 @@ const FILTER_TEST: Record<Exclude<ProjectTableFilter, "drafts">, (p: PortfolioOv
   completed: isCompleted,
   archived: (p) => p.status === "ARCHIVED",
 };
+
+/** Client demo updates C1: the state and LGA names from their codes, else what an older project recorded. */
+function locationOf(p: PortfolioOverviewProject) {
+  return {
+    state: stateByCode(p.stateCode)?.name ?? (p.stateLocation || p.region?.name || null),
+    lga: lgaByCode(p.lgaCode)?.name ?? p.lgaLocation ?? null,
+    zone: zoneName(p.zone),
+  };
+}
 
 const FILTER_LABEL: Record<ProjectTableFilter, string> = {
   all: "All",
@@ -107,13 +121,18 @@ export function PortfolioProjectsTable({
     return projects.filter((p) => {
       if (!FILTER_TEST[filter](p)) return false;
       if (!q) return true;
+      const loc = locationOf(p);
       return [
         p.name,
         p.codePrefix,
+        formatProjectCode(p.codePrefix),
         p.externalReference ?? "",
         p.primaryBeneficiary?.name ?? "",
         p.stateLocation,
         p.lgaLocation ?? "",
+        loc.state ?? "",
+        loc.lga ?? "",
+        loc.zone ?? "",
         p.region?.name ?? "",
         p.contractorName ?? "",
         p.projectType?.name ?? "",
@@ -121,7 +140,12 @@ export function PortfolioProjectsTable({
     });
   }, [projects, filter, q]);
   const draftRows = useMemo(
-    () => (filter === "drafts" ? drafts.filter((d) => !q || d.name.toLowerCase().includes(q) || d.codePrefix.toLowerCase().includes(q)) : []),
+    () =>
+      filter === "drafts"
+        ? drafts.filter(
+            (d) => !q || [d.name, d.codePrefix, formatProjectCode(d.codePrefix)].some((v) => v.toLowerCase().includes(q))
+          )
+        : [],
     [drafts, filter, q]
   );
 
@@ -180,7 +204,7 @@ export function PortfolioProjectsTable({
       {importOpen && <ProjectRegisterImportDialog onClose={() => setImportOpen(false)} />}
     </div>
   );
-  const searchBox = { value: search, onChange: setSearch, placeholder: "Search by name, code, project ID, school, state, LGA or contractor" };
+  const searchBox = { value: search, onChange: setSearch, placeholder: "Search by name, code, project ID, school, zone, state, LGA or contractor" };
 
   if (filter === "drafts") {
     const draftColumns: TableColumnDef<DraftRow>[] = [
@@ -189,7 +213,10 @@ export function PortfolioProjectsTable({
         header: "Project",
         cell: (d) => (
           <div className="min-w-0 max-w-[360px]">
-            <div className="text-[11px] font-semibold text-slate-500 tabular-nums">{d.codePrefix}</div>
+            <div className="text-[11px] font-semibold text-slate-500 tabular-nums">
+              {formatProjectCode(d.codePrefix)}
+              {parseLotBatchCode(d.codePrefix) && <span className="font-medium"> · {parseLotBatchCode(d.codePrefix)!.year}</span>}
+            </div>
             <div className="font-semibold text-slate-900 truncate" title={d.name}>
               {d.name}
             </div>
@@ -244,12 +271,22 @@ export function PortfolioProjectsTable({
   }
 
   const columns: TableColumnDef<PortfolioOverviewProject>[] = [
+    // Client demo updates C3: the code as people read it ("LOT 5 BATCH 7"), the intervention year beside it.
+    {
+      id: "code",
+      header: "Code",
+      cell: (p) => <span className="text-xs font-semibold text-slate-700 tabular-nums whitespace-nowrap">{formatProjectCode(p.codePrefix)}</span>,
+    },
+    {
+      id: "year",
+      header: "Intervention year",
+      cell: (p) => (p.interventionYear !== null ? <span className="text-slate-700 tabular-nums">{p.interventionYear}</span> : <span className="text-slate-400">–</span>),
+    },
     {
       id: "project",
       header: "Project",
       cell: (p) => (
         <div className="min-w-0 max-w-[300px]">
-          <div className="text-[11px] font-semibold text-slate-500 tabular-nums">{p.codePrefix}</div>
           {p.externalReference && (
             <div className="text-[11px] text-slate-500 truncate" title={`${term("externalReference")}: ${p.externalReference}`}>
               <span className="sr-only">{term("externalReference")}: </span>
@@ -265,19 +302,18 @@ export function PortfolioProjectsTable({
     },
     { id: "type", header: "Type", cell: (p) => <span className="block max-w-[140px] text-slate-700">{p.projectType?.name ?? "–"}</span> },
     {
-      id: "year",
-      header: <span title="Intervention year">Year</span>,
-      cell: (p) => (p.interventionYear !== null ? <span className="text-slate-700 tabular-nums">{p.interventionYear}</span> : <span className="text-slate-400">–</span>),
-    },
-    {
       id: "location",
       header: "Location",
-      cell: (p) => (
-        <span className="text-slate-700 whitespace-nowrap">
-          {p.stateLocation || p.region?.name || "–"}
-          {p.lgaLocation ? <span className="text-slate-500"> · {p.lgaLocation}</span> : null}
-        </span>
-      ),
+      cell: (p) => {
+        const loc = locationOf(p);
+        return (
+          <span className="block text-slate-700 whitespace-nowrap">
+            {loc.state ?? "–"}
+            {loc.lga ? <span className="text-slate-500"> · {loc.lga}</span> : null}
+            {loc.zone && <span className="block text-[11px] text-slate-500">{loc.zone}</span>}
+          </span>
+        );
+      },
     },
     {
       id: "stage",
@@ -337,14 +373,14 @@ export function PortfolioProjectsTable({
     },
     {
       id: "lastUpdate",
-      header: <span title="Last approved visit report">Last update</span>,
+      header: <span title="Last approved monitoring report">Last update</span>,
       cell: (p) =>
         p.lastApprovedUpdateAt ? (
-          <span className="text-slate-700 whitespace-nowrap" title="Last approved visit report">
+          <span className="text-slate-700 whitespace-nowrap" title="Last approved monitoring report">
             {formatDateShort(p.lastApprovedUpdateAt)}
           </span>
         ) : (
-          <span className="text-slate-400" title="No approved visit report yet">–</span>
+          <span className="text-slate-400" title="No approved monitoring report yet">–</span>
         ),
     },
     {
@@ -374,7 +410,7 @@ export function PortfolioProjectsTable({
       selectedId={selectedId}
       pageSize={pageSize}
       loading={loading}
-      minWidth="min-w-[1180px]"
+      minWidth="min-w-[1280px]"
       emptyState={{
         title: projects.length === 0 ? "No projects yet" : "No projects match",
         description:

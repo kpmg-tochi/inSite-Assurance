@@ -34,7 +34,24 @@ import {
   CONTRACT_MILESTONE_ANCHOR_META,
   FacilityArchetype,
   validateUnits,
+  FundingSourceCodeEnum,
+  fundingSourceCodeFromText,
+  fundingSourceText,
+  findLgaByName,
+  findStateByName,
+  lgaByCode,
+  LOT_BATCH_CODE_REGEX,
+  stateByCode,
+  zoneOfState,
+  allowedInterventionYears,
+  zonedCalendarDate,
 } from '@insite/shared';
+import {
+  assertInterventionYearAllowed,
+  assignLotBatchCode,
+  PROJECT_LOT_REF_SELECT,
+  projectLotRef,
+} from '../projectLots/projectLots.service';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import {
@@ -118,6 +135,7 @@ const SETUP_INCLUDE = {
       defaultGeofenceToleranceMeters: true,
       defaultGeofenceRadiusMeters: true,
       organizationInputMode: true,
+      fiscalYearStartMonth: true,
     },
   },
   monitorOrganization: { select: { id: true, name: true } },
@@ -128,6 +146,8 @@ const SETUP_INCLUDE = {
   region: { select: REGION_SUMMARY_SELECT },
   beneficiaries: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
   userAssignments: { select: { userId: true } },
+  // Client demo updates C3
+  lot: { select: PROJECT_LOT_REF_SELECT },
 } satisfies Prisma.ProjectInclude;
 
 type SetupProjectRow = Prisma.ProjectGetPayload<{ include: typeof SETUP_INCLUDE }>;
@@ -236,19 +256,23 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
   const basics = ProjectBasicsStepSchema.safeParse({
     name: project.name,
     codePrefix: project.codePrefix,
-    stateLocation: project.stateLocation ?? '',
+    stateLocation: project.stateLocation || undefined,
     lgaLocation: project.lgaLocation,
     description: project.description,
     totalBudgetNgn: budget ?? undefined,
   });
   const basicsIssues: SetupIssue[] = basics.success ? [] : zodIssues(basics.error);
+  // Client demo updates C1: the state is present when it has a code or (older projects) a name.
+  if (!project.stateCode && !project.stateLocation?.trim()) {
+    basicsIssues.push({ code: 'INVALID_FIELD', message: 'Choose the state.', field: 'stateCode' });
+  }
   const rules = partyRulesFor(loaded.typeConfig);
   // Phase 11: a tenant with project types requires one; the type may require a region.
   if (loaded.tenantHasTypes && !project.projectTypeId) {
     basicsIssues.push({ code: 'PROJECT_TYPE_REQUIRED', message: 'Choose the project type.', field: 'projectTypeId' });
   }
   if (rules.regionRequired && !project.regionId) {
-    basicsIssues.push({ code: 'REGION_REQUIRED', message: 'Choose the region.', field: 'regionId' });
+    basicsIssues.push({ code: 'REGION_REQUIRED', message: 'Choose the zone or state.', field: 'regionId' });
   }
   out.basics = { issues: basicsIssues, warnings: [] };
 
@@ -320,7 +344,7 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
   if (lastSprintEnd && plannedCompletion && plannedCompletion < lastSprintEnd) {
     contractWarnings.push({
       code: 'PLANNED_COMPLETION_BEFORE_SPRINTS_END',
-      message: `The contractor's planned completion (${plannedCompletion}) is before the last sprint ends (${lastSprintEnd}).`,
+      message: `The contractor's planned completion (${plannedCompletion}) is before the last work phase ends (${lastSprintEnd}).`,
       field: 'plannedCompletionDate',
     });
   }
@@ -350,7 +374,7 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
   const legacyLive = project.status !== 'DRAFT' && scope.units.length === 0;
   if (!legacyLive) {
     const s = scope.summary;
-    if (s.sprintCount === 0) scopeIssues.push({ code: 'SPRINT_REQUIRED', message: 'Add at least one sprint.', field: 'sprints' });
+    if (s.sprintCount === 0) scopeIssues.push({ code: 'SPRINT_REQUIRED', message: 'Add at least one work phase.', field: 'sprints' });
     if (s.lineCount === 0) scopeIssues.push({ code: 'SCOPE_REQUIRED', message: 'Add the BoQ lines (by hand or from the needs assessment).', field: 'lines' });
     if (s.unassignedLineCount > 0) {
       scopeIssues.push({
@@ -470,6 +494,14 @@ function buildWizardStepStatuses(sections: SetupStepStatus[]): SetupWizardStepSt
   return out;
 }
 
+/** Client demo updates D5: the years the form offers (the allowed ones plus the saved one). */
+function interventionYearOptions(project: SetupProjectRow): number[] {
+  const today = zonedCalendarDate(new Date(), project.tenant.timezone || 'Africa/Lagos');
+  const years = new Set(allowedInterventionYears(today, project.tenant.fiscalYearStartMonth));
+  if (project.interventionYear) years.add(project.interventionYear);
+  return [...years].sort((a, b) => a - b);
+}
+
 function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
   const { project, contractors } = loaded;
   const steps = buildStepStatuses(loaded);
@@ -497,6 +529,14 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
       fundingSource: project.fundingSource,
       externalReference: project.externalReference,
       importedAt: project.importedAt?.toISOString() ?? null,
+      // Client demo updates (wave 1)
+      stateCode: project.stateCode,
+      lgaCode: project.lgaCode,
+      zone: zoneOfState(project.stateCode),
+      fundingSourceCode: FundingSourceCodeEnum.safeParse(project.fundingSourceCode).data ?? null,
+      lot: projectLotRef(project.lot),
+      batchNumber: project.batchNumber,
+      interventionYearOptions: interventionYearOptions(project),
     },
     parties: {
       owningOrganization: project.owningOrganization,
@@ -597,18 +637,133 @@ function assertMayEditSetup(webUser: WebJwtPayload, project: { status: string; c
 // Create draft
 // ---------------------------------------------------------------------------
 
+interface AdminAreaFields {
+  stateCode: string | null;
+  stateLocation: string | null;
+  lgaCode: string | null;
+  lgaLocation: string | null;
+}
+
+/**
+ * Client demo updates C1: state and LGA from the national reference data. A code writes its name
+ * into the text field older screens read; text sent without a code (older clients) is kept and
+ * matched to a code when it names a state or LGA. Omitted keeps; null clears. An LGA must be in
+ * the state (422 LGA_NOT_IN_STATE). `current` is null on create.
+ */
+export function resolveAdminArea(
+  sent: { stateCode?: string | null; stateLocation?: string | null; lgaCode?: string | null; lgaLocation?: string | null },
+  current: AdminAreaFields | null
+): AdminAreaFields {
+  let stateCode: string | null;
+  let stateLocation: string | null;
+  if (sent.stateCode) {
+    const state = stateByCode(sent.stateCode);
+    if (!state) throw new AppError(`"${sent.stateCode}" is not a state.`, 422, 'UNKNOWN_STATE');
+    stateCode = state.code;
+    stateLocation = state.name;
+  } else if (sent.stateCode === null) {
+    stateCode = null;
+    stateLocation = sent.stateLocation ?? null;
+  } else if (sent.stateLocation !== undefined) {
+    stateLocation = sent.stateLocation;
+    stateCode = findStateByName(sent.stateLocation)?.code ?? null;
+  } else {
+    stateCode = current?.stateCode ?? null;
+    stateLocation = current?.stateLocation ?? null;
+  }
+
+  let lgaCode: string | null;
+  let lgaLocation: string | null;
+  if (sent.lgaCode) {
+    const lga = lgaByCode(sent.lgaCode);
+    if (!lga || !stateCode || lga.stateCode !== stateCode) {
+      throw new AppError(
+        stateCode ? `That LGA is not in ${stateByCode(stateCode)?.name ?? 'the state'}.` : 'Choose the state before the LGA.',
+        422,
+        'LGA_NOT_IN_STATE'
+      );
+    }
+    lgaCode = lga.code;
+    lgaLocation = lga.name;
+  } else if (sent.lgaCode === null) {
+    lgaCode = null;
+    lgaLocation = sent.lgaLocation ?? null;
+  } else if (sent.lgaLocation !== undefined) {
+    lgaLocation = sent.lgaLocation;
+    lgaCode = stateCode ? (findLgaByName(stateCode, sent.lgaLocation)?.code ?? null) : null;
+  } else {
+    // Omitted: a coded LGA stays while it is in the state; free text was cleared before C1 and still is.
+    const kept = current?.lgaCode ? lgaByCode(current.lgaCode) : null;
+    lgaCode = kept && kept.stateCode === stateCode ? kept.code : null;
+    lgaLocation = lgaCode ? (current?.lgaLocation ?? kept!.name) : null;
+  }
+  return { stateCode, stateLocation, lgaCode, lgaLocation };
+}
+
+/**
+ * Client demo updates C4: the funding source code and the text stored beside it. A code writes
+ * `fundingSourceText(code, detail)` (the sent `fundingSource` is the detail); text sent without a
+ * code (older clients) is kept and matched to a code when it names one. Omitted keeps; null clears.
+ */
+export function resolveFundingSource(
+  sent: { fundingSourceCode?: string | null; fundingSource?: string | null },
+  current: { fundingSourceCode: string | null; fundingSource: string | null } | null
+): { fundingSourceCode: string | null; fundingSource: string | null } {
+  if (sent.fundingSourceCode) {
+    const code = FundingSourceCodeEnum.parse(sent.fundingSourceCode);
+    return { fundingSourceCode: code, fundingSource: fundingSourceText(code, sent.fundingSource) };
+  }
+  if (sent.fundingSourceCode === null) return { fundingSourceCode: null, fundingSource: sent.fundingSource ?? null };
+  if (sent.fundingSource !== undefined) {
+    return { fundingSourceCode: fundingSourceCodeFromText(sent.fundingSource), fundingSource: sent.fundingSource };
+  }
+  return { fundingSourceCode: current?.fundingSourceCode ?? null, fundingSource: current?.fundingSource ?? null };
+}
+
+/** Lot/batch codes are numbered by the platform: typed ones are refused (choose the lot instead). */
+function assertNotManualLotCode(codePrefix: string | undefined, current: string | null) {
+  if (codePrefix && codePrefix !== current && LOT_BATCH_CODE_REGEX.test(codePrefix)) {
+    throw new AppError('LOT … BATCH … codes are numbered by the platform: choose the lot instead of typing the code.', 422, 'LOT_CODE_NOT_MANUAL');
+  }
+}
+
 export async function createProjectDraft(webUser: WebJwtPayload, input: CreateProjectDraftRequest) {
   const tenantId = webUser.tenantId;
-  const existing = await prisma.project.findUnique({
-    where: { tenantId_codePrefix: { tenantId, codePrefix: input.codePrefix } },
-    select: { id: true },
-  });
-  if (existing) {
-    throw new AppError(`A project with code prefix "${input.codePrefix}" already exists`, 409, 'DUPLICATE_PROJECT_PREFIX');
+  // Client demo updates C3: a lot choice numbers the code (it wins over a typed code); without
+  // either, 400 PROJECT_CODE_REQUIRED.
+  const lotChoice = input.lotChoice;
+  if (!input.codePrefix && !lotChoice) throw new AppError('Enter the project code or choose a lot.', 400, 'PROJECT_CODE_REQUIRED');
+  if (lotChoice && !input.interventionYear) {
+    throw new AppError('Choose the intervention year: the lot and batch are numbered within it.', 422, 'INTERVENTION_YEAR_REQUIRED');
+  }
+  if (!lotChoice) assertNotManualLotCode(input.codePrefix, null);
+  // D5: a new project takes the current or the next intervention year.
+  if (input.interventionYear) await assertInterventionYearAllowed(prisma, tenantId, input.interventionYear);
+  const area = resolveAdminArea(input, null);
+  const funding = resolveFundingSource(input, null);
+  if (!lotChoice) {
+    const existing = await prisma.project.findUnique({
+      where: { tenantId_codePrefix: { tenantId, codePrefix: input.codePrefix! } },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new AppError(`A project with code prefix "${input.codePrefix}" already exists`, 409, 'DUPLICATE_PROJECT_PREFIX');
+    }
   }
   if (input.externalReference) await assertExternalReferenceFree(prisma, tenantId, input.externalReference, null);
 
   const projectId = await prisma.$transaction(async (tx) => {
+    // C3: the lot lock is taken first and held to commit, so concurrent drafts get distinct batches.
+    const assigned = lotChoice
+      ? await assignLotBatchCode(tx, {
+          tenantId,
+          interventionYear: input.interventionYear!,
+          lotChoice,
+          userId: webUser.userId,
+          actorDisplayName: actorName(webUser),
+        })
+      : null;
+    const codePrefix = assigned?.codePrefix ?? input.codePrefix!;
     // Phase 11: a tenant with project types must pick one first.
     if (!input.projectTypeId && (await tenantHasActiveProjectTypes(tx, tenantId))) {
       throw new AppError('Choose the project type first.', 422, 'PROJECT_TYPE_REQUIRED');
@@ -631,15 +786,16 @@ export async function createProjectDraft(webUser: WebJwtPayload, input: CreatePr
         createdByUserId: webUser.userId,
         timezone: tenant.timezone,
         name: input.name,
-        codePrefix: input.codePrefix,
-        stateLocation: input.stateLocation,
-        lgaLocation: input.lgaLocation ?? null,
+        codePrefix,
+        ...area,
         description: input.description ?? null,
         totalBudgetNgn: input.totalBudgetNgn,
         regionId: input.regionId ?? null,
         interventionYear: input.interventionYear ?? null,
-        fundingSource: input.fundingSource ?? null,
+        ...funding,
         externalReference: input.externalReference ?? null,
+        lotId: assigned?.lotId ?? null,
+        batchNumber: assigned?.batchNumber ?? null,
         // Pre-fill the monitor only when the creator's organisation is a monitor.
         monitorOrganizationId: (creatorOrg?.categories as string[] | undefined)?.includes('ADVISORY_MONITOR')
           ? creatorOrg!.id
@@ -706,14 +862,65 @@ export async function assertExternalReferenceFree(db: Tx | typeof prisma, tenant
 
 const saveBasics: StepSaver = async ({ tx, project, webUser, input }) => {
   const data = input as CreateProjectDraftRequest;
+  // Omitted keeps, null clears.
+  const keep = <T>(sent: T | null | undefined, current: T | null): T | null => (sent === undefined ? current : sent);
   // Phase 11: the type (re-applied on a draft, locked once live) and the region.
   let typeChange: { changed: boolean; prefilled: string[] } = { changed: false, prefilled: [] };
   if (data.projectTypeId !== undefined) {
     typeChange = await applyProjectTypeToProject(tx, project, data.projectTypeId, webUser);
   }
   if (data.regionId) await assertRegionUsable(tx, project.tenantId, data.regionId, project.regionId);
-  if (data.codePrefix !== project.codePrefix) {
-    if (project.status !== 'DRAFT') {
+
+  // Client demo updates D5: a changed year on a draft (not imported) must be the current or next one.
+  const interventionYear = keep(data.interventionYear, project.interventionYear);
+  const isDraft = project.status === 'DRAFT';
+  if (isDraft && !project.importedAt && interventionYear !== null && interventionYear !== project.interventionYear) {
+    await assertInterventionYearAllowed(tx, project.tenantId, interventionYear);
+  }
+
+  // C3: an omitted code keeps the current one; a lot choice (or a new year on a lot-coded draft)
+  // re-numbers a draft; a live project keeps its code.
+  assertNotManualLotCode(data.codePrefix, project.codePrefix);
+  let codePrefix = data.codePrefix ?? project.codePrefix;
+  let lotId = project.lotId;
+  let batchNumber = project.batchNumber;
+  const lotChoice = data.lotChoice;
+  const sameLot =
+    lotChoice && 'lotId' in lotChoice && lotChoice.lotId === project.lotId && interventionYear === project.lot?.interventionYear;
+  const yearMovedLot = !lotChoice && project.lot && interventionYear !== project.lot.interventionYear;
+  if (isDraft && ((lotChoice && !sameLot) || yearMovedLot)) {
+    if (!interventionYear) {
+      throw new AppError('Choose the intervention year: the lot and batch are numbered within it.', 422, 'INTERVENTION_YEAR_REQUIRED');
+    }
+    // A new year without a lot choice moves the draft to the lot of that year with the same title
+    // (created when the year has none).
+    let choice = lotChoice;
+    if (!choice) {
+      const sameTitle = await tx.projectLot.findFirst({
+        where: { tenantId: project.tenantId, interventionYear, title: { equals: project.lot!.title, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      choice = sameTitle ? { lotId: sameTitle.id } : { newLotTitle: project.lot!.title };
+    }
+    const assigned = await assignLotBatchCode(tx, {
+      tenantId: project.tenantId,
+      interventionYear,
+      lotChoice: choice,
+      userId: webUser.userId,
+      actorDisplayName: actorName(webUser),
+    });
+    codePrefix = assigned.codePrefix;
+    lotId = assigned.lotId;
+    batchNumber = assigned.batchNumber;
+  } else if (!isDraft && lotChoice && !sameLot) {
+    throw new AppError('The project code cannot change once the project is active.', 409, 'CODE_PREFIX_LOCKED');
+  } else if (isDraft && data.codePrefix && data.codePrefix !== project.codePrefix && project.lotId) {
+    // A typed code replaces the lot numbering.
+    lotId = null;
+    batchNumber = null;
+  }
+  if (codePrefix !== project.codePrefix) {
+    if (!isDraft) {
       throw new AppError(
         'The project code cannot change once the project is active: join codes, IPC references and reports use it.',
         409,
@@ -721,40 +928,47 @@ const saveBasics: StepSaver = async ({ tx, project, webUser, input }) => {
       );
     }
     const clash = await tx.project.findUnique({
-      where: { tenantId_codePrefix: { tenantId: project.tenantId, codePrefix: data.codePrefix } },
+      where: { tenantId_codePrefix: { tenantId: project.tenantId, codePrefix } },
       select: { id: true },
     });
     if (clash && clash.id !== project.id) {
-      throw new AppError(`A project with code prefix "${data.codePrefix}" already exists`, 409, 'DUPLICATE_PROJECT_PREFIX');
+      throw new AppError(`A project with code prefix "${codePrefix}" already exists`, 409, 'DUPLICATE_PROJECT_PREFIX');
     }
   }
   // UBEC IRL register fields: omitted keeps, null clears; the client project ID is unique per workspace.
-  const keep = <T>(sent: T | null | undefined, current: T | null): T | null => (sent === undefined ? current : sent);
   const externalReference = keep(data.externalReference, project.externalReference);
   if (externalReference && externalReference !== project.externalReference) {
     await assertExternalReferenceFree(tx, project.tenantId, externalReference, project.id);
   }
+  const area = resolveAdminArea(data, project);
+  const funding = resolveFundingSource(data, project);
   const before = {
     name: project.name,
     codePrefix: project.codePrefix,
+    stateCode: project.stateCode,
     stateLocation: project.stateLocation,
+    lgaCode: project.lgaCode,
     lgaLocation: project.lgaLocation,
     description: project.description,
     totalBudgetNgn: project.totalBudgetNgn === null ? null : Number(project.totalBudgetNgn),
     interventionYear: project.interventionYear,
+    fundingSourceCode: project.fundingSourceCode,
     fundingSource: project.fundingSource,
     externalReference: project.externalReference,
+    lotId: project.lotId,
+    batchNumber: project.batchNumber,
   };
   const after = {
     name: data.name,
-    codePrefix: data.codePrefix,
-    stateLocation: data.stateLocation,
-    lgaLocation: data.lgaLocation ?? null,
+    codePrefix,
+    ...area,
     description: data.description ?? null,
     totalBudgetNgn: data.totalBudgetNgn,
-    interventionYear: keep(data.interventionYear, project.interventionYear),
-    fundingSource: keep(data.fundingSource, project.fundingSource),
+    interventionYear,
+    ...funding,
     externalReference,
+    lotId,
+    batchNumber,
   };
   if (project.status !== 'DRAFT' && after.totalBudgetNgn < Number(project.disbursedToDateNgn)) {
     throw new AppError('The budget cannot be below the amount already disbursed', 409, 'BUDGET_BELOW_DISBURSED');
@@ -1223,7 +1437,8 @@ export async function activateProject(projectId: string, webUser: WebJwtPayload)
       basics: {
         name: project.name,
         codePrefix: project.codePrefix,
-        stateLocation: project.stateLocation ?? '',
+        // C1: the state is checked by the basics section (code or name).
+        stateLocation: project.stateLocation || undefined,
         lgaLocation: project.lgaLocation,
         description: project.description,
         totalBudgetNgn: project.totalBudgetNgn === null ? undefined : Number(project.totalBudgetNgn),

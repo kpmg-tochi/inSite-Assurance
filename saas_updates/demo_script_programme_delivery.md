@@ -246,7 +246,7 @@ Each detail below is planted early and pays off later. Don't point at them; let 
 **Show** (tab 1, admin, PRG-106):
 1. **Completion & handover** → **Closure**: the checklist, everything green before closing.
 2. **Overview** → **Close the project**.
-3. **Closure** tab → **Upload closeout report** → `13 Closeout report.pdf`. (Archiving is refused until it's there.)
+3. **Project closure** tab → **Upload lessons learned report** → `13 Lessons learned report.pdf`. (Archiving is refused until it's there.)
 4. Project settings → **Archive project**.
 5. **Closure** tab → **Export closure pack** → download the ZIP and open it: the index, every document and certificate, the visit summaries with their photos, and the audit ledger with its verification result.
 

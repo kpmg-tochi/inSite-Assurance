@@ -229,8 +229,8 @@ export const useRequestClosurePackMutation = (projectId: string) => {
     mutationFn: () => requestClosurePack(projectId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: closurePacksKey(projectId) });
-      toast.success('Closure pack queued. It appears here when it is ready.');
+      toast.success('Project closure file queued. It appears here when it is ready.');
     },
-    onError: (err) => toast.error(errorMessage(err, 'Could not start the closure pack.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not start the project closure file.')),
   });
 };

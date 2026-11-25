@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, Touc
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { VISIT_KIND_META, VISIT_OVERALL_FINDING_LABELS, VisitOverallFindingEnum, type VisitOverallFinding } from '@insite/shared';
+import { formatProjectCode, VISIT_KIND_META, VISIT_OVERALL_FINDING_LABELS, VisitOverallFindingEnum, type VisitOverallFinding } from '@insite/shared';
 import type { RootStackScreenProps } from '../../navigation/types';
 import { hydrateBaselinePack } from '../../storage/baselineStore';
 import { captureDisplayUri, getCaptures, type CaptureRecord } from '../../storage/captureStore';
@@ -64,10 +64,10 @@ export default function VisitReviewScreen({ route, navigation }: RootStackScreen
       const v = await getVisit(visitId);
       if (!v) return setPhase({ kind: 'BLOCKED', title: 'Visit not on this phone', message: 'Refresh your visits and open it again.' });
       const open = await getOpenDraft(v.id);
-      if (!open) return setPhase({ kind: 'BLOCKED', title: 'No report to review', message: 'Start the form from the visit first.' });
+      if (!open) return setPhase({ kind: 'BLOCKED', title: 'No monitoring report to review', message: 'Start the form from the visit first.' });
       const pack = await hydrateBaselinePack(v.projectId).catch(() => null);
       const form = await getVisitFormByHash(v.id, open.draft.formHash);
-      if (!form) return setPhase({ kind: 'BLOCKED', title: 'Form not on this phone', message: 'The form of this report is no longer on the phone.' });
+      if (!form) return setPhase({ kind: 'BLOCKED', title: 'Form not on this phone', message: 'The form of this monitoring report is no longer on the phone.' });
       let d = open.draft;
       let prefilled = false;
       if (open.status === 'DRAFT' && !d.overallFinding) {
@@ -148,7 +148,7 @@ export default function VisitReviewScreen({ route, navigation }: RootStackScreen
       </Text>
       {data ? (
         <Text style={styles.subtitle}>
-          {VISIT_KIND_META[data.visit.visit.visitKind].label} · {data.visit.visit.projectCode} · {data.visit.visit.plannedDate}
+          {VISIT_KIND_META[data.visit.visit.visitKind].label} · {formatProjectCode(data.visit.visit.projectCode)} · {data.visit.visit.plannedDate}
         </Text>
       ) : null}
     </LinearGradient>
@@ -227,7 +227,7 @@ export default function VisitReviewScreen({ route, navigation }: RootStackScreen
           ))}
           {check.recheckResults.length > 0 && (
             <Text style={[formStyles.meta, { marginTop: 8 }]}>
-              Re-checks: {resolved} marked resolved, {notResolved} not resolved.
+              Follow-up checks: {resolved} marked rectified, {notResolved} not rectified.
             </Text>
           )}
         </View>
@@ -266,7 +266,7 @@ export default function VisitReviewScreen({ route, navigation }: RootStackScreen
           <Text style={formStyles.label} accessibilityRole="header">
             Attach site log entries
           </Text>
-          <Text style={formStyles.meta}>Entries from this project&apos;s site log. Attached entries are sent with the report; the others stay in the site log.</Text>
+          <Text style={formStyles.meta}>Entries from this project&apos;s site log. Attached entries are sent with the monitoring report; the others stay in the site log.</Text>
           {attachable.length === 0 && <Text style={[formStyles.meta, { marginTop: 8 }]}>No site log entries to attach.</Text>}
           {attachable.map((e) => {
             const on = draft.siteLogEntryIds.includes(e.id);
@@ -313,13 +313,13 @@ export default function VisitReviewScreen({ route, navigation }: RootStackScreen
               onPress={() => void submit()}
               accessibilityRole="button"
               accessibilityState={{ disabled: !check.canSubmit || Boolean(busy), busy: Boolean(busy) }}
-              accessibilityLabel={check.canSubmit ? 'Submit the report' : 'Submit the report, not available until everything is fixed'}
+              accessibilityLabel={check.canSubmit ? 'Submit the monitoring report' : 'Submit the monitoring report, not available until everything is fixed'}
             >
-              <Text style={formStyles.primaryButtonText}>{busy ?? 'Submit report'}</Text>
+              <Text style={formStyles.primaryButtonText}>{busy ?? 'Submit monitoring report'}</Text>
             </TouchableOpacity>
             <Text style={[formStyles.meta, { marginTop: 8 }]}>
               {check.canSubmit
-                ? 'Works offline: the report is saved on the phone and sends with its photos when you are online. It cannot be changed after you submit.'
+                ? 'Works offline: the monitoring report is saved on the phone and sends with its photos when you are online. It cannot be changed after you submit.'
                 : 'Fix the items above to submit.'}
             </Text>
           </>

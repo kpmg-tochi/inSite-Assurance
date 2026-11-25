@@ -22,7 +22,7 @@ export function SprintVerifyDialog({ projectId, sprintId, onClose }: { projectId
   const v = q.data;
   return (
     <ModalShell
-      title={v ? `Verify ${v.name}` : "Verify sprint"}
+      title={v ? `Verify ${v.name}` : "Verify work phase"}
       subtitle={v ? `${v.startDate} to ${v.endDate}${v.outcome ? ` · now ${SPRINT_VERIFICATION_OUTCOME_LABELS[v.outcome].toLowerCase()} (${v.verifiedByName ?? "—"})` : ""}` : undefined}
       onClose={onClose}
       maxWidth="max-w-3xl"
@@ -40,7 +40,7 @@ export function SprintVerifyDialog({ projectId, sprintId, onClose }: { projectId
             </div>
           )}
           <div className="space-y-3">
-            {v.facilities.length === 0 && <p className="text-xs text-slate-500">No facility units are active in this sprint.</p>}
+            {v.facilities.length === 0 && <p className="text-xs text-slate-500">No facility units are active in this work phase.</p>}
             {v.facilities.map((f) => (
               <div key={f.facilityId} className="rounded-xl border border-slate-200 p-3 text-xs space-y-2">
                 <p className="font-bold text-slate-900">{f.facilityName}</p>
@@ -68,7 +68,7 @@ export function SprintVerifyDialog({ projectId, sprintId, onClose }: { projectId
                     </ul>
                   </div>
                 ) : (
-                  <p className="text-[11px] text-slate-500">No accepted visit covered this facility in the sprint.</p>
+                  <p className="text-[11px] text-slate-500">No accepted visit covered this facility in the work phase.</p>
                 )}
                 {f.openFindings.length > 0 && (
                   <ul className="text-[11px] text-red-700">
@@ -85,7 +85,7 @@ export function SprintVerifyDialog({ projectId, sprintId, onClose }: { projectId
           {v.canVerify ? (
             <VerifyForm projectId={projectId} sprintId={sprintId} v={v} onClose={onClose} />
           ) : (
-            <p className="text-xs text-slate-500">{v.endedYet || v.status !== "UPCOMING" ? "You cannot verify sprints." : "The sprint has not started."}</p>
+            <p className="text-xs text-slate-500">{v.endedYet || v.status !== "UPCOMING" ? "You cannot verify work phases." : "The work phase has not started."}</p>
           )}
         </div>
       )}
@@ -103,7 +103,7 @@ function VerifyForm({ projectId, sprintId, v, onClose }: { projectId: string; sp
     .superRefine((x, ctx) => {
       if (!x.outcome) ctx.addIssue({ code: "custom", path: ["outcome"], message: "Choose met, partly met or not met" });
       if (!v.endedYet && x.notes.length < 3) {
-        ctx.addIssue({ code: "custom", path: ["notes"], message: "The sprint has not ended: say why you verify it now (at least 3 characters)" });
+        ctx.addIssue({ code: "custom", path: ["notes"], message: "The work phase has not ended: say why you verify it now (at least 3 characters)" });
       }
     })
     .transform((x): VerifySprintRequest => ({ outcome: x.outcome!, notes: x.notes || null }))
@@ -121,7 +121,7 @@ function VerifyForm({ projectId, sprintId, v, onClose }: { projectId: string; sp
         ))}
       </div>
       <label className="block text-xs font-semibold text-slate-700">
-        Notes{!v.endedYet ? " (required: the sprint has not ended)" : ""}
+        Notes{!v.endedYet ? " (required: the work phase has not ended)" : ""}
         <textarea className={`${inputClass} mt-1 ${invalidClass(form, "notes")}`} rows={3} {...form.register("notes")} {...fieldA11y(form, "notes")} />
       </label>
       <FieldError form={form} name="notes" />

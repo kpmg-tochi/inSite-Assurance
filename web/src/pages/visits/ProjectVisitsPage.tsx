@@ -28,8 +28,8 @@ import { ConfirmationText, officersText, primaryButton, secondaryButton, visitKi
 type Tab = "plan" | "findings" | "site-log";
 
 const REPORT_TABS: Array<{ id: "plan" | "findings" | "site-log"; label: string; intro: string }> = [
-  { id: "plan", label: "Visits", intro: "Planned and past site visits and their reports. Officers confirm or move visits and submit the form from the field app." },
-  { id: "findings", label: "Findings", intro: "Problems raised by visit reports, followed until the contractor corrects them and a visit confirms it." },
+  { id: "plan", label: "Visits", intro: "Planned and past monitoring visits and their monitoring reports. Officers confirm or move visits and submit the form from the field app." },
+  { id: "findings", label: "Findings", intro: "Problems raised by monitoring reports, followed until the contractor corrects them and a visit confirms it." },
   { id: "site-log", label: "Site log", intro: "Photos, voice notes and notes officers record on site outside a visit." },
 ];
 
@@ -47,7 +47,7 @@ export function ProjectVisitsPage({ project }: { project: ProjectSummaryDto }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="tablist" aria-label="Reports" className={TAB_LIST_CLASS}>
+        <div role="tablist" aria-label="Monitoring" className={TAB_LIST_CLASS}>
           {REPORT_TABS.map((t) => (
             <button
               key={t.id}
@@ -112,7 +112,7 @@ function visitNotes(v: VisitDto): string {
   return [
     v.sprint ? v.sprint.name : null,
     v.facilityCount ? `${v.facilityCount} facilit${v.facilityCount === 1 ? "y" : "ies"}` : null,
-    v.recheckCount ? `${v.recheckCount} re-check${v.recheckCount === 1 ? "" : "s"}` : null,
+    v.recheckCount ? `${v.recheckCount} follow-up check${v.recheckCount === 1 ? "" : "s"}` : null,
     v.pendingProposal ? `move to ${v.pendingProposal.toDate} proposed` : null,
     v.isLate ? "late" : null,
     v.origin === "UNSCHEDULED" ? "unscheduled" : null,
@@ -305,7 +305,7 @@ function PlanTab({ projectId, selectedId, onSelect }: { projectId: string; selec
 
 /** One note for both actions: what was done (resolve) or why it is dismissed. Both need 5 characters. */
 const FindingNotesFormSchema = z.object({
-  notes: z.string().trim().min(5, "Say what was done, or why it is dismissed (at least 5 characters)").max(1000, "Too long (at most 1000 characters)"),
+  notes: z.string().trim().min(5, "Say how it was rectified, or why it is dismissed (at least 5 characters)").max(1000, "Too long (at most 1000 characters)"),
 });
 
 function FindingCard({ projectId, finding: f }: { projectId: string; finding: InspectionFindingDto }) {
@@ -323,19 +323,19 @@ function FindingCard({ projectId, finding: f }: { projectId: string; finding: In
             f.status === "OPEN" ? (f.severity === "MINOR" ? "bg-amber-50 text-amber-800" : "bg-red-50 text-red-700") : "bg-emerald-50 text-emerald-700"
           }`}
         >
-          {f.status === "OPEN" ? f.severity.toLowerCase() : f.status.toLowerCase()}
+          {f.status === "OPEN" ? f.severity.toLowerCase() : f.status === "RESOLVED" ? "rectified" : f.status.toLowerCase()}
         </span>
       </div>
       <p className="text-slate-700">{f.description}</p>
       <p className="text-[11px] text-slate-500">
         {where ? `${where} · ` : ""}
         {f.visitKind ? visitKindLabel(f.visitKind) : "Visit"} of {f.inspectionVisitDate} · {f.contractorName ?? "Monitoring side"}
-        {f.recheckCount ? ` · re-checked ${f.recheckCount} time(s)` : ""}
+        {f.recheckCount ? ` · followed up ${f.recheckCount} time(s)` : ""}
         {f.escalatedAt ? " · escalated" : ""}
       </p>
       {f.resolvedNotes && (
         <p className="text-[11px] text-slate-600">
-          {f.status === "DISMISSED" ? "Dismissed" : "Resolved"} by {f.resolvedByName}: {f.resolvedNotes}
+          {f.status === "DISMISSED" ? "Dismissed" : "Rectified"} by {f.resolvedByName}: {f.resolvedNotes}
         </p>
       )}
       {f.resolutionCaptures.length > 0 && (
@@ -352,7 +352,7 @@ function FindingCard({ projectId, finding: f }: { projectId: string; finding: In
           <span className="flex-1 min-w-[10rem]">
             <input
               className={`w-full rounded-xl border border-slate-300 px-3 py-1.5 text-xs ${invalidClass(form, "notes")}`}
-              placeholder="What was done, or why it is dismissed"
+              placeholder="How it was rectified, or why it is dismissed"
               aria-label="Notes"
               {...form.register("notes")}
               {...fieldA11y(form, "notes")}
@@ -361,7 +361,7 @@ function FindingCard({ projectId, finding: f }: { projectId: string; finding: In
           </span>
           {f.canResolve && (
             <SubmitButton form={form} pending={pending} showHint={false} className={primaryButton}>
-              Resolve
+              Mark rectified
             </SubmitButton>
           )}
           {f.canDismiss && (
@@ -389,7 +389,7 @@ function FindingsTab({ projectId }: { projectId: string }) {
   const findings = q.data ?? [];
   const columns = [
     { key: "OPEN", title: "Open" },
-    { key: "RESOLVED", title: "Resolved" },
+    { key: "RESOLVED", title: "Rectified" },
     { key: "DISMISSED", title: "Dismissed" },
   ];
   return (

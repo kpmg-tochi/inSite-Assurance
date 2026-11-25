@@ -189,7 +189,7 @@ export function ContractorSection({ projectId, setup, readOnly }: StepProps) {
   return (
     <StepSection
       title="Contractor"
-      description="The one contractor that delivers the project. Its planned completion should not be before the last sprint ends."
+      description="The one contractor that delivers the project. Its planned completion should not be before the last work phase ends."
       actions={
         !readOnly &&
         !c && (

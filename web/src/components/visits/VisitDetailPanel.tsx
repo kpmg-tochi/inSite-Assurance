@@ -195,7 +195,7 @@ function SubmissionCard({ projectId, visitId, submission: s, snapshot }: { proje
     <div className="rounded-xl border border-slate-200 p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-bold text-slate-900">
-          Submission {s.revisionNumber} · {VISIT_SUBMISSION_STATUS_LABELS[s.status]}
+          Monitoring report {s.revisionNumber} · {VISIT_SUBMISSION_STATUS_LABELS[s.status]}
         </p>
         <p className="text-[11px] text-slate-500">
           {s.reporterName} ({s.reporterRoleName}) · {new Date(s.confirmedAt).toLocaleString()}
@@ -269,7 +269,7 @@ function SubmissionCard({ projectId, visitId, submission: s, snapshot }: { proje
         );
       })}
       {orphans.length > 0 && (
-        <p className="text-[11px] text-slate-500">{orphans.length} answer(s) to an earlier version of the form (re-checks since closed).</p>
+        <p className="text-[11px] text-slate-500">{orphans.length} answer(s) to an earlier version of the form (follow-up checks since closed).</p>
       )}
       {s.siteLog.length > 0 && (
         <div className="space-y-1">

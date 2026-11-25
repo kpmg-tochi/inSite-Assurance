@@ -74,9 +74,9 @@ export const VisitPlanRuleKindEnum = z.enum([
 ]);
 export type VisitPlanRuleKind = z.infer<typeof VisitPlanRuleKindEnum>;
 export const VISIT_PLAN_RULE_KIND_LABELS: Record<VisitPlanRuleKind, string> = {
-  EVERY_N_WEEKS_DURING_CONSTRUCTION: 'Every N weeks during construction',
-  EVERY_N_WEEKS_IN_SPRINTS: 'Every N weeks in chosen sprints',
-  EVERY_N_WEEKS_UNTIL_MOBILISED: 'Every N weeks until the contractor is on site',
+  EVERY_N_WEEKS_DURING_CONSTRUCTION: 'Every N weeks during execution',
+  EVERY_N_WEEKS_IN_SPRINTS: 'Every N weeks in chosen work phases',
+  EVERY_N_WEEKS_UNTIL_MOBILISED: 'Every N weeks until the contractor has mobilised to site',
   QUARTERLY: 'Quarterly',
   ONCE_AFTER_START: 'Once, after the start',
   ON_COMPLETION_NOTICE: 'On the completion notice',

@@ -245,6 +245,8 @@ enum AuditActionType {
   SCOPE_IMPORTED
   // UBEC IRL: bulk project register import
   PROJECT_REGISTER_IMPORTED
+  // Client demo updates C3: project lots
+  PROJECT_LOT_CREATED
   // Redesign R3: form library
   FORM_COMPONENT_SAVED
   // Redesign R4: visits
@@ -388,6 +390,9 @@ model Tenant {
   terminologyLabels                Json           @default("{}")
   // Phase 15: contractor rating criteria [{ key, label, description }]; empty = the defaults.
   ratingCriteriaJson               Json           @default("[]")
+  // Client demo updates D5: the month the fiscal year starts (1 = January). Periods and the
+  // intervention year rule follow it.
+  fiscalYearStartMonth             Int            @default(1)
   createdAt                        DateTime       @default(now())
   updatedAt                        DateTime       @updatedAt
 
@@ -402,6 +407,7 @@ model Tenant {
   lessonsLearned     LessonLearned[]
   kpiSnapshots       KpiSnapshot[] // Phase 16
   regions            Region[]
+  projectLots        ProjectLot[] // Client demo updates C3
   // Phase 13
   documentTypes      DocumentType[]
   // Redesign R2a
@@ -554,6 +560,26 @@ model UserProjectAssignment {
   @@map("user_project_assignments")
 }
 
+/// Client demo updates C3: a lot is a category of project within an intervention year, numbered in
+/// order per year; its projects are its batches. Codes are assigned in a per-tenant advisory lock.
+model ProjectLot {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  interventionYear Int
+  number           Int
+  title            String
+  createdByUserId  String?  @db.Uuid
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  projects Project[]
+
+  @@unique([tenantId, interventionYear, number])
+  @@index([tenantId, interventionYear])
+  @@map("project_lots")
+}
+
 model Project {
   id                      String        @id @default(uuid()) @db.Uuid
   tenantId                String        @db.Uuid
@@ -583,6 +609,14 @@ model Project {
   // Bulk register import: set on every imported project. Projects already under way are imported live
   // with the reported % complete (shown until their scope is added) and the status the client reported.
   importedAt              DateTime?
+  // Client demo updates (wave 1). C1: national reference codes (NIGERIA_STATES / NIGERIA_LGAS); the
+  // stateLocation / lgaLocation text is still written for older screens. C4: FUNDING_SOURCES code
+  // (fundingSource keeps the text). C3: the lot and batch the code {year}-LOT-{lot}-BATCH-{batch} names.
+  stateCode               String?
+  lgaCode                 String?
+  fundingSourceCode       String?
+  lotId                   String?       @db.Uuid
+  batchNumber             Int?
   importedProgressPct     Decimal?      @db.Decimal(5, 2)
   importedStatus          String?
   workdayStartTime        String        @default("08:00")
@@ -666,6 +700,7 @@ model Project {
   owningOrganization  Organization?        @relation("OwningOrganization", fields: [owningOrganizationId], references: [id])
   projectType         ProjectType?         @relation(fields: [projectTypeId], references: [id], onDelete: Restrict)
   region              Region?              @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  lot                 ProjectLot?          @relation(fields: [lotId], references: [id], onDelete: Restrict)
   beneficiaries       ProjectBeneficiary[]
   contractors         ProjectContractor[]
   boqRevisions        BoqRevision[]
@@ -714,6 +749,8 @@ model Project {
 
   @@unique([tenantId, codePrefix])
   @@unique([tenantId, externalReference])
+  @@unique([lotId, batchNumber])
+  @@index([tenantId, stateCode])
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([monitorOrganizationId])

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, MouseEvent } from "react";
+import { formatProjectCode } from "@insite/shared";
 import type { ProjectSummaryDto, AuditTrailResponseDto } from "../../api/types";
 import { displayZoneLabel, formatDateTimeShort } from "../../lib/formatters";
 import {
@@ -243,7 +244,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
         subtitle={
           activeTab === "tenant"
             ? "Roles, users, branding and sign-in lockouts across the tenant"
-            : `${project.codePrefix}: ${project.name}`
+            : `${formatProjectCode(project.codePrefix)}: ${project.name}`
         }
         search={{
           value: searchTerm,

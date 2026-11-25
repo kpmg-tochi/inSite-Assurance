@@ -33,7 +33,7 @@ describe('Outbox labels', () => {
   it('names every kind in visit wording, and tells photos from voice notes', () => {
     assert.equal(outboxItemLabel(item()), 'Photo');
     assert.equal(outboxItemLabel(item({ mediaType: 'VOICE_NOTE' })), 'Voice note');
-    assert.equal(outboxItemLabel(item({ kind: 'VISIT_SUBMISSION', mediaType: null })), 'Visit report');
+    assert.equal(outboxItemLabel(item({ kind: 'VISIT_SUBMISSION', mediaType: null })), 'Monitoring report');
     assert.equal(outboxItemLabel(item({ kind: 'VISIT_CHECK_IN' })), 'Check-in');
     assert.equal(outboxItemLabel(item({ kind: 'UNSCHEDULED_VISIT' })), 'Unscheduled visit');
     for (const label of Object.values(OUTBOX_KIND_LABELS)) {

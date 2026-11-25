@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import type { VisitResponseAction } from '@insite/shared';
+import { formatProjectCode, type VisitResponseAction } from '@insite/shared';
 import { allowedResponses, RESPONSE_ACTION_LABELS } from '../../utils/visitResponses';
 import type { VisitView } from '../../utils/visitCalendar';
 import type { StoredVisit } from '../../utils/visitModel';
@@ -31,7 +31,7 @@ export function VisitRow({
 }) {
   const actions = onRespond ? allowedResponses(stored, { canSubmit, workWeekDays }) : [];
   const responseError = stored.local.responseError;
-  const title = showProject ? `${view.kindLabel} · ${view.projectCode}` : view.kindLabel;
+  const title = showProject ? `${view.kindLabel} · ${formatProjectCode(view.projectCode)}` : view.kindLabel;
   return (
     <View style={styles.card}>
       <TouchableOpacity
@@ -47,7 +47,7 @@ export function VisitRow({
           <Text style={styles.meta}>
             {formatDay(view.date)}
             {view.originalDate !== view.date ? ` · first planned ${formatDay(view.originalDate)}` : ''}
-            {stored.visit.sprint ? ` · Sprint ${stored.visit.sprint.number}` : ''}
+            {stored.visit.sprint ? ` · Work phase ${stored.visit.sprint.number}` : ''}
           </Text>
           <StatusBadges badges={visitBadges(view)} style={styles.badges} />
         </View>

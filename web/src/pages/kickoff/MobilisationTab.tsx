@@ -30,12 +30,12 @@ export function MobilisationTab({ project }: { project: ProjectSummaryDto }) {
 
       <section className={sectionClass} aria-labelledby="mob-on-site">
         <h2 id="mob-on-site" className="text-sm font-bold text-slate-900">
-          Contractor on site
+          Mobilised to site
         </h2>
         {milestones.isLoading ? (
           <Loader />
         ) : onSite.length === 0 ? (
-          <p className="text-xs text-slate-500">This project has no "contractor on site" milestone (its project type defines none).</p>
+          <p className="text-xs text-slate-500">This project has no "Mobilised to site" milestone (its project type defines none).</p>
         ) : (
           <ol className="space-y-2">
             {onSite.map((m) => (

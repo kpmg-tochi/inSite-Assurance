@@ -6,6 +6,7 @@ import {
   LessonCategoryEnum,
   LessonStageEnum,
   SaveLessonRequestSchema,
+  formatProjectCode,
   type LessonCategory,
   type LessonDto,
   type LessonStage,
@@ -39,7 +40,7 @@ export function LessonCard({ lesson, showProject = false, actions }: { lesson: L
           </div>
           <div className="mt-0.5 text-[11px] text-slate-500">
             {LESSON_CATEGORY_META[lesson.category].label} · {LESSON_STAGE_META[lesson.stage].label}
-            {showProject ? ` · ${lesson.projectCode} ${lesson.projectName}` : ""}
+            {showProject ? ` · ${formatProjectCode(lesson.projectCode)} ${lesson.projectName}` : ""}
             {showProject && lesson.projectTypeName ? ` · ${lesson.projectTypeName}` : ""}
             {showProject && lesson.regionName ? ` · ${lesson.regionName}` : ""}
             {lesson.createdByName ? ` · ${lesson.createdByName}` : ""}

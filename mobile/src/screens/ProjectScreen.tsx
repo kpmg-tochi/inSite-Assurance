@@ -10,7 +10,8 @@ import { useVisitData } from '../hooks/useVisitData';
 import { hydrateBaselinePack } from '../storage/baselineStore';
 import { listVisits } from '../storage/visitStore';
 import type { RootStackParamList } from '../navigation/types';
-import { mobilisationProgress, unitsByFacility } from '../utils/homeLayout';
+import { interventionYearOfCode, mobilisationProgress, unitsByFacility } from '../utils/homeLayout';
+import { formatProjectCode } from '@insite/shared';
 import { projectToday, visitView } from '../utils/visitCalendar';
 import { personaCopy } from '../utils/personaCopy';
 import { showDefectsShortcut } from '../utils/defects';
@@ -72,11 +73,12 @@ export function ProjectScreen() {
   const showDefects = showDefectsShortcut(pack?.constructionPhase, pack?.openDefectCount, project?.permissions);
   const sprints = [...(pack?.sprints ?? [])].sort((a, b) => a.number - b.number);
   const groups = unitsByFacility(pack?.facilityUnits ?? []);
+  const interventionYear = interventionYearOfCode(pack?.codePrefix ?? project?.projectCodePrefix);
   const stage = pack?.stage ? (pack.stage.subLabel ? `${pack.stage.currentLabel} · ${pack.stage.subLabel}` : pack.stage.currentLabel) : null;
 
   return (
     <GradientHeaderLayout
-      title={pack?.codePrefix ?? project?.projectCodePrefix ?? 'Project'}
+      title={formatProjectCode(pack?.codePrefix ?? project?.projectCodePrefix) || 'Project'}
       subtitle={pack?.name ?? project?.projectName}
       leftAction={<BackButton onPress={() => navigation.goBack()} />}
       rightAction={<HomeButton onPress={() => navigation.popTo('Home')} />}
@@ -92,6 +94,7 @@ export function ProjectScreen() {
             <DetailLine label={copy.beneficiaryLabel} value={pack.school} />
             <DetailLine label="Address" value={pack.address} />
             <DetailLine label="LGA" value={pack.lgaLocation} />
+            {interventionYear != null ? <DetailLine label="Intervention year" value={String(interventionYear)} /> : null}
             <DetailLine label={copy.contractorLabel} value={pack.contractorName ?? 'Not awarded yet'} />
             {pack.stage?.contractTerminated ? <Text style={visitUiStyles.errorText}>The contract was terminated.</Text> : null}
             {mobilisation?.dayText ? (
@@ -111,7 +114,7 @@ export function ProjectScreen() {
             )}
           </View>
 
-          <SectionCard title="Upcoming visits" subtitle={upcomingVisits.length === 0 ? 'None planned on this phone.' : null}>
+          <SectionCard title="Upcoming monitoring visits" subtitle={upcomingVisits.length === 0 ? 'None planned on this phone.' : null}>
             {upcomingVisits.map((v) => (
               <LinkRow
                 key={v.id}
@@ -123,12 +126,12 @@ export function ProjectScreen() {
             ))}
           </SectionCard>
 
-          <SectionCard title="Sprints" subtitle={sprints.length === 0 ? 'No sprints planned yet.' : `${sprints.length} sprint${sprints.length === 1 ? '' : 's'}`}>
+          <SectionCard title="Work phases" subtitle={sprints.length === 0 ? 'No work phases planned yet.' : `${sprints.length} work phase${sprints.length === 1 ? '' : 's'}`}>
             {sprints.map((s) => (
               <View key={s.id} style={styles.item}>
                 <View style={visitUiStyles.row}>
                   <Text style={visitUiStyles.strong}>
-                    Sprint {s.number}: {s.name}
+                    Work phase {s.number}: {s.name}
                   </Text>
                   <Pill
                     variant={s.status === 'ACTIVE' ? 'info' : s.status === 'LATE' ? 'negative' : s.status === 'VERIFIED' ? 'positive' : 'gray'}
@@ -162,7 +165,7 @@ export function ProjectScreen() {
 
           <SectionCard
             title="Open findings"
-            subtitle={pack.openFindings.length === 0 ? 'None open.' : 'Re-checked inside a visit form.'}
+            subtitle={pack.openFindings.length === 0 ? 'None open.' : 'Followed up with a follow-up check in the visit form.'}
           >
             {pack.openFindings.map((f) => (
               <View key={f.id} style={styles.item}>
@@ -179,7 +182,7 @@ export function ProjectScreen() {
             ))}
           </SectionCard>
 
-          <SectionCard title="Past visits" subtitle={pastVisits.length === 0 ? 'None on this phone.' : 'Visits on this phone from the last weeks.'}>
+          <SectionCard title="Past monitoring visits" subtitle={pastVisits.length === 0 ? 'None on this phone.' : 'Visits on this phone from the last weeks.'}>
             {pastVisits.map((v) => (
               <LinkRow
                 key={v.id}
@@ -196,10 +199,10 @@ export function ProjectScreen() {
   );
 }
 
-/** "sprint 3" or "sprints 1–3". */
+/** "work phase 3" or "work phases 1–3". */
 function sprintRange(start: number, end: number | null): string {
-  if (end == null) return `from sprint ${start}`;
-  return start === end ? `sprint ${start}` : `sprints ${start}–${end}`;
+  if (end == null) return `from work phase ${start}`;
+  return start === end ? `work phase ${start}` : `work phases ${start}–${end}`;
 }
 
 const styles = StyleSheet.create({

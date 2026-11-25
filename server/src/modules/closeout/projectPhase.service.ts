@@ -166,7 +166,7 @@ export async function changeProjectPhase(params: { projectId: string; webUser: W
       }
     }
     if (to === 'ACTIVE_CONSTRUCTION' && !reason) {
-      throw new AppError('Give a reason for moving the project back to construction.', 422, 'REASON_REQUIRED');
+      throw new AppError('Give a reason for moving the project back to execution.', 422, 'REASON_REQUIRED');
     }
 
     const data: Prisma.ProjectUpdateInput = { constructionPhase: to, constructionPhaseChangedAt: new Date() };

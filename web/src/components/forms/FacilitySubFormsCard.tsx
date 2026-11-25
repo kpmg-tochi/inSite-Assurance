@@ -113,7 +113,7 @@ export function FacilitySubFormsCard() {
         <h3 className="text-sm font-bold text-slate-900">Archetype default sub-forms</h3>
         <p className="text-xs text-slate-500 mt-0.5">
           Every facility starts from its archetype's questions. Questions use placeholders such as {"{count} {facility}"} and can be limited to visit kinds (existing
-          condition on Baseline, progress on Routine, delivery on Final).
+          condition on Baseline monitoring, progress on Routine, delivery on Final).
         </p>
         <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
           {FacilityArchetypeEnum.options.map((a) => {

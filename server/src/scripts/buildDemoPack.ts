@@ -29,7 +29,7 @@ async function main() {
     throw new Error(`The demo workbook does not import cleanly:\n${parsed.issues.map((i) => `${i.sheet} row ${i.row}: ${i.message}`).join("\n")}`);
   }
   if (parsed.units.length !== DEMO_UNITS.length || parsed.lines.length !== DEMO_LINES.length || parsed.sprints.length !== 2) {
-    throw new Error(`The demo workbook read back ${parsed.units.length} units, ${parsed.lines.length} lines, ${parsed.sprints.length} sprints`);
+    throw new Error(`The demo workbook read back ${parsed.units.length} units, ${parsed.lines.length} lines, ${parsed.sprints.length} work phases`);
   }
   fs.writeFileSync(path.join(OUT, DEMO_WORKBOOK_FILE), workbook);
   const total = parsed.lines.reduce((s, l) => s + l.amountNgn, 0);
@@ -49,7 +49,7 @@ async function main() {
 
   const dates = demoDates(today);
   console.log(`Demo pack for ${today} written to ${OUT}`);
-  console.log(`  ${DEMO_WORKBOOK_FILE}: ${parsed.units.length} units, ${parsed.lines.length} lines (NGN ${total.toLocaleString("en-NG")}), sprint 1 ${dates.sprints[0].startDate}..${dates.sprints[0].endDate}, sprint 2 ${dates.sprints[1].startDate}..${dates.sprints[1].endDate}; ${parsed.warnings.length} warning(s)`);
+  console.log(`  ${DEMO_WORKBOOK_FILE}: ${parsed.units.length} units, ${parsed.lines.length} lines (NGN ${total.toLocaleString("en-NG")}), work phase 1 ${dates.sprints[0].startDate}..${dates.sprints[0].endDate}, work phase 2 ${dates.sprints[1].startDate}..${dates.sprints[1].endDate}; ${parsed.warnings.length} warning(s)`);
   for (const d of docs) console.log(`  ${d.file}`);
   const live = registerRows.filter((r) => r.status !== "Not started").length;
   console.log(`  ${DEMO_REGISTER_FILE}: ${registerRows.length} projects (${registerRows.length - live} not started, ${live} ongoing or completed)`);

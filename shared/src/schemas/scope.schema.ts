@@ -149,7 +149,7 @@ export type ProjectScopeDto = z.infer<typeof ProjectScopeDtoSchema>;
 export const SprintInputSchema = z.object({
   /** Existing sprint; omit to add. */
   id: z.string().uuid().optional(),
-  name: z.string().trim().min(1, 'Name the sprint').max(120),
+  name: z.string().trim().min(1, 'Name the work phase').max(120),
   startDate: IsoDate,
   endDate: IsoDate,
   /** Omitted keeps an existing sprint's text (empty for a new one). */

@@ -3,7 +3,7 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Toast from 'react-native-toast-message';
-import type { VisitResponseAction } from '@insite/shared';
+import { formatProjectCode, type VisitResponseAction } from '@insite/shared';
 import { EmptyStateCard, GradientHeaderLayout, InSiteLoader } from '../components/common';
 import { IconButton, PrimaryButton } from '../components/inputs/Buttons';
 import { DateGrid } from '../components/visit/DateGrid';
@@ -101,7 +101,7 @@ export function VisitRespondModal() {
   return (
     <GradientHeaderLayout
       title={RESPONSE_ACTION_LABELS[action]}
-      subtitle={visit ? `${visit.visit.projectCode} · ${formatDay(visit.visit.plannedDate, true)}` : undefined}
+      subtitle={visit ? `${formatProjectCode(visit.visit.projectCode)} · ${formatDay(visit.visit.plannedDate, true)}` : undefined}
       rightAction={<IconButton icon="close" text="Close" onPress={close} />}
       contentContainerStyle={styles.body}
     >

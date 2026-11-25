@@ -6,6 +6,7 @@ import {
   PaymentDto,
   PaymentException,
   PaymentExceptionEnum,
+  ProjectPaymentsQuery,
   ProjectPaymentsSummaryDto,
   RecordPaymentRequest,
   RETENTION_NGN_EPSILON,
@@ -83,8 +84,37 @@ async function lockProject(tx: Tx, projectId: string) {
   });
 }
 
-/** GET /projects/:projectId/payments */
-export async function getProjectPayments(projectId: string, viewer: WebJwtPayload): Promise<ProjectPaymentsSummaryDto> {
+/**
+ * The payment record's filters (search, type, work phase, exceptions only, period), server-side so the
+ * page, its totals and its export agree (client demo updates G.1). Exceptions only = live payments
+ * with at least one exception; the period is inclusive on `paidOn`.
+ */
+export function filterPayments(payments: PaymentDto[], q: ProjectPaymentsQuery): PaymentDto[] {
+  const t = (q.search ?? '').trim().toLowerCase();
+  return payments.filter(
+    (p) =>
+      (!t || p.reference.toLowerCase().includes(t) || (p.description ?? '').toLowerCase().includes(t)) &&
+      (!q.kind || p.kind === q.kind) &&
+      (!q.sprint || (q.sprint === 'none' ? p.sprint === null : p.sprint?.id === q.sprint)) &&
+      (q.exceptionsOnly !== 'true' || (!p.voided && p.exceptions.length > 0)) &&
+      (!q.from || p.paidOn >= q.from) &&
+      (!q.to || p.paidOn <= q.to)
+  );
+}
+
+/** A period whose start is after its end matches nothing; refuse it instead (400). */
+export function assertPeriod(q: { from?: string; to?: string }): void {
+  if (q.from && q.to && q.from > q.to) {
+    throw new AppError('The period starts after it ends', 400, 'INVALID_PERIOD');
+  }
+}
+
+/**
+ * GET /projects/:projectId/payments. `payments` holds the payments matching the query (every payment
+ * when there is none); the totals are always the project's to date.
+ */
+export async function getProjectPayments(projectId: string, viewer: WebJwtPayload, q: ProjectPaymentsQuery = {}): Promise<ProjectPaymentsSummaryDto> {
+  assertPeriod(q);
   const [project, payments, openDefects, cocIssued, sprints] = await Promise.all([
     prisma.project.findUniqueOrThrow({
       where: { id: projectId },
@@ -96,6 +126,7 @@ export async function getProjectPayments(projectId: string, viewer: WebJwtPayloa
         retentionReleasedNgn: true,
         disbursedToDateNgn: true,
         timezone: true,
+        tenant: { select: { fiscalYearStartMonth: true } },
       },
     }),
     prisma.projectPayment.findMany({ where: { projectId }, include: PAYMENT_INCLUDE, orderBy: [{ paidOn: 'desc' }, { createdAt: 'desc' }] }),
@@ -123,7 +154,8 @@ export async function getProjectPayments(projectId: string, viewer: WebJwtPayloa
     sprints,
     exceptionCount: rows.filter((r) => !r.voided).reduce((s, r) => s + r.exceptions.length, 0),
     canRecord: hasWebPermission(viewer, RECORD),
-    payments: rows,
+    payments: filterPayments(rows, q),
+    fiscalYearStartMonth: project.tenant.fiscalYearStartMonth,
   };
 }
 

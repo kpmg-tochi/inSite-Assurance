@@ -282,7 +282,7 @@ async function projectFill(db: Db, project: ProjectRow, wb: Partial<Record<Scope
       where: { tenantId: project.tenantId, isArchived: false, OR: [{ name: { equals: wb.region, mode: 'insensitive' } }, { code: { equals: wb.region, mode: 'insensitive' } }] },
       select: { id: true, name: true },
     });
-    if (!region) warn(label('region'), 'UNKNOWN_REGION', `Region "${wb.region}" is not on the list; ignored.`);
+    if (!region) warn(label('region'), 'UNKNOWN_REGION', `Zone or state "${wb.region}" is not on the list; ignored.`);
     else if (compare('regionId', label('region'), region.name, project.region?.name ?? null, region.id === project.regionId)) apply.data.regionId = region.id;
   }
   if (wb.deliveryModel) {
@@ -352,7 +352,7 @@ async function assertImportable(db: Db, project: { id: string; status: string; i
   ]);
   if (!scopeImportAllowed(project, unitCount, lineCount)) {
     throw new AppError(
-      'Needs assessment import is for draft projects (and imported projects without scope). On a live project, change the scope on the Scope & sprints page (every change is audited).',
+      'Needs assessment import is for draft projects (and imported projects without scope). On a live project, change the scope on the BoQ & work phases page (every change is audited).',
       409,
       'SCOPE_IMPORT_LIVE_PROJECT'
     );
@@ -398,7 +398,7 @@ async function analyse(db: Db, projectId: string, buffer: Buffer, fileName: stri
   const linesByUnit = new Map<string, typeof parsed.lines>();
   for (const l of parsed.lines) linesByUnit.set(l.unitCode, [...(linesByUnit.get(l.unitCode) ?? []), l]);
   const sprintLabel = (s: number | null, e: number | null) =>
-    s === null || e === null ? 'No sprints' : s === e ? `Sprint ${s}` : `Sprints ${s}–${e}`;
+    s === null || e === null ? 'No work phases' : s === e ? `Work phase ${s}` : `Work phases ${s}–${e}`;
   const groups = new Map<string, ScopeWorkbookPreviewDto['groups'][number]>();
   for (const u of parsed.units) {
     const label = sprintLabel(u.startSprint, u.endSprint);

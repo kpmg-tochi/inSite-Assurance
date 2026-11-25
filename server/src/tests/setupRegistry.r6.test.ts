@@ -49,7 +49,7 @@ describe('setup registry (R6a)', () => {
     const numbered = PROJECT_SETUP_STEPS.filter((s) => !s.settingsOnly).sort((a, b) => a.order - b.order);
     assert.deepEqual(
       numbered.map((s) => s.title),
-      ['Project', 'Contract', 'Scope & sprints', 'Team & visits', 'Review']
+      ['Project', 'Contract', 'BoQ & work phases', 'Team & visits', 'Review']
     );
     assert.deepEqual(numbered.map((s) => s.order), [1, 2, 3, 4, 5]);
     assert.deepEqual(

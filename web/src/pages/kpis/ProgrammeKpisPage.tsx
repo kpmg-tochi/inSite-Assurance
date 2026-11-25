@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   addDays,
   formatKpiValue,
+  formatProjectCode,
   timeZoneAbbreviation,
   KPI_BY_KEY,
   KPI_STAGE_META,
@@ -73,7 +74,7 @@ function csvCell(v: unknown): string {
 
 /** One row per project and KPI (plus the programme totals), for pivoting in a spreadsheet. */
 function exportCsv(data: KpiDashboardDto) {
-  const header = ["Project code", "Project", "Project type", "Region", "Owner", "Stage", "KPI", "Value", "Unit", "Numerator", "Denominator", "Target", "Status"];
+  const header = ["Project code", "Project", "Project type", "Zone / State", "Owner", "Stage", "KPI", "Value", "Unit", "Numerator", "Denominator", "Target", "Status"];
   const lines = [header.join(",")];
   for (const k of data.kpis) {
     const def = KPI_BY_KEY[k.key];
@@ -85,7 +86,7 @@ function exportCsv(data: KpiDashboardDto) {
     for (const p of data.projects) {
       const c = p.values[k.key];
       lines.push(
-        [p.codePrefix, p.name, p.projectTypeName, p.regionName, p.owningOrganizationName, KPI_STAGE_META[def.stage].label, def.label, c?.value ?? "", def.unit, c?.numerator ?? "", c?.denominator ?? "", c?.target ?? "", c ? KPI_STATUS_META[c.status].label : "Not tracked"]
+        [formatProjectCode(p.codePrefix), p.name, p.projectTypeName, p.regionName, p.owningOrganizationName, KPI_STAGE_META[def.stage].label, def.label, c?.value ?? "", def.unit, c?.numerator ?? "", c?.denominator ?? "", c?.target ?? "", c ? KPI_STATUS_META[c.status].label : "Not tracked"]
           .map(csvCell)
           .join(",")
       );
@@ -159,7 +160,7 @@ function KpiDetail({
       header: "Project",
       cell: (p) => (
         <div className="min-w-0">
-          <div className="text-[11px] font-semibold text-slate-500 tabular-nums">{p.codePrefix}</div>
+          <div className="text-[11px] font-semibold text-slate-500 tabular-nums">{formatProjectCode(p.codePrefix)}</div>
           <div className="text-sm font-semibold text-slate-900 truncate max-w-[300px]">{p.name}</div>
         </div>
       ),

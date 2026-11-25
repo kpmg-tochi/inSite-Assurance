@@ -5,6 +5,7 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ChevronRight, Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import type { ProjectSummaryDto } from "../api/types";
+import { formatProjectCode } from "@insite/shared";
 import { useAuth } from "../lib/auth-context";
 import { useDemoAccounts } from "../config/useDemoAccounts";
 import { IS_DEMO_MODE } from "../config/demoMode";
@@ -120,7 +121,7 @@ export function AppShell({ selectedProject, headerActions, children }: AppShellP
             {headerProject && (
               <>
                 <span className="text-sm font-semibold text-white/70 shrink-0 tabular-nums" title={headerProject.name}>
-                  {headerProject.codePrefix}
+                  {formatProjectCode(headerProject.codePrefix)}
                 </span>
                 <span className="text-white/30" aria-hidden="true">
                   /
@@ -307,7 +308,10 @@ function SidebarContent({
           <nav aria-labelledby={`${uid}-pr`} className="pt-3 border-t border-white/10">
             <div className={collapsed ? "sr-only" : "px-2.5 pb-2"}>
               <h2 id={`${uid}-pr`}>
-                <span className="block text-[11px] font-semibold text-brand-sky tabular-nums">{project.codePrefix}</span>
+                <span className="block text-[11px] font-semibold text-brand-sky tabular-nums">
+                  {formatProjectCode(project.codePrefix)}
+                  {project.interventionYear ? <span className="font-normal text-white/60"> · {project.interventionYear}</span> : null}
+                </span>
                 <span className="block text-sm font-semibold text-white leading-snug line-clamp-2" title={project.name}>
                   {project.name}
                 </span>
@@ -426,8 +430,8 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
           {IS_DEMO_MODE && (
             <>
               <div className="px-2.5 py-1.5 border-b border-slate-100">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Demo Account Switcher</div>
-                <div className="text-[11px] text-slate-500">Switch active role for live demonstration</div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Switch user</div>
+                <div className="text-[11px] text-slate-500">Sign in as another member of the demo cast</div>
               </div>
               <div className="py-1 space-y-0.5">
                 {demoAccounts.map((acct) => {

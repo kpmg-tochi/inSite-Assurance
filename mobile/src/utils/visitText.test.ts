@@ -58,7 +58,7 @@ describe('visit badges (state as text)', () => {
     assert.equal(texts(visitView(storedVisit({ visit: { status: 'RETURNED' } }), TODAY))[0], 'Returned for correction');
     assert.equal(texts(visitView(storedVisit({ visit: { status: 'SUBMITTED' } }), TODAY))[0], 'Awaiting approval');
     assert.equal(texts(visitView(storedVisit({ visit: { status: 'APPROVED' } }), TODAY))[0], 'Accepted');
-    assert.deepEqual(texts(visitView(storedVisit({ local: { queuedSubmissionId: 'd' } }), TODAY)), ['Report saved', 'Waiting to send']);
+    assert.deepEqual(texts(visitView(storedVisit({ local: { queuedSubmissionId: 'd' } }), TODAY)), ['Monitoring report saved', 'Waiting to send']);
   });
 
   it('a checked-in visit and a cancelled one', () => {
@@ -69,9 +69,9 @@ describe('visit badges (state as text)', () => {
 
 describe('site log upload state (D-R5.22)', () => {
   it('reads the entry first, then its outbox row', () => {
-    assert.equal(siteLogStateBadge({ status: 'MOVED_TO_FORM', attachedSubmissionId: null }, null).text, 'Used in a visit report');
+    assert.equal(siteLogStateBadge({ status: 'MOVED_TO_FORM', attachedSubmissionId: null }, null).text, 'Used in a monitoring report');
     assert.equal(siteLogStateBadge({ status: 'SENT', attachedSubmissionId: null }, { status: 'DONE', lastError: null }).text, 'Sent');
-    assert.equal(siteLogStateBadge({ status: 'SENT', attachedSubmissionId: 'x' }, null).text, 'Sent, attached to a report');
+    assert.equal(siteLogStateBadge({ status: 'SENT', attachedSubmissionId: 'x' }, null).text, 'Sent, attached to a monitoring report');
     assert.equal(siteLogStateBadge({ status: 'QUEUED', attachedSubmissionId: null }, { status: 'PENDING', lastError: null }).text, 'Waiting to send');
     assert.equal(siteLogStateBadge({ status: 'QUEUED', attachedSubmissionId: null }, { status: 'DEAD', lastError: 'Too big' }).text, 'Not sent: Too big');
     assert.equal(siteLogStateBadge({ status: 'QUEUED', attachedSubmissionId: null }, { status: 'PENDING', lastError: 'offline' }).tone, 'warning');

@@ -31,7 +31,7 @@ export function ProjectStageTabs({ projectId, stage }: { projectId: string; stag
   if (pages.length < 2) return null;
 
   return (
-    <nav aria-label="Project stages">
+    <nav aria-label="Project cycle">
       <ol className="flex flex-wrap items-center gap-y-2">
         {pages.map((p, i) => {
           const n = order.indexOf(p.segment) + 1;

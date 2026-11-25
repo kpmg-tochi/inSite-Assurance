@@ -73,8 +73,8 @@ export function demoDates(today: string) {
     kickoffDate: today,
     plannedCompletion: sprint2End,
     sprints: [
-      { number: 1, name: "Sprint 1: foundations and drilling", startDate: sprint1Start, endDate: sprint1End, deliverables: "Toilet block substructure and walls; borehole drilled, cased and yield-tested." },
-      { number: 2, name: "Sprint 2: roofing, fittings and power", startDate: sprint2Start, endDate: sprint2End, deliverables: "Toilet block roofed and fitted; tank stand, reticulation and taps; solar pump installed and tested." },
+      { number: 1, name: "Work phase 1: foundations and drilling", startDate: sprint1Start, endDate: sprint1End, deliverables: "Toilet block substructure and walls; borehole drilled, cased and yield-tested." },
+      { number: 2, name: "Work phase 2: roofing, fittings and power", startDate: sprint2Start, endDate: sprint2End, deliverables: "Toilet block roofed and fitted; tank stand, reticulation and taps; solar pump installed and tested." },
     ] satisfies WorkbookSprint[],
   };
 }
@@ -156,10 +156,10 @@ export function demoPackDocuments(today: string): Array<{ file: string; code: De
     { file: "07 Resident Supervisor assignment.pdf", code: "SUPERVISOR_ASSIGNMENT", typeCode: "SUPERVISOR_ASSIGNMENT", title: "Resident Supervisor assignment, Musa Danladi", when: "Documents, after the kick-off", date: today },
     { file: "08 Mobilisation agreement (PPE clause).pdf", code: "MOBILISATION_AGREEMENT", typeCode: "MOBILISATION_AGREEMENT", title: "Mobilisation agreement (incl. PPE on site)", when: "Documents, contractor: Kurmi; sign off. Its PPE clause is what the inspector's finding pays off", date: today },
     { file: "09 Site possession form.pdf", code: "SITE_POSSESSION_FORM", typeCode: "SITE_POSSESSION_FORM", title: `Site possession form, ${fmt(today)}`, when: "Documents, contractor: Kurmi; sign off (completes 'Mobilisation documents complete' with the agreement)", date: today },
-    { file: "10 Programme of works.pdf", code: "PROGRAMME_OF_WORKS", typeCode: "PROGRAMME_OF_WORKS", title: "Programme of works, by sprint", when: "Optional: Documents; its sign-off records the programme as accepted", date: today },
+    { file: "10 Programme of works.pdf", code: "PROGRAMME_OF_WORKS", typeCode: "PROGRAMME_OF_WORKS", title: "Programme of works, by work phase", when: "Optional: Documents; its sign-off records the programme of works as accepted", date: today },
     { file: "11 Mobilisation plan.pdf", code: "MOBILISATION_PLAN", typeCode: "MOBILISATION_PLAN", title: "Contractor's mobilisation plan", when: "Optional: Documents", date: today },
     { file: "12 Certificate of Completion - signed paper copy.pdf", code: "COC_SIGNED_COPY", typeCode: "COMPLETION_CERTIFICATE", title: "Certificate of Completion, signed paper copy", when: "Completion & handover → Certificate: 'Record signed copy' (beneficiary slot)", date: today },
-    { file: "13 Closeout report.pdf", code: "CLOSEOUT_REPORT", typeCode: "CLOSEOUT_REPORT", title: `Closeout report: ${DEMO_PROJECT.school}`, when: "Completion & handover → Closure: 'Upload closeout report' (PRG-106 or the live project)", date: today },
+    { file: "13 Lessons learned report.pdf", code: "CLOSEOUT_REPORT", typeCode: "CLOSEOUT_REPORT", title: `Lessons learned report: ${DEMO_PROJECT.school}`, when: "Completion & handover → Closure: upload the lessons learned report (PRG-106 or the live project)", date: today },
   ];
 }
 

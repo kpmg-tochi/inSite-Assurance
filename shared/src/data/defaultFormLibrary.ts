@@ -57,7 +57,7 @@ export const DEFAULT_FORM_LIBRARY: DefaultFormLibrary = {
       code: 'MOBILISATION',
       title: 'Mobilisation',
       fields: [
-        yesNo('contractor-on-site', 'Contractor on site', {
+        yesNo('contractor-on-site', 'Contractor mobilised to site', {
           rules: [comment(NO)],
           signal: { kind: 'CONTRACTOR_ON_SITE', when: YES },
         }),
@@ -133,7 +133,7 @@ export const DEFAULT_FORM_LIBRARY: DefaultFormLibrary = {
       title: 'Delivery to specification',
       fields: [
         yesNo('delivered-to-spec', 'Project delivered to specification', { rules: [comment(NO), finding(NO, 'MAJOR')] }),
-        { key: 'outstanding-snags', label: 'Outstanding snags', type: 'LONG_TEXT', required: false },
+        { key: 'outstanding-snags', label: 'Outstanding punch list items', type: 'LONG_TEXT', required: false },
       ],
     },
     {
@@ -223,7 +223,7 @@ export const DEFAULT_FORM_LIBRARY: DefaultFormLibrary = {
 
   templates: [
     { code: 'MOBILISATION_CHECK', name: 'Mobilisation check', visitKind: 'MOBILISATION_CHECK', blocks: [s('MOBILISATION'), s('HEALTH_SAFETY')] },
-    { code: 'BASELINE', name: 'Baseline survey', visitKind: 'BASELINE', blocks: [s('SITE_CONDITIONS'), FACILITIES] },
+    { code: 'BASELINE', name: 'Baseline monitoring', visitKind: 'BASELINE', blocks: [s('SITE_CONDITIONS'), FACILITIES] },
     {
       code: 'ROUTINE',
       name: 'Routine monitoring visit',

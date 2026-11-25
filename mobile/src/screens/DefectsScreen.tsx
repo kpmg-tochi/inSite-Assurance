@@ -7,6 +7,7 @@ import { useNavigation, useRoute, type RouteProp } from "@react-navigation/nativ
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { DEFECT_STATUS_LABELS, type DefectTicketDto } from "@insite/shared";
+import { PHOTO_SAFEGUARDING_HINT } from "../utils/personaCopy";
 import { EmptyStateCard, InfoCallout, InSiteLoader, Pill } from "../components/common";
 import { SiteEvidenceCameraModal, type SiteEvidenceBatchSubmission } from "../components/camera";
 import { useProfile } from "../context/ProfileContext";
@@ -210,7 +211,7 @@ function ActionSheet({
         <Text style={styles.cardMeta}>
           {ticket.reference} · {ticket.title}
         </Text>
-        <Text style={styles.cardText}>Take photos of the fixed defect before closing it.</Text>
+        <Text style={styles.cardText}>Take photos of the fixed defect before closing it. {PHOTO_SAFEGUARDING_HINT}.</Text>
         {canReopen && (
           <View style={styles.actions}>
             {(["CLOSE", "REOPEN"] as const).map((d) => (

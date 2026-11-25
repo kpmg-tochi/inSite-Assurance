@@ -72,7 +72,7 @@ export const SETTINGS_ADMIN_PERMISSIONS: readonly string[] = [
  */
 export const STAGE_PAGES = [
   { segment: "kickoff", label: "Kick-off & mobilisation", anyOf: MILESTONE_VIEW_PERMISSIONS },
-  { segment: "scope", label: "Scope & sprints", anyOf: ["scope:view"] as readonly string[] },
+  { segment: "scope", label: "BoQ & work phases", anyOf: ["scope:view"] as readonly string[] },
   { segment: "completion", label: "Completion & handover", anyOf: COMPLETION_PAGE_PERMISSIONS },
 ] as const;
 
@@ -100,7 +100,8 @@ export const WORKSPACE_NAV: readonly NavItem[] = [
     icon: Globe2,
     group: "workspace",
     to: () => "/app/portfolio",
-    segments: ["portfolio", "projects", "kpis", "visits"],
+    // Client demo updates G.2: "payments" is the home page's Payments tab (/app/payments redirects).
+    segments: ["portfolio", "projects", "kpis", "visits", "payments"],
     anyOf: [PORTFOLIO_PERMISSION],
   },
   {
@@ -109,7 +110,7 @@ export const WORKSPACE_NAV: readonly NavItem[] = [
     icon: LayoutDashboard,
     group: "workspace",
     to: () => "/app/dashboard",
-    segments: ["dashboard", "projects", "kpis", "visits"],
+    segments: ["dashboard", "projects", "kpis", "visits", "payments"],
     noneOf: [PORTFOLIO_PERMISSION],
   },
   {
@@ -133,19 +134,21 @@ export const PROJECT_NAV: readonly NavItem[] = [
   { key: "overview", label: "Project overview", icon: LayoutDashboard, group: "project", to: (id) => projectPath(id, "dashboard"), segments: ["dashboard"] },
   {
     key: "stages",
-    label: "Project stages",
+    // Client demo updates (glossary): "Project stages" → "Project cycle", "Scope & sprints" → "BoQ & work phases".
+    label: "Project cycle",
     icon: Route,
     group: "project",
     to: (id) => projectPath(id, "kickoff"),
     toForProject: (p) => projectPath(p.id, currentStageSegment(p.stage)),
     segments: ["kickoff", "milestones", "scope", "boq", "schedule", "completion", "handover", "retention", "closure"],
-    segmentTitles: { kickoff: "Kick-off & mobilisation", scope: "Scope & sprints", completion: "Completion & handover" },
+    segmentTitles: { kickoff: "Kick-off & mobilisation", scope: "BoQ & work phases", completion: "Completion & handover" },
     anyOf: [...MILESTONE_VIEW_PERMISSIONS, "scope:view", ...COMPLETION_PAGE_PERMISSIONS],
   },
   {
     key: "reports",
-    label: "Reports",
-    pageTitle: "Visits, reports and findings",
+    // Client demo updates (glossary): "Reports" / "Visits, reports and findings" → "Monitoring".
+    label: "Monitoring",
+    pageTitle: "Monitoring",
     icon: ClipboardCheck,
     group: "project",
     to: (id) => projectPath(id, "visits"),

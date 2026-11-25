@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import {
-  FUNDING_SOURCE_SUGGESTIONS,
+  FUNDING_SOURCES,
   INTERVENTION_YEAR_MAX,
   INTERVENTION_YEAR_MIN,
   PROJECT_REGISTER_COLUMNS,
@@ -116,7 +116,7 @@ export async function buildRegisterWorkbook(data: RegisterWorkbookData): Promise
   sectionRow(ins, 7, 'How to fill it in');
   const steps = [
     'Projects: one row per project. Keep the title rows and the green header row; do not rename the sheet or the headers.',
-    `Status: "Not started" (or blank) creates a draft that you then set up and activate as usual (needs assessment, sprints, team). "Ongoing" and "Completed" create live projects at once, with the % complete you report; their progress shows that figure until their scope (needs assessment) is added.`,
+    `Status: "Not started" (or blank) creates a draft that you then set up and activate as usual (needs assessment, work phases, team). "Ongoing" and "Completed" create live projects at once, with the % complete you report; their progress shows that figure until their scope (needs assessment) is added.`,
     'Ongoing and completed projects need the site GPS (latitude and longitude), the contractor and, for ongoing ones, the % complete.',
     `Code: leave it blank to number the project automatically after the highest code in use (e.g. PRG-125). A code already in use gets the next free number.`,
     `${ctx.term}: your own reference for the project; each one may be used once in the workspace.`,
@@ -159,7 +159,9 @@ export async function buildRegisterWorkbook(data: RegisterWorkbookData): Promise
   fill('B', data.projectTypes);
   fill('C', owners);
   fill('D', contractors);
-  fill('E', [...FUNDING_SOURCE_SUGGESTIONS]);
+  // Client demo updates C4: the fixed list (a suggestion: other text is kept on import).
+  const fundingLabels = FUNDING_SOURCES.map((f) => f.label);
+  fill('E', fundingLabels);
   fill('F', statuses);
   const ref = (col: string, n: number) => `${S.lists}!${listRange(col, n)}`;
 
@@ -178,7 +180,7 @@ export async function buildRegisterWorkbook(data: RegisterWorkbookData): Promise
     if (data.projectTypes.length) cell('projectType').dataValidation = listValidation(ref('B', data.projectTypes.length), 'Choose a project type from the list.');
     if (owners.length) cell('owner').dataValidation = listValidation(ref('C', owners.length), 'Choose an organisation from the list.');
     if (contractors.length) cell('contractor').dataValidation = suggest(ref('D', contractors.length));
-    cell('fundingSource').dataValidation = suggest(ref('E', FUNDING_SOURCE_SUGGESTIONS.length));
+    cell('fundingSource').dataValidation = suggest(ref('E', fundingLabels.length));
     cell('status').dataValidation = listValidation(ref('F', statuses.length), 'Choose Not started, Ongoing or Completed.');
     cell('latitude').dataValidation = { type: 'decimal', operator: 'between', allowBlank: true, formulae: [-90, 90], showErrorMessage: true, error: 'Enter decimal degrees.' };
     cell('longitude').dataValidation = { type: 'decimal', operator: 'between', allowBlank: true, formulae: [-180, 180], showErrorMessage: true, error: 'Enter decimal degrees.' };

@@ -35,6 +35,8 @@ import { closureTenantRoutes, completionRoutes } from "./modules/completion/comp
 import { kpiRoutes, projectKpiRoutes } from "./modules/kpis/kpis.routes";
 import { regionsRoutes } from "./modules/regions/regions.routes";
 import { projectRegisterRoutes } from "./modules/projectRegister/projectRegister.routes";
+import { projectLotsRoutes } from "./modules/projectLots/projectLots.routes";
+import { portfolioPaymentsRoutes } from "./modules/payments/portfolioPayments.routes";
 import { requestContextMiddleware } from "./utils/requestContext";
 import { localStorageRoutes } from "./modules/storage/localStorage.routes";
 import { storageService } from "./integrations/storage.service";
@@ -131,6 +133,9 @@ export function createApp() {
   app.use("/api/v1/form-library", formLibraryRoutes); // Redesign R3
   app.use("/api/v1/scope-workbook", scopeWorkbookRoutes); // blank needs-assessment workbook
   app.use("/api/v1/project-register", projectRegisterRoutes); // UBEC IRL: bulk project import
+  // Client demo updates (wave 1)
+  app.use("/api/v1/project-lots", projectLotsRoutes); // C3: lots and codes
+  app.use("/api/v1/payments", portfolioPaymentsRoutes); // G.2: programme-wide payments
 
   // Development object storage when S3 is not configured (never in production; see env checks).
   if (!storageService.isCloudConfigured() && env.NODE_ENV !== "production") {

@@ -7,7 +7,7 @@ export interface YesNoInputProps {
   allowNa: boolean;
   value: VisitFormAnswerInput['value'];
   readOnly: boolean;
-  /** Re-check items: "Resolved" / "Not resolved" instead of Yes / No. */
+  /** Follow-up check items: "Rectified" / "Not rectified" instead of Yes / No. */
   recheck?: boolean;
   onChange: (value: 'YES' | 'NO' | 'NA' | null) => void;
 }
@@ -15,8 +15,8 @@ export interface YesNoInputProps {
 /** YES_NO: Yes / No, plus N/A when the question allows it. Tapping the chosen answer clears it. */
 export function YesNoInput({ label, allowNa, value, readOnly, recheck = false, onChange }: YesNoInputProps) {
   const options = [
-    { key: 'YES', label: recheck ? 'Resolved' : 'Yes' },
-    { key: 'NO', label: recheck ? 'Not resolved' : 'No' },
+    { key: 'YES', label: recheck ? 'Rectified' : 'Yes' },
+    { key: 'NO', label: recheck ? 'Not rectified' : 'No' },
     ...(allowNa ? [{ key: 'NA', label: 'N/A', accessibilityLabel: 'Not applicable' }] : []),
   ];
   return (
