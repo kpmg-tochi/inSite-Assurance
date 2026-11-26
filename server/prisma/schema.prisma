@@ -40,6 +40,8 @@ enum OrganizationCategory {
 enum PermissionCategory {
   TENANT_ADMIN
   FORMS_FACILITIES
+  // Needs pipeline (N1)
+  NEEDS_FUNDING
   PORTFOLIO_PROJECTS
   SCOPE_SPRINTS
   CONTRACT_KICKOFF
@@ -281,6 +283,30 @@ enum AuditActionType {
   FINDING_ESCALATED
   FINDINGS_SUMMARY_SENT
   SPRINT_VERIFIED
+  // Needs pipeline (N1)
+  NEEDS_CYCLE_OPENED
+  NEEDS_CYCLE_UPDATED
+  NEEDS_CYCLE_CLOSED
+  NEEDS_PROPOSAL_CREATED
+  NEEDS_VERSION_ADDED
+  NEEDS_PROPOSAL_SUBMITTED
+  NEEDS_PROPOSAL_RETURNED
+  NEEDS_PROPOSAL_WITHDRAWN
+  NEEDS_PROPOSAL_MERGED
+  NEEDS_FLAG_RESOLVED
+  NEEDS_STAGE_DECIDED
+  NEEDS_VALIDATION_RECORDED
+  NEEDS_COMMITTEE_UPDATED
+  NEEDS_CONFLICT_DECLARED
+  NEEDS_SCORE_SUBMITTED
+  NEEDS_RANKING_FINALISED
+  NEEDS_SUBMISSION_CREATED
+  NEEDS_APPROVAL_ACTION
+  NEEDS_FUNDING_RECORDED
+  NEEDS_PROPOSAL_CONVERTED
+  NEEDS_SEPARATION_OVERRIDDEN
+  COSTING_STANDARD_SAVED
+  PROJECT_CREATED_FROM_PROPOSAL
 }
 
 // Phase 11: which organisation an approval step actor must belong to (ANY = Phase 7 behaviour).
@@ -413,30 +439,34 @@ model Tenant {
   createdAt                        DateTime       @default(now())
   updatedAt                        DateTime       @updatedAt
 
-  organizations      Organization[]
-  roles              Role[]
-  users              User[]
-  projects           Project[]
-  auditLogs          AuditLog[]
-  workflowTemplates  WorkflowTemplate[]
-  outboundMessages   OutboundMessage[]
-  projectTypes       ProjectType[]
-  lessonsLearned     LessonLearned[]
-  kpiSnapshots       KpiSnapshot[] // Phase 16
-  regions            Region[]
-  projectLots        ProjectLot[] // Client demo updates C3
+  organizations             Organization[]
+  roles                     Role[]
+  users                     User[]
+  projects                  Project[]
+  auditLogs                 AuditLog[]
+  workflowTemplates         WorkflowTemplate[]
+  outboundMessages          OutboundMessage[]
+  projectTypes              ProjectType[]
+  lessonsLearned            LessonLearned[]
+  kpiSnapshots              KpiSnapshot[] // Phase 16
+  regions                   Region[]
+  projectLots               ProjectLot[] // Client demo updates C3
   contractorRatingSnapshots ContractorRatingSnapshot[] // wave 2, F.3
   contractorFlags           ContractorFlag[] // wave 3, F.4
   approvedLists             ApprovedList[] // wave 3, E3
+  // Needs pipeline (N1)
+  needsCycles               NeedsCycle[]
+  needsProposals            NeedsProposal[]
+  costingStandardVersions   CostingStandardVersion[]
   // Phase 13
-  documentTypes      DocumentType[]
+  documentTypes             DocumentType[]
   // Redesign R2a
-  facilities         Facility[]
+  facilities                Facility[]
   // Redesign R3
-  formSections       FormSection[]
-  facilitySubForms   FacilitySubForm[]
-  visitFormTemplates VisitFormTemplate[]
-  visitFormSnapshots VisitFormSnapshot[]
+  formSections              FormSection[]
+  facilitySubForms          FacilitySubForm[]
+  visitFormTemplates        VisitFormTemplate[]
+  visitFormSnapshots        VisitFormSnapshot[]
 
   @@map("tenants")
 }
@@ -519,16 +549,17 @@ model Organization {
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 
-  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  parentOrganization Organization?       @relation("OrganizationHierarchy", fields: [parentOrganizationId], references: [id], onDelete: Restrict)
-  childOrganizations Organization[]      @relation("OrganizationHierarchy")
+  tenant             Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parentOrganization Organization?              @relation("OrganizationHierarchy", fields: [parentOrganizationId], references: [id], onDelete: Restrict)
+  childOrganizations Organization[]             @relation("OrganizationHierarchy")
   users              User[]
-  monitoredProjects  Project[]           @relation("MonitorOrganization")
-  lenderProjects     Project[]           @relation("LenderOrganization")
-  ownedProjects      Project[]           @relation("OwningOrganization")
+  monitoredProjects  Project[]                  @relation("MonitorOrganization")
+  lenderProjects     Project[]                  @relation("LenderOrganization")
+  ownedProjects      Project[]                  @relation("OwningOrganization")
   projectContractors ProjectContractor[]
   ratingSnapshots    ContractorRatingSnapshot[]
   contractorFlags    ContractorFlag[]
+  needsCycles        NeedsCycle[]               @relation("NeedsCycleOwner") // Needs pipeline (N1)
 
   @@index([tenantId])
   @@index([parentOrganizationId])
@@ -601,8 +632,8 @@ model ContractorFlagAction {
 
 /// Client demo updates E3 (wave 3): an annual approved project list (DI schedule or a state's BEAP).
 model ApprovedList {
-  id               String   @id @default(uuid()) @db.Uuid
-  tenantId         String   @db.Uuid
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @db.Uuid
   interventionYear Int
   // DI_SCHEDULE | MG_BEAP (ApprovedListKindEnum)
   kind             String
@@ -611,14 +642,14 @@ model ApprovedList {
   approvedBy       String
   // YYYY-MM-DD
   approvedOn       String
-  documentId       String?  @db.Uuid
+  documentId       String?   @db.Uuid
   // Client demo updates E3 (wave 4): the last upload (null for seeded lists)
   sourceFileName   String?
   sourceSha256     String?
   importedAt       DateTime?
-  importedById     String?  @db.Uuid
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  importedById     String?   @db.Uuid
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   tenant Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   rows   ApprovedListRow[]
@@ -693,17 +724,20 @@ model User {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  tenant             Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  notificationReads  WebNotificationRead[]
-  role               Role                    @relation("UserMainRole", fields: [roleId], references: [id], onDelete: Restrict)
-  mobileRole         Role?                   @relation("UserMobileRole", fields: [mobileRoleId], references: [id], onDelete: SetNull)
-  mobileDevices      MobileDevice[]
-  fieldSessions      FieldAgentSession[]
-  organization       Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  projectAssignments UserProjectAssignment[]
-  pushTokens         PushToken[]
-  approvalActions    ApprovalAction[]
-  visitAssignments   VisitAssignee[] // Redesign R4
+  tenant                    Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  notificationReads         WebNotificationRead[]
+  role                      Role                    @relation("UserMainRole", fields: [roleId], references: [id], onDelete: Restrict)
+  mobileRole                Role?                   @relation("UserMobileRole", fields: [mobileRoleId], references: [id], onDelete: SetNull)
+  mobileDevices             MobileDevice[]
+  fieldSessions             FieldAgentSession[]
+  organization              Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  projectAssignments        UserProjectAssignment[]
+  pushTokens                PushToken[]
+  approvalActions           ApprovalAction[]
+  visitAssignments          VisitAssignee[] // Redesign R4
+  // Needs pipeline (N1)
+  needsCommitteeMemberships NeedsCommitteeMember[]
+  needsApprovalActions      NeedsApprovalAction[]
 
   @@index([tenantId])
   @@index([organizationId])
@@ -859,10 +893,16 @@ model Project {
   strategicJustification String? @db.Text
   assumptions            String? @db.Text
 
+  // Needs pipeline (N1, D-N.13): where the project came from (null = none yet) and the proposed
+  // project it was converted from.
+  origin          ProjectOrigin?
+  needsProposalId String?        @unique @db.Uuid
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  needsProposal       NeedsProposal?       @relation(fields: [needsProposalId], references: [id], onDelete: SetNull)
   monitorOrganization Organization?        @relation("MonitorOrganization", fields: [monitorOrganizationId], references: [id])
   lenderOrganization  Organization?        @relation("LenderOrganization", fields: [lenderOrganizationId], references: [id])
   owningOrganization  Organization?        @relation("OwningOrganization", fields: [owningOrganizationId], references: [id])
@@ -1620,6 +1660,7 @@ model ProjectType {
   tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   workflowTemplate WorkflowTemplate @relation(fields: [workflowTemplateId], references: [id], onDelete: Restrict)
   projects         Project[]
+  needsCycles      NeedsCycle[] // Needs pipeline (N1)
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -2786,4 +2827,562 @@ enum SprintVerificationOutcome {
   MET
   PARTLY_MET
   NOT_MET
+}
+
+// ---------------------------------------------------------------------------
+// Needs pipeline (wave 1, N1): from identified need to funded project.
+// Plan: saas_updates/needs_pipeline_implementation_plan.md (contract names in its section 17).
+// A proposed project (NeedsProposal) is not a Project (D-N.1); it becomes one at the funding gate.
+// Enum-like columns are strings validated by the shared Zod enums (needsPipeline.schema.ts), as in
+// the client demo waves. "By" columns keep the user's id and name as written (no relation), like
+// the audit ledger; the committee and approval actions relate to users.
+// ---------------------------------------------------------------------------
+
+// D-N.13: where a project came from. Null on a draft without an origin (cannot be activated once
+// the wave 4 gate is on); every project that existed when the migration ran is LEGACY.
+enum ProjectOrigin {
+  NEEDS_PIPELINE
+  OUT_OF_CYCLE
+  REGISTER_IMPORT
+  LEGACY
+}
+
+// One annual cycle of one programme: national (Direct Intervention) or one State (Matching Grants).
+model NeedsCycle {
+  id                       String    @id @default(uuid()) @db.Uuid
+  tenantId                 String    @db.Uuid
+  projectTypeId            String    @db.Uuid
+  interventionYear         Int
+  // Matching Grants: the State the cycle is for; null for a national cycle.
+  stateCode                String?
+  // "NATIONAL" or the State code: one cycle per tenant, type, year and scope.
+  scopeKey                 String
+  owningOrganizationId     String    @db.Uuid
+  // DRAFT | OPEN | CLOSED (NeedsCycleStatusEnum)
+  status                   String    @default("DRAFT")
+  // NeedsPipelineConfig frozen when the cycle opens (stages, rubric, checks, chains)
+  configSnapshotJson       Json
+  // NeedsDeadline[] (cycleDeadlines; editable per cycle)
+  deadlinesJson            Json      @default("[]")
+  templateVersion          String
+  costingStandardVersionId String?   @db.Uuid
+  indicativeCeilingNgn     Decimal?  @db.Decimal(18, 2)
+  // The last proposal sequence given (references <year>-DI-<nnn>).
+  proposalSequence         Int       @default(0)
+  // Prioritisation: how many ranked proposals are above the funding line, once the chair finalises.
+  fundingLinePosition      Int?
+  rankingFinalisedAt       DateTime?
+  rankingFinalisedByUserId String?   @db.Uuid
+  rankingFinalisedByName   String?
+  createdByUserId          String?   @db.Uuid
+  openedAt                 DateTime?
+  openedByUserId           String?   @db.Uuid
+  openedByName             String?
+  closedAt                 DateTime?
+  closedByUserId           String?   @db.Uuid
+  closedByName             String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  tenant                 Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  projectType            ProjectType             @relation(fields: [projectTypeId], references: [id], onDelete: Restrict)
+  owningOrganization     Organization            @relation("NeedsCycleOwner", fields: [owningOrganizationId], references: [id], onDelete: Restrict)
+  costingStandardVersion CostingStandardVersion? @relation(fields: [costingStandardVersionId], references: [id], onDelete: Restrict)
+  documents              NeedsCycleDocument[]
+  proposals              NeedsProposal[]
+  committeeMembers       NeedsCommitteeMember[]
+  scoreSheets            NeedsScoreSheet[]
+  stageDecisions         NeedsStageDecision[]
+  submissions            NeedsSubmission[]
+  approvalSteps          NeedsApprovalStep[]
+  approvalActions        NeedsApprovalAction[]
+
+  @@unique([tenantId, projectTypeId, interventionYear, scopeKey])
+  @@index([tenantId, interventionYear])
+  @@index([owningOrganizationId])
+  @@index([projectTypeId])
+  @@map("needs_cycles")
+}
+
+// D-N.5: documents that live once on the cycle and cover many proposals.
+model NeedsCycleDocument {
+  id                 String   @id @default(uuid()) @db.Uuid
+  cycleId            String   @db.Uuid
+  // CycleDocumentKindEnum
+  kind               String
+  title              String
+  // Produced by the platform from the records (a signed copy is uploaded as its own row).
+  generated          Boolean  @default(false)
+  objectKey          String
+  fileName           String
+  mimeType           String
+  byteSize           Int
+  sha256             String
+  supersedesId       String?  @db.Uuid
+  // The proposals the document covers.
+  coveredProposalIds String[] @default([]) @db.Uuid
+  uploadedByUserId   String   @db.Uuid
+  uploadedByName     String
+  createdAt          DateTime @default(now())
+
+  cycle        NeedsCycle           @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  supersedes   NeedsCycleDocument?  @relation("NeedsCycleDocumentVersions", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy NeedsCycleDocument[] @relation("NeedsCycleDocumentVersions")
+
+  @@index([cycleId, kind])
+  @@map("needs_cycle_documents")
+}
+
+// A proposed project. Its one-to-one with the project it became is Project.needsProposalId.
+model NeedsProposal {
+  id                    String   @id @default(uuid()) @db.Uuid
+  tenantId              String   @db.Uuid
+  cycleId               String   @db.Uuid
+  // <year>-DI-<nnn> | <year>-MG-<state>-<nnn>, unique per tenant
+  reference             String
+  sequence              Int
+  title                 String
+  // ANNUAL | OUT_OF_CYCLE (NeedsProposalRouteEnum)
+  route                 String   @default("ANNUAL")
+  // OutOfCycleReasonEnum; the authorising document is a NeedsProposalDocument
+  outOfCycleReason      String?
+  authorisingDocumentId String?  @db.Uuid
+  // NeedsStageEnum, NeedsProposalStatusEnum
+  stage                 String
+  status                String   @default("DRAFT")
+  // Why it was last returned, not validated, not selected or withdrawn.
+  statusReason          String?  @db.Text
+  stateCode             String?
+  lgaCodes              String[] @default([])
+  currentVersionId      String?  @unique @db.Uuid
+  // Latest amounts per gate (NGN).
+  preliminaryAmountNgn  Decimal? @db.Decimal(18, 2)
+  costedAmountNgn       Decimal? @db.Decimal(18, 2)
+  approvedAmountNgn     Decimal? @db.Decimal(18, 2)
+  fundedAmountNgn       Decimal? @db.Decimal(18, 2)
+  // Prioritisation (0–100 scores; rank 1 = first).
+  scoreImpact           Decimal? @db.Decimal(5, 2)
+  scoreEase             Decimal? @db.Decimal(5, 2)
+  scoreTotal            Decimal? @db.Decimal(5, 2)
+  rank                  Int?
+  // Above the funding line once the ranking is finalised; an override keeps its reason.
+  aboveLine             Boolean?
+  lineOverrideReason    String?
+  // D-N.19: the proposal of the previous cycle it was carried from.
+  carriedFromId         String?  @db.Uuid
+  // D-N.16: the proposal a duplicate was merged into.
+  mergedIntoId          String?  @db.Uuid
+  createdByUserId       String   @db.Uuid
+  createdByName         String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tenant            Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cycle             NeedsCycle                  @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  currentVersion    NeedsAssessmentVersion?     @relation("NeedsProposalCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  carriedFrom       NeedsProposal?              @relation("NeedsProposalCarried", fields: [carriedFromId], references: [id], onDelete: SetNull)
+  carriedTo         NeedsProposal[]             @relation("NeedsProposalCarried")
+  mergedInto        NeedsProposal?              @relation("NeedsProposalMerged", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom        NeedsProposal[]             @relation("NeedsProposalMerged")
+  project           Project?
+  versions          NeedsAssessmentVersion[]    @relation("NeedsProposalVersions")
+  sites             NeedsProposalSite[]
+  breakdownRows     NeedsFacilityBreakdownRow[]
+  documents         NeedsProposalDocument[]
+  flags             NeedsProposalFlag[]
+  validationRecords NeedsValidationRecord[]
+  decisionItems     NeedsStageDecisionItem[]
+  scoreSheets       NeedsScoreSheet[]
+  submissionItems   NeedsSubmissionItem[]
+
+  @@unique([tenantId, reference])
+  @@unique([cycleId, sequence])
+  @@index([cycleId, stage, status])
+  @@index([tenantId, stateCode])
+  @@index([carriedFromId])
+  @@index([mergedIntoId])
+  @@map("needs_proposals")
+}
+
+// D-N.3: a needs assessment file. Never overwritten; a content change adds a version.
+model NeedsAssessmentVersion {
+  id                       String   @id @default(uuid()) @db.Uuid
+  proposalId               String   @db.Uuid
+  number                   Int
+  // UPLOAD | CORRECTION | COSTING | BEAP_REVISION | CARRY_FORWARD (NeedsVersionSourceEnum)
+  source                   String
+  objectKey                String
+  fileName                 String
+  mimeType                 String
+  byteSize                 Int
+  sha256                   String
+  templateVersion          String
+  costingStandardVersionId String?  @db.Uuid
+  // ParsedNeedsAssessment: the full parse (sites, breakdown rows, BoQ lines, costing summary)
+  parsedJson               Json
+  siteCount                Int      @default(0)
+  breakdownRowCount        Int      @default(0)
+  boqLineCount             Int      @default(0)
+  preliminaryCostNgn       Decimal? @db.Decimal(18, 2)
+  costedTotalNgn           Decimal? @db.Decimal(18, 2)
+  uploadedByUserId         String   @db.Uuid
+  uploadedByName           String
+  uploadedAt               DateTime @default(now())
+
+  proposal               NeedsProposal           @relation("NeedsProposalVersions", fields: [proposalId], references: [id], onDelete: Cascade)
+  currentOf              NeedsProposal?          @relation("NeedsProposalCurrentVersion")
+  costingStandardVersion CostingStandardVersion? @relation(fields: [costingStandardVersionId], references: [id], onDelete: Restrict)
+  validationRecords      NeedsValidationRecord[]
+
+  @@unique([proposalId, number])
+  @@index([costingStandardVersionId])
+  @@index([sha256])
+  @@map("needs_assessment_versions")
+}
+
+// Sites of the proposal's current version (replaced in the transaction that adds a version).
+model NeedsProposalSite {
+  id            String   @id @default(uuid()) @db.Uuid
+  proposalId    String   @db.Uuid
+  siteNumber    Int
+  schoolName    String
+  // normaliseSchoolName(schoolName): duplicate checks match on it with the LGA (D-N.16)
+  schoolNameKey String
+  // SchoolLevelEnum: ECCDE | PRIMARY | JSS
+  schoolLevel   String
+  lgaCode       String
+  address       String?
+  latitude      Float?
+  longitude     Float?
+  enrolment     Int?
+  createdAt     DateTime @default(now())
+
+  proposal NeedsProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@unique([proposalId, siteNumber])
+  @@index([lgaCode, schoolNameKey])
+  @@map("needs_proposal_sites")
+}
+
+// Facilities breakdown of the current version: one facility at one site (plan 6.3, D-N.7).
+model NeedsFacilityBreakdownRow {
+  id                     String   @id @default(uuid()) @db.Uuid
+  proposalId             String   @db.Uuid
+  siteNumber             Int
+  // Unique per proposal; becomes the FacilityUnit code at conversion.
+  unitId                 String
+  facilityCode           String
+  // InterventionActionEnum, ExistingConditionEnum, FacilityCriticalityEnum
+  interventionAction     String
+  existingQuantity       Decimal  @db.Decimal(14, 3)
+  existingCondition      String
+  requiredQuantity       Decimal  @db.Decimal(14, 3)
+  // 0 = an existing facility recorded without work (no unit, no cost).
+  proposedQuantity       Decimal  @db.Decimal(14, 3)
+  unitOfMeasure          String
+  preliminaryCostNgn     Decimal? @db.Decimal(18, 2)
+  technicalJustification String   @db.Text
+  criticality            String
+  supportingEvidence     String?  @db.Text
+  evidenceDocumentIds    String[] @default([]) @db.Uuid
+  sortOrder              Int      @default(0)
+
+  proposal NeedsProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@unique([proposalId, unitId])
+  @@index([proposalId, siteNumber])
+  @@index([facilityCode])
+  @@map("needs_facility_breakdown_rows")
+}
+
+// Drawings, photos, site reports, the out-of-cycle authorising document.
+model NeedsProposalDocument {
+  id               String   @id @default(uuid()) @db.Uuid
+  proposalId       String   @db.Uuid
+  // ProposalDocumentKindEnum
+  kind             String
+  title            String
+  objectKey        String
+  fileName         String
+  mimeType         String
+  byteSize         Int
+  sha256           String
+  supersedesId     String?  @db.Uuid
+  uploadedByUserId String   @db.Uuid
+  uploadedByName   String
+  createdAt        DateTime @default(now())
+
+  proposal     NeedsProposal           @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  supersedes   NeedsProposalDocument?  @relation("NeedsProposalDocumentVersions", fields: [supersedesId], references: [id], onDelete: SetNull)
+  supersededBy NeedsProposalDocument[] @relation("NeedsProposalDocumentVersions")
+
+  @@index([proposalId, kind])
+  @@map("needs_proposal_documents")
+}
+
+// A warning on a proposal: never a block by itself; the stage gate asks for its resolution.
+model NeedsProposalFlag {
+  id                    String    @id @default(uuid()) @db.Uuid
+  proposalId            String    @db.Uuid
+  // ProposalFlagKindEnum
+  kind                  String
+  detailsJson           Json      @default("{}")
+  raisedOnVersionId     String?   @db.Uuid
+  raisedOnVersionNumber Int?
+  raisedAt              DateTime  @default(now())
+  resolvedAt            DateTime?
+  resolvedByUserId      String?   @db.Uuid
+  resolvedByName        String?
+  // ProposalFlagResolutionEnum
+  resolution            String?
+  resolutionReason      String?   @db.Text
+
+  proposal NeedsProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId, kind])
+  @@index([proposalId, resolvedAt])
+  @@map("needs_proposal_flags")
+}
+
+// Validation of one version: desk review, site verification, duplicate resolutions.
+model NeedsValidationRecord {
+  id                       String   @id @default(uuid()) @db.Uuid
+  proposalId               String   @db.Uuid
+  versionId                String   @db.Uuid
+  // StageOutcomeEnum: ADVANCE | RETURN | NOT_VALIDATED
+  outcome                  String
+  deskNotes                String?  @db.Text
+  // SiteVerification: method, date, officer, notes, evidence document ids
+  siteVerificationJson     Json?
+  // [{ flagId, resolution, reason }]
+  duplicateResolutionsJson Json     @default("[]")
+  recordedByUserId         String   @db.Uuid
+  recordedByName           String
+  recordedAt               DateTime @default(now())
+
+  proposal NeedsProposal          @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  version  NeedsAssessmentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId, recordedAt])
+  @@index([versionId])
+  @@map("needs_validation_records")
+}
+
+// D-N.4: a batch decision of one stage, with an outcome per proposal.
+model NeedsStageDecision {
+  id                  String   @id @default(uuid()) @db.Uuid
+  cycleId             String   @db.Uuid
+  // NeedsStageEnum
+  stage               String
+  reason              String?  @db.Text
+  // Cycle documents that evidence the decision.
+  evidenceDocumentIds String[] @default([]) @db.Uuid
+  decidedByUserId     String   @db.Uuid
+  decidedByName       String
+  decidedAt           DateTime @default(now())
+
+  cycle NeedsCycle               @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  items NeedsStageDecisionItem[]
+
+  @@index([cycleId, stage])
+  @@map("needs_stage_decisions")
+}
+
+model NeedsStageDecisionItem {
+  id         String  @id @default(uuid()) @db.Uuid
+  decisionId String  @db.Uuid
+  proposalId String  @db.Uuid
+  // StageOutcomeEnum
+  outcome    String
+  reason     String? @db.Text
+  // Where the outcome left the proposal.
+  toStage    String?
+  toStatus   String?
+
+  decision NeedsStageDecision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  proposal NeedsProposal      @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@unique([decisionId, proposalId])
+  @@index([proposalId])
+  @@map("needs_stage_decision_items")
+}
+
+// The steering committee of a cycle, with each member's conflict declaration (D-N.10).
+model NeedsCommitteeMember {
+  id                    String    @id @default(uuid()) @db.Uuid
+  cycleId               String    @db.Uuid
+  userId                String    @db.Uuid
+  // CHAIR | MEMBER (CommitteeRoleEnum)
+  role                  String    @default("MEMBER")
+  // Null until declared; a "no conflict" declaration has an empty list.
+  conflictDeclaredAt    DateTime?
+  conflictStatement     String?   @db.Text
+  conflictedProposalIds String[]  @default([]) @db.Uuid
+  addedByUserId         String?   @db.Uuid
+  createdAt             DateTime  @default(now())
+
+  cycle       NeedsCycle        @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  user        User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  scoreSheets NeedsScoreSheet[]
+
+  @@unique([cycleId, userId])
+  @@index([userId])
+  @@map("needs_committee_members")
+}
+
+// One member's scores for one proposal (criterion key → 1–5).
+model NeedsScoreSheet {
+  id          String   @id @default(uuid()) @db.Uuid
+  cycleId     String   @db.Uuid
+  proposalId  String   @db.Uuid
+  memberId    String   @db.Uuid
+  scoresJson  Json
+  comment     String?  @db.Text
+  submittedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cycle    NeedsCycle           @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  proposal NeedsProposal        @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  member   NeedsCommitteeMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([proposalId, memberId])
+  @@index([cycleId])
+  @@index([memberId])
+  @@map("needs_score_sheets")
+}
+
+// A list put to an approval chain: the portfolio, a State's BEAP or one out-of-cycle request.
+model NeedsSubmission {
+  id                            String    @id @default(uuid()) @db.Uuid
+  cycleId                       String    @db.Uuid
+  // PORTFOLIO | BEAP | OUT_OF_CYCLE (NeedsSubmissionKindEnum); chain per NEEDS_CHAIN_FOR_SUBMISSION
+  kind                          String
+  // DRAFT | IN_REVIEW | RETURNED | APPROVED (NeedsSubmissionStatusEnum)
+  status                        String    @default("DRAFT")
+  // The chain version of the cycle it runs on; the step waited on (null = complete, 0 = not
+  // started or returned), as project chains.
+  chainVersion                  Int       @default(1)
+  currentStepOrder              Int?      @default(0)
+  submittedByUserId             String?   @db.Uuid
+  submittedByName               String?
+  submittedAt                   DateTime?
+  decidedAt                     DateTime?
+  // Cycle documents: the signed memo; BEAP: the counterpart funding evidence (A5).
+  memoDocumentId                String?   @db.Uuid
+  counterpartDeclaredNgn        Decimal?  @db.Decimal(18, 2)
+  counterpartEvidenceDocumentId String?   @db.Uuid
+  createdByUserId               String    @db.Uuid
+  createdByName                 String
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+
+  cycle   NeedsCycle            @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  items   NeedsSubmissionItem[]
+  actions NeedsApprovalAction[]
+
+  @@index([cycleId, kind, status])
+  @@map("needs_submissions")
+}
+
+model NeedsSubmissionItem {
+  id                String   @id @default(uuid()) @db.Uuid
+  submissionId      String   @db.Uuid
+  proposalId        String   @db.Uuid
+  included          Boolean  @default(true)
+  exclusionReason   String?  @db.Text
+  amountNgn         Decimal? @db.Decimal(18, 2)
+  // BEAP: the lot, batch and procurement method the proposal converts with.
+  lotTitle          String?
+  lotNumber         Int?
+  batchNumber       Int?
+  procurementMethod String?
+  // BEAP review by UBEC, per proposal (accept, comment, request removal).
+  reviewOutcome     String?
+  reviewComment     String?  @db.Text
+  sortOrder         Int      @default(0)
+
+  submission NeedsSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  proposal   NeedsProposal   @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@unique([submissionId, proposalId])
+  @@index([proposalId])
+  @@map("needs_submission_items")
+}
+
+// D-N.23: the cycle's approval chains. Same shape as ApprovalStep / ApprovalAction with cycleId in
+// place of projectId (a cycle has no project); the subject of an action is a NeedsSubmission.
+model NeedsApprovalStep {
+  id                    String                    @id @default(uuid()) @db.Uuid
+  cycleId               String                    @db.Uuid
+  // NEEDS_PORTFOLIO | BEAP | OUT_OF_CYCLE (NeedsChainTypeEnum)
+  chainType             String
+  version               Int
+  stepOrder             Int
+  label                 String
+  requiredPermissionKey String
+  requiredRoleId        String?                   @db.Uuid
+  minAmountThresholdNgn Decimal?                  @db.Decimal(18, 2)
+  isSystemStep          Boolean                   @default(false)
+  // Resolved against the cycle's owning organisation.
+  organizationScope     ApprovalOrganizationScope @default(ANY)
+  isActive              Boolean                   @default(true)
+  createdAt             DateTime                  @default(now())
+
+  cycle   NeedsCycle            @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  actions NeedsApprovalAction[]
+
+  @@unique([cycleId, chainType, version, stepOrder])
+  @@index([cycleId, chainType, isActive])
+  @@map("needs_approval_steps")
+}
+
+model NeedsApprovalAction {
+  id          String           @id @default(uuid()) @db.Uuid
+  cycleId     String           @db.Uuid
+  chainType   String
+  // The NeedsSubmission acted on.
+  subjectId   String           @db.Uuid
+  stepId      String           @db.Uuid
+  stepOrder   Int
+  decision    ApprovalDecision
+  actorUserId String           @db.Uuid
+  notes       String?
+  createdAt   DateTime         @default(now())
+
+  cycle      NeedsCycle        @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  submission NeedsSubmission   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  step       NeedsApprovalStep @relation(fields: [stepId], references: [id], onDelete: Restrict)
+  actor      User              @relation(fields: [actorUserId], references: [id])
+
+  @@index([subjectId, createdAt])
+  @@index([cycleId, chainType])
+  @@map("needs_approval_actions")
+}
+
+// D-N.8: the costing standards of a tenant, versioned. A version a cycle or a needs assessment
+// version refers to is locked: saving makes the next version.
+model CostingStandardVersion {
+  id                        String   @id @default(uuid()) @db.Uuid
+  tenantId                  String   @db.Uuid
+  version                   Int
+  // CostingStandardRate[], CostingZoneFactors, CostingCeiling[] (costingStandard.schema.ts)
+  ratesJson                 Json     @default("[]")
+  zoneFactorsJson           Json     @default("{}")
+  supervisionMonitoringPct  Decimal  @default(0) @db.Decimal(5, 2)
+  contingencyPct            Decimal  @default(0) @db.Decimal(5, 2)
+  ceilingsJson              Json     @default("[]")
+  designStandardDocumentIds String[] @default([]) @db.Uuid
+  note                      String?
+  isLocked                  Boolean  @default(false)
+  savedByUserId             String?  @db.Uuid
+  savedByName               String
+  savedAt                   DateTime @default(now())
+  createdAt                 DateTime @default(now())
+
+  tenant        Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cycles        NeedsCycle[]
+  needsVersions NeedsAssessmentVersion[]
+
+  @@unique([tenantId, version])
+  @@map("costing_standard_versions")
 }

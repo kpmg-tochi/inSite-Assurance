@@ -205,7 +205,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
     () => [
       {
         id: "agent",
-        header: "Agent & Role",
+        header: "Agent and role",
         tooltip:
           "Authorized field engineer or inspector registered on this project",
         width: "w-64",
@@ -222,7 +222,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
       },
       {
         id: "persona",
-        header: "Assurance Persona",
+        header: "Assurance persona",
         tooltip:
           "Role persona & corroboration weight assigned to evidence from this mobile session",
         width: "w-52",
@@ -254,7 +254,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
       },
       {
         id: "lastActive",
-        header: "Last Activity",
+        header: "Last activity",
         tooltip:
           "Most recent geotagged evidence capture or sync received from this device",
         width: "w-36",
@@ -266,12 +266,12 @@ export function SettingsPage({ project }: SettingsPageProps) {
       },
       {
         id: "status",
-        header: "Access Status",
+        header: "Access status",
         tooltip: "Whether mobile app upload permissions are active or revoked",
         width: "w-32",
         cell: (agent) => (
           <TableBadge variant={agent.isActive ? "success" : "danger"}>
-            {agent.isActive ? "Active Session" : "Access Revoked"}
+            {agent.isActive ? "Active session" : "Access revoked"}
           </TableBadge>
         ),
       },
@@ -297,7 +297,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
               <TableActionMenu
                 actions={[
                   {
-                    label: agent.isActive ? "Revoke Access" : "Restore Access",
+                    label: agent.isActive ? "Revoke access" : "Restore access",
                     variant: agent.isActive ? "danger" : "default",
                     onClick: () =>
                       handleToggleAgentStatus(agent.id, !agent.isActive),

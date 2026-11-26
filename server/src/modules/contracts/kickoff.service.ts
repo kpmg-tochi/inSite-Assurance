@@ -1,12 +1,15 @@
 import { Prisma } from '@prisma/client';
 import {
   daysBetween,
+  formatCalendarDate,
   formatProjectCodeWithYear,
+  kickoffAfterAwardWindow,
   KickoffInviteeInput,
   KickoffMeetingDto,
   KickoffNoticeStatus,
   kickoffQuorumMet,
   KickoffStakeholderGroup,
+  KickoffWarning,
   ProjectKickoffDto,
   RecordKickoffHeldRequest,
   resolveProjectTypeConfig,
@@ -53,6 +56,7 @@ async function loadProject(projectId: string) {
       codePrefix: true,
       timezone: true,
       kickoffDate: true,
+      contractAwardDate: true,
       owningOrganizationId: true,
       lenderOrganizationId: true,
       monitorOrganizationId: true,
@@ -178,6 +182,38 @@ export async function suggestedKickoffInvitees(projectId: string): Promise<Kicko
   return out;
 }
 
+/**
+ * Needs pipeline N0 (D-N.22): warnings about the kick-off plan. Never a block: the meeting can still
+ * be saved. The rule comes from the type's milestone templates (mobilisation counted from contract
+ * award), so it applies to Direct Intervention and to any type set up the same way. The planned date
+ * is the scheduled meeting's day in the project zone, else the planned kick-off date; a held
+ * kick-off has no warning.
+ */
+export function kickoffWarnings(p: {
+  projectTypeSnapshotJson: unknown;
+  timezone: string;
+  contractAwardDate: string | null;
+  kickoffDate: string | null;
+  meeting: { scheduledAt: Date; heldAt: Date | null } | null;
+}): KickoffWarning[] {
+  if (p.meeting?.heldAt) return [];
+  const breach = kickoffAfterAwardWindow({
+    templates: resolveProjectTypeConfig(p.projectTypeSnapshotJson)?.contractMilestones ?? [],
+    contractAwardDate: p.contractAwardDate,
+    plannedKickoffDate: p.meeting ? zonedCalendarDate(p.meeting.scheduledAt, p.timezone) : p.kickoffDate,
+  });
+  if (!breach) return [];
+  return [
+    {
+      code: 'KICKOFF_AFTER_AWARD_WINDOW',
+      message: `The kick-off is planned for ${formatCalendarDate(breach.plannedKickoffDate)}, later than ${breach.windowDays} days after the contract award (${formatCalendarDate(breach.contractAwardDate)}). Mobilisation counts from the award, so hold the kick-off by ${formatCalendarDate(breach.latestKickoffDate)} to leave the contractor time to mobilise.`,
+      contractAwardDate: breach.contractAwardDate,
+      plannedKickoffDate: breach.plannedKickoffDate,
+      latestKickoffDate: breach.latestKickoffDate,
+    },
+  ];
+}
+
 export async function getProjectKickoff(projectId: string): Promise<ProjectKickoffDto> {
   const project = await loadProject(projectId);
   const rules = kickoffRules(project.projectTypeSnapshotJson);
@@ -187,6 +223,7 @@ export async function getProjectKickoff(projectId: string): Promise<ProjectKicko
     plannedKickoffDate: project.kickoffDate,
     requiredStakeholderGroups: rules.requiredStakeholderGroups,
     noticeLeadDays: rules.noticeLeadDays,
+    warnings: kickoffWarnings({ ...project, meeting }),
     suggestedInvitees: meeting ? [] : await suggestedKickoffInvitees(projectId),
   };
 }

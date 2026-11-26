@@ -18,8 +18,8 @@ type HomeTab = "overview" | "kpis" | "visits" | "payments";
 
 /**
  * The workspace home (UBEC rebrand). "portfolio" is the programme admins' Portfolio
- * (`projects:view_portfolio`); "dashboard" is everyone else's Dashboard, over the projects they are
- * assigned to. Both: an Overview tab (headline figures, the map, the projects table: the only way
+ * (`projects:view_portfolio`); "dashboard" is everyone else's home, over the projects they are
+ * assigned to (it also reads "Portfolio" on screen since design round 2). Both:an Overview tab (headline figures, the map, the projects table: the only way
  * into a project), a KPIs tab (`kpis:view`), a Monitoring visits tab (the monitoring planner,
  * `visits:view`; URL value `?tab=visits`) and a
  * Payments tab (client demo updates G.2: every payment in the period across the visible projects,
@@ -42,7 +42,7 @@ export function WorkspaceHomePage({ variant, onOpenProject }: { variant: "portfo
 
   return (
     <div className="space-y-4">
-      {tabs.length > 1 && <Tabs tabs={tabs} active={tab} onChange={setActive} label={variant === "portfolio" ? "Portfolio views" : "Dashboard views"} idPrefix="home" />}
+      {tabs.length > 1 && <Tabs tabs={tabs} active={tab} onChange={setActive} label="Portfolio views" idPrefix="home" />}
       <TabPanel idPrefix="home" id={tab}>
         {tab === "overview" && <OverviewTab variant={variant} onOpenProject={onOpenProject} />}
         {tab === "kpis" && <ProgrammeKpisPage onOpenProject={onOpenProject} />}

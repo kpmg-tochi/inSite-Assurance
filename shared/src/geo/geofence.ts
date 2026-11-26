@@ -158,6 +158,11 @@ export function geofenceCentroid(geofence: ProjectGeofence): GeoCoordinate {
   }
 }
 
+/** Great-circle distance between two points, in metres (needs pipeline: duplicate sites). */
+export function distanceMeters(a: GeoCoordinate, b: GeoCoordinate): number {
+  return distance(point([a.longitude, a.latitude]), point([b.longitude, b.latitude]), { units: 'meters' });
+}
+
 const METERS_PER_DEG_LAT = 111_320;
 
 /** Bounding box of a geofence including its radius, for fitting a map. */

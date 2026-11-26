@@ -48,10 +48,11 @@ function permissionKeysCheckedIn(file: string): string[] {
 }
 
 describe('Redesign R7a: permission catalogue', () => {
-  it('groups the catalogue into the eight flow categories, every one used, keys unique', () => {
+  it('groups the catalogue into the flow categories (eight in R7a, plus the needs pipeline), every one used, keys unique', () => {
     assert.deepEqual(Object.keys(PERMISSION_CATEGORY_META), [
       'TENANT_ADMIN',
       'FORMS_FACILITIES',
+      'NEEDS_FUNDING',
       'PORTFOLIO_PROJECTS',
       'SCOPE_SPRINTS',
       'CONTRACT_KICKOFF',
@@ -60,6 +61,9 @@ describe('Redesign R7a: permission catalogue', () => {
       'COMPLETION_CLOSURE',
     ]);
     assert.equal(CATALOG_KEYS.size, SYSTEM_PERMISSIONS_CATALOG.length);
+    for (const category of Object.keys(PERMISSION_CATEGORY_META)) {
+      assert.ok(SYSTEM_PERMISSIONS_CATALOG.some((p) => p.category === category), `${category} has no permission`);
+    }
   });
 
   it('keeps no legacy key and maps every renamed key to a catalogue key', () => {

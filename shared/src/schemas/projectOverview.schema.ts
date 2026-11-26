@@ -97,3 +97,121 @@ export const ProjectOverviewDtoSchema = z.object({
   alertRaisedAt: z.record(ProjectAlertKeyEnum, z.string()),
 });
 export type ProjectOverviewDto = z.infer<typeof ProjectOverviewDtoSchema>;
+
+/**
+ * Design round 2026-11-26: the Overview dashboard's charts, `GET /projects/:id/overview/charts`.
+ * One request, computed on the server. A section the caller may not see is null (never zero); a
+ * section with nothing to show yet is an empty list. Months are calendar months in the project zone.
+ */
+
+/** One month of the progress curve. Percentages 0–100, rounded to one decimal. */
+export const OverviewProgressPointSchema = z.object({
+  /** YYYY-MM */
+  month: z.string(),
+  /** The point's date: the month's last day, or today for the current month (YYYY-MM-DD). */
+  date: z.string(),
+  /** Budget-weighted planned % complete from the lines' planned windows (linear); null when no line has one. */
+  plannedPct: z.number().nullable(),
+  /** % complete at that date from accepted monitoring reports; null after today. */
+  actualPct: z.number().nullable(),
+  /** Cumulative gross paid (interim + final, not voided) over the contract sum (else budget); null after today or without payments permission. */
+  paidPct: z.number().nullable(),
+});
+export type OverviewProgressPoint = z.infer<typeof OverviewProgressPointSchema>;
+
+export const OverviewProgressCurveSchema = z.object({
+  points: z.array(OverviewProgressPointSchema),
+  /** What paidPct is measured against; null when paidPct is not shown. */
+  paidBasis: z.enum(['CONTRACT_SUM', 'BUDGET']).nullable(),
+  /** The project's current % complete (the curve's last actual point equals it). */
+  currentPct: z.number(),
+  /** Planned % complete today; null when no line has a planned window. */
+  plannedTodayPct: z.number().nullable(),
+});
+export type OverviewProgressCurve = z.infer<typeof OverviewProgressCurveSchema>;
+
+export const OverviewUnitProgressSchema = z.object({
+  unitId: z.string().uuid(),
+  /** Workbook "Unit ID". */
+  unitCode: z.string(),
+  facilityName: z.string(),
+  siteNumber: z.number().int().nullable(),
+  siteName: z.string().nullable(),
+  progressPct: z.number(),
+  /** Expected % today from the unit's lines' planned windows; null without windows. */
+  plannedPct: z.number().nullable(),
+  /** The unit's end work phase has ended and a line is below 100% (the R2 behind rule). */
+  behind: z.boolean(),
+  amountNgn: z.number(),
+});
+export type OverviewUnitProgress = z.infer<typeof OverviewUnitProgressSchema>;
+
+export const OverviewWorkPhaseSchema = z.object({
+  id: z.string().uuid(),
+  number: z.number().int(),
+  name: z.string().nullable(),
+  startDate: z.string(),
+  endDate: z.string(),
+  status: SprintStatusEnum,
+  verificationOutcome: z.enum(['MET', 'PARTLY_MET', 'NOT_MET']).nullable(),
+  unitCount: z.number().int(),
+});
+export type OverviewWorkPhase = z.infer<typeof OverviewWorkPhaseSchema>;
+
+/** Monitoring visits by planned month: six months back, the current month and two ahead. */
+export const OverviewVisitMonthSchema = z.object({
+  month: z.string(),
+  /** Report accepted (APPROVED). */
+  accepted: z.number().int(),
+  /** SUBMITTED (awaiting review). */
+  awaitingReview: z.number().int(),
+  returned: z.number().int(),
+  missed: z.number().int(),
+  /** PROPOSED, PLANNED or IN_PROGRESS. */
+  upcoming: z.number().int(),
+});
+export type OverviewVisitMonth = z.infer<typeof OverviewVisitMonthSchema>;
+
+export const OverviewFindingSeverityRowSchema = z.object({
+  severity: z.enum(['MINOR', 'MAJOR', 'CRITICAL']),
+  open: z.number().int(),
+  /** Open longer than the type's escalation days (`monitoring.findingEscalationDays`). */
+  openOverdue: z.number().int(),
+  resolved: z.number().int(),
+  dismissed: z.number().int(),
+});
+export type OverviewFindingSeverityRow = z.infer<typeof OverviewFindingSeverityRowSchema>;
+
+export const OverviewMoneySchema = z.object({
+  budgetNgn: z.number(),
+  contractSumNgn: z.number().nullable(),
+  /** Interim + final, gross (before retention), not voided. */
+  paidGrossNgn: z.number(),
+  /** Net paid to date (Project.disbursedToDateNgn). */
+  paidNetNgn: z.number(),
+  retentionHeldNgn: z.number(),
+  retentionReleasedNgn: z.number(),
+  /** Contract sum (else budget) minus gross paid, never below 0. */
+  remainingNgn: z.number(),
+  /** Gross paid per quarter (YYYY-Qn), oldest first, from the first payment to today. */
+  byQuarter: z.array(z.object({ quarter: z.string(), paidGrossNgn: z.number() })),
+});
+export type OverviewMoney = z.infer<typeof OverviewMoneySchema>;
+
+export const ProjectOverviewChartsDtoSchema = z.object({
+  projectId: z.string().uuid(),
+  today: z.string(),
+  /** null without `scope:view`. */
+  progressCurve: OverviewProgressCurveSchema.nullable(),
+  /** null without `scope:view`; [] when the project has no units. */
+  units: z.array(OverviewUnitProgressSchema).nullable(),
+  /** null without `scope:view`; [] without work phases. */
+  workPhases: z.array(OverviewWorkPhaseSchema).nullable(),
+  /** null without `visits:view`. Always 9 months. */
+  visitsByMonth: z.array(OverviewVisitMonthSchema).nullable(),
+  /** null without `visits:view` or `findings:manage`. Always the three severities. */
+  findingsBySeverity: z.array(OverviewFindingSeverityRowSchema).nullable(),
+  /** null without `payments:view` or `payments:record`. */
+  money: OverviewMoneySchema.nullable(),
+});
+export type ProjectOverviewChartsDto = z.infer<typeof ProjectOverviewChartsDtoSchema>;

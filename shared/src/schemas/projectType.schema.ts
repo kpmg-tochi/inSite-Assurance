@@ -11,6 +11,7 @@ import { ProjectTypeClosureConfigSchema } from './closure.schema';
 import { ProjectTypeKpiTargetsSchema } from './kpi.schema';
 import { ProjectTypeVisitFormsConfigSchema } from './form.schema';
 import { ProjectTypeMonitoringConfigSchema } from './visit.schema';
+import { NeedsPipelineConfigSchema } from './needsPipeline.schema';
 
 /**
  * Project types (Phase 11): a delivery model ("Central Delivery Model", "Co-Funded Delivery
@@ -87,6 +88,11 @@ export const ProjectTypeConfigSchema = z.object({
   visitForms: ProjectTypeVisitFormsConfigSchema.default({}),
   /** Redesign R4: the visit plan, deadlines, escalation and the contractor findings email. */
   monitoring: ProjectTypeMonitoringConfigSchema.default({}),
+  /**
+   * Needs pipeline (N1): stages, calendar, rubric and approval chains of the annual needs assessment
+   * cycle. Disabled by default, so a type without it is unchanged. A cycle freezes its own copy.
+   */
+  needsPipeline: NeedsPipelineConfigSchema.default({}),
 });
 export type ProjectTypeConfig = z.infer<typeof ProjectTypeConfigSchema>;
 export type ProjectTypeConfigInput = z.input<typeof ProjectTypeConfigSchema>;

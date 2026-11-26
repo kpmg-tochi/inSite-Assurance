@@ -12,15 +12,20 @@ import type { ProjectSummaryDto } from '../api/types';
 import { formatDateTimeShort } from '../lib/formatters';
 import { formatReporterRoleBadge } from './reporterRole';
 import { GeofenceShapeLayers } from './geofence/GeofenceShapeLayers';
-import { paddedGeofenceBounds, type LatLngTuple } from './geofence/geofenceGeometry';
+import { paddedGeofenceBounds, unionBounds, type LatLngTuple } from './geofence/geofenceGeometry';
 import { describeGeofenceStatus } from './geofence/geofenceStatus';
 import { TAB_LIST_CLASS, tabCountClass, tabItemClass } from './common/Tabs';
+import { useAuth } from '../lib/auth-context';
+import { useProjectSitesQuery } from '../queries/sites';
+import { SiteBoundaryLayers, mapSitesOf } from './sites/SiteBoundaryLayers';
 
 interface LiveGeospatialMapProps {
   project: ProjectSummaryDto;
   /** Registered captures (GET /evidence). Only captures with a GPS fix are plotted. */
   evidenceLogs: CaptureListItemDto[];
   onSelectEvidenceLog?: (log: CaptureListItemDto) => void;
+  /** Draw the project's sites (needs `scope:view`). Default true. */
+  showSites?: boolean;
 }
 
 type LocatedCapture = CaptureListItemDto & { latitude: number; longitude: number };
@@ -45,6 +50,13 @@ function FitToGeofence({ bounds }: { bounds: [LatLngTuple, LatLngTuple] }) {
   return null;
 }
 
+/** "2 of 4 sites located", "All 3 sites located", "1 site located". */
+function sitesLocatedText(located: number, total: number): string {
+  if (total === 1) return located === 1 ? '1 site located' : 'Site not located yet';
+  if (located === total) return `All ${total} sites located`;
+  return `${located} of ${total} sites located`;
+}
+
 /** One-line description of the boundary size for the callout. */
 function geofenceSizeText(geofence: ProjectGeofence): string {
   switch (geofence.mode) {
@@ -64,7 +76,20 @@ export function LiveGeospatialMap({
   project,
   evidenceLogs,
   onSelectEvidenceLog,
+  showSites = true,
 }: LiveGeospatialMapProps) {
+  const { hasPermission } = useAuth();
+  // Same query (and cache) as the overview's site list; skipped for projects known to have no sites.
+  const sitesEnabled =
+    showSites && hasPermission('scope:view') && (project.sites === undefined || project.sites.length > 0);
+  const { data: sitesData } = useProjectSitesQuery(project.id, sitesEnabled);
+  const allSites = useMemo(() => (sitesEnabled ? sitesData?.sites ?? [] : []), [sitesEnabled, sitesData]);
+  const mapSites = useMemo(
+    () => mapSitesOf(allSites, sitesData?.defaultRadiusMeters ?? 0),
+    [allSites, sitesData?.defaultRadiusMeters]
+  );
+  const behindSiteCount = allSites.filter((s) => s.status === 'BEHIND').length;
+
   const [searchQuery, setSearchQuery] = useState('');
   const [tierFilter, setTierFilter] = useState<'ALL' | 'INDEPENDENT' | 'FLAGGED'>('ALL');
   const located = useMemo(() => evidenceLogs.filter(isLocated), [evidenceLogs]);
@@ -105,9 +130,14 @@ export function LiveGeospatialMap({
     return parsed.success ? parsed.data : null;
   }, [project.geofence]);
   const tolerance = Math.max(0, project.geofenceToleranceMeters ?? 0);
+  // The project boundary (with its tolerance band) and every drawn site boundary.
   const mapBounds = useMemo(
-    () => (geofence ? paddedGeofenceBounds(geofence, tolerance) : null),
-    [geofence, tolerance]
+    () =>
+      unionBounds([
+        ...(geofence ? [paddedGeofenceBounds(geofence, tolerance)] : []),
+        ...mapSites.map((s) => paddedGeofenceBounds(s.geofence)),
+      ]),
+    [geofence, tolerance, mapSites]
   );
 
   // Counted only over captures the server could evaluate; no data means no percentage.
@@ -123,7 +153,7 @@ export function LiveGeospatialMap({
     )
   ).length;
 
-  if (!geofence || !mapBounds) {
+  if (!mapBounds) {
     return (
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm h-[44vh] min-h-[340px] flex flex-col items-center justify-center text-center px-6">
         <MapPinOff className="w-8 h-8 text-slate-300" />
@@ -135,7 +165,12 @@ export function LiveGeospatialMap({
             ? 'The saved geofence is incomplete or invalid, so it is not drawn. Redraw it in the project settings.'
             : 'Draw the geofence in the project settings to see the boundary and capture locations on a map.'}
         </p>
-        <p className="mt-3 text-[11px] text-slate-400">
+        {allSites.length > 0 && (
+          <p className="mt-2 text-xs text-slate-500">
+            {sitesLocatedText(mapSites.length, allSites.length)}: locate the sites in the project settings to draw them.
+          </p>
+        )}
+        <p className="mt-3 text-[11px] text-slate-500">
           {located.length} capture{located.length === 1 ? '' : 's'} with a GPS fix
           {noLocationCount > 0 ? ` · ${noLocationCount} without` : ''}
         </p>
@@ -205,7 +240,8 @@ export function LiveGeospatialMap({
           url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        <GeofenceShapeLayers geofence={geofence} toleranceMeters={tolerance} />
+        <SiteBoundaryLayers sites={mapSites} />
+        {geofence && <GeofenceShapeLayers geofence={geofence} toleranceMeters={tolerance} />}
 
         {/* Capture Pins */}
         {filteredLogs.map((log) => {
@@ -258,17 +294,37 @@ export function LiveGeospatialMap({
       <div className="absolute bottom-3 right-3 z-[400] flex items-stretch gap-2.5 max-w-3xl pointer-events-auto">
         <div className="bg-brand-navy/95 backdrop-blur-md text-white rounded-xl p-3 shadow-xl border border-white/10 w-44 flex flex-col justify-between">
           <div className="text-[10px] uppercase tracking-wider text-white/60 font-semibold">
-            {geofenceModeLabel(geofence.mode)}
+            {geofence ? geofenceModeLabel(geofence.mode) : 'Site boundaries'}
           </div>
           <div className="my-1">
             <div className="text-lg font-bold">
               {withinPct === null ? 'No data' : `${withinPct}% Within`}
             </div>
-            <div className="text-[11px] text-white/70">{geofenceSizeText(geofence)}</div>
-            <div className="text-[11px] text-white/70">
-              {tolerance > 0 ? `${tolerance.toLocaleString()} m tolerance band` : 'No tolerance band'}
-              {toleranceCount > 0 ? ` · ${toleranceCount} within tolerance` : ''}
-            </div>
+            {geofence ? (
+              <>
+                <div className="text-[11px] text-white/70">{geofenceSizeText(geofence)}</div>
+                <div className="text-[11px] text-white/70">
+                  {tolerance > 0 ? `${tolerance.toLocaleString()} m tolerance band` : 'No tolerance band'}
+                  {toleranceCount > 0 ? ` · ${toleranceCount} within tolerance` : ''}
+                </div>
+              </>
+            ) : (
+              <div className="text-[11px] text-white/70">
+                {project.geofence ? 'Project boundary could not be read' : 'No project boundary set'}
+              </div>
+            )}
+            {allSites.length > 0 && (
+              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-white/80">
+                <span
+                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full border border-brand-medium bg-white"
+                  aria-hidden="true"
+                />
+                <span>
+                  {sitesLocatedText(mapSites.length, allSites.length)}
+                  {behindSiteCount > 0 ? ` · ${behindSiteCount} behind` : ''}
+                </span>
+              </div>
+            )}
           </div>
           <div className="text-[10px] text-white/70 font-medium">
             {located.length} with GPS fix

@@ -38,6 +38,7 @@ import Loader from '../Loader';
 const CATEGORY_ORDER: PermissionCategory[] = [
   'TENANT_ADMIN',
   'FORMS_FACILITIES',
+  'NEEDS_FUNDING',
   'PORTFOLIO_PROJECTS',
   'SCOPE_SPRINTS',
   'CONTRACT_KICKOFF',
@@ -294,7 +295,7 @@ export function RolesPermissionsTab() {
 
               <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-[11px]">
                 <div>
-                  <span className="text-slate-400 block">Field Persona</span>
+                  <span className="text-slate-400 block">Field persona</span>
                   <span className="font-semibold text-slate-800">
                     {role.surface === 'WEB' ? 'Web Governance Only' : 'Independent Verifier'}
                   </span>
@@ -361,7 +362,7 @@ export function RolesPermissionsTab() {
               <h3 className="text-sm font-bold text-slate-900 mt-0.5">
                 {editingRole
                   ? `Customize Role: ${editingRole.name}`
-                  : 'Create New Tenant Role'}
+                  : 'Create new tenant role'}
               </h3>
             </div>
             <button
@@ -514,7 +515,7 @@ export function RolesPermissionsTab() {
                         ) : (
                           <Square className="w-3.5 h-3.5 text-slate-400" />
                         )}
-                        {allSelected ? 'Clear All' : 'Select All'}
+                        {allSelected ? 'Clear all' : 'Select all'}
                       </button>
                     </div>
 
@@ -576,7 +577,7 @@ export function RolesPermissionsTab() {
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-brand-primary hover:bg-brand-hover text-white text-xs font-semibold shadow-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-brand-primary"
             >
               <ShieldCheck className="w-3.5 h-3.5" />
-              {editingRole ? 'Save Role Permissions' : 'Create Role'}
+              {editingRole ? 'Save role permissions' : 'Create role'}
             </SubmitButton>
           </div>
         </form>

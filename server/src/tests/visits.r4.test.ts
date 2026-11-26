@@ -74,6 +74,19 @@ describe('Redesign R4a: visit plan generators', () => {
     assert.deepEqual(generateVisitDates(r, ctx({ kickoffHeldDate: '2026-03-10' })), ['2026-03-17', '2026-03-24']);
   });
 
+  it('until mobilised: a window shorter than the interval still gets one check, on the due date (needs pipeline N0)', () => {
+    // Direct Intervention counts mobilisation from contract award, so little time may be left after the kick-off.
+    const fortnightly = rule({ key: 'm', visitKind: 'MOBILISATION_CHECK', kind: 'EVERY_N_WEEKS_UNTIL_MOBILISED', intervalWeeks: 2 });
+    assert.deepEqual(generateVisitDates(fortnightly, ctx({ mobilisationDueDate: '2026-03-09' })), ['2026-03-09'], 'due a week after activation');
+    assert.deepEqual(generateVisitDates(fortnightly, ctx({ mobilisationDueDate: '2026-03-08' })), ['2026-03-06'], 'due on a Sunday: the Friday before');
+    assert.deepEqual(generateVisitDates(fortnightly, ctx({ kickoffHeldDate: '2026-03-10', mobilisationDueDate: '2026-03-17' })), ['2026-03-17'], 'counted from the kick-off');
+    // A window that holds an interval is unchanged: the check a fortnight in, none added on the due date.
+    assert.deepEqual(generateVisitDates(fortnightly, ctx({ mobilisationDueDate: '2026-03-23' })), ['2026-03-16']);
+    // A due date already passed, or none: one check an interval ahead, as before.
+    assert.deepEqual(generateVisitDates(fortnightly, ctx({ mobilisationDueDate: '2026-02-20' })), ['2026-03-16']);
+    assert.deepEqual(generateVisitDates(fortnightly, ctx({ mobilisationDueDate: null })), ['2026-03-16']);
+  });
+
   it('quarterly: the quarter last month + offset working days, inside construction', () => {
     const r = rule({ key: 'q', visitKind: 'QUARTERLY_ME', kind: 'QUARTERLY', quarterAnchorMonth: 1, offsetWorkdays: 5 });
     const long = ctx({ sprints: [{ number: 1, startDate: '2026-02-01', endDate: '2026-12-31' }] });

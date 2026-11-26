@@ -1,0 +1,1107 @@
+Below is a hand-off summary designed so another AI agent can pick up the work without reconstructing the reasoning. It distinguishes what the process document actually says, what UBEC-specific public sources support, and what was proposed or assumed for a digital-platform design.
+
+AI Agent Handoff: UBEC Annual Needs Assessment and Project Lifecycle Interpretation
+
+1. Source context
+
+The discussion centres on the process-design document:
+
+MoE_Process Design for Direct & Matching Grant Project Delivery\_\_Draft.pdf
+
+The document covers Direct Intervention and Matching Grant project-delivery processes, including:
+
+Needs Assessment
+validation
+project costing
+project prioritisation
+budget preparation
+procurement planning/procurement
+project implementation
+monitoring and evaluation
+project closure
+
+Additional research was restricted to verified UBEC-specific sources. Two relevant official UBEC pages were found:
+
+Physical Planning - Universal Basic Education Commission (UBEC), which states that UBEC's Department of Physical Planning coordinates infrastructural interventions and contains Architecture, Engineering and Quantity Surveying units.
+Quantity Surveying - Universal Basic Education Commission (UBEC), which confirms the existence of UBEC's Quantity Surveying Unit.
+
+No unsupported external information should be treated as UBEC policy.
+
+2. Core conceptual question: Are there two "Needs Assessments"?
+   User's initial interpretation
+
+The user identified what appeared to be two different things being called Needs Assessment:
+
+an annual project list/report submitted around September; and
+individual project-level assessments containing details such as:
+BoQs;
+site/location information;
+strategic justification;
+drawings;
+assumptions; and
+cost estimates.
+
+The question was whether these are genuinely two separate Needs Assessments and whether both should be called that.
+
+Conclusion reached
+
+The distinction is real, but the better interpretation is not two disconnected Needs Assessment processes.
+
+Instead:
+
+The Annual Needs Assessment is the overarching annual process, within which multiple individual project needs/interventions are identified, documented, validated, costed and prioritised.
+
+The terminology in the source document itself appears somewhat ambiguous because "Needs Assessment", "Needs Assessment Reports", individual project information and the annual consolidated process are not always clearly separated.
+
+Recommended terminology for a digital platform
+
+Use three explicit concepts:
+
+A. Project Needs Assessment
+
+One individual proposed project/intervention.
+
+Potential contents:
+
+identified need;
+project description;
+site/location;
+justification;
+BoQ;
+drawings;
+assumptions;
+preliminary cost;
+supporting evidence.
+B. Annual Needs Assessment
+
+The annual exercise through which all needs/projects are:
+
+identified;
+consolidated;
+validated;
+costed;
+evaluated;
+prioritised; and
+submitted for approval/budget consideration.
+C. Annual Prioritised Project Portfolio
+
+The annual output consisting of the projects that survive validation/prioritisation and are approved to move forward.
+
+The source document describes the prioritisation output as the Prioritised Project Portfolio.
+
+3. Important correction to the September/October interpretation
+
+The user initially proposed:
+
+In September 2026, 40 individual Needs Assessments are uploaded for 40 potential 2027 projects. In October, once the budget/procurement plan is finalised, projects are prioritised and those inside the budget become the final 2027 portfolio.
+
+This was assessed as substantially correct conceptually, but with an important sequencing correction.
+
+September is not simply submission of a final annual project list
+
+The source document expects Needs Assessment material to include detailed information such as:
+
+BoQs;
+justification;
+design drawings;
+assumptions;
+cost estimates;
+geographic/site information.
+
+Therefore, the September stage is better understood as the point by which the substantive candidate-project assessment information is assembled/submitted, not merely as submission of a high-level annual list.
+
+October prioritisation occurs before final budget/procurement planning
+
+The user's original statement that the budget and procurement plan would already have been finalised before prioritisation was corrected.
+
+The documented sequence is closer to:
+
+Needs identified
+→ Project information/assessments captured
+→ Consolidation
+→ Validation
+→ Project costing
+→ Prioritisation
+→ Prioritised Project Portfolio
+→ Approval
+→ Budget preparation/inclusion
+→ National budget approval
+→ Procurement planning
+→ Procurement
+→ Project execution
+
+In other words:
+
+The Annual Needs Assessment informs the budget. The final annual budget and procurement plan should not be treated as prerequisites for prioritisation.
+
+4. Illustrative 40-project scenario
+
+The following case was used throughout the discussion.
+
+Assume 40 potential projects are being considered for 2027.
+
+Stage 1: Candidate pipeline
+
+During the 2026 Needs Assessment cycle, UBEC identifies project needs/interventions.
+
+The digital system could eventually contain:
+
+2027 Annual Needs Assessment
+
+Project 001
+Project 002
+Project 003
+...
+Project 040
+
+Each project can carry project-specific information and evidence.
+
+In simplified form:
+
+Project 001
+→ Needs Assessment
+→ BoQ
+→ drawings
+→ site data
+→ strategic justification
+→ preliminary cost
+
+Repeat through Project 040.
+
+The platform therefore acts as a system of record for identified needs and candidate interventions, rather than merely storing one annual Needs Assessment PDF.
+
+5. Important refinement: the Consolidated Needs Repository may precede fully formed projects
+
+Subsequent discussion produced an important refinement to the previous "40 candidate projects" shorthand.
+
+The earliest stage should not necessarily assume that every identified need is already a fully developed project.
+
+The source document describes Data Gathering as identifying intervention areas and projects using information such as:
+
+previously budgeted but unfunded initiatives;
+projects excluded during previous prioritisation;
+field visit insights;
+monitoring findings;
+stakeholder requests;
+State/Zonal Resident Engineer assessments.
+
+These become the Consolidated Needs Repository and Preliminary Needs Report.
+
+Stakeholder engagement subsequently produces an Updated Consolidated Needs Repository.
+
+Only after Validation and Review does the process produce the Validated Project List.
+
+Therefore, the preferred conceptual model is:
+
+Identified Need / Intervention Area
+→ Proposed Project Response
+→ Validated Project Need/Candidate Project
+→ Costed Candidate Project
+→ Prioritised Project
+→ Approved Project
+
+For example:
+
+Need:
+"Insufficient classroom capacity at School A"
+
+↓
+
+Possible intervention:
+"Construct additional classrooms"
+
+↓
+
+Proposed project:
+"Construct a three-classroom block at School A"
+
+↓
+
+Validated project:
+Site and need confirmed and technical scope validated
+
+↓
+
+Costed project:
+BoQ/costing completed or refined
+
+↓
+
+Prioritised project:
+Evaluated against UBEC prioritisation criteria
+
+↓
+
+Approved project:
+Included for budget/procurement progression.
+
+This distinction should be preserved in the platform.
+
+6. What exactly should the Consolidated Needs Repository contain?
+
+The repository should not be interpreted as merely a flat annual project list.
+
+Neither should it necessarily contain only abstract needs.
+
+It appears capable of containing items at different levels of maturity.
+
+Entry maturity Illustrative exampleNeed Insufficient classroom capacity at School A
+Intervention area Additional learning spaces required
+Proposed response Construct additional classrooms
+Candidate project Construct a three-classroom block
+Validated candidate Need/site/scope validated
+Costed candidate BoQ and refined estimate completed
+Prioritised candidate Project evaluated/ranked
+Recommended platform relationship
+
+A strong data model would be:
+
+Annual Needs Assessment Cycle
+
+↓ contains
+
+Consolidated Needs Repository
+
+↓ contains
+
+Needs / intervention requirements
+
+↓ which may produce
+
+Proposed Project(s)
+
+↓ validation converts suitable proposals into
+
+Validated Candidate Projects
+
+↓ costing + scoring produce
+
+Prioritised Projects
+
+↓ selection/approval produces
+
+Annual Prioritised Project Portfolio
+
+This provides traceability from the original problem all the way to delivery.
+
+7. Do project Needs Assessments change after initial submission?
+   During the Annual Needs Assessment: yes
+
+The source process strongly indicates that the information develops over time rather than remaining frozen.
+
+The progression is approximately:
+
+Consolidated Needs Repository
+
+↓
+
+Updated Consolidated Needs Repository
+
+↓
+
+Validated Project List
+
+↓
+
+Cost Estimate Report
+
+↓
+
+Prioritised Project Portfolio
+
+This means that information about a candidate intervention can be:
+
+supplemented;
+validated;
+corrected;
+costed/refined;
+assessed for feasibility;
+prioritised.
+
+Consequently, the platform should not treat an initial September project assessment as an immutable final document.
+
+A conceptual project workflow proposed was:
+
+Draft
+→ Submitted
+→ Under Validation
+→ Validated
+→ Costed
+→ Prioritised
+→ Approved for Budget
+
+However, these status names are a recommended platform design, not confirmed UBEC terminology.
+
+8. What happens to project information after prioritisation?
+
+A critical design recommendation was made:
+
+Do not continually overwrite the original Needs Assessment with later procurement and implementation information.
+
+Once a project progresses beyond Needs Assessment, subsequent details belong to later lifecycle domains.
+
+Recommended logical document/data areas:
+
+Domain Typical informationNeeds Assessment Need, initial site evidence, justification, proposed scope, initial BoQ/drawings/cost
+Validation & Prioritisation Validation outcome, revised costing, scores, prioritisation result
+Budget Approved funding/allocation
+Procurement Procurement scope, bidding documents, specifications, procurement BoQ, contractor, award/contract value
+Implementation Mobilisation, work programme, milestones, implementation changes/variations
+Monitoring & Evaluation Site visits, physical progress, evidence, issues, quality/compliance monitoring
+Closure Completion/handover information and final evaluation
+
+This enables traceability of:
+
+What need was originally identified?
+→ What project was proposed?
+→ What was validated?
+→ What was budgeted?
+→ What was procured?
+→ What was actually delivered?
+
+That audit trail is especially important if scope, BoQ or cost changes between Needs Assessment and procurement/execution.
+
+9. Proposed high-level platform lifecycle
+
+The accumulated conversation supports the following digital model:
+
+Annual Needs Assessment Cycle created
+
+↓
+
+Needs gathered
+
+historic unfunded projects
+previously deprioritised projects
+monitoring findings
+field visits
+stakeholder requests
+engineering assessments
+
+↓
+
+Consolidated Needs Repository created
+
+↓
+
+Stakeholder engagement / repository enrichment
+
+↓
+
+Needs/projects validated
+
+↓
+
+Validated Project List
+
+↓
+
+Projects costed
+
+↓
+
+Cost Estimate Report
+
+↓
+
+Projects assessed and prioritised
+
+↓
+
+Prioritised Project Portfolio
+
+↓
+
+Management/appropriate approval
+
+↓
+
+Budget preparation/inclusion
+
+↓
+
+Approved annual funding/budget
+
+↓
+
+Procurement planning
+
+↓
+
+Procurement
+
+↓
+
+Project implementation
+
+↓
+
+Monitoring & Evaluation
+
+↓
+
+Project closure
+
+This should be treated as the current working interpretation of the process.
+
+10. Project costing: what is known
+
+The user asked whether UBEC uses:
+
+one standard costing template for every project; or
+different templates depending on project type.
+Confirmed from the process document
+
+The document refers to:
+
+"UBEC costing templates" in the plural;
+UBEC cost standards;
+UBEC standard costing benchmarks; and
+standards covering templates, assumptions and funding ceilings.
+
+This demonstrates that project costing is designed to be standardised and governed by UBEC.
+
+What could not be confirmed
+
+Neither the document nor the official public UBEC information found established:
+
+how many templates exist;
+whether each project category has a separate template;
+whether every project uses exactly one common template;
+the fields contained in each template.
+
+Therefore, an AI agent should not assert that there is one universal template or give a definitive number of templates.
+
+Most likely interpretation, explicitly an assumption
+
+It is operationally more plausible that UBEC has either:
+
+one common costing structure with different schedules; or
+standard templates for different project/intervention types.
+
+UBEC's official Physical Planning information confirms a structure containing Architecture, Engineering and Quantity Surveying capabilities.
+
+This supports a structured technical costing environment, but does not itself prove the template arrangement.
+
+Platform recommendation
+
+Until UBEC confirms the actual templates, design for:
+
+Common costing framework
+
+- configurable project/intervention-type templates
+
+rather than hard-coding one universal template.
+
+11. Cost Estimate Report: separate document or part of Needs Assessment?
+
+This was another specific user question.
+
+Confirmed interpretation
+
+The Cost Estimate Report is explicitly treated as a distinct workflow output.
+
+The logical document progression is approximately:
+
+Process stage Major outputData gathering Consolidated Needs Repository / Preliminary Needs Report
+Stakeholder engagement Updated Consolidated Needs Repository
+Validation Validated Project List
+Market assessment / costing Cost Estimate Report
+Prioritisation Prioritised Project Portfolio
+Finalisation/approval Final annual Needs Assessment-related output/submission
+
+The Cost Estimate Report then becomes an input to later stages, including prioritisation and budget preparation.
+
+What is not established
+
+The source material does not clearly establish whether the final Cost Estimate Report is physically appended to the final Needs Assessment Report.
+
+Therefore:
+
+Confirmed:
+Cost Estimate Report is a separate workflow artefact/output.
+
+Possible but unconfirmed:
+It may ultimately be packaged as an annex/supporting document to the final Needs Assessment submission.
+
+Platform recommendation
+
+Store the Cost Estimate Report as a:
+
+separate, version-controlled artefact linked to the Annual Needs Assessment Cycle and the affected project records.
+
+Do not assume that it must simply be embedded inside each individual project's Needs Assessment document.
+
+12. Preliminary versus refined project costs
+
+The conversation produced an important distinction between costs at different stages.
+
+A project-level Needs Assessment may already contain:
+
+a BoQ;
+preliminary cost estimates;
+assumptions.
+
+However, after validation, the project proceeds through Market Assessment / Project Costing, which can produce a more rigorous/refined estimate using:
+
+validated project information;
+UBEC costing templates/standards;
+market information;
+local conditions.
+
+Therefore, it is useful for the platform to distinguish:
+
+Initial / Needs Assessment Cost Estimate
+
+from
+
+Validated / Market-Assessed Project Cost
+
+and later potentially:
+
+Budgeted Amount
+
+from
+
+Procurement Estimate
+
+from
+
+Contract Award Value
+
+from
+
+Final Delivered Cost
+
+These distinctions were proposed for platform design and should not automatically be labelled as official UBEC field names.
+
+13. Impact and Ease of Implementation scoring
+
+The source document establishes a prioritisation weighting of:
+
+Impact: 60%
+Ease of Implementation: 40%
+
+The surrounding process also mentions considerations such as:
+
+institutional/strategic alignment;
+potential impact;
+equity;
+ease of implementation;
+implementation readiness;
+project cost;
+feasibility;
+site condition;
+scope accuracy;
+geographic/distribution considerations.
+What was NOT found
+
+Research did not uncover a verified UBEC methodology specifying:
+
+whether evaluators use 1–5, 1–10, 1–100, etc.;
+exact scoring questions;
+individual sub-criteria weights;
+scoring descriptors;
+minimum thresholds;
+treatment of missing values;
+whether multiple evaluators independently score;
+whether scores are averaged;
+tie-breaking rules.
+
+Therefore an AI agent must not claim that UBEC uses a specific numeric scale without new evidence.
+
+14. Illustrative scoring model proposed, NOT confirmed UBEC practice
+
+For platform-design purposes, the conversation demonstrated how a scoring mechanism could work.
+
+This was explicitly labelled an assumption/recommendation.
+
+For example:
+
+Impact: 60%
+
+Potential sub-questions could assess:
+
+strategic alignment;
+severity of identified need;
+number/reach of beneficiaries;
+expected educational benefit;
+equity/geographic inclusion.
+Ease of Implementation: 40%
+
+Potential sub-questions could assess:
+
+site readiness;
+technical feasibility;
+scope maturity;
+cost/funding feasibility;
+availability/completeness of BoQ and drawings;
+expected implementation complexity/timeline.
+
+An illustrative 1–5 scale was suggested:
+
+Rating Example descriptor1 Very low
+2 Low
+3 Moderate
+4 High
+5 Very high
+
+Then scores could be normalised.
+
+Illustrative calculation
+
+Suppose:
+
+Impact = 4.5/5
+
+Ease = 3/5
+
+Then:
+
+Impact contribution:
+
+4.5 ÷ 5 × 60 = 54
+
+Ease contribution:
+
+3 ÷ 5 × 40 = 24
+
+Overall prioritisation score:
+
+54 + 24 = 78/100
+
+Again:
+
+The 1–5 scale and this exact calculation are illustrative platform-design assumptions, not a verified UBEC scoring methodology.
+
+The 60/40 distinction originates from the process interpretation; the mechanics underneath it remain to be validated with UBEC.
+
+15. Recommended scoring architecture if digitised
+
+Rather than asking evaluators:
+
+"Impact score out of 10?"
+
+and:
+
+"Ease score out of 10?"
+
+the preferable platform approach would be to capture structured sub-questions.
+
+For example:
+
+IMPACT | 60%
+
+→ Strategic Alignment
+→ Severity of Need
+→ Beneficiary Impact
+→ Educational Benefit
+→ Equity
+
+EASE OF IMPLEMENTATION | 40%
+
+→ Site Readiness
+→ Technical Feasibility
+→ Scope/Design Readiness
+→ Cost/Funding Feasibility
+→ Delivery Complexity
+
+↓
+
+Calculate Impact Score
+
+Calculate Ease Score
+
+↓
+
+Apply 60/40 weighting
+
+↓
+
+Overall Project Score
+
+↓
+
+Project Ranking
+
+↓
+
+Steering Committee Review
+
+↓
+
+Prioritised Project Portfolio
+
+This is a platform-design recommendation pending confirmation of UBEC's actual scoring framework.
+
+16. Important distinction: prioritisation versus budget affordability
+
+Do not automatically equate:
+
+"highest-ranking projects"
+
+with:
+
+"projects automatically selected because they fit within a pre-existing budget."
+
+The more defensible sequence from the process is:
+
+Validate → Cost → Prioritise → Approve Portfolio → Feed into Budget Preparation
+
+Budget availability obviously becomes relevant to what can ultimately be funded, but prioritisation itself is part of the Needs Assessment process that informs budgeting.
+
+This distinction should be maintained when configuring workflow rules.
+
+17. Recommended document/artefact stages
+
+A useful working document model emerging from the conversation is:
+
+Needs identification
+Needs/source submissions
+Consolidated Needs Repository
+Preliminary Needs Report
+Updated Consolidated Needs Repository
+Validation
+Supporting project/site assessment documentation
+Validated Project List
+Costing
+Project-level preliminary BoQs/cost estimates
+Validated/refined costing records
+Cost Estimate Report
+Prioritisation
+Project Evaluation/Scoring Records
+Prioritisation/Raking Results
+Prioritised Project Portfolio
+Final Annual Needs Assessment
+Final Needs Assessment Report / annual submission
+Approval record
+Budget
+Budget preparation records
+Approved allocations/budget
+Procurement
+Annual Procurement Plan
+Bidding/procurement documentation
+Final technical specifications/BoQs
+Contract/award documentation
+Implementation
+Mobilisation/kick-off records
+Work programme/implementation plan
+Implementation progress records
+Variations/change records
+Monitoring
+Site monitoring records
+Progress evidence, including relevant site evidence
+Valuation/compliance information
+Closure
+Completion/handover documentation
+Final evaluation/close-out records
+
+The exact document titles from #13 onwards should be reconciled with the PDF and UBEC stakeholders before they become platform labels. Some are conceptual data/document categories rather than confirmed official titles.
+
+18. Recommended core data hierarchy
+
+One of the most important outputs of the conversation is that the platform should not be primarily designed around PDFs.
+
+A more robust data model is:
+
+Annual Needs Assessment Cycle
+
+e.g. 2027 Needs Assessment
+
+↓
+
+Needs Repository Entries
+
+individual need/intervention requirements
+
+↓
+
+Proposed Projects
+
+one need may conceivably create one or more responses/projects
+
+↓
+
+Project Needs Assessment
+
+project-specific assessment/evidence
+
+↓
+
+Validation Record
+
+↓
+
+Costing / Cost Estimate
+
+↓
+
+Priority Assessment
+
+↓
+
+Project Portfolio Membership
+
+↓
+
+Budget Allocation
+
+↓
+
+Procurement Package / Contract
+
+↓
+
+Implementation Record
+
+↓
+
+Monitoring Records
+
+↓
+
+Closure Record
+
+The system can generate documents from these structured records instead of making the documents themselves the sole source of truth.
+
+19. Example end-to-end lifecycle for one project
+
+An illustrative record could progress as follows:
+
+Step 1: Need identified
+
+School A has inadequate classroom capacity based on field assessment/monitoring.
+
+Step 2: Repository entry
+
+The need is entered into the Consolidated Needs Repository.
+
+Step 3: Proposed response
+
+Construct additional classroom accommodation at School A.
+
+Step 4: Project Needs Assessment
+
+Supporting information is developed:
+
+site details;
+justification;
+drawings;
+BoQ;
+assumptions;
+preliminary cost.
+Step 5: Validation
+
+Review determines whether:
+
+the need exists;
+site conditions are satisfactory;
+scope is appropriate;
+the proposal is feasible.
+Step 6: Costing
+
+The proposal is assessed against:
+
+UBEC costing standards/templates;
+prevailing market information;
+relevant local conditions.
+
+A refined costing is generated and contributes to the Cost Estimate Report.
+
+Step 7: Prioritisation
+
+The project is assessed against:
+
+Impact, weighted 60%; and
+Ease of Implementation, weighted 40%.
+
+Exact UBEC scoring mechanics remain unknown.
+
+Step 8: Portfolio decision
+
+If prioritised/approved, the project enters the Prioritised Project Portfolio.
+
+Step 9: Budget
+
+The approved portfolio informs budget preparation.
+
+Step 10: Procurement
+
+Following relevant budget approval and procurement planning, the project progresses through procurement.
+
+The procurement-stage BoQ/specifications may become more definitive than the original Needs Assessment versions.
+
+Step 11: Implementation
+
+The awarded project is implemented and monitored.
+
+Step 12: Closure
+
+Completion, handover and final evaluation/close-out records complete the project lifecycle.
+
+20. Data/versioning principle proposed
+
+The platform should preserve a history of changes, especially for:
+
+scope;
+drawings;
+BoQ;
+estimated cost;
+site information;
+prioritisation score;
+budget allocation;
+procurement estimate;
+contract award;
+implementation variations.
+
+Do not overwrite the initial Needs Assessment information with later procurement information.
+
+An appropriate conceptual approach is:
+
+Needs Assessment BoQ v1
+→ Validated/Costed BoQ v2
+→ Procurement BoQ/specification v3
+→ Contract BoQ
+→ Variation(s), if any
+→ Final measured/delivered quantities
+
+This exact version naming is illustrative, but the underlying traceability requirement follows logically from the lifecycle.
+
+21. What is confirmed versus assumed
+
+An AI agent continuing this work should preserve this distinction rigorously.
+
+Strongly supported by the process document
+Annual Needs Assessment is a multi-stage process.
+Needs/projects are consolidated into a repository.
+Stakeholder engagement can update the repository.
+Validation precedes final project costing/prioritisation.
+A Validated Project List is produced.
+Market Assessment/Project Costing occurs.
+A Cost Estimate Report is produced.
+Projects are prioritised.
+Impact and Ease of Implementation carry a 60/40 weighting.
+A Prioritised Project Portfolio is produced.
+Approved/prioritised interventions feed toward budget preparation.
+Costing uses UBEC templates/standards/benchmarks.
+Supported by official UBEC public information
+
+UBEC has a Department of Physical Planning involved in infrastructure intervention and technical disciplines including Architecture, Engineering and Quantity Surveying.
+
+UBEC publicly identifies a Quantity Surveying Unit.
+
+Not yet verified
+Exact UBEC costing template catalogue.
+Whether one or multiple costing templates apply by project type.
+Exact Impact scoring scale.
+Exact Ease-of-Implementation scoring scale.
+Exact sub-questions for either dimension.
+Sub-criterion weights.
+Whether evaluators independently score projects.
+How multiple evaluator scores are consolidated.
+Tie-breaking procedure.
+Whether the Cost Estimate Report is physically appended to the final Needs Assessment Report.
+Exact relationship between the final portfolio and budget ceilings at the precise selection point.
+Exact required data fields for a digital Project Needs Assessment. 22. Key stakeholder questions still needing UBEC confirmation
+
+Before converting this interpretation into final platform requirements, the next AI agent should flag these questions:
+
+Needs Repository
+Can a repository entry initially be a need only, without a defined project?
+Can one identified need lead to multiple project proposals?
+At what point is a repository entry assigned a formal Project ID?
+Project Needs Assessment
+What is the official Project Needs Assessment template?
+Which fields are mandatory?
+Which documents are mandatory attachments?
+Can submitted assessments be returned for correction?
+Who can modify them after validation?
+Costing
+How many UBEC costing templates exist?
+Are templates selected according to project/intervention type?
+Are standard rates centrally maintained?
+How are geographic/market differences handled?
+Does project costing overwrite the submitted cost estimate or create a new version?
+Is the Cost Estimate Report one consolidated annual document or multiple reports?
+Prioritisation
+What is the actual scoring scale?
+What sub-criteria sit underneath Impact?
+What sub-criteria sit underneath Ease of Implementation?
+Are individual sub-criteria weighted?
+Who scores?
+Are multiple evaluators' scores averaged?
+Are any criteria pass/fail gates rather than scored factors?
+What happens in ties?
+Can management override the calculated ranking, and if so, how is justification captured?
+Portfolio
+At what exact point does a candidate become part of the annual portfolio?
+Is the Prioritised Project Portfolio different from the eventual funded/approved project portfolio?
+Can projects be prioritised but subsequently excluded because of budget constraints?
+Are excluded but valid projects automatically carried forward into the next Annual Needs Assessment?
+Downstream lifecycle
+Which Needs Assessment fields remain editable after portfolio approval?
+When does the procurement BoQ supersede the Needs Assessment BoQ?
+How should scope/cost changes be linked back to the originally approved need?
+Which later processes require formal project variation/change control? 23. Concise mental model for the next AI agent
+
+The conversation's central conclusion can be compressed into this model:
+
+UBEC's Annual Needs Assessment should be thought of as a funnel, not as one static annual document.
+
+Many needs identified
+
+↓
+
+Consolidated Needs Repository
+
+↓
+
+Needs translated/refined into candidate interventions/projects
+
+↓
+
+Validation
+
+↓
+
+Validated Project List
+
+↓
+
+Costing
+
+↓
+
+Cost Estimate Report
+
+↓
+
+Impact/Ease prioritisation
+
+↓
+
+Prioritised Project Portfolio
+
+↓
+
+Approval and budget preparation
+
+↓
+
+Procurement
+
+↓
+
+Implementation
+
+↓
+
+Monitoring
+
+↓
+
+Closure
+
+The digital platform should therefore preserve both the original identified need and the evolving project that responds to it, with controlled relationships and version history.
+
+The biggest remaining uncertainties are UBEC's detailed scoring methodology, the actual costing-template structure, and the exact document/record relationships, which should not be invented if they cannot be verified.

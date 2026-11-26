@@ -2,12 +2,13 @@ import type { ProjectTypeConfig } from './projectType.schema';
 
 /**
  * Redesign R6e (D-R6.24): the project type editor shows the general fields (name, code, colour,
- * description, default, active) above five tabs, and every `ProjectTypeConfigSchema` key belongs to
+ * description, default, active) above its tabs (five in R6; the needs pipeline added "Needs
+ * assessment"), and every `ProjectTypeConfigSchema` key belongs to
  * exactly one tab. A new config key must be added here (the unit test `typeConfigGroups.r6.test.ts`
  * fails otherwise) and given an editor in that tab (CLAUDE.md: "a new config key needs an editor
  * section too").
  */
-export const PROJECT_TYPE_CONFIG_GROUP_IDS = ['kickoff', 'monitoring', 'completion', 'kpis', 'advanced'] as const;
+export const PROJECT_TYPE_CONFIG_GROUP_IDS = ['needs', 'kickoff', 'monitoring', 'completion', 'kpis', 'advanced'] as const;
 export type ProjectTypeConfigGroupId = (typeof PROJECT_TYPE_CONFIG_GROUP_IDS)[number];
 
 export type ProjectTypeConfigKey = keyof ProjectTypeConfig;
@@ -21,6 +22,13 @@ export interface ProjectTypeConfigGroupDef {
 }
 
 export const PROJECT_TYPE_CONFIG_GROUP_DEFS: readonly ProjectTypeConfigGroupDef[] = [
+  {
+    // Needs pipeline (N1): first, as the needs assessment comes before the contract.
+    id: 'needs',
+    label: 'Needs assessment',
+    description: 'The annual needs assessment cycle: stages and deadlines, the scoring rubric, essential facilities, checks and approval chains.',
+    configKeys: ['needsPipeline'],
+  },
   {
     id: 'kickoff',
     label: 'Kick-off & mobilisation',

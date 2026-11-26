@@ -108,6 +108,25 @@ export function paddedGeofenceBounds(geofence: ProjectGeofence, toleranceMeters 
   ];
 }
 
+/** Smallest box holding every given box; null when there is none. */
+export function unionBounds(boxes: [LatLngTuple, LatLngTuple][]): [LatLngTuple, LatLngTuple] | null {
+  if (boxes.length === 0) return null;
+  let south = 90;
+  let west = 180;
+  let north = -90;
+  let east = -180;
+  for (const [[s, w], [n, e]] of boxes) {
+    south = Math.min(south, s);
+    west = Math.min(west, w);
+    north = Math.max(north, n);
+    east = Math.max(east, e);
+  }
+  return [
+    [south, west],
+    [north, east],
+  ];
+}
+
 /** A point `meters` due east of a centre, for the radius handle. */
 export function pointEastOf(center: { latitude: number; longitude: number }, meters: number): LatLngTuple {
   const kx = METERS_PER_DEG_LON_EQUATOR * Math.max(0.01, Math.cos((center.latitude * Math.PI) / 180));

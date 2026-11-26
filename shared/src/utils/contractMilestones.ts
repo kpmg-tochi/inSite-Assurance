@@ -125,3 +125,46 @@ export function describeMilestoneAnchor(
   if (row.offsetValue === 0) return base;
   return `${base} ${row.offsetValue > 0 ? '+' : '−'} ${n} ${unit}`;
 }
+
+/**
+ * Needs pipeline N0 (D-N.22): where mobilisation counts from contract award (Direct Intervention:
+ * 21 days), the kick-off has to happen inside that window. The notice goes out at least 7 days
+ * before the meeting and the pack within 7 days of the contract (PCM p.11), so a kick-off planned
+ * later than 14 days after award leaves the contractor no time to mobilise.
+ */
+export const KICKOFF_AFTER_AWARD_WINDOW_DAYS = 14;
+
+export interface KickoffAwardWindowBreach {
+  contractAwardDate: string;
+  plannedKickoffDate: string;
+  /** The last day the kick-off fits the window: award + 14 days. */
+  latestKickoffDate: string;
+  windowDays: number;
+  /** How many days past the window the kick-off is planned. */
+  daysLate: number;
+}
+
+/**
+ * The rule is read from the type's milestone templates, never from the type code: it applies when a
+ * "mobilised to site" milestone (AUTO_CONTRACTOR_ON_SITE) counts from contract award. Returns the
+ * breach when the planned kick-off is later than award + 14 days; null when the rule does not apply,
+ * a date is missing or the kick-off is inside the window. A warning only: nothing is blocked.
+ */
+export function kickoffAfterAwardWindow(input: {
+  templates: ReadonlyArray<{ anchor: ContractMilestoneAnchor; completionMode: string }>;
+  contractAwardDate: string | null | undefined;
+  plannedKickoffDate: string | null | undefined;
+}): KickoffAwardWindowBreach | null {
+  const fromAward = input.templates.some((t) => t.completionMode === 'AUTO_CONTRACTOR_ON_SITE' && t.anchor === 'CONTRACT_AWARD');
+  if (!fromAward || !input.contractAwardDate || !input.plannedKickoffDate) return null;
+  const latestKickoffDate = addDays(input.contractAwardDate, KICKOFF_AFTER_AWARD_WINDOW_DAYS);
+  const daysLate = daysBetween(latestKickoffDate, input.plannedKickoffDate);
+  if (daysLate <= 0) return null;
+  return {
+    contractAwardDate: input.contractAwardDate,
+    plannedKickoffDate: input.plannedKickoffDate,
+    latestKickoffDate,
+    windowDays: KICKOFF_AFTER_AWARD_WINDOW_DAYS,
+    daysLate,
+  };
+}

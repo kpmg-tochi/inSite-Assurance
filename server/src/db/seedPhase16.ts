@@ -277,8 +277,10 @@ export async function seedPhase16() {
     where: { id: prg101.id },
     data: {
       contractReference: "UBEC/DI/2026/101",
-      contractAwardDate: addDays(today, -12),
-      contractSignedDate: addDays(today, -6),
+      // Needs pipeline N0: the kick-off is planned 12 days after award, inside the 14-day window
+      // (Direct Intervention mobilisation counts 21 days from award).
+      contractAwardDate: addDays(today, -3),
+      contractSignedDate: addDays(today, -1),
       kickoffDate: addDays(today, 9),
     },
   });

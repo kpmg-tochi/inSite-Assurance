@@ -6,7 +6,7 @@ import { offsetRing, openRingLonLat, toLatLng, type LonLat } from './geofenceGeo
 
 const BRAND = 'var(--hex-brand-primary)';
 
-const SHAPE: PathOptions = {
+const PROJECT_SHAPE: PathOptions = {
   color: BRAND,
   fillColor: BRAND,
   fillOpacity: 0.1,
@@ -23,17 +23,35 @@ const TOLERANCE: PathOptions = {
   interactive: false,
 };
 
+/** A site's boundary inside a project map: lighter and thinner than the project's own boundary. */
+const SITE_SHAPE: PathOptions = {
+  color: 'var(--hex-brand-medium)',
+  fillColor: 'var(--hex-brand-medium)',
+  fillOpacity: 0.18,
+  opacity: 0.9,
+  weight: 2,
+  interactive: false,
+};
+
 interface GeofenceShapeLayersProps {
   geofence: ProjectGeofence;
   /** Dashed band drawn this far outside the boundary when > 0. */
   toleranceMeters?: number;
   /** Editing view: perimeter closing edge is dashed so the user can see where the ring closes. */
   editing?: boolean;
+  /** `site`: a site's boundary drawn beside the project's own (lighter style). Default `project`. */
+  variant?: 'project' | 'site';
 }
 
 /** Draws a geofence (and its tolerance band) on a react-leaflet map. Not interactive. */
-export function GeofenceShapeLayers({ geofence, toleranceMeters = 0, editing = false }: GeofenceShapeLayersProps) {
+export function GeofenceShapeLayers({
+  geofence,
+  toleranceMeters = 0,
+  editing = false,
+  variant = 'project',
+}: GeofenceShapeLayersProps) {
   const tolerance = Math.max(0, toleranceMeters);
+  const SHAPE = variant === 'site' ? SITE_SHAPE : PROJECT_SHAPE;
 
   const perimeter = useMemo(() => {
     if (geofence.mode !== 'PERIMETER') return null;

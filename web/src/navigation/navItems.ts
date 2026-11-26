@@ -25,6 +25,9 @@ import { COMPLETION_PAGE_PERMISSIONS } from "../pages/completion/completionPermi
 
 export type NavGroup = "workspace" | "project";
 
+/** Sidebar section headers (design round 2, 2026-11-26): the workspace entries read "Platform". */
+export const NAV_GROUP_LABEL: Readonly<Record<NavGroup, string>> = { workspace: "Platform", project: "Project" };
+
 export interface NavItem {
   key: string;
   label: string;
@@ -44,11 +47,14 @@ export interface NavItem {
   tab?: { only?: string; not?: string };
   /** Shown when the user holds any of these; omitted = everyone who can open the portal. */
   anyOf?: readonly string[];
-  /** Hidden when the user holds any of these (the Dashboard is for people without the Portfolio). */
+  /** Hidden when the user holds any of these (the assigned-projects home is for people without the Portfolio). */
   noneOf?: readonly string[];
 }
 
-/** UBEC rebrand: the workspace home. Portfolio for programme admins, Dashboard for everyone else. */
+/**
+ * UBEC rebrand: the workspace home. `/app/portfolio` for programme admins, `/app/dashboard` (the
+ * projects they are assigned to) for everyone else; both read "Portfolio" on screen (design round 2).
+ */
 export const PORTFOLIO_PERMISSION = "projects:view_portfolio";
 
 export function workspaceHomePath(hasAnyPermission: (...keys: string[]) => boolean): string {
@@ -107,8 +113,9 @@ export const WORKSPACE_NAV: readonly NavItem[] = [
     anyOf: [PORTFOLIO_PERMISSION],
   },
   {
+    // Design round 2: the assigned-projects home also reads "Portfolio" (route and gate unchanged).
     key: "dashboard",
-    label: "Dashboard",
+    label: "Portfolio",
     icon: LayoutDashboard,
     group: "workspace",
     to: () => "/app/dashboard",
@@ -153,11 +160,12 @@ export const WORKSPACE_NAV: readonly NavItem[] = [
  * log as tabs of one page.
  */
 export const PROJECT_NAV: readonly NavItem[] = [
-  { key: "overview", label: "Project overview", icon: LayoutDashboard, group: "project", to: (id) => projectPath(id, "dashboard"), segments: ["dashboard"] },
+  // Design round 2: "Project overview" → "Overview", "Project cycle" → "Cycle" (they sit under the "Project" header).
+  { key: "overview", label: "Overview", icon: LayoutDashboard, group: "project", to: (id) => projectPath(id, "dashboard"), segments: ["dashboard"] },
   {
     key: "stages",
     // Client demo updates (glossary): "Project stages" → "Project cycle", "Scope & sprints" → "BoQ & work phases".
-    label: "Project cycle",
+    label: "Cycle",
     icon: Route,
     group: "project",
     to: (id) => projectPath(id, "kickoff"),
@@ -233,7 +241,7 @@ export function findNavItem(loc: AppLocation): NavItem | null {
   return list.find((item) => navItemMatches(item, loc)) ?? null;
 }
 
-/** The workspace entry for a location, among the entries this user sees (Portfolio and Dashboard share segments). */
+/** The workspace entry for a location, among the entries this user sees (the two home entries share segments). */
 export function findVisibleNavItem(loc: AppLocation, hasAnyPermission: (...keys: string[]) => boolean): NavItem | null {
   const list = loc.projectId ? PROJECT_NAV : WORKSPACE_NAV;
   return list.find((item) => canSeeNavItem(item, hasAnyPermission) && navItemMatches(item, loc)) ?? null;

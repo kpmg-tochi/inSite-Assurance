@@ -85,8 +85,10 @@ export async function seedClosureTwin() {
       geofenceMode: "RADIAL",
       geofenceGeoJson: geofence as unknown as Prisma.InputJsonValue,
       contractReference: "UBEC/DI/2025/106",
-      contractAwardDate: addDays(kickoff, -20),
-      contractSignedDate: addDays(kickoff, -12),
+      // Needs pipeline N0: Direct Intervention mobilisation counts 21 days from award. Awarded a week
+      // before the kick-off, the contractor mobilised on the day it was due (kick-off + 14, below).
+      contractAwardDate: addDays(kickoff, -7),
+      contractSignedDate: addDays(kickoff, -4),
       contractSumNgn: 96_000_000,
       kickoffDate: kickoff,
       kickoffHeldAt: new Date(`${kickoff}T09:00:00.000Z`),

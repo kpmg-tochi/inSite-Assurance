@@ -27,13 +27,30 @@ import { organizationAncestorIds } from '../organizations/hierarchy';
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
+/**
+ * What the pure chain functions read of a step and of an action. Project chains (`ApprovalStep`,
+ * `ApprovalAction`) and the needs pipeline's cycle chains (`NeedsApprovalStep`, `NeedsApprovalAction`,
+ * D-N.23) both fit, so the cycle chains reuse `stepApplies`, `nextApplicableStep`,
+ * `organizationScopeAllows`, `holdsStep`, `gateForStep` and `assertMayAct`. For a cycle, the org
+ * context is built from the cycle's owning organisation.
+ */
+export type ChainStepLike = Pick<
+  ApprovalStepRow,
+  'id' | 'stepOrder' | 'label' | 'requiredPermissionKey' | 'requiredRoleId' | 'minAmountThresholdNgn' | 'organizationScope'
+>;
+export type ChainActionLike = Pick<Prisma.ApprovalActionGetPayload<object>, 'decision' | 'stepOrder' | 'actorUserId'>;
+
 export function stepApplies(step: Pick<ApprovalStepRow, 'minAmountThresholdNgn'>, amount: number | null): boolean {
   if (step.minAmountThresholdNgn === null || amount === null) return true;
   return amount >= Number(step.minAmountThresholdNgn);
 }
 
 /** The first applicable step after `afterOrder`, or null when the chain is complete. */
-export function nextApplicableStep(steps: ApprovalStepRow[], afterOrder: number, amount: number | null): ApprovalStepRow | null {
+export function nextApplicableStep<T extends Pick<ApprovalStepRow, 'stepOrder' | 'minAmountThresholdNgn'>>(
+  steps: T[],
+  afterOrder: number,
+  amount: number | null
+): T | null {
   return steps.find((s) => s.stepOrder > afterOrder && stepApplies(s, amount)) ?? null;
 }
 
@@ -136,7 +153,7 @@ export async function loadActions(db: Db, subjectType: ApprovalSubjectType, subj
 }
 
 /** The user who approved the step before `step` in the current pass, if any. */
-function previousApprover(actions: ActionRow[], stepOrder: number): string | null {
+function previousApprover(actions: ChainActionLike[], stepOrder: number): string | null {
   // Only actions since the last RETURN belong to the current pass.
   let passStart = 0;
   actions.forEach((a, i) => {
@@ -160,8 +177,8 @@ function permissionLabel(key: string): string {
 /** Whether `webUser` may act on `step` of this item now. Advisory for the UI; enforced by `assertMayAct`. */
 export function gateForStep(params: {
   webUser: WebJwtPayload;
-  step: ApprovalStepRow | null;
-  actions: ActionRow[];
+  step: ChainStepLike | null;
+  actions: ChainActionLike[];
   /** e.g. the reporter's user id, who may never review their own report. */
   excludedUserId?: string | null;
   excludedReason?: string;
@@ -190,7 +207,7 @@ export function gateForStep(params: {
   return { allowed: true, reason: null };
 }
 
-export function assertMayAct(gate: ActGate, step: ApprovalStepRow | null): void {
+export function assertMayAct(gate: ActGate, step: ChainStepLike | null): void {
   if (gate.allowed) return;
   if (!step) throw new AppError('Nothing is waiting for approval', 409, 'NOT_AWAITING_APPROVAL');
   const code = gate.reason?.includes('is limited to')

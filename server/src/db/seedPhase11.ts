@@ -13,7 +13,7 @@ import { provisionDefaultRoles } from "../modules/rbac/rbac.service";
 import { seedStarterTemplates } from "../modules/process/workflowTemplates.service";
 import { createProjectType } from "../modules/projectTypes/projectTypes.service";
 import { createProjectDraft, saveProjectSetupStep } from "../modules/projects/projectSetup.service";
-import { KANO_ADMIN_EMAIL, LAGOS_ADMIN_EMAIL, tailorUbecRoles, UBEC_ADMIN_EMAIL, UBEC_ROLE } from "./seedUbecRoster";
+import { KANO_ADMIN_EMAIL, LAGOS_ADMIN_EMAIL, seedNeedsPipelinePeople, tailorUbecRoles, UBEC_ADMIN_EMAIL, UBEC_ROLE } from "./seedUbecRoster";
 
 /**
  * Phase 11 seed: a second tenant run as a programme with two delivery models, branded for UBEC
@@ -160,6 +160,8 @@ export async function seedPhase11(p: { passwordHash: string }) {
       data: { tenantId: tenant.id, email, passwordHash: p.passwordHash, fullName, roleId: orgAdminRole.id, organizationId: orgId },
     });
   }
+  // Needs pipeline (D-N.25): the people of the annual cycle (UBEC HQ and the Kano SUBEB).
+  await seedNeedsPipelinePeople(prisma, { tenantId: tenant.id, passwordHash: p.passwordHash, ubecOrganizationId: flagship.id, kanoSubebOrganizationId: north.id });
   const adminPayload = webPayload(admin, adminRole, await permsOf(adminRole.id));
 
   // Workflow templates (redesign R1b: payments happen outside the platform; no disbursement chain).

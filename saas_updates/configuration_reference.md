@@ -125,11 +125,12 @@ Build and server environment, not workspace settings.
 
 Set in Settings → Project types, regions & documents → Project types. One type per delivery model. The demo (UBEC) has "Direct Intervention" (type code `CENTRAL`) and "Matching Grants" (type code `CO_FUNDED`).
 
-**The type editor (redesign R6e).** General fields sit above five tabs. A tab with a validation error shows its error count; leaving the editor with unsaved changes asks first; "Save new version" saves every tab.
+**The type editor (redesign R6e).** General fields sit above six tabs (five in R6; the needs pipeline added "Needs assessment", first). A tab with a validation error shows its error count; leaving the editor with unsaved changes asks first; "Save new version" saves every tab.
 
 | Editor place | Settings in it | Type config keys | Section below |
 | :--- | :--- | :--- | :--- |
 | General (above the tabs) | Code, name, colour, description, default type, active | – | 3.1 |
+| **Needs assessment** tab | The annual needs assessment cycle: stages and deadlines, scoring rubric, essential facilities, checks, approval chains. **Read-only** until needs pipeline wave 2 | `needsPipeline` | 3.9 |
 | **Kick-off & mobilisation** tab | Contract milestone templates (incl. mobilisation days), kick-off quorum and notice lead time, required documents, contractor default cases (Legal role) | `contractMilestones`, `kickoff`, `documentRequirements`, `defaultCases` | 3.5, 3.6 |
 | **Monitoring** tab | Visit plan and deadlines, visit form per visit kind, supervisor roles and limits | `monitoring`, `visitForms`, `supervision` (and the legacy `inspections` until R5f removes it) | 3.3, 3.6 |
 | **Completion & closure** tab | CoC signatories and gates, handover due, closure checklists, rating sharing; retention defaults | `closure`, `payments` | 3.7, 3.4 |
@@ -165,7 +166,7 @@ Monitoring tab. Replaces the Phase 8 reporting defaults and the Phase 14 reporti
 
 | Setting | Default | Effect | Control |
 | :--- | :--- | :--- | :--- |
-| Visit plan rules (visit kind, when, interval, sprints, offsets) | None (demo: mobilisation checks every 2 weeks until the contractor is on site; baseline 5 working days after the later of activation and kick-off; routine every week during construction (UBEC manual: weekly supervision); quarterly M&E 5 working days into each quarter's last month; final evaluation 5 working days after the completion notice; Matching Grants: post-closure evaluation on its closure milestone, else 180 days after closing) | Activation proposes the visits (all of them, through the last sprint); a live sprint change regenerates the proposed sprint-driven ones; the completion notice proposes the final evaluation, closing the post-closure one. The M&E manager assigns officers and publishes them. Dates fall on working days. | P3, Q-H |
+| Visit plan rules (visit kind, when, interval, sprints, offsets) | None (demo: mobilisation checks every 2 weeks until the contractor is on site (when less than one interval is left before mobilisation is due, as on a Direct Intervention project whose 21 days count from contract award, one check on the due date; needs pipeline N0); baseline 5 working days after the later of activation and kick-off; routine every week during construction (UBEC manual: weekly supervision); quarterly M&E 5 working days into each quarter's last month; final evaluation 5 working days after the completion notice; Matching Grants: post-closure evaluation on its closure milestone, else 180 days after closing) | Activation proposes the visits (all of them, through the last sprint); a live sprint change regenerates the proposed sprint-driven ones; the completion notice proposes the final evaluation, closing the post-closure one. The M&E manager assigns officers and publishes them. Dates fall on working days. | P3, Q-H |
 | Submit within | 7 days | The submission deadline is the visit date plus this many calendar days; later is late, and with nothing submitted the visit becomes missed. | Spec 8.1 |
 | Remind unconfirmed | 2 days before | Officers who have not confirmed get one reminder. | Spec 8.1 |
 | Escalate findings after | 14 days | An open finding is escalated once to holders of `findings:receive_escalations`. | Confirm |
@@ -196,7 +197,7 @@ Kick-off & mobilisation tab.
 | :--- | :--- | :--- | :--- |
 | Contract milestone templates | None | Dated obligations created on each project. Per milestone: key, label, anchor (contract award, contract signed, kick-off, activation, another milestone, CoC issued, project closed), offset (calendar or working days, negative = before), completion mode, required documents, a sign-off permission, responsible role and organisation, one per contractor. | G2 |
 | Completion modes | Manual | Contractor on site (confirmed by an officer through the complete button; telemetry was removed in redesign R1e), and automatic: kick-off notice sent, kick-off quorum, programme accepted (the programme of works document is signed off; redesign R2d), CoC issued, handover accepted, final evaluation approved. | G2 |
-| **Mobilisation days** | – | The offset of the "contractor mobilised" milestone from kick-off. Demo: Direct Intervention 21 days, Matching Grants 14 days (decision M; UBEC manual). | G2 |
+| **Mobilisation days** | – | The anchor and offset of the "mobilised to site" milestone. Demo (needs pipeline N0, D-N.22, 2026-11-26): **Direct Intervention 21 days from contract award** (PCM p.12; "mobilisation documents complete" counts the same 21 days), **Matching Grants 14 days from the kick-off** (PCM p.38). Where mobilisation counts from award, the kick-off tab warns (`KICKOFF_AFTER_AWARD_WINDOW`, never a block) when the scheduled or planned kick-off is later than 14 days after award; the 14 days are fixed, not a setting. | G2 |
 | Kick-off quorum groups | None | At least one attendee per group (demo: owner, monitor, contractor, beneficiary), or a waiver reason. | G2 |
 | Kick-off notice lead time | 7 days | The notice must go out this many days ahead, or the shortfall is waived with a reason. | G2 |
 
@@ -239,6 +240,30 @@ KPI targets tab. **Changes apply to every project of the type at once.** Unlike 
 | Shown | On | Off hides the KPI for projects of the type. A KPI hidden on every type in view drops off the page. | G8 |
 
 Demo values: Direct Intervention (mobilisation 90%, reports 85%, visits 90%); Matching Grants (mobilisation 85%, reports 80%, visits 85%, approval 7 days). Financial utilisation has no target.
+
+---
+
+### 3.9 Needs assessment cycle (needs pipeline, type key `needsPipeline`)
+
+Needs assessment tab. **Wave 1 (2026-11-26): the settings exist and are shown read-only; nothing runs on them yet** (the cycle, upload, validation, costing, prioritisation, approval and funding are built in waves 2–4 of `needs_pipeline_implementation_plan.md`). A cycle keeps its own copy of these rules from the day it opens, so a change applies to new cycles. Defaults: `DEFAULT_DI_NEEDS_PIPELINE` and `DEFAULT_MG_NEEDS_PIPELINE` in `shared/src/data/needsPipelineDefaults.ts`, merged into the two UBEC types by the seed.
+
+| Setting | Default (no pipeline) | Direct Intervention | Matching Grants | Effect |
+| :--- | :--- | :--- | :--- | :--- |
+| Enabled | Off | On | On | Off: the type has no needs assessment cycle; nothing else here applies. |
+| Funding gate | Appropriation | Appropriation | BEAP approval | What turns a proposed project into a draft project. |
+| Reference | DI | `<year>-DI-<nnn>` | `<year>-MG-<State>-<nnn>` | The reference of a proposed project. |
+| Cycle scope | National | National (owner UBEC HQ) | One per State (owner the SUBEB) | Who a cycle belongs to; users see the cycles of their organisation and below. |
+| Cycle opens | 1 March | 1 March | 31 July (the circular) | In the year before the intervention year. |
+| Stages (label, who moves it on, deadline) | None | Identification 30 May · Validation 31 July · Needs assessment completion 30 Sept · Costing 14 Oct · Prioritisation 21 Oct · Approval 31 Oct · Budget and appropriation (no fixed date) | Identification 31 Aug · Field verification 30 Sept · Costing 14 Oct · Prioritisation 21 Oct · State approval 30 Oct · BEAP 30 Nov | The stage list a proposed project passes. Required: every stage but "Needs assessment completion" (`DESIGN`). |
+| Other dated events | None | Stakeholder engagement summary 30 June; budget submission 15 Dec | BEAP submitted 15 Nov | Shown in the deadline strip. |
+| Minimum fields per stage | None | Identification: the need, sites, breakdown, justification. Completion: plus BoQ, drawings, preliminary cost | Identification: all of them | What a needs assessment must contain to leave the stage. |
+| Scoring rubric | Empty | Impact 60%, Ease of implementation 40%; five criteria each, scores 1–5 with descriptors; divergence flagged at 2 points; quorum 3 | Same | Frozen on the cycle. The two weights must add up to 100. |
+| Essential facilities | None | Toilets (`TOILET`), Water (`BOREHOLE`, `OVERHEAD_TANK`), Solar (`SOLAR_POWER`) | Same | Each school site needs a proposed row, or an existing Functional one, in each group; a gap needs a written justification. |
+| Rate tolerance | 15% | 15% | 15% | A BoQ rate this far from the costing standard's rate (for the zone) is flagged. |
+| Duplicate check | 100 m, 3 years | Same | Same | Same school and LGA, or a site within the radius, among open proposed projects and recent projects. A flag, never a block. |
+| Site verification required | On | On | On | Validation needs a site verification for every proposed project. |
+| Counterpart evidence before activation | Off | Off | On | A converted project cannot be activated until its BEAP's counterpart funding evidence is recorded (wave 4). |
+| Approval chains (label, permission, organisation scope, deadline) | None | Portfolio: Management review, Executive Secretary approval. Out-of-cycle: Executive Secretary | Portfolio: SUBEB management review (27 Oct), Executive Chairman endorsement (30 Oct). BEAP: UBEC Physical Planning review (22 Nov), UBEC Executive Management approval (30 Nov). Out-of-cycle: Executive Chairman, then UBEC | Steps are copied to the cycle when it opens. "Owning organisation" is the cycle's owner. |
 
 ---
 
@@ -307,6 +332,7 @@ The catalogue lives in `SYSTEM_PERMISSIONS_CATALOG` (`shared/src/enums.ts`). Cod
 | UBEC M&E Officer (`UBEC_ME_OFFICER`), SUBEB M&E Officer (`SUBEB_ME_OFFICER`) | Both | Assigned projects only. Scope view, schedule status, visits (view, plan, review, submit), findings and escalations, `incidents:view`, sprint verification, documents (view, upload), handover (record, review), defects, milestones, CoC signature, ratings, lessons, KPIs. |
 | Independent M&E, COREN-certified firm (`MONITOR`) | Both | Assigned projects only. Scope view, schedule status, visits (view, submit), `incidents:view`, documents (view, upload), lessons, KPIs. |
 | Resident Supervisor (`INDEPENDENT_RESIDENT`) | Field app | Visits (view, submit), scope view, findings, defects. Web sign-in refused (below). |
+| Needs pipeline roles (wave 1, 2026-11-26; `NEEDS_PIPELINE_GRANTS`): Executive Secretary (`EXECUTIVE_SECRETARY`), Director, Physical Planning (`DIRECTOR_PHYSICAL_PLANNING`), Finance Officer (`FINANCE_OFFICER`), Procurement Officer (`PROCUREMENT_OFFICER`), Quantity Surveyor (`QUANTITY_SURVEYOR`), SUBEB Director, Physical Planning (`SUBEB_DIRECTOR_PHYSICAL_PLANNING`), SUBEB Procurement Officer (`SUBEB_PROCUREMENT_OFFICER`) | Web | In the normal seed only their needs assessment permissions (plan section 8; the SUBEB Director also reviews the portfolio). The UBEC M&E Officer also holds `needs:view` and `needs:validate`; the SUBEB Administrator the Executive Chairman's grants (chair, review, approve, out-of-cycle, override). The demo overlay adds the project permissions of its cast. |
 
 **Rules that hold whatever the role (redesign R7b).**
 - A user whose main role's surface is Field app (Resident Supervisor) cannot sign in on the web: 403 `WEB_ACCESS_NOT_ALLOWED`, and web tokens issued earlier stop working. Roles with surface Both use the same credentials on the web and the field app. Platform super admins are never refused.
@@ -328,6 +354,23 @@ The catalogue lives in `SYSTEM_PERMISSIONS_CATALOG` (`shared/src/enums.ts`). Cod
 | Workspace & access | `documents:manage_types` | Manage Document Types | Web | – |
 | Forms & facilities | `facilities:manage` | Manage Facility Catalogue | Web | MONITOR |
 | Forms & facilities | `forms:manage` | Manage Form Library | Web | MONITOR |
+| Needs assessment & funding | `needs:view` | View Needs Assessment Cycles | Web | – |
+| Needs assessment & funding | `needs:manage_cycle` | Open & Manage Cycles | Web | – |
+| Needs assessment & funding | `needs:submit` | Upload Needs Assessments | Web | – |
+| Needs assessment & funding | `needs:validate` | Validate Proposed Projects | Web | – |
+| Needs assessment & funding | `needs:cost` | Cost Proposed Projects | Web | – |
+| Needs assessment & funding | `needs:score` | Score Proposed Projects | Web | – |
+| Needs assessment & funding | `needs:chair_committee` | Chair the Steering Committee | Web | – |
+| Needs assessment & funding | `needs:submit_portfolio` | Submit the Prioritised Portfolio | Web | – |
+| Needs assessment & funding | `needs:review_portfolio` | Review the Portfolio | Web | – |
+| Needs assessment & funding | `needs:approve_portfolio` | Approve the Portfolio | Web | – |
+| Needs assessment & funding | `needs:record_funding` | Record Budget & Appropriation | Web | – |
+| Needs assessment & funding | `needs:prepare_beap` | Prepare the BEAP | Web | – |
+| Needs assessment & funding | `needs:review_beap` | Review BEAPs | Web | – |
+| Needs assessment & funding | `needs:approve_beap` | Approve BEAPs | Web | – |
+| Needs assessment & funding | `needs:approve_out_of_cycle` | Approve Out-of-Cycle Projects | Web | – |
+| Needs assessment & funding | `needs:override_separation` | Override Separation of Duties | Web | – |
+| Needs assessment & funding | `standards:manage` | Manage Costing & Design Standards | Web | – |
 | Portfolio & projects | `projects:view_assigned` | View Assigned Projects | Web | MONITOR, LENDER, ORGANIZATION_ADMIN |
 | Portfolio & projects | `projects:view_all_tenant` | View Every Project | Web | MONITOR, LENDER |
 | Portfolio & projects | `projects:view_organization_tree` | View Projects Owned by My Organisation Tree | Web | ORGANIZATION_ADMIN |
@@ -337,6 +380,7 @@ The catalogue lives in `SYSTEM_PERMISSIONS_CATALOG` (`shared/src/enums.ts`). Cod
 | Portfolio & projects | `projects:activate` | Activate Draft Projects | Web | MONITOR |
 | Portfolio & projects | `projects:edit_baseline` | Edit Project Details & Site | Web | MONITOR |
 | Portfolio & projects | `projects:manage_standards_docs` | Manage Standards & Needs Assessments | Web | MONITOR |
+| Portfolio & projects | `procurement:plan_lots` | Plan Procurement Lots | Web | – |
 | Portfolio & projects | `approved_lists:view` | View Approved Project Lists (client demo wave 3) | Web | – (see 2.2) |
 | Portfolio & projects | `approved_lists:manage` | Upload Approved Project Lists (client demo wave 4) | Web | – (see 2.2) |
 | Scope & sprints | `scope:view` | View Scope & Sprints | Both | MONITOR, LENDER, ORGANIZATION_ADMIN, MONITOR_INSPECTOR, INDEPENDENT_RESIDENT |

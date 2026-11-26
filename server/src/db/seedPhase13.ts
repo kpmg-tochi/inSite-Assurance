@@ -26,8 +26,9 @@ import { DemoDocumentContext, demoDocumentTitle, renderDemoDocument } from "./de
  * Phase 13 seed: document types for every tenant; contract milestone templates, kick-off rules,
  * document requirements and default cases on both programme project types (the UBEC administrator
  * acts for the Director Legal); then
- * - PRG-102 (Direct Intervention) mid-mobilisation: contract awarded and signed, kick-off held 16 days ago with
- *   quorum, minutes filed and signed, mobilisation due in 5 days;
+ * - PRG-102 (Direct Intervention) mid-mobilisation: contract awarded 16 days ago and signed, kick-off held 8 days
+ *   ago (inside the 14 days after award) with quorum, minutes filed and signed, mobilisation due in 5 days
+ *   (21 days from award, needs pipeline N0);
  * - PRG-221 (Matching Grants) with mobilisation overdue (kick-off 20 days ago, +14) and a default case
  *   that Legal has reviewed, now waiting for the Lagos SUBEB Executive Chairman's decision.
  *
@@ -36,7 +37,11 @@ import { DemoDocumentContext, demoDocumentTitle, renderDemoDocument } from "./de
  * S3 is not configured (otherwise only the register rows exist).
  */
 
-/** Direct Intervention (type code CENTRAL): UBEC Project Cycle Manual, Direct Intervention sections 5-6. */
+/**
+ * Direct Intervention (type code CENTRAL): UBEC Project Cycle Manual, Direct Intervention sections 5-6.
+ * Needs pipeline N0 (D-N.22, assumption A3): mobilisation counts 21 days from contract award (PCM p.12),
+ * and the kick-off happens inside that window. Matching Grants keeps 14 days from the kick-off (PCM p.38).
+ */
 const DIRECT_INTERVENTION: ContractMilestoneTemplateInput[] = [
   { key: "acceptance-letter", label: "Acceptance letter received", anchor: "CONTRACT_AWARD", offsetValue: 3, requiredDocumentTypeCodes: ["ACCEPTANCE_LETTER"], responsibleScope: "PROJECT_OWNER" },
   { key: "kickoff-notice", label: "Kick-off notice sent", anchor: "KICKOFF", offsetValue: -7, completionMode: "AUTO_KICKOFF_NOTICE_SENT", responsibleScope: "PROJECT_OWNER" },
@@ -47,8 +52,8 @@ const DIRECT_INTERVENTION: ContractMilestoneTemplateInput[] = [
   {
     key: "mobilisation-documents",
     label: "Mobilisation documents complete",
-    anchor: "KICKOFF",
-    offsetValue: 14,
+    anchor: "CONTRACT_AWARD",
+    offsetValue: 21,
     requiredDocumentTypeCodes: ["MOBILISATION_AGREEMENT", "SITE_POSSESSION_FORM"],
     perContractor: true,
     responsibleScope: "CONTRACTOR",
@@ -56,7 +61,7 @@ const DIRECT_INTERVENTION: ContractMilestoneTemplateInput[] = [
   {
     key: "contractor-mobilised",
     label: "Mobilised to site",
-    anchor: "KICKOFF",
+    anchor: "CONTRACT_AWARD",
     offsetValue: 21,
     completionMode: "AUTO_CONTRACTOR_ON_SITE",
     perContractor: true,
@@ -70,7 +75,9 @@ const DIRECT_INTERVENTION: ContractMilestoneTemplateInput[] = [
  * week), mobilisation within 14 calendar days.
  */
 const MATCHING_GRANTS: ContractMilestoneTemplateInput[] = [
-  ...DIRECT_INTERVENTION.filter((t) => t.key !== "contractor-mobilised" && t.key !== "minutes-signed"),
+  ...DIRECT_INTERVENTION.filter((t) => t.key !== "contractor-mobilised" && t.key !== "minutes-signed" && t.key !== "mobilisation-documents"),
+  // Unchanged by N0: both mobilisation milestones count 14 days from the kick-off.
+  { ...DIRECT_INTERVENTION.find((t) => t.key === "mobilisation-documents")!, anchor: "KICKOFF", offsetValue: 14 },
   { key: "programme-of-works", label: "Programme of works accepted", anchor: "KICKOFF", offsetValue: 0, completionMode: "AUTO_SCHEDULE_BASELINE_SET", responsibleScope: "CONTRACTOR" },
   { key: "mobilisation-plan", label: "Mobilisation plan submitted", anchor: "KICKOFF", offsetValue: 0, requiredDocumentTypeCodes: ["MOBILISATION_PLAN"], perContractor: true, responsibleScope: "CONTRACTOR" },
   {
@@ -83,7 +90,7 @@ const MATCHING_GRANTS: ContractMilestoneTemplateInput[] = [
     signOffPermissionKey: "kickoff:manage",
     responsibleScope: "PROJECT_OWNER",
   },
-  { ...DIRECT_INTERVENTION.find((t) => t.key === "contractor-mobilised")!, offsetValue: 14 },
+  { ...DIRECT_INTERVENTION.find((t) => t.key === "contractor-mobilised")!, anchor: "KICKOFF", offsetValue: 14 },
 ];
 
 const KICKOFF = { requiredStakeholderGroups: ["OWNER", "MONITOR", "CONTRACTOR", "BENEFICIARY"] as const, noticeLeadDays: 7 };
@@ -313,26 +320,28 @@ export async function seedPhase13() {
 
   // ---- PRG-102 (Direct Intervention): mid-mobilisation -------------------------------------------------
   const prg102 = byCode.get("PRG-102")!;
-  const kickoff102 = addDays(today, -16);
+  // N0: mobilisation is due 21 days from award, so award + 21 = today + 5; the kick-off was held 8 days
+  // after award (notice on the award day), inside the 14-day window.
+  const kickoff102 = addDays(today, -8);
   await prisma.project.update({
     where: { id: prg102.id },
     data: {
       contractReference: "UBEC/DI/2026/102",
-      contractAwardDate: addDays(today, -40),
-      contractSignedDate: addDays(today, -30),
+      contractAwardDate: addDays(today, -16),
+      contractSignedDate: addDays(today, -12),
       contractSumNgn: 232_000_000,
       kickoffDate: kickoff102,
     },
   });
   const contractor102 = await prisma.projectContractor.findFirstOrThrow({ where: { projectId: prg102.id }, include: { organization: true } });
   const beneficiary102 = await prisma.projectBeneficiary.findFirst({ where: { projectId: prg102.id, isPrimary: true } });
-  await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "CONTRACT", title: demoDocumentTitle("CONTRACT", { contractReference: "UBEC/DI/2026/102" }), uploadedByUserId: admin.userId, createdAt: daysAgo(30) });
-  await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "ACCEPTANCE_LETTER", title: demoDocumentTitle("ACCEPTANCE_LETTER", { contractor: contractor102.organization.name }), uploadedByUserId: admin.userId, createdAt: daysAgo(38) });
-  const minutes102 = await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "KICKOFF_MINUTES", title: demoDocumentTitle("KICKOFF_MINUTES", { kickoffDate: kickoff102 }), uploadedByUserId: admin.userId, createdAt: daysAgo(15) });
-  await signDocument(minutes102, admin, daysAgo(14));
-  await signDocument(minutes102, monitorUser, daysAgo(13));
-  const agreement102 = await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "MOBILISATION_AGREEMENT", title: demoDocumentTitle("MOBILISATION_AGREEMENT"), uploadedByUserId: admin.userId, projectContractorId: contractor102.id, createdAt: daysAgo(10) });
-  await signDocument(agreement102, admin, daysAgo(9));
+  await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "CONTRACT", title: demoDocumentTitle("CONTRACT", { contractReference: "UBEC/DI/2026/102" }), uploadedByUserId: admin.userId, createdAt: daysAgo(12) });
+  await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "ACCEPTANCE_LETTER", title: demoDocumentTitle("ACCEPTANCE_LETTER", { contractor: contractor102.organization.name }), uploadedByUserId: admin.userId, createdAt: daysAgo(14) });
+  const minutes102 = await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "KICKOFF_MINUTES", title: demoDocumentTitle("KICKOFF_MINUTES", { kickoffDate: kickoff102 }), uploadedByUserId: admin.userId, createdAt: daysAgo(7) });
+  await signDocument(minutes102, admin, daysAgo(6));
+  await signDocument(minutes102, monitorUser, daysAgo(5));
+  const agreement102 = await fileDocument({ tenantId: programme.id, projectId: prg102.id, typeCode: "MOBILISATION_AGREEMENT", title: demoDocumentTitle("MOBILISATION_AGREEMENT"), uploadedByUserId: admin.userId, projectContractorId: contractor102.id, createdAt: daysAgo(4) });
+  await signDocument(agreement102, admin, daysAgo(3));
   await heldKickoff({
     projectId: prg102.id,
     date: kickoff102,

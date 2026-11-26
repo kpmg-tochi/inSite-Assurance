@@ -113,6 +113,12 @@ export function generateVisitDates(rule: VisitPlanRule, ctx: VisitPlanContext): 
       const from = ctx.kickoffHeldDate && ctx.kickoffHeldDate > ctx.activationDate ? ctx.kickoffHeldDate : ctx.activationDate;
       const until = ctx.mobilisationDueDate && ctx.mobilisationDueDate > from ? ctx.mobilisationDueDate : addDays(from, 7 * Math.max(1, rule.intervalWeeks));
       dates = everyNWeeks(from, until, rule.intervalWeeks).map(roll);
+      // Needs pipeline N0 (D-N.22): where mobilisation counts from contract award, the time left
+      // after the kick-off can be shorter than the interval. Mobilisation is still checked once, on
+      // the day it is due (the last working day on or before it), as a short sprint gets one visit.
+      if (dates.length === 0 && ctx.mobilisationDueDate && ctx.mobilisationDueDate > from) {
+        dates = [previousWorkdayOnOrBefore(ctx.mobilisationDueDate, ww)];
+      }
       break;
     }
     case 'QUARTERLY': {

@@ -73,6 +73,18 @@ export * from './schemas/needsAssessment.schema';
 // Client demo updates (wave 3): contractor flags and decisions, approved lists
 export * from './schemas/contractorFlag.schema';
 export * from './schemas/approvedList.schema';
+// Needs pipeline (wave 1, N1): proposed projects, cycles, costing standards and their pure rules
+export * from './schemas/needsPipeline.schema';
+export * from './schemas/costingStandard.schema';
+export * from './data/needsPipelineDefaults';
+export * from './utils/needsStages';
+export * from './utils/needsSeparation';
+export * from './utils/needsScoring';
+export * from './utils/facilityBreakdown';
+export * from './utils/needsCosting';
+export * from './utils/proposalReference';
+export * from './utils/needsDuplicates';
+export * from './utils/needsCalendar';
 
 // Data
 export * from './data/standardsLibrary';

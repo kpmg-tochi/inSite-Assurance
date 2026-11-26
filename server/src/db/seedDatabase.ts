@@ -30,6 +30,7 @@ import { seedClosureTwin } from "./seedClosureTwin";
 import { seedRegisterFields } from "./seedRegisterFields";
 import { seedDocumentRegisters } from "./seedDocumentRegisters";
 import { seedAlerts } from "./seedAlerts";
+import { seedNeedsPipeline } from "./seedNeedsPipeline";
 import { seedDemoOverlay } from "./seedDemoOverlay";
 import { projectObjectPrefix } from "../integrations/storage.service";
 import { seedDaysAgo, seedRecordedPayment } from "./seedPayments";
@@ -140,6 +141,29 @@ async function runSeed(): Promise<void> {
   console.log("🌱 Starting InSite Assurance database seed...");
 
   // Clean existing records in reverse dependency order
+  // Needs pipeline (N1): children before parents. Deleted first, as cycles point at project types,
+  // organisations and costing standards, and committee members and approval actions at users.
+  // Projects lose their proposal link by the foreign key (SET NULL).
+  await prisma.needsApprovalAction.deleteMany();
+  await prisma.needsApprovalStep.deleteMany();
+  await prisma.needsSubmissionItem.deleteMany();
+  await prisma.needsSubmission.deleteMany();
+  await prisma.needsScoreSheet.deleteMany();
+  await prisma.needsCommitteeMember.deleteMany();
+  await prisma.needsStageDecisionItem.deleteMany();
+  await prisma.needsStageDecision.deleteMany();
+  await prisma.needsValidationRecord.deleteMany();
+  await prisma.needsProposalFlag.deleteMany();
+  await prisma.needsProposalDocument.deleteMany();
+  await prisma.needsFacilityBreakdownRow.deleteMany();
+  await prisma.needsProposalSite.deleteMany();
+  // Self-references and the current-version pointer are cleared before the rows go.
+  await prisma.needsProposal.updateMany({ data: { carriedFromId: null, mergedIntoId: null, currentVersionId: null } });
+  await prisma.needsAssessmentVersion.deleteMany();
+  await prisma.needsProposal.deleteMany();
+  await prisma.needsCycleDocument.deleteMany();
+  await prisma.needsCycle.deleteMany();
+  await prisma.costingStandardVersion.deleteMany();
   await prisma.pushToken.deleteMany();
   // Phase 15 (signatures restrict their evidence documents, so they go before the register).
   await prisma.kpiSnapshot.deleteMany(); // Phase 16
@@ -847,6 +871,8 @@ async function runSeed(): Promise<void> {
   await seedDocumentRegisters();
   // UBEC IRL: early-warning alerts from the seeded data, through the alert service (runs last).
   await seedAlerts();
+  // Needs pipeline (wave 1): the cycle rules on both programme types (no cycles or proposals yet).
+  await seedNeedsPipeline();
   // Client demo updates: SEED_PROFILE=ubec-demo adds the demo overlay (story table in its header).
   // Tests and the default profile keep the normal seed.
   if (process.env.SEED_PROFILE === "ubec-demo") await seedDemoOverlay();

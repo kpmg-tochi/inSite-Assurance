@@ -590,11 +590,27 @@ export const KickoffMeetingDtoSchema = z.object({
 });
 export type KickoffMeetingDto = z.infer<typeof KickoffMeetingDtoSchema>;
 
+/** Needs pipeline N0 (D-N.22): shown on the kick-off tab; never blocks a save. */
+export const KickoffWarningCodeEnum = z.enum(['KICKOFF_AFTER_AWARD_WINDOW']);
+export type KickoffWarningCode = z.infer<typeof KickoffWarningCodeEnum>;
+
+export const KickoffWarningSchema = z.object({
+  code: KickoffWarningCodeEnum,
+  message: z.string(),
+  /** KICKOFF_AFTER_AWARD_WINDOW: the dates the rule compared (YYYY-MM-DD). */
+  contractAwardDate: z.string().nullable(),
+  plannedKickoffDate: z.string().nullable(),
+  latestKickoffDate: z.string().nullable(),
+});
+export type KickoffWarning = z.infer<typeof KickoffWarningSchema>;
+
 export const ProjectKickoffDtoSchema = z.object({
   meeting: KickoffMeetingDtoSchema.nullable(),
   plannedKickoffDate: z.string().nullable(),
   requiredStakeholderGroups: z.array(KickoffStakeholderGroupEnum),
   noticeLeadDays: z.number().int(),
+  /** Non-blocking warnings about the plan (empty once the kick-off is held). */
+  warnings: z.array(KickoffWarningSchema),
   /** Pre-filled invitees from the parties, beneficiaries and assigned users (for a new meeting). */
   suggestedInvitees: z.array(KickoffInviteeInputSchema),
 });

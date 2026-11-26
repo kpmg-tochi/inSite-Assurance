@@ -69,10 +69,14 @@ import { KANO_SUBEB_NAME, ME_CONSULTANTS_NAME, PROGRAMME_TENANT_SLUG, UBEC_ORG_N
 import { heldKickoff, payloadFor } from "./seedPhase13";
 import { approvedFinalEvaluation } from "./seedPhase15";
 import {
+  DPP_EMAIL,
+  ES_EMAIL,
+  FINANCE_EMAIL,
   INDEPENDENT_ME_EMAIL,
   KANO_ADMIN_EMAIL,
   LAGOS_ADMIN_EMAIL,
   LAGOS_ME_EMAIL,
+  NEEDS_PIPELINE_GRANTS,
   RESIDENT_SUPERVISOR_EMAIL,
   UBEC_ADMIN_EMAIL,
   UBEC_ME_EMAIL,
@@ -187,15 +191,13 @@ import {
 
 const TZ = "Africa/Lagos";
 
+// Needs pipeline (D-N.25): these three roles and logins are created by the normal seed
+// (seedUbecRoster); the overlay reuses them and sets their demo permissions.
 const ROLE = {
-  ES: "EXECUTIVE_SECRETARY",
-  DPP: "DIRECTOR_PHYSICAL_PLANNING",
-  FINANCE: "FINANCE_OFFICER",
+  ES: UBEC_ROLE.ES,
+  DPP: UBEC_ROLE.DPP,
+  FINANCE: UBEC_ROLE.FINANCE,
 } as const;
-
-const ES_EMAIL = "es@ubec.test";
-const DPP_EMAIL = "dpp@ubec.test";
-const FINANCE_EMAIL = "finance@ubec.test";
 const SOKOTO_ADMIN_EMAIL = "sokoto.admin@ubec.test";
 
 /** Lots in order per intervention year (UBEC-style titles). */
@@ -433,8 +435,13 @@ async function rolesAndLogins(tenantId: string): Promise<Ctx["roleIds"]> {
   ];
   const created: Record<string, string> = {};
   for (const [code, name, description, keys] of newRoles) {
-    const role = await prisma.role.create({ data: { tenantId, code, name, description, surface: "WEB", fieldPersonaType: "NONE", isSystemDefault: false } });
-    await setPermissions(role.id, keys);
+    // The role exists (normal seed) with its needs pipeline grants only: the demo adds its project permissions.
+    const role = await prisma.role.upsert({
+      where: { tenantId_code: { tenantId, code } },
+      update: { name, description },
+      create: { tenantId, code, name, description, surface: "WEB", fieldPersonaType: "NONE", isSystemDefault: false },
+    });
+    await setPermissions(role.id, [...keys, ...(NEEDS_PIPELINE_GRANTS[code] ?? [])]);
     created[code] = role.id;
   }
 
@@ -445,7 +452,11 @@ async function rolesAndLogins(tenantId: string): Promise<Ctx["roleIds"]> {
     [DPP_EMAIL, "Ifeoma Nwosu", created[ROLE.DPP], "+234 803 555 0202"],
     [FINANCE_EMAIL, "Babatunde Adewale", created[ROLE.FINANCE], "+234 803 555 0203"],
   ] as const) {
-    await prisma.user.create({ data: { tenantId, email, fullName, passwordHash, roleId, organizationId: flagship.id, phoneNumber: phone } });
+    await prisma.user.upsert({
+      where: { email },
+      update: { fullName, roleId, organizationId: flagship.id, phoneNumber: phone },
+      create: { tenantId, email, fullName, passwordHash, roleId, organizationId: flagship.id, phoneNumber: phone },
+    });
   }
   return { admin: admin.id, chairman: chairman.id, es: created[ROLE.ES] };
 }

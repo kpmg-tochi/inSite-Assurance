@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { Link } from "react-router-dom";
-import { CheckCircle2, Mail, Plus, Trash2, Users, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Mail, Plus, Trash2, Users, XCircle } from "lucide-react";
 import {
   KICKOFF_STAKEHOLDER_GROUP_META,
   KickoffStakeholderGroupEnum,
@@ -173,6 +173,21 @@ function KickoffBody({ projectId, k }: { projectId: string; k: ProjectKickoffDto
             : `one attendee from each of ${k.requiredStakeholderGroups.map((g) => KICKOFF_STAKEHOLDER_GROUP_META[g].label.toLowerCase()).join(", ")}`}
         </span>
       </div>
+
+      {/* Needs pipeline N0: warnings about the plan (e.g. kick-off later than 14 days after award). Never a block. */}
+      {k.warnings.map((w) => (
+        <div
+          key={w.code}
+          role="status"
+          className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span>
+            <span className="font-semibold">Check the kick-off date. </span>
+            {w.message}
+          </span>
+        </div>
+      ))}
 
       {held && meeting ? (
         <HeldSummary projectId={projectId} meeting={meeting} />

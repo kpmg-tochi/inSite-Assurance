@@ -54,6 +54,9 @@ describe('Redesign R6e: project type config groups', () => {
     assert.equal(PROJECT_TYPE_CONFIG_GROUPS.kpiTargets, 'kpis');
     assert.equal(PROJECT_TYPE_CONFIG_GROUPS.ownership, 'advanced');
     assert.equal(PROJECT_TYPE_CONFIG_GROUPS.parties, 'advanced');
+    // Needs pipeline (N1): its own tab, first.
+    assert.equal(PROJECT_TYPE_CONFIG_GROUPS.needsPipeline, 'needs');
+    assert.equal(PROJECT_TYPE_CONFIG_GROUP_IDS[0], 'needs');
   });
 
   it('maps validation issue paths to the general block or a tab', () => {
@@ -64,6 +67,7 @@ describe('Redesign R6e: project type config groups', () => {
     assert.equal(projectTypeEditorSectionForPath(['config', 'monitoring', 'visitPlan', 0]), 'monitoring');
     assert.equal(projectTypeEditorSectionForPath(['config', 'payments', 'retentionPercentage']), 'completion');
     assert.equal(projectTypeEditorSectionForPath(['config', 'kpiTargets']), 'kpis');
+    assert.equal(projectTypeEditorSectionForPath(['config', 'needsPipeline', 'stages', 0, 'label']), 'needs');
     assert.equal(projectTypeEditorSectionForPath(['config', 'somethingNew']), 'advanced');
     assert.equal(projectTypeEditorSectionForPath(['config']), 'advanced');
   });

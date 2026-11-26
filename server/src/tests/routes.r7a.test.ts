@@ -19,7 +19,7 @@ import path from 'node:path';
 import { Client } from 'pg';
 import type { Express } from 'express';
 import request from 'supertest';
-import { SYSTEM_PERMISSIONS_CATALOG } from '@insite/shared';
+import { PermissionCategoryEnum, SYSTEM_PERMISSIONS_CATALOG } from '@insite/shared';
 
 type PrismaClientType = typeof import('../config/prisma')['prisma'];
 
@@ -32,11 +32,27 @@ const MIGRATION_SQL = path.resolve(
   '../../prisma/migrations/20261225090000_r7a_permission_catalogue/migration.sql',
 );
 
+/** The categories the R7a migration's enum swap creates. Later migrations added the others. */
+const R7A_CATEGORIES = ['TENANT_ADMIN', 'FORMS_FACILITIES', 'PORTFOLIO_PROJECTS', 'SCOPE_SPRINTS', 'CONTRACT_KICKOFF', 'VISITS_FINDINGS', 'PAYMENTS', 'COMPLETION_CLOSURE'];
+const LATER_CATEGORIES = PermissionCategoryEnum.options.filter((c) => !R7A_CATEGORIES.includes(c));
+
+/**
+ * Replays the R7a migration in history order. Its enum swap knows only the R7a categories, so rows
+ * of a category added later (needs pipeline: NEEDS_FUNDING) wait in an R7a category while it runs;
+ * the later category is then added again, as its own migration did, and the catalogue sync that
+ * follows puts those rows back.
+ */
 async function runMigrationSql() {
   const client = new Client({ connectionString: TEST_DATABASE_URL });
   await client.connect();
   try {
+    if (LATER_CATEGORIES.length) {
+      await client.query(`UPDATE "permissions" SET "category" = 'PORTFOLIO_PROJECTS' WHERE "category"::text = ANY($1)`, [LATER_CATEGORIES]);
+    }
     await client.query(fs.readFileSync(MIGRATION_SQL, 'utf8'));
+    for (const category of LATER_CATEGORIES) {
+      await client.query(`ALTER TYPE "PermissionCategory" ADD VALUE IF NOT EXISTS '${category}'`);
+    }
   } finally {
     await client.end();
   }
