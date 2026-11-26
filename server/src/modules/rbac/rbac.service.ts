@@ -11,6 +11,7 @@ import {
   DEFAULT_TENANT_ROLES,
   MobileDeviceDto,
   FieldPersonaType,
+  formatProjectCodeWithYear,
   OrganizationCategory,
   PermissionCategory,
   RoleSurface,
@@ -738,7 +739,7 @@ export async function assignUserProjectsAndRole(
     for (const project of added) {
       void sendPushToMobileUser(userId, {
         title: 'New project',
-        body: `You've been added to ${project.name} (${project.codePrefix}).`,
+        body: `You've been added to ${project.name} (${formatProjectCodeWithYear(project.codePrefix)}).`,
         data: { actionType: 'OPEN_PROJECT', projectId: project.id },
       }).catch(() => undefined);
     }

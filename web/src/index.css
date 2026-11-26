@@ -14,7 +14,7 @@
     --color-brand-navy: 18 47 42; /* #122F2A dark green surface */
     --color-brand-dark: 12 32 29; /* #0C201D */
     --color-brand-subcard: 15 41 37; /* #0F2925 */
-    --color-surface-canvas: 246 248 247; /* #F6F8F7 green-tinted canvas */
+    --color-surface-canvas: 249 251 250; /* #F9FBFA green-tinted canvas (light enough for slate-500 text at 4.5:1) */
 
     /* Hex equivalents for SVG & Leaflet vector paths */
     --hex-brand-primary: #00715d;
@@ -133,16 +133,31 @@ table td {
   filter: saturate(0.78) contrast(0.96) brightness(1.02);
 }
 
-@keyframes logoLoaderPulse {
-  0%,
-  100% {
-    opacity: 0.25;
-  }
-  50% {
-    opacity: 1;
+/* Loader (components/Loader.tsx): two open rings turning in opposite directions. */
+@keyframes ubecSpinnerTurn {
+  to {
+    transform: rotate(360deg);
   }
 }
 
-.logo-loader {
-  animation: logoLoaderPulse 1s ease-in-out infinite;
+.ubec-spinner-outer {
+  animation: ubecSpinnerTurn 1.1s linear infinite;
+}
+
+.ubec-spinner-inner {
+  animation: ubecSpinnerTurn 0.8s linear infinite reverse;
+}
+
+/* Reduced motion: no looping pulses (map pins); the spinner turns very slowly but stays visible. */
+@media (prefers-reduced-motion: reduce) {
+  .pin-pulse::after {
+    animation: none;
+    opacity: 0;
+  }
+  .ubec-spinner-outer {
+    animation-duration: 6s;
+  }
+  .ubec-spinner-inner {
+    animation-duration: 5s;
+  }
 }

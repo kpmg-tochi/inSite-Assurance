@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ProjectPaymentHoldDtoSchema } from './contractorFlag.schema';
 
 /**
  * Payment record (redesign R1b). Contractor payments are made outside the platform (later fed by
@@ -27,6 +28,8 @@ export const PaymentExceptionEnum = z.enum([
   'RETENTION_RELEASE_BEFORE_PERIOD_END',
   'RETENTION_RELEASE_WITH_OPEN_DEFECTS',
   'PAID_ABOVE_CONTRACT_SUM',
+  // Client demo updates F.4 (wave 3): recorded while a payment hold was in effect (with an override reason).
+  'PAID_DURING_HOLD',
 ]);
 export type PaymentException = z.infer<typeof PaymentExceptionEnum>;
 
@@ -36,6 +39,7 @@ export const PAYMENT_EXCEPTION_LABELS: Record<PaymentException, string> = {
   RETENTION_RELEASE_BEFORE_PERIOD_END: 'Retention released before the defects liability period ended',
   RETENTION_RELEASE_WITH_OPEN_DEFECTS: 'Retention released while defects were still open',
   PAID_ABOVE_CONTRACT_SUM: 'Total paid is above the contract sum',
+  PAID_DURING_HOLD: 'Recorded while a payment hold was in effect on the contractor',
 };
 
 export const RecordPaymentRequestSchema = z
@@ -50,6 +54,8 @@ export const RecordPaymentRequestSchema = z
     description: z.string().trim().max(500).nullable().optional(),
     /** Redesign R6d (D-R6.23): the sprint the payment is for, optional; must be a sprint of the project. */
     sprintId: z.string().uuid().nullable().optional(),
+    /** Wave 3 (F.4): required while a payment hold is in effect (422 PAYMENT_HOLD_OVERRIDE_REQUIRED). */
+    holdOverrideReason: z.string().trim().min(5, 'Say why the payment is made during the hold').max(500).nullable().optional(),
   })
   .superRefine((v, ctx) => {
     if (v.retentionHeldNgn != null && v.retentionHeldNgn > v.grossAmountNgn) {
@@ -124,6 +130,8 @@ export const ProjectPaymentsSummaryDtoSchema = z.object({
   payments: z.array(PaymentDtoSchema),
   /** G.1: the tenant's fiscal year start (1–12), for the period filter's quarters and years. */
   fiscalYearStartMonth: z.number().int().optional(),
+  /** Wave 3 (F.4): a payment hold in effect on the project's contractor, or null. */
+  paymentHold: ProjectPaymentHoldDtoSchema.nullable().optional(),
 });
 export type ProjectPaymentsSummaryDto = z.infer<typeof ProjectPaymentsSummaryDtoSchema>;
 

@@ -17,6 +17,8 @@ export const SCOPE_WORKBOOK_SHEETS = {
   units: 'Facility units',
   boq: 'BoQ',
   sprints: 'Sprints',
+  /** Client demo updates C2/D1 (wave 2): one row per site; optional (older files have none). */
+  sites: 'Sites',
   lists: 'Lists',
 } as const;
 
@@ -25,7 +27,12 @@ export const SCOPE_WORKBOOK_COLUMNS = {
   units: ['Unit ID', 'Facility', 'Label', 'Quantity', 'Quantity unit', 'Start sprint', 'End sprint'],
   boq: ['Item no.', 'Unit ID', 'Description', 'Unit of measure', 'Quantity', 'Rate', 'Amount'],
   sprints: ['No.', 'Name', 'Start date', 'End date', 'Deliverables'],
+  /** Wave 2: "Site" on a unit is the site number from the Sites sheet (optional column). */
+  sites: ['Site no.', 'School name', 'School level', 'LGA', 'Address', 'Latitude', 'Longitude'],
 } as const;
+
+/** Wave 2: the optional column on the Facility units sheet naming the unit's site (site number). */
+export const SCOPE_WORKBOOK_UNIT_SITE_COLUMN = 'Site no.';
 
 /** Project sheet rows (label in column A, value in column B). */
 export const SCOPE_WORKBOOK_PROJECT_FIELDS = [
@@ -41,6 +48,9 @@ export const SCOPE_WORKBOOK_PROJECT_FIELDS = [
   // UBEC IRL register fields (files made before them still import: rows are matched by label).
   { key: 'interventionYear', label: 'Intervention year' },
   { key: 'fundingSource', label: 'Funding source' },
+  // Client demo updates (wave 2, D1): needs assessment first.
+  { key: 'state', label: 'State' },
+  { key: 'lotTitle', label: 'Lot title' },
   { key: 'strategicJustification', label: 'Strategic justification' },
   { key: 'assumptions', label: 'Assumptions' },
 ] as const;

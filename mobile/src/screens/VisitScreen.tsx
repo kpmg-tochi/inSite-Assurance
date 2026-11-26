@@ -120,16 +120,16 @@ export function VisitScreen() {
 
   if (loading && !data) {
     return (
-      <GradientHeaderLayout title="Visit" leftAction={<BackButton onPress={() => navigation.goBack()} />}>
+      <GradientHeaderLayout title="Monitoring visit" leftAction={<BackButton onPress={() => navigation.goBack()} />}>
         <InSiteLoader size="md" />
       </GradientHeaderLayout>
     );
   }
   if (!data || !data.visit) {
     return (
-      <GradientHeaderLayout title="Visit" leftAction={<BackButton onPress={() => navigation.goBack()} />}>
+      <GradientHeaderLayout title="Monitoring visit" leftAction={<BackButton onPress={() => navigation.goBack()} />}>
         <EmptyStateCard
-          title="This visit is not on the phone"
+          title="This monitoring visit is not on the phone"
           description="It may have been reassigned or is outside the weeks kept offline. Pull down on Home to refresh."
         />
       </GradientHeaderLayout>
@@ -167,7 +167,7 @@ export function VisitScreen() {
   const openForm = () =>
     run(async () => {
       if (!open && s.status === 'RETURNED') {
-        if (!v.serverId) throw new Error('This visit has not reached the server yet.');
+        if (!v.serverId) throw new Error('This monitoring visit has not reached the server yet.');
         const d = detail ?? (await refreshVisitDetail(v.projectId, v.serverId).catch(() => null));
         if (!d) throw new Error('Connect to the internet to load the returned monitoring report, then try again.');
         const { dropped } = await startCorrectionDraft(v.id, d);
@@ -219,9 +219,9 @@ export function VisitScreen() {
       contentContainerStyle={styles.body}
     >
       <StatusBadges badges={visitBadges(view)} />
-      {v.local.createError ? <InfoCallout variant="warning" title="The server refused this visit" description={v.local.createError} /> : null}
+      {v.local.createError ? <InfoCallout variant="warning" title="The server refused this monitoring visit" description={v.local.createError} /> : null}
       {v.local.removedFromFeedAt ? (
-        <InfoCallout variant="warning" title="No longer in your visits" description="The server no longer lists this visit for you. Your monitoring report on this phone is kept." />
+        <InfoCallout variant="warning" title="No longer in your monitoring visits" description="The server no longer lists this monitoring visit for you. Your monitoring report on this phone is kept." />
       ) : null}
       {v.local.responseError ? (
         <TouchableOpacity onPress={() => void dismissResponseError(v.id)} accessibilityRole="button" accessibilityLabel="Dismiss this message">
@@ -278,13 +278,13 @@ export function VisitScreen() {
         <PrimaryButton text={copy.checkInButton} onPress={() => setCheckInOpen(true)} accessibilityLabel={`${copy.checkInButton} to ${view.kindLabel}`} />
       )}
       {startable && formState.kind === 'FORM_MISSING' ? (
-        <SectionCard title="The form is not on this phone yet" subtitle="Connect once to download it; after that the visit works offline.">
+        <SectionCard title="The form is not on this phone yet" subtitle="Connect once to download it; after that the monitoring visit works offline.">
           <OutlineButton text="Download the form" icon="download" onPress={() => void downloadForm()} disabled={working} />
         </SectionCard>
       ) : startable && open?.status !== 'QUEUED' ? (
         <PrimaryButton text={formButton} onPress={() => void openForm()} isWorking={working} />
       ) : null}
-      {!canSubmit ? <Text style={visitUiStyles.muted}>Your role on this project can view visits but not submit them.</Text> : null}
+      {!canSubmit ? <Text style={visitUiStyles.muted}>Your role on this project can view monitoring visits but not submit them.</Text> : null}
 
       {open?.status === 'QUEUED' && (
         <SectionCard title="Monitoring report saved" subtitle={copy.waitingToSend}>
@@ -315,7 +315,7 @@ export function VisitScreen() {
 
       <SectionCard
         title="Facilities to check"
-        subtitle={facilityBlocks.length === 0 ? (form ? 'This visit has no facility sections.' : `${s.facilityCount} facilit${s.facilityCount === 1 ? 'y' : 'ies'}`) : null}
+        subtitle={facilityBlocks.length === 0 ? (form ? 'This monitoring visit has no facility sections.' : `${s.facilityCount} facilit${s.facilityCount === 1 ? 'y' : 'ies'}`) : null}
       >
         {facilityBlocks.map((b) => (
           <View key={b.key} style={styles.item}>
@@ -339,7 +339,7 @@ export function VisitScreen() {
         </SectionCard>
       )}
 
-      <SectionCard title="Review and comments" subtitle={detailError ?? (v.serverId ? null : 'Available once the visit reaches the server.')}>
+      <SectionCard title="Review and comments" subtitle={detailError ?? (v.serverId ? null : 'Available once the monitoring visit reaches the server.')}>
         {detail?.submissions
           .filter((sub) => sub.status === 'RETURNED' && sub.returnedNotes)
           .map((sub) => (

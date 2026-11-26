@@ -28,16 +28,16 @@ const ROWS: Array<{
   {
     section: "stalled",
     alert: "STALLED",
-    rule: "In execution, no accepted visit has raised a unit's progress for this many days since the first work phase started.",
+    rule: "In execution, no accepted monitoring report has raised a unit's progress for this many days since the first work phase started.",
     threshold: { field: "days", label: "Days without progress", min: 7, max: 365 },
     recipients: "Users who receive escalations, and the project's field officers (phone).",
   },
   {
     section: "siteUpdateOverdue",
     alert: "SITE_UPDATE_OVERDUE",
-    rule: "In mobilisation or execution, no visit has been accepted for this many days (from activation until the first).",
-    threshold: { field: "days", label: "Days without an accepted visit", min: 3, max: 180 },
-    recipients: "Users who plan visits, and the project's field officers (phone).",
+    rule: "In mobilisation or execution, no monitoring report has been accepted for this many days (from activation until the first).",
+    threshold: { field: "days", label: "Days without an accepted monitoring report", min: 3, max: 180 },
+    recipients: "Users who plan monitoring visits, and the project's field officers (phone).",
   },
   {
     section: "spendAheadOfProgress",

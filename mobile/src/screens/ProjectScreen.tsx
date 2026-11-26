@@ -156,7 +156,7 @@ export function ProjectScreen() {
                     {u.label}
                     {u.plannedQuantity != null ? ` · ${u.plannedQuantity} ${u.quantityUnit ?? ''}`.trimEnd() : ''}
                     {u.startSprintNumber != null ? ` · ${sprintRange(u.startSprintNumber, u.endSprintNumber)}` : ''}
-                    {u.progressPct != null ? ` · ${Math.round(u.progressPct)}% seen on the last accepted visit` : ''}
+                    {u.progressPct != null ? ` · ${Math.round(u.progressPct)}% seen on the last accepted monitoring visit` : ''}
                   </Text>
                 ))}
               </View>
@@ -165,7 +165,7 @@ export function ProjectScreen() {
 
           <SectionCard
             title="Open findings"
-            subtitle={pack.openFindings.length === 0 ? 'None open.' : 'Followed up with a follow-up check in the visit form.'}
+            subtitle={pack.openFindings.length === 0 ? 'None open.' : 'Followed up with a follow-up check in the monitoring form.'}
           >
             {pack.openFindings.map((f) => (
               <View key={f.id} style={styles.item}>
@@ -182,7 +182,7 @@ export function ProjectScreen() {
             ))}
           </SectionCard>
 
-          <SectionCard title="Past monitoring visits" subtitle={pastVisits.length === 0 ? 'None on this phone.' : 'Visits on this phone from the last weeks.'}>
+          <SectionCard title="Past monitoring visits" subtitle={pastVisits.length === 0 ? 'None on this phone.' : 'Monitoring visits on this phone from the last weeks.'}>
             {pastVisits.map((v) => (
               <LinkRow
                 key={v.id}

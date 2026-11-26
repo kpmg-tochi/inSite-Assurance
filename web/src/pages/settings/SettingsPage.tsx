@@ -394,7 +394,7 @@ export function SettingsPage({ project }: SettingsPageProps) {
                     </span>
                   </span>
                 }
-                subtitle="Field accounts signed in on a device for this project: visits, geotagged photos and voice notes"
+                subtitle="Field accounts signed in on a device for this project: monitoring visits, geotagged photos and voice notes"
                 search={{
                   value: rosterSearch,
                   onChange: setRosterSearch,

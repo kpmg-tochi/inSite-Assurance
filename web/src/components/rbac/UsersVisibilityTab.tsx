@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { UserPlus, Smartphone } from 'lucide-react';
@@ -37,9 +37,25 @@ import { StandardTable, TableActionButton, type TableColumnDef } from '../table'
 import { TAB_LIST_CLASS, tabCountClass, tabItemClass } from '../common/Tabs';
 import { StatusText } from '../common/StatusText';
 import { OrganizationInput } from '../organizations/OrganizationInput';
+import { UserProjectsTable } from './UserProjectsTable';
 
 const isProvisionedRole = (role: RoleDto | undefined) =>
   Boolean(role && role.surface !== 'WEB');
+
+/** The role sees every project of the workspace, so the project list is not used (same rule as the server's hasAllTenantProjects). */
+const roleSeesAllProjects = (role: RoleDto | undefined) =>
+  Boolean(role?.permissions.some((p) => p.key === 'projects:view_all_tenant'));
+
+const projectCountLabel = (n: number) => (n === 1 ? '1 project' : `${n} projects`);
+
+/** One line in place of the projects table when the role sees every project. */
+function AllProjectsNote() {
+  return (
+    <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-slate-700">
+      <span className="font-semibold text-slate-800">All projects.</span> This role sees every project, so no projects need assigning.
+    </p>
+  );
+}
 
 /** Optional phone: empty, or the format the server accepts. */
 const PhoneText = z
@@ -105,6 +121,7 @@ function MobileAccessFields(props: {
   form: AnyForm;
 }) {
   const { form } = props;
+  const uid = useId();
   const mainGivesAccess = isProvisionedRole(props.mainRole);
   return (
     <div className="rounded-xl border border-slate-200 p-3 space-y-2.5">
@@ -113,8 +130,9 @@ function MobileAccessFields(props: {
         Mobile access
       </div>
       <div>
-        <label className="block font-semibold text-slate-700 mb-1">Mobile role</label>
+        <label htmlFor={`${uid}-mobile-role`} className="block font-semibold text-slate-700 mb-1">Mobile role</label>
         <select
+          id={`${uid}-mobile-role`}
           {...form.register('mobileRoleId')}
           className="w-full rounded-xl border border-slate-200 px-3 py-2"
         >
@@ -132,8 +150,9 @@ function MobileAccessFields(props: {
         </p>
       </div>
       <div>
-        <label className="block font-semibold text-slate-700 mb-1">Phone number</label>
+        <label htmlFor={`${uid}-phone`} className="block font-semibold text-slate-700 mb-1">Phone number</label>
         <input
+          id={`${uid}-phone`}
           type="tel"
           {...form.register('phoneNumber')}
           {...fieldA11y(form, 'phoneNumber')}
@@ -222,8 +241,7 @@ export function UsersVisibilityTab() {
     });
   };
 
-  const toggleProject = (form: typeof createForm | typeof editForm, list: string[], projectId: string) => {
-    const next = list.includes(projectId) ? list.filter((id) => id !== projectId) : [...list, projectId];
+  const setProjectIds = (form: typeof createForm | typeof editForm, next: string[]) => {
     (form as AnyForm).setValue('projectIds', next, { shouldDirty: true, shouldValidate: true });
   };
 
@@ -242,7 +260,7 @@ export function UsersVisibilityTab() {
   const searched = users.filter(
     (u) =>
       !term ||
-      [u.fullName, u.email, u.organizationName, u.roleName, ...u.projectAssignments.map((a) => a.projectCodePrefix ?? '')].some((v) =>
+      [u.fullName, u.email, u.organizationName, u.roleName, ...u.projectAssignments.flatMap((a) => [a.projectCodePrefix ?? '', formatProjectCode(a.projectCodePrefix)])].some((v) =>
         v.toLowerCase().includes(term)
       )
   );
@@ -287,9 +305,9 @@ export function UsersVisibilityTab() {
         u.hasAllTenantProjects ? (
           <span className="text-slate-800">All projects</span>
         ) : u.projectAssignments.length > 0 ? (
-          <span className="text-slate-800">{u.projectAssignments.map((pa) => formatProjectCode(pa.projectCodePrefix) || pa.projectId.slice(0, 8)).join(', ')}</span>
+          <span className="whitespace-nowrap text-slate-800">{projectCountLabel(u.projectAssignments.length)}</span>
         ) : (
-          <span className="text-amber-800">No projects assigned</span>
+          <span className="whitespace-nowrap text-amber-800">No projects assigned</span>
         ),
     },
     {
@@ -379,6 +397,8 @@ export function UsersVisibilityTab() {
           onClick={(e) => {
             if (e.target === e.currentTarget) setCreateDrawerOpen(false);
           }}
+          onClose={() => setCreateDrawerOpen(false)}
+          label="Add a user"
         >
           <form onSubmit={handleCreateUser} noValidate className="flex flex-col h-full">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">
@@ -394,10 +414,11 @@ export function UsersVisibilityTab() {
 
           <div className="p-4 space-y-3 overflow-y-auto flex-1 text-xs">
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">
+              <label htmlFor="new-user-fullName" className="block font-semibold text-slate-700 mb-1">
                 Full Name *
               </label>
               <input
+                id="new-user-fullName"
                 type="text"
                 {...createForm.register('fullName')}
                 {...fieldA11y(createForm, 'fullName')}
@@ -407,10 +428,11 @@ export function UsersVisibilityTab() {
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">
+              <label htmlFor="new-user-email" className="block font-semibold text-slate-700 mb-1">
                 Work Email *
               </label>
               <input
+                id="new-user-email"
                 type="email"
                 {...createForm.register('email')}
                 {...fieldA11y(createForm, 'email')}
@@ -420,10 +442,11 @@ export function UsersVisibilityTab() {
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">
+              <label htmlFor="new-user-password" className="block font-semibold text-slate-700 mb-1">
                 Temporary Password * (user must change it at first sign-in)
               </label>
               <input
+                id="new-user-password"
                 type="text"
                 {...createForm.register('password')}
                 {...fieldA11y(createForm, 'password')}
@@ -433,10 +456,11 @@ export function UsersVisibilityTab() {
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">
+              <label htmlFor="new-user-roleId" className="block font-semibold text-slate-700 mb-1">
                 Role Assignment *
               </label>
               <select
+                id="new-user-roleId"
                 {...createForm.register('roleId')}
                 {...fieldA11y(createForm, 'roleId')}
                 className="w-full rounded-xl border border-slate-200 px-3 py-2"
@@ -494,30 +518,16 @@ export function UsersVisibilityTab() {
               form={createForm}
             />
 
-            <div className="pt-2">
-              <div className="font-semibold text-slate-700 mb-1.5">
-                Assign Visible Projects (ignored if role has view-all)
-              </div>
-              <div className="space-y-1.5 max-h-44 overflow-y-auto border border-slate-200 rounded-xl p-2.5">
-                {projects.map((p) => (
-                  <label
-                    key={p.id}
-                    className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={createProjectIds.includes(p.id)}
-                      onChange={() => toggleProject(createForm, createProjectIds, p.id)}
-                      className="h-4 w-4 rounded-sm border-slate-300 text-brand-primary"
-                    />
-                    <span className="font-semibold text-brand-primary">
-                      {formatProjectCode(p.codePrefix)}
-                    </span>
-                    <span className="text-slate-700 truncate">{p.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+            {roleSeesAllProjects(roleById.get(createRoleId)) ? (
+              <AllProjectsNote />
+            ) : (
+              <UserProjectsTable
+                label="Projects they can see"
+                projects={projects}
+                selectedIds={createProjectIds}
+                onChange={(next) => setProjectIds(createForm, next)}
+              />
+            )}
           </div>
 
           <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
@@ -547,6 +557,8 @@ export function UsersVisibilityTab() {
           onClick={(e) => {
             if (e.target === e.currentTarget) setEditingUser(null);
           }}
+          onClose={() => setEditingUser(null)}
+          label="Edit user"
         >
           <form
             onSubmit={handleSaveAssignments}
@@ -571,10 +583,11 @@ export function UsersVisibilityTab() {
 
             <div className="p-4 space-y-4 overflow-y-auto flex-1 text-xs">
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Assigned Tenant Role
+                <label htmlFor="edit-user-roleId" className="block font-semibold text-slate-700 mb-1">
+                  Role
                 </label>
                 <select
+                  id="edit-user-roleId"
                   {...editForm.register('roleId')}
                   {...fieldA11y(editForm, 'roleId')}
                   className="w-full rounded-xl border border-slate-200 px-3 py-2"
@@ -600,34 +613,23 @@ export function UsersVisibilityTab() {
                   className="h-4 w-4 rounded-sm border-slate-300 text-brand-primary"
                 />
                 <span className="font-semibold text-slate-800">
-                  Account Active (Uncheck to suspend portal login)
+                  Account active (untick to suspend sign-in)
                 </span>
               </label>
 
-              <div>
-                <div className="font-semibold text-slate-700 mb-1.5">
-                  Explicitly Assigned Facilities
-                </div>
-                <div className="space-y-1.5 border border-slate-200 rounded-xl p-2.5 max-h-60 overflow-y-auto">
-                  {projects.map((p) => (
-                    <label
-                      key={p.id}
-                      className="flex items-center gap-2 p-2 rounded-lg hover:bg-slate-50 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={editProjectIds.includes(p.id)}
-                        onChange={() => toggleProject(editForm, editProjectIds, p.id)}
-                        className="h-4 w-4 rounded-sm border-slate-300 text-brand-primary"
-                      />
-                      <span className="font-semibold text-brand-primary">
-                        {formatProjectCode(p.codePrefix)}
-                      </span>
-                      <span className="text-slate-700 truncate">{p.name}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+              {roleSeesAllProjects(roleById.get(editRoleId)) || editingUser.isPlatformSuperAdmin ? (
+                <AllProjectsNote />
+              ) : (
+                <UserProjectsTable
+                  key={editingUser.id}
+                  label="Projects they can see"
+                  projects={projects}
+                  assignments={editingUser.projectAssignments}
+                  selectedIds={editProjectIds}
+                  onChange={(next) => setProjectIds(editForm, next)}
+                  initialSelectedOnly
+                />
+              )}
             </div>
 
             <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">

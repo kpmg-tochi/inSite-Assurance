@@ -11,6 +11,7 @@ import {
 } from "@insite/shared";
 import { FieldError, visibleError } from "../../../../lib/forms";
 import { OrganizationInput } from "../../../../components/organizations/OrganizationInput";
+import { ContractorPicker } from "../../../../components/contractors/ContractorPicker";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import { useAuth } from "../../../../lib/auth-context";
 import { useDefaultCasesQuery } from "../../../../queries/contracts/useContractQueries";
@@ -132,6 +133,8 @@ const contractorPath = (path: string) =>
  */
 export function ContractorSection({ projectId, setup, readOnly }: StepProps) {
   const { hasAnyPermission } = useAuth();
+  // Client demo updates F.2: pick from the contractor register (stars, status) when the user may read it.
+  const usesRegister = hasAnyPermission("contractors:view_register", "contractors:manage");
   // Phase 13: open default cases (live projects only).
   const casesQuery = useDefaultCasesQuery(
     projectId,
@@ -219,18 +222,34 @@ export function ContractorSection({ projectId, setup, readOnly }: StepProps) {
           )}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
             <div className="md:col-span-6">
-              <OrganizationInput
-                label="Contractor"
-                tag="CONTRACTOR"
-                value={c.organization}
-                selectedName={c.organizationName}
-                onChange={(v) => {
-                  form.setValue("contractor.organizationName", null);
-                  setField(form, "contractor.organization", v, true);
-                }}
-                error={err("contractor.organization")}
-                disabled={locked || c.hasActivity}
-              />
+              {usesRegister ? (
+                <>
+                  <ContractorPicker
+                    value={c.organization?.id ?? null}
+                    selectedName={c.organizationName}
+                    onChange={(v) => {
+                      form.setValue("contractor.organizationName", v?.name ?? null);
+                      setField(form, "contractor.organization", v ? { id: v.id } : null, true);
+                    }}
+                    error={err("contractor.organization")}
+                    disabled={locked || c.hasActivity}
+                  />
+                  <p className="mt-1 text-[11px] text-slate-500">Rating is information from past monitoring; the award follows procurement.</p>
+                </>
+              ) : (
+                <OrganizationInput
+                  label="Contractor"
+                  tag="CONTRACTOR"
+                  value={c.organization}
+                  selectedName={c.organizationName}
+                  onChange={(v) => {
+                    form.setValue("contractor.organizationName", null);
+                    setField(form, "contractor.organization", v, true);
+                  }}
+                  error={err("contractor.organization")}
+                  disabled={locked || c.hasActivity}
+                />
+              )}
             </div>
             <div className="md:col-span-3">
               <label className={labelClass} htmlFor="contractor-completion">Planned completion</label>

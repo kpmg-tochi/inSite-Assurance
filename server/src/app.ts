@@ -37,6 +37,12 @@ import { regionsRoutes } from "./modules/regions/regions.routes";
 import { projectRegisterRoutes } from "./modules/projectRegister/projectRegister.routes";
 import { projectLotsRoutes } from "./modules/projectLots/projectLots.routes";
 import { portfolioPaymentsRoutes } from "./modules/payments/portfolioPayments.routes";
+import { sitesRoutes } from "./modules/sites/sites.routes";
+import { contractorsRoutes } from "./modules/contractors/contractors.routes";
+import { needsAssessmentRoutes } from "./modules/needsAssessment/needsAssessment.routes";
+import { contractorFlagsRoutes, projectContractorFlagsRoutes } from "./modules/contractorFlags/contractorFlags.routes";
+import { approvedListsRoutes, projectApprovedListRoutes } from "./modules/approvedLists/approvedLists.routes";
+import { geocodeRoutes } from "./modules/geocode/geocode.routes";
 import { requestContextMiddleware } from "./utils/requestContext";
 import { localStorageRoutes } from "./modules/storage/localStorage.routes";
 import { storageService } from "./integrations/storage.service";
@@ -50,6 +56,9 @@ export function createApp() {
     cors({
       origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN.split(","),
       credentials: true,
+      // Downloads (.xlsx, .pdf) name the file in Content-Disposition; the web reads it, so a
+      // cross-origin web build must be allowed to see it.
+      exposedHeaders: ["Content-Disposition"],
     }),
   );
 
@@ -92,6 +101,8 @@ export function createApp() {
   app.use("/api/v1/auth", authRoutes);
   app.use("/api/v1/rbac", rbacRoutes);
   app.use("/api/v1/organizations", organizationsRoutes);
+  // Client demo updates D1 (wave 2): before the projects router (its /:projectId routes would take the path).
+  app.use("/api/v1/projects/from-needs-assessment", needsAssessmentRoutes);
   app.use("/api/v1/projects", projectsRoutes);
   app.use("/api/v1/projects", projectOverviewRoutes); // Redesign R6c (after projectsRoutes: /portfolio/overview)
   app.use("/api/v1/projects", boqRoutes);
@@ -136,6 +147,15 @@ export function createApp() {
   // Client demo updates (wave 1)
   app.use("/api/v1/project-lots", projectLotsRoutes); // C3: lots and codes
   app.use("/api/v1/payments", portfolioPaymentsRoutes); // G.2: programme-wide payments
+  // Client demo updates (wave 2)
+  app.use("/api/v1/projects", sitesRoutes); // C2: GET /projects/:projectId/sites
+  app.use("/api/v1/contractors", contractorsRoutes); // F.1–F.3: contractor register
+  // Client demo updates (wave 3)
+  app.use("/api/v1/contractor-flags", contractorFlagsRoutes); // F.4: flags and decisions
+  app.use("/api/v1/projects", projectContractorFlagsRoutes); // F.4: GET /projects/:projectId/contractor-flags
+  app.use("/api/v1/approved-lists", approvedListsRoutes); // E3: approved lists
+  app.use("/api/v1/projects", projectApprovedListRoutes); // E3: /projects/:projectId/approved-list-row
+  app.use("/api/v1/geocode", geocodeRoutes); // D3: "Find address" (Google, server-side key)
 
   // Development object storage when S3 is not configured (never in production; see env checks).
   if (!storageService.isCloudConfigured() && env.NODE_ENV !== "production") {

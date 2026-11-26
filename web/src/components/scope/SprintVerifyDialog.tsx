@@ -12,10 +12,11 @@ import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm } from "../.
 import { useSprintVerificationQuery } from "../../queries/visits/useVisitQueries";
 import { useVerifySprintMutation } from "../../mutations/visits/useVisitMutations";
 import { visitKindLabel } from "../visits/visitUi";
+import { formatDateShort } from "../../lib/formatters";
 
 /**
  * Redesign R4e (D-R4.31): verify a sprint as met, partly met or not met. Shows, per facility in the
- * sprint, the latest accepted visit's answers, unit progress and open findings.
+ * sprint, the latest accepted monitoring visit's answers, unit progress and open findings.
  */
 export function SprintVerifyDialog({ projectId, sprintId, onClose }: { projectId: string; sprintId: string; onClose: () => void }) {
   const q = useSprintVerificationQuery(projectId, sprintId);
@@ -23,7 +24,7 @@ export function SprintVerifyDialog({ projectId, sprintId, onClose }: { projectId
   return (
     <ModalShell
       title={v ? `Verify ${v.name}` : "Verify work phase"}
-      subtitle={v ? `${v.startDate} to ${v.endDate}${v.outcome ? ` · now ${SPRINT_VERIFICATION_OUTCOME_LABELS[v.outcome].toLowerCase()} (${v.verifiedByName ?? "—"})` : ""}` : undefined}
+      subtitle={v ? `${formatDateShort(v.startDate)} to ${formatDateShort(v.endDate)}${v.outcome ? ` · now ${SPRINT_VERIFICATION_OUTCOME_LABELS[v.outcome].toLowerCase()} (${v.verifiedByName ?? "—"})` : ""}` : undefined}
       onClose={onClose}
       maxWidth="max-w-3xl"
     >
@@ -50,14 +51,14 @@ export function SprintVerifyDialog({ projectId, sprintId, onClose }: { projectId
                       <span>
                         {u.code} · {u.label}
                       </span>
-                      <span className="font-semibold tabular-nums">{u.progressPct === null ? "no visit yet" : `${u.progressPct}% (${u.progressAsOf})`}</span>
+                      <span className="font-semibold tabular-nums">{u.progressPct === null ? "no monitoring visit yet" : `${u.progressPct}%${u.progressAsOf ? ` (${formatDateShort(u.progressAsOf)})` : ""}`}</span>
                     </li>
                   ))}
                 </ul>
                 {f.latestVisit ? (
                   <div className="rounded-lg bg-slate-50 p-2">
                     <p className="text-[11px] font-semibold text-slate-700">
-                      {visitKindLabel(f.latestVisit.visitKind)} of {f.latestVisit.date}
+                      Monitoring visit of {formatDateShort(f.latestVisit.date)} ({visitKindLabel(f.latestVisit.visitKind)})
                     </p>
                     <ul className="text-[11px] text-slate-600">
                       {f.latestVisit.answers.map((a, i) => (
@@ -68,13 +69,13 @@ export function SprintVerifyDialog({ projectId, sprintId, onClose }: { projectId
                     </ul>
                   </div>
                 ) : (
-                  <p className="text-[11px] text-slate-500">No accepted visit covered this facility in the work phase.</p>
+                  <p className="text-[11px] text-slate-500">No accepted monitoring visit covered this facility in the work phase.</p>
                 )}
                 {f.openFindings.length > 0 && (
                   <ul className="text-[11px] text-red-700">
                     {f.openFindings.map((x) => (
                       <li key={x.id}>
-                        Open {x.severity.toLowerCase()} finding: {x.title} (raised {x.raisedDate})
+                        Open {x.severity.toLowerCase()} finding: {x.title} (raised {formatDateShort(x.raisedDate)})
                       </li>
                     ))}
                   </ul>

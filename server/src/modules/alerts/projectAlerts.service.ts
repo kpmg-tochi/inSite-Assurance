@@ -4,6 +4,7 @@ import {
   parseProjectAlertState,
   PROJECT_ALERT_META,
   zonedCalendarDate,
+  formatProjectCodeWithYear,
   type ProjectAlertEvaluation,
   type ProjectAlertFacts,
   type ProjectAlertKey,
@@ -103,10 +104,12 @@ interface AlertCopy {
 }
 
 function copyFor(p: AlertProject, e: ProjectAlertEvaluation, behindUnitCount: number | undefined): AlertCopy {
+  // Read across projects and years: "LOT 4 BATCH 1 (2026)", never the stored "2026-LOT-4-BATCH-1".
+  const code = formatProjectCodeWithYear(p.codePrefix);
   switch (e.key) {
     case 'DELAYED':
       return {
-        title: `${p.codePrefix} is behind schedule`,
+        title: `${code} is behind schedule`,
         description:
           behindUnitCount !== undefined
             ? `${p.name}: ${behindUnitCount} facility unit(s) due by a work phase that has ended are not complete.`
@@ -115,27 +118,27 @@ function copyFor(p: AlertProject, e: ProjectAlertEvaluation, behindUnitCount: nu
       };
     case 'STALLED':
       return {
-        title: `${p.codePrefix} has stalled`,
-        description: `${p.name}: no accepted visit has recorded progress for ${e.days} days (alert after ${e.limit}).`,
+        title: `${code} has stalled`,
+        description: `${p.name}: no accepted monitoring report has recorded progress for ${e.days} days (alert after ${e.limit}).`,
         actionUrl: `/app/projects/${p.id}/scope`,
         mobile: {
-          title: `${p.codePrefix}: no progress for ${e.days} days`,
-          message: `No accepted visit on ${p.codePrefix} has recorded progress for ${e.days} days. Record what you see on site at your next visit.`,
+          title: `${code}: no progress for ${e.days} days`,
+          message: `No accepted monitoring report on ${code} has recorded progress for ${e.days} days. Record what you see on site at your next monitoring visit.`,
         },
       };
     case 'SITE_UPDATE_OVERDUE':
       return {
-        title: `${p.codePrefix}: monitoring overdue`,
-        description: `${p.name}: no visit has been accepted for ${e.days} days (alert after ${e.limit}). Plan or complete a visit.`,
+        title: `${code}: monitoring overdue`,
+        description: `${p.name}: no monitoring report has been accepted for ${e.days} days (alert after ${e.limit}). Plan or complete a monitoring visit.`,
         actionUrl: `/app/projects/${p.id}/visits`,
         mobile: {
-          title: `${p.codePrefix}: monitoring overdue`,
-          message: `No visit on ${p.codePrefix} has been accepted for ${e.days} days. Submit your next visit, or record an ad hoc visit.`,
+          title: `${code}: monitoring overdue`,
+          message: `No monitoring report on ${code} has been accepted for ${e.days} days. Submit your next monitoring report, or record an ad hoc monitoring visit.`,
         },
       };
     case 'SPEND_AHEAD_OF_PROGRESS':
       return {
-        title: `${p.codePrefix}: paid ahead of work done`,
+        title: `${code}: paid ahead of work done`,
         description: `${p.name}: ${e.spendPct}% of the contract sum is paid against ${e.progressPct}% complete, ${e.gapPoints} points ahead (alert above ${e.limit}).`,
         actionUrl: `/app/projects/${p.id}/payments`,
       };

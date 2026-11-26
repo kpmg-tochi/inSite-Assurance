@@ -11,10 +11,11 @@ describe('persona copy (D-R5.23)', () => {
     }
   });
 
-  it('wording is about visits', () => {
+  it('wording is about monitoring visits (owner decision 1, 2026-11-26)', () => {
     const v = personaCopy('INDEPENDENT_VERIFIER');
     assert.equal(v.checkInButton, 'Check in');
-    assert.equal(v.startFormButton, 'Start the visit form');
+    assert.equal(v.startFormButton, 'Start monitoring visit');
+    assert.equal(v.unscheduledVisitButton, 'Ad hoc monitoring visit');
     assert.match(v.unscheduledVisitHelp, /Ad hoc/);
   });
 

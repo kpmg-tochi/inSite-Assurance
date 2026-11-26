@@ -8,6 +8,7 @@ import { AppError } from '../../middleware/error.middleware';
 import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { resolveOrganization } from '../organizations/organizations.service';
+import { assertContractorSelectable } from '../contractors/contractors.service';
 
 /**
  * The project's contractor (Phase 6). Redesign R1d (decision T): one contractor per project, no
@@ -153,6 +154,9 @@ export async function syncProjectContractors(
       allowArchivedId: keepArchived,
       actor: { actorId: params.webUser.userId, actorDisplayName: actorName(params.webUser) },
     });
+    // Client demo updates F.4 (wave 2): a suspended contractor cannot be newly named (409 CONTRACTOR_SUSPENDED).
+    const before = input.id ? byId.get(input.id) : undefined;
+    if (!before || before.organizationId !== organization.id) await assertContractorSelectable(tx, organization.id);
     resolved.push({ input, organizationId: organization.id, organizationName: organization.name });
   }
 

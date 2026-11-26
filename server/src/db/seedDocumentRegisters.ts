@@ -153,7 +153,7 @@ export async function seedDocumentRegisters() {
     if (p.codePrefix === "PRG-102" && kickoff) {
       await prisma.projectContractMilestone.updateMany({
         where: { projectId: p.id, key: { in: ["letter-of-introduction", "supervisor-assignment"] }, status: { not: "DONE" } },
-        data: { status: "DONE", completedAt: new Date(`${addDays(kickoff, 2)}T10:00:00.000Z`), completedNotes: "Issued after the kick-off (seeded history)." },
+        data: { status: "DONE", completedAt: new Date(`${addDays(kickoff, 2)}T10:00:00.000Z`), completedNotes: "Issued after the kick-off." },
       });
     }
   }

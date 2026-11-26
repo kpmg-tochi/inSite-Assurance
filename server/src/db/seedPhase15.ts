@@ -355,7 +355,7 @@ export async function seedPhase15() {
     await prisma.$transaction((tx) => syncContractMilestones(tx, p.id));
     await prisma.projectContractMilestone.updateMany({
       where: { projectId: p.id, status: { in: ["PENDING", "DUE", "OVERDUE"] }, anchor: { notIn: ["COC_ISSUED", "PROJECT_CLOSED"] } },
-      data: { status: "DONE", completedAt: new Date(`${addDays(today, -250)}T10:00:00.000Z`), completedNotes: "Done (seeded history)." },
+      data: { status: "DONE", completedAt: new Date(`${addDays(today, -250)}T10:00:00.000Z`), completedNotes: "Done." },
     });
   }
 

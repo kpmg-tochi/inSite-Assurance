@@ -31,6 +31,6 @@ export function notificationTarget(n: NotificationLike): NotificationTarget | nu
 export const PROJECT_ALERT_BADGE: Record<ProjectAlertKey, string> = {
   DELAYED: "Delayed",
   STALLED: "Stalled",
-  SITE_UPDATE_OVERDUE: "Update overdue",
-  SPEND_AHEAD_OF_PROGRESS: "Spend alert",
+  SITE_UPDATE_OVERDUE: "Monitoring overdue",
+  SPEND_AHEAD_OF_PROGRESS: "Paid ahead of work done",
 };

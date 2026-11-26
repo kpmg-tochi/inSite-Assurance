@@ -97,3 +97,61 @@ export const PortfolioPaymentsSummaryDtoSchema = z.object({
   }),
 });
 export type PortfolioPaymentsSummaryDto = z.infer<typeof PortfolioPaymentsSummaryDtoSchema>;
+
+// ---------------------------------------------------------------------------
+// Wave 4 (G.1 grouping, G.2 Breakdown): GET /api/v1/payments/breakdown?by=…, same filters as the
+// summary. Built by `buildPaymentsBreakdown` (utils/paymentsBreakdown.ts). Month and quarter give the
+// "group by" subtotals of the payments list; the export's Breakdown sheet uses the same rows.
+// ---------------------------------------------------------------------------
+
+export const PaymentsBreakdownByEnum = z.enum(['zone', 'state', 'lga', 'contractor', 'project', 'month', 'quarter']);
+export type PaymentsBreakdownBy = z.infer<typeof PaymentsBreakdownByEnum>;
+
+export const PAYMENTS_BREAKDOWN_BY_LABELS: Record<PaymentsBreakdownBy, string> = {
+  zone: 'Zone',
+  state: 'State',
+  lga: 'LGA',
+  contractor: 'Contractor',
+  project: 'Project',
+  month: 'Month',
+  quarter: 'Quarter',
+};
+
+export const PortfolioPaymentsBreakdownQuerySchema = PortfolioPaymentsQuerySchema.extend({
+  by: PaymentsBreakdownByEnum.default('state'),
+});
+export type PortfolioPaymentsBreakdownQuery = z.infer<typeof PortfolioPaymentsBreakdownQuerySchema>;
+
+export const PaymentsBreakdownTotalsSchema = z.object({
+  /** Gross and retention held exclude retention releases (as the summary cards); net includes them. */
+  grossPaidNgn: z.number(),
+  retentionHeldNgn: z.number(),
+  retentionReleasedNgn: z.number(),
+  netPaidNgn: z.number(),
+  paymentCount: z.number().int(),
+  exceptionCount: z.number().int(),
+  projectCount: z.number().int(),
+});
+export type PaymentsBreakdownTotals = z.infer<typeof PaymentsBreakdownTotalsSchema>;
+
+export const PaymentsBreakdownRowDtoSchema = PaymentsBreakdownTotalsSchema.extend({
+  /** Zone code, State code, LGA code, organisation id, project id, "2026-03" or "2026-Q1"; "__none__" = not recorded. */
+  key: z.string(),
+  label: z.string(),
+  /** The parent place (a State's zone, an LGA's State, a project's State); null otherwise. */
+  context: z.string().nullable(),
+  /** LGA only: a project counted here has sites in several LGAs and is counted under each. */
+  sharedAcrossGroups: z.boolean(),
+});
+export type PaymentsBreakdownRowDto = z.infer<typeof PaymentsBreakdownRowDtoSchema>;
+
+export const PaymentsBreakdownDtoSchema = z.object({
+  by: PaymentsBreakdownByEnum,
+  from: z.string().nullable(),
+  to: z.string().nullable(),
+  rows: z.array(PaymentsBreakdownRowDtoSchema),
+  /** Each payment counted once (LGA rows can add up to more). */
+  totals: PaymentsBreakdownTotalsSchema,
+  hasSharedGroups: z.boolean(),
+});
+export type PaymentsBreakdownDto = z.infer<typeof PaymentsBreakdownDtoSchema>;

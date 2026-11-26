@@ -159,7 +159,7 @@ export function FormSectionsCard() {
     <>
       <StandardTable<FormSectionDto>
         title="Fixed sections"
-        subtitle="Reusable sections (Health & safety, Materials…). Visit form templates list them by code."
+        subtitle="Reusable sections (Health & safety, Materials…). Monitoring form templates list them by code."
         filters={
           <label className="inline-flex items-center gap-1.5 text-xs text-slate-700">
             <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived

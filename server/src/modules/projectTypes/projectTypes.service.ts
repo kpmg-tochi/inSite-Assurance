@@ -130,9 +130,9 @@ async function assertVisitFormTemplates(tx: Tx, tenantId: string, config: Projec
   const live = await liveTemplateKinds(tx, tenantId);
   for (const [kind, code] of changed) {
     const kindOfCode = live.get(code!);
-    if (!kindOfCode) throw new AppError(`Visit form template ${code} does not exist or is archived`, 422, 'VISIT_FORM_TEMPLATE_NOT_FOUND');
+    if (!kindOfCode) throw new AppError(`Monitoring form template ${code} does not exist or is archived`, 422, 'VISIT_FORM_TEMPLATE_NOT_FOUND');
     if (kindOfCode !== kind) {
-      throw new AppError(`Template ${code} is for ${VISIT_KIND_META[kindOfCode].label} visits, not ${VISIT_KIND_META[kind].label}`, 422, 'TEMPLATE_KIND_MISMATCH');
+      throw new AppError(`Template ${code} is for ${VISIT_KIND_META[kindOfCode].label} monitoring visits, not ${VISIT_KIND_META[kind].label}`, 422, 'TEMPLATE_KIND_MISMATCH');
     }
   }
 }
@@ -242,6 +242,133 @@ function stepSaved(setupState: unknown, stepId: string): boolean {
   return Boolean(steps && steps[stepId]);
 }
 
+/** What `deriveOwnerAndFunder` last wrote, kept in `setupState.derivedParties`. */
+interface DerivedParties {
+  owningOrganizationId?: string | null;
+  lenderOrganizationId?: string | null;
+}
+
+/** Matching Grants-like types: the state's SUBEB owns the project. */
+function isMatchingGrantsType(snapshot: { code?: unknown; name?: unknown }): boolean {
+  return snapshot.code === 'CO_FUNDED' || (typeof snapshot.name === 'string' && /matching/i.test(snapshot.name));
+}
+
+const SUBEB_RE = /SUBEB/i;
+
+/**
+ * Client demo updates D2 (wave 2): a typed draft's owner and funder, derived instead of asked.
+ *
+ * Owner:
+ * - Matching Grants-like type (code CO_FUNDED, or "Matching" in its name): the workspace
+ *   organisation with `stateCode` = the project's state whose name contains "SUBEB"; none: unchanged.
+ * - Any other type (Direct Intervention): the UBEC state office of the project's state (an
+ *   owner-category organisation with that `stateCode` whose name does not contain "SUBEB"); else the
+ *   type's default owner; else, when the type requires an owner, the workspace's root owner
+ *   organisation (UBEC HQ: no parent, category CLIENT_OWNER, oldest).
+ * - A candidate the type's allowed-owner list excludes is skipped.
+ * Funder: the type's funder default (FIXED: its organisation; OWNER: the owner); with no default,
+ * the root owner organisation when the type requires a funder.
+ *
+ * A value is replaced only when it is empty, or when it is still the value this function derived
+ * last and no user has saved the parties section. Drafts only. Returns the fields it changed.
+ */
+export async function deriveOwnerAndFunder(tx: Tx, projectId: string): Promise<string[]> {
+  const p = await tx.project.findUniqueOrThrow({
+    where: { id: projectId },
+    select: {
+      tenantId: true,
+      status: true,
+      stateCode: true,
+      projectTypeSnapshotJson: true,
+      owningOrganizationId: true,
+      lenderOrganizationId: true,
+      setupState: true,
+    },
+  });
+  if (p.status !== 'DRAFT' || !p.projectTypeSnapshotJson || typeof p.projectTypeSnapshotJson !== 'object') return [];
+  const snapshot = p.projectTypeSnapshotJson as Record<string, unknown>;
+  const config = resolveProjectTypeConfig(snapshot)!;
+  const state = p.setupState && typeof p.setupState === 'object' ? (p.setupState as Record<string, unknown>) : {};
+  const partiesSaved = stepSaved(state, 'parties');
+  const previous = (state.derivedParties && typeof state.derivedParties === 'object' ? state.derivedParties : {}) as DerivedParties;
+  const mayReplace = (current: string | null, derivedBefore: string | null | undefined) =>
+    !current || (!partiesSaved && Boolean(derivedBefore) && current === derivedBefore);
+
+  const allowed = config.ownership.allowedOwningOrganizationIds;
+  const isAllowed = (id: string) => !allowed || allowed.includes(id);
+  let rootId: string | null | undefined;
+  const root = async () => {
+    if (rootId === undefined) {
+      const r = await tx.organization.findFirst({
+        where: { tenantId: p.tenantId, parentOrganizationId: null, isArchived: false, categories: { has: 'CLIENT_OWNER' } },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true },
+      });
+      rootId = r?.id ?? null;
+    }
+    return rootId;
+  };
+
+  const inState = p.stateCode
+    ? await tx.organization.findMany({
+        where: { tenantId: p.tenantId, stateCode: p.stateCode, isArchived: false },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, name: true, categories: true },
+      })
+    : [];
+  let ownerCandidate: string | null = null;
+  if (isMatchingGrantsType(snapshot)) {
+    ownerCandidate = inState.find((o) => SUBEB_RE.test(o.name) && isAllowed(o.id))?.id ?? null;
+  } else {
+    ownerCandidate =
+      inState.find((o) => !SUBEB_RE.test(o.name) && o.categories.includes('CLIENT_OWNER') && isAllowed(o.id))?.id ??
+      config.ownership.defaultOwningOrganizationId ??
+      null;
+    if (!ownerCandidate && config.ownership.owningOrganizationRequired) {
+      const r = await root();
+      ownerCandidate = r && isAllowed(r) ? r : null;
+    }
+  }
+
+  const data: Prisma.ProjectUncheckedUpdateInput = {};
+  const changed: string[] = [];
+  let owner = p.owningOrganizationId;
+  if (ownerCandidate && ownerCandidate !== owner && mayReplace(owner, previous.owningOrganizationId)) {
+    owner = ownerCandidate;
+    data.owningOrganizationId = owner;
+    changed.push('owningOrganizationId');
+  }
+
+  const funderCandidate =
+    config.parties.funderDefault === 'FIXED'
+      ? config.parties.defaultFunderOrganizationId
+      : config.parties.funderDefault === 'OWNER'
+        ? owner
+        : config.parties.funderRequired
+          ? await root()
+          : null;
+  let funder = p.lenderOrganizationId;
+  if (funderCandidate && funderCandidate !== funder && mayReplace(funder, previous.lenderOrganizationId)) {
+    funder = funderCandidate;
+    data.lenderOrganizationId = funder;
+    changed.push('lenderOrganizationId');
+  }
+
+  const derived: DerivedParties = {
+    owningOrganizationId: ownerCandidate && owner === ownerCandidate ? ownerCandidate : (previous.owningOrganizationId ?? null),
+    lenderOrganizationId: funderCandidate && funder === funderCandidate ? funderCandidate : (previous.lenderOrganizationId ?? null),
+  };
+  if (
+    changed.length > 0 ||
+    derived.owningOrganizationId !== (previous.owningOrganizationId ?? null) ||
+    derived.lenderOrganizationId !== (previous.lenderOrganizationId ?? null)
+  ) {
+    data.setupState = { ...state, derivedParties: derived } as unknown as Prisma.InputJsonValue;
+    await tx.project.update({ where: { id: projectId }, data });
+  }
+  return changed;
+}
+
 /**
  * Sets (or clears, with null) a project's type. Drafts only: a live project's type is locked.
  * Applying copies the type's workflow template into the project, writes the snapshot, and pre-fills
@@ -307,23 +434,6 @@ export async function applyProjectTypeToProject(
     projectTypeSnapshotJson: snapshot as unknown as Prisma.InputJsonValue,
   };
   const prefilled: string[] = [];
-  if (!project.owningOrganizationId && config.ownership.defaultOwningOrganizationId) {
-    data.owningOrganizationId = config.ownership.defaultOwningOrganizationId;
-    prefilled.push('owningOrganizationId');
-  }
-  const owner = (data.owningOrganizationId as string | undefined) ?? project.owningOrganizationId;
-  if (!project.lenderOrganizationId) {
-    const funder =
-      config.parties.funderDefault === 'FIXED'
-        ? config.parties.defaultFunderOrganizationId
-        : config.parties.funderDefault === 'OWNER'
-          ? owner
-          : null;
-    if (funder) {
-      data.lenderOrganizationId = funder;
-      prefilled.push('lenderOrganizationId');
-    }
-  }
   // Redesign R1b: retention defaults, unless the retention step was saved already.
   if (!stepSaved(project.setupState, 'facility')) {
     if (config.payments.retentionPercentage !== null) {
@@ -336,6 +446,9 @@ export async function applyProjectTypeToProject(
     }
   }
   await tx.project.update({ where: { id: project.id }, data });
+  // Owner and funder: derived from the type and the project's state (client demo updates D2), never
+  // overwriting what a user saved.
+  prefilled.push(...(await deriveOwnerAndFunder(tx, project.id)));
   // Phase 13: contract milestones from the type (one per contractor where the template says so).
   const milestones = await syncContractMilestones(tx, project.id);
   if (milestones.created) prefilled.push('contractMilestones');

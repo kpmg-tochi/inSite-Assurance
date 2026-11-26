@@ -232,13 +232,13 @@ export const DEFAULT_FORM_LIBRARY: DefaultFormLibrary = {
     },
     {
       code: 'QUARTERLY_ME',
-      name: 'Quarterly M&E visit',
+      name: 'Quarterly M&E monitoring visit',
       visitKind: 'QUARTERLY_ME',
       blocks: [s('PROGRESS'), FACILITIES, s('WORKMANSHIP'), s('MATERIALS'), s('HEALTH_SAFETY'), s('ENVIRONMENT'), s('VALUATION_ESTIMATE')],
     },
     { code: 'FINAL_EVALUATION', name: 'Final evaluation', visitKind: 'FINAL_EVALUATION', blocks: [FACILITIES, s('FINAL_SPEC'), s('HEALTH_SAFETY')] },
     { code: 'POST_CLOSURE_EVALUATION', name: 'Post-closure evaluation', visitKind: 'POST_CLOSURE_EVALUATION', blocks: [s('POST_CLOSURE')] },
-    { code: 'AD_HOC', name: 'Ad hoc visit', visitKind: 'AD_HOC', blocks: [FACILITIES, s('HEALTH_SAFETY')] },
+    { code: 'AD_HOC', name: 'Ad hoc monitoring visit', visitKind: 'AD_HOC', blocks: [FACILITIES, s('HEALTH_SAFETY')] },
   ],
 };
 

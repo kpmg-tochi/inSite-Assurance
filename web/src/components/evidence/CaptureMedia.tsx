@@ -71,7 +71,7 @@ export function CapturePhoto({
     );
   }
   if (!url) {
-    return <div className={`${className} rounded-lg bg-slate-100 animate-pulse`} />;
+    return <div className={`${className} rounded-lg bg-slate-100 animate-pulse motion-reduce:animate-none`} />;
   }
   const link = (
     <a href={url} target="_blank" rel="noopener noreferrer" title={details ? `${details}. Open full size` : "Open full size"}>

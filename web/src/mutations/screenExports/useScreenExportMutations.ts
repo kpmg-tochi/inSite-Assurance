@@ -20,7 +20,12 @@ import {
 
 /** UBEC IRL: "Export to Excel" on the visits, findings, payments and KPI screens. */
 
-const errorMessage = (err: unknown, fallback: string) => (err as { message?: string })?.message || fallback;
+const errorMessage = (err: unknown, fallback: string) => {
+  const e = err as { message?: string; code?: string } | null;
+  // No response at all (server down, offline): axios says only "Network Error".
+  if (e?.code === 'ERR_NETWORK' || e?.message === 'Network Error') return `${fallback} The server could not be reached; try again.`;
+  return e?.message || fallback;
+};
 
 /** Saves the downloaded file in the browser. */
 function saveFile({ blob, fileName }: DownloadedFile) {

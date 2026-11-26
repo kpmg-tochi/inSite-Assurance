@@ -4,10 +4,13 @@ import {
   ProjectTypeMonitoringConfig,
   ProjectTypeMonitoringConfigSchema,
   resolveProjectTypeConfig,
-  VISIT_KIND_META,
   VisitDto,
   VisitFormSnapshotSchema,
   VisitKind,
+  formatCalendarDate,
+  formatProjectCodeWithYear,
+  visitKindNoun,
+  visitKindNounInSentence,
   zonedCalendarDate,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
@@ -92,7 +95,7 @@ export function serializeVisit(v: VisitRow, extras: VisitExtras = {}): VisitDto 
 
 export async function loadVisitInProject(db: Db, projectId: string, visitId: string): Promise<VisitRow> {
   const v = await db.visit.findFirst({ where: { id: visitId, projectId }, include: VISIT_INCLUDE });
-  if (!v) throw new AppError('Visit not found', 404, 'VISIT_NOT_FOUND');
+  if (!v) throw new AppError('Monitoring visit not found', 404, 'VISIT_NOT_FOUND');
   return v;
 }
 
@@ -139,7 +142,16 @@ export function projectToday(project: { timezone: string }, now: Date = new Date
   return zonedCalendarDate(now, project.timezone);
 }
 
-export const visitLabel = (kind: string) => VISIT_KIND_META[kind as VisitKind]?.label ?? kind;
+/** A visit kind for titles: "Routine monitoring visit", "Mobilisation check" (client demo glossary). */
+export const visitLabel = (kind: string) => visitKindNoun(kind);
+/** The same inside a sentence: "the routine monitoring visit". */
+export const visitLabelInSentence = (kind: string) => visitKindNounInSentence(kind);
+/** A label inside a sentence: only the first letter is lowered ("Quarterly M&E …" → "quarterly M&E …"). */
+export const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+/** A calendar date in texts people read: "26 Nov 2026". */
+export const dayText = (date: string | null | undefined) => formatCalendarDate(date);
+/** A project code in notifications read across projects and years: "LOT 4 BATCH 1 (2026)". */
+export const codeText = (codePrefix: string) => formatProjectCodeWithYear(codePrefix);
 
 // ---------------------------------------------------------------------------
 // Actors
@@ -160,7 +172,7 @@ export function fieldVisitActor(f: FieldAgentJwtPayload): VisitActor {
   return { actorType: 'FIELD_AGENT', actorId: f.sessionId, actorDisplayName: `${f.agentFullName} (${f.roleName}, field)`, userId: f.userId };
 }
 
-export const SYSTEM_VISIT_ACTOR: VisitActor = { actorType: 'SYSTEM', actorId: 'visits', actorDisplayName: 'InSite (visits)', userId: null };
+export const SYSTEM_VISIT_ACTOR: VisitActor = { actorType: 'SYSTEM', actorId: 'visits', actorDisplayName: 'System (visits)', userId: null };
 
 // ---------------------------------------------------------------------------
 // Officers (D-R4.17)
@@ -191,7 +203,7 @@ export async function resolveOfficers(
     if (!u.isActive) throw new AppError(`${u.fullName}'s account is disabled`, 422, 'OFFICER_INACTIVE', { userId: u.id });
     const role = effectiveMobileRole(u);
     if (!role || !role.rolePermissions.some((rp) => rp.permission.key === 'visits:submit')) {
-      throw new AppError(`${u.fullName} has no field role that can carry out visits`, 422, 'OFFICER_CANNOT_VISIT', { userId: u.id });
+      throw new AppError(`${u.fullName} has no field role that can carry out monitoring visits`, 422, 'OFFICER_CANNOT_VISIT', { userId: u.id });
     }
     if (!(await isProjectVisibleOnMobile(u, project.id))) {
       await tx.userProjectAssignment.createMany({ data: [{ userId: u.id, projectId: project.id }], skipDuplicates: true });

@@ -20,7 +20,8 @@ type HomeTab = "overview" | "kpis" | "visits" | "payments";
  * The workspace home (UBEC rebrand). "portfolio" is the programme admins' Portfolio
  * (`projects:view_portfolio`); "dashboard" is everyone else's Dashboard, over the projects they are
  * assigned to. Both: an Overview tab (headline figures, the map, the projects table: the only way
- * into a project), a KPIs tab (`kpis:view`), a Visits tab (the visit planner, `visits:view`) and a
+ * into a project), a KPIs tab (`kpis:view`), a Monitoring visits tab (the monitoring planner,
+ * `visits:view`; URL value `?tab=visits`) and a
  * Payments tab (client demo updates G.2: every payment in the period across the visible projects,
  * `payments:view`).
  */
@@ -31,7 +32,7 @@ export function WorkspaceHomePage({ variant, onOpenProject }: { variant: "portfo
       [
         { id: "overview" as const, label: "Overview" },
         ...(hasPermission("kpis:view") ? [{ id: "kpis" as const, label: "KPIs" }] : []),
-        ...(hasPermission("visits:view") ? [{ id: "visits" as const, label: "Visits" }] : []),
+        ...(hasPermission("visits:view") ? [{ id: "visits" as const, label: "Monitoring visits" }] : []),
         ...(hasPermission("payments:view") ? [{ id: "payments" as const, label: "Payments" }] : []),
       ] satisfies { id: HomeTab; label: string }[],
     [hasPermission]
@@ -171,7 +172,7 @@ function OverviewTab({ variant, onOpenProject }: { variant: "portfolio" | "dashb
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="space-y-2">
         <p className="text-sm text-slate-600">
           {variant === "portfolio" ? "Every project in the programme you can see." : "The projects you are assigned to."} Figures follow the filters.
         </p>
@@ -197,7 +198,8 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 /**
  * The four headline figures. Portfolio (owner's choice): total commitment, progress, ongoing
  * projects, behind schedule. Dashboard: the user's projects and schedule, then what their
- * permissions say they act on (visits and findings, or payments), topped up with progress.
+ * permissions say they act on (monitoring visits and findings, or payments), topped up with progress.
+ * Commitment (owner decision 3, 2026-11-26): the contract sum where a project has one, else its budget.
  */
 function useStats(
   variant: "portfolio" | "dashboard",
@@ -233,11 +235,11 @@ function useStats(
     onSelect: () => toggle("behind"),
     selected: tableFilter === "behind",
   };
-  const progress: Stat = { key: "progress", label: "Progress", value: `${k.weightedProgressPct}%`, detail: "Weighted by contract sum" };
+  const progress: Stat = { key: "progress", label: "Progress", value: `${k.weightedProgressPct}%`, detail: "Weighted by contract sum or budget" };
 
   if (variant === "portfolio") {
     return [
-      { key: "commitment", label: "Total commitment", value: formatCompactNaira(k.totalCommitmentNgn), detail: `Contract sums of ${plural(k.projectCount, "project")}` },
+      { key: "commitment", label: "Total commitment", value: formatCompactNaira(k.totalCommitmentNgn), detail: `Contract sums (budget where not yet contracted) of ${plural(k.projectCount, "project")}` },
       progress,
       ongoing,
       behind,
@@ -248,10 +250,10 @@ function useStats(
   if (hasPermission("visits:view")) {
     extra.push({
       key: "visits",
-      label: "Visits in the next 7 days",
+      label: "Monitoring visits in the next 7 days",
       value: k.upcomingVisitCount,
       tone: k.overdueVisitCount > 0 ? "alert" : "default",
-      detail: k.overdueVisitCount > 0 ? `${plural(k.overdueVisitCount, "visit")} overdue or missed` : "None overdue",
+      detail: k.overdueVisitCount > 0 ? `${plural(k.overdueVisitCount, "monitoring visit")} overdue or missed` : "None overdue",
     });
     extra.push({
       key: "findings",
@@ -261,7 +263,7 @@ function useStats(
     });
   }
   if (hasPermission("payments:view") || hasPermission("payments:record")) {
-    extra.push({ key: "paid", label: "Paid to date", value: formatCompactNaira(k.totalDisbursedNgn), detail: `${k.disbursedPct}% of contract sums` });
+    extra.push({ key: "paid", label: "Paid to date", value: formatCompactNaira(k.totalDisbursedNgn), detail: `${k.disbursedPct}% of total commitment` });
   }
   return [ongoing, behind, ...extra, progress].slice(0, 4);
 }

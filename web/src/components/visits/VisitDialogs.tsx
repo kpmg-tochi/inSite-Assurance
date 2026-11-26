@@ -7,6 +7,7 @@ import { CustomSelect } from "../common";
 import { FieldError, SubmitButton, canSubmit, fieldA11y, invalidClass, useZodForm, zDateText } from "../../lib/forms";
 import { useVisitOfficersQuery } from "../../queries/visits/useVisitQueries";
 import { useProjectScopeQuery } from "../../queries/scope/useScopeQueries";
+import { formatDateShort } from "../../lib/formatters";
 import { useCancelVisitMutation, useCreateVisitMutation, useDecideProposalMutation, useUpdateVisitMutation } from "../../mutations/visits/useVisitMutations";
 
 /** Redesign R4: create, edit (move, reassign, facilities) and cancel dialogs for a visit. */
@@ -26,7 +27,7 @@ function OfficerPicker({ projectId, value, onChange }: { projectId: string; valu
     }
   };
   if (q.isLoading) return <p className="text-[11px] text-slate-500">Loading officers…</p>;
-  if (candidates.length === 0) return <p className="text-[11px] text-slate-500">No one in this workspace has a field role that can carry out visits.</p>;
+  if (candidates.length === 0) return <p className="text-[11px] text-slate-500">No one in this workspace has a field role that can carry out monitoring visits.</p>;
   return (
     <div className="space-y-1 max-h-48 overflow-y-auto rounded-xl border border-slate-200 p-2">
       {candidates.map((c) => {
@@ -86,7 +87,7 @@ const CreateVisitFormSchema = z
   })
   .superRefine((v, ctx) => {
     if (!v.proposed && v.assignees.length === 0) {
-      ctx.addIssue({ code: "custom", path: ["assignees"], message: "Pick at least one officer to publish the visit, or save it as proposed" });
+      ctx.addIssue({ code: "custom", path: ["assignees"], message: "Pick at least one officer to publish the monitoring visit, or save it as proposed" });
     }
     if (VISIT_KIND_META[v.visitKind].facilityRule === "PICKED" && v.pickedFacilityIds.length === 0) {
       ctx.addIssue({ code: "custom", path: ["pickedFacilityIds"], message: "Pick at least one facility to check" });
@@ -107,14 +108,14 @@ export function CreateVisitDialog({ projectId, onClose, defaultDate }: { project
     void form.trigger(["assignees", "pickedFacilityIds"]);
   }, [form, proposed, adHoc]);
   return (
-    <ModalShell title="New visit" subtitle="Plan a visit by hand. Published visits go to their officers with a frozen form." onClose={onClose}>
+    <ModalShell title="New monitoring visit" subtitle="Plan a monitoring visit by hand. Published monitoring visits go to their officers with a frozen form." onClose={onClose}>
       <form className="p-5 space-y-3" noValidate onSubmit={form.handleSubmit((body) => create.mutate(body, { onSuccess: onClose }))}>
         <Controller
           control={form.control}
           name="visitKind"
           render={({ field }) => (
             <CustomSelect
-              label="Visit kind"
+              label="Kind of monitoring visit"
               value={field.value}
               onChange={(v) => field.onChange(v as VisitKind)}
               options={VisitKindEnum.options.map((k) => ({ value: k, label: VISIT_KIND_META[k].label }))}
@@ -192,9 +193,9 @@ export function EditVisitDialog({ projectId, visit, onClose, defaultDate }: { pr
     })
     .superRefine((v, ctx) => {
       if (published && v.plannedDate !== visit.plannedDate && v.note.length < 3) {
-        ctx.addIssue({ code: "custom", path: ["note"], message: "Say why the visit moves (at least 3 characters)" });
+        ctx.addIssue({ code: "custom", path: ["note"], message: "Say why the monitoring visit moves (at least 3 characters)" });
       }
-      if (published && v.assignees.length === 0) ctx.addIssue({ code: "custom", path: ["assignees"], message: "A published visit needs at least one officer" });
+      if (published && v.assignees.length === 0) ctx.addIssue({ code: "custom", path: ["assignees"], message: "A published monitoring visit needs at least one officer" });
       if (adHoc && v.pickedFacilityIds.length === 0) ctx.addIssue({ code: "custom", path: ["pickedFacilityIds"], message: "Pick at least one facility to check" });
     });
   const form = useZodForm(schema, {
@@ -219,8 +220,8 @@ export function EditVisitDialog({ projectId, visit, onClose, defaultDate }: { pr
   const unchanged = !moved && sameOfficers && samePicked;
   return (
     <ModalShell
-      title={`${VISIT_KIND_META[visit.visitKind].label} · ${visit.plannedDate}`}
-      subtitle={published ? `Original date ${visit.originalPlannedDate}. Officers are told of any change and must confirm again.` : "Proposed visit (not published yet)."}
+      title={`${VISIT_KIND_META[visit.visitKind].label} · ${formatDateShort(visit.plannedDate)}`}
+      subtitle={published ? `Original date ${formatDateShort(visit.originalPlannedDate)}. Officers are told of any change and must confirm again.` : "Proposed monitoring visit (not published yet)."}
       onClose={onClose}
     >
       <form
@@ -365,7 +366,7 @@ export function CancelVisitDialog({ projectId, visit, onClose }: { projectId: st
   const cancel = useCancelVisitMutation(projectId);
   const form = useZodForm(CancelVisitRequestSchema, { defaultValues: { reason: "" } });
   return (
-    <ModalShell title="Cancel visit" subtitle={`${VISIT_KIND_META[visit.visitKind].label} · ${visit.plannedDate}`} onClose={onClose}>
+    <ModalShell title="Cancel monitoring visit" subtitle={`${VISIT_KIND_META[visit.visitKind].label} · ${formatDateShort(visit.plannedDate)}`} onClose={onClose}>
       <form className="p-5 space-y-3" noValidate onSubmit={form.handleSubmit((body) => cancel.mutate({ visitId: visit.id, body }, { onSuccess: onClose }))}>
         <label className="block text-xs font-semibold text-slate-700">
           Reason
@@ -374,7 +375,7 @@ export function CancelVisitDialog({ projectId, visit, onClose }: { projectId: st
         <FieldError form={form} name="reason" />
         <ModalActions
           onCancel={onClose}
-          submitLabel="Cancel visit"
+          submitLabel="Cancel monitoring visit"
           pendingLabel="Cancelling…"
           isPending={cancel.isPending}
           disabled={!canSubmit(form, { pending: cancel.isPending })}

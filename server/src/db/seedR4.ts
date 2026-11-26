@@ -128,7 +128,7 @@ export function answersFor(snapshot: VisitFormSnapshot, overrides: Record<string
       if (f.type === "MULTI_CHOICE") value = f.options.slice(0, Math.max(1, f.minSelected ?? 1)).map((o) => o.key);
       if (f.type === "DATE") value = snapshot.context.visitDate;
       const o = overrides[f.path];
-      out.push({ path: f.path, value: o ? o.value : value, comment: o ? o.comment : "Seen on the visit", captures: [] });
+      out.push({ path: f.path, value: o ? o.value : value, comment: o ? o.comment : "Seen on the monitoring visit", captures: [] });
     }
   }
   return out;
@@ -240,7 +240,7 @@ export async function seedR4(): Promise<void> {
       projectId: prg105.id,
       visitId: published[2].id,
       fieldAgent: officer105,
-      input: { clientActionId: crypto.randomUUID(), action: "DECLINE", comment: "On the PRG-102 mobilisation check that day." },
+      input: { clientActionId: crypto.randomUUID(), action: "DECLINE", comment: "On another mobilisation check that day." },
     });
   }
   const sprints = await prisma.projectSprint.findMany({ where: { projectId: prg105.id }, orderBy: { number: "asc" } });
@@ -258,7 +258,7 @@ export async function seedR4(): Promise<void> {
     const late = await createVisit(prg211.id, monitor, { visitKind: "ROUTINE", plannedDate: addWorkdays(today, -40, workdays), assignees: lead, pickedFacilityIds: [], proposed: false });
     await submitAndAccept(prg211.id, late.id, officer211, monitor, {
       overallFinding: "MINOR_ISSUES",
-      summary: "Routine visit uploaded late: blockwork complete to lintel level; roofing materials not yet on site.",
+      summary: "Routine monitoring visit uploaded late: blockwork complete to lintel level; roofing materials not yet on site.",
     });
 
     const major = await createVisit(prg211.id, monitor, { visitKind: "ROUTINE", plannedDate: addWorkdays(today, -20, workdays), assignees: lead, pickedFacilityIds: [], proposed: false });
@@ -267,7 +267,7 @@ export async function seedR4(): Promise<void> {
     await submitAndAccept(prg211.id, major.id, officer211, monitor, {
       overallFinding: "MAJOR_ISSUES",
       overrides: ppe ? { [ppe.path]: { value: "NO", comment: "Six workers on the roof without harnesses or helmets." } } : {},
-      summary: "Routine visit: roof framing in progress. Unsafe work at height.",
+      summary: "Routine monitoring visit: roof framing in progress. Unsafe work at height.",
     });
     await prisma.finding.updateMany({ where: { projectId: prg211.id, visitId: major.id, status: "OPEN" }, data: { createdAt: new Date(now.getTime() - 20 * 24 * 3600 * 1000) } });
     await runFindingEscalations({ now });

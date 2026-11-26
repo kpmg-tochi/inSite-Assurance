@@ -3,7 +3,12 @@ import { ChangeProjectDialog } from "./projects/ChangeProjectDialog";
 import { useGuardedAction } from "../lib/navigationGuard";
 import React, { useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ChevronRight, Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
+import {
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
+} from "lucide-react";
 import type { ProjectSummaryDto } from "../api/types";
 import { formatProjectCode } from "@insite/shared";
 import { useAuth } from "../lib/auth-context";
@@ -17,10 +22,8 @@ import {
   navItemMatches,
   pageNameFor,
   parseAppLocation,
-  PROJECT_MORE_NAV,
   PROJECT_NAV,
   WORKSPACE_NAV,
-  workspaceHomePath,
   type AppLocation,
   type NavItem,
 } from "../navigation/navItems";
@@ -31,16 +34,21 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-const FOCUSABLE = 'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FOCUSABLE =
+  'a[href], button:not([disabled]), select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
- * The portal frame (redesign R6b, D-R6.11; UBEC rebrand): the sidebar renders the navigation config
- * in a Workspace group (home and Settings) and, on a project's pages only, a Project group with
- * "More ▸". Projects are opened from the home page's map and table; there is no project switcher.
- * The header shows the project code and the page name. Below `lg` the sidebar is an off-canvas
- * drawer opened from the header.
+ * The portal frame (redesign R6b, D-R6.11; UBEC rebrand): the sidebar renders the navigation config:
+ * the selected project's block on top (code, name, "Change project", its pages), then the Workspace
+ * group (home, Needs assessment, Contractors, Settings) at the bottom above the user menu. The header
+ * shows the project code and the page name. Below `lg` the sidebar is an off-canvas drawer opened
+ * from the header.
  */
-export function AppShell({ selectedProject, headerActions, children }: AppShellProps) {
+export function AppShell({
+  selectedProject,
+  headerActions,
+  children,
+}: AppShellProps) {
   const location = useLocation();
   const { hasAnyPermission } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -50,7 +58,10 @@ export function AppShell({ selectedProject, headerActions, children }: AppShellP
   const loc = parseAppLocation(location.pathname, location.search);
   // Header: the project code only on pages about one project (and only when it is the selected one,
   // e.g. not a draft in setup), then the page name.
-  const headerProject = loc.projectId && selectedProject?.id === loc.projectId ? selectedProject : null;
+  const headerProject =
+    loc.projectId && selectedProject?.id === loc.projectId
+      ? selectedProject
+      : null;
   const pageName = pageNameFor(loc, hasAnyPermission);
 
   // Close the drawer when a link in it navigates.
@@ -79,11 +90,17 @@ export function AppShell({ selectedProject, headerActions, children }: AppShellP
             <button
               type="button"
               onClick={() => setSidebarCollapsed((prev) => !prev)}
-              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-label={
+                sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+              }
               title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
               className="p-1.5 rounded-lg text-white/75 hover:text-white hover:bg-white/10 transition shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
             >
-              {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+              {sidebarCollapsed ? (
+                <PanelLeftOpen className="w-4 h-4" />
+              ) : (
+                <PanelLeftClose className="w-4 h-4" />
+              )}
             </button>
           }
         />
@@ -120,7 +137,10 @@ export function AppShell({ selectedProject, headerActions, children }: AppShellP
             </button>
             {headerProject && (
               <>
-                <span className="text-sm font-semibold text-white/70 shrink-0 tabular-nums" title={headerProject.name}>
+                <span
+                  className="text-sm font-semibold text-white/70 shrink-0 tabular-nums"
+                  title={headerProject.name}
+                >
                   {formatProjectCode(headerProject.codePrefix)}
                 </span>
                 <span className="text-white/30" aria-hidden="true">
@@ -128,7 +148,9 @@ export function AppShell({ selectedProject, headerActions, children }: AppShellP
                 </span>
               </>
             )}
-            <h1 className="text-base font-bold text-white tracking-tight truncate">{pageName}</h1>
+            <h1 className="text-base font-bold text-white tracking-tight truncate">
+              {pageName}
+            </h1>
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
@@ -138,14 +160,22 @@ export function AppShell({ selectedProject, headerActions, children }: AppShellP
         </header>
 
         {/* Scrollable Workspace Canvas */}
-        <main className="relative flex-1 overflow-y-auto pr-1 pb-3 rounded-2xl">{children}</main>
+        <main className="relative flex-1 overflow-y-auto pr-1 pb-3 pt-2 px-1 rounded-2xl">
+          {children}
+        </main>
       </div>
     </div>
   );
 }
 
 /** Off-canvas navigation: focus moves in, Tab stays inside, Escape and the backdrop close it. */
-function NavDrawer({ onClose, children }: { onClose: () => void; children: (closeButton: React.ReactNode) => React.ReactNode }) {
+function NavDrawer({
+  onClose,
+  children,
+}: {
+  onClose: () => void;
+  children: (closeButton: React.ReactNode) => React.ReactNode;
+}) {
   const panelRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
@@ -160,7 +190,9 @@ function NavDrawer({ onClose, children }: { onClose: () => void; children: (clos
       return;
     }
     if (e.key !== "Tab" || !panelRef.current) return;
-    const items = Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.offsetParent !== null);
+    const items = Array.from(
+      panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+    ).filter((el) => el.offsetParent !== null);
     if (items.length === 0) return;
     const first = items[0];
     const last = items[items.length - 1];
@@ -187,7 +219,11 @@ function NavDrawer({ onClose, children }: { onClose: () => void; children: (clos
 
   return (
     <div className="fixed inset-0 z-[900] lg:hidden" onKeyDown={onKeyDown}>
-      <div className="absolute inset-0 bg-slate-900/50" aria-hidden="true" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-slate-900/50"
+        aria-hidden="true"
+        onClick={onClose}
+      />
       <div
         ref={panelRef}
         id="app-nav-drawer"
@@ -204,7 +240,9 @@ function NavDrawer({ onClose, children }: { onClose: () => void; children: (clos
 
 const linkClass = (active: boolean) =>
   `w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-white ${
-    active ? "bg-white/15 text-white shadow-sm" : "text-white/85 hover:text-white hover:bg-white/10"
+    active
+      ? "bg-white/15 text-white shadow-sm"
+      : "text-white/85 hover:text-white hover:bg-white/10"
   }`;
 
 function NavEntry({
@@ -219,12 +257,22 @@ function NavEntry({
   collapsed: boolean;
 }) {
   const projectId = project?.id ?? "";
-  const active = navItemMatches(item, loc) && (item.group === "workspace" || loc.projectId === projectId);
+  const active =
+    navItemMatches(item, loc) &&
+    (item.group === "workspace" || loc.projectId === projectId);
   const Icon = item.icon;
-  const to = project && item.toForProject ? item.toForProject({ id: project.id, stage: project.stage ?? null }) : item.to(projectId);
+  const to =
+    project && item.toForProject
+      ? item.toForProject({ id: project.id, stage: project.stage ?? null })
+      : item.to(projectId);
   return (
     <li>
-      <Link to={to} title={collapsed ? item.label : undefined} aria-current={active ? "page" : undefined} className={linkClass(active)}>
+      <Link
+        to={to}
+        title={collapsed ? item.label : undefined}
+        aria-current={active ? "page" : undefined}
+        className={linkClass(active)}
+      >
         <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
         <span className={collapsed ? "sr-only" : "truncate"}>{item.label}</span>
       </Link>
@@ -233,7 +281,13 @@ function NavEntry({
 }
 
 /** Two workspace entries need no visible heading; screen readers still get the group name. */
-function GroupHeading({ id, children }: { id: string; children: React.ReactNode }) {
+function GroupHeading({
+  id,
+  children,
+}: {
+  id: string;
+  children: React.ReactNode;
+}) {
   return (
     <h2 id={id} className="sr-only">
       {children}
@@ -255,19 +309,11 @@ function SidebarContent({
 }) {
   const { user, hasAnyPermission } = useAuth();
   const uid = useId();
-  const visible = (items: readonly NavItem[]) => items.filter((item) => canSeeNavItem(item, hasAnyPermission));
+  const visible = (items: readonly NavItem[]) =>
+    items.filter((item) => canSeeNavItem(item, hasAnyPermission));
   const workspaceItems = visible(WORKSPACE_NAV);
   const projectItems = visible(PROJECT_NAV);
-  const moreItems = visible(PROJECT_MORE_NAV);
-  const projectId = project?.id ?? "";
-  const moreActive = Boolean(project) && moreItems.some((item) => navItemMatches(item, loc) && loc.projectId === projectId);
-  const [moreOpen, setMoreOpen] = useState(moreActive);
   const [changingProject, setChangingProject] = useState(false);
-  const moreButtonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (moreActive) setMoreOpen(true);
-  }, [moreActive]);
 
   return (
     <>
@@ -279,40 +325,46 @@ function SidebarContent({
           className="flex items-center gap-2.5 overflow-hidden hover:opacity-90 transition rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
         >
           <div className="w-9 h-9 rounded-full bg-white flex items-center justify-center p-0.5 shrink-0">
-            <BrandLogo logoUrl={user?.tenant?.brandingConfig?.logoUrl} alt={user?.tenant?.name || APPLICATION_NAME} className="w-full h-full" />
+            <BrandLogo
+              logoUrl={user?.tenant?.brandingConfig?.logoUrl}
+              alt={user?.tenant?.name || APPLICATION_NAME}
+              className="w-full h-full"
+            />
           </div>
           {!collapsed && (
             <div className="min-w-0">
-              <div className="text-white font-bold text-sm leading-tight truncate">{shortOrganisationName(user?.tenant?.name) || APPLICATION_NAME}</div>
-              <div className="text-[11px] text-white/75 truncate">{user?.tenant?.brandingConfig?.tagline || "Project Monitoring Portal"}</div>
+              <div className="text-white font-bold text-sm leading-tight truncate">
+                {shortOrganisationName(user?.tenant?.name) || APPLICATION_NAME}
+              </div>
+              <div className="text-[11px] text-white/90 truncate">
+                {user?.tenant?.brandingConfig?.tagline ||
+                  "Project Monitoring Portal"}
+              </div>
             </div>
           )}
         </Link>
         {headerButton}
       </div>
 
-      {/* Scrollable middle: navigation */}
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mr-1.5 pr-1.5 pb-2 space-y-4">
-        <nav aria-labelledby={`${uid}-ws`}>
-          <GroupHeading id={`${uid}-ws`}>
-            Workspace
-          </GroupHeading>
-          <ul className="space-y-0.5">
-            {workspaceItems.map((item) => (
-              <NavEntry key={item.key} item={item} project={project} loc={loc} collapsed={collapsed} />
-            ))}
-          </ul>
-        </nav>
-
+      {/* Scrollable middle: the project block on top, the workspace entries at the bottom. */}
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mr-1.5 pr-1.5 pb-2 flex flex-col gap-4">
         {project && (
-          <nav aria-labelledby={`${uid}-pr`} className="pt-3 border-t border-white/10">
+          <nav aria-labelledby={`${uid}-pr`}>
             <div className={collapsed ? "sr-only" : "px-2.5 pb-2"}>
               <h2 id={`${uid}-pr`}>
-                <span className="block text-[11px] font-semibold text-brand-sky tabular-nums">
+                <span className="block text-[11px] font-semibold text-amber-200 tabular-nums">
                   {formatProjectCode(project.codePrefix)}
-                  {project.interventionYear ? <span className="font-normal text-white/60"> · {project.interventionYear}</span> : null}
+                  {project.interventionYear ? (
+                    <span className="font-normal text-white/85">
+                      {" "}
+                      · {project.interventionYear}
+                    </span>
+                  ) : null}
                 </span>
-                <span className="block text-sm font-semibold text-white leading-snug line-clamp-2" title={project.name}>
+                <span
+                  className="block text-sm font-semibold text-white leading-snug line-clamp-2"
+                  title={project.name}
+                >
                   {project.name}
                 </span>
               </h2>
@@ -323,46 +375,45 @@ function SidebarContent({
               >
                 Change project
               </button>
-              {changingProject && <ChangeProjectDialog currentProjectId={project.id} onClose={() => setChangingProject(false)} />}
+              {changingProject && (
+                <ChangeProjectDialog
+                  currentProjectId={project.id}
+                  onClose={() => setChangingProject(false)}
+                />
+              )}
             </div>
             <ul className="space-y-0.5">
               {projectItems.map((item) => (
-                <NavEntry key={item.key} item={item} project={project} loc={loc} collapsed={collapsed} />
+                <NavEntry
+                  key={item.key}
+                  item={item}
+                  project={project}
+                  loc={loc}
+                  collapsed={collapsed}
+                />
               ))}
-              {moreItems.length > 0 && (
-                <li
-                  onKeyDown={(e) => {
-                    if (e.key === "Escape" && moreOpen) {
-                      e.stopPropagation();
-                      setMoreOpen(false);
-                      moreButtonRef.current?.focus();
-                    }
-                  }}
-                >
-                  <button
-                    ref={moreButtonRef}
-                    type="button"
-                    aria-expanded={moreOpen}
-                    aria-controls={`${uid}-more`}
-                    onClick={() => setMoreOpen((o) => !o)}
-                    title={collapsed ? "More" : undefined}
-                    className={linkClass(false)}
-                  >
-                    {collapsed ? <MoreHorizontal className="w-4 h-4 shrink-0" aria-hidden="true" /> : (
-                      <ChevronRight className={`w-4 h-4 shrink-0 motion-safe:transition-transform ${moreOpen ? "rotate-90" : ""}`} aria-hidden="true" />
-                    )}
-                    <span className={collapsed ? "sr-only" : "truncate"}>More</span>
-                  </button>
-                  <ul id={`${uid}-more`} hidden={!moreOpen} className={`space-y-0.5 mt-0.5 ${collapsed ? "" : "pl-4"}`}>
-                    {moreItems.map((item) => (
-                      <NavEntry key={item.key} item={item} project={project} loc={loc} collapsed={collapsed} />
-                    ))}
-                  </ul>
-                </li>
-              )}
             </ul>
           </nav>
         )}
+
+        {/* With a project, a divider and the workspace entries pushed down to the user button. */}
+        <nav
+          aria-labelledby={`${uid}-ws`}
+          className={project ? "mt-auto pt-3 border-t border-white/10" : undefined}
+        >
+          <GroupHeading id={`${uid}-ws`}>Workspace</GroupHeading>
+          <ul className="space-y-0.5">
+            {workspaceItems.map((item) => (
+              <NavEntry
+                key={item.key}
+                item={item}
+                project={project}
+                loc={loc}
+                collapsed={collapsed}
+              />
+            ))}
+          </ul>
+        </nav>
       </div>
 
       <UserMenu collapsed={collapsed} />
@@ -379,10 +430,19 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
   const [open, setOpen] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const currentAccountRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
+
+  // Long demo casts scroll inside the menu: bring the signed-in account into view on open.
+  useEffect(() => {
+    if (open) currentAccountRef.current?.scrollIntoView({ block: "nearest" });
+  }, [open]);
 
   useEffect(() => {
     function handleOutsideClick(e: MouseEvent) {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) setOpen(false);
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node))
+        setOpen(false);
     }
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
@@ -406,44 +466,75 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
         if (e.key === "Escape" && open) {
           e.stopPropagation();
           setOpen(false);
+          triggerRef.current?.focus();
         }
       }}
     >
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((prev) => !prev)}
         aria-expanded={open}
         aria-haspopup="true"
+        aria-controls={open ? menuId : undefined}
         className="w-full flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/10 transition text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
       >
         <div className="w-8 h-8 rounded-full bg-white text-brand-primary font-bold text-xs flex items-center justify-center shrink-0 shadow-sm">
           {getInitials(user?.fullName || "User")}
         </div>
         <div className={collapsed ? "sr-only" : "overflow-hidden"}>
-          <div className="text-xs font-semibold text-white truncate">{user?.fullName}</div>
-          <div className="text-[11px] text-white/75 truncate">{user?.roleName || user?.roleCode || "Team Member"}</div>
+          <div className="text-xs font-semibold text-white truncate">
+            {user?.fullName}
+          </div>
+          <div className="text-[11px] text-white/75 truncate">
+            {user?.roleName || user?.roleCode || "Team Member"}
+          </div>
         </div>
       </button>
 
       {open && (
-        <div className="absolute bottom-14 left-2 w-64 bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-200 p-2 z-50">
+        // Never taller than the space above the user button: the cast list scrolls, the header and
+        // the menu's own actions stay in view.
+        <div
+          id={menuId}
+          className="absolute bottom-14 left-2 w-64 max-h-[calc(100vh-6rem)] supports-[height:100dvh]:max-h-[calc(100dvh-6rem)] flex flex-col bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-200 p-2 z-50"
+        >
+          <div className="px-2.5 py-1.5 border-b border-slate-100 shrink-0">
+            <div className="text-xs font-semibold text-slate-900 truncate">
+              {user?.fullName}
+            </div>
+            {user?.email && (
+              <div className="text-[11px] text-slate-500 truncate" title={user.email}>
+                {user.email}
+              </div>
+            )}
+          </div>
+
           {IS_DEMO_MODE && (
             <>
-              <div className="px-2.5 py-1.5 border-b border-slate-100">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Switch user</div>
-                <div className="text-[11px] text-slate-500">Sign in as another member of the demo cast</div>
+              <div className="px-2.5 pt-2 pb-1 shrink-0">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Switch user
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  Sign in as another member of the demo cast
+                </div>
               </div>
-              <div className="py-1 space-y-0.5">
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-1 space-y-0.5">
                 {demoAccounts.map((acct) => {
                   const isCurrent = user?.email === acct.email;
                   return (
                     <button
                       key={acct.email}
+                      ref={isCurrent ? currentAccountRef : undefined}
                       type="button"
                       disabled={switchingAccount}
+                      aria-current={isCurrent ? "true" : undefined}
                       onClick={() => handleRoleSwitch(acct.email)}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs hover:bg-slate-100 flex items-center justify-between transition ${
-                        isCurrent ? "font-semibold text-brand-primary bg-brand-primary/5" : "text-slate-700"
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs hover:bg-slate-100 flex items-center justify-between transition focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary ${
+                        isCurrent
+                          ? "font-semibold text-brand-primary bg-brand-primary/5"
+                          : "text-slate-700"
                       }`}
                     >
                       <div>
@@ -452,7 +543,11 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
                           {acct.name} · {acct.organization}
                         </div>
                       </div>
-                      {isCurrent && <span className="text-[10px] bg-brand-primary/5 text-brand-primary px-1.5 py-0.5 rounded font-semibold">Active</span>}
+                      {isCurrent && (
+                        <span className="text-[10px] bg-brand-primary/5 text-brand-primary px-1.5 py-0.5 rounded font-semibold">
+                          Active
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -460,17 +555,17 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
             </>
           )}
 
-          <div className={`${IS_DEMO_MODE ? "pt-1 mt-1 border-t border-slate-100" : ""} space-y-0.5`}>
+          <div className="pt-1 mt-1 border-t border-slate-100 space-y-0.5 shrink-0">
             <Link
               to="/app/settings?tab=account"
               onClick={() => setOpen(false)}
-              className="block w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-brand-primary hover:bg-brand-primary/5 transition"
+              className="block w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-medium text-brand-primary hover:bg-brand-primary/5 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary"
             >
               Account and password
             </Link>
           </div>
 
-          <div className="pt-1 mt-1 border-t border-slate-100">
+          <div className="pt-1 mt-1 border-t border-slate-100 shrink-0">
             <button
               type="button"
               onClick={() => {
@@ -480,7 +575,7 @@ function UserMenu({ collapsed }: { collapsed: boolean }) {
                   navigate("/login");
                 });
               }}
-              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-red-600 hover:bg-red-50 font-medium transition"
+              className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs text-red-600 hover:bg-red-50 font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-red-500"
             >
               Sign out
             </button>

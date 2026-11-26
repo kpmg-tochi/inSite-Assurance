@@ -243,7 +243,7 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
         }
         subtitle={
           activeTab === "tenant"
-            ? "Roles, users, branding and sign-in lockouts across the tenant"
+            ? "Roles, users, branding, sign-in lockouts and approved list uploads across the tenant"
             : `${formatProjectCode(project.codePrefix)}: ${project.name}`
         }
         search={{
@@ -294,6 +294,8 @@ export function AuditLedgerPage({ project }: AuditLedgerPageProps) {
           onClick={(e: MouseEvent<HTMLDivElement>) => {
             if (e.target === e.currentTarget) setSelectedEntry(null);
           }}
+          onClose={() => setSelectedEntry(null)}
+          label="Audit entry"
         >
           {/* Drawer Header */}
           <div className="p-4 border-b border-slate-100 flex items-start justify-between">

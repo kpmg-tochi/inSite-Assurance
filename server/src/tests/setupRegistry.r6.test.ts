@@ -49,7 +49,7 @@ describe('setup registry (R6a)', () => {
     const numbered = PROJECT_SETUP_STEPS.filter((s) => !s.settingsOnly).sort((a, b) => a.order - b.order);
     assert.deepEqual(
       numbered.map((s) => s.title),
-      ['Project', 'Contract', 'BoQ & work phases', 'Team & visits', 'Review']
+      ['Project', 'Contract', 'BoQ & work phases', 'Team & monitoring', 'Review']
     );
     assert.deepEqual(numbered.map((s) => s.order), [1, 2, 3, 4, 5]);
     assert.deepEqual(
@@ -57,7 +57,7 @@ describe('setup registry (R6a)', () => {
       ['advanced']
     );
     const sections = (id: string) => PROJECT_SETUP_STEPS.find((s) => s.id === id)!.sectionIds;
-    assert.deepEqual(sections('project'), ['basics', 'parties', 'site']);
+    assert.deepEqual(sections('project'), ['basics', 'parties', 'site', 'sites']);
     assert.deepEqual(sections('contract'), ['contractor', 'contract', 'facility']);
     assert.deepEqual(sections('scope'), ['scope', 'standards']);
     assert.deepEqual(sections('team'), ['team', 'visits']);

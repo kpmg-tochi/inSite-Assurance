@@ -110,7 +110,7 @@ export async function tailorUbecRoles(db: Db, tenantId: string): Promise<void> {
     where: { id: independent.id },
     data: {
       name: "Independent M&E (COREN-certified firm)",
-      description: "Independent monitoring and evaluation by a COREN-certified firm, on the projects it is assigned to: web and field app (ad hoc independent visits).",
+      description: "Independent monitoring and evaluation by a COREN-certified firm, on the projects it is assigned to: web and field app (ad hoc independent monitoring visits).",
       ...FIELD_ROLE,
     },
   });
@@ -132,7 +132,7 @@ export async function tailorUbecRoles(db: Db, tenantId: string): Promise<void> {
     where: { id: (await byCode(UBEC_ROLE.RESIDENT_SUPERVISOR)).id },
     data: {
       name: "Resident Supervisor",
-      description: "UBEC State/Zonal Office Resident Supervisor: weekly supervision visits on the field app (mobile only).",
+      description: "UBEC State/Zonal Office Resident Supervisor: weekly monitoring visits on the field app (mobile only).",
     },
   });
 

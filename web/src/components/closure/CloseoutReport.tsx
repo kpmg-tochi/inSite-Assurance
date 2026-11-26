@@ -14,6 +14,7 @@ import { useOpenDocumentMutation } from "../../mutations/contracts/useContractMu
 import { DocumentUploadDialog } from "../documents/DocumentUploadDialog";
 import { DocumentDrawer } from "../documents/DocumentDrawer";
 import { primaryButton, secondaryButton } from "../contracts/contractUi";
+import { CollapsibleSection } from "./closureUi";
 
 /**
  * UBEC: the closeout report replaces lessons learned on the project. It is a `CLOSEOUT_REPORT`
@@ -92,7 +93,7 @@ export function CloseoutReportCard({ project }: { project: ProjectSummaryDto }) 
     );
   } else if (report) {
     body = (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
         <div className="flex min-w-0 items-start gap-2">
           <FileText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
           <div className="min-w-0">
@@ -142,29 +143,39 @@ export function CloseoutReportCard({ project }: { project: ProjectSummaryDto }) 
     );
   }
 
+  // Design round 2026-11-26: a collapsible sub-section of the Project closure tab, open when the
+  // caller has the report to upload. Remounted once the register has loaded so it opens then.
+  const needsUpload = !report && canUploadHere && closeout.typeAvailable !== false;
+  const hint = closeout.isLoading
+    ? undefined
+    : report
+      ? `Uploaded ${formatDateShort(report.current.uploadedAt)}${report.currentVersion > 1 ? ` · version ${report.currentVersion}` : ""}`
+      : "Not uploaded yet";
+
   return (
-    <section id="closeout-report" className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5" aria-labelledby="closeout-report-heading">
-      <div>
-        <h2 id="closeout-report-heading" className="text-sm font-bold text-slate-900">
-          Lessons learned report
-        </h2>
-        <p className="text-[11px] text-slate-500">
-          One document with {CLOSEOUT_REPORT_HOLDS}, filed in the project register.
-        </p>
+    <CollapsibleSection
+      key={closeout.isLoading ? "loading" : "ready"}
+      id="closeout-report"
+      title="Lessons learned report"
+      hint={hint}
+      defaultOpen={!closeout.isLoading && needsUpload}
+    >
+      <div className="space-y-3">
+        <p className="text-xs text-slate-600">One document with {CLOSEOUT_REPORT_HOLDS}, filed in the project register.</p>
+        {body}
+        {report && closeout.otherCount > 0 && (
+          <p className="text-[11px] text-slate-500">
+            {closeout.otherCount} earlier lessons learned report{closeout.otherCount === 1 ? " is" : "s are"} in the{" "}
+            <Link to={`/app/projects/${project.id}/documents`} className="font-semibold text-brand-primary hover:underline">
+              documents register
+            </Link>
+            .
+          </p>
+        )}
+        {canUploadHere && uploading && <CloseoutReportUploadDialog projectId={project.id} onClose={() => setUploading(false)} />}
+        {report && drawerOpen && <DocumentDrawer projectId={project.id} documentId={report.id} onClose={() => setDrawerOpen(false)} />}
       </div>
-      {body}
-      {report && closeout.otherCount > 0 && (
-        <p className="text-[11px] text-slate-500">
-          {closeout.otherCount} earlier lessons learned report{closeout.otherCount === 1 ? " is" : "s are"} in the{" "}
-          <Link to={`/app/projects/${project.id}/documents`} className="font-semibold text-brand-primary hover:underline">
-            documents register
-          </Link>
-          .
-        </p>
-      )}
-      {canUploadHere && uploading && <CloseoutReportUploadDialog projectId={project.id} onClose={() => setUploading(false)} />}
-      {report && drawerOpen && <DocumentDrawer projectId={project.id} documentId={report.id} onClose={() => setDrawerOpen(false)} />}
-    </section>
+    </CollapsibleSection>
   );
 }
 

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { AlertTriangle } from "lucide-react";
-import type { SupervisorWorkloadDto } from "@insite/shared";
+import { formatProjectCode, type SupervisorWorkloadDto } from "@insite/shared";
 import { useAuth } from "../../lib/auth-context";
 import { useSupervisorsQuery, useTeamWorkloadQuery } from "../../queries/supervision/useSupervisionQueries";
 import { useTenantUsersQuery } from "../../queries/rbac/useRbacQueries";
@@ -63,7 +63,7 @@ export function SupervisorsCard() {
   const matchesSearch = (w: SupervisorWorkloadDto) => {
     const term = search.trim().toLowerCase();
     if (!term) return true;
-    return [w.fullName, w.roleName, orgByUser.get(w.userId) ?? "", ...w.projects.flatMap((p) => [p.codePrefix, p.name])].some((s) =>
+    return [w.fullName, w.roleName, orgByUser.get(w.userId) ?? "", ...w.projects.flatMap((p) => [p.codePrefix, formatProjectCode(p.codePrefix), p.name])].some((s) =>
       s.toLowerCase().includes(term)
     );
   };

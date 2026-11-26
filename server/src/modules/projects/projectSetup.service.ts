@@ -1,4 +1,6 @@
 import { Prisma } from '@prisma/client';
+import { getProjectSites, saveProjectSites } from '../sites/sites.service';
+import { getNeedsAssessmentImportState } from '../needsAssessment/needsAssessment.service';
 import {
   ActivateProjectResponse,
   ActivationIssue,
@@ -45,6 +47,7 @@ import {
   zoneOfState,
   allowedInterventionYears,
   zonedCalendarDate,
+  formatProjectCodeWithYear,
 } from '@insite/shared';
 import {
   assertInterventionYearAllowed,
@@ -76,6 +79,7 @@ import {
 import { countStandardsDocs } from '../standards/standards.service';
 import {
   applyProjectTypeToProject,
+  deriveOwnerAndFunder,
   PROJECT_TYPE_SUMMARY_SELECT,
   projectTypeSummary,
   tenantHasActiveProjectTypes,
@@ -115,12 +119,14 @@ interface StepState {
 
 interface SetupState {
   steps: Partial<Record<string, StepState>>;
+  /** Other keys (wave 2: `needsAssessment`, `derivedParties`) are kept as they are. */
+  [key: string]: unknown;
 }
 
 function parseSetupState(raw: unknown): SetupState {
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   const steps = obj.steps && typeof obj.steps === 'object' ? (obj.steps as SetupState['steps']) : {};
-  return { steps };
+  return { ...obj, steps };
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +163,7 @@ async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
   if (!project) throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   const typeConfigForLoad = resolveProjectTypeConfig(project.projectTypeSnapshotJson);
   const beforeActivationCodes = typeConfigForLoad?.documentRequirements.beforeActivation ?? [];
-  const [contractors, lineCount, unassignedLineCount, budgetSum, sprintCount, units, process, standards, tenantHasTypes, presentDocTypes, lastSprint] =
+  const [contractors, lineCount, unassignedLineCount, budgetSum, sprintCount, units, process, standards, tenantHasTypes, presentDocTypes, lastSprint, sites] =
     await Promise.all([
       getProjectContractors(db, projectId),
       db.boqItem.count({ where: { projectId } }),
@@ -189,6 +195,12 @@ async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
         : Promise.resolve([] as Array<{ documentType: { code: string; name: string } }>),
       // Redesign R6a: the last sprint's end, for the planned completion warning.
       db.projectSprint.findFirst({ where: { projectId }, orderBy: { endDate: 'desc' }, select: { endDate: true } }),
+      // Client demo updates C2 (wave 2): the sites, for the activation rule (each located).
+      db.projectSite.findMany({
+        where: { projectId },
+        orderBy: { siteNumber: 'asc' },
+        select: { siteNumber: true, schoolName: true, lgaCode: true, latitude: true, longitude: true },
+      }),
     ]);
   return {
     project,
@@ -196,6 +208,12 @@ async function loadSetupProject(db: Tx | typeof prisma, projectId: string) {
     process,
     standards,
     tenantHasTypes,
+    sites,
+    /**
+     * Client demo updates D2 (wave 2): a typed project whose parties section no user has saved runs
+     * on the derived owner and funder; the section asks only for what could not be derived.
+     */
+    partiesDerived: Boolean(project.projectTypeId) && !parseSetupState(project.setupState).steps.parties,
     /** Phase 11: the project type's rules (from the snapshot), or today's rules without a type. */
     typeConfig: typeConfigForLoad,
     /** Phase 13 */
@@ -271,7 +289,9 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
   if (loaded.tenantHasTypes && !project.projectTypeId) {
     basicsIssues.push({ code: 'PROJECT_TYPE_REQUIRED', message: 'Choose the project type.', field: 'projectTypeId' });
   }
-  if (rules.regionRequired && !project.regionId) {
+  // Client demo updates C1: the State (zone derived from it) is the client's Zone/State, so a
+  // State code satisfies the type's "Zone / State required" rule; the tenant region is optional.
+  if (rules.regionRequired && !project.regionId && !project.stateCode) {
     basicsIssues.push({ code: 'REGION_REQUIRED', message: 'Choose the zone or state.', field: 'regionId' });
   }
   out.basics = { issues: basicsIssues, warnings: [] };
@@ -289,16 +309,43 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
       field: 'owningOrganizationId',
     });
   }
-  if (rules.monitorRequired && !project.monitorOrganizationId) {
+  // D2 (wave 2): with derived parties, the independent M&E firm is assigned when one is engaged
+  // (team step) and the beneficiary schools are the sites; only a missing owner or funder is asked.
+  if (rules.monitorRequired && !project.monitorOrganizationId && !loaded.partiesDerived) {
     parties.push({ code: 'MONITOR_REQUIRED', message: 'Choose the monitor organisation.', field: 'monitorOrganization' });
   }
   if (rules.funderRequired && !project.lenderOrganizationId) {
     parties.push({ code: 'LENDER_REQUIRED', message: 'Choose the funding organisation.', field: 'lenderOrganization' });
   }
-  if (rules.beneficiaryRequired && project.beneficiaries.length === 0) {
+  if (rules.beneficiaryRequired && project.beneficiaries.length === 0 && !loaded.partiesDerived) {
     parties.push({ code: 'BENEFICIARY_REQUIRED', message: 'Add at least one beneficiary.', field: 'beneficiaries' });
   }
   out.parties = { issues: parties, warnings: [] };
+
+  // Sites (client demo updates C2, wave 2): optional; when a project has sites, each must be
+  // located and in the project's state. A project without sites has no issues here.
+  const siteIssues: SetupIssue[] = [];
+  if (loaded.sites.length > 0 && !project.stateCode) {
+    siteIssues.push({ code: 'STATE_REQUIRED_FOR_SITES', message: 'Choose the project state: every site is in that state.', field: 'stateCode' });
+  }
+  loaded.sites.forEach((s, index) => {
+    if (s.latitude === null || s.longitude === null) {
+      siteIssues.push({
+        code: 'SITE_NOT_LOCATED',
+        message: `Locate site ${s.siteNumber} (${s.schoolName}): enter its coordinates or paste a map link.`,
+        field: `sites.${index}.latitude`,
+      });
+    }
+    const lga = lgaByCode(s.lgaCode);
+    if (project.stateCode && lga?.stateCode !== project.stateCode) {
+      siteIssues.push({
+        code: 'SITE_LGA_NOT_IN_STATE',
+        message: `The LGA of site ${s.siteNumber} (${s.schoolName}) is not in ${stateByCode(project.stateCode)?.name ?? 'the project state'}.`,
+        field: `sites.${index}.lgaCode`,
+      });
+    }
+  });
+  out.sites = { issues: siteIssues, warnings: [] };
 
   // Contractor (redesign R6a, D-R6.4: split from parties)
   const contractorSectionIssues: SetupIssue[] = contractorIssues(contractors).map((i) => ({ ...i, field: 'contractors' }));
@@ -400,7 +447,7 @@ function computeStepIssues(loaded: LoadedSetup): Record<string, { issues: SetupI
     issues: [],
     warnings: project.defaultVisitOfficerIds.length
       ? []
-      : [{ code: 'NO_VISIT_OFFICER', message: 'No visit officer is set: proposed visits need an officer before they are published.', field: 'officers' }],
+      : [{ code: 'NO_VISIT_OFFICER', message: 'No monitoring officer is set: proposed monitoring visits need an officer before they are published.', field: 'officers' }],
   };
 
   // Process: valid by construction (validated on save).
@@ -447,13 +494,18 @@ function buildStepStatuses(loaded: LoadedSetup): SetupStepStatus[] {
     .sort((a, b) => a.order - b.order)
     .filter((s) => stepVisible(s, loaded))
     .map((section) => {
-      const saved = state.steps[section.id];
-      const required = stepRequired(section, loaded);
+      // Wave 2: sites written by the needs-assessment import count as saved.
+      const saved = state.steps[section.id] ?? (section.id === 'sites' && loaded.sites.length > 0 ? ({} as Partial<StepState>) : undefined);
       const issues = [...(computed[section.id]?.issues ?? [])];
+      // Wave 2 (C2): the sites section is required once the project has sites (each must be located).
+      // D2: derived parties are required only for what could not be derived, and need no save.
+      const derivedParties = section.id === 'parties' && loaded.partiesDerived;
+      const required =
+        section.id === 'sites' ? loaded.sites.length > 0 : derivedParties ? issues.length > 0 : stepRequired(section, loaded);
       const wizardStep = wizardStepFor(section.id)!;
       // A draft's sections must each be opened and saved; live projects were activated already.
       // D-R6.5: the message names the wizard step that shows the section.
-      if (!saved && !isLive && required && section.id !== 'basics') {
+      if (!saved && !isLive && required && section.id !== 'basics' && !derivedParties) {
         issues.unshift({ code: 'STEP_NOT_SAVED', message: `Open ${wizardStepLabel(wizardStep)} and save it.` });
       }
       return {
@@ -610,7 +662,10 @@ function serializeSetup(loaded: LoadedSetup): ProjectSetupDto {
 }
 
 export async function getProjectSetup(projectId: string): Promise<ProjectSetupDto> {
-  return serializeSetup(await loadSetupProject(prisma, projectId));
+  const dto = serializeSetup(await loadSetupProject(prisma, projectId));
+  // Client demo updates (wave 2): C2 sites (sites module) and D1 needs-assessment tags (needsAssessment module).
+  const [sites, needsAssessmentImport] = await Promise.all([getProjectSites(projectId), getNeedsAssessmentImportState(projectId)]);
+  return { ...dto, sites, needsAssessmentImport };
 }
 
 // ---------------------------------------------------------------------------
@@ -728,6 +783,17 @@ function assertNotManualLotCode(codePrefix: string | undefined, current: string 
 }
 
 export async function createProjectDraft(webUser: WebJwtPayload, input: CreateProjectDraftRequest) {
+  const projectId = await prisma.$transaction((tx) => createProjectDraftInTx(tx, webUser, input));
+  invalidateUserAuthCache(webUser.userId);
+  return getProjectSetup(projectId);
+}
+
+/**
+ * Client demo updates (wave 2, D1): the draft creation inside a caller's transaction, so the
+ * needs-assessment-first flow creates the draft, its sites, work phases, units and BoQ atomically.
+ * Returns the project id; the caller invalidates the creator's auth cache after commit.
+ */
+export async function createProjectDraftInTx(tx: Tx, webUser: WebJwtPayload, input: CreateProjectDraftRequest): Promise<string> {
   const tenantId = webUser.tenantId;
   // Client demo updates C3: a lot choice numbers the code (it wins over a typed code); without
   // either, 400 PROJECT_CODE_REQUIRED.
@@ -738,11 +804,11 @@ export async function createProjectDraft(webUser: WebJwtPayload, input: CreatePr
   }
   if (!lotChoice) assertNotManualLotCode(input.codePrefix, null);
   // D5: a new project takes the current or the next intervention year.
-  if (input.interventionYear) await assertInterventionYearAllowed(prisma, tenantId, input.interventionYear);
+  if (input.interventionYear) await assertInterventionYearAllowed(tx, tenantId, input.interventionYear);
   const area = resolveAdminArea(input, null);
   const funding = resolveFundingSource(input, null);
   if (!lotChoice) {
-    const existing = await prisma.project.findUnique({
+    const existing = await tx.project.findUnique({
       where: { tenantId_codePrefix: { tenantId, codePrefix: input.codePrefix! } },
       select: { id: true },
     });
@@ -750,9 +816,9 @@ export async function createProjectDraft(webUser: WebJwtPayload, input: CreatePr
       throw new AppError(`A project with code prefix "${input.codePrefix}" already exists`, 409, 'DUPLICATE_PROJECT_PREFIX');
     }
   }
-  if (input.externalReference) await assertExternalReferenceFree(prisma, tenantId, input.externalReference, null);
+  if (input.externalReference) await assertExternalReferenceFree(tx, tenantId, input.externalReference, null);
 
-  const projectId = await prisma.$transaction(async (tx) => {
+  {
     // C3: the lot lock is taken first and held to commit, so concurrent drafts get distinct batches.
     const assigned = lotChoice
       ? await assignLotBatchCode(tx, {
@@ -820,9 +886,7 @@ export async function createProjectDraft(webUser: WebJwtPayload, input: CreatePr
       payload: { codePrefix: project.codePrefix, name: project.name, totalBudgetNgn: input.totalBudgetNgn },
     });
     return project.id;
-  });
-  invalidateUserAuthCache(webUser.userId);
-  return getProjectSetup(projectId);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -856,8 +920,13 @@ export async function assertExternalReferenceFree(db: Tx | typeof prisma, tenant
     select: { codePrefix: true },
   });
   if (clash) {
-    throw new AppError(`Project ID "${externalReference}" is already used by ${clash.codePrefix}.`, 409, 'EXTERNAL_REFERENCE_TAKEN');
+    throw new AppError(`Project ID "${externalReference}" is already used by ${projectCodeForMessage(clash.codePrefix)}.`, 409, 'EXTERNAL_REFERENCE_TAKEN');
   }
+}
+
+/** A code as people read it, with the year of a lot/batch code ("LOT 4 BATCH 1 (2026)"); other codes as stored. */
+export function projectCodeForMessage(code: string): string {
+  return formatProjectCodeWithYear(code);
 }
 
 const saveBasics: StepSaver = async ({ tx, project, webUser, input }) => {
@@ -977,6 +1046,13 @@ const saveBasics: StepSaver = async ({ tx, project, webUser, input }) => {
   await tx.project.update({ where: { id: project.id }, data: { ...after, regionId } });
   const changedFields = diffFields({ ...before, regionId: project.regionId }, { ...after, regionId });
   if (typeChange.changed) changedFields.push('projectTypeId');
+  // Client demo updates D2 (wave 2): a draft's owner and funder follow its type and state (never a
+  // value a user saved). The type apply above ran on the old state, so derive again after the update.
+  if (isDraft && (typeChange.changed || area.stateCode !== project.stateCode)) {
+    for (const field of await deriveOwnerAndFunder(tx, project.id)) {
+      if (!changedFields.includes(field)) changedFields.push(field);
+    }
+  }
   return { changedFields, payload: typeChange.changed ? { prefilledFromType: typeChange.prefilled } : undefined };
 };
 
@@ -1350,6 +1426,8 @@ const STEP_SAVERS: Record<ProjectSetupSectionId, StepSaver> = {
   standards: saveStandards,
   visits: saveVisits,
   team: saveTeam,
+  // Client demo updates C2 (wave 2): sites module (WS-B1).
+  sites: ({ tx, project, webUser, input }) => saveProjectSites(tx, project.id, webUser, input),
 };
 
 /**

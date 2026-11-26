@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   getPlanner,
   getSprintVerification,
@@ -22,8 +22,14 @@ export const projectFindingsKey = (projectId: string | null | undefined) => ['fi
 export const siteLogKey = (projectId: string | null | undefined) => ['site-log', projectId] as const;
 export const sprintVerificationKey = (projectId: string | null | undefined, sprintId: string | null | undefined) => ['sprint-verification', projectId, sprintId] as const;
 
-export const useProjectVisitsQuery = (projectId: string | null | undefined, filters: VisitFilters = {}, enabled = true) =>
-  useQuery({ queryKey: [...projectVisitsKey(projectId), filters], queryFn: () => listProjectVisits(projectId!, filters), enabled: Boolean(projectId) && enabled });
+/** `keepPrevious` (client demo updates D4, the calendar): keep the last range on screen while the next one loads. */
+export const useProjectVisitsQuery = (projectId: string | null | undefined, filters: VisitFilters = {}, enabled = true, keepPrevious = false) =>
+  useQuery({
+    queryKey: [...projectVisitsKey(projectId), filters],
+    queryFn: () => listProjectVisits(projectId!, filters),
+    enabled: Boolean(projectId) && enabled,
+    placeholderData: keepPrevious ? keepPreviousData : undefined,
+  });
 
 export const useVisitDetailQuery = (projectId: string | null | undefined, visitId: string | null | undefined) =>
   useQuery({ queryKey: visitDetailKey(projectId, visitId), queryFn: () => getVisitDetail(projectId!, visitId!), enabled: Boolean(projectId && visitId) });
@@ -34,8 +40,8 @@ export const useVisitPlanPreviewQuery = (projectId: string | null | undefined, e
 export const useVisitOfficersQuery = (projectId: string | null | undefined, enabled = true) =>
   useQuery({ queryKey: visitOfficersKey(projectId), queryFn: () => getVisitOfficers(projectId!), enabled: Boolean(projectId) && enabled });
 
-export const usePlannerQuery = (filters: PlannerFilters, enabled = true) =>
-  useQuery({ queryKey: [...plannerKey, filters], queryFn: () => getPlanner(filters), enabled });
+export const usePlannerQuery = (filters: PlannerFilters, enabled = true, keepPrevious = false) =>
+  useQuery({ queryKey: [...plannerKey, filters], queryFn: () => getPlanner(filters), enabled, placeholderData: keepPrevious ? keepPreviousData : undefined });
 
 export const useProjectFindingsQuery = (projectId: string | null | undefined, params: { status?: string; visitId?: string } = {}, enabled = true) =>
   useQuery({ queryKey: [...projectFindingsKey(projectId), params], queryFn: () => listProjectFindings(projectId!, params), enabled: Boolean(projectId) && enabled });

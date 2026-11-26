@@ -651,7 +651,7 @@ describe('Phase 15', () => {
     for (const expected of ['index.pdf', 'manifest.json', 'audit/audit-ledger.csv', 'audit/chain-verification.json']) assert.ok(names.includes(expected), expected);
     assert.ok(names.some((n) => n.startsWith('certificates/Certificate of Completion COC-P15-500-02')), names.join('\n'));
     assert.ok(names.some((n) => n.startsWith('certificates/Handover certificate')));
-    assert.ok(names.some((n) => n.startsWith('visits/') && n.includes('final_evaluation')), names.join('\n'));
+    assert.ok(names.some((n) => n.startsWith('monitoring-visits/') && n.includes('final_evaluation')), names.join('\n'));
     assert.ok(!names.some((n) => n.includes('COC-P15-500-01-')), 'the revoked certificate is archived and left out');
     const verification = JSON.parse(files.get('audit/chain-verification.json')!.toString('utf8'));
     assert.equal(verification.chainIntegrityVerified, true);

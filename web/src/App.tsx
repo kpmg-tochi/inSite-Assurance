@@ -15,6 +15,9 @@ import { LoginPage } from "./pages/auth/LoginPage";
 import { ProjectOverviewPage } from "./pages/overview/ProjectOverviewPage";
 import { WorkspaceHomePage } from "./pages/dashboard/WorkspaceHomePage";
 import { OrganizationRatingsPage } from "./pages/organizations/OrganizationRatingsPage";
+import { ContractorsPage } from "./pages/contractors/ContractorsPage";
+import { ContractorDetailPage } from "./pages/contractors/ContractorDetailPage";
+import { NeedsAssessmentPage } from "./pages/needsAssessment/NeedsAssessmentPage";
 import { NewProjectPage } from "./pages/projects/setup/NewProjectPage";
 import { ProjectSetupShell } from "./pages/projects/setup/ProjectSetupShell";
 import { ProjectPaymentsPage } from "./pages/payments/ProjectPaymentsPage";
@@ -160,7 +163,9 @@ function AuthenticatedWorkspace() {
   // not render another project's data under that URL: drafts have no Overview, so open their setup
   // (which also answers for a project the user may not open).
   const onSetupRoute = /^\/app\/projects\/[^/]+\/(setup|settings)(\/|$)/.test(path);
-  if (urlProjectId && !onSetupRoute && projectsQuery.isSuccess && !projects.some((p) => p.id === urlProjectId)) {
+  // Not while the list is refetching: right after activation the cached list still lacks the project,
+  // and redirecting then would send the new Overview back to its setup.
+  if (urlProjectId && !onSetupRoute && projectsQuery.isSuccess && !projectsQuery.isFetching && !projects.some((p) => p.id === urlProjectId)) {
     return <Navigate to={`/app/projects/${urlProjectId}/setup`} replace />;
   }
 
@@ -218,6 +223,32 @@ function AuthenticatedWorkspace() {
         <Route path="projects/:projectId/settings/:stepId" element={<ProjectSetupShell mode="settings" />} />
         <Route path="projects/:projectId/settings" element={<ProjectSetupRedirect mode="settings" />} />
         <Route path="organizations/:organizationId/ratings" element={<OrganizationRatingsPage />} />
+        {/* Client demo updates E3 (wave 3): approved lists. */}
+        <Route
+          path="needs-assessment"
+          element={
+            <RequirePermission anyOf={["approved_lists:view"]} backTo={projectHome}>
+              <NeedsAssessmentPage />
+            </RequirePermission>
+          }
+        />
+        {/* Client demo updates F.1 (wave 2): the contractor register. */}
+        <Route
+          path="contractors"
+          element={
+            <RequirePermission anyOf={["contractors:view_register"]} backTo={projectHome}>
+              <ContractorsPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="contractors/:contractorId"
+          element={
+            <RequirePermission anyOf={["contractors:view_register"]} backTo={projectHome}>
+              <ContractorDetailPage />
+            </RequirePermission>
+          }
+        />
 
         {activeProject ? (
           <>
@@ -321,7 +352,7 @@ function AuthenticatedWorkspace() {
                 {projectsQuery.isLoading ? (
                   <>
                     <Loader size="sm" inline />
-                    <span>Loading capital projects...</span>
+                    <span>Loading projects…</span>
                   </>
                 ) : (
                   <>

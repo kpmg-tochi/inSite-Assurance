@@ -32,7 +32,7 @@ const ROLE_DEFINITIONS: DefaultRoleDefinition[] = [
     name: 'Independent Monitor',
     code: 'MONITOR',
     description:
-      'Monitoring and evaluation lead: sets up projects, plans and reviews visits, follows findings and drives completion.',
+      'Monitoring and evaluation lead: sets up projects, plans and reviews monitoring visits, follows findings and drives completion.',
     surface: 'WEB',
     fieldPersonaType: 'NONE',
     assuranceWeight: 1.0,
@@ -160,7 +160,7 @@ const ROLE_DEFINITIONS: DefaultRoleDefinition[] = [
     name: 'Monitor Inspector (Visiting QS / COREN)',
     code: 'MONITOR_INSPECTOR',
     description:
-      'Visiting Quantity Surveyor or COREN Engineer from the independent monitoring firm: carries out visits on the field app.',
+      'Visiting Quantity Surveyor or COREN Engineer from the independent monitoring firm: carries out monitoring visits on the field app.',
     surface: 'MOBILE',
     fieldPersonaType: 'INDEPENDENT_VERIFIER',
     assuranceWeight: 1.0,
@@ -171,7 +171,7 @@ const ROLE_DEFINITIONS: DefaultRoleDefinition[] = [
     name: 'Independent Resident Clerk of Works',
     code: 'INDEPENDENT_RESIDENT',
     description:
-      'Full-time on-site resident supervisor: carries out visits and keeps the site log on the field app.',
+      'Full-time on-site resident supervisor: carries out monitoring visits and keeps the site log on the field app.',
     surface: 'MOBILE',
     fieldPersonaType: 'INDEPENDENT_VERIFIER',
     assuranceWeight: 0.85,

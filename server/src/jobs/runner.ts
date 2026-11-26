@@ -120,14 +120,38 @@ export function startJobRunner(options: { enabled: boolean }): () => void {
     return () => {};
   }
   const timers: NodeJS.Timeout[] = [];
-  const running = new Set<string>();
+  // Ticks run one at a time in this process (pre-demo fix, 2026-11-26). Each tick holds one pooled
+  // connection for its advisory lock and its work needs another; when many jobs fired together (a
+  // restart, or the laptop waking from sleep) every lock transaction took a connection and the work
+  // waited for one that never came, hanging the API for the 10-minute transaction timeout. A job
+  // already queued or running is not queued again.
+  const queue: string[] = [];
+  const queuedOrRunning = new Set<string>();
+  let draining = false;
+  const drain = async () => {
+    if (draining) return;
+    draining = true;
+    try {
+      while (queue.length > 0) {
+        const name = queue.shift()!;
+        try {
+          await runJobOnce(name);
+        } catch (error) {
+          console.warn(`[jobs] ${name} tick failed:`, error);
+        } finally {
+          queuedOrRunning.delete(name);
+        }
+      }
+    } finally {
+      draining = false;
+    }
+  };
   for (const job of registry.values()) {
     const tick = () => {
-      if (running.has(job.name)) return; // previous tick still going in this process
-      running.add(job.name);
-      runJobOnce(job.name)
-        .catch((error) => console.warn(`[jobs] ${job.name} tick failed:`, error))
-        .finally(() => running.delete(job.name));
+      if (queuedOrRunning.has(job.name)) return; // previous tick still queued or going in this process
+      queuedOrRunning.add(job.name);
+      queue.push(job.name);
+      void drain();
     };
     timers.push(setInterval(tick, job.intervalMs));
     // First tick shortly after start so a restart does not wait a whole interval.

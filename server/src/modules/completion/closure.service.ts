@@ -7,7 +7,8 @@ import {
   ClosureChecklistItemTemplate,
   ClosureChecklistList,
   CONTRACTOR_RATING_STAGE_META,
-  VISIT_KIND_META,
+  formatCalendarDate,
+  visitKindNounInSentence,
   ProjectClosureChecklistDto,
   resolveProjectTypeConfig,
 } from '@insite/shared';
@@ -100,14 +101,14 @@ async function evaluateItems(db: Db, projectId: string, items: ClosureChecklistI
         const ok = docs.find((d) => !needSign(d) || d.currentSignerIds.length > 0);
         out.set(item.key, {
           met: Boolean(ok),
-          detail: ok ? `"${ok.title}" filed${needSign(ok) ? ' and signed' : ''}.` : docs.length ? `"${docs[0].title}" filed, awaiting a sign-off.` : `No ${name.toLowerCase()} in the register.`,
+          detail: ok ? `"${ok.title}" filed${needSign(ok) ? ' and signed' : ''}.` : docs.length ? `"${docs[0].title}" filed, awaiting a sign-off.` : `No "${name}" in the register.`,
         });
         break;
       }
       case 'INSPECTION_VISIT_TYPE': {
         const found = inspections.filter((i) => i.visitType === item.inspectionVisitType).sort((a, b) => b.visitDate.localeCompare(a.visitDate));
-        const label = VISIT_KIND_META[item.inspectionVisitType!].label.toLowerCase();
-        out.set(item.key, { met: found.length > 0, detail: found.length ? `Accepted ${label} of ${found[0].visitDate}.` : `No accepted ${label}.` });
+        const label = visitKindNounInSentence(item.inspectionVisitType!);
+        out.set(item.key, { met: found.length > 0, detail: found.length ? `Accepted ${label} of ${formatCalendarDate(found[0].visitDate)}.` : `No accepted ${label}.` });
         break;
       }
       case 'CONTRACT_MILESTONE': {
@@ -121,7 +122,7 @@ async function evaluateItems(db: Db, projectId: string, items: ClosureChecklistI
               : open.length === 0
                 ? 'Done.'
                 : open[0].dueDate
-                  ? `Due ${open[0].dueDate}.`
+                  ? `Due ${formatCalendarDate(open[0].dueDate)}.`
                   : 'Not due yet (its anchor has not happened).',
         });
         break;

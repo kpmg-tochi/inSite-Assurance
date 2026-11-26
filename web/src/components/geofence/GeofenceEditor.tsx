@@ -6,6 +6,7 @@ import {
   GEOFENCE_MODE_META,
   PERIMETER_MAX_VERTICES,
   ProjectGeofenceSchema,
+  type GeocodeResult,
   type GeofenceMode,
   type ProjectGeofence,
   type ProjectGeofenceInput,
@@ -21,6 +22,7 @@ import {
   type LonLat,
 } from './geofenceGeometry';
 import { formatCoordinateLines, parseCoordinates } from './parseCoordinates';
+import { FindAddressButton, FoundAddressNote, useAddressLookupEnabled } from './FindAddressButton';
 
 export interface GeofenceEditorProps {
   value: ProjectGeofenceInput | null;
@@ -36,6 +38,11 @@ export interface GeofenceEditorProps {
   disabled?: boolean;
   /** Server or field error shown under the editor. */
   error?: string | null;
+  /**
+   * Client demo updates D3: "Find address" above the map, pre-filled with this text (editable).
+   * Shown only when the workspace has the address lookup.
+   */
+  findAddress?: { query: string; stateCode: string | null };
 }
 
 // Redesign: linear corridors were removed; a site is radial or a perimeter.
@@ -191,6 +198,7 @@ export function GeofenceEditor({
   defaultRadiusMeters,
   disabled = false,
   error = null,
+  findAddress,
 }: GeofenceEditorProps): JSX.Element {
   const selectable = (m: GeofenceMode) => enabledModes.includes(m) || m === lockedMode;
   const initialMode = (): GeofenceMode | null =>
@@ -205,6 +213,12 @@ export function GeofenceEditor({
   const [pasteError, setPasteError] = useState<string | null>(null);
   /** Where the radius handle is while being dragged, so the map does not fight the drag. */
   const [radiusDragPos, setRadiusDragPos] = useState<LatLngTuple | null>(null);
+  /** D3: the text to look up (follows the suggested text until the user edits it). */
+  const lookupEnabled = useAddressLookupEnabled();
+  const [lookupText, setLookupText] = useState<string | null>(null);
+  const [found, setFound] = useState<{ result: GeocodeResult; moved: boolean } | null>(null);
+  /** Where to fit the map after a lookup on a perimeter (the shape is left alone). */
+  const [focusBounds, setFocusBounds] = useState<[LatLngTuple, LatLngTuple] | null>(null);
 
   // Adopt a value set from outside (e.g. loaded from the server); ignore our own echoes.
   useEffect(() => {
@@ -274,6 +288,8 @@ export function GeofenceEditor({
   };
 
   const handleMapClick = (p: LonLat) => {
+    if (draftRef.current.mode === 'RADIAL') markMoved();
+    setFocusBounds(null);
     commit((d) => {
       if (d.mode === 'RADIAL') {
         if (d.center && d.radius.trim() === '') {
@@ -291,11 +307,14 @@ export function GeofenceEditor({
   const movePoint = (index: number, p: LonLat) =>
     commit((d) => ({ ...d, points: d.points.map((q, i) => (i === index ? p : q)) }));
   const removePoint = (index: number) => commit((d) => ({ ...d, points: d.points.filter((_, i) => i !== index) }));
-  const undoLast = () =>
+  const undoLast = () => {
+    if (draftRef.current.mode === 'RADIAL') setFound(null);
     commit((d) => (d.mode === 'RADIAL' ? { ...d, center: null } : { ...d, points: d.points.slice(0, -1) }));
+  };
   const clearShape = () => {
     if (!hasShape(draftRef.current)) return;
     if (!window.confirm('Clear the shape you have drawn?')) return;
+    setFound(null);
     commit((d) => ({ ...emptyDraft(d.mode, d.label), radius: d.radius }));
   };
 
@@ -330,6 +349,37 @@ export function GeofenceEditor({
     setFitKey((k) => k + 1);
   };
 
+  /**
+   * D3: a found address. A radial boundary (or none yet) gets its centre there at the current radius
+   * (the workspace default when empty), and an empty label takes the place's name; a perimeter keeps
+   * its corners and the map moves there so they can be drawn around the school.
+   */
+  const pickAddress = (r: GeocodeResult) => {
+    const center: LonLat = [r.longitude, r.latitude];
+    const useRadial = draftRef.current.mode === 'RADIAL' || (draftRef.current.mode === null && selectable('RADIAL'));
+    if (useRadial) {
+      commit((d) => ({
+        ...d,
+        mode: 'RADIAL',
+        center,
+        points: [],
+        radius: d.radius.trim() !== '' ? d.radius : defaultRadiusMeters ? String(defaultRadiusMeters) : '',
+        label: d.label.trim() !== '' ? d.label : (r.name ?? r.formattedAddress).slice(0, 120),
+      }));
+      setFocusBounds(null);
+    } else {
+      const b = latLng(r.latitude, r.longitude).toBounds(1000);
+      setFocusBounds([
+        [b.getSouth(), b.getWest()],
+        [b.getNorth(), b.getEast()],
+      ]);
+    }
+    setFound({ result: r, moved: false });
+    setFitKey((k) => k + 1);
+  };
+  const markMoved = () => setFound((f) => (f && !f.moved ? { ...f, moved: true } : f));
+  const lookupQuery = lookupText ?? findAddress?.query ?? '';
+
   const mode = draft.mode;
   const pointCount = mode === 'RADIAL' ? (draft.center ? 1 : 0) : draft.points.length;
 
@@ -338,7 +388,9 @@ export function GeofenceEditor({
     if (mode === 'RADIAL') {
       if (!draft.center) {
         return draft.radius.trim() !== ''
-          ? `Click the map to place the site centre. The radius starts at ${draft.radius} m (the workspace default); change it below.`
+          ? `Click the map to place the site centre. The radius starts at ${draft.radius} m${
+              defaultRadiusMeters !== undefined && toNumber(draft.radius) === defaultRadiusMeters ? ' (the workspace default)' : ''
+            }; change it below.`
           : 'Click the map to place the site centre.';
       }
       if (draft.radius.trim() === '') return 'Click the map again to set the edge of the circle, or type the radius below.';
@@ -401,6 +453,33 @@ export function GeofenceEditor({
         </p>
       )}
 
+      {/* D3: Find address (only with the workspace address lookup) */}
+      {findAddress && lookupEnabled && !disabled && (
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-[14rem] flex-1">
+              <label className={labelClass} htmlFor="geofence-lookup">
+                Address to look up
+              </label>
+              <input
+                id="geofence-lookup"
+                type="text"
+                maxLength={300}
+                value={lookupQuery}
+                onChange={(e) => setLookupText(e.target.value)}
+                placeholder="School name, street, town, LGA"
+                className={inputClass}
+              />
+            </div>
+            <FindAddressButton query={lookupQuery} stateCode={findAddress.stateCode} onPick={pickAddress} />
+          </div>
+          {found && <FoundAddressNote result={found.result} moved={found.moved} />}
+          {found && mode === 'PERIMETER' && (
+            <p className="text-[11px] text-slate-500">The map moved to the address: draw the corners around the school.</p>
+          )}
+        </div>
+      )}
+
       {/* Map */}
       <div className="relative rounded-xl border border-slate-200 overflow-hidden h-[380px] bg-slate-100">
         <MapContainer
@@ -413,7 +492,7 @@ export function GeofenceEditor({
             url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
           <MapClicks onClick={handleMapClick} enabled={!!mode && !disabled} />
-          <FitView bounds={viewBounds} fitKey={fitKey} />
+          <FitView bounds={focusBounds ?? viewBounds} fitKey={fitKey} />
 
           {drawable && <GeofenceShapeLayers geofence={drawable} toleranceMeters={tolerance} editing />}
 
@@ -432,7 +511,10 @@ export function GeofenceEditor({
                 icon={CENTRE_ICON}
                 draggable={!disabled}
                 title="Site centre"
-                eventHandlers={{ drag: (e) => commit((d) => ({ ...d, center: markerLonLat(e) })) }}
+                eventHandlers={{
+                  drag: (e) => commit((d) => ({ ...d, center: markerLonLat(e) })),
+                  dragend: markMoved,
+                }}
               />
               {radiusValue > 0 && (
                 <Marker
@@ -495,7 +577,10 @@ export function GeofenceEditor({
               <button
                 type="button"
                 className={toolButton}
-                onClick={() => setFitKey((k) => k + 1)}
+                onClick={() => {
+                  setFocusBounds(null);
+                  setFitKey((k) => k + 1);
+                }}
                 disabled={!viewBounds}
                 title="Zoom to the shape"
               >

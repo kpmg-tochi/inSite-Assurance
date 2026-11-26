@@ -103,7 +103,7 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
     setError(null);
     try {
       const v = await getVisit(visitId);
-      if (!v) return setPhase({ kind: 'BLOCKED', title: 'Visit not on this phone', message: 'Refresh your visits and open it again.' });
+      if (!v) return setPhase({ kind: 'BLOCKED', title: 'Monitoring visit not on this phone', message: 'Refresh your monitoring visits and open it again.' });
       const pack = await hydrateBaselinePack(v.projectId).catch(() => null);
       const timeZone = pack?.timezone ?? null;
       const canSubmit = projectsRef.current.find((p) => p.projectId === v.projectId)?.permissions.includes('visits:submit') ?? false;
@@ -112,7 +112,7 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
 
       if (access.mode === 'START') {
         if (access.correction) {
-          if (!v.serverId) return setPhase({ kind: 'BLOCKED', title: 'Not on the server yet', message: 'This visit has not reached the server yet.' });
+          if (!v.serverId) return setPhase({ kind: 'BLOCKED', title: 'Not on the server yet', message: 'This monitoring visit has not reached the server yet.' });
           try {
             const detail = await refreshVisitDetail(v.projectId, v.serverId);
             await startCorrectionDraft(v.id, detail);
@@ -220,6 +220,7 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
     if (!target || !data) return;
     const kept = batch.photos.slice(0, target.left);
     let replace = target.replace;
+    setError(null);
     try {
       for (const photo of kept) {
         const rec = await saveCapture({
@@ -253,6 +254,7 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
   // ----- voice notes -----
   const onVoiceRecorded = async (field: VisitFormSnapshotField, result: VoiceRecordingResult) => {
     if (!data) return;
+    setError(null);
     try {
       const fix = await acquireFix();
       const rec = await saveCapture({
@@ -355,11 +357,11 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
   };
 
   // ----- render -----
-  const kindLabel = data ? VISIT_KIND_META[data.visit.visit.visitKind].label : 'Visit';
+  const kindLabel = data ? VISIT_KIND_META[data.visit.visit.visitKind].label : 'Monitoring visit';
   const progress = data && check ? formProgress(data.form.snapshot, check) : null;
   const header = (
     <LinearGradient colors={['#00715D', '#005A4A', '#122F2A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
-      <TouchableOpacity onPress={() => void back()} accessibilityRole="button" accessibilityLabel="Back to the visit">
+      <TouchableOpacity onPress={() => void back()} accessibilityRole="button" accessibilityLabel="Back to the monitoring visit">
         <Text style={styles.closeText}>‹ Back</Text>
       </TouchableOpacity>
       <Text style={styles.title} accessibilityRole="header">
@@ -453,8 +455,8 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
               title="The form was rebuilt"
               description={
                 draft.remap.dropped.length === 0
-                  ? 'The form for this visit changed after you started. Your answers were moved onto the new form.'
-                  : `The form for this visit changed after you started. Your answers were moved onto the new form, except: ${draft.remap.dropped.map((d) => `${d.label} (${d.reason})`).join('; ')}.`
+                  ? 'The form for this monitoring visit changed after you started. Your answers were moved onto the new form.'
+                  : `The form for this monitoring visit changed after you started. Your answers were moved onto the new form, except: ${draft.remap.dropped.map((d) => `${d.label} (${d.reason})`).join('; ')}.`
               }
             />
             <TouchableOpacity onPress={() => update((d) => ({ ...d, remap: null }))} accessibilityRole="button" accessibilityLabel="Dismiss the rebuilt form notice">
@@ -472,7 +474,7 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
             Units: {screen.units.map((u) => (u.plannedQuantity !== null ? `${u.label} (${u.plannedQuantity}${u.quantityUnit ? ` ${u.quantityUnit}` : ''})` : u.label)).join(', ')}
           </Text>
         ) : null}
-        {screen.isEmpty && <InfoCallout variant="neutral" title="Nothing to answer" description="This facility has no questions on this visit." />}
+        {screen.isEmpty && <InfoCallout variant="neutral" title="Nothing to answer" description="This facility has no questions on this monitoring visit." />}
 
         {block.fields.map((field) => (
           <FormFieldCard
@@ -560,7 +562,7 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
         </View>
       </Modal>
 
-      <SiteEvidenceCameraModal visible={Boolean(camera)} title={camera?.title ?? 'Visit photo'} onSubmit={(b) => void onPhotos(b)} onClose={() => setCamera(null)} />
+      <SiteEvidenceCameraModal visible={Boolean(camera)} title={camera?.title ?? 'Monitoring visit photo'} onSubmit={(b) => void onPhotos(b)} onClose={() => setCamera(null)} />
       <SiteLogPhotoPicker
         visible={Boolean(picker)}
         loading={pickerState?.loading ?? false}

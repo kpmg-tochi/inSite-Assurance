@@ -2,6 +2,8 @@ import { Prisma } from '@prisma/client';
 import {
   ContractMilestoneStatus,
   daysBetween,
+  formatCalendarDate,
+  formatProjectCodeWithYear,
   deriveMilestoneStatus,
   resolveProjectTypeConfig,
   zonedCalendarDate,
@@ -70,6 +72,7 @@ async function notify(tx: Prisma.TransactionClient, project: ProjectRow, row: Mi
 
 async function processProject(project: ProjectRow, now: Date): Promise<string> {
   const today = zonedCalendarDate(now, project.timezone);
+  const code = formatProjectCodeWithYear(project.codePrefix);
   const config = resolveProjectTypeConfig(project.projectTypeSnapshotJson);
   const rows = await prisma.projectContractMilestone.findMany({
     where: { projectId: project.id, status: { in: OPEN_MILESTONE_STATUSES }, dueDate: { not: null } },
@@ -95,8 +98,8 @@ async function processProject(project: ProjectRow, now: Date): Promise<string> {
           row,
           status === 'DUE' ? `Due today: ${row.label}${who}` : `Overdue: ${row.label}${who}`,
           status === 'DUE'
-            ? `${project.codePrefix}: "${row.label}" is due today (${row.dueDate}).`
-            : `${project.codePrefix}: "${row.label}" was due on ${row.dueDate} and is not done.`
+            ? `${code}: "${row.label}" is due today (${formatCalendarDate(row.dueDate)}).`
+            : `${code}: "${row.label}" was due on ${formatCalendarDate(row.dueDate)} and is not done.`
         );
         data.lastNotifiedStatus = status as ContractMilestoneStatus;
         data.lastNotifiedAt = now;
@@ -104,7 +107,7 @@ async function processProject(project: ProjectRow, now: Date): Promise<string> {
       } else if (status === 'PENDING') {
         const daysLeft = daysBetween(today, row.dueDate!);
         if (project.mobilizationReminderOffsetsDays.includes(daysLeft) && !current.remindedOffsetsDays.includes(daysLeft)) {
-          await notify(tx, project, row, `${row.label}${who}: due in ${daysLeft} day(s)`, `${project.codePrefix}: "${row.label}" is due on ${row.dueDate}.`);
+          await notify(tx, project, row, `${row.label}${who}: due in ${daysLeft} day(s)`, `${code}: "${row.label}" is due on ${formatCalendarDate(row.dueDate)}.`);
           data.remindedOffsetsDays = [...current.remindedOffsetsDays, daysLeft];
           data.lastNotifiedAt = now;
           notified += 1;
@@ -127,7 +130,7 @@ async function processProject(project: ProjectRow, now: Date): Promise<string> {
               projectContractorId: row.projectContractorId,
               trigger: 'MILESTONE_OVERDUE',
               milestoneId: row.id,
-              summary: `${row.projectContractor?.organization.name ?? 'The contractor'} has not mobilised; "${row.label}" was due on ${row.dueDate}.`,
+              summary: `${row.projectContractor?.organization.name ?? 'The contractor'} has not mobilised; "${row.label}" was due on ${formatCalendarDate(row.dueDate)}.`,
               actor: SYSTEM_ACTOR,
             });
             opened += 1;

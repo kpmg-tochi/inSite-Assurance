@@ -67,6 +67,8 @@ export function CustomSelect<T extends string | number = string>({
   const uid = useId();
   const labelId = `${uid}-label`;
   const valueId = `${uid}-value`;
+  const hintId = `${uid}-hint`;
+  const errorId = `${uid}-error`;
   const listboxId = `${uid}-listbox`;
   const optionId = (i: number) => `${uid}-option-${i}`;
   const [searchQuery, setSearchQuery] = useState("");
@@ -249,6 +251,8 @@ export function CustomSelect<T extends string | number = string>({
           aria-activedescendant={isOpen && activeIndex >= 0 ? optionId(activeIndex) : undefined}
           aria-label={label || id || !ariaLabel ? undefined : `${ariaLabel}: ${selectedOption ? selectedOption.label : placeholder}`}
           aria-labelledby={label && !id ? `${labelId} ${valueId}` : undefined}
+          aria-describedby={error ? errorId : hint ? hintId : undefined}
+          aria-invalid={error ? true : undefined}
         >
           <div className="flex items-center gap-2 min-w-0 truncate">
             {selectedOption?.icon && (
@@ -305,7 +309,7 @@ export function CustomSelect<T extends string | number = string>({
 
           <div className="max-h-60 overflow-y-auto divide-y divide-slate-50">
             {filteredOptions.length === 0 ? (
-              <div className="py-3 px-3.5 text-center text-xs text-slate-400">
+              <div className="py-3 px-3.5 text-center text-xs text-slate-500">
                 No matching options found
               </div>
             ) : (
@@ -340,7 +344,7 @@ export function CustomSelect<T extends string | number = string>({
                           <div className="min-w-0">
                             <div className="truncate">{opt.label}</div>
                             {opt.description && (
-                              <div className="text-[11px] text-slate-400 font-normal truncate mt-0.5">
+                              <div className="text-[11px] text-slate-500 font-normal truncate mt-0.5">
                                 {opt.description}
                               </div>
                             )}
@@ -367,9 +371,9 @@ export function CustomSelect<T extends string | number = string>({
       )}
 
       {hint && !error && (
-        <p className="text-[11px] text-slate-400 mt-1">{hint}</p>
+        <p id={hintId} className="text-[11px] text-slate-500 mt-1">{hint}</p>
       )}
-      {error && <p className="text-[11px] text-red-500 mt-1">{error}</p>}
+      {error && <p id={errorId} className="text-[11px] text-red-600 mt-1">{error}</p>}
     </div>
   );
 }

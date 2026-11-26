@@ -255,7 +255,7 @@ export function ProjectSetupShell({ mode }: { mode: SetupMode }) {
             <span className="sr-only"> ({stateLabel})</span>
           </span>
           {!required && s.id !== "review" && (
-            <span className="text-[10px] font-normal text-slate-500" aria-hidden="true">
+            <span className="text-[10px] font-normal text-slate-600" aria-hidden="true">
               optional
             </span>
           )}
@@ -272,9 +272,9 @@ export function ProjectSetupShell({ mode }: { mode: SetupMode }) {
             <Link to={setup.status === "DRAFT" ? "/app/projects?tab=drafts" : `/app/projects/${projectId}/dashboard`} className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-primary hover:underline">
               <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" /> {setup.status === "DRAFT" ? "Drafts" : "Overview"}
             </Link>
-            <h1 className="mt-1 text-lg font-bold text-slate-900">
+            <h2 className="mt-1 text-lg font-bold text-slate-900">
               {setup.basics.name} <span className="font-mono text-sm text-slate-500">{formatProjectCode(setup.basics.codePrefix)}</span>
-            </h1>
+            </h2>
             <p className="text-xs text-slate-500">
               {setup.status === "DRAFT"
                 ? "Draft: not live anywhere until you set it active on the Review step."

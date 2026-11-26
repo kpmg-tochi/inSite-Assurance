@@ -182,16 +182,19 @@ export async function raiseVisitFinding(params: {
     where: { id: input.submissionId, visitId, projectId },
     include: { visit: { select: { formSnapshot: { select: { snapshotJson: true } } } } },
   });
-  if (!submission) throw new AppError('Submission not found on this visit', 404, 'VISIT_SUBMISSION_NOT_FOUND');
+  if (!submission) throw new AppError('Submission not found on this monitoring visit', 404, 'VISIT_SUBMISSION_NOT_FOUND');
   const snapshotRow = await prisma.visitFormSnapshot.findUnique({ where: { id: submission.formSnapshotId }, select: { snapshotJson: true } });
   const snapshot = VisitFormSnapshotSchema.safeParse(snapshotRow?.snapshotJson);
-  if (!snapshot.success) throw new AppError('The visit form cannot be read', 500, 'INVALID_VISIT_FORM_SNAPSHOT');
+  if (!snapshot.success) throw new AppError('The monitoring form cannot be read', 500, 'INVALID_VISIT_FORM_SNAPSHOT');
   const block = snapshot.data.blocks.find((b) => b.fields.some((fl) => fl.path === input.path));
   const field = block?.fields.find((fl) => fl.path === input.path);
-  if (!block || !field || field.recheck) throw new AppError('Not a question of this visit form', 422, 'VISIT_QUESTION_NOT_FOUND');
+  if (!block || !field || field.recheck) throw new AppError('Not a question of this monitoring form', 422, 'VISIT_QUESTION_NOT_FOUND');
   const answered = ((Array.isArray(submission.answersJson) ? submission.answersJson : []) as VisitFormAnswer[]).some((a) => a.path === input.path);
   if (!answered) throw new AppError('Findings are raised from answered questions', 422, 'VISIT_QUESTION_NOT_ANSWERED');
   const id = await prisma.$transaction(async (tx) => {
+    // One open finding per answer path, as for rule-raised findings (visitAcceptance.ts).
+    const open = await tx.finding.count({ where: { projectId, questionKey: field.path, status: 'OPEN' } });
+    if (open > 0) throw new AppError('This question already has an open finding.', 409, 'FINDING_ALREADY_OPEN');
     const f = await tx.finding.create({
       data: {
         projectId,
@@ -240,7 +243,7 @@ export async function resolveInspectionFinding(params: {
   const before = await loadFinding(prisma, projectId, findingId);
   if (!viewer.canManage) throw new AppError(`Access requires permission(s): ${MANAGE}`, 403, 'FORBIDDEN_PERMISSION');
   if (input.clientCaptureIds.length) {
-    throw new AppError('Photos of a fix are taken on a visit (follow-up check)', 400, 'CAPTURES_NEED_FIELD_APP');
+    throw new AppError('Photos of a fix are taken on a monitoring visit (follow-up check)', 400, 'CAPTURES_NEED_FIELD_APP');
   }
   await prisma.$transaction(async (tx) => {
     const updated = await tx.finding.updateMany({

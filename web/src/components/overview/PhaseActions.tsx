@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { z } from "zod";
 import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
-import { CONSTRUCTION_PHASE_LABELS, type ConstructionPhase, type ProjectPhaseTransitionDto } from "@insite/shared";
+import { CONSTRUCTION_PHASE_LABELS, type ConstructionPhase, type ProjectPhaseTransitionDto, type ProjectStageKey } from "@insite/shared";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { useProjectPhaseQuery } from "../../queries/closeout/useCloseoutQueries";
 import { useChangeProjectPhaseMutation } from "../../mutations/closeout/useCloseoutMutations";
@@ -35,8 +35,12 @@ function fixLinkFor(projectId: string, reason: string | null): { to: string; lab
  * phase (`canChangePhase`) with a move available. A refused move keeps its button (disabled unless
  * it can be overridden) with the refusal as plain text and a link to where it is fixed. Without an
  * action, the liability period end date is a plain line.
+ *
+ * Pre-demo fix (WEB-R6-24): the stage decides how the handover move reads. Before execution
+ * (kick-off, mobilisation) it is not offered; during execution it is an option "when the works are
+ * complete", not the "Next step" (the server still allows it at any time).
  */
-export function PhaseActions({ projectId, projectStatus }: { projectId: string; projectStatus: string }) {
+export function PhaseActions({ projectId, projectStatus, stage }: { projectId: string; projectStatus: string; stage?: ProjectStageKey }) {
   const live = projectStatus === "ACTIVE";
   const processQuery = useProjectProcess(projectId, live);
   const config = processQuery.data?.config;
@@ -53,7 +57,11 @@ export function PhaseActions({ projectId, projectStatus }: { projectId: string; 
         }`
       : null;
   // Forward moves first, the backwards one last.
-  const actions = (phase.canChangePhase ? phase.transitions : []).slice().sort((a, b) => Number(a.to === "ACTIVE_CONSTRUCTION") - Number(b.to === "ACTIVE_CONSTRUCTION"));
+  const beforeExecution = stage === "KICKOFF" || stage === "MOBILISATION";
+  const actions = (phase.canChangePhase ? phase.transitions : [])
+    .filter((t) => !(beforeExecution && t.to === "HANDOVER_IN_PROGRESS"))
+    .slice()
+    .sort((a, b) => Number(a.to === "ACTIVE_CONSTRUCTION") - Number(b.to === "ACTIVE_CONSTRUCTION"));
 
   if (actions.length === 0) {
     return retentionNote ? <p className="text-xs text-slate-600">{retentionNote}</p> : null;
@@ -84,7 +92,11 @@ export function PhaseActions({ projectId, projectStatus }: { projectId: string; 
                   </p>
                 ) : (
                   <p className="text-slate-700">
-                    {forward ? (
+                    {forward && t.to === "HANDOVER_IN_PROGRESS" && stage === "CONSTRUCTION" ? (
+                      <>
+                        <span className="font-semibold text-slate-900">When the works are complete:</span> {PHASE_ACTION_LABEL[t.to].toLowerCase()}.
+                      </>
+                    ) : forward ? (
                       <>
                         <span className="font-semibold text-slate-900">Next step:</span> {PHASE_ACTION_LABEL[t.to].toLowerCase()}.
                       </>

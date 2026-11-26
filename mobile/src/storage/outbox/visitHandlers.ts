@@ -50,8 +50,8 @@ export function registerVisitHandlers(): void {
   registerOutboxHandler('VISIT_RESPONSE', async (row) => {
     const { visitId, body } = row.payload as { visitId: string; body: RespondToVisitRequestInput };
     const v = await getVisit(visitId);
-    if (!v) throw new LocalPermanentError('This visit is no longer on the phone.');
-    if (!v.serverId) throw new LocalPermanentError('An unscheduled visit takes no responses.');
+    if (!v) throw new LocalPermanentError('This monitoring visit is no longer on the phone.');
+    if (!v.serverId) throw new LocalPermanentError('An Ad hoc monitoring visit takes no responses.');
     try {
       const dto = await postVisitResponse(row.projectId, v.serverId, body);
       await completeVisitResponse(v.id, body.clientActionId, dto);
@@ -66,8 +66,8 @@ export function registerVisitHandlers(): void {
   registerOutboxHandler('VISIT_CHECK_IN', async (row) => {
     const { visitId, body } = row.payload as { visitId: string; body: VisitCheckInRequestInput };
     const v = await getVisit(visitId);
-    if (!v) throw new LocalPermanentError('This visit is no longer on the phone.');
-    if (!v.serverId) throw new NotReadyError('VISIT_NOT_CREATED', 'The unscheduled visit has not reached the server yet.');
+    if (!v) throw new LocalPermanentError('This monitoring visit is no longer on the phone.');
+    if (!v.serverId) throw new NotReadyError('VISIT_NOT_CREATED', 'The Ad hoc monitoring visit has not reached the server yet.');
     const dto = await postVisitCheckIn(row.projectId, v.serverId, body);
     await markCheckInSent(v.id, body.clientCheckInId, dto);
   });
@@ -80,8 +80,8 @@ export function registerVisitHandlers(): void {
     if (q.status === 'SENT') return;
     if (q.status === 'REFUSED') throw new LocalPermanentError(q.lastError ?? 'This monitoring report was refused by the server.');
     const v = await getVisit(q.request.visitId);
-    if (!v) throw new LocalPermanentError('This visit is no longer on the phone.');
-    if (!v.serverId) throw new NotReadyError('VISIT_NOT_CREATED', 'The unscheduled visit has not reached the server yet.');
+    if (!v) throw new LocalPermanentError('This monitoring visit is no longer on the phone.');
+    if (!v.serverId) throw new NotReadyError('VISIT_NOT_CREATED', 'The Ad hoc monitoring visit has not reached the server yet.');
     const finalised = finaliseSubmissionBody(q.request, {
       visitFormSnapshotId: v.visit.formSnapshotId,
       siteLogServerIdByClientId: await siteLogServerIds(q.request.siteLogClientEntryIds),
@@ -102,7 +102,7 @@ export function registerVisitHandlers(): void {
   registerOutboxHandler('UNSCHEDULED_VISIT', async (row) => {
     const { visitId, body } = row.payload as { visitId: string; body: CreateUnscheduledVisitRequestInput };
     const v = await getVisit(visitId);
-    if (!v) throw new LocalPermanentError('This visit is no longer on the phone.');
+    if (!v) throw new LocalPermanentError('This monitoring visit is no longer on the phone.');
     if (v.serverId) return;
     try {
       const dto = await postUnscheduledVisit(row.projectId, body);

@@ -42,3 +42,14 @@ export function formatProjectCode(code: string | null | undefined): string {
   const parsed = parseLotBatchCode(code);
   return parsed ? formatLotBatch(parsed.lot, parsed.batch) : code;
 }
+
+/**
+ * The code for messages read outside the project's own pages (notifications, emails, job texts,
+ * export title bands): a lot/batch code keeps its year apart ("LOT 5 BATCH 7 (2026)"), since lot
+ * numbers repeat across years; any other code is shown as stored.
+ */
+export function formatProjectCodeWithYear(code: string | null | undefined): string {
+  if (!code) return '';
+  const parsed = parseLotBatchCode(code);
+  return parsed ? `${formatLotBatch(parsed.lot, parsed.batch)} (${parsed.year})` : code;
+}

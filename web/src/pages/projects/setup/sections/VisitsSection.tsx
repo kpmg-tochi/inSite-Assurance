@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ISO_WEEKDAY_SHORT, ProjectVisitsStepSchema, VISIT_KIND_META } from "@insite/shared";
+import { ISO_WEEKDAY_SHORT, ProjectVisitsStepSchema, SYSTEM_PERMISSIONS_CATALOG, VISIT_KIND_META } from "@insite/shared";
+import { formatDateShort } from "../../../../lib/formatters";
 import { FieldError } from "../../../../lib/forms";
 import { projectSetupKey } from "../../../../queries/projects/useProjectSetupQueries";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
@@ -25,6 +26,9 @@ import {
  */
 
 const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7];
+
+/** A permission's display name from the catalogue, so the hint follows any rename. */
+const permissionName = (key: string) => SYSTEM_PERMISSIONS_CATALOG.find((p) => p.key === key)?.name ?? key;
 
 const daysKey = (v: { workWeekDays: number[] }) => JSON.stringify([...v.workWeekDays].sort((a, b) => a - b));
 
@@ -82,7 +86,7 @@ export function VisitsSection({ projectId, setup, readOnly }: StepProps) {
 
   return (
     <>
-      <StepSection title="Visits" description="Who carries out the visits and on which days of the week. Proposed visits get these officers; the first is the lead.">
+      <StepSection title="Monitoring visits" description="Who carries out the monitoring visits and on which days of the week. Proposed monitoring visits get these officers; the first is the lead.">
         {general && <p className="text-xs font-medium text-red-600">{general}</p>}
         <fieldset>
           <legend className={labelClass}>Working days</legend>
@@ -105,11 +109,11 @@ export function VisitsSection({ projectId, setup, readOnly }: StepProps) {
 
         {canPlan ? (
           <fieldset>
-            <legend className={labelClass}>Visit officers</legend>
+            <legend className={labelClass}>Monitoring officers</legend>
             {officers.isLoading ? (
               <Loader size="sm" />
             ) : (officers.data?.candidates ?? []).length === 0 ? (
-              <p className="text-xs text-slate-500">Nobody in this workspace has a field role that can carry out visits. Give a user a mobile role with “Carry Out Visits”.</p>
+              <p className="text-xs text-slate-500">Nobody in this workspace has a field role that can carry out monitoring visits. Give a user a mobile role with “{permissionName("visits:submit")}”.</p>
             ) : (
               <div className="space-y-1">
                 {(officers.data?.candidates ?? []).map((c) => (
@@ -127,16 +131,16 @@ export function VisitsSection({ projectId, setup, readOnly }: StepProps) {
             )}
           </fieldset>
         ) : (
-          <p className="text-xs text-slate-500">Planning visits needs the “Plan Visits” permission.</p>
+          <p className="text-xs text-slate-500">Planning monitoring visits needs the “{permissionName("visits:plan")}” permission.</p>
         )}
       </StepSection>
 
       {canPlan && (
-        <StepSection title="Visit plan" description="What the project type will propose. The M&E manager publishes the proposals to the officers.">
+        <StepSection title="Monitoring plan" description="What the project type will propose. The M&E manager publishes the proposals to the officers.">
           {preview.isLoading ? (
             <Loader size="sm" />
           ) : !preview.data || preview.data.rules.length === 0 ? (
-            <p className="text-xs text-slate-500">{preview.data?.assumptions[0] ?? "The project type has no visit plan; visits are planned by hand."}</p>
+            <p className="text-xs text-slate-500">{preview.data?.assumptions[0] ?? "The project type has no monitoring plan; monitoring visits are planned by hand."}</p>
           ) : (
             <div className="space-y-2 text-xs">
               {preview.data.assumptions.map((a) => (
@@ -147,7 +151,7 @@ export function VisitsSection({ projectId, setup, readOnly }: StepProps) {
               <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1">
                 {byDate.slice(0, 60).map((i) => (
                   <li key={`${i.ruleKey}-${i.date}`} className="rounded-lg bg-slate-50 px-2 py-1">
-                    <span className="font-semibold tabular-nums">{i.date}</span> · {VISIT_KIND_META[i.visitKind].label}
+                    <span className="font-semibold tabular-nums">{formatDateShort(i.date)}</span> · {VISIT_KIND_META[i.visitKind].label}
                     {i.exists ? " (exists)" : ""}
                   </li>
                 ))}

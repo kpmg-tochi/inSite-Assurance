@@ -12,10 +12,11 @@ import {
   resolveTerminology,
   zonedCalendarDate,
   PAYMENT_KIND_LABELS,
-  VISIT_KIND_META,
+  formatCalendarDate,
+  formatProjectCodeWithYear,
+  visitKindNoun,
   VisitFormAnswer,
   VisitFormSnapshotSchema,
-  VisitKind,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -136,7 +137,7 @@ export async function runClosurePackExport(exportId: string): Promise<void> {
           projectId: row.projectId,
           tenantId: project.tenantId,
           typeCode: 'CLOSURE_FILE',
-          title: `Project closure file ${project.codePrefix} ${zonedCalendarDate(new Date(), project.timezone)}`,
+          title: `Project closure file ${formatProjectCodeWithYear(project.codePrefix)} ${formatCalendarDate(zonedCalendarDate(new Date(), project.timezone))}`,
           file: { filePath: zipPath, byteSize: finished.byteSize, sha256: finished.sha256, mimeType: 'application/zip', extension: 'zip' },
           uploadedByUserId: row.requestedByUserId,
           note: `${finished.entryCount} files; audit chain ${result.chainVerified ? 'verified' : 'NOT verified'}`,
@@ -279,13 +280,13 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
         )
       : [];
     const findings = await prisma.finding.findMany({ where: { visitSubmissionId: s.id }, select: { description: true, severity: true, status: true } });
-    const label = VISIT_KIND_META[s.visit.visitKind as VisitKind].label;
+    const label = visitKindNoun(s.visit.visitKind);
     add(
-      `visits/${s.visit.plannedDate}-${s.visit.visitKind.toLowerCase()}-${s.visit.id.slice(0, 8)}.pdf`,
+      `monitoring-visits/${s.visit.plannedDate}-${s.visit.visitKind.toLowerCase()}-${s.visit.id.slice(0, 8)}.pdf`,
       await generateInspectionSummaryPdf({
         branding,
-        projectLabel: `[${project.codePrefix}] ${project.name}`,
-        title: `${label} of ${s.visit.plannedDate}`,
+        projectLabel: `[${formatProjectCodeWithYear(project.codePrefix)}] ${project.name}`,
+        title: `${label} of ${formatCalendarDate(s.visit.plannedDate)}`,
         fields: [
           ['Officer', `${s.reporterName} (${s.reporterRoleName})`],
           ['Form', parsed.success ? `${parsed.data.sources.template.name} v${parsed.data.sources.template.version}` : '—'],
@@ -298,7 +299,7 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
         items,
         findings: findings.map((f) => ({ severity: f.severity, title: f.description.slice(0, 160), status: f.status })),
       }),
-      `visit ${s.visit.id}`
+      `monitoring visit ${s.visit.id}`
     );
   }
 
@@ -353,14 +354,14 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
     { path: 'certificates/', description: 'Certificate of Completion and handover certificate.' },
     { path: 'documents/<type>/', description: 'Current version of every document in the register.' },
     { path: 'payments/payment-record.csv', description: 'Every recorded payment, voided ones included.' },
-    { path: 'visits/', description: 'One summary per monitoring report.' },
+    { path: 'monitoring-visits/', description: 'One summary per monitoring report.' },
     { path: 'audit/audit-ledger.csv', description: 'The project audit ledger with entry hashes.' },
     { path: 'audit/chain-verification.json', description: 'Result of the hash chain verification.' },
   ];
   const index = await generateClosureIndexPdf({
     branding,
     project: [
-      ['Project', `[${project.codePrefix}] ${project.name}`],
+      ['Project', `[${formatProjectCodeWithYear(project.codePrefix)}] ${project.name}`],
       ['Project type', project.projectType?.name ?? null],
       ['Zone / State', project.region?.name ?? null],
       ['Location', [project.lgaLocation, project.stateLocation].filter(Boolean).join(', ') || null],

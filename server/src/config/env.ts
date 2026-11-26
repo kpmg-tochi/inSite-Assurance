@@ -71,6 +71,9 @@ const EnvSchema = z.object({
   MESSAGING_RECIPIENT_DAILY_CAP: z.coerce.number().int().min(0).default(5),
   // Phase 10: base URL of the web portal, used for stakeholder handover links.
   WEB_APP_BASE_URL: z.string().optional().default(''),
+  // Client demo updates D3: Google Maps Platform key for "Find address" (Places API (New) text search,
+  // Geocoding API v4 as fallback). Server-side only; empty = the address lookup is off.
+  GOOGLE_MAPS_KEY: z.string().trim().optional().default(''),
 });
 
 const parsedEnv = EnvSchema.parse(process.env);

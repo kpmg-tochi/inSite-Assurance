@@ -24,9 +24,9 @@ describe('dates as text', () => {
   it('calendar days say today, selection and their visit states in words', () => {
     assert.equal(
       dayAccessibilityLabel(TODAY, { today: TODAY, dots: ['OVERDUE', 'PLANNED'], selected: true }),
-      'Tuesday 24 November 2026, today, selected, visits: overdue, planned'
+      'Tuesday 24 November 2026, today, selected, monitoring visits: overdue, planned'
     );
-    assert.equal(dayAccessibilityLabel('2026-11-25', { today: TODAY, dots: [], selected: false }), 'Wednesday 25 November 2026, no visits');
+    assert.equal(dayAccessibilityLabel('2026-11-25', { today: TODAY, dots: [], selected: false }), 'Wednesday 25 November 2026, no monitoring visits');
   });
 });
 

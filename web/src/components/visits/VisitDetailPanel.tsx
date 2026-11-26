@@ -24,6 +24,7 @@ import {
 } from "../../mutations/visits/useVisitMutations";
 import { CancelVisitDialog, EditVisitDialog, ProposalDecisionForm } from "./VisitDialogs";
 import { ConfirmationText, officersText, primaryButton, secondaryButton, visitKindLabel, VisitStatusChip } from "./visitUi";
+import { formatDateShort, formatDateTimeShort } from "../../lib/formatters";
 
 /** Return notes: the shared review rule for RETURN (at least 5 characters). */
 const ReturnSubmissionFormSchema = z.object({
@@ -71,19 +72,19 @@ export function VisitDetailPanel({ projectId, visitId, onClose }: { projectId: s
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            {visitKindLabel(v.visitKind)} · {v.plannedDate} <VisitStatusChip status={v.status} /> <ConfirmationText visit={v} />
+            {visitKindLabel(v.visitKind)} · {formatDateShort(v.plannedDate)} <VisitStatusChip status={v.status} /> <ConfirmationText visit={v} />
           </h2>
           <p className="text-[11px] text-slate-500">
             {officersText(v)}
             {v.sprint ? ` · ${v.sprint.name}` : ""}
-            {v.originalPlannedDate !== v.plannedDate ? ` · originally ${v.originalPlannedDate}` : ""}
-            {v.submissionDeadline ? ` · submit by ${v.submissionDeadline}` : ""}
+            {v.originalPlannedDate !== v.plannedDate ? ` · originally ${formatDateShort(v.originalPlannedDate)}` : ""}
+            {v.submissionDeadline ? ` · submit by ${formatDateShort(v.submissionDeadline)}` : ""}
             {v.origin === "UNSCHEDULED" ? " · unscheduled" : ""}
             {v.rescheduleCount ? ` · moved by the officer ${v.rescheduleCount} time(s)` : ""}
           </p>
           {v.checkInAt && (
             <p className="text-[11px] text-slate-600 inline-flex items-center gap-1">
-              <MapPin className="w-3 h-3" /> Checked in {new Date(v.checkInAt).toLocaleString()}
+              <MapPin className="w-3 h-3" /> Checked in {formatDateTimeShort(v.checkInAt)}
               {v.checkInGeofenceStatus ? ` · ${v.checkInGeofenceStatus.toLowerCase().replace("_", " ")}` : " · no location"}
               {v.checkInGeofenceStatus === "OUTSIDE" && <span className="font-semibold text-red-700"> (outside the site boundary)</span>}
             </p>
@@ -111,20 +112,20 @@ export function VisitDetailPanel({ projectId, visitId, onClose }: { projectId: s
             </button>
           )}
           <button type="button" className={secondaryButton} onClick={() => setDialog("cancel")}>
-            Cancel visit
+            Cancel monitoring visit
           </button>
         </div>
       )}
       {canPlan && !notStarted && ["IN_PROGRESS", "RETURNED", "MISSED"].includes(v.status) && (
         <button type="button" className={secondaryButton} onClick={() => setDialog("cancel")}>
-          Cancel visit
+          Cancel monitoring visit
         </button>
       )}
 
       {pending && (
         <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-xs space-y-2">
           <p className="text-sky-900">
-            <span className="font-semibold">{pending.byName}</span> proposes {pending.toDate} (now {pending.fromDate}): {pending.comment}
+            <span className="font-semibold">{pending.byName}</span> proposes {formatDateShort(pending.toDate)} (now {formatDateShort(pending.fromDate)}): {pending.comment}
           </p>
           {canPlan && (
             <ProposalDecisionForm
@@ -132,7 +133,7 @@ export function VisitDetailPanel({ projectId, visitId, onClose }: { projectId: s
               projectId={projectId}
               visitId={v.id}
               changeId={pending.id}
-              acceptLabel={`Accept ${pending.toDate}`}
+              acceptLabel={`Accept ${formatDateShort(pending.toDate)}`}
               placeholder="Why the date stays"
               className="flex flex-wrap items-start gap-2"
               inputClassName="min-w-[10rem] rounded-xl border border-slate-300 px-3 py-1.5 text-xs"
@@ -149,7 +150,7 @@ export function VisitDetailPanel({ projectId, visitId, onClose }: { projectId: s
           <ul className="text-[11px] text-slate-600 space-y-0.5">
             {d.dateChanges.map((c) => (
               <li key={c.id}>
-                {new Date(c.createdAt).toLocaleDateString()} · {c.kind === "MANAGER_MOVE" ? "Manager moved" : c.kind === "OFFICER_MOVE" ? "Officer moved" : "Officer proposed"} {c.fromDate} → {c.toDate}
+                {formatDateTimeShort(c.createdAt)} · {c.kind === "MANAGER_MOVE" ? "Manager moved" : c.kind === "OFFICER_MOVE" ? "Officer moved" : "Officer proposed"} {formatDateShort(c.fromDate)} → {formatDateShort(c.toDate)}
                 {` (${c.byName}${c.comment ? `: ${c.comment}` : ""})`} · {c.status.toLowerCase()}
                 {c.decisionNote ? ` · ${c.decisionNote}` : ""}
               </li>
@@ -198,7 +199,7 @@ function SubmissionCard({ projectId, visitId, submission: s, snapshot }: { proje
           Monitoring report {s.revisionNumber} · {VISIT_SUBMISSION_STATUS_LABELS[s.status]}
         </p>
         <p className="text-[11px] text-slate-500">
-          {s.reporterName} ({s.reporterRoleName}) · {new Date(s.confirmedAt).toLocaleString()}
+          {s.reporterName} ({s.reporterRoleName}) · {formatDateTimeShort(s.confirmedAt)}
           {s.isLate ? " · late" : ""}
           {s.geofenceStatus ? ` · location ${s.geofenceStatus.toLowerCase().replace("_", " ")}` : ""}
         </p>
@@ -349,7 +350,7 @@ function Comments({ projectId, visitId, comments }: { projectId: string; visitId
       <ul className="space-y-1">
         {comments.map((c) => (
           <li key={c.id} className="text-[11px] text-slate-700">
-            <span className="font-semibold">{c.authorName}</span> · {new Date(c.createdAt).toLocaleString()}: {c.text}
+            <span className="font-semibold">{c.authorName}</span> · {formatDateTimeShort(c.createdAt)}: {c.text}
           </li>
         ))}
       </ul>

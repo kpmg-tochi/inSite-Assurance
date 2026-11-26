@@ -179,7 +179,7 @@ export async function seedPhase11(p: { passwordHash: string }) {
     data: {
       tenantId: tenant.id,
       name: "Direct Intervention process",
-      description: "Visit report approval, handover and retention for Direct Intervention projects (UBEC-led).",
+      description: "Monitoring report approval, handover and retention for Direct Intervention projects (UBEC-led).",
       configJson: centralTemplateConfig as unknown as Prisma.InputJsonValue,
     },
   });
@@ -187,7 +187,7 @@ export async function seedPhase11(p: { passwordHash: string }) {
     data: {
       tenantId: tenant.id,
       name: "Matching Grants process",
-      description: "Visit report approval, handover and retention for Matching Grants projects (SUBEB-led).",
+      description: "Monitoring report approval, handover and retention for Matching Grants projects (SUBEB-led).",
       configJson: coFundedTemplateConfig as unknown as Prisma.InputJsonValue,
     },
   });

@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import {
   daysBetween,
+  formatProjectCodeWithYear,
   KickoffInviteeInput,
   KickoffMeetingDto,
   KickoffNoticeStatus,
@@ -301,7 +302,7 @@ export async function sendKickoffNotice(projectId: string, webUser: WebJwtPayloa
       data: {
         recipientName: i.name,
         projectName: project.name,
-        projectCode: project.codePrefix,
+        projectCode: formatProjectCodeWithYear(project.codePrefix),
         whenText: whenText(meeting.scheduledAt, project.timezone),
         location: meeting.location,
         virtualLink: meeting.virtualLink,
@@ -428,8 +429,8 @@ export async function recordKickoffHeld(projectId: string, webUser: WebJwtPayloa
       data: {
         recipientName: r.name,
         projectName: project.name,
-        projectCode: project.codePrefix,
-        minutesTitle: minutesTitle ?? 'Kick-off minutes',
+        projectCode: formatProjectCodeWithYear(project.codePrefix),
+        minutesTitle: minutesTitle ?? 'Kick-off meeting minutes',
         documentsUrl: `${env.WEB_APP_BASE_URL}/app/projects/${projectId}/documents`,
       },
     });

@@ -92,7 +92,7 @@ export function ProjectDocumentsPage({
         <div>
           <p className="text-xs font-bold text-slate-900">{d.title}</p>
           {d.isArchived && (
-            <p className="text-[11px] text-slate-400">Archived</p>
+            <p className="text-[11px] text-slate-500">Archived</p>
           )}
         </div>
       ),
@@ -131,7 +131,7 @@ export function ProjectDocumentsPage({
         ) : d.signOffCount > 0 ? (
           <TableBadge variant="neutral">Signed ({d.signOffCount})</TableBadge>
         ) : (
-          <span className="text-[11px] text-slate-400">Not needed</span>
+          <span className="text-[11px] text-slate-500">Not needed</span>
         ),
     },
     {
@@ -141,7 +141,7 @@ export function ProjectDocumentsPage({
       cell: (d) => (
         <div className="text-[11px] text-slate-600">
           <p>{formatDateShort(d.current.uploadedAt)}</p>
-          <p className="text-slate-400">
+          <p className="text-slate-500">
             {d.current.uploadedByName ?? d.uploadedByName ?? "—"}
           </p>
         </div>
@@ -177,7 +177,7 @@ export function ProjectDocumentsPage({
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-lg font-bold text-slate-900">Documents</h1>
+        <h2 className="text-lg font-bold text-slate-900">Documents</h2>
         <p className="text-xs text-slate-500">
           The project register: contracts, letters, minutes and mobilisation
           documents, with versions and sign-offs.

@@ -20,7 +20,7 @@ import { dangerButton, formatBytes, primaryButton, secondaryButton, shortHash, s
 export function DocumentDrawer({ projectId, documentId, onClose }: { projectId: string; documentId: string; onClose: () => void }) {
   const q = useProjectDocumentQuery(projectId, documentId);
   return (
-    <Drawer onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <Drawer onClick={(e) => e.target === e.currentTarget && onClose()} onClose={onClose} label={q.data?.title ?? "Document"}>
       <div className="px-5 py-4 bg-brand-navy text-white flex items-start justify-between gap-3 shrink-0">
         <div className="min-w-0">
           <h3 className="text-sm font-bold truncate">{q.data?.title ?? "Document"}</h3>
@@ -147,7 +147,7 @@ function DocumentDetail({ projectId, doc }: { projectId: string; doc: ProjectDoc
                     {v.uploadedByName ?? "Unknown"} · {formatDateTimeShort(v.uploadedAt)} · {formatBytes(v.byteSize)}
                   </p>
                   {v.note && <p className="text-[11px] text-slate-600">{v.note}</p>}
-                  <p className="text-[10px] text-slate-400" title={v.sha256}>
+                  <p className="text-[10px] text-slate-500" title={v.sha256}>
                     SHA-256 {shortHash(v.sha256)}
                   </p>
                 </div>

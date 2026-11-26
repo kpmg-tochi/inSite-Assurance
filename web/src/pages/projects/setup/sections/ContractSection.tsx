@@ -12,6 +12,7 @@ import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProj
 import { useTenantSettingsQuery } from "../../../../queries/organizations/useOrganizationQueries";
 import { useMilestonesQuery } from "../../../../queries/contracts/useContractQueries";
 import { apiErrorCode } from "../../../../api/process/processApi";
+import { formatDateShort } from "../../../../lib/formatters";
 import { DaysLeft, MILESTONE_STATUS_META, StatusChip } from "../../../../components/contracts/contractUi";
 import {
   inputClass,
@@ -200,7 +201,7 @@ export function ContractSection({ projectId, setup, readOnly }: StepProps) {
           {dateField("kickoffDate", "Planned kick-off date", "On or after the contract dates. Mobilisation deadlines count from it.")}
           {c.kickoffHeldAt && (
             <p className="self-end text-[11px] text-slate-600">
-              The kick-off was held on {new Date(c.kickoffHeldAt).toLocaleDateString()}.
+              The kick-off was held on {formatDateShort(c.kickoffHeldAt)}.
             </p>
           )}
         </div>

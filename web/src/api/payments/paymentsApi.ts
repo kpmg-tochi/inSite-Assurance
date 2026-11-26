@@ -1,5 +1,7 @@
 import type {
   PaymentDto,
+  PaymentsBreakdownDto,
+  PortfolioPaymentsBreakdownQuery,
   PortfolioPaymentsListDto,
   PortfolioPaymentsQuery,
   PortfolioPaymentsSummaryDto,
@@ -40,5 +42,11 @@ export const listPortfolioPayments = async (query: Partial<PortfolioPaymentsQuer
 
 export const getPortfolioPaymentsSummary = async (query: Partial<PortfolioPaymentsQuery>) => {
   const { data } = await api.get<ApiEnvelope<PortfolioPaymentsSummaryDto>>('/payments/summary', { params: clean(query) });
+  return data.data;
+};
+
+/** Wave 4 (G.1/G.2): the summary's filters grouped by zone, State, LGA, contractor, project, month or quarter. */
+export const getPortfolioPaymentsBreakdown = async (query: Partial<PortfolioPaymentsBreakdownQuery>) => {
+  const { data } = await api.get<ApiEnvelope<PaymentsBreakdownDto>>('/payments/breakdown', { params: clean(query) });
   return data.data;
 };

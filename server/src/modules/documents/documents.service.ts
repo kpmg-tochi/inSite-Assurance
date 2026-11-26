@@ -17,6 +17,7 @@ import { assertProjectObjectKey, projectObjectPrefix, storageService } from '../
 import { recordAuditEvent } from '../audit/audit.service';
 import { ensureDefaultDocumentTypes } from './documentTypes.service';
 import { autoCompleteMilestones, webActor } from '../contracts/milestones.service';
+import { activateContractorOnSignedContract } from '../contractors/contractors.service';
 
 /**
  * Phase 13: the project document register. A document has a type, versions (each one an object in
@@ -351,6 +352,8 @@ export async function registerProjectDocument(
         summaryText: `Filed ${type.name.toLowerCase()} "${input.title}" (version 1).`,
         payload: { documentId: doc.id, documentTypeCode: type.code, sha256: file.sha256, byteSize: file.byteSize, projectContractorId },
       });
+      // Client demo updates F.1: a signed contract on file activates an INACTIVE contractor.
+      if (type.code === 'CONTRACT') await activateContractorOnSignedContract(tx, projectId, { userId: webUser.userId, displayName: actorName(webUser) });
       return doc.id;
     });
     return getProjectDocument(projectId, id, webUser);
@@ -400,6 +403,8 @@ export async function addDocumentVersion(
         summaryText: `Filed version ${version} of "${doc.title}". Sign-offs of earlier versions stay with those versions.`,
         payload: { documentId, version, sha256: file.sha256, byteSize: file.byteSize },
       });
+      // Client demo updates F.1: a signed contract on file activates an INACTIVE contractor.
+      if (doc.documentType.code === 'CONTRACT') await activateContractorOnSignedContract(tx, projectId, { userId: webUser.userId, displayName: actorName(webUser) });
     });
   } catch (error) {
     if (uniqueKeyConflict(error)) throw new AppError('This file is already in the register', 409, 'OBJECT_ALREADY_REGISTERED');
@@ -466,6 +471,8 @@ export async function signProjectDocument(
           actor: webActor(webUser),
         });
       }
+      // Client demo updates F.1: a signed contract on file activates an INACTIVE contractor.
+      if (doc.documentType.code === 'CONTRACT') await activateContractorOnSignedContract(tx, projectId, { userId: webUser.userId, displayName: actorName(webUser) });
     });
   } catch (error) {
     if (uniqueKeyConflict(error)) throw new AppError('You have already signed this version', 409, 'ALREADY_SIGNED');

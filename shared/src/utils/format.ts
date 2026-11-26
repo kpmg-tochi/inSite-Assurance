@@ -101,6 +101,16 @@ export function formatDateInZone(
   }
 }
 
+/**
+ * A calendar date ("2026-11-26", no time) as people read it: "26 Nov 2026", the same day in any
+ * zone. Used by server-written texts (notifications, labels); anything else is returned as given.
+ */
+export function formatCalendarDate(date: string | null | undefined): string {
+  if (!date) return '—';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  return formatDateInZone(`${date}T12:00:00Z`, 'UTC');
+}
+
 /** "19 Nov 2026, 14:05 WAT" in the given zone. */
 export function formatDateTimeInZone(
   input: string | Date | null | undefined,

@@ -30,7 +30,7 @@ export const PROJECT_TYPE_CONFIG_GROUP_DEFS: readonly ProjectTypeConfigGroupDef[
   {
     id: 'monitoring',
     label: 'Monitoring',
-    description: 'The default visit plan and deadlines, the visit form per visit kind, and supervision limits.',
+    description: 'The default monitoring plan and deadlines, the monitoring form per visit kind, and supervision limits.',
     configKeys: ['monitoring', 'visitForms', 'supervision'],
   },
   {

@@ -109,7 +109,7 @@ export function ProjectRegisterImportDialog({ onClose }: { onClose: () => void }
 
   if (pending) {
     return (
-      <ModalShell title="Import preview" subtitle={`${pending.fileName} · nothing is saved until you confirm`} onClose={onClose} maxWidth="max-w-6xl">
+      <ModalShell title="Check the project register" subtitle={`${pending.fileName} · nothing is saved until you confirm`} onClose={onClose} maxWidth="max-w-6xl">
         <PreviewBody preview={pending.preview} confirmIssues={confirmIssues} />
         <div className="flex flex-wrap items-center justify-end gap-2 px-5 py-3 border-t border-slate-100">
           {fileError && <p className="mr-auto text-xs font-medium text-rose-600">{fileError}</p>}
@@ -166,7 +166,7 @@ function PreviewBody({ preview, confirmIssues }: { preview: ProjectRegisterImpor
   const sheetWarnings = preview.warnings.filter((i) => i.row === null);
 
   return (
-    <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+    <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary" tabIndex={0} role="region" aria-label="File check">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
         <Tile label="Projects" value={String(t.rowCount)} />
         <Tile label="Drafts (not started)" value={String(t.draftCount)} />
@@ -188,7 +188,7 @@ function PreviewBody({ preview, confirmIssues }: { preview: ProjectRegisterImpor
       )}
 
       {preview.rows.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="overflow-x-auto rounded-xl border border-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary" tabIndex={0} role="region" aria-label="Rows in the file">
           <table className="w-full min-w-[1000px] text-xs">
             <caption className="sr-only">Rows in the file and what each one becomes</caption>
             <thead className="bg-slate-50">

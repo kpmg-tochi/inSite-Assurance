@@ -1,7 +1,14 @@
 import { Prisma } from '@prisma/client';
 import {
+  buildPaymentsBreakdown,
   formatProjectCode,
   fundingSourceLabel,
+  PAYMENTS_BREAKDOWN_BY_LABELS,
+  type BreakdownPayment,
+  type BreakdownProject,
+  type PaymentsBreakdownDto,
+  type PaymentsBreakdownRowDto,
+  type PortfolioPaymentsBreakdownQuery,
   lgaByCode,
   PAYMENT_EXCEPTION_LABELS,
   PAYMENT_KIND_LABELS,
@@ -56,7 +63,8 @@ export function portfolioProjectWhere(webUser: WebJwtPayload, q: PortfolioPaymen
   // C1/C4 codes (applied here so the payments screen does not depend on the register's version).
   if (q.zone) and.push({ stateCode: { in: statesOfZone(q.zone).map((s) => s.code) } });
   if (q.stateCode) and.push({ stateCode: q.stateCode });
-  if (q.lgaCode) and.push({ lgaCode: q.lgaCode });
+  // G.2: an LGA matches projects with a site there (C2), or whose own LGA it is (projects without sites).
+  if (q.lgaCode) and.push({ OR: [{ lgaCode: q.lgaCode }, { sites: { some: { lgaCode: q.lgaCode } } }] });
   if (q.fundingSourceCode) and.push({ fundingSourceCode: q.fundingSourceCode });
   if (q.projectId) and.push({ id: q.projectId });
   return { AND: and };
@@ -220,6 +228,76 @@ export async function getPortfolioPaymentsSummary(webUser: WebJwtPayload, q: Por
 }
 
 // ---------------------------------------------------------------------------
+// Breakdown (wave 4, G.1 grouping and G.2 Breakdown; decision W4.4: pure, over the matching payments)
+// ---------------------------------------------------------------------------
+
+/** Every matching payment (voided never counted); plenty at programme scale. */
+const MAX_BREAKDOWN_PAYMENTS = 50_000;
+
+/**
+ * GET /api/v1/payments/breakdown?by=…: the summary's filters and visibility, grouped. Each payment
+ * counted once in the totals; by LGA a project with sites in several LGAs is counted under each.
+ */
+export async function getPortfolioPaymentsBreakdown(
+  webUser: WebJwtPayload,
+  q: PortfolioPaymentsBreakdownQuery,
+  now = new Date()
+): Promise<PaymentsBreakdownDto> {
+  assertPeriod(q);
+  const where = paymentWhere(portfolioProjectWhere(webUser, q), q, false);
+  const [settings, payments] = await Promise.all([
+    tenantSettings(webUser.tenantId, now),
+    prisma.projectPayment.findMany({
+      where,
+      select: { projectId: true, kind: true, paidOn: true, grossAmountNgn: true, retentionHeldNgn: true, netAmountNgn: true, exceptionsJson: true },
+      orderBy: ORDER,
+      take: MAX_BREAKDOWN_PAYMENTS,
+    }),
+  ]);
+  const projectIds = [...new Set(payments.map((p) => p.projectId))];
+  const projects = projectIds.length
+    ? await prisma.project.findMany({
+        where: { id: { in: projectIds } },
+        select: {
+          id: true,
+          codePrefix: true,
+          name: true,
+          stateCode: true,
+          stateLocation: true,
+          lgaCode: true,
+          sites: { select: { lgaCode: true }, orderBy: { siteNumber: 'asc' } },
+          contractors: { orderBy: { createdAt: 'asc' }, take: 1, select: { organization: { select: { id: true, name: true } } } },
+        },
+      })
+    : [];
+  const rows: BreakdownPayment[] = payments.map((p) => ({
+    projectId: p.projectId,
+    kind: p.kind,
+    paidOn: p.paidOn,
+    grossAmountNgn: Number(p.grossAmountNgn),
+    retentionHeldNgn: Number(p.retentionHeldNgn),
+    netAmountNgn: Number(p.netAmountNgn),
+    hasException: Array.isArray(p.exceptionsJson) && p.exceptionsJson.length > 0,
+  }));
+  const breakdownProjects: BreakdownProject[] = projects.map((p) => {
+    const siteLgas = p.sites.map((s) => s.lgaCode).filter(Boolean);
+    const contractor = p.contractors[0]?.organization ?? null;
+    return {
+      id: p.id,
+      code: formatProjectCode(p.codePrefix),
+      name: p.name,
+      stateCode: p.stateCode,
+      stateText: p.stateLocation,
+      lgaCodes: siteLgas.length ? siteLgas : p.lgaCode ? [p.lgaCode] : [],
+      contractorId: contractor?.id ?? null,
+      contractorName: contractor?.name ?? null,
+    };
+  });
+  const built = buildPaymentsBreakdown(rows, breakdownProjects, q.by, settings.fiscalYearStartMonth);
+  return { by: q.by, from: q.from ?? null, to: q.to ?? null, ...built };
+}
+
+// ---------------------------------------------------------------------------
 // Export
 // ---------------------------------------------------------------------------
 
@@ -281,13 +359,22 @@ interface SummaryLine {
   percent: number | null;
 }
 
-/** GET /api/v1/payments/export.xlsx: sheets Summary and Payments, the screen's filters. */
-export async function buildPortfolioPaymentsExport(webUser: WebJwtPayload, q: PortfolioPaymentsQuery, now = new Date()): Promise<PaymentsXlsxFile> {
+/**
+ * GET /api/v1/payments/export.xlsx: sheets Summary, Breakdown (grouped by `by`, default State) and
+ * Payments, the screen's filters.
+ */
+export async function buildPortfolioPaymentsExport(
+  webUser: WebJwtPayload,
+  q: PortfolioPaymentsQuery & Partial<Pick<PortfolioPaymentsBreakdownQuery, 'by'>>,
+  now = new Date()
+): Promise<PaymentsXlsxFile> {
   assertPeriod(q);
   const projectWhere = portfolioProjectWhere(webUser, q);
-  const [settings, summary, rows, filters] = await Promise.all([
+  const by = q.by ?? 'state';
+  const [settings, summary, breakdown, rows, filters] = await Promise.all([
     tenantSettings(webUser.tenantId, now),
     getPortfolioPaymentsSummary(webUser, q, now),
+    getPortfolioPaymentsBreakdown(webUser, { ...q, by }, now),
     prisma.projectPayment.findMany({ where: paymentWhere(projectWhere, q, q.includeVoided === 'true'), include: ROW_INCLUDE, orderBy: ORDER, take: MAX_EXPORT_ROWS }),
     filterText(webUser, q),
   ]);
@@ -328,6 +415,36 @@ export async function buildPortfolioPaymentsExport(webUser: WebJwtPayload, q: Po
     { header: '%', width: 10, format: 'number', value: (l) => l.percent },
   ];
 
+  // Breakdown: one row per group, the context column only where a group has a parent place.
+  const contextHeader: Partial<Record<PortfolioPaymentsBreakdownQuery['by'], string>> = { state: 'Zone', lga: 'State', project: 'State' };
+  const ctx = contextHeader[by];
+  const breakdownColumns: ExportColumn<PaymentsBreakdownRowDto>[] = [
+    { header: PAYMENTS_BREAKDOWN_BY_LABELS[by], width: by === 'project' ? 44 : 30, wrap: true, value: (r) => (r.sharedAcrossGroups ? `${r.label} *` : r.label) },
+    ...(ctx ? [{ header: ctx, width: 18, value: (r: PaymentsBreakdownRowDto) => r.context } satisfies ExportColumn<PaymentsBreakdownRowDto>] : []),
+    { header: 'Gross paid', width: 18, format: 'money', value: (r) => r.grossPaidNgn },
+    { header: 'Retention held', width: 17, format: 'money', value: (r) => r.retentionHeldNgn },
+    { header: 'Retention released', width: 17, format: 'money', value: (r) => r.retentionReleasedNgn },
+    { header: 'Net paid', width: 18, format: 'money', value: (r) => r.netPaidNgn },
+    { header: 'Payments', width: 11, format: 'integer', value: (r) => r.paymentCount },
+    { header: 'With exceptions', width: 12, format: 'integer', value: (r) => r.exceptionCount },
+    { header: 'Projects', width: 10, format: 'integer', value: (r) => r.projectCount },
+  ];
+  const first = ctx ? 2 : 1;
+  const t = breakdown.totals;
+  const breakdownTotals: Record<number, number> = {
+    [first]: t.grossPaidNgn,
+    [first + 1]: t.retentionHeldNgn,
+    [first + 2]: t.retentionReleasedNgn,
+    [first + 3]: t.netPaidNgn,
+    [first + 4]: t.paymentCount,
+    [first + 5]: t.exceptionCount,
+    [first + 6]: t.projectCount,
+  };
+  const sharedNote =
+    by === 'lga' && breakdown.hasSharedGroups
+      ? '* Payments are recorded per project: a project with sites in several LGAs is counted in full under each, so the rows add up to more than the total'
+      : null;
+
   const data = rows.map(serializeRow);
   const isRelease = (p: PortfolioPaymentRowDto) => p.kind === 'RETENTION_RELEASE';
   const columns: ExportColumn<PortfolioPaymentRowDto>[] = [
@@ -361,6 +478,15 @@ export async function buildPortfolioPaymentsExport(webUser: WebJwtPayload, q: Po
         hint: hint('Voided payments not counted', 'Money against progress: to date, over the projects matching the filters'),
         columns: summaryColumns,
         rows: lines,
+      },
+      {
+        name: 'Breakdown',
+        title: titleOf(`Payments by ${PAYMENTS_BREAKDOWN_BY_LABELS[by]}`, period),
+        hint: hint('Voided payments not counted', 'Gross and retention held exclude retention releases; net includes them', sharedNote),
+        columns: breakdownColumns,
+        rows: breakdown.rows,
+        emptyText: 'No payments match these filters.',
+        totals: { label: 'Total (each payment once)', values: breakdownTotals },
       },
       {
         name: 'Payments',

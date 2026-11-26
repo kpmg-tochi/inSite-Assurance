@@ -26,7 +26,7 @@ export function FormsAndFacilitiesTab() {
     { id: "facilities", label: "Facilities", show: canFacilities },
     { id: "subforms", label: "Facility sub-forms", show: canForms },
     { id: "sections", label: "Fixed sections", show: canForms },
-    { id: "templates", label: "Visit form templates", show: canForms },
+    { id: "templates", label: "Monitoring form templates", show: canForms },
     { id: "preview", label: "Preview", show: canForms },
   ];
   const visible = sections.filter((s) => s.show);

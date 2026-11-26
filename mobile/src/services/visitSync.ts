@@ -149,7 +149,7 @@ async function runOnce(force: boolean): Promise<void> {
     await pruneUnusedForms().catch(() => 0);
     emitVisitDataChanged('forms');
   } catch (error) {
-    publish({ lastError: (error as Error)?.message ?? 'Could not refresh visits.' });
+    publish({ lastError: (error as Error)?.message ?? 'Could not refresh monitoring visits.' });
   } finally {
     publish({ isSyncing: false });
   }

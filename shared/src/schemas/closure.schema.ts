@@ -100,7 +100,7 @@ export const AUTOMATIC_CLOSURE_ITEM_KINDS: ClosureChecklistItemKind[] = [
 
 export const CLOSURE_ITEM_KIND_META: Record<ClosureChecklistItemKind, { label: string; description: string }> = {
   DOCUMENT_TYPE: { label: 'Document in the register', description: 'Done when a document of the type is filed (and signed, if required).' },
-  INSPECTION_VISIT_TYPE: { label: 'Visit accepted', description: 'Done when a monitoring report for a visit of the kind is accepted.' },
+  INSPECTION_VISIT_TYPE: { label: 'Monitoring visit accepted', description: 'Done when a monitoring report for a monitoring visit of the kind is accepted.' },
   CONTRACT_MILESTONE: { label: 'Contract milestone done', description: 'Done when the contract milestone is done or waived.' },
   CONTRACTOR_RATINGS: { label: 'Contractors rated', description: 'Done when every contractor on the project has a rating at the stage.' },
   LESSONS_LEARNED: { label: 'Lessons published', description: 'Done when the project has at least one published lesson.' },
@@ -142,7 +142,7 @@ export const ClosureChecklistItemTemplateSchema = z
       if (!v[field]) ctx.addIssue({ code: z.ZodIssueCode.custom, message, path: [field] });
     };
     if (v.kind === 'DOCUMENT_TYPE') need('documentTypeCode', 'Choose the document type');
-    if (v.kind === 'INSPECTION_VISIT_TYPE') need('inspectionVisitType', 'Choose the visit type');
+    if (v.kind === 'INSPECTION_VISIT_TYPE') need('inspectionVisitType', 'Choose the monitoring visit kind');
     if (v.kind === 'CONTRACT_MILESTONE') need('milestoneKey', 'Enter the milestone key');
   });
 export type ClosureChecklistItemTemplate = z.infer<typeof ClosureChecklistItemTemplateSchema>;

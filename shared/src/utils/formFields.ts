@@ -141,8 +141,8 @@ export function validateFormFields(
     } else if (f.photo) {
       add('PHOTO_NOT_ALLOWED', `${name}: only photo questions have photo settings`, 'photo');
     }
-    if (!sub && f.scope === 'PER_UNIT') add('SCOPE_NOT_ALLOWED', `${name}: fixed sections have no units; answers are for the whole visit`, 'scope');
-    if (!sub && f.visitKinds) add('VISIT_KINDS_NOT_ALLOWED', `${name}: fixed sections are picked per visit kind by the template`, 'visitKinds');
+    if (!sub && f.scope === 'PER_UNIT') add('SCOPE_NOT_ALLOWED', `${name}: fixed sections have no units; answers are for the whole monitoring visit`, 'scope');
+    if (!sub && f.visitKinds) add('VISIT_KINDS_NOT_ALLOWED', `${name}: fixed sections are picked per monitoring visit kind by the template`, 'visitKinds');
 
     // Rules.
     f.rules.forEach((r) => {
@@ -206,6 +206,15 @@ function lowerFirst(text: string): string {
 }
 
 /**
+ * Lower-cases every title-case word for use mid-sentence ("Gate House" → "gate house", "ICT Lab / Room"
+ * → "ICT lab / room"); all-caps words (acronyms: ICT, ECCDE) are kept. Client demo updates: the UBEC
+ * catalogue uses title-case names.
+ */
+function lowerWords(text: string): string {
+  return text.replace(/[A-Za-z][A-Za-z'-]*/g, (w) => lowerFirst(w));
+}
+
+/**
  * The facility noun for `{facility}`: singular for one, else `pluralName`, else a simple plural.
  * Supply facilities never pluralise ("pupils' furniture"). Lower-cased for use mid-sentence.
  */
@@ -214,7 +223,7 @@ export function facilityNoun(facility: FacilityNounInput, count: number): string
     count === 1 || facility.archetype === 'SUPPLY_INSTALLATION'
       ? facility.name
       : facility.pluralName?.trim() || simplePlural(facility.name);
-  return lowerFirst(base);
+  return lowerWords(base);
 }
 
 export interface PlaceholderUnit {

@@ -68,7 +68,7 @@ function principalOf(req: Request): VisitPrincipal {
 }
 
 function fieldOnly(req: Request) {
-  if (!req.fieldAgent) throw new AppError('Visits are answered from the field app', 403, 'VISIT_NEEDS_FIELD_APP');
+  if (!req.fieldAgent) throw new AppError('Monitoring visits are answered from the field app', 403, 'VISIT_NEEDS_FIELD_APP');
   return req.fieldAgent;
 }
 

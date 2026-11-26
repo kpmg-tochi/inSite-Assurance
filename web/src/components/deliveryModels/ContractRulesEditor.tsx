@@ -140,7 +140,7 @@ export function ContractRulesEditor({ value, onChange }: { value: ContractRules;
             return (
               <li key={i} className="rounded-xl border border-slate-200 p-3 space-y-3">
                 <div className="flex flex-wrap items-start gap-2">
-                  <span className="mt-2 text-[11px] font-bold text-slate-400 tabular-nums w-5">{i + 1}.</span>
+                  <span className="mt-2 text-[11px] font-bold text-slate-500 tabular-nums w-5">{i + 1}.</span>
                   <label className="flex-1 min-w-[14rem] text-xs font-medium text-slate-700">
                     Label
                     <input

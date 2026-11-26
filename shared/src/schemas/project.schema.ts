@@ -11,6 +11,7 @@ import { ProjectStageSummarySchema } from './projectOverview.schema';
 import { ProjectAlertKeyEnum } from './projectAlert.schema';
 import { FundingSourceCodeEnum } from './projectRegister.schema';
 import { NigeriaZoneCodeEnum } from '../data/nigeriaAdminAreas';
+import { ProjectSiteSummaryDtoSchema } from './site.schema';
 
 /**
  * Phase 11: the delivery-model fields every project list row carries (directory and portfolio
@@ -118,6 +119,8 @@ export type ProjectCoreDto = z.infer<typeof ProjectCoreDtoSchema>;
  * (`ProjectCoreDto` + BOQ) with this shape.
  */
 export const ProjectSummaryDtoSchema = ProjectCoreDtoSchema.extend({
+  /** Client demo updates C2 (wave 2): the project's sites (register sub-rows); empty for single-site projects. */
+  sites: z.array(ProjectSiteSummaryDtoSchema).optional(),
   /** Redesign R6c (D-R6.22): the stage chip, from the batched stage loader. */
   stage: ProjectStageSummarySchema.nullable().optional(),
   /** Phase 13: open contract milestones past their due date (today in the project zone). */
@@ -157,6 +160,8 @@ export type PortfolioProjectPin = z.infer<typeof PortfolioProjectPinSchema>;
 /** One project on the portfolio map. "point" is the geofence centroid (server-computed). */
 export const PortfolioOverviewProjectSchema = z.object({
   id: z.string().uuid(),
+  /** Client demo updates C2 (wave 2): one map pin and one register sub-row per site; empty = the project's own pin. */
+  sites: z.array(ProjectSiteSummaryDtoSchema).optional(),
   name: z.string(),
   codePrefix: z.string(),
   status: ProjectStatusEnum,
@@ -164,6 +169,8 @@ export const PortfolioOverviewProjectSchema = z.object({
   stateLocation: z.string(),
   lgaLocation: z.string().nullable(),
   totalBudgetNgn: z.number(),
+  /** Owner decision 3 (2026-11-26): the contract sum, null until the project is contracted (register column). */
+  contractSumNgn: z.number().nullable(),
   disbursedToDateNgn: z.number(),
   certifiedProgressPct: z.number(),
   lastFieldCaptureAt: z.string().nullable(),

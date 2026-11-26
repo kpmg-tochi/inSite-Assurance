@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, RotateCcw } from "lucide-react";
+import { AlertTriangle, Plus, RotateCcw, X } from "lucide-react";
 import { Controller } from "react-hook-form";
 import { z } from "zod";
 import {
@@ -15,26 +15,45 @@ import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth, useTerm } from "../../lib/auth-context";
 import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import Loader from "../../components/Loader";
+import Drawer from "../../components/Drawer";
 import { CustomSelect } from "../../components/common";
-import { TableBadge } from "../../components/table/StandardTable";
+import { StandardTable, TableBadge, type TableBadgeVariant, type TableColumnDef } from "../../components/table/StandardTable";
 import { CapturePhoto } from "../../components/evidence/CaptureMedia";
 import { BlockedNotice, ModalActions, ModalShell, inputClass } from "../../components/common/ModalShell";
+import { panelClass, secondaryAction } from "../../components/closure/closureUi";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { useDefectTicketsQuery } from "../../queries/closeout/useCloseoutQueries";
+import { formatDateShort } from "../../lib/formatters";
 import { useCreateDefectTicketMutation, useDefectActionMutation } from "../../mutations/closeout/useCloseoutMutations";
+import { OPEN_DEFECT_STATUSES } from "./completionTabHints";
 
 const BOARD: DefectStatus[] = ["OPEN", "ASSIGNED", "RECTIFIED_PENDING_VERIFICATION", "VERIFIED_CLOSED", "REJECTED_NOT_A_DEFECT"];
+const SEVERITIES: DefectSeverity[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 const SEVERITY_BADGE: Record<DefectSeverity, "neutral" | "info" | "warning" | "danger"> = {
   LOW: "neutral",
   MEDIUM: "info",
   HIGH: "warning",
   CRITICAL: "danger",
 };
+const STATUS_BADGE: Record<DefectStatus, TableBadgeVariant> = {
+  OPEN: "warning",
+  ASSIGNED: "info",
+  RECTIFIED_PENDING_VERIFICATION: "info",
+  VERIFIED_CLOSED: "success",
+  REJECTED_NOT_A_DEFECT: "neutral",
+};
+const severityLabel = (s: DefectSeverity) => s.charAt(0) + s.slice(1).toLowerCase();
+
+type StatusFilter = "all" | "still-open" | DefectStatus;
 
 /**
- * Completion & handover → Defects (Phase 10; redesign R1b, R6b): the defect board. The retention
- * cards moved to Payments (D-R6.17). `?ticket=` (from a notification) scrolls to that ticket.
- * The tab is shown only when the retention module is on.
+ * Completion & handover → Defects (Phase 10; redesign R1b, R6b). The retention cards moved to
+ * Payments (D-R6.17). The tab is shown only when the retention module is on.
+ *
+ * Design round 2026-11-26: the five-column board became one register table (search, status and
+ * severity filters, 15 rows a page); a row opens the ticket in a side drawer with its details,
+ * repair photos and actions (Assign, Reopen, Not a defect). `?ticket=` (from a notification) opens
+ * that ticket's drawer.
  */
 export function DefectsTab({ project }: { project: ProjectSummaryDto }) {
   const term = useTerm();
@@ -46,29 +65,17 @@ export function DefectsTab({ project }: { project: ProjectSummaryDto }) {
 
   if (processQuery.isLoading) return <Loader />;
   if (!enabled) {
-    return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
-        {term("retention")} and defects are not used on this project.
-      </div>
-    );
+    return <div className={`${panelClass} text-center text-xs text-slate-600`}>{term("retention")} and defects are not used on this project.</div>;
   }
 
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-slate-500">
-        Defects raised during handover and the defects liability period. An officer closes a defect from the field app with photos of the
-        repair.
-      </p>
-      <DefectBoard project={project} tickets={ticketsQuery.data ?? []} loading={ticketsQuery.isLoading} focusTicketId={focusTicketId} />
-    </div>
-  );
+  return <DefectRegister project={project} tickets={ticketsQuery.data ?? []} loading={ticketsQuery.isLoading} focusTicketId={focusTicketId} />;
 }
 
 // ---------------------------------------------------------------------------
 
 type TicketAction = { ticket: DefectTicketDto; kind: "assign" | "verify" | "reject" };
 
-function DefectBoard({
+function DefectRegister({
   project,
   tickets,
   loading,
@@ -82,118 +89,272 @@ function DefectBoard({
   const { hasPermission } = useAuth();
   const [raising, setRaising] = useState(false);
   const [acting, setActing] = useState<TicketAction | null>(null);
-  const byStatus = useMemo(() => {
-    const m = new Map<DefectStatus, DefectTicketDto[]>(BOARD.map((s) => [s, []]));
-    for (const t of tickets) m.get(t.status)!.push(t);
-    return m;
-  }, [tickets]);
-  // A notification link names one ticket: bring it into view once it is loaded.
-  const focusFound = Boolean(focusTicketId && tickets.some((t) => t.id === focusTicketId));
-  useEffect(() => {
-    if (focusFound && focusTicketId) document.getElementById(`defect-${focusTicketId}`)?.scrollIntoView({ block: "center" });
-  }, [focusFound, focusTicketId]);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [severity, setSeverity] = useState<"all" | DefectSeverity>("all");
   // Defects are staff-only (R1c): the liable party is always the project's one contractor.
   const canRaise = hasPermission("defects:manage");
 
+  // A notification link names one ticket: open it once it is loaded.
+  const focused = useRef<string | null>(null);
+  useEffect(() => {
+    if (focusTicketId && focused.current !== focusTicketId && tickets.some((t) => t.id === focusTicketId)) {
+      focused.current = focusTicketId;
+      setOpenId(focusTicketId);
+    }
+  }, [focusTicketId, tickets]);
+
+  const counts = useMemo(() => {
+    const byStatus = new Map<DefectStatus, number>(BOARD.map((s) => [s, 0]));
+    for (const t of tickets) byStatus.set(t.status, (byStatus.get(t.status) ?? 0) + 1);
+    const open = tickets.filter((t) => OPEN_DEFECT_STATUSES.includes(t.status)).length;
+    const overdue = tickets.filter((t) => t.isOverdue && OPEN_DEFECT_STATUSES.includes(t.status)).length;
+    return { byStatus, open, overdue };
+  }, [tickets]);
+
+  const rows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return tickets.filter((t) => {
+      if (status === "still-open" && !OPEN_DEFECT_STATUSES.includes(t.status)) return false;
+      if (status !== "all" && status !== "still-open" && t.status !== status) return false;
+      if (severity !== "all" && t.severity !== severity) return false;
+      if (q && ![t.reference, t.title, t.location ?? "", t.description].some((v) => v.toLowerCase().includes(q))) return false;
+      return true;
+    });
+  }, [tickets, search, status, severity]);
+
+  const selected = openId ? (tickets.find((t) => t.id === openId) ?? null) : null;
+
+  const columns: TableColumnDef<DefectTicketDto>[] = [
+    {
+      id: "reference",
+      header: "Reference",
+      width: "w-32",
+      cell: (t) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpenId(t.id);
+          }}
+          className="rounded font-bold text-brand-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+          aria-label={`Open ${t.reference}: ${t.title}`}
+        >
+          {t.reference}
+        </button>
+      ),
+    },
+    {
+      id: "defect",
+      header: "Defect",
+      cell: (t) => (
+        <div className="min-w-0">
+          <p className="font-semibold text-slate-900">{t.title}</p>
+          {t.location && <p className="text-[11px] text-slate-600">{t.location}</p>}
+        </div>
+      ),
+    },
+    { id: "severity", header: "Severity", width: "w-28", cell: (t) => <TableBadge variant={SEVERITY_BADGE[t.severity]}>{severityLabel(t.severity)}</TableBadge> },
+    { id: "status", header: "Status", width: "w-44", cell: (t) => <TableBadge variant={STATUS_BADGE[t.status]}>{DEFECT_STATUS_LABELS[t.status]}</TableBadge> },
+    {
+      id: "due",
+      header: "Due",
+      width: "w-36",
+      cell: (t) =>
+        t.dueDate ? (
+          <span className={t.isOverdue ? "inline-flex items-center gap-1 font-semibold text-rose-700" : "text-slate-700"}>
+            {t.isOverdue && <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />}
+            {formatDateShort(t.dueDate)}
+            {t.isOverdue && " · overdue"}
+          </span>
+        ) : (
+          <span className="text-slate-500">No due date</span>
+        ),
+    },
+  ];
+
+  const summary =
+    tickets.length === 0
+      ? "Officers close defects from the field app with photos of the repair."
+      : `${counts.open} open${counts.overdue ? ` · ${counts.overdue} overdue` : ""} · ${tickets.length} in all. Officers close defects from the field app with photos of the repair.`;
+
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-slate-900">Defects</h2>
-        {canRaise && (
-          <button
-            type="button"
-            onClick={() => setRaising(true)}
-            className="inline-flex items-center gap-1 rounded-xl bg-brand-primary px-3 py-2 text-xs font-semibold text-white hover:bg-brand-hover"
-          >
-            <Plus className="h-4 w-4" /> Raise defect
-          </button>
-        )}
-      </div>
-      {loading && <Loader />}
-      <div className="grid gap-3 lg:grid-cols-5">
-        {BOARD.map((status) => (
-          <div key={status} className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
-            <p className="px-1 pb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-              {DEFECT_STATUS_LABELS[status]} ({byStatus.get(status)!.length})
-            </p>
-            <div className="space-y-2">
-              {byStatus.get(status)!.map((t) => (
-                <TicketCard key={t.id} project={project} ticket={t} focused={t.id === focusTicketId} onAct={(kind) => setActing({ ticket: t, kind })} />
-              ))}
+    <>
+      <StandardTable
+        title="Defects"
+        subtitle={summary}
+        headerActions={
+          canRaise ? (
+            <button
+              type="button"
+              onClick={() => setRaising(true)}
+              className="inline-flex items-center gap-1 rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-brand-navy hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" /> Raise defect
+            </button>
+          ) : undefined
+        }
+        search={{ value: search, onChange: setSearch, placeholder: "Search reference, title or location" }}
+        filters={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="w-48">
+            <CustomSelect<StatusFilter>
+              ariaLabel="Status"
+              size="sm"
+              value={status}
+              onChange={setStatus}
+              options={[
+                { value: "all", label: `All statuses (${tickets.length})` },
+                { value: "still-open", label: `Still open (${counts.open})` },
+                ...BOARD.map((s) => ({ value: s as StatusFilter, label: `${DEFECT_STATUS_LABELS[s]} (${counts.byStatus.get(s) ?? 0})` })),
+              ]}
+            />
+            </div>
+            <div className="w-40">
+            <CustomSelect<"all" | DefectSeverity>
+              ariaLabel="Severity"
+              size="sm"
+              value={severity}
+              onChange={setSeverity}
+              options={[{ value: "all", label: "All severities" }, ...SEVERITIES.map((s) => ({ value: s, label: severityLabel(s) }))]}
+            />
             </div>
           </div>
-        ))}
-      </div>
+        }
+        columns={columns}
+        data={rows}
+        keyExtractor={(t) => t.id}
+        onRowClick={(t) => setOpenId(t.id)}
+        selectedId={openId}
+        loading={loading}
+        minWidth="min-w-[720px]"
+        emptyState={
+          tickets.length === 0
+            ? { title: "No defects", description: "Defects raised during handover and the defects liability period are listed here." }
+            : { title: "No matching defects", description: "Change the search or the filters." }
+        }
+      />
+      {selected && (
+        <DefectDrawer
+          project={project}
+          ticket={selected}
+          onClose={() => setOpenId(null)}
+          onAct={(kind) => {
+            setOpenId(null);
+            setActing({ ticket: selected, kind });
+          }}
+        />
+      )}
       {raising && <RaiseDefectModal project={project} onClose={() => setRaising(false)} />}
       {acting && <TicketActionModal project={project} action={acting} onClose={() => setActing(null)} />}
-    </section>
+    </>
   );
 }
 
-function TicketCard({
+function DefectDrawer({
   project,
   ticket: t,
-  focused,
+  onClose,
   onAct,
 }: {
   project: ProjectSummaryDto;
   ticket: DefectTicketDto;
-  focused: boolean;
+  onClose: () => void;
   onAct: (k: TicketAction["kind"]) => void;
 }) {
+  const photos = t.verificationCaptures.filter((c) => c.objectKey);
+  const hasActions = t.actions.assign.allowed || t.actions.verify.allowed || t.actions.reject.allowed;
+  const facts: [string, React.ReactNode][] = [
+    ["Contractor", t.contractorName],
+    ["Location", t.location ?? "—"],
+    ["Due", t.dueDate ? `${formatDateShort(t.dueDate)}${t.isOverdue ? " (overdue)" : ""}` : "No due date"],
+    ["Raised", `${formatDateShort(t.createdAt)}${t.raisedByName ? ` by ${t.raisedByName}` : ""}`],
+    ...(t.boqItemLabel ? ([["BoQ item", t.boqItemLabel]] as [string, React.ReactNode][]) : []),
+    ...(t.sourceHandoverSubmissionId ? ([["Source", "Handover punch list"]] as [string, React.ReactNode][]) : []),
+    ...(t.reopenCount > 0 ? ([["Reopened", `${t.reopenCount} time${t.reopenCount === 1 ? "" : "s"}`]] as [string, React.ReactNode][]) : []),
+    ...(t.verifiedAt ? ([["Verified", `${formatDateShort(t.verifiedAt)}${t.verifiedByName ? ` by ${t.verifiedByName}` : ""}`]] as [string, React.ReactNode][]) : []),
+  ];
   return (
-    <article
-      id={`defect-${t.id}`}
-      aria-current={focused ? "true" : undefined}
-      className={`space-y-1.5 rounded-xl border bg-white p-2.5 text-[11px] ${focused ? "border-brand-primary ring-2 ring-brand-primary/40" : "border-slate-200"}`}
-    >
-      <div className="flex items-center justify-between gap-1">
-        <span className="font-bold text-slate-500">{t.reference}</span>
-        <TableBadge variant={SEVERITY_BADGE[t.severity]}>{t.severity.toLowerCase()}</TableBadge>
+    <Drawer onClick={(e) => e.target === e.currentTarget && onClose()} onClose={onClose} labelledBy="defect-drawer-title">
+      <div className="flex shrink-0 items-start justify-between gap-3 bg-brand-navy px-5 py-4 text-white">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold text-white/80">{t.reference}</p>
+          <h3 id="defect-drawer-title" className="text-sm font-bold">
+            {t.title}
+          </h3>
+        </div>
+        <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-1 text-white/80 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
       </div>
-      <p className="text-xs font-semibold text-slate-900">{t.title}</p>
-      <p className="text-slate-600">{t.description}</p>
-      <p className="text-slate-500">
-        {t.contractorName}
-        {t.location ? ` · ${t.location}` : ""}
-        {t.dueDate ? ` · due ${t.dueDate}` : ""}
-      </p>
-      {t.isOverdue && <p className="font-semibold text-rose-700">Overdue</p>}
-      {t.resolutionReason && <p className="text-slate-600">Note: {t.resolutionReason}</p>}
-      {t.verificationCaptures.some((c) => c.objectKey) && (
-        <div className="flex flex-wrap gap-1">
-          {t.verificationCaptures
-            .filter((c) => c.objectKey)
-            .map((c) => (
-              <CapturePhoto key={c.clientCaptureId} projectId={project.id} objectKey={c.objectKey!} alt="Repair photo" className="h-12 w-12" />
-            ))}
+      <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4 text-xs">
+        <div className="flex flex-wrap items-center gap-2">
+          <TableBadge variant={STATUS_BADGE[t.status]}>{DEFECT_STATUS_LABELS[t.status]}</TableBadge>
+          <TableBadge variant={SEVERITY_BADGE[t.severity]}>{severityLabel(t.severity)} severity</TableBadge>
+          {t.isOverdue && (
+            <span className="inline-flex items-center gap-1 font-semibold text-rose-700">
+              <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> Overdue
+            </span>
+          )}
+        </div>
+        <p className="whitespace-pre-line text-slate-700">{t.description}</p>
+        <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1.5">
+          {facts.map(([k, v]) => (
+            <React.Fragment key={k}>
+              <dt className="text-slate-600">{k}</dt>
+              <dd className="text-slate-900">{v}</dd>
+            </React.Fragment>
+          ))}
+        </dl>
+        {t.verificationNotes && (
+          <div>
+            <p className="font-semibold text-slate-700">Verification notes</p>
+            <p className="text-slate-700">{t.verificationNotes}</p>
+          </div>
+        )}
+        {t.resolutionReason && (
+          <div>
+            <p className="font-semibold text-slate-700">Note</p>
+            <p className="text-slate-700">{t.resolutionReason}</p>
+          </div>
+        )}
+        {photos.length > 0 && (
+          <div>
+            <p className="mb-1.5 font-semibold text-slate-700">Repair photos</p>
+            <div className="flex flex-wrap gap-2">
+              {photos.map((c) => (
+                <CapturePhoto key={c.clientCaptureId} projectId={project.id} objectKey={c.objectKey!} alt="Repair photo" className="h-20 w-20" />
+              ))}
+            </div>
+          </div>
+        )}
+        {!t.actions.verify.allowed && t.actions.verify.reason && OPEN_DEFECT_STATUSES.includes(t.status) && <p className="text-slate-600">{t.actions.verify.reason}</p>}
+      </div>
+      {hasActions && (
+        <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-slate-100 px-5 py-3">
+          {t.actions.reject.allowed && (
+            <button type="button" onClick={() => onAct("reject")} className={secondaryAction}>
+              Not a defect
+            </button>
+          )}
+          {t.actions.verify.allowed && (
+            <button type="button" onClick={() => onAct("verify")} className={secondaryAction}>
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> Reopen
+            </button>
+          )}
+          {t.actions.assign.allowed && (
+            <button
+              type="button"
+              onClick={() => onAct("assign")}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-brand-primary px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-brand-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-1"
+            >
+              Assign
+            </button>
+          )}
         </div>
       )}
-      <div className="flex flex-wrap gap-1 pt-1">
-        {t.actions.assign.allowed && <SmallButton onClick={() => onAct("assign")}>Assign</SmallButton>}
-        {t.actions.verify.allowed && (
-          <SmallButton onClick={() => onAct("verify")}>
-            <RotateCcw className="h-3 w-3" /> Reopen
-          </SmallButton>
-        )}
-        {t.actions.reject.allowed && <SmallButton onClick={() => onAct("reject")}>Not a defect</SmallButton>}
-      </div>
-      {!t.actions.verify.allowed && t.actions.verify.reason && (t.status === "ASSIGNED" || t.status === "OPEN" || t.status === "RECTIFIED_PENDING_VERIFICATION") && (
-        <p className="text-slate-500">{t.actions.verify.reason}</p>
-      )}
-    </article>
-  );
-}
-
-function SmallButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-1.5 py-0.5 font-semibold text-slate-700 hover:bg-slate-50"
-    >
-      {children}
-    </button>
+    </Drawer>
   );
 }
 

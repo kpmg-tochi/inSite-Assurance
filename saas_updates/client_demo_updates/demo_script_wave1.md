@@ -1,8 +1,10 @@
 # Demo script: wave 1 (it looks and speaks like UBEC)
 
+> **Superseded for the client demo by [demo_script.md](demo_script.md)** (30-minute walkthrough, 2026-11-26). Kept for the wave detail and recovery notes.
+
 **Written:** 2026-11-25, before the wave 1 integration. **Not yet rehearsed.** Rehearse once on the overlay seed and fix this file where the screens differ.
 **Length:** about 10 minutes of screens, plus the slides marked **[SLIDE]** (outline: [slides_outline.md](slides_outline.md)).
-**Covers wave 1 only:** user switcher, map across six zones, LOT/BATCH codes, zone/State/LGA filters, new project, payments by period, the field visit. The full 45-minute story is [../demo_script_programme_delivery.md](../demo_script_programme_delivery.md) (older wording: read "sprint" as work phase, "Reports" as Monitoring).
+**Covers wave 1:** user switcher, map across six zones, LOT/BATCH codes, zone/State/LGA filters, new project, payments by period, the field visit. **Wave 4 add-on scenes** (approved list upload, visit calendar, payments Breakdown) are at the end: [Wave 4 scenes](#wave-4-scenes-add-on-2026-11-26). The full 45-minute story is [../demo_script_programme_delivery.md](../demo_script_programme_delivery.md) (older wording: read "sprint" as work phase, "Reports" as Monitoring).
 **Logins and reseeding:** [demo_accounts.md](demo_accounts.md).
 
 **Codes.** Project codes come from the overlay seed (`SEED_PROFILE=ubec-demo`); the table holds the codes it writes (the screen shows "LOT n BATCH m" with the intervention year beside it). Story numbers follow `working_plan.md` section 7.1.
@@ -43,7 +45,7 @@ Password for every login: `Password123!`.
 **Login:** `es@ubec.test` (Executive Secretary).
 
 **Show:**
-1. **Portfolio** → **Overview**: the map. Pins across all six zones: North Central (FCT, Niger), North West (Kano, Kaduna, Sokoto), North East (Borno), South West (Lagos, Oyo, Ogun), South East (Enugu, Anambra), South South (Rivers).
+1. **Portfolio** → **Overview**: the map. Pins across all six zones: North Central (FCT, Niger), North West (Kano, Kaduna, Sokoto), North East (Borno), South West (Lagos, Oyo, Ogun), South East (Enugu, Anambra), South South (Delta, live; Rivers, archived).
 2. The register below the map: codes read **LOT n BATCH m** (e.g. Demo 1, LOT 1 BATCH 1), with the **Intervention year** column beside them. Point at LOT 1 BATCH 1 twice: Demo 1 (2026, FCT) and the Lagos project in its defects liability period (2025): the year column tells them apart.
 3. Filters: **Zone** = North West → the register and the map narrow to Kano, Kaduna and Sokoto. **State** = Kano → Demo 2 and the imported Kano project. **LGA** = Dala → Demo 2 only. Clear the filters.
 4. Demo 2 (LOT 4 BATCH 1, 2026): its alert chips (**Delayed**, **Stalled**, **Monitoring overdue**, **Paid ahead of work done**). Background 15 (LOT 1 BATCH 5, 2026) in Borno: **Stalled**.
@@ -134,11 +136,71 @@ Do not finish the draft. Leave it; the reseed removes it.
 | :--- | :--- |
 | No **Switch user** in the menu | The web build is not a demo build: set `VITE_DEMO_MODE=true` in `web/.env` and restart the web dev server. Meanwhile sign out and in with the logins in [demo_accounts.md](demo_accounts.md). |
 | Codes show as `PRG-…` | The database has the normal seed, not the overlay. Restore the snapshot or reseed with `SEED_PROFILE=ubec-demo`. |
-| A zone has no pin | Check the zone filter is cleared. South South has one project (Rivers, closed and archived); if the map hides archived projects, say so and filter the register by South South instead. |
+| A zone has no pin | Check the zone filter is cleared. South South has a live project in Delta (LOT 1 BATCH 2, 2026, Asaba) and the archived Rivers project; the map leaves archived projects out. |
 | The intervention year offers other years | The server date or the fiscal year start month differs; say "this year and next" and move on. |
 | The phone does not show the visit | Pull to refresh; check the visit was **published**, not only planned. |
 | A photo won't upload | The report waits in the Outbox; approve it once it lands, or move on and come back. |
 | Anything after the demo | Restore the `pg_dump` snapshot before the next rehearsal. |
+
+---
+
+## Wave 4 scenes (add-on, 2026-11-26)
+
+**Written:** 2026-11-26, after the wave 4 build. **Not yet rehearsed.** Everything in this section is wave 4. Each scene stands alone: slot it after the wave 1 scene named, or show it on request. Uploading the list changes the database: restore the snapshot afterwards ([demo_accounts.md](demo_accounts.md)).
+
+| Scene | Login | Slot after | Length |
+| :--- | :--- | :--- | :--- |
+| W4-A. Approved list upload | `dpp@ubec.test` (Director, Physical Planning) | Scene 2 | 2 min |
+| W4-B. Visit calendar | `me.officer@ubec.test` (M&E Officer) | Scene 4 (web part) | 1 min |
+| W4-C. Payments Breakdown | `finance@ubec.test` (Finance Officer) | Scene 3 | 2 min |
+
+**Before you start:** the demo pack file `saas_updates/demo_pack/15 Approved list upload.xlsx` on the presenting laptop (`npm run demo:pack` in `server/` writes it). For the optional link, open it once before the demo and type `2027-LOT-1-BATCH-1` in row 1's **Project ID** (LEA Primary School, Bwari): save it as a second copy so both versions are at hand.
+
+### W4-A. Director, Physical Planning: upload the approved list (2 min)
+
+**Show:**
+1. **Needs assessment**: the 2025 and 2026 lists (Direct Intervention schedule, BEAPs), Demo 2's budget mismatch. 2027 has no list yet.
+2. **Upload approved list** → **Download template**: point at the Instructions sheet, the List sheet (year, kind, State for a BEAP) and the Rows sheet. Close it.
+3. Choose `15 Approved list upload.xlsx`. **Check the approved list**: the 2027 Approved Projects & Implementation Schedule, 6 new rows (FCT, Kano ×2, Lagos, Borno, Sokoto), total ₦248,550,000. With the linked copy: row 1 links draft #11 (LOT 1 BATCH 1, 2027).
+4. **Confirm**: the 2027 list opens with its rows' match status and "Uploaded <today> by Ifeoma Nwosu · <file>".
+
+**Say:**
+> "The Board approves the list once a year. You upload it as it is, in this template; the platform checks every row before anything is saved, and a file with one error is refused whole. Next year's revision updates the same list: rows are matched by their reference, so projects already linked stay linked.
+>
+> From then on every project is compared with its approved estimate, and a budget that drifts beyond 10% is flagged, as you saw on the Kano project."
+
+Only the Director, Physical Planning and the System Administrator see the upload button; the Executive Secretary sees the lists.
+
+### W4-B. M&E Officer: the monitoring calendar (1 min)
+
+**Show:**
+1. Demo 1 (LOT 1 BATCH 1, 2026) → **Monitoring** → **Visits** → **Calendar**: the month's visits, coloured and with an icon per status, legend below. **Week** for the detail; a busy day shows "+N more", which opens that week.
+2. Click a visit: the same visit drawer as the list.
+3. **Portfolio** → **Visits** (the planner) → **Calendar**: every visible project's visits on one month, with the planner's filters.
+
+**Say:**
+> "The same plan, as a calendar: who goes where this month, what was approved, what was missed. It reads the plan; changes are still made in the list, so nothing moves by accident."
+
+### W4-C. Finance Officer: where the money went (2 min)
+
+**Show:**
+1. **Portfolio** → **Payments** (this fiscal year) → **Breakdown** → **Zone**: gross paid, retention and net per zone; the totals row equals the cards above.
+2. Click **North West** → its States; click **Kano** → its LGAs. Demo 2 (LOT 4 BATCH 1) has schools in Dala, Gwale and Kano Municipal: its payments show under each LGA, marked "shared across LGAs"; the total still counts them once. Click an LGA → its projects; a project opens its payments page.
+3. Clear the filters. In the payments list, **Group by** → **Quarter**: subtotal rows per quarter, covering every payment in the period, not only the page shown.
+4. Breakdown back to **Zone** → **Export to Excel**: sheets Summary, **Breakdown** (by zone) and Payments.
+
+**Say:**
+> "Finance asked for one question answered: how much has gone to each zone, State and LGA this year. Any grouping, any period, and straight to Excel. A project with schools in three LGAs is shown in each, and flagged, so the LGA figures add up honestly."
+
+### Wave 4 recovery
+
+| Problem | Recovery |
+| :--- | :--- |
+| No **Upload approved list** button | Signed in as someone without `approved_lists:manage`; switch to the Director, Physical Planning. |
+| The check step shows the 2027 rows as unchanged | The list was uploaded in an earlier rehearsal: restore the snapshot. Meanwhile say "uploading the same list again changes nothing". |
+| Row 1 says the project was not found | The database has the normal seed (no `2027-LOT-1-BATCH-1`) or the code was mistyped; upload the copy with Project ID blank. |
+| The calendar month is empty | Go to the next month (Demo 1's routine visits are weekly from the seed day). |
+| Breakdown shows no LGA rows under Kano | The period filter excludes Demo 2's payments (70 and 20 days before the seed day); set the period to **All time**. |
 
 ## Words to use (glossary)
 

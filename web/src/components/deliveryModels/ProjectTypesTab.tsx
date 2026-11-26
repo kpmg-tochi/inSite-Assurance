@@ -236,6 +236,17 @@ function issuesForDraft(d: Draft): EditorIssue[] {
   return [...local, ...shared];
 }
 
+/** Field names as the editor labels them, so a refusal never shows a payload key. */
+const GENERAL_FIELD_LABELS: Record<string, string> = { name: "Name", code: "Code", colour: "Colour", description: "Description" };
+const MILESTONE_FIELD_LABELS: Record<string, string> = {
+  label: "label",
+  key: "key",
+  description: "description",
+  anchorMilestoneKey: "counted from",
+  offsetValue: "days",
+  requiredDocumentTypeCodes: "documents needed",
+};
+
 /** Validation issues of the save payload, each placed in the general block or a tab. */
 function issuesFor(payload: SaveProjectTypeRequestInput, skipPayments = false): EditorIssue[] {
   const parsed = SaveProjectTypeRequestSchema.safeParse(payload);
@@ -245,9 +256,11 @@ function issuesFor(payload: SaveProjectTypeRequestInput, skipPayments = false): 
     const section = projectTypeEditorSectionForPath(i.path);
     const [root, key, index, field] = i.path;
     if (root === "config" && key === "contractMilestones" && typeof index === "number") {
-      return { section, message: `Milestone ${index + 1}${field ? ` (${String(field)})` : ""}: ${i.message}` };
+      const fieldLabel = field ? MILESTONE_FIELD_LABELS[String(field)] ?? String(field) : null;
+      return { section, message: `Milestone ${index + 1}${fieldLabel ? ` (${fieldLabel})` : ""}: ${i.message}` };
     }
     if (root === "workflowTemplateId") return { section, message: "Choose a workflow template." };
+    if (typeof root === "string" && GENERAL_FIELD_LABELS[root]) return { section, message: `${GENERAL_FIELD_LABELS[root]}: ${i.message}` };
     const where = (root === "config" ? i.path.slice(1) : i.path).map(String).join(".");
     return { section, message: where ? `${where}: ${i.message}` : i.message };
   });
@@ -612,8 +625,8 @@ export function ProjectTypesTab() {
       cell: (t) => (
         <div className="flex items-center gap-2">
           <span className="h-3 w-3 rounded-full" style={{ background: t.colour ?? "#94a3b8" }} />
+          {/* The stored code (e.g. CENTRAL) is edited in the type's General block, not shown in the list (owner decision 4). */}
           <span className="font-semibold text-slate-900">{t.name}</span>
-          <span className="text-[11px] text-slate-500">{t.code}</span>
           {t.isDefault && <Star className="w-3.5 h-3.5 text-amber-500" aria-label="Default" />}
         </div>
       ),

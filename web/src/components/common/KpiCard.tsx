@@ -73,7 +73,7 @@ export function KpiCard({
         )}
         <div className="flex items-center gap-2">
           {badge}
-          <span className="text-[11px] font-medium text-slate-400 text-right truncate">
+          <span className="text-[11px] font-medium text-slate-500 text-right truncate">
             {title}
           </span>
         </div>

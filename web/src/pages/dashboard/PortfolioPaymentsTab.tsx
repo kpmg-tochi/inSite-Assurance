@@ -6,24 +6,39 @@ import {
   PAYMENT_KIND_LABELS,
   PaymentKindEnum,
   formatProjectCode,
+  lgaByCode,
+  stateByCode,
   zoneName,
   type NigeriaZoneCode,
   type PaymentKind,
+  type PaymentsBreakdownBy,
+  type PaymentsBreakdownRowDto,
   type PeriodSelection,
+  type PortfolioPaymentsBreakdownQuery,
   type PortfolioPaymentRowDto,
   type PortfolioPaymentsQuery,
   type PortfolioPaymentsSummaryDto,
 } from "@insite/shared";
 import { useTerm } from "../../lib/auth-context";
-import { formatNaira } from "../../lib/formatters";
+import { formatDateShort, formatNaira } from "../../lib/formatters";
 import { useGuardedNavigate } from "../../lib/navigationGuard";
 import { CustomSelect, KpiCard } from "../../components/common";
 import { lgaOptions, stateOptions, zoneOptions } from "../../components/common/AdminAreaSelect";
 import { ExportExcelButton } from "../../components/common/ExportExcelButton";
 import { PeriodFilter, browserToday, periodLabel, periodQuery, usePeriodUrlState } from "../../components/common/PeriodFilter";
 import { PaidVsContractSumBar } from "../../components/payments/PaidVsContractSumBar";
+import { BREAKDOWN_DRILL_NEXT, PaymentsBreakdownPanel } from "../../components/payments/PaymentsBreakdownPanel";
+import {
+  GROUP_ROW_CLASS,
+  PaymentGroupingControl,
+  groupPaymentRows,
+  paymentListItemKey,
+  withGroupRows,
+  type PaymentListGrouping,
+  type PaymentListItem,
+} from "../../components/payments/paymentListGroups";
 import { StandardTable, TableBadge, type TableColumnDef } from "../../components/table";
-import { usePortfolioPaymentsQuery, usePortfolioPaymentsSummaryQuery } from "../../queries/payments/usePaymentsQueries";
+import { usePortfolioPaymentsBreakdownQuery, usePortfolioPaymentsQuery, usePortfolioPaymentsSummaryQuery } from "../../queries/payments/usePaymentsQueries";
 import { useProjectTypesQuery } from "../../queries/deliveryModels/useDeliveryModelQueries";
 import { useProjectRegisterOptionsQuery } from "../../queries/projects/useProjectsQueries";
 import { useExportPortfolioPaymentsMutation } from "../../mutations/screenExports/useScreenExportMutations";
@@ -32,7 +47,9 @@ import { useExportPortfolioPaymentsMutation } from "../../mutations/screenExport
  * Client demo updates G.2: every payment in the period across the projects the user can see (the
  * directory's rule: a SUBEB sees its own), with the period's totals and money against progress.
  * `payments:view` (the workspace home shows the tab only then). The period lives in the URL; the
- * other filters are local to the tab.
+ * other filters are local to the tab. Wave 4: the Breakdown table (drill zone → State → LGA → project,
+ * contractor → project, quarter → month → project) sets the tab's own filters, so the cards, the list
+ * and the export follow; the list can be grouped by month or quarter with subtotals from the server.
  */
 
 const PAGE_SIZE = 25;
@@ -86,8 +103,14 @@ export function PortfolioPaymentsTab({ onOpenProject }: { onOpenProject?: (proje
   const types = useProjectTypesQuery(true).data ?? [];
   const registerOptions = useProjectRegisterOptionsQuery().data;
   const exportPayments = useExportPortfolioPaymentsMutation();
+  const [breakdownBy, setBreakdownBy] = useState<PaymentsBreakdownBy>("state");
+  const [grouping, setGrouping] = useState<PaymentListGrouping>("none");
+  /** Breakdown drills, newest last: what each drill changed, so "Back to <level>" can restore it (WEB-DEMO4-14). */
+  const [drillStack, setDrillStack] = useState<Array<{ by: PaymentsBreakdownBy; filters: TabFilters; period: PeriodSelection }>>([]);
 
   const set = <K extends keyof TabFilters>(key: K, value: TabFilters[K]) => {
+    // A filter chosen by hand starts a new path: there is nothing to go back to.
+    setDrillStack([]);
     setFilters((f) => {
       const next = { ...f, [key]: value };
       // A zone narrows the states; a state the LGAs.
@@ -127,6 +150,13 @@ export function PortfolioPaymentsTab({ onOpenProject }: { onOpenProject?: (proje
 
   const summaryQ = usePortfolioPaymentsSummaryQuery(query);
   const listQ = usePortfolioPaymentsQuery(listQuery);
+  const breakdownQuery = useMemo<Partial<PortfolioPaymentsBreakdownQuery>>(() => ({ ...query, by: breakdownBy }), [query, breakdownBy]);
+  const groupingQuery = useMemo<Partial<PortfolioPaymentsBreakdownQuery>>(
+    () => ({ ...query, by: grouping === "none" ? undefined : grouping }),
+    [query, grouping]
+  );
+  const breakdownQ = usePortfolioPaymentsBreakdownQuery(breakdownQuery);
+  const groupingQ = usePortfolioPaymentsBreakdownQuery(groupingQuery, grouping !== "none");
   const summary = summaryQ.data;
   const list = listQ.data;
   useEffect(() => {
@@ -135,12 +165,74 @@ export function PortfolioPaymentsTab({ onOpenProject }: { onOpenProject?: (proje
     }
   }, [summary, calendar]);
 
+  /** The export: the list's filters and the Breakdown's grouping (sheet Breakdown). */
+  const exportQuery: Partial<PortfolioPaymentsBreakdownQuery> = { ...listQuery, page: undefined, pageSize: undefined, by: breakdownBy };
   const pageCount = list ? Math.max(1, Math.ceil(list.total / list.pageSize)) : 1;
   const anyFilter = Object.keys(query).some((k) => k !== "from" && k !== "to") || filters.includeVoided;
   const openPayments = (projectId: string) => navigate(`/app/projects/${projectId}/payments`);
 
-  const columns: TableColumnDef<PortfolioPaymentRowDto>[] = [
-    { id: "date", header: "Paid on", width: "w-28", cell: (p) => <span className="text-xs tabular-nums">{p.paidOn}</span> },
+  /** Drill down: narrow the tab's own filters (or the period), then show the next level. */
+  const drill = (row: PaymentsBreakdownRowDto) => {
+    const by = breakdownQ.data?.by ?? breakdownBy;
+    const next = BREAKDOWN_DRILL_NEXT[by];
+    if (by !== "project") setDrillStack((s) => [...s, { by, filters, period }]);
+    switch (by) {
+      case "project":
+        openPayments(row.key);
+        return;
+      case "zone":
+        setFilters((f) => ({ ...f, zone: row.key as NigeriaZoneCode, stateCode: "", lgaCode: "" }));
+        break;
+      case "state":
+        setFilters((f) => ({ ...f, zone: f.zone && f.zone !== stateZone(row.key) ? "" : f.zone, stateCode: row.key, lgaCode: "" }));
+        break;
+      case "lga": {
+        const stateCode = lgaByCode(row.key)?.stateCode;
+        if (!stateCode) return;
+        setFilters((f) => ({ ...f, zone: f.zone && f.zone !== stateZone(stateCode) ? "" : f.zone, stateCode, lgaCode: row.key }));
+        break;
+      }
+      case "contractor":
+        setFilters((f) => ({ ...f, contractorOrganizationId: row.key }));
+        break;
+      case "quarter": {
+        const m = /^(\d{4})-Q([1-4])$/.exec(row.key);
+        if (!m) return;
+        setPeriod({ preset: "QUARTER", fiscalYear: Number(m[1]), quarter: Number(m[2]) });
+        break;
+      }
+      case "month": {
+        const m = /^(\d{4})-(\d{2})$/.exec(row.key);
+        if (!m) return;
+        const last = new Date(Date.UTC(Number(m[1]), Number(m[2]), 0)).getUTCDate();
+        setPeriod({ preset: "CUSTOM", from: `${row.key}-01`, to: `${row.key}-${String(last).padStart(2, "0")}` });
+        break;
+      }
+    }
+    if (next) setBreakdownBy(next);
+  };
+
+  /** Back up one drill: the filters, period and grouping as they were before it. */
+  const lastDrill = drillStack.length > 0 ? drillStack[drillStack.length - 1] : null;
+  const drillBack = () => {
+    if (!lastDrill) return;
+    setFilters(lastDrill.filters);
+    setPeriod(lastDrill.period);
+    setBreakdownBy(lastDrill.by);
+    setDrillStack((s) => s.slice(0, -1));
+  };
+  const chooseBreakdownBy = (by: PaymentsBreakdownBy) => {
+    setDrillStack([]);
+    setBreakdownBy(by);
+  };
+
+  const listItems = useMemo(
+    () => groupPaymentRows(list?.rows ?? [], grouping, calendar.fiscalYearStartMonth, groupingQ.data),
+    [list, grouping, calendar.fiscalYearStartMonth, groupingQ.data]
+  );
+
+  const paymentColumns: TableColumnDef<PortfolioPaymentRowDto>[] = [
+    { id: "date", header: "Paid on", width: "w-28", cell: (p) => <span className="whitespace-nowrap text-xs tabular-nums">{formatDateShort(p.paidOn)}</span> },
     {
       id: "project",
       header: "Project",
@@ -320,6 +412,9 @@ export function PortfolioPaymentsTab({ onOpenProject }: { onOpenProject?: (proje
               onClick={() => {
                 setFilters(NO_FILTERS);
                 setSearch("");
+                // Back to the grouping the drills started from.
+                if (drillStack.length > 0) setBreakdownBy(drillStack[0].by);
+                setDrillStack([]);
               }}
               className="text-xs font-semibold text-brand-primary hover:underline"
             >
@@ -333,16 +428,36 @@ export function PortfolioPaymentsTab({ onOpenProject }: { onOpenProject?: (proje
       {summary && <SummaryCards s={summary} period={periodLabel(period, calendar.today, calendar.fiscalYearStartMonth)} />}
       {summary && <MoneyAgainstProgress s={summary} />}
 
-      <StandardTable<PortfolioPaymentRowDto>
+      <PaymentsBreakdownPanel
+        by={breakdownBy}
+        onByChange={chooseBreakdownBy}
+        data={breakdownQ.data}
+        loading={breakdownQ.isFetching}
+        error={breakdownQ.isError}
+        onDrill={drill}
+        backTo={lastDrill?.by ?? null}
+        onBack={drillBack}
+      />
+
+      <StandardTable<PaymentListItem>
         title="Payments"
-        subtitle={list ? `${list.total} payment(s)${filters.includeVoided ? " incl. voided" : ""} · newest first` : undefined}
+        subtitle={
+          list
+            ? `${list.total} payment(s)${filters.includeVoided ? " incl. voided" : ""} · newest first${
+                grouping !== "none" ? " · subtotals cover every payment in the period, voided not counted" : ""
+              }`
+            : undefined
+        }
         search={{ value: search, onChange: setSearch, placeholder: "Search references, projects" }}
-        headerActions={<ExportExcelButton onDark pending={exportPayments.isPending} onClick={() => exportPayments.mutate({ ...listQuery, page: undefined, pageSize: undefined })} />}
-        columns={columns}
-        data={list?.rows ?? []}
-        keyExtractor={(p) => p.id}
-        onRowClick={(p) => openPayments(p.projectId)}
-        rowClassName={(p) => (p.voided ? "opacity-70" : "")}
+        filters={<PaymentGroupingControl value={grouping} onChange={setGrouping} />}
+        headerActions={<ExportExcelButton onDark pending={exportPayments.isPending} onClick={() => exportPayments.mutate(exportQuery)} />}
+        columns={withGroupRows(paymentColumns, groupingQ.isFetching)}
+        data={listItems}
+        keyExtractor={paymentListItemKey}
+        onRowClick={(item) => {
+          if (item.type === "payment") openPayments(item.payment.projectId);
+        }}
+        rowClassName={(item) => (item.type === "group" ? GROUP_ROW_CLASS : item.payment.voided ? "opacity-70" : "")}
         loading={listQ.isLoading}
         pageSize={false}
         footer={
@@ -498,6 +613,11 @@ function Meter({ label, pct, tone }: { label: string; pct: number; tone: "brand"
       </div>
     </div>
   );
+}
+
+/** The zone of a State code ("" when unknown), to keep a drilled zone filter consistent. */
+function stateZone(stateCode: string): string {
+  return stateByCode(stateCode)?.zone ?? "";
 }
 
 export default PortfolioPaymentsTab;

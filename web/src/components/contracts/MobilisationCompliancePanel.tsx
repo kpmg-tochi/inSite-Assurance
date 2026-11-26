@@ -91,7 +91,7 @@ function Row({ projectId, r }: { projectId: string; r: MobilisationComplianceRow
       </td>
       <td className="py-2.5 pr-3 align-top">
         {r.missingDocuments.length === 0 ? (
-          <span className="text-slate-400">None</span>
+          <span className="text-slate-500">None</span>
         ) : (
           <ul className="space-y-0.5">
             {r.missingDocuments.map((d) => (

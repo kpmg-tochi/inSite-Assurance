@@ -54,7 +54,7 @@ export function webActor(webUser: WebJwtPayload): MilestoneActor {
 export const SYSTEM_ACTOR: MilestoneActor = {
   actorType: 'SYSTEM',
   actorId: 'contract-milestones',
-  actorDisplayName: 'InSite (contract milestones)',
+  actorDisplayName: 'System (contract milestones)',
   userId: null,
 };
 

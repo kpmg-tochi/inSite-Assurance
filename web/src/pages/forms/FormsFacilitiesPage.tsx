@@ -55,7 +55,7 @@ export function FormsFacilitiesSettings() {
     { id: "facilities", label: "Facilities", show: canFacilities },
     { id: "subforms", label: "Facility sub-forms", show: canForms },
     { id: "sections", label: "Fixed sections", show: canForms },
-    { id: "templates", label: "Visit form templates", show: canForms },
+    { id: "templates", label: "Monitoring form templates", show: canForms },
     { id: "preview", label: "Preview", show: canForms },
   ];
   const visible = sections.filter((s) => s.show);
@@ -78,7 +78,7 @@ export function FormsFacilitiesSettings() {
   return (
     <div className="space-y-4">
       <p className="text-xs text-slate-500">
-        The facilities a project can include, and the forms officers fill in on a visit. Preview a form against a real project.
+        The facilities a project can include, and the forms officers fill in on a monitoring visit. Preview a form against a real project.
       </p>
       {visible.length === 1 ? (
         body

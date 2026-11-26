@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import type { PortfolioPaymentsQuery, ProjectPaymentsQuery } from '@insite/shared';
-import { getPortfolioPaymentsSummary, getProjectPayments, listPortfolioPayments } from '../../api/payments/paymentsApi';
+import type { PortfolioPaymentsBreakdownQuery, PortfolioPaymentsQuery, ProjectPaymentsQuery } from '@insite/shared';
+import { getPortfolioPaymentsBreakdown, getPortfolioPaymentsSummary, getProjectPayments, listPortfolioPayments } from '../../api/payments/paymentsApi';
 
 /** The project's payments; the filters (G.1) are the key's last part, so invalidating the prefix refreshes every view. */
 export const projectPaymentsKey = (projectId: string | null | undefined) => ['project-payments', projectId] as const;
@@ -28,6 +28,15 @@ export const usePortfolioPaymentsSummaryQuery = (query: Partial<PortfolioPayment
   useQuery({
     queryKey: [...portfolioPaymentsKey, 'summary', query],
     queryFn: () => getPortfolioPaymentsSummary(query),
+    enabled,
+    placeholderData: keepPreviousData,
+  });
+
+/** Wave 4: the Breakdown table and the list's month / quarter subtotals (same key prefix, so payment changes refresh it). */
+export const usePortfolioPaymentsBreakdownQuery = (query: Partial<PortfolioPaymentsBreakdownQuery>, enabled = true) =>
+  useQuery({
+    queryKey: [...portfolioPaymentsKey, 'breakdown', query],
+    queryFn: () => getPortfolioPaymentsBreakdown(query),
     enabled,
     placeholderData: keepPreviousData,
   });

@@ -22,6 +22,7 @@ import { getProcessConfig } from '../process/processConfig.service';
 import { cocGateReason } from '../completion/completion.service';
 import { fmtNgn, projectToday } from '../closeout/closeoutGate';
 import { loadSprintInProject } from '../../utils/ownership';
+import { activePaymentHold } from '../contractorFlags/contractorFlags.service';
 
 /**
  * Payment record (redesign R1b). Payments are made outside the platform; finance records them here
@@ -115,7 +116,7 @@ export function assertPeriod(q: { from?: string; to?: string }): void {
  */
 export async function getProjectPayments(projectId: string, viewer: WebJwtPayload, q: ProjectPaymentsQuery = {}): Promise<ProjectPaymentsSummaryDto> {
   assertPeriod(q);
-  const [project, payments, openDefects, cocIssued, sprints] = await Promise.all([
+  const [project, payments, openDefects, cocIssued, sprints, paymentHold] = await Promise.all([
     prisma.project.findUniqueOrThrow({
       where: { id: projectId },
       select: {
@@ -126,6 +127,7 @@ export async function getProjectPayments(projectId: string, viewer: WebJwtPayloa
         retentionReleasedNgn: true,
         disbursedToDateNgn: true,
         timezone: true,
+        status: true,
         tenant: { select: { fiscalYearStartMonth: true } },
       },
     }),
@@ -133,6 +135,7 @@ export async function getProjectPayments(projectId: string, viewer: WebJwtPayloa
     prisma.retentionDefectTicket.count({ where: { projectId, status: { in: OPEN_DEFECT_STATUSES } } }),
     prisma.completionCertificate.count({ where: { projectId, status: 'ISSUED' } }),
     prisma.projectSprint.findMany({ where: { projectId }, orderBy: { number: 'asc' }, select: { id: true, number: true, name: true } }),
+    activePaymentHold(prisma, projectId), // F.4
   ]);
   const today = projectToday(project.timezone);
   const live = payments.filter((p) => p.voidedAt === null);
@@ -153,9 +156,11 @@ export async function getProjectPayments(projectId: string, viewer: WebJwtPayloa
     today,
     sprints,
     exceptionCount: rows.filter((r) => !r.voided).reduce((s, r) => s + r.exceptions.length, 0),
-    canRecord: hasWebPermission(viewer, RECORD),
+    // An archived project is read-only (the guard refuses the write), so nobody may record there.
+    canRecord: hasWebPermission(viewer, RECORD) && project.status !== 'ARCHIVED',
     payments: filterPayments(rows, q),
     fiscalYearStartMonth: project.tenant.fiscalYearStartMonth,
+    paymentHold,
   };
 }
 
@@ -204,6 +209,17 @@ export async function recordPayment(projectId: string, webUser: WebJwtPayload, i
     }
     const net = roundNgn2(gross - held);
 
+    // F.4 (wave 3): a payment hold on the contractor needs an override reason and flags the payment.
+    // A retention release is not held (it is the retention already earned).
+    const hold = input.kind === 'RETENTION_RELEASE' ? null : await activePaymentHold(tx, projectId);
+    const holdOverrideReason = hold ? input.holdOverrideReason?.trim() || null : null;
+    if (hold && !holdOverrideReason) {
+      throw new AppError('A payment hold is in effect on the contractor. Say why this payment is made during the hold.', 422, 'PAYMENT_HOLD_OVERRIDE_REQUIRED', {
+        flagId: hold.flagId,
+        actionId: hold.actionId,
+      });
+    }
+
     // Exceptions: recorded, never blocking.
     const exceptions: PaymentException[] = [];
     const cocMissing = await cocGateReason(tx, projectId, 'FINAL_PAYMENT', project.projectTypeSnapshotJson);
@@ -222,6 +238,10 @@ export async function recordPayment(projectId: string, webUser: WebJwtPayload, i
         exceptions.push('PAID_ABOVE_CONTRACT_SUM');
       }
     }
+    if (hold) exceptions.push('PAID_DURING_HOLD');
+    const description = holdOverrideReason
+      ? [input.description?.trim(), `Paid during payment hold: ${holdOverrideReason}`].filter(Boolean).join(' · ')
+      : input.description ?? null;
 
     const created = await tx.projectPayment.create({
       data: {
@@ -233,7 +253,7 @@ export async function recordPayment(projectId: string, webUser: WebJwtPayload, i
         netAmountNgn: net,
         retentionOverrideReason: overrideReason,
         reference: input.reference,
-        description: input.description ?? null,
+        description,
         source: 'MANUAL',
         exceptionsJson: exceptions as unknown as Prisma.InputJsonValue,
         recordedByUserId: webUser.userId,
@@ -269,6 +289,7 @@ export async function recordPayment(projectId: string, webUser: WebJwtPayload, i
         exceptions,
         sprintId: sprint?.id ?? null,
         sprintNumber: sprint?.number ?? null,
+        ...(hold ? { paymentHold: { flagId: hold.flagId, actionId: hold.actionId, overrideReason: holdOverrideReason } } : {}),
       },
     });
     if (exceptions.length > 0) {

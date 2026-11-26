@@ -26,7 +26,7 @@ export function tabItemClass(selected: boolean): string {
 }
 /** A count inside a tab item ("All 7"): readable on both the green and the light track. */
 export function tabCountClass(selected: boolean): string {
-  return `ml-1.5 tabular-nums font-normal ${selected ? "text-white/80" : "text-slate-500"}`;
+  return `ml-1.5 tabular-nums font-normal ${selected ? "text-white" : "text-slate-600"}`;
 }
 
 export const tabId = (idPrefix: string, id: string) => `${idPrefix}-tab-${id}`;

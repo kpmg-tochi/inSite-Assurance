@@ -45,9 +45,9 @@ export const useCreateVisitMutation = (projectId: string) => {
     mutationFn: (body: CreateVisitRequestInput) => createVisit(projectId, body),
     onSuccess: (v) => {
       invalidateVisits(qc, projectId);
-      toast.success(v.status === 'PROPOSED' ? 'Visit proposed.' : 'Visit planned and sent to the officers.');
+      toast.success(v.status === 'PROPOSED' ? 'Monitoring visit proposed.' : 'Monitoring visit planned and sent to the officers.');
     },
-    onError: (err) => toast.error(errorMessage(err, 'Could not create the visit.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not create the monitoring visit.')),
   });
 };
 
@@ -57,9 +57,9 @@ export const useUpdateVisitMutation = (projectId: string) => {
     mutationFn: (p: { visitId: string; body: UpdateVisitRequest }) => updateVisit(projectId, p.visitId, p.body),
     onSuccess: () => {
       invalidateVisits(qc, projectId);
-      toast.success('Visit updated.');
+      toast.success('Monitoring visit updated.');
     },
-    onError: (err) => toast.error(errorMessage(err, 'Could not update the visit.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not update the monitoring visit.')),
   });
 };
 
@@ -69,9 +69,9 @@ export const usePublishVisitsMutation = (projectId: string) => {
     mutationFn: (visitIds: string[]) => publishVisits(projectId, visitIds),
     onSuccess: (list) => {
       invalidateVisits(qc, projectId);
-      toast.success(`${list.length} visit(s) published to their officers.`);
+      toast.success(`${list.length} monitoring visit(s) published to their officers.`);
     },
-    onError: (err) => toast.error(errorMessage(err, 'Could not publish the visits.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not publish the monitoring visits.')),
   });
 };
 
@@ -81,9 +81,9 @@ export const useCancelVisitMutation = (projectId: string) => {
     mutationFn: (p: { visitId: string; body: CancelVisitRequest }) => cancelVisit(projectId, p.visitId, p.body),
     onSuccess: () => {
       invalidateVisits(qc, projectId);
-      toast.success('Visit cancelled.');
+      toast.success('Monitoring visit cancelled.');
     },
-    onError: (err) => toast.error(errorMessage(err, 'Could not cancel the visit.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not cancel the monitoring visit.')),
   });
 };
 
@@ -105,9 +105,9 @@ export const useGenerateVisitsMutation = (projectId: string) => {
     mutationFn: (body: GenerateVisitsRequestInput) => generateVisits(projectId, body),
     onSuccess: (r) => {
       invalidateVisits(qc, projectId);
-      toast.success(r.created ? `${r.created} visit(s) proposed from the plan.` : 'The plan has nothing new to propose.');
+      toast.success(r.created ? `${r.created} monitoring visit(s) proposed from the plan.` : 'The plan has nothing new to propose.');
     },
-    onError: (err) => toast.error(errorMessage(err, 'Could not run the visit plan.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not run the monitoring plan.')),
   });
 };
 
@@ -130,7 +130,7 @@ export const useReviewVisitSubmissionMutation = (projectId: string) => {
     onSuccess: (s) => {
       invalidateVisits(qc, projectId);
       qc.invalidateQueries({ queryKey: projectFindingsKey(projectId) });
-      toast.success(s.status === 'RETURNED' ? 'Returned to the officer.' : s.status === 'APPROVED' ? 'Visit accepted.' : 'Step approved.');
+      toast.success(s.status === 'RETURNED' ? 'Returned to the officer.' : s.status === 'APPROVED' ? 'Monitoring report accepted.' : 'Step approved.');
     },
     onError: (err) => toast.error(errorMessage(err, 'Could not record the review.')),
   });
@@ -152,7 +152,7 @@ export const useRaiseVisitFindingMutation = (projectId: string) => {
     onSuccess: () => {
       invalidateVisits(qc, projectId);
       qc.invalidateQueries({ queryKey: projectFindingsKey(projectId) });
-      toast.success('Finding raised; the next visits include a follow-up check.');
+      toast.success('Finding raised; the next monitoring visits include a follow-up check.');
     },
     onError: (err) => toast.error(errorMessage(err, 'Could not raise the finding.')),
   });
@@ -190,9 +190,9 @@ export const useSaveVisitOfficersMutation = (projectId: string) => {
     mutationFn: (userIds: string[]) => saveVisitOfficers(projectId, userIds),
     onSuccess: (data) => {
       qc.setQueryData(visitOfficersKey(projectId), data);
-      toast.success('Visit officers saved.');
+      toast.success('Monitoring officers saved.');
     },
-    onError: (err) => toast.error(errorMessage(err, 'Could not save the visit officers.')),
+    onError: (err) => toast.error(errorMessage(err, 'Could not save the monitoring officers.')),
   });
 };
 

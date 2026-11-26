@@ -93,6 +93,8 @@ export const WebNotificationCategoryEnum = z.enum([
   'PROJECT_STALLED',
   'SITE_UPDATE_OVERDUE',
   'SPEND_AHEAD_OF_PROGRESS',
+  // Client demo updates F.4 (wave 3)
+  'CONTRACTOR_FLAGGED',
 ]);
 export type WebNotificationCategory = z.infer<typeof WebNotificationCategoryEnum>;
 

@@ -77,7 +77,7 @@ export const SettingsScreen: React.FC = () => {
   const handleConfirmResetDemo = () => {
     Alert.alert(
       "Reset Demo Environment?",
-      "This will clear all local SQLite data and device profile settings, and reset everything submitted in the database (visit responses, monitoring reports, site log entries) back to the original seed.",
+      "This will clear all local SQLite data and device profile settings, and reset everything submitted in the database (monitoring visit responses, monitoring reports, site log entries) back to the original seed.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -108,7 +108,7 @@ export const SettingsScreen: React.FC = () => {
             <View style={styles.avatarTextContainer}>
               <Text style={styles.cardLabel}>Your profile</Text>
               <Text style={styles.helperText}>
-                Your name is recorded on the visits, photos and notes you send.
+                Your name is recorded on the monitoring visits, photos and notes you send.
               </Text>
             </View>
           </View>

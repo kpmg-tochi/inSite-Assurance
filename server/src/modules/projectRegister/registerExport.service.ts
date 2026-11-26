@@ -5,7 +5,10 @@ import {
   PortfolioOverviewProject,
   ProjectRegisterFilterOptionsDto,
   ProjectRegisterFilters,
+  ProjectSiteSummaryDto,
   projectStageChipLabel,
+  SCHOOL_LEVEL_LABELS,
+  SITE_STATUS_LABELS,
   resolveTerminology,
   stateByCode,
   zoneName,
@@ -70,10 +73,21 @@ export async function getRegisterFilterOptions(webUser: WebJwtPayload): Promise<
   };
 }
 
+/**
+ * One register line: a project, or (client demo updates C2, wave 2) one of its sites, listed right
+ * under the project as the client's register does (school, LGA, status, % complete; the contractor
+ * repeated on every site row).
+ */
 interface RegisterRow {
   p: PortfolioOverviewProject;
   contractSumNgn: number | null;
+  site?: ProjectSiteSummaryDto;
 }
+
+const isProjectRow = (r: RegisterRow) => r.site === undefined;
+const siteSchool = (s: ProjectSiteSummaryDto) => `${s.schoolName} (${SCHOOL_LEVEL_LABELS[s.schoolLevel]})`;
+const siteCode = (s: ProjectSiteSummaryDto) => `   Site ${s.siteNumber}`;
+const siteCount = (p: PortfolioOverviewProject) => p.sites?.length ?? 0;
 
 async function loadRegister(webUser: WebJwtPayload, filters: ProjectRegisterFilters) {
   const [overview, tenant] = await Promise.all([
@@ -83,15 +97,16 @@ async function loadRegister(webUser: WebJwtPayload, filters: ProjectRegisterFilt
       select: { name: true, timezone: true, brandingConfig: true, terminologyLabels: true },
     }),
   ]);
-  const sums = overview.projects.length
-    ? await prisma.project.findMany({ where: { id: { in: overview.projects.map((p) => p.id) } }, select: { id: true, contractSumNgn: true } })
-    : [];
-  const sumById = new Map(sums.map((s) => [s.id, s.contractSumNgn === null ? null : Number(s.contractSumNgn)]));
   const rows: RegisterRow[] = [...overview.projects]
     .sort((a, b) => a.codePrefix.localeCompare(b.codePrefix, undefined, { numeric: true }))
-    .map((p) => ({ p, contractSumNgn: sumById.get(p.id) ?? null }));
+    .flatMap((p) => {
+      const contractSumNgn = p.contractSumNgn;
+      return [{ p, contractSumNgn }, ...(p.sites ?? []).map((site) => ({ p, contractSumNgn, site }))];
+    });
+  const projectCount = overview.projects.length;
   return {
     rows,
+    projectCount,
     tenant,
     brand: workspaceShortName(tenant.name),
     zone: tenant.timezone || 'Africa/Lagos',
@@ -136,44 +151,58 @@ export function registerFileName(tenantName: string | null | undefined, date: st
 const scheduleText = (p: PortfolioOverviewProject) => p.scheduleVariance?.label ?? (p.status === 'ARCHIVED' ? 'Archived' : 'Not computed');
 const stageText = (p: PortfolioOverviewProject) =>
   p.stage ? `${projectStageChipLabel(p.stage)}${p.stage.contractTerminated ? ' (contract terminated)' : ''}` : '';
-const regionText = (p: PortfolioOverviewProject) => p.region?.name ?? p.stateLocation ?? '';
-/** Client demo updates C1/C3: zone and state from the national codes; codes as people read them. */
+/**
+ * Client demo updates C1/C3: zone and state from the national codes (an older project without a
+ * state code: the state it recorded, as the register table shows it); codes as people read them.
+ */
 const zoneText = (p: PortfolioOverviewProject) => zoneName(p.zone) ?? '';
-const stateText = (p: PortfolioOverviewProject) => stateByCode(p.stateCode)?.name ?? '';
+const stateText = (p: PortfolioOverviewProject) => stateByCode(p.stateCode)?.name ?? (p.stateLocation || p.region?.name || '');
 const codeText = (p: PortfolioOverviewProject) => formatProjectCode(p.codePrefix);
 
 export async function buildRegisterXlsx(webUser: WebJwtPayload, filters: ProjectRegisterFilters): Promise<{ buffer: Buffer; fileName: string }> {
   const now = new Date();
-  const { rows, tenant, brand, zone, term, canSeePaid } = await loadRegister(webUser, filters);
+  const { rows, projectCount, tenant, brand, zone, term, canSeePaid } = await loadRegister(webUser, filters);
   const filterText = await describeFilters(webUser.tenantId, filters);
+  // Site rows (wave 2) fill the site's own cells and repeat the contractor; project-only cells stay empty.
+  const projectOnly =
+    <T>(fn: (r: RegisterRow) => T) =>
+    (r: RegisterRow): T | null =>
+      r.site ? null : fn(r);
   const columns: ExportColumn<RegisterRow>[] = [
-    { header: 'Code', width: 18, value: (r) => codeText(r.p) },
-    { header: term, width: 22, value: (r) => r.p.externalReference },
-    { header: 'Project', width: 40, wrap: true, value: (r) => r.p.name },
-    { header: 'School', width: 30, wrap: true, value: (r) => r.p.primaryBeneficiary?.name ?? null },
-    { header: 'Zone', width: 14, value: (r) => zoneText(r.p) || null },
-    { header: 'State', width: 14, value: (r) => stateText(r.p) || null },
-    { header: 'Programme zone', width: 16, value: (r) => regionText(r.p) },
-    { header: 'LGA', width: 16, value: (r) => r.p.lgaLocation },
-    { header: 'Type', width: 20, value: (r) => r.p.projectType?.name ?? null },
-    { header: 'Owner', width: 22, wrap: true, value: (r) => r.p.owningOrganization?.name ?? null },
+    { header: 'Code', width: 18, value: (r) => (r.site ? siteCode(r.site) : codeText(r.p)) },
+    { header: term, width: 22, value: projectOnly((r) => r.p.externalReference) },
+    { header: 'Project', width: 40, wrap: true, value: projectOnly((r) => r.p.name) },
+    { header: 'School', width: 30, wrap: true, value: (r) => (r.site ? siteSchool(r.site) : siteCount(r.p) ? null : (r.p.primaryBeneficiary?.name ?? null)) },
+    { header: 'Zone', width: 14, value: projectOnly((r) => zoneText(r.p) || null) },
+    { header: 'State', width: 14, value: projectOnly((r) => stateText(r.p) || null) },
+    { header: 'LGA', width: 16, value: (r) => (r.site ? (r.site.lgaName ?? r.site.lgaCode) : r.p.lgaLocation) },
+    { header: 'Number of sites', width: 10, format: 'integer', value: projectOnly((r) => siteCount(r.p) || null) },
+    { header: 'Type', width: 20, value: projectOnly((r) => r.p.projectType?.name ?? null) },
+    { header: 'Owner', width: 22, wrap: true, value: projectOnly((r) => r.p.owningOrganization?.name ?? null) },
     { header: 'Contractor', width: 26, wrap: true, value: (r) => r.p.contractorName },
-    { header: 'Contract sum', width: 18, format: 'money', value: (r) => r.contractSumNgn ?? r.p.totalBudgetNgn },
-    ...(canSeePaid ? [{ header: 'Paid to date', width: 18, format: 'money' as const, value: (r: RegisterRow) => r.p.disbursedToDateNgn }] : []),
-    { header: 'Intervention year', width: 12, format: 'integer', value: (r) => r.p.interventionYear },
-    { header: 'Funding source', width: 26, wrap: true, value: (r) => r.p.fundingSource },
-    { header: 'Stage', width: 22, wrap: true, value: (r) => stageText(r.p) },
-    { header: 'Schedule', width: 16, value: (r) => scheduleText(r.p) },
-    { header: '% complete', width: 11, format: 'number', value: (r) => r.p.certifiedProgressPct },
-    { header: 'Progress basis', width: 18, value: (r) => (r.p.progressIsImported ? 'Reported at import' : 'Verified visits') },
+    { header: 'Contract sum', width: 18, format: 'money', value: projectOnly((r) => r.contractSumNgn) },
+    ...(canSeePaid
+      ? [{ header: 'Paid to date', width: 18, format: 'money' as const, value: projectOnly((r: RegisterRow) => r.p.disbursedToDateNgn) }]
+      : []),
+    { header: 'Intervention year', width: 12, format: 'integer', value: projectOnly((r) => r.p.interventionYear) },
+    { header: 'Funding source', width: 26, wrap: true, value: projectOnly((r) => r.p.fundingSource) },
+    { header: 'Stage', width: 22, wrap: true, value: (r) => (r.site ? SITE_STATUS_LABELS[r.site.status] : stageText(r.p)) },
+    { header: 'Schedule', width: 16, value: projectOnly((r) => scheduleText(r.p)) },
+    { header: '% complete', width: 11, format: 'number', value: (r) => (r.site ? r.site.progressPct : r.p.certifiedProgressPct) },
+    {
+      header: 'Progress basis',
+      width: 18,
+      value: (r) => (r.site ? 'Site BoQ lines' : r.p.progressIsImported ? 'Reported at import' : 'Approved monitoring reports'),
+    },
     {
       header: 'Last approved update',
       width: 14,
       format: 'date',
-      value: (r) => dateCell(r.p.lastApprovedUpdateAt ? zonedCalendarDate(new Date(r.p.lastApprovedUpdateAt), zone) : null),
+      value: projectOnly((r) => dateCell(r.p.lastApprovedUpdateAt ? zonedCalendarDate(new Date(r.p.lastApprovedUpdateAt), zone) : null)),
     },
-    { header: 'Open findings', width: 10, format: 'integer', value: (r) => r.p.openFindingsCount },
+    { header: 'Open findings', width: 10, format: 'integer', value: projectOnly((r) => r.p.openFindingsCount) },
   ];
+  const projectRows = rows.filter(isProjectRow);
   const moneyIndex = columns.findIndex((c) => c.header === 'Contract sum');
   const paidIndex = columns.findIndex((c) => c.header === 'Paid to date');
   const buffer = await buildExportWorkbook({
@@ -184,16 +213,16 @@ export async function buildRegisterXlsx(webUser: WebJwtPayload, filters: Project
       {
         name: 'Project register',
         title: [brand, 'Project register'].filter(Boolean).join(' · '),
-        hint: `${filterText}  |  ${rows.length} project${rows.length === 1 ? '' : 's'}  |  ${generatedLine(now, zone, webUser.fullName)}`,
+        hint: `${filterText}  |  ${projectCount} project${projectCount === 1 ? '' : 's'}  |  ${generatedLine(now, zone, webUser.fullName)}`,
         columns,
         rows,
         emptyText: 'No projects match these filters.',
-        totals: rows.length
+        totals: projectCount
           ? {
-              label: `${rows.length} project${rows.length === 1 ? '' : 's'}`,
+              label: `${projectCount} project${projectCount === 1 ? '' : 's'}`,
               values: {
-                [moneyIndex]: rows.reduce((s, r) => s + (r.contractSumNgn ?? r.p.totalBudgetNgn), 0),
-                ...(paidIndex >= 0 ? { [paidIndex]: rows.reduce((s, r) => s + r.p.disbursedToDateNgn, 0) } : {}),
+                [moneyIndex]: projectRows.reduce((s, r) => s + (r.contractSumNgn ?? 0), 0),
+                ...(paidIndex >= 0 ? { [paidIndex]: projectRows.reduce((s, r) => s + r.p.disbursedToDateNgn, 0) } : {}),
               },
             }
           : undefined,
@@ -205,40 +234,80 @@ export async function buildRegisterXlsx(webUser: WebJwtPayload, filters: Project
 
 const money = (n: number | null) => (n === null ? '' : `NGN ${Math.round(n).toLocaleString('en-NG')}`);
 
+/** "UBEC project register"; "Project register" without a short name (the PDF's title band). */
+export function registerTitle(tenantName: string | null | undefined): string {
+  const short = workspaceShortName(tenantName);
+  return short ? `${short} project register` : 'Project register';
+}
+
 export async function buildRegisterPdf(webUser: WebJwtPayload, filters: ProjectRegisterFilters): Promise<{ buffer: Buffer; fileName: string }> {
   const now = new Date();
-  const { rows, tenant, zone, term, canSeePaid } = await loadRegister(webUser, filters);
+  const { rows, projectCount, tenant, zone, term, canSeePaid } = await loadRegister(webUser, filters);
   const filterText = await describeFilters(webUser.tenantId, filters);
   const branding = parseTenantBranding(tenant.brandingConfig);
   const lastUpdate = (p: PortfolioOverviewProject) => (p.lastApprovedUpdateAt ? zonedCalendarDate(new Date(p.lastApprovedUpdateAt), zone) : '');
+  // Site rows (wave 2): the site's own cells and the contractor; project-only cells stay empty.
+  const projectOnly = (fn: (r: RegisterRow) => string) => (r: RegisterRow) => (r.site ? '' : fn(r));
   const columns: Array<RegisterPdfColumn & { value: (r: RegisterRow) => string }> = [
-    { header: `Code\n${term}`, weight: 9, value: (r) => [codeText(r.p), r.p.externalReference].filter(Boolean).join('\n') },
-    { header: 'Project / school', weight: 17, value: (r) => [r.p.name, r.p.primaryBeneficiary?.name].filter(Boolean).join('\n') },
-    { header: 'Zone · State', weight: 8, value: (r) => [zoneText(r.p), stateText(r.p)].filter(Boolean).join('\n') },
-    { header: 'State · LGA', weight: 8, value: (r) => [regionText(r.p), r.p.lgaLocation].filter(Boolean).join(' · ') },
-    { header: 'Type / owner', weight: 10, value: (r) => [r.p.projectType?.name, r.p.owningOrganization?.name].filter(Boolean).join('\n') },
+    {
+      header: `Code\n${term}`,
+      weight: 9,
+      value: (r) => (r.site ? siteCode(r.site) : [codeText(r.p), r.p.externalReference].filter(Boolean).join('\n')),
+    },
+    {
+      header: 'Project / school',
+      weight: 17,
+      value: (r) =>
+        r.site
+          ? siteSchool(r.site)
+          : [r.p.name, siteCount(r.p) ? `${siteCount(r.p)} ${siteCount(r.p) === 1 ? 'site' : 'sites'}` : r.p.primaryBeneficiary?.name].filter(Boolean).join('\n'),
+    },
+    { header: 'Zone · State', weight: 8, value: projectOnly((r) => [zoneText(r.p), stateText(r.p)].filter(Boolean).join('\n')) },
+    { header: 'LGA', weight: 8, value: (r) => (r.site ? (r.site.lgaName ?? r.site.lgaCode) : (r.p.lgaLocation ?? '')) },
+    { header: 'Type / owner', weight: 10, value: projectOnly((r) => [r.p.projectType?.name, r.p.owningOrganization?.name].filter(Boolean).join('\n')) },
     { header: 'Contractor', weight: 10, value: (r) => r.p.contractorName ?? '' },
-    { header: 'Contract sum', weight: 8, align: 'right', value: (r) => money(r.contractSumNgn ?? r.p.totalBudgetNgn) },
-    ...(canSeePaid ? [{ header: 'Paid to date', weight: 8, align: 'right' as const, value: (r: RegisterRow) => money(r.p.disbursedToDateNgn) }] : []),
-    { header: 'Year / funding', weight: 9, value: (r) => [r.p.interventionYear ? String(r.p.interventionYear) : '', r.p.fundingSource].filter(Boolean).join('\n') },
-    { header: 'Stage / schedule', weight: 10, value: (r) => [stageText(r.p), scheduleText(r.p)].filter(Boolean).join('\n') },
-    { header: '% complete', weight: 5, align: 'right', value: (r) => `${r.p.certifiedProgressPct.toFixed(1)}%${r.p.progressIsImported ? '*' : ''}` },
-    { header: 'Last approved update', weight: 7, align: 'center', value: (r) => lastUpdate(r.p) },
-    { header: 'Open findings', weight: 5, align: 'right', value: (r) => String(r.p.openFindingsCount) },
+    { header: 'Contract sum', weight: 8, align: 'right', value: projectOnly((r) => money(r.contractSumNgn)) },
+    ...(canSeePaid
+      ? [{ header: 'Paid to date', weight: 8, align: 'right' as const, value: projectOnly((r: RegisterRow) => money(r.p.disbursedToDateNgn)) }]
+      : []),
+    {
+      header: 'Year / funding',
+      weight: 9,
+      value: projectOnly((r) => [r.p.interventionYear ? String(r.p.interventionYear) : '', r.p.fundingSource].filter(Boolean).join('\n')),
+    },
+    {
+      header: 'Stage / schedule',
+      weight: 10,
+      value: (r) => (r.site ? SITE_STATUS_LABELS[r.site.status] : [stageText(r.p), scheduleText(r.p)].filter(Boolean).join('\n')),
+    },
+    {
+      header: '% complete',
+      weight: 5,
+      align: 'right',
+      value: (r) =>
+        r.site
+          ? r.site.progressPct === null
+            ? ''
+            : `${r.site.progressPct.toFixed(1)}%`
+          : `${r.p.certifiedProgressPct.toFixed(1)}%${r.p.progressIsImported ? '*' : ''}`,
+    },
+    { header: 'Last approved update', weight: 7, align: 'center', value: projectOnly((r) => lastUpdate(r.p)) },
+    { header: 'Open findings', weight: 5, align: 'right', value: projectOnly((r) => String(r.p.openFindingsCount)) },
   ];
   const buffer = await generateRegisterPdf({
     branding: {
       tenantName: tenant.name,
-      headerTitle: branding.pdfHeaderTitle || undefined,
+      // The tenant's PDF header title names the monitoring report; the register carries its own title.
+      headerTitle: registerTitle(tenant.name),
       footerDisclaimer: branding.pdfFooterDisclaimer || undefined,
       primaryColorHex: branding.primaryColorHex || undefined,
       timeZone: zone,
     },
     heading: 'Project register',
-    subtitle: `${filterText} · ${rows.length} project${rows.length === 1 ? '' : 's'} · prepared for ${webUser.fullName}`,
+    subtitle: `${filterText} · ${projectCount} project${projectCount === 1 ? '' : 's'} · prepared for ${webUser.fullName}`,
     columns,
     rows: rows.map((r) => columns.map((c) => c.value(r))),
-    footnote: rows.some((r) => r.p.progressIsImported)
+    footnote: rows.some((r) => !r.site && r.p.progressIsImported)
       ? '* % complete reported when the project was imported; replaced by verified progress once its scope is added.'
       : undefined,
   });

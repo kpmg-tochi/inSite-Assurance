@@ -71,6 +71,7 @@ export function ClosureRulesEditor({ value, onChange }: { value: ClosureRules; o
               className={`${inputCls} md:col-span-4`}
               value={slot.label}
               placeholder="e.g. Director, Physical Planning"
+              aria-label={`Signatory ${i + 1}: title`}
               onChange={(e) => setSlot(i, { label: e.target.value })}
               onBlur={() => !slot.key && setSlot(i, { key: keyFrom(slot.label, slots.map((s) => s.key), "slot") })}
             />
@@ -79,6 +80,7 @@ export function ClosureRulesEditor({ value, onChange }: { value: ClosureRules; o
                 value={(slot.organizationScope ?? "PROJECT_OWNER") as CocSignatoryScope}
                 onChange={(v) => setSlot(i, { organizationScope: v })}
                 disabled={Boolean(slot.isBeneficiary)}
+                ariaLabel={`Signatory ${i + 1}: organisation`}
                 options={CocSignatoryScopeEnum.options.map((o) => ({ value: o, label: COC_SIGNATORY_SCOPE_META[o].label }))}
               />
             </div>
@@ -86,6 +88,7 @@ export function ClosureRulesEditor({ value, onChange }: { value: ClosureRules; o
               className={`${inputCls} md:col-span-2`}
               value={slot.roleCode ?? ""}
               placeholder="Role code (optional)"
+              aria-label={`Signatory ${i + 1}: role code (optional)`}
               disabled={Boolean(slot.isBeneficiary)}
               onChange={(e) => setSlot(i, { roleCode: e.target.value.trim() ? e.target.value.trim().toUpperCase() : null })}
             />
@@ -137,7 +140,7 @@ export function ClosureRulesEditor({ value, onChange }: { value: ClosureRules; o
         <div className="space-y-2">
           <label className="flex items-start gap-2 text-xs text-slate-700">
             <input type="checkbox" className="mt-0.5" checked={Boolean(value.requireFinalEvaluationBeforeCoc)} onChange={(e) => set({ requireFinalEvaluationBeforeCoc: e.target.checked })} />
-            <span className="font-medium">An accepted final evaluation visit is needed before drafting</span>
+            <span className="font-medium">An accepted final evaluation monitoring report is needed before drafting</span>
           </label>
           <label className="flex items-start gap-2 text-xs text-slate-700">
             <input type="checkbox" className="mt-0.5" checked={Boolean(value.shareRatingsWithContractor)} onChange={(e) => set({ shareRatingsWithContractor: e.target.checked })} />
@@ -222,7 +225,7 @@ function ChecklistList({
               <CustomSelect
                 value={(item.inspectionVisitType ?? "") as VisitKind}
                 onChange={(v) => setItem(i, { inspectionVisitType: v })}
-                placeholder="Visit kind"
+                placeholder="Kind of monitoring visit"
                 options={VisitKindEnum.options.map((v) => ({ value: v, label: VISIT_KIND_META[v].label }))}
               />
             )}

@@ -22,6 +22,12 @@ export interface ProjectStageFacts {
   cocDraftedAt: string | null;
   archivedAt: string | null;
   contractTerminated: boolean;
+  /**
+   * When the project was imported already under way (project register import, status Ongoing or
+   * Completed): its kick-off and mobilisation were before the platform took it on and their
+   * milestones were waived. Null or absent for every other project.
+   */
+  importedLiveAt?: string | null;
 }
 
 export const PROJECT_STAGE_ORDER: ProjectStageKey[] = ['KICKOFF', 'MOBILISATION', 'CONSTRUCTION', 'COMPLETION', 'CLOSURE'];
@@ -40,6 +46,8 @@ function currentStage(f: ProjectStageFacts): ProjectStageKey {
   }
   if (f.constructionPhase === 'HANDOVER_IN_PROGRESS' || f.cocDraftedAt) return 'COMPLETION';
   if (!f.kickoffTracked) return 'CONSTRUCTION';
+  // Imported under way: the on-site milestone was waived (null here), so the project is in execution.
+  if (f.importedLiveAt && !f.contractorOnSite) return 'CONSTRUCTION';
   if (f.contractorOnSite?.done) return 'CONSTRUCTION';
   if (!f.contractorOnSite && f.kickoffHeldAt) return 'CONSTRUCTION';
   if (f.kickoffHeldAt) return 'MOBILISATION';
@@ -56,11 +64,13 @@ function closureSubLabel(f: ProjectStageFacts): string {
 function enteredAt(key: ProjectStageKey, f: ProjectStageFacts): string | null {
   switch (key) {
     case 'KICKOFF':
-      return f.activatedAt;
+      // Imported under way: activation is the import, which entered execution directly.
+      return f.importedLiveAt && !f.kickoffHeldAt ? null : f.activatedAt;
     case 'MOBILISATION':
       return f.kickoffHeldAt;
     case 'CONSTRUCTION':
       if (f.contractorOnSite) return f.contractorOnSite.completedAt;
+      if (f.importedLiveAt && !f.kickoffHeldAt) return f.importedLiveAt;
       return f.kickoffTracked ? f.kickoffHeldAt : f.activatedAt;
     case 'COMPLETION':
       if (f.constructionPhase === 'HANDOVER_IN_PROGRESS') {
@@ -89,7 +99,8 @@ export function deriveProjectStage(f: ProjectStageFacts): ProjectStage {
     }
     if (index < currentIndex) {
       const at = enteredAt(key, f);
-      return { key, label: PROJECT_STAGE_LABELS[key], state: 'DONE', enteredAt: at, note: at ? null : 'Done, not recorded' };
+      const missing = f.importedLiveAt && (key === 'KICKOFF' || key === 'MOBILISATION') ? 'Before import' : 'Done, not recorded';
+      return { key, label: PROJECT_STAGE_LABELS[key], state: 'DONE', enteredAt: at, note: at ? null : missing };
     }
     if (index === currentIndex) {
       let note: string | null = key === 'CLOSURE' ? closureSubLabel(f) : null;

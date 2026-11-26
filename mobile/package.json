@@ -9,7 +9,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/security/signing.test.ts src/storage/outbox/outboxPolicy.test.ts src/config/authRegistry.test.ts src/utils/personaCopy.test.ts src/storage/db/migrations.test.ts src/utils/defects.test.ts src/utils/visitCalendar.test.ts src/utils/homeLayout.test.ts src/utils/visitResponses.test.ts src/utils/visitForm.test.ts src/utils/siteLog.test.ts src/utils/visitText.test.ts src/utils/formUiModel.test.ts src/utils/outboxView.test.ts src/utils/photoCapture.test.ts src/utils/notificationTarget.test.ts"
+    "test": "tsx --test src/security/signing.test.ts src/storage/outbox/outboxPolicy.test.ts src/config/authRegistry.test.ts src/utils/personaCopy.test.ts src/storage/db/migrations.test.ts src/utils/defects.test.ts src/utils/visitCalendar.test.ts src/utils/homeLayout.test.ts src/utils/visitResponses.test.ts src/utils/visitForm.test.ts src/utils/siteLog.test.ts src/utils/visitText.test.ts src/utils/formUiModel.test.ts src/utils/outboxView.test.ts src/utils/photoCapture.test.ts src/utils/notificationTarget.test.ts src/utils/demoAccounts.test.ts"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",

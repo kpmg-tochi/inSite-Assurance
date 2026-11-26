@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { useSearchParams } from "react-router-dom";
 import { CalendarPlus, ClipboardList, Send, Sparkles } from "lucide-react";
 import { VISIT_KIND_META, VISIT_STATUS_LABELS, VisitKindEnum, VisitStatusEnum, type InspectionFindingDto, type ProjectVisitsExportQuery, type VisitDto } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth } from "../../lib/auth-context";
+import { formatDateShort, formatDateTimeShort } from "../../lib/formatters";
 import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import Loader from "../../components/Loader";
 import { CustomSelect } from "../../components/common";
@@ -18,6 +19,8 @@ import { useExportProjectFindingsMutation, useExportProjectVisitsMutation } from
 import { CreateVisitDialog } from "../../components/visits/VisitDialogs";
 import { VisitDetailPanel } from "../../components/visits/VisitDetailPanel";
 import { ConfirmationText, officersText, primaryButton, secondaryButton, visitKindLabel, WarningsList } from "../../components/visits/visitUi";
+import { VisitCalendar } from "../../components/visits/VisitCalendar";
+import { officerInitials, useUrlView, useVisitCalendarState } from "../../components/visits/useVisitCalendar";
 
 /**
  * Redesign R4: a project's visits. Plan (proposed, planned and done visits with their officers,
@@ -28,10 +31,12 @@ import { ConfirmationText, officersText, primaryButton, secondaryButton, visitKi
 type Tab = "plan" | "findings" | "site-log";
 
 const REPORT_TABS: Array<{ id: "plan" | "findings" | "site-log"; label: string; intro: string }> = [
-  { id: "plan", label: "Visits", intro: "Planned and past monitoring visits and their monitoring reports. Officers confirm or move visits and submit the form from the field app." },
-  { id: "findings", label: "Findings", intro: "Problems raised by monitoring reports, followed until the contractor corrects them and a visit confirms it." },
-  { id: "site-log", label: "Site log", intro: "Photos, voice notes and notes officers record on site outside a visit." },
+  { id: "plan", label: "Monitoring visits", intro: "Planned and past monitoring visits and their monitoring reports. Officers confirm or move monitoring visits and submit the form from the field app." },
+  { id: "findings", label: "Findings", intro: "Problems raised by monitoring reports, followed until the contractor corrects them and a monitoring visit confirms it." },
+  { id: "site-log", label: "Site log", intro: "Photos, voice notes and notes officers record on site outside a monitoring visit." },
 ];
+
+const PLAN_VIEWS = ["list", "calendar"] as const;
 
 export function ProjectVisitsPage({ project }: { project: ProjectSummaryDto }) {
   const [params, setParams] = useSearchParams();
@@ -43,6 +48,13 @@ export function ProjectVisitsPage({ project }: { project: ProjectSummaryDto }) {
     else next.delete(key);
     setParams(next, { replace: true });
   };
+  // Client demo updates D4: the visit plan as a list (default) or a read-only calendar (`?view=calendar`).
+  const [view, setView] = useUrlView(PLAN_VIEWS, "list");
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Below xl the panel sits under the calendar: bring it into view when a visit is opened.
+    if (view === "calendar" && selectedId) panelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [view, selectedId]);
 
   return (
     <div className="space-y-5">
@@ -61,6 +73,15 @@ export function ProjectVisitsPage({ project }: { project: ProjectSummaryDto }) {
             </button>
           ))}
         </div>
+        {tab === "plan" && (
+          <div role="group" aria-label="Monitoring plan view" className={TAB_LIST_CLASS}>
+            {PLAN_VIEWS.map((v) => (
+              <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)} className={tabItemClass(view === v)}>
+                {v === "list" ? "List" : "Calendar"}
+              </button>
+            ))}
+          </div>
+        )}
         <p className="w-full text-sm text-slate-600">{REPORT_TABS.find((t) => t.id === tab)!.intro}</p>
       </div>
 
@@ -68,6 +89,17 @@ export function ProjectVisitsPage({ project }: { project: ProjectSummaryDto }) {
         <FindingsTab projectId={project.id} />
       ) : tab === "site-log" ? (
         <SiteLogTab projectId={project.id} />
+      ) : view === "calendar" ? (
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+          <div className={selectedId ? "xl:col-span-3" : "xl:col-span-5"}>
+            <PlanCalendar projectId={project.id} selectedId={selectedId} onSelect={(id) => setParam("visitId", id)} />
+          </div>
+          {selectedId && (
+            <div ref={panelRef} className="xl:col-span-2 scroll-mt-4">
+              <VisitDetailPanel projectId={project.id} visitId={selectedId} onClose={() => setParam("visitId", null)} />
+            </div>
+          )}
+        </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
           <div className={selectedId ? "xl:col-span-2" : "xl:col-span-5"}>
@@ -104,8 +136,7 @@ const VISIT_STATUS_TONE: Record<VisitDto["status"], DotTone> = {
 };
 
 /** "24 Nov 2026" from YYYY-MM-DD (a calendar date, no zone shift). */
-const visitDay = (date: string) =>
-  new Date(`${date}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+const visitDay = (date: string) => formatDateShort(date);
 
 /** What else is worth knowing about a visit, in one line. */
 function visitNotes(v: VisitDto): string {
@@ -113,7 +144,7 @@ function visitNotes(v: VisitDto): string {
     v.sprint ? v.sprint.name : null,
     v.facilityCount ? `${v.facilityCount} facilit${v.facilityCount === 1 ? "y" : "ies"}` : null,
     v.recheckCount ? `${v.recheckCount} follow-up check${v.recheckCount === 1 ? "" : "s"}` : null,
-    v.pendingProposal ? `move to ${v.pendingProposal.toDate} proposed` : null,
+    v.pendingProposal ? `move to ${formatDateShort(v.pendingProposal.toDate)} proposed` : null,
     v.isLate ? "late" : null,
     v.origin === "UNSCHEDULED" ? "unscheduled" : null,
   ]
@@ -159,7 +190,7 @@ function PlanTab({ projectId, selectedId, onSelect }: { projectId: string; selec
                     const on = e.target.checked;
                     setChecked((c) => (on ? [...c, v.id] : c.filter((x) => x !== v.id)));
                   }}
-                  aria-label={`Select the ${visitKindLabel(v.visitKind)} of ${v.plannedDate} to publish`}
+                  aria-label={`Select the ${visitKindLabel(v.visitKind)} of ${visitDay(v.plannedDate)} to publish`}
                 />
               ) : null,
           },
@@ -173,7 +204,7 @@ function PlanTab({ projectId, selectedId, onSelect }: { projectId: string; selec
     },
     {
       id: "visit",
-      header: "Visit",
+      header: "Monitoring visit",
       cell: (v) => {
         const notes = visitNotes(v);
         return (
@@ -210,7 +241,7 @@ function PlanTab({ projectId, selectedId, onSelect }: { projectId: string; selec
       {selectable && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-700">
           <span>
-            {proposed.length} proposed visit(s) not yet sent to officers{checked.length ? ` · ${checked.length} selected` : ""}.
+            {proposed.length} proposed monitoring visit(s) not yet sent to officers{checked.length ? ` · ${checked.length} selected` : ""}.
           </span>
           <button
             type="button"
@@ -226,11 +257,11 @@ function PlanTab({ projectId, selectedId, onSelect }: { projectId: string; selec
         </div>
       )}
 
-      {q.isError && <p className="text-xs text-rose-700">The visits could not be loaded.</p>}
+      {q.isError && <p className="text-xs text-rose-700">The monitoring visits could not be loaded.</p>}
 
       <StandardTable<VisitDto>
-        title="Visits"
-        subtitle={q.data ? `${visits.length} visit${visits.length === 1 ? "" : "s"}` : undefined}
+        title="Monitoring visits"
+        subtitle={q.data ? `${visits.length} monitoring visit${visits.length === 1 ? "" : "s"}` : undefined}
         headerActions={
           <>
             <ExportExcelButton
@@ -253,7 +284,7 @@ function PlanTab({ projectId, selectedId, onSelect }: { projectId: string; selec
                   onClick={() => setCreating(true)}
                   className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-brand-navy hover:bg-slate-100"
                 >
-                  <CalendarPlus className="w-3.5 h-3.5" aria-hidden="true" /> New visit
+                  <CalendarPlus className="w-3.5 h-3.5" aria-hidden="true" /> New monitoring visit
                 </button>
               </>
             )}
@@ -265,7 +296,7 @@ function PlanTab({ projectId, selectedId, onSelect }: { projectId: string; selec
               <CustomSelect
                 value={status}
                 onChange={(v) => setStatus(String(v))}
-                options={[{ value: "", label: "Open visits" }, ...VisitStatusEnum.options.map((st) => ({ value: st, label: VISIT_STATUS_LABELS[st] }))]}
+                options={[{ value: "", label: "Open monitoring visits" }, ...VisitStatusEnum.options.map((st) => ({ value: st, label: VISIT_STATUS_LABELS[st] }))]}
               />
             </div>
             <div className="w-44">
@@ -290,11 +321,64 @@ function PlanTab({ projectId, selectedId, onSelect }: { projectId: string; selec
         loading={q.isLoading}
         minWidth="min-w-[620px]"
         emptyState={{
-          title: status || kind ? "No visits match" : "No visits yet",
-          description: status || kind ? "Choose another status or kind." : canPlan ? "Generate the visits from the plan, or add one with New visit." : "Visits appear here once they are planned.",
+          title: status || kind ? "No monitoring visits match" : "No monitoring visits yet",
+          description:
+            status || kind
+              ? "Choose another status or kind."
+              : canPlan
+                ? "Generate the monitoring visits from the plan, or add one with New monitoring visit."
+                : "Monitoring visits appear here once they are planned.",
         }}
       />
       {creating && <CreateVisitDialog projectId={projectId} onClose={() => setCreating(false)} />}
+    </div>
+  );
+}
+
+/**
+ * Client demo updates D4: the visit plan as a read-only month / week calendar. Loads the shown range
+ * (`GET /projects/:id/visits?from&to`, plus status and kind); every status shows unless one is
+ * chosen. Clicking a visit opens the same detail panel as the list (`?visitId=`).
+ */
+function PlanCalendar({ projectId, selectedId, onSelect }: { projectId: string; selectedId: string | null; onSelect: (id: string) => void }) {
+  const calendar = useVisitCalendarState("month");
+  const [status, setStatus] = useState("");
+  const [kind, setKind] = useState("");
+  const q = useProjectVisitsQuery(projectId, { ...calendar.range, status: status || undefined, visitKind: kind || undefined }, true, true);
+  return (
+    <div className="space-y-3">
+      {q.data && <WarningsList warnings={q.data.warnings} />}
+      <VisitCalendar
+        state={calendar}
+        visits={q.data?.visits ?? []}
+        loading={q.isLoading}
+        error={q.isError}
+        primaryText={(v) => visitKindLabel(v.visitKind)}
+        secondaryText={(v) => officerInitials(v)}
+        describe={(v) => officersText(v)}
+        selectedId={selectedId}
+        onOpen={(v) => onSelect(v.id)}
+        filters={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="w-40">
+              <CustomSelect
+                value={status}
+                onChange={(v) => setStatus(String(v))}
+                ariaLabel="Status"
+                options={[{ value: "", label: "All statuses" }, ...VisitStatusEnum.options.map((st) => ({ value: st, label: VISIT_STATUS_LABELS[st] }))]}
+              />
+            </div>
+            <div className="w-44">
+              <CustomSelect
+                value={kind}
+                onChange={(v) => setKind(String(v))}
+                ariaLabel="Kind"
+                options={[{ value: "", label: "All kinds" }, ...VisitKindEnum.options.map((k) => ({ value: k, label: VISIT_KIND_META[k].label }))]}
+              />
+            </div>
+          </div>
+        }
+      />
     </div>
   );
 }
@@ -329,7 +413,7 @@ function FindingCard({ projectId, finding: f }: { projectId: string; finding: In
       <p className="text-slate-700">{f.description}</p>
       <p className="text-[11px] text-slate-500">
         {where ? `${where} · ` : ""}
-        {f.visitKind ? visitKindLabel(f.visitKind) : "Visit"} of {f.inspectionVisitDate} · {f.contractorName ?? "Monitoring side"}
+        {f.visitKind ? visitKindLabel(f.visitKind) : "Monitoring visit"} of {formatDateShort(f.inspectionVisitDate)} · {f.contractorName ?? "Monitoring side"}
         {f.recheckCount ? ` · followed up ${f.recheckCount} time(s)` : ""}
         {f.escalatedAt ? " · escalated" : ""}
       </p>
@@ -424,7 +508,7 @@ function SiteLogTab({ projectId }: { projectId: string }) {
   const entries = q.data ?? [];
   return (
     <section className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-sm space-y-3">
-      <p className="text-xs text-slate-500">Photos, voice notes and notes officers took on site outside a form. Entries attached to a visit show on that visit too.</p>
+      <p className="text-xs text-slate-500">Entries attached to a monitoring visit show on that monitoring visit too.</p>
       {entries.length === 0 ? (
         <p className="text-xs text-slate-500 py-6 text-center">Nothing in the site log yet.</p>
       ) : (
@@ -439,14 +523,14 @@ function SiteLogTab({ projectId }: { projectId: string }) {
                 ))}
               <div className="text-xs">
                 <p className="font-semibold text-slate-900">
-                  {e.authorName} · {new Date(e.capturedAt).toLocaleString()}
+                  {e.authorName} · {formatDateTimeShort(e.capturedAt)}
                 </p>
                 {e.text && <p className="text-slate-700">{e.text}</p>}
                 {e.capture?.transcript && <p className="text-slate-600 italic">“{e.capture.transcript}”</p>}
                 <p className="text-[11px] text-slate-500">
                   {e.kind.toLowerCase()}
                   {e.geofenceStatus ? ` · ${e.geofenceStatus.toLowerCase().replace("_", " ")}` : ""}
-                  {e.attachedSubmissionId ? " · attached to a visit" : ""}
+                  {e.attachedSubmissionId ? " · attached to a monitoring visit" : ""}
                 </p>
               </div>
             </li>

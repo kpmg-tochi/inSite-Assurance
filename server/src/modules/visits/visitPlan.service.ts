@@ -16,7 +16,7 @@ import {
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
-import { defaultOfficersFor, Db, loadVisitProject, monitoringConfigOf, OfficerInput, projectToday, setVisitAssignees, Tx, VisitActor, visitLabel } from './visitCore';
+import { defaultOfficersFor, Db, loadVisitProject, monitoringConfigOf, OfficerInput, projectToday, setVisitAssignees, Tx, VisitActor, visitLabelInSentence } from './visitCore';
 
 /**
  * Redesign R4a (D-R4.11, D-R4.12): the project type's visit plan proposes visits. Generated visits are
@@ -200,7 +200,7 @@ export async function proposeVisitsFromType(
     for (const w of wanted) counts.set(w.rule.visitKind, counts.get(w.rule.visitKind) ?? 0);
     const created = await tx.visit.findMany({ where: { id: { in: createdIds } }, select: { visitKind: true } });
     for (const c of created) counts.set(c.visitKind, (counts.get(c.visitKind) ?? 0) + 1);
-    const breakdown = [...counts].filter(([, n]) => n > 0).map(([k, n]) => `${n} ${visitLabel(k).toLowerCase()}`).join(', ');
+    const breakdown = [...counts].filter(([, n]) => n > 0).map(([k, n]) => `${n} ${visitLabelInSentence(k)}`).join(', ');
     await recordAuditEvent(tx, {
       projectId,
       actorType: opts.actor.actorType,
@@ -222,12 +222,12 @@ export async function previewVisitPlan(projectId: string, now: Date = new Date()
   const project = await loadVisitProject(prisma, projectId);
   const type = resolveProjectTypeConfig(project.projectTypeSnapshotJson);
   const assumptions: string[] = [];
-  if (!type) return { rules: [], items: [], laterRules: [], assumptions: ['The project has no project type, so there is no visit plan.'] };
+  if (!type) return { rules: [], items: [], laterRules: [], assumptions: ['The project has no project type, so there is no monitoring plan.'] };
   const rules = type.monitoring.visitPlan;
   const today = projectToday(project, now);
   const { ctx, mobilised } = await planContextFor(prisma, projectId, now);
   if (project.status === 'DRAFT') assumptions.push(`Dates assume the project is activated today (${today}).`);
-  if (ctx.sprints.length === 0) assumptions.push('The project has no work phases yet: visits tied to work phases are dated from the planned end date, if any.');
+  if (ctx.sprints.length === 0) assumptions.push('The project has no work phases yet: monitoring visits tied to work phases are dated from the planned end date, if any.');
   if (!ctx.mobilisationDueDate) assumptions.push('Mobilisation checks run every interval until the contractor is on site; the mobilisation milestone has no due date yet.');
   const active = rules.filter((r) => (project.status === 'DRAFT' ? isActivationRule(r) : true));
   const existing = new Set(

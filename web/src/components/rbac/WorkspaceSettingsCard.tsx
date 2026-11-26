@@ -283,7 +283,7 @@ export function WorkspaceSettingsCard() {
 
         <div>
           <label htmlFor="ws-visit-tolerance" className="block font-semibold text-slate-700 mb-1">
-            Visit move tolerance (working days)
+            Monitoring visit move tolerance (working days)
           </label>
           <input
             id="ws-visit-tolerance"
@@ -298,7 +298,7 @@ export function WorkspaceSettingsCard() {
             className={inputClass(Boolean(errors.visitRescheduleToleranceWorkdays))}
           />
           <p id="ws-visit-tolerance-hint" className="text-[11px] text-slate-500 mt-1">
-            0 to 10. An officer may move a visit this many working days either side of its original date, within the same work phase, without asking. Further moves are proposed to the manager.
+            0 to 10. An officer may move a monitoring visit this many working days either side of its original date, within the same work phase, without asking. Further moves are proposed to the manager.
           </p>
           {errors.visitRescheduleToleranceWorkdays && (
             <p className="text-[11px] text-rose-600 mt-1">{errors.visitRescheduleToleranceWorkdays}</p>
@@ -346,7 +346,7 @@ export function WorkspaceSettingsCard() {
             ))}
           </datalist>
           <p id="ws-timezone-hint" className="text-[11px] text-slate-500 mt-1">
-            Pick from the list or type any IANA zone. New projects count their dates (visit days, deadlines) in this zone.
+            Pick from the list or type any IANA zone. New projects count their dates (monitoring visit days, deadlines) in this zone.
           </p>
           {errors.timezone && <p className="text-[11px] text-rose-600 mt-1">{errors.timezone}</p>}
         </div>

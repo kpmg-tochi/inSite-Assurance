@@ -487,7 +487,7 @@ function SamplePreview({ fields, context, facility }: { fields: FormField[]; con
   return (
     <div className="space-y-2">
       {context === "SUBFORM" && (
-        <div role="group" aria-label="Preview for visit kind" className={TAB_LIST_CLASS}>
+        <div role="group" aria-label="Preview for kind of monitoring visit" className={TAB_LIST_CLASS}>
           {FACILITY_KINDS.map((k) => (
             <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)} className={tabItemClass(kind === k)}>
               {VISIT_KIND_META[k].label}
@@ -532,7 +532,7 @@ export function FormFieldsEditor({
     <div className="space-y-2">
       {context === "SUBFORM" && fields.length > FORM_SUBFORM_SOFT_FIELD_LIMIT && (
         <p className="text-[11px] text-amber-700">
-          {fields.length} questions: sub-forms work best with 1–3 per visit kind, because each repeats for every facility in the visit.
+          {fields.length} questions: sub-forms work best with 1–3 per kind of monitoring visit, because each repeats for every facility in the monitoring visit.
         </p>
       )}
       {fields.map((f, i) => {

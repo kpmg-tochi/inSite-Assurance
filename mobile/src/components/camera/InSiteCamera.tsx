@@ -308,6 +308,8 @@ export const InSiteCamera = forwardRef<InSiteCameraHandle, InSiteCameraProps>(
                 ]}
                 onPress={cycleFlashSetting}
                 activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={flashLabel}
               >
                 <Text style={styles.utilityPillText}>⚡ {flashLabel}</Text>
               </TouchableOpacity>

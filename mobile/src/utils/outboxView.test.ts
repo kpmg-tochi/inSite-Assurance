@@ -35,7 +35,7 @@ describe('Outbox labels', () => {
     assert.equal(outboxItemLabel(item({ mediaType: 'VOICE_NOTE' })), 'Voice note');
     assert.equal(outboxItemLabel(item({ kind: 'VISIT_SUBMISSION', mediaType: null })), 'Monitoring report');
     assert.equal(outboxItemLabel(item({ kind: 'VISIT_CHECK_IN' })), 'Check-in');
-    assert.equal(outboxItemLabel(item({ kind: 'UNSCHEDULED_VISIT' })), 'Unscheduled visit');
+    assert.equal(outboxItemLabel(item({ kind: 'UNSCHEDULED_VISIT' })), 'Ad hoc monitoring visit');
     for (const label of Object.values(OUTBOX_KIND_LABELS)) {
       assert.ok(!/report.*(daily|workday)|chat|inspection|ai\b/i.test(label), label);
     }

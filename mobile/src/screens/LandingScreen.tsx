@@ -40,8 +40,8 @@ export const LandingScreen: React.FC = () => {
           <Text style={styles.appName}>{APPLICATION_NAME}</Text>
           <Text style={styles.headline}>Every school project, from contract award to handover.</Text>
           <Text style={styles.body}>
-            Site visits with geotagged photos for Direct Intervention and Matching Grants projects. Works offline; your
-            visits send when you are back online.
+            Monitoring visits with geotagged photos for Direct Intervention and Matching Grants projects. Works offline;
+            your monitoring reports send when you are back online.
           </Text>
           <PrimaryButton
             onPress={() => navigation.navigate("SignIn")}

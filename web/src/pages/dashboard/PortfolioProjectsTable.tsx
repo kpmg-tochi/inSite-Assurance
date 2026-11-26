@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { ArrowRight, FileUp, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, FileUp, Plus, Trash2 } from "lucide-react";
 import {
   formatProjectCode,
   isOngoingProject,
@@ -11,13 +11,16 @@ import {
   type PortfolioOverviewProject,
   type ProjectListFilters,
   type ProjectRegisterFilters,
+  type ProjectSiteSummaryDto,
+  SCHOOL_LEVEL_LABELS,
 } from "@insite/shared";
+import { SiteStatusChip, sitePercentText } from "../../components/sites/siteStatus";
 import { useAuth, useTerm } from "../../lib/auth-context";
 import { useGuardedNavigate } from "../../lib/navigationGuard";
 import { formatCompactNaira, formatDateShort } from "../../lib/formatters";
 import { ProjectRegisterExportMenu } from "../../components/projects/ProjectRegisterExportMenu";
 import { ProjectRegisterImportDialog } from "../../components/projects/ProjectRegisterImportDialog";
-import { ProjectAlertChips } from "../../components/alerts/ProjectAlertChips";
+import { ProjectAlertIndicator } from "../../components/projects/ProjectAlertIndicator";
 import { useDraftProjectsQuery } from "../../queries/projects/useProjectSetupQueries";
 import { useDeleteDraftMutation } from "../../mutations/projects/useProjectSetupMutations";
 import { StandardTable, TableActionButton, type TableColumnDef } from "../../components/table";
@@ -27,6 +30,11 @@ import { TAB_LIST_CLASS, tabCountClass, tabItemClass } from "../../components/co
 export type ProjectTableFilter = "all" | "ongoing" | "behind" | "completed" | "archived" | "drafts";
 
 type DraftRow = NonNullable<ReturnType<typeof useDraftProjectsQuery>["data"]>[number];
+
+/** Client demo updates C2 (wave 2): a project row, or one of its sites under it (as the client's register shows them). */
+type RegisterRow = { kind: "project"; p: PortfolioOverviewProject } | { kind: "site"; p: PortfolioOverviewProject; site: ProjectSiteSummaryDto };
+
+const sitesOf = (p: PortfolioOverviewProject) => p.sites ?? [];
 
 const isCompleted = (p: PortfolioOverviewProject) =>
   p.status === "ACTIVE" && (p.constructionPhase === "RETENTION_PERIOD" || p.constructionPhase === "COMPLETED_CLOSED");
@@ -74,8 +82,17 @@ export function PortfolioProjectsTable({
   search: controlledSearch,
   onSearchChange,
   registerFilters,
+  title = "Projects",
+  subtitle,
+  headerAction,
 }: {
   projects: PortfolioOverviewProject[];
+  /** The header title; the Change project dialog passes its own (with the id that names the dialog). */
+  title?: React.ReactNode;
+  /** The header line under the title, from the rows shown and the total; defaults to the count and "Select a project to open it." */
+  subtitle?: (shown: number, total: number) => React.ReactNode;
+  /** One more control at the end of the header (the Change project dialog's close button). */
+  headerAction?: React.ReactNode;
   /** UBEC IRL: a controlled search box (the home page keeps it in the URL); left out, the table keeps its own. */
   search?: string;
   onSearchChange?: (value: string) => void;
@@ -97,6 +114,14 @@ export function PortfolioProjectsTable({
   const search = controlledSearch ?? ownSearch;
   const setSearch = onSearchChange ?? setOwnSearch;
   const [importOpen, setImportOpen] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggleExpanded = (projectId: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) next.delete(projectId);
+      else next.add(projectId);
+      return next;
+    });
   const term = useTerm();
   const canCreate = !hideCreate && hasPermission("projects:create");
   const canSeeDrafts = !hideCreate && (hasPermission("projects:create") || hasPermission("projects:edit_baseline"));
@@ -136,6 +161,7 @@ export function PortfolioProjectsTable({
         p.region?.name ?? "",
         p.contractorName ?? "",
         p.projectType?.name ?? "",
+        ...sitesOf(p).flatMap((s) => [s.schoolName, s.lgaName ?? ""]),
       ].some((v) => v.toLowerCase().includes(q));
     });
   }, [projects, filter, q]);
@@ -188,7 +214,7 @@ export function PortfolioProjectsTable({
     ...(filter !== "all" && filter !== "drafts" ? { status: filter } : {}),
     ...(search.trim() ? { q: search.trim() } : {}),
   };
-  const headerActions = hideCreate ? undefined : (
+  const headerActions = hideCreate ? headerAction : (
     <div className="flex flex-wrap items-center gap-2">
       <ProjectRegisterExportMenu filters={exportFilters} />
       {canCreate && (
@@ -202,6 +228,7 @@ export function PortfolioProjectsTable({
       )}
       {newProject}
       {importOpen && <ProjectRegisterImportDialog onClose={() => setImportOpen(false)} />}
+      {headerAction}
     </div>
   );
   const searchBox = { value: search, onChange: setSearch, placeholder: "Search by name, code, project ID, school, zone, state, LGA or contractor" };
@@ -225,7 +252,7 @@ export function PortfolioProjectsTable({
       },
       { id: "steps", header: "Setup", cell: (d) => <span className="text-slate-600 whitespace-nowrap">{d.completedRequiredSteps} of {d.totalRequiredSteps} steps done</span> },
       { id: "by", header: "Started by", cell: (d) => <span className="text-slate-600">{d.createdByName ?? "Someone"}</span> },
-      { id: "saved", header: "Last saved", cell: (d) => <span className="text-slate-600 whitespace-nowrap">{new Date(d.updatedAt).toLocaleDateString("en-GB")}</span> },
+      { id: "saved", header: "Last saved", cell: (d) => <span className="text-slate-600 whitespace-nowrap">{formatDateShort(d.updatedAt)}</span> },
       {
         id: "actions",
         header: <span className="sr-only">Actions</span>,
@@ -254,7 +281,7 @@ export function PortfolioProjectsTable({
     ];
     return (
       <StandardTable<DraftRow>
-        title="Projects"
+        title={title}
         subtitle="Drafts stay private to the people setting them up until they are made active."
         headerActions={headerActions}
         search={searchBox}
@@ -279,14 +306,15 @@ export function PortfolioProjectsTable({
     },
     {
       id: "year",
-      header: "Intervention year",
+      header: "Year",
+      tooltip: "Intervention year",
       cell: (p) => (p.interventionYear !== null ? <span className="text-slate-700 tabular-nums">{p.interventionYear}</span> : <span className="text-slate-400">–</span>),
     },
     {
       id: "project",
       header: "Project",
       cell: (p) => (
-        <div className="min-w-0 max-w-[300px]">
+        <div className="min-w-0 max-w-[260px]">
           {p.externalReference && (
             <div className="text-[11px] text-slate-500 truncate" title={`${term("externalReference")}: ${p.externalReference}`}>
               <span className="sr-only">{term("externalReference")}: </span>
@@ -296,9 +324,34 @@ export function PortfolioProjectsTable({
           <div className="font-semibold text-slate-900 truncate" title={p.name}>
             {p.name}
           </div>
-          {p.contractorName && <div className="text-xs text-slate-500 truncate">{p.contractorName}</div>}
+          {sitesOf(p).length > 0 && (
+            <button
+              type="button"
+              aria-expanded={expanded.has(p.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleExpanded(p.id);
+              }}
+              className="mt-1 inline-flex items-center gap-0.5 rounded text-xs font-semibold text-brand-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+            >
+              {expanded.has(p.id) ? <ChevronDown className="w-3.5 h-3.5" aria-hidden="true" /> : <ChevronRight className="w-3.5 h-3.5" aria-hidden="true" />}
+              {sitesOf(p).length} site{sitesOf(p).length === 1 ? "" : "s"}
+            </button>
+          )}
         </div>
       ),
+    },
+    {
+      id: "contractor",
+      header: "Contractor",
+      cell: (p) =>
+        p.contractorName ? (
+          <span className="block max-w-[180px] truncate text-slate-700" title={p.contractorName}>
+            {p.contractorName}
+          </span>
+        ) : (
+          <span className="text-slate-400" title="No contractor named yet">–</span>
+        ),
     },
     { id: "type", header: "Type", cell: (p) => <span className="block max-w-[140px] text-slate-700">{p.projectType?.name ?? "–"}</span> },
     {
@@ -320,14 +373,13 @@ export function PortfolioProjectsTable({
       header: "Stage",
       cell: (p) =>
         p.stage ? (
-          <span className="block max-w-[170px] text-slate-700">
-            {projectStageChipLabel(p.stage)}
-            {p.stage.contractTerminated && <span className="text-rose-700"> · terminated</span>}
-            {p.activeAlerts.length > 0 && (
-              <span className="mt-1 block">
-                <ProjectAlertChips alerts={p.activeAlerts} size="sm" />
-              </span>
-            )}
+          // UBEC IRL alerts: one compact indicator; the tooltip lists them (rows stay one line tall).
+          <span className="flex max-w-[190px] items-center gap-2 text-slate-700">
+            <span className="min-w-0">
+              {projectStageChipLabel(p.stage)}
+              {p.stage.contractTerminated && <span className="text-rose-700"> · terminated</span>}
+            </span>
+            <ProjectAlertIndicator alerts={p.activeAlerts} />
           </span>
         ) : (
           <span className="text-slate-400">–</span>
@@ -337,7 +389,13 @@ export function PortfolioProjectsTable({
       id: "budget",
       header: "Contract sum",
       align: "right",
-      cell: (p) => <span className="text-slate-900 whitespace-nowrap tabular-nums">{formatCompactNaira(p.totalBudgetNgn)}</span>,
+      // Owner decision 3 (2026-11-26): the contract sum, as the register export; "–" until contracted.
+      cell: (p) =>
+        p.contractSumNgn !== null ? (
+          <span className="text-slate-900 whitespace-nowrap tabular-nums">{formatCompactNaira(p.contractSumNgn)}</span>
+        ) : (
+          <span className="text-slate-500" title="Not yet contracted">–</span>
+        ),
     },
     {
       id: "progress",
@@ -396,17 +454,52 @@ export function PortfolioProjectsTable({
     },
   ];
 
+  // Client demo updates C2 (wave 2): site sub-rows under an expanded project (site no., school, LGA, % complete, status).
+  const siteCells: Record<string, (s: ProjectSiteSummaryDto) => React.ReactNode> = {
+    code: (s) => <span className="block pl-3 text-xs font-semibold text-slate-500 tabular-nums whitespace-nowrap">Site {s.siteNumber}</span>,
+    project: (s) => (
+      <div className="min-w-0 max-w-[260px] pl-3 border-l-2 border-slate-200">
+        <div className="text-[13px] font-medium text-slate-800 truncate" title={s.schoolName}>
+          {s.schoolName}
+        </div>
+        <div className="text-[11px] text-slate-500">{SCHOOL_LEVEL_LABELS[s.schoolLevel]}</div>
+      </div>
+    ),
+    location: (s) => <span className="block text-slate-600 whitespace-nowrap">{s.lgaName ?? "–"}</span>,
+    progress: (s) => (
+      <div className="w-28">
+        <div className="text-xs font-semibold text-slate-700 tabular-nums">{sitePercentText(s.progressPct)}</div>
+        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
+          <div className="h-full rounded-full bg-brand-primary/70" style={{ width: `${Math.min(100, Math.max(0, s.progressPct ?? 0))}%` }} />
+        </div>
+      </div>
+    ),
+    schedule: (s) => <SiteStatusChip status={s.status} />,
+  };
+  // The Change project dialog (hideCreate) shows only what helps pick a project, so it fits without side-scrolling.
+  const PICKER_COLUMN_IDS = new Set(["code", "year", "project", "contractor", "location", "stage"]);
+  const shownColumns = hideCreate ? columns.filter((col) => PICKER_COLUMN_IDS.has(col.id)) : columns;
+  const registerColumns: TableColumnDef<RegisterRow>[] = shownColumns.map((col) => ({
+    ...col,
+    cell: (row: RegisterRow, index: number) => (row.kind === "project" ? col.cell(row.p, index) : siteCells[col.id]?.(row.site) ?? null),
+  }));
+  const registerRows: RegisterRow[] = rows.flatMap((p) => [
+    { kind: "project" as const, p },
+    ...(expanded.has(p.id) ? sitesOf(p).map((site) => ({ kind: "site" as const, p, site })) : []),
+  ]);
+
   return (
-    <StandardTable<PortfolioOverviewProject>
-      title="Projects"
-      subtitle={`${rows.length} of ${projects.length} shown. Select a project to open it.`}
+    <StandardTable<RegisterRow>
+      title={title}
+      subtitle={subtitle ? subtitle(rows.length, projects.length) : `${rows.length} of ${projects.length} shown. Select a project to open it.`}
       headerActions={headerActions}
       search={searchBox}
       filters={filterButtons}
-      columns={columns}
-      data={rows}
-      keyExtractor={(p) => p.id}
-      onRowClick={(p) => onOpenProject(p.id)}
+      columns={registerColumns}
+      data={registerRows}
+      keyExtractor={(row) => (row.kind === "project" ? row.p.id : `site:${row.site.id}`)}
+      rowClassName={(row) => (row.kind === "site" ? "bg-slate-50/60" : "")}
+      onRowClick={(row) => onOpenProject(row.p.id)}
       selectedId={selectedId}
       pageSize={pageSize}
       loading={loading}

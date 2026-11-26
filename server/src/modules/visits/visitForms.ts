@@ -76,7 +76,7 @@ export async function freezeVisitForm(
 ): Promise<FreezeResult> {
   const kind = visit.visitKind as VisitKind;
   if (VISIT_KIND_META[kind].facilityRule === 'PICKED' && visit.pickedFacilityIds.length === 0) {
-    throw new AppError('Pick the facilities this ad hoc visit checks', 422, 'VISIT_NEEDS_FACILITIES', { visitId: visit.id });
+    throw new AppError('Pick the facilities this ad hoc monitoring visit checks', 422, 'VISIT_NEEDS_FACILITIES', { visitId: visit.id });
   }
   const rechecks = VISIT_KIND_META[kind].recheckByDefault ? await recheckInputsForProject(tx, visit.projectId, opts.timezone) : [];
   const frozen = await freezeVisitFormSnapshot(tx, {

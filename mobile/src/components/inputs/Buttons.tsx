@@ -122,7 +122,13 @@ export const IconButton: FC<IconButtonProps> = ({
   text,
 }) => {
   return (
-    <TouchableOpacity onPress={onPress} style={styles.iconButtonContent}>
+    <TouchableOpacity
+      onPress={onPress}
+      style={styles.iconButtonContent}
+      accessibilityRole="button"
+      // Screen readers read the label, not the icon font's private glyph.
+      accessibilityLabel={text ?? icon.charAt(0).toUpperCase() + icon.slice(1).replace(/-/g, " ")}
+    >
       <MaterialCommunityIcons name={icon} size={24} color={color} />
       {!!text && <Text style={{ color, fontSize: 8 }}>{text}</Text>}
     </TouchableOpacity>

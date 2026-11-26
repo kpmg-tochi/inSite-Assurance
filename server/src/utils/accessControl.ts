@@ -194,7 +194,7 @@ export function requireProjectAccess(
 }
 
 /** Routes under /projects/:projectId that work on a draft (the wizard and its data). */
-const DRAFT_ROUTE_RE = /^\/api\/v1\/projects\/[^/]+(?:\/(?:setup|activate|contractors|boq|scope|baseline|process|standards|needs-assessments|evidence\/presign|media|supervision|documents|milestones|visit-form|visit-plan|visit-officers)(?:\/|$)|\/?$)/;
+const DRAFT_ROUTE_RE = /^\/api\/v1\/projects\/[^/]+(?:\/(?:setup|activate|contractors|boq|scope|baseline|process|standards|needs-assessments|evidence\/presign|media|supervision|documents|milestones|visit-form|visit-plan|visit-officers|sites|approved-list-row|contractor-flags)(?:\/|$)|\/?$)/;
 
 /** Writes an archived project still serves (Phase 15: the closure pack export). */
 const ARCHIVED_WRITE_RE = /^\/api\/v1\/projects\/[^/]+\/closure-pack\/?$/;

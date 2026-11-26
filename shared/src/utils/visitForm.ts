@@ -291,7 +291,7 @@ export function assembleVisitForm(input: AssembleVisitFormInput): { snapshot: Vi
   if (input.template.visitKind !== input.visitKind) {
     throw new VisitFormAssemblyError(
       'TEMPLATE_KIND_MISMATCH',
-      `Template ${input.template.code} is for ${VISIT_KIND_META[input.template.visitKind].label} visits, not ${VISIT_KIND_META[input.visitKind].label}.`
+      `Template ${input.template.code} is for ${VISIT_KIND_META[input.template.visitKind].label} monitoring visits, not ${VISIT_KIND_META[input.visitKind].label}.`
     );
   }
   const warnings: VisitFormAssemblyWarning[] = [];
@@ -318,7 +318,7 @@ export function assembleVisitForm(input: AssembleVisitFormInput): { snapshot: Vi
     });
   }
   if (hasFacilitySlot && units.length === 0) {
-    warn({ code: 'NO_FACILITIES_IN_SCOPE', message: 'No facility units are in this visit; the form has the fixed sections only.', facilityId: null });
+    warn({ code: 'NO_FACILITIES_IN_SCOPE', message: 'No facility units are in this monitoring visit; the form has the fixed sections only.', facilityId: null });
   }
 
   const sectionsByCode = new Map(input.sections.map((s) => [s.code, s]));
@@ -361,7 +361,7 @@ export function assembleVisitForm(input: AssembleVisitFormInput): { snapshot: Vi
         if (forKind.length === 0) {
           warn({
             code: 'SUBFORM_EMPTY_FOR_KIND',
-            message: `${facility.name}'s sub-form has no questions for ${meta.label} visits; its units are listed without questions.`,
+            message: `${facility.name}'s sub-form has no questions for ${meta.label} monitoring visits; its units are listed without questions.`,
             facilityId: facility.id,
           });
         }
@@ -427,7 +427,7 @@ export function assemblyInputFromBundle(
 ): AssembleVisitFormInput {
   const template = bundle.templates.find((t) => t.visitKind === opts.visitKind);
   if (!template) {
-    throw new VisitFormAssemblyError('NO_VISIT_FORM_TEMPLATE', `There is no visit form template for ${VISIT_KIND_META[opts.visitKind].label} visits.`);
+    throw new VisitFormAssemblyError('NO_VISIT_FORM_TEMPLATE', `There is no monitoring form template for ${VISIT_KIND_META[opts.visitKind].label} monitoring visits.`);
   }
   return {
     projectId: bundle.projectId,

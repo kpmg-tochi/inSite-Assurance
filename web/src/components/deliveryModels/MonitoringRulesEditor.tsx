@@ -77,15 +77,15 @@ export function MonitoringRulesEditor({ value, onChange }: { value: MonitoringRu
   return (
     <section className={sectionCls}>
       <div>
-        <h3 className="text-sm font-bold text-slate-900">Monitoring: visit forms and supervision</h3>
-        <p className="text-[11px] text-slate-500">The visit plan and deadlines are in the next section.</p>
+        <h3 className="text-sm font-bold text-slate-900">Monitoring: monitoring forms and supervision</h3>
+        <p className="text-[11px] text-slate-500">The monitoring plan and deadlines are in the next section.</p>
       </div>
 
       <div className="border-t border-slate-100 pt-3 space-y-2">
-        <h4 className="text-xs font-bold text-slate-900">Visit forms</h4>
+        <h4 className="text-xs font-bold text-slate-900">Monitoring forms</h4>
         <p className="text-[11px] text-slate-500">
-          The visit form template for each visit kind (Forms &amp; facilities page). "Default" uses the template whose code is the visit kind. A project keeps the
-          choice it was created with; the latest version of the template is used when a visit's form is built.
+          The monitoring form template for each kind of monitoring visit (Forms &amp; facilities page). "Default" uses the template whose code is the kind. A project keeps the
+          choice it was created with; the latest version of the template is used when a monitoring visit's form is built.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {VisitKindEnum.options.map((kind) => {

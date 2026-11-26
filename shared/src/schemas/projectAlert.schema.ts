@@ -36,7 +36,7 @@ export const PROJECT_ALERT_META: Record<ProjectAlertKey, ProjectAlertMeta> = {
   },
   STALLED: {
     label: 'Stalled',
-    description: 'No progress has been recorded by an accepted visit for longer than the type allows.',
+    description: 'No progress has been recorded by an accepted monitoring report for longer than the type allows.',
     webCategory: 'PROJECT_STALLED',
     notifyPermission: 'findings:receive_escalations',
     notifiesFieldOfficers: true,
@@ -44,7 +44,7 @@ export const PROJECT_ALERT_META: Record<ProjectAlertKey, ProjectAlertMeta> = {
   },
   SITE_UPDATE_OVERDUE: {
     label: 'Monitoring overdue',
-    description: 'No visit has been accepted for longer than the type allows.',
+    description: 'No monitoring report has been accepted for longer than the type allows.',
     webCategory: 'SITE_UPDATE_OVERDUE',
     notifyPermission: 'visits:plan',
     notifiesFieldOfficers: true,

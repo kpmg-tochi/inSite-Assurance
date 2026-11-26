@@ -252,7 +252,7 @@ export async function seedPhase16() {
       }
       await prisma.projectContractMilestone.update({
         where: { id: m.id },
-        data: { status: "DONE", completedAt: new Date(`${done}T10:00:00.000Z`), completedNotes: "Done (seeded history)." },
+        data: { status: "DONE", completedAt: new Date(`${done}T10:00:00.000Z`), completedNotes: "Done." },
       });
     }
     // An approved baseline survey shortly after mobilisation.
@@ -262,7 +262,7 @@ export async function seedPhase16() {
       reporter: invitees[invitees.length - 1],
       visitDate: addDays(kickoff, 24),
       visitKind: "BASELINE",
-      summary: "Baseline visit: site cleared and set out; existing structures and access recorded with photographs.",
+      summary: "Baseline monitoring: site cleared and set out; existing structures and access recorded with photographs.",
     });
     return contractor;
   }

@@ -1,16 +1,26 @@
 import ExcelJS from 'exceljs';
 import {
   FACILITY_ARCHETYPE_META,
-  FUNDING_SOURCE_SUGGESTIONS,
+  FUNDING_SOURCES,
   FacilityArchetype,
+  findStateByName,
   lineAmount,
+  NIGERIA_LGAS,
+  NIGERIA_STATES,
+  NigeriaLga,
   normalizeUnitOfMeasure,
+  SCHOOL_LEVEL_LABELS,
+  SchoolLevel,
+  SchoolLevelEnum,
   SCOPE_WORKBOOK_COLUMNS,
   SCOPE_WORKBOOK_PROJECT_FIELDS,
   SCOPE_WORKBOOK_SHEETS,
+  SCOPE_WORKBOOK_UNIT_SITE_COLUMN,
   SCOPE_WORKBOOK_VERSION,
   ScopeWorkbookIssue,
   ScopeWorkbookProjectFieldKey,
+  SITES_MAX,
+  stateByCode,
   UNITS_OF_MEASURE,
   unitNeedsQuantity,
   validateSprints,
@@ -79,6 +89,21 @@ export interface WorkbookUnit {
   quantityUnit: string | null;
   startSprint: number | null;
   endSprint: number | null;
+  /** Client demo updates (wave 2): the unit's site (Sites sheet number); optional. */
+  siteNumber?: number | null;
+}
+
+/** Client demo updates C2/D1 (wave 2): a row of the Sites sheet. */
+export interface WorkbookSite {
+  siteNumber: number;
+  schoolName: string;
+  /** Code (PRIMARY) or label (Primary); written as the label. */
+  schoolLevel: string;
+  /** LGA name (or code), as people pick it from the list. */
+  lga: string;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface WorkbookLine {
@@ -104,7 +129,21 @@ export interface WorkbookBuildData {
   sprints: WorkbookSprint[];
   units: WorkbookUnit[];
   lines: WorkbookLine[];
+  /** Wave 2: the Sites sheet's rows (none in a blank template). */
+  sites?: WorkbookSite[];
+  /** Wave 2: the intervention years a new project may take (dropdown); else any year 2000–2100. */
+  interventionYears?: number[];
+  /** Wave 2: the workspace's lot titles of those years (suggestions; a new title is allowed). */
+  lotTitles?: string[];
 }
+
+/** Rows of the Sites sheet that carry dropdowns. */
+const SITE_ROWS = SITES_MAX;
+
+/** Named range of a state's LGAs on the Lists sheet ("LGA_Akwa_Ibom"); the LGA dropdowns use it. */
+export const lgaRangeName = (stateName: string) => `LGA_${stateName.replace(/[^A-Za-z0-9]+/g, '_')}`;
+
+const schoolLevelLabel = (v: string) => (SchoolLevelEnum.safeParse(v).success ? SCHOOL_LEVEL_LABELS[v as SchoolLevel] : v);
 
 // ---------------------------------------------------------------------------
 // Generator
@@ -168,12 +207,13 @@ export async function buildScopeWorkbook(data: WorkbookBuildData): Promise<Buffe
     ins.getRow(r).height = 22;
   };
   const steps = [
-    'Project: fill in the project details. On a draft, empty project fields take these values; existing values are not overwritten.',
+    'Project: fill in the project details: delivery model, State, lot title (the category of project, e.g. "Renovation of Public Schools"), funding source, intervention year and budget. On a draft, empty project fields take these values; existing values are not overwritten.',
+    'Sites: one row per school, numbered 1, 2, 3… Pick the school level and the LGA from the lists (the LGA list follows the State on the Project sheet). Add the address, or the latitude and longitude in decimal degrees. A one-school project can leave this sheet empty.',
     'Sprints (work phases): one row per work phase, numbered 1, 2, 3… in date order. Work phases may differ in length and leave gaps, but may not overlap.',
-    'Facility units: one row per physical facility on site (e.g. "Ground floor male toilet"). Pick the facility from the list. Give each unit its own Unit ID (U01, U02…). Supply items (furniture, equipment) need a quantity.',
+    'Facility units: one row per physical facility on site (e.g. "Ground floor male toilet"). Pick the facility from the list. Give each unit its own Unit ID (U01, U02…) and, on a project with several sites, the site number it belongs to. Supply items (furniture, equipment) need a quantity.',
     'BoQ: one row per bill line. Pick the Unit ID of the facility unit it belongs to and the unit of measure. Rates and amounts are in naira. Amount is quantity × rate and is recomputed on upload.',
     'Do not rename the sheets or the column headers, and keep the title rows above the headers.',
-    'Import the file on the project\'s "BoQ & work phases" step (Import needs assessment). You will see a preview with any errors before anything is saved.',
+    'Upload the file on New project (Upload needs assessment) to create the draft from it, or import it on a draft\'s "BoQ & work phases" step (Import needs assessment). You will see what will be saved, with any errors, before anything is saved.',
     'Drawings and other attachments go to the project documents, not this file.',
   ];
   section(8, 'How to fill it in');
@@ -215,17 +255,58 @@ export async function buildScopeWorkbook(data: WorkbookBuildData): Promise<Buffe
 
   // Lists (hidden, protected): the dropdown sources.
   const lists = wb.addWorksheet(S.lists);
-  lists.columns = [{ header: 'Facilities', width: 34 }, { header: 'Units of measure', width: 18 }, { header: 'Regions', width: 28 }, { header: 'Delivery models', width: 28 }, { header: 'Funding sources', width: 36 }];
+  lists.columns = [
+    { header: 'Facilities', width: 34 },
+    { header: 'Units of measure', width: 18 },
+    { header: 'Regions', width: 28 },
+    { header: 'Delivery models', width: 28 },
+    { header: 'Funding sources', width: 44 },
+    // Wave 2 (C1, C2, C3, C4, D5): States, LGAs grouped by State (one named range per State),
+    // school levels, the allowed intervention years and the workspace's lot titles.
+    { header: 'States', width: 28 },
+    { header: 'LGAs', width: 28 },
+    { header: 'School levels', width: 24 },
+    { header: 'Intervention years', width: 18 },
+    { header: 'Lot titles', width: 48 },
+  ];
+  const years = data.interventionYears ?? [];
+  const lotTitles = data.lotTitles ?? [];
+  const schoolLevels = SchoolLevelEnum.options.map((l) => SCHOOL_LEVEL_LABELS[l]);
   data.facilities.forEach((f, i) => (lists.getCell(`A${i + 2}`).value = f.name));
   UNITS_OF_MEASURE.forEach((u, i) => (lists.getCell(`B${i + 2}`).value = u.code));
   data.regions.forEach((r, i) => (lists.getCell(`C${i + 2}`).value = r));
   data.deliveryModels.forEach((m, i) => (lists.getCell(`D${i + 2}`).value = m));
-  FUNDING_SOURCE_SUGGESTIONS.forEach((s, i) => (lists.getCell(`E${i + 2}`).value = s));
+  FUNDING_SOURCES.forEach((s, i) => (lists.getCell(`E${i + 2}`).value = s.label));
+  NIGERIA_STATES.forEach((s, i) => (lists.getCell(`F${i + 2}`).value = s.name));
+  // LGAs are grouped by State (NIGERIA_LGAS order): each State's block is a named range.
+  const lgaBlocks: Array<{ name: string; first: number; last: number }> = [];
+  NIGERIA_LGAS.forEach((l, i) => {
+    const r = i + 2;
+    lists.getCell(`G${r}`).value = l.name;
+    const state = stateByCode(l.stateCode)!;
+    const block = lgaBlocks[lgaBlocks.length - 1];
+    if (block && block.name === lgaRangeName(state.name)) block.last = r;
+    else lgaBlocks.push({ name: lgaRangeName(state.name), first: r, last: r });
+  });
+  schoolLevels.forEach((s, i) => (lists.getCell(`H${i + 2}`).value = s));
+  years.forEach((y, i) => (lists.getCell(`I${i + 2}`).value = y));
+  lotTitles.forEach((t, i) => (lists.getCell(`J${i + 2}`).value = t));
   const facilityList = `${S.lists}!${colRange('A', data.facilities.length)}`;
   const uomList = `${S.lists}!${colRange('B', UNITS_OF_MEASURE.length)}`;
   const regionList = `${S.lists}!${colRange('C', data.regions.length)}`;
   const modelList = `${S.lists}!${colRange('D', data.deliveryModels.length)}`;
-  const fundingList = `${S.lists}!${colRange('E', FUNDING_SOURCE_SUGGESTIONS.length)}`;
+  const fundingList = `${S.lists}!${colRange('E', FUNDING_SOURCES.length)}`;
+  const stateList = `${S.lists}!${colRange('F', NIGERIA_STATES.length)}`;
+  const allLgaList = `${S.lists}!${colRange('G', NIGERIA_LGAS.length)}`;
+  const levelList = `${S.lists}!${colRange('H', schoolLevels.length)}`;
+  const yearList = `${S.lists}!${colRange('I', years.length)}`;
+  const lotList = `${S.lists}!${colRange('J', lotTitles.length)}`;
+  // The LGA dropdowns follow the State on the Project sheet (every LGA while it is empty).
+  const stateCell = `${S.project}!$B$${FR + SCOPE_WORKBOOK_PROJECT_FIELDS.findIndex((f) => f.key === 'state')}`;
+  const lgaListFormula = `IF(${stateCell}="",${allLgaList},INDIRECT("LGA_"&SUBSTITUTE(SUBSTITUTE(${stateCell}," ","_"),"-","_")))`;
+  const lgaValidation = (): ExcelJS.DataValidation => ({
+    ...listValidation(lgaListFormula, 'Choose an LGA of the State on the Project sheet.'),
+  });
 
   // Project (label / value)
   const proj = wb.addWorksheet(S.project, { properties: { tabColor: { argb: COLOR.primary } } });
@@ -246,11 +327,17 @@ export async function buildScopeWorkbook(data: WorkbookBuildData): Promise<Buffe
     cell.alignment = { vertical: 'top', horizontal: 'left', indent: 1 };
     if (f.key === 'region' && data.regions.length) cell.dataValidation = listValidation(regionList, 'Choose a zone or state from the list.');
     if (f.key === 'deliveryModel' && data.deliveryModels.length) cell.dataValidation = listValidation(modelList, 'Choose a delivery model from the list.');
-    // UBEC IRL: suggestions only (any other funding source is accepted), and a year from 2000 to 2100.
+    // Funding source: the fixed list (C4); a detail may follow a development partner or "Other"
+    // ("Development partner: BESDA-AF"), so other text is not blocked here (the import maps it).
     if (f.key === 'fundingSource') cell.dataValidation = { ...listValidation(fundingList, ''), showErrorMessage: false };
     if (f.key === 'interventionYear') {
-      cell.dataValidation = { type: 'whole', operator: 'between', allowBlank: true, formulae: [2000, 2100], showErrorMessage: true, error: 'Enter a year from 2000 to 2100.' };
+      cell.dataValidation = years.length
+        ? listValidation(yearList, `A new project takes the intervention year ${years.join(' or ')}.`)
+        : { type: 'whole', operator: 'between', allowBlank: true, formulae: [2000, 2100], showErrorMessage: true, error: 'Enter a year from 2000 to 2100.' };
     }
+    if (f.key === 'state') cell.dataValidation = listValidation(stateList, 'Choose a State from the list.');
+    if (f.key === 'lga') cell.dataValidation = lgaValidation();
+    if (f.key === 'lotTitle' && lotTitles.length) cell.dataValidation = { ...listValidation(lotList, ''), showErrorMessage: false };
     if (f.key === 'budget') {
       cell.dataValidation = decimalValidation(0, 'Enter the budget as a number.');
       cell.numFmt = MONEY;
@@ -265,25 +352,50 @@ export async function buildScopeWorkbook(data: WorkbookBuildData): Promise<Buffe
     }
   });
 
-  // Facility units
+  // Sites (wave 2, C2): one row per school; units name their site by number.
+  const sitesLast = SITE_ROWS + HR;
+  const sitesWs = wb.addWorksheet(S.sites, { properties: { tabColor: { argb: COLOR.primary } } });
+  titleBand(sitesWs, SCOPE_WORKBOOK_COLUMNS.sites.length, sheetTitle(S.sites), hint('One row per school, numbered 1, 2, 3… The LGA list follows the State on the Project sheet.'));
+  headerRow(sitesWs, SCOPE_WORKBOOK_COLUMNS.sites, [9, 46, 24, 26, 50, 14, 14]);
+  tableBody(
+    sitesWs,
+    [{ align: 'center' }, { wrap: true }, { align: 'center' }, {}, { wrap: true }, { numFmt: '0.000000', align: 'right' }, { numFmt: '0.000000', align: 'right' }],
+    sitesLast
+  );
+  (data.sites ?? []).forEach((s, i) => {
+    setRow(sitesWs, i + FR, [s.siteNumber, s.schoolName, schoolLevelLabel(s.schoolLevel), s.lga, s.address ?? null, s.latitude ?? null, s.longitude ?? null]);
+  });
+  for (let r = FR; r <= sitesLast; r++) {
+    sitesWs.getCell(`A${r}`).dataValidation = { type: 'whole', operator: 'greaterThanOrEqual', allowBlank: true, formulae: [1], showErrorMessage: true, error: 'Site numbers are 1, 2, 3…' };
+    sitesWs.getCell(`C${r}`).dataValidation = listValidation(levelList, 'Choose ECCDE, Primary or Junior Secondary (JSS).');
+    sitesWs.getCell(`D${r}`).dataValidation = lgaValidation();
+    sitesWs.getCell(`F${r}`).dataValidation = { type: 'decimal', operator: 'between', allowBlank: true, formulae: [-90, 90], showErrorMessage: true, error: 'Enter the latitude in decimal degrees, e.g. 12.1006.' };
+    sitesWs.getCell(`G${r}`).dataValidation = { type: 'decimal', operator: 'between', allowBlank: true, formulae: [-180, 180], showErrorMessage: true, error: 'Enter the longitude in decimal degrees, e.g. 8.3354.' };
+  }
+  sitesWs.autoFilter = { from: { row: HR, column: 1 }, to: { row: HR, column: SCOPE_WORKBOOK_COLUMNS.sites.length } };
+
+  // Facility units (wave 2: "Site no." last, so the older columns keep their letters)
+  const unitHeaders = [...SCOPE_WORKBOOK_COLUMNS.units, SCOPE_WORKBOOK_UNIT_SITE_COLUMN];
   const unitsLast = ROWS.units + HR;
   const units = wb.addWorksheet(S.units, { properties: { tabColor: { argb: COLOR.primary } } });
-  titleBand(units, SCOPE_WORKBOOK_COLUMNS.units.length, sheetTitle(S.units), hint('One row per physical facility on site. Supply items need a quantity.'));
-  headerRow(units, SCOPE_WORKBOOK_COLUMNS.units, [12, 32, 44, 14, 16, 14, 14]);
-  tableBody(units, [{ align: 'center' }, {}, { wrap: true }, { numFmt: QTY, align: 'right' }, { align: 'center' }, { align: 'center' }, { align: 'center' }], unitsLast);
+  titleBand(units, unitHeaders.length, sheetTitle(S.units), hint('One row per physical facility on site. Supply items need a quantity. Site no.: the school on the Sites sheet.'));
+  headerRow(units, unitHeaders, [12, 32, 44, 14, 16, 14, 14, 10]);
+  tableBody(units, [{ align: 'center' }, {}, { wrap: true }, { numFmt: QTY, align: 'right' }, { align: 'center' }, { align: 'center' }, { align: 'center' }, { align: 'center' }], unitsLast);
   data.units.forEach((u, i) => {
-    setRow(units, i + FR, [u.code, u.facilityName, u.label, u.plannedQuantity ?? null, u.quantityUnit ?? null, u.startSprint ?? null, u.endSprint ?? null]);
+    setRow(units, i + FR, [u.code, u.facilityName, u.label, u.plannedQuantity ?? null, u.quantityUnit ?? null, u.startSprint ?? null, u.endSprint ?? null, u.siteNumber ?? null]);
   });
   const sprintsLast = ROWS.sprints + HR;
   const sprintList = `${S.sprints}!$A$${FR}:$A$${sprintsLast}`;
+  const siteList = `${S.sites}!$A$${FR}:$A$${sitesLast}`;
   for (let r = FR; r <= unitsLast; r++) {
     units.getCell(`B${r}`).dataValidation = listValidation(facilityList, 'Choose a facility from the list.');
     units.getCell(`D${r}`).dataValidation = decimalValidation(0, 'Enter the quantity as a number.');
     units.getCell(`E${r}`).dataValidation = listValidation(uomList, 'Choose a unit of measure from the list.');
     units.getCell(`F${r}`).dataValidation = listValidation(sprintList, 'Choose a work phase number from the Sprints sheet.');
     units.getCell(`G${r}`).dataValidation = listValidation(sprintList, 'Choose a work phase number from the Sprints sheet.');
+    units.getCell(`H${r}`).dataValidation = listValidation(siteList, 'Choose a site number from the Sites sheet.');
   }
-  units.autoFilter = { from: { row: HR, column: 1 }, to: { row: HR, column: SCOPE_WORKBOOK_COLUMNS.units.length } };
+  units.autoFilter = { from: { row: HR, column: 1 }, to: { row: HR, column: unitHeaders.length } };
 
   // BoQ: Amount is a protected formula; input columns (also below the pre-sized rows) stay editable.
   const boqLast = Math.max(ROWS.boq, data.lines.length) + HR;
@@ -346,6 +458,7 @@ export async function buildScopeWorkbook(data: WorkbookBuildData): Promise<Buffe
   lists.eachRow((row, n) => {
     if (n > 1) hidden.getRow(n).values = row.values as ExcelJS.CellValue[];
   });
+  for (const b of lgaBlocks) wb.definedNames.add(`${S.lists}!$G$${b.first}:$G$${b.last}`, b.name);
   await hidden.protect('', { selectLockedCells: true, selectUnlockedCells: true });
 
   const out = await wb.xlsx.writeBuffer();
@@ -361,6 +474,11 @@ export interface WorkbookParseContext {
   facilities: WorkbookFacility[];
   /** Retired facilities the project already uses (a draft's own round-trip keeps them). */
   allowedRetiredFacilityIds?: Set<string>;
+  /**
+   * Wave 2: the State LGAs are read against when the Project sheet names none (the project's own
+   * State on an in-project import).
+   */
+  stateCode?: string | null;
 }
 
 export interface ParsedUnit {
@@ -372,6 +490,21 @@ export interface ParsedUnit {
   quantityUnit: string | null;
   startSprint: number | null;
   endSprint: number | null;
+  /** Wave 2: the unit's site number (Sites sheet), null when none. */
+  siteNumber: number | null;
+}
+
+/** Wave 2: a Sites sheet row, validated (the LGA resolved against the State). */
+export interface ParsedSite {
+  row: number;
+  siteNumber: number;
+  schoolName: string;
+  schoolLevel: SchoolLevel;
+  lgaCode: string;
+  lgaName: string;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export interface ParsedLine {
@@ -391,16 +524,62 @@ export interface ParsedScopeWorkbook {
   sprints: WorkbookSprint[];
   units: ParsedUnit[];
   lines: ParsedLine[];
+  /** Wave 2: the Sites sheet (empty for older files and one-school projects), by site number. */
+  sites: ParsedSite[];
+  /** Wave 2: the State the Project sheet names (State row), null when none or unknown. */
+  stateCode: string | null;
   issues: ScopeWorkbookIssue[];
   warnings: ScopeWorkbookIssue[];
 }
 
 // Reading helpers: server/src/utils/sheetReader.ts (shared with the project register import).
 
+const looseName = (v: string) =>
+  v
+    .toLowerCase()
+    .replace(/\b(lga|local government area|local government)\b/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/** "Primary", "PRIMARY", "Junior Secondary (JSS)", "JSS", "ECCDE", "ECCE" → the level; null when unknown. */
+export function parseSchoolLevel(value: string): SchoolLevel | null {
+  const n = normHeader(value);
+  if (!n) return null;
+  for (const level of SchoolLevelEnum.options) {
+    if (normHeader(level) === n || normHeader(SCHOOL_LEVEL_LABELS[level]) === n) return level;
+  }
+  if (n.startsWith('ecc') || n.includes('earlychild') || n.includes('nursery')) return 'ECCDE';
+  if (n.includes('jss') || n.includes('juniorsecondary')) return 'JSS';
+  if (n.includes('primary')) return 'PRIMARY';
+  return null;
+}
+
+type LgaLookup = { lga: NigeriaLga } | { code: 'UNKNOWN_LGA' | 'LGA_NOT_IN_STATE' | 'STATE_REQUIRED'; message: string };
+
+/** An LGA by name or code, in the State when one is known (else unique across the country). */
+export function resolveLgaText(value: string, stateCode: string | null): LgaLookup {
+  const code = value.trim().toUpperCase();
+  const n = looseName(value);
+  const matches = NIGERIA_LGAS.filter((l) => l.code === code || looseName(l.name) === n);
+  const state = stateByCode(stateCode);
+  if (state) {
+    const inState = matches.find((l) => l.stateCode === state.code);
+    if (inState) return { lga: inState };
+    if (matches.length) {
+      const where = [...new Set(matches.map((l) => stateByCode(l.stateCode)?.name ?? l.stateCode))].join(', ');
+      return { code: 'LGA_NOT_IN_STATE', message: `"${value}" is an LGA of ${where}, not of ${state.name}.` };
+    }
+    return { code: 'UNKNOWN_LGA', message: `"${value}" is not an LGA of ${state.name}.` };
+  }
+  if (matches.length === 1) return { lga: matches[0] };
+  if (matches.length > 1) return { code: 'STATE_REQUIRED', message: `"${value}" is an LGA of several States: enter the State on the Project sheet.` };
+  return { code: 'UNKNOWN_LGA', message: `"${value}" is not an LGA on the list.` };
+}
+
 export async function parseScopeWorkbook(buffer: Buffer, context: WorkbookParseContext): Promise<ParsedScopeWorkbook> {
   const issues: ScopeWorkbookIssue[] = [];
   const warnings: ScopeWorkbookIssue[] = [];
-  const result: ParsedScopeWorkbook = { version: null, project: {}, sprints: [], units: [], lines: [], issues, warnings };
+  const result: ParsedScopeWorkbook = { version: null, project: {}, sprints: [], units: [], lines: [], sites: [], stateCode: null, issues, warnings };
   const wb = new ExcelJS.Workbook();
   try {
     if (!(buffer.length > 2 && buffer[0] === 0x50 && buffer[1] === 0x4b)) throw new Error('not a zip');
@@ -435,9 +614,10 @@ export async function parseScopeWorkbook(buffer: Buffer, context: WorkbookParseC
     units: findSheet(wb, S.units),
     boq: findSheet(wb, S.boq),
     sprints: findSheet(wb, S.sprints),
+    sites: findSheet(wb, S.sites),
   };
   for (const [key, ws] of Object.entries(sheets)) {
-    if (!ws && key !== 'sprints') {
+    if (!ws && key !== 'sprints' && key !== 'sites') {
       const name = S[key as keyof typeof S];
       issues.push({ sheet: name, row: null, column: null, code: 'WORKBOOK_SHEET_MISSING', message: `The "${name}" sheet is missing.` });
     }
@@ -452,6 +632,85 @@ export async function parseScopeWorkbook(buffer: Buffer, context: WorkbookParseC
       const v = text(cellValue(row.getCell(2).value));
       if (v) result.project[key] = v;
     });
+  }
+
+  // State (wave 2): the State row, else the caller's (the project's) State for reading LGAs.
+  if (result.project.state) {
+    const state = findStateByName(result.project.state);
+    if (state) result.stateCode = state.code;
+    else {
+      warnings.push({ sheet: S.project, row: null, column: 'State', code: 'UNKNOWN_STATE', message: `State "${result.project.state}" is not on the list; ignored.` });
+    }
+  }
+  const lgaState = result.stateCode ?? stateByCode(context.stateCode)?.code ?? null;
+
+  // Sites (optional sheet, wave 2)
+  const siteNumbers = new Set<number>();
+  if (sheets.sites) {
+    const t = readTable(sheets.sites, S.sites, ['Site no.', 'School name', 'School level', 'LGA'], issues);
+    for (const r of t?.rows ?? []) {
+      let ok = true;
+      const bad = (column: string, code: string, message: string) => {
+        issues.push({ sheet: S.sites, row: r.row, column, code, message: `Row ${r.row}: ${message}` });
+        ok = false;
+      };
+      const number = parseSheetNumber(r.get('Site no.'));
+      if (number === null || Number.isNaN(number) || !Number.isInteger(number) || number < 1) bad('Site no.', 'INVALID_SITE_NUMBER', 'the site number must be 1, 2, 3…');
+      else if (siteNumbers.has(number)) bad('Site no.', 'DUPLICATE_SITE_NUMBER', `site ${number} appears twice.`);
+      const schoolName = text(r.get('School name'));
+      if (schoolName.length < 3) bad('School name', 'MISSING_VALUE', 'enter the school name.');
+      else if (schoolName.length > 200) bad('School name', 'TOO_LONG', 'the school name is longer than 200 characters.');
+      const levelText = text(r.get('School level'));
+      const schoolLevel = parseSchoolLevel(levelText);
+      if (!levelText) bad('School level', 'MISSING_VALUE', 'choose the school level.');
+      else if (!schoolLevel) bad('School level', 'UNKNOWN_SCHOOL_LEVEL', `"${levelText}" is not a school level (ECCDE, Primary or Junior Secondary (JSS)).`);
+      const lgaText = text(r.get('LGA'));
+      let lga: NigeriaLga | null = null;
+      if (!lgaText) bad('LGA', 'MISSING_VALUE', 'choose the LGA.');
+      else {
+        const found = resolveLgaText(lgaText, lgaState);
+        if ('lga' in found) lga = found.lga;
+        else bad('LGA', found.code, found.message);
+      }
+      const address = t?.columns.has(normHeader('Address')) ? text(r.get('Address')) : '';
+      if (address.length > 300) bad('Address', 'TOO_LONG', 'the address is longer than 300 characters.');
+      const coord = (column: 'Latitude' | 'Longitude', max: number) => {
+        if (!t?.columns.has(normHeader(column))) return null;
+        const raw = r.get(column);
+        if (isBlank(raw)) return null;
+        const n = parseSheetNumber(raw);
+        if (n === null || Number.isNaN(n) || Math.abs(n) > max) {
+          bad(column, 'INVALID_GPS', `${column.toLowerCase()} "${text(raw)}" must be in decimal degrees.`);
+          return null;
+        }
+        return n;
+      };
+      const latitude = coord('Latitude', 90);
+      const longitude = coord('Longitude', 180);
+      if ((latitude === null) !== (longitude === null) && ok) bad('Latitude', 'INVALID_GPS', 'enter both the latitude and the longitude, or neither.');
+      if (number !== null && !Number.isNaN(number)) siteNumbers.add(number);
+      if (ok && lga && schoolLevel) {
+        result.sites.push({
+          row: r.row,
+          siteNumber: number!,
+          schoolName,
+          schoolLevel,
+          lgaCode: lga.code,
+          lgaName: lga.name,
+          address: address || null,
+          latitude,
+          longitude,
+        });
+      }
+    }
+    result.sites.sort((a, b) => a.siteNumber - b.siteNumber);
+    if (siteNumbers.size > SITES_MAX) {
+      issues.push({ sheet: S.sites, row: null, column: null, code: 'TOO_MANY_SITES', message: `A project has up to ${SITES_MAX} sites.` });
+    }
+    const numbers = [...siteNumbers].sort((a, b) => a - b);
+    if (numbers.some((n, i) => n !== i + 1)) {
+      issues.push({ sheet: S.sites, row: null, column: 'Site no.', code: 'SITE_NUMBER_ORDER', message: 'Number the sites 1, 2, 3… with no gaps.' });
+    }
   }
 
   // Sprints (optional sheet)
@@ -552,6 +811,19 @@ export async function parseScopeWorkbook(buffer: Buffer, context: WorkbookParseC
       if (startSprint !== null && endSprint !== null && startSprint > endSprint) {
         bad('End sprint', 'UNIT_SPRINT_ORDER', `the unit ends in work phase ${endSprint}, before it starts in work phase ${startSprint}.`);
       }
+      // Wave 2: the unit's site (optional column). A project with one site links every unit to it.
+      let siteNumber: number | null = null;
+      const siteRaw = t?.columns.has(normHeader(SCOPE_WORKBOOK_UNIT_SITE_COLUMN)) ? r.get(SCOPE_WORKBOOK_UNIT_SITE_COLUMN) : '';
+      if (!isBlank(siteRaw)) {
+        const n = parseSheetNumber(siteRaw);
+        if (n === null || Number.isNaN(n) || !Number.isInteger(n)) bad(SCOPE_WORKBOOK_UNIT_SITE_COLUMN, 'INVALID_SITE_NUMBER', `site "${text(siteRaw)}" must be a site number.`);
+        else if (!siteNumbers.has(n)) bad(SCOPE_WORKBOOK_UNIT_SITE_COLUMN, 'UNKNOWN_SITE', `site ${n} is not on the Sites sheet.`);
+        else siteNumber = n;
+      } else if (siteNumbers.size === 1) {
+        siteNumber = [...siteNumbers][0];
+      } else if (siteNumbers.size > 1) {
+        warnings.push({ sheet: S.units, row: r.row, column: SCOPE_WORKBOOK_UNIT_SITE_COLUMN, code: 'UNIT_WITHOUT_SITE', message: `Row ${r.row}: the unit names no site; it is not linked to a school.` });
+      }
       if (ok && facility) {
         result.units.push({
           row: r.row,
@@ -562,6 +834,7 @@ export async function parseScopeWorkbook(buffer: Buffer, context: WorkbookParseC
           quantityUnit: needsQty ? qtyUnit ?? 'nr' : null,
           startSprint,
           endSprint,
+          siteNumber,
         });
         if (!needsQty && qty !== null) {
           warnings.push({ sheet: S.units, row: r.row, column: 'Quantity', code: 'QUANTITY_IGNORED', message: `Row ${r.row}: ${facility.name} is not a supply item; the quantity is ignored.` });

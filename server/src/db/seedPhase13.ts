@@ -390,7 +390,7 @@ export async function seedPhase13() {
       projectContractorId: contractor221.id,
       trigger: "MILESTONE_OVERDUE",
       milestoneId: mobilised.id,
-      summary: `${contractor221.organization.name} has not checked in on site; "${mobilised.label}" was due on ${mobilised.dueDate}.`,
+      summary: `${contractor221.organization.name} has not mobilised; "${mobilised.label}" was due on ${mobilised.dueDate}.`,
       actor: SYSTEM_ACTOR,
     });
   });

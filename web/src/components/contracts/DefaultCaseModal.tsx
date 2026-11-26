@@ -122,7 +122,7 @@ function DecisionForm({ projectId, c }: { projectId: string; c: ContractorDefaul
         message: (
           <div className="space-y-2">
             <p>This ends the contractor's contract on this project and waives its open milestones.</p>
-            <p>Its visits, payments, progress, retention and open defects stay on record.</p>
+            <p>Its monitoring visits, payments, progress, retention and open defects stay on record.</p>
           </div>
         ),
         confirmLabel: "Terminate the contract",

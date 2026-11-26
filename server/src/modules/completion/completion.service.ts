@@ -21,6 +21,8 @@ import {
   resolveTerminology,
   resolveTerm,
   zonedCalendarDate,
+  formatCalendarDate,
+  formatProjectCodeWithYear,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -182,10 +184,10 @@ function staffSlotRefusal(cert: CertRow, slot: CocSignatorySlot, webUser: WebJwt
   if (slot.isBeneficiary) {
     return hasWebPermission(webUser, 'completion:draft_certificate')
       ? null
-      : "Recording the beneficiary's signed copy needs completion:draft_certificate.";
+      : "The beneficiary's signed copy is recorded by staff who can draft the certificate.";
   }
-  if (!hasWebPermission(webUser, slot.permissionKey)) return `Signing "${slot.label}" needs ${slot.permissionKey}.`;
-  if (slot.roleCode && webUser.roleCode !== slot.roleCode) return `"${slot.label}" is signed by the ${slot.roleCode} role.`;
+  if (!hasWebPermission(webUser, slot.permissionKey)) return `Your role cannot sign "${slot.label}".`;
+  if (slot.roleCode && webUser.roleCode !== slot.roleCode) return `"${slot.label}" is signed by someone in another role.`;
   if (!scopeAllows(slot, webUser.organizationId, parties)) return scopeReason(slot);
   const mine = cert.signatures.find((s) => s.userId === webUser.userId);
   if (mine) return `You already signed as "${mine.slotLabel}". Each slot needs a different person.`;
@@ -278,7 +280,7 @@ async function suggestedScope(db: Db, projectId: string, evaluation: Awaited<Ret
   ].filter(Boolean);
   let text = `${parts.join(', ')}.`;
   if (p.description) text += ` ${p.description}`;
-  if (evaluation) text += ` Final evaluation of ${evaluation.visitDate}: ${evaluation.overallFinding.replace('_', ' ').toLowerCase()}.`;
+  if (evaluation) text += ` Final evaluation of ${formatCalendarDate(evaluation.visitDate)}: ${evaluation.overallFinding.replace('_', ' ').toLowerCase()}.`;
   return text.slice(0, 4000);
 }
 
@@ -290,7 +292,7 @@ async function draftRefusal(db: Db, projectId: string, config: ProjectTypeClosur
   if (!DRAFTABLE_PHASES.includes(project.constructionPhase)) return 'A certificate is drafted during execution or handover.';
   if (await db.completionCertificate.count({ where: { projectId, status: { in: [...LIVE_STATUSES] } } })) return 'The project already has a certificate.';
   if (config.requireFinalEvaluationBeforeCoc && !evaluationId) {
-    return 'An accepted final evaluation visit is needed before the certificate can be drafted.';
+    return 'An accepted final evaluation is needed before the certificate can be drafted.';
   }
   return null;
 }
@@ -636,7 +638,7 @@ export async function renderCertificatePdf(db: Db, projectId: string, cert: Cert
     certificateNumber: cert.certificateNumber,
     status: cert.status,
     project: {
-      code: project.codePrefix,
+      code: formatProjectCodeWithYear(project.codePrefix),
       name: project.name,
       location: [project.lgaLocation, project.stateLocation].filter(Boolean).join(', ') || null,
       contractReference: project.contractReference,
@@ -651,7 +653,7 @@ export async function renderCertificatePdf(db: Db, projectId: string, cert: Cert
     completionDate: cert.completionDate,
     scopeSummary: cert.scopeSummary,
     finalEvaluation: evaluation
-      ? `Final evaluation of ${evaluation.visitDate} by ${evaluation.reporterName}: ${evaluation.overallFinding.replace('_', ' ').toLowerCase()}.`
+      ? `Final evaluation of ${formatCalendarDate(evaluation.visitDate)} by ${evaluation.reporterName}: ${evaluation.overallFinding.replace('_', ' ').toLowerCase()}.`
       : null,
     issuedAtIso: cert.issuedAt?.toISOString() ?? null,
     slots: dto.slots.map((s) => ({
@@ -773,7 +775,7 @@ async function issueCertificate(tx: Tx, projectId: string, cert: CertRow, webUse
       targetOrganizationId: organizationId,
       category: 'COMPLETION_CERTIFICATE',
       title: `Certificate of Completion ${cert.certificateNumber} issued`,
-      description: `Completion date ${cert.completionDate}.${ceremony?.dueDate ? ` The handover ceremony is due by ${ceremony.dueDate}.` : ''}`,
+      description: `Completion date ${formatCalendarDate(cert.completionDate)}.${ceremony?.dueDate ? ` The handover ceremony is due by ${formatCalendarDate(ceremony.dueDate)}.` : ''}`,
       actionUrl: `/app/projects/${projectId}/completion?tab=certificate`,
       metadata: { certificateId: cert.id, documentId: stored.documentId },
     });

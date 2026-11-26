@@ -1,5 +1,5 @@
-import { addDays, deriveSprintStatus, resolveProjectTypeConfig, sprintCoveringDate, VISIT_KIND_META, VisitKind, VisitWarning } from '@insite/shared';
-import { Db, monitoringConfigOf, projectToday, visitLabel } from './visitCore';
+import { addDays, deriveSprintStatus, formatProjectCodeWithYear, resolveProjectTypeConfig, sprintCoveringDate, VISIT_KIND_META, VisitKind, VisitWarning } from '@insite/shared';
+import { Db, monitoringConfigOf, projectToday, visitLabel, dayText } from './visitCore';
 
 /**
  * Redesign R4a (D-R4.18): planning warnings. They are shown on the planner and the project's visits
@@ -26,6 +26,7 @@ export async function projectPlanWarnings(db: Db, projectId: string, now: Date =
   const warnings: VisitWarning[] = [];
   const base = { projectId, userId: null };
   const live = visits.filter((v) => v.status !== 'PROPOSED');
+  const code = formatProjectCodeWithYear(project.codePrefix);
 
   if (project.constructionPhase === 'ACTIVE_CONSTRUCTION') {
     for (const s of sprints) {
@@ -35,7 +36,7 @@ export async function projectPlanWarnings(db: Db, projectId: string, now: Date =
         warnings.push({
           ...base,
           code: 'SPRINT_WITHOUT_VISIT',
-          message: `${project.codePrefix}: ${s.name} (${s.startDate} to ${s.endDate}) has no visit planned.`,
+          message: `${code}: ${s.name} (${dayText(s.startDate)} to ${dayText(s.endDate)}) has no monitoring visit planned.`,
           visitId: null,
           date: s.startDate,
         });
@@ -45,14 +46,14 @@ export async function projectPlanWarnings(db: Db, projectId: string, now: Date =
     const from = addDays(today, -7 * weeks);
     const to = addDays(today, 7 * weeks);
     if (!live.some((v) => v.plannedDate >= from && v.plannedDate <= to)) {
-      warnings.push({ ...base, code: 'NO_RECENT_VISIT', message: `${project.codePrefix} has no visit within ${weeks} weeks of today.`, visitId: null, date: today });
+      warnings.push({ ...base, code: 'NO_RECENT_VISIT', message: `${code} has no monitoring visit within ${weeks} weeks of today.`, visitId: null, date: today });
     }
   }
 
   for (const v of visits) {
     if (v.status !== 'PLANNED' && v.status !== 'PROPOSED') continue;
     if (v.status === 'PLANNED' && v.assignees.length === 0) {
-      warnings.push({ ...base, code: 'VISIT_WITHOUT_OFFICER', message: `${visitLabel(v.visitKind)} on ${v.plannedDate} has no officer.`, visitId: v.id, date: v.plannedDate });
+      warnings.push({ ...base, code: 'VISIT_WITHOUT_OFFICER', message: `${visitLabel(v.visitKind)} on ${dayText(v.plannedDate)} has no officer.`, visitId: v.id, date: v.plannedDate });
     }
     if (v.status === 'PLANNED' && sprints.length > 0 && VISIT_KIND_META[v.visitKind as VisitKind].facilityRule === 'SPRINT' && v.sprintId) {
       const own = sprints.find((s) => s.id === v.sprintId);
@@ -61,7 +62,7 @@ export async function projectPlanWarnings(db: Db, projectId: string, now: Date =
         warnings.push({
           ...base,
           code: 'VISIT_OUTSIDE_SPRINT',
-          message: `${visitLabel(v.visitKind)} on ${v.plannedDate} was planned for ${own.name} but now falls in ${covering.name}. Rebuild its form or move it.`,
+          message: `${visitLabel(v.visitKind)} on ${dayText(v.plannedDate)} was planned for ${own.name} but now falls in ${covering.name}. Rebuild its form or move it.`,
           visitId: v.id,
           date: v.plannedDate,
         });
@@ -101,7 +102,7 @@ export async function officerWarnings(db: Db, userIds: string[], now: Date = new
     if (limit !== null && projects.size > limit) {
       warnings.push({
         code: 'OFFICER_OVER_LIMIT',
-        message: `${name} has visits on ${projects.size} sites in the next 30 days; the limit is ${limit}.`,
+        message: `${name} has monitoring visits on ${projects.size} sites in the next 30 days; the limit is ${limit}.`,
         projectId: null,
         visitId: null,
         userId,
@@ -117,7 +118,7 @@ export async function officerWarnings(db: Db, userIds: string[], now: Date = new
       if (regions.size > 1) {
         warnings.push({
           code: 'OFFICER_TWO_REGIONS_SAME_DAY',
-          message: `${name} has visits in ${regions.size} zones or states on ${date}.`,
+          message: `${name} has monitoring visits in ${regions.size} zones or states on ${dayText(date)}.`,
           projectId: null,
           visitId: null,
           userId,

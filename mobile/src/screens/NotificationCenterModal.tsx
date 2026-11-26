@@ -120,7 +120,7 @@ export const NotificationCenterModal: React.FC = () => {
   return (
     <GradientHeaderLayout
       scrollable={false}
-      title="Notification Center"
+      title="Notifications"
       subtitle={
         unreadCount > 0
           ? `${unreadCount} unread update${unreadCount === 1 ? "" : "s"} across your projects`
@@ -188,7 +188,7 @@ export const NotificationCenterModal: React.FC = () => {
             ) : (
               <EmptyStateCard
                 title="All Caught Up"
-                description="Visit changes, reminders and reviews will appear here."
+                description="Monitoring visit changes, reminders and reviews will appear here."
               />
             )
           }

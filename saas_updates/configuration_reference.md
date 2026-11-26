@@ -3,7 +3,7 @@
 **For:** the delivery team preparing client workshops on UBEC's Direct Intervention and Matching Grants delivery models.
 **Use:** go through it setting by setting with the client. Each row says where the setting lives, its default, what it changes, and which process-flow control (gap analysis IDs G1–G14) it serves.
 
-**Last updated:** 2026-11-24 (redesign R6: type editor tabs, the five-step project setup, new page names and routes; redesign R5f: reporting cadence, hold points, contractor field reporting, the `inspections` type key and checklist templates removed, see 1.1).
+**Last updated:** 2026-11-26 (client demo wave 4: approved list upload permission, no new settings, section 2.2). Before that 2026-11-25 (client demo waves 1–3: workspace values without a Settings control yet, section 2.2). Before that 2026-11-24 (redesign R6: type editor tabs, the five-step project setup, new page names and routes; redesign R5f: reporting cadence, hold points, contractor field reporting, the `inspections` type key and checklist templates removed, see 1.1).
 
 ---
 
@@ -77,6 +77,47 @@ Three kinds of component, each versioned. A form is built ("frozen") from them w
 **Limits:** 40 questions per section or sub-form (the editor warns above 5 on a sub-form), 30 options, 20 blocks per template, 600 questions per built form. A question's key never changes type across versions.
 
 **Preview:** Forms & facilities → Preview builds the form a project would get for a visit kind and date, from the live library and the project's scope, without saving anything.
+
+### 2.2 Client demo settings (waves 1–4)
+
+Workspace values added for the client demo. **None has a Settings control yet** (follow-ups): they are columns on the tenant, changed in the database, and every one takes its default until set. Control column: section of `client_demo_updates/implementation_plan.md`.
+
+| Setting | Where | Default | Effect | Control |
+| :--- | :--- | :--- | :--- | :--- |
+| Fiscal year start month (wave 1) | `Tenant.fiscalYearStartMonth`, no UI yet | 1 (January) | Starts the fiscal year used by the payment period filter (this / last fiscal year, quarters) and the portfolio Payments tab, and decides which intervention years a new draft may take (current and next fiscal year). | D5, G |
+| Contractor performance (wave 2–3) | `Tenant.contractorPerformanceJson`, no UI yet (`ContractorPerformanceSettingsSchema`; `{}` = every default) | See the rows below | How the contractor register's star rating is computed and when a contractor is flagged on a project. Ratings are recomputed nightly (`contractor-ratings` job) or with "Refresh ratings". | F.3, F.4 |
+| ↳ `weights` | same | workmanship 0.4, schedule 0.2, findings 0.2, closure 0.2 | Weight of each rating component: workmanship on accepted monitoring reports; work phases verified met on time and mobilisation on time; major and critical findings and how fast they were rectified; closure ratings on completed projects. A component with no facts yet passes its weight to the others in proportion. | F.3 |
+| ↳ `windowMonths` | same | 24 (3–60) | Monitoring reports older than this are not counted. | F.3 |
+| ↳ `halfLifeMonths` | same | 6 (1–36) | A report's weight halves every N months, so recent work counts most. | F.3 |
+| ↳ `minReports` | same | 5 (1–50) | Below this many accepted reports the contractor shows "Not yet rated" instead of stars. | F.3 |
+| ↳ `flagRule` | same | `enabled` true, `reportCount` 3, `workmanshipAtOrBelow` 3 (of 5), `withinDays` 60 (7–365) | Flags a contractor on a project when that many accepted monitoring reports within the window rate workmanship at or below the threshold. Checked daily and when a report is accepted; one open flag per contractor and project. Holders of `contractors:manage` (in the demo, the Director, Physical Planning) are notified and decide the action. | F.4 |
+| Budget mismatch tolerance (wave 3) | `Tenant.budgetMismatchTolerancePct`, no UI yet | 10 (%) | A project whose budget differs from the cost estimate on its approved list row (Direct Intervention schedule or the State's approved BEAP) by more than this is red-flagged on the Overview and the Needs assessment page, e.g. "Budget ₦84.0m vs approved BEAP ₦71.5m (+17%)". | E3 |
+
+**Wave 4 (2026-11-26) adds no setting.** The fiscal year start month above still has no control.
+
+| Feature | Settings | Access |
+| :--- | :--- | :--- |
+| Approved list upload (E3) | None. The template (`INSITE-APPROVED-LIST-v1`) is fixed: one list per file; an upload replaces the list of the same year, kind and State. | New permission `approved_lists:manage` (Upload Approved Project Lists, category Portfolio & projects). Granted to `TENANT_SUPER_ADMIN` (UBEC Administrator; System Administrator in the demo overlay) by migration, and by the demo overlay to the Director, Physical Planning (`DIRECTOR_PHYSICAL_PLANNING`). Viewing stays `approved_lists:view`. |
+| Payments Breakdown and Group by month / quarter (G.1, G.2) | None. Groupings are fixed (zone, State, LGA, contractor, project, month, quarter); months and quarters follow the fiscal year start month. | `payments:view`, as the rest of the Payments tab. |
+| Visit calendar (D4, read-only) | None. Status colours and icons are fixed; it uses the page's own filters. | As the visit plan and the planner (`visits:view`). |
+
+### 2.3 Server environment: address lookup (D3, 2026-11-26)
+
+Set on the API server (`server/.env`), not per workspace: it applies to every workspace on that server.
+
+| Variable | Default | Effect | Notes |
+| :--- | :--- | :--- | :--- |
+| `GOOGLE_MAPS_KEY` | empty (off) | Turns on **Find address** on project sites (setup → Sites) and the project's own Location boundary. The server looks the typed text up with Google Maps Platform: Places API (New) text search, then Geocoding API v4 when Places finds nothing; Nigeria only, and only matches in the project's State when it has one. One match fills the coordinates (and an empty address), several show a pick list with the match quality ("Named place", "Street", "Area only", "Town only"). Empty: `GET /api/v1/geocode/status` says disabled and the button is not shown. | The key stays on the server (never sent to the browser or the app). Only the address text (plus the State name) is sent to Google, nothing about the project or user. Signed-in web users only, 30 lookups a minute per user; results are not stored. The key's Cloud project needs Places API (New) and Geocoding API enabled; the legacy Geocoding API needs billing and is not used. Tests blank it. |
+
+### 2.4 Demo builds and local storage links (pre-demo round, 2026-11-26)
+
+Build and server environment, not workspace settings.
+
+| Variable | Where | Default | Effect | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| `VITE_DEMO_MODE` | `web/.env` (build time) | `false` | `true` builds the demo web: user menu → **Switch user**, the demo accounts on the sign-in page, sample values on New project. Vite drops the demo code and the account list from other builds. | Restart the web dev server after changing it. Never in a build real users see. |
+| `EXPO_PUBLIC_DEMO_MODE` | `mobile/.env` (bundle time) | `false` | `true` builds the demo field app: **Demo accounts** quick sign-in on the sign-in screen (Resident Supervisor, M&E Officer, SUBEB M&E Officer, Independent M&E; each tap is a normal password sign-in) and Settings → Demo controls. Metro drops the demo account module from other bundles. | Restart Metro after changing it. Never in a build real users see. |
+| `PUBLIC_API_BASE_URL` | `server/.env` | `http://localhost:<PORT>` | Local-dev storage only (no S3 configured): signed file links use the **origin of the request** being served, so the web on `localhost` gets localhost links and a phone on the LAN address gets LAN links. Links written outside a request (jobs, emails) use this value. | With S3-compatible storage the provider's presigned URLs are used and this does not apply. `X-Forwarded-Host` is read only when Express `trust proxy` is set. |
 
 ---
 
@@ -296,6 +337,8 @@ The catalogue lives in `SYSTEM_PERMISSIONS_CATALOG` (`shared/src/enums.ts`). Cod
 | Portfolio & projects | `projects:activate` | Activate Draft Projects | Web | MONITOR |
 | Portfolio & projects | `projects:edit_baseline` | Edit Project Details & Site | Web | MONITOR |
 | Portfolio & projects | `projects:manage_standards_docs` | Manage Standards & Needs Assessments | Web | MONITOR |
+| Portfolio & projects | `approved_lists:view` | View Approved Project Lists (client demo wave 3) | Web | – (see 2.2) |
+| Portfolio & projects | `approved_lists:manage` | Upload Approved Project Lists (client demo wave 4) | Web | – (see 2.2) |
 | Scope & sprints | `scope:view` | View Scope & Sprints | Both | MONITOR, LENDER, ORGANIZATION_ADMIN, MONITOR_INSPECTOR, INDEPENDENT_RESIDENT |
 | Scope & sprints | `scope:edit` | Edit Scope & Sprints | Web | MONITOR |
 | Scope & sprints | `sprints:view_status` | View Schedule Status | Web | MONITOR, LENDER, ORGANIZATION_ADMIN |

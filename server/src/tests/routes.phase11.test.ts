@@ -581,14 +581,16 @@ describe('portfolio dashboard', () => {
     // PRG-105 (under construction); the demo closure twin PRG-106 (liability period over); PRG-242 is
     // archived, so not on the map.
     assert.equal(flagship.body.data.kpis.projectCount, 8);
-    assert.equal(flagship.body.data.kpis.totalCommitmentNgn, 240_000_000 + 70_000_000 + 85_000_000 + 150_000_000 + 64_000_000 + 165_000_000 + 210_000_000 + 98_000_000);
+    // Owner decision 3 (2026-11-26): the contract sum where a project has one (PRG-102 ₦232m, PRG-221
+    // ₦81.5m, PRG-106 ₦96m), else the budget.
+    assert.equal(flagship.body.data.kpis.totalCommitmentNgn, 232_000_000 + 70_000_000 + 81_500_000 + 150_000_000 + 64_000_000 + 165_000_000 + 210_000_000 + 96_000_000);
     assert.equal(flagship.body.data.kpis.quietSiteCount, 4, 'no captures yet on the seeded projects under construction');
 
     const filtered = await request(app)
       .get(`/api/v1/projects/portfolio/overview?projectTypeId=${ids.coFunded}`)
       .set(await login(FLAGSHIP));
     assert.equal(filtered.body.data.kpis.projectCount, 3);
-    assert.equal(filtered.body.data.kpis.totalCommitmentNgn, 70_000_000 + 85_000_000 + 64_000_000);
+    assert.equal(filtered.body.data.kpis.totalCommitmentNgn, 70_000_000 + 81_500_000 + 64_000_000);
   });
 
   it('is open to any web user (UBEC Dashboard) and keeps the visibility rule', async () => {

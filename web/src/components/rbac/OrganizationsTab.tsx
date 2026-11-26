@@ -366,6 +366,8 @@ export function OrganizationsTab() {
           onClick={(e) => {
             if (e.target === e.currentTarget && !saving) setDrawer(null);
           }}
+          onClose={() => !saving && setDrawer(null)}
+          label={drawer.mode === 'create' ? 'Add organisation' : `Edit ${drawer.org.name}`}
         >
           <form onSubmit={handleSubmit} className="flex flex-col h-full" noValidate>
             <div className="p-4 border-b border-slate-100 flex items-center justify-between">

@@ -4,7 +4,8 @@ import {
   parseProjectAlertState,
   OPEN_DEFECT_STATUSES,
   unitsActiveInSprint,
-  VISIT_KIND_META,
+  formatCalendarDate,
+  visitKindNoun,
   zonedCalendarDate,
   type OverviewDeadline,
   type OverviewNextVisit,
@@ -57,7 +58,7 @@ function firstLine(text: string): string | null {
 }
 
 function visitKindLabel(kind: VisitKind): string {
-  return VISIT_KIND_META[kind]?.label ?? kind;
+  return visitKindNoun(kind);
 }
 
 export async function getProjectOverview(projectId: string, webUser: WebJwtPayload, now: Date = new Date()): Promise<ProjectOverviewDto> {
@@ -183,7 +184,7 @@ export async function getProjectOverview(projectId: string, webUser: WebJwtPaylo
   if (visitDeadlineRow?.submissionDeadline) {
     candidates.push({
       kind: 'VISIT_SUBMISSION',
-      label: `${visitKindLabel(visitDeadlineRow.visitKind)} visit of ${visitDeadlineRow.plannedDate}: submit the report`,
+      label: `${visitKindLabel(visitDeadlineRow.visitKind)} of ${formatCalendarDate(visitDeadlineRow.plannedDate)}: submit the monitoring report`,
       dueDate: visitDeadlineRow.submissionDeadline,
       overdue: visitDeadlineRow.submissionDeadline < today,
       milestoneId: null,

@@ -20,6 +20,7 @@ import {
   VisitKind,
   VisitStatus,
   zonedCalendarDate,
+  formatProjectCodeWithYear,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import type { WebJwtPayload } from '../../middleware/auth.middleware';
@@ -138,7 +139,7 @@ function visitColumns(withProject: boolean): ExportColumn<VisitLine>[] {
   const zone = (l: VisitLine) => l.v.project.timezone;
   const project: ExportColumn<VisitLine>[] = withProject
     ? [
-        { header: 'Project code', width: 13, value: (l) => l.v.project.codePrefix },
+        { header: 'Project code', width: 22, value: (l) => formatProjectCodeWithYear(l.v.project.codePrefix) },
         { header: 'Project', width: 30, wrap: true, value: (l) => l.v.project.name },
       ]
     : [];
@@ -146,7 +147,7 @@ function visitColumns(withProject: boolean): ExportColumn<VisitLine>[] {
     ...project,
     { header: 'Planned date', width: 14, format: 'date', value: (l) => dateCell(l.v.plannedDate) },
     { header: 'Original date', width: 14, format: 'date', value: (l) => dateCell(l.v.originalPlannedDate) },
-    { header: 'Visit kind', width: 22, value: (l) => VISIT_KIND_META[l.v.visitKind as VisitKind]?.label ?? l.v.visitKind },
+    { header: 'Monitoring visit kind', width: 22, value: (l) => VISIT_KIND_META[l.v.visitKind as VisitKind]?.label ?? l.v.visitKind },
     { header: 'Work phase', width: 20, value: (l) => (l.v.sprint ? `Work phase ${l.v.sprint.number}${JOIN}${l.v.sprint.name}` : null) },
     { header: 'Status', width: 17, value: (l) => VISIT_STATUS_LABELS[l.v.status as VisitStatus] ?? l.v.status },
     { header: 'Confirmation', width: 15, value: (l) => VISIT_CONFIRMATION_LABELS[l.v.confirmation] },
@@ -166,8 +167,8 @@ function visitColumns(withProject: boolean): ExportColumn<VisitLine>[] {
       width: 18,
       value: (l) => (l.v.checkInAt ? (l.v.checkInGeofenceStatus ? CHECK_IN_LABELS[l.v.checkInGeofenceStatus] : 'No location') : null),
     },
-    { header: 'Submission due', width: 14, format: 'date', value: (l) => dateCell(l.v.submissionDeadline) },
-    { header: 'Submitted at', width: 18, format: 'datetime', value: (l) => dateTimeCell(l.v.submissions[0]?.confirmedAt, zone(l)) },
+    { header: 'Report due', width: 14, format: 'date', value: (l) => dateCell(l.v.submissionDeadline) },
+    { header: 'Report submitted at', width: 18, format: 'datetime', value: (l) => dateTimeCell(l.v.submissions[0]?.confirmedAt, zone(l)) },
     { header: 'Submitted late', width: 11, value: (l) => (l.v.submissions[0] ? (l.v.submissions[0].isLate ? 'Yes' : 'No') : null) },
     { header: 'Review', width: 17, value: (l) => (l.v.submissions[0] ? VISIT_SUBMISSION_STATUS_LABELS[l.v.submissions[0].status] : null) },
     { header: 'Reviewed at', width: 18, format: 'datetime', value: (l) => dateTimeCell(l.reviewedAt, zone(l)) },
@@ -184,7 +185,7 @@ function visitFilterText(q: { status?: string; visitKind?: string }): string | n
   return parts.length ? parts.join('; ') : null;
 }
 
-/** GET /projects/:id/visits/export.xlsx: the Visits tab with its filters. */
+/** GET /projects/:id/visits/export.xlsx: the Monitoring visits tab with its filters. */
 export async function buildProjectVisitsExport(projectId: string, webUser: WebJwtPayload, q: ProjectVisitsExportQuery, now = new Date()): Promise<XlsxFile> {
   const project = await loadProjectHeader(projectId);
   const brand = workspaceShortName(project.tenant.name);
@@ -193,23 +194,23 @@ export async function buildProjectVisitsExport(projectId: string, webUser: WebJw
   const period = q.from || q.to ? `Planned ${q.from ?? '…'} to ${q.to ?? '…'}` : null;
   const buffer = await buildExportWorkbook({
     brandName: brand,
-    title: `Visits${JOIN}${project.codePrefix}`,
+    title: `Monitoring visits${JOIN}${formatProjectCodeWithYear(project.codePrefix)}`,
     generatedAt: now,
     sheets: [
       {
-        name: 'Visits',
-        title: titleOf(brand, 'Visits', project.codePrefix),
-        hint: hintOf(project.name, period, visitFilterText(q) ?? 'All visits', `${lines.length} visit(s)`, `Times in ${zone}`, generatedLine(now, zone, webUser.fullName)),
+        name: 'Monitoring visits',
+        title: titleOf(brand, 'Monitoring visits', formatProjectCodeWithYear(project.codePrefix)),
+        hint: hintOf(project.name, period, visitFilterText(q) ?? 'All monitoring visits', `${lines.length} monitoring visit(s)`, `Times in ${zone}`, generatedLine(now, zone, webUser.fullName)),
         columns: visitColumns(false),
         rows: lines,
-        emptyText: 'No visits match these filters.',
+        emptyText: 'No monitoring visits match these filters.',
       },
     ],
   });
-  return { buffer, fileName: `${project.codePrefix} visits ${zonedCalendarDate(now, zone)}.xlsx` };
+  return { buffer, fileName: `${project.codePrefix} monitoring visits ${zonedCalendarDate(now, zone)}.xlsx` };
 }
 
-/** GET /visits/export.xlsx: the planner's period and filters (cancelled visits left out, as on screen). */
+/** GET /visits/export.xlsx: the monitoring planner's period and filters (cancelled visits left out, as on screen). */
 export async function buildPlannerVisitsExport(webUser: WebJwtPayload, q: PlannerVisitsExportQuery, now = new Date()): Promise<XlsxFile> {
   const { brand, zone } = await workspaceBrand(webUser.tenantId);
   const { from, to, where } = plannerVisitWhere(webUser, q, now);
@@ -220,33 +221,33 @@ export async function buildPlannerVisitsExport(webUser: WebJwtPayload, q: Planne
     q.officerId ? prisma.user.findFirst({ where: { id: q.officerId, tenantId: webUser.tenantId }, select: { fullName: true } }) : null,
   ]);
   const filters = [
-    region && `Zone: ${region.name}`,
-    project && `Project: ${project.codePrefix}`,
+    region && `Zone / State: ${region.name}`,
+    project && `Project: ${formatProjectCodeWithYear(project.codePrefix)}`,
     officer && `Officer: ${officer.fullName}`,
     visitFilterText({ visitKind: q.visitKind }),
   ].filter(Boolean);
   const buffer = await buildExportWorkbook({
     brandName: brand,
-    title: `Visits ${from} to ${to}`,
+    title: `Monitoring visits ${from} to ${to}`,
     generatedAt: now,
     sheets: [
       {
-        name: 'Visits',
-        title: titleOf(brand, 'Visits', `${from} to ${to}`),
+        name: 'Monitoring visits',
+        title: titleOf(brand, 'Monitoring visits', `${from} to ${to}`),
         hint: hintOf(
-          `Planned ${from} to ${to}, cancelled visits left out`,
+          `Planned ${from} to ${to}, cancelled monitoring visits left out`,
           filters.length ? filters.join('; ') : 'All projects in view',
-          `${lines.length} visit(s)`,
+          `${lines.length} monitoring visit(s)`,
           "Times in each project's zone",
           generatedLine(now, zone, webUser.fullName)
         ),
         columns: visitColumns(true),
         rows: lines,
-        emptyText: `No visits from ${from} to ${to} match these filters.`,
+        emptyText: `No monitoring visits from ${from} to ${to} match these filters.`,
       },
     ],
   });
-  return { buffer, fileName: `${brand ? `${brand} visits` : 'Visits'} ${from} to ${to}.xlsx` };
+  return { buffer, fileName: `${brand ? `${brand} monitoring visits` : 'Monitoring visits'} ${from} to ${to}.xlsx` };
 }
 
 // ---------------------------------------------------------------------------
@@ -272,10 +273,10 @@ export async function buildProjectFindingsExport(projectId: string, webUser: Web
     { header: 'Unit', width: 14, value: (f) => (f.facilityUnitId ? (names.units.get(f.facilityUnitId) ?? null) : null) },
     { header: 'Question', width: 34, wrap: true, value: (f) => f.title ?? f.checklistItemKey },
     { header: 'Description', width: 40, wrap: true, value: (f) => f.description },
-    { header: 'Raised on visit', width: 22, value: (f) => VISIT_KIND_META[visitOf(f)?.visitKind as VisitKind]?.label ?? (f.visitId ? 'Visit' : null) },
-    { header: 'Visit date', width: 14, format: 'date', value: (f) => dateCell(visitOf(f)?.plannedDate ?? zonedCalendarDate(f.createdAt, zone)) },
+    { header: 'Raised on monitoring visit', width: 22, value: (f) => VISIT_KIND_META[visitOf(f)?.visitKind as VisitKind]?.label ?? (f.visitId ? 'Monitoring visit' : null) },
+    { header: 'Monitoring visit date', width: 14, format: 'date', value: (f) => dateCell(visitOf(f)?.plannedDate ?? zonedCalendarDate(f.createdAt, zone)) },
     { header: 'Raised at', width: 18, format: 'datetime', value: (f) => dateTimeCell(f.createdAt, zone) },
-    { header: 'Raised by', width: 22, value: (f) => f.raisedByName ?? 'Visit form rule' },
+    { header: 'Raised by', width: 22, value: (f) => f.raisedByName ?? 'Monitoring form rule' },
     { header: 'Follow-up checks', width: 10, format: 'integer', value: (f) => f.recheckCount },
     { header: 'Last follow-up check', width: 18, format: 'datetime', value: (f) => dateTimeCell(f.lastRecheckedAt, zone) },
     { header: 'Escalated at', width: 18, format: 'datetime', value: (f) => dateTimeCell(f.escalatedAt, zone) },
@@ -286,12 +287,12 @@ export async function buildProjectFindingsExport(projectId: string, webUser: Web
   ];
   const buffer = await buildExportWorkbook({
     brandName: brand,
-    title: `Findings${JOIN}${project.codePrefix}`,
+    title: `Findings${JOIN}${formatProjectCodeWithYear(project.codePrefix)}`,
     generatedAt: now,
     sheets: [
       {
         name: 'Findings',
-        title: titleOf(brand, 'Findings', project.codePrefix),
+        title: titleOf(brand, 'Findings', formatProjectCodeWithYear(project.codePrefix)),
         hint: hintOf(
           project.name,
           q.status ? `Status: ${FINDING_STATUS_LABELS[q.status]}` : 'Open, rectified and dismissed',
@@ -368,12 +369,12 @@ export async function buildProjectPaymentsExport(projectId: string, webUser: Web
   const money = (n: number | null) => (n === null ? 'not set' : `₦${n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   const buffer = await buildExportWorkbook({
     brandName: brand,
-    title: `Payments${JOIN}${project.codePrefix}`,
+    title: `Payments${JOIN}${formatProjectCodeWithYear(project.codePrefix)}`,
     generatedAt: now,
     sheets: [
       {
         name: 'Payments',
-        title: titleOf(brand, 'Payments', project.codePrefix),
+        title: titleOf(brand, 'Payments', formatProjectCodeWithYear(project.codePrefix)),
         hint: hintOf(
           project.name,
           `Contract sum ${money(summary.contractSumNgn)}`,
@@ -427,7 +428,7 @@ export async function buildKpiExport(webUser: WebJwtPayload, q: KpiQuery, now = 
     q.regionId ? prisma.region.findFirst({ where: { id: q.regionId, tenantId: webUser.tenantId }, select: { name: true } }) : null,
     q.owningOrganizationId ? prisma.organization.findFirst({ where: { id: q.owningOrganizationId, tenantId: webUser.tenantId }, select: { name: true } }) : null,
   ]);
-  const filters = [type && `Type: ${type.name}`, region && `Zone: ${region.name}`, owner && `Owner: ${owner.name}`].filter(Boolean);
+  const filters = [type && `Type: ${type.name}`, region && `Zone / State: ${region.name}`, owner && `Owner: ${owner.name}`].filter(Boolean);
   const { from, to } = data.period;
   const baseHint = (count: string) =>
     hintOf(`${from} to ${to} (${zone})`, filters.length ? filters.join('; ') : 'All projects in view', count, generatedLine(now, zone, webUser.fullName));
@@ -455,10 +456,10 @@ export async function buildKpiExport(webUser: WebJwtPayload, q: KpiQuery, now = 
     }))
   );
   const byProject: ExportColumn<KpiProjectLine>[] = [
-    { header: 'Project code', width: 13, value: (l) => l.codePrefix },
+    { header: 'Project code', width: 22, value: (l) => formatProjectCodeWithYear(l.codePrefix) },
     { header: 'Project', width: 30, wrap: true, value: (l) => l.name },
     { header: 'Project type', width: 20, value: (l) => l.projectTypeName },
-    { header: 'Zone', width: 16, value: (l) => l.regionName },
+    { header: 'Zone / State', width: 16, value: (l) => l.regionName },
     { header: 'Owner', width: 22, value: (l) => l.owningOrganizationName },
     { header: 'Stage', width: 20, value: (l) => KPI_STAGE_META[KPI_BY_KEY[l.key].stage].label },
     { header: 'KPI', width: 44, wrap: true, value: (l) => KPI_BY_KEY[l.key].label },

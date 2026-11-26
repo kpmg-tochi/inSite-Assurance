@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { z } from "zod";
 import {
   COMMON_TIME_ZONES,
+  lgaByCode,
   ProjectGeofenceSchema,
   ProjectSiteStepSchema,
   type ProjectGeofenceInput,
@@ -9,6 +10,7 @@ import {
 } from "@insite/shared";
 import { FieldError, visibleError } from "../../../../lib/forms";
 import { GeofenceEditor } from "../../../../components/geofence/GeofenceEditor";
+import { addressQuery } from "../../../../components/geofence/addressQuery";
 import { useSaveSetupStepMutation } from "../../../../mutations/projects/useProjectSetupMutations";
 import {
   extractErrors,
@@ -93,6 +95,13 @@ export function SiteSection({ projectId, setup, readOnly }: StepProps) {
     section
   );
 
+  // D3: "Find address" starts from the project name, its address and LGA (the server adds the State).
+  const findAddress = useMemo(() => {
+    const b = setup.basics;
+    const lga = lgaByCode(b.lgaCode)?.name ?? b.lgaLocation ?? null;
+    return { query: addressQuery([b.name, b.siteAddress, lga]), stateCode: b.stateCode ?? null };
+  }, [setup.basics]);
+
   // The editor explains an invalid shape itself; this shows a failed save's message.
   const geofenceError = err("geofence") ?? general;
 
@@ -100,9 +109,10 @@ export function SiteSection({ projectId, setup, readOnly }: StepProps) {
     <div className="space-y-5">
       <StepSection
         title="Location"
-        description={`Field captures and visit check-ins are checked against this boundary. A new radial boundary starts at the workspace default radius (${setup.site.tenantDefaultRadiusMeters} m); set this project's own radius below.`}
+        description={`Field captures and monitoring visit check-ins are checked against this boundary. A new radial boundary starts at the workspace default radius (${setup.site.tenantDefaultRadiusMeters} m); set this project's own radius below.`}
       >
         <GeofenceEditor
+          findAddress={findAddress}
           value={state.geofence}
           onChange={(geofence) => setField(form, "geofence", geofence, true)}
           enabledModes={setup.site.enabledGeofenceModes}
@@ -158,7 +168,7 @@ export function SiteSection({ projectId, setup, readOnly }: StepProps) {
               ))}
             </select>
             <p className="mt-1 text-[11px] text-slate-500">
-              Dates on this project (visit days, deadlines, milestones) are counted in this zone.
+              Dates on this project (monitoring visit days, deadlines, milestones) are counted in this zone.
             </p>
             <FieldError form={form} name="timezone" />
           </div>

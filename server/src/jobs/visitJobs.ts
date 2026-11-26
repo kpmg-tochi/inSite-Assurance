@@ -3,7 +3,7 @@ import { addDays, daysBetween, zonedCalendarDate } from '@insite/shared';
 import { prisma } from '../config/prisma';
 import { recordAuditEvent } from '../modules/audit/audit.service';
 import { createWebNotification } from '../modules/notifications/notifications.service';
-import { flushVisitPushes, monitoringConfigOf, notifyOfficers, SYSTEM_VISIT_ACTOR, VisitPushQueue, visitLabel } from '../modules/visits/visitCore';
+import { codeText, dayText, flushVisitPushes, monitoringConfigOf, notifyOfficers, SYSTEM_VISIT_ACTOR, VisitPushQueue, visitLabel, visitLabelInSentence } from '../modules/visits/visitCore';
 import { proposeVisitsFromType } from '../modules/visits/visitPlan.service';
 import { refreshScheduleBadge } from '../modules/schedule/schedule.service';
 import { JobContext, registerJob, runUnit } from './runner';
@@ -42,8 +42,8 @@ export async function runVisitReminders({ now }: JobContext): Promise<void> {
             visitId: v.id,
             userIds: v.assignees.map((a) => a.userId),
             type: 'VISIT_REMINDER',
-            title: `Confirm the ${visitLabel(v.visitKind).toLowerCase()} on ${v.plannedDate}`,
-            message: `${p.codePrefix}: the ${visitLabel(v.visitKind).toLowerCase()} on ${v.plannedDate} is not confirmed yet. Confirm it, move it or propose another date.`,
+            title: `Confirm the ${visitLabelInSentence(v.visitKind)} on ${dayText(v.plannedDate)}`,
+            message: `${codeText(p.codePrefix)}: the ${visitLabelInSentence(v.visitKind)} on ${dayText(v.plannedDate)} is not confirmed yet. Confirm it, move it or propose another date.`,
           })
         );
         await flushVisitPushes(pushes);
@@ -71,12 +71,13 @@ async function markMissed(p: { id: string; codePrefix: string }, today: string, 
         if (!['PLANNED', 'IN_PROGRESS', 'RETURNED'].includes(v.status) || !v.submissionDeadline || v.submissionDeadline >= today) return 'not due';
         await tx.visit.update({ where: { id }, data: { status: 'MISSED', missedAt: now } });
         const label = visitLabel(v.visitKind);
+        const inSentence = visitLabelInSentence(v.visitKind);
         await createWebNotification(tx, {
           projectId: p.id,
           targetPermissionKey: 'visits:plan',
           category: 'VISIT_MISSED',
-          title: `Missed: ${label} of ${v.plannedDate}`,
-          description: `${p.codePrefix}: nothing was submitted for the ${label.toLowerCase()} of ${v.plannedDate} by ${v.submissionDeadline}.`,
+          title: `Missed: ${label} of ${dayText(v.plannedDate)}`,
+          description: `${codeText(p.codePrefix)}: no monitoring report was submitted for the ${inSentence} of ${dayText(v.plannedDate)} by ${dayText(v.submissionDeadline)}.`,
           actionUrl: `/app/projects/${p.id}/visits?visitId=${id}`,
           metadata: { visitId: id },
         });
@@ -84,9 +85,9 @@ async function markMissed(p: { id: string; codePrefix: string }, today: string, 
           projectId: p.id,
           actorType: 'SYSTEM',
           actorId: 'visit-deadlines',
-          actorDisplayName: 'InSite (visits)',
+          actorDisplayName: 'System (visits)',
           action: 'VISIT_MISSED',
-          summaryText: `The ${label.toLowerCase()} of ${v.plannedDate} was missed: no submission by ${v.submissionDeadline}.`,
+          summaryText: `The ${inSentence} of ${v.plannedDate} was missed: no monitoring report by ${v.submissionDeadline}.`,
           payload: { visitId: id, submissionDeadline: v.submissionDeadline, previousStatus: v.status },
         });
         return 'missed';
@@ -112,7 +113,7 @@ async function notifySprintsDue(p: { id: string; codePrefix: string; projectType
           targetPermissionKey: 'sprints:verify',
           category: 'SPRINT_VERIFICATION_DUE',
           title: `Verify ${s.name}`,
-          description: `${p.codePrefix}: ${s.name} ended on ${s.endDate}. Record whether it was met by ${addDays(s.endDate, days)}.`,
+          description: `${codeText(p.codePrefix)}: ${s.name} ended on ${dayText(s.endDate)}. Record whether it was met by ${dayText(addDays(s.endDate, days))}.`,
           actionUrl: `/app/projects/${p.id}/scope?sprintId=${s.id}`,
           metadata: { sprintId: s.id },
         });
@@ -172,7 +173,7 @@ export async function runFindingEscalations({ now }: JobContext): Promise<void> 
             targetPermissionKey: 'findings:receive_escalations',
             category: 'FINDING_ESCALATED',
             title: `Finding open for ${openDays} days`,
-            description: `${p.codePrefix}: "${what}" (${f.severity.toLowerCase()}) has been open for ${openDays} days.`,
+            description: `${codeText(p.codePrefix)}: "${what}" (${f.severity.toLowerCase()}) has been open for ${openDays} days.`,
             actionUrl: `/app/projects/${p.id}/visits?tab=findings`,
             metadata: { findingId: f.id, openDays },
           });
@@ -180,7 +181,7 @@ export async function runFindingEscalations({ now }: JobContext): Promise<void> 
             projectId: p.id,
             actorType: 'SYSTEM',
             actorId: 'finding-escalations',
-            actorDisplayName: 'InSite (findings)',
+            actorDisplayName: 'System (findings)',
             action: 'FINDING_ESCALATED',
             summaryText: `Escalated the finding "${what}": open for ${openDays} days (limit ${days}).`,
             payload: { findingId: f.id, openDays, escalationDays: days },

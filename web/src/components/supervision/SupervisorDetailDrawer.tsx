@@ -4,6 +4,7 @@ import { AlertTriangle, X } from "lucide-react";
 import { formatProjectCode, type SupervisorWorkloadDto } from "@insite/shared";
 import Drawer from "../Drawer";
 import { supervisorWarnings } from "./supervisorWarnings";
+import { formatDateShort } from "../../lib/formatters";
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -26,7 +27,7 @@ export function SupervisorDetailDrawer({
 }) {
   const warnings = supervisorWarnings(w);
   return (
-    <Drawer onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <Drawer onClick={(e) => e.target === e.currentTarget && onClose()} onClose={onClose} label={w.fullName}>
       <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 shrink-0">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-bold text-slate-900">{w.fullName}</h3>
@@ -86,8 +87,8 @@ export function SupervisorDetailDrawer({
                     <p className="truncate text-slate-600">{p.name}</p>
                   </div>
                   <p className="shrink-0 text-right text-slate-500">
-                    Last visit
-                    <span className="block font-semibold text-slate-800">{p.lastVisitDate ?? "None yet"}</span>
+                    Last monitoring visit
+                    <span className="block font-semibold text-slate-800">{p.lastVisitDate ? formatDateShort(p.lastVisitDate) : "None yet"}</span>
                   </p>
                 </li>
               ))}

@@ -48,6 +48,10 @@ import {
   VisitRow,
   visitLabel,
   webVisitActor,
+  codeText,
+  dayText,
+  lowerFirst,
+  visitLabelInSentence,
 } from './visitCore';
 import { freezeVisitForm } from './visitForms';
 import { officerWarnings, projectPlanWarnings } from './planWarnings';
@@ -161,7 +165,7 @@ export function assertMayReadVisit(visit: VisitRow, principal: VisitPrincipal): 
     throw new AppError('Access requires permission(s): visits:view', 403, 'FORBIDDEN_PERMISSION');
   }
   if (!visit.assignees.some((a) => a.userId === principal.fieldAgent.userId)) {
-    throw new AppError('This visit is not assigned to you', 403, 'VISIT_NOT_ASSIGNED');
+    throw new AppError('This monitoring visit is not assigned to you', 403, 'VISIT_NOT_ASSIGNED');
   }
 }
 
@@ -228,7 +232,7 @@ async function sprintIdFor(tx: Tx, projectId: string, date: string): Promise<str
 
 function assertNotStarted(v: VisitRow) {
   if (!VISIT_NOT_STARTED_STATUSES.includes(v.status) || v.checkInAt) {
-    throw new AppError('This visit has started or is closed; it cannot be changed', 409, 'VISIT_STARTED', { status: v.status });
+    throw new AppError('This monitoring visit has started or is closed; it cannot be changed', 409, 'VISIT_STARTED', { status: v.status });
   }
 }
 
@@ -253,8 +257,8 @@ async function publishOne(tx: Tx, project: VisitProject, v: VisitRow, webUser: W
     visitId: v.id,
     userIds: v.assignees.map((a) => a.userId),
     type: 'VISIT_ASSIGNED',
-    title: `${visitLabel(v.visitKind)} on ${v.plannedDate}`,
-    message: `${project.codePrefix}: you are on the ${visitLabel(v.visitKind).toLowerCase()} on ${v.plannedDate}. Confirm, or move it within the allowed days.`,
+    title: `${visitLabel(v.visitKind)} on ${dayText(v.plannedDate)}`,
+    message: `${codeText(project.codePrefix)}: you are on the ${visitLabelInSentence(v.visitKind)} on ${dayText(v.plannedDate)}. Confirm, or move it within the allowed days.`,
   });
 }
 
@@ -262,13 +266,13 @@ export async function createVisit(projectId: string, webUser: WebJwtPayload, inp
   assertDate(input.plannedDate);
   const meta = VISIT_KIND_META[input.visitKind];
   if (meta.facilityRule === 'PICKED' && input.pickedFacilityIds.length === 0) {
-    throw new AppError('Pick the facilities this ad hoc visit checks', 422, 'VISIT_NEEDS_FACILITIES');
+    throw new AppError('Pick the facilities this ad hoc monitoring visit checks', 422, 'VISIT_NEEDS_FACILITIES');
   }
   if (meta.facilityRule !== 'PICKED' && input.pickedFacilityIds.length > 0) {
-    throw new AppError(`${meta.label} visits do not take picked facilities`, 422, 'FACILITIES_NOT_ALLOWED');
+    throw new AppError(`${meta.label} monitoring visits do not take picked facilities`, 422, 'FACILITIES_NOT_ALLOWED');
   }
   await assertFacilitiesInScope(prisma, projectId, input.pickedFacilityIds);
-  if (!input.proposed && input.assignees.length === 0) throw new AppError('Assign an officer before publishing the visit', 422, 'VISIT_NEEDS_OFFICER');
+  if (!input.proposed && input.assignees.length === 0) throw new AppError('Assign an officer before publishing the monitoring visit', 422, 'VISIT_NEEDS_OFFICER');
   const pushes: VisitPushQueue = [];
   const now = new Date();
   const id = await prisma.$transaction(async (tx) => {
@@ -295,7 +299,7 @@ export async function createVisit(projectId: string, webUser: WebJwtPayload, inp
       projectId,
       ...auditActor(webUser),
       action: 'VISIT_CREATED',
-      summaryText: `${input.proposed ? 'Proposed' : 'Planned'} a ${visitLabel(input.visitKind).toLowerCase()} on ${input.plannedDate}${
+      summaryText: `${input.proposed ? 'Proposed' : 'Planned'} a ${visitLabelInSentence(input.visitKind)} on ${input.plannedDate}${
         input.assignees.length ? ` with ${input.assignees.length} officer(s)` : ''
       }.`,
       payload: { visitId: visit.id, visitKind: input.visitKind, plannedDate: input.plannedDate, assignees: input.assignees, assignedToProject },
@@ -334,8 +338,8 @@ export async function updateVisit(projectId: string, visitId: string, webUser: W
     let rebuild = false;
 
     if (input.pickedFacilityIds !== undefined) {
-      if (VISIT_KIND_META[v.visitKind].facilityRule !== 'PICKED') throw new AppError('Only ad hoc visits take picked facilities', 422, 'FACILITIES_NOT_ALLOWED');
-      if (input.pickedFacilityIds.length === 0) throw new AppError('Pick the facilities this ad hoc visit checks', 422, 'VISIT_NEEDS_FACILITIES');
+      if (VISIT_KIND_META[v.visitKind].facilityRule !== 'PICKED') throw new AppError('Only ad hoc monitoring visits take picked facilities', 422, 'FACILITIES_NOT_ALLOWED');
+      if (input.pickedFacilityIds.length === 0) throw new AppError('Pick the facilities this ad hoc monitoring visit checks', 422, 'VISIT_NEEDS_FACILITIES');
       await assertFacilitiesInScope(tx, projectId, input.pickedFacilityIds);
       data.pickedFacilityIds = input.pickedFacilityIds;
       changes.push('facilities changed');
@@ -344,7 +348,7 @@ export async function updateVisit(projectId: string, visitId: string, webUser: W
 
     let moved = false;
     if (input.plannedDate && input.plannedDate !== v.plannedDate) {
-      if (published && (input.note ?? '').trim().length < 3) throw new AppError('Say why the visit moves (at least 3 characters)', 422, 'NOTE_REQUIRED');
+      if (published && (input.note ?? '').trim().length < 3) throw new AppError('Say why the monitoring visit moves (at least 3 characters)', 422, 'NOTE_REQUIRED');
       moved = true;
       const sprintId = await sprintIdFor(tx, projectId, input.plannedDate);
       data.plannedDate = input.plannedDate;
@@ -354,7 +358,7 @@ export async function updateVisit(projectId: string, visitId: string, webUser: W
       data.submissionDeadline = submissionDeadlineFor(input.plannedDate, config.submissionDeadlineDays);
       data.confirmation = 'UNCONFIRMED';
       data.confirmedAt = null;
-      await withdrawPendingProposal(tx, visitId, 'The manager moved the visit.');
+      await withdrawPendingProposal(tx, visitId, 'The manager moved the monitoring visit.');
       await tx.visitDateChange.create({
         data: {
           visitId,
@@ -375,7 +379,7 @@ export async function updateVisit(projectId: string, visitId: string, webUser: W
     let removedOfficers: string[] = [];
     let assignedToProject: string[] = [];
     if (input.assignees !== undefined) {
-      if (published && input.assignees.length === 0) throw new AppError('A published visit needs an officer', 422, 'VISIT_NEEDS_OFFICER');
+      if (published && input.assignees.length === 0) throw new AppError('A published monitoring visit needs an officer', 422, 'VISIT_NEEDS_OFFICER');
       ({ assignedToProject } = await resolveOfficers(tx, project, input.assignees));
       const before = new Set(v.assignees.map((a) => a.userId));
       const after = new Set(input.assignees.map((a) => a.userId));
@@ -405,8 +409,8 @@ export async function updateVisit(projectId: string, visitId: string, webUser: W
           visitId,
           userIds: stay,
           type: 'VISIT_CHANGED',
-          title: `${label} moved to ${date}`,
-          message: `${project.codePrefix}: the ${label.toLowerCase()} on ${v.plannedDate} moved to ${date}${input.note ? `: ${input.note}` : ''}. Please confirm.`,
+          title: `${label} moved to ${dayText(date)}`,
+          message: `${codeText(project.codePrefix)}: the ${lowerFirst(label)} on ${dayText(v.plannedDate)} moved to ${dayText(date)}${input.note ? `: ${input.note}` : ''}. Please confirm.`,
         });
       }
       if (added.length) {
@@ -415,8 +419,8 @@ export async function updateVisit(projectId: string, visitId: string, webUser: W
           visitId,
           userIds: added,
           type: 'VISIT_ASSIGNED',
-          title: `${label} on ${date}`,
-          message: `${project.codePrefix}: you are on the ${label.toLowerCase()} on ${date}. Confirm, or move it within the allowed days.`,
+          title: `${label} on ${dayText(date)}`,
+          message: `${codeText(project.codePrefix)}: you are on the ${lowerFirst(label)} on ${dayText(date)}. Confirm, or move it within the allowed days.`,
         });
       }
       if (removedOfficers.length) {
@@ -425,8 +429,8 @@ export async function updateVisit(projectId: string, visitId: string, webUser: W
           visitId,
           userIds: removedOfficers,
           type: 'VISIT_CHANGED',
-          title: `${label} on ${v.plannedDate} reassigned`,
-          message: `${project.codePrefix}: you are no longer on the ${label.toLowerCase()} on ${v.plannedDate}.`,
+          title: `${label} on ${dayText(v.plannedDate)} reassigned`,
+          message: `${codeText(project.codePrefix)}: you are no longer on the ${lowerFirst(label)} on ${dayText(v.plannedDate)}.`,
         });
       }
     }
@@ -434,7 +438,7 @@ export async function updateVisit(projectId: string, visitId: string, webUser: W
       projectId,
       ...auditActor(webUser),
       action: 'VISIT_UPDATED',
-      summaryText: `Changed the ${visitLabel(v.visitKind).toLowerCase()} of ${v.plannedDate}: ${changes.join('; ')}${input.note ? ` (${input.note})` : ''}.`,
+      summaryText: `Changed the ${visitLabelInSentence(v.visitKind)} of ${v.plannedDate}: ${changes.join('; ')}${input.note ? ` (${input.note})` : ''}.`,
       payload: { visitId, input, added, removed: removedOfficers, assignedToProject },
     });
   });
@@ -448,13 +452,13 @@ export async function publishVisits(projectId: string, webUser: WebJwtPayload, i
   const ids = [...new Set(input.visitIds)];
   await prisma.$transaction(async (tx) => {
     const project = await loadVisitProject(tx, projectId);
-    if (project.status !== 'ACTIVE') throw new AppError('Visits are published once the project is live', 409, 'PROJECT_NOT_ACTIVE');
+    if (project.status !== 'ACTIVE') throw new AppError('Monitoring visits are published once the project is live', 409, 'PROJECT_NOT_ACTIVE');
     const rows = await tx.visit.findMany({ where: { id: { in: ids }, projectId }, include: VISIT_INCLUDE });
-    if (rows.length !== ids.length) throw new AppError('Visit not found', 404, 'VISIT_NOT_FOUND');
+    if (rows.length !== ids.length) throw new AppError('Monitoring visit not found', 404, 'VISIT_NOT_FOUND');
     const toPublish = rows.filter((r) => r.status === 'PROPOSED');
     const noOfficer = toPublish.filter((r) => !r.assignees.some((a) => a.isLead));
     if (noOfficer.length) {
-      throw new AppError('Assign a lead officer to every visit before publishing', 422, 'VISIT_NEEDS_OFFICER', { visitIds: noOfficer.map((r) => r.id) });
+      throw new AppError('Assign a lead officer to every monitoring visit before publishing', 422, 'VISIT_NEEDS_OFFICER', { visitIds: noOfficer.map((r) => r.id) });
     }
     for (const r of toPublish) {
       await tx.$queryRaw`SELECT id FROM "visits" WHERE id = ${r.id}::uuid FOR UPDATE`;
@@ -465,7 +469,7 @@ export async function publishVisits(projectId: string, webUser: WebJwtPayload, i
         projectId,
         ...auditActor(webUser),
         action: 'VISIT_PUBLISHED',
-        summaryText: `Published ${toPublish.length} visit(s) to their officers: ${toPublish.map((r) => `${visitLabel(r.visitKind).toLowerCase()} on ${r.plannedDate}`).join(', ')}.`,
+        summaryText: `Published ${toPublish.length} visit(s) to their officers: ${toPublish.map((r) => `${visitLabelInSentence(r.visitKind)} on ${r.plannedDate}`).join(', ')}.`,
         payload: { visitIds: toPublish.map((r) => r.id) },
       });
     }
@@ -481,7 +485,7 @@ export async function cancelVisit(projectId: string, visitId: string, webUser: W
   const pushes: VisitPushQueue = [];
   await prisma.$transaction(async (tx) => {
     const v = await lockVisit(tx, projectId, visitId);
-    if (!CANCELLABLE.includes(v.status)) throw new AppError('This visit cannot be cancelled', 409, 'VISIT_NOT_CANCELLABLE', { status: v.status });
+    if (!CANCELLABLE.includes(v.status)) throw new AppError('This monitoring visit cannot be cancelled', 409, 'VISIT_NOT_CANCELLABLE', { status: v.status });
     const project = await loadVisitProject(tx, projectId);
     await cancelVisitRow(tx, v, { reason: input.reason, userId: webUser.userId });
     if (v.status !== 'PROPOSED') {
@@ -490,15 +494,15 @@ export async function cancelVisit(projectId: string, visitId: string, webUser: W
         visitId,
         userIds: v.assignees.map((a) => a.userId),
         type: 'VISIT_CHANGED',
-        title: `${visitLabel(v.visitKind)} on ${v.plannedDate} cancelled`,
-        message: `${project.codePrefix}: the ${visitLabel(v.visitKind).toLowerCase()} on ${v.plannedDate} is cancelled: ${input.reason}`,
+        title: `${visitLabel(v.visitKind)} on ${dayText(v.plannedDate)} cancelled`,
+        message: `${codeText(project.codePrefix)}: the ${visitLabelInSentence(v.visitKind)} on ${dayText(v.plannedDate)} is cancelled: ${input.reason}`,
       });
     }
     await recordAuditEvent(tx, {
       projectId,
       ...auditActor(webUser),
       action: 'VISIT_CANCELLED',
-      summaryText: `Cancelled the ${visitLabel(v.visitKind).toLowerCase()} of ${v.plannedDate}: ${input.reason}`,
+      summaryText: `Cancelled the ${visitLabelInSentence(v.visitKind)} of ${v.plannedDate}: ${input.reason}`,
       payload: { visitId, reason: input.reason, previousStatus: v.status },
     });
   });
@@ -508,7 +512,7 @@ export async function cancelVisit(projectId: string, visitId: string, webUser: W
 
 /** Marks a visit cancelled (also used by the system when mobilisation completes). */
 export async function cancelVisitRow(tx: Tx, v: { id: string }, opts: { reason: string; userId: string | null }): Promise<void> {
-  await withdrawPendingProposal(tx, v.id, 'The visit was cancelled.');
+  await withdrawPendingProposal(tx, v.id, 'The monitoring visit was cancelled.');
   await tx.visit.update({ where: { id: v.id }, data: { status: 'CANCELLED', cancelledAt: new Date(), cancelledReason: opts.reason, cancelledByUserId: opts.userId } });
 }
 
@@ -516,7 +520,7 @@ export async function rebuildVisitForm(projectId: string, visitId: string, webUs
   const result = await prisma.$transaction(async (tx) => {
     const v = await lockVisit(tx, projectId, visitId);
     if (v.status !== 'PLANNED' || v.checkInAt) {
-      throw new AppError('Only a published visit that has not started can have its form rebuilt', 409, 'VISIT_FORM_LOCKED', { status: v.status });
+      throw new AppError('Only a published monitoring visit that has not started can have its form rebuilt', 409, 'VISIT_FORM_LOCKED', { status: v.status });
     }
     const project = await loadVisitProject(tx, projectId);
     const sprintId = await sprintIdFor(tx, projectId, v.plannedDate);
@@ -527,7 +531,7 @@ export async function rebuildVisitForm(projectId: string, visitId: string, webUs
         projectId,
         ...auditActor(webUser),
         action: 'VISIT_FORM_REBUILT',
-        summaryText: `Rebuilt the form of the ${visitLabel(v.visitKind).toLowerCase()} of ${v.plannedDate}.`,
+        summaryText: `Rebuilt the form of the ${visitLabelInSentence(v.visitKind)} of ${v.plannedDate}.`,
         payload: { visitId, formSnapshotId: frozen.formSnapshotId, formHash: frozen.formHash, previousSnapshotId: v.formSnapshotId },
       });
     }
@@ -539,7 +543,7 @@ export async function rebuildVisitForm(projectId: string, visitId: string, webUs
 export async function generateVisits(projectId: string, webUser: WebJwtPayload, input: GenerateVisitsRequest): Promise<GenerateVisitsResult> {
   const result = await prisma.$transaction(async (tx) => {
     const project = await loadVisitProject(tx, projectId);
-    if (project.status !== 'ACTIVE') throw new AppError('The visit plan runs once the project is live', 409, 'PROJECT_NOT_ACTIVE');
+    if (project.status !== 'ACTIVE') throw new AppError('The monitoring plan runs once the project is live', 409, 'PROJECT_NOT_ACTIVE');
     let officers: OfficerInput[] | undefined;
     if (input.assignees.length) officers = (await resolveOfficers(tx, project, input.assignees)).officers;
     return proposeVisitsFromType(tx, projectId, { trigger: 'MANUAL', ruleKey: input.ruleKey, actor: webVisitActor(webUser), assignees: officers });

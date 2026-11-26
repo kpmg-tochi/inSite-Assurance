@@ -335,9 +335,9 @@ export async function storeVisitFormSnapshot(
 /** A stored snapshot, parsed. */
 export async function getVisitFormSnapshot(db: Db, snapshotId: string): Promise<{ id: string; snapshot: VisitFormSnapshot; contentSha256: string }> {
   const row = await db.visitFormSnapshot.findUnique({ where: { id: snapshotId } });
-  if (!row) throw new AppError('Visit form not found', 404, 'VISIT_FORM_SNAPSHOT_NOT_FOUND');
+  if (!row) throw new AppError('Monitoring form not found', 404, 'VISIT_FORM_SNAPSHOT_NOT_FOUND');
   const parsed = VisitFormSnapshotSchema.safeParse(row.snapshotJson);
-  if (!parsed.success) throw new AppError('This visit form is not valid any more', 500, 'INVALID_VISIT_FORM_SNAPSHOT');
+  if (!parsed.success) throw new AppError('This monitoring form is not valid any more', 500, 'INVALID_VISIT_FORM_SNAPSHOT');
   return { id: row.id, snapshot: parsed.data, contentSha256: row.contentSha256 };
 }
 

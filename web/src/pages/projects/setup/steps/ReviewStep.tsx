@@ -80,7 +80,7 @@ function summaryFor(sectionId: string, s: ProjectSetupDto, currency: string, ter
     case "visits":
       return [
         `Working days: ${s.visits.workWeekDays.map((d) => ISO_WEEKDAY_SHORT[d]).join(", ") || "none"}`,
-        `${s.visits.defaultOfficerIds.length} visit officer(s)`,
+        `${s.visits.defaultOfficerIds.length} monitoring officer(s)`,
       ];
     case "process": {
       const p = s.process;

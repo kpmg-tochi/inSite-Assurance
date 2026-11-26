@@ -55,7 +55,7 @@ import {
   VISIT_INCLUDE,
   VisitPrincipal,
   VisitPushQueue,
-  visitLabel,
+  visitLabelInSentence,
 } from './visitCore';
 import { completedUnitIdsFor, recheckInputsForProject } from './visitForms';
 import { assertMayReadVisit, serializeVisits, visitDto } from './visits.service';
@@ -119,7 +119,7 @@ async function approvalFor(s: SubmissionRow, viewer: WebJwtPayload | null): Prom
     amount: null,
     viewer,
     excludedUserId: s.submittedByUserId,
-    excludedReason: 'You carried out this visit, so someone else must review it.',
+    excludedReason: 'You carried out this monitoring visit, so someone else must review it.',
   });
 }
 
@@ -206,7 +206,7 @@ async function recordCheckIn(tx: Tx, visitId: string, f: FieldAgentJwtPayload, i
     actorId: actor.actorId,
     actorDisplayName: actor.actorDisplayName,
     action: 'VISIT_CHECKED_IN',
-    summaryText: `Checked in for the ${visitLabel(v.visitKind).toLowerCase()} of ${v.plannedDate}${
+    summaryText: `Checked in for the ${visitLabelInSentence(v.visitKind)} of ${v.plannedDate}${
       geotag ? (outside ? `, ${Math.round(geotag.distanceOutsideMeters ?? 0)} m outside the site boundary` : ', on site') : ', without a location'
     }.`,
     payload: { visitId, clientCheckInId: input.clientCheckInId, geofenceStatus: geotag?.geofenceStatus ?? null, flagged: outside },
@@ -219,9 +219,9 @@ export async function checkInVisit(projectId: string, visitId: string, f: FieldA
   try {
     await prisma.$transaction(async (tx) => {
       const v = await lockVisit(tx, projectId, visitId);
-      if (!v.assignees.some((a) => a.userId === f.userId)) throw new AppError('This visit is not assigned to you', 403, 'VISIT_NOT_ASSIGNED');
+      if (!v.assignees.some((a) => a.userId === f.userId)) throw new AppError('This monitoring visit is not assigned to you', 403, 'VISIT_NOT_ASSIGNED');
       if (v.clientCheckInId === input.clientCheckInId || v.checkInAt) return; // replay, or already checked in
-      if (!['PLANNED', 'MISSED'].includes(v.status)) throw new AppError('This visit cannot be checked in to', 409, 'VISIT_CHANGED', { status: v.status });
+      if (!['PLANNED', 'MISSED'].includes(v.status)) throw new AppError('This monitoring visit cannot be checked in to', 409, 'VISIT_CHANGED', { status: v.status });
       await recordCheckIn(tx, visitId, f, input, project);
     });
   } catch (error) {
@@ -295,9 +295,9 @@ async function replaySubmission(clientSubmissionId: string, f: FieldAgentJwtPayl
 
 /** The snapshot the phone answered: the visit's own, or an older one that differs only in re-checks. */
 async function snapshotAnswered(visit: { id: string; formSnapshotId: string | null; formHash: string | null; projectId: string; visitKind: string; plannedDate: string }, input: SubmitVisitRequest) {
-  if (!visit.formSnapshotId) throw new AppError('This visit has no form yet', 409, 'VISIT_CHANGED');
+  if (!visit.formSnapshotId) throw new AppError('This monitoring visit has no form yet', 409, 'VISIT_CHANGED');
   const stale = () =>
-    new AppError('The visit form changed since it was downloaded. Download it again and resubmit.', 409, 'FORM_SNAPSHOT_STALE', {
+    new AppError('The monitoring form changed since it was downloaded. Download it again and resubmit.', 409, 'FORM_SNAPSHOT_STALE', {
       formSnapshotId: visit.formSnapshotId,
       formHash: visit.formHash,
     });
@@ -332,9 +332,9 @@ export async function submitVisit(params: {
   }
 
   const visit = await loadVisitInProject(prisma, projectId, visitId);
-  if (!visit.assignees.some((a) => a.userId === f.userId)) throw new AppError('This visit is not assigned to you', 403, 'VISIT_NOT_ASSIGNED');
-  if (visit.status === 'SUBMITTED' || visit.status === 'APPROVED') throw new AppError('This visit has already been submitted', 409, 'VISIT_ALREADY_SUBMITTED');
-  if (!SUBMITTABLE.includes(visit.status)) throw new AppError('This visit is not open for submission', 409, 'VISIT_CHANGED', { status: visit.status });
+  if (!visit.assignees.some((a) => a.userId === f.userId)) throw new AppError('This monitoring visit is not assigned to you', 403, 'VISIT_NOT_ASSIGNED');
+  if (visit.status === 'SUBMITTED' || visit.status === 'APPROVED') throw new AppError('This monitoring visit has already been submitted', 409, 'VISIT_ALREADY_SUBMITTED');
+  if (!SUBMITTABLE.includes(visit.status)) throw new AppError('This monitoring visit is not open for submission', 409, 'VISIT_CHANGED', { status: visit.status });
 
   const answered = await snapshotAnswered(visit, input);
   const { links, facts } = await loadAnswerCaptures(projectId, f.userId, input.answers);
@@ -371,8 +371,8 @@ export async function submitVisit(params: {
   try {
     createdId = await prisma.$transaction(async (tx) => {
       const v = await lockVisit(tx, projectId, visitId);
-      if (v.status === 'SUBMITTED' || v.status === 'APPROVED') throw new AppError('This visit has already been submitted', 409, 'VISIT_ALREADY_SUBMITTED');
-      if (!SUBMITTABLE.includes(v.status)) throw new AppError('This visit is not open for submission', 409, 'VISIT_CHANGED', { status: v.status });
+      if (v.status === 'SUBMITTED' || v.status === 'APPROVED') throw new AppError('This monitoring visit has already been submitted', 409, 'VISIT_ALREADY_SUBMITTED');
+      if (!SUBMITTABLE.includes(v.status)) throw new AppError('This monitoring visit is not open for submission', 409, 'VISIT_CHANGED', { status: v.status });
       if (input.checkIn && !v.checkInAt) await recordCheckIn(tx, visitId, f, input.checkIn, project);
       const revisionNumber = (await tx.visitSubmission.count({ where: { visitId } })) + 1;
       const submission = await tx.visitSubmission.create({
@@ -418,7 +418,7 @@ export async function submitVisit(params: {
         actorId: actor.actorId,
         actorDisplayName: actor.actorDisplayName,
         action: 'VISIT_SUBMITTED',
-        summaryText: `Submitted the ${visitLabel(v.visitKind).toLowerCase()} of ${v.plannedDate} (revision ${revisionNumber}): ${input.overallFinding
+        summaryText: `Submitted the ${visitLabelInSentence(v.visitKind)} of ${v.plannedDate} (revision ${revisionNumber}): ${input.overallFinding
           .replace('_', ' ')
           .toLowerCase()}, ${links.length} capture(s), ${check.findingsToRaise.length} finding(s) to raise${isLate ? `; late (deadline ${deadline})` : ''}${
           check.photoGaps.length ? `; ${check.photoGaps.length} photo gap(s)` : ''
@@ -440,7 +440,7 @@ export async function submitVisit(params: {
     if (isUniqueViolation(error)) {
       const again = await replaySubmission(input.clientSubmissionId, f);
       if (again) return { submission: again, created: false };
-      throw new AppError('This visit has already been submitted', 409, 'VISIT_ALREADY_SUBMITTED');
+      throw new AppError('This monitoring visit has already been submitted', 409, 'VISIT_ALREADY_SUBMITTED');
     }
     throw error;
   }
@@ -457,12 +457,12 @@ export async function createUnscheduledVisit(projectId: string, f: FieldAgentJwt
   requireSubmitter(f);
   const existing = await prisma.visit.findUnique({ where: { clientVisitId: input.clientVisitId }, include: VISIT_INCLUDE });
   if (existing) {
-    if (existing.projectId !== projectId || existing.createdByUserId !== f.userId) throw new AppError('This visit ID is already in use', 409, 'VISIT_ID_CONFLICT');
+    if (existing.projectId !== projectId || existing.createdByUserId !== f.userId) throw new AppError('This monitoring visit ID is already in use', 409, 'VISIT_ID_CONFLICT');
     return { visit: (await serializeVisits(prisma, [existing]))[0], created: false };
   }
   const project = await loadVisitProject(prisma, projectId);
   const today = zonedCalendarDate(new Date(), project.timezone);
-  if (input.plannedDate > addDays(today, 1)) throw new AppError('An unscheduled visit is recorded on the day it happens', 422, 'VISIT_DATE_IN_FUTURE');
+  if (input.plannedDate > addDays(today, 1)) throw new AppError('An unscheduled monitoring visit is recorded on the day it happens', 422, 'VISIT_DATE_IN_FUTURE');
 
   // Re-assemble with the same inputs the phone used and compare hashes.
   const bundle = await buildPinnedAdHocBundle(prisma, projectId, input.components);
@@ -573,7 +573,7 @@ async function recheckInputsForProjectAnyStatus(tx: Tx, projectId: string, timez
 export async function getVisitForm(projectId: string, visitId: string, principal: VisitPrincipal): Promise<VisitFormDto> {
   const visit = await loadVisitInProject(prisma, projectId, visitId);
   assertMayReadVisit(visit, principal);
-  if (!visit.formSnapshotId) throw new AppError('This visit is not published yet', 404, 'VISIT_FORM_NOT_READY');
+  if (!visit.formSnapshotId) throw new AppError('This monitoring visit is not published yet', 404, 'VISIT_FORM_NOT_READY');
   const [snap, project] = await Promise.all([
     getVisitFormSnapshot(prisma, visit.formSnapshotId),
     prisma.project.findUniqueOrThrow({ where: { id: projectId }, select: { geofenceGeoJson: true, geofenceToleranceMeters: true, tenant: { select: { defaultGeofenceToleranceMeters: true } } } }),

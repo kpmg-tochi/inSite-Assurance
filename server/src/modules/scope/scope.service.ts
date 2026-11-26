@@ -117,7 +117,7 @@ export function scopeImportAllowed(project: { status: string; importedAt: Date |
 export async function getProjectScope(projectId: string): Promise<ProjectScopeDto> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { id: true, status: true, timezone: true, totalBudgetNgn: true, projectTypeSnapshotJson: true, importedAt: true },
+    select: { id: true, status: true, timezone: true, totalBudgetNgn: true, certifiedProgressPct: true, projectTypeSnapshotJson: true, importedAt: true },
   });
   if (!project) throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   const verificationDays = monitoringConfigOf(project.projectTypeSnapshotJson).sprintVerificationDays;
@@ -151,7 +151,10 @@ export async function getProjectScope(projectId: string): Promise<ProjectScopeDt
       endSprintId: u.endSprintId,
       startSprintNumber: u.startSprint?.number ?? null,
       endSprintNumber: u.endSprint?.number ?? null,
+      siteId: u.siteId,
       sortOrder: u.sortOrder,
+      progressPct: u.progressPct === null ? null : Number(u.progressPct),
+      progressAsOf: u.progressAsOf,
       lineCount: own.length,
       amountNgn: own.reduce((s, l) => s + l.budgetedCostNgn, 0),
       hasEvidence: own.some((l) => l.hasEvidence),
@@ -185,6 +188,7 @@ export async function getProjectScope(projectId: string): Promise<ProjectScopeDt
     projectStatus: project.status,
     today,
     budgetNgn: budget,
+    progressPct: Number(project.certifiedProgressPct),
     sprints: sprintDtos,
     units: unitDtos,
     facilityGroups: [...groups.values()],
@@ -439,7 +443,7 @@ function uniqueCodeError(error: unknown, code: string): never {
   throw error;
 }
 
-function unitSnapshot(u: { code: string; label: string; facilityId: string; plannedQuantity: unknown; quantityUnit: string | null; startSprintId: string | null; endSprintId: string | null }) {
+function unitSnapshot(u: { code: string; label: string; facilityId: string; plannedQuantity: unknown; quantityUnit: string | null; startSprintId: string | null; endSprintId: string | null; siteId?: string | null }) {
   return {
     code: u.code,
     label: u.label,
@@ -448,7 +452,15 @@ function unitSnapshot(u: { code: string; label: string; facilityId: string; plan
     quantityUnit: u.quantityUnit,
     startSprintId: u.startSprintId,
     endSprintId: u.endSprintId,
+    siteId: u.siteId ?? null,
   };
+}
+
+/** Client demo updates C2 (wave 2): a unit's site must be a site of the project (422 SITE_NOT_FOUND). */
+async function assertSiteInProject(tx: Tx, projectId: string, siteId: string | null | undefined) {
+  if (!siteId) return;
+  const site = await tx.projectSite.findFirst({ where: { id: siteId, projectId }, select: { id: true } });
+  if (!site) throw new AppError('Site not found on this project', 422, 'SITE_NOT_FOUND');
 }
 
 export async function createFacilityUnit(projectId: string, webUser: WebJwtPayload, input: CreateFacilityUnitRequest): Promise<ProjectScopeDto> {
@@ -460,6 +472,7 @@ export async function createFacilityUnit(projectId: string, webUser: WebJwtPaylo
       const start = await sprintNumber(tx, projectId, input.startSprintId);
       const end = await sprintNumber(tx, projectId, input.endSprintId);
       assertSprintOrder(start, end);
+      await assertSiteInProject(tx, projectId, input.siteId);
       const q = quantityFields(facility.archetype as FacilityArchetype, input.plannedQuantity, input.quantityUnit);
       const existing = await tx.facilityUnit.findMany({ where: { projectId }, select: { code: true, sortOrder: true } });
       code = input.code ?? nextUnitCode(existing.map((u) => u.code));
@@ -472,6 +485,7 @@ export async function createFacilityUnit(projectId: string, webUser: WebJwtPaylo
           ...q,
           startSprintId: input.startSprintId ?? null,
           endSprintId: input.endSprintId ?? null,
+          siteId: input.siteId ?? null,
           sortOrder: input.sortOrder ?? Math.max(0, ...existing.map((u) => u.sortOrder)) + 10,
         },
       });
@@ -503,6 +517,9 @@ export async function updateFacilityUnit(
       const startSprintId = input.startSprintId === undefined ? before.startSprintId : input.startSprintId;
       const endSprintId = input.endSprintId === undefined ? before.endSprintId : input.endSprintId;
       assertSprintOrder(await sprintNumber(tx, projectId, startSprintId), await sprintNumber(tx, projectId, endSprintId));
+      // Wave 2: omitted keeps the site, null clears it.
+      const siteId = input.siteId === undefined ? before.siteId : input.siteId;
+      if (siteId !== before.siteId) await assertSiteInProject(tx, projectId, siteId);
       const q = quantityFields(
         facility.archetype as FacilityArchetype,
         input.plannedQuantity === undefined ? (before.plannedQuantity === null ? null : Number(before.plannedQuantity)) : input.plannedQuantity,
@@ -518,6 +535,7 @@ export async function updateFacilityUnit(
           ...q,
           startSprintId,
           endSprintId,
+          siteId,
         },
       });
       // Lines show the facility name as their section.

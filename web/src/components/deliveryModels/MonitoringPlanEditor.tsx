@@ -26,10 +26,10 @@ const sectionCls = "rounded-2xl border border-slate-200 bg-white p-4 space-y-3";
 const label = "text-xs font-medium text-slate-700 mb-1 block";
 
 const NUMBERS: Array<{ key: keyof ProjectTypeMonitoringConfigInput; label: string; hint: string; fallback: number }> = [
-  { key: "submissionDeadlineDays", label: "Submit the monitoring report within (days)", hint: "Calendar days after the visit date.", fallback: 7 },
+  { key: "submissionDeadlineDays", label: "Submit the monitoring report within (days)", hint: "Calendar days after the monitoring visit date.", fallback: 7 },
   { key: "unconfirmedReminderDays", label: "Remind unconfirmed (days before)", hint: "Officers who have not confirmed get a reminder.", fallback: 2 },
   { key: "findingEscalationDays", label: "Escalate findings after (days)", hint: "Open findings are escalated once.", fallback: 14 },
-  { key: "noVisitWarningWeeks", label: "Warn after no visit for (weeks)", hint: "Planner warning only.", fallback: 4 },
+  { key: "noVisitWarningWeeks", label: "Warn after no monitoring visit for (weeks)", hint: "Planner warning only.", fallback: 4 },
   { key: "sprintVerificationDays", label: "Verify work phases within (days)", hint: "After a work phase ends; late after that.", fallback: 7 },
 ];
 
@@ -48,9 +48,9 @@ export function MonitoringPlanEditor({ value, onChange }: { value: ProjectTypeMo
     <section className={sectionCls}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-bold text-slate-900">Visit plan and deadlines</h3>
+          <h3 className="text-sm font-bold text-slate-900">Monitoring plan and deadlines</h3>
           <p className="text-[11px] text-slate-500">
-            Activation proposes these visits; the M&amp;E manager assigns officers and publishes them. Final and post-closure evaluations are proposed on the completion notice and on closing.
+            Activation proposes these monitoring visits; the M&amp;E manager assigns officers and publishes them. Final and post-closure evaluations are proposed on the completion notice and on closing.
           </p>
         </div>
         {rules.length === 0 && (
@@ -64,7 +64,7 @@ export function MonitoringPlanEditor({ value, onChange }: { value: ProjectTypeMo
         {rules.map((r, i) => (
           <div key={i} className="rounded-xl border border-slate-200 p-3 grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
             <div className="md:col-span-2">
-              <span className={label}>Visit kind</span>
+              <span className={label}>Kind of monitoring visit</span>
               <CustomSelect value={r.visitKind} onChange={(v) => setRule(i, { visitKind: v as VisitKind })} options={VisitKindEnum.options.map((k) => ({ value: k, label: VISIT_KIND_META[k].label }))} />
             </div>
             <div className="md:col-span-2">
@@ -153,7 +153,7 @@ export function MonitoringPlanEditor({ value, onChange }: { value: ProjectTypeMo
       </div>
       <label className="inline-flex items-center gap-2 text-xs text-slate-700">
         <input type="checkbox" checked={value.emailContractorFindingsSummary ?? true} onChange={(e) => onChange({ ...value, emailContractorFindingsSummary: e.target.checked })} />
-        Email the contractor the open findings after each accepted visit
+        Email the contractor the open findings after each accepted monitoring report
       </label>
       <div className="border-t border-slate-100 pt-3">
         <AlertRulesEditor value={value.alerts} onChange={(alerts) => onChange({ ...value, alerts })} />

@@ -29,8 +29,8 @@ export interface OutboxItem {
 export const OUTBOX_KIND_LABELS: Record<OutboxKind, string> = {
   VISIT_SUBMISSION: 'Monitoring report',
   VISIT_CHECK_IN: 'Check-in',
-  VISIT_RESPONSE: 'Visit response',
-  UNSCHEDULED_VISIT: 'Unscheduled visit',
+  VISIT_RESPONSE: 'Monitoring visit response',
+  UNSCHEDULED_VISIT: 'Ad hoc monitoring visit',
   SITE_LOG_ENTRY: 'Site log entry',
   CAPTURE: 'Photo',
   DEFECT_ACTION: 'Defect update',
@@ -132,7 +132,7 @@ export const OUTBOX_REMOVE_TEXT: Record<OutboxRemoveAction, { button: string; ti
   DISCARD_RESPONSE: {
     button: 'Remove',
     title: 'Remove this response?',
-    message: 'It was not sent. The visit keeps the date and status the server has; you can respond again from the visit.',
+    message: 'It was not sent. The monitoring visit keeps the date and status the server has; you can respond again from it.',
   },
   DISCARD_DEFECT_UPDATE: {
     button: 'Remove',

@@ -60,7 +60,12 @@ export function getInitials(fullName: string): string {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
+/**
+ * "26 Nov 2026". A calendar date ("2026-11-26", no time) is shown as that day in any zone; an
+ * instant is shown in the tenant zone.
+ */
 export function formatDateShort(isoString?: string | null): string {
+  if (isoString && /^\d{4}-\d{2}-\d{2}$/.test(isoString)) return formatDateInZone(`${isoString}T12:00:00Z`, 'UTC');
   return formatDateInZone(isoString, display.timeZone);
 }
 

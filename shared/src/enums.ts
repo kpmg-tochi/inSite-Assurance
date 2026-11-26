@@ -88,7 +88,7 @@ export const PERMISSION_CATEGORY_META: Record<
   },
   FORMS_FACILITIES: {
     label: 'Forms & facilities',
-    description: 'The facility catalogue and the visit form library.',
+    description: 'The facility catalogue and the monitoring form library.',
   },
   PORTFOLIO_PROJECTS: {
     label: 'Portfolio & projects',
@@ -103,8 +103,8 @@ export const PERMISSION_CATEGORY_META: Record<
     description: 'The project contractor, contract milestones, the kick-off meeting, default cases and the document register.',
   },
   VISITS_FINDINGS: {
-    label: 'Visits & findings',
-    description: 'Planning, carrying out and reviewing visits; findings, escalations, defects and incidents.',
+    label: 'Monitoring visits & findings',
+    description: 'Planning, carrying out and reviewing monitoring visits; findings, escalations, defects and incidents.',
   },
   PAYMENTS: {
     label: 'Payments & retention',
@@ -143,7 +143,7 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   {
     key: 'tenant:manage_settings',
     name: 'Manage Workspace Settings',
-    description: 'Change workspace settings such as currency, timezone, the default site radius, the visit reschedule tolerance and the security policy.',
+    description: 'Change workspace settings such as currency, timezone, the default site radius, the monitoring visit reschedule tolerance and the security policy.',
     category: 'TENANT_ADMIN',
     surface: 'WEB',
     unlocksViews: ['Settings -> Workspace settings'],
@@ -191,7 +191,7 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   {
     key: 'project_types:manage',
     name: 'Manage Project Types',
-    description: 'Define the project types (delivery models): workflow template, ownership rules, kick-off and milestones, visit plan, closure rules and KPI targets.',
+    description: 'Define the project types (delivery models): workflow template, ownership rules, kick-off and milestones, monitoring plan, closure rules and KPI targets.',
     category: 'TENANT_ADMIN',
     surface: 'WEB',
     unlocksViews: ['Settings -> Project types'],
@@ -199,7 +199,7 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   {
     key: 'templates:manage_workflows',
     name: 'Configure Workflow Templates',
-    description: 'Define reusable workflow templates: process switches and the visit review and default case approval chains.',
+    description: 'Define reusable workflow templates: process switches and the monitoring report review and default case approval chains.',
     category: 'TENANT_ADMIN',
     surface: 'WEB',
     unlocksViews: ['Settings -> Workflow templates'],
@@ -225,7 +225,7 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   {
     key: 'forms:manage',
     name: 'Manage Form Library',
-    description: 'Build and version the visit form library: fixed sections, facility sub-forms and visit form templates.',
+    description: 'Build and version the monitoring form library: fixed sections, facility sub-forms and monitoring form templates.',
     category: 'FORMS_FACILITIES',
     surface: 'WEB',
     unlocksViews: ['Forms & facilities'],
@@ -284,7 +284,7 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   {
     key: 'projects:activate',
     name: 'Activate Draft Projects',
-    description: 'Set a completed draft live: visits are proposed, and the project shows in the field app and the portfolio.',
+    description: 'Set a completed draft live: monitoring visits are proposed, and the project shows in the field app and the portfolio.',
     category: 'PORTFOLIO_PROJECTS',
     surface: 'WEB',
     unlocksViews: ['Project setup -> Activate'],
@@ -292,7 +292,7 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   {
     key: 'projects:edit_baseline',
     name: 'Edit Project Details & Site',
-    description: 'Change project details, the site boundary, working days, the team and the visit settings.',
+    description: 'Change project details, the site boundary, working days, the team and the monitoring settings.',
     category: 'PORTFOLIO_PROJECTS',
     surface: 'WEB',
     unlocksViews: ['Project settings'],
@@ -341,6 +341,33 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   },
 
   // 5. CONTRACT_KICKOFF: Contract & kick-off
+  {
+    // Client demo updates E3 (wave 3)
+    key: 'approved_lists:view',
+    name: 'View Approved Project Lists',
+    description: 'See the annual approved project lists (Approved Projects & Implementation Schedule, Approved BEAP), their links to projects and budget mismatches.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Needs assessment'],
+  },
+  {
+    // Client demo updates E3 (wave 4)
+    key: 'approved_lists:manage',
+    name: 'Upload Approved Project Lists',
+    description: 'Upload an annual approved project list (Approved Projects & Implementation Schedule or Approved BEAP) from the template; replaces the list of the same year, kind and State.',
+    category: 'PORTFOLIO_PROJECTS',
+    surface: 'WEB',
+    unlocksViews: ['Needs assessment upload'],
+  },
+  {
+    // Client demo updates F.1 (wave 2)
+    key: 'contractors:view_register',
+    name: 'View the Contractor Register',
+    description: 'See every contractor with its status, rating, projects and decisions.',
+    category: 'CONTRACT_KICKOFF',
+    surface: 'WEB',
+    unlocksViews: ['Contractors'],
+  },
   {
     key: 'contractors:manage',
     name: 'Manage the Project Contractor',
@@ -409,43 +436,43 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   // 6. VISITS_FINDINGS: Visits & findings
   {
     key: 'visits:view',
-    name: 'View Visits',
-    description: 'See the visit plan and planner, visit forms, submissions and their evidence, comments, the site log and the supervision workload.',
+    name: 'View Monitoring Visits',
+    description: 'See the monitoring plan and planner, monitoring forms, monitoring reports and their evidence, comments, the site log and the supervision workload.',
     category: 'VISITS_FINDINGS',
     surface: 'BOTH',
-    unlocksViews: ['Visits', 'Visit planner', 'Settings -> Supervisors'],
+    unlocksViews: ['Monitoring visits', 'Monitoring planner', 'Settings -> Supervisors'],
   },
   {
     key: 'visits:plan',
-    name: 'Plan Visits',
-    description: 'Create, generate, publish, move, reassign and cancel visits, and accept or reject date proposals from officers.',
+    name: 'Plan Monitoring Visits',
+    description: 'Create, generate, publish, move, reassign and cancel monitoring visits, and accept or reject date proposals from officers.',
     category: 'VISITS_FINDINGS',
     surface: 'WEB',
-    unlocksViews: ['Visit planner editing'],
+    unlocksViews: ['Monitoring planner editing'],
   },
   {
     key: 'visits:submit',
-    name: 'Carry Out Visits',
-    description: 'Respond to assigned visits (confirm, move, propose, decline), check in, submit visit forms and keep the site log from the field app.',
+    name: 'Carry Out Monitoring Visits',
+    description: 'Respond to assigned monitoring visits (confirm, move, propose, decline), check in, submit monitoring reports and keep the site log from the field app.',
     category: 'VISITS_FINDINGS',
     surface: 'MOBILE',
-    unlocksViews: ['Field app -> Visits'],
+    unlocksViews: ['Field app -> Monitoring visits'],
   },
   {
     key: 'visits:review',
-    name: 'Review Visit Submissions',
-    description: 'Accept or return submitted visits on the review chain (the default step of the visit review chain).',
+    name: 'Review Monitoring Reports',
+    description: 'Accept or return submitted monitoring reports on the review chain (the default step of the monitoring report review chain).',
     category: 'VISITS_FINDINGS',
     surface: 'WEB',
-    unlocksViews: ['Visit review'],
+    unlocksViews: ['Monitoring report review'],
   },
   {
     key: 'findings:manage',
     name: 'Raise and Close Findings',
-    description: 'Raise findings on a visit submission, and resolve or dismiss them.',
+    description: 'Raise findings on a monitoring report, and resolve or dismiss them.',
     category: 'VISITS_FINDINGS',
     surface: 'WEB',
-    unlocksViews: ['Visits -> Findings'],
+    unlocksViews: ['Monitoring visits -> Findings'],
   },
   {
     key: 'findings:receive_escalations',
@@ -804,6 +831,19 @@ export const AuditActionTypeEnum = z.enum([
   'PROJECT_REGISTER_IMPORTED',
   // Client demo updates C3: project lots
   'PROJECT_LOT_CREATED',
+  // Client demo updates (wave 2): sites and the contractor register
+  'SITES_SAVED',
+  'CONTRACTOR_CREATED',
+  'CONTRACTOR_UPDATED',
+  'CONTRACTOR_STATUS_CHANGED',
+  // Client demo updates (wave 3): contractor flags, approved lists
+  'CONTRACTOR_FLAG_RAISED',
+  'CONTRACTOR_FLAG_ACTION_DECIDED',
+  'CONTRACTOR_FLAG_ACTION_LIFTED',
+  'CONTRACTOR_FLAG_CLOSED',
+  'APPROVED_LIST_ROW_LINKED',
+  // Client demo updates (wave 4): approved list upload
+  'APPROVED_LIST_IMPORTED',
   // Redesign R3
   'FORM_COMPONENT_SAVED',
   // Redesign R4: visits

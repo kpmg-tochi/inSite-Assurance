@@ -113,7 +113,7 @@ export function FacilitiesCard() {
       id: "plural",
       header: "Plural",
       width: "w-36",
-      cell: (f) => <span className="text-xs text-slate-600">{f.pluralName ?? <span className="text-slate-400">derived</span>}</span>,
+      cell: (f) => <span className="text-xs text-slate-600">{f.pluralName ?? <span className="text-slate-500">derived</span>}</span>,
     },
     {
       id: "subForm",
@@ -121,7 +121,7 @@ export function FacilitiesCard() {
       width: "w-40",
       cell: (f) =>
         !f.subForm ? (
-          <span className="text-xs text-slate-400">–</span>
+          <span className="text-xs text-slate-500">–</span>
         ) : f.subForm.source === "FACILITY" ? (
           <TableBadge variant="info">Customised v{f.subForm.version}</TableBadge>
         ) : (
@@ -165,7 +165,7 @@ export function FacilitiesCard() {
     <>
       <StandardTable<FacilityDto>
         title="Facilities"
-        subtitle="The catalogue that scope lines are tagged with. The archetype decides the default visit questions and whether units carry a planned quantity."
+        subtitle="The catalogue that scope lines are tagged with. The archetype decides the default monitoring questions and whether units carry a planned quantity."
         search={{ value: search, onChange: setSearch, placeholder: "Search facilities" }}
         filters={
           <div className="flex flex-wrap items-center gap-3">

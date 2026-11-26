@@ -62,7 +62,10 @@ export const VisitFacilityRuleEnum = z.enum(['NONE', 'ALL', 'SPRINT', 'PICKED'])
 export type VisitFacilityRule = z.infer<typeof VisitFacilityRuleEnum>;
 
 export interface VisitKindMeta {
+  /** Short label for pickers, chips and columns ("Routine"). */
   label: string;
+  /** The kind as a noun in sentences and titles ("Routine monitoring visit"; client demo glossary). */
+  noun: string;
   description: string;
   facilityRule: VisitFacilityRule;
   /** Hint for R4: open findings and defects are added as re-check items by default. */
@@ -72,47 +75,65 @@ export interface VisitKindMeta {
 export const VISIT_KIND_META: Record<VisitKind, VisitKindMeta> = {
   MOBILISATION_CHECK: {
     label: 'Mobilisation check',
+    noun: 'Mobilisation check',
     description: 'Contractor mobilised to site, personnel, equipment, materials, letter presented. No facility sub-forms.',
     facilityRule: 'NONE',
     recheckByDefault: false,
   },
   BASELINE: {
     label: 'Baseline monitoring',
+    noun: 'Baseline monitoring',
     description: 'Existing condition of every facility in scope.',
     facilityRule: 'ALL',
     recheckByDefault: false,
   },
   ROUTINE: {
     label: 'Routine',
-    description: 'Units active in the work phase covering the visit date, plus earlier units not yet reported complete.',
+    noun: 'Routine monitoring visit',
+    description: 'Units active in the work phase covering the monitoring visit date, plus earlier units not yet reported complete.',
     facilityRule: 'SPRINT',
     recheckByDefault: true,
   },
   QUARTERLY_ME: {
     label: 'Quarterly M&E',
+    noun: 'Quarterly M&E monitoring visit',
     description: 'Same units as Routine, with the M&E sections (including the valuation estimate).',
     facilityRule: 'SPRINT',
     recheckByDefault: true,
   },
   FINAL_EVALUATION: {
     label: 'Final evaluation',
+    noun: 'Final evaluation',
     description: 'Every facility in scope, delivered to specification.',
     facilityRule: 'ALL',
     recheckByDefault: true,
   },
   POST_CLOSURE_EVALUATION: {
     label: 'Post-closure evaluation',
+    noun: 'Post-closure evaluation',
     description: 'Facilities in use, beneficiary feedback, issues. No facility sub-forms.',
     facilityRule: 'NONE',
     recheckByDefault: true,
   },
   AD_HOC: {
     label: 'Ad hoc',
+    noun: 'Ad hoc monitoring visit',
     description: 'The officer picks the facilities to check.',
     facilityRule: 'PICKED',
     recheckByDefault: true,
   },
 };
+
+/** A visit kind as a noun for titles: "Routine monitoring visit" (an unknown kind as given). */
+export function visitKindNoun(kind: string): string {
+  return VISIT_KIND_META[kind as VisitKind]?.noun ?? kind;
+}
+
+/** The same inside a sentence: "the routine monitoring visit" (only the first letter is lowered, so "M&E" stays). */
+export function visitKindNounInSentence(kind: string): string {
+  const noun = visitKindNoun(kind);
+  return noun.charAt(0).toLowerCase() + noun.slice(1);
+}
 
 // ---------------------------------------------------------------------------
 // Fields (D-R3.4–D-R3.12)
@@ -371,7 +392,7 @@ export const SaveVisitFormTemplateRequestSchema = z
     if (VISIT_KIND_META[v.visitKind].facilityRule === 'NONE') {
       const i = v.blocks.findIndex((b) => b.type === 'FACILITIES');
       if (i >= 0) {
-        ctx.addIssue({ code: 'custom', message: `${VISIT_KIND_META[v.visitKind].label} visits have no facility sub-forms`, path: ['blocks', i] });
+        ctx.addIssue({ code: 'custom', message: `${VISIT_KIND_META[v.visitKind].label} monitoring visits have no facility sub-forms`, path: ['blocks', i] });
       }
     }
   });

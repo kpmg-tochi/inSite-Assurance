@@ -118,7 +118,7 @@ export function LoginPage() {
                 Every school project, from contract award to handover.
               </h1>
               <p className="mt-3 text-sm xl:text-base leading-relaxed text-white/85 max-w-lg">
-                Site visits with geotagged photos, findings followed to correction, and every deadline and sign-off in one place, for
+                Monitoring visits with geotagged photos, findings followed to correction, and every deadline and sign-off in one place, for
                 Direct Intervention and Matching Grants projects.
               </p>
               <p className="mt-6 border-t border-white/20 pt-3 text-xs text-white/75">Universal Basic Education Commission · Education for development</p>

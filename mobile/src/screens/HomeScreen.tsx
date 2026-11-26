@@ -130,7 +130,7 @@ export function HomeScreen() {
   }, [outsideWindow, rangeKey, outbox.isOnline, cachedWindow, shownRange.from, shownRange.to, reload]);
   const calendarNotice =
     outsideWindow && rangeFailed === rangeKey && cachedWindow
-      ? `Showing what is on this phone. Visits from ${formatDay(cachedWindow.from)} to ${formatDay(cachedWindow.to)} are kept offline; connect to see the rest.`
+      ? `Showing what is on this phone. Monitoring visits from ${formatDay(cachedWindow.from)} to ${formatDay(cachedWindow.to)} are kept offline; connect to see the rest.`
       : null;
 
   const [refreshing, setRefreshing] = useState(false);
@@ -179,7 +179,7 @@ export function HomeScreen() {
 
   const firstName = displayName.split(' ')[0] ?? '';
   let syncLine = copy.homeSubtitle;
-  if (sync.isSyncing) syncLine = 'Updating your visits…';
+  if (sync.isSyncing) syncLine = 'Updating your monitoring visits…';
   else if (sync.lastError) syncLine = 'Not updated: showing what is on this phone';
   else if (sync.lastSyncedAt) syncLine = `${copy.homeSubtitle} · updated ${formatTime(sync.lastSyncedAt)}`;
   const outboxCount = outbox.pendingCount + outbox.deadCount;
@@ -259,11 +259,11 @@ export function HomeScreen() {
                   style={styles.attention}
                   onPress={() => (attention.length === 1 ? openVisit(attention[0].id) : setSelected(attention[0].date))}
                   accessibilityRole="button"
-                  accessibilityLabel={`${attention.length} visit${attention.length === 1 ? '' : 's'} overdue or returned. Show the first.`}
+                  accessibilityLabel={`${attention.length} monitoring visit${attention.length === 1 ? '' : 's'} overdue or returned. Show the first.`}
                 >
                   <Feather name="alert-circle" size={16} color="#B91C1C" />
                   <Text style={styles.attentionText}>
-                    {attention.length} visit{attention.length === 1 ? '' : 's'} overdue or returned for correction. Oldest: {attention[0].kindLabel},{' '}
+                    {attention.length} monitoring visit{attention.length === 1 ? '' : 's'} overdue or returned for correction. Oldest: {attention[0].kindLabel},{' '}
                     {formatDay(attention[0].date)}.
                   </Text>
                 </TouchableOpacity>
@@ -281,8 +281,13 @@ export function HomeScreen() {
               />
 
               <SectionCard
-                title={selectedDate === homeToday ? `Today, ${formatDay(selectedDate)}` : formatDay(selectedDate, true)}
-                subtitle={dayVisits.length > 0 ? `${dayVisits.length} visit${dayVisits.length === 1 ? '' : 's'}` : copy.noVisitsOnDay}
+                title={selectedDate === homeToday ? "Today's monitoring visits" : `Monitoring visits, ${formatDay(selectedDate, true)}`}
+                subtitle={[
+                  selectedDate === homeToday ? formatDay(selectedDate) : null,
+                  dayVisits.length > 0 ? `${dayVisits.length} monitoring visit${dayVisits.length === 1 ? '' : 's'}` : copy.noVisitsOnDay,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               >
                 {dayVisits.map((view) => {
                   const stored = storedById.get(view.id);

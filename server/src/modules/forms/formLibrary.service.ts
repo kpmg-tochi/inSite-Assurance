@@ -48,7 +48,7 @@ export function parseFields(raw: unknown): FormField[] {
 
 export function parseLayout(raw: unknown): VisitFormBlock[] {
   const parsed = VisitFormTemplateLayoutSchema.safeParse(raw);
-  if (!parsed.success) throw new AppError('A stored visit form template is not valid any more', 500, 'INVALID_FORM_COMPONENT');
+  if (!parsed.success) throw new AppError('A stored monitoring form template is not valid any more', 500, 'INVALID_FORM_COMPONENT');
   return parsed.data;
 }
 
@@ -272,7 +272,7 @@ export async function listSubFormVersions(tenantId: string, subjectKey: string):
 
 export async function listTemplateVersions(tenantId: string, code: string): Promise<VisitFormTemplateDto[]> {
   const rows = await prisma.visitFormTemplate.findMany({ where: { tenantId, code }, orderBy: { version: 'desc' } });
-  if (rows.length === 0) throw new AppError('Visit form template not found', 404, 'VISIT_FORM_TEMPLATE_NOT_FOUND');
+  if (rows.length === 0) throw new AppError('Monitoring form template not found', 404, 'VISIT_FORM_TEMPLATE_NOT_FOUND');
   const usage = await templateUsage(prisma, rows.map((r) => r.id));
   return rows.map((r) => serializeTemplate(r, rows[0].version, usage.get(r.id) ?? 0));
 }
@@ -540,9 +540,9 @@ export async function saveVisitFormTemplate(webUser: WebJwtPayload, input: SaveV
     if (existingCode && input.code !== existingCode) throw new AppError('A template code cannot change; create a new template instead', 422, 'FORM_CODE_LOCKED');
     const latest = await tx.visitFormTemplate.findFirst({ where: { tenantId, code }, orderBy: { version: 'desc' }, include: { _count: { select: { snapshots: true } } } });
     if (!existingCode && latest) throw new AppError(`A template with code "${code}" already exists`, 409, 'VISIT_FORM_TEMPLATE_EXISTS');
-    if (existingCode && !latest) throw new AppError('Visit form template not found', 404, 'VISIT_FORM_TEMPLATE_NOT_FOUND');
+    if (existingCode && !latest) throw new AppError('Monitoring form template not found', 404, 'VISIT_FORM_TEMPLATE_NOT_FOUND');
     if (latest && latest.visitKind !== input.visitKind) {
-      throw new AppError('A template keeps its visit kind; create a new template for another kind', 422, 'TEMPLATE_KIND_LOCKED');
+      throw new AppError('A template keeps its monitoring visit kind; create a new template for another kind', 422, 'TEMPLATE_KIND_LOCKED');
     }
     const codes = input.blocks.flatMap((b) => (b.type === 'SECTION' ? [b.sectionCode] : []));
     const sections = await tx.formSection.findMany({ where: { tenantId, code: { in: codes } }, select: { code: true, version: true, isArchived: true } });
@@ -589,7 +589,7 @@ export async function setVisitFormTemplateArchived(webUser: WebJwtPayload, code:
       }
     }
     const updated = await tx.visitFormTemplate.updateMany({ where: { tenantId, code }, data: { isArchived: archived } });
-    if (updated.count === 0) throw new AppError('Visit form template not found', 404, 'VISIT_FORM_TEMPLATE_NOT_FOUND');
+    if (updated.count === 0) throw new AppError('Monitoring form template not found', 404, 'VISIT_FORM_TEMPLATE_NOT_FOUND');
     await audit(tx, webUser, `${archived ? 'Archived' : 'Restored'} visit form template ${code}.`, { componentKind: 'TEMPLATE', code, mode: archived ? 'archived' : 'restored' });
   });
   return (await listTemplateVersions(tenantId, code))[0];

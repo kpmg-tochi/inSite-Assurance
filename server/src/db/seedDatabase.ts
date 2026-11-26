@@ -171,6 +171,8 @@ async function runSeed(): Promise<void> {
   // Redesign R2 (units restrict their facility; lines and sprints point at units)
   await prisma.boqItem.updateMany({ data: { facilityUnitId: null } });
   await prisma.facilityUnit.deleteMany();
+  await prisma.projectSite.deleteMany(); // client demo updates C2 (units point at sites)
+  await prisma.contractorRatingSnapshot.deleteMany(); // client demo updates F.3
   // R6d: payments may name a sprint (onDelete Restrict), so they go first.
   await prisma.projectPayment.deleteMany();
   await prisma.projectSprint.deleteMany();
@@ -208,6 +210,10 @@ async function runSeed(): Promise<void> {
   await prisma.userProjectAssignment.deleteMany();
   await prisma.project.deleteMany();
   await prisma.projectLot.deleteMany(); // client demo updates C3 (projects point at lots)
+  await prisma.contractorFlagAction.deleteMany(); // client demo updates F.4
+  await prisma.contractorFlag.deleteMany();
+  await prisma.approvedListRow.deleteMany(); // client demo updates E3 (after projects: they point at rows)
+  await prisma.approvedList.deleteMany();
   await prisma.user.deleteMany();
   await prisma.organization.updateMany({ data: { parentOrganizationId: null } });
   await prisma.organization.deleteMany();

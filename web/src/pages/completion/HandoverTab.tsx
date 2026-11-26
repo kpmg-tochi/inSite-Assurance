@@ -1,8 +1,10 @@
 import React, { useState } from "react";
-import { ClipboardPen, ListChecks, Plus, Trash2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { CheckCircle2, ClipboardPen, FileSignature, Handshake, ListChecks, Plus, Trash2 } from "lucide-react";
 import { Controller, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import {
+  CONSTRUCTION_PHASE_LABELS,
   DefectSeverityEnum,
   HANDOVER_DECISION_LABELS,
   HANDOVER_LIMITS,
@@ -20,19 +22,25 @@ import {
 } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth } from "../../lib/auth-context";
+import { formatDateShort } from "../../lib/formatters";
 import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import Loader from "../../components/Loader";
 import { TableBadge } from "../../components/table/StandardTable";
 import { CustomSelect } from "../../components/common";
 import { ModalActions, ModalShell, inputClass } from "../../components/common/ModalShell";
+import { StatusText, type StatusTone } from "../../components/common/StatusText";
 import { RichTextView } from "../../components/closeout/RichTextView";
+import { Dot, StatusHeader, linkAction, panelClass, primaryAction, secondaryAction } from "../../components/closure/closureUi";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { useHandoverSubmissionsQuery, useProjectPhaseQuery } from "../../queries/closeout/useCloseoutQueries";
+import { useProjectCompletionQuery } from "../../queries/closure/useClosureQueries";
+import { useOpenDocumentMutation } from "../../mutations/contracts/useContractMutations";
 import {
   useConvertSnagsMutation,
   useRecordHandoverResponseMutation,
   useReviewHandoverSubmissionMutation,
 } from "../../mutations/closeout/useCloseoutMutations";
+import { handoverStateLabel, latestHandoverResponse } from "./completionTabHints";
 
 const DECISION_BADGE: Record<HandoverDecision, "success" | "warning" | "danger"> = {
   ACCEPTED: "success",
@@ -47,9 +55,12 @@ const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-
  * there is no public link. An officer records the beneficiary's response from the signed paper copy
  * (accept, accept with snags, reject); reviewers mark responses reviewed and turn snags into defect
  * tickets. The tab is shown only when the handover module is on.
+ *
+ * Design round 2026-11-26: a status header (handover state, "Record handover response" as the one
+ * action, the handover certificate when issued) and the responses as one list without nested cards.
  */
 export function HandoverTab({ project }: { project: ProjectSummaryDto }) {
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
   const processQuery = useProjectProcess(project.id);
   const enabled = processQuery.data?.config.enableHandoverModule ?? false;
   const canRecord = hasPermission("handover:record_response");
@@ -58,53 +69,100 @@ export function HandoverTab({ project }: { project: ProjectSummaryDto }) {
   // The list is open to recorders and reviewers; only reviewers mark a response reviewed.
   const canSeeResponses = canReview || canRecord;
   const submissionsQuery = useHandoverSubmissionsQuery(project.id, enabled && canSeeResponses);
+  // Same query as the Certificate tab (cached): the handover certificate once the handover is accepted.
+  const completionQuery = useProjectCompletionQuery(project.id, enabled);
+  const openDocument = useOpenDocumentMutation(project.id);
   const [recordOpen, setRecordOpen] = useState(false);
 
   if (processQuery.isLoading) return <Loader />;
   if (!enabled) {
-    return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
-        Stakeholder handover is not used on this project.
-      </div>
-    );
+    return <div className={`${panelClass} text-center text-xs text-slate-600`}>Stakeholder handover is not used on this project.</div>;
   }
+  const phase = phaseQuery.data?.phase ?? project.constructionPhase;
   const inHandover = phaseQuery.data?.phase === "HANDOVER_IN_PROGRESS";
+  const responses = submissionsQuery.data ?? [];
+  const latest = latestHandoverResponse(responses);
+  const state = handoverStateLabel(phase, latest);
+  const tone: StatusTone = !latest
+    ? phase === "HANDOVER_IN_PROGRESS"
+      ? "pending"
+      : "neutral"
+    : !latest.reviewedAt
+      ? "pending"
+      : latest.decision === "REJECTED"
+        ? "bad"
+        : "good";
+  const certificateId = completionQuery.data?.handoverCertificateDocumentId ?? null;
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <p className="text-xs text-slate-500">
-          Record whether the beneficiary accepted the works, accepted them with punch list items, or rejected them.
-        </p>
-        {canRecord && (
-          <button
-            type="button"
-            disabled={!inHandover}
-            title={inHandover ? undefined : "Responses can be recorded once the project is in handover."}
-            onClick={() => setRecordOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-3 py-2 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
-          >
-            <ClipboardPen className="h-4 w-4" /> Record handover response
-          </button>
+      <section className={`${panelClass} space-y-3`} aria-labelledby="handover-heading">
+        <StatusHeader
+          icon={<Handshake className="h-5 w-5" />}
+          title="Handover"
+          titleId="handover-heading"
+          status={
+            <>
+              <StatusText label={state} tone={tone} />
+              <Dot />
+              <span>Phase: {CONSTRUCTION_PHASE_LABELS[phase]}</span>
+              {latest && (
+                <>
+                  <Dot />
+                  <span>Last response {formatDateShort(latest.submittedAt)}</span>
+                </>
+              )}
+            </>
+          }
+          help="The beneficiary's response is copied from the signed paper copy: accepted, accepted with punch list items, or rejected."
+          actions={
+            <>
+              {certificateId && (
+                <button type="button" onClick={() => openDocument.mutate({ documentId: certificateId })} className={secondaryAction}>
+                  <FileSignature className="h-3.5 w-3.5" aria-hidden="true" /> Handover certificate
+                </button>
+              )}
+              {canRecord && inHandover && (
+                <button type="button" onClick={() => setRecordOpen(true)} className={primaryAction}>
+                  <ClipboardPen className="h-3.5 w-3.5" aria-hidden="true" /> Record handover response
+                </button>
+              )}
+            </>
+          }
+        />
+        {canRecord && phaseQuery.data?.phase === "ACTIVE_CONSTRUCTION" && (
+          <p className="text-xs text-slate-600">
+            Responses can be recorded once the handover starts.{" "}
+            <Link to={`/app/projects/${project.id}/dashboard`} className={linkAction}>
+              Start it from the project Overview
+            </Link>
+          </p>
         )}
-      </div>
-
-      {canRecord && !inHandover && phaseQuery.data && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-          Responses can be recorded only while the project is in handover. Start the handover from the project Overview.
-        </div>
-      )}
+      </section>
 
       {canSeeResponses && (
-        <section className="space-y-3">
-          <h2 className="text-sm font-bold text-slate-900">Responses</h2>
+        <section className={`${panelClass} space-y-3`} aria-labelledby="handover-responses-heading">
+          <h3 id="handover-responses-heading" className="text-sm font-bold text-slate-900">
+            Responses{responses.length > 0 ? ` (${responses.length})` : ""}
+          </h3>
           {submissionsQuery.isLoading && <Loader />}
-          {submissionsQuery.data?.length === 0 && (
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center text-xs text-slate-500">No responses yet.</div>
+          {submissionsQuery.data?.length === 0 && <p className="text-xs text-slate-600">No responses yet.</p>}
+          {responses.length > 0 && (
+            <ul className="divide-y divide-slate-100">
+              {[...responses]
+                .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
+                .map((s) => (
+                  <SubmissionCard
+                    key={s.id}
+                    project={project}
+                    submission={s}
+                    canReview={canReview}
+                    recordedBySelf={s.recordedByUserId === user?.id}
+                    canConvert={hasPermission("defects:manage")}
+                  />
+                ))}
+            </ul>
           )}
-          {submissionsQuery.data?.map((s) => (
-            <SubmissionCard key={s.id} project={project} submission={s} canReview={canReview} canConvert={hasPermission("defects:manage")} />
-          ))}
         </section>
       )}
 
@@ -375,11 +433,14 @@ function SubmissionCard({
   project,
   submission: s,
   canReview,
+  recordedBySelf,
   canConvert,
 }: {
   project: ProjectSummaryDto;
   submission: HandoverSubmissionDto;
   canReview: boolean;
+  /** The recorder may not review their own response (R7b). */
+  recordedBySelf: boolean;
   canConvert: boolean;
 }) {
   const review = useReviewHandoverSubmissionMutation(project.id);
@@ -388,50 +449,55 @@ function SubmissionCard({
   const openSnags = s.snags.filter((x) => !x.defectTicketId).length;
 
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
-      <header className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-bold text-slate-900">
-            {s.submitterName} <span className="font-normal text-slate-500">· {s.submitterRole}</span>
+    <li className="space-y-3 py-4 first:pt-1 last:pb-0">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900">
+            {s.submitterName} <span className="font-normal text-slate-600">· {s.submitterRole}</span>
           </p>
-          <p className="text-[11px] text-slate-500">
+          <p className="text-xs text-slate-600">
             {HANDOVER_STAKEHOLDER_LABELS[s.stakeholderType]} · {fmtDate(s.submittedAt)}
             {s.recordedByName ? ` · recorded by ${s.recordedByName}` : ""}
           </p>
         </div>
         <TableBadge variant={DECISION_BADGE[s.decision]}>{HANDOVER_DECISION_LABELS[s.decision]}</TableBadge>
-      </header>
+      </div>
 
       <RichTextView text={s.feedbackText} />
 
       {s.snags.length > 0 && (
-        <div className="space-y-2">
+        <div>
           <p className="text-xs font-semibold text-slate-700">Punch list items ({s.snags.length})</p>
-          <ul className="space-y-2">
+          <ul className="mt-1 divide-y divide-slate-100 rounded-xl bg-slate-50 px-3">
             {s.snags.map((snag) => (
-              <li key={snag.index} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs font-semibold text-slate-900">
+              <li key={snag.index} className="flex flex-wrap items-start justify-between gap-2 py-2 text-xs">
+                <div className="min-w-0">
+                  <p className="font-semibold text-slate-900">
                     {snag.title}
-                    {snag.location && <span className="font-normal text-slate-500"> · {snag.location}</span>}
+                    {snag.location && <span className="font-normal text-slate-600"> · {snag.location}</span>}
                   </p>
-                  {snag.defectTicketId && <TableBadge variant="info">Defect raised</TableBadge>}
+                  {snag.description && <p className="text-slate-600">{snag.description}</p>}
                 </div>
-                {snag.description && <p className="mt-1 text-xs text-slate-600">{snag.description}</p>}
+                {snag.defectTicketId && <TableBadge variant="info">Defect raised</TableBadge>}
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      <footer className="flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
+      <div className="flex flex-wrap items-end gap-2">
         {s.reviewedAt ? (
-          <p className="text-[11px] text-slate-500">
+          <p className="inline-flex items-center gap-1.5 text-xs text-slate-600">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden="true" />
             Reviewed by {s.reviewedByName ?? "—"} on {fmtDate(s.reviewedAt)}
             {s.reviewNotes ? `: ${s.reviewNotes}` : ""}
           </p>
         ) : !canReview ? (
-          <p className="text-[11px] text-slate-500">Waiting for review.</p>
+          <StatusText label="Waiting for review" tone="pending" />
+        ) : recordedBySelf ? (
+          <p className="text-xs text-slate-600">
+            <StatusText label="Waiting for review" tone="pending" /> You recorded this response, so another officer must review it.
+          </p>
         ) : (
           <form
             noValidate
@@ -449,27 +515,19 @@ function SubmissionCard({
               />
               <FieldError form={reviewForm} name="notes" />
             </span>
-            <button
-              type="submit"
-              disabled={!canSubmit(reviewForm, { pending: review.isPending })}
-              className="rounded-xl bg-brand-primary px-3 py-2 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button type="submit" disabled={!canSubmit(reviewForm, { pending: review.isPending })} className={primaryAction}>
               Mark reviewed
             </button>
           </form>
         )}
         {canConvert && openSnags > 0 && (
-          <button
-            type="button"
-            onClick={() => setConvertOpen(true)}
-            className="ml-auto inline-flex items-center gap-1 rounded-xl border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            <ListChecks className="h-4 w-4" /> Create defects from {openSnags} punch list item(s)
+          <button type="button" onClick={() => setConvertOpen(true)} className={`ml-auto ${secondaryAction}`}>
+            <ListChecks className="h-3.5 w-3.5" aria-hidden="true" /> Create defects from {openSnags} punch list item(s)
           </button>
         )}
-      </footer>
+      </div>
       {convertOpen && <ConvertSnagsModal project={project} submission={s} onClose={() => setConvertOpen(false)} />}
-    </article>
+    </li>
   );
 }
 

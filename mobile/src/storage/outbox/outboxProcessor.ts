@@ -39,7 +39,7 @@ export type RowHandler = (row: OutboxRow) => Promise<void>;
 
 /** Stored on a row whose dependency was dead-lettered (redesign R5: also check-ins, unscheduled visits, site log entries). */
 export const BLOCKED_DEPENDENCY_MESSAGE =
-  'Something this depends on (a photo, voice note, check-in, site log entry or unscheduled visit) could not be sent. Retry that item first.';
+  'Something this depends on (a photo, voice note, check-in, site log entry or Ad hoc monitoring visit) could not be sent. Retry that item first.';
 
 /** Thrown by handlers for failures that retrying cannot fix (a missing local file, for example). */
 export class LocalPermanentError extends Error {

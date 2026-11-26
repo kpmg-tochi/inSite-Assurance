@@ -18,6 +18,9 @@ export interface TemplateContext {
   brandColor: string;
 }
 
+/** A label inside a sentence: only the first letter is lowered ("Quarterly M&E …" keeps "M&E"). */
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
+
 function esc(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -33,7 +36,7 @@ function layout(ctx: TemplateContext, title: string, paragraphs: string[]): stri
     `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#1f2937">` +
     `<div style="border-top:4px solid ${esc(ctx.brandColor)};padding:16px 0 8px;font-weight:bold">${esc(ctx.tenantName)}</div>` +
     `<h2 style="font-size:18px;margin:8px 0 16px">${esc(title)}</h2>${body}` +
-    `<p style="margin:24px 0 0;font-size:12px;color:#6b7280">Sent by ${esc(ctx.tenantName)} through InSite Assurance.</p></div>`
+    `<p style="margin:24px 0 0;font-size:12px;color:#6b7280">Sent by ${esc(ctx.tenantName)}.</p></div>`
   );
 }
 
@@ -110,33 +113,33 @@ export function minutesSignOff(ctx: TemplateContext, d: MinutesSignOffData): Ren
 }
 
 // ---------------------------------------------------------------------------
-// Redesign R4d (D-R4.29): open findings summary to the contractor after each accepted visit. No
+// Redesign R4d (D-R4.29): open findings summary to the contractor after each accepted monitoring visit. No
 // internal comments and no photos (there is no public link to them).
 // ---------------------------------------------------------------------------
 
 export function findingsSummary(ctx: TemplateContext, d: FindingsSummaryEmailData): RenderedMessage {
-  const subject = `${d.projectCode}: findings after the ${d.visitLabel.toLowerCase()} of ${d.visitDate}`;
+  const subject = `${d.projectCode}: findings after the ${lowerFirst(d.visitLabel)} of ${d.visitDate}`;
   const where = (f: { facility: string | null; unit: string | null }) => [f.facility, f.unit].filter(Boolean).join(', ') || 'Project';
   const openLines = d.open.map(
     (f) => `${where(f)}: ${f.title} (${f.severity.toLowerCase()}, raised ${f.raisedDate}${f.timesRechecked ? `, ${f.timesRechecked} follow-up check(s)` : ''}). ${f.description}`
   );
   const resolvedLines = d.resolved.map((f) => `${where(f)}: ${f.title}`);
-  const intro = `The monitoring team visited ${d.projectName} (${d.projectCode}) on ${d.visitDate} (${d.visitLabel.toLowerCase()}).`;
+  const intro = `The monitoring team visited ${d.projectName} (${d.projectCode}) on ${d.visitDate} (${lowerFirst(d.visitLabel)}).`;
   const text = [
     intro,
     '',
     d.open.length ? `Open findings to correct (${d.open.length}):` : 'There are no open findings.',
     ...openLines.map((l) => `- ${l}`),
-    ...(d.resolved.length ? ['', `Rectified on this visit (${d.resolved.length}):`, ...resolvedLines.map((l) => `- ${l}`)] : []),
+    ...(d.resolved.length ? ['', `Rectified on this monitoring visit (${d.resolved.length}):`, ...resolvedLines.map((l) => `- ${l}`)] : []),
     '',
-    'The next visits will check the open findings again.',
+    'The next monitoring visits will check the open findings again.',
   ].join('\n');
   const list = (lines: string[]) => `<ul style="margin:0;padding-left:20px">${lines.map((l) => `<li style="margin:0 0 6px">${esc(l)}</li>`).join('')}</ul>`;
   const html = layout(ctx, subject, [
     esc(intro),
     d.open.length ? `<strong>Open findings to correct (${d.open.length})</strong>${list(openLines)}` : 'There are no open findings.',
-    ...(d.resolved.length ? [`<strong>Rectified on this visit (${d.resolved.length})</strong>${list(resolvedLines)}`] : []),
-    'The next visits will check the open findings again.',
+    ...(d.resolved.length ? [`<strong>Rectified on this monitoring visit (${d.resolved.length})</strong>${list(resolvedLines)}`] : []),
+    'The next monitoring visits will check the open findings again.',
   ]);
   return { subject, text, html };
 }

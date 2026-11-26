@@ -202,7 +202,7 @@ export function defaultContractDefaultChain(opts: { hasOwner: boolean; legalRole
 export function defaultReportChain(): ApprovalStepConfig[] {
   return [
     {
-      label: 'Monitor approval',
+      label: 'M&E review',
       requiredPermissionKey: REPORT_APPROVAL_PERMISSION_KEY,
       requiredRoleId: null,
       minAmountThresholdNgn: null,

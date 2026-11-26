@@ -4,6 +4,7 @@ import type { StepProps } from "./setupContext";
 import { BasicsSection } from "./sections/BasicsSection";
 import { PartiesSection } from "./sections/PartiesSection";
 import { SiteSection } from "./sections/SiteSection";
+import { SitesSection } from "./sections/SitesSection";
 import { ContractorSection } from "./sections/ContractorSection";
 import { ContractSection } from "./sections/ContractSection";
 import { FacilitySection } from "./sections/FacilitySection";
@@ -18,6 +19,7 @@ export const SECTION_COMPONENTS: Record<ProjectSetupSectionId, React.ComponentTy
   basics: BasicsSection,
   parties: PartiesSection,
   site: SiteSection,
+  sites: SitesSection,
   contractor: ContractorSection,
   contract: ContractSection,
   facility: FacilitySection,

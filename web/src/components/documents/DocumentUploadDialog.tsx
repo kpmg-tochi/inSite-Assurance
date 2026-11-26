@@ -187,7 +187,7 @@ export function DocumentUploadDialog({
                     value={field.value}
                     onChange={field.onChange}
                     options={[{ value: "", label: "Not tied to a contractor" }, ...contractors.map((c) => ({ value: c.id, label: `${c.organizationName} (${c.tradeCode})` }))]}
-                    hint="A document tied to a contractor is visible to that contractor's users when its type is shared."
+                    hint="Name the contractor the document concerns, e.g. its signed contract."
                     disabled={pending}
                   />
                 )}

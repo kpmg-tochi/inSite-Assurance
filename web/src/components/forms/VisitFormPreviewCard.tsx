@@ -26,12 +26,12 @@ const PreviewFormSchema = z
   .object({
     projectId: zChoice("project"),
     visitKind: VisitKindEnum,
-    visitDate: zDateText("visit date"),
+    visitDate: zDateText("monitoring visit date"),
     picked: z.array(z.string()),
   })
   .superRefine((v, ctx) => {
     if (v.visitKind === "AD_HOC" && v.picked.length === 0) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["picked"], message: "Pick at least one facility for an ad hoc visit." });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["picked"], message: "Pick at least one facility for an ad hoc monitoring visit." });
     }
     const contract = PreviewVisitFormRequestSchema.safeParse(previewBody(v));
     if (!contract.success) {
@@ -69,8 +69,8 @@ export function VisitFormPreviewCard() {
   return (
     <div className={sectionClass}>
       <div>
-        <h3 className="text-sm font-bold text-slate-900">Preview a visit form</h3>
-        <p className="text-xs text-slate-500">Builds the form a visit would get today from the live library and the project's scope. Nothing is saved.</p>
+        <h3 className="text-sm font-bold text-slate-900">Preview a monitoring form</h3>
+        <p className="text-xs text-slate-500">Builds the form a monitoring visit would get today from the live library and the project's scope. Nothing is saved.</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-[1fr_200px_160px_auto] gap-3 items-end">
         <Controller
@@ -97,7 +97,7 @@ export function VisitFormPreviewCard() {
           name="visitKind"
           render={({ field }) => (
             <CustomSelect
-              label="Visit kind"
+              label="Kind of monitoring visit"
               size="sm"
               value={field.value}
               onChange={(v) => field.onChange(v as VisitKind)}
@@ -106,7 +106,7 @@ export function VisitFormPreviewCard() {
           )}
         />
         <label className="text-[11px] font-semibold text-slate-700">
-          Visit date
+          Monitoring visit date
           <input type="date" className={`${smallInput} ${invalidClass(form, "visitDate")}`} {...form.register("visitDate")} {...fieldA11y(form, "visitDate")} />
         </label>
         <button type="button" className={primaryButton} disabled={!canSubmit(form, { pending: preview.isPending })} onClick={() => void build()}>

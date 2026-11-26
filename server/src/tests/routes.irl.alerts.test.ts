@@ -214,7 +214,7 @@ describe('UBEC IRL early-warning alerts', () => {
       projectId,
       actorType: 'SYSTEM',
       actorId: 'visits',
-      actorDisplayName: 'InSite (visits)',
+      actorDisplayName: 'System (visits)',
       action: 'VISIT_UPDATED',
       summaryText: 'Test: a routine visit raised the progress of 1 facility unit(s).',
       payload: { progressIncrease: { asOf: zonedCalendarDate(day(5), today), units: [] } },

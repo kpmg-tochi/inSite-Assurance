@@ -3,8 +3,10 @@ import { formatDateTimeInZone } from '@insite/shared';
 import type { PdfBranding } from './closure-pdf.service';
 
 /**
- * UBEC IRL: the project register as a landscape A4 table with the tenant's PDF header (as the
- * closure PDFs render it). Amounts print with the currency code because the PDF font has no ₦ glyph.
+ * UBEC IRL: the project register as a landscape A4 table, laid out as the closure PDFs are. The title
+ * band is the register's own title ("UBEC project register"), not the tenant's PDF header title,
+ * which names the monitoring report. Amounts print with the currency code because the PDF font has
+ * no ₦ glyph.
  */
 
 type Doc = InstanceType<typeof PDFDocument>;
@@ -50,6 +52,8 @@ export function generateRegisterPdf(input: RegisterPdfInput): Promise<Buffer> {
       const range = doc.bufferedPageRange();
       for (let i = range.start; i < range.start + range.count; i++) {
         doc.switchToPage(i);
+        // The footer sits below the bottom margin: without this, pdfkit starts a new (blank) page for it.
+        doc.page.margins.bottom = 0;
         const bottom = doc.page.height - MARGIN + 10;
         doc.fontSize(7).fillColor('#94a3b8').text(`Page ${i + 1} of ${range.count}`, MARGIN, bottom, {
           width: doc.page.width - 2 * MARGIN,

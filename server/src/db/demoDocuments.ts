@@ -160,7 +160,7 @@ function specFor(code: DemoDocumentCode, c: DemoDocumentContext): Spec {
           "Scope of works, work phases and the programme of works",
           `Mobilisation: personnel, equipment and site office within ${days} days`,
           "Health and safety on site, including PPE for every worker",
-          "Visits, reporting and the letter of introduction to the head teacher",
+          "Monitoring visits, reporting and the letter of introduction to the head teacher",
           "Any other business",
         ],
         signatures: ["Prepared by: UBEC State Office (Physical Planning)"],
@@ -187,7 +187,7 @@ function specFor(code: DemoDocumentCode, c: DemoDocumentContext): Spec {
           `The contractor confirmed it will mobilise within ${days} days: site office, signboard, key personnel and equipment.`,
           "PPE (helmets, boots, high-visibility vests) is mandatory for every worker on site; checked on every visit.",
           "The school will keep pupils clear of the works area; the contractor will fence or hoard the site.",
-          `The Resident Supervisor${c.residentSupervisor ? ` (${c.residentSupervisor})` : ""} will carry out the mobilisation check and weekly visits.`,
+          `The Resident Supervisor${c.residentSupervisor ? ` (${c.residentSupervisor})` : ""} will carry out the mobilisation check and weekly monitoring visits.`,
           "Quorum: owner, monitor, contractor and beneficiary present.",
         ],
         signatures: ["Chair: UBEC State Office", "UBEC M&E Officer", `For ${w.contractor}`, `Head teacher, ${w.school}`],
@@ -264,7 +264,7 @@ function specFor(code: DemoDocumentCode, c: DemoDocumentContext): Spec {
         ref: `${w.ref}/SUP`,
         paragraphs: [
           `${c.residentSupervisor ?? "The UBEC Resident Supervisor"} is assigned as Resident Supervisor for ${w.project}${w.code} at ${w.school}, with effect from ${demoDate(c.date)}.`,
-          "Duties: the mobilisation check, weekly supervision visits recorded in the field app, confirming the contractor's progress against the work phases, and reporting findings to the UBEC M&E Officer.",
+          "Duties: the mobilisation check, weekly monitoring visits recorded in the field app, confirming the contractor's progress against the work phases, and reporting findings to the UBEC M&E Officer.",
           c.meOfficer ? `Reports are reviewed by the UBEC M&E Officer, ${c.meOfficer}.` : "Reports are reviewed by the UBEC M&E Officer.",
         ],
         signatures: ["Director, Physical Planning, UBEC"],
@@ -324,7 +324,7 @@ function specFor(code: DemoDocumentCode, c: DemoDocumentContext): Spec {
           "Final evaluation: works delivered to specification; all facilities in use.",
           "Defects liability period: defects raised at handover closed with site photographs.",
           "Payments: final payment and retention release recorded; no exceptions outstanding.",
-          "Lessons learned: plan the rainy season into the programme of works; check PPE from the first visit.",
+          "Lessons learned: plan the rainy season into the programme of works; check PPE from the first monitoring visit.",
           "Beneficiary feedback: the school reports the facilities are in daily use.",
         ],
         signatures: ["UBEC M&E Officer", "Director, Physical Planning"],
@@ -333,7 +333,7 @@ function specFor(code: DemoDocumentCode, c: DemoDocumentContext): Spec {
       return {
         title: "Project closure file: cover sheet",
         ref: `${w.ref}/CF`,
-        paragraphs: [`Closure file for ${w.project}${w.code}: contract documents, certificates, visit reports, payments and the audit ledger.`],
+        paragraphs: [`Closure file for ${w.project}${w.code}: contract documents, certificates, monitoring reports, payments and the audit ledger.`],
         signatures: ["UBEC Audit Department"],
       };
     case "OTHER":

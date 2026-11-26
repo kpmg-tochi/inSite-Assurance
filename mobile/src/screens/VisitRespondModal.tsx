@@ -29,10 +29,10 @@ import { formatDay } from '../utils/visitText';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const ACTION_HELP: Record<VisitResponseAction, string> = {
-  CONFIRM: 'Tell the manager you will do this visit on its date.',
-  MOVE: 'Move the visit to another day inside the window you are allowed. The new date is agreed at once.',
-  PROPOSE: 'Ask the manager for a date outside your window. The visit keeps its date until the manager decides.',
-  DECLINE: 'Say you cannot do this visit. The manager reassigns or reschedules it.',
+  CONFIRM: 'Tell the manager you will do this monitoring visit on its date.',
+  MOVE: 'Move the monitoring visit to another day inside the window you are allowed. The new date is agreed at once.',
+  PROPOSE: 'Ask the manager for a date outside your window. The monitoring visit keeps its date until the manager decides.',
+  DECLINE: 'Say you cannot do this monitoring visit. The manager reassigns or reschedules it.',
 };
 
 /**
@@ -108,14 +108,14 @@ export function VisitRespondModal() {
       {loading && !data ? (
         <InSiteLoader size="md" />
       ) : !visit ? (
-        <EmptyStateCard title="Visit not on this phone" description="Refresh your visits on Home and try again." />
+        <EmptyStateCard title="Monitoring visit not on this phone" description="Refresh your monitoring visits on Home and try again." />
       ) : actions.length === 0 ? (
         <EmptyStateCard
           title="Nothing to respond to"
           description={
             visit.local.pendingResponse
               ? 'Your last response is still waiting to send. You can respond again once it has gone.'
-              : 'This visit no longer takes responses (it was checked in, completed or changed).'
+              : 'This monitoring visit no longer takes responses (it was checked in, completed or changed).'
           }
           actionLabel="Close"
           onAction={close}
@@ -142,7 +142,7 @@ export function VisitRespondModal() {
             </View>
           )}
           {!actions.includes(action) ? (
-            <Text style={visitUiStyles.errorText}>{RESPONSE_ACTION_LABELS[action]} is not available for this visit now. Pick another response.</Text>
+            <Text style={visitUiStyles.errorText}>{RESPONSE_ACTION_LABELS[action]} is not available for this monitoring visit now. Pick another response.</Text>
           ) : (
             <>
               <Text style={visitUiStyles.body}>{ACTION_HELP[action]}</Text>

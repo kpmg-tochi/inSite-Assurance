@@ -32,6 +32,9 @@ const CONFIRMATION_TONE: Record<VisitConfirmation, string> = {
   DECLINED: "text-red-700",
 };
 
+/** Client demo updates D4: the status chip's colour classes, for the visit calendar's entries and legend. */
+export const visitStatusToneClass = (status: VisitStatus): string => STATUS_TONE[status];
+
 export function VisitStatusChip({ status }: { status: VisitStatus }) {
   return <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_TONE[status]}`}>{VISIT_STATUS_LABELS[status]}</span>;
 }

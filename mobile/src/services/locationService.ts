@@ -57,10 +57,10 @@ export function geofenceBadgeText(
   if (!status) return null;
   if (status === 'WITHIN_TOLERANCE') {
     return distanceOutsideMeters != null
-      ? `Within tolerance (${Math.round(distanceOutsideMeters)} m outside)`
-      : 'Within tolerance';
+      ? `Just outside the boundary (${Math.round(distanceOutsideMeters)} m)`
+      : 'Just outside the boundary';
   }
-  return status === 'INSIDE' ? 'In geofence' : 'Outside geofence';
+  return status === 'INSIDE' ? 'Inside the site boundary' : 'Outside the site boundary';
 }
 
 /** @deprecated name kept for older screens; a geotag is a fix plus a local geofence preview. */

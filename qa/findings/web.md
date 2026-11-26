@@ -30,7 +30,7 @@ Format and severities: `saas_updates/ui_verification_and_design_plan.md` ("Findi
 - **Actual:** `label` (critical) on `input[type=email]` and `input[type=password]` (the `<label>`s had no `htmlFor`); `color-contrast` (serious) on 4 nodes (`text-slate-400` helper/footer text 2.56:1, `text-slate-500` on the tinted demo card 4.35:1).
 - **Fix:** `web/src/pages/auth/LoginPage.tsx`: `htmlFor`/`id` and `autoComplete` on both inputs; helper/footer text to `text-slate-500`, demo card email line to `text-slate-600`. axe now reports 0 serious/critical (moderate `landmark-one-main` and `region` remain).
 
-### W-R6-004 · Minor · Login: showcase panel still shows removed features
+### W-R6-004 · Minor · Login: showcase panel still shows removed features · Fixed (confirmed 2026-11-26)
 - **Check:** C20 (the login page is public)
 - **Role / project:** signed out, `/login`
 - **Steps:** 1. Open `/login` at ≥ `lg` width. 2. Read the left panel.

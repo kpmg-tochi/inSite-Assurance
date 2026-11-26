@@ -88,9 +88,9 @@ export function UnscheduledVisitModal() {
         user: { userId: account.profile.userId, fullName: account.profile.fullName },
       });
       if (result.warnings.length > 0) {
-        Toast.show({ type: 'info', props: { title: 'Visit created', message: result.warnings.join(' ') } });
+        Toast.show({ type: 'info', props: { title: 'Monitoring visit created', message: result.warnings.join(' ') } });
       } else {
-        Toast.show({ type: 'success', props: { title: 'Visit created', message: 'Check in to start the form. It is sent when you are online.' } });
+        Toast.show({ type: 'success', props: { title: 'Monitoring visit created', message: 'Check in to start the form. It is sent when you are online.' } });
       }
       navigation.replace('Visit', { visitId: result.visitId });
     } catch (err) {
@@ -103,13 +103,13 @@ export function UnscheduledVisitModal() {
   return (
     <GradientHeaderLayout
       title={copy.unscheduledVisitButton}
-      subtitle={`Ad hoc visit, ${formatDay(today, true)}`}
+      subtitle={formatDay(today, true)}
       rightAction={<IconButton icon="close" text="Close" onPress={close} />}
       contentContainerStyle={styles.body}
     >
       <Text style={visitUiStyles.body}>{copy.unscheduledVisitHelp}</Text>
       {eligible.length === 0 ? (
-        <EmptyStateCard title="You cannot record visits" description="Your role on these projects does not include submitting monitoring reports." />
+        <EmptyStateCard title="You cannot record monitoring visits" description="Your role on these projects does not include submitting monitoring reports." />
       ) : (
         <>
           {eligible.length > 1 && (
@@ -143,7 +143,7 @@ export function UnscheduledVisitModal() {
               <OutlineButton text={downloading ? 'Downloading…' : 'Download now'} icon="download" onPress={() => void download()} disabled={downloading} />
             </SectionCard>
           ) : !adHocAvailable(fieldPack) ? (
-            <EmptyStateCard title="No Ad hoc form" description="This project has no Ad hoc visit form. Ask your manager to set one up." />
+            <EmptyStateCard title="No Ad hoc form" description="This project has no Ad hoc monitoring form. Ask your manager to set one up." />
           ) : (
             <SectionCard
               title="Facilities to check"
@@ -189,7 +189,7 @@ export function UnscheduledVisitModal() {
             </Text>
           ) : null}
           {projectId && fieldPack && adHocAvailable(fieldPack) && (
-            <PrimaryButton text="Create the visit" onPress={() => void create()} isWorking={busy} disabled={picked.length === 0} />
+            <PrimaryButton text="Create the monitoring visit" onPress={() => void create()} isWorking={busy} disabled={picked.length === 0} />
           )}
         </>
       )}

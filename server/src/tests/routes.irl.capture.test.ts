@@ -253,3 +253,25 @@ describe('UBEC IRL: compass heading on visit geotags', () => {
     assert.equal(answer?.captures[0]?.headingDegrees, 271);
   });
 });
+
+describe('Local-dev storage links follow the request host', () => {
+  it('a presign from localhost gets a localhost link, one from the LAN address a LAN link; both upload', async () => {
+    const o = await officer();
+    for (const host of ['localhost:4000', '192.168.1.20:4000']) {
+      const bytes = await photo();
+      const presign = await request(app)
+        .post(`/api/v1/projects/${ids.prg105}/evidence/presign`)
+        .set(o.auth)
+        .set('Host', host)
+        // No `trust proxy` on the API: a forwarded host is ignored.
+        .set('X-Forwarded-Host', 'elsewhere.example')
+        .send({ mediaType: 'SITE_PHOTO', fileName: 'capture.jpg', mimeType: 'image/jpeg', byteSize: bytes.length });
+      assert.equal(presign.status, 200, JSON.stringify(presign.body));
+      const url = new URL(presign.body.data.uploadUrl);
+      assert.equal(url.host, host);
+      // The host is not signed, so the link verifies whichever host serves it.
+      const put = await request(app).put(url.pathname + url.search).set('Content-Type', 'image/jpeg').send(bytes);
+      assert.equal(put.status, 200, JSON.stringify(put.body));
+    }
+  });
+});

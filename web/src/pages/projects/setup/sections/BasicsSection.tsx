@@ -29,6 +29,7 @@ import {
 import { useProjectLotsQuery } from "../../../../queries/projectLots";
 import { CustomSelect } from "../../../../components/common";
 import { AdminAreaSelect } from "../../../../components/common/AdminAreaSelect";
+import { ApprovedListRowPicker } from "../../../../components/approvedLists/ApprovedListRowPicker";
 import { useTerm } from "../../../../lib/auth-context";
 import { FieldError, visibleError, type AnyForm, type ZodForm } from "../../../../lib/forms";
 import {
@@ -361,7 +362,7 @@ export function BasicsForm({
                     {t.name}
                   </span>
                   {t.description && (
-                    <span className="mt-1 block text-[11px] text-slate-500">
+                    <span className="mt-1 block text-[11px] text-slate-600">
                       {t.description}
                     </span>
                   )}
@@ -436,8 +437,8 @@ export function BasicsForm({
         {regions.length > 0 && (
           <div className="md:col-span-2">
             <CustomSelect
-              label="Programme zone (workspace list)"
-              hint="The workspace's own grouping, used by programme filters and KPIs. The geopolitical zone follows the state."
+              label="Workspace zone (for KPI filters)"
+              hint="The workspace's own grouping, used by portfolio filters and KPIs. It is not the geopolitical Zone, which follows the State."
               value={values.regionId ?? ""}
               onChange={(v) => setField(form, "regionId", v, true)}
               options={regionOptions}
@@ -782,6 +783,13 @@ export function BasicsSection({ projectId, setup, mode, readOnly }: StepProps) {
         rules={rules}
         context={context}
       />
+      {/* Client demo updates E3 (wave 3): the approved list row, saved on its own (not with the section). */}
+      <StepSection
+        title="Approved list"
+        description="The row of the annual approved list (Direct Intervention schedule or the state's BEAP) this project implements. The budget is checked against its estimate."
+      >
+        <ApprovedListRowPicker projectId={projectId} interventionYear={b.interventionYear} readOnly={readOnly} />
+      </StepSection>
       {needs.length > 0 && (
         // Redesign R2c: filled from the needs-assessment workbook; read-only for now.
         <StepSection

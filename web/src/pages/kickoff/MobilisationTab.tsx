@@ -2,6 +2,7 @@ import React from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth } from "../../lib/auth-context";
+import { formatDateShort } from "../../lib/formatters";
 import Loader from "../../components/Loader";
 import { MobilisationCompliancePanel } from "../../components/contracts/MobilisationCompliancePanel";
 import { sectionClass } from "../../components/contracts/contractUi";
@@ -67,21 +68,21 @@ function MobilisationChecks({ projectId }: { projectId: string }) {
           Mobilisation checks
         </h2>
         <Link to={`/app/projects/${projectId}/visits`} className="text-[11px] font-semibold text-brand-primary hover:underline">
-          All visits
+          All monitoring visits
         </Link>
       </div>
       {q.isLoading ? (
         <Loader />
       ) : q.isError ? (
-        <p className="text-xs text-slate-500">Could not load the visits.</p>
+        <p className="text-xs text-slate-500">Could not load the monitoring visits.</p>
       ) : visits.length === 0 ? (
-        <p className="text-xs text-slate-500">No mobilisation check visits. They are proposed from the project type's visit plan.</p>
+        <p className="text-xs text-slate-500">No mobilisation checks. They are proposed from the project type's monitoring plan.</p>
       ) : (
         <ul className="divide-y divide-slate-100">
           {visits.map((v) => (
             <li key={v.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-xs">
               <Link to={`/app/projects/${projectId}/visits?visitId=${v.id}`} className="min-w-0 hover:underline">
-                <span className="font-semibold text-slate-900 tabular-nums">{v.plannedDate}</span>
+                <span className="font-semibold text-slate-900 tabular-nums">{formatDateShort(v.plannedDate)}</span>
                 <span className="text-slate-500">
                   {" "}
                   · {officersText(v)}

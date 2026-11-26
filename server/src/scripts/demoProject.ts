@@ -1,5 +1,5 @@
 import { addDays, DEFAULT_FACILITIES, nextWorkdayOnOrAfter } from "@insite/shared";
-import type { WorkbookBuildData, WorkbookFacility, WorkbookLine, WorkbookSprint, WorkbookUnit } from "../modules/scope/workbook/scopeWorkbook";
+import type { WorkbookBuildData, WorkbookFacility, WorkbookLine, WorkbookSite, WorkbookSprint, WorkbookUnit } from "../modules/scope/workbook/scopeWorkbook";
 import type { DemoDocumentCode, DemoDocumentContext } from "../db/demoDocuments";
 import type { RegisterRowRaw } from "@insite/shared";
 import type { RegisterWorkbookData } from "../modules/projectRegister/registerWorkbook";
@@ -15,6 +15,9 @@ export const DEMO_PROJECT = {
   code: "PRG-110",
   school: "Government Primary School, Dawakin Tofa",
   stateLocation: "Kano State",
+  /** Client demo updates (wave 2): the State row and the lot title (C3). */
+  state: "Kano",
+  lotTitle: "Provision of Water, Sanitation and Hygiene (WASH) Facilities in Public Schools",
   /** Region list entry (an area of North West). */
   region: "Kano",
   lga: "Dawakin Tofa",
@@ -37,11 +40,21 @@ export const DEMO_PROJECT = {
   assumptions: "Water table at 60–80 m (yield to be confirmed by the drilling test). The school keeps pupils clear of the works area. Works continue through the dry season.",
 } as const;
 
-/** A unit: Unit ID, facility (catalogue code and name), label, start/end sprint. */
+/**
+ * Client demo updates (wave 2, C2): the project's three schools, in two LGAs of Kano. Site 1 is the
+ * school on the Project sheet (its GPS point). Coordinates are approximate, for the demo only.
+ */
+export const DEMO_SITES: WorkbookSite[] = [
+  { siteNumber: 1, schoolName: "Government Primary School, Dawakin Tofa", schoolLevel: "PRIMARY", lga: "Dawakin Tofa", address: "School compound, Dawakin Tofa town", latitude: 12.1006, longitude: 8.3354 },
+  { siteNumber: 2, schoolName: "LGEA Primary School, Kwa", schoolLevel: "PRIMARY", lga: "Dawakin Tofa", address: "Kwa village, off the Dawakin Tofa–Bichi road", latitude: 12.0712, longitude: 8.2958 },
+  { siteNumber: 3, schoolName: "Government Junior Secondary School, Tofa", schoolLevel: "JSS", lga: "Tofa", address: "Tofa town, near the LGA secretariat", latitude: 12.0517, longitude: 8.2623 },
+];
+
+/** A unit: Unit ID, facility (catalogue code and name), label, start/end sprint, site. */
 export const DEMO_UNITS: Array<WorkbookUnit & { facilityCode: string }> = [
-  { code: "T1", facilityCode: "TOILET", facilityName: "Toilet", label: "Toilet block, 8 cubicles (boys and girls)", plannedQuantity: null, quantityUnit: null, startSprint: 1, endSprint: 2 },
-  { code: "BH1", facilityCode: "BOREHOLE", facilityName: "Borehole", label: "Motorised borehole with overhead tank", plannedQuantity: null, quantityUnit: null, startSprint: 1, endSprint: 2 },
-  { code: "SP1", facilityCode: "SOLAR_POWER", facilityName: "Solar power", label: "Solar power for the borehole pump", plannedQuantity: null, quantityUnit: null, startSprint: 2, endSprint: 2 },
+  { code: "T1", facilityCode: "TOILET", facilityName: "Toilet", label: "Toilet block, 8 cubicles (boys and girls)", plannedQuantity: null, quantityUnit: null, startSprint: 1, endSprint: 2, siteNumber: 1 },
+  { code: "BH1", facilityCode: "BOREHOLE", facilityName: "Borehole", label: "Motorised borehole with overhead tank", plannedQuantity: null, quantityUnit: null, startSprint: 1, endSprint: 2, siteNumber: 2 },
+  { code: "SP1", facilityCode: "SOLAR_POWER", facilityName: "Solar power", label: "Solar pump for the school's existing borehole", plannedQuantity: null, quantityUnit: null, startSprint: 2, endSprint: 2, siteNumber: 3 },
 ];
 
 export const DEMO_LINES: WorkbookLine[] = [
@@ -52,7 +65,7 @@ export const DEMO_LINES: WorkbookLine[] = [
   { wbsCode: "02.01", unitCode: "BH1", description: "Drill, case and develop a 150 mm borehole (80 m), with yield test", unit: "m", totalQuantity: 80, rateNgn: 95_000 },
   { wbsCode: "02.02", unitCode: "BH1", description: "Steel tank stand with a 5,000-litre overhead tank", unit: "item", totalQuantity: 1, rateNgn: 6_500_000 },
   { wbsCode: "02.03", unitCode: "BH1", description: "Water reticulation to the toilet block and four taps", unit: "m", totalQuantity: 120, rateNgn: 22_000 },
-  { wbsCode: "03.01", unitCode: "SP1", description: "1.5 kW solar submersible pump with controller, and 8 × 400 W panels on a frame", unit: "set", totalQuantity: 1, rateNgn: 9_500_000 },
+  { wbsCode: "03.01", unitCode: "SP1", description: "1.5 kW solar submersible pump with controller, and 8 × 400 W panels on a frame, fitted to the existing borehole", unit: "set", totalQuantity: 1, rateNgn: 9_500_000 },
 ];
 
 const WORK_WEEK = [1, 2, 3, 4, 5];
@@ -101,8 +114,11 @@ export function demoWorkbookData(today: string, generatedAt = new Date()): Workb
       longitude: DEMO_PROJECT.longitude,
       deliveryModel: DEMO_PROJECT.deliveryModel,
       budget: DEMO_PROJECT.budgetNgn,
-      interventionYear: DEMO_PROJECT.interventionYear,
+      // The year of the demo day, so the file stays a year a new project may take (D5).
+      interventionYear: Number(today.slice(0, 4)),
       fundingSource: DEMO_PROJECT.fundingSource,
+      state: DEMO_PROJECT.state,
+      lotTitle: DEMO_PROJECT.lotTitle,
       strategicJustification: DEMO_PROJECT.strategicJustification,
       assumptions: DEMO_PROJECT.assumptions,
     },
@@ -113,6 +129,8 @@ export function demoWorkbookData(today: string, generatedAt = new Date()): Workb
     sprints: d.sprints,
     units: DEMO_UNITS.map(({ facilityCode: _code, ...u }) => u),
     lines: DEMO_LINES,
+    sites: DEMO_SITES,
+    interventionYears: [Number(today.slice(0, 4)), Number(today.slice(0, 4)) + 1],
   };
 }
 

@@ -80,6 +80,8 @@ export const HandoverSubmissionDtoSchema = z.object({
   /** Plain text with the small formatting allow-list (see parseHandoverRichText). */
   feedbackText: z.string(),
   snags: z.array(HandoverSnagDtoSchema),
+  /** The officer who recorded it; they may not review it (R7b, 409 SAME_PERSON_REVIEW). */
+  recordedByUserId: z.string().uuid(),
   recordedByName: z.string().nullable(),
   submittedAt: z.string(),
   reviewedAt: z.string().nullable(),

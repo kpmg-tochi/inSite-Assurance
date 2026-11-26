@@ -165,7 +165,10 @@ describe('Redesign R6a: sections and wizard steps', () => {
     assert.equal(contractor.issues[0].message, 'Open step 2 "Contract" and save it.');
     // The contractor issues left the parties section.
     assert.ok(!section(dto, 'parties').issues.some((i) => i.code === 'CONTRACTOR_REQUIRED'));
-    assert.equal(section(dto, 'parties').issues[0].message, 'Open step 1 "Project" and save it.');
+    // Client demo updates D2 (wave 2): a typed draft's owner and funder are derived, so its parties
+    // section asks for nothing and needs no save.
+    assert.deepEqual(section(dto, 'parties').issues, []);
+    assert.equal(section(dto, 'parties').required, false);
     // Every section names its wizard step.
     assert.equal(section(dto, 'basics').wizardStepId, 'project');
     assert.equal(section(dto, 'site').wizardStepId, 'project');
@@ -182,7 +185,8 @@ describe('Redesign R6a: sections and wizard steps', () => {
       ['project', 'contract', 'scope', 'team', 'advanced']
     );
     const project = wizard(dto, 'project');
-    assert.deepEqual(project.sectionIds, ['basics', 'parties', 'site']);
+    // Client demo updates C2 (wave 2): the optional sites section.
+    assert.deepEqual(project.sectionIds, ['basics', 'parties', 'site', 'sites']);
     assert.equal(project.required, true);
     assert.equal(project.saved, false);
     assert.equal(project.complete, false);
@@ -284,7 +288,7 @@ describe('Redesign R6a: sections and wizard steps', () => {
     assert.equal(res.status, 200, JSON.stringify(res.body));
     const row = res.body.data.find((d: { id: string }) => d.id === ids.draft);
     assert.ok(row);
-    // Project, Contract and Scope & sprints are required; Team & visits and Advanced are optional.
+    // Project, Contract and Scope & sprints are required; Team & monitoring and Advanced are optional.
     assert.equal(row.totalRequiredSteps, 3);
     const dto = await getSetup(ids.draft);
     assert.equal(row.completedRequiredSteps, dto.wizardSteps.filter((w) => w.required && w.complete).length);
@@ -324,6 +328,8 @@ describe('Redesign R6a: a draft through the five steps only', () => {
         beneficiaries: [{ name: 'Five Step Primary School', beneficiaryType: 'SCHOOL', isPrimary: true }],
       },
       site: { geofence: RADIAL, geofenceToleranceMeters: null, timezone: 'Africa/Lagos' },
+      // Client demo updates C2 (wave 2): a single-site project saves an empty site list.
+      sites: { sites: [] },
       contractor: { contractors: [contractorRow(ids.contractorOrg, { plannedCompletionDate: '2027-06-30' })] },
       contract: {
         contractReference: 'CTR/R6A/603',

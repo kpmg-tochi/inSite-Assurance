@@ -116,7 +116,7 @@ export function RaiseDefaultCaseDialog({
       ...(milestones.data?.milestones ?? [])
         .filter((m) => m.status !== "DONE" && m.status !== "WAIVED")
         .filter((m) => !contractorId || m.projectContractorId === null || m.projectContractorId === contractorId)
-        .map((m) => ({ value: m.id, label: m.label, description: m.dueDate ? `Due ${m.dueDate}` : "No date yet" })),
+        .map((m) => ({ value: m.id, label: m.label, description: m.dueDate ? `Due ${formatDateShort(m.dueDate)}` : "No date yet" })),
     ],
     [milestones.data, contractorId]
   );

@@ -15,6 +15,7 @@ import {
   type VisitFormSnapshotField,
 } from '@insite/shared';
 import { projectToday } from './visitCalendar';
+import { formatDay } from './visitText';
 import { REVIEW_SCREEN_KEY, triggeredRules, type DraftCheck, type FormIssue, type FormScreen, type PhotoFieldModel, type PhotoSlot } from './visitForm';
 import type { StoredVisit, StoredVisitDraft } from './visitModel';
 import type { SiteLogRecord } from './siteLog';
@@ -121,12 +122,12 @@ export function commentVisible(notes: FieldRuleNotes, answer: VisitFormAnswerInp
   return notes.commentNeeded || (answer?.comment ?? '').length > 0 || openedByOfficer;
 }
 
-/** Re-check items: "Major · raised 2026-11-10". */
+/** Follow-up check items: "Finding · Major · raised Tue 10 Nov 2026". */
 export function recheckMetaText(field: VisitFormSnapshotField): string | null {
   const r = field.recheck;
   if (!r) return null;
   const kind = r.kind === 'DEFECT' ? 'Defect' : 'Finding';
-  return [kind, r.severity ? SEVERITY_LABELS[r.severity] : null, `raised ${r.raisedDate}`].filter(Boolean).join(' · ');
+  return [kind, r.severity ? SEVERITY_LABELS[r.severity] : null, `raised ${formatDay(r.raisedDate, true)}`].filter(Boolean).join(' · ');
 }
 
 /** The issues of one question (all units), or of one photo slot when `unitId` is given. */
@@ -259,10 +260,10 @@ export function formAccess(
     return { mode: 'READ_ONLY', draft: latest, title: 'Sent', message: 'The server has this monitoring report.', canCopy: false };
   }
   if (!canSubmit) return { mode: 'BLOCKED', title: 'Not available', message: 'Your role on this project does not submit monitoring reports.' };
-  if (v.local.createError) return { mode: 'BLOCKED', title: 'Visit not created', message: v.local.createError };
+  if (v.local.createError) return { mode: 'BLOCKED', title: 'Monitoring visit not created', message: v.local.createError };
   if (returned) return { mode: 'START', correction: true };
   if (!['PLANNED', 'IN_PROGRESS', 'MISSED'].includes(v.visit.status)) {
-    return { mode: 'BLOCKED', title: 'Closed', message: 'This visit can no longer be reported on from the phone.' };
+    return { mode: 'BLOCKED', title: 'Closed', message: 'This monitoring visit can no longer be reported on from the phone.' };
   }
   if (!v.local.checkIn) {
     return { mode: 'BLOCKED', title: 'Check in first', message: 'Check in on this phone before you start the form. The form is fixed from then on.' };

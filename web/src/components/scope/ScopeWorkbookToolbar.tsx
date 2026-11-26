@@ -19,6 +19,10 @@ import { primaryButton, secondaryButton } from "../contracts/contractUi";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
+/** Design refinement (2026-11-26): a secondary tool on the BoQ summary, lighter than an outlined button. */
+export const quietButton =
+  "inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary disabled:opacity-50 disabled:cursor-not-allowed";
+
 function readAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -54,20 +58,21 @@ export function ScopeWorkbookToolbar({ projectId, scope, canEdit }: { projectId:
 
   return (
     <>
-      <button type="button" className={secondaryButton} disabled={download.isPending} onClick={() => download.mutate()}>
-        <Download className="w-3.5 h-3.5 inline -mt-0.5" /> {download.isPending ? "Preparing…" : "Download needs assessment"}
-      </button>
-      {scope.projectStatus === "DRAFT" && (
+      {/* Drafts, and imported live projects with no units or lines yet (`importAllowed`, UBEC IRL). The primary tool comes first. */}
+      {(scope.projectStatus === "DRAFT" || scope.importAllowed) && (
       <button
         type="button"
-        className={primaryButton}
+        className={`${primaryButton} justify-center`}
         disabled={Boolean(importReason) || preview.isPending}
         title={importReason ?? "Upload a filled needs assessment (.xlsx). You will see a preview before anything is saved."}
         onClick={() => fileRef.current?.click()}
       >
-        <FileUp className="w-3.5 h-3.5 inline -mt-0.5" /> {preview.isPending ? "Reading…" : "Import needs assessment"}
+        <FileUp className="w-3.5 h-3.5" aria-hidden="true" /> {preview.isPending ? "Reading…" : "Import needs assessment"}
       </button>
       )}
+      <button type="button" className={quietButton} disabled={download.isPending} onClick={() => download.mutate()}>
+        <Download className="w-3.5 h-3.5" aria-hidden="true" /> {download.isPending ? "Preparing…" : "Download needs assessment"}
+      </button>
       <input ref={fileRef} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={onFile} />
       {fileError && <p className="w-full text-xs font-medium text-rose-600">{fileError}</p>}
       {pending && (
@@ -123,7 +128,7 @@ function ImportPreviewModal({
   const fills = preview.projectChanges.filter((c) => c.action === "FILL");
 
   return (
-    <ModalShell title="Import preview" subtitle={`${fileName} · nothing is saved until you confirm`} onClose={onClose} maxWidth="max-w-4xl">
+    <ModalShell title="Check the needs assessment" subtitle={`${fileName} · nothing is saved until you import`} onClose={onClose} maxWidth="max-w-4xl">
       <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
           <Tile label="Work phases" value={String(t.sprintCount)} />

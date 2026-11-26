@@ -220,7 +220,7 @@ describe('Redesign R5 (D-R5.9): visit-app kinds', () => {
     assert.equal(failureMessage({ code: 'FORM_SNAPSHOT_STALE', message: 'raw' }, 'VISIT_SUBMISSION'), FORM_SNAPSHOT_STALE_MESSAGE);
     assert.equal(failureMessage({ code: 'VISIT_ALREADY_SUBMITTED', message: 'raw' }, 'VISIT_SUBMISSION'), VISIT_ALREADY_SUBMITTED_MESSAGE);
     assert.equal(failureMessage({ code: 'FORM_SNAPSHOT_STALE', message: 'raw' }, 'UNSCHEDULED_VISIT'), UNSCHEDULED_FORM_STALE_MESSAGE);
-    assert.equal(VISIT_CHANGED_RESPONSE_MESSAGE, 'This visit changed since you responded. Refresh and respond again.');
+    assert.equal(VISIT_CHANGED_RESPONSE_MESSAGE, 'This monitoring visit changed since you responded. Refresh and respond again.');
     assert.equal(failureMessage({ code: 'VISIT_CHANGED', message: 'raw' }, 'VISIT_RESPONSE'), VISIT_CHANGED_RESPONSE_MESSAGE);
     assert.equal(failureMessage({ code: 'VISIT_CHANGED', message: 'This visit is not open for submission' }, 'VISIT_SUBMISSION'), 'This visit is not open for submission');
     assert.equal(

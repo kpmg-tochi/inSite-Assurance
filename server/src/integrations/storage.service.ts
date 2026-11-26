@@ -15,6 +15,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { MediaType } from '@insite/shared';
 import { env } from '../config/env';
 import { AppError } from '../middleware/error.middleware';
+import { getRequestOrigin } from '../utils/requestContext';
 
 export interface PresignedUploadResult {
   objectKey: string;
@@ -119,6 +120,15 @@ export function isProjectObjectKey(objectKey: string | null | undefined, tenantI
 
 type LocalUrlPurpose = 'put' | 'get';
 
+/**
+ * Base of local-dev storage links: the origin of the request being served (the web on localhost gets
+ * localhost links, a phone on the LAN address gets LAN links), else `PUBLIC_API_BASE_URL` (jobs and
+ * emails have no request). The host is not part of the signature, so a link verifies on any host.
+ */
+function localStorageBaseUrl(): string {
+  return getRequestOrigin() ?? env.PUBLIC_API_BASE_URL;
+}
+
 function safeDispositionName(name: string): string {
   return name.replace(/[^A-Za-z0-9._-]/g, '_').slice(-80) || 'download';
 }
@@ -150,7 +160,7 @@ export function signLocalStorageUrl(params: {
   }
   if (params.purpose === 'get' && attachment) q.set('attachment', attachment);
   const route = params.purpose === 'put' ? 'upload' : 'file';
-  return `${env.PUBLIC_API_BASE_URL}/api/v1/storage/local-dev/${route}?${q.toString()}`;
+  return `${localStorageBaseUrl()}/api/v1/storage/local-dev/${route}?${q.toString()}`;
 }
 
 /** Throws unless the query carries a valid, unexpired signature for this purpose. */
@@ -211,7 +221,7 @@ export function signLocalPartUrl(params: {
     expires: String(expires),
     sig,
   });
-  return `${env.PUBLIC_API_BASE_URL}/api/v1/storage/local-dev/part?${q.toString()}`;
+  return `${localStorageBaseUrl()}/api/v1/storage/local-dev/part?${q.toString()}`;
 }
 
 export function verifyLocalPartUrl(query: Record<string, unknown>) {

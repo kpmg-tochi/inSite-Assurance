@@ -1,6 +1,7 @@
 import { overdueMilestoneCounts } from '../contracts/milestones.service';
 import { loadProjectStageSummaries } from './projectStage.service';
 import { alertKeysForViewer } from '../alerts/alertView';
+import { loadSiteSummaries } from '../sites/sites.service';
 import { Prisma, ProjectStatus } from '@prisma/client';
 import {
   geofenceCentroid,
@@ -290,10 +291,12 @@ export async function listProjectsForUser(
 
   // Phase 13: overdue contract milestones per project (directory badge).
   // Redesign R6c (D-R6.22): the stage chip, batched.
-  const [overdue, stages, lastApproved] = await Promise.all([
+  // Client demo updates C2 (wave 2): each row's sites, batched.
+  const [overdue, stages, lastApproved, sites] = await Promise.all([
     overdueMilestoneCounts(projects),
     loadProjectStageSummaries(projects.map((p) => p.id)),
     lastApprovedUpdates(projects.map((p) => p.id)),
+    loadSiteSummaries(projects.map((p) => p.id)),
   ]);
 
   return projects.map((project) => {
@@ -307,6 +310,7 @@ export async function listProjectsForUser(
       stage: stages.get(project.id) ?? null,
       activeAlerts: alertKeysForViewer(project, webUser),
       lastApprovedUpdateAt: lastApproved.get(project.id)?.toISOString() ?? null,
+      sites: sites.get(project.id) ?? [],
     };
   });
 }
@@ -330,6 +334,8 @@ export async function getProjectBaselineDetails(projectId: string) {
   return {
     ...serializeProjectCore(project),
     boqItems: project.boqItems.map((b) => serializeBoqItem(b)),
+    // Client demo updates C2 (wave 2): the project's sites (empty for single-site projects).
+    sites: (await loadSiteSummaries([projectId])).get(projectId) ?? [],
   };
 }
 
@@ -496,7 +502,7 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
   });
 
   const projectIds = projects.map((p) => p.id);
-  const [stages, findingGroups, openVisits, lastApproved] = await Promise.all([
+  const [stages, findingGroups, openVisits, lastApproved, sites] = await Promise.all([
     loadProjectStageSummaries(projectIds),
     projectIds.length
       ? prisma.finding.groupBy({
@@ -512,6 +518,8 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
         })
       : Promise.resolve([]),
     lastApprovedUpdates(projectIds),
+    // Client demo updates C2 (wave 2): one map pin and one register sub-row per site.
+    loadSiteSummaries(projectIds),
   ]);
   const openFindingsByProject = new Map(findingGroups.map((g) => [g.projectId, g._count._all]));
   const nowDate = new Date();
@@ -549,15 +557,17 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
 
   const items: PortfolioOverviewProject[] = projects.map((p) => {
     const budget = Number(p.totalBudgetNgn ?? 0);
+    // Owner decision 3 (2026-11-26): the commitment is the contract sum where a project has one, else its budget.
+    const commitment = p.contractSumNgn !== null && Number(p.contractSumNgn) > 0 ? Number(p.contractSumNgn) : budget;
     const disbursed = Number(p.disbursedToDateNgn);
     const progress = Number(p.certifiedProgressPct);
     const lastCapture = p.evidenceLogs[0]?.capturedAtDevice ?? null;
     const geofence = p.geofenceGeoJson ? ProjectGeofenceSchema.safeParse(p.geofenceGeoJson).data ?? null : null;
     const schedule = serializeScheduleBadge(p);
 
-    kpis.totalCommitmentNgn += budget;
+    kpis.totalCommitmentNgn += commitment;
     kpis.totalDisbursedNgn += disbursed;
-    weightedProgress += budget * progress;
+    weightedProgress += commitment * progress;
     if (p.scheduleStatus === 'BEHIND') kpis.behindScheduleCount += 1;
     if (
       p.constructionPhase === 'ACTIVE_CONSTRUCTION' &&
@@ -582,6 +592,7 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
       stateLocation: p.stateLocation ?? '',
       lgaLocation: p.lgaLocation,
       totalBudgetNgn: budget,
+      contractSumNgn: p.contractSumNgn === null ? null : Number(p.contractSumNgn),
       disbursedToDateNgn: disbursed,
       certifiedProgressPct: progress,
       lastFieldCaptureAt: lastCapture?.toISOString() ?? null,
@@ -594,6 +605,7 @@ export async function getPortfolioOverview(webUser: WebJwtPayload, filters: Proj
       lastApprovedUpdateAt: lastApproved.get(p.id)?.toISOString() ?? null,
       openFindingsCount,
       activeAlerts,
+      sites: sites.get(p.id) ?? [],
       ...serializeDeliveryModel(p),
       ...serializeRegisterFields(p),
     };

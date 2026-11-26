@@ -1,6 +1,9 @@
 import { deriveProjectStage, type ProjectStage, type ProjectStageFacts, type ProjectStageSummary } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 
+/** Register import statuses that create a live project (the import waived its kick-off and mobilisation). */
+const IMPORTED_LIVE_STATUSES = new Set(['ONGOING', 'COMPLETED']);
+
 /**
  * Redesign R6c (D-R6.18, D-R6.22): stage facts for many projects in a fixed number of queries
  * (no per-project query). Used by the Overview, the directory/portfolio rows and the mobile
@@ -23,6 +26,8 @@ export async function loadProjectStageFacts(projectIds: string[]): Promise<Map<s
         archivedAt: true,
         kickoffHeldAt: true,
         projectTypeId: true,
+        importedAt: true,
+        importedStatus: true,
       },
     }),
     prisma.projectContractMilestone.groupBy({ by: ['projectId'], where: { projectId: { in: ids } }, _count: { _all: true } }),
@@ -70,6 +75,7 @@ export async function loadProjectStageFacts(projectIds: string[]): Promise<Map<s
       cocDraftedAt: cocDrafted.get(p.id) ?? null,
       archivedAt: p.archivedAt?.toISOString() ?? null,
       contractTerminated: terminatedIds.has(p.id),
+      importedLiveAt: p.importedAt && IMPORTED_LIVE_STATUSES.has((p.importedStatus ?? '').toUpperCase()) ? p.importedAt.toISOString() : null,
     });
   }
   return result;

@@ -66,7 +66,7 @@ export function VisitFormTemplatesCard() {
         </div>
       ),
     },
-    { id: "kind", header: "Visit kind", width: "w-40", cell: (t) => <span className="text-xs text-slate-700">{VISIT_KIND_META[t.visitKind].label}</span> },
+    { id: "kind", header: "Monitoring visit kind", width: "w-40", cell: (t) => <span className="text-xs text-slate-700">{VISIT_KIND_META[t.visitKind].label}</span> },
     {
       id: "blocks",
       header: "Blocks",
@@ -113,8 +113,8 @@ export function VisitFormTemplatesCard() {
   return (
     <>
       <StandardTable<VisitFormTemplateDto>
-        title="Visit form templates"
-        subtitle="One per visit kind: the fixed sections in order and where the facility sub-forms go. A project type picks the template for each kind."
+        title="Monitoring form templates"
+        subtitle="One per kind of monitoring visit: the fixed sections in order and where the facility sub-forms go. A project type picks the template for each kind."
         filters={
           <label className="inline-flex items-center gap-1.5 text-xs text-slate-700">
             <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived
@@ -173,7 +173,7 @@ const TemplateFormSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["blocks"],
-        message: `${VISIT_KIND_META[v.visitKind].label} visits have no facility sub-forms: remove that block.`,
+        message: `${VISIT_KIND_META[v.visitKind].label} monitoring visits have no facility sub-forms: remove that block.`,
       });
     }
     const contract = SaveVisitFormTemplateRequestSchema.safeParse(templateBody(v));
@@ -221,7 +221,7 @@ function TemplateEditor({
       return false;
     }
   };
-  useLeaveGuard(dirty ? { label: "Visit form template", save: submit } : null);
+  useLeaveGuard(dirty ? { label: "Monitoring form template", save: submit } : null);
   const close = () => {
     if (dirty && !window.confirm("Discard the unsaved changes?")) return;
     onClose();
@@ -233,7 +233,7 @@ function TemplateEditor({
   };
 
   return (
-    <ModalShell title={initial.existingCode ? `Edit ${initial.name}` : "Add a visit form template"} onClose={close} maxWidth="max-w-2xl">
+    <ModalShell title={initial.existingCode ? `Edit ${initial.name}` : "Add a monitoring form template"} onClose={close} maxWidth="max-w-2xl">
       <div className="p-5 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="text-[11px] font-semibold text-slate-700">
@@ -264,7 +264,7 @@ function TemplateEditor({
           name="visitKind"
           render={({ field }) => (
             <CustomSelect
-              label="Visit kind"
+              label="Kind of monitoring visit"
               size="sm"
               value={field.value}
               disabled={Boolean(initial.existingCode)}
@@ -275,11 +275,11 @@ function TemplateEditor({
         />
         <div className="space-y-1.5">
           <p className="text-[11px] font-semibold text-slate-700">Blocks, in order</p>
-          <p className="text-[11px] text-slate-500">Header first (from the visit), then these blocks, then any follow-up check items, then the summary.</p>
+          <p className="text-[11px] text-slate-500">Header first (from the monitoring visit), then these blocks, then any follow-up check items, then the summary.</p>
           {s.blocks.map((b, i) => (
             <div key={b.type === "SECTION" ? b.sectionCode : "facilities"} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
               <span className={`flex-1 text-xs ${b.type === "FACILITIES" ? "font-bold text-brand-primary" : "text-slate-800"}`}>
-                {b.type === "FACILITIES" ? "Facility sub-forms (one per facility in the visit)" : titleOf(b.sectionCode)}
+                {b.type === "FACILITIES" ? "Facility sub-forms (one per facility in the monitoring visit)" : titleOf(b.sectionCode)}
               </span>
               <button type="button" disabled={i === 0} onClick={() => move(i, -1)} className="p-1 text-slate-400 disabled:opacity-30" aria-label="Move up">
                 <ChevronUp className="w-4 h-4" />

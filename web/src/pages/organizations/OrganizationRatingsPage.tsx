@@ -24,7 +24,7 @@ export function OrganizationRatingsPage() {
       <div className="flex items-start gap-3">
         <Star className="mt-1 h-5 w-5 text-brand-primary" />
         <div>
-          <h1 className="text-lg font-bold text-slate-900">{d.organizationName}</h1>
+          <h2 className="text-lg font-bold text-slate-900">{d.organizationName}</h2>
           <p className="text-xs text-slate-500">
             Contractor performance: {d.ratingCount} rating(s) on {d.projectCount} project(s)
             {d.averageOverall !== null ? `, average ${d.averageOverall.toFixed(2)} of 5` : ""}.

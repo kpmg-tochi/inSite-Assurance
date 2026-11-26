@@ -67,18 +67,18 @@ export function ProjectCard({
             <TouchableOpacity
               onPress={() => onOpenVisit(model.nextVisit!.visitId)}
               accessibilityRole="button"
-              accessibilityLabel={`Next visit: ${model.nextVisit.kindLabel} on ${formatDay(model.nextVisit.date)}`}
+              accessibilityLabel={`Next monitoring visit: ${model.nextVisit.kindLabel} on ${formatDay(model.nextVisit.date)}`}
             >
               <Text style={styles.next}>
-                Next visit: {model.nextVisit.kindLabel}, {formatDay(model.nextVisit.date)}
+                Next monitoring visit: {model.nextVisit.kindLabel}, {formatDay(model.nextVisit.date)}
                 {model.nextVisit.datePending ? ' (move waiting to send)' : ''}
               </Text>
             </TouchableOpacity>
           ) : (
-            <Text style={styles.meta}>No visit planned in the next two weeks.</Text>
+            <Text style={styles.meta}>No monitoring visit planned in the next two weeks.</Text>
           )}
           {model.attentionCount > 0 && (
-            <Pill variant="negative" text={`${model.attentionCount} visit${model.attentionCount === 1 ? '' : 's'} overdue or returned`} />
+            <Pill variant="negative" text={`${model.attentionCount} monitoring visit${model.attentionCount === 1 ? '' : 's'} overdue or returned`} />
           )}
         </>
       )}

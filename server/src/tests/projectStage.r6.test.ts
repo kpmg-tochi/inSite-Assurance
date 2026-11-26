@@ -103,4 +103,23 @@ describe('deriveProjectStage', () => {
     assert.equal(s.flags.contractTerminated, true);
     assert.equal(s.stages[1].note, 'Contract terminated');
   });
+
+  it('a project imported under way (pre-construction milestones waived) is in execution from the import', () => {
+    const importedAt = '2026-10-17T09:30:00.000Z';
+    const f = { ...base, activatedAt: importedAt, contractorOnSite: null, importedLiveAt: importedAt };
+    const s = deriveProjectStage(f);
+    assert.equal(s.current, 'CONSTRUCTION');
+    assert.deepEqual(states(f), ['DONE', 'DONE', 'CURRENT', 'UPCOMING', 'UPCOMING']);
+    assert.equal(s.stages[0].enteredAt, null);
+    assert.equal(s.stages[0].note, 'Before import');
+    assert.equal(s.stages[1].note, 'Before import');
+    assert.equal(s.stages[2].enteredAt, importedAt);
+    // Later phases still move it on.
+    assert.equal(deriveProjectStage({ ...f, constructionPhase: 'HANDOVER_IN_PROGRESS', constructionPhaseChangedAt: '2026-11-20T08:00:00.000Z' }).current, 'COMPLETION');
+  });
+
+  it('an imported project whose on-site milestone is still open follows the usual rule', () => {
+    const s = deriveProjectStage({ ...base, importedLiveAt: '2026-10-17T09:30:00.000Z' });
+    assert.equal(s.current, 'KICKOFF');
+  });
 });

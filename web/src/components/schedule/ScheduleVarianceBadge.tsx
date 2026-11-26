@@ -1,5 +1,6 @@
 import React from "react";
 import { SCHEDULE_STATUS_META, type ScheduleStatusValue, type ScheduleVarianceBadge as Badge } from "@insite/shared";
+import { formatDateTimeShort } from "../../lib/formatters";
 
 const TONE_CLASSES: Record<string, string> = {
   positive: "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -41,7 +42,7 @@ export function ScheduleVariancePill({
 /** The stored project badge (directory, dashboard, portfolio). Renders nothing without one. */
 export function ScheduleBadge({ badge, size = "sm" }: { badge: Badge | null | undefined; size?: "xs" | "sm" }) {
   if (!badge) return null;
-  const computed = badge.computedAt ? ` · computed ${new Date(badge.computedAt).toLocaleString()}` : "";
+  const computed = badge.computedAt ? ` · computed ${formatDateTimeShort(badge.computedAt)}` : "";
   return (
     <ScheduleVariancePill
       status={badge.status}

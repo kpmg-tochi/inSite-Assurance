@@ -28,6 +28,8 @@ export function useDialogFocus(dialogRef: React.RefObject<HTMLElement>, onClose:
   }, [dialogRef]);
 
   return (e: React.KeyboardEvent) => {
+    // Keys from a nested dialog (portalled to body, but a React child) belong to that dialog.
+    if (dialogRef.current && !dialogRef.current.contains(e.target as Node)) return;
     if (e.key === "Escape") {
       if (e.defaultPrevented) return;
       e.stopPropagation();

@@ -62,6 +62,17 @@ export * from './utils/projectCode';
 export * from './schemas/lot.schema';
 export * from './utils/fiscalYear';
 export * from './schemas/portfolioPayments.schema';
+export * from './utils/paymentsBreakdown';
+export * from './utils/calendarGrid';
+export * from './schemas/geocode.schema';
+// Client demo updates (wave 2): sites, contractor register, needs assessment first
+export * from './schemas/site.schema';
+export * from './schemas/contractor.schema';
+export * from './utils/contractorRating';
+export * from './schemas/needsAssessment.schema';
+// Client demo updates (wave 3): contractor flags and decisions, approved lists
+export * from './schemas/contractorFlag.schema';
+export * from './schemas/approvedList.schema';
 
 // Data
 export * from './data/standardsLibrary';

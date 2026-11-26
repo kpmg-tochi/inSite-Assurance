@@ -98,7 +98,7 @@ export function DocumentRulesEditor({ value, onChange }: { value: DocumentRules;
           />
           <span>
             <span className="font-medium">Open a default case when mobilisation is overdue</span>
-            <span className="block text-[11px] text-slate-500">Once per overdue contractor-on-site milestone.</span>
+            <span className="block text-[11px] text-slate-500">Once per overdue “Mobilised to site” milestone.</span>
           </span>
         </label>
       </div>

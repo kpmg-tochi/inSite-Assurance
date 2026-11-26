@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import ExcelJS from 'exceljs';
-import { ContractMilestoneStatus, MilestoneCompletionMode, Prisma } from '@prisma/client';
+import { ContractMilestoneAnchor, ContractMilestoneStatus, MilestoneCompletionMode, Prisma } from '@prisma/client';
 import {
   assignRegisterCodes,
   buildLotBatchCode,
@@ -41,7 +41,7 @@ import { findSheet, labelledValue, loadWorkbook, normHeader, readTable, type She
 import { initialiseProjectProcess } from '../process/processConfig.service';
 import { applyProjectTypeToProject } from '../projectTypes/projectTypes.service';
 import { syncProjectContractors } from '../projects/contractors.service';
-import { markStepSaved } from '../projects/projectSetup.service';
+import { markStepSaved, projectCodeForMessage } from '../projects/projectSetup.service';
 import { syncContractMilestones } from '../contracts/milestones.service';
 import { proposeVisitsFromType } from '../visits/visitPlan.service';
 import { webVisitActor } from '../visits/visitCore';
@@ -63,8 +63,9 @@ import { findOrCreateLotByNumber, lockProjectLots } from '../projectLots/project
  * contractor on the project, a radial site boundary from the GPS point, `importedAt`,
  * `importedStatus` and `importedProgressPct` set. They skip the setup gates (no scope needed). To
  * avoid a flood of overdue work: contract milestones are synced, then every pre-construction one
- * (kick-off, mobilisation, programme accepted) and every one already due before the import date is
- * waived with a reason; later ones stay open. Visit plan proposals (PROPOSED, for a manager to
+ * (kick-off, mobilisation, programme accepted, every step dated from the award, signing or kick-off,
+ * and steps chained on those) and every one already due before the import date is waived with a
+ * reason; later ones stay open. The stage reads Execution from the import (`importedLiveAt`). Visit plan proposals (PROPOSED, for a manager to
  * publish) are made for ongoing projects only, after mobilisation is waived, so no mobilisation
  * checks are proposed; a completed project gets none (the completion notice proposes its own).
  */
@@ -81,6 +82,12 @@ const PRE_CONSTRUCTION_MODES: MilestoneCompletionMode[] = [
   'AUTO_CONTRACTOR_ON_SITE',
   'AUTO_SCHEDULE_BASELINE_SET',
 ];
+/**
+ * Steps dated from the award, the signing or the kick-off (letters, minutes, supervisor, mobilisation
+ * documents): before the platform took the project on, so waived on a live import. Without this they
+ * stay pending with no date (no kick-off is recorded) and the project reads as not yet kicked off.
+ */
+const PRE_CONSTRUCTION_ANCHORS: ContractMilestoneAnchor[] = ['CONTRACT_AWARD', 'CONTRACT_SIGNED', 'KICKOFF'];
 const OPEN_STATUSES: ContractMilestoneStatus[] = ['PENDING', 'DUE', 'OVERDUE'];
 const IMPORT_WAIVE_REASON = 'Project imported already under way (project register import): this step was before the platform took it on.';
 /** The contractor's trade on an imported project (as the setup's contractor section). */
@@ -120,7 +127,7 @@ async function loadContext(db: Db, tenantId: string) {
     types,
     orgs,
     existingCodes: projects.map((p) => p.codePrefix),
-    existingRefs: new Map(projects.filter((p) => p.externalReference).map((p) => [lower(p.externalReference!), p.codePrefix])),
+    existingRefs: new Map(projects.filter((p) => p.externalReference).map((p) => [lower(p.externalReference!), projectCodeForMessage(p.codePrefix)])),
     radialAllowed: modes.length === 0 || modes.includes('RADIAL'),
     term: resolveTerminology(tenant.terminologyLabels).externalReference.singular,
   };
@@ -606,15 +613,26 @@ async function createImportedProject(
     });
     await syncContractMilestones(tx, project.id);
     const today = zonedCalendarDate(now, ctx.tenant.timezone);
+    const waive = { status: 'WAIVED' as const, waivedReason: IMPORT_WAIVE_REASON, completedAt: now, completedByUserId: webUser.userId };
     const result = await tx.projectContractMilestone.updateMany({
       where: {
         projectId: project.id,
         status: { in: OPEN_STATUSES },
-        OR: [{ completionMode: { in: PRE_CONSTRUCTION_MODES } }, { dueDate: { lt: today } }],
+        OR: [{ completionMode: { in: PRE_CONSTRUCTION_MODES } }, { anchor: { in: PRE_CONSTRUCTION_ANCHORS } }, { dueDate: { lt: today } }],
       },
-      data: { status: 'WAIVED', waivedReason: IMPORT_WAIVE_REASON, completedAt: now, completedByUserId: webUser.userId },
+      data: waive,
     });
     waived = result.count;
+    // Steps counted from a waived step were before the import too (e.g. "mobilised + 14 days").
+    for (let depth = 0; depth < 5; depth += 1) {
+      const waivedKeys = (await tx.projectContractMilestone.findMany({ where: { projectId: project.id, status: 'WAIVED' }, select: { key: true } })).map((m) => m.key);
+      const chained = await tx.projectContractMilestone.updateMany({
+        where: { projectId: project.id, status: { in: OPEN_STATUSES }, anchor: 'MILESTONE', anchorMilestoneKey: { in: waivedKeys } },
+        data: waive,
+      });
+      if (chained.count === 0) break;
+      waived += chained.count;
+    }
     if (x.status === 'ONGOING') {
       const proposed = await proposeVisitsFromType(tx, project.id, { trigger: 'ACTIVATION', actor: webVisitActor(webUser), now });
       proposedVisits = proposed.createdIds.length;

@@ -30,6 +30,9 @@ import {
   VisitPushQueue,
   visitLabel,
   webVisitActor,
+  codeText,
+  dayText,
+  lowerFirst,
 } from './visitCore';
 import { refreshUnstartedVisitForms } from './visitForms';
 import { cancelVisitRow } from './visits.service';
@@ -45,6 +48,8 @@ import { cancelVisitRow } from './visits.service';
 export interface AcceptanceOutbox {
   emails: Array<{ projectId: string; submissionId: string }>;
   refreshProjects: Set<string>;
+  /** Client demo updates F.4: projects with an accepted report, for the contractor flag rule after commit. */
+  acceptedProjects?: Set<string>;
 }
 
 const visitDay = (date: string) => new Date(`${date}T12:00:00.000Z`);
@@ -59,7 +64,7 @@ async function notifyPendingApproval(tx: Tx, s: { id: string; projectId: string;
     targetRoleId: step.requiredRoleId,
     category: 'VISIT_PENDING_APPROVAL',
     title: `Monitoring report awaiting ${step.label} · ${label}`,
-    description: `${s.reporterName}'s monitoring report (${label.toLowerCase()}) is waiting for "${step.label}" (step ${step.stepOrder} of ${steps.length}).`,
+    description: `${s.reporterName}'s monitoring report (${lowerFirst(label)}) is waiting for "${step.label}" (step ${step.stepOrder} of ${steps.length}).`,
     actionUrl: `/app/projects/${s.projectId}/visits?visitId=${s.visitId}`,
     metadata: { visitId: s.visitId, visitSubmissionId: s.id, stepOrder: step.stepOrder, chainVersion: version },
   });
@@ -114,7 +119,7 @@ export async function reviewVisitSubmission(params: {
         actions,
         orgContext: await orgContextForStep(tx, projectId, step),
         excludedUserId: s.submittedByUserId,
-        excludedReason: 'You carried out this visit, so someone else must review it.',
+        excludedReason: 'You carried out this monitoring visit, so someone else must review it.',
       }),
       step
     );
@@ -152,20 +157,20 @@ export async function reviewVisitSubmission(params: {
         userIds: [s.submittedByUserId],
         type: 'VISIT_RETURNED',
         title: `${label} returned`,
-        message: `${project.codePrefix}: your ${label.toLowerCase()} of ${s.visit.plannedDate} was returned: ${input.notes}. Correct it and submit again.`,
+        message: `${codeText(project.codePrefix)}: your ${lowerFirst(label)} of ${dayText(s.visit.plannedDate)} was returned: ${input.notes}. Correct it and submit again.`,
         submissionId: s.id,
       });
-      await audit(`Returned the ${label.toLowerCase()} of ${s.visit.plannedDate} at step ${step!.stepOrder} "${step!.label}": ${input.notes}`);
+      await audit(`Returned the ${lowerFirst(label)} of ${s.visit.plannedDate} at step ${step!.stepOrder} "${step!.label}": ${input.notes}`);
       return;
     }
     const next = nextApplicableStep(steps, step!.stepOrder, null);
     if (next) {
       await tx.visitSubmission.update({ where: { id: s.id }, data: { currentApprovalStep: next.stepOrder } });
       await notifyPendingApproval(tx, s, s.approvalChainVersion, next.stepOrder, label);
-      await audit(`Approved step ${step!.stepOrder} "${step!.label}" of the ${label.toLowerCase()} of ${s.visit.plannedDate}; now at "${next.label}".`, { nextStepOrder: next.stepOrder });
+      await audit(`Approved step ${step!.stepOrder} "${step!.label}" of the ${lowerFirst(label)} of ${s.visit.plannedDate}; now at "${next.label}".`, { nextStepOrder: next.stepOrder });
       return;
     }
-    await audit(`Approved the ${label.toLowerCase()} of ${s.visit.plannedDate} at the final step "${step!.label}".`);
+    await audit(`Approved the ${lowerFirst(label)} of ${s.visit.plannedDate} at the final step "${step!.label}".`);
     await acceptSubmission(tx, s.id, { actor, pushes, outbox, notifyOfficer: true });
   });
   await flushVisitPushes(pushes);
@@ -190,6 +195,7 @@ export async function acceptSubmission(
   });
   await tx.visitSubmission.update({ where: { id: submissionId }, data: { status: 'APPROVED', approvedAt: now, currentApprovalStep: 0 } });
   await tx.visit.update({ where: { id: s.visitId }, data: { status: 'APPROVED' } });
+  (ctx.outbox.acceptedProjects ??= new Set()).add(s.projectId);
 
   const { snapshot } = await getVisitFormSnapshot(tx, s.formSnapshotId);
   const answers = (Array.isArray(s.answersJson) ? s.answersJson : []) as VisitFormAnswer[];
@@ -197,7 +203,7 @@ export async function acceptSubmission(
   const visit = s.visit;
   const label = visitLabel(visit.visitKind);
   const audit = (action: 'INSPECTION_FINDING_RAISED' | 'INSPECTION_FINDING_RESOLVED' | 'VISIT_UPDATED', summaryText: string, payload: Record<string, unknown>) =>
-    recordAuditEvent(tx, { projectId: s.projectId, actorType: 'SYSTEM', actorId: 'visits', actorDisplayName: 'InSite (visits)', action, summaryText, payload });
+    recordAuditEvent(tx, { projectId: s.projectId, actorType: 'SYSTEM', actorId: 'visits', actorDisplayName: 'System (visits)', action, summaryText, payload });
 
   // 1. Findings from the form's rules (one open finding per question; an open one is re-checked instead).
   const contractorId = await defaultContractorId(tx, s.projectId);
@@ -228,7 +234,7 @@ export async function acceptSubmission(
     raised.push(finding.id);
   }
   if (raised.length) {
-    await audit('INSPECTION_FINDING_RAISED', `The ${label.toLowerCase()} of ${visit.plannedDate} raised ${raised.length} finding(s).`, { visitId: visit.id, visitSubmissionId: s.id, findingIds: raised });
+    await audit('INSPECTION_FINDING_RAISED', `The ${lowerFirst(label)} of ${visit.plannedDate} raised ${raised.length} finding(s).`, { visitId: visit.id, visitSubmissionId: s.id, findingIds: raised });
   }
 
   // 2. Re-check outcomes: "resolved" closes the finding with the answer's photos; otherwise it is counted.
@@ -243,7 +249,7 @@ export async function acceptSubmission(
         where: { id: finding.id },
         data: {
           status: 'RESOLVED',
-          resolvedNotes: answer?.comment?.trim() || `Rectified on the ${label.toLowerCase()} of ${visit.plannedDate}.`,
+          resolvedNotes: answer?.comment?.trim() || `Rectified on the ${lowerFirst(label)} of ${dayText(visit.plannedDate)}.`,
           resolutionCaptureIds: photoIds,
           resolvedByUserId: s.submittedByUserId,
           resolvedByName: s.reporterName,
@@ -259,7 +265,7 @@ export async function acceptSubmission(
     }
   }
   if (resolved.length) {
-    await audit('INSPECTION_FINDING_RESOLVED', `The ${label.toLowerCase()} of ${visit.plannedDate} resolved ${resolved.length} finding(s).`, {
+    await audit('INSPECTION_FINDING_RESOLVED', `The ${lowerFirst(label)} of ${visit.plannedDate} resolved ${resolved.length} finding(s).`, {
       visitId: visit.id,
       visitSubmissionId: s.id,
       findingIds: resolved,
@@ -284,7 +290,7 @@ export async function acceptSubmission(
       .map((u) => ({ unitId: u.id, from: u.progressPct === null ? null : Number(u.progressPct), to: Math.round(progress.get(u.id)! * 100) / 100 }))
       .filter((u) => u.to > (u.from ?? 0));
     if (raisedUnits.length) {
-      await audit('VISIT_UPDATED', `The ${label.toLowerCase()} of ${visit.plannedDate} raised the progress of ${raisedUnits.length} facility unit(s).`, {
+      await audit('VISIT_UPDATED', `The ${lowerFirst(label)} of ${visit.plannedDate} raised the progress of ${raisedUnits.length} facility unit(s).`, {
         visitId: visit.id,
         visitSubmissionId: s.id,
         progressIncrease: { asOf: visit.plannedDate, units: raisedUnits },
@@ -306,16 +312,16 @@ export async function acceptSubmission(
       projectId: s.projectId,
       mode: 'AUTO_CONTRACTOR_ON_SITE',
       at: visitDay(visit.plannedDate),
-      notes: `Contractor mobilised to site, confirmed at the mobilisation check of ${visit.plannedDate}.`,
+      notes: `Contractor mobilised to site, confirmed at the mobilisation check of ${dayText(visit.plannedDate)}.`,
       actor: { actorType: ctx.actor.actorType, actorId: ctx.actor.actorId, actorDisplayName: ctx.actor.actorDisplayName, userId: ctx.actor.userId },
     });
     const later = await tx.visit.findMany({
       where: { projectId: s.projectId, visitKind: 'MOBILISATION_CHECK', id: { not: visit.id }, status: { in: ['PROPOSED', 'PLANNED'] }, checkInAt: null },
       select: { id: true },
     });
-    for (const v of later) await cancelVisitRow(tx, v, { reason: `The contractor was on site at the mobilisation check of ${visit.plannedDate}.`, userId: null });
+    for (const v of later) await cancelVisitRow(tx, v, { reason: `The contractor was on site at the mobilisation check of ${dayText(visit.plannedDate)}.`, userId: null });
     if (done || later.length) {
-      await audit('VISIT_UPDATED', `Mobilisation confirmed by the visit of ${visit.plannedDate}: ${done} milestone(s) completed, ${later.length} later mobilisation check(s) cancelled.`, {
+      await audit('VISIT_UPDATED', `Mobilisation confirmed by the monitoring visit of ${visit.plannedDate}: ${done} milestone(s) completed, ${later.length} later mobilisation check(s) cancelled.`, {
         visitId: visit.id,
         cancelledVisitIds: later.map((v) => v.id),
       });
@@ -329,7 +335,7 @@ export async function acceptSubmission(
       onlyDated: post,
       ...(post ? { anchorIn: ['PROJECT_CLOSED' as const] } : { anchorNotIn: ['PROJECT_CLOSED' as const] }),
       at: now,
-      notes: `${label} of ${visit.plannedDate} accepted.`,
+      notes: `${label} of ${dayText(visit.plannedDate)} accepted.`,
       actor: { actorType: ctx.actor.actorType, actorId: ctx.actor.actorId, actorDisplayName: ctx.actor.actorDisplayName, userId: ctx.actor.userId },
     });
   }
@@ -348,7 +354,7 @@ export async function acceptSubmission(
       userIds: [s.submittedByUserId],
       type: 'VISIT_APPROVED',
       title: `${label} accepted`,
-      message: `${s.project.codePrefix}: your ${label.toLowerCase()} of ${visit.plannedDate} was accepted.`,
+      message: `${codeText(s.project.codePrefix)}: your ${lowerFirst(label)} of ${dayText(visit.plannedDate)} was accepted.`,
       submissionId: s.id,
     });
   }
@@ -358,6 +364,12 @@ export async function acceptSubmission(
 export async function afterAcceptanceCommitted(outbox: AcceptanceOutbox): Promise<void> {
   for (const projectId of outbox.refreshProjects) await refreshScheduleBadge(projectId).catch((e) => console.warn('[visits] badge refresh failed:', e));
   for (const e of outbox.emails) await sendFindingsSummary(e.projectId, e.submissionId).catch((err) => console.warn('[visits] findings summary failed:', err));
+  // Client demo updates F.4: contractor flag rule and rating refresh (never fails the acceptance).
+  for (const projectId of outbox.acceptedProjects ?? []) {
+    await import('../contractorFlags/contractorFlags.service')
+      .then((m) => m.evaluateFlagsAfterAcceptance(projectId))
+      .catch((err) => console.warn('[visits] contractor flag evaluation failed:', err));
+  }
 }
 
 /** The open findings summary to the contractor organisation (D-R4.29). Audited either way. */
@@ -382,17 +394,17 @@ export async function sendFindingsSummary(projectId: string, submissionId: strin
   const fName = new Map(facilities.map((f) => [f.id, f.name]));
   const uName = new Map(units.map((u) => [u.id, u.label]));
   const data: FindingsSummaryEmailData = {
-    projectCode: s.project.codePrefix,
+    projectCode: codeText(s.project.codePrefix),
     projectName: s.project.name,
     visitLabel: visitLabel(s.visit.visitKind),
-    visitDate: s.visit.plannedDate,
+    visitDate: dayText(s.visit.plannedDate),
     open: open.map((f) => ({
       facility: f.facilityId ? (fName.get(f.facilityId) ?? null) : null,
       unit: f.facilityUnitId ? (uName.get(f.facilityUnitId) ?? null) : null,
       title: f.title ?? f.checklistItemKey,
       description: f.description,
       severity: f.severity,
-      raisedDate: zonedCalendarDate(f.createdAt, s.project.timezone),
+      raisedDate: dayText(zonedCalendarDate(f.createdAt, s.project.timezone)),
       timesRechecked: f.recheckCount,
     })),
     resolved: resolvedHere.map((f) => ({
@@ -412,11 +424,11 @@ export async function sendFindingsSummary(projectId: string, submissionId: strin
     projectId,
     actorType: 'SYSTEM',
     actorId: 'visits',
-    actorDisplayName: 'InSite (visits)',
+    actorDisplayName: 'System (visits)',
     action: 'FINDINGS_SUMMARY_SENT',
     summaryText: contractor?.contactEmail
-      ? `Findings summary after the ${data.visitLabel.toLowerCase()} of ${data.visitDate} sent to ${contractor.name} (${data.open.length} open, ${data.resolved.length} resolved): ${status.toLowerCase()}.`
-      : `Findings summary after the ${data.visitLabel.toLowerCase()} of ${data.visitDate} not sent: ${contractor ? `${contractor.name} has no contact email` : 'the project has no contractor'}.`,
+      ? `Findings summary after the ${lowerFirst(data.visitLabel)} of ${data.visitDate} sent to ${contractor.name} (${data.open.length} open, ${data.resolved.length} resolved): ${status.toLowerCase()}.`
+      : `Findings summary after the ${lowerFirst(data.visitLabel)} of ${data.visitDate} not sent: ${contractor ? `${contractor.name} has no contact email` : 'the project has no contractor'}.`,
     payload: { visitId: s.visit.id, visitSubmissionId: submissionId, status, messageId, open: data.open.length, resolved: data.resolved.length },
   });
   return status;

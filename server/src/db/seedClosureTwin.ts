@@ -105,7 +105,7 @@ export async function seedClosureTwin() {
   await prisma.$transaction((tx) => syncContractMilestones(tx, projectId));
   await prisma.projectContractMilestone.updateMany({
     where: { projectId, status: { in: ["PENDING", "DUE", "OVERDUE"] }, anchor: { notIn: ["COC_ISSUED", "PROJECT_CLOSED"] } },
-    data: { status: "DONE", completedAt: new Date(`${addDays(kickoff, 14)}T10:00:00.000Z`), completedNotes: "Done (seeded history)." },
+    data: { status: "DONE", completedAt: new Date(`${addDays(kickoff, 14)}T10:00:00.000Z`), completedNotes: "Done." },
   });
 
   // The bill, measured complete (legacy lines without facility units: the project predates R2).
@@ -177,8 +177,8 @@ export async function seedClosureTwin() {
   const lesson = await createLesson(projectId, monitor, {
     category: "SITE_DELIVERY",
     title: "Check PPE from the first mobilisation check",
-    description: "Workers on the borehole crew had no helmets in the first two weeks; the finding was raised only on the first routine visit.",
-    recommendation: "Put PPE in the mobilisation agreement and check it on the mobilisation visit, not only during construction.",
+    description: "Workers on the borehole crew had no helmets in the first two weeks; the finding was raised only on the first routine monitoring visit.",
+    recommendation: "Put PPE in the mobilisation agreement and check it on the mobilisation check, not only during construction.",
     stage: "MOBILISATION",
     tags: ["safety", "ppe", "mobilisation"],
     sharedWithContractor: true,

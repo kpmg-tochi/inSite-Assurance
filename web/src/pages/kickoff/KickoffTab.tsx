@@ -781,7 +781,7 @@ function HeldSummary({ projectId, meeting }: { projectId: string; meeting: Kicko
               <span className="font-semibold text-slate-900">{i.name}</span>
               <span className="text-slate-500"> · {KICKOFF_STAKEHOLDER_GROUP_META[i.stakeholderGroup].label}</span>
             </span>
-            <span className={`text-[11px] font-semibold ${i.attended ? "text-emerald-700" : "text-slate-400"}`}>{i.attended ? "Attended" : "Absent"}</span>
+            <span className={`text-[11px] font-semibold ${i.attended ? "text-emerald-700" : "text-slate-500"}`}>{i.attended ? "Attended" : "Absent"}</span>
           </li>
         ))}
       </ul>

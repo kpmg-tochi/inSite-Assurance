@@ -235,7 +235,7 @@ export async function queueVisitResponse(
   ctx: { today: string; canSubmit: boolean; workWeekDays?: number[] | null }
 ): Promise<string> {
   const v = await getVisit(visitId);
-  if (!v) throw new Error('This visit is no longer on the phone. Refresh your visits.');
+  if (!v) throw new Error('This monitoring visit is no longer on the phone. Refresh your monitoring visits.');
   const problem = responseProblem(v, input, ctx);
   if (problem) throw new Error(problem);
   const clientActionId = newId();
@@ -310,7 +310,7 @@ export async function queueCheckIn(
   input: { fix: LocationFix | null; heading?: HeadingReading | null; preview?: GeofencePreview | null; checkedInAt?: string }
 ): Promise<string> {
   const v = await getVisit(visitId);
-  if (!v) throw new Error('This visit is no longer on the phone. Refresh your visits.');
+  if (!v) throw new Error('This monitoring visit is no longer on the phone. Refresh your monitoring visits.');
   if (v.local.checkIn) return v.local.checkIn.clientCheckInId;
   const clientCheckInId = newId();
   const checkedInAt = input.checkedInAt ?? nowIso();
@@ -663,9 +663,9 @@ export async function startDraft(
   const existing = await getOpenDraft(visitId);
   if (existing) return existing;
   const v = await getVisit(visitId);
-  if (!v) throw new Error('This visit is no longer on the phone. Refresh your visits.');
+  if (!v) throw new Error('This monitoring visit is no longer on the phone. Refresh your monitoring visits.');
   const form = await getVisitForm(v.id);
-  if (!form) throw new Error('The form for this visit is not on the phone yet. Connect once to download it.');
+  if (!form) throw new Error('The form for this monitoring visit is not on the phone yet. Connect once to download it.');
   const now = nowIso();
   const draft: VisitDraft = {
     id: newId(),
@@ -727,7 +727,7 @@ export async function queueVisitSubmission(
   if (stored.status !== 'DRAFT') return;
   const draft = stored.draft;
   const v = await getVisit(draft.visitId);
-  if (!v) throw new Error('This visit is no longer on the phone. Refresh your visits.');
+  if (!v) throw new Error('This monitoring visit is no longer on the phone. Refresh your monitoring visits.');
   if (v.local.createError) throw new Error(v.local.createError);
   const form = await getVisitFormByHash(v.id, draft.formHash);
   if (!form) throw new Error('The form of this monitoring report is not on the phone any more. Refresh and start again.');
@@ -882,7 +882,7 @@ export async function copyRefusedDraft(draftId: string): Promise<{ draft: Stored
   const refused = await getDraft(draftId);
   if (!refused || refused.status !== 'REFUSED') throw new Error('Only a refused monitoring report can be copied.');
   const [oldForm, current] = await Promise.all([getVisitFormByHash(refused.draft.visitId, refused.draft.formHash), getVisitForm(refused.draft.visitId)]);
-  if (!current) throw new Error('The form for this visit is not on the phone yet. Connect once to download it.');
+  if (!current) throw new Error('The form for this monitoring visit is not on the phone yet. Connect once to download it.');
   const { draft: moved, dropped } = remapDraftOntoSnapshot(
     refused.draft,
     oldForm?.snapshot ?? null,
@@ -907,10 +907,10 @@ export async function copyRefusedDraft(draftId: string): Promise<{ draft: Stored
  */
 export async function startCorrectionDraft(visitId: string, detail: VisitDetailDto): Promise<{ draft: StoredVisitDraft; dropped: DroppedAnswer[] }> {
   const returned = [...detail.submissions].filter((s) => s.status === 'RETURNED').sort((a, b) => b.revisionNumber - a.revisionNumber)[0];
-  if (!returned) throw new Error('This visit has no monitoring report returned for correction.');
+  if (!returned) throw new Error('This monitoring visit has no monitoring report returned for correction.');
   await applyServerVisit(visitId, detail.visit);
   const current = await getVisitForm(visitId);
-  if (!current) throw new Error('The form for this visit is not on the phone yet. Connect once to download it.');
+  if (!current) throw new Error('The form for this monitoring visit is not on the phone yet. Connect once to download it.');
   const { answers, dropped } = answersFromReturnedSubmission(current.snapshot, returned.answers);
   const now = nowIso();
   const draft = await startDraft(visitId, {

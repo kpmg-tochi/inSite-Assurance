@@ -60,7 +60,7 @@ export const ProfileAndProjectsScreen = () => {
   return (
     <>
       <View style={[styles.floatingAvatar, { top: insets.top + 54 }]}>
-        <Avatar editable={true} size="lg" />
+        <Avatar editable={true} size="lg" accessibilityLabel="Profile photo. Tap to change it." />
       </View>
 
       <GradientHeaderLayout
@@ -91,7 +91,7 @@ export const ProfileAndProjectsScreen = () => {
             )}
 
             {account ? (
-              <Text style={styles.note}>Your projects and visits are on Home. Pull down there to refresh them.</Text>
+              <Text style={styles.note}>Your projects and monitoring visits are on Home. Pull down there to refresh them.</Text>
             ) : null}
 
             {account ? (

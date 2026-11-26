@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, ReactNode } from 'react';
+import React, { useState, useRef, useEffect, useId, ReactNode } from 'react';
 import {
   Search,
   MoreHorizontal,
@@ -258,6 +258,7 @@ export function StandardTable<T>({
   const size = pageSize === false ? Math.max(1, data.length) : Math.max(1, pageSize);
   const pageCount = Math.max(1, Math.ceil(data.length / size));
   const [page, setPage] = useState(0);
+  const titleId = useId();
   // A filter or search that shrinks the data must not leave the table on an empty page.
   useEffect(() => {
     if (page > pageCount - 1) setPage(pageCount - 1);
@@ -274,7 +275,7 @@ export function StandardTable<T>({
       <div className="px-5 py-3.5 bg-brand-navy text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-bold text-white tracking-tight">
+            <h2 id={titleId} className="text-sm font-bold text-white tracking-tight">
               {title}
             </h2>
           </div>
@@ -303,15 +304,17 @@ export function StandardTable<T>({
                 value={search.value}
                 onChange={(e) => search.onChange(e.target.value)}
                 placeholder={search.placeholder || 'Search records...'}
+                aria-label={search.placeholder || 'Search records'}
                 className="w-full text-xs pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition"
               />
               {search.value && (
                 <button
                   type="button"
                   onClick={() => search.onChange('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  aria-label="Clear search"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <X className="w-3.5 h-3.5" aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -328,7 +331,8 @@ export function StandardTable<T>({
       )}
 
       {/* 3. Horizontally Scrollable Table Canvas */}
-      <div className="overflow-x-auto">
+      {/* Focusable so keyboard users can scroll a wide table (axe scrollable-region-focusable). */}
+      <div className="overflow-x-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-primary" tabIndex={0} role="region" aria-labelledby={titleId}>
         <table className={`w-full ${minWidth} text-left border-collapse`}>
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">
@@ -366,7 +370,7 @@ export function StandardTable<T>({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="py-12 text-center text-slate-400 text-xs"
+                  className="py-12 text-center text-slate-500 text-xs"
                 >
                   Loading table data...
                 </td>
@@ -381,7 +385,7 @@ export function StandardTable<T>({
                     <div className="font-bold text-slate-700 text-xs">
                       {emptyState?.title || 'No records found'}
                     </div>
-                    <p className="text-[11px] text-slate-400">
+                    <p className="text-[11px] text-slate-500">
                       {emptyState?.description ||
                         'There are no entries matching the current filter criteria.'}
                     </p>

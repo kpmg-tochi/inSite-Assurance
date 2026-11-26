@@ -108,8 +108,7 @@ export const SiteEvidenceCameraModal: React.FC<Props> = ({
           <View style={styles.header}>
             <View style={styles.headerRow}>
               <Text style={styles.headerTitle}>
-                Site Evidence ({capturedPhotos.length}{' '}
-                {capturedPhotos.length === 1 ? 'Photo' : 'Photos'})
+                Site photos ({capturedPhotos.length})
               </Text>
               <TouchableOpacity onPress={resetAndClose} activeOpacity={0.7}>
                 <Text style={styles.cancelText}>Discard</Text>
@@ -117,7 +116,7 @@ export const SiteEvidenceCameraModal: React.FC<Props> = ({
             </View>
             <Text style={styles.headerSub}>
               {latestGps
-                ? `GPS Locked: ${latestGps.latitude.toFixed(5)}, ${latestGps.longitude.toFixed(5)}${latestHeading}`
+                ? `Location: ${latestGps.latitude.toFixed(5)}, ${latestGps.longitude.toFixed(5)}${latestHeading}`
                 : 'Captured offline · GPS pending'}
             </Text>
           </View>
@@ -159,14 +158,14 @@ export const SiteEvidenceCameraModal: React.FC<Props> = ({
               onPress={() => setIsTakingPhoto(true)}
               activeOpacity={0.8}
             >
-              <Text style={styles.addAnotherText}>+ Add Another Angle / Photo</Text>
+              <Text style={styles.addAnotherText}>+ Take another photo</Text>
             </TouchableOpacity>
           </ScrollView>
 
           {/* Shared Caption & Submit Footer */}
           <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom + 12, 16) }]}>
             <Text style={styles.captionLabel}>
-              Shared Description / Caption (Optional)
+              Caption (optional)
             </Text>
             <TextInput
               style={styles.captionInput}
@@ -183,8 +182,7 @@ export const SiteEvidenceCameraModal: React.FC<Props> = ({
               activeOpacity={0.85}
             >
               <Text style={styles.submitBtnText}>
-                Attach {capturedPhotos.length}{' '}
-                {capturedPhotos.length === 1 ? 'Photo' : 'Photos'} to Thread
+                Use {capturedPhotos.length === 1 ? 'this photo' : `these ${capturedPhotos.length} photos`}
               </Text>
             </TouchableOpacity>
           </View>

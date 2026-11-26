@@ -134,11 +134,45 @@ const partiesKey = (s: PartiesValues) =>
   });
 
 /**
- * Section `parties` (step 1 "Project"): the school (primary beneficiary, others below it) and the
- * organisations (owner, monitor, funder; pre-filled by the delivery model). Redesign R6a: the
- * contractor moved to its own section on step 2, so this section never sends `contractors`.
+ * Section `parties` (step 1 "Project"). Client demo updates D2 (wave 2): a project with a delivery
+ * model gets its owner and funder from the model and the state (server), and its schools from the
+ * Sites section, so it shows a read-only summary and registers nothing; projects without a model
+ * keep the form.
  */
-export function PartiesSection({ projectId, setup, readOnly }: StepProps) {
+export function PartiesSection(props: StepProps) {
+  if (props.setup.basics.projectType) return <PartiesSummary setup={props.setup} />;
+  return <PartiesForm {...props} />;
+}
+
+/** D2: what the delivery model and the state set (there is no control to change it in setup). */
+function PartiesSummary({ setup }: { setup: ProjectSetupDto }) {
+  const term = useTerm();
+  const p = setup.parties;
+  const owner = p.owningOrganization?.name ?? "not set yet";
+  const funder = p.lenderOrganization?.name ?? "not set yet";
+  return (
+    <section className="rounded-2xl border border-slate-200/80 bg-white px-6 py-4 shadow-sm" aria-label="Organisations">
+      <h2 className="text-sm font-bold text-slate-900">Organisations</h2>
+      <p className="mt-1 text-xs text-slate-600">
+        Owner and funder follow the delivery model ({setup.basics.projectType?.name}) and the project's state:{" "}
+        <span className="font-semibold text-slate-900">{owner}</span> · <span className="font-semibold text-slate-900">{funder}</span>.
+      </p>
+      {p.monitorOrganization && (
+        <p className="mt-1 text-xs text-slate-600">
+          {term("monitorParty")}: <span className="font-semibold text-slate-900">{p.monitorOrganization.name}</span>
+        </p>
+      )}
+      <p className="mt-1 text-[11px] text-slate-500">Schools are entered under Sites.</p>
+    </section>
+  );
+}
+
+/**
+ * The parties form (projects without a delivery model): the school (primary beneficiary, others
+ * below it) and the organisations (owner, monitor, funder). Redesign R6a: the contractor moved to
+ * its own section on step 2, so this section never sends `contractors`.
+ */
+function PartiesForm({ projectId, setup, readOnly }: StepProps) {
   const term = useTerm();
   const rules = setup.parties.rules;
   const orgsQuery = useOrganizationsQuery({});

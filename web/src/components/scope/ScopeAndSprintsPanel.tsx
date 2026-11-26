@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Controller, useFieldArray } from "react-hook-form";
 import { z } from "zod";
-import { AlertTriangle, CalendarRange, Pencil, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, CalendarRange, Plus, Trash2 } from "lucide-react";
 import {
   addDays,
   CreateFacilityUnitRequestSchema,
@@ -18,6 +18,8 @@ import {
   type FacilityDto,
   type FacilityUnitDto,
   type ProjectScopeDto,
+  type ProjectSiteDto,
+  type ProjectSetupDto,
   type ProjectSprintDto,
   type SaveSprintsRequest,
   type ScopeLineDto,
@@ -36,18 +38,27 @@ import {
 } from "../../mutations/scope/useScopeMutations";
 import { StandardTable, TableActionButton, TableBadge, type TableColumnDef } from "../table";
 import { CustomSelect } from "../common";
+import { TabPanel, Tabs, useUrlTab, type TabItem } from "../common/Tabs";
 import { ModalShell } from "../common/ModalShell";
 import { useConfirmDialog } from "../process/ConfirmDialog";
 import { primaryButton, secondaryButton, smallInput } from "../contracts/contractUi";
 import Loader from "../Loader";
-import { ScopeWorkbookToolbar } from "./ScopeWorkbookToolbar";
 import { SprintVerifyDialog } from "./SprintVerifyDialog";
+import { ScopeSummary } from "./ScopeSummary";
+import { LinesTable, ScopeUnitsTable } from "./ScopeUnitsTable";
 import { useAuth } from "../../lib/auth-context";
+import { useQueryClient } from "@tanstack/react-query";
+import { useProjectSitesQuery, projectSitesKey } from "../../queries/sites";
+import { projectSetupKey } from "../../queries/projects/useProjectSetupQueries";
 
 /**
  * Redesign R2b: scope and sprints of one project (spec section 5). Used by the setup step
  * (/setup/scope), live settings (/settings/scope) and the project page (/scope).
- * Sprints → facility units (grouped by facility) → BoQ lines. Amounts are computed by the server.
+ * Design refinement (2026-11-26): a summary head (BoQ total, % complete, work phases at a glance,
+ * the needs assessment and work phase tools), then two tabs: "Units & BoQ" (one table of facility
+ * units, each opening onto its BoQ lines) and "Work phases". The project page keeps the tab in
+ * `?tab=` (`urlTabs`); the setup wizard keeps it in local state so the wizard owns its URL.
+ * Amounts are computed by the server.
  */
 
 const SPRINT_STATUS: Record<SprintStatus, { label: string; variant: "info" | "success" | "neutral" | "warning" | "danger" }> = {
@@ -62,44 +73,49 @@ const OUTCOME_VARIANT = { MET: "success", PARTLY_MET: "warning", NOT_MET: "dange
 
 const UOM_OPTIONS = UNITS_OF_MEASURE.map((u) => ({ value: u.code as string, label: `${u.code} · ${u.label}` }));
 
-function sprintRange(u: FacilityUnitDto) {
-  if (u.startSprintNumber === null || u.endSprintNumber === null) return null;
-  return u.startSprintNumber === u.endSprintNumber ? `Work phase ${u.startSprintNumber}` : `Work phases ${u.startSprintNumber}–${u.endSprintNumber}`;
-}
+type ScopeTab = "units" | "phases";
+const SCOPE_TAB_IDS: readonly ScopeTab[] = ["units", "phases"];
 
 export interface ScopeAndSprintsPanelProps {
   projectId: string;
   readOnly: boolean;
+  /** Keep the open tab in `?tab=` (the project page). The setup wizard leaves it off. */
+  urlTabs?: boolean;
 }
 
-export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPanelProps) {
+export function ScopeAndSprintsPanel({ projectId, readOnly, urlTabs = false }: ScopeAndSprintsPanelProps) {
   const q = useProjectScopeQuery(projectId);
   const { hasPermission } = useAuth();
   const [verifying, setVerifying] = useState<string | null>(null);
   const facilitiesQ = useFacilitiesQuery(false, !readOnly);
+  // Client demo updates C2 (wave 2): a multi-site project's units name their site.
+  // On a draft the setup DTO (already loaded by the setup pages) carries the same list.
+  const queryClient = useQueryClient();
+  const sitesQ = useProjectSitesQuery(projectId);
+  const sites = sitesQ.data?.sites ?? queryClient.getQueryData<ProjectSetupDto>(projectSetupKey(projectId))?.sites?.sites ?? [];
   const deleteUnit = useDeleteFacilityUnitMutation(projectId);
   const deleteLine = useDeleteScopeLineMutation(projectId);
   const { ask, dialog } = useConfirmDialog();
   const [sprintsOpen, setSprintsOpen] = useState(false);
   const [unitEditor, setUnitEditor] = useState<{ unit: FacilityUnitDto | null } | null>(null);
   const [lineEditor, setLineEditor] = useState<{ line: ScopeLineDto | null; unitId: string | null } | null>(null);
+  const [urlTab, setUrlTab] = useUrlTab(SCOPE_TAB_IDS);
+  const [localTab, setLocalTab] = useState<ScopeTab | null>(null);
 
   const scope = q.data;
-  const linesByUnit = useMemo(() => {
-    const m = new Map<string, ScopeLineDto[]>();
-    for (const l of scope?.lines ?? []) {
-      if (!l.facilityUnitId) continue;
-      m.set(l.facilityUnitId, [...(m.get(l.facilityUnitId) ?? []), l]);
-    }
-    return m;
-  }, [scope?.lines]);
 
   if (q.isLoading) return <Loader />;
   if (!scope) return <p className="text-sm text-rose-600">Could not load the BoQ and work phases.</p>;
 
   const live = scope.projectStatus !== "DRAFT";
-  const unitsById = new Map(scope.units.map((u) => [u.id, u]));
   const unassigned = scope.lines.filter((l) => !l.facilityUnitId);
+  // Setup: open on Work phases until there are some (units start and end in them).
+  const tab: ScopeTab = urlTabs ? (urlTab ?? "units") : (localTab ?? (scope.sprints.length === 0 && !readOnly ? "phases" : "units"));
+  const setTab = (t: ScopeTab) => (urlTabs ? setUrlTab(t) : setLocalTab(t));
+  const tabs: readonly TabItem<ScopeTab>[] = [
+    { id: "units", label: "Units & BoQ", count: scope.totals.unitCount },
+    { id: "phases", label: "Work phases", count: scope.totals.sprintCount },
+  ];
 
   const removeUnit = async (u: FacilityUnitDto) => {
     const ok = await ask({
@@ -115,6 +131,7 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
     if (ok) deleteLine.mutate(l.id);
   };
 
+  const canVerify = live && hasPermission("sprints:verify");
   const sprintColumns: TableColumnDef<ProjectSprintDto>[] = [
     { id: "n", header: "No.", width: "w-14", cell: (s) => <span className="text-xs font-bold tabular-nums">{s.number}</span> },
     { id: "name", header: "Work phase", cell: (s) => <span className="text-xs font-semibold text-slate-900">{s.name}</span> },
@@ -131,13 +148,21 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
     {
       id: "status",
       header: "Status",
-      width: "w-24",
-      cell: (s) =>
-        s.status === "VERIFIED" && s.verificationOutcome ? (
-          <TableBadge variant={OUTCOME_VARIANT[s.verificationOutcome]}>{SPRINT_VERIFICATION_OUTCOME_LABELS[s.verificationOutcome]}</TableBadge>
-        ) : (
-          <TableBadge variant={SPRINT_STATUS[s.status].variant}>{SPRINT_STATUS[s.status].label}</TableBadge>
-        ),
+      width: "w-36",
+      cell: (s) => (
+        <div className="flex flex-col items-start gap-0.5">
+          {s.status === "VERIFIED" && s.verificationOutcome ? (
+            <TableBadge variant={OUTCOME_VARIANT[s.verificationOutcome]}>{SPRINT_VERIFICATION_OUTCOME_LABELS[s.verificationOutcome]}</TableBadge>
+          ) : (
+            <TableBadge variant={SPRINT_STATUS[s.status].variant}>{SPRINT_STATUS[s.status].label}</TableBadge>
+          )}
+          {live && (s.status === "ENDED" || s.status === "LATE") && !s.verificationOutcome && (
+            <span className={`text-[11px] whitespace-nowrap ${s.status === "LATE" ? "font-semibold text-rose-700" : "text-slate-600"}`}>
+              Verify by {formatDateShort(s.verificationDueDate)}
+            </span>
+          )}
+        </div>
+      ),
     },
     { id: "units", header: "Units", width: "w-16", align: "center", cell: (s) => <span className="text-xs tabular-nums">{s.unitCount}</span> },
     {
@@ -145,19 +170,34 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
       header: "Deliverables",
       cell: (s) => <span className="text-[11px] text-slate-600 line-clamp-2">{s.deliverables || "–"}</span>,
     },
-    // Redesign R4e: verification on live projects (D-R4.31).
-    ...(live && hasPermission("sprints:verify")
+    // Redesign R4e: verification on live projects (D-R4.31). Due phases get a button, the rest a link.
+    ...(canVerify
       ? [
           {
             id: "verify",
-            header: "",
+            header: <span className="sr-only">Verification</span>,
             width: "w-24",
-            cell: (s: ProjectSprintDto) =>
-              s.status === "UPCOMING" ? null : (
-                <button type="button" className="text-xs font-semibold text-brand-primary hover:underline" onClick={() => setVerifying(s.id)}>
+            align: "right",
+            cell: (s: ProjectSprintDto) => {
+              if (s.status === "UPCOMING") return null;
+              const label = `${s.verificationOutcome ? "Re-verify" : "Verify"} work phase ${s.number}: ${s.name}`;
+              const due = !s.verificationOutcome && (s.status === "ENDED" || s.status === "LATE");
+              return due ? (
+                <TableActionButton onClick={() => setVerifying(s.id)} title={label} className="whitespace-nowrap">
+                  <span aria-hidden="true">Verify</span>
+                  <span className="sr-only">{label}</span>
+                </TableActionButton>
+              ) : (
+                <button
+                  type="button"
+                  aria-label={label}
+                  className="rounded text-xs font-semibold text-brand-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
+                  onClick={() => setVerifying(s.id)}
+                >
                   {s.verificationOutcome ? "Re-verify" : "Verify"}
                 </button>
-              ),
+              );
+            },
           } as TableColumnDef<ProjectSprintDto>,
         ]
       : []),
@@ -167,152 +207,84 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
     <div className="space-y-4">
       {dialog}
       {verifying && <SprintVerifyDialog projectId={projectId} sprintId={verifying} onClose={() => setVerifying(null)} />}
-      {/* One summary: the total leads, the counts support it, the needs assessment sits beside it. */}
-      <section aria-label="BoQ summary" className="bg-white rounded-2xl border border-slate-200/80 shadow-sm px-5 py-4">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-slate-600">BoQ total</p>
-            <p className="mt-0.5 text-2xl font-bold tracking-tight tabular-nums text-slate-900">{formatNaira(scope.totals.amountNgn)}</p>
-            <p className="mt-1 text-sm text-slate-600">
-              {countOf(scope.totals.sprintCount, "work phase")} · {countOf(scope.totals.unitCount, "facility unit")} · {countOf(scope.totals.lineCount, "BoQ line")}
-              {scope.budgetNgn !== null &&
-                (scope.budgetNgn === scope.totals.amountNgn ? " · matches the budget" : ` · budget ${formatNaira(scope.budgetNgn)}`)}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <ScopeWorkbookToolbar projectId={projectId} scope={scope} canEdit={!readOnly} />
-          </div>
-        </div>
-        {live && !readOnly && (
-          <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">
-            Changes are recorded in the audit ledger. Units and lines with site evidence cannot be removed.
-          </p>
-        )}
-        {readOnly && <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">View only: changing the scope needs scope editing rights.</p>}
-      </section>
+
+      <ScopeSummary
+        projectId={projectId}
+        scope={scope}
+        live={live}
+        readOnly={readOnly}
+        onEditSprints={() => setSprintsOpen(true)}
+        onShowSprints={() => setTab("phases")}
+      />
 
       {scope.budgetWarning && (
-        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+        <div role="status" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
           <span>{scope.budgetWarning}</span>
         </div>
       )}
 
-      <StandardTable<ProjectSprintDto>
-        title="Work phases"
-        subtitle="Named periods with deliverables. They may differ in length and leave gaps, but may not overlap. Numbers follow the dates."
-        headerActions={
-          !readOnly && (
-            <button
-              type="button"
-              onClick={() => setSprintsOpen(true)}
-              className="inline-flex items-center gap-1 rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-brand-navy hover:bg-slate-100"
-            >
-              <CalendarRange className="w-3.5 h-3.5" /> Edit work phases
-            </button>
-          )
-        }
-        columns={sprintColumns}
-        data={scope.sprints}
-        keyExtractor={(s) => s.id}
-        minWidth="min-w-[720px]"
-        emptyState={{ title: "No work phases yet", description: "Add the work phases before you plan the facility units." }}
-      />
-
-      <section className="rounded-2xl border border-slate-200 bg-white">
-        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Facility units and BoQ lines</h3>
-            <p className="text-[11px] text-slate-500">
-              Each unit is one physical facility on site (e.g. "Ground floor male toilet"). Its lines take their planned dates from its work phases.
-            </p>
+      <Tabs tabs={tabs} active={tab} onChange={setTab} label="BoQ and work phases" idPrefix="scope" />
+      <TabPanel idPrefix="scope" id={tab}>
+        {tab === "units" ? (
+          <div className="space-y-4">
+            <ScopeUnitsTable
+              scope={scope}
+              sites={sites}
+              live={live}
+              readOnly={readOnly}
+              removePending={deleteUnit.isPending}
+              onAddUnit={() => setUnitEditor({ unit: null })}
+              onEditUnit={(u) => setUnitEditor({ unit: u })}
+              onRemoveUnit={removeUnit}
+              onAddLine={(u) => setLineEditor({ line: null, unitId: u.id })}
+              onEditLine={(l) => setLineEditor({ line: l, unitId: l.facilityUnitId })}
+              onRemoveLine={removeLine}
+              onEditSprints={() => setSprintsOpen(true)}
+            />
+            {unassigned.length > 0 && (
+              <section className="rounded-2xl border border-amber-200 bg-white">
+                <header className="border-b border-amber-100 px-4 py-3">
+                  <h3 className="flex items-center gap-1.5 text-sm font-bold text-slate-900">
+                    <AlertTriangle className="h-4 w-4 text-amber-700" aria-hidden="true" /> Lines without a facility unit
+                  </h3>
+                  <p className="text-[11px] text-slate-600">
+                    {live
+                      ? "Lines from before facility units existed. Edit a line to give it a unit."
+                      : "Every line needs a facility unit before the project can be activated."}
+                  </p>
+                </header>
+                <LinesTable
+                  lines={unassigned}
+                  readOnly={readOnly || scope.units.length === 0}
+                  showProgress={live}
+                  onEdit={(l) => setLineEditor({ line: l, unitId: null })}
+                  onRemove={removeLine}
+                />
+              </section>
+            )}
           </div>
-          {!readOnly && (
-            <button type="button" className={primaryButton} onClick={() => setUnitEditor({ unit: null })}>
-              <Plus className="w-3.5 h-3.5 inline -mt-0.5" /> Add unit
-            </button>
-          )}
-        </header>
-        {scope.facilityGroups.length === 0 && (
-          <p className="px-4 py-6 text-center text-xs text-slate-500">No facility units yet.</p>
-        )}
-        <div className="divide-y divide-slate-100">
-          {scope.facilityGroups.map((g) => (
-            <div key={g.facility.id} className="px-4 py-3 space-y-2">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="text-xs font-bold text-slate-900">
-                  {g.facility.name}{" "}
-                  <span className="font-normal text-slate-500">
-                    · {FACILITY_ARCHETYPE_META[g.facility.archetype].label} · {g.unitIds.length} unit(s)
-                  </span>
-                  {g.facility.isRetired && <TableBadge variant="warning" className="ml-2">Retired</TableBadge>}
-                </p>
-                <p className="text-xs font-semibold tabular-nums text-slate-700">{formatNaira(g.amountNgn)}</p>
-              </div>
-              {g.unitIds.map((id) => {
-                const u = unitsById.get(id)!;
-                const range = sprintRange(u);
-                return (
-                  <div key={u.id} className="rounded-xl border border-slate-200">
-                    <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-3 py-2 rounded-t-xl">
-                      <div className="text-xs">
-                        <span className="font-mono font-bold text-slate-900">{u.code}</span>{" "}
-                        <span className="font-semibold text-slate-800">{u.label}</span>
-                        <span className="text-slate-500">
-                          {" · "}
-                          {range ?? <span className="text-rose-600 font-semibold">No work phases</span>}
-                          {u.plannedQuantity !== null && ` · ${u.plannedQuantity.toLocaleString()} ${u.quantityUnit ?? ""}`}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-semibold tabular-nums text-slate-700 mr-2">{formatNaira(u.amountNgn)}</span>
-                        {!readOnly && (
-                          <>
-                            <TableActionButton onClick={() => setLineEditor({ line: null, unitId: u.id })}>Add line</TableActionButton>
-                            <TableActionButton onClick={() => setUnitEditor({ unit: u })}>Edit</TableActionButton>
-                            <TableActionButton
-                              variant="danger"
-                              disabled={u.hasEvidence || deleteUnit.isPending}
-                              onClick={() => removeUnit(u)}
-                            >
-                              Remove
-                            </TableActionButton>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <LinesTable
-                      lines={linesByUnit.get(u.id) ?? []}
-                      readOnly={readOnly}
-                      onEdit={(l) => setLineEditor({ line: l, unitId: l.facilityUnitId })}
-                      onRemove={removeLine}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {unassigned.length > 0 && (
-        <section className="rounded-2xl border border-amber-200 bg-white">
-          <header className="border-b border-amber-100 px-4 py-3">
-            <h3 className="text-sm font-bold text-slate-900">Lines without a facility unit</h3>
-            <p className="text-[11px] text-slate-500">
-              {live
-                ? "Lines from before facility units existed. Edit a line to give it a unit."
-                : "Every line needs a facility unit before the project can be activated."}
-            </p>
-          </header>
-          <LinesTable
-            lines={unassigned}
-            readOnly={readOnly || scope.units.length === 0}
-            onEdit={(l) => setLineEditor({ line: l, unitId: null })}
-            onRemove={removeLine}
+        ) : (
+          <StandardTable<ProjectSprintDto>
+            title="Work phases"
+            subtitle="Named periods with deliverables. They may differ in length and leave gaps, but may not overlap. Numbers follow the dates."
+            columns={sprintColumns}
+            data={scope.sprints}
+            keyExtractor={(s) => s.id}
+            minWidth="min-w-[720px]"
+            pageSize={false}
+            emptyState={{
+              title: "No work phases yet",
+              description: "Add the work phases before you plan the facility units.",
+              action: !readOnly ? (
+                <button type="button" className={secondaryButton} onClick={() => setSprintsOpen(true)}>
+                  <CalendarRange className="w-3.5 h-3.5" aria-hidden="true" /> Add work phases
+                </button>
+              ) : undefined,
+            }}
           />
-        </section>
-      )}
+        )}
+      </TabPanel>
 
       {sprintsOpen && <SprintsEditor projectId={projectId} scope={scope} onClose={() => setSprintsOpen(false)} />}
       {unitEditor && (
@@ -320,6 +292,7 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
           projectId={projectId}
           scope={scope}
           facilities={facilitiesQ.data ?? []}
+          sites={sites}
           unit={unitEditor.unit}
           onClose={() => setUnitEditor(null)}
         />
@@ -333,73 +306,6 @@ export function ScopeAndSprintsPanel({ projectId, readOnly }: ScopeAndSprintsPan
           onClose={() => setLineEditor(null)}
         />
       )}
-    </div>
-  );
-}
-
-const countOf = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
-
-function LinesTable({
-  lines,
-  readOnly,
-  onEdit,
-  onRemove,
-}: {
-  lines: ScopeLineDto[];
-  readOnly: boolean;
-  onEdit: (l: ScopeLineDto) => void;
-  onRemove: (l: ScopeLineDto) => void;
-}) {
-  if (lines.length === 0) return <p className="px-3 py-2 text-[11px] text-slate-500">No BoQ lines on this unit yet.</p>;
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[720px] text-xs">
-        <thead>
-          <tr className="text-left text-[10px] uppercase tracking-wide text-slate-500">
-            <th className="px-3 py-1.5 font-semibold w-20">Item no.</th>
-            <th className="px-3 py-1.5 font-semibold">Description</th>
-            <th className="px-3 py-1.5 font-semibold text-right w-28">Quantity</th>
-            <th className="px-3 py-1.5 font-semibold text-right w-28">Rate</th>
-            <th className="px-3 py-1.5 font-semibold text-right w-32">Amount</th>
-            <th className="px-3 py-1.5 font-semibold w-44">Planned</th>
-            {!readOnly && <th className="px-3 py-1.5 w-20" />}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {lines.map((l) => (
-            <tr key={l.id}>
-              <td className="px-3 py-1.5 font-mono font-semibold text-slate-900">{l.wbsCode}</td>
-              <td className="px-3 py-1.5 text-slate-700">{l.description}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums">
-                {l.totalQuantity.toLocaleString()} {l.unit}
-              </td>
-              <td className="px-3 py-1.5 text-right tabular-nums">{formatNaira(l.rateNgn)}</td>
-              <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{formatNaira(l.budgetedCostNgn)}</td>
-              <td className="px-3 py-1.5 text-slate-600 whitespace-nowrap">
-                {l.plannedStartDate && l.plannedEndDate ? `${formatDateShort(l.plannedStartDate)} – ${formatDateShort(l.plannedEndDate)}` : "–"}
-              </td>
-              {!readOnly && (
-                <td className="px-3 py-1.5">
-                  <div className="flex justify-end gap-1">
-                    <button type="button" title="Edit line" className="p-1 text-slate-500 hover:text-slate-900" onClick={() => onEdit(l)}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title={l.hasEvidence ? "This line has field evidence and cannot be removed" : "Remove line"}
-                      disabled={l.hasEvidence}
-                      className="p-1 text-slate-500 hover:text-rose-600 disabled:opacity-30"
-                      onClick={() => onRemove(l)}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </td>
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 }
@@ -544,16 +450,21 @@ function UnitEditor({
   projectId,
   scope,
   facilities,
+  sites,
   unit,
   onClose,
 }: {
   projectId: string;
   scope: ProjectScopeDto;
   facilities: FacilityDto[];
+  /** The project's sites; empty on a single-site project (no site picker). */
+  sites: ProjectSiteDto[];
   unit: FacilityUnitDto | null;
   onClose: () => void;
 }) {
   const save = useSaveFacilityUnitMutation(projectId);
+  const queryClient = useQueryClient();
+  const hasSites = sites.length > 0;
 
   const facilityOptions = useMemo(() => {
     const list = facilities.map((f) => ({ value: f.id, label: f.name, description: `${f.code} · ${FACILITY_ARCHETYPE_META[f.archetype].label}` }));
@@ -582,6 +493,7 @@ function UnitEditor({
       endSprintId: z.string(),
       plannedQuantity: z.string().trim(),
       quantityUnit: z.string(),
+      siteId: z.string(),
     })
     .superRefine((v, ctx) => {
       if (needsQtyFor(v.facilityId)) {
@@ -604,6 +516,7 @@ function UnitEditor({
         endSprintId: v.endSprintId || null,
         plannedQuantity: needsQty ? Number(v.plannedQuantity) : null,
         quantityUnit: needsQty ? (v.quantityUnit as (typeof UNITS_OF_MEASURE)[number]["code"]) : null,
+        ...(hasSites ? { siteId: v.siteId || null } : {}),
       };
     });
   const form = useZodForm(schema, {
@@ -615,6 +528,7 @@ function UnitEditor({
       endSprintId: unit?.endSprintId ?? "",
       plannedQuantity: unit?.plannedQuantity?.toString() ?? "",
       quantityUnit: unit?.quantityUnit ?? "nr",
+      siteId: unit?.siteId ?? (sites.length === 1 ? sites[0].id : ""),
     },
   });
   const needsQty = needsQtyFor(form.watch("facilityId"));
@@ -635,7 +549,18 @@ function UnitEditor({
     }
   })();
 
-  const submit = form.handleSubmit((body) => save.mutate(unit ? { id: unit.id, update: body } : { create: body }, { onSuccess: onClose }));
+  const submit = form.handleSubmit((body) =>
+    save.mutate(unit ? { id: unit.id, update: body } : { create: body }, {
+      onSuccess: () => {
+        if (hasSites) void queryClient.invalidateQueries({ queryKey: projectSitesKey(projectId) });
+        onClose();
+      },
+    })
+  );
+  const siteOptions = [
+    { value: "", label: "Not set" },
+    ...sites.map((s) => ({ value: s.id, label: `Site ${s.siteNumber} · ${s.schoolName}`, description: s.lgaName ?? undefined })),
+  ];
 
   return (
     <ModalShell title={unit ? `Edit ${unit.code}` : "Add a facility unit"} onClose={onClose} maxWidth="max-w-lg">
@@ -683,6 +608,23 @@ function UnitEditor({
             <FieldError form={form} name="code" />
           </label>
         </div>
+        {hasSites && (
+          <Controller
+            control={form.control}
+            name="siteId"
+            render={({ field }) => (
+              <CustomSelect
+                label="Site"
+                hint="The school this facility unit is at. Its progress counts towards that site."
+                value={field.value}
+                onChange={field.onChange}
+                options={siteOptions}
+                searchable={sites.length > 8}
+                size="sm"
+              />
+            )}
+          />
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Controller
             control={form.control}

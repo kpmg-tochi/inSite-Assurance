@@ -175,14 +175,14 @@ export function FormSnapshotView({ snapshot, showHeader = true }: { snapshot: Vi
           </header>
           <div className="px-3.5 pb-1">
             {b.fields.length === 0 ? (
-              <p className="py-2.5 text-[11px] text-slate-500">No questions for this visit kind.</p>
+              <p className="py-2.5 text-[11px] text-slate-500">No questions for this kind of monitoring visit.</p>
             ) : (
               b.fields.map((f) => <FieldRow key={f.path} f={f} />)
             )}
           </div>
         </section>
       ))}
-      <p className="text-[11px] text-slate-500">Header (project, officers, check-in) and the summary (overall finding, summary text) come from the visit itself.</p>
+      <p className="text-[11px] text-slate-500">Header (project, officers, check-in) and the summary (overall finding, summary text) come from the monitoring visit itself.</p>
     </div>
   );
 }

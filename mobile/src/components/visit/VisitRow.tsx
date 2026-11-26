@@ -38,7 +38,7 @@ export function VisitRow({
         onPress={onOpen}
         activeOpacity={0.75}
         accessibilityRole="button"
-        accessibilityLabel={`${title}, ${formatDay(view.date)}, ${visitBadges(view).map((b) => b.text).join(', ')}. Open the visit.`}
+        accessibilityLabel={`${title}, ${formatDay(view.date)}, ${visitBadges(view).map((b) => b.text).join(', ')}. Open the monitoring visit.`}
         style={styles.main}
       >
         <View style={styles.texts}>

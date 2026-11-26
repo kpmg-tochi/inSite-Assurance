@@ -5,7 +5,6 @@ import { getVisit, queueCheckIn } from '../../storage/visitStore';
 import { hydrateBaselinePack } from '../../storage/baselineStore';
 import {
   acquireFix,
-  geofenceBadgeText,
   previewGeofence,
   requestLocationPermission,
   type GeofencePreview,
@@ -66,7 +65,7 @@ export default function CheckInSheet({ visitId, visible, onClose, onCheckedIn }:
     setPhase({ kind: 'LOCATING' });
     try {
       const v = await getVisit(visitId);
-      if (!v) throw new Error('This visit is no longer on the phone. Refresh your visits.');
+      if (!v) throw new Error('This monitoring visit is no longer on the phone. Refresh your monitoring visits.');
       const pack = await hydrateBaselinePack(v.projectId).catch(() => null);
       if (v.local.checkIn) {
         if (mine === run.current) setPhase({ kind: 'ALREADY', at: v.local.checkIn.checkedInAt, timeZone: pack?.timezone ?? null });
@@ -101,7 +100,6 @@ export default function CheckInSheet({ visitId, visible, onClose, onCheckedIn }:
   const view = reading
     ? checkInView({ fix: reading.fix, preview: reading.preview, hasBoundary: reading.hasBoundary, locationPermissionGranted: reading.permissionGranted })
     : null;
-  const badge = reading?.preview ? geofenceBadgeText(reading.preview.status, reading.preview.distanceOutsideMeters) : null;
   const good = view?.state === 'INSIDE' || view?.state === 'WITHIN_TOLERANCE';
 
   return (
@@ -144,13 +142,12 @@ export default function CheckInSheet({ visitId, visible, onClose, onCheckedIn }:
             <Text style={[styles.stateTitle, { color: good ? FORM_COLORS.ok : view.state === 'NO_BOUNDARY' ? FORM_COLORS.text : FORM_COLORS.warning }]} accessibilityLiveRegion="polite">
               {STATE_MARK[view.state]} {view.title}
             </Text>
-            {badge ? <Text style={styles.badge}>Phone preview: {badge}</Text> : null}
             {view.distance ? <Text style={formStyles.meta}>{view.distance}</Text> : null}
             {view.accuracy ? <Text style={formStyles.meta}>{view.accuracy}</Text> : null}
             {reading.fix && reading.heading ? <Text style={formStyles.meta}>{formatHeading(reading.heading.degrees)}</Text> : null}
             <Text style={[formStyles.meta, { marginTop: 8 }]}>{view.note}</Text>
             <Text style={[formStyles.meta, { marginTop: 8 }]}>{CHECK_IN_ALWAYS_ALLOWED_TEXT}</Text>
-            <Text style={[formStyles.meta, { marginTop: 4 }]}>The check-in is saved on the phone and sends when you are online. Once checked in, the form is fixed for this visit.</Text>
+            <Text style={[formStyles.meta, { marginTop: 4 }]}>The check-in is saved on the phone and sends when you are online. Once checked in, the form is fixed for this monitoring visit.</Text>
 
             <View style={[formStyles.row, { marginTop: 16 }]}>
               <TouchableOpacity
@@ -189,5 +186,4 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '800', color: FORM_COLORS.text, marginBottom: 12 },
   center: { alignItems: 'center', gap: 10, paddingVertical: 16 },
   stateTitle: { fontSize: 16, fontWeight: '800', color: FORM_COLORS.text },
-  badge: { fontSize: 13, fontWeight: '600', color: FORM_COLORS.text, marginTop: 6 },
 });

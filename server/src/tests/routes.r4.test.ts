@@ -782,6 +782,13 @@ describe('Redesign R4d: approval, findings loop, progress, milestones', () => {
     assert.equal(finding.visitSubmissionId, sub.body.data.id);
     assert.equal(finding.questionKey, ff!.field.path);
     assert.equal(finding.status, 'OPEN');
+    // A second finding on the same question is refused while this one is open (click-through 2026-11-26).
+    const again = await request(app)
+      .post(`/api/v1/projects/${ids.prg105}/visits/${v.id}/findings`)
+      .set(await web(P_MONITOR))
+      .send({ submissionId: sub.body.data.id, path: ff!.field.path, description: 'Raised twice', severity: 'MAJOR' });
+    assert.equal(again.status, 409, JSON.stringify(again.body));
+    assert.equal(again.body.error.code, 'FINDING_ALREADY_OPEN');
     if (contractor) {
       const mail = consoleOutbox.slice(before).find((m) => m.to === 'site.manager@contractor.example');
       assert.ok(mail, 'the contractor got the findings summary');

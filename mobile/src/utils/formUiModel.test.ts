@@ -101,7 +101,7 @@ describe('inline rules', () => {
   it('asks why a re-check is not resolved and needs a photo when it is', () => {
     const path = findPath((f) => f.recheck !== null);
     const { field: f } = field(path);
-    assert.match(recheckMetaText(f)!, /^Finding · (Major|Minor) · raised 2026-11-1\d$/);
+    assert.match(recheckMetaText(f)!, /^Finding · (Major|Minor) · raised \w{3} 1\d Nov 2026$/);
     assert.equal(fieldRuleNotes(f, setAnswerValue([], path, 'NO')[0]).commentLabel, 'Why is it not rectified? (needed)');
     assert.equal(fieldRuleNotes(f, setAnswerValue([], path, 'YES')[0]).photoNeeded, true);
   });

@@ -24,6 +24,8 @@ import {
 } from './projectRegister.schema';
 import { LotChoiceSchema, ProjectLotRefSchema } from './lot.schema';
 import { NigeriaLgaCodeSchema, NigeriaStateCodeSchema, NigeriaZoneCodeEnum } from '../data/nigeriaAdminAreas';
+import { ProjectSitesDtoSchema, SaveProjectSitesRequestSchema } from './site.schema';
+import { NeedsAssessmentImportStateSchema } from './needsAssessment.schema';
 
 /**
  * Staged project creation (Phase 6, decision C; redesign R6a, D-R6.2). A project is created as a
@@ -35,7 +37,7 @@ import { NigeriaLgaCodeSchema, NigeriaStateCodeSchema, NigeriaZoneCodeEnum } fro
  * Two levels: **sections** are what the server saves, validates and audits
  * (`PUT /projects/:id/setup/:sectionId`, `setupState`, audit payloads keep the section id);
  * five **wizard steps** group them for people (1 Project, 2 Contract, 3 Scope & sprints,
- * 4 Team & visits, 5 Review), plus the optional "Advanced" entry listed under a divider.
+ * 4 Team & monitoring, 5 Review), plus the optional "Advanced" entry listed under a divider.
  */
 
 /** `AAA-999` (older codes, e.g. PRG-102) or the UBEC lot/batch form `2026-LOT-5-BATCH-7` (client demo updates C3). */
@@ -45,6 +47,8 @@ export const ProjectSetupSectionIdEnum = z.enum([
   'basics',
   'parties',
   'site',
+  // Client demo updates C2 (wave 2)
+  'sites',
   'contractor',
   'contract',
   'facility',
@@ -75,6 +79,9 @@ export const PROJECT_SETUP_SECTIONS: ProjectSetupSectionDefinition[] = [
   { id: 'basics', title: 'Project details', stepId: 'project', required: true, order: 10, description: 'Delivery model, name, code, location and budget' },
   { id: 'parties', title: 'School and organisations', stepId: 'project', required: true, order: 20, description: 'Beneficiaries, owner, monitor and funder' },
   { id: 'site', title: 'Location', stepId: 'project', required: true, order: 30, description: 'Site boundary, tolerance and time zone' },
+  // Client demo updates C2 (wave 2): the schools of a multi-site project. Not required (single-site
+  // projects keep working); when sites exist, every one must be located to activate (server).
+  { id: 'sites', title: 'Sites', stepId: 'project', required: false, order: 35, description: 'Schools, LGAs and locations of the project\'s sites' },
   // Redesign R6a (D-R6.4): split from the parties section.
   { id: 'contractor', title: 'Contractor', stepId: 'contract', required: true, order: 40, description: 'The contractor and its planned completion' },
   // Phase 13. Required (server-computed) when the project type has contract milestones or documents needed before activation.
@@ -89,7 +96,7 @@ export const PROJECT_SETUP_SECTIONS: ProjectSetupSectionDefinition[] = [
   // Team before visits: saving visit officers adds them to the team.
   { id: 'team', title: 'Team', stepId: 'team', required: false, order: 90, description: 'Web users and mobile users' },
   // Redesign R4 (D-R4.39): the visit officers, working days and a preview of the visit plan.
-  { id: 'visits', title: 'Visits', stepId: 'team', required: false, order: 100, description: 'Visit officers, working days and the visit plan' },
+  { id: 'visits', title: 'Monitoring visits', stepId: 'team', required: false, order: 100, description: 'Monitoring officers, working days and the monitoring plan' },
   // D-R6.9: optional, filled from the type's workflow template on apply.
   { id: 'process', title: 'Workflow and process', stepId: 'advanced', required: false, order: 200, description: 'Template, process switches and approval chains' },
 ];
@@ -118,7 +125,7 @@ export const PROJECT_SETUP_STEPS: ProjectSetupStepDefinition[] = [
   { id: 'project', title: 'Project', route: 'project', order: 1, sectionIds: sectionsOf('project'), settingsOnly: false, description: 'What, where and for whom' },
   { id: 'contract', title: 'Contract', route: 'contract', order: 2, sectionIds: sectionsOf('contract'), settingsOnly: false, description: 'Contractor, contract dates and retention' },
   { id: 'scope', title: 'BoQ & work phases', route: 'scope', order: 3, sectionIds: sectionsOf('scope'), settingsOnly: false, description: 'Work phases, facility units, BoQ and needs assessment' },
-  { id: 'team', title: 'Team & visits', route: 'team', order: 4, sectionIds: sectionsOf('team'), settingsOnly: false, description: 'People with access and the visit plan' },
+  { id: 'team', title: 'Team & monitoring', route: 'team', order: 4, sectionIds: sectionsOf('team'), settingsOnly: false, description: 'People with access and the monitoring plan' },
   { id: 'review', title: 'Review', route: 'review', order: 5, sectionIds: [], settingsOnly: false, description: 'Check and set the project active' },
   { id: 'advanced', title: 'Advanced', route: 'advanced', order: 100, sectionIds: sectionsOf('advanced'), settingsOnly: true, description: 'Workflow template, process switches and approval chains' },
 ];
@@ -322,6 +329,7 @@ export const PROJECT_STEP_SAVE_SCHEMAS = {
   standards: ProjectStandardsStepSchema,
   visits: ProjectVisitsStepSchema,
   team: ProjectTeamStepSchema,
+  sites: SaveProjectSitesRequestSchema,
 } as const satisfies Record<ProjectSetupSectionId, z.ZodTypeAny>;
 
 // ---------------------------------------------------------------------------
@@ -420,6 +428,10 @@ const OrgSummary = z.object({ id: z.string().uuid(), name: z.string() }).nullabl
 
 export const ProjectSetupDtoSchema = z.object({
   projectId: z.string().uuid(),
+  /** Client demo updates C2 (wave 2): section `sites`. */
+  sites: ProjectSitesDtoSchema.nullable().optional(),
+  /** Client demo updates D1 (wave 2): set when the draft was created from a needs assessment. */
+  needsAssessmentImport: NeedsAssessmentImportStateSchema.nullable().optional(),
   status: ProjectStatusEnum,
   createdByUserId: z.string().uuid().nullable(),
   activatedAt: z.string().nullable(),

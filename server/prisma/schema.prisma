@@ -247,6 +247,19 @@ enum AuditActionType {
   PROJECT_REGISTER_IMPORTED
   // Client demo updates C3: project lots
   PROJECT_LOT_CREATED
+  // Client demo updates (wave 2)
+  SITES_SAVED
+  CONTRACTOR_CREATED
+  CONTRACTOR_UPDATED
+  CONTRACTOR_STATUS_CHANGED
+  // Client demo updates (wave 3)
+  CONTRACTOR_FLAG_RAISED
+  CONTRACTOR_FLAG_ACTION_DECIDED
+  CONTRACTOR_FLAG_ACTION_LIFTED
+  CONTRACTOR_FLAG_CLOSED
+  APPROVED_LIST_ROW_LINKED
+  // Client demo updates (wave 4)
+  APPROVED_LIST_IMPORTED
   // Redesign R3: form library
   FORM_COMPONENT_SAVED
   // Redesign R4: visits
@@ -393,6 +406,10 @@ model Tenant {
   // Client demo updates D5: the month the fiscal year starts (1 = January). Periods and the
   // intervention year rule follow it.
   fiscalYearStartMonth             Int            @default(1)
+  // Client demo updates F.3/F.4: rating weights, window and the flag rule (ContractorPerformanceSettingsSchema; {} = defaults).
+  contractorPerformanceJson        Json           @default("{}")
+  // Client demo updates E3 (wave 3): budget vs approved estimate tolerance (± %).
+  budgetMismatchTolerancePct       Int            @default(10)
   createdAt                        DateTime       @default(now())
   updatedAt                        DateTime       @updatedAt
 
@@ -408,6 +425,9 @@ model Tenant {
   kpiSnapshots       KpiSnapshot[] // Phase 16
   regions            Region[]
   projectLots        ProjectLot[] // Client demo updates C3
+  contractorRatingSnapshots ContractorRatingSnapshot[] // wave 2, F.3
+  contractorFlags           ContractorFlag[] // wave 3, F.4
+  approvedLists             ApprovedList[] // wave 3, E3
   // Phase 13
   documentTypes      DocumentType[]
   // Redesign R2a
@@ -490,6 +510,12 @@ model Organization {
   isArchived           Boolean                @default(false)
   // Phase 11: hierarchy (flagship -> subsidiaries), up to 5 levels; cycles refused by the service.
   parentOrganizationId String?                @db.Uuid
+  // Client demo updates (wave 2). F.1: contractor register fields (status INACTIVE until a signed
+  // contract is on file; existing rows ACTIVE). C1/D2: the state an organisation (SUBEB, state office) serves.
+  contractorStatus     ContractorStatus       @default(ACTIVE)
+  tin                  String?
+  address              String?
+  stateCode            String?
   createdAt            DateTime               @default(now())
   updatedAt            DateTime               @updatedAt
 
@@ -501,9 +527,149 @@ model Organization {
   lenderProjects     Project[]           @relation("LenderOrganization")
   ownedProjects      Project[]           @relation("OwningOrganization")
   projectContractors ProjectContractor[]
+  ratingSnapshots    ContractorRatingSnapshot[]
+  contractorFlags    ContractorFlag[]
 
   @@index([tenantId])
   @@index([parentOrganizationId])
+}
+
+/// Client demo updates F.1 (wave 2).
+enum ContractorStatus {
+  INACTIVE
+  ACTIVE
+  SUSPENDED
+}
+
+/// Client demo updates F.4 (wave 3): a contractor flagged on a project by the flag rule. One OPEN flag
+/// per contractor and project (hand-written partial unique index contractor_flags_one_open_per_project).
+model ContractorFlag {
+  id             String    @id @default(uuid()) @db.Uuid
+  tenantId       String    @db.Uuid
+  organizationId String    @db.Uuid
+  projectId      String    @db.Uuid
+  // OPEN | CLOSED (ContractorFlagStatusEnum)
+  status         String    @default("OPEN")
+  // The rule when raised: { reportCount, workmanshipAtOrBelow, withinDays }
+  ruleJson       Json
+  // ContractorFlagEvidence[] (later low reports join it)
+  evidenceJson   Json      @default("[]")
+  raisedAt       DateTime  @default(now())
+  closedAt       DateTime?
+  closedByUserId String?   @db.Uuid
+  closedByName   String?
+  closeReason    String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  tenant       Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actions      ContractorFlagAction[]
+
+  @@index([tenantId, status])
+  @@index([organizationId])
+  @@index([projectId])
+  @@map("contractor_flags")
+}
+
+/// Client demo updates F.4 (wave 3): an action decided on a flag.
+model ContractorFlagAction {
+  id              String    @id @default(uuid()) @db.Uuid
+  flagId          String    @db.Uuid
+  // ContractorFlagActionKindEnum
+  kind            String
+  // RECORDED | IN_EFFECT | SENT_TO_LEGAL_REVIEW | LIFTED
+  status          String
+  reason          String
+  paramsJson      Json      @default("{}")
+  // ADDITIONAL_VISITS: the visits it proposed
+  visitIds        String[]  @db.Uuid
+  decidedByUserId String?   @db.Uuid
+  decidedByName   String
+  decidedAt       DateTime  @default(now())
+  liftedAt        DateTime?
+  liftedByUserId  String?   @db.Uuid
+  liftedByName    String?
+  liftReason      String?
+
+  flag ContractorFlag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+
+  @@index([flagId])
+  @@map("contractor_flag_actions")
+}
+
+/// Client demo updates E3 (wave 3): an annual approved project list (DI schedule or a state's BEAP).
+model ApprovedList {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @db.Uuid
+  interventionYear Int
+  // DI_SCHEDULE | MG_BEAP (ApprovedListKindEnum)
+  kind             String
+  stateCode        String?
+  title            String
+  approvedBy       String
+  // YYYY-MM-DD
+  approvedOn       String
+  documentId       String?  @db.Uuid
+  // Client demo updates E3 (wave 4): the last upload (null for seeded lists)
+  sourceFileName   String?
+  sourceSha256     String?
+  importedAt       DateTime?
+  importedById     String?  @db.Uuid
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenant Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rows   ApprovedListRow[]
+
+  @@index([tenantId, interventionYear])
+  @@map("approved_lists")
+}
+
+model ApprovedListRow {
+  id              String   @id @default(uuid()) @db.Uuid
+  listId          String   @db.Uuid
+  rowRef          String
+  projectTitle    String
+  schoolNamesJson Json     @default("[]")
+  stateCode       String
+  lgaCodes        String[]
+  facilityScope   String?
+  costEstimateNgn Decimal  @db.Decimal(18, 2)
+  lotTitle        String?
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  list     ApprovedList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  projects Project[]
+
+  @@unique([listId, rowRef])
+  @@index([listId])
+  @@map("approved_list_rows")
+}
+
+/// Client demo updates F.3 (wave 2): the latest computed rating per contractor (nightly and on demand).
+model ContractorRatingSnapshot {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @db.Uuid
+  organizationId String   @db.Uuid
+  rated          Boolean
+  score          Decimal? @db.Decimal(3, 1)
+  stars          Decimal? @db.Decimal(2, 1)
+  reportCount    Int
+  projectCount   Int
+  // ContractorRatingComponent[]
+  componentsJson Json     @default("[]")
+  summary        String
+  computedAt     DateTime @default(now())
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId])
+  @@index([tenantId])
+  @@map("contractor_rating_snapshots")
 }
 
 model User {
@@ -617,6 +783,8 @@ model Project {
   fundingSourceCode       String?
   lotId                   String?       @db.Uuid
   batchNumber             Int?
+  // Client demo updates E3 (wave 3): the approved list row the project implements.
+  approvedListRowId       String?       @db.Uuid
   importedProgressPct     Decimal?      @db.Decimal(5, 2)
   importedStatus          String?
   workdayStartTime        String        @default("08:00")
@@ -701,6 +869,7 @@ model Project {
   projectType         ProjectType?         @relation(fields: [projectTypeId], references: [id], onDelete: Restrict)
   region              Region?              @relation(fields: [regionId], references: [id], onDelete: Restrict)
   lot                 ProjectLot?          @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  approvedListRow     ApprovedListRow?     @relation(fields: [approvedListRowId], references: [id], onDelete: SetNull)
   beneficiaries       ProjectBeneficiary[]
   contractors         ProjectContractor[]
   boqRevisions        BoqRevision[]
@@ -746,6 +915,8 @@ model Project {
   visits                 Visit[] // Redesign R4
   visitSubmissions       VisitSubmission[]
   siteLogEntries         SiteLogEntry[]
+  sites                  ProjectSite[] // Client demo updates C2 (wave 2)
+  contractorFlags        ContractorFlag[] // wave 3, F.4
 
   @@unique([tenantId, codePrefix])
   @@unique([tenantId, externalReference])
@@ -2154,6 +2325,32 @@ model ProjectSprint {
 
 // One physical instance of a catalogue facility on a project ("Ground floor male toilet"). Supply
 // units carry a planned quantity. Its scope lines take their planned window from its sprints.
+/// Client demo updates C2 (wave 2, light version): a school (site) of a multi-site project. All sites
+/// are in the project's state; units name their site. Visits and handover stay per project for now.
+model ProjectSite {
+  id           String   @id @default(uuid()) @db.Uuid
+  projectId    String   @db.Uuid
+  siteNumber   Int
+  schoolName   String
+  // SchoolLevelEnum: ECCDE | PRIMARY | JSS
+  schoolLevel  String
+  lgaCode      String
+  address      String?
+  latitude     Float?
+  longitude    Float?
+  // ProjectGeofence (radial, workspace default radius) when located; null otherwise.
+  boundaryJson Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  project Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  units   FacilityUnit[]
+
+  @@unique([projectId, siteNumber])
+  @@index([projectId])
+  @@map("project_sites")
+}
+
 model FacilityUnit {
   id                   String   @id @default(uuid()) @db.Uuid
   projectId            String   @db.Uuid
@@ -2169,6 +2366,7 @@ model FacilityUnit {
   progressSubmissionId String?  @db.Uuid
   startSprintId        String?  @db.Uuid
   endSprintId          String?  @db.Uuid
+  siteId               String?  @db.Uuid // Client demo updates C2 (wave 2)
   sortOrder            Int      @default(0)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
@@ -2177,6 +2375,7 @@ model FacilityUnit {
   facility    Facility       @relation(fields: [facilityId], references: [id], onDelete: Restrict)
   startSprint ProjectSprint? @relation("UnitStartSprint", fields: [startSprintId], references: [id], onDelete: SetNull)
   endSprint   ProjectSprint? @relation("UnitEndSprint", fields: [endSprintId], references: [id], onDelete: SetNull)
+  site        ProjectSite?   @relation(fields: [siteId], references: [id], onDelete: Restrict)
   lines       BoqItem[]
 
   @@unique([projectId, code])

@@ -1,6 +1,8 @@
 import type { LucideIcon } from "lucide-react";
 import {
   ClipboardCheck,
+  ClipboardList,
+  HardHat,
   FolderOpen,
   Globe2,
   LayoutDashboard,
@@ -21,7 +23,7 @@ import { COMPLETION_PAGE_PERMISSIONS } from "../pages/completion/completionPermi
  * RequirePermission screen.
  */
 
-export type NavGroup = "workspace" | "project" | "more";
+export type NavGroup = "workspace" | "project";
 
 export interface NavItem {
   key: string;
@@ -114,6 +116,26 @@ export const WORKSPACE_NAV: readonly NavItem[] = [
     noneOf: [PORTFOLIO_PERMISSION],
   },
   {
+    // Client demo updates E3 (wave 3): annual approved lists and budget mismatches.
+    key: "needs-assessment",
+    label: "Needs assessment",
+    icon: ClipboardList,
+    group: "workspace",
+    to: () => "/app/needs-assessment",
+    segments: ["needs-assessment"],
+    anyOf: ["approved_lists:view"],
+  },
+  {
+    // Client demo updates F.1 (wave 2): the contractor register.
+    key: "contractors",
+    label: "Contractors",
+    icon: HardHat,
+    group: "workspace",
+    to: () => "/app/contractors",
+    segments: ["contractors"],
+    anyOf: ["contractors:view_register"],
+  },
+  {
     key: "settings",
     label: "Settings",
     icon: Settings,
@@ -157,25 +179,20 @@ export const PROJECT_NAV: readonly NavItem[] = [
   },
   { key: "payments", label: "Payments", icon: Wallet, group: "project", to: (id) => projectPath(id, "payments"), segments: ["payments"], anyOf: ["payments:view", "payments:record"] },
   { key: "documents", label: "Documents", icon: FolderOpen, group: "project", to: (id) => projectPath(id, "documents"), segments: ["documents"], anyOf: ["documents:view", "documents:upload"] },
-];
-
-/** "More ▸" entries of the project group. */
-export const PROJECT_MORE_NAV: readonly NavItem[] = [
-  { key: "audit", label: "Audit ledger", icon: ShieldCheck, group: "more", to: (id) => projectPath(id, "audit"), segments: ["audit"], anyOf: ["audit:view_ledger"] },
+  // Design round 2026-11-26: Audit ledger and Project settings are plain entries (no "More ▸").
+  { key: "audit", label: "Audit ledger", icon: ShieldCheck, group: "project", to: (id) => projectPath(id, "audit"), segments: ["audit"], anyOf: ["audit:view_ledger"] },
   {
     key: "project-settings",
     label: "Project settings",
     pageTitle: "Project settings",
     icon: SlidersHorizontal,
-    group: "more",
+    group: "project",
     to: (id) => projectPath(id, "settings/project"),
     segments: ["settings"],
     // As the header button it replaces; the setup shell itself stays read-only for others.
     anyOf: ["projects:edit_baseline"],
   },
 ];
-
-export const ALL_PROJECT_NAV: readonly NavItem[] = [...PROJECT_NAV, ...PROJECT_MORE_NAV];
 
 /** Header names of pages that have no navigation entry. */
 const OTHER_PROJECT_PAGES: Record<string, string> = { setup: "Project setup" };
@@ -212,13 +229,13 @@ export function navItemMatches(item: NavItem, loc: AppLocation): boolean {
 
 /** The entry for a location (project pages, then workspace pages). */
 export function findNavItem(loc: AppLocation): NavItem | null {
-  const list = loc.projectId ? ALL_PROJECT_NAV : WORKSPACE_NAV;
+  const list = loc.projectId ? PROJECT_NAV : WORKSPACE_NAV;
   return list.find((item) => navItemMatches(item, loc)) ?? null;
 }
 
 /** The workspace entry for a location, among the entries this user sees (Portfolio and Dashboard share segments). */
 export function findVisibleNavItem(loc: AppLocation, hasAnyPermission: (...keys: string[]) => boolean): NavItem | null {
-  const list = loc.projectId ? ALL_PROJECT_NAV : WORKSPACE_NAV;
+  const list = loc.projectId ? PROJECT_NAV : WORKSPACE_NAV;
   return list.find((item) => canSeeNavItem(item, hasAnyPermission) && navItemMatches(item, loc)) ?? null;
 }
 

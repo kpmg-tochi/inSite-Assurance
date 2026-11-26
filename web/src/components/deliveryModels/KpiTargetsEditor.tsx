@@ -38,7 +38,7 @@ export function KpiTargetsEditor({ value, onChange }: { value: ProjectTypeKpiTar
       </div>
       {KpiStageEnum.options.map((stage) => (
         <div key={stage}>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">{KPI_STAGE_META[stage].label}</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">{KPI_STAGE_META[stage].label}</div>
           <div className="divide-y divide-slate-100 rounded-xl border border-slate-100">
             {KPI_CATALOGUE.filter((k) => k.stage === stage).map((def) => {
               const s = settingOf(def.key);

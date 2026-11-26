@@ -22,6 +22,7 @@ import { attachableEntries, attachEntry, detachEntry, entryDay, type SiteLogReco
 import { findingLine, findingsCountText, reviewIssueGroups, siteLogEntryLabel, timeInZone, WAITING_TO_SEND_TEXT } from '../../utils/formUiModel';
 import type { StoredVisit, StoredVisitDraft } from '../../utils/visitModel';
 import { formatMobileErrorMessage } from '../../utils/errorFormatter';
+import { formatDay } from '../../utils/visitText';
 
 /**
  * Redesign R5c: review and submit. Lists what still blocks the submission (errors and photo gaps,
@@ -62,9 +63,9 @@ export default function VisitReviewScreen({ route, navigation }: RootStackScreen
     setPhase({ kind: 'LOADING' });
     try {
       const v = await getVisit(visitId);
-      if (!v) return setPhase({ kind: 'BLOCKED', title: 'Visit not on this phone', message: 'Refresh your visits and open it again.' });
+      if (!v) return setPhase({ kind: 'BLOCKED', title: 'Monitoring visit not on this phone', message: 'Refresh your monitoring visits and open it again.' });
       const open = await getOpenDraft(v.id);
-      if (!open) return setPhase({ kind: 'BLOCKED', title: 'No monitoring report to review', message: 'Start the form from the visit first.' });
+      if (!open) return setPhase({ kind: 'BLOCKED', title: 'No monitoring report to review', message: 'Start the form from the monitoring visit first.' });
       const pack = await hydrateBaselinePack(v.projectId).catch(() => null);
       const form = await getVisitFormByHash(v.id, open.draft.formHash);
       if (!form) return setPhase({ kind: 'BLOCKED', title: 'Form not on this phone', message: 'The form of this monitoring report is no longer on the phone.' });
@@ -148,7 +149,7 @@ export default function VisitReviewScreen({ route, navigation }: RootStackScreen
       </Text>
       {data ? (
         <Text style={styles.subtitle}>
-          {VISIT_KIND_META[data.visit.visit.visitKind].label} · {formatProjectCode(data.visit.visit.projectCode)} · {data.visit.visit.plannedDate}
+          {VISIT_KIND_META[data.visit.visit.visitKind].label} · {formatProjectCode(data.visit.visit.projectCode)} · {formatDay(data.visit.visit.plannedDate)}
         </Text>
       ) : null}
     </LinearGradient>
@@ -255,8 +256,8 @@ export default function VisitReviewScreen({ route, navigation }: RootStackScreen
             value={draft.summaryText}
             onChangeText={(t) => update((d) => ({ ...d, summaryText: t }))}
             maxLength={4000}
-            placeholder="What you saw on this visit"
-            accessibilityLabel="Summary of the visit"
+            placeholder="What you saw on this monitoring visit"
+            accessibilityLabel="Summary of the monitoring visit"
           />
           {!readOnly && issueOf('SUMMARY_REQUIRED') ? <Text style={formStyles.error}>To fix: {issueOf('SUMMARY_REQUIRED')}</Text> : null}
         </View>

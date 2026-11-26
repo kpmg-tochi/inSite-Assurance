@@ -18,7 +18,7 @@ export const XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.
 const VisitStatusList = z
   .string()
   .max(200)
-  .refine((s) => s.split(',').every((x) => VisitStatusEnum.safeParse(x).success), { message: 'Unknown visit status' });
+  .refine((s) => s.split(',').every((x) => VisitStatusEnum.safeParse(x).success), { message: 'Unknown monitoring visit status' });
 
 /** GET /projects/:id/visits/export.xlsx (the project's Visits tab). */
 export const ProjectVisitsExportQuerySchema = z

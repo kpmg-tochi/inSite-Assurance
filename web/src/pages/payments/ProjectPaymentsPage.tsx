@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Controller } from "react-hook-form";
+import { useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { AlertTriangle, CheckCircle2, CircleDashed, Landmark, Plus, Receipt, Wallet } from "lucide-react";
 import {
@@ -22,13 +23,14 @@ import { FieldError, canSubmit, fieldA11y, invalidClass, useZodForm, zDateText, 
 import { CustomSelect, KpiCard } from "../../components/common";
 import { ModalActions, ModalShell, inputClass } from "../../components/common/ModalShell";
 import { StandardTable, TableActionButton, TableBadge, type TableColumnDef } from "../../components/table";
-import { useProjectPaymentsQuery } from "../../queries/payments/usePaymentsQueries";
+import { projectPaymentsKey, useProjectPaymentsQuery } from "../../queries/payments/usePaymentsQueries";
 import { useRecordPaymentMutation, useVoidPaymentMutation } from "../../mutations/payments/usePaymentsMutations";
 import { useProjectProcess } from "../../queries/process/useProcessQueries";
 import { PaidVsContractSumBar } from "../../components/payments/PaidVsContractSumBar";
 import { ExportExcelButton } from "../../components/common/ExportExcelButton";
 import { useExportProjectPaymentsMutation } from "../../mutations/screenExports/useScreenExportMutations";
 import { PeriodFilter, browserToday, periodQuery, usePeriodUrlState } from "../../components/common/PeriodFilter";
+import { PaymentHoldBanner } from "../../components/contractorFlags/PaymentHoldBanner";
 
 const labelClass = "block text-xs font-semibold text-slate-700 mb-1";
 
@@ -99,13 +101,13 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
   };
 
   const columns: TableColumnDef<PaymentDto>[] = [
-    { id: "date", header: "Paid on", width: "w-28", cell: (p) => <span className="text-xs tabular-nums">{p.paidOn}</span> },
+    { id: "date", header: "Paid on", width: "w-28", cell: (p) => <span className="whitespace-nowrap text-xs tabular-nums">{formatDateShort(p.paidOn)}</span> },
     {
       id: "what",
       header: "Payment",
       cell: (p) => (
         <div>
-          <p className={`text-xs font-bold ${p.voided ? "text-slate-400 line-through" : "text-slate-900"}`}>
+          <p className={`text-xs font-bold ${p.voided ? "text-slate-500 line-through" : "text-slate-900"}`}>
             {PAYMENT_KIND_LABELS[p.kind]} · {p.reference}
           </p>
           {p.description && <p className="text-[11px] text-slate-500">{p.description}</p>}
@@ -129,7 +131,7 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
                   <span className="block truncate text-[11px] text-slate-500">{p.sprint.name}</span>
                 </span>
               ) : (
-                <span className="text-xs text-slate-400">—</span>
+                <span className="text-xs text-slate-500">—</span>
               ),
           },
         ]
@@ -172,7 +174,7 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
       cell: (p) => (
         <div className="text-[11px] text-slate-600">
           <p>{p.recordedByName}</p>
-          <p className="text-slate-400">{formatDateShort(p.recordedAt)}</p>
+          <p className="text-slate-500">{formatDateShort(p.recordedAt)}</p>
         </div>
       ),
     },
@@ -193,12 +195,15 @@ export function ProjectPaymentsPage({ project }: { project: ProjectSummaryDto })
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-lg font-bold text-slate-900">Payments</h1>
+        <h2 className="text-lg font-bold text-slate-900">Payments</h2>
         <p className="text-xs text-slate-500">
           Payments to the {term("contractor", { lower: true })} are made outside the platform. Record each one here so progress, {term("retention", { lower: true })} and
           closure checks stay complete.
         </p>
       </div>
+
+      {/* Client demo updates F.4 (wave 3): a payment hold decided on a performance flag. */}
+      {s?.paymentHold && <PaymentHoldBanner hold={s.paymentHold} contractorLabel={term("contractor", { lower: true })} />}
 
       {s && <SummaryCards s={s} retentionOn={retentionOn} />}
 
@@ -399,8 +404,10 @@ function RecordPaymentModal({
 }) {
   const term = useTerm();
   const record = useRecordPaymentMutation(projectId);
+  const queryClient = useQueryClient();
   const kinds = PaymentKindEnum.options.filter((k) => retentionOn || k !== "RETENTION_RELEASE");
   const pct = retentionOn ? summary.retentionPercentage ?? 0 : 0;
+  const hold = summary.paymentHold ?? null;
   const expectedHeldFor = (kind: PaymentKind, gross: number) => (kind === "RETENTION_RELEASE" || !(gross > 0) ? 0 : Math.round(gross * pct) / 100);
   /** The held amount typed over the default, when it differs from it (null = the default applies). */
   const heldChange = (kind: PaymentKind, gross: number, heldOverride: string): number | null => {
@@ -423,8 +430,12 @@ function RecordPaymentModal({
         .trim()
         .refine((v) => v === "" || (/^\d+(\.\d+)?$/.test(v) && Number(v) >= 0), "Enter the amount held as a number, or leave it empty"),
       overrideReason: z.string().trim().max(500, "Too long (at most 500 characters)"),
+      holdReason: z.string().trim().max(500, "Too long (at most 500 characters)"),
     })
     .superRefine((v, ctx) => {
+      if (hold && v.kind !== "RETENTION_RELEASE" && v.holdReason.length < 5) {
+        ctx.addIssue({ code: "custom", path: ["holdReason"], message: "Say why the payment is made during the hold (at least 5 characters)" });
+      }
       if (v.kind === "RETENTION_RELEASE" && v.amount > summary.retentionBalanceNgn + 0.005) {
         ctx.addIssue({ code: "custom", path: ["amount"], message: `Only ${formatNaira(summary.retentionBalanceNgn)} is held` });
       }
@@ -447,12 +458,13 @@ function RecordPaymentModal({
         retentionHeldNgn: held,
         retentionOverrideReason: held !== null ? v.overrideReason : null,
         sprintId: v.sprintId || null,
+        ...(hold && v.kind !== "RETENTION_RELEASE" ? { holdOverrideReason: v.holdReason } : {}),
       };
     })
     .pipe(RecordPaymentRequestSchema);
 
   const form = useZodForm(schema, {
-    defaultValues: { kind: "INTERIM", paidOn: summary.today, amount: "", reference: "", sprintId: "", description: "", heldOverride: "", overrideReason: "" },
+    defaultValues: { kind: "INTERIM", paidOn: summary.today, amount: "", reference: "", sprintId: "", description: "", heldOverride: "", overrideReason: "", holdReason: "" },
   });
   const kind = form.watch("kind");
   const gross = Number(form.watch("amount"));
@@ -469,14 +481,45 @@ function RecordPaymentModal({
     try {
       await record.mutateAsync(body);
       onClose();
-    } catch {
-      // Toast from the mutation hook.
+    } catch (err) {
+      // Toast from the mutation hook. A hold decided since the page loaded: reload it so the override field shows.
+      const code = (err as { response?: { data?: { error?: { code?: string } } } })?.response?.data?.error?.code;
+      if (code === "PAYMENT_HOLD_OVERRIDE_REQUIRED") void queryClient.invalidateQueries({ queryKey: projectPaymentsKey(projectId) });
     }
   });
 
   return (
     <ModalShell title="Record payment" subtitle="A payment already made outside the platform" onClose={onClose}>
       <form onSubmit={submit} noValidate className="space-y-3 p-5">
+        {hold && (
+          <div className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3">
+            <p className="text-xs font-semibold text-amber-900">
+              A payment hold is in effect on the {term("contractor", { lower: true })} since {formatDateShort(hold.since)}: {hold.reason}
+            </p>
+            {kind === "RETENTION_RELEASE" ? (
+              <p className="text-[11px] text-amber-800">A {term("retention", { lower: true })} release is not affected by the hold: no override reason is needed.</p>
+            ) : (
+              <div>
+                <label className={labelClass} htmlFor="pay-hold-reason">
+                  Override reason <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  id="pay-hold-reason"
+                  rows={2}
+                  maxLength={500}
+                  className={`${inputClass} ${invalidClass(form, "holdReason")}`}
+                  {...form.register("holdReason")}
+                  {...fieldA11y(form, "holdReason")}
+                  aria-describedby={fieldA11y(form, "holdReason")["aria-describedby"] ?? "pay-hold-hint"}
+                />
+                <FieldError form={form} name="holdReason" />
+                <p id="pay-hold-hint" className="mt-1 text-[11px] text-amber-800">
+                  Why this payment is made during the hold. The payment is recorded and flagged as an exception.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
         <div className="grid gap-3 sm:grid-cols-2">
           <Controller
             control={form.control}

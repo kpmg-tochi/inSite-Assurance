@@ -30,6 +30,9 @@ import {
   VisitRow,
   visitLabel,
   webVisitActor,
+  codeText,
+  dayText,
+  lowerFirst,
 } from './visitCore';
 import { freezeVisitForm } from './visitForms';
 import { serializeDateChange, serializeVisits, visitDto, withdrawPendingProposal } from './visits.service';
@@ -60,7 +63,7 @@ async function applyNewDate(tx: Tx, v: VisitRow, date: string, opts: { timezone:
 
 function assertRespondable(v: VisitRow) {
   if (v.status !== 'PLANNED' || v.checkInAt) {
-    throw new AppError('This visit has changed since you last saw it (started, closed or not published). Refresh your visits.', 409, 'VISIT_CHANGED', {
+    throw new AppError('This monitoring visit has changed since you last saw it (started, closed or not published). Refresh your monitoring visits.', 409, 'VISIT_CHANGED', {
       status: v.status,
     });
   }
@@ -85,7 +88,7 @@ export async function respondToVisit(params: {
   try {
     await prisma.$transaction(async (tx) => {
       const v = await lockVisit(tx, projectId, visitId);
-      if (!v.assignees.some((a) => a.userId === f.userId)) throw new AppError('This visit is not assigned to you', 403, 'VISIT_NOT_ASSIGNED');
+      if (!v.assignees.some((a) => a.userId === f.userId)) throw new AppError('This monitoring visit is not assigned to you', 403, 'VISIT_NOT_ASSIGNED');
       assertRespondable(v);
       const project = await loadVisitProject(tx, projectId);
       const tenant = await tx.tenant.findUniqueOrThrow({ where: { id: project.tenantId }, select: { visitRescheduleToleranceWorkdays: true } });
@@ -110,15 +113,15 @@ export async function respondToVisit(params: {
       switch (input.action) {
         case 'CONFIRM':
           await tx.visit.update({ where: { id: visitId }, data: { confirmation: 'CONFIRMED', confirmedAt: new Date() } });
-          summary = `Confirmed the ${label.toLowerCase()} on ${v.plannedDate}.`;
+          summary = `Confirmed the ${lowerFirst(label)} on ${v.plannedDate}.`;
           break;
         case 'DECLINE':
           await tx.visit.update({ where: { id: visitId }, data: { confirmation: 'DECLINED', confirmedAt: null } });
-          await notifyManagers('VISIT_DECLINED', `${f.agentFullName} declined a visit`, `${project.codePrefix}: ${label} on ${v.plannedDate}: ${comment}`);
-          summary = `Declined the ${label.toLowerCase()} on ${v.plannedDate}: ${comment}`;
+          await notifyManagers('VISIT_DECLINED', `${f.agentFullName} declined a monitoring visit`, `${codeText(project.codePrefix)}: ${label} on ${dayText(v.plannedDate)}: ${comment}`);
+          summary = `Declined the ${lowerFirst(label)} on ${v.plannedDate}: ${comment}`;
           break;
         case 'MOVE': {
-          if (date === v.plannedDate) throw new AppError('The visit is already on that date', 422, 'SAME_DATE');
+          if (date === v.plannedDate) throw new AppError('The monitoring visit is already on that date', 422, 'SAME_DATE');
           const sprints = await tx.projectSprint.findMany({ where: { projectId }, select: { number: true, startDate: true, endDate: true } });
           const check = withinRescheduleTolerance(v.originalPlannedDate, date!, tenant.visitRescheduleToleranceWorkdays, project.workWeekDays, sprints);
           if (!check.ok) {
@@ -131,27 +134,27 @@ export async function respondToVisit(params: {
                   : `That date is more than ${tenant.visitRescheduleToleranceWorkdays} working day(s) from the original date.`;
             throw new AppError(`${why} Propose the date to the manager instead.`, 422, 'MOVE_OUTSIDE_WINDOW', { reason: check.reason, window });
           }
-          await withdrawPendingProposal(tx, visitId, 'The officer moved the visit within the allowed days.');
+          await withdrawPendingProposal(tx, visitId, 'The officer moved the monitoring visit within the allowed days.');
           const change = await tx.visitDateChange.create({
             data: { visitId, kind: 'OFFICER_MOVE', status: 'APPLIED', fromDate: v.plannedDate, toDate: date!, comment, byUserId: f.userId, byName: f.agentFullName, clientActionId: input.clientActionId },
           });
           dateChangeId = change.id;
           await applyNewDate(tx, v, date!, { timezone: project.timezone, snapshotJson: project.projectTypeSnapshotJson, byUserId: f.userId, countAsReschedule: true });
-          await notifyManagers('VISIT_RESCHEDULED', `${f.agentFullName} moved a visit`, `${project.codePrefix}: ${label} moved from ${v.plannedDate} to ${date}: ${comment}`);
+          await notifyManagers('VISIT_RESCHEDULED', `${f.agentFullName} moved a monitoring visit`, `${codeText(project.codePrefix)}: ${label} moved from ${dayText(v.plannedDate)} to ${dayText(date)}: ${comment}`);
           const others = v.assignees.map((a) => a.userId).filter((id) => id !== f.userId);
           await notifyOfficers(tx, pushes, {
             projectId,
             visitId,
             userIds: others,
             type: 'VISIT_CHANGED',
-            title: `${label} moved to ${date}`,
-            message: `${project.codePrefix}: ${f.agentFullName} moved the ${label.toLowerCase()} from ${v.plannedDate} to ${date}.`,
+            title: `${label} moved to ${dayText(date)}`,
+            message: `${codeText(project.codePrefix)}: ${f.agentFullName} moved the ${lowerFirst(label)} from ${dayText(v.plannedDate)} to ${dayText(date)}.`,
           });
-          summary = `Moved the ${label.toLowerCase()} from ${v.plannedDate} to ${date}: ${comment}`;
+          summary = `Moved the ${lowerFirst(label)} from ${v.plannedDate} to ${date}: ${comment}`;
           break;
         }
         case 'PROPOSE': {
-          if (date === v.plannedDate) throw new AppError('The visit is already on that date', 422, 'SAME_DATE');
+          if (date === v.plannedDate) throw new AppError('The monitoring visit is already on that date', 422, 'SAME_DATE');
           await withdrawPendingProposal(tx, visitId, 'The officer proposed another date.');
           const change = await tx.visitDateChange.create({
             data: { visitId, kind: 'OFFICER_PROPOSAL', status: 'PENDING', fromDate: v.plannedDate, toDate: date!, comment, byUserId: f.userId, byName: f.agentFullName, clientActionId: input.clientActionId },
@@ -160,9 +163,9 @@ export async function respondToVisit(params: {
           await notifyManagers(
             'VISIT_DATE_PROPOSED',
             `${f.agentFullName} proposed a new date`,
-            `${project.codePrefix}: ${label} on ${v.plannedDate}, proposed ${date}: ${comment}`
+            `${codeText(project.codePrefix)}: ${label} on ${dayText(v.plannedDate)}, proposed ${dayText(date)}: ${comment}`
           );
-          summary = `Proposed moving the ${label.toLowerCase()} from ${v.plannedDate} to ${date}: ${comment}`;
+          summary = `Proposed moving the ${lowerFirst(label)} from ${v.plannedDate} to ${date}: ${comment}`;
           break;
         }
       }
@@ -206,7 +209,7 @@ export async function decideVisitProposal(params: {
     const change = await tx.visitDateChange.findFirst({ where: { id: changeId, visitId } });
     if (!change) throw new AppError('Date proposal not found', 404, 'DATE_CHANGE_NOT_FOUND');
     if (change.status !== 'PENDING') throw new AppError('This proposal has already been decided', 409, 'DATE_CHANGE_NOT_PENDING', { status: change.status });
-    if (v.status !== 'PLANNED' || v.checkInAt) throw new AppError('The visit has started or is closed', 409, 'VISIT_STARTED', { status: v.status });
+    if (v.status !== 'PLANNED' || v.checkInAt) throw new AppError('The monitoring visit has started or is closed', 409, 'VISIT_STARTED', { status: v.status });
     const project = await loadVisitProject(tx, projectId);
     const label = visitLabel(v.visitKind);
     const accept = input.decision === 'ACCEPT';
@@ -222,10 +225,10 @@ export async function decideVisitProposal(params: {
       visitId,
       userIds: v.assignees.map((a) => a.userId),
       type: 'VISIT_CHANGED',
-      title: accept ? `${label} moved to ${change.toDate}` : `New date for the ${label.toLowerCase()} not accepted`,
+      title: accept ? `${label} moved to ${dayText(change.toDate)}` : `New date for the ${lowerFirst(label)} not accepted`,
       message: accept
-        ? `${project.codePrefix}: the manager accepted ${change.toDate} for the ${label.toLowerCase()} (was ${change.fromDate}).`
-        : `${project.codePrefix}: the ${label.toLowerCase()} stays on ${v.plannedDate}: ${input.note}`,
+        ? `${codeText(project.codePrefix)}: the manager accepted ${dayText(change.toDate)} for the ${lowerFirst(label)} (was ${dayText(change.fromDate)}).`
+        : `${codeText(project.codePrefix)}: the ${lowerFirst(label)} stays on ${dayText(v.plannedDate)}: ${input.note}`,
     });
     const actor = webVisitActor(webUser);
     await recordAuditEvent(tx, {
@@ -235,8 +238,8 @@ export async function decideVisitProposal(params: {
       actorDisplayName: actor.actorDisplayName,
       action: 'VISIT_DATE_DECIDED',
       summaryText: accept
-        ? `Accepted ${change.byName}'s proposal to move the ${label.toLowerCase()} from ${change.fromDate} to ${change.toDate}.`
-        : `Rejected ${change.byName}'s proposal to move the ${label.toLowerCase()} of ${change.fromDate} to ${change.toDate}: ${input.note}`,
+        ? `Accepted ${change.byName}'s proposal to move the ${lowerFirst(label)} from ${change.fromDate} to ${change.toDate}.`
+        : `Rejected ${change.byName}'s proposal to move the ${lowerFirst(label)} of ${change.fromDate} to ${change.toDate}: ${input.note}`,
       payload: { visitId, changeId, decision: input.decision, note: input.note ?? null },
     });
   });

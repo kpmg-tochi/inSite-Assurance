@@ -81,7 +81,15 @@ export const FacilityUnitDtoSchema = z.object({
   endSprintId: z.string().uuid().nullable(),
   startSprintNumber: z.number().int().nullable(),
   endSprintNumber: z.number().int().nullable(),
+  /** Client demo updates C2 (wave 2): the site the unit is at; null on single-site and older projects. */
+  siteId: z.string().uuid().nullable().optional(),
   sortOrder: z.number().int(),
+  /**
+   * Redesign R4d (D-R4.26): % complete observed by the latest accepted monitoring report, and that
+   * visit's date (YYYY-MM-DD); both null until one is accepted. Its lines follow it.
+   */
+  progressPct: z.number().nullable(),
+  progressAsOf: z.string().nullable(),
   lineCount: z.number().int(),
   amountNgn: z.number(),
   /** A line has captures, reports, defects or findings: the unit cannot be removed. */
@@ -122,6 +130,8 @@ export const ProjectScopeDtoSchema = z.object({
   /** Project zone calendar date the sprint statuses were derived for. */
   today: z.string(),
   budgetNgn: z.number().nullable(),
+  /** The project's % complete as stored (`Project.certifiedProgressPct`: budget-weighted over the lines, or the imported %). */
+  progressPct: z.number(),
   sprints: z.array(ProjectSprintDtoSchema),
   /** Units in facility order, then unit order. */
   units: z.array(FacilityUnitDtoSchema),
@@ -185,6 +195,8 @@ export const CreateFacilityUnitRequestSchema = z.object({
   quantityUnit: UnitOfMeasureEnum.nullable().optional(),
   startSprintId: z.string().uuid().nullable().optional(),
   endSprintId: z.string().uuid().nullable().optional(),
+  /** Wave 2: a site of the project (422 SITE_NOT_FOUND otherwise); omitted keeps, null clears. */
+  siteId: z.string().uuid().nullable().optional(),
   sortOrder: z.number().int().min(0).max(100_000).optional(),
 });
 export type CreateFacilityUnitRequest = z.infer<typeof CreateFacilityUnitRequestSchema>;

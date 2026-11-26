@@ -8,7 +8,7 @@ import { formatDateShort } from "../../lib/formatters";
  * when the project has no active alert. `size="sm"` suits table rows.
  */
 
-const ICON: Record<ProjectAlertKey, LucideIcon> = {
+export const PROJECT_ALERT_ICON: Record<ProjectAlertKey, LucideIcon> = {
   DELAYED: Clock,
   STALLED: PauseCircle,
   SITE_UPDATE_OVERDUE: CalendarX,
@@ -16,6 +16,8 @@ const ICON: Record<ProjectAlertKey, LucideIcon> = {
 };
 
 /** Delayed and stalled are the serious ones; the others ask for attention. */
+export const SERIOUS_PROJECT_ALERTS: readonly ProjectAlertKey[] = ["DELAYED", "STALLED"];
+
 const TONE: Record<ProjectAlertKey, string> = {
   DELAYED: "bg-rose-50 text-rose-800 ring-rose-200",
   STALLED: "bg-rose-50 text-rose-800 ring-rose-200",
@@ -42,11 +44,11 @@ export function ProjectAlertChips({
     <ul className={`flex flex-wrap items-center gap-1.5 ${className}`} aria-label="Early-warning alerts">
       {alerts.map((key) => {
         const meta = PROJECT_ALERT_META[key];
-        const Icon = ICON[key];
+        const Icon = PROJECT_ALERT_ICON[key];
         const since = raisedAt?.[key] ? ` Since ${formatDateShort(raisedAt[key]!)}.` : "";
         return (
           <li key={key}>
-            <span title={`${meta.description}${since}`} className={`inline-flex items-center rounded-full font-semibold ring-1 ring-inset ${chip} ${TONE[key]}`}>
+            <span title={`${meta.description}${since}`} className={`inline-flex items-center whitespace-nowrap rounded-full font-semibold ring-1 ring-inset ${chip} ${TONE[key]}`}>
               <Icon className={icon} aria-hidden />
               {meta.label}
               <span className="sr-only">

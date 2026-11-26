@@ -13,6 +13,7 @@ import {
   PauseCircle,
   CalendarX,
   Banknote,
+  Flag,
 } from "lucide-react";
 import { formatElapsedTime, type WebNotificationCategory, type WebNotificationDto } from "@insite/shared";
 import {
@@ -40,17 +41,19 @@ const CATEGORY_LABELS: Partial<Record<WebNotificationCategory, string>> = {
   LESSON_SHARED: "Lesson learned",
   PAYMENT_EXCEPTION: "Payment exception",
   // Redesign R4
-  VISIT_RESCHEDULED: "Visit moved",
-  VISIT_DATE_PROPOSED: "New visit date proposed",
-  VISIT_DECLINED: "Visit declined",
+  VISIT_RESCHEDULED: "Monitoring visit moved",
+  VISIT_DATE_PROPOSED: "New monitoring visit date proposed",
+  VISIT_DECLINED: "Monitoring visit declined",
   VISIT_PENDING_APPROVAL: "Monitoring report awaiting approval",
-  VISIT_MISSED: "Missed visit",
+  VISIT_MISSED: "Missed monitoring visit",
   FINDING_ESCALATED: "Finding escalated",
   SPRINT_VERIFICATION_DUE: "Work phase to verify",
   // UBEC IRL early-warning alerts (SCHEDULE_BEHIND is the delayed alert)
   PROJECT_STALLED: "Stalled project",
   SITE_UPDATE_OVERDUE: "Monitoring overdue",
   SPEND_AHEAD_OF_PROGRESS: "Paid ahead of work done",
+  // Client demo updates F.4 (wave 3)
+  CONTRACTOR_FLAGGED: "Contractor flagged",
 };
 
 interface NotificationsProps {
@@ -127,6 +130,8 @@ export default function Notifications({ projectId }: NotificationsProps) {
         return <CalendarX className="w-4 h-4 text-amber-600" />;
       case "SPEND_AHEAD_OF_PROGRESS":
         return <Banknote className="w-4 h-4 text-amber-600" />;
+      case "CONTRACTOR_FLAGGED":
+        return <Flag className="w-4 h-4 text-rose-600" />;
       default:
         return <Bell className="w-4 h-4 text-slate-500" />;
     }
@@ -136,6 +141,8 @@ export default function Notifications({ projectId }: NotificationsProps) {
     switch (category) {
       case "CONTRACTOR_ONBOARDING":
         return `${term("contractor")} onboarding`;
+      case "CONTRACTOR_FLAGGED":
+        return `${term("contractor")} flagged`;
       default:
         return CATEGORY_LABELS[category] ?? "Notification";
     }
@@ -155,6 +162,7 @@ export default function Notifications({ projectId }: NotificationsProps) {
         return "bg-amber-50 text-amber-800 border-amber-200";
       case "SCHEDULE_BEHIND":
       case "PROJECT_STALLED":
+      case "CONTRACTOR_FLAGGED":
         return "bg-rose-50 text-rose-800 border-rose-200";
       default:
         return "bg-slate-50 text-slate-700 border-slate-200";
@@ -241,7 +249,7 @@ export default function Notifications({ projectId }: NotificationsProps) {
                     : "No notifications present for this project."}
                 </p>
                 <p className="text-[11px] text-slate-400 mt-0.5">
-                  Visits to review, findings, milestones and payment exceptions appear here.
+                  Monitoring reports to review, findings, milestones and payment exceptions appear here.
                 </p>
               </div>
             ) : (

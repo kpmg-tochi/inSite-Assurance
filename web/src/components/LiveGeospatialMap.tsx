@@ -157,13 +157,14 @@ export function LiveGeospatialMap({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search reporter, role or caption..."
+            aria-label="Search photos by reporter, role or caption"
             className="text-xs text-slate-800 placeholder-slate-400 bg-transparent focus:outline-none w-full"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="text-[11px] text-slate-400 hover:text-slate-700 font-medium"
+              className="text-[11px] text-slate-500 hover:text-slate-700 font-medium"
             >
               Clear
             </button>

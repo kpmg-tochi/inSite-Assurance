@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import {
+  formatProjectCodeWithYear,
   HANDOVER_DECISION_LABELS,
   HandoverSubmissionDto,
   RecordHandoverResponseRequest,
@@ -58,6 +59,7 @@ async function serializeSubmissions(db: Db, rows: SubmissionRow[]): Promise<Hand
         description: snag.description ?? null,
         defectTicketId: ticketBySnag.get(index) ?? null,
       })),
+      recordedByUserId: s.recordedByUserId,
       recordedByName: names.get(s.recordedByUserId) ?? null,
       submittedAt: s.submittedAt.toISOString(),
       reviewedAt: s.reviewedAt?.toISOString() ?? null,
@@ -123,7 +125,7 @@ export async function recordHandoverResponse(
       projectId,
       targetPermissionKey: 'handover:review_feedback',
       category: 'HANDOVER_RECORDED',
-      title: `${project.codePrefix}: handover response to review`,
+      title: `${formatProjectCodeWithYear(project.codePrefix)}: handover response to review`,
       description: `${created.submitterName}: ${label}${snags.length ? `, ${snags.length} punch list item(s)` : ''}.`,
       actionUrl: `/app/projects/${projectId}/completion?tab=handover`,
       metadata: { handoverSubmissionId: created.id },

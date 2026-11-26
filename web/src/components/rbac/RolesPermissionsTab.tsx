@@ -349,6 +349,8 @@ export function RolesPermissionsTab() {
           onClick={(e) => {
             if (e.target === e.currentTarget) setDrawerOpen(false);
           }}
+          onClose={() => setDrawerOpen(false)}
+          label="Role"
         >
           <form onSubmit={handleSaveRole} noValidate className="flex flex-col h-full">
           <div className="p-4 border-b border-slate-100 flex items-center justify-between">

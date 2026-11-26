@@ -54,13 +54,13 @@ export function greeting(hour: number): string {
 
 export const DOT_TEXT: Record<VisitDot, string> = { PLANNED: 'planned', OVERDUE: 'overdue', DONE: 'done' };
 
-/** Screen-reader label of a calendar day: "Tuesday 24 November 2026, today, 2 visits: overdue, planned". */
+/** Screen-reader label of a calendar day: "Tuesday 24 November 2026, today, monitoring visits: overdue, planned". */
 export function dayAccessibilityLabel(date: string, ctx: { today: string; dots: VisitDot[]; selected: boolean }): string {
   const bits = [formatLongDay(date)];
   if (date === ctx.today) bits.push('today');
   if (ctx.selected) bits.push('selected');
-  if (ctx.dots.length > 0) bits.push(`visits: ${ctx.dots.map((d) => DOT_TEXT[d]).join(', ')}`);
-  else bits.push('no visits');
+  if (ctx.dots.length > 0) bits.push(`monitoring visits: ${ctx.dots.map((d) => DOT_TEXT[d]).join(', ')}`);
+  else bits.push('no monitoring visits');
   return bits.join(', ');
 }
 

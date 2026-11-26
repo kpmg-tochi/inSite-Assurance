@@ -384,6 +384,18 @@ describe('UBEC demo: Direct Intervention, live', () => {
       },
       // The import drew a radial boundary of the workspace default radius on the workbook's GPS point.
       site: { geofence: dto.site.geofence, geofenceToleranceMeters: null, timezone: 'Africa/Lagos' },
+      // Client demo updates C2 (wave 2): the sites section saves the list as it is (empty for a one-site project).
+      sites: {
+        sites: ((dto.sites?.sites ?? []) as Array<Record<string, unknown>>).map((s) => ({
+          id: s.id,
+          schoolName: s.schoolName,
+          schoolLevel: s.schoolLevel,
+          lgaCode: s.lgaCode,
+          address: s.address,
+          latitude: s.latitude,
+          longitude: s.longitude,
+        })),
+      },
       contractor: {
         contractors: [{ organization: { name: DEMO_PROJECT.contractor }, tradeCategory: 'Water and sanitation works', tradeCode: 'WASH', plannedCompletionDate: dates.plannedCompletion }],
       },

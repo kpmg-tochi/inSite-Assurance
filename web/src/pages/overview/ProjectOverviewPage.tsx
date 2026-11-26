@@ -25,6 +25,9 @@ import { ProjectStageBar } from "../../components/overview/ProjectStageBar";
 import { PhaseActions } from "../../components/overview/PhaseActions";
 import { ProjectAlertChips } from "../../components/alerts/ProjectAlertChips";
 import { CloseoutReportPrompt } from "../../components/closure/CloseoutReport";
+import { ProjectSitesCard } from "../../components/sites/ProjectSitesCard";
+import { ApprovedListLinkCard } from "../../components/approvedLists/ApprovedListLinkCard";
+import { ProjectContractorFlagCard } from "../../components/contractorFlags/ProjectContractorFlagCard";
 import { useProjectOverviewQuery } from "../../queries/projects/useProjectsQueries";
 import { useProjectPaymentsQuery } from "../../queries/payments/usePaymentsQueries";
 
@@ -138,7 +141,14 @@ function sprintCard(projectId: string, sprint: OverviewSprint | null, hasSprints
 function visitCard(projectId: string, visit: OverviewNextVisit | null, today: string, span: string) {
   if (!visit) {
     return (
-      <Card key="visit" span={span} title="Next visit" headline="None planned" lines={["No visit is planned from today."]} link={{ to: `/app/projects/${projectId}/visits`, label: "Visits" }} />
+      <Card
+        key="visit"
+        span={span}
+        title="Next monitoring visit"
+        headline="None planned"
+        lines={["No monitoring visit is planned from today."]}
+        link={{ to: `/app/projects/${projectId}/visits`, label: "Monitoring visits" }}
+      />
     );
   }
   const status = visit.status === "PLANNED" ? VISIT_CONFIRMATION_LABELS[visit.confirmation] : VISIT_STATUS_LABELS[visit.status];
@@ -146,13 +156,13 @@ function visitCard(projectId: string, visit: OverviewNextVisit | null, today: st
     <Card
       key="visit"
       span={span}
-      title="Next visit"
+      title="Next monitoring visit"
       headline={`${VISIT_KIND_META[visit.visitKind]?.label ?? visit.visitKind} · ${visit.plannedDate === today ? "today" : fmtDay(visit.plannedDate)}`}
       lines={[
         status,
         visit.officerNames.length > 0 ? visit.officerNames.join(", ") : <StateText key="o" tone="warn">No officer assigned</StateText>,
       ]}
-      link={{ to: `/app/projects/${projectId}/visits?visitId=${visit.id}`, label: "Open visit" }}
+      link={{ to: `/app/projects/${projectId}/visits?visitId=${visit.id}`, label: "Open monitoring visit" }}
     />
   );
 }
@@ -166,12 +176,12 @@ function deadlineCard(projectId: string, deadline: OverviewDeadline | null, over
       </StateText>
     ) : null;
   const visitLink = deadline?.kind === "VISIT_SUBMISSION" && deadline.visitId ? `/app/projects/${projectId}/visits?visitId=${deadline.visitId}` : null;
-  const link =
-    overdueMilestones !== null
+  // The link follows the deadline shown: a monitoring report opens its monitoring visit.
+  const link = visitLink
+    ? { to: visitLink, label: "Open monitoring visit" }
+    : overdueMilestones !== null
       ? { to: milestones, label: "Milestones" }
-      : visitLink
-        ? { to: visitLink, label: "Open visit" }
-        : null;
+      : null;
   if (!deadline) {
     return <Card key="deadline" span={span} title="Next deadline" headline="No open deadlines" lines={[overdueLine]} link={link} />;
   }
@@ -258,7 +268,7 @@ function progressCard(project: ProjectSummaryDto, overview: ProjectOverviewDto, 
             <span className="text-xs font-semibold text-slate-500">Reported at import</span>
           </span>
         ) : (
-          <span title="Budget-weighted, from accepted visits" className="text-2xl tabular-nums">
+          <span title="Budget-weighted, from accepted monitoring reports" className="text-2xl tabular-nums">
             {project.certifiedProgressPct.toFixed(1)}%
           </span>
         )
@@ -324,7 +334,8 @@ function spansFor(n: number): string[] {
  * Redesign R6c (D-R6.18 – D-R6.21), UBEC layout: the project overview. The phase action banner and
  * the stage timeline, the closeout report prompt once construction is complete, then five plain
  * cards (current sprint, next visit, next deadline in one row; budget and payments, progress in the
- * next), open default cases, the map and the project KPIs. Data from `GET /projects/:id/overview`;
+ * next), the contractor card (stars, open performance flag), open default cases, the map and the
+ * project KPIs. Data from `GET /projects/:id/overview`;
  * sections the caller may not see come back null and their card is hidden.
  */
 export function ProjectOverviewPage({ project, evidenceLogs }: ProjectOverviewPageProps) {
@@ -347,7 +358,7 @@ export function ProjectOverviewPage({ project, evidenceLogs }: ProjectOverviewPa
 
   return (
     <div className="space-y-3">
-      <PhaseActions projectId={project.id} projectStatus={project.status} />
+      <PhaseActions projectId={project.id} projectStatus={project.status} stage={overview?.stage.current} />
 
       <section className="rounded-2xl border border-slate-200/80 bg-white px-4 py-4 shadow-sm sm:px-5" aria-labelledby="overview-stage-heading">
         <h2 id="overview-stage-heading" className="sr-only">
@@ -374,7 +385,13 @@ export function ProjectOverviewPage({ project, evidenceLogs }: ProjectOverviewPa
 
       <RegisterDetails project={project} />
 
+      {/* Client demo updates E3 (wave 3): the approved list row and the budget-mismatch red flag. */}
+      <ApprovedListLinkCard projectId={project.id} />
+
       {overview && <div className="grid grid-cols-1 gap-3 md:grid-cols-6">{cards.map((render, i) => render(spans[i]))}</div>}
+
+      {/* Client demo updates F.4 (wave 3): the contractor with its stars and any open performance flag. */}
+      <ProjectContractorFlagCard project={project} />
       {!overview && live && !overviewQuery.isError && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3" aria-hidden="true">
           {[0, 1, 2].map((i) => (
@@ -382,6 +399,9 @@ export function ProjectOverviewPage({ project, evidenceLogs }: ProjectOverviewPa
           ))}
         </div>
       )}
+
+      {/* Client demo updates C2 (wave 2): multi-site projects list their sites. */}
+      <ProjectSitesCard projectId={project.id} enabled={live && (project.sites === undefined || project.sites.length > 0)} />
 
       {hasAnyPermission(...DEFAULT_CASE_VIEW_PERMISSIONS) && <OpenDefaultCasesCard projectId={project.id} />}
 

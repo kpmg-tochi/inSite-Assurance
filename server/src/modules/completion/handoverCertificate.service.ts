@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { HANDOVER_DECISION_LABELS } from '@insite/shared';
+import { formatProjectCodeWithYear, HANDOVER_DECISION_LABELS } from '@insite/shared';
 import { WebJwtPayload } from '../../middleware/auth.middleware';
 import { recordAuditEvent } from '../audit/audit.service';
 import { storeGeneratedDocument } from '../documents/documents.service';
@@ -33,7 +33,7 @@ export async function issueHandoverCertificate(tx: Tx, projectId: string, submis
   const reviewedAt = s.reviewedAt ?? new Date();
   const pdf = await generateHandoverCertificatePdf({
     branding: await brandingFor(tx, projectId),
-    project: { code: project.codePrefix, name: project.name, location: [project.lgaLocation, project.stateLocation].filter(Boolean).join(', ') || null },
+    project: { code: formatProjectCodeWithYear(project.codePrefix), name: project.name, location: [project.lgaLocation, project.stateLocation].filter(Boolean).join(', ') || null },
     beneficiaryName: project.beneficiaries[0]?.name ?? null,
     submitterName: s.submitterName,
     submitterRole: s.submitterRole,
@@ -51,7 +51,7 @@ export async function issueHandoverCertificate(tx: Tx, projectId: string, submis
     projectId,
     tenantId: project.tenantId,
     typeCode: 'HANDOVER_CERTIFICATE',
-    title: `Handover certificate ${project.codePrefix}`,
+    title: `Handover certificate ${formatProjectCodeWithYear(project.codePrefix)}`,
     file: { body: pdf, mimeType: 'application/pdf', extension: 'pdf' },
     uploadedByUserId: webUser.userId,
     note: `Generated from the reviewed handover response of ${s.submitterName}`,

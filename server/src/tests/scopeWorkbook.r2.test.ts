@@ -101,7 +101,7 @@ async function oldLayoutWorkbook(): Promise<Buffer> {
 describe('Redesign R2c: workbook generator', () => {
   it('has the sheets, a version stamp, a hidden Lists sheet, dropdowns and the amount formula', async () => {
     const wb = await load(await buildScopeWorkbook(DATA));
-    assert.deepEqual(wb.worksheets.map((w) => w.name), ['Instructions', 'Project', 'Facility units', 'BoQ', 'Sprints', 'Lists']);
+    assert.deepEqual(wb.worksheets.map((w) => w.name), ['Instructions', 'Project', 'Sites', 'Facility units', 'BoQ', 'Sprints', 'Lists']);
     assert.equal(instructionsRow(wb, 'Version').getCell(2).value, SCOPE_WORKBOOK_VERSION);
     const lists = wb.getWorksheet('Lists')!;
     assert.equal(lists.state, 'hidden');
@@ -303,5 +303,91 @@ describe('Redesign R2c: workbook parser', () => {
     assert.equal(parseSheetDate(new Date(Date.UTC(2027, 0, 4))), '2027-01-04');
     assert.equal(parseSheetDate(46391), '2027-01-04', 'Excel serial');
     assert.equal(parseSheetDate('31/02/2027'), null);
+  });
+});
+
+describe('Client demo updates (wave 2): State, lot, sites', () => {
+  const SITES: WorkbookBuildData = {
+    ...DATA,
+    project: { ...DATA.project, region: null, lga: null, state: 'Kano', lotTitle: 'Renovation of Public Schools', interventionYear: 2026, fundingSource: 'Matching Grant' },
+    interventionYears: [2026, 2027],
+    lotTitles: ['Renovation of Public Schools'],
+    sites: [
+      { siteNumber: 1, schoolName: 'Government Primary School, Bichi', schoolLevel: 'PRIMARY', lga: 'Bichi', address: 'Bichi town', latitude: 12.2336, longitude: 8.2412 },
+      { siteNumber: 2, schoolName: 'Dala Junior Secondary School', schoolLevel: 'JSS', lga: 'Dala', address: null, latitude: null, longitude: null },
+    ],
+    units: [
+      { ...DATA.units[0], siteNumber: 1 },
+      { ...DATA.units[1], siteNumber: 2 },
+    ],
+  };
+  const parseIn = (buffer: Buffer, stateCode?: string) => parseScopeWorkbook(buffer, { facilities: FACILITIES, stateCode });
+
+  it('writes the State, LGA and lot rows, a Sites sheet and dependent LGA lists', async () => {
+    const wb = await load(await buildScopeWorkbook(SITES));
+    const lists = wb.getWorksheet('Lists')!;
+    assert.equal(lists.getCell('E2').value, 'Matching Grant', 'funding sources are the fixed list');
+    assert.equal(lists.getCell('I2').value, 2026);
+    const sites = wb.getWorksheet('Sites')!;
+    assert.deepEqual((sites.getRow(HR).values as unknown[]).slice(1), [...SCOPE_WORKBOOK_COLUMNS.sites]);
+    assert.equal(sites.getCell(`C${FR}`).value, 'Primary');
+    const lgaFormula = String(sites.getCell(`D${FR}`).dataValidation?.formulae?.[0]);
+    assert.match(lgaFormula, /INDIRECT\("LGA_"/);
+    const names = wb.definedNames.model.map((n) => n.name);
+    assert.ok(names.includes('LGA_Kano') && names.includes('LGA_Akwa_Ibom'), names.slice(0, 5).join(','));
+    const units = wb.getWorksheet('Facility units')!;
+    assert.equal(units.getCell(`H${HR}`).value, 'Site no.');
+    assert.match(String(units.getCell(`H${FR}`).dataValidation?.formulae?.[0]), /^Sites!\$A\$/);
+  });
+
+  it('round-trips sites, the State and units linked to sites', async () => {
+    const parsed = await parseIn(await buildScopeWorkbook(SITES));
+    assert.deepEqual(parsed.issues, []);
+    assert.equal(parsed.stateCode, 'KN');
+    assert.equal(parsed.project.lotTitle, 'Renovation of Public Schools');
+    assert.deepEqual(
+      parsed.sites.map((s) => [s.siteNumber, s.schoolLevel, s.lgaCode, s.latitude]),
+      [
+        [1, 'PRIMARY', 'KN-BICHI', 12.2336],
+        [2, 'JSS', 'KN-DALA', null],
+      ]
+    );
+    assert.deepEqual(parsed.units.map((u) => u.siteNumber), [1, 2]);
+  });
+
+  it('refuses an unknown LGA, an LGA of another State and a unit naming a missing site', async () => {
+    const buffer = await edited((wb) => {
+      const sites = wb.getWorksheet('Sites')!;
+      sites.getCell(`D${FR}`).value = 'Ikeja';
+      sites.getCell(`D${FR + 1}`).value = 'Atlantis';
+      wb.getWorksheet('Facility units')!.getCell(`H${FR + 1}`).value = 7;
+    }, SITES);
+    const parsed = await parseIn(buffer);
+    assert.deepEqual(codes(parsed.issues).sort(), ['LGA_NOT_IN_STATE', 'UNKNOWN_LGA', 'UNKNOWN_SITE']);
+  });
+
+  it('reads LGAs against the project State when the file names none, and links every unit of a one-site file', async () => {
+    const buffer = await buildScopeWorkbook({ ...SITES, project: { ...SITES.project, state: null }, sites: [SITES.sites![0]], units: DATA.units });
+    const parsed = await parseIn(buffer, 'KN');
+    assert.deepEqual(parsed.issues, []);
+    assert.equal(parsed.stateCode, null);
+    assert.deepEqual(parsed.units.map((u) => u.siteNumber), [1, 1]);
+  });
+
+  it('still reads older files: no Sites sheet, no Site no. column, no State or Lot title rows', async () => {
+    const buffer = await edited((wb) => {
+      wb.removeWorksheet(wb.getWorksheet('Sites')!.id);
+      const units = wb.getWorksheet('Facility units')!;
+      for (let r = HR; r <= HR + 5; r++) units.getCell(`H${r}`).value = null;
+      wb.getWorksheet('Project')!.eachRow((row) => {
+        if (['State', 'Lot title'].includes(String(row.getCell(1).value))) row.getCell(1).value = null;
+      });
+    });
+    const parsed = await parse(buffer);
+    assert.deepEqual(parsed.issues, []);
+    assert.deepEqual(parsed.sites, []);
+    assert.equal(parsed.stateCode, null);
+    assert.deepEqual(parsed.units.map((u) => u.siteNumber), [null, null]);
+    assert.equal(parsed.lines.length, 2);
   });
 });

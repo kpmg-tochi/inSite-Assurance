@@ -5,7 +5,7 @@ import { CalendarClock, CheckCircle2, Circle, Flag } from "lucide-react";
 import { MILESTONE_COMPLETION_MODE_META, WaiveMilestoneRequestSchema, type ContractMilestoneDto } from "@insite/shared";
 import type { ProjectSummaryDto } from "../../api/types";
 import { useAuth } from "../../lib/auth-context";
-import { formatDateTimeShort } from "../../lib/formatters";
+import { formatDateShort, formatDateTimeShort } from "../../lib/formatters";
 import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import { useMilestonesQuery } from "../../queries/contracts/useContractQueries";
 import { useCompleteMilestoneMutation, useWaiveMilestoneMutation } from "../../mutations/contracts/useContractMutations";
@@ -75,16 +75,17 @@ export function MilestonesTab({ project }: { project: ProjectSummaryDto }) {
               value={<span className={data.summary.overdue > 0 ? "text-rose-700" : ""}>{data.summary.overdue}</span>}
               subtitle="Past their due date"
             />
-            <KpiCard title="Due within 7 days" icon={<CalendarClock className="h-4 w-4" />} iconVariant="slate" value={data.summary.dueSoon} subtitle={`Today is ${data.today}`} />
+            <KpiCard title="Due within 7 days" icon={<CalendarClock className="h-4 w-4" />} iconVariant="slate" value={data.summary.dueSoon} subtitle={`Today is ${formatDateShort(data.today)}`} />
             <KpiCard
               title="Anchor dates"
               icon={<CalendarClock className="h-4 w-4" />}
               iconVariant="slate"
-              value={<span className="text-sm tabular-nums">{data.anchors.kickoffDate ?? "Kick-off not set"}</span>}
+              value={<span className="text-sm tabular-nums">{data.anchors.kickoffDate ? formatDateShort(data.anchors.kickoffDate) : "Kick-off not set"}</span>}
               subtitle={
                 <span>
-                  Award {data.anchors.contractAwardDate ?? "–"} · signed {data.anchors.contractSignedDate ?? "–"} · activation{" "}
-                  {data.anchors.activationDate ?? "–"}
+                  Award {data.anchors.contractAwardDate ? formatDateShort(data.anchors.contractAwardDate) : "–"} · signed{" "}
+                  {data.anchors.contractSignedDate ? formatDateShort(data.anchors.contractSignedDate) : "–"} · activation{" "}
+                  {data.anchors.activationDate ? formatDateShort(data.anchors.activationDate) : "–"}
                 </span>
               }
             />
@@ -151,7 +152,7 @@ export function MilestoneRow({ projectId, m, onOpenCase }: { projectId: string; 
             </p>
             <p className="text-[11px] text-slate-500">
               {m.anchorLabel}
-              {m.dueDate ? ` · due ${m.dueDate}` : " · no date yet"}
+              {m.dueDate ? ` · due ${formatDateShort(m.dueDate)}` : " · no date yet"}
               {officerConfirmed
                 ? ` · ${MILESTONE_COMPLETION_MODE_META[m.completionMode].label.toLowerCase()} (confirmed by an officer)`
                 : !manual

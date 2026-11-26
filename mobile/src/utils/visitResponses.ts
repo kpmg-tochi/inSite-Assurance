@@ -74,7 +74,7 @@ export function isValidMoveDate(plannedDate: string, window: MoveWindow | null, 
 export function proposeDateProblem(plannedDate: string, window: MoveWindow | null, date: string, today: string): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return 'Pick a date.';
   if (date < today) return 'Pick today or a later date.';
-  if (date === plannedDate) return 'The visit is already on that date.';
+  if (date === plannedDate) return 'The monitoring visit is already on that date.';
   if (window && date >= window.from && date <= window.to) return 'This date is inside the window you can move to: use Move instead.';
   return null;
 }
@@ -92,7 +92,7 @@ export function responseProblem(
   ctx: { today: string; canSubmit: boolean; workWeekDays?: number[] | null }
 ): string | null {
   if (!allowedResponses(v, { canSubmit: ctx.canSubmit, workWeekDays: ctx.workWeekDays }).includes(input.action)) {
-    return 'This response is not available for this visit now.';
+    return 'This response is not available for this monitoring visit now.';
   }
   const comment = (input.comment ?? '').trim();
   if (commentRequired(input.action) && comment.length < RESPONSE_COMMENT_MIN) return 'Say why (at least 3 characters).';

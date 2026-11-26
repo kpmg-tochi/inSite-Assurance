@@ -482,7 +482,7 @@ export function finaliseSubmissionBody(
   known: { visitFormSnapshotId: string | null; siteLogServerIdByClientId: Map<string, string | null> }
 ): FinalisedSubmission {
   const formSnapshotId = queued.body.formSnapshotId ?? known.visitFormSnapshotId;
-  if (!formSnapshotId) return { ok: false, code: 'VISIT_NOT_CREATED', message: 'The unscheduled visit has not reached the server yet.' };
+  if (!formSnapshotId) return { ok: false, code: 'VISIT_NOT_CREATED', message: 'The Ad hoc monitoring visit has not reached the server yet.' };
   const siteLogEntryIds: string[] = [];
   for (const id of queued.siteLogClientEntryIds) {
     const serverId = known.siteLogServerIdByClientId.get(id);

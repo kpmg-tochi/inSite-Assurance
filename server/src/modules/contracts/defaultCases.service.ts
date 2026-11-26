@@ -7,6 +7,7 @@ import {
   RaiseDefaultCaseRequest,
   resolveProjectTypeConfig,
   zonedCalendarDate,
+  formatCalendarDate,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
@@ -79,7 +80,7 @@ async function serializeCase(c: CaseRow, viewer: WebJwtPayload | null): Promise<
     summary: c.summary,
     outcomeNotes: c.outcomeNotes,
     newDueDate: c.newDueDate,
-    openedByName: opener?.fullName ?? (c.trigger === 'MILESTONE_OVERDUE' ? 'InSite (overdue milestone)' : null),
+    openedByName: opener?.fullName ?? (c.trigger === 'MILESTONE_OVERDUE' ? 'System (overdue milestone)' : null),
     openedAt: c.openedAt.toISOString(),
     decidedAt: c.decidedAt?.toISOString() ?? null,
     isOpen,
@@ -352,7 +353,7 @@ export async function lapseCurePeriods(projectId: string, today: string, now: Da
         targetRoleId: decision.requiredRoleId,
         category: 'CONTRACT_DEFAULT_CASE',
         title: `Cure period ended: ${c.projectContractor.organization.name}`,
-        description: `The cure period ended on ${c.newDueDate} without a cure. The case needs a new decision.`,
+        description: `The cure period ended on ${formatCalendarDate(c.newDueDate)} without a cure. The case needs a new decision.`,
         actionUrl: `/app/projects/${projectId}/kickoff?tab=milestones&case=${c.id}`,
         metadata: { caseId: c.id },
         hideFromProjectContractors: true,

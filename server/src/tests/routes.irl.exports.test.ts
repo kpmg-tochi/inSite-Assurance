@@ -100,7 +100,7 @@ const paymentsUrl = (projectId: string) => `/api/v1/projects/${projectId}/paymen
 const VISIT_HEADERS = [
   'Planned date',
   'Original date',
-  'Visit kind',
+  'Monitoring visit kind',
   'Work phase',
   'Status',
   'Confirmation',
@@ -108,8 +108,8 @@ const VISIT_HEADERS = [
   'Other officers',
   'Checked in at',
   'Check-in location',
-  'Submission due',
-  'Submitted at',
+  'Report due',
+  'Report submitted at',
   'Submitted late',
   'Review',
   'Reviewed at',
@@ -166,9 +166,9 @@ describe('UBEC IRL exports: project visits', () => {
     const d = await download(visitsUrl(ids['PRG-211']));
     assert.equal(d.status, 200);
     const today = zonedCalendarDate(new Date(), zones['PRG-211']);
-    assert.match(d.disposition, new RegExp(`^attachment; filename="PRG-211 visits ${today}\\.xlsx"`));
-    const ws = sheet(d, 'Visits');
-    assert.match(String(ws.getCell(1, 1).value), /Visits · PRG-211/);
+    assert.match(d.disposition, new RegExp(`^attachment; filename="PRG-211 monitoring visits ${today}\\.xlsx"`));
+    const ws = sheet(d, 'Monitoring visits');
+    assert.match(String(ws.getCell(1, 1).value), /Monitoring visits · PRG-211/);
     assert.deepEqual(headersOf(ws), VISIT_HEADERS);
     assert.equal(ws.views[0]?.state, 'frozen');
 
@@ -187,7 +187,7 @@ describe('UBEC IRL exports: project visits', () => {
       assert.ok(r['Reviewed at'] instanceof Date);
       assert.ok(typeof r['Reviewed by'] === 'string' && r['Reviewed by'].length > 0);
       assert.ok(['Satisfactory', 'Minor issues', 'Major issues'].includes(String(r.Outcome)));
-      assert.ok(r['Submitted at'] instanceof Date);
+      assert.ok(r['Report submitted at'] instanceof Date);
     }
     const raised = rows.reduce((s, r) => s + Number(r['Findings raised'] ?? 0), 0);
     assert.equal(raised, await prisma.finding.count({ where: { projectId: ids['PRG-211'], visitId: { not: null } } }));
@@ -198,15 +198,15 @@ describe('UBEC IRL exports: project visits', () => {
   it('applies the screen filters (status list and kind) and refuses an unknown status', async () => {
     const accepted = await download(visitsUrl(ids['PRG-211']), ADMIN, { status: 'APPROVED' });
     const list = await request(app).get(`/api/v1/projects/${ids['PRG-211']}/visits`).query({ status: 'APPROVED' }).set(await web(ADMIN));
-    const rows = rowsOf(sheet(accepted, 'Visits'));
+    const rows = rowsOf(sheet(accepted, 'Monitoring visits'));
     assert.equal(rows.length, list.body.data.visits.length);
     assert.ok(rows.every((r) => r.Status === 'Accepted'));
-    assert.match(String(sheet(accepted, 'Visits').getCell(2, 1).value), /Status: Accepted/);
+    assert.match(String(sheet(accepted, 'Monitoring visits').getCell(2, 1).value), /Status: Accepted/);
 
     const open = await download(visitsUrl(ids['PRG-105']), ADMIN, { status: 'PROPOSED,PLANNED,IN_PROGRESS,SUBMITTED,RETURNED,MISSED', visitKind: 'ROUTINE' });
-    const openRows = rowsOf(sheet(open, 'Visits'));
+    const openRows = rowsOf(sheet(open, 'Monitoring visits'));
     assert.ok(openRows.length > 0, 'PRG-105 has open routine visits');
-    assert.ok(openRows.every((r) => r['Visit kind'] === 'Routine' && r.Status !== 'Accepted' && r.Status !== 'Cancelled'), JSON.stringify(openRows.map((r) => [r['Visit kind'], r.Status])));
+    assert.ok(openRows.every((r) => r['Monitoring visit kind'] === 'Routine' && r.Status !== 'Accepted' && r.Status !== 'Cancelled'), JSON.stringify(openRows.map((r) => [r['Monitoring visit kind'], r.Status])));
 
     const bad = await download(visitsUrl(ids['PRG-211']), ADMIN, { status: 'APPROVED,NOPE' });
     assert.equal(bad.status, 400);
@@ -229,8 +229,8 @@ describe('UBEC IRL exports: planner visits', () => {
   it('matches the planner for the same period and filters, with project columns', async () => {
     const d = await download('/api/v1/visits/export.xlsx', ADMIN, period);
     assert.equal(d.status, 200);
-    assert.match(d.disposition, new RegExp(`^attachment; filename="UBEC visits ${period.from} to ${period.to}\\.xlsx"`));
-    const ws = sheet(d, 'Visits');
+    assert.match(d.disposition, new RegExp(`^attachment; filename="UBEC monitoring visits ${period.from} to ${period.to}\\.xlsx"`));
+    const ws = sheet(d, 'Monitoring visits');
     assert.deepEqual(headersOf(ws), ['Project code', 'Project', ...VISIT_HEADERS]);
     const planner = await request(app).get('/api/v1/visits').query(period).set(await web(ADMIN));
     assert.equal(planner.status, 200, JSON.stringify(planner.body));
@@ -240,23 +240,23 @@ describe('UBEC IRL exports: planner visits', () => {
     assert.ok(rows.every((r) => r.Status !== 'Cancelled'));
 
     const one = await download('/api/v1/visits/export.xlsx', ADMIN, { ...period, projectId: ids['PRG-105'] });
-    const oneRows = rowsOf(sheet(one, 'Visits'));
+    const oneRows = rowsOf(sheet(one, 'Monitoring visits'));
     assert.ok(oneRows.length > 0);
     assert.ok(oneRows.every((r) => r['Project code'] === 'PRG-105'));
-    assert.match(String(sheet(one, 'Visits').getCell(2, 1).value), /Project: PRG-105/);
+    assert.match(String(sheet(one, 'Monitoring visits').getCell(2, 1).value), /Project: PRG-105/);
   });
 
   it('shows an assigned-only officer their projects only; refuses without visits:view', async () => {
     const d = await download('/api/v1/visits/export.xlsx', LAGOS_ME, period);
     assert.equal(d.status, 200);
-    const rows = rowsOf(sheet(d, 'Visits')).filter((r) => r['Project code']);
+    const rows = rowsOf(sheet(d, 'Monitoring visits')).filter((r) => r['Project code']);
     assert.ok(rows.length > 0, 'lagos.me@ has visits on PRG-221');
     assert.ok(rows.every((r) => ['PRG-221', 'PRG-241', 'PRG-242'].includes(String(r['Project code']))), JSON.stringify(rows.map((r) => r['Project code'])));
     // Naming another project in the filter does not widen visibility.
     const widened = await download('/api/v1/visits/export.xlsx', LAGOS_ME, { ...period, projectId: ids['PRG-105'] });
-    const widenedRows = rowsOf(sheet(widened, 'Visits'));
+    const widenedRows = rowsOf(sheet(widened, 'Monitoring visits'));
     assert.equal(widenedRows.length, 1);
-    assert.match(String(widenedRows[0]['Project code']), /^No visits/);
+    assert.match(String(widenedRows[0]['Project code']), /^No monitoring visits/);
 
     const refused = await download('/api/v1/visits/export.xlsx', NO_EXPORTS, period);
     assert.equal(refused.status, 403);
@@ -279,8 +279,8 @@ describe('UBEC IRL exports: findings', () => {
       'Unit',
       'Question',
       'Description',
-      'Raised on visit',
-      'Visit date',
+      'Raised on monitoring visit',
+      'Monitoring visit date',
       'Raised at',
       'Raised by',
       'Follow-up checks',
@@ -302,7 +302,7 @@ describe('UBEC IRL exports: findings', () => {
     assert.ok(row, 'the escalated finding has its escalation time');
     assert.equal(row!.Severity, escalated.severity.charAt(0) + escalated.severity.slice(1).toLowerCase());
     assert.equal(row!['Follow-up checks'], escalated.recheckCount);
-    assert.ok(row!['Visit date'] instanceof Date);
+    assert.ok(row!['Monitoring visit date'] instanceof Date);
   });
 
   it('filters by status; a visits:view holder may export; refuses without permission or visibility', async () => {

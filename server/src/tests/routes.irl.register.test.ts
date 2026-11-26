@@ -224,6 +224,16 @@ describe('UBEC IRL register export', () => {
       const codes = rows.slice(0, -1).map((r) => r[0]); // last row: totals
       assert.deepEqual([...codes].sort(), visible.map((p) => p.codePrefix).sort(), email);
     }
+    // Owner decision 3 (2026-11-26): "Contract sum" is the contract sum only, blank until contracted (as
+    // the register table); "Programme zone" (the State again) is gone.
+    const all = await readSheet((await download('/api/v1/projects/export.xlsx', ADMIN)).body as Buffer, 'Project register');
+    assert.ok(!all.headers.includes('Programme zone'), all.headers.join('|'));
+    const sumCol = all.headers.indexOf('Contract sum');
+    const rowOf = (code: string) => all.rows.find((r) => r[0] === code);
+    assert.equal(Number(rowOf('PRG-102')?.[sumCol]), 232_000_000);
+    assert.ok(rowOf('PRG-105'), 'PRG-105 listed');
+    // An empty cell is a hole in the sparse row array.
+    assert.equal(rowOf('PRG-105')![sumCol] ?? '', '');
     // Filters apply.
     const filtered = await download('/api/v1/projects/export.xlsx?interventionYear=2024&status=ongoing', ADMIN);
     const { rows } = await readSheet(filtered.body as Buffer, 'Project register');
@@ -331,6 +341,9 @@ describe('UBEC IRL bulk project import', () => {
     assert.equal(row.progressIsImported, true);
     assert.equal(row.certifiedProgressPct, 55);
     assert.equal(row.importedStatus, 'ONGOING');
+    // Imported under way: in execution, and no kick-off step is left open with no date.
+    assert.equal(row.stage?.current, 'CONSTRUCTION');
+    assert.ok(ongoing.contractMilestones.filter((m) => m.anchor === 'KICKOFF').every((m) => m.status === 'WAIVED'));
 
     const audit = await prisma.auditLog.count({ where: { action: 'PROJECT_REGISTER_IMPORTED' } });
     assert.equal(audit, 7, 'one per project and one for the file');
