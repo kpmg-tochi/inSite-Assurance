@@ -2,15 +2,21 @@ import type { NeedsSeparationErrorCode, RecusalReason } from '../schemas/needsPi
 
 /**
  * Needs pipeline N1: separation of duties (plan section 7, D-N.9). Pure; the services of waves 3–4
- * call it before a decision is written and answer 409 with the code. Where a SUBEB lacks people, a
- * holder of `needs:override_separation` may proceed with a reason; the service then raises the flag
- * `SEPARATION_OVERRIDE` on the proposal and writes `NEEDS_SEPARATION_OVERRIDDEN` to the ledger.
+ * call it before a decision is written and answer 409 with the code.
+ *
+ * Override (owner decision 2026-11-26: a second person's authorisation). Where a SUBEB lacks people,
+ * the person blocked asks for an override with a reason (an open `SEPARATION_OVERRIDE` flag on the
+ * proposal); **another** person holding `needs:override_separation` authorises it (the flag is
+ * resolved `AUTHORISED`) or refuses it (`REFUSED`); the blocked person then acts. The authorisation
+ * covers one action by one person on one proposal. The service writes `NEEDS_SEPARATION_OVERRIDDEN`
+ * to the ledger; the flag stays on the proposal as the record.
  */
 
 export const NEEDS_OVERRIDE_SEPARATION_PERMISSION_KEY = 'needs:override_separation';
 
 /** The guarded actions. */
-export type NeedsSeparationAction = 'VALIDATE' | 'COST' | 'APPROVE_STEP' | 'CONFIRM_FUNDING';
+export type { NeedsSeparationAction } from '../schemas/needsPipeline.schema';
+import type { NeedsSeparationAction } from '../schemas/needsPipeline.schema';
 
 /** Who has done what so far, as user ids. Lists the action does not need may be left out. */
 export interface NeedsSeparationHistory {
@@ -59,23 +65,50 @@ export function separationViolation(
 export interface SeparationCheck {
   /** The rule broken; null when none. */
   violation: NeedsSeparationErrorCode | null;
-  /** The action may go ahead (no violation, or a valid override). */
+  /** The action may go ahead (no violation, or a valid authorisation). */
   allowed: boolean;
-  /** The action goes ahead on an override: raise the flag and the ledger entry. */
+  /** The action goes ahead on an authorised override: write the ledger entry. */
   overridden: boolean;
 }
 
-/** The rule plus the D-N.9 override: a violation is passed only with the permission and a reason. */
+/** An authorised override, as the service reads it from the resolved `SEPARATION_OVERRIDE` flag. */
+export interface SeparationAuthorisation {
+  action: NeedsSeparationAction;
+  /** Who asked: the person blocked by the rule. */
+  requestedByUserId: string;
+  reason: string;
+  /** Who authorised, with that person's permissions when they did. */
+  authorisedByUserId: string;
+  authoriserPermissionKeys: readonly string[];
+}
+
+/** Why an authorisation does not count; null when it does. */
+export function authorisationProblem(
+  action: NeedsSeparationAction,
+  actorUserId: string,
+  authorisation: SeparationAuthorisation
+): 'WRONG_ACTION' | 'WRONG_PERSON' | 'SELF_AUTHORISED' | 'NOT_AUTHORISER' | 'NO_REASON' | null {
+  if (authorisation.action !== action) return 'WRONG_ACTION';
+  if (authorisation.requestedByUserId !== actorUserId) return 'WRONG_PERSON';
+  if (authorisation.authorisedByUserId === actorUserId) return 'SELF_AUTHORISED';
+  if (!authorisation.authoriserPermissionKeys.includes(NEEDS_OVERRIDE_SEPARATION_PERMISSION_KEY)) return 'NOT_AUTHORISER';
+  if (!authorisation.reason.trim()) return 'NO_REASON';
+  return null;
+}
+
+/**
+ * The rule plus the D-N.9 override: a violation is passed only on an authorisation by another person
+ * holding `needs:override_separation`, given for this action and this actor.
+ */
 export function checkSeparation(
   action: NeedsSeparationAction,
   actorUserId: string,
   history: NeedsSeparationHistory,
-  override: { permissionKeys: readonly string[]; reason: string | null | undefined }
+  authorisation: SeparationAuthorisation | null
 ): SeparationCheck {
   const violation = separationViolation(action, actorUserId, history);
   if (!violation) return { violation: null, allowed: true, overridden: false };
-  const overridden =
-    override.permissionKeys.includes(NEEDS_OVERRIDE_SEPARATION_PERMISSION_KEY) && Boolean(override.reason && override.reason.trim().length > 0);
+  const overridden = authorisation !== null && authorisationProblem(action, actorUserId, authorisation) === null;
   return { violation, allowed: overridden, overridden };
 }
 

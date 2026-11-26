@@ -38,8 +38,8 @@ describe('Needs pipeline scenario: Matching Grants (Kano, 2027 cycle)', () => {
   it('MG-01 kano.dpp@ opens the Kano 2027 MG cycle with the circular', todo(2));
   it('MG-02 kano.procurement@ uploads; a file without BoQ is refused (MG minimum fields)', todo(2));
   it('MG-03 Lagos SUBEB users cannot see the Kano cycle', todo(2));
-  it('MG-04 kano.dpp@ field-verifies; costs (separation override with reason because the same person validated, flag raised)', todo(3));
-  it('MG-05 SUBEB committee scores and finalises', todo(3));
+  it('MG-04 kano.dpp@ field-verifies; asks for a separation override to cost (the same person validated); kano.admin@ (Executive Chairman) authorises it; kano.dpp@ costs; the override stays flagged and is in the ledger', todo(3));
+  it('MG-05 SUBEB committee (kano.admin@ chair, three members with the umbrella role SUBEB_COMMITTEE_MEMBER; kano.dpp@ and kano.procurement@ recused) scores and finalises', todo(3));
   it('MG-06 SUBEB management review and kano.admin@ endorsement', todo(4));
   it('MG-07 BEAP built (lot, batch, procurement method per proposal; counterpart declared) and submitted', todo(4));
   it('MG-08 dpp@ reviews, comments on one proposal and returns; SUBEB revises (new version) and resubmits', todo(4));

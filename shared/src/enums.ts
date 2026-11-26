@@ -360,8 +360,8 @@ export const SYSTEM_PERMISSIONS_CATALOG: SystemPermissionCatalogItem[] = [
   },
   {
     key: 'needs:override_separation',
-    name: 'Override Separation of Duties',
-    description: 'Let one person act on two stages of a proposed project where there is nobody else, with a recorded reason; the override is flagged on the proposed project. Grant sparingly.',
+    name: 'Authorise Separation of Duties Overrides',
+    description: 'Authorise or refuse a request from another person to act on two stages of a proposed project where there is nobody else; never for your own request. The override stays flagged on the proposed project. Grant sparingly.',
     category: 'NEEDS_FUNDING',
     surface: 'WEB',
     unlocksViews: ['Needs assessment'],

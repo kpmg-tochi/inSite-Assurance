@@ -17,7 +17,7 @@ Owns: `server/src/modules/needs/decisions/*`, `server/src/modules/needs/reports/
 
 | # | Item | Verified by | State |
 | :--- | :--- | :--- | :--- |
-| A1 | Submit, return (reason), resubmit, withdraw; stage decisions (batch, per-item outcome, one evidence set) with `allowedProposalActions` and `separationViolation` enforced; override with reason (flag + audit) | | TODO |
+| A1 | Submit, return (reason), resubmit, withdraw; stage decisions (batch, per-item outcome, one evidence set) with `allowedProposalActions` and `separationViolation` enforced; **override = a second person's authorisation** (parent plan 16.2 O-1): the blocked person asks (`SeparationOverrideRequestSchema` → open `SEPARATION_OVERRIDE` flag, audit), another holder of `needs:override_separation` decides (`SeparationOverrideDecisionRequestSchema` → flag `AUTHORISED` / `REFUSED`; the asker cannot decide), then the action passes `checkSeparation` with that authorisation and writes `NEEDS_SEPARATION_OVERRIDDEN`; the authorisers see the request in the task queue | | TODO |
 | A2 | Validation records (desk notes, site verification evidence uploaded on the web, duplicate resolutions, essential-gap justification); gate rules of plan 6.2 | | TODO |
 | A3 | Design submission (DI): new version with the design minimum fields | | TODO |
 | A4 | Costing: costed version (source `COSTING`), flags acknowledged with reasons, costed amount stored | | TODO |
@@ -60,6 +60,14 @@ Owns: `web/src/components/needs/committee/*`, the Prioritisation tab, the propos
 | D2 | Member: proposals to score, rubric with descriptors, save and submit | | TODO |
 | D3 | Ranking table: divergence marks, cumulative cost, the funding line, override with reason, finalise | | TODO |
 | D4 | `WT-N3C-*` owed checks | | TODO |
+
+### Main thread: SUBEB committee roster (parent plan 16.2 O-2)
+
+Seed, so it stays in the main thread; do it before briefing Track B, whose MG-05 test needs it.
+
+| # | Item | Verified by | State |
+| :--- | :--- | :--- | :--- |
+| R1 | `seedUbecRoster.ts`: umbrella role `SUBEB_COMMITTEE_MEMBER` ("SUBEB Steering Committee Member": stands for the SUBEB directorates on the committee, e.g. M&E, Finance, Administration), web, `needs:view` + `needs:score`; three Kano SUBEB logins (`kano.committee1@` … `kano.committee3@ubec.test`); `needs:score` added to the SUBEB Administrator grants (the Chairman scores too). Update `NEEDS_PIPELINE_GRANTS` / `NEEDS_PIPELINE_PEOPLE` and the tests that assert them (`routes.needs.n1.test.ts` "nobody else gained a pipeline permission", "each pipeline role holds exactly its plan section 8 grants") | | TODO |
 
 ### Main thread: conversion core (N7a)
 

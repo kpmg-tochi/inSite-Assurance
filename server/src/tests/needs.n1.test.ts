@@ -22,6 +22,7 @@ import { AuditActionType as DbAuditActionType, PermissionCategory as DbPermissio
 import {
   allowedProposalActions,
   AuditActionTypeEnum,
+  authorisationProblem,
   breakdownRowCost,
   breakdownShortfall,
   breakdownTotals,
@@ -68,6 +69,8 @@ import {
   reopenStageFor,
   returnTarget,
   separationViolation,
+  SeparationOverrideDecisionRequestSchema,
+  SeparationOverrideRequestSchema,
   stagesFor,
   StageDecisionRequestSchema,
   standardRateFor,
@@ -307,20 +310,32 @@ describe('Needs pipeline N1: separation of duties', () => {
     assert.deepEqual(Object.keys(NEEDS_SEPARATION_ERROR_MESSAGES).sort(), [...NeedsSeparationErrorCodeEnum.options].sort());
   });
 
-  it('an override needs the permission and a reason (D-N.9)', () => {
+  it('an override is a second person\'s authorisation, for this action and this person (D-N.9)', () => {
     const sameValidator = { validatorUserIds: ['kano-dpp'] };
-    assert.deepEqual(checkSeparation('COST', 'kano-dpp', sameValidator, { permissionKeys: ['needs:cost'], reason: 'No other officer' }), {
-      violation: 'SAME_PERSON_COSTING',
-      allowed: false,
-      overridden: false,
-    });
-    assert.equal(checkSeparation('COST', 'kano-dpp', sameValidator, { permissionKeys: ['needs:override_separation'], reason: '  ' }).allowed, false);
-    assert.deepEqual(checkSeparation('COST', 'kano-dpp', sameValidator, { permissionKeys: ['needs:override_separation'], reason: 'The SUBEB has one Physical Planning officer' }), {
-      violation: 'SAME_PERSON_COSTING',
-      allowed: true,
-      overridden: true,
-    });
-    assert.deepEqual(checkSeparation('COST', 'qs', sameValidator, { permissionKeys: [], reason: null }), { violation: null, allowed: true, overridden: false });
+    const authorised = {
+      action: 'COST' as const,
+      requestedByUserId: 'kano-dpp',
+      reason: 'The SUBEB has one Physical Planning officer',
+      authorisedByUserId: 'kano-chairman',
+      authoriserPermissionKeys: ['needs:view', 'needs:override_separation'],
+    };
+    assert.deepEqual(checkSeparation('COST', 'kano-dpp', sameValidator, null), { violation: 'SAME_PERSON_COSTING', allowed: false, overridden: false });
+    assert.deepEqual(checkSeparation('COST', 'kano-dpp', sameValidator, authorised), { violation: 'SAME_PERSON_COSTING', allowed: true, overridden: true });
+    // Nobody overrides their own block, even holding the permission.
+    assert.equal(authorisationProblem('COST', 'kano-dpp', { ...authorised, authorisedByUserId: 'kano-dpp', authoriserPermissionKeys: ['needs:override_separation'] }), 'SELF_AUTHORISED');
+    assert.equal(checkSeparation('COST', 'kano-dpp', sameValidator, { ...authorised, authorisedByUserId: 'kano-dpp' }).allowed, false);
+    assert.equal(authorisationProblem('COST', 'kano-dpp', { ...authorised, authoriserPermissionKeys: ['needs:cost'] }), 'NOT_AUTHORISER');
+    assert.equal(authorisationProblem('COST', 'kano-dpp', { ...authorised, action: 'VALIDATE' }), 'WRONG_ACTION');
+    assert.equal(authorisationProblem('COST', 'someone-else', authorised), 'WRONG_PERSON');
+    assert.equal(authorisationProblem('COST', 'kano-dpp', { ...authorised, reason: '  ' }), 'NO_REASON');
+    assert.equal(authorisationProblem('COST', 'kano-dpp', authorised), null);
+    // No rule broken: nothing to authorise.
+    assert.deepEqual(checkSeparation('COST', 'qs', sameValidator, null), { violation: null, allowed: true, overridden: false });
+    // The request and decision schemas.
+    const proposalId = '00000000-0000-4000-8000-000000000001';
+    assert.equal(SeparationOverrideRequestSchema.safeParse({ proposalId, action: 'COST', reason: 'short' }).success, false);
+    assert.equal(SeparationOverrideRequestSchema.safeParse({ proposalId, action: 'COST', reason: 'The SUBEB has one officer' }).success, true);
+    assert.equal(SeparationOverrideDecisionRequestSchema.safeParse({ decision: 'AUTHORISED' }).success, true);
   });
 
   it('recuses a member from proposals they uploaded, validated, costed or declared', () => {

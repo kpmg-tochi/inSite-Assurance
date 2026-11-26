@@ -369,7 +369,7 @@ The catalogue lives in `SYSTEM_PERMISSIONS_CATALOG` (`shared/src/enums.ts`). Cod
 | Needs assessment & funding | `needs:review_beap` | Review BEAPs | Web | – |
 | Needs assessment & funding | `needs:approve_beap` | Approve BEAPs | Web | – |
 | Needs assessment & funding | `needs:approve_out_of_cycle` | Approve Out-of-Cycle Projects | Web | – |
-| Needs assessment & funding | `needs:override_separation` | Override Separation of Duties | Web | – |
+| Needs assessment & funding | `needs:override_separation` | Authorise Separation of Duties Overrides | Web | – |
 | Needs assessment & funding | `standards:manage` | Manage Costing & Design Standards | Web | – |
 | Portfolio & projects | `projects:view_assigned` | View Assigned Projects | Web | MONITOR, LENDER, ORGANIZATION_ADMIN |
 | Portfolio & projects | `projects:view_all_tenant` | View Every Project | Web | MONITOR, LENDER |

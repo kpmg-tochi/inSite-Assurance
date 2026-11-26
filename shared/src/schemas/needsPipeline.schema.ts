@@ -128,11 +128,14 @@ export const PROPOSAL_FLAG_KIND_META: Record<ProposalFlagKind, { label: string; 
   RATE_VARIANCE: { label: 'Rate differs from the costing standard', blocksStage: 'COSTING' },
   CEILING_EXCEEDED: { label: 'Cost ceiling exceeded', blocksStage: 'COSTING' },
   MISSING_SUPERVISION_LINE: { label: 'Supervision and monitoring line missing', blocksStage: 'COSTING' },
-  SEPARATION_OVERRIDE: { label: 'Separation of duties overridden', blocksStage: null },
+  SEPARATION_OVERRIDE: { label: 'Separation of duties override', blocksStage: null },
 };
 
-/** How a flag was closed. Wave 3 settles which resolutions each kind accepts. */
-export const ProposalFlagResolutionEnum = z.enum(['NOT_A_DUPLICATE', 'MERGED', 'NOT_VALIDATED', 'JUSTIFIED', 'ACKNOWLEDGED', 'CORRECTED']);
+/**
+ * How a flag was closed. Wave 3 settles which resolutions each kind accepts. `AUTHORISED` and
+ * `REFUSED` close a `SEPARATION_OVERRIDE` request (a second person's decision, D-N.9).
+ */
+export const ProposalFlagResolutionEnum = z.enum(['NOT_A_DUPLICATE', 'MERGED', 'NOT_VALIDATED', 'JUSTIFIED', 'ACKNOWLEDGED', 'CORRECTED', 'AUTHORISED', 'REFUSED']);
 export type ProposalFlagResolution = z.infer<typeof ProposalFlagResolutionEnum>;
 
 /** D-N.4: the outcome one proposal gets in a batch decision. */
@@ -892,8 +895,6 @@ export const StageDecisionRequestSchema = z
       )
       .min(1, 'Select at least one proposed project')
       .max(500),
-    /** D-N.9: proceed despite a separation-of-duties rule (needs `needs:override_separation`). */
-    separationOverrideReason: z.string().trim().min(10, 'Give the reason for the override').max(1000).nullable().default(null),
   })
   .superRefine((v, ctx) => {
     const seen = new Set<string>();
@@ -1027,6 +1028,32 @@ export const NeedsSubmissionDtoSchema = z.object({
   cannotActReason: z.string().nullable(),
 });
 export type NeedsSubmissionDto = z.infer<typeof NeedsSubmissionDtoSchema>;
+
+// ---------------------------------------------------------------------------
+// Separation of duties override (D-N.9; owner decision 2026-11-26: a second person authorises)
+// ---------------------------------------------------------------------------
+
+/** The guarded actions (`separationViolation`). */
+export const NeedsSeparationActionEnum = z.enum(['VALIDATE', 'COST', 'APPROVE_STEP', 'CONFIRM_FUNDING']);
+export type NeedsSeparationAction = z.infer<typeof NeedsSeparationActionEnum>;
+
+/**
+ * The blocked person asks for an override (an open `SEPARATION_OVERRIDE` flag). Wave 3 settles the
+ * route; the details of the flag hold `{ action, requestedByUserId, reason }`.
+ */
+export const SeparationOverrideRequestSchema = z.object({
+  proposalId: Uuid,
+  action: NeedsSeparationActionEnum,
+  reason: z.string().trim().min(10, 'Give the reason for the override').max(1000),
+});
+export type SeparationOverrideRequest = z.infer<typeof SeparationOverrideRequestSchema>;
+
+/** Another holder of `needs:override_separation` decides it (never the person who asked). */
+export const SeparationOverrideDecisionRequestSchema = z.object({
+  decision: z.enum(['AUTHORISED', 'REFUSED']),
+  note: z.string().trim().max(1000).nullable().default(null),
+});
+export type SeparationOverrideDecisionRequest = z.infer<typeof SeparationOverrideDecisionRequestSchema>;
 
 // ---------------------------------------------------------------------------
 // Error codes reserved by wave 1 (the services of waves 2–4 throw them)
