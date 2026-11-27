@@ -405,7 +405,7 @@ Decisions, deviations and the review are in `needs_pipeline/wave4_approval_fundi
 
 - **Late proposals** re-enter through the out-of-cycle route (no second ranking round).
 - **Activation gate** applies to drafts whose type snapshot runs the pipeline; the seed marks its projects LEGACY. Wave 5's seeded cycles should give the overlay's projects origin NEEDS_PIPELINE with proposals (N9) instead.
-- **Open for the owner:** a BEAP revision above the approved amount is not refused; the SUBEB Administrator holds no `projects:edit_baseline`, so a converted SUBEB draft's setup needs a UBEC administrator (role catalogue).
+- **Resolved after the wave (owner, 2026-11-27):** a BEAP revision above the approved amount is refused; the SUBEB Administrator holds `projects:edit_baseline`, `projects:activate`, `scope:edit`, `contractors:view_register` (`SUBEB_ADMIN_PROJECT_GRANTS`, seed-tailored) to complete and activate its converted drafts.
 - **Demo:** the D1 flow and its demo pack file are gone; wave 5 rewrites the demo script and pack. The wave 2–4 migrations are owed on `insite_assurance`.
 
 ### 16.3 Wave 1 (2026-11-26)

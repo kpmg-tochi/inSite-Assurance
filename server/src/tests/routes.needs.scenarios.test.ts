@@ -569,6 +569,13 @@ describe('Needs pipeline scenario: Matching Grants (Kano, 2027 cycle)', () => {
     assert.equal(kano.body.data.origin, 'NEEDS_PIPELINE');
     const listed = await request(app).get('/api/v1/projects/drafts').set(await web('kano.admin@ubec.test'));
     assert.ok((listed.body.data as Array<{ id: string }>).some((d) => d.id === ids.mgProject), JSON.stringify(listed.body));
+    // Owner decision after wave 4: the SUBEB Administrator completes and activates its converted drafts.
+    const options = await request(app).get(`/api/v1/projects/${ids.mgProject}/setup/team-options`).set(await web('kano.admin@ubec.test'));
+    assert.equal(options.status, 200, JSON.stringify(options.body));
+    const kanoAdmin = await prisma.user.findUniqueOrThrow({ where: { email: 'kano.admin@ubec.test' }, include: { role: { include: { rolePermissions: { include: { permission: true } } } } } });
+    const held = kanoAdmin.role.rolePermissions.map((rp) => rp.permission.key);
+    for (const key of ['projects:edit_baseline', 'projects:activate', 'scope:edit', 'contractors:view_register']) assert.ok(held.includes(key), key);
+    assert.ok(!held.includes('projects:view_all_tenant'), 'still limited to its own SUBEB');
     assert.equal((await request(app).get(`/api/v1/projects/${ids.mgProject}/needs-origin`).set(await web('lagos.admin@ubec.test'))).status, 403, 'outside the Kano tree, as for live projects');
   });
   it('MG-10 activation refused until counterpart evidence is recorded; then allowed', async () => {

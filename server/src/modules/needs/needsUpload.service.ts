@@ -215,9 +215,11 @@ async function analyseFiles(user: WebJwtPayload, ctx: CycleContext, files: FileI
     if (already) issues.push(fileIssue(`This file is already uploaded as ${already.proposal.reference} v${already.number}.`));
 
     const stage: NeedsStage = proposal ? (proposal.stage as NeedsStage) : firstStage(config);
+    let beapRevision = false;
     if (proposal) {
       const permit = uploadPermit(user, cycle, config, proposal, facts, await beapRevisionPermit(prisma, user, cycle, proposal));
       if (!permit.ok) issues.push(fileIssue(permit.reason!));
+      beapRevision = permit.ok && permit.source === 'BEAP_REVISION';
     } else if (!input.proposalId && !holds(user, stageConfigOf(config, stage)?.actorPermissionKey ?? 'needs:submit')) {
       // Wave 3: the route also admits needs:cost (costed versions); new proposed projects stay Procurement's.
       issues.push(fileIssue('Only the submitter of needs assessments can add a new proposed project. Choose the proposed project this file is a new version of.'));
@@ -252,6 +254,20 @@ async function analyseFiles(user: WebJwtPayload, ctx: CycleContext, files: FileI
       } catch (error) {
         console.error('[needs upload] parser failed', error);
         issues.push(fileIssue('The file could not be read as a needs assessment template.'));
+      }
+    }
+    // Owner decision after wave 4 (2026-11-27): a BEAP revision may not cost more than the State approved
+    // for the proposal (the approved amount is what the portfolio decision covered; more needs a new approval).
+    if (beapRevision && parsed && proposal?.approvedAmountNgn !== null && proposal?.approvedAmountNgn !== undefined) {
+      const revised = versionAmounts(parsed).costedTotalNgn;
+      const approved = Number(proposal.approvedAmountNgn);
+      if (revised !== null && revised - approved > 0.005) {
+        issues.push({
+          ...fileIssue(
+            `The revised cost (NGN ${revised.toLocaleString('en-NG')}) is above the amount approved for ${proposal.reference} (NGN ${approved.toLocaleString('en-NG')}). Bring the BoQ within the approved amount, or exclude the proposed project from the BEAP.`,
+            NEEDS_TEMPLATE_SHEETS.COSTING
+          ),
+        });
       }
     }
     if (issues.length) parsed = null;

@@ -256,13 +256,22 @@ export async function tailorUbecRoles(db: Db, tenantId: string): Promise<void> {
   }
   const chairman = await byCode(UBEC_ROLE.SUBEB_ADMIN);
   await db.rolePermission.createMany({
-    data: NEEDS_PIPELINE_GRANTS[UBEC_ROLE.SUBEB_ADMIN].map((k) => {
+    data: [...NEEDS_PIPELINE_GRANTS[UBEC_ROLE.SUBEB_ADMIN], ...SUBEB_ADMIN_PROJECT_GRANTS].map((k) => {
       if (!permIds.has(k)) throw new Error(`UBEC roles: unknown permission ${k}`);
       return { roleId: chairman.id, permissionId: permIds.get(k)! };
     }),
     skipDuplicates: true,
   });
 }
+
+/**
+ * Owner decision after needs pipeline wave 4 (2026-11-27): the SUBEB Administrator completes and
+ * activates its SUBEB's projects converted from the State's approved BEAP (award, contractor from the
+ * register, work phases, team), so it gets the setup permissions the default role lacks. The project
+ * visibility rule keeps them to the SUBEB's own organisation subtree. Seed-tailored until the role
+ * catalogue migration (`next_steps/role_catalogue_migration_plan.md`).
+ */
+export const SUBEB_ADMIN_PROJECT_GRANTS = ["projects:edit_baseline", "projects:activate", "scope:edit", "contractors:view_register"] as const;
 
 /** Name and phone per pipeline login (the demo overlay shows the same people). */
 export const NEEDS_PIPELINE_PEOPLE: Array<{ email: string; fullName: string; roleCode: string; organization: "UBEC" | "KANO_SUBEB"; phoneNumber: string }> = [

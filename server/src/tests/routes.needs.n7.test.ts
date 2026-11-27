@@ -744,6 +744,16 @@ describe('Needs pipeline N7 B4: the BEAP (MG, Kano)', () => {
     const notPreparer = await ok(ctx(), KANO_PROCUREMENT, 'post', `${N}/cycles/${ids.mgCycle2027}/uploads/preview`, { files });
     assert.equal(notPreparer.files[0].status, 'INVALID');
 
+    // Owner decision after wave 4: a revision may not cost more than the State approved.
+    const dearer = structuredClone(FIXTURE_SPECS.find((s) => s.name === 'mg-complete-valid')!);
+    dearer.lines = dearer.lines.map((l) => (l.itemCode === 'BRD-MAG' ? { ...l, rate: Math.round(l.rate * 3) } : l));
+    const dearerFile = await buildFixtureFile(dearer);
+    const above = await ok(ctx(), KANO_DPP, 'post', `${N}/cycles/${ids.mgCycle2027}/uploads/preview`, {
+      files: [{ fileName: 'MG-KN-002 dearer.xlsx', fileBase64: dearerFile.toString('base64'), proposalId: ids.mg2 }],
+    });
+    assert.equal(above.files[0].status, 'INVALID');
+    assert.match(JSON.stringify(above.files[0].issues), /above the amount approved for 2027-MG-KN-002/);
+
     const before = await prisma.needsProposal.findUniqueOrThrow({ where: { id: ids.mg2 } });
     const pre = await ok(ctx(), KANO_DPP, 'post', `${N}/cycles/${ids.mgCycle2027}/uploads/preview`, { files });
     assert.equal(pre.files[0].status, 'VALID', JSON.stringify(pre.files[0].issues));
