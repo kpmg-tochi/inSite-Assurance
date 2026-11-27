@@ -31,7 +31,7 @@ import { compactKpiTargets, KpiTargetsEditor } from "./KpiTargetsEditor";
 import { MonitoringRulesEditor, type MonitoringRules } from "./MonitoringRulesEditor";
 import { MonitoringPlanEditor } from "./MonitoringPlanEditor";
 import { DocumentRulesEditor, type DocumentRules } from "./DocumentRulesEditor";
-import { NeedsPipelineSummary } from "./NeedsPipelineSummary";
+import { NeedsPipelineEditor } from "./NeedsPipelineEditor";
 
 const inputCls =
   "w-full rounded-xl border border-slate-300 px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-brand-primary";
@@ -431,8 +431,8 @@ function ProjectTypeEditor({
 
       <Tabs tabs={tabs} active={tab} onChange={setTab} label="Project type rules" idPrefix={TAB_PREFIX} />
 
-      {/* Needs pipeline (N1): read-only until the cycle settings get an editor; the value stays in `rest`. */}
-      {panel("needs", <NeedsPipelineSummary value={draft.rest.needsPipeline} />)}
+      {/* Needs pipeline wave 2 (C6): the cycle rules are edited here; the value stays in `rest` and is saved with the type. */}
+      {panel("needs", <NeedsPipelineEditor value={draft.rest.needsPipeline} onChange={(needsPipeline) => set({ rest: { ...draft.rest, needsPipeline } })} />)}
 
       {panel(
         "kickoff",

@@ -1069,3 +1069,309 @@ export const NEEDS_SEPARATION_ERROR_MESSAGES: Record<NeedsSeparationErrorCode, s
   SAME_PERSON_APPROVAL: 'You submitted this list or already approved a step of it, so another person must act on this step.',
   SAME_PERSON_FUNDING: 'You approved this portfolio, so another person must confirm the funding.',
 };
+
+// ---------------------------------------------------------------------------
+// Wave 2 (N3): cycles, documents, upload, proposal reads
+// ---------------------------------------------------------------------------
+
+/**
+ * Wave 2 decisions (wave file section 5): a cycle is created OPEN (DRAFT is unused until a wave needs
+ * it); it is seen by users whose organisation is the cycle's owner or above it (the platform's
+ * organisation-tree rule: UBEC HQ sees the SUBEB cycles, a SUBEB sees only its own); writes need the
+ * user's organisation to be the owning organisation itself.
+ */
+
+/** One deadline moved on a cycle, by `NeedsDeadline.key`. */
+export const NeedsDeadlineOverrideSchema = z.object({
+  key: z.string().trim().min(1).max(80),
+  date: IsoDate,
+});
+export type NeedsDeadlineOverride = z.infer<typeof NeedsDeadlineOverrideSchema>;
+
+/** POST /api/v1/needs/cycles. The owner is derived (DI: the type's default owner; MG: the State's SUBEB). */
+export const OpenNeedsCycleRequestSchema = z.object({
+  projectTypeId: Uuid,
+  interventionYear: z.number().int().min(2000).max(2100),
+  /** Required for a STATE-scope type (Matching Grants); must be null for a NATIONAL one. */
+  stateCode: NigeriaStateCodeSchema.nullable().default(null),
+  indicativeCeilingNgn: Money.nullable().default(null),
+  /** Dates that differ from the type's calendar; the rest come from `cycleDeadlines`. */
+  deadlines: z.array(NeedsDeadlineOverrideSchema).max(60).default([]),
+  /** D-N.19: proposals of the previous cycle (status NOT_SELECTED) to carry into this one. */
+  carryForwardProposalIds: z.array(Uuid).max(500).default([]),
+});
+export type OpenNeedsCycleRequest = z.infer<typeof OpenNeedsCycleRequestSchema>;
+export type OpenNeedsCycleRequestInput = z.input<typeof OpenNeedsCycleRequestSchema>;
+
+/** PATCH /api/v1/needs/cycles/:cycleId (open cycles only). Omitted keeps; `indicativeCeilingNgn: null` clears. */
+export const UpdateNeedsCycleRequestSchema = z.object({
+  indicativeCeilingNgn: Money.nullable().optional(),
+  /** Replaces the dates of the named deadlines; keys not in the cycle's calendar are refused (422). */
+  deadlines: z.array(NeedsDeadlineOverrideSchema).max(60).optional(),
+});
+export type UpdateNeedsCycleRequest = z.infer<typeof UpdateNeedsCycleRequestSchema>;
+
+/** POST /api/v1/needs/cycles/:cycleId/close. No upload or decision after it. */
+export const CloseNeedsCycleRequestSchema = z.object({
+  reason: z.string().trim().max(2000).nullable().default(null),
+});
+export type CloseNeedsCycleRequest = z.infer<typeof CloseNeedsCycleRequestSchema>;
+
+/** GET /api/v1/needs/cycles. */
+export const NeedsCycleListQuerySchema = z.object({
+  interventionYear: z.coerce.number().int().min(2000).max(2100).optional(),
+  projectTypeId: Uuid.optional(),
+  stateCode: NigeriaStateCodeSchema.optional(),
+  status: NeedsCycleStatusEnum.optional(),
+});
+export type NeedsCycleListQuery = z.infer<typeof NeedsCycleListQuerySchema>;
+
+/** A programme the user can run a cycle for (GET /api/v1/needs/options). */
+export const NeedsProgrammeOptionSchema = z.object({
+  projectTypeId: Uuid,
+  projectTypeName: z.string(),
+  fundingGate: NeedsFundingGateEnum,
+  referencePrefix: NeedsReferencePrefixEnum,
+  cycleScope: NeedsCycleScopeEnum,
+  /** The calendar of `suggestedInterventionYear` with these rules (open-cycle dialog). */
+  defaultDeadlines: z.array(NeedsDeadlineSchema),
+  /** States the user may open a STATE-scope cycle for (their SUBEB's State); empty for NATIONAL. */
+  openableStateCodes: z.array(z.string()),
+  /** The user may open a cycle of this programme (needs:manage_cycle in the owning organisation). */
+  canOpen: z.boolean(),
+});
+export type NeedsProgrammeOption = z.infer<typeof NeedsProgrammeOptionSchema>;
+
+export const NeedsOptionsDtoSchema = z.object({
+  programmes: z.array(NeedsProgrammeOptionSchema),
+  /** Intervention years of the cycles the user can see, newest first. */
+  years: z.array(z.number().int()),
+  /** The intervention year a cycle opened today would be for (`cycleOpens` in Y − 1). */
+  suggestedInterventionYear: z.number().int(),
+});
+export type NeedsOptionsDto = z.infer<typeof NeedsOptionsDtoSchema>;
+
+/** D-N.19: GET /api/v1/needs/cycles/carry-forward (the cycle about to open). */
+export const NeedsCarryForwardQuerySchema = z.object({
+  projectTypeId: Uuid,
+  interventionYear: z.coerce.number().int().min(2000).max(2100),
+  stateCode: NigeriaStateCodeSchema.optional(),
+});
+export type NeedsCarryForwardQuery = z.infer<typeof NeedsCarryForwardQuerySchema>;
+
+/** A NOT_SELECTED proposal of the previous cycle (same type and scope, year − 1). */
+export const NeedsCarryForwardCandidateDtoSchema = z.object({
+  proposalId: Uuid,
+  reference: z.string(),
+  title: z.string(),
+  cycleId: Uuid,
+  interventionYear: z.number().int(),
+  statusLabel: z.string(),
+  statusReason: z.string().nullable(),
+  siteCount: z.number().int(),
+  lgaCodes: z.array(z.string()),
+  preliminaryCostNgn: z.number().nullable(),
+  costedAmountNgn: z.number().nullable(),
+});
+export type NeedsCarryForwardCandidateDto = z.infer<typeof NeedsCarryForwardCandidateDtoSchema>;
+
+/** Files accepted for cycle, proposal and design-standard documents (presign kind NEEDS_DOCUMENT). */
+export const NEEDS_DOCUMENT_UPLOAD_POLICY: { mimeTypes: readonly string[]; maxBytes: number } = {
+  mimeTypes: [
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/heic',
+    'image/heif',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain',
+  ],
+  maxBytes: 25 * 1024 * 1024,
+};
+
+/** POST …/documents/presign (cycle and design-standard documents). */
+export const NeedsDocumentPresignRequestSchema = z.object({
+  fileName: z.string().trim().min(1).max(160),
+  mimeType: z.string().trim().min(3).max(120),
+  byteSize: z.number().int().positive(),
+});
+export type NeedsDocumentPresignRequest = z.infer<typeof NeedsDocumentPresignRequestSchema>;
+
+export const NeedsPresignedUploadDtoSchema = z.object({
+  objectKey: z.string(),
+  uploadUrl: z.string(),
+  expiresInSeconds: z.number().int(),
+  storageMode: z.enum(['S3_COMPATIBLE', 'LOCAL_DEV_SIMULATED']),
+});
+export type NeedsPresignedUploadDto = z.infer<typeof NeedsPresignedUploadDtoSchema>;
+
+const ObjectKeySchema = z.string().trim().min(1).max(600);
+
+/** POST /api/v1/needs/cycles/:cycleId/documents: registers an uploaded file; size, type and sha256 are read from storage. */
+export const RegisterCycleDocumentRequestSchema = z.object({
+  objectKey: ObjectKeySchema,
+  kind: CycleDocumentKindEnum,
+  title: z.string().trim().min(2).max(200),
+  /** A new version of this document (same cycle and kind). */
+  supersedesId: Uuid.nullable().default(null),
+  /** Proposals of this cycle the document covers (D-N.5). */
+  proposalIds: z.array(Uuid).max(500).default([]),
+});
+export type RegisterCycleDocumentRequest = z.infer<typeof RegisterCycleDocumentRequestSchema>;
+export type RegisterCycleDocumentRequestInput = z.input<typeof RegisterCycleDocumentRequestSchema>;
+
+/** POST /api/v1/needs/proposals/:proposalId/documents (presign through the proposal's cycle). */
+export const RegisterProposalDocumentRequestSchema = z.object({
+  objectKey: ObjectKeySchema,
+  kind: ProposalDocumentKindEnum,
+  title: z.string().trim().min(2).max(200),
+  supersedesId: Uuid.nullable().default(null),
+});
+export type RegisterProposalDocumentRequest = z.infer<typeof RegisterProposalDocumentRequestSchema>;
+export type RegisterProposalDocumentRequestInput = z.input<typeof RegisterProposalDocumentRequestSchema>;
+
+/** A signed link to a stored file (`?format=json` on a file route). */
+export const NeedsFileLinkDtoSchema = z.object({
+  url: z.string(),
+  expiresInSeconds: z.number().int(),
+  fileName: z.string(),
+});
+export type NeedsFileLinkDto = z.infer<typeof NeedsFileLinkDtoSchema>;
+
+/** Upload limits: many files in one request (the API's JSON body limit is 15 MB in all). */
+export const NEEDS_UPLOAD_MAX_FILES = 20;
+export const NEEDS_FILE_MAX_BYTES = 5 * 1024 * 1024;
+/** All files of one request together (base64 adds a third: 10 MB stays inside the 15 MB body limit). */
+export const NEEDS_UPLOAD_MAX_TOTAL_BYTES = 10 * 1024 * 1024;
+
+const decodedBytes = (files: ReadonlyArray<{ fileBase64: string }>) => files.reduce((sum, f) => sum + Math.floor((f.fileBase64.length * 3) / 4), 0);
+const TOTAL_TOO_LARGE = `The files together are larger than ${NEEDS_UPLOAD_MAX_TOTAL_BYTES / (1024 * 1024)} MB: upload them in smaller groups.`;
+
+const NeedsUploadFileSchema = z.object({
+  fileName: z.string().trim().min(1).max(200),
+  /** base64 of the .xlsx (at most NEEDS_FILE_MAX_BYTES once decoded). */
+  fileBase64: z.string().min(1).max(Math.ceil((NEEDS_FILE_MAX_BYTES * 4) / 3) + 8),
+  /** A new version of this proposal of the URL cycle; null = a new proposed project. */
+  proposalId: Uuid.nullable().default(null),
+});
+
+/** POST /api/v1/needs/cycles/:cycleId/uploads/preview: nothing is written. */
+export const NeedsUploadPreviewRequestSchema = z.object({
+  files: z
+    .array(NeedsUploadFileSchema)
+    .min(1)
+    .max(NEEDS_UPLOAD_MAX_FILES)
+    .refine((files) => decodedBytes(files) <= NEEDS_UPLOAD_MAX_TOTAL_BYTES, TOTAL_TOO_LARGE),
+});
+export type NeedsUploadPreviewRequest = z.infer<typeof NeedsUploadPreviewRequestSchema>;
+export type NeedsUploadPreviewRequestInput = z.input<typeof NeedsUploadPreviewRequestSchema>;
+
+/**
+ * POST /api/v1/needs/cycles/:cycleId/uploads/confirm: the same files, each with the preview's sha256.
+ * A sha256 that does not match its file: 409 NEEDS_FILE_CHANGED, nothing written. Otherwise every
+ * valid file is written in its own transaction and invalid ones are listed (REFUSED); 201 when at
+ * least one file was written, else 422 NEEDS_FILE_INVALID with the per-file results in `details`.
+ */
+export const NeedsUploadConfirmRequestSchema = z.object({
+  files: z
+    .array(NeedsUploadFileSchema.extend({ sha256: z.string().regex(/^[0-9a-f]{64}$/, 'Preview the file first') }))
+    .min(1)
+    .max(NEEDS_UPLOAD_MAX_FILES)
+    .refine((files) => decodedBytes(files) <= NEEDS_UPLOAD_MAX_TOTAL_BYTES, TOTAL_TOO_LARGE),
+});
+export type NeedsUploadConfirmRequest = z.infer<typeof NeedsUploadConfirmRequestSchema>;
+export type NeedsUploadConfirmRequestInput = z.input<typeof NeedsUploadConfirmRequestSchema>;
+
+/** What a file says, in brief (preview and result). */
+export const NeedsUploadSummarySchema = z.object({
+  title: z.string().nullable(),
+  stateCode: z.string().nullable(),
+  lgaCodes: z.array(z.string()),
+  siteCount: z.number().int(),
+  breakdownRowCount: z.number().int(),
+  boqLineCount: z.number().int(),
+  /** e.g. "Classroom ×6, Toilet ×2" (proposed quantities). */
+  facilitiesSummary: z.string(),
+  preliminaryCostNgn: z.number().nullable(),
+  costedTotalNgn: z.number().nullable(),
+});
+export type NeedsUploadSummary = z.infer<typeof NeedsUploadSummarySchema>;
+
+/** A flag the version would raise (preview), with a sentence for the user. */
+export const NeedsExpectedFlagSchema = z.object({
+  kind: ProposalFlagKindEnum,
+  message: z.string(),
+});
+export type NeedsExpectedFlag = z.infer<typeof NeedsExpectedFlagSchema>;
+
+export const NeedsUploadFilePreviewSchema = z.object({
+  /** Position in the request (0-based). */
+  index: z.number().int(),
+  fileName: z.string(),
+  sha256: z.string(),
+  status: z.enum(['VALID', 'INVALID']),
+  action: z.enum(['NEW_PROPOSAL', 'NEW_VERSION']),
+  /** NEW_VERSION: the proposal named in the request. */
+  proposalId: Uuid.nullable(),
+  proposalReference: z.string().nullable(),
+  /** `INSITE-NEEDS-v2`, the v1 scope workbook stamp, or null when the file has none. */
+  templateVersion: z.string().nullable(),
+  summary: NeedsUploadSummarySchema.nullable(),
+  /** Blocking (sheet, row, column, reason); the file is refused while any is listed. */
+  issues: z.array(NeedsFileIssueSchema),
+  /** Non-blocking (old template, values filled in). */
+  warnings: z.array(NeedsFileIssueSchema),
+  expectedFlags: z.array(NeedsExpectedFlagSchema),
+});
+export type NeedsUploadFilePreview = z.infer<typeof NeedsUploadFilePreviewSchema>;
+
+export const NeedsUploadPreviewDtoSchema = z.object({
+  cycleId: Uuid,
+  files: z.array(NeedsUploadFilePreviewSchema),
+  validCount: z.number().int(),
+  invalidCount: z.number().int(),
+});
+export type NeedsUploadPreviewDto = z.infer<typeof NeedsUploadPreviewDtoSchema>;
+
+export const NeedsUploadFileResultSchema = NeedsUploadFilePreviewSchema.extend({
+  outcome: z.enum(['CREATED', 'VERSION_ADDED', 'REFUSED']),
+  /** The proposal written (CREATED / VERSION_ADDED). */
+  reference: z.string().nullable(),
+  versionNumber: z.number().int().nullable(),
+  flags: z.array(ProposalFlagDtoSchema),
+});
+export type NeedsUploadFileResult = z.infer<typeof NeedsUploadFileResultSchema>;
+
+export const NeedsUploadResultDtoSchema = z.object({
+  cycleId: Uuid,
+  files: z.array(NeedsUploadFileResultSchema),
+  createdCount: z.number().int(),
+  versionCount: z.number().int(),
+  refusedCount: z.number().int(),
+});
+export type NeedsUploadResultDto = z.infer<typeof NeedsUploadResultDtoSchema>;
+
+/** GET /api/v1/needs/cycles/:cycleId/proposals (filters on the server; the table pages in the browser). */
+export const NeedsProposalListQuerySchema = z.object({
+  stage: NeedsStageEnum.optional(),
+  status: NeedsProposalStatusEnum.optional(),
+  q: z.string().trim().max(120).optional(),
+  waitingForMe: z.enum(['true', 'false']).optional(),
+});
+export type NeedsProposalListQuery = z.infer<typeof NeedsProposalListQuerySchema>;
+
+/** Sheet names used in `NeedsFileIssue.sheet` (template v2). */
+export const NEEDS_TEMPLATE_SHEETS = {
+  FILE: 'File',
+  INSTRUCTIONS: 'Instructions',
+  PROJECT: 'Project',
+  SITES: 'Sites',
+  BREAKDOWN: 'Facilities breakdown',
+  BOQ: 'BoQ',
+  COSTING: 'Costing summary',
+  RATES: 'Rates',
+  LISTS: 'Lists',
+} as const;

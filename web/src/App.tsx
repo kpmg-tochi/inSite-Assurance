@@ -18,6 +18,8 @@ import { OrganizationRatingsPage } from "./pages/organizations/OrganizationRatin
 import { ContractorsPage } from "./pages/contractors/ContractorsPage";
 import { ContractorDetailPage } from "./pages/contractors/ContractorDetailPage";
 import { NeedsAssessmentPage } from "./pages/needsAssessment/NeedsAssessmentPage";
+import { ProposalPage } from "./pages/needsAssessment/ProposalPage";
+import { StandardsPage } from "./pages/standards/StandardsPage";
 import { NewProjectPage } from "./pages/projects/setup/NewProjectPage";
 import { ProjectSetupShell } from "./pages/projects/setup/ProjectSetupShell";
 import { ProjectPaymentsPage } from "./pages/payments/ProjectPaymentsPage";
@@ -223,15 +225,25 @@ function AuthenticatedWorkspace() {
         <Route path="projects/:projectId/settings/:stepId" element={<ProjectSetupShell mode="settings" />} />
         <Route path="projects/:projectId/settings" element={<ProjectSetupRedirect mode="settings" />} />
         <Route path="organizations/:organizationId/ratings" element={<OrganizationRatingsPage />} />
-        {/* Client demo updates E3 (wave 3): approved lists. */}
+        {/* Needs pipeline wave 2: the annual cycle (needs:view) with the E3 approved lists as a tab (approved_lists:view). */}
         <Route
           path="needs-assessment"
           element={
-            <RequirePermission anyOf={["approved_lists:view"]} backTo={projectHome}>
+            <RequirePermission anyOf={["needs:view", "approved_lists:view"]} backTo={projectHome}>
               <NeedsAssessmentPage />
             </RequirePermission>
           }
         />
+        <Route
+          path="needs-assessment/proposals/:proposalId"
+          element={
+            <RequirePermission anyOf={["needs:view"]} backTo={projectHome}>
+              <ProposalPage />
+            </RequirePermission>
+          }
+        />
+        {/* Needs pipeline wave 2 (N2): costing, design and monitoring standards (any web user). */}
+        <Route path="standards" element={<StandardsPage />} />
         {/* Client demo updates F.1 (wave 2): the contractor register. */}
         <Route
           path="contractors"

@@ -305,10 +305,11 @@ describe('Needs pipeline N1: type config', () => {
 });
 
 describe('Needs pipeline N1: tables', () => {
-  it('starts empty: no cycle, proposed project or costing standard is seeded yet', async () => {
+  it('starts empty: no cycle or proposed project is seeded yet; the programme tenant has costing standard v1 (wave 2)', async () => {
     assert.equal(await prisma.needsCycle.count(), 0);
     assert.equal(await prisma.needsProposal.count(), 0);
-    assert.equal(await prisma.costingStandardVersion.count(), 0);
+    const standards = await prisma.costingStandardVersion.findMany();
+    assert.deepEqual(standards.map((v) => [v.tenantId, v.version, v.isLocked]), [[tenantId, 1, false]]);
   });
 
   it('a cycle holds everything under it, keeps its unique rules, and takes it all with it', async () => {
@@ -325,9 +326,9 @@ describe('Needs pipeline N1: tables', () => {
     const config = NeedsPipelineConfigSchema.parse(resolveProjectTypeConfig({ config: type.configJson })!.needsPipeline);
 
     const standard = await prisma.costingStandardVersion.create({
-      data: { tenantId, version: 1, supervisionMonitoringPct: 3, contingencyPct: 5, savedByUserId: dpp.id, savedByName: dpp.name },
+      data: { tenantId, version: 2, supervisionMonitoringPct: 3, contingencyPct: 5, savedByUserId: dpp.id, savedByName: dpp.name },
     });
-    await assert.rejects(prisma.costingStandardVersion.create({ data: { tenantId, version: 1, savedByName: dpp.name } }), 'one row per tenant and version');
+    await assert.rejects(prisma.costingStandardVersion.create({ data: { tenantId, version: 2, savedByName: dpp.name } }), 'one row per tenant and version');
 
     const cycleData = {
       tenantId,

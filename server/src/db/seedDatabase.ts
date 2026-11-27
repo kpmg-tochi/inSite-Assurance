@@ -164,6 +164,9 @@ async function runSeed(): Promise<void> {
   await prisma.needsCycleDocument.deleteMany();
   await prisma.needsCycle.deleteMany();
   await prisma.costingStandardVersion.deleteMany();
+  // Wave 2 (N2): design standard documents (versions point at earlier versions).
+  await prisma.designStandardDocument.updateMany({ data: { supersedesId: null } });
+  await prisma.designStandardDocument.deleteMany();
   await prisma.pushToken.deleteMany();
   // Phase 15 (signatures restrict their evidence documents, so they go before the register).
   await prisma.kpiSnapshot.deleteMany(); // Phase 16

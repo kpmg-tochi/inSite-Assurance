@@ -42,6 +42,9 @@ import { contractorsRoutes } from "./modules/contractors/contractors.routes";
 import { needsAssessmentRoutes } from "./modules/needsAssessment/needsAssessment.routes";
 import { contractorFlagsRoutes, projectContractorFlagsRoutes } from "./modules/contractorFlags/contractorFlags.routes";
 import { approvedListsRoutes, projectApprovedListRoutes } from "./modules/approvedLists/approvedLists.routes";
+import { needsRoutes } from "./modules/needs/needs.routes";
+import { costingStandardsRoutes } from "./modules/standards/costingStandards.routes";
+import { standardsPageRoutes } from "./modules/standards/standardsPage.routes";
 import { geocodeRoutes } from "./modules/geocode/geocode.routes";
 import { requestContextMiddleware } from "./utils/requestContext";
 import { localStorageRoutes } from "./modules/storage/localStorage.routes";
@@ -154,6 +157,9 @@ export function createApp() {
   app.use("/api/v1/contractor-flags", contractorFlagsRoutes); // F.4: flags and decisions
   app.use("/api/v1/projects", projectContractorFlagsRoutes); // F.4: GET /projects/:projectId/contractor-flags
   app.use("/api/v1/approved-lists", approvedListsRoutes); // E3: approved lists
+  app.use("/api/v1/needs", needsRoutes); // Needs pipeline wave 2: cycles, uploads, proposals
+  app.use("/api/v1/costing-standards", costingStandardsRoutes); // Needs pipeline wave 2 (N2)
+  app.use("/api/v1/standards", standardsPageRoutes); // Needs pipeline wave 2 (N2): Standards page
   app.use("/api/v1/projects", projectApprovedListRoutes); // E3: /projects/:projectId/approved-list-row
   app.use("/api/v1/geocode", geocodeRoutes); // D3: "Find address" (Google, server-side key)
 

@@ -119,6 +119,16 @@ Build and server environment, not workspace settings.
 | `EXPO_PUBLIC_DEMO_MODE` | `mobile/.env` (bundle time) | `false` | `true` builds the demo field app: **Demo accounts** quick sign-in on the sign-in screen (Resident Supervisor, M&E Officer, SUBEB M&E Officer, Independent M&E; each tap is a normal password sign-in) and Settings → Demo controls. Metro drops the demo account module from other bundles. | Restart Metro after changing it. Never in a build real users see. |
 | `PUBLIC_API_BASE_URL` | `server/.env` | `http://localhost:<PORT>` | Local-dev storage only (no S3 configured): signed file links use the **origin of the request** being served, so the web on `localhost` gets localhost links and a phone on the LAN address gets LAN links. Links written outside a request (jobs, emails) use this value. | With S3-compatible storage the provider's presigned URLs are used and this does not apply. `X-Forwarded-Host` is read only when Express `trust proxy` is set. |
 
+### 2.5 Standards (needs pipeline wave 2, 2026-11-26)
+
+Workspace data on **Standards** (`/app/standards`, Platform navigation): read by every web user, changed with `standards:manage` (Director, Physical Planning; Quantity Surveyor; System Administrator).
+
+| Setting | Default | Effect | Notes |
+| :--- | :--- | :--- | :--- |
+| **Costing standard** (rates by item code, zone factors, supervision and monitoring %, contingency %, ceilings per facility and action) | None. Seed: version 1 for UBEC = `DEFAULT_COSTING_STANDARD` (16 **specimen** rates, S&M 5 %, contingency 5 %, NE × 1.1, SS × 1.05, five ceilings; `shared/src/data/defaultCostingStandard.ts`) | A cycle uses the latest version when it opens; the needs assessment template carries that version's rates (pre-filled in the BoQ), and uploaded versions are checked against it (rate tolerance and ceilings from the type's `needsPipeline`, supervision and monitoring line). | Edited by Excel round trip ("Download template", "Upload costing standard": preview, then save). A version a cycle or a needs assessment uses is locked: saving then makes the next version. The specimen rates are placeholders, not UBEC's. |
+| **Design standard documents** (standard drawings, specifications, guidelines; optional facilities) | None | Listed on the Standards page beside each programme's essential facility groups. | A new version supersedes the earlier one; both stay listed. |
+| Monitoring standards | – | Read-only view of the form library (visit form templates, facility sub-forms). | Edited in Forms & facilities. |
+
 ---
 
 ## 3. Project type settings
@@ -130,7 +140,7 @@ Set in Settings → Project types, regions & documents → Project types. One ty
 | Editor place | Settings in it | Type config keys | Section below |
 | :--- | :--- | :--- | :--- |
 | General (above the tabs) | Code, name, colour, description, default type, active | – | 3.1 |
-| **Needs assessment** tab | The annual needs assessment cycle: stages and deadlines, scoring rubric, essential facilities, checks, approval chains. **Read-only** until needs pipeline wave 2 | `needsPipeline` | 3.9 |
+| **Needs assessment** tab | The annual needs assessment cycle: stages and deadlines, scoring rubric, essential facilities, checks, approval chains (editable since needs pipeline wave 2; a cycle keeps its own copy) | `needsPipeline` | 3.9 |
 | **Kick-off & mobilisation** tab | Contract milestone templates (incl. mobilisation days), kick-off quorum and notice lead time, required documents, contractor default cases (Legal role) | `contractMilestones`, `kickoff`, `documentRequirements`, `defaultCases` | 3.5, 3.6 |
 | **Monitoring** tab | Visit plan and deadlines, visit form per visit kind, supervisor roles and limits | `monitoring`, `visitForms`, `supervision` (and the legacy `inspections` until R5f removes it) | 3.3, 3.6 |
 | **Completion & closure** tab | CoC signatories and gates, handover due, closure checklists, rating sharing; retention defaults | `closure`, `payments` | 3.7, 3.4 |
@@ -245,14 +255,14 @@ Demo values: Direct Intervention (mobilisation 90%, reports 85%, visits 90%); Ma
 
 ### 3.9 Needs assessment cycle (needs pipeline, type key `needsPipeline`)
 
-Needs assessment tab. **Wave 1 (2026-11-26): the settings exist and are shown read-only; nothing runs on them yet** (the cycle, upload, validation, costing, prioritisation, approval and funding are built in waves 2–4 of `needs_pipeline_implementation_plan.md`). A cycle keeps its own copy of these rules from the day it opens, so a change applies to new cycles. Defaults: `DEFAULT_DI_NEEDS_PIPELINE` and `DEFAULT_MG_NEEDS_PIPELINE` in `shared/src/data/needsPipelineDefaults.ts`, merged into the two UBEC types by the seed.
+Needs assessment tab, editable since needs pipeline wave 2 (2026-11-26). **What runs on these settings after wave 2:** opening a cycle (scope, owner, calendar, rubric and chains are copied into the cycle), the upload checks (minimum fields of the stage, drawings excepted until submission) and the flags on every uploaded version (duplicates, essential facilities, rate tolerance, ceilings, supervision and monitoring line). Validation, costing, prioritisation, approval and funding come in waves 3–4 of `needs_pipeline_implementation_plan.md`. A cycle keeps its own copy of these rules from the day it opens, so a change applies to new cycles. Defaults: `DEFAULT_DI_NEEDS_PIPELINE` and `DEFAULT_MG_NEEDS_PIPELINE` in `shared/src/data/needsPipelineDefaults.ts`, merged into the two UBEC types by the seed.
 
 | Setting | Default (no pipeline) | Direct Intervention | Matching Grants | Effect |
 | :--- | :--- | :--- | :--- | :--- |
 | Enabled | Off | On | On | Off: the type has no needs assessment cycle; nothing else here applies. |
 | Funding gate | Appropriation | Appropriation | BEAP approval | What turns a proposed project into a draft project. |
 | Reference | DI | `<year>-DI-<nnn>` | `<year>-MG-<State>-<nnn>` | The reference of a proposed project. |
-| Cycle scope | National | National (owner UBEC HQ) | One per State (owner the SUBEB) | Who a cycle belongs to; users see the cycles of their organisation and below. |
+| Cycle scope | National | National (owner UBEC HQ) | One per State (owner the SUBEB) | Who a cycle belongs to. Users with `needs:view` see the cycles owned by their organisation or one below it (UBEC HQ sees every State cycle); only users of the owning organisation itself open, change, close or upload to it. |
 | Cycle opens | 1 March | 1 March | 31 July (the circular) | In the year before the intervention year. |
 | Stages (label, who moves it on, deadline) | None | Identification 30 May · Validation 31 July · Needs assessment completion 30 Sept · Costing 14 Oct · Prioritisation 21 Oct · Approval 31 Oct · Budget and appropriation (no fixed date) | Identification 31 Aug · Field verification 30 Sept · Costing 14 Oct · Prioritisation 21 Oct · State approval 30 Oct · BEAP 30 Nov | The stage list a proposed project passes. Required: every stage but "Needs assessment completion" (`DESIGN`). |
 | Other dated events | None | Stakeholder engagement summary 30 June; budget submission 15 Dec | BEAP submitted 15 Nov | Shown in the deadline strip. |

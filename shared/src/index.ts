@@ -76,6 +76,8 @@ export * from './schemas/approvedList.schema';
 // Needs pipeline (wave 1, N1): proposed projects, cycles, costing standards and their pure rules
 export * from './schemas/needsPipeline.schema';
 export * from './schemas/costingStandard.schema';
+export * from './schemas/needsStandards.schema';
+export * from './data/defaultCostingStandard';
 export * from './data/needsPipelineDefaults';
 export * from './utils/needsStages';
 export * from './utils/needsSeparation';

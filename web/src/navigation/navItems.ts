@@ -7,6 +7,7 @@ import {
   Globe2,
   LayoutDashboard,
   Route,
+  Ruler,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
@@ -123,14 +124,14 @@ export const WORKSPACE_NAV: readonly NavItem[] = [
     noneOf: [PORTFOLIO_PERMISSION],
   },
   {
-    // Client demo updates E3 (wave 3): annual approved lists and budget mismatches.
+    // Client demo updates E3 (wave 3): annual approved lists; needs pipeline wave 2: the annual cycle.
     key: "needs-assessment",
     label: "Needs assessment",
     icon: ClipboardList,
     group: "workspace",
     to: () => "/app/needs-assessment",
     segments: ["needs-assessment"],
-    anyOf: ["approved_lists:view"],
+    anyOf: ["needs:view", "approved_lists:view"],
   },
   {
     // Client demo updates F.1 (wave 2): the contractor register.
@@ -141,6 +142,15 @@ export const WORKSPACE_NAV: readonly NavItem[] = [
     to: () => "/app/contractors",
     segments: ["contractors"],
     anyOf: ["contractors:view_register"],
+  },
+  {
+    // Needs pipeline wave 2 (N2): costing, design and monitoring standards. Read by any web user.
+    key: "standards",
+    label: "Standards",
+    icon: Ruler,
+    group: "workspace",
+    to: () => "/app/standards",
+    segments: ["standards"],
   },
   {
     key: "settings",

@@ -1,6 +1,6 @@
 # Needs Pipeline: from identified need to funded project (N0–N9)
 
-Status: **wave 1 (N0 + N1) built 2026-11-26; waves 2–5 not started.** Written 2026-11-26, the day before the Minister of Education demo (2026-11-27). Wave 1 was executed on the owner's instruction that day on the section 3 assumptions (section 16.1 had no answers yet): fold the demo answers into 16.1 before wave 2 starts. Contract names: section 17.
+Status: **wave 1 (N0 + N1) and wave 2 (N2 + N3) built 2026-11-26; waves 3–5 not started.** Written 2026-11-26, the day before the Minister of Education demo (2026-11-27). Wave 1 was executed on the owner's instruction that day on the section 3 assumptions (section 16.1 had no answers yet): fold the demo answers into 16.1 before wave 2 starts. Contract names: section 17.
 
 ## 1. Goal
 
@@ -288,16 +288,16 @@ Gate = typecheck, lint, web build, server unit + route tests, mobile tests, seed
 - [x] Unit tests for every pure util
 
 ### N2: Costing standards and Standards page
-- [ ] `CostingStandard` versions, Excel template/upload (preview → confirm), lock on use; design standard documents; essential groups shown
-- [ ] Monitoring standards read-only render from the form library
-- [ ] Web `/app/standards`, nav entry; route tests
+- [x] `CostingStandard` versions, Excel template/upload (preview → confirm), lock on use; design standard documents; essential groups shown. _Wave 2_
+- [x] Monitoring standards read-only render from the form library. _Wave 2; the page is owed a click-through (WT-N2-01)_
+- [x] Web `/app/standards`, nav entry; route tests. _Web owed WT-N2-01…03_
 
 ### N3: Cycle, template v2, upload, proposal page (Identification)
-- [ ] Cycle open/close, deadlines, circular and cycle documents, carry-forward offer (D-N.19)
-- [ ] Template v2 builder and parser (D-N.6), pre-filled rates; multi-file upload preview/confirm; versions; sites and breakdown tables; duplicate and essential-facility flags
-- [ ] Proposal documents (presign kind `NEEDS_DOCUMENT`, keys under the cycle)
-- [ ] Web: Needs assessment page (Proposed projects tab, upload dialog), proposal page with Intervention & facilities tab
-- [ ] **Full gate**
+- [x] Cycle open/close, deadlines, circular and cycle documents, carry-forward offer (D-N.19). _Wave 2_
+- [x] Template v2 builder and parser (D-N.6), pre-filled rates; multi-file upload preview/confirm; versions; sites and breakdown tables; duplicate and essential-facility flags. _Wave 2; the template in a spreadsheet app owed WT-N2-13_
+- [x] Proposal documents (presign kind `NEEDS_DOCUMENT`, keys under the cycle). _Wave 2_
+- [x] Web: Needs assessment page (Proposed projects tab, upload dialog), proposal page with Intervention & facilities tab. _Owed WT-N2-04…12_
+- [x] **Full gate** _(wave 2, section 15)_
 
 ### N4: Validation, design, costing
 - [ ] Stage decisions (batch, per-item outcomes, return/resubmit), validation records with web evidence, duplicate resolution
@@ -358,7 +358,7 @@ Parallel work (CLAUDE.md step 4): after N1 is built, server (services, routes, t
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | Baseline (pre-demo round record: unit 262, routes 443, mobile 169; rerun 2026-11-26 on the tree with the design round) | ✓ | 0 errors (52 warnings) | ✓ | 262/262 | 454/454 | 169/169 | not rerun |
 | Wave 1 (N0 + N1), 2026-11-26 | ✓ | 0 errors (52 warnings) | ✓ | **310/310** (262 + 47 in `needs.n1.test.ts` + 1 in `visits.r4.test.ts`) | **470/470 pass, 25 todo** of 495 (454 + 16 in `routes.needs.n1.test.ts` + the 25 todo scenario steps) | 169/169 | normal ✓, overlay ✓, normal ✓, overlay ✓ (scratch database `insite_needs_w1`); schema diff against it empty |
-| N3 | | | | | | | |
+| Wave 2 (N2 + N3), 2026-11-27 (run 2, after the review fixes) | ✓ | 0 errors (52 warnings) | ✓ | **329/329** | **514/514 pass, 19 todo** of 533 | 169/169 | normal ✓, overlay ✓ (scratch `insite_needs_w1`); schema diff empty |
 | N5 | | | | | | | |
 | N7 | | | | | | | |
 | N9 | | | | | | | |
@@ -504,3 +504,35 @@ Enum-like columns are strings checked by the shared enums, except `Project.origi
 ### 17.7 Seed
 
 Roles and logins (`server/src/db/seedUbecRoster.ts`: `NEEDS_PIPELINE_ROLES`, `NEEDS_PIPELINE_GRANTS`, `NEEDS_PIPELINE_PEOPLE`, `seedNeedsPipelinePeople`; emails `ES_EMAIL`, `DPP_EMAIL`, `FINANCE_EMAIL`, `PROCUREMENT_EMAIL`, `QS_EMAIL`, `KANO_DPP_EMAIL`, `KANO_PROCUREMENT_EMAIL`). Type rules: `server/src/db/seedNeedsPipeline.ts` (runs after `seedAlerts`, before the overlay; wave 5 adds the demo cycles there). Reset list: the needs tables are deleted first in `runSeed`.
+
+
+### 17.8 Added by wave 2 (2026-11-26)
+
+Decisions: `needs_pipeline/wave2_upload_standards.md` section 5. Names below are binding for waves 3–5 like the rest of section 17.
+
+| Kind | Names |
+| :--- | :--- |
+| Shared, `needsPipeline.schema.ts` (section "Wave 2 (N3)") | `NeedsDeadlineOverrideSchema`, `OpenNeedsCycleRequestSchema`, `UpdateNeedsCycleRequestSchema`, `CloseNeedsCycleRequestSchema`, `NeedsCycleListQuerySchema`, `NeedsProgrammeOptionSchema`, `NeedsOptionsDtoSchema`, `NeedsCarryForwardQuerySchema`, `NeedsCarryForwardCandidateDtoSchema`, `NEEDS_DOCUMENT_UPLOAD_POLICY`, `NeedsDocumentPresignRequestSchema`, `NeedsPresignedUploadDtoSchema`, `RegisterCycleDocumentRequestSchema`, `RegisterProposalDocumentRequestSchema`, `NeedsFileLinkDtoSchema`, `NEEDS_UPLOAD_MAX_FILES` (20), `NEEDS_FILE_MAX_BYTES` (5 MB), `NEEDS_UPLOAD_MAX_TOTAL_BYTES` (10 MB per request), `NeedsUploadPreviewRequestSchema`, `NeedsUploadConfirmRequestSchema`, `NeedsUploadSummarySchema`, `NeedsExpectedFlagSchema`, `NeedsUploadFilePreviewSchema`, `NeedsUploadPreviewDtoSchema`, `NeedsUploadFileResultSchema`, `NeedsUploadResultDtoSchema`, `NeedsProposalListQuerySchema`, `NEEDS_TEMPLATE_SHEETS` |
+| Shared, `needsStandards.schema.ts` (new; `standards.schema.ts` is Phase 7's) | `COSTING_STANDARD_TEMPLATE_VERSION` (`INSITE-COSTING-v1`), `COSTING_STANDARD_FILE_MAX_BYTES`, `CostingStandardVersionSummaryDtoSchema`, `CostingStandardImportPreviewRequestSchema`, `CostingStandardImportConfirmRequestSchema`, `CostingStandardChangesSchema`, `CostingStandardImportPreviewDtoSchema`, `CostingStandardSaveResultDtoSchema`, `DesignStandardDocumentKindEnum` + `DESIGN_STANDARD_DOCUMENT_KIND_LABELS`, `RegisterDesignStandardDocumentRequestSchema`, `DesignStandardDocumentDtoSchema`, `ProgrammeEssentialGroupsSchema`, `StandardsOverviewDtoSchema` |
+| Shared data | `DEFAULT_COSTING_STANDARD` (`data/defaultCostingStandard.ts`; specimen rates, stable item codes) |
+| Audit actions | `NEEDS_DOCUMENT_ADDED`, `DESIGN_STANDARD_DOCUMENT_ADDED` |
+| Prisma | `DesignStandardDocument` (`design_standard_documents`: `tenantId`, `kind`, `title`, `facilityCodes[]`, file columns, `sha256`, `supersedesId?`, `uploadedBy…`); migration `20261229090000_needs_w2_standards` |
+| Server, non-project files | `server/src/utils/tenantUploads.ts`: `tenantAreaPrefix`, `assertTenantAreaObjectKey`, `newTenantAreaObjectKey`, `presignTenantAreaUpload`, `inspectTenantAreaUpload`, `storeTenantAreaBuffer`. Areas `needs/cycles/<cycleId>/needs_document/`, `needs/cycles/<cycleId>/versions/`, `standards/design_document/` |
+| Server, needs (`server/src/modules/needs/`) | `needsFlags.service.ts`: `redactFlagsForViewer`, `expectedFlagsForViewer` (duplicate matches the viewer cannot open are redacted); `needsVersions.ts`: `assertDocumentRegistrable`; `needsAccess.ts`: `visibleCycleWhere`, `loadVisibleCycle`, `assertCycleWritable`, `loadWritableCycle`, `loadVisibleProposal`, `loadCycleProposal`, `beapReviewerCycleBranch` (wave 4 seam, null now); `needsSupport.ts` (`deriveCycleOwnerId`, `cycleConfig`, costing standard readers, `lockCostingStandardVersion`); `needsCycles.service.ts`, `needsUpload.service.ts`, `needsProposals.service.ts`, `needsFlags.service.ts`, `needsVersions.ts`, `needsSerializers.ts`, `needs.routes.ts` (`needsRoutes`); `workbook/needsWorkbook.ts`: `buildNeedsWorkbook`, `parseNeedsWorkbook`, `NeedsWorkbookBuildData`, `NeedsWorkbookParseContext`, `NeedsWorkbookParseResult`, `NeedsWorkbookFacility`, `needsTemplateFileName`, `NEEDS_LEGACY_TEMPLATE_STAGES`, `LEGACY_TEMPLATE_WARNING` |
+| Server, standards (`server/src/modules/standards/`, beside Phase 7's `standards.service.ts`) | `costingStandards.service.ts` (`getLatestCostingStandard`, `lockCostingStandardVersionInTx`, `standardOf`), `costingStandardWorkbook.ts`, `costingStandards.routes.ts` (`costingStandardsRoutes`), `designStandards.service.ts`, `standardsPage.service.ts`, `standardsPage.routes.ts` (`standardsPageRoutes`) |
+| Tests and fixtures | `needsWorkbook.n3.test.ts`, `routes.needs.n2.test.ts`, `routes.needs.n3.test.ts`; `server/src/tests/fixtures/needs/needsFixtures.ts` (`needsFixture`, `needsFixtureBase64`, `needsBatchFixtures`, `NEEDS_FIXTURE_FACTS`, `NEEDS_BATCH_FACTS`; names `di-draft-valid`, `di-design-valid`, `mg-complete-valid`, `mg-no-boq`, `row-errors`, `duplicate-of-di-draft`, `essential-gap`, `rate-variance`, `missing-sm-line`, `v1-scope-workbook`, `batch-1…5`), regenerate with `generateNeedsFixtures.ts` |
+| Web | `/app/standards` (`pages/standards/StandardsPage.tsx`, `components/standards/*`), `/app/needs-assessment` (`pages/needsAssessment/*`: `NeedsAssessmentPage`, `ProposedProjectsTab`, `CycleDocumentsTab`, `ApprovedListsTab`, `ProposalPage`), `components/needs/*`, `api/needsPipeline.ts`, `api/needsStandards.ts`, `queries/needs/*`, `mutations/needs/*`, `components/deliveryModels/NeedsPipelineEditor.tsx` (replaces `NeedsPipelineSummary`) |
+
+Routes (section 17.6 reservations now built): `/api/v1/costing-standards` (`GET /`, `/current`, `/template`, `/:versionId`; `POST /import/preview`, `/import/confirm`, `/`; `PUT /:versionId`), `/api/v1/standards` (`GET /`; `POST /design-documents/presign`, `/design-documents`; `GET /design-documents/:id/file`), `/api/v1/needs` (`GET /options`; `GET|POST /cycles`, `GET /cycles/carry-forward`, `GET|PATCH /cycles/:id`, `POST /cycles/:id/close`, `GET /cycles/:id/template`, `POST /cycles/:id/documents/presign`, `GET|POST /cycles/:id/documents`, `GET /cycles/:id/documents/:docId/file`, `POST /cycles/:id/uploads/preview|confirm`, `GET /cycles/:id/proposals`; `GET /proposals/:id`, `/proposals/:id/template`, `/proposals/:id/versions/:n/file`, `GET|POST /proposals/:id/documents`, `GET /proposals/:id/documents/:docId/file`). Still reserved: `/api/v1/needs/tasks` (wave 3).
+
+Error codes added (section 17.3 codes `NEEDS_FILE_CHANGED`, `NEEDS_FILE_INVALID`, `NEEDS_CYCLE_NOT_OPEN`, `NEEDS_CYCLE_EXISTS`, `COSTING_STANDARD_LOCKED` are now thrown; `NEEDS_MINIMUM_FIELDS_MISSING` is a per-file issue at upload, not an HTTP error yet):
+
+| Code | HTTP | When |
+| :--- | :--- | :--- |
+| `NEEDS_CYCLE_NOT_FOUND`, `NEEDS_PROPOSAL_NOT_FOUND`, `NEEDS_DOCUMENT_NOT_FOUND`, `NEEDS_VERSION_NOT_FOUND` | 404 | Not visible to the user, or not under the URL cycle / proposal |
+| `NEEDS_CYCLE_FORBIDDEN` | 403 | A write from outside the cycle's owning organisation |
+| `NEEDS_PIPELINE_DISABLED`, `NEEDS_CYCLE_STATE_REQUIRED`, `NEEDS_CYCLE_STATE_NOT_ALLOWED`, `NEEDS_DEADLINE_UNKNOWN`, `NEEDS_CYCLE_OWNER_NOT_FOUND`, `NEEDS_CARRY_FORWARD_INVALID`, `NEEDS_DOCUMENT_KIND_MISMATCH` | 422 | Opening or changing a cycle; registering a document version of another kind |
+| `COSTING_STANDARD_NOT_FOUND`, `DESIGN_STANDARD_DOCUMENT_NOT_FOUND` | 404 | Another tenant's or unknown |
+| `NEEDS_DOCUMENT_EXISTS`, `NEEDS_DOCUMENT_SUPERSEDED` | 409 | A file already registered as a document of the cycle; replacing a version that is no longer current (review fix) |
+| `COSTING_STANDARD_FILE_CHANGED`, `DESIGN_STANDARD_DOCUMENT_SUPERSEDED`, `DESIGN_STANDARD_DOCUMENT_EXISTS` | 409 | Confirm with another file; superseding a document twice; registering the same file twice |
+| `COSTING_STANDARD_IMPORT_INVALID`, `UNKNOWN_FACILITY_CODE` | 422 | A costing file with issues (`details.issues`); a facility code not in the catalogue |
