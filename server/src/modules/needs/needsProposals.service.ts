@@ -3,9 +3,6 @@ import {
   NEEDS_DOCUMENT_UPLOAD_POLICY,
   NEEDS_OPEN_PROPOSAL_STATUSES,
   PROPOSAL_DOCUMENT_KIND_LABELS,
-  allowedProposalActions,
-  minimumFieldsFor,
-  nextStage,
   proposalStatusLabel,
   returnTarget,
   stageConfigOf,
@@ -18,27 +15,28 @@ import {
   type NeedsProposalListQuery,
   type NeedsProposalStatus,
   type NeedsProposalSummaryDto,
-  type NeedsProposalTask,
   type NeedsStage,
   type NeedsValidationRecordDto,
   type ProposalFlagKind,
   type RegisterProposalDocumentRequest,
-  type SiteVerification,
-  type StageOutcome,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
 import { AppError } from '../../middleware/error.middleware';
-import { hasWebPermission, type WebJwtPayload } from '../../middleware/auth.middleware';
+import type { WebJwtPayload } from '../../middleware/auth.middleware';
 import { inspectTenantAreaUpload } from '../../utils/tenantUploads';
 import { recordAuditEvent } from '../audit/audit.service';
 import { workspaceShortName } from '../scope/scopeImport.service';
 import { assertCycleWritable, isUuid, loadVisibleCycle, loadVisibleProposal, webActor, type CycleRow } from './needsAccess';
 import { cycleDocumentPrefix, fileLink } from './needsCycles.service';
-import { costingStandardById, cycleConfig, dec, facilitiesSummary, facilityNames, parsedOf, workbookFacilities } from './needsSupport';
+import { costingStandardById, cycleConfig, dec, facilitiesSummary, facilityNames, parsedOf, tenantToday, workbookFacilities } from './needsSupport';
 import { currentFirst, serializeFlag, serializeProposalDocument, serializeVersion } from './needsSerializers';
 import { buildNeedsWorkbook } from './workbook/needsWorkbook';
 import { assertDocumentRegistrable, lockCycle } from './needsVersions';
 import { redactFlagsForViewer } from './needsFlags.service';
+import { drawingCounts } from './decisions/needsGate';
+import { loadRuleFacts, narrowActions, type RuleFacts } from './decisions/proposalRules';
+import { proposalPageTasks, proposalQueueTasks } from './decisions/needsTasks.service';
+import { serializeValidationRecord } from './decisions/needsValidation.service';
 
 /**
  * Needs pipeline wave 2 (B8): proposal lists and detail, proposal documents, templates and stored
@@ -82,10 +80,8 @@ export function nextActorOf(p: { stage: NeedsStage; status: NeedsProposalStatus 
   return who ? `${stage.label}: ${who}` : stage.label;
 }
 
-const lowerFirst = (s: string) => (s.length > 1 && s.split(/\s+/)[0] === s.split(/\s+/)[0].toUpperCase() ? s : s.charAt(0).toLowerCase() + s.slice(1));
-
 const LIST_INCLUDE = {
-  currentVersion: { select: { number: true, siteCount: true } },
+  currentVersion: { select: { number: true, siteCount: true, source: true } },
   breakdownRows: { select: { facilityCode: true, proposedQuantity: true }, orderBy: { sortOrder: 'asc' } },
   flags: { where: { resolvedAt: null }, select: { kind: true } },
   project: { select: { id: true } },
@@ -93,10 +89,28 @@ const LIST_INCLUDE = {
 
 type ListRow = Prisma.NeedsProposalGetPayload<{ include: typeof LIST_INCLUDE }>;
 
-function summaryOf(p: ListRow, config: NeedsPipelineConfig, user: WebJwtPayload, names: Map<string, string>): NeedsProposalSummaryDto & { allowed: NeedsProposalAction[] } {
+/**
+ * A row of the table. Wave 3 (A7): `allowed` is `allowedProposalActions` narrowed by the server's own
+ * rules (owning organisation, open cycle, separation of duties, committee: `narrowActions`), and
+ * "waiting for me" means the proposal has a task in the viewer's queue.
+ */
+function summaryOf(
+  p: ListRow,
+  cycle: CycleRow,
+  config: NeedsPipelineConfig,
+  user: WebJwtPayload,
+  names: Map<string, string>,
+  facts: RuleFacts,
+  today: string
+): NeedsProposalSummaryDto & { allowed: NeedsProposalAction[] } {
   const stage = p.stage as NeedsStage;
   const status = p.status as NeedsProposalStatus;
-  const allowed = allowedProposalActions({ stage, status }, config, user.permissions);
+  const { allowed } = narrowActions(user, cycle, config, p, facts);
+  const queue = proposalQueueTasks(user, cycle, config, { ...p, currentVersionSource: p.currentVersion?.source ?? null }, facts, today);
+  // Independent scoring (D-N.10, Track B decision 8): until the ranking is finalised a committee
+  // member who is not the chair sees no combined score here either.
+  const committee = facts.committees.get(cycle.id);
+  const scoresHidden = !cycle.rankingFinalisedAt && committee?.me?.role === 'MEMBER';
   return {
     id: p.id,
     cycleId: p.cycleId,
@@ -118,12 +132,13 @@ function summaryOf(p: ListRow, config: NeedsPipelineConfig, user: WebJwtPayload,
     approvedAmountNgn: dec(p.approvedAmountNgn),
     fundedAmountNgn: dec(p.fundedAmountNgn),
     currentVersionNumber: p.currentVersion?.number ?? null,
-    scoreTotal: dec(p.scoreTotal),
-    rank: p.rank,
-    aboveLine: p.aboveLine,
+    scoreTotal: scoresHidden ? null : dec(p.scoreTotal),
+    rank: scoresHidden ? null : p.rank,
+    // Before finalisation the column holds the chair's placement, not the line (DTO: null before).
+    aboveLine: cycle.rankingFinalisedAt && !scoresHidden ? p.aboveLine : null,
     openFlagKinds: [...new Set(p.flags.map((f) => f.kind as ProposalFlagKind))],
     nextActor: nextActorOf({ stage, status }, config),
-    waitingForMe: allowed.length > 0,
+    waitingForMe: queue.length > 0,
     projectId: p.project?.id ?? null,
     updatedAt: p.updatedAt.toISOString(),
     allowed,
@@ -158,52 +173,15 @@ export async function listProposals(user: WebJwtPayload, cycleId: string, query:
     include: LIST_INCLUDE,
     orderBy: { sequence: 'asc' },
   });
-  const names = await facilityNames(user.tenantId);
-  let out = rows.map((p) => summaryOf(p, config, user, names));
+  const [names, facts, today] = await Promise.all([
+    facilityNames(user.tenantId),
+    loadRuleFacts(prisma, user, [cycle], rows.map((r) => r.id)),
+    tenantToday(user.tenantId),
+  ]);
+  let out = rows.map((p) => summaryOf(p, cycle, config, user, names, facts, today));
   if (query.waitingForMe === 'true') out = out.filter((p) => p.waitingForMe);
   if (query.waitingForMe === 'false') out = out.filter((p) => !p.waitingForMe);
   return out.map(stripAllowed);
-}
-
-function tasksOf(
-  p: { stage: NeedsStage; status: NeedsProposalStatus },
-  config: NeedsPipelineConfig,
-  user: WebJwtPayload,
-  facts: { flags: Array<{ kind: string; resolvedAt: Date | null }>; drawingCount: number }
-): NeedsProposalTask[] {
-  const tasks: NeedsProposalTask[] = [];
-  const open = NEEDS_OPEN_PROPOSAL_STATUSES.includes(p.status);
-  const flagTask = (kind: ProposalFlagKind, key: string, label: string, permission: string) => {
-    const flags = facts.flags.filter((f) => f.kind === kind);
-    if (!flags.length) return;
-    const todo = flags.some((f) => !f.resolvedAt);
-    tasks.push({ key, label, status: todo ? (open ? 'TODO' : 'NOT_NEEDED') : 'DONE', mine: todo && open && hasWebPermission(user, permission) });
-  };
-  flagTask('DUPLICATE', 'resolve-duplicate', 'Resolve possible duplicate', 'needs:validate');
-  flagTask('ESSENTIAL_FACILITY_GAP', 'justify-essential-gap', 'Justify essential-facility gap', 'needs:validate');
-
-  const drawingsNeeded = minimumFieldsFor(config, p.stage).includes('DRAWINGS');
-  if (drawingsNeeded) {
-    const done = facts.drawingCount > 0;
-    tasks.push({ key: 'upload-drawings', label: 'Upload drawings', status: done ? 'DONE' : open ? 'TODO' : 'NOT_NEEDED', mine: !done && open && hasWebPermission(user, 'needs:submit') });
-  }
-
-  // Submitting is wave 3; the task is shown so the list reads as the process does.
-  const first = config.stages[0]?.stage;
-  const after = first ? nextStage(config, first) : null;
-  if (first && after) {
-    const label = `Submit for ${lowerFirst(stageConfigOf(config, after)?.label ?? after)}`;
-    const submitted = p.stage !== first;
-    const blocked = !submitted && drawingsNeeded && facts.drawingCount === 0;
-    const actor = stageConfigOf(config, first)?.actorPermissionKey ?? 'needs:submit';
-    tasks.push({
-      key: 'submit',
-      label,
-      status: submitted ? 'DONE' : !open ? 'NOT_NEEDED' : blocked ? 'BLOCKED' : 'TODO',
-      mine: !submitted && open && hasWebPermission(user, actor),
-    });
-  }
-  return tasks;
 }
 
 async function proposalHistory(tenantId: string, proposalId: string): Promise<NeedsProposalHistoryEntry[]> {
@@ -226,7 +204,7 @@ export async function getProposalDetail(user: WebJwtPayload, proposalId: string)
     where: { id: base.id },
     include: {
       ...LIST_INCLUDE,
-      currentVersion: { select: { number: true, siteCount: true, parsedJson: true } },
+      currentVersion: { select: { number: true, siteCount: true, source: true, parsedJson: true } },
       versions: { include: { costingStandardVersion: { select: { version: true } } }, orderBy: { number: 'desc' } },
       flags: { orderBy: { raisedAt: 'asc' } },
       documents: true,
@@ -235,27 +213,13 @@ export async function getProposalDetail(user: WebJwtPayload, proposalId: string)
       mergedInto: { select: { id: true, reference: true } },
     },
   });
-  const names = await facilityNames(user.tenantId);
+  const [names, facts, today] = await Promise.all([facilityNames(user.tenantId), loadRuleFacts(prisma, user, [base.cycle], [p.id]), tenantToday(user.tenantId)]);
   const listRow = { ...p, flags: p.flags.filter((f) => !f.resolvedAt).map((f) => ({ kind: f.kind })) } as unknown as ListRow;
-  const summary = summaryOf(listRow, config, user, names);
+  const summary = summaryOf(listRow, base.cycle, config, user, names, facts, today);
   const parsed = parsedOf(p.currentVersion?.parsedJson);
-  const stage = p.stage as NeedsStage;
-  const status = p.status as NeedsProposalStatus;
   const record = p.validationRecords[0];
-  const validation: NeedsValidationRecordDto | null = record
-    ? {
-        id: record.id,
-        proposalId: record.proposalId,
-        versionNumber: record.version.number,
-        outcome: record.outcome as StageOutcome,
-        deskNotes: record.deskNotes,
-        siteVerification: (record.siteVerificationJson as SiteVerification | null) ?? null,
-        duplicateResolutions: Array.isArray(record.duplicateResolutionsJson) ? (record.duplicateResolutionsJson as NeedsValidationRecordDto['duplicateResolutions']) : [],
-        recordedByUserId: record.recordedByUserId,
-        recordedByName: record.recordedByName,
-        recordedAt: record.recordedAt.toISOString(),
-      }
-    : null;
+  const validation: NeedsValidationRecordDto | null = record ? serializeValidationRecord(record) : null;
+  const documents = currentFirst(p.documents);
   return {
     ...stripAllowed(summary),
     outOfCycleReason: (p.outOfCycleReason as NeedsProposalDetailDto['outOfCycleReason']) ?? null,
@@ -268,9 +232,14 @@ export async function getProposalDetail(user: WebJwtPayload, proposalId: string)
     versions: p.versions.map((v) => serializeVersion(v, p.currentVersionId)),
     flags: await redactFlagsForViewer(user, p.flags.map(serializeFlag)),
     validation,
-    documents: currentFirst(p.documents).map(serializeProposalDocument),
+    documents: documents.map(serializeProposalDocument),
     allowedActions: summary.allowed,
-    tasks: tasksOf({ stage, status }, config, user, { flags: p.flags, drawingCount: p.documents.filter((d) => d.kind === 'DRAWING').length }),
+    tasks: proposalPageTasks(user, base.cycle, config, { ...p, currentVersionSource: p.currentVersion?.source ?? null }, facts, {
+      flags: p.flags,
+      drawingCount: drawingCounts(p.documents.map((d) => ({ ...d, proposalId: p.id }))).get(p.id) ?? 0,
+      currentVersionSource: p.currentVersion?.source ?? null,
+      hasRecordOnCurrent: Boolean(record && record.versionId === p.currentVersionId),
+    }),
     carriedFromId: p.carriedFrom?.id ?? null,
     carriedFromReference: p.carriedFrom?.reference ?? null,
     mergedIntoId: p.mergedInto?.id ?? null,

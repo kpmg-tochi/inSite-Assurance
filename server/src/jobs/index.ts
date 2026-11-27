@@ -7,6 +7,7 @@ import { registerVisitJobs } from './visitJobs';
 import { registerAlertJobs } from './alertJobs';
 import { registerContractorRatingsJobs } from './contractorRatingsJobs';
 import { registerContractorFlagsJobs } from './contractorFlagsJobs';
+import { registerNeedsDeadlinesJobs } from './needsDeadlines';
 import { registeredJobs, runJobOnce, startJobRunner } from './runner';
 
 let registered = false;
@@ -23,6 +24,7 @@ export function registerAllJobs(): void {
   registerAlertJobs(); // UBEC IRL early-warning alerts
   registerContractorRatingsJobs(); // Client demo updates F.3
   registerContractorFlagsJobs(); // Client demo updates F.4
+  registerNeedsDeadlinesJobs(); // Needs pipeline wave 3 (A8)
   registered = true;
 }
 

@@ -22,6 +22,7 @@ import {
   type DownloadedFile,
 } from '../../api/needsPipeline';
 import { needsCycleKey, needsCyclesKey, needsKey, needsOptionsKey, needsProposalKey, needsProposalsKey } from '../../queries/needs/useNeedsQueries';
+import { needsTasksRootKey } from '../../queries/needs/useDecisionQueries';
 
 /** Needs pipeline wave 2: cycle, upload and document actions. The hooks own the toasts. */
 
@@ -144,6 +145,8 @@ export const useAddProposalDocumentMutation = () => {
     },
     onSuccess: (doc, p) => {
       qc.invalidateQueries({ queryKey: needsProposalKey(p.proposalId) });
+      // A document can complete a task (drawings, site verification evidence).
+      qc.invalidateQueries({ queryKey: needsTasksRootKey });
       toast.success(`"${doc.title}" added.`);
     },
     onError: (err) => toast.error(errorMessage(err, 'Could not add the document.')),
@@ -168,6 +171,7 @@ export const useConfirmNeedsUploadMutation = (cycleId: string) => {
       qc.invalidateQueries({ queryKey: needsCyclesKey });
       for (const f of result.files) if (f.proposalId) qc.invalidateQueries({ queryKey: needsProposalKey(f.proposalId) });
       qc.invalidateQueries({ queryKey: [...needsKey, 'proposal'] });
+      qc.invalidateQueries({ queryKey: needsTasksRootKey });
       const parts = [
         result.createdCount > 0 ? `${result.createdCount} proposed project${result.createdCount === 1 ? '' : 's'} created` : null,
         result.versionCount > 0 ? `${result.versionCount} new version${result.versionCount === 1 ? '' : 's'}` : null,

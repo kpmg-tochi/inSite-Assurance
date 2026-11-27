@@ -309,6 +309,8 @@ enum AuditActionType {
   PROJECT_CREATED_FROM_PROPOSAL
   NEEDS_DOCUMENT_ADDED
   DESIGN_STANDARD_DOCUMENT_ADDED
+  NEEDS_SEPARATION_OVERRIDE_REQUESTED
+  NEEDS_RANKING_OVERRIDDEN
 }
 
 // Phase 11: which organisation an approval step actor must belong to (ANY = Phase 7 behaviour).
@@ -2877,6 +2879,15 @@ model NeedsCycle {
   rankingFinalisedAt       DateTime?
   rankingFinalisedByUserId String?   @db.Uuid
   rankingFinalisedByName   String?
+  // Wave 3 (N5): the chair opens scoring once every member has declared, and may close it before finalising.
+  scoringOpenedAt          DateTime?
+  scoringOpenedByUserId    String?   @db.Uuid
+  scoringOpenedByName      String?
+  scoringClosedAt          DateTime?
+  scoringClosedByUserId    String?   @db.Uuid
+  scoringClosedByName      String?
+  // Why the chair moved the funding line away from where the ceiling draws it.
+  fundingLineReason        String?   @db.Text
   createdByUserId          String?   @db.Uuid
   openedAt                 DateTime?
   openedByUserId           String?   @db.Uuid

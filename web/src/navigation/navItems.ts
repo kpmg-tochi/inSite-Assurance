@@ -50,7 +50,17 @@ export interface NavItem {
   anyOf?: readonly string[];
   /** Hidden when the user holds any of these (the assigned-projects home is for people without the Portfolio). */
   noneOf?: readonly string[];
+  /** A count shown on the entry (needs pipeline wave 3: the user's task queue). */
+  badge?: NavBadgeKey;
 }
+
+/** Counts the sidebar can show on an entry; `AppShell` fetches each for holders of its permission. */
+export type NavBadgeKey = "needsTasks";
+
+export const NAV_BADGES: Readonly<Record<NavBadgeKey, { permission: string; srLabel: (n: number) => string }>> = {
+  // Needs pipeline wave 3 (C4): proposed projects, score sheets and steps waiting for the user.
+  needsTasks: { permission: "needs:view", srLabel: (n) => `${n} task${n === 1 ? "" : "s"} waiting for you` },
+};
 
 /**
  * UBEC rebrand: the workspace home. `/app/portfolio` for programme admins, `/app/dashboard` (the
@@ -132,6 +142,7 @@ export const WORKSPACE_NAV: readonly NavItem[] = [
     to: () => "/app/needs-assessment",
     segments: ["needs-assessment"],
     anyOf: ["needs:view", "approved_lists:view"],
+    badge: "needsTasks",
   },
   {
     // Client demo updates F.1 (wave 2): the contractor register.

@@ -1363,6 +1363,357 @@ export const NeedsProposalListQuerySchema = z.object({
 });
 export type NeedsProposalListQuery = z.infer<typeof NeedsProposalListQuerySchema>;
 
+// ---------------------------------------------------------------------------
+// Wave 3 (N4 + N5): stage work, flag resolutions, separation overrides, task queue, reports,
+// committee, scoring and ranking. Decisions: `needs_pipeline/wave3_validation_costing_scoring.md`
+// section 5; routes: parent plan section 17.9.
+// ---------------------------------------------------------------------------
+
+const ReasonText = z.string().trim().min(5, 'Give the reason').max(2000);
+
+const uniqueIds = (ids: readonly string[], ctx: z.RefinementCtx, path: (string | number)[]) => {
+  const seen = new Set<string>();
+  ids.forEach((id, i) => {
+    if (seen.has(id)) ctx.addIssue({ code: 'custom', path: [...path, i], message: 'Listed twice' });
+    seen.add(id);
+  });
+};
+
+/**
+ * The submitter's batch actions (D-N.4), `POST /cycles/:cycleId/proposal-actions`:
+ * - SUBMIT: a DRAFT in the first stage, or IN_PROGRESS at Design (DI), moves to the next stage once
+ *   its current version has the minimum fields of the stage it leaves (incl. DRAWINGS);
+ * - RESUBMIT: a RETURNED proposal goes back to IN_PROGRESS in the stage that returned it;
+ * - WITHDRAW (reason required): closed WITHDRAWN.
+ * All or nothing: one item that may not move refuses the request, nothing is written.
+ */
+export const ProposalBatchActionEnum = z.enum(['SUBMIT', 'RESUBMIT', 'WITHDRAW']);
+export type ProposalBatchAction = z.infer<typeof ProposalBatchActionEnum>;
+
+export const ProposalBatchActionRequestSchema = z
+  .object({
+    action: ProposalBatchActionEnum,
+    proposalIds: z.array(Uuid).min(1, 'Select at least one proposed project').max(500),
+    reason: z.string().trim().max(2000).nullable().default(null),
+  })
+  .superRefine((v, ctx) => {
+    uniqueIds(v.proposalIds, ctx, ['proposalIds']);
+    if (v.action === 'WITHDRAW' && (!v.reason || v.reason.length < 5)) ctx.addIssue({ code: 'custom', path: ['reason'], message: 'Give the reason for withdrawing' });
+  });
+export type ProposalBatchActionRequest = z.infer<typeof ProposalBatchActionRequestSchema>;
+export type ProposalBatchActionRequestInput = z.input<typeof ProposalBatchActionRequestSchema>;
+
+/**
+ * The outcomes a stage decision (`StageDecisionRequestSchema`, `POST /cycles/:cycleId/decisions`)
+ * may give in each stage. Identification and Design move by SUBMIT; Prioritisation moves by the
+ * committee's finalisation (only RETURN is a stage decision there); Approval and Funding are wave 4.
+ */
+export const STAGE_DECISION_OUTCOMES: Partial<Record<NeedsStage, readonly StageOutcome[]>> = {
+  VALIDATION: ['ADVANCE', 'RETURN', 'NOT_VALIDATED'],
+  COSTING: ['ADVANCE', 'RETURN'],
+  PRIORITISATION: ['RETURN'],
+};
+
+/** Which resolutions a person may give each flag kind (CORRECTED is the system's, on a new version). */
+export const FLAG_RESOLUTIONS_BY_KIND: Record<ProposalFlagKind, readonly ProposalFlagResolution[]> = {
+  DUPLICATE: ['NOT_A_DUPLICATE', 'MERGED', 'NOT_VALIDATED'],
+  ESSENTIAL_FACILITY_GAP: ['JUSTIFIED'],
+  RATE_VARIANCE: ['ACKNOWLEDGED'],
+  CEILING_EXCEEDED: ['ACKNOWLEDGED'],
+  // D-N.18: only a corrected costed version clears it.
+  MISSING_SUPERVISION_LINE: [],
+  // Decided through the override routes, never through a flag resolution.
+  SEPARATION_OVERRIDE: [],
+};
+
+/** Who resolves a flag kind (the actor of the stage it blocks). */
+export const FLAG_RESOLVER_PERMISSION: Record<ProposalFlagKind, string | null> = {
+  DUPLICATE: 'needs:validate',
+  ESSENTIAL_FACILITY_GAP: 'needs:validate',
+  RATE_VARIANCE: 'needs:cost',
+  CEILING_EXCEEDED: 'needs:cost',
+  MISSING_SUPERVISION_LINE: null,
+  SEPARATION_OVERRIDE: 'needs:override_separation',
+};
+
+export const PROPOSAL_FLAG_RESOLUTION_LABELS: Record<ProposalFlagResolution, string> = {
+  NOT_A_DUPLICATE: 'Not a duplicate',
+  MERGED: 'Merged into another proposed project',
+  NOT_VALIDATED: 'Not validated',
+  JUSTIFIED: 'Justified',
+  ACKNOWLEDGED: 'Acknowledged',
+  CORRECTED: 'Corrected in a later version',
+  AUTHORISED: 'Override authorised',
+  REFUSED: 'Override refused',
+};
+
+/** One flag resolved by a person (validation record or costing acknowledgement). */
+export const FlagResolutionInputSchema = z
+  .object({
+    flagId: Uuid,
+    resolution: ProposalFlagResolutionEnum,
+    reason: ReasonText,
+    /** MERGED: the proposal of the same cycle this one is merged into (it closes MERGED). */
+    mergeIntoProposalId: Uuid.nullable().default(null),
+  })
+  .superRefine((v, ctx) => {
+    if (v.resolution === 'MERGED' && !v.mergeIntoProposalId) ctx.addIssue({ code: 'custom', path: ['mergeIntoProposalId'], message: 'Choose the proposed project it is merged into' });
+    if (v.resolution !== 'MERGED' && v.mergeIntoProposalId) ctx.addIssue({ code: 'custom', path: ['mergeIntoProposalId'], message: 'Only a merge names another proposed project' });
+  });
+export type FlagResolutionInput = z.infer<typeof FlagResolutionInputSchema>;
+export type FlagResolutionInputInput = z.input<typeof FlagResolutionInputSchema>;
+
+/** `POST /proposals/:proposalId/flags/resolve`: e.g. the quantity surveyor acknowledges a rate variance. */
+export const ResolveProposalFlagsRequestSchema = z
+  .object({ resolutions: z.array(FlagResolutionInputSchema).min(1).max(50) })
+  .superRefine((v, ctx) => uniqueIds(v.resolutions.map((r) => r.flagId), ctx, ['resolutions']));
+export type ResolveProposalFlagsRequest = z.infer<typeof ResolveProposalFlagsRequestSchema>;
+export type ResolveProposalFlagsRequestInput = z.input<typeof ResolveProposalFlagsRequestSchema>;
+
+/**
+ * `POST /proposals/:proposalId/validation`: the validator's record on the current version (A2): desk
+ * review, site verification (required for an ADVANCE record when the cycle's `requireSiteVerification`
+ * is on; evidence = SITE_VERIFICATION_EVIDENCE documents of this proposal), and resolutions of the
+ * open DUPLICATE and ESSENTIAL_FACILITY_GAP flags. The outcome is the validator's finding; the stage
+ * decision then moves the proposal (an ADVANCE decision needs an ADVANCE record on the current version).
+ */
+export const RecordValidationRequestSchema = z
+  .object({
+    outcome: z.enum(['ADVANCE', 'RETURN', 'NOT_VALIDATED']),
+    deskNotes: z.string().trim().min(10, 'Write the desk review').max(4000),
+    siteVerification: SiteVerificationSchema.nullable().default(null),
+    flagResolutions: z.array(FlagResolutionInputSchema).max(50).default([]),
+  })
+  .superRefine((v, ctx) => uniqueIds(v.flagResolutions.map((r) => r.flagId), ctx, ['flagResolutions']));
+export type RecordValidationRequest = z.infer<typeof RecordValidationRequestSchema>;
+export type RecordValidationRequestInput = z.input<typeof RecordValidationRequestSchema>;
+
+/** What a stage decision or batch action did, per proposal (all items succeed together). */
+export const NeedsDecisionResultDtoSchema = z.object({
+  /** The stage decision written; null for a batch action. */
+  decisionId: Uuid.nullable(),
+  items: z.array(
+    z.object({
+      proposalId: Uuid,
+      reference: z.string(),
+      outcome: z.string(),
+      stage: NeedsStageEnum,
+      status: NeedsProposalStatusEnum,
+      statusLabel: z.string(),
+    })
+  ),
+  /** Cycle reports produced by the decision (Validated Project List, Cost Estimate Report …). */
+  generatedDocuments: z.array(NeedsCycleDocumentDtoSchema),
+});
+export type NeedsDecisionResultDto = z.infer<typeof NeedsDecisionResultDtoSchema>;
+
+/** One refused item of a batch (`details.items` of the 409/422 error). */
+export const NeedsBatchProblemSchema = z.object({
+  proposalId: Uuid,
+  reference: z.string(),
+  code: z.string(),
+  message: z.string(),
+});
+export type NeedsBatchProblem = z.infer<typeof NeedsBatchProblemSchema>;
+
+/**
+ * Details of a SEPARATION_OVERRIDE flag (D-N.9, 16.2 O-1). The authorisation counts for the asker's
+ * `action` on this proposal while it stays in `stage`; `usedAt` is set when the action went ahead.
+ */
+export const SeparationOverrideDetailsSchema = z.object({
+  action: NeedsSeparationActionEnum,
+  violation: NeedsSeparationErrorCodeEnum,
+  requestedByUserId: Uuid,
+  requestedByName: z.string(),
+  reason: z.string(),
+  stage: NeedsStageEnum,
+  usedAt: z.string().nullable().default(null),
+});
+export type SeparationOverrideDetails = z.infer<typeof SeparationOverrideDetailsSchema>;
+
+/** The generated cycle reports (D-N.5): xlsx and PDF, each regeneration supersedes the last. */
+export const NeedsReportKindEnum = z.enum(['VALIDATED_PROJECT_LIST', 'COST_ESTIMATE_REPORT', 'PRIORITISED_PROJECT_PORTFOLIO']);
+export type NeedsReportKind = z.infer<typeof NeedsReportKindEnum>;
+
+/** `GET /api/v1/needs/tasks` (every visible open cycle, or one with `cycleId`). */
+export const NeedsTaskListQuerySchema = z.object({ cycleId: Uuid.optional() });
+export type NeedsTaskListQuery = z.infer<typeof NeedsTaskListQuerySchema>;
+
+/** `GET /api/v1/needs/tasks/count` (nav badge). */
+export const NeedsTaskCountDtoSchema = z.object({ count: z.number().int() });
+export type NeedsTaskCountDto = z.infer<typeof NeedsTaskCountDtoSchema>;
+
+// Committee (N5) ---------------------------------------------------------------
+
+/**
+ * `PUT /cycles/:cycleId/committee`: the full membership, set by the chair (a holder of
+ * `needs:chair_committee` in the owning organisation, who is the CHAIR row). Members hold
+ * `needs:score` and belong to the owning organisation. Not after the ranking is finalised.
+ */
+export const SetCommitteeRequestSchema = z
+  .object({
+    members: z.array(z.object({ userId: Uuid, role: CommitteeRoleEnum })).min(1).max(30),
+  })
+  .superRefine((v, ctx) => {
+    uniqueIds(v.members.map((m) => m.userId), ctx, ['members']);
+    if (v.members.filter((m) => m.role === 'CHAIR').length !== 1) ctx.addIssue({ code: 'custom', path: ['members'], message: 'The committee has exactly one chair' });
+  });
+export type SetCommitteeRequest = z.infer<typeof SetCommitteeRequestSchema>;
+
+/** `POST /cycles/:cycleId/committee/scoring`: the chair opens scoring (every member declared) or closes it. */
+export const CommitteeScoringRequestSchema = z.object({ action: z.enum(['OPEN', 'CLOSE']) });
+export type CommitteeScoringRequest = z.infer<typeof CommitteeScoringRequestSchema>;
+
+export const NeedsCommitteeCandidateSchema = z.object({
+  userId: Uuid,
+  fullName: z.string(),
+  roleName: z.string(),
+  canScore: z.boolean(),
+  canChair: z.boolean(),
+});
+export type NeedsCommitteeCandidate = z.infer<typeof NeedsCommitteeCandidateSchema>;
+
+/** `GET /cycles/:cycleId/committee`. */
+export const NeedsCommitteeDtoSchema = z.object({
+  cycleId: Uuid,
+  members: z.array(CommitteeMemberDtoSchema),
+  /** People of the owning organisation who may be appointed (for the chair). */
+  candidates: z.array(NeedsCommitteeCandidateSchema),
+  quorum: z.number().int(),
+  divergenceThreshold: z.number(),
+  /** Proposals waiting at Prioritisation (in progress). */
+  proposalCount: z.number().int(),
+  scoringOpenedAt: z.string().nullable(),
+  scoringOpenedByName: z.string().nullable(),
+  scoringClosedAt: z.string().nullable(),
+  rankingFinalisedAt: z.string().nullable(),
+  rankingFinalisedByName: z.string().nullable(),
+  /** The viewer's own membership. */
+  me: z.object({ memberId: Uuid, role: CommitteeRoleEnum, declared: z.boolean() }).nullable(),
+  /** The viewer may change the membership, open or close scoring and finalise. */
+  canManage: z.boolean(),
+});
+export type NeedsCommitteeDto = z.infer<typeof NeedsCommitteeDtoSchema>;
+
+export const ProposalScoreSchema = z.object({ impact: z.number(), ease: z.number(), total: z.number() });
+
+export const DivergentCriterionSchema = z.object({
+  criterionKey: z.string(),
+  label: z.string(),
+  min: z.number(),
+  max: z.number(),
+  spread: z.number(),
+});
+export type DivergentCriterionDto = z.infer<typeof DivergentCriterionSchema>;
+
+/** `GET /cycles/:cycleId/score-sheets/mine`: what the member scores and their own sheets. */
+export const NeedsMyScoringDtoSchema = z.object({
+  cycleId: Uuid,
+  canScore: z.boolean(),
+  /** Why not ("Declare your conflicts of interest first", "Scoring is not open") when `canScore` is false. */
+  cannotScoreReason: z.string().nullable(),
+  items: z.array(
+    z.object({
+      proposalId: Uuid,
+      reference: z.string(),
+      title: z.string(),
+      costedAmountNgn: z.number().nullable(),
+      recusal: RecusalReasonEnum.nullable(),
+      sheet: ScoreSheetDtoSchema.nullable(),
+    })
+  ),
+});
+export type NeedsMyScoringDto = z.infer<typeof NeedsMyScoringDtoSchema>;
+
+/**
+ * `GET /proposals/:proposalId/scores`. Scoring is independent (D-N.10): until the ranking is
+ * finalised a member sees only their own sheet and the chair sees all (`sheetsHidden` says so).
+ */
+export const NeedsProposalScoresDtoSchema = z.object({
+  proposalId: Uuid,
+  score: ProposalScoreSchema.nullable(),
+  rank: z.number().int().nullable(),
+  aboveLine: z.boolean().nullable(),
+  lineOverrideReason: z.string().nullable(),
+  sheets: z.array(ScoreSheetDtoSchema),
+  sheetsHidden: z.boolean(),
+  sheetCount: z.number().int(),
+  /** Members who score it (not recused). */
+  eligibleCount: z.number().int(),
+  divergent: z.array(DivergentCriterionSchema),
+  recusals: z.array(z.object({ memberName: z.string(), reason: RecusalReasonEnum })),
+});
+export type NeedsProposalScoresDto = z.infer<typeof NeedsProposalScoresDtoSchema>;
+
+export const RankingPlacementEnum = z.enum(['ABOVE', 'BELOW']);
+export type RankingPlacement = z.infer<typeof RankingPlacementEnum>;
+
+/** `POST /cycles/:cycleId/ranking/placements`: the chair puts a proposal above or below the line (null clears). */
+export const RankingPlacementRequestSchema = z
+  .object({ proposalId: Uuid, placement: RankingPlacementEnum.nullable(), reason: z.string().trim().max(2000).nullable().default(null) })
+  .superRefine((v, ctx) => {
+    if (v.placement && (!v.reason || v.reason.length < 5)) ctx.addIssue({ code: 'custom', path: ['reason'], message: 'Give the reason for the override' });
+  });
+export type RankingPlacementRequest = z.infer<typeof RankingPlacementRequestSchema>;
+
+/** `PUT /cycles/:cycleId/ranking/line`: how many ranked proposals are above the line (null = at the ceiling). */
+export const SetFundingLineRequestSchema = z
+  .object({ linePosition: z.number().int().min(0).max(500).nullable(), reason: z.string().trim().max(2000).nullable().default(null) })
+  .superRefine((v, ctx) => {
+    if (v.linePosition !== null && (!v.reason || v.reason.length < 5)) ctx.addIssue({ code: 'custom', path: ['reason'], message: 'Give the reason for moving the line' });
+  });
+export type SetFundingLineRequest = z.infer<typeof SetFundingLineRequestSchema>;
+
+/** `POST /cycles/:cycleId/ranking/finalise`. Minutes: a COMMITTEE_MINUTES cycle document (optional, also addable later). */
+export const FinaliseRankingRequestSchema = z.object({
+  minutesDocumentId: Uuid.nullable().default(null),
+  note: z.string().trim().max(2000).nullable().default(null),
+});
+export type FinaliseRankingRequest = z.infer<typeof FinaliseRankingRequestSchema>;
+
+export const NeedsRankingRowSchema = z.object({
+  proposalId: Uuid,
+  reference: z.string(),
+  title: z.string(),
+  stateCode: z.string().nullable(),
+  lgaCodes: z.array(z.string()),
+  costNgn: z.number().nullable(),
+  score: ProposalScoreSchema.nullable(),
+  sheetCount: z.number().int(),
+  eligibleCount: z.number().int(),
+  divergent: z.array(DivergentCriterionSchema),
+  rank: z.number().int().nullable(),
+  cumulativeNgn: z.number().nullable(),
+  /** Above the line the ceiling (or the chair's line position) draws. */
+  computedAboveLine: z.boolean(),
+  /** After the chair's placement, if any. */
+  aboveLine: z.boolean(),
+  placement: RankingPlacementEnum.nullable(),
+  placementReason: z.string().nullable(),
+});
+export type NeedsRankingRow = z.infer<typeof NeedsRankingRowSchema>;
+
+/** `GET /cycles/:cycleId/ranking` (live until finalised, then the stored ranks). */
+export const NeedsRankingDtoSchema = z.object({
+  cycleId: Uuid,
+  finalised: z.boolean(),
+  finalisedAt: z.string().nullable(),
+  finalisedByName: z.string().nullable(),
+  ceilingNgn: z.number().nullable(),
+  /** Where the ceiling draws the line. */
+  computedLinePosition: z.number().int(),
+  /** The line in force (the chair's, else the computed one). */
+  linePosition: z.number().int(),
+  lineReason: z.string().nullable(),
+  totalAboveNgn: z.number(),
+  quorum: z.number().int(),
+  rows: z.array(NeedsRankingRowSchema),
+  canManage: z.boolean(),
+  canFinalise: z.boolean(),
+  cannotFinaliseReason: z.string().nullable(),
+});
+export type NeedsRankingDto = z.infer<typeof NeedsRankingDtoSchema>;
+
 /** Sheet names used in `NeedsFileIssue.sheet` (template v2). */
 export const NEEDS_TEMPLATE_SHEETS = {
   FILE: 'File',

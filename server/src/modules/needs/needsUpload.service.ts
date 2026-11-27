@@ -1,11 +1,11 @@
 import crypto from 'crypto';
 import {
   NEEDS_FILE_MAX_BYTES,
+  NEEDS_SEPARATION_ERROR_MESSAGES,
   NEEDS_STAGE_LABELS,
   NEEDS_TEMPLATE_SHEETS,
   NEEDS_TEMPLATE_VERSION,
   XLSX_CONTENT_TYPE,
-  allowedProposalActions,
   minimumFieldsFor,
   proposalStatusLabel,
   stageConfigOf,
@@ -20,6 +20,7 @@ import {
   type NeedsUploadPreviewRequest,
   type NeedsUploadResultDto,
   type NeedsUploadSummary,
+  type NeedsVersionSource,
   type ParsedNeedsAssessment,
 } from '@insite/shared';
 import { prisma } from '../../config/prisma';
@@ -42,6 +43,46 @@ import {
 } from './needsSupport';
 import { firstStage, lockCycle, nextProposalReference, writeVersionInTx } from './needsVersions';
 import { parseNeedsWorkbook, type NeedsWorkbookFacility } from './workbook/needsWorkbook';
+import { recordOverrideUseInTx } from './decisions/needsOverrides.service';
+import { holds, loadRuleFacts, narrowActions, separationFor, type OverrideFlagFact, type RuleFacts } from './decisions/proposalRules';
+
+/**
+ * Wave 3 (A3, A4): who may add a version to a proposal now, and as what.
+ * - A costed version (source COSTING): a proposal at Costing IN_PROGRESS, or RETURNED at
+ *   Prioritisation; the action UPLOAD_COSTED_VERSION (needs:cost) and separation COST (a validator may
+ *   not cost it unless another person authorised an override; the use is written to the ledger).
+ * - Otherwise UPLOAD_VERSION: source CORRECTION when RETURNED, else UPLOAD.
+ * Both narrowed by the owning organisation and an open cycle (`narrowActions`).
+ */
+interface UploadPermit {
+  ok: boolean;
+  source: NeedsVersionSource;
+  reason: string | null;
+  /** The authorisation the costed upload goes ahead on. */
+  overrideFlag: OverrideFlagFact | null;
+}
+
+function uploadPermit(user: WebJwtPayload, cycle: CycleRow, config: NeedsPipelineConfig, proposal: ProposalRow, facts: RuleFacts): UploadPermit {
+  const stage = proposal.stage as NeedsStage;
+  const status = proposal.status as NeedsProposalStatus;
+  const costed = (stage === 'COSTING' && status === 'IN_PROGRESS') || (stage === 'PRIORITISATION' && status === 'RETURNED');
+  const needed = costed ? 'UPLOAD_COSTED_VERSION' : 'UPLOAD_VERSION';
+  const source: NeedsVersionSource = costed ? 'COSTING' : status === 'RETURNED' ? 'CORRECTION' : 'UPLOAD';
+  const { allowed, blocked } = narrowActions(user, cycle, config, proposal, facts);
+  if (allowed.includes(needed)) {
+    return { ok: true, source, reason: null, overrideFlag: costed ? separationFor(facts, proposal, 'COST', user.userId).flag : null };
+  }
+  const sep = blocked.find((b) => b.action === needed);
+  if (sep) {
+    return { ok: false, source, reason: `${proposal.reference}: ${NEEDS_SEPARATION_ERROR_MESSAGES[sep.violation]} Ask for a separation-of-duties override.`, overrideFlag: null };
+  }
+  return {
+    ok: false,
+    source,
+    reason: `You cannot upload a new version of ${proposal.reference} while it is "${proposalStatusLabel({ stage, status }, config)}".`,
+    overrideFlag: null,
+  };
+}
 
 /**
  * Needs pipeline wave 2 (B5): uploading needs assessments, many files at once.
@@ -134,6 +175,8 @@ async function analyseFiles(user: WebJwtPayload, ctx: CycleContext, files: FileI
     orderBy: { number: 'asc' },
   });
 
+  const targetIds = [...new Set(files.map((f) => f.proposalId).filter((id): id is string => Boolean(id)))];
+  const facts = await loadRuleFacts(prisma, user, [cycle], targetIds.filter((id) => /^[0-9a-f-]{36}$/i.test(id)));
   const out: Analysed[] = [];
   for (let index = 0; index < files.length; index++) {
     const input = files[index];
@@ -164,14 +207,11 @@ async function analyseFiles(user: WebJwtPayload, ctx: CycleContext, files: FileI
 
     const stage: NeedsStage = proposal ? (proposal.stage as NeedsStage) : firstStage(config);
     if (proposal) {
-      const actions = allowedProposalActions({ stage, status: proposal.status as NeedsProposalStatus }, config, user.permissions);
-      if (!actions.includes('UPLOAD_VERSION')) {
-        issues.push(
-          fileIssue(
-            `You cannot upload a new version of ${proposal.reference} while it is "${proposalStatusLabel({ stage, status: proposal.status as NeedsProposalStatus }, config)}".`
-          )
-        );
-      }
+      const permit = uploadPermit(user, cycle, config, proposal, facts);
+      if (!permit.ok) issues.push(fileIssue(permit.reason!));
+    } else if (!input.proposalId && !holds(user, stageConfigOf(config, stage)?.actorPermissionKey ?? 'needs:submit')) {
+      // Wave 3: the route also admits needs:cost (costed versions); new proposed projects stay Procurement's.
+      issues.push(fileIssue('Only the submitter of needs assessments can add a new proposed project. Choose the proposed project this file is a new version of.'));
     }
 
     let parsed: ParsedNeedsAssessment | null = null;
@@ -333,16 +373,16 @@ export async function confirmUpload(user: WebJwtPayload, cycleId: string, input:
           if (a.proposal) {
             const proposal = await tx.needsProposal.findUniqueOrThrow({ where: { id: a.proposal.id } });
             const stage = proposal.stage as NeedsStage;
-            const status = proposal.status as NeedsProposalStatus;
-            if (!allowedProposalActions({ stage, status }, ctx.config, user.permissions).includes('UPLOAD_VERSION')) {
-              return { refusedReason: `You cannot upload a new version of ${proposal.reference} while it is "${proposalStatusLabel({ stage, status }, ctx.config)}".` };
-            }
+            // Wave 3: re-checked under the cycle lock (another request may have moved it or used the override).
+            const freshCycle = await tx.needsCycle.findUniqueOrThrow({ where: { id: cycle.id } });
+            const permit = uploadPermit(user, freshCycle, ctx.config, proposal, await loadRuleFacts(tx, user, [freshCycle], [proposal.id]));
+            if (!permit.ok) return { refusedReason: permit.reason! };
             // Review fix (wave 2): the file was checked against the stage it had then (minimum fields,
             // old template); if the proposal has moved since, check the file again.
             if (stage !== a.stage) {
               return { refusedReason: `${proposal.reference} moved to ${stageConfigOf(ctx.config, stage)?.label ?? NEEDS_STAGE_LABELS[stage]} since the files were checked. Check the file again.` };
             }
-            const source = status === 'RETURNED' ? 'CORRECTION' : 'UPLOAD';
+            const source = permit.source;
             // Review fix (wave 2): a national proposal takes the State of its new version.
             const stateCode = ctx.config.cycleScope === 'STATE' ? proposal.stateCode : (a.stateCode ?? proposal.stateCode);
             const written = await writeVersionInTx(tx, {
@@ -357,13 +397,24 @@ export async function confirmUpload(user: WebJwtPayload, cycleId: string, input:
               isLegacyTemplate: a.isLegacyTemplate,
               uploadedBy: { userId: user.userId, name: user.fullName },
             });
+            if (permit.overrideFlag) await recordOverrideUseInTx(tx, user, cycle, proposal, permit.overrideFlag, 'Uploaded the costed version');
+            const sourceWords = source === 'CORRECTION' ? ' (correction)' : source === 'COSTING' ? ' (costed version)' : '';
             await recordAuditEvent(tx, {
               tenantId: user.tenantId,
               projectId: null,
               ...actor,
               action: 'NEEDS_VERSION_ADDED',
-              summaryText: `Uploaded version ${written.versionNumber} of ${proposal.reference} from "${file.fileName}"${source === 'CORRECTION' ? ' (correction)' : ''}.`,
-              payload: { cycleId: cycle.id, proposalId: proposal.id, reference: proposal.reference, versionNumber: written.versionNumber, sha256: file.sha256, source, fileName: file.fileName },
+              summaryText: `Uploaded version ${written.versionNumber} of ${proposal.reference} from "${file.fileName}"${sourceWords}.${written.reopened ? ` ${written.reopened.sentence}` : ''}`,
+              payload: {
+                cycleId: cycle.id,
+                proposalId: proposal.id,
+                reference: proposal.reference,
+                versionNumber: written.versionNumber,
+                sha256: file.sha256,
+                source,
+                fileName: file.fileName,
+                ...(written.reopened ? { reopenedStage: written.reopened.stage, change: written.reopened.change } : {}),
+              },
             });
             return { outcome: 'VERSION_ADDED' as const, reference: proposal.reference, versionNumber: written.versionNumber, flags: written.flags };
           }

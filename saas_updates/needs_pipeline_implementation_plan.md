@@ -1,6 +1,6 @@
 # Needs Pipeline: from identified need to funded project (N0–N9)
 
-Status: **wave 1 (N0 + N1) and wave 2 (N2 + N3) built 2026-11-26; waves 3–5 not started.** Written 2026-11-26, the day before the Minister of Education demo (2026-11-27). Wave 1 was executed on the owner's instruction that day on the section 3 assumptions (section 16.1 had no answers yet): fold the demo answers into 16.1 before wave 2 starts. Contract names: section 17.
+Status: **wave 1 (N0 + N1) and wave 2 (N2 + N3) built 2026-11-26; wave 3 (N4 + N5 + N7a) built 2026-11-27; waves 4–5 not started.** Written 2026-11-26, the day before the Minister of Education demo (2026-11-27). Wave 1 was executed on the owner's instruction that day on the section 3 assumptions (section 16.1 had no answers yet): fold the demo answers into 16.1 before wave 2 starts. Contract names: section 17.
 
 ## 1. Goal
 
@@ -300,14 +300,14 @@ Gate = typecheck, lint, web build, server unit + route tests, mobile tests, seed
 - [x] **Full gate** _(wave 2, section 15)_
 
 ### N4: Validation, design, costing
-- [ ] Stage decisions (batch, per-item outcomes, return/resubmit), validation records with web evidence, duplicate resolution
-- [ ] Costing: costed version, rate variance and ceiling flags, acknowledgements; generated Validated Project List and Cost Estimate Report
-- [ ] Separation rules enforced; "Waiting for me"; job `needs-deadlines` (one `JobRun` per cycle-day: reminders 7 days before, overdue notices)
+- [x] Stage decisions (batch, per-item outcomes, return/resubmit), validation records with web evidence, duplicate resolution. _Wave 3; web owed WT-N3-*_
+- [x] Costing: costed version, rate variance and ceiling flags, acknowledgements; generated Validated Project List and Cost Estimate Report. _Wave 3_
+- [x] Separation rules enforced; "Waiting for me"; job `needs-deadlines` (one `JobRun` per cycle-day: reminders 7 days before, overdue notices). _Wave 3 (second-person override, 16.2 O-1)_
 
 ### N5: Prioritisation
-- [ ] Committee formation, conflict declarations, recusals; score sheets; divergence; chair ranking, line, overrides; generated Prioritised Project Portfolio; minutes upload
-- [ ] Web committee workspace
-- [ ] **Full gate**
+- [x] Committee formation, conflict declarations, recusals; score sheets; divergence; chair ranking, line, overrides; generated Prioritised Project Portfolio; minutes upload. _Wave 3_
+- [x] Web committee workspace. _Wave 3; owed WT-N3C-*_
+- [x] **Full gate** _(wave 3, section 15)_
 
 ### N6: Approval and out-of-cycle
 - [ ] `NEEDS_PORTFOLIO` chain (type-configured steps, organisation scope from the cycle), exclusions, memo; `OUT_OF_CYCLE` chain and route; New project button
@@ -316,7 +316,7 @@ Gate = typecheck, lint, web build, server unit + route tests, mobile tests, seed
 ### N7: Funding, conversion, BEAP, project integration
 - [ ] DI: budget submission record; appropriated schedule import (approved-list workbook with proposal reference column) → conversion
 - [ ] MG: BEAP build, submit, UBEC review, revision, approval → conversion; counterpart evidence; activation gate
-- [ ] `convertProposalToProject` (one transaction: draft with type applied and parties derived, sites, units from breakdown rows, BoQ lines, budget = funded amount, origin, approved-list row, documents linked, ledger entry)
+- [ ] `convertProposalToProject` (core built in wave 3, N7a: `needs.conversion.n7a.test.ts`; the approved-list row and documents link are wave 4) (one transaction: draft with type applied and parties derived, sites, units from breakdown rows, BoQ lines, budget = funded amount, origin, approved-list row, documents linked, ledger entry)
 - [ ] DI procurement plan tab (lots on converted drafts); Portfolio Pipeline tab; project Origin card, Facilities tab, Documents link
 - [ ] Remove `/projects/from-needs-assessment` and the D1 web flow; register import admin-only
 - [ ] **Full gate**
@@ -359,7 +359,7 @@ Parallel work (CLAUDE.md step 4): after N1 is built, server (services, routes, t
 | Baseline (pre-demo round record: unit 262, routes 443, mobile 169; rerun 2026-11-26 on the tree with the design round) | ✓ | 0 errors (52 warnings) | ✓ | 262/262 | 454/454 | 169/169 | not rerun |
 | Wave 1 (N0 + N1), 2026-11-26 | ✓ | 0 errors (52 warnings) | ✓ | **310/310** (262 + 47 in `needs.n1.test.ts` + 1 in `visits.r4.test.ts`) | **470/470 pass, 25 todo** of 495 (454 + 16 in `routes.needs.n1.test.ts` + the 25 todo scenario steps) | 169/169 | normal ✓, overlay ✓, normal ✓, overlay ✓ (scratch database `insite_needs_w1`); schema diff against it empty |
 | Wave 2 (N2 + N3), 2026-11-27 (run 2, after the review fixes) | ✓ | 0 errors (52 warnings) | ✓ | **329/329** | **514/514 pass, 19 todo** of 533 | 169/169 | normal ✓, overlay ✓ (scratch `insite_needs_w1`); schema diff empty |
-| N5 | | | | | | | |
+| Wave 3 (N4 + N5 + N7a), 2026-11-27 (run 2, after the review fixes) | ✓ | 0 errors (52 warnings) | ✓ | **329/329** | **593/593 pass, 11 todo** of 604 | 169/169 | normal ✓, overlay ✓ (scratch `insite_needs_w1`); schema diff empty |
 | N7 | | | | | | | |
 | N9 | | | | | | | |
 
@@ -389,6 +389,15 @@ Parallel work (CLAUDE.md step 4): after N1 is built, server (services, routes, t
 | O-1 | A separation-of-duties override is **a second person's authorisation**: the blocked person asks with a reason, another holder of `needs:override_separation` authorises or refuses | Done in wave 1's contracts: `checkSeparation(action, actor, history, authorisation)`, `authorisationProblem`, `NeedsSeparationActionEnum`, `SeparationOverrideRequestSchema`, `SeparationOverrideDecisionRequestSchema`, resolutions `AUTHORISED` / `REFUSED`; the request field on stage decisions is gone. Wave 3 builds the routes (A1) |
 | O-2 | The extra SUBEB people a committee needs are represented by **one umbrella role** (in reality they are several roles: M&E, Finance, other directorates) | Wave 3, main thread: role `SUBEB_COMMITTEE_MEMBER` (`needs:view`, `needs:score`) held by **three** Kano logins, and `needs:score` for the SUBEB Administrator (Chairman). Three logins, not one: each score sheet is one person and the quorum counts people |
 | O-3 | The demo shows the highlights of the pipeline, not the whole of it; the full click-through runs once, when every wave is done | No per-wave click-through; owed checks collect in `web_testing_checklist.md` |
+
+### 16.4 Wave 3 (2026-11-27)
+
+Decisions, deviations and the review are in `needs_pipeline/wave3_validation_costing_scoring.md` section 5. For waves 4–5:
+
+- **Late proposals:** nothing enters a finalised ranking (409 `NEEDS_RANKING_FINALISED`): a proposal still at Costing, or returned at Prioritisation, when the chair finalises waits there. Wave 4 decides how it re-enters (a second ranking round, or the out-of-cycle route).
+- **Conversion core exists, uncalled:** `convertProposalToProject(tx, proposal, { fundedAmountNgn, lot?, by })`; wave 4's gates call it and add the approved-list row and document links. A State cycle's projects are owned by the cycle's SUBEB.
+- **Email cap:** pipeline emails count against `MESSAGING_RECIPIENT_DAILY_CAP` (5 a day); the task queue is the reliable channel.
+- **Demo database:** the wave 2 and 3 migrations are owed on `insite_assurance`.
 
 ### 16.3 Wave 1 (2026-11-26)
 
@@ -536,3 +545,54 @@ Error codes added (section 17.3 codes `NEEDS_FILE_CHANGED`, `NEEDS_FILE_INVALID`
 | `NEEDS_DOCUMENT_EXISTS`, `NEEDS_DOCUMENT_SUPERSEDED` | 409 | A file already registered as a document of the cycle; replacing a version that is no longer current (review fix) |
 | `COSTING_STANDARD_FILE_CHANGED`, `DESIGN_STANDARD_DOCUMENT_SUPERSEDED`, `DESIGN_STANDARD_DOCUMENT_EXISTS` | 409 | Confirm with another file; superseding a document twice; registering the same file twice |
 | `COSTING_STANDARD_IMPORT_INVALID`, `UNKNOWN_FACILITY_CODE` | 422 | A costing file with issues (`details.issues`); a facility code not in the catalogue |
+
+### 17.9 Added by wave 3 (2026-11-27)
+
+Decisions: `needs_pipeline/wave3_validation_costing_scoring.md` section 5. Binding for waves 3–5.
+
+| Kind | Names |
+| :--- | :--- |
+| Shared, `needsPipeline.schema.ts` (section "Wave 3") | `ProposalBatchActionEnum` (`SUBMIT`, `RESUBMIT`, `WITHDRAW`), `ProposalBatchActionRequestSchema`, `STAGE_DECISION_OUTCOMES` (VALIDATION: ADVANCE/RETURN/NOT_VALIDATED; COSTING: ADVANCE/RETURN; PRIORITISATION: RETURN), `FLAG_RESOLUTIONS_BY_KIND`, `FLAG_RESOLVER_PERMISSION`, `PROPOSAL_FLAG_RESOLUTION_LABELS`, `FlagResolutionInputSchema`, `ResolveProposalFlagsRequestSchema`, `RecordValidationRequestSchema`, `NeedsDecisionResultDtoSchema`, `NeedsBatchProblemSchema`, `SeparationOverrideDetailsSchema`, `NeedsReportKindEnum`, `NeedsTaskListQuerySchema`, `NeedsTaskCountDtoSchema`, `SetCommitteeRequestSchema`, `CommitteeScoringRequestSchema`, `NeedsCommitteeCandidateSchema`, `NeedsCommitteeDtoSchema`, `ProposalScoreSchema`, `DivergentCriterionSchema`, `NeedsMyScoringDtoSchema`, `NeedsProposalScoresDtoSchema`, `RankingPlacementEnum`, `RankingPlacementRequestSchema`, `SetFundingLineRequestSchema`, `FinaliseRankingRequestSchema`, `NeedsRankingRowSchema`, `NeedsRankingDtoSchema` |
+| Shared, pure | `resolveRankingLine({ ranked, ceilingNgn, linePosition, placements })` (`utils/needsScoring.ts`); `PROJECT_CODE_PREFIX_REGEX` also accepts a proposal reference (D-N.15) |
+| Audit actions | `NEEDS_SEPARATION_OVERRIDE_REQUESTED`, `NEEDS_RANKING_OVERRIDDEN` |
+| Prisma (migration `20261230090000_needs_w3_committee`) | `NeedsCycle.scoringOpenedAt/ByUserId/ByName`, `scoringClosedAt/ByUserId/ByName`, `fundingLineReason` |
+| Server seams (main thread) | `modules/needs/needsFacts.ts`: `dutyHistories(db, proposalIds)` → uploaders / validators / costers, `loadCommittee`, `memberRecusals`, `scoringState`, `proposalsAtPrioritisation`; `modules/needs/needsGeneratedDocuments.ts`: `storeGeneratedReportFiles` (outside the transaction), `registerGeneratedReportInTx`, `PDF_CONTENT_TYPE` |
+| Server, Track A | `modules/needs/decisions/*` (`needsDecisionsRoutes`), `modules/needs/reports/*`, `jobs/needsDeadlines.ts` (job `needs-deadlines`) |
+| Server, Track B | `modules/needs/committee/*` (`needsCommitteeRoutes`) |
+| Server, conversion (main) | `modules/needs/conversion/*`: `needsToScopeImport(parsed)`, `convertProposalToProject(tx, proposal, { fundedAmountNgn, lot? })` |
+
+Routes under `/api/v1/needs` (web users; `needs:view` to read; writes also need the cycle's owning organisation and an OPEN cycle):
+
+| Route | Body → result | Who |
+| :--- | :--- | :--- |
+| `POST /cycles/:cycleId/proposal-actions` | `ProposalBatchActionRequestSchema` → `NeedsDecisionResultDto` | SUBMIT: the stage's actor (Identification, Design: `needs:submit`); RESUBMIT: the corrector (`returnTarget`); WITHDRAW: `needs:submit` |
+| `POST /cycles/:cycleId/decisions` | `StageDecisionRequestSchema` → `NeedsDecisionResultDto` (201) | the stage's actor (`needs:validate`, `needs:cost`, `needs:chair_committee`) |
+| `POST /proposals/:proposalId/validation` | `RecordValidationRequestSchema` → `NeedsValidationRecordDto` (201) | `needs:validate` |
+| `POST /proposals/:proposalId/flags/resolve` | `ResolveProposalFlagsRequestSchema` → `ProposalFlagDto[]` | `FLAG_RESOLVER_PERMISSION` of each flag's kind |
+| `POST /cycles/:cycleId/separation-overrides` | `SeparationOverrideRequestSchema` → `ProposalFlagDto` (201) | the blocked person (holds the action's permission) |
+| `POST /cycles/:cycleId/separation-overrides/:flagId/decision` | `SeparationOverrideDecisionRequestSchema` → `ProposalFlagDto` | `needs:override_separation`, never the asker |
+| `GET /tasks`, `GET /tasks/count` | `NeedsTaskListQuerySchema` → `NeedsTaskDto[]`; → `NeedsTaskCountDto` | any `needs:view` |
+| `POST /cycles/:cycleId/reports/:kind` | kind `VALIDATED_PROJECT_LIST` or `COST_ESTIMATE_REPORT` → `NeedsCycleDocumentDto[]` (201) | the stage's actor or `needs:manage_cycle` |
+| `POST /cycles/:cycleId/uploads/preview|confirm` (wave 2) | also `needs:cost`: a costed version (source `COSTING`) at Costing | |
+| `GET|PUT /cycles/:cycleId/committee` | → / `SetCommitteeRequestSchema` → `NeedsCommitteeDto` | read `needs:view`; write `needs:chair_committee` |
+| `POST /cycles/:cycleId/committee/declaration` | `ConflictDeclarationRequestSchema` → `NeedsCommitteeDto` | a member |
+| `POST /cycles/:cycleId/committee/scoring` | `CommitteeScoringRequestSchema` → `NeedsCommitteeDto` | the chair |
+| `POST /cycles/:cycleId/committee/minutes/presign`, `POST /cycles/:cycleId/committee/minutes` | `NeedsDocumentPresignRequestSchema`; `RegisterCycleDocumentRequestSchema` (kind `COMMITTEE_MINUTES`) → `NeedsCycleDocumentDto` | the chair |
+| `GET /cycles/:cycleId/score-sheets/mine`, `PUT /cycles/:cycleId/score-sheets` | → `NeedsMyScoringDto`; `ScoreSheetSchema` → `ScoreSheetDto` | a member |
+| `GET /proposals/:proposalId/scores` | → `NeedsProposalScoresDto` | `needs:view` (sheets hidden until finalised, except own and the chair's view) |
+| `GET /cycles/:cycleId/ranking`; `POST …/ranking/placements`; `PUT …/ranking/line`; `POST …/ranking/finalise`; `POST …/ranking/report` | → `NeedsRankingDto`; `RankingPlacementRequestSchema`; `SetFundingLineRequestSchema`; `FinaliseRankingRequestSchema`; → `NeedsCycleDocumentDto[]` | read `needs:view`; write the chair |
+
+Web task links: proposal `/app/needs-assessment/proposals/:id`; cycle tabs `/app/needs-assessment?cycle=<id>&tab=proposals|prioritisation|documents`.
+
+Error codes added by wave 3 (thrown; details in the wave file section 5):
+
+| Code | HTTP | When |
+| :--- | :--- | :--- |
+| `NEEDS_STAGE_ACTION_NOT_ALLOWED`, `NEEDS_FLAGS_UNRESOLVED`, `SAME_PERSON_VALIDATION`, `SAME_PERSON_COSTING` | 409 | First thrown in wave 3 (reserved in 17.3) |
+| `NEEDS_MINIMUM_FIELDS_MISSING` | 422 | Leaving a stage without its minimum fields (also a per-file issue at upload) |
+| `NEEDS_TEMPLATE_V2_REQUIRED`, `NEEDS_OUTCOME_NOT_ALLOWED`, `NEEDS_EVIDENCE_INVALID`, `NEEDS_SITE_VERIFICATION_REQUIRED`, `NEEDS_FLAG_RESOLUTION_INVALID`, `NEEDS_MERGE_TARGET_INVALID`, `NEEDS_SUPERVISION_LINE_MISSING`, `NEEDS_OVERRIDE_ACTION_NOT_SUPPORTED`, `NEEDS_COMMITTEE_MEMBER_INVALID`, `NEEDS_SCORE_INCOMPLETE`, `NEEDS_CONVERSION_INVALID`, `NEEDS_FUNDED_AMOUNT_REQUIRED` | 422 | Stage work, committee, conversion |
+| `NEEDS_VALIDATION_RECORD_REQUIRED`, `NEEDS_COSTED_VERSION_REQUIRED`, `NEEDS_FLAG_ALREADY_RESOLVED`, `NEEDS_OVERRIDE_NOT_NEEDED`, `NEEDS_OVERRIDE_PENDING`, `NEEDS_OVERRIDE_SELF`, `NEEDS_OVERRIDE_DECIDED`, `NEEDS_OVERRIDE_STALE` (review fix), `NEEDS_SCORING_ALREADY_OPEN`, `NEEDS_SCORING_NOT_OPEN`, `NEEDS_NOTHING_TO_SCORE`, `NEEDS_QUORUM_NOT_MET`, `NEEDS_CONFLICT_NOT_DECLARED`, `NEEDS_MEMBER_RECUSED`, `NEEDS_COMMITTEE_MEMBER_HAS_SCORES`, `NEEDS_PROPOSAL_NOT_SCORED`, `NEEDS_RANKING_FINALISED`, `NEEDS_RANKING_NOT_FINALISED`, `NEEDS_PROPOSAL_ALREADY_CONVERTED`, `NEEDS_PROPOSAL_CLOSED` | 409 | Stage work, overrides, committee, conversion |
+| `NEEDS_NOT_COMMITTEE_CHAIR`, `NEEDS_NOT_COMMITTEE_MEMBER`, `NEEDS_SCORES_HIDDEN` | 403 | Committee writes; a non-chair member reading combined scores before finalisation |
+| `NEEDS_FLAG_NOT_FOUND`, `NEEDS_REPORT_NOT_FOUND` | 404 | A flag not on the proposal or cycle; a report kind other than the two stage reports |
+
+Server files built by wave 3 (beyond the seams above): `decisions/` (`needsDecisions.routes.ts`, `needsDecisions.service.ts`, `needsGate.ts`, `proposalRules.ts` (`narrowActions`, `loadRuleFacts`, `RuleFacts`), `needsOverrides.service.ts`, `needsValidation.service.ts`, `needsTasks.service.ts`, `needsEmails.ts`, `versionChange.ts` (`compareVersions`, `reopenAfterChange`)), `reports/needsReports.service.ts`, `committee/` (`committeeFacts.ts`, `needsCommittee.service.ts`, `needsScoreSheets.service.ts`, `needsRanking.service.ts`, `prioritisedPortfolioReport.ts`, `needsCommittee.routes.ts`), `jobs/needsDeadlines.ts`, message template `NEEDS_TASK_NOTICE`. Web: `components/needs/decisions/*`, `components/needs/committee/*`, `api/needsDecisions.ts`, `api/needsCommittee.ts`, `queries/needs/useDecisionQueries.ts`, `useCommitteeQueries.ts`, `mutations/needs/useDecisionMutations.ts`, `useCommitteeMutations.ts`, nav badge (`NavItem.badge`). Tests: `routes.needs.n4.test.ts`, `routes.needs.n5.test.ts`, `needs.conversion.n7a.test.ts`, `helpers/needsScenarioSteps.n5.ts`.

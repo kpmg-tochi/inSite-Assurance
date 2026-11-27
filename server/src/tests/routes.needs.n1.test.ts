@@ -222,12 +222,12 @@ describe('Needs pipeline N0: Direct Intervention mobilisation from contract awar
 });
 
 describe('Needs pipeline N1: seed people and grants (D-N.25)', () => {
-  it('the seven cycle logins exist in their organisations, are web roles and sign in', async () => {
+  it('the ten cycle logins (incl. the three SUBEB committee members, wave 3) exist in their organisations, are web roles and sign in', async () => {
     const ubec = await prisma.organization.findFirstOrThrow({ where: { tenantId, name: { startsWith: 'Universal Basic Education Commission' } } });
     const kano = await prisma.organization.findFirstOrThrow({ where: { tenantId, name: { startsWith: 'Kano State Universal Basic Education Board' } } });
     assert.deepEqual(
       NEEDS_PIPELINE_PEOPLE.map((p) => p.email).sort(),
-      ['dpp@ubec.test', 'es@ubec.test', 'finance@ubec.test', 'kano.dpp@ubec.test', 'kano.procurement@ubec.test', 'procurement@ubec.test', 'qs@ubec.test']
+      ['dpp@ubec.test', 'es@ubec.test', 'finance@ubec.test', 'kano.committee1@ubec.test', 'kano.committee2@ubec.test', 'kano.committee3@ubec.test', 'kano.dpp@ubec.test', 'kano.procurement@ubec.test', 'procurement@ubec.test', 'qs@ubec.test']
     );
     for (const person of NEEDS_PIPELINE_PEOPLE) {
       const user = await prisma.user.findUniqueOrThrow({ where: { email: person.email }, include: { role: true } });
@@ -258,6 +258,8 @@ describe('Needs pipeline N1: seed people and grants (D-N.25)', () => {
 
     const kanoAdmin = await permissionsOf('kano.admin@ubec.test');
     for (const key of NEEDS_PIPELINE_GRANTS.ORGANIZATION_ADMIN) assert.ok(kanoAdmin.includes(key), key);
+    assert.ok(kanoAdmin.includes('needs:score'), 'the Chairman scores too (16.2 O-2)');
+    assert.deepEqual(NEEDS_PIPELINE_GRANTS.SUBEB_COMMITTEE_MEMBER, ['needs:view', 'needs:score']);
     assert.ok(!kanoAdmin.includes('needs:validate') && !kanoAdmin.includes('needs:cost') && !kanoAdmin.includes('needs:approve_beap'));
     assert.deepEqual(await permissionsOf('lagos.admin@ubec.test'), kanoAdmin, 'one role for every SUBEB Administrator');
 

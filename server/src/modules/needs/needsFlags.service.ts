@@ -196,7 +196,8 @@ export async function applyFlagFindings(
   tx: Prisma.TransactionClient,
   params: { tenantId: string; cycleId: string; proposalId: string; reference: string; versionId: string; versionNumber: number; findings: FlagFinding[] }
 ): Promise<ProposalFlagDto[]> {
-  const open = await tx.needsProposalFlag.findMany({ where: { proposalId: params.proposalId, resolvedAt: null, kind: { in: [...VERSION_FLAG_KINDS] } } });
+  const all = await tx.needsProposalFlag.findMany({ where: { proposalId: params.proposalId, kind: { in: [...VERSION_FLAG_KINDS] } }, orderBy: { raisedAt: 'asc' } });
+  const open = all.filter((f) => !f.resolvedAt);
   const now = new Date();
   for (const kind of VERSION_FLAG_KINDS) {
     const finding = params.findings.find((f) => f.kind === kind);
@@ -204,6 +205,10 @@ export async function applyFlagFindings(
     if (finding) {
       if (existing.length) {
         await tx.needsProposalFlag.updateMany({ where: { id: { in: existing.map((f) => f.id) } }, data: { detailsJson: finding.details as Prisma.InputJsonValue } });
+      } else if (resolvedByPersonWithSameDetails(all, kind, finding.details)) {
+        // Wave 3: a flag a person resolved (justified, acknowledged, not a duplicate) is not raised
+        // again by a later version that finds exactly the same thing; changed details raise a new one.
+        continue;
       } else {
         await tx.needsProposalFlag.create({
           data: {
@@ -236,6 +241,24 @@ export async function applyFlagFindings(
   }
   const after = await tx.needsProposalFlag.findMany({ where: { proposalId: params.proposalId, resolvedAt: null }, orderBy: { raisedAt: 'asc' } });
   return after.map(serializeFlag);
+}
+
+/** JSON with sorted keys, so two detail objects compare by content. */
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value as Record<string, unknown>)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableJson((value as Record<string, unknown>)[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+function resolvedByPersonWithSameDetails(flags: Array<{ kind: string; resolvedAt: Date | null; resolution: string | null; detailsJson: Prisma.JsonValue }>, kind: ProposalFlagKind, details: Record<string, unknown>): boolean {
+  const last = [...flags].reverse().find((f) => f.kind === kind && f.resolvedAt);
+  if (!last || !last.resolution || last.resolution === 'CORRECTED') return false;
+  return stableJson(last.detailsJson) === stableJson(JSON.parse(JSON.stringify(details)));
 }
 
 

@@ -7,9 +7,13 @@ import {
   OUT_OF_CYCLE_REASON_LABELS,
   PROPOSAL_DOCUMENT_KIND_LABELS,
   SCHOOL_LEVEL_LABELS,
+  STAGE_DECISION_OUTCOMES,
   type NeedsCycleDto,
   type NeedsProposalDetailDto,
   type NeedsProposalDocumentDto,
+  type NeedsStage,
+  type ProposalBatchAction,
+  type StageOutcome,
 } from "@insite/shared";
 import { Tabs, TabPanel, useUrlTab, type TabItem } from "../../components/common/Tabs";
 import { StandardTable, TableBadge, type TableColumnDef } from "../../components/table";
@@ -20,7 +24,14 @@ import { ProposalTaskList } from "../../components/needs/ProposalTaskList";
 import { BreakdownPanel } from "../../components/needs/BreakdownPanel";
 import { NeedsUploadDialog } from "../../components/needs/NeedsUploadDialog";
 import { NeedsDocumentDialog } from "../../components/needs/NeedsDocumentDialog";
+import { ProposalScoresTab } from "../../components/needs/committee/ProposalScoresTab";
 import { EmptyPanel, FlagChips, ProposalStatusTag, cardCls, formatBytes, locationText, money } from "../../components/needs/needsUi";
+import { ProposalValidationTab } from "../../components/needs/decisions/ProposalValidationTab";
+import { ProposalCostingTab } from "../../components/needs/decisions/ProposalCostingTab";
+import { BatchActionDialog } from "../../components/needs/decisions/BatchActionDialog";
+import { DecisionDrawer } from "../../components/needs/decisions/DecisionDrawer";
+import { SeparationOverridesCard, overrideFlagsOf } from "../../components/needs/decisions/SeparationOverride";
+import { actionForOutcome, cycleWritable } from "../../components/needs/decisions/decisionUi";
 import { lgaNames, stateName } from "../../components/approvedLists/approvedListUi";
 import { getProposalDocumentLink, getVersionFileLink } from "../../api/needsPipeline";
 import { useNeedsCycleQuery, useNeedsProposalQuery } from "../../queries/needs/useNeedsQueries";
@@ -28,7 +39,6 @@ import { useFacilitiesQuery } from "../../queries/facilities/useFacilityQueries"
 import { useDownloadProposalTemplateMutation, useOpenNeedsFileMutation } from "../../mutations/needs/useNeedsMutations";
 import { useAuth } from "../../lib/auth-context";
 import { formatDateTimeShort } from "../../lib/formatters";
-import { stageLabel } from "./ProposedProjectsTab";
 
 type TabId = "summary" | "sites" | "facilities" | "boq" | "versions" | "validation" | "scores" | "documents" | "history";
 const TAB_IDS: readonly TabId[] = ["summary", "sites", "facilities", "boq", "versions", "validation", "scores", "documents", "history"];
@@ -52,6 +62,11 @@ const SITE_PIN_RADIUS_M = 150;
  * Header with status and flags, the cycle's stages, the task list, and tabs: Summary, Sites (map),
  * Intervention & facilities, Versions, Documents, History; BoQ & costing, Validation and Scores are
  * filled by the later stages. "Upload new version" when the server offers UPLOAD_VERSION.
+ *
+ * Wave 3 (C2–C4): the header buttons follow the server's `allowedActions` (submit, resubmit,
+ * withdraw, return, record the validation, upload the costed version, sign off the costing), the task
+ * list is the server's, separation of duties overrides are asked for and decided below it, and the
+ * Validation and BoQ & costing tabs hold the stage work.
  */
 export function ProposalPage() {
   const { proposalId } = useParams();
@@ -92,18 +107,27 @@ function ProposalView({ proposal, cycle }: { proposal: NeedsProposalDetailDto; c
   const { hasAnyPermission, user } = useAuth();
   const [tab, setTab] = useUrlTab(TAB_IDS);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [batchAction, setBatchAction] = useState<ProposalBatchAction | null>(null);
+  const [decision, setDecision] = useState<{ stage: NeedsStage; outcome: StageOutcome } | null>(null);
   const template = useDownloadProposalTemplateMutation();
   const facilitiesQuery = useFacilitiesQuery(true);
   const facilityNames = useMemo(() => new Map((facilitiesQuery.data ?? []).map((f) => [f.code.toUpperCase(), f.name])), [facilitiesQuery.data]);
   const facilityName = (code: string) => facilityNames.get(code.toUpperCase()) ?? code;
 
-  const cycleOpen = cycle?.status === "OPEN";
-  // Writes on the cycle need its own organisation (wave 2 decision 1; the server checks too).
-  const ownsCycle = Boolean(cycle && user && user.organizationId === cycle.owningOrganizationId);
-  const canUploadVersion = cycleOpen && ownsCycle && proposal.allowedActions.includes("UPLOAD_VERSION");
-  const canAddDocuments =
-    cycleOpen && ownsCycle && NEEDS_OPEN_PROPOSAL_STATUSES.includes(proposal.status) && hasAnyPermission("needs:submit", "needs:validate", "needs:cost");
+  // Writes on the cycle need an open cycle and its own organisation (wave 2 decision 1; the server checks too).
+  const writable = cycleWritable(cycle, user);
+  // The header follows the server's allowed actions (C4).
+  const allows = (a: NeedsProposalDetailDto["allowedActions"][number]) => writable && proposal.allowedActions.includes(a);
+  const canAddDocuments = writable && NEEDS_OPEN_PROPOSAL_STATUSES.includes(proposal.status) && hasAnyPermission("needs:submit", "needs:validate", "needs:cost");
   const openFlags = proposal.flags.filter((f) => !f.resolved).map((f) => f.kind);
+  const overrides = useMemo(() => overrideFlagsOf(proposal.flags), [proposal.flags]);
+  const self = { id: proposal.id, reference: proposal.reference, title: proposal.title };
+  // Stage decisions on this proposal: the outcomes whose action the server offers here.
+  const decisionOutcomes = (STAGE_DECISION_OUTCOMES[proposal.stage] ?? []).filter((o) => {
+    const needed = actionForOutcome(proposal.stage, o);
+    return needed !== null && allows(needed);
+  });
+  const decide = (outcome: StageOutcome) => setDecision({ stage: proposal.stage, outcome });
 
   const tabs: TabItem<TabId>[] = TAB_IDS.map((id) => ({
     id,
@@ -128,20 +152,74 @@ function ProposalView({ proposal, cycle }: { proposal: NeedsProposalDetailDto; c
           </div>
           {proposal.nextActor && <p className="mt-1 text-xs text-slate-600">Next: {proposal.nextActor}</p>}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <button type="button" className={secondaryButton} disabled={template.isPending} onClick={() => template.mutate(proposal.id)}>
             <Download className="h-3.5 w-3.5" aria-hidden="true" /> {template.isPending ? "Preparing…" : "Download pre-filled template"}
           </button>
-          {canUploadVersion && (
-            <button type="button" className={primaryButton} onClick={() => setUploadOpen(true)}>
+          {allows("WITHDRAW") && (
+            <button type="button" className={withdrawButton} onClick={() => setBatchAction("WITHDRAW")}>
+              Withdraw
+            </button>
+          )}
+          {allows("RETURN") && (
+            <button type="button" className={secondaryButton} onClick={() => decide("RETURN")}>
+              Return for correction
+            </button>
+          )}
+          {allows("UPLOAD_VERSION") && (
+            <button type="button" className={allows("SUBMIT") || allows("RESUBMIT") ? secondaryButton : primaryButton} onClick={() => setUploadOpen(true)}>
               <FileUp className="h-3.5 w-3.5" aria-hidden="true" /> Upload new version
             </button>
+          )}
+          {allows("UPLOAD_COSTED_VERSION") && (
+            <button type="button" className={allows("SIGN_OFF_COSTING") || allows("RESUBMIT") ? secondaryButton : primaryButton} onClick={() => setUploadOpen(true)}>
+              <FileUp className="h-3.5 w-3.5" aria-hidden="true" /> Upload the costed version
+            </button>
+          )}
+          {allows("RECORD_VALIDATION") && (
+            <button type="button" className={primaryButton} onClick={() => setTab("validation")}>
+              {proposal.validation && proposal.validation.versionNumber === proposal.currentVersionNumber ? "Open the validation" : "Record the validation"}
+            </button>
+          )}
+          {allows("SIGN_OFF_COSTING") && (
+            <button type="button" className={primaryButton} onClick={() => decide("ADVANCE")}>
+              Sign off the costing
+            </button>
+          )}
+          {allows("SUBMIT") && (
+            <button type="button" className={primaryButton} onClick={() => setBatchAction("SUBMIT")}>
+              Submit
+            </button>
+          )}
+          {allows("RESUBMIT") && (
+            <button type="button" className={primaryButton} onClick={() => setBatchAction("RESUBMIT")}>
+              Resubmit
+            </button>
+          )}
+          {allows("SCORE") && (
+            <button type="button" className={primaryButton} onClick={() => setTab("scores")}>
+              Score
+            </button>
+          )}
+          {allows("FINALISE_PRIORITISATION") && (
+            <Link className={secondaryButton} to={`/app/needs-assessment?cycle=${proposal.cycleId}&tab=prioritisation`}>
+              Open the ranking
+            </Link>
           )}
         </div>
       </header>
 
       <ProposalStageBar stages={cycle?.config.stages ?? []} current={proposal.stage} status={proposal.status} />
       <ProposalTaskList tasks={proposal.tasks} />
+      {cycle && (
+        <SeparationOverridesCard
+          cycleId={proposal.cycleId}
+          proposal={self}
+          stage={proposal.stage}
+          overrides={overrides}
+          writable={writable && NEEDS_OPEN_PROPOSAL_STATUSES.includes(proposal.status)}
+        />
+      )}
 
       <Tabs tabs={tabs} active={tab ?? "summary"} onChange={setTab} label="Proposed project" idPrefix={TAB_PREFIX} />
       <TabPanel idPrefix={TAB_PREFIX} id={tab ?? "summary"}>
@@ -157,23 +235,18 @@ function ProposalView({ proposal, cycle }: { proposal: NeedsProposalDetailDto; c
           />
         )}
         {tab === "boq" && (
-          <EmptyPanel title="Costing comes at the Costing stage">
-            {proposal.boqLines.length > 0
-              ? `The current version has ${proposal.boqLines.length} BoQ line${proposal.boqLines.length === 1 ? "" : "s"}. `
-              : "The current version has no BoQ lines. "}
-            The quantity surveyor's costed version, the rates compared with the costing standard and the supervision and monitoring line will be shown here.
-          </EmptyPanel>
+          <ProposalCostingTab
+            proposal={proposal}
+            cycle={cycle}
+            writable={writable}
+            facilityName={facilityName}
+            onUploadCosted={allows("UPLOAD_COSTED_VERSION") ? () => setUploadOpen(true) : null}
+            onSignOff={allows("SIGN_OFF_COSTING") ? () => decide("ADVANCE") : null}
+          />
         )}
         {tab === "versions" && <VersionsTab proposal={proposal} />}
-        {tab === "validation" && (
-          <EmptyPanel title="Not validated yet">
-            The desk review, the site verification and how any possible duplicate was resolved will be recorded here at the{" "}
-            {cycle ? stageLabel(cycle, "VALIDATION") : "Validation"} stage.
-          </EmptyPanel>
-        )}
-        {tab === "scores" && (
-          <EmptyPanel title="Not scored yet">The committee's score sheets, the total score and the rank will be shown here at Prioritisation.</EmptyPanel>
-        )}
+        {tab === "validation" && <ProposalValidationTab proposal={proposal} cycle={cycle} writable={writable} onDecide={decide} />}
+        {tab === "scores" && <ProposalScoresTab proposal={proposal} cycle={cycle} />}
         {tab === "documents" && <DocumentsTab proposal={proposal} canAdd={canAddDocuments} />}
         {tab === "history" && <HistoryTab proposal={proposal} />}
       </TabPanel>
@@ -185,9 +258,23 @@ function ProposalView({ proposal, cycle }: { proposal: NeedsProposalDetailDto; c
           onClose={() => setUploadOpen(false)}
         />
       )}
+      {batchAction && <BatchActionDialog cycleId={proposal.cycleId} action={batchAction} proposals={[self]} onClose={() => setBatchAction(null)} />}
+      {decision && cycle && (
+        <DecisionDrawer
+          cycle={cycle}
+          stage={decision.stage}
+          proposals={[self]}
+          outcomes={decisionOutcomes.length ? decisionOutcomes : [decision.outcome]}
+          initialOutcome={decision.outcome}
+          onClose={() => setDecision(null)}
+        />
+      )}
     </div>
   );
 }
+
+const withdrawButton =
+  "inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-700";
 
 // ---------------------------------------------------------------------------
 // Summary

@@ -144,12 +144,76 @@ export function findingsSummary(ctx: TemplateContext, d: FindingsSummaryEmailDat
   return { subject, text, html };
 }
 
+// ---------------------------------------------------------------------------
+// Needs pipeline wave 3 (A7, D-N.24): work reaches people through the task queue and email. One email
+// per person per event, listing the proposed projects it concerns.
+// ---------------------------------------------------------------------------
+
+export interface NeedsTaskNoticeData {
+  kind: 'RETURNED' | 'WAITING' | 'DUE_SOON' | 'OVERDUE';
+  recipientName: string;
+  /** "Direct Intervention 2027" or "Matching Grants 2027, Kano". */
+  cycleLabel: string;
+  /** The stage the notice is about ("Validation", "Costing"). */
+  stageLabel: string;
+  proposals: Array<{ reference: string; title: string }>;
+  /** RETURNED: why. */
+  reason: string | null;
+  /** DUE_SOON / OVERDUE: the stage deadline ("31 Jul 2026"). */
+  dueDate: string | null;
+  url: string;
+}
+
+export function needsTaskNotice(ctx: TemplateContext, d: NeedsTaskNoticeData): RenderedMessage {
+  const n = d.proposals.length;
+  const projects = `${n} proposed project${n === 1 ? '' : 's'}`;
+  const stage = lowerFirst(d.stageLabel);
+  const subject =
+    d.kind === 'RETURNED'
+      ? `${d.cycleLabel}: ${projects} returned to you for correction`
+      : d.kind === 'WAITING'
+        ? `${d.cycleLabel}: ${projects} waiting for ${stage}`
+        : d.kind === 'DUE_SOON'
+          ? `${d.cycleLabel}: ${d.stageLabel} closes on ${d.dueDate}`
+          : `${d.cycleLabel}: the ${stage} deadline (${d.dueDate}) has passed`;
+  const intro =
+    d.kind === 'RETURNED'
+      ? `These proposed projects were returned at ${stage}. Correct them and resubmit.`
+      : d.kind === 'WAITING'
+        ? `These proposed projects are waiting for ${stage}.`
+        : d.kind === 'DUE_SOON'
+          ? `The ${stage} deadline is ${d.dueDate}.${n ? ' These proposed projects are still open at this stage or earlier:' : ''}`
+          : `The ${stage} deadline was ${d.dueDate}. These proposed projects are still open at this stage or earlier:`;
+  const lines = d.proposals.map((p) => `${p.reference}: ${p.title}`);
+  const text = [
+    `Hello ${d.recipientName},`,
+    '',
+    intro,
+    ...lines.map((l) => `- ${l}`),
+    ...(d.reason ? ['', `Reason: ${d.reason}`] : []),
+    '',
+    d.url,
+    '',
+    ctx.tenantName,
+  ].join('\n');
+  const html = layout(ctx, subject, [
+    `Hello ${esc(d.recipientName)},`,
+    esc(intro),
+    ...(lines.length ? [`<ul style="margin:0;padding-left:20px">${lines.map((l) => `<li style="margin:0 0 6px">${esc(l)}</li>`).join('')}</ul>`] : []),
+    ...(d.reason ? [`<strong>Reason:</strong> ${esc(d.reason)}`] : []),
+    `<a href="${esc(d.url)}" style="display:inline-block;background:${esc(ctx.brandColor)};color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold">Open the needs assessment</a>`,
+  ]);
+  return { subject, text, html };
+}
+
 export const TEMPLATES = {
   // Phase 13
   KICKOFF_NOTICE: kickoffNotice,
   MINUTES_SIGN_OFF: minutesSignOff,
   // Redesign R4d
   FINDINGS_SUMMARY: findingsSummary,
+  // Needs pipeline wave 3
+  NEEDS_TASK_NOTICE: needsTaskNotice,
 } as const;
 
 export type TemplateKey = keyof typeof TEMPLATES;

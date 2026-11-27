@@ -89,7 +89,8 @@ const sendXlsx =
 
 const VIEW = requirePermission('needs:view');
 const MANAGE = requirePermission('needs:manage_cycle');
-const SUBMIT = requirePermission('needs:submit');
+// Wave 3 (A4): the quantity surveyor uploads costed versions through the same routes.
+const UPLOADERS = requirePermission('needs:submit', 'needs:cost');
 const DOCUMENT_WRITERS = requirePermission('needs:manage_cycle', 'needs:submit', 'needs:validate', 'needs:cost');
 const PROPOSAL_DOCUMENT_WRITERS = requirePermission('needs:submit', 'needs:validate', 'needs:cost');
 
@@ -121,8 +122,8 @@ needsRoutes.post(
 needsRoutes.get('/cycles/:cycleId/documents/:documentId/file', VIEW, sendFile((req) => cycleDocumentFile(req.webUser!, param(req, 'cycleId'), param(req, 'documentId'))));
 
 // Upload.
-needsRoutes.post('/cycles/:cycleId/uploads/preview', SUBMIT, validateBody(NeedsUploadPreviewRequestSchema), send((req) => previewUpload(req.webUser!, param(req, 'cycleId'), req.body)));
-needsRoutes.post('/cycles/:cycleId/uploads/confirm', SUBMIT, validateBody(NeedsUploadConfirmRequestSchema), send((req) => confirmUpload(req.webUser!, param(req, 'cycleId'), req.body), 201));
+needsRoutes.post('/cycles/:cycleId/uploads/preview', UPLOADERS, validateBody(NeedsUploadPreviewRequestSchema), send((req) => previewUpload(req.webUser!, param(req, 'cycleId'), req.body)));
+needsRoutes.post('/cycles/:cycleId/uploads/confirm', UPLOADERS, validateBody(NeedsUploadConfirmRequestSchema), send((req) => confirmUpload(req.webUser!, param(req, 'cycleId'), req.body), 201));
 
 // Proposals.
 needsRoutes.get('/cycles/:cycleId/proposals', VIEW, send((req) => listProposals(req.webUser!, param(req, 'cycleId'), NeedsProposalListQuerySchema.parse(req.query))));

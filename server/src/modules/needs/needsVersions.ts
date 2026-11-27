@@ -12,8 +12,9 @@ import {
 } from '@insite/shared';
 import { AppError } from '../../middleware/error.middleware';
 import { applyFlagFindings, computeFlagFindings } from './needsFlags.service';
-import { costingStandardById, distinctLgas, lockCostingStandardVersion, versionAmounts, type LoadedCostingStandard } from './needsSupport';
+import { costingStandardById, distinctLgas, lockCostingStandardVersion, parsedOf, versionAmounts, type LoadedCostingStandard } from './needsSupport';
 import type { CycleRow } from './needsAccess';
+import { compareVersions, reopenAfterChange, reopenSentence, type Reopen } from './decisions/versionChange';
 
 /**
  * Needs pipeline wave 2 (B5, B6, B9): writing proposals and versions, always inside the caller's
@@ -127,12 +128,19 @@ export interface WrittenVersion {
   versionId: string;
   versionNumber: number;
   flags: ProposalFlagDto[];
+  /** Wave 3 (A5): the stage the change rule sent the proposal back to, with the sentence for the ledger. */
+  reopened: (Reopen & { sentence: string }) | null;
 }
 
 /**
  * Adds a version to a proposal (number = last + 1), makes it current, replaces the current tables,
  * locks the costing standard version it names, updates the proposal's amounts and places, and runs
  * the flags. The caller writes the audit entry.
+ *
+ * Wave 3 (A5, the change rule): without a `statusUpdate`, the new version is compared with the
+ * previous current one (`compareVersions`); a changed scope in Design or later sends the proposal
+ * back to Validation, a changed cost after Costing back to Costing, IN_PROGRESS (a RETURNED proposal
+ * reopened this way needs no resubmission), and the costed amount is cleared (it is signed off again).
  */
 export async function writeVersionInTx(
   tx: Tx,
@@ -155,6 +163,16 @@ export async function writeVersionInTx(
   const last = await tx.needsAssessmentVersion.aggregate({ where: { proposalId: params.proposal.id }, _max: { number: true } });
   const number = (last._max.number ?? 0) + 1;
   const amounts = versionAmounts(params.parsed);
+  let reopened: WrittenVersion['reopened'] = null;
+  if (!params.statusUpdate) {
+    const before = await tx.needsProposal.findUniqueOrThrow({
+      where: { id: params.proposal.id },
+      select: { stage: true, currentVersion: { select: { parsedJson: true } } },
+    });
+    const previous = parsedOf(before.currentVersion?.parsedJson);
+    const r = previous ? reopenAfterChange(before.stage as NeedsStage, compareVersions(previous, params.parsed)) : null;
+    if (r) reopened = { ...r, sentence: reopenSentence(r, params.config.stages.find((s) => s.stage === r.stage)?.label ?? r.stage) };
+  }
   if (params.costingStandardVersionId) await lockCostingStandardVersion(tx, params.costingStandardVersionId);
   const version = await tx.needsAssessmentVersion.create({
     data: {
@@ -179,6 +197,8 @@ export async function writeVersionInTx(
     },
   });
   await replaceCurrentTables(tx, params.proposal.id, params.parsed);
+  // Review fix (wave 3): a reopened proposal leaves any ranking it was in; its sheets scored the old content.
+  if (reopened) await tx.needsScoreSheet.deleteMany({ where: { proposalId: params.proposal.id } });
   await tx.needsProposal.update({
     where: { id: params.proposal.id },
     data: {
@@ -190,6 +210,20 @@ export async function writeVersionInTx(
       stateCode: params.proposal.stateCode,
       ...(params.parsed.project.title ? { title: params.parsed.project.title } : {}),
       ...(params.statusUpdate ? { stage: params.statusUpdate.stage, status: params.statusUpdate.status } : {}),
+      ...(reopened
+        ? {
+            stage: reopened.stage,
+            status: 'IN_PROGRESS',
+            statusReason: `Version ${number}: ${reopened.sentence}`,
+            costedAmountNgn: null,
+            scoreImpact: null,
+            scoreEase: null,
+            scoreTotal: null,
+            rank: null,
+            aboveLine: null,
+            lineOverrideReason: null,
+          }
+        : {}),
     },
   });
 
@@ -215,5 +249,5 @@ export async function writeVersionInTx(
     versionNumber: number,
     findings,
   });
-  return { versionId: version.id, versionNumber: number, flags };
+  return { versionId: version.id, versionNumber: number, flags, reopened };
 }

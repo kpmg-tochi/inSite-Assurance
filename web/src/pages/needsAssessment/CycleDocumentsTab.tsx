@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { FilePlus2 } from "lucide-react";
-import { CYCLE_DOCUMENT_KIND_META, type NeedsCycleDocumentDto, type NeedsCycleDto } from "@insite/shared";
+import { CYCLE_DOCUMENT_KIND_META, NeedsReportKindEnum, type NeedsCycleDocumentDto, type NeedsCycleDto } from "@insite/shared";
 import { StandardTable, TableBadge, type TableColumnDef } from "../../components/table";
 import { primaryButton } from "../../components/contracts/contractUi";
 import { NeedsDocumentDialog } from "../../components/needs/NeedsDocumentDialog";
 import { formatBytes } from "../../components/needs/needsUi";
+import { GeneratedReports } from "../../components/needs/decisions/GeneratedReports";
 import { getCycleDocumentLink } from "../../api/needsPipeline";
 import { useNeedsProposalsQuery } from "../../queries/needs/useNeedsQueries";
 import { useOpenNeedsFileMutation } from "../../mutations/needs/useNeedsMutations";
@@ -14,7 +15,12 @@ import { formatDateTimeShort } from "../../lib/formatters";
  * Needs pipeline wave 2 (C2): the documents that live once on the cycle (D-N.5): circular, reports,
  * minutes, memos … each may cover some proposed projects. A new version supersedes the earlier one,
  * which stays listed (muted). Adding needs `needs:manage_cycle` on an open cycle.
+ *
+ * Wave 3 (C5): the generated reports (Validated Project List, Cost Estimate Report, Prioritised
+ * Project Portfolio) and their signed copies sit in report cards above; the table lists the others.
  */
+
+const REPORT_KINDS = new Set<string>(NeedsReportKindEnum.options);
 export function CycleDocumentsTab({ cycle, canManage }: { cycle: NeedsCycleDto; canManage: boolean }) {
   const openFile = useOpenNeedsFileMutation();
   const proposalsQuery = useNeedsProposalsQuery(cycle.id, {});
@@ -22,13 +28,14 @@ export function CycleDocumentsTab({ cycle, canManage }: { cycle: NeedsCycleDto; 
   const referenceOf = useMemo(() => new Map(proposals.map((p) => [p.id, p.reference])), [proposals]);
   const [dialog, setDialog] = useState<{ supersedes: NeedsCycleDocumentDto | null } | null>(null);
 
-  const supersededIds = useMemo(() => new Set(cycle.documents.map((d) => d.supersedesId).filter((id): id is string => Boolean(id))), [cycle.documents]);
+  const others = useMemo(() => cycle.documents.filter((d) => !REPORT_KINDS.has(d.kind)), [cycle.documents]);
+  const supersededIds = useMemo(() => new Set(others.map((d) => d.supersedesId).filter((id): id is string => Boolean(id))), [others]);
   const rows = useMemo(
     () =>
-      [...cycle.documents].sort(
+      [...others].sort(
         (a, b) => Number(supersededIds.has(a.id)) - Number(supersededIds.has(b.id)) || b.uploadedAt.localeCompare(a.uploadedAt)
       ),
-    [cycle.documents, supersededIds]
+    [others, supersededIds]
   );
   const writable = canManage && cycle.status === "OPEN";
 
@@ -115,10 +122,11 @@ export function CycleDocumentsTab({ cycle, canManage }: { cycle: NeedsCycleDto; 
   ];
 
   return (
-    <>
+    <div className="space-y-4">
+      <GeneratedReports cycle={cycle} documents={cycle.documents.filter((d) => REPORT_KINDS.has(d.kind))} canUploadSigned={writable} />
       <StandardTable<NeedsCycleDocumentDto>
         title="Cycle documents"
-        subtitle={`${cycle.documents.length - supersededIds.size} current · ${supersededIds.size} superseded`}
+        subtitle={`${others.length - supersededIds.size} current · ${supersededIds.size} superseded`}
         headerActions={
           writable ? (
             <button type="button" className={primaryButton} onClick={() => setDialog({ supersedes: null })}>
@@ -146,6 +154,6 @@ export function CycleDocumentsTab({ cycle, canManage }: { cycle: NeedsCycleDto; 
           onClose={() => setDialog(null)}
         />
       )}
-    </>
+    </div>
   );
 }

@@ -40,8 +40,12 @@ import { NeedsAssessmentImportStateSchema } from './needsAssessment.schema';
  * 4 Team & monitoring, 5 Review), plus the optional "Advanced" entry listed under a divider.
  */
 
-/** `AAA-999` (older codes, e.g. PRG-102) or the UBEC lot/batch form `2026-LOT-5-BATCH-7` (client demo updates C3). */
-export const PROJECT_CODE_PREFIX_REGEX = /^(?:[A-Z0-9]{3}-[0-9]{3}|\d{4}-LOT-\d+-BATCH-\d+)$/;
+/**
+ * `AAA-999` (older codes, e.g. PRG-102), the UBEC lot/batch form `2026-LOT-5-BATCH-7` (client demo
+ * updates C3), or a needs pipeline proposal reference `2027-DI-014` / `2027-MG-KN-007`, which a
+ * converted draft keeps as its code until it gets a lot (D-N.15; `PROPOSAL_REFERENCE_REGEX`).
+ */
+export const PROJECT_CODE_PREFIX_REGEX = /^(?:[A-Z0-9]{3}-[0-9]{3}|\d{4}-LOT-\d+-BATCH-\d+|\d{4}-(?:DI|MG-[A-Z]{2})-\d{3,})$/;
 
 export const ProjectSetupSectionIdEnum = z.enum([
   'basics',

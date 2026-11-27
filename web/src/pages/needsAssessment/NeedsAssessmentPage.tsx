@@ -15,6 +15,7 @@ import { useAuth } from "../../lib/auth-context";
 import { ApprovedListsTab } from "./ApprovedListsTab";
 import { ProposedProjectsTab } from "./ProposedProjectsTab";
 import { CycleDocumentsTab } from "./CycleDocumentsTab";
+import { PrioritisationTab } from "../../components/needs/committee/PrioritisationTab";
 
 type TabId = "proposals" | "prioritisation" | "approvals" | "procurement" | "documents" | "approved-lists";
 
@@ -185,12 +186,7 @@ function PipelinePage({ canLists }: { canLists: boolean }) {
               </div>
             )}
             {cycle && active === "proposals" && <ProposedProjectsTab cycle={cycle} canUpload={canUpload} onUpload={() => setUploadOpen(true)} />}
-            {cycle && active === "prioritisation" && (
-              <EmptyPanel title="Nothing to prioritise yet">
-                Proposed projects come here once they are validated and costed. The committee's score sheets, the ranking and the funding line against the
-                indicative ceiling ({money(cycle.indicativeCeilingNgn)}) will be shown in this tab.
-              </EmptyPanel>
-            )}
+            {cycle && active === "prioritisation" && <PrioritisationTab cycle={cycle} />}
             {cycle && active === "approvals" && (
               <EmptyPanel title="Nothing to approve yet">
                 {cycle.fundingGate === "BEAP_APPROVAL"

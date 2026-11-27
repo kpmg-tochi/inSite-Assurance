@@ -35,6 +35,8 @@ export const PROCUREMENT_EMAIL = "procurement@ubec.test";
 export const QS_EMAIL = "qs@ubec.test";
 export const KANO_DPP_EMAIL = "kano.dpp@ubec.test";
 export const KANO_PROCUREMENT_EMAIL = "kano.procurement@ubec.test";
+// Wave 3 (parent plan 16.2 O-2): three SUBEB Steering Committee members (one umbrella role).
+export const KANO_COMMITTEE_EMAILS = ["kano.committee1@ubec.test", "kano.committee2@ubec.test", "kano.committee3@ubec.test"] as const;
 
 /** Role codes of the UBEC tenant's catalogue (the four default codes are kept, renamed). */
 export const UBEC_ROLE = {
@@ -52,6 +54,7 @@ export const UBEC_ROLE = {
   QS: "QUANTITY_SURVEYOR",
   SUBEB_DPP: "SUBEB_DIRECTOR_PHYSICAL_PLANNING",
   SUBEB_PROCUREMENT: "SUBEB_PROCUREMENT_OFFICER",
+  SUBEB_COMMITTEE: "SUBEB_COMMITTEE_MEMBER",
 } as const;
 
 /**
@@ -70,8 +73,10 @@ export const NEEDS_PIPELINE_GRANTS: Record<string, string[]> = {
   EXECUTIVE_SECRETARY: ["needs:view", "needs:chair_committee", "needs:score", "needs:approve_portfolio", "needs:approve_beap", "needs:approve_out_of_cycle"],
   SUBEB_DIRECTOR_PHYSICAL_PLANNING: ["needs:view", "needs:manage_cycle", "needs:validate", "needs:cost", "needs:prepare_beap", "needs:score", "needs:review_portfolio"],
   SUBEB_PROCUREMENT_OFFICER: ["needs:view", "needs:submit", "needs:submit_portfolio", "needs:score"],
-  // The SUBEB Executive Chairman (the SUBEB Administrator acts for him).
-  ORGANIZATION_ADMIN: ["needs:view", "needs:chair_committee", "needs:review_portfolio", "needs:approve_portfolio", "needs:approve_out_of_cycle", "needs:override_separation"],
+  // Parent plan 16.2 O-2: stands for the SUBEB directorates on the committee (M&E, Finance, Administration …).
+  SUBEB_COMMITTEE_MEMBER: ["needs:view", "needs:score"],
+  // The SUBEB Executive Chairman (the SUBEB Administrator acts for him); he also scores (wave 3, 16.2 O-2).
+  ORGANIZATION_ADMIN: ["needs:view", "needs:chair_committee", "needs:score", "needs:review_portfolio", "needs:approve_portfolio", "needs:approve_out_of_cycle", "needs:override_separation"],
 };
 
 /** The pipeline roles the roster adds (web only), with the names the demo overlay also uses. */
@@ -110,6 +115,11 @@ export const NEEDS_PIPELINE_ROLES: Array<{ code: string; name: string; descripti
     code: "SUBEB_PROCUREMENT_OFFICER",
     name: "SUBEB Procurement Officer",
     description: "A SUBEB's Procurement: uploads the State's needs assessments as proposed projects and submits the Prioritised Project Portfolio.",
+  },
+  {
+    code: "SUBEB_COMMITTEE_MEMBER",
+    name: "SUBEB Steering Committee Member",
+    description: "Sits on a SUBEB's Steering Committee for the State's Matching Grants needs assessment and scores the proposed projects. Stands for the SUBEB directorates on the committee (e.g. M&E, Finance, Administration).",
   },
 ];
 
@@ -263,6 +273,9 @@ export const NEEDS_PIPELINE_PEOPLE: Array<{ email: string; fullName: string; rol
   { email: QS_EMAIL, fullName: "Segun Adeyemi", roleCode: UBEC_ROLE.QS, organization: "UBEC", phoneNumber: "+234 803 555 0206" },
   { email: KANO_DPP_EMAIL, fullName: "Kabiru Sule", roleCode: UBEC_ROLE.SUBEB_DPP, organization: "KANO_SUBEB", phoneNumber: "+234 803 555 0207" },
   { email: KANO_PROCUREMENT_EMAIL, fullName: "Hadiza Ibrahim", roleCode: UBEC_ROLE.SUBEB_PROCUREMENT, organization: "KANO_SUBEB", phoneNumber: "+234 803 555 0208" },
+  { email: KANO_COMMITTEE_EMAILS[0], fullName: "Musa Garba", roleCode: UBEC_ROLE.SUBEB_COMMITTEE, organization: "KANO_SUBEB", phoneNumber: "+234 803 555 0209" },
+  { email: KANO_COMMITTEE_EMAILS[1], fullName: "Aisha Lawan", roleCode: UBEC_ROLE.SUBEB_COMMITTEE, organization: "KANO_SUBEB", phoneNumber: "+234 803 555 0210" },
+  { email: KANO_COMMITTEE_EMAILS[2], fullName: "Yakubu Danjuma", roleCode: UBEC_ROLE.SUBEB_COMMITTEE, organization: "KANO_SUBEB", phoneNumber: "+234 803 555 0211" },
 ];
 
 /** Creates the pipeline logins (password as the other seeded users). Runs once the organisations exist. */

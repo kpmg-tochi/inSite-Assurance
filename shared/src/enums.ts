@@ -1045,6 +1045,9 @@ export const AuditActionTypeEnum = z.enum([
   // Needs pipeline wave 2: documents on a cycle or proposal; design standard documents
   'NEEDS_DOCUMENT_ADDED',
   'DESIGN_STANDARD_DOCUMENT_ADDED',
+  // Needs pipeline wave 3: a separation-of-duties override asked for; the committee moves a proposal across the funding line or moves the line
+  'NEEDS_SEPARATION_OVERRIDE_REQUESTED',
+  'NEEDS_RANKING_OVERRIDDEN',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 

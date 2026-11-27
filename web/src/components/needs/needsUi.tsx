@@ -12,11 +12,15 @@ import {
   XCircle,
 } from "lucide-react";
 import {
+  NEEDS_STAGE_LABELS,
   PROPOSAL_FLAG_KIND_META,
+  stageConfigOf,
   zonedCalendarDate,
+  type NeedsCycleDto,
   type NeedsCycleSummaryDto,
   type NeedsDeadlineState,
   type NeedsProposalStatus,
+  type NeedsStage,
   type ProposalFlagKind,
 } from "@insite/shared";
 import { displayTimeZone, formatNaira } from "../../lib/formatters";
@@ -63,6 +67,11 @@ export function locationText(stateCode: string | null | undefined, lgaCodes: rea
 /** "2027 · Direct Intervention" or "2027 · Matching Grants · Kano". */
 export function cycleLabel(c: Pick<NeedsCycleSummaryDto, "interventionYear" | "projectTypeName" | "stateCode">): string {
   return [String(c.interventionYear), c.projectTypeName, c.stateCode ? stateName(c.stateCode) : null].filter(Boolean).join(" · ");
+}
+
+/** The stage's name in this cycle (a programme may rename stages). */
+export function stageLabel(cycle: Pick<NeedsCycleDto, "config">, stage: NeedsStage): string {
+  return stageConfigOf(cycle.config, stage)?.label ?? NEEDS_STAGE_LABELS[stage];
 }
 
 export const formatBytes = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${Math.round(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);

@@ -154,3 +154,54 @@ export function fundingLine(ranked: readonly RankedProposal[], ceilingNgn: numbe
   const totalAboveNgn = round2(ranked.filter((p, i) => items[i].aboveLine).reduce((s, p) => s + (p.costNgn ?? 0), 0));
   return { linePosition, totalAboveNgn, items };
 }
+
+export interface ResolvedRankingItem {
+  id: string;
+  rank: number | null;
+  cumulativeNgn: number | null;
+  /** Above the line the ceiling (or the chair's line position) draws. */
+  computedAboveLine: boolean;
+  /** After the chair's placement, if any. */
+  aboveLine: boolean;
+  placement: 'ABOVE' | 'BELOW' | null;
+}
+
+export interface ResolvedRanking {
+  /** Where the ceiling draws the line (`fundingLine`). */
+  computedLinePosition: number;
+  /** The line in force: the chair's position, else the computed one. */
+  linePosition: number;
+  /** Sum of the costs of the proposals above the line after placements. */
+  totalAboveNgn: number;
+  items: ResolvedRankingItem[];
+}
+
+/**
+ * Needs pipeline wave 3 (B3): the committee's line (D-N.10). The ceiling draws a line
+ * (`fundingLine`); the chair may move it (`linePosition`: the first N ranked proposals are above)
+ * and may place single proposals above or below it, each with a reason (`placements`). A placement
+ * wins over the line; an unranked or uncosted proposal is above only when placed there.
+ */
+export function resolveRankingLine(params: {
+  ranked: readonly RankedProposal[];
+  ceilingNgn: number | null;
+  linePosition: number | null;
+  placements: ReadonlyMap<string, 'ABOVE' | 'BELOW'>;
+}): ResolvedRanking {
+  const computed = fundingLine(params.ranked, params.ceilingNgn);
+  const rankedCount = params.ranked.filter((p) => p.rank !== null && p.costNgn !== null).length;
+  const linePosition = params.linePosition === null ? computed.linePosition : Math.min(params.linePosition, rankedCount);
+  let rankedSeen = 0;
+  const items = params.ranked.map((p, i) => {
+    const line = computed.items[i];
+    let computedAboveLine: boolean;
+    if (params.linePosition === null) computedAboveLine = line.aboveLine;
+    else if (p.rank === null || p.costNgn === null) computedAboveLine = false;
+    else computedAboveLine = ++rankedSeen <= linePosition;
+    const placement = params.placements.get(p.id) ?? null;
+    const aboveLine = placement === 'ABOVE' ? true : placement === 'BELOW' ? false : computedAboveLine;
+    return { id: p.id, rank: p.rank, cumulativeNgn: line.cumulativeNgn, computedAboveLine, aboveLine, placement };
+  });
+  const totalAboveNgn = round2(params.ranked.reduce((sum, p, i) => sum + (items[i].aboveLine ? (p.costNgn ?? 0) : 0), 0));
+  return { computedLinePosition: computed.linePosition, linePosition, totalAboveNgn, items };
+}

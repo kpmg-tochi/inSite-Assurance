@@ -43,6 +43,8 @@ import { needsAssessmentRoutes } from "./modules/needsAssessment/needsAssessment
 import { contractorFlagsRoutes, projectContractorFlagsRoutes } from "./modules/contractorFlags/contractorFlags.routes";
 import { approvedListsRoutes, projectApprovedListRoutes } from "./modules/approvedLists/approvedLists.routes";
 import { needsRoutes } from "./modules/needs/needs.routes";
+import { needsDecisionsRoutes } from "./modules/needs/decisions/needsDecisions.routes";
+import { needsCommitteeRoutes } from "./modules/needs/committee/needsCommittee.routes";
 import { costingStandardsRoutes } from "./modules/standards/costingStandards.routes";
 import { standardsPageRoutes } from "./modules/standards/standardsPage.routes";
 import { geocodeRoutes } from "./modules/geocode/geocode.routes";
@@ -157,6 +159,8 @@ export function createApp() {
   app.use("/api/v1/contractor-flags", contractorFlagsRoutes); // F.4: flags and decisions
   app.use("/api/v1/projects", projectContractorFlagsRoutes); // F.4: GET /projects/:projectId/contractor-flags
   app.use("/api/v1/approved-lists", approvedListsRoutes); // E3: approved lists
+  app.use("/api/v1/needs", needsDecisionsRoutes); // Needs pipeline wave 3 (N4): stage work, overrides, tasks, reports
+  app.use("/api/v1/needs", needsCommitteeRoutes); // Needs pipeline wave 3 (N5): committee, scoring, ranking
   app.use("/api/v1/needs", needsRoutes); // Needs pipeline wave 2: cycles, uploads, proposals
   app.use("/api/v1/costing-standards", costingStandardsRoutes); // Needs pipeline wave 2 (N2)
   app.use("/api/v1/standards", standardsPageRoutes); // Needs pipeline wave 2 (N2): Standards page

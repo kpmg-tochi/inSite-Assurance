@@ -21,6 +21,7 @@ import Notifications from "./Notifications";
 import { APPLICATION_NAME } from "../config/appName";
 import {
   canSeeNavItem,
+  NAV_BADGES,
   NAV_GROUP_LABEL,
   navItemMatches,
   pageNameFor,
@@ -28,8 +29,10 @@ import {
   PROJECT_NAV,
   WORKSPACE_NAV,
   type AppLocation,
+  type NavBadgeKey,
   type NavItem,
 } from "../navigation/navItems";
+import { useNeedsTaskCountQuery } from "../queries/needs/useDecisionQueries";
 
 interface AppShellProps {
   selectedProject: ProjectSummaryDto | null;
@@ -264,22 +267,33 @@ const linkClass = (active: boolean) =>
       : "text-white/85 hover:text-white hover:bg-white/10"
   }`;
 
+/** The counts behind `NavItem.badge`, each fetched only for holders of its permission. */
+function useNavBadgeCounts(): Partial<Record<NavBadgeKey, number>> {
+  const { hasPermission } = useAuth();
+  const needsTasks = useNeedsTaskCountQuery(hasPermission(NAV_BADGES.needsTasks.permission));
+  return { needsTasks: needsTasks.data?.count };
+}
+
 function NavEntry({
   item,
   project,
   loc,
   collapsed,
+  badgeCount,
 }: {
   item: NavItem;
   project: ProjectSummaryDto | null;
   loc: AppLocation;
   collapsed: boolean;
+  /** The entry's badge count; nothing is shown for 0 or unknown. */
+  badgeCount?: number;
 }) {
   const projectId = project?.id ?? "";
   const active =
     navItemMatches(item, loc) &&
     (item.group === "workspace" || loc.projectId === projectId);
   const Icon = item.icon;
+  const badge = badgeCount ?? 0;
   const to =
     project && item.toForProject
       ? item.toForProject({ id: project.id, stage: project.stage ?? null })
@@ -288,12 +302,24 @@ function NavEntry({
     <li>
       <Link
         to={to}
-        title={collapsed ? item.label : undefined}
+        title={collapsed ? (badge ? `${item.label} (${badge})` : item.label) : undefined}
         aria-current={active ? "page" : undefined}
-        className={linkClass(active)}
+        className={`${linkClass(active)} relative`}
       >
         <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
         <span className={collapsed ? "sr-only" : "truncate"}>{item.label}</span>
+        {badge > 0 && item.badge && (
+          <>
+            <span className="sr-only">, {NAV_BADGES[item.badge].srLabel(badge)}</span>
+            {collapsed ? (
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-white ring-2 ring-brand-navy" aria-hidden="true" />
+            ) : (
+              <span className="ml-auto min-w-[1.25rem] rounded-full bg-white px-1.5 py-px text-center text-[10px] font-bold tabular-nums text-brand-navy" aria-hidden="true">
+                {badge > 99 ? "99+" : badge}
+              </span>
+            )}
+          </>
+        )}
       </Link>
     </li>
   );
@@ -346,6 +372,7 @@ function SidebarContent({
   const visible = (items: readonly NavItem[]) =>
     items.filter((item) => canSeeNavItem(item, hasAnyPermission));
   const workspaceItems = visible(WORKSPACE_NAV);
+  const badgeCounts = useNavBadgeCounts();
   const projectItems = visible(PROJECT_NAV);
   const [changingProject, setChangingProject] = useState(false);
 
@@ -407,6 +434,7 @@ function SidebarContent({
                   project={project}
                   loc={loc}
                   collapsed={collapsed}
+                  badgeCount={item.badge ? badgeCounts[item.badge] : undefined}
                 />
               ))}
             </ul>

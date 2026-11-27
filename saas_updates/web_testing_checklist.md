@@ -251,6 +251,62 @@ Normal seed with migration `20261229090000_needs_w2_standards` applied (costing 
 | WT-N2-12 | `admin@ubec.test` | Project type editor tab. Settings → Project types → Direct Intervention → Needs assessment tab: the note that a cycle keeps its own copy; editable Cycle (on/off, becomes a project, cycles, reference, opens month/day), Stages and deadlines (7 rows, name, "Who moves it on" permission picker or "An approval chain", deadline or "No fixed date", remove; "Add stage" offers only missing stages and inserts them in process order), Other dates, minimum fields grid (checkbox per stage and field), Scoring rubric (two dimension names and weights with the running total, divergence and quorum, criteria per dimension with key, label and the five score descriptors), Essential facilities (groups with facility chips and "Add a facility"), Checks (tolerance %, duplicate radius, look-back years, two switches), Approval chains (steps with permission, organisation, deadline, move up/down, remove). Remove the Costing stage: the tab shows a red count and "Add the Costing stage." under Stages; set Impact weight 70: "The dimension weights must add up to 100." and the total line turns red; Save is refused with the tab opened. Undo, change the Validation deadline, save → reload shows the new date; the open DI cycle's deadline strip is unchanged (frozen copy). Matching Grants: removing every BEAP step shows "The BEAP approval chain needs at least one step." |
 | WT-N2-13 | `procurement@ubec.test` | Template v2 in a spreadsheet app. Download the blank template of the 2027 DI cycle; open it in Excel and in LibreOffice: Instructions shows `INSITE-NEEDS-v2` and the costing standard version; dropdowns on Facilities breakdown (facility, action, condition, unit, criticality, site no.) and BoQ (item code, unit); the Sites LGA list follows the State chosen on the Project sheet; choosing an item code on BoQ fills the standard rate for the State's zone; Amount and the Costing summary (subtotal, S&M 5 %, contingency 5 %, total) are formulas and locked; Rates and Lists cannot be edited. Fill one site and two rows, save, upload: the preview reads it without issues. Download a proposal's pre-filled template: every sheet holds the current version. |
 
+## 6i. Needs pipeline wave 3 (2026-11-27)
+
+Normal seed with migration `20261230090000_needs_w3_committee` applied. The seed has no cycle yet: open the 2027 DI cycle as `dpp@` and the Kano 2027 MG cycle as `kano.dpp@`, upload the fixtures (`server/src/tests/fixtures/needs/*`) and follow the walk of `routes.needs.scenarios.test.ts` (DI-01 … DI-09, MG-01 … MG-05; its header lists the steps). Password `Password123!`. New logins: `kano.committee1@`, `kano.committee2@`, `kano.committee3@ubec.test` (SUBEB Steering Committee Member). Wave file: `needs_pipeline/wave3_validation_costing_scoring.md` (Tracks C and D). Check every screen at 375 px too.
+
+### Stage work (Track C)
+
+| Ref | Login | Check |
+| :--- | :--- | :--- |
+| WT-N3-01 | `me.officer@` | Proposed projects with tasks: "Waiting for me" is on by default and the subtitle says "(showing what waits for you)"; toggling it off shows every proposal. |
+| WT-N3-02 | `procurement@` | Tick two Draft proposals: the bar offers Submit and Withdraw only; Submit moves both, success toast. |
+| WT-N3-03 | `procurement@` | Tick one Draft and one Validation proposal: the bar says no action is common; "Clear selection" removes the bar. |
+| WT-N3-04 | `procurement@` | Batch Submit where one file lacks the minimum fields: the dialog lists the refused reference and message; neither proposal moved. |
+| WT-N3-05 | `procurement@` | Withdraw without a reason: button disabled with a hint; with a reason the proposal shows Withdrawn. |
+| WT-N3-06 | `me.officer@` | Tick proposals at Validation → Validate: the drawer opens; choose Return on one item: a reason is required unless the batch reason is filled. |
+| WT-N3-07 | `me.officer@` | In the drawer, "Upload a document": the new cycle document appears ticked as evidence. |
+| WT-N3-08 | `me.officer@` | A Validation decision that generates the Validated Project List: the result view shows new statuses, the report files with Open, and "See them in Cycle documents". |
+| WT-N3-09 | a validator who uploaded a version | A batch decision including that proposal: the refused item reads `SAME_PERSON_VALIDATION` with "Ask for an override". |
+| WT-N3-10 | `me.officer@` | Validation tab: record a Validate finding with desk notes, site verification and an evidence document uploaded from the form (ticked); the record card then shows it. |
+| WT-N3-11 | `me.officer@` | Validation tab with a DUPLICATE flag: matches list site, reason and distance; a match in a cycle the user cannot open shows its label, not a code. |
+| WT-N3-12 | `me.officer@` | Resolve a duplicate as Merged: the picker lists other open proposals of the cycle; the record's "Flags resolved" shows it; the proposal reads "Merged into another proposed project". |
+| WT-N3-13 | `kano.dpp@` | As the validator of a Kano proposal at Costing: "Ask for an override" (reason ≥ 10 characters) sends the request; the Separation of duties card shows "Waiting for a decision". |
+| WT-N3-14 | `kano.admin@` | The request is in the task queue; "Decide this request" → Authorise with a note → "Authorised, not used yet"; the asker (`kano.dpp@`) sees no Decide button; after the costed upload and sign-off it reads "Authorised, used". |
+| WT-N3-15 | `qs@` | BoQ & costing tab at Costing: lines grouped by unit, standard rate and variance; a line beyond tolerance is amber with an icon; the summary shows both columns and the at-standard-rates sentence. |
+| WT-N3-16 | `qs@` | "Acknowledge" a RATE_VARIANCE flag with a reason: it shows "Acknowledged by …: reason"; a missing supervision line has no Acknowledge. |
+| WT-N3-17 | `qs@` | "Upload the costed version" opens the upload for this proposal; "Sign off the costing" opens the drawer with Sign off preset; the Cost Estimate Report appears in Cycle documents. |
+| WT-N3-18 | several | Header buttons follow `allowedActions`: Draft (submitter), Returned (corrector: Resubmit), Validation (validator), Costing (QS), a read-only viewer (download only). |
+| WT-N3-19 | any actor | Task list: the user's open tasks highlighted "For you", tags with icon and words, the summary line counts them. |
+| WT-N3-20 | `me.officer@`, `lagos.me@` | Nav: a `needs:view` holder with tasks sees a count on Needs assessment (a dot when the sidebar is collapsed); a user without `needs:view` sends no count request. |
+| WT-N3-21 | `dpp@` | Cycle documents: report cards with "Generated", Excel and PDF side by side; "Earlier versions (n)" unfolds after a regeneration; the files open and read correctly (UBEC styling, NGN amounts in the PDF). |
+| WT-N3-22 | `qs@`, `kano.dpp@` | Regenerate the Cost Estimate Report as the QS or a cycle manager: new files, the old ones fold away; a user outside the owning organisation sees no Regenerate. |
+| WT-N3-23 | `dpp@` | Upload a signed copy on a report card: listed under "Signed copy", not in the table; replacing it marks the earlier one "(superseded)". |
+
+### Committee (Track D)
+
+| Ref | Login | Check |
+| :--- | :--- | :--- |
+| WT-N3C-01 | `es@` | Prioritisation with no committee: "Committee" opens by default with an empty panel and "Edit committee". |
+| WT-N3C-02 | `es@` | Edit committee: the chair row is the signed-in user; people without the scoring permission are greyed out; save → toast, the members table updates. |
+| WT-N3C-03 | `es@` | Open scoring stays disabled, naming who has not declared, until every member declares; then it opens and the chip reads "Scoring open". |
+| WT-N3C-04 | `es@` | Close scoring asks for confirmation; afterwards the button reads "Reopen scoring". |
+| WT-N3C-05 | `dpp@` | A member who has not declared sees the declaration form first; "No conflict" saves; "I have a conflict" needs at least one proposed project; the members table shows the declaration. |
+| WT-N3C-06 | `dpp@` | After declaring a conflict, that proposal is greyed in "Your scoring" as "Recused: declared a conflict of interest", no score button. |
+| WT-N3C-07 | `finance@` | The score sheet: dimensions with weights, each criterion's five descriptors as radio options; arrow keys move within a group; Save disabled until every criterion is scored; the live preview shows Impact, Ease and Total. |
+| WT-N3C-08 | `finance@` | Saving: toast, "n of m scored" rises, the next unscored proposal opens; "Edit scores" reloads the saved values. |
+| WT-N3C-09 | `dpp@` | A non-chair member sees no combined scores, ranking or rank (ranking area, the proposal's Scores tab and the Proposed projects table) before finalisation; afterwards they do. |
+| WT-N3C-10 | `admin@` (not a member) | The live ranking read-only, without Override, Move the line or Finalise. |
+| WT-N3C-11 | `es@` | The ranking shows the funding line row with the ceiling and the total above; cumulative amounts add up; rows below the line are muted. |
+| WT-N3C-12 | `es@` | Divergence mark: a keyboard toggle opens the criteria with min–max; the hover title lists them. |
+| WT-N3C-13 | `es@` | "Place above the line" requires a reason; the row shows "Placed above the line: reason"; "Clear the override" restores it. |
+| WT-N3C-14 | `es@` | Move the line to position N with a reason: the line row moves and reads "Moved by the chair"; "Back to the ceiling" restores it. |
+| WT-N3C-15 | `es@` | Finalise disabled with the reason when below quorum; when allowed, the dialog picks or uploads minutes and finalises; toast says the proposals moved to Approval; Proposed projects shows the new stage. |
+| WT-N3C-16 | `es@` | After finalisation the ranking is read-only with "Finalised <date> by <name>"; the Prioritised Project Portfolio links open (xlsx and PDF read correctly); "Regenerate portfolio" and "Upload minutes" work and appear in Cycle documents. |
+| WT-N3C-17 | `dpp@` | Proposal Scores tab after finalisation: total, Impact, Ease, rank, line chip with override reason, every sheet with rubric labels and comments, recusals. Before finalisation a member sees only their own sheet and the hidden-sheets note. |
+| WT-N3C-18 | `es@` | Server errors (409 `NEEDS_QUORUM_NOT_MET`, `NEEDS_CONFLICT_NOT_DECLARED`, `NEEDS_MEMBER_RECUSED`) show the server's message with the proposal references. |
+| WT-N3C-19 | any | At 375 px: no horizontal page scroll; tables scroll in their card; dialogs fit; the progress bar does not animate with reduced motion. |
+
 ## 7. Known open items
 
 | Ref | Item |

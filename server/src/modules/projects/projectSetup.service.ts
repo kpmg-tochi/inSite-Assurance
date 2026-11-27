@@ -793,7 +793,16 @@ export async function createProjectDraft(webUser: WebJwtPayload, input: CreatePr
  * needs-assessment-first flow creates the draft, its sites, work phases, units and BoQ atomically.
  * Returns the project id; the caller invalidates the creator's auth cache after commit.
  */
-export async function createProjectDraftInTx(tx: Tx, webUser: WebJwtPayload, input: CreateProjectDraftRequest): Promise<string> {
+export async function createProjectDraftInTx(
+  tx: Tx,
+  webUser: WebJwtPayload,
+  input: CreateProjectDraftRequest,
+  /**
+   * Needs pipeline conversion (wave 3, N7a): the year comes from the cycle, so the "current or next
+   * fiscal year" window of a new draft does not apply (plan section 11, `allowedInterventionYears`).
+   */
+  options: { interventionYearFromCycle?: boolean } = {}
+): Promise<string> {
   const tenantId = webUser.tenantId;
   // Client demo updates C3: a lot choice numbers the code (it wins over a typed code); without
   // either, 400 PROJECT_CODE_REQUIRED.
@@ -804,7 +813,7 @@ export async function createProjectDraftInTx(tx: Tx, webUser: WebJwtPayload, inp
   }
   if (!lotChoice) assertNotManualLotCode(input.codePrefix, null);
   // D5: a new project takes the current or the next intervention year.
-  if (input.interventionYear) await assertInterventionYearAllowed(tx, tenantId, input.interventionYear);
+  if (input.interventionYear && !options.interventionYearFromCycle) await assertInterventionYearAllowed(tx, tenantId, input.interventionYear);
   const area = resolveAdminArea(input, null);
   const funding = resolveFundingSource(input, null);
   if (!lotChoice) {
