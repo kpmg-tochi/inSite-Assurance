@@ -47,6 +47,9 @@ async function createDraft(typeId: string, stateCode: string | null = 'KN') {
     .set(await web())
     .send({ name: `Sites test project ${seq}`, codePrefix: `STE-${100 + seq}`, ...(stateCode ? { stateCode } : {}), totalBudgetNgn: 50_000_000, projectTypeId: typeId });
   assert.equal(res.status, 201, JSON.stringify(res.body));
+  // Needs pipeline wave 4 (D-N.13): a manual draft of a pipeline programme has no origin; these tests
+  // cover the setup checks behind the origin gate, so the draft is given one.
+  await prisma.project.update({ where: { id: res.body.data.projectId }, data: { origin: 'LEGACY' } });
   return res.body.data.projectId as string;
 }
 

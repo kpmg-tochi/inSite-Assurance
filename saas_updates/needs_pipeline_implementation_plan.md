@@ -1,6 +1,6 @@
 # Needs Pipeline: from identified need to funded project (N0–N9)
 
-Status: **wave 1 (N0 + N1) and wave 2 (N2 + N3) built 2026-11-26; wave 3 (N4 + N5 + N7a) built 2026-11-27; waves 4–5 not started.** Written 2026-11-26, the day before the Minister of Education demo (2026-11-27). Wave 1 was executed on the owner's instruction that day on the section 3 assumptions (section 16.1 had no answers yet): fold the demo answers into 16.1 before wave 2 starts. Contract names: section 17.
+Status: **wave 1 (N0 + N1) and wave 2 (N2 + N3) built 2026-11-26; wave 3 (N4 + N5 + N7a) and wave 4 (N6 + N7b–e) built 2026-11-27; wave 5 not started.** Written 2026-11-26, the day before the Minister of Education demo (2026-11-27). Wave 1 was executed on the owner's instruction that day on the section 3 assumptions (section 16.1 had no answers yet): fold the demo answers into 16.1 before wave 2 starts. Contract names: section 17.
 
 ## 1. Goal
 
@@ -310,16 +310,16 @@ Gate = typecheck, lint, web build, server unit + route tests, mobile tests, seed
 - [x] **Full gate** _(wave 3, section 15)_
 
 ### N6: Approval and out-of-cycle
-- [ ] `NEEDS_PORTFOLIO` chain (type-configured steps, organisation scope from the cycle), exclusions, memo; `OUT_OF_CYCLE` chain and route; New project button
-- [ ] Web approval review
+- [x] `NEEDS_PORTFOLIO` chain (type-configured steps, organisation scope from the cycle), exclusions, memo; `OUT_OF_CYCLE` chain and route; New project button. _Wave 4 (Track A); web owed WT-N4-01 … -14_
+- [x] Web approval review. _Wave 4 (Track C); owed WT-N4-01 … -07_
 
 ### N7: Funding, conversion, BEAP, project integration
-- [ ] DI: budget submission record; appropriated schedule import (approved-list workbook with proposal reference column) → conversion
-- [ ] MG: BEAP build, submit, UBEC review, revision, approval → conversion; counterpart evidence; activation gate
-- [ ] `convertProposalToProject` (core built in wave 3, N7a: `needs.conversion.n7a.test.ts`; the approved-list row and documents link are wave 4) (one transaction: draft with type applied and parties derived, sites, units from breakdown rows, BoQ lines, budget = funded amount, origin, approved-list row, documents linked, ledger entry)
-- [ ] DI procurement plan tab (lots on converted drafts); Portfolio Pipeline tab; project Origin card, Facilities tab, Documents link
-- [ ] Remove `/projects/from-needs-assessment` and the D1 web flow; register import admin-only
-- [ ] **Full gate**
+- [x] DI: budget submission record; appropriated schedule import (approved-list workbook with proposal reference column) → conversion. _Wave 4 (Track B); web owed WT-N4-40 … -45_
+- [x] MG: BEAP build, submit, UBEC review, revision, approval → conversion; counterpart evidence; activation gate. _Wave 4; web owed WT-N4-47 … -53_
+- [x] `convertProposalToProject` (core built in wave 3, N7a: `needs.conversion.n7a.test.ts`; the approved-list row and documents link are wave 4) (one transaction: draft with type applied and parties derived, sites, units from breakdown rows, BoQ lines, budget = funded amount, origin, approved-list row, documents linked, ledger entry)
+- [x] DI procurement plan tab (lots on converted drafts); Portfolio Pipeline tab; project Origin card, Facilities tab, Documents link. _Wave 4; owed WT-N4-15 … -20, -45_
+- [x] Remove `/projects/from-needs-assessment` and the D1 web flow; register import admin-only. _Wave 4 (M2, M3)_
+- [x] **Full gate** _(wave 4, section 15)_
 
 ### N8: Field app verification
 - [ ] Section 10; physical checks added to `physical_testing_checklist.md`
@@ -360,7 +360,7 @@ Parallel work (CLAUDE.md step 4): after N1 is built, server (services, routes, t
 | Wave 1 (N0 + N1), 2026-11-26 | ✓ | 0 errors (52 warnings) | ✓ | **310/310** (262 + 47 in `needs.n1.test.ts` + 1 in `visits.r4.test.ts`) | **470/470 pass, 25 todo** of 495 (454 + 16 in `routes.needs.n1.test.ts` + the 25 todo scenario steps) | 169/169 | normal ✓, overlay ✓, normal ✓, overlay ✓ (scratch database `insite_needs_w1`); schema diff against it empty |
 | Wave 2 (N2 + N3), 2026-11-27 (run 2, after the review fixes) | ✓ | 0 errors (52 warnings) | ✓ | **329/329** | **514/514 pass, 19 todo** of 533 | 169/169 | normal ✓, overlay ✓ (scratch `insite_needs_w1`); schema diff empty |
 | Wave 3 (N4 + N5 + N7a), 2026-11-27 (run 2, after the review fixes) | ✓ | 0 errors (52 warnings) | ✓ | **329/329** | **593/593 pass, 11 todo** of 604 | 169/169 | normal ✓, overlay ✓ (scratch `insite_needs_w1`); schema diff empty |
-| N7 | | | | | | | |
+| Wave 4 (N6 + N7b–e), 2026-11-27 (end of wave, after M2–M5 and the review fixes; the M1 gate before the deletion is in the wave file) | ✓ | 0 errors (52 warnings) | ✓ | **329/329** | **653/653 pass, 1 todo** of 654 (only FIELD-01 left `todo`) | 169/169 | normal ✓, overlay ✓ (scratch `insite_needs_w1`, migration `20261231090000_needs_w4_funding`); schema diff empty |
 | N9 | | | | | | | |
 
 ## 16. Found during implementation
@@ -398,6 +398,15 @@ Decisions, deviations and the review are in `needs_pipeline/wave3_validation_cos
 - **Conversion core exists, uncalled:** `convertProposalToProject(tx, proposal, { fundedAmountNgn, lot?, by })`; wave 4's gates call it and add the approved-list row and document links. A State cycle's projects are owned by the cycle's SUBEB.
 - **Email cap:** pipeline emails count against `MESSAGING_RECIPIENT_DAILY_CAP` (5 a day); the task queue is the reliable channel.
 - **Demo database:** the wave 2 and 3 migrations are owed on `insite_assurance`.
+
+### 16.5 Wave 4 (2026-11-27)
+
+Decisions, deviations and the review are in `needs_pipeline/wave4_approval_funding_conversion.md` section 5. For wave 5:
+
+- **Late proposals** re-enter through the out-of-cycle route (no second ranking round).
+- **Activation gate** applies to drafts whose type snapshot runs the pipeline; the seed marks its projects LEGACY. Wave 5's seeded cycles should give the overlay's projects origin NEEDS_PIPELINE with proposals (N9) instead.
+- **Open for the owner:** a BEAP revision above the approved amount is not refused; the SUBEB Administrator holds no `projects:edit_baseline`, so a converted SUBEB draft's setup needs a UBEC administrator (role catalogue).
+- **Demo:** the D1 flow and its demo pack file are gone; wave 5 rewrites the demo script and pack. The wave 2–4 migrations are owed on `insite_assurance`.
 
 ### 16.3 Wave 1 (2026-11-26)
 
@@ -596,3 +605,46 @@ Error codes added by wave 3 (thrown; details in the wave file section 5):
 | `NEEDS_FLAG_NOT_FOUND`, `NEEDS_REPORT_NOT_FOUND` | 404 | A flag not on the proposal or cycle; a report kind other than the two stage reports |
 
 Server files built by wave 3 (beyond the seams above): `decisions/` (`needsDecisions.routes.ts`, `needsDecisions.service.ts`, `needsGate.ts`, `proposalRules.ts` (`narrowActions`, `loadRuleFacts`, `RuleFacts`), `needsOverrides.service.ts`, `needsValidation.service.ts`, `needsTasks.service.ts`, `needsEmails.ts`, `versionChange.ts` (`compareVersions`, `reopenAfterChange`)), `reports/needsReports.service.ts`, `committee/` (`committeeFacts.ts`, `needsCommittee.service.ts`, `needsScoreSheets.service.ts`, `needsRanking.service.ts`, `prioritisedPortfolioReport.ts`, `needsCommittee.routes.ts`), `jobs/needsDeadlines.ts`, message template `NEEDS_TASK_NOTICE`. Web: `components/needs/decisions/*`, `components/needs/committee/*`, `api/needsDecisions.ts`, `api/needsCommittee.ts`, `queries/needs/useDecisionQueries.ts`, `useCommitteeQueries.ts`, `mutations/needs/useDecisionMutations.ts`, `useCommitteeMutations.ts`, nav badge (`NavItem.badge`). Tests: `routes.needs.n4.test.ts`, `routes.needs.n5.test.ts`, `needs.conversion.n7a.test.ts`, `helpers/needsScenarioSteps.n5.ts`.
+
+### 17.10 Added by wave 4 (2026-11-27)
+
+Decisions: `needs_pipeline/wave4_approval_funding_conversion.md` section 5. Binding for wave 5.
+
+| Kind | Names |
+| :--- | :--- |
+| Shared, `needsPipeline.schema.ts` (section "Wave 4") | `NEEDS_SUBMISSION_STATUS_LABELS`, `ProcurementMethodEnum` + `PROCUREMENT_METHOD_LABELS`, `BeapReviewOutcomeEnum` + `BEAP_REVIEW_OUTCOME_LABELS`, extended `NeedsSubmissionItemDtoSchema` and `NeedsSubmissionDtoSchema`, `NeedsApprovalDecisionEnum` (APPROVE, RETURN), `PortfolioItemInputSchema`, `SubmitPortfolioRequestSchema`, `NeedsApprovalActionRequestSchema`, `NeedsDistributionLevelEnum`, `OutOfCycleRequestSchema`, `UpdateOutOfCycleRequestSchema`, `OutOfCycleListQuerySchema`, `NeedsOutOfCycleDtoSchema`, `NeedsFundingRecordKindEnum`, `RecordBudgetSubmissionRequestSchema`, `NeedsFundingRecordDtoSchema`, `APPROPRIATED_SCHEDULE_COLUMNS` (`AppropriatedScheduleColumn`), `AppropriationImportPreviewRequestSchema`, `AppropriationImportConfirmRequestSchema`, `AppropriationRowOutcomeEnum`, `AppropriationIssueSchema`, `AppropriationPreviewRowSchema`, `AppropriationPreviewDtoSchema`, `NeedsConvertedProposalSchema`, `AppropriationResultDtoSchema`, `NeedsFundingDtoSchema`, `NeedsProcurementPlanRowSchema`, `NeedsProcurementPlanDtoSchema`, `AssignLotsRequestSchema`, `BeapItemInputSchema`, `SaveBeapRequestSchema`, `BeapItemReviewRequestSchema`, `RecordCounterpartRequestSchema`, `NeedsPipelineRowSchema`, `NeedsPipelineQuerySchema`, `ProjectNeedsDocumentSchema`, `ProjectNeedsOriginDtoSchema` |
+| Shared, other | `ProjectRegisterFieldsSchema.origin` (every project DTO); `utils/needsDistribution.ts` `needsDistribution(items, level)` |
+| Audit actions | `NEEDS_SUBMISSION_UPDATED`, `NEEDS_COUNTERPART_RECORDED`, `NEEDS_LOTS_ASSIGNED` |
+| Prisma (migration `20261231090000_needs_w4_funding`) | `NeedsFundingRecord` (`needs_funding_records`), `NeedsProposal.outOfCycleDetails`, `NeedsSubmission.narrativeDocumentId`, `counterpartRecordedAt/ByUserId/ByName`, `NeedsSubmissionItem.plannedStartDate/plannedEndDate` |
+| Server, main thread | `submissions/submissions.service.ts` (`createSubmissionInTx`, `replaceItemsInTx`, `submitInTx`, `gateForSubmission`, `actOnSubmissionInTx` + `ChainHooks`, `serializeSubmission`, `loadVisibleSubmission`, `cycleOrgContext`, `chainSteps`), `submissions/submissions.routes.ts` (`needsSubmissionsRoutes`); `needsCycles.service.ts` `ensureCycleForOutOfCycle`; `conversion/convertProposal.ts` options `origin`, `approvedListRowId` (bare out-of-cycle drafts); `funding/activationGate.ts` `assertActivationOrigin`; `completion/closurePackNeeds.ts` (`addNeedsAssessmentFolder`); `needsAccess.ts` `beapReviewerCycleBranch` |
+| Server, Track A | `submissions/portfolio.service.ts`, `submissions/outOfCycle.service.ts`, `submissions/needsApproval.routes.ts` (`needsApprovalRoutes`), `integration/needsIntegration.service.ts`, `integration/projectNeedsOrigin.routes.ts` (`projectNeedsOriginRoutes`); queue additions in `decisions/needsTasks.service.ts`, `proposalRules.ts` |
+| Server, Track B | `funding/fundingSupport.ts`, `appropriationWorkbook.ts`, `needsFunding.service.ts`, `procurementPlan.service.ts`, `needsFunding.routes.ts` (`needsFundingRoutes`), `submissions/beap.service.ts`; BEAP revision rule in `needsUpload.service.ts`; `approvedListImport.service.ts` `lockApprovedLists` |
+| Tests | `routes.needs.n6.test.ts`, `routes.needs.n7.test.ts`, `needs.closurePack.n7e.test.ts`, `helpers/needsScenarioSteps.n6.ts` (`stepDI10`, `stepMG06`, `stepOOC01`), `helpers/needsScenarioSteps.n7.ts` (`stepDI11`, `stepDI12`, `stepMG07` … `stepMG10`) |
+| Web | `components/needs/submissions/*` (Approvals tab), `components/needs/outOfCycle/*` (page `/app/needs-assessment/out-of-cycle/:proposalId`), `components/needs/integration/*` (`NewProjectControl`, `PipelineTab`, `ProjectOriginCard`, `FacilitiesBreakdownTab`, `ProjectNeedsDocuments`, `OriginChip`), `components/needs/funding/*` (Funding / BEAP and Procurement plan tabs), `api/needsApproval.ts`, `api/needsIntegration.ts`, `api/needsFunding.ts`, `queries/needs/useApprovalQueries.ts`, `useIntegrationQueries.ts`, `useFundingQueries.ts`, `mutations/needs/useApprovalMutations.ts`, `useFundingMutations.ts` |
+
+Routes (`/api/v1/needs`; web users; `needs:view` to read):
+
+| Route | Who |
+| :--- | :--- |
+| `GET /cycles/:cycleId/submissions?kind=`, `GET /submissions/:submissionId` | `needs:view` |
+| `POST /cycles/:cycleId/portfolio` (submit or resubmit) | `needs:submit_portfolio`, owning organisation, OPEN |
+| `POST /cycles/:cycleId/portfolio/actions`; `POST …/portfolio/memo/presign`, `…/portfolio/memo` | the current step's holder (`gateForSubmission`) |
+| `POST /out-of-cycle`; `GET /out-of-cycle?cycleId=`, `GET|PATCH /out-of-cycle/:proposalId`; `POST …/documents/presign`, `…/documents`, `…/needs-assessment/preview`, `…/needs-assessment/confirm`, `…/submit`, `…/withdraw` | `needs:submit`, owning organisation (OPEN or CLOSED cycle) |
+| `POST /out-of-cycle/:proposalId/actions` | the current step's holder |
+| `GET /pipeline` | `needs:view` |
+| `GET /cycles/:cycleId/funding`; `POST …/funding/budget-submission`, `…/funding/documents/presign`, `…/funding/documents`; `GET …/funding/appropriation/template`; `POST …/funding/appropriation/preview`, `…/confirm` | read `needs:view`; writes `needs:record_funding`, owning organisation, OPEN, DI |
+| `GET /cycles/:cycleId/procurement-plan`; `POST …/procurement-plan/lots`, `…/procurement-plan/documents/presign`, `…/documents` | read `needs:view`; writes `procurement:plan_lots`, DI |
+| `GET|PUT /cycles/:cycleId/beap`; `POST …/beap/submit`, `…/beap/documents/presign`, `…/beap/documents`; `PUT …/beap/counterpart` | read `needs:view`; writes `needs:prepare_beap`, owning organisation, MG |
+| `POST /cycles/:cycleId/beap/review-items`, `…/beap/actions` | the current step's holder (UBEC, outside the SUBEB) |
+| `GET /api/v1/projects/:projectId/needs-origin`, `…/needs-origin/files/:scope/:id` | any web reader of the project (also drafts) |
+
+Error codes added by wave 4 (17.3's `SAME_PERSON_APPROVAL`, `SAME_PERSON_FUNDING`, `PROJECT_ORIGIN_REQUIRED`, `COUNTERPART_EVIDENCE_REQUIRED` are now thrown):
+
+| Code | HTTP | When |
+| :--- | :--- | :--- |
+| `NOT_STEP_APPROVER`, `NOT_STEP_ORGANIZATION` | 403 | A cycle chain step the user does not hold / outside its organisation (UBEC steps on a State cycle need an organisation outside the SUBEB) |
+| `NEEDS_SUBMISSION_NOT_FOUND`, `NEEDS_BEAP_NOT_FOUND`, `NEEDS_PROJECT_NOT_IN_CYCLE` | 404 | |
+| `NEEDS_SUBMISSION_NOT_IN_REVIEW`, `NEEDS_SUBMISSION_NOT_EDITABLE`, `NEEDS_PORTFOLIO_EXISTS`, `NEEDS_OUT_OF_CYCLE_NOT_EDITABLE`, `NEEDS_FUNDING_GATE_MISMATCH`, `NEEDS_FUNDING_ALREADY_IMPORTED`, `NEEDS_APPROVED_LIST_EXISTS`, `NEEDS_PROPOSAL_NOT_AT_FUNDING`, `NEEDS_PROJECT_NOT_DRAFT`, `NEEDS_LOT_ALREADY_ASSIGNED` | 409 | Chain and gate state |
+| `NEEDS_PORTFOLIO_ITEMS_MISMATCH`, `NEEDS_BELOW_LINE_INCLUDED`, `NEEDS_PORTFOLIO_EMPTY`, `NEEDS_EXCLUSION_INVALID`, `NEEDS_APPROVAL_MEMO_REQUIRED`, `NEEDS_AUTHORISING_DOCUMENT_REQUIRED`, `NEEDS_APPROPRIATION_INVALID`, `NEEDS_BEAP_INVALID`, `NEEDS_BEAP_INCOMPLETE`, `NEEDS_BEAP_EXCLUSIONS_NOT_ALLOWED`, `NEEDS_LOT_ITEMS_INVALID` | 422 | Inputs |
+
+Issue codes (inside a preview, not HTTP errors): appropriated schedule rows `PROPOSAL_REFERENCE_REQUIRED`, `PROPOSAL_LISTED_TWICE`, `PROPOSAL_NOT_FOUND`, `PROPOSAL_OTHER_CYCLE`, `PROPOSAL_NOT_AT_FUNDING`, `ABOVE_APPROVED_AMOUNT`, `NO_APPROVED_AMOUNT`, `OUT_OF_CYCLE_NOT_APPROVED`, `OUT_OF_CYCLE_OTHER_YEAR` (review fix), `PROPOSAL_OTHER_PROGRAMME`, `PROJECT_ARCHIVED`; file `NEEDS_APPROPRIATION_YEAR`, `NEEDS_APPROPRIATION_KIND`, `WORKBOOK_COLUMN_MISSING`; approved list upload `APPROVED_LIST_FROM_FUNDING_GATE` (review fix: a list the funding gate wrote is not replaced). Review fix R6 added `OutOfCycleFileRequestSchema`, `OutOfCycleFileConfirmRequestSchema`, `WithdrawOutOfCycleRequestSchema` to the shared schemas.

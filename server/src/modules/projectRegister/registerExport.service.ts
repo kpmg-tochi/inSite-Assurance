@@ -3,6 +3,7 @@ import {
   fundingSourceLabel,
   lgaByCode,
   PortfolioOverviewProject,
+  PROJECT_ORIGIN_LABELS,
   ProjectRegisterFilterOptionsDto,
   ProjectRegisterFilters,
   ProjectSiteSummaryDto,
@@ -22,6 +23,9 @@ import { generateRegisterPdf, RegisterPdfColumn } from '../../integrations/regis
 import { parseTenantBranding } from '../rbac/rbac.service';
 import { getPortfolioOverview } from '../projects/projects.service';
 import { workspaceShortName } from '../scope/scopeImport.service';
+
+/** Needs pipeline wave 4 (D-N.13): the "Outside annual cycle" chip of the screen, for OUT_OF_CYCLE projects. */
+const outsideCycle = (p: PortfolioOverviewProject): string | null => (p.origin === 'OUT_OF_CYCLE' ? PROJECT_ORIGIN_LABELS.OUT_OF_CYCLE : null);
 
 /**
  * UBEC IRL: the project register export (.xlsx and .pdf) and the register filter options. Rows come
@@ -186,6 +190,7 @@ export async function buildRegisterXlsx(webUser: WebJwtPayload, filters: Project
       : []),
     { header: 'Intervention year', width: 12, format: 'integer', value: projectOnly((r) => r.p.interventionYear) },
     { header: 'Funding source', width: 26, wrap: true, value: projectOnly((r) => r.p.fundingSource) },
+    { header: 'Origin', width: 18, wrap: true, value: projectOnly((r) => outsideCycle(r.p)) },
     { header: 'Stage', width: 22, wrap: true, value: (r) => (r.site ? SITE_STATUS_LABELS[r.site.status] : stageText(r.p)) },
     { header: 'Schedule', width: 16, value: projectOnly((r) => scheduleText(r.p)) },
     { header: '% complete', width: 11, format: 'number', value: (r) => (r.site ? r.site.progressPct : r.p.certifiedProgressPct) },
@@ -273,7 +278,7 @@ export async function buildRegisterPdf(webUser: WebJwtPayload, filters: ProjectR
     {
       header: 'Year / funding',
       weight: 9,
-      value: projectOnly((r) => [r.p.interventionYear ? String(r.p.interventionYear) : '', r.p.fundingSource].filter(Boolean).join('\n')),
+      value: projectOnly((r) => [r.p.interventionYear ? String(r.p.interventionYear) : '', r.p.fundingSource, outsideCycle(r.p)].filter(Boolean).join('\n')),
     },
     {
       header: 'Stage / schedule',

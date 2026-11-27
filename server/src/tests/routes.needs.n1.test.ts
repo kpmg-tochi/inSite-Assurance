@@ -521,6 +521,8 @@ describe('Needs pipeline N1: tables', () => {
   });
 
   it('Project.origin is empty on a new row, takes the four origins, and a project links to one proposed project', async () => {
+    // Wave 4: the seed marks its projects LEGACY at the end; clear it to check the column has no default.
+    await prisma.project.update({ where: { id: ids['PRG-101'] }, data: { origin: null } });
     const project = await prisma.project.findUniqueOrThrow({ where: { id: ids['PRG-101'] } });
     assert.equal(project.origin, null, 'no database default: the origin is set in code');
     assert.equal(project.needsProposalId, null);

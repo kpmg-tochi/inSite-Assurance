@@ -45,6 +45,7 @@ import { firstStage, lockCycle, nextProposalReference, writeVersionInTx } from '
 import { parseNeedsWorkbook, type NeedsWorkbookFacility } from './workbook/needsWorkbook';
 import { recordOverrideUseInTx } from './decisions/needsOverrides.service';
 import { holds, loadRuleFacts, narrowActions, separationFor, type OverrideFlagFact, type RuleFacts } from './decisions/proposalRules';
+import { applyBeapRevisionInTx, beapRevisionPermit } from './submissions/beap.service';
 
 /**
  * Wave 3 (A3, A4): who may add a version to a proposal now, and as what.
@@ -53,6 +54,11 @@ import { holds, loadRuleFacts, narrowActions, separationFor, type OverrideFlagFa
  *   not cost it unless another person authorised an override; the use is written to the ledger).
  * - Otherwise UPLOAD_VERSION: source CORRECTION when RETURNED, else UPLOAD.
  * Both narrowed by the owning organisation and an open cycle (`narrowActions`).
+ *
+ * Wave 4 (B4): a proposal at Funding in a BEAP cycle takes a BEAP revision (source BEAP_REVISION) from a
+ * `needs:prepare_beap` holder while the BEAP is a draft or returned (`beapRevisionPermit`, computed by the
+ * caller and passed as `beap`). A revision moves no stage (the wave 3 change rule does not apply); the
+ * costed total of the new version becomes the proposal's costed amount and the BEAP item's amount.
  */
 interface UploadPermit {
   ok: boolean;
@@ -62,7 +68,10 @@ interface UploadPermit {
   overrideFlag: OverrideFlagFact | null;
 }
 
-function uploadPermit(user: WebJwtPayload, cycle: CycleRow, config: NeedsPipelineConfig, proposal: ProposalRow, facts: RuleFacts): UploadPermit {
+type BeapRevision = Awaited<ReturnType<typeof beapRevisionPermit>>;
+
+function uploadPermit(user: WebJwtPayload, cycle: CycleRow, config: NeedsPipelineConfig, proposal: ProposalRow, facts: RuleFacts, beap: BeapRevision = null): UploadPermit {
+  if (beap) return beap.ok ? { ok: true, source: 'BEAP_REVISION', reason: null, overrideFlag: null } : { ok: false, source: 'BEAP_REVISION', reason: beap.reason, overrideFlag: null };
   const stage = proposal.stage as NeedsStage;
   const status = proposal.status as NeedsProposalStatus;
   const costed = (stage === 'COSTING' && status === 'IN_PROGRESS') || (stage === 'PRIORITISATION' && status === 'RETURNED');
@@ -207,7 +216,7 @@ async function analyseFiles(user: WebJwtPayload, ctx: CycleContext, files: FileI
 
     const stage: NeedsStage = proposal ? (proposal.stage as NeedsStage) : firstStage(config);
     if (proposal) {
-      const permit = uploadPermit(user, cycle, config, proposal, facts);
+      const permit = uploadPermit(user, cycle, config, proposal, facts, await beapRevisionPermit(prisma, user, cycle, proposal));
       if (!permit.ok) issues.push(fileIssue(permit.reason!));
     } else if (!input.proposalId && !holds(user, stageConfigOf(config, stage)?.actorPermissionKey ?? 'needs:submit')) {
       // Wave 3: the route also admits needs:cost (costed versions); new proposed projects stay Procurement's.
@@ -375,7 +384,7 @@ export async function confirmUpload(user: WebJwtPayload, cycleId: string, input:
             const stage = proposal.stage as NeedsStage;
             // Wave 3: re-checked under the cycle lock (another request may have moved it or used the override).
             const freshCycle = await tx.needsCycle.findUniqueOrThrow({ where: { id: cycle.id } });
-            const permit = uploadPermit(user, freshCycle, ctx.config, proposal, await loadRuleFacts(tx, user, [freshCycle], [proposal.id]));
+            const permit = uploadPermit(user, freshCycle, ctx.config, proposal, await loadRuleFacts(tx, user, [freshCycle], [proposal.id]), await beapRevisionPermit(tx, user, freshCycle, proposal));
             if (!permit.ok) return { refusedReason: permit.reason! };
             // Review fix (wave 2): the file was checked against the stage it had then (minimum fields,
             // old template); if the proposal has moved since, check the file again.
@@ -396,9 +405,12 @@ export async function confirmUpload(user: WebJwtPayload, cycleId: string, input:
               costingStandardVersionId: a.costingStandardVersionId,
               isLegacyTemplate: a.isLegacyTemplate,
               uploadedBy: { userId: user.userId, name: user.fullName },
+              // Wave 4 (B4): a BEAP revision keeps the proposal where it is (no change rule).
+              statusUpdate: source === 'BEAP_REVISION' ? { stage, status: proposal.status as NeedsProposalStatus } : null,
             });
+            if (source === 'BEAP_REVISION') await applyBeapRevisionInTx(tx, cycle.id, proposal.id, versionAmounts(parsed).costedTotalNgn);
             if (permit.overrideFlag) await recordOverrideUseInTx(tx, user, cycle, proposal, permit.overrideFlag, 'Uploaded the costed version');
-            const sourceWords = source === 'CORRECTION' ? ' (correction)' : source === 'COSTING' ? ' (costed version)' : '';
+            const sourceWords = source === 'CORRECTION' ? ' (correction)' : source === 'COSTING' ? ' (costed version)' : source === 'BEAP_REVISION' ? ' (BEAP revision)' : '';
             await recordAuditEvent(tx, {
               tenantId: user.tenantId,
               projectId: null,

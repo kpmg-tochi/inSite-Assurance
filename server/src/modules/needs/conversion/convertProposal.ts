@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { formatProjectCode, type CreateProjectDraftRequest } from '@insite/shared';
+import { formatProjectCode, type CreateProjectDraftRequest, type ProjectOrigin } from '@insite/shared';
 import { AppError } from '../../../middleware/error.middleware';
 import type { WebJwtPayload } from '../../../middleware/auth.middleware';
 import { recordAuditEvent } from '../../audit/audit.service';
@@ -34,6 +34,10 @@ export interface ConvertProposalOptions {
   lot?: CreateProjectDraftRequest['lotChoice'];
   /** Who converts (the person whose decision funds the proposal). */
   by: WebJwtPayload;
+  /** Wave 4: default NEEDS_PIPELINE, or OUT_OF_CYCLE for an out-of-cycle proposal. */
+  origin?: Extract<ProjectOrigin, 'NEEDS_PIPELINE' | 'OUT_OF_CYCLE'>;
+  /** Wave 4 (D-N.12): the approved-list row the funding gate wrote for this proposal. */
+  approvedListRowId?: string | null;
 }
 
 export interface ConvertedProposal {
@@ -63,18 +67,23 @@ export async function convertProposalToProject(tx: Tx, proposal: { id: string },
     throw new AppError(`${p.reference} is closed and cannot be funded.`, 409, 'NEEDS_PROPOSAL_CLOSED');
   }
   const parsed = parsedOf(p.currentVersion?.parsedJson);
-  if (!p.currentVersion || !parsed) throw new AppError(`${p.reference} has no needs assessment version.`, 422, 'NEEDS_CONVERSION_INVALID');
+  // Wave 4 (D-N.14): an out-of-cycle request may come without a needs assessment: a bare draft.
+  const bare = p.route === 'OUT_OF_CYCLE' && !p.currentVersion;
+  if (!bare && (!p.currentVersion || !parsed)) throw new AppError(`${p.reference} has no needs assessment version.`, 422, 'NEEDS_CONVERSION_INVALID');
+  const origin = options.origin ?? (p.route === 'OUT_OF_CYCLE' ? 'OUT_OF_CYCLE' : 'NEEDS_PIPELINE');
 
   const facilities = await tx.facility.findMany({ where: { tenantId: by.tenantId }, select: { id: true, code: true, name: true } });
   const facilityByCode = new Map(facilities.map((f) => [f.code.toUpperCase(), f]));
-  const plan = needsToScopeImport(parsed, new Map(facilities.map((f) => [f.code.toUpperCase(), f.name])));
+  const plan = parsed
+    ? needsToScopeImport(parsed, new Map(facilities.map((f) => [f.code.toUpperCase(), f.name])))
+    : { sites: [], units: [], lines: [], issues: [], totals: { siteCount: 0, unitCount: 0, lineCount: 0 } };
   const unknown = [...new Set(plan.units.map((u) => u.facilityCode).filter((c) => !facilityByCode.has(c)))];
   const issues = [...plan.issues.map((i) => i.message), ...unknown.map((c) => `Facility ${c} is not in the workspace catalogue.`)];
   if (issues.length) {
     throw new AppError(`${p.reference} cannot become a project: ${issues[0]}`, 422, 'NEEDS_CONVERSION_INVALID', { issues });
   }
 
-  const stateCode = p.stateCode ?? parsed.project.stateCode ?? null;
+  const stateCode = p.stateCode ?? parsed?.project.stateCode ?? null;
   const lgas = [...new Set(plan.sites.map((s) => s.lgaCode))];
   const projectId = await createProjectDraftInTx(
     tx,
@@ -102,10 +111,11 @@ export async function convertProposalToProject(tx: Tx, proposal: { id: string },
     where: { id: projectId },
     data: {
       owningOrganizationId,
-      origin: 'NEEDS_PIPELINE',
+      origin,
       needsProposalId: p.id,
-      strategicJustification: parsed.project.justification ?? null,
-      assumptions: parsed.project.assumptions ?? null,
+      approvedListRowId: options.approvedListRowId ?? undefined,
+      strategicJustification: parsed?.project.justification ?? p.outOfCycleDetails ?? null,
+      assumptions: parsed?.project.assumptions ?? null,
     },
   });
 
@@ -146,8 +156,10 @@ export async function convertProposalToProject(tx: Tx, proposal: { id: string },
     await tx.projectBeneficiary.create({ data: { projectId, name: plan.sites[0].schoolName, beneficiaryType: 'SCHOOL', isPrimary: true } });
   }
   // The wizard shows sites and scope as filled in; scope stays incomplete until work phases are set.
-  await markStepSaved(tx, projectId, 'sites', by.userId);
-  await markStepSaved(tx, projectId, 'scope', by.userId);
+  if (!bare) {
+    await markStepSaved(tx, projectId, 'sites', by.userId);
+    await markStepSaved(tx, projectId, 'scope', by.userId);
+  }
 
   await tx.needsProposal.update({
     where: { id: p.id },
@@ -165,8 +177,8 @@ export async function convertProposalToProject(tx: Tx, proposal: { id: string },
     reference: p.reference,
     cycleId: p.cycleId,
     interventionYear: p.cycle.interventionYear,
-    versionNumber: p.currentVersion.number,
-    versionSha256: p.currentVersion.sha256,
+    versionNumber: p.currentVersion?.number ?? null,
+    versionSha256: p.currentVersion?.sha256 ?? null,
     // The proposal's history is on the tenant ledger (entries whose payload names the proposal).
     tenantLedgerLastSeq: lastProposalEntry ? Number(lastProposalEntry.seq) : null,
   };
@@ -178,7 +190,7 @@ export async function convertProposalToProject(tx: Tx, proposal: { id: string },
     actorDisplayName: actorName(by),
     action: 'PROJECT_CREATED_FROM_PROPOSAL',
     summaryText:
-      `Created from proposed project ${p.reference} (needs assessment version ${p.currentVersion.number}): ` +
+      `Created from ${p.route === 'OUT_OF_CYCLE' ? 'out-of-cycle request' : 'proposed project'} ${p.reference}${p.currentVersion ? ` (needs assessment version ${p.currentVersion.number})` : ' (no needs assessment)'}: ` +
       `${plan.totals.siteCount} site(s), ${plan.totals.unitCount} facility unit(s), ${plan.totals.lineCount} BoQ line(s); funded amount NGN ${options.fundedAmountNgn.toLocaleString('en-NG')}.`,
     payload: { ...history, fundedAmountNgn: options.fundedAmountNgn, codePrefix: project.codePrefix, totals: plan.totals },
   });
@@ -188,7 +200,7 @@ export async function convertProposalToProject(tx: Tx, proposal: { id: string },
     ...webActor(by),
     action: 'NEEDS_PROPOSAL_CONVERTED',
     summaryText: `${p.reference} became draft project ${code}.`,
-    payload: { cycleId: p.cycleId, proposalId: p.id, reference: p.reference, projectId, codePrefix: project.codePrefix, fundedAmountNgn: options.fundedAmountNgn },
+    payload: { cycleId: p.cycleId, proposalId: p.id, reference: p.reference, projectId, codePrefix: project.codePrefix, fundedAmountNgn: options.fundedAmountNgn, origin, approvedListRowId: options.approvedListRowId ?? null },
   });
 
   return { projectId, codePrefix: project.codePrefix, siteCount: plan.totals.siteCount, unitCount: plan.totals.unitCount, lineCount: plan.totals.lineCount };

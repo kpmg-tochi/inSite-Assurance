@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Plus } from "lucide-react";
 import type { NeedsCycleDto, NeedsCycleSummaryDto } from "@insite/shared";
@@ -16,19 +16,23 @@ import { ApprovedListsTab } from "./ApprovedListsTab";
 import { ProposedProjectsTab } from "./ProposedProjectsTab";
 import { CycleDocumentsTab } from "./CycleDocumentsTab";
 import { PrioritisationTab } from "../../components/needs/committee/PrioritisationTab";
+import { ApprovalsTab } from "../../components/needs/submissions/ApprovalsTab";
+import { FundingTab } from "../../components/needs/funding/FundingTab";
+import { ProcurementPlanTab } from "../../components/needs/funding/ProcurementPlanTab";
 
-type TabId = "proposals" | "prioritisation" | "approvals" | "procurement" | "documents" | "approved-lists";
+type TabId = "proposals" | "prioritisation" | "approvals" | "funding" | "procurement" | "documents" | "approved-lists";
 
 const TAB_LABELS: Record<TabId, string> = {
   proposals: "Proposed projects",
   prioritisation: "Prioritisation",
   approvals: "Approvals",
+  funding: "Funding",
   procurement: "Procurement plan",
   documents: "Cycle documents",
   "approved-lists": "Approved lists",
 };
 
-const CYCLE_TABS: readonly TabId[] = ["proposals", "prioritisation", "approvals", "procurement", "documents"];
+const CYCLE_TABS: readonly TabId[] = ["proposals", "prioritisation", "approvals", "funding", "procurement", "documents"];
 const TAB_PREFIX = "needs-assessment";
 /** Parameters of the Approved lists tab: an old link that carries them opens that tab. */
 const APPROVED_LIST_PARAMS = ["year", "list", "kind", "state", "match", "q"];
@@ -94,6 +98,16 @@ function PipelinePage({ canLists }: { canLists: boolean }) {
   const canUpload = ownsCycle && hasPermission("needs:submit") && cycle?.status === "OPEN";
   const canManageCycle = ownsCycle && hasPermission("needs:manage_cycle");
 
+  // Wave 4 (C4): "New proposed project" lands here with `?upload=1`: open the upload on the cycle, once.
+  const wantsUpload = params.get("upload") === "1";
+  useEffect(() => {
+    if (!wantsUpload || !cycle) return;
+    if (canUpload) setUploadOpen(true);
+    const next = new URLSearchParams(params);
+    next.delete("upload");
+    setParams(next, { replace: true });
+  }, [wantsUpload, cycle, canUpload, params, setParams]);
+
   // Tabs: the cycle tabs once a cycle exists, and the approved lists for their readers.
   const visible: TabId[] = [...(selected ? CYCLE_TABS : []), ...(canLists ? (["approved-lists"] as TabId[]) : [])];
   const tabParam = params.get("tab") as TabId | null;
@@ -118,7 +132,8 @@ function PipelinePage({ canLists }: { canLists: boolean }) {
 
   const tabs: TabItem<TabId>[] = visible.map((id) => ({
     id,
-    label: TAB_LABELS[id],
+    // Wave 4: the Funding tab is the BEAP for a Matching Grants cycle.
+    label: id === "funding" && cycle?.fundingGate === "BEAP_APPROVAL" ? "BEAP" : TAB_LABELS[id],
     count: id === "proposals" && cycle ? cycle.proposalCount : id === "documents" && cycle ? cycle.documents.length : null,
   }));
 
@@ -187,20 +202,9 @@ function PipelinePage({ canLists }: { canLists: boolean }) {
             )}
             {cycle && active === "proposals" && <ProposedProjectsTab cycle={cycle} canUpload={canUpload} onUpload={() => setUploadOpen(true)} />}
             {cycle && active === "prioritisation" && <PrioritisationTab cycle={cycle} />}
-            {cycle && active === "approvals" && (
-              <EmptyPanel title="Nothing to approve yet">
-                {cycle.fundingGate === "BEAP_APPROVAL"
-                  ? "The prioritised list goes to the State's approval, then the BEAP goes to UBEC. Each submission and its approval steps will be shown here."
-                  : "The prioritised portfolio goes through management review to the Executive Secretary. The submission and its approval steps will be shown here."}
-              </EmptyPanel>
-            )}
-            {cycle && active === "procurement" && (
-              <EmptyPanel title="No procurement plan yet">
-                {cycle.fundingGate === "BEAP_APPROVAL"
-                  ? "Lots and procurement methods are set in the BEAP once the State's list is approved."
-                  : "Funded proposed projects become draft projects at appropriation; they are grouped into lots and batches here."}
-              </EmptyPanel>
-            )}
+            {cycle && active === "approvals" && <ApprovalsTab cycle={cycle} />}
+            {cycle && active === "funding" && <FundingTab cycle={cycle} />}
+            {cycle && active === "procurement" && <ProcurementPlanTab cycle={cycle} />}
             {cycle && active === "documents" && <CycleDocumentsTab cycle={cycle} canManage={canManageCycle} />}
           </TabPanel>
         </>

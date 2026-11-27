@@ -9,15 +9,12 @@ npm run demo:pack            # or: npm run demo:pack -- 2026-12-01 to build for 
 
 The script overwrites the `.xlsx` and `.pdf` files here (this README is kept). It needs no database. It reads the workbook back with the real parser and fails if it would not import cleanly. Every PDF is a specimen with a "SPECIMEN – demo data" footer.
 
-**Demo project: start from the needs assessment** (client demo wave 2). Portfolio → **New project** → **Upload needs assessment** → choose `Dawakin Tofa needs assessment.xlsx`. The check dialog shows what the file gives (name, delivery model Direct Intervention, intervention year, State Kano, LGA Dawakin Tofa, funding source, budget NGN 48,500,000, lot), the 3 sites, the work phases, units and BoQ, and the code it will get; nothing needs typing. **Confirm** creates the draft with its lot/batch code, sites, 2 work phases, 3 units and 8 BoQ lines in one step. The lot title is not one of the seeded lots, so it becomes a new lot of the year (the next lot number: LOT 5 on the overlay database in 2026). Each setup step then shows a "From needs assessment" panel; "Needs your input" lists anything the file left out (nothing, with this file).
-
-**Older flow** (the normal seed, and `routes.demo.test.ts`): "Start without one", type name "WASH upgrade, Government Primary School Dawakin Tofa", code `PRG-110`, state "Kano State", budget NGN 48,500,000, delivery model Direct Intervention, region Kano, leave the LGA empty; then import the same file in setup step 3 (BoQ & work phases), which fills the LGA and empty fields.
+**Needs pipeline wave 4 (2026-11-27):** the D1 file `Dawakin Tofa needs assessment.xlsx` (New project → Upload needs assessment) is no longer in the pack: that flow was replaced by the needs pipeline (Needs assessment page → upload into the open cycle). Wave 5 (N9) adds the pipeline's template v2 files and rewrites this README and the demo script. The file is still in git history (commit before wave 4) if an older walkthrough needs it.
 
 ## Files and when to use them
 
 | File | When in the demo | Where in the app |
 | :--- | :--- | :--- |
-| `Dawakin Tofa needs assessment.xlsx` | Creating the project (first) | New project → **Upload needs assessment** → check dialog → **Confirm**. Older flow: setup step 3, BoQ & work phases → **Import needs assessment** → preview → **Import and fill N project field(s)** |
 | `01 Letter of award.pdf` | Setup step 2 (drafts accept documents) or after activation | Documents → **Add document**, type Award letter |
 | `02 Acceptance of award.pdf` | Same; then complete the "Acceptance letter received" milestone | Documents, type Acceptance letter, contractor Kurmi |
 | `03 Contract agreement.pdf` | Same. A contractor created with **New contractor** is Inactive until this is on file: uploading it makes Kurmi Active | Documents, type Signed contract |

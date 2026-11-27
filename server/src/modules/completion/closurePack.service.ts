@@ -27,6 +27,7 @@ import { storageService } from '../../integrations/storage.service';
 import { generateClosureIndexPdf, generateInspectionSummaryPdf } from '../../integrations/closure-pdf.service';
 import { ZipFileWriter } from '../../utils/zipWriter';
 import { brandingFor } from './completion.service';
+import { addNeedsAssessmentFolder, NEEDS_FOLDER_CONTENTS } from './closurePackNeeds';
 
 /**
  * Phase 15 Step 7: the closure pack. POST queues an export; the export builds a ZIP on disk one
@@ -303,6 +304,9 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
     );
   }
 
+  // 3b. Needs pipeline wave 4 (M4): where the project came from (needs-assessment/), when converted from a proposal.
+  const hasNeedsFolder = await addNeedsAssessmentFolder(projectId, add, skip, MAX_ENTRY_BYTES);
+
   // 4. Audit ledger with a chain verification.
   const entries = await prisma.auditLog.findMany({ where: { projectId }, orderBy: { seq: 'asc' } });
   const chain = verifyAuditChain(entries);
@@ -355,6 +359,7 @@ async function buildPack(projectId: string, zip: ZipFileWriter) {
     { path: 'documents/<type>/', description: 'Current version of every document in the register.' },
     { path: 'payments/payment-record.csv', description: 'Every recorded payment, voided ones included.' },
     { path: 'monitoring-visits/', description: 'One summary per monitoring report.' },
+    ...(hasNeedsFolder ? [NEEDS_FOLDER_CONTENTS] : []),
     { path: 'audit/audit-ledger.csv', description: 'The project audit ledger with entry hashes.' },
     { path: 'audit/chain-verification.json', description: 'Result of the hash chain verification.' },
   ];

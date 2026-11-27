@@ -91,6 +91,9 @@ async function createDraft(code: string) {
       regionId: ids.kano,
     });
   assert.equal(res.status, 201, JSON.stringify(res.body));
+  // Needs pipeline wave 4 (D-N.13): a manual draft of a pipeline programme has no origin and cannot go
+  // live; these tests cover the wizard, so the draft is given one (the five-step test asserts the 409 first).
+  if (code !== 'RSA-603') await prisma.project.update({ where: { id: res.body.data.projectId }, data: { origin: 'LEGACY' } });
   return res.body.data as SetupDto;
 }
 
@@ -366,6 +369,11 @@ describe('Redesign R6a: a draft through the five steps only', () => {
     const row = drafts.body.data.find((d: { id: string }) => d.id === projectId);
     assert.equal(row.completedRequiredSteps, row.totalRequiredSteps);
 
+    // Needs pipeline wave 4 (D-N.13): without an origin the complete draft is refused first.
+    const noOrigin = await request(app).post(url(projectId, '/activate')).set(await web(PROGRAMME_ADMIN));
+    assert.equal(noOrigin.status, 409, JSON.stringify(noOrigin.body));
+    assert.equal(noOrigin.body.error.code, 'PROJECT_ORIGIN_REQUIRED');
+    await prisma.project.update({ where: { id: projectId }, data: { origin: 'LEGACY' } });
     const activated = await request(app).post(url(projectId, '/activate')).set(await web(PROGRAMME_ADMIN));
     assert.equal(activated.status, 200, JSON.stringify(activated.body));
     assert.equal(activated.body.data.status, 'ACTIVE');

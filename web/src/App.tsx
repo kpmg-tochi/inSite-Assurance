@@ -19,6 +19,7 @@ import { ContractorsPage } from "./pages/contractors/ContractorsPage";
 import { ContractorDetailPage } from "./pages/contractors/ContractorDetailPage";
 import { NeedsAssessmentPage } from "./pages/needsAssessment/NeedsAssessmentPage";
 import { ProposalPage } from "./pages/needsAssessment/ProposalPage";
+import { OutOfCyclePage } from "./components/needs/outOfCycle/OutOfCyclePage";
 import { StandardsPage } from "./pages/standards/StandardsPage";
 import { NewProjectPage } from "./pages/projects/setup/NewProjectPage";
 import { ProjectSetupShell } from "./pages/projects/setup/ProjectSetupShell";
@@ -239,6 +240,15 @@ function AuthenticatedWorkspace() {
           element={
             <RequirePermission anyOf={["needs:view"]} backTo={projectHome}>
               <ProposalPage />
+            </RequirePermission>
+          }
+        />
+        {/* Needs pipeline wave 4 (C4, D-N.14): one out-of-cycle request (under the Needs assessment nav entry). */}
+        <Route
+          path="needs-assessment/out-of-cycle/:proposalId"
+          element={
+            <RequirePermission anyOf={["needs:view"]} backTo={projectHome}>
+              <OutOfCyclePage />
             </RequirePermission>
           }
         />

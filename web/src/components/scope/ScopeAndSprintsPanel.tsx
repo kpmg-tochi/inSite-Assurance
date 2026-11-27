@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Controller, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { AlertTriangle, CalendarRange, Plus, Trash2 } from "lucide-react";
@@ -73,17 +73,23 @@ const OUTCOME_VARIANT = { MET: "success", PARTLY_MET: "warning", NOT_MET: "dange
 
 const UOM_OPTIONS = UNITS_OF_MEASURE.map((u) => ({ value: u.code as string, label: `${u.code} · ${u.label}` }));
 
-type ScopeTab = "units" | "phases";
+type ScopeTab = "units" | "phases" | "facilities";
 const SCOPE_TAB_IDS: readonly ScopeTab[] = ["units", "phases"];
+const SCOPE_TAB_IDS_WITH_FACILITIES: readonly ScopeTab[] = ["units", "phases", "facilities"];
 
 export interface ScopeAndSprintsPanelProps {
   projectId: string;
   readOnly: boolean;
   /** Keep the open tab in `?tab=` (the project page). The setup wizard leaves it off. */
   urlTabs?: boolean;
+  /**
+   * Needs pipeline wave 4 (C5): a third tab, "Facilities" (the needs assessment's facilities
+   * breakdown beside each unit's progress), given by the project page when the project has one.
+   */
+  facilitiesTab?: { count?: number | null; render: (scope: ProjectScopeDto) => ReactNode } | null;
 }
 
-export function ScopeAndSprintsPanel({ projectId, readOnly, urlTabs = false }: ScopeAndSprintsPanelProps) {
+export function ScopeAndSprintsPanel({ projectId, readOnly, urlTabs = false, facilitiesTab = null }: ScopeAndSprintsPanelProps) {
   const q = useProjectScopeQuery(projectId);
   const { hasPermission } = useAuth();
   const [verifying, setVerifying] = useState<string | null>(null);
@@ -99,7 +105,7 @@ export function ScopeAndSprintsPanel({ projectId, readOnly, urlTabs = false }: S
   const [sprintsOpen, setSprintsOpen] = useState(false);
   const [unitEditor, setUnitEditor] = useState<{ unit: FacilityUnitDto | null } | null>(null);
   const [lineEditor, setLineEditor] = useState<{ line: ScopeLineDto | null; unitId: string | null } | null>(null);
-  const [urlTab, setUrlTab] = useUrlTab(SCOPE_TAB_IDS);
+  const [urlTab, setUrlTab] = useUrlTab(facilitiesTab ? SCOPE_TAB_IDS_WITH_FACILITIES : SCOPE_TAB_IDS);
   const [localTab, setLocalTab] = useState<ScopeTab | null>(null);
 
   const scope = q.data;
@@ -115,6 +121,7 @@ export function ScopeAndSprintsPanel({ projectId, readOnly, urlTabs = false }: S
   const tabs: readonly TabItem<ScopeTab>[] = [
     { id: "units", label: "Units & BoQ", count: scope.totals.unitCount },
     { id: "phases", label: "Work phases", count: scope.totals.sprintCount },
+    ...(facilitiesTab ? [{ id: "facilities" as const, label: "Facilities", count: facilitiesTab.count ?? null }] : []),
   ];
 
   const removeUnit = async (u: FacilityUnitDto) => {
@@ -264,6 +271,8 @@ export function ScopeAndSprintsPanel({ projectId, readOnly, urlTabs = false }: S
               </section>
             )}
           </div>
+        ) : tab === "facilities" && facilitiesTab ? (
+          facilitiesTab.render(scope)
         ) : (
           <StandardTable<ProjectSprintDto>
             title="Work phases"

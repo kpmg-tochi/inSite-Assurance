@@ -4,6 +4,8 @@ import { NigeriaLgaCodeSchema, NigeriaStateCodeSchema } from '../data/nigeriaAdm
 import { FACILITY_CODE_REGEX } from './facility.schema';
 import { FACILITY_UNIT_CODE_REGEX, UnitOfMeasureEnum } from './scope.schema';
 import { SchoolLevelEnum } from './site.schema';
+import { LotChoiceSchema } from './lot.schema';
+import { APPROVED_LIST_COLUMNS, type ApprovedListColumn } from './approvedList.schema';
 
 /**
  * Needs pipeline (plan `saas_updates/needs_pipeline_implementation_plan.md`, wave 1 = N1 contracts).
@@ -158,8 +160,14 @@ export const NEEDS_CHAIN_FOR_SUBMISSION: Record<NeedsSubmissionKind, NeedsChainT
   OUT_OF_CYCLE: 'OUT_OF_CYCLE',
 };
 
-/** Wave 4 settles the transitions. */
+/** Transitions: `NeedsSubmissionDtoSchema` (wave 4). */
 export const NeedsSubmissionStatusEnum = z.enum(['DRAFT', 'IN_REVIEW', 'RETURNED', 'APPROVED']);
+export const NEEDS_SUBMISSION_STATUS_LABELS: Record<z.infer<typeof NeedsSubmissionStatusEnum>, string> = {
+  DRAFT: 'Draft',
+  IN_REVIEW: 'In review',
+  RETURNED: 'Returned for revision',
+  APPROVED: 'Approved',
+};
 export type NeedsSubmissionStatus = z.infer<typeof NeedsSubmissionStatusEnum>;
 
 /** D-N.5: documents that live once on the cycle. */
@@ -968,18 +976,58 @@ export const ConflictDeclarationRequestSchema = z
 export type ConflictDeclarationRequest = z.infer<typeof ConflictDeclarationRequestSchema>;
 export type ConflictDeclarationRequestInput = z.input<typeof ConflictDeclarationRequestSchema>;
 
-/** Wave 4 settles: BEAP lot, batch, procurement method and timeline per proposal. */
+/**
+ * Wave 4: how a BEAP item is to be procured (assumption: the common methods of public procurement in
+ * Nigeria; the BEAP records the State's choice, the platform enforces nothing on it).
+ */
+export const ProcurementMethodEnum = z.enum(['OPEN_COMPETITIVE_BIDDING', 'SELECTIVE_TENDERING', 'REQUEST_FOR_QUOTATIONS', 'DIRECT_PROCUREMENT', 'COMMUNITY_PARTICIPATION']);
+export type ProcurementMethod = z.infer<typeof ProcurementMethodEnum>;
+export const PROCUREMENT_METHOD_LABELS: Record<ProcurementMethod, string> = {
+  OPEN_COMPETITIVE_BIDDING: 'Open competitive bidding',
+  SELECTIVE_TENDERING: 'Selective tendering',
+  REQUEST_FOR_QUOTATIONS: 'Request for quotations',
+  DIRECT_PROCUREMENT: 'Direct procurement',
+  COMMUNITY_PARTICIPATION: 'Community participation',
+};
+
+/** Wave 4: UBEC's review of one BEAP item (plan section 9: accept, comment, request removal). */
+export const BeapReviewOutcomeEnum = z.enum(['ACCEPTED', 'COMMENTED', 'REMOVAL_REQUESTED']);
+export type BeapReviewOutcome = z.infer<typeof BeapReviewOutcomeEnum>;
+export const BEAP_REVIEW_OUTCOME_LABELS: Record<BeapReviewOutcome, string> = {
+  ACCEPTED: 'Accepted',
+  COMMENTED: 'Comment',
+  REMOVAL_REQUESTED: 'Removal requested',
+};
+
+/** One proposal on a submission (wave 4). Portfolio: included or excluded; BEAP: lot, method, timeline, review. */
 export const NeedsSubmissionItemDtoSchema = z.object({
   proposalId: Uuid,
   reference: z.string(),
   title: z.string(),
+  stateCode: z.string().nullable(),
+  lgaCodes: z.array(z.string()),
+  siteCount: z.number().int(),
+  /** Portfolio: the costed amount; BEAP: the current version's costed total; out-of-cycle: the requested amount. */
   amountNgn: z.number().nullable(),
+  rank: z.number().int().nullable(),
+  aboveLine: z.boolean().nullable(),
   included: z.boolean(),
   /** Why it was excluded (required then). */
   exclusionReason: z.string().nullable(),
+  /** BEAP: the lot the proposal is procured in (projects with the same title share a lot); numbers given at conversion. */
   lotTitle: z.string().nullable(),
+  lotNumber: z.number().int().nullable(),
   batchNumber: z.number().int().nullable(),
-  procurementMethod: z.string().nullable(),
+  procurementMethod: ProcurementMethodEnum.nullable(),
+  plannedStartDate: IsoDate.nullable(),
+  plannedEndDate: IsoDate.nullable(),
+  reviewOutcome: BeapReviewOutcomeEnum.nullable(),
+  reviewComment: z.string().nullable(),
+  /** The proposal's current needs assessment version (a BEAP revision adds one). */
+  currentVersionNumber: z.number().int().nullable(),
+  /** Set once the proposal is a project. */
+  projectId: Uuid.nullable(),
+  projectCode: z.string().nullable(),
 });
 export type NeedsSubmissionItemDto = z.infer<typeof NeedsSubmissionItemDtoSchema>;
 
@@ -994,22 +1042,36 @@ export const NeedsApprovalStepDtoSchema = z.object({
 });
 export type NeedsApprovalStepDto = z.infer<typeof NeedsApprovalStepDtoSchema>;
 
-/** A list put to an approval chain: the portfolio, a BEAP, or one out-of-cycle request. Wave 4 settles. */
+/**
+ * A list put to an approval chain: the portfolio, a BEAP, or one out-of-cycle request (wave 4).
+ * Status: a portfolio is created IN_REVIEW (submitting is creating); a BEAP and an out-of-cycle
+ * request start DRAFT; RETURNED after a return (the submitter edits and resubmits); APPROVED when
+ * the last step approves (the gate's effect runs in the same transaction).
+ */
 export const NeedsSubmissionDtoSchema = z.object({
   id: Uuid,
   cycleId: Uuid,
   kind: NeedsSubmissionKindEnum,
   chainType: NeedsChainTypeEnum,
   status: NeedsSubmissionStatusEnum,
+  statusLabel: z.string(),
   submittedByUserId: Uuid.nullable(),
   submittedByName: z.string().nullable(),
   submittedAt: z.string().nullable(),
+  decidedAt: z.string().nullable(),
+  /** The signed approval memo (a cycle document of kind APPROVAL_MEMO), required on the portfolio's last step. */
   memoDocumentId: Uuid.nullable(),
+  /** BEAP: the narrative (a cycle document of kind BEAP). */
+  narrativeDocumentId: Uuid.nullable(),
   /** BEAP only (A5). */
   counterpartDeclaredNgn: z.number().nullable(),
   counterpartEvidenceDocumentId: Uuid.nullable(),
+  counterpartRecordedAt: z.string().nullable(),
+  counterpartRecordedByName: z.string().nullable(),
   items: z.array(NeedsSubmissionItemDtoSchema),
+  /** Included items only. */
   totalNgn: z.number(),
+  includedCount: z.number().int(),
   steps: z.array(NeedsApprovalStepDtoSchema),
   /** Null when the chain is complete; 0 before submission or after a return. */
   currentStepOrder: z.number().int().nullable(),
@@ -1726,3 +1788,459 @@ export const NEEDS_TEMPLATE_SHEETS = {
   RATES: 'Rates',
   LISTS: 'Lists',
 } as const;
+
+// ---------------------------------------------------------------------------
+// Wave 4 (N6 + N7b–e): approval, out-of-cycle, funding, BEAP, procurement plan, project integration
+// Decisions: needs_pipeline/wave4_approval_funding_conversion.md section 5. Names: plan section 17.10.
+// ---------------------------------------------------------------------------
+
+/** A decision on the current step of a cycle chain (no rejection in wave 4: a return sends it back). */
+export const NeedsApprovalDecisionEnum = z.enum(['APPROVE', 'RETURN']);
+export type NeedsApprovalDecision = z.infer<typeof NeedsApprovalDecisionEnum>;
+
+const Reason = z.string().trim().min(5, 'Give the reason').max(1000);
+
+/** One proposal of the portfolio: included, or excluded with a reason. */
+export const PortfolioItemInputSchema = z
+  .object({
+    proposalId: Uuid,
+    included: z.boolean(),
+    exclusionReason: z.string().trim().max(1000).nullable().default(null),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.included && (!v.exclusionReason || v.exclusionReason.length < 5)) {
+      ctx.addIssue({ code: 'custom', path: ['exclusionReason'], message: 'Give the reason for the exclusion' });
+    }
+  });
+export type PortfolioItemInput = z.infer<typeof PortfolioItemInputSchema>;
+
+/**
+ * `POST /cycles/:cycleId/portfolio` (`needs:submit_portfolio`, owning organisation): submits the
+ * finalised ranking's proposals at Approval to the NEEDS_PORTFOLIO chain (IN_REVIEW at once); after a
+ * return the same body resubmits it. Every proposal at Approval must be listed; a proposal below the
+ * funding line cannot be included (the committee's line, D-N.10).
+ */
+export const SubmitPortfolioRequestSchema = z.object({
+  items: z.array(PortfolioItemInputSchema).min(1).max(500),
+  note: z.string().trim().max(2000).nullable().default(null),
+});
+export type SubmitPortfolioRequest = z.infer<typeof SubmitPortfolioRequestSchema>;
+export type SubmitPortfolioRequestInput = z.input<typeof SubmitPortfolioRequestSchema>;
+
+/**
+ * A decision on the current step of any cycle chain. Portfolio: a step may exclude more proposals
+ * (each with a reason); the last step needs the signed memo (`memoDocumentId`, a cycle document of
+ * kind APPROVAL_MEMO). A return needs notes.
+ */
+export const NeedsApprovalActionRequestSchema = z
+  .object({
+    decision: NeedsApprovalDecisionEnum,
+    notes: z.string().trim().max(2000).nullable().default(null),
+    exclusions: z.array(z.object({ proposalId: Uuid, reason: Reason })).max(500).default([]),
+    memoDocumentId: Uuid.nullable().default(null),
+  })
+  .superRefine((v, ctx) => {
+    if (v.decision === 'RETURN' && (!v.notes || v.notes.length < 5)) {
+      ctx.addIssue({ code: 'custom', path: ['notes'], message: 'Say what must change' });
+    }
+    if (v.decision === 'RETURN' && v.exclusions.length) {
+      ctx.addIssue({ code: 'custom', path: ['exclusions'], message: 'Exclusions are made when approving' });
+    }
+  });
+export type NeedsApprovalActionRequest = z.infer<typeof NeedsApprovalActionRequestSchema>;
+export type NeedsApprovalActionRequestInput = z.input<typeof NeedsApprovalActionRequestSchema>;
+
+/** Where approved items land, for the approval review (C1; `needsDistribution` in utils). */
+export const NeedsDistributionLevelEnum = z.enum(['ZONE', 'STATE', 'LGA']);
+export type NeedsDistributionLevel = z.infer<typeof NeedsDistributionLevelEnum>;
+
+// --- Out-of-cycle (D-N.14) --------------------------------------------------
+
+/**
+ * `POST /api/v1/needs/out-of-cycle` (`needs:submit`, the owning organisation of the programme's cycle
+ * for that year and scope). Creates the proposal (route OUT_OF_CYCLE, stage APPROVAL, status DRAFT)
+ * and its DRAFT OUT_OF_CYCLE submission in that cycle; when the year has no cycle, a CLOSED container
+ * cycle is created for it (wave 4 decision). The authorising document is required before submitting;
+ * a needs assessment (template v2) is optional.
+ */
+export const OutOfCycleRequestSchema = z.object({
+  projectTypeId: Uuid,
+  interventionYear: z.number().int().min(2000).max(2100),
+  stateCode: NigeriaStateCodeSchema.nullable().default(null),
+  title: z.string().trim().min(3).max(200),
+  reason: OutOfCycleReasonEnum,
+  reasonDetails: z.string().trim().min(10, 'Explain why the project cannot wait for the annual cycle').max(4000),
+  requestedAmountNgn: z.number().positive().max(1e13),
+});
+export type OutOfCycleRequest = z.infer<typeof OutOfCycleRequestSchema>;
+export type OutOfCycleRequestInput = z.input<typeof OutOfCycleRequestSchema>;
+
+/** `PATCH /out-of-cycle/:proposalId` while DRAFT or RETURNED. */
+export const UpdateOutOfCycleRequestSchema = OutOfCycleRequestSchema.pick({ title: true, reason: true, reasonDetails: true, requestedAmountNgn: true }).partial();
+export type UpdateOutOfCycleRequest = z.infer<typeof UpdateOutOfCycleRequestSchema>;
+
+/** `GET /out-of-cycle` filters. */
+export const OutOfCycleListQuerySchema = z.object({ cycleId: Uuid.optional() });
+export type OutOfCycleListQuery = z.infer<typeof OutOfCycleListQuerySchema>;
+
+export const NeedsOutOfCycleDtoSchema = z.object({
+  proposalId: Uuid,
+  reference: z.string(),
+  title: z.string(),
+  cycleId: Uuid,
+  cycleStatus: NeedsCycleStatusEnum,
+  interventionYear: z.number().int(),
+  projectTypeId: Uuid,
+  projectTypeName: z.string(),
+  stateCode: z.string().nullable(),
+  reason: OutOfCycleReasonEnum,
+  reasonLabel: z.string(),
+  reasonDetails: z.string(),
+  requestedAmountNgn: z.number(),
+  authorisingDocument: NeedsProposalDocumentDtoSchema.nullable(),
+  documents: z.array(NeedsProposalDocumentDtoSchema),
+  currentVersion: NeedsAssessmentVersionDtoSchema.nullable(),
+  status: NeedsProposalStatusEnum,
+  statusLabel: z.string(),
+  submission: NeedsSubmissionDtoSchema,
+  projectId: Uuid.nullable(),
+  projectCode: z.string().nullable(),
+  canEdit: z.boolean(),
+  createdByName: z.string(),
+  createdAt: z.string(),
+});
+export type NeedsOutOfCycleDto = z.infer<typeof NeedsOutOfCycleDtoSchema>;
+
+// --- Funding, Direct Intervention (N7b) ---------------------------------------
+
+export const NeedsFundingRecordKindEnum = z.enum(['BUDGET_SUBMISSION', 'APPROPRIATION']);
+export type NeedsFundingRecordKind = z.infer<typeof NeedsFundingRecordKindEnum>;
+
+/** `POST /cycles/:cycleId/funding/budget-submission` (`needs:record_funding`, owning organisation). */
+export const RecordBudgetSubmissionRequestSchema = z.object({
+  submittedOn: IsoDate,
+  amountNgn: z.number().positive().max(1e13),
+  /** A cycle document of kind BUDGET_SUBMISSION_ACKNOWLEDGEMENT. */
+  acknowledgementDocumentId: Uuid.nullable().default(null),
+  note: z.string().trim().max(2000).nullable().default(null),
+});
+export type RecordBudgetSubmissionRequest = z.infer<typeof RecordBudgetSubmissionRequestSchema>;
+
+export const NeedsFundingRecordDtoSchema = z.object({
+  id: Uuid,
+  cycleId: Uuid,
+  kind: NeedsFundingRecordKindEnum,
+  recordedOn: IsoDate,
+  amountNgn: z.number().nullable(),
+  documentId: Uuid.nullable(),
+  approvedListId: Uuid.nullable(),
+  fileName: z.string().nullable(),
+  sha256: z.string().nullable(),
+  note: z.string().nullable(),
+  /** APPROPRIATION: counts and totals of the import. */
+  summary: z.record(z.unknown()),
+  recordedByName: z.string(),
+  createdAt: z.string(),
+});
+export type NeedsFundingRecordDto = z.infer<typeof NeedsFundingRecordDtoSchema>;
+
+/**
+ * The appropriated schedule: the approved-list workbook with a required "Proposal reference" column
+ * in place of "Project ID" (`GET /cycles/:cycleId/funding/appropriation/template`).
+ */
+export interface AppropriatedScheduleColumn extends Omit<ApprovedListColumn, 'key'> {
+  key: ApprovedListColumn['key'] | 'proposalRef';
+}
+export const APPROPRIATED_SCHEDULE_COLUMNS: readonly AppropriatedScheduleColumn[] = [
+  ...APPROVED_LIST_COLUMNS.filter((c) => c.key !== 'projectRef'),
+  {
+    key: 'proposalRef',
+    header: 'Proposal reference',
+    required: true,
+    note: 'The proposed project the row funds, e.g. 2027-DI-014 (or an approved out-of-cycle request).',
+  },
+];
+
+export const AppropriationImportPreviewRequestSchema = z.object({
+  fileName: z.string().trim().min(1).max(200),
+  fileBase64: z.string().min(1),
+});
+export type AppropriationImportPreviewRequest = z.infer<typeof AppropriationImportPreviewRequestSchema>;
+
+export const AppropriationImportConfirmRequestSchema = AppropriationImportPreviewRequestSchema.extend({
+  /** The preview's sha256: another file is 409 NEEDS_FILE_CHANGED. */
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  /** When the appropriation act or schedule was passed. */
+  appropriatedOn: IsoDate,
+});
+export type AppropriationImportConfirmRequest = z.infer<typeof AppropriationImportConfirmRequestSchema>;
+
+/**
+ * Per row: MATCHED (funded at the approved amount), PARTLY_FUNDED (below it), OUT_OF_CYCLE (an
+ * approved out-of-cycle proposal: the row is linked to its project), REFUSED (unknown reference, not
+ * at Funding, above the approved amount, listed twice …).
+ */
+export const AppropriationRowOutcomeEnum = z.enum(['MATCHED', 'PARTLY_FUNDED', 'OUT_OF_CYCLE', 'REFUSED']);
+export type AppropriationRowOutcome = z.infer<typeof AppropriationRowOutcomeEnum>;
+
+export const AppropriationIssueSchema = z.object({ row: z.number().int().nullable(), column: z.string().nullable(), code: z.string(), message: z.string() });
+export type AppropriationIssue = z.infer<typeof AppropriationIssueSchema>;
+
+export const AppropriationPreviewRowSchema = z.object({
+  rowNumber: z.number().int(),
+  rowRef: z.string(),
+  proposalReference: z.string().nullable(),
+  proposalId: Uuid.nullable(),
+  title: z.string(),
+  approvedAmountNgn: z.number().nullable(),
+  fundedAmountNgn: z.number().nullable(),
+  outcome: AppropriationRowOutcomeEnum,
+  issues: z.array(AppropriationIssueSchema),
+});
+export type AppropriationPreviewRow = z.infer<typeof AppropriationPreviewRowSchema>;
+
+export const AppropriationPreviewDtoSchema = z.object({
+  cycleId: Uuid,
+  fileName: z.string(),
+  sha256: z.string(),
+  rows: z.array(AppropriationPreviewRowSchema),
+  /** Proposals at Funding the file does not fund: "Not funded, carried forward" on confirm. */
+  notFunded: z.array(z.object({ proposalId: Uuid, reference: z.string(), title: z.string(), approvedAmountNgn: z.number().nullable() })),
+  /** File-level problems (template, list header, year). */
+  issues: z.array(AppropriationIssueSchema),
+  totals: z.object({
+    matched: z.number().int(),
+    partlyFunded: z.number().int(),
+    outOfCycle: z.number().int(),
+    refused: z.number().int(),
+    notFunded: z.number().int(),
+    fundedNgn: z.number(),
+  }),
+  canConfirm: z.boolean(),
+});
+export type AppropriationPreviewDto = z.infer<typeof AppropriationPreviewDtoSchema>;
+
+export const NeedsConvertedProposalSchema = z.object({
+  proposalId: Uuid,
+  reference: z.string(),
+  projectId: Uuid,
+  projectCode: z.string(),
+  fundedAmountNgn: z.number(),
+});
+export type NeedsConvertedProposal = z.infer<typeof NeedsConvertedProposalSchema>;
+
+export const AppropriationResultDtoSchema = z.object({
+  fundingRecord: NeedsFundingRecordDtoSchema,
+  converted: z.array(NeedsConvertedProposalSchema),
+  notSelected: z.array(z.object({ proposalId: Uuid, reference: z.string() })),
+  approvedListId: Uuid,
+});
+export type AppropriationResultDto = z.infer<typeof AppropriationResultDtoSchema>;
+
+/** `GET /cycles/:cycleId/funding` */
+export const NeedsFundingDtoSchema = z.object({
+  cycleId: Uuid,
+  fundingGate: NeedsFundingGateEnum,
+  records: z.array(NeedsFundingRecordDtoSchema),
+  /** Proposals at Funding (waiting for appropriation or the BEAP). */
+  awaiting: z.array(NeedsSubmissionItemDtoSchema),
+  converted: z.array(NeedsConvertedProposalSchema),
+  canRecord: z.boolean(),
+  /** Why the current user cannot confirm an import (e.g. SAME_PERSON_FUNDING), null when they can. */
+  cannotConfirmReason: z.string().nullable(),
+});
+export type NeedsFundingDto = z.infer<typeof NeedsFundingDtoSchema>;
+
+// --- Procurement plan, Direct Intervention (B3) ------------------------------
+
+export const NeedsProcurementPlanRowSchema = z.object({
+  projectId: Uuid,
+  proposalId: Uuid,
+  reference: z.string(),
+  title: z.string(),
+  /** As shown (`formatProjectCode`): the reference until a lot is assigned. */
+  projectCode: z.string(),
+  projectStatus: z.string(),
+  stateCode: z.string().nullable(),
+  budgetNgn: z.number().nullable(),
+  lotId: Uuid.nullable(),
+  lotNumber: z.number().int().nullable(),
+  lotTitle: z.string().nullable(),
+  batchNumber: z.number().int().nullable(),
+});
+export type NeedsProcurementPlanRow = z.infer<typeof NeedsProcurementPlanRowSchema>;
+
+export const NeedsProcurementPlanDtoSchema = z.object({
+  cycleId: Uuid,
+  interventionYear: z.number().int(),
+  rows: z.array(NeedsProcurementPlanRowSchema),
+  /** The tenant's lots of the cycle's year, for the picker. */
+  lots: z.array(z.object({ id: Uuid, number: z.number().int(), title: z.string(), batchCount: z.number().int() })),
+  planDocuments: z.array(NeedsCycleDocumentDtoSchema),
+  canPlan: z.boolean(),
+});
+export type NeedsProcurementPlanDto = z.infer<typeof NeedsProcurementPlanDtoSchema>;
+
+/** `POST /cycles/:cycleId/procurement-plan/lots` (`procurement:plan_lots`): converted drafts without a lot only. */
+export const AssignLotsRequestSchema = z.object({
+  items: z.array(z.object({ projectId: Uuid, lotChoice: LotChoiceSchema })).min(1).max(500),
+});
+export type AssignLotsRequest = z.infer<typeof AssignLotsRequestSchema>;
+
+// --- BEAP, Matching Grants (B4) -----------------------------------------------
+
+export const BeapItemInputSchema = z
+  .object({
+    proposalId: Uuid,
+    included: z.boolean(),
+    exclusionReason: z.string().trim().max(1000).nullable().default(null),
+    lotTitle: z.string().trim().max(200).nullable().default(null),
+    procurementMethod: ProcurementMethodEnum.nullable().default(null),
+    plannedStartDate: IsoDate.nullable().default(null),
+    plannedEndDate: IsoDate.nullable().default(null),
+  })
+  .superRefine((v, ctx) => {
+    if (!v.included && (!v.exclusionReason || v.exclusionReason.length < 5)) {
+      ctx.addIssue({ code: 'custom', path: ['exclusionReason'], message: 'Give the reason for the exclusion' });
+    }
+    if (v.plannedStartDate && v.plannedEndDate && v.plannedEndDate < v.plannedStartDate) {
+      ctx.addIssue({ code: 'custom', path: ['plannedEndDate'], message: 'The end is before the start' });
+    }
+  });
+export type BeapItemInput = z.infer<typeof BeapItemInputSchema>;
+
+/**
+ * `PUT /cycles/:cycleId/beap` (`needs:prepare_beap`, owning organisation): creates or edits the
+ * State's BEAP while DRAFT or RETURNED. Submitting (`POST /cycles/:cycleId/beap/submit`) needs every
+ * proposal at Funding listed, every included item with a lot title, a procurement method and both
+ * dates, and the narrative. Counterpart evidence may follow (A5).
+ */
+export const SaveBeapRequestSchema = z.object({
+  items: z.array(BeapItemInputSchema).min(1).max(500),
+  narrativeDocumentId: Uuid.nullable().default(null),
+  counterpartDeclaredNgn: z.number().nonnegative().max(1e13).nullable().default(null),
+  counterpartEvidenceDocumentId: Uuid.nullable().default(null),
+});
+export type SaveBeapRequest = z.infer<typeof SaveBeapRequestSchema>;
+export type SaveBeapRequestInput = z.input<typeof SaveBeapRequestSchema>;
+
+/** `POST /cycles/:cycleId/beap/review-items`: the reviewer at the current BEAP step. */
+export const BeapItemReviewRequestSchema = z.object({
+  items: z
+    .array(
+      z
+        .object({ proposalId: Uuid, outcome: BeapReviewOutcomeEnum, comment: z.string().trim().max(2000).nullable().default(null) })
+        .superRefine((v, ctx) => {
+          if (v.outcome !== 'ACCEPTED' && (!v.comment || v.comment.length < 5)) ctx.addIssue({ code: 'custom', path: ['comment'], message: 'Write the comment' });
+        })
+    )
+    .min(1)
+    .max(500),
+});
+export type BeapItemReviewRequest = z.infer<typeof BeapItemReviewRequestSchema>;
+
+/** `PUT /cycles/:cycleId/beap/counterpart` (`needs:prepare_beap`, owning organisation): also after approval (A5). */
+export const RecordCounterpartRequestSchema = z.object({
+  counterpartDeclaredNgn: z.number().positive().max(1e13),
+  /** A cycle document of kind COUNTERPART_EVIDENCE. */
+  counterpartEvidenceDocumentId: Uuid,
+});
+export type RecordCounterpartRequest = z.infer<typeof RecordCounterpartRequestSchema>;
+
+// --- Project integration (C5) -------------------------------------------------
+
+/** `GET /api/v1/needs/pipeline` (Portfolio → Pipeline): proposals at Approval or Funding, and converted drafts not yet live. */
+export const NeedsPipelineRowSchema = z.object({
+  proposalId: Uuid,
+  reference: z.string(),
+  title: z.string(),
+  cycleId: Uuid,
+  interventionYear: z.number().int(),
+  projectTypeName: z.string(),
+  route: NeedsProposalRouteEnum,
+  stateCode: z.string().nullable(),
+  lgaCodes: z.array(z.string()),
+  stage: NeedsStageEnum,
+  status: NeedsProposalStatusEnum,
+  statusLabel: z.string(),
+  /** Funded, else approved, else costed, else preliminary. */
+  amountNgn: z.number().nullable(),
+  projectId: Uuid.nullable(),
+  projectCode: z.string().nullable(),
+  projectStatus: z.string().nullable(),
+});
+export type NeedsPipelineRow = z.infer<typeof NeedsPipelineRowSchema>;
+
+export const NeedsPipelineQuerySchema = z.object({
+  projectTypeId: Uuid.optional(),
+  interventionYear: z.coerce.number().int().optional(),
+  stateCode: z.string().optional(),
+});
+export type NeedsPipelineQuery = z.infer<typeof NeedsPipelineQuerySchema>;
+
+/** A document from the project's proposal or its cycle, read-only on the project (wave 4 section 0 item 3: read-through). */
+export const ProjectNeedsDocumentSchema = z.object({
+  id: Uuid,
+  scope: z.enum(['PROPOSAL', 'CYCLE', 'VERSION']),
+  kind: z.string(),
+  kindLabel: z.string(),
+  title: z.string(),
+  fileName: z.string(),
+  mimeType: z.string(),
+  byteSize: z.number().int(),
+  uploadedByName: z.string(),
+  uploadedAt: z.string(),
+});
+export type ProjectNeedsDocument = z.infer<typeof ProjectNeedsDocumentSchema>;
+
+/**
+ * `GET /projects/:projectId/needs-origin` (any web reader of the project): the Origin card, the
+ * Documents "Needs assessment" group and the Facilities tab of Sprints & scope. Files:
+ * `GET /projects/:projectId/needs-origin/files/:scope/:id` → `NeedsFileLinkDto`.
+ */
+export const ProjectNeedsOriginDtoSchema = z.object({
+  projectId: Uuid,
+  origin: ProjectOriginEnum.nullable(),
+  originLabel: z.string(),
+  proposal: z
+    .object({
+      id: Uuid,
+      reference: z.string(),
+      title: z.string(),
+      route: NeedsProposalRouteEnum,
+      cycleId: Uuid,
+      interventionYear: z.number().int(),
+      projectTypeName: z.string(),
+      status: NeedsProposalStatusEnum,
+      statusLabel: z.string(),
+      costedAmountNgn: z.number().nullable(),
+      approvedAmountNgn: z.number().nullable(),
+      fundedAmountNgn: z.number().nullable(),
+      rank: z.number().int().nullable(),
+      versionCount: z.number().int(),
+      outOfCycleReason: OutOfCycleReasonEnum.nullable(),
+      outOfCycleReasonLabel: z.string().nullable(),
+      /** True when the viewer may open the proposal page (`needs:view` on its cycle). */
+      canOpenProposal: z.boolean(),
+    })
+    .nullable(),
+  documents: z.array(ProjectNeedsDocumentSchema),
+  /** The current version's breakdown rows (unit IDs match the project's facility units). */
+  breakdown: z.array(FacilityBreakdownRowSchema),
+});
+export type ProjectNeedsOriginDto = z.infer<typeof ProjectNeedsOriginDtoSchema>;
+
+/** `POST /out-of-cycle/:proposalId/needs-assessment/preview`: the request's optional needs assessment (template v2, one file). */
+export const OutOfCycleFileRequestSchema = z.object({
+  fileName: z.string().trim().min(1).max(200),
+  fileBase64: z.string().min(1).max(Math.ceil((NEEDS_FILE_MAX_BYTES * 4) / 3) + 8),
+});
+export type OutOfCycleFileRequest = z.infer<typeof OutOfCycleFileRequestSchema>;
+
+/** `…/needs-assessment/confirm`: the same file with the preview's sha256 (another file: 409 NEEDS_FILE_CHANGED). */
+export const OutOfCycleFileConfirmRequestSchema = OutOfCycleFileRequestSchema.extend({ sha256: z.string().regex(/^[0-9a-f]{64}$/, 'Preview the file first') });
+export type OutOfCycleFileConfirmRequest = z.infer<typeof OutOfCycleFileConfirmRequestSchema>;
+
+/** `POST /out-of-cycle/:proposalId/withdraw`. */
+export const WithdrawOutOfCycleRequestSchema = z.object({ reason: z.string().trim().min(5, 'Give the reason').max(1000) });
+export type WithdrawOutOfCycleRequest = z.infer<typeof WithdrawOutOfCycleRequestSchema>;

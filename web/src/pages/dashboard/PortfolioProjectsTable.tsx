@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { ArrowRight, ChevronDown, ChevronRight, FileUp, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, ChevronDown, ChevronRight, FileUp, Trash2 } from "lucide-react";
 import {
   formatProjectCode,
   isOngoingProject,
@@ -21,6 +21,8 @@ import { formatCompactNaira, formatDateShort } from "../../lib/formatters";
 import { ProjectRegisterExportMenu } from "../../components/projects/ProjectRegisterExportMenu";
 import { ProjectRegisterImportDialog } from "../../components/projects/ProjectRegisterImportDialog";
 import { ProjectAlertIndicator } from "../../components/projects/ProjectAlertIndicator";
+import { NewProjectControl } from "../../components/needs/integration/NewProjectControl";
+import { OutsideCycleChip } from "../../components/needs/integration/OriginChip";
 import { useDraftProjectsQuery } from "../../queries/projects/useProjectSetupQueries";
 import { useDeleteDraftMutation } from "../../mutations/projects/useProjectSetupMutations";
 import { StandardTable, TableActionButton, type TableColumnDef } from "../../components/table";
@@ -199,15 +201,10 @@ export function PortfolioProjectsTable({
     </div>
   );
 
-  const newProject = canCreate ? (
-    <button
-      type="button"
-      onClick={() => navigate("/app/projects/new")}
-      className="inline-flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs font-semibold text-brand-navy hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-    >
-      <Plus className="w-3.5 h-3.5" aria-hidden="true" /> New project
-    </button>
-  ) : undefined;
+  // Needs pipeline wave 4 (C4): the same control as the header (a menu in pipeline workspaces).
+  const newProject = hideCreate ? undefined : <NewProjectControl />;
+  // Wave 4 (M3): the register import is for administrators only (the server needs both permissions).
+  const canImport = canCreate && hasPermission("tenant:manage_settings");
   // UBEC IRL: the register export (what the table shows: filters, status button, search) and the bulk import.
   const exportFilters: ProjectRegisterFilters = {
     ...(registerFilters ?? {}),
@@ -217,7 +214,7 @@ export function PortfolioProjectsTable({
   const headerActions = hideCreate ? headerAction : (
     <div className="flex flex-wrap items-center gap-2">
       <ProjectRegisterExportMenu filters={exportFilters} />
-      {canCreate && (
+      {canImport && (
         <button
           type="button"
           onClick={() => setImportOpen(true)}
@@ -324,6 +321,8 @@ export function PortfolioProjectsTable({
           <div className="font-semibold text-slate-900 truncate" title={p.name}>
             {p.name}
           </div>
+          {/* Needs pipeline wave 4 (D-N.13): a project approved outside the annual cycle. */}
+          {p.origin === "OUT_OF_CYCLE" && <OutsideCycleChip className="mt-0.5" />}
           {sitesOf(p).length > 0 && (
             <button
               type="button"

@@ -236,9 +236,12 @@ export async function openCycle(user: WebJwtPayload, input: OpenNeedsCycleReques
   const cycleId = await prisma.$transaction(async (tx) => {
     const existing = await tx.needsCycle.findUnique({
       where: { tenantId_projectTypeId_interventionYear_scopeKey: { tenantId: user.tenantId, projectTypeId: type.id, interventionYear: input.interventionYear, scopeKey } },
-      select: { id: true },
+      select: { id: true, status: true, openedAt: true },
     });
-    if (existing) {
+    // Wave 4 (review fix): a CLOSED container made for out-of-cycle requests (never opened) is adopted:
+    // it opens as the annual cycle, keeping its requests and its chain steps.
+    const container = existing && existing.status === 'CLOSED' && existing.openedAt === null ? existing : null;
+    if (existing && !container) {
       throw new AppError(
         `A ${type.name} cycle for ${input.interventionYear}${stateCode ? ` (${stateByCode(stateCode)?.name})` : ''} already exists`,
         409,
@@ -249,28 +252,24 @@ export async function openCycle(user: WebJwtPayload, input: OpenNeedsCycleReques
     const standard = await latestCostingStandardRow(user.tenantId, tx);
     if (standard) await lockCostingStandardVersion(tx, standard.id);
     const now = new Date();
-    const cycle = await tx.needsCycle.create({
-      data: {
-        tenantId: user.tenantId,
-        projectTypeId: type.id,
-        interventionYear: input.interventionYear,
-        stateCode,
-        scopeKey,
-        owningOrganizationId: ownerId,
-        status: 'OPEN',
-        configSnapshotJson: config as unknown as Prisma.InputJsonValue,
-        deadlinesJson: deadlines as unknown as Prisma.InputJsonValue,
-        templateVersion: NEEDS_TEMPLATE_VERSION,
-        costingStandardVersionId: standard?.id ?? null,
-        indicativeCeilingNgn: input.indicativeCeilingNgn,
-        createdByUserId: user.userId,
-        openedAt: now,
-        openedByUserId: user.userId,
-        openedByName: user.fullName,
-      },
-    });
-    // D-N.23: the chain steps, version 1.
-    const steps = NeedsChainTypeEnum.options.flatMap((chainType) =>
+    const opened = {
+      status: 'OPEN',
+      configSnapshotJson: config as unknown as Prisma.InputJsonValue,
+      deadlinesJson: deadlines as unknown as Prisma.InputJsonValue,
+      templateVersion: NEEDS_TEMPLATE_VERSION,
+      costingStandardVersionId: standard?.id ?? null,
+      indicativeCeilingNgn: input.indicativeCeilingNgn,
+      openedAt: now,
+      openedByUserId: user.userId,
+      openedByName: user.fullName,
+    };
+    const cycle = container
+      ? await tx.needsCycle.update({ where: { id: container.id }, data: { ...opened, closedAt: null, closedByUserId: null, closedByName: null } })
+      : await tx.needsCycle.create({
+          data: { tenantId: user.tenantId, projectTypeId: type.id, interventionYear: input.interventionYear, stateCode, scopeKey, owningOrganizationId: ownerId, createdByUserId: user.userId, ...opened },
+        });
+    // D-N.23: the chain steps, version 1 (an adopted container already has them).
+    const steps = container ? [] : NeedsChainTypeEnum.options.flatMap((chainType) =>
       config.approvalChains[chainType].map((s, i) => ({
         cycleId: cycle.id,
         chainType,
@@ -304,6 +303,7 @@ export async function openCycle(user: WebJwtPayload, input: OpenNeedsCycleReques
         templateVersion: NEEDS_TEMPLATE_VERSION,
         deadlineOverrides: input.deadlines,
         carriedForward: carried,
+        adoptedContainer: Boolean(container),
         openedBy: name,
       },
     });
@@ -402,6 +402,77 @@ async function carryForwardInTx(
   return out;
 }
 
+/**
+ * Needs pipeline wave 4 (D-N.14, wave 4 decision): the cycle an out-of-cycle request is filed in, in
+ * the caller's transaction. The programme's cycle for that year and scope when it exists (OPEN or
+ * CLOSED); otherwise a CLOSED container cycle for the year (config frozen, deadlines, chain steps
+ * version 1, the latest costing standard; no proposals of its own, `NEEDS_CYCLE_OPENED` with
+ * `container: true`). Only the owning organisation files requests (403 NEEDS_CYCLE_FORBIDDEN).
+ */
+export async function ensureCycleForOutOfCycle(
+  tx: Prisma.TransactionClient,
+  user: WebJwtPayload,
+  input: { projectTypeId: string; interventionYear: number; stateCode: string | null }
+): Promise<CycleRow> {
+  const { type, config } = await loadPipelineType(user.tenantId, input.projectTypeId);
+  const stateCode = checkScope(config, input.stateCode);
+  const scopeKey = scopeKeyOf(config.cycleScope, stateCode);
+  const ownerId = await deriveCycleOwnerId(tx, user.tenantId, type, config.cycleScope, stateCode);
+  if (!ownerId) throw new AppError('The programme has no owning organisation for this request', 422, 'NEEDS_CYCLE_OWNER_NOT_FOUND');
+  if (!user.isPlatformSuperAdmin && ownerId !== user.organizationId) {
+    throw new AppError('Only the organisation that owns this programme cycle can request an out-of-cycle project', 403, 'NEEDS_CYCLE_FORBIDDEN');
+  }
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`needs-cycle-container:${user.tenantId}:${type.id}:${input.interventionYear}:${scopeKey}`}))`;
+  const existing = await tx.needsCycle.findUnique({
+    where: { tenantId_projectTypeId_interventionYear_scopeKey: { tenantId: user.tenantId, projectTypeId: type.id, interventionYear: input.interventionYear, scopeKey } },
+  });
+  if (existing) return existing;
+  const standard = await latestCostingStandardRow(user.tenantId, tx);
+  if (standard) await lockCostingStandardVersion(tx, standard.id);
+  const now = new Date();
+  const cycle = await tx.needsCycle.create({
+    data: {
+      tenantId: user.tenantId,
+      projectTypeId: type.id,
+      interventionYear: input.interventionYear,
+      stateCode,
+      scopeKey,
+      owningOrganizationId: ownerId,
+      status: 'CLOSED',
+      configSnapshotJson: config as unknown as Prisma.InputJsonValue,
+      deadlinesJson: cycleDeadlines(config, input.interventionYear) as unknown as Prisma.InputJsonValue,
+      templateVersion: NEEDS_TEMPLATE_VERSION,
+      costingStandardVersionId: standard?.id ?? null,
+      createdByUserId: user.userId,
+      closedAt: now,
+      closedByUserId: user.userId,
+      closedByName: user.fullName,
+    },
+  });
+  const steps = NeedsChainTypeEnum.options.flatMap((chainType) =>
+    config.approvalChains[chainType].map((s, i) => ({
+      cycleId: cycle.id,
+      chainType,
+      version: 1,
+      stepOrder: i + 1,
+      label: s.label,
+      requiredPermissionKey: s.requiredPermissionKey,
+      organizationScope: s.organizationScope,
+      isActive: true,
+    }))
+  );
+  if (steps.length) await tx.needsApprovalStep.createMany({ data: steps });
+  await recordAuditEvent(tx, {
+    tenantId: user.tenantId,
+    projectId: null,
+    ...webActor(user),
+    action: 'NEEDS_CYCLE_OPENED',
+    summaryText: `Created a closed ${type.name} cycle record for ${input.interventionYear}${stateCode ? ` (${stateByCode(stateCode)?.name})` : ''} to hold out-of-cycle requests.`,
+    payload: { cycleId: cycle.id, projectTypeId: type.id, interventionYear: input.interventionYear, stateCode, owningOrganizationId: ownerId, container: true },
+  });
+  return cycle;
+}
+
 export async function updateCycle(user: WebJwtPayload, cycleId: string, input: UpdateNeedsCycleRequest): Promise<NeedsCycleDto> {
   const cycle = await loadWritableCycle(user, cycleId);
   const data: Prisma.NeedsCycleUpdateInput = {};
@@ -461,8 +532,21 @@ export async function closeCycle(user: WebJwtPayload, cycleId: string, input: Cl
 export const cycleDocumentPrefix = (tenantId: string, cycleId: string) => tenantAreaPrefix(tenantId, `needs/cycles/${cycleId}/needs_document`);
 export const cycleVersionPrefix = (tenantId: string, cycleId: string) => tenantAreaPrefix(tenantId, `needs/cycles/${cycleId}/versions`);
 
-export async function presignNeedsDocument(user: WebJwtPayload, cycleId: string, input: NeedsDocumentPresignRequest): Promise<NeedsPresignedUploadDto> {
-  const cycle = await loadWritableCycle(user, cycleId);
+/**
+ * The cycle a document is filed on: open and the owner's; with `allowClosed` (wave 4 review fix: the
+ * State's counterpart evidence after the cycle closed) the owner's in any status.
+ */
+async function documentCycle(user: WebJwtPayload, cycleId: string, allowClosed: boolean): Promise<CycleRow> {
+  if (!allowClosed) return loadWritableCycle(user, cycleId);
+  const cycle = await loadVisibleCycle(user, cycleId);
+  if (!user.isPlatformSuperAdmin && cycle.owningOrganizationId !== user.organizationId) {
+    throw new AppError('Only the organisation that owns this cycle can change it', 403, 'NEEDS_CYCLE_FORBIDDEN');
+  }
+  return cycle;
+}
+
+export async function presignNeedsDocument(user: WebJwtPayload, cycleId: string, input: NeedsDocumentPresignRequest, opts: { allowClosed?: boolean } = {}): Promise<NeedsPresignedUploadDto> {
+  const cycle = await documentCycle(user, cycleId, Boolean(opts.allowClosed));
   return presignTenantAreaUpload({
     prefix: cycleDocumentPrefix(user.tenantId, cycle.id),
     fileName: input.fileName,
@@ -478,8 +562,8 @@ export async function listCycleDocuments(user: WebJwtPayload, cycleId: string): 
   return currentFirst(rows).map(serializeCycleDocument);
 }
 
-export async function registerCycleDocument(user: WebJwtPayload, cycleId: string, input: RegisterCycleDocumentRequest): Promise<NeedsCycleDocumentDto> {
-  const cycle = await loadWritableCycle(user, cycleId);
+export async function registerCycleDocument(user: WebJwtPayload, cycleId: string, input: RegisterCycleDocumentRequest, opts: { allowClosed?: boolean } = {}): Promise<NeedsCycleDocumentDto> {
+  const cycle = await documentCycle(user, cycleId, Boolean(opts.allowClosed));
   const proposalIds = [...new Set(input.proposalIds)];
   if (proposalIds.length) {
     const found = await prisma.needsProposal.count({ where: { id: { in: proposalIds.filter(isUuid) }, cycleId: cycle.id } });

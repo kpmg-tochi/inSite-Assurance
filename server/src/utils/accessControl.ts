@@ -65,7 +65,7 @@ export function buildProjectVisibilityWhere(
     clauses.push(
       canManageDrafts(webUser) || webUser.isPlatformSuperAdmin
         ? { status: 'DRAFT' }
-        : { status: 'DRAFT', createdByUserId: webUser.userId }
+        : { status: 'DRAFT', OR: [{ createdByUserId: webUser.userId }, { needsProposalId: { not: null } }] }
     );
   }
   where.OR = clauses.length > 0 ? clauses : [{ id: '00000000-0000-0000-0000-000000000000' }];
@@ -96,7 +96,7 @@ export async function assertCallerProjectAccess(params: {
 
   const row = await prisma.project.findUnique({
     where: { id: params.projectId },
-    select: { id: true, tenantId: true, status: true, createdByUserId: true, constructionPhase: true },
+    select: { id: true, tenantId: true, status: true, createdByUserId: true, constructionPhase: true, needsProposalId: true },
   });
 
   if (!row) {
@@ -130,7 +130,9 @@ export async function assertCallerProjectAccess(params: {
   }
 
   // A draft exists only for its creator and for users who can create or edit project baselines.
-  if (row.status === 'DRAFT' && row.createdByUserId !== webUser.userId && !canManageDrafts(webUser)) {
+  // Needs pipeline wave 4: a draft converted from a funded proposal is funded work, not a private
+  // draft: it follows the project visibility rule below (owner tree, assignment, tenant-wide).
+  if (row.status === 'DRAFT' && row.createdByUserId !== webUser.userId && !canManageDrafts(webUser) && !row.needsProposalId) {
     throw new AppError('Project not found', 404, 'PROJECT_NOT_FOUND');
   }
 
@@ -194,7 +196,7 @@ export function requireProjectAccess(
 }
 
 /** Routes under /projects/:projectId that work on a draft (the wizard and its data). */
-const DRAFT_ROUTE_RE = /^\/api\/v1\/projects\/[^/]+(?:\/(?:setup|activate|contractors|boq|scope|baseline|process|standards|needs-assessments|evidence\/presign|media|supervision|documents|milestones|visit-form|visit-plan|visit-officers|sites|approved-list-row|contractor-flags)(?:\/|$)|\/?$)/;
+const DRAFT_ROUTE_RE = /^\/api\/v1\/projects\/[^/]+(?:\/(?:setup|activate|contractors|boq|scope|baseline|process|standards|needs-assessments|evidence\/presign|media|supervision|documents|milestones|visit-form|visit-plan|visit-officers|sites|approved-list-row|contractor-flags|needs-origin)(?:\/|$)|\/?$)/;
 
 /** Writes an archived project still serves (Phase 15: the closure pack export). */
 const ARCHIVED_WRITE_RE = /^\/api\/v1\/projects\/[^/]+\/closure-pack\/?$/;

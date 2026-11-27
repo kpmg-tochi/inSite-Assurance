@@ -565,6 +565,8 @@ async function createImportedProject(
       originalPlannedEndDate: x.plannedCompletionDate,
       ...(geofence ? { geofenceMode: 'RADIAL' as const, geofenceGeoJson: geofence as unknown as Prisma.InputJsonValue } : {}),
       importedAt: now,
+      // Needs pipeline wave 4 (D-N.13, D-N.14): onboarding ongoing work; such a project may go live.
+      origin: 'REGISTER_IMPORT',
       importedStatus: x.status,
       importedProgressPct: live ? x.percentComplete : null,
       setupState: {

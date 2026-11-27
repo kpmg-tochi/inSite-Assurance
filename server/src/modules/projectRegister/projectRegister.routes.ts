@@ -6,9 +6,12 @@ import { buildRegisterTemplate, confirmRegisterImport, previewRegisterImport } f
 
 /**
  * UBEC IRL: bulk import of the project register (mounted at /api/v1/project-register). Permission
- * `projects:create`; projects are created in the caller's workspace.
+ * `projects:create`; projects are created in the caller's workspace. Needs pipeline wave 4 (D-N.14): the
+ * import is for onboarding ongoing projects, so it is for workspace administrators only (also
+ * `tenant:manage_settings`); imported projects get origin REGISTER_IMPORT.
  */
 const router = Router();
+const ADMIN_ONLY = requirePermission('tenant:manage_settings');
 
 type Handler = (req: Request, res: Response) => Promise<void>;
 const wrap = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => fn(req, res).catch(next);
@@ -17,6 +20,7 @@ const wrap = (fn: Handler) => (req: Request, res: Response, next: NextFunction) 
 router.get(
   '/template',
   requirePermission('projects:create'),
+  ADMIN_ONLY,
   wrap(async (req, res) => {
     const { buffer, fileName } = await buildRegisterTemplate(req.webUser!.tenantId);
     res.attachment(fileName);
@@ -30,6 +34,7 @@ router.get(
 router.post(
   '/import/preview',
   requirePermission('projects:create'),
+  ADMIN_ONLY,
   validateBody(ProjectRegisterImportPreviewRequestSchema),
   wrap(async (req, res) => {
     res.json({ success: true, data: await previewRegisterImport(req.webUser!, req.body) });
@@ -40,6 +45,7 @@ router.post(
 router.post(
   '/import/confirm',
   requirePermission('projects:create'),
+  ADMIN_ONLY,
   validateBody(ProjectRegisterImportConfirmRequestSchema),
   wrap(async (req, res) => {
     res.status(201).json({ success: true, data: await confirmRegisterImport(req.webUser!, req.body) });

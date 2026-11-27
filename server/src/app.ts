@@ -39,12 +39,15 @@ import { projectLotsRoutes } from "./modules/projectLots/projectLots.routes";
 import { portfolioPaymentsRoutes } from "./modules/payments/portfolioPayments.routes";
 import { sitesRoutes } from "./modules/sites/sites.routes";
 import { contractorsRoutes } from "./modules/contractors/contractors.routes";
-import { needsAssessmentRoutes } from "./modules/needsAssessment/needsAssessment.routes";
 import { contractorFlagsRoutes, projectContractorFlagsRoutes } from "./modules/contractorFlags/contractorFlags.routes";
 import { approvedListsRoutes, projectApprovedListRoutes } from "./modules/approvedLists/approvedLists.routes";
 import { needsRoutes } from "./modules/needs/needs.routes";
 import { needsDecisionsRoutes } from "./modules/needs/decisions/needsDecisions.routes";
 import { needsCommitteeRoutes } from "./modules/needs/committee/needsCommittee.routes";
+import { needsSubmissionsRoutes } from "./modules/needs/submissions/submissions.routes";
+import { needsApprovalRoutes } from "./modules/needs/submissions/needsApproval.routes";
+import { needsFundingRoutes } from "./modules/needs/funding/needsFunding.routes";
+import { projectNeedsOriginRoutes } from "./modules/needs/integration/projectNeedsOrigin.routes";
 import { costingStandardsRoutes } from "./modules/standards/costingStandards.routes";
 import { standardsPageRoutes } from "./modules/standards/standardsPage.routes";
 import { geocodeRoutes } from "./modules/geocode/geocode.routes";
@@ -106,8 +109,6 @@ export function createApp() {
   app.use("/api/v1/auth", authRoutes);
   app.use("/api/v1/rbac", rbacRoutes);
   app.use("/api/v1/organizations", organizationsRoutes);
-  // Client demo updates D1 (wave 2): before the projects router (its /:projectId routes would take the path).
-  app.use("/api/v1/projects/from-needs-assessment", needsAssessmentRoutes);
   app.use("/api/v1/projects", projectsRoutes);
   app.use("/api/v1/projects", projectOverviewRoutes); // Redesign R6c (after projectsRoutes: /portfolio/overview)
   app.use("/api/v1/projects", boqRoutes);
@@ -161,7 +162,11 @@ export function createApp() {
   app.use("/api/v1/approved-lists", approvedListsRoutes); // E3: approved lists
   app.use("/api/v1/needs", needsDecisionsRoutes); // Needs pipeline wave 3 (N4): stage work, overrides, tasks, reports
   app.use("/api/v1/needs", needsCommitteeRoutes); // Needs pipeline wave 3 (N5): committee, scoring, ranking
+  app.use("/api/v1/needs", needsSubmissionsRoutes); // Needs pipeline wave 4: submissions (read)
+  app.use("/api/v1/needs", needsApprovalRoutes); // Needs pipeline wave 4 (N6): portfolio, out-of-cycle, pipeline
+  app.use("/api/v1/needs", needsFundingRoutes); // Needs pipeline wave 4 (N7b–c): funding, procurement plan, BEAP
   app.use("/api/v1/needs", needsRoutes); // Needs pipeline wave 2: cycles, uploads, proposals
+  app.use("/api/v1/projects", projectNeedsOriginRoutes); // Needs pipeline wave 4: /projects/:projectId/needs-origin
   app.use("/api/v1/costing-standards", costingStandardsRoutes); // Needs pipeline wave 2 (N2)
   app.use("/api/v1/standards", standardsPageRoutes); // Needs pipeline wave 2 (N2): Standards page
   app.use("/api/v1/projects", projectApprovedListRoutes); // E3: /projects/:projectId/approved-list-row

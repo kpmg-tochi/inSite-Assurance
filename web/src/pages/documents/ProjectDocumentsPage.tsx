@@ -20,10 +20,12 @@ import { DocumentDrawer } from "../../components/documents/DocumentDrawer";
 import { DocumentUploadDialog } from "../../components/documents/DocumentUploadDialog";
 import { canOfferSignOff } from "../../components/documents/documentSignOff";
 import { useOpenDocumentMutation } from "../../mutations/contracts/useContractMutations";
+import { ProjectNeedsDocuments } from "../../components/needs/integration/ProjectNeedsDocuments";
 
 /**
  * Phase 13: the project document register. Typed, versioned documents with sign-offs; filter by
- * type and contractor; a drawer per document with versions and sign-offs.
+ * type and contractor; a drawer per document with versions and sign-offs. Needs pipeline wave 4: a
+ * read-only "Needs assessment" group below it (the proposed project's and its cycle's documents).
  */
 export function ProjectDocumentsPage({
   project,
@@ -261,6 +263,9 @@ export function ProjectDocumentsPage({
               : "Documents added to the register appear here.",
         }}
       />
+
+      {/* Needs pipeline wave 4 (C5): the proposal's and the cycle's documents, read-only. */}
+      <ProjectNeedsDocuments projectId={project.id} />
 
       {selectedId && (
         <DocumentDrawer

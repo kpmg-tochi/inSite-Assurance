@@ -146,6 +146,7 @@ async function runSeed(): Promise<void> {
   // Projects lose their proposal link by the foreign key (SET NULL).
   await prisma.needsApprovalAction.deleteMany();
   await prisma.needsApprovalStep.deleteMany();
+  await prisma.needsFundingRecord.deleteMany();
   await prisma.needsSubmissionItem.deleteMany();
   await prisma.needsSubmission.deleteMany();
   await prisma.needsScoreSheet.deleteMany();
@@ -879,6 +880,10 @@ async function runSeed(): Promise<void> {
   // Client demo updates: SEED_PROFILE=ubec-demo adds the demo overlay (story table in its header).
   // Tests and the default profile keep the normal seed.
   if (process.env.SEED_PROFILE === "ubec-demo") await seedDemoOverlay();
+  // Needs pipeline wave 4 (D-N.13): every seeded project predates the pipeline (origin LEGACY), as the
+  // migration did for existing rows; the activation gate then refuses only drafts made without an origin.
+  const legacy = await prisma.project.updateMany({ where: { origin: null }, data: { origin: "LEGACY" } });
+  console.log(`   • Project origin: ${legacy.count} seeded project(s) marked LEGACY.`);
 
   console.log("✅ Seed complete!");
   console.log(

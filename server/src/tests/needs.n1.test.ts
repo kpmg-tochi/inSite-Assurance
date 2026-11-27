@@ -920,7 +920,8 @@ describe('Needs pipeline N1: the shared enums and the database enums agree', () 
 
   it('the 23 pipeline audit actions and the new permission category are there', () => {
     const pipeline = AuditActionTypeEnum.options.filter((a) => a.startsWith('NEEDS_') && a !== 'NEEDS_ASSESSMENT_UPLOADED' && a !== 'NEEDS_ASSESSMENT_DELETED' && a !== 'NEEDS_DOCUMENT_ADDED' && a !== 'NEEDS_SEPARATION_OVERRIDE_REQUESTED' && a !== 'NEEDS_RANKING_OVERRIDDEN');
-    assert.equal(pipeline.length, 21);
+    // Wave 4 added NEEDS_SUBMISSION_UPDATED, NEEDS_COUNTERPART_RECORDED, NEEDS_LOTS_ASSIGNED.
+    assert.equal(pipeline.length, 24);
     for (const action of [...pipeline, 'COSTING_STANDARD_SAVED', 'PROJECT_CREATED_FROM_PROPOSAL'] as const) {
       assert.ok((Object.values(DbAuditActionType) as string[]).includes(action), action);
     }

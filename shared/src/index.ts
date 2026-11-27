@@ -87,6 +87,7 @@ export * from './utils/needsCosting';
 export * from './utils/proposalReference';
 export * from './utils/needsDuplicates';
 export * from './utils/needsCalendar';
+export * from './utils/needsDistribution';
 
 // Data
 export * from './data/standardsLibrary';

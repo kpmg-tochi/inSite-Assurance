@@ -341,6 +341,9 @@ describe('UBEC demo: Direct Intervention, live', () => {
     });
     assert.equal(created.status, 201, JSON.stringify(created.body));
     ids.project = created.body.data.projectId;
+    // Needs pipeline wave 4 (D-N.13): a project of a pipeline programme goes live only with an origin. This
+    // walk predates the pipeline (wave 5 rewrites the demo through it), so the draft is marked LEGACY.
+    await prisma.project.update({ where: { id: ids.project }, data: { origin: 'LEGACY' } });
 
     const { buildScopeWorkbook } = await import('../modules/scope/workbook/scopeWorkbook');
     const file = (await buildScopeWorkbook(demoWorkbookData(today))).toString('base64');

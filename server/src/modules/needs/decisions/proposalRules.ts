@@ -39,6 +39,15 @@ export interface RuleProposal {
   id: string;
   stage: string;
   status: string;
+  /** Wave 4: an OUT_OF_CYCLE request is moved by its own routes only (absent = not known). */
+  route?: string | null;
+}
+
+/** Wave 4: a cycle's submissions, for the Approval and Funding actions. */
+export interface SubmissionFact {
+  id: string;
+  kind: string;
+  status: string;
 }
 
 export interface OverrideFlagFact {
@@ -69,7 +78,13 @@ export interface RuleFacts {
   overrides: Map<string, OverrideFlagFact[]>;
   /** Per cycle id (loaded for the viewer). */
   committees: Map<string, CommitteeView>;
+  /** Wave 4: per cycle id, its submissions (only for the cycles `loadRuleFacts` was given). */
+  submissions?: Map<string, SubmissionFact[]>;
 }
+
+/** Wave 4: the cycle has a submission of that kind with the approvers or approved. */
+export const liveSubmission = (facts: Pick<RuleFacts, 'submissions'>, cycleId: string, kind: 'PORTFOLIO' | 'BEAP') =>
+  (facts.submissions?.get(cycleId) ?? []).some((s) => s.kind === kind && (s.status === 'IN_REVIEW' || s.status === 'APPROVED'));
 
 export const SEPARATION_ACTION_PERMISSION: Partial<Record<NeedsSeparationAction, string>> = {
   VALIDATE: 'needs:validate',
@@ -137,7 +152,12 @@ export async function loadRuleFacts(db: Db, user: WebJwtPayload, cycles: readonl
   const [histories, overrides] = await Promise.all([dutyHistories(db, proposalIds), loadOverrideFlags(db, proposalIds)]);
   const committees = new Map<string, CommitteeView>();
   for (const cycle of cycles) committees.set(cycle.id, await loadCommitteeView(db, cycle, user, histories));
-  return { histories, overrides, committees };
+  const submissions = new Map<string, SubmissionFact[]>(cycles.map((c) => [c.id, []]));
+  if (cycles.length) {
+    const rows = await db.needsSubmission.findMany({ where: { cycleId: { in: cycles.map((c) => c.id) } }, select: { id: true, cycleId: true, kind: true, status: true } });
+    for (const r of rows) submissions.get(r.cycleId)?.push({ id: r.id, kind: r.kind, status: r.status });
+  }
+  return { histories, overrides, committees, submissions };
 }
 
 export const EMPTY_HISTORY: ProposalDutyHistory = { uploaderUserIds: [], validatorUserIds: [], costerUserIds: [] };
@@ -194,6 +214,9 @@ export function narrowActions(user: WebJwtPayload, cycle: CycleRow, config: Need
   if (!canWriteCycle(user, cycle)) return { allowed: [], blocked: [] };
   const stage = proposal.stage as NeedsStage;
   const status = proposal.status as NeedsProposalStatus;
+  // Wave 4 (D-N.14): an out-of-cycle request is edited, submitted and withdrawn through its own
+  // routes; only such a request is DRAFT or RETURNED at Approval (a caller may not know the route).
+  if (proposal.route === 'OUT_OF_CYCLE' || (stage === 'APPROVAL' && (status === 'DRAFT' || status === 'RETURNED'))) return { allowed: [], blocked: [] };
   const base = allowedProposalActions({ stage, status }, config, user.isPlatformSuperAdmin ? allPermissionsOf(user, config) : user.permissions);
   const committee = facts.committees.get(cycle.id) ?? null;
   const allowed: NeedsProposalAction[] = [];
@@ -215,6 +238,10 @@ export function narrowActions(user: WebJwtPayload, cycle: CycleRow, config: Need
     // committee must exist; finalise and return refuse anyone else), and nothing moves after finalisation.
     if ((action === 'FINALISE_PRIORITISATION' || (action === 'RETURN' && stage === 'PRIORITISATION')) && (committee?.me?.role !== 'CHAIR' || committee.state === 'FINALISED')) continue;
     if ((action === 'RESUBMIT' || action === 'UPLOAD_COSTED_VERSION') && stage === 'PRIORITISATION' && cycle.rankingFinalisedAt) continue;
+    // Wave 4: a proposal joins the portfolio once the ranking is final and while no portfolio is with
+    // the approvers or approved; it joins the BEAP while no BEAP is.
+    if (action === 'INCLUDE_IN_PORTFOLIO' && (!cycle.rankingFinalisedAt || liveSubmission(facts, cycle.id, 'PORTFOLIO'))) continue;
+    if (action === 'INCLUDE_IN_BEAP' && liveSubmission(facts, cycle.id, 'BEAP')) continue;
     allowed.push(action);
   }
   return { allowed, blocked };

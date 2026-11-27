@@ -311,6 +311,10 @@ enum AuditActionType {
   DESIGN_STANDARD_DOCUMENT_ADDED
   NEEDS_SEPARATION_OVERRIDE_REQUESTED
   NEEDS_RANKING_OVERRIDDEN
+  // Needs pipeline wave 4
+  NEEDS_SUBMISSION_UPDATED
+  NEEDS_COUNTERPART_RECORDED
+  NEEDS_LOTS_ASSIGNED
 }
 
 // Phase 11: which organisation an approval step actor must belong to (ANY = Phase 7 behaviour).
@@ -2910,6 +2914,7 @@ model NeedsCycle {
   submissions            NeedsSubmission[]
   approvalSteps          NeedsApprovalStep[]
   approvalActions        NeedsApprovalAction[]
+  fundingRecords         NeedsFundingRecord[]
 
   @@unique([tenantId, projectTypeId, interventionYear, scopeKey])
   @@index([tenantId, interventionYear])
@@ -2960,6 +2965,8 @@ model NeedsProposal {
   route                 String   @default("ANNUAL")
   // OutOfCycleReasonEnum; the authorising document is a NeedsProposalDocument
   outOfCycleReason      String?
+  // Wave 4: why the project cannot wait for the annual cycle (out-of-cycle requests).
+  outOfCycleDetails     String?  @db.Text
   authorisingDocumentId String?  @db.Uuid
   // NeedsStageEnum, NeedsProposalStatusEnum
   stage                 String
@@ -3285,6 +3292,12 @@ model NeedsSubmission {
   memoDocumentId                String?   @db.Uuid
   counterpartDeclaredNgn        Decimal?  @db.Decimal(18, 2)
   counterpartEvidenceDocumentId String?   @db.Uuid
+  // Wave 4: when and by whom the counterpart evidence was recorded (also after approval, A5).
+  counterpartRecordedAt         DateTime?
+  counterpartRecordedByUserId   String?   @db.Uuid
+  counterpartRecordedByName     String?
+  // Wave 4, BEAP: the narrative (a cycle document of kind BEAP).
+  narrativeDocumentId           String?   @db.Uuid
   createdByUserId               String    @db.Uuid
   createdByName                 String
   createdAt                     DateTime  @default(now())
@@ -3310,6 +3323,9 @@ model NeedsSubmissionItem {
   lotNumber         Int?
   batchNumber       Int?
   procurementMethod String?
+  // Wave 4, BEAP: the planned timeline (YYYY-MM-DD).
+  plannedStartDate  String?
+  plannedEndDate    String?
   // BEAP review by UBEC, per proposal (accept, comment, request removal).
   reviewOutcome     String?
   reviewComment     String?  @db.Text
@@ -3371,6 +3387,33 @@ model NeedsApprovalAction {
   @@index([subjectId, createdAt])
   @@index([cycleId, chainType])
   @@map("needs_approval_actions")
+}
+
+// Needs pipeline wave 4 (N7b): what Finance records at Funding (DI): the budget submission to the
+// Ministry and the appropriated schedule import (with the approved list it wrote).
+model NeedsFundingRecord {
+  id               String   @id @default(uuid()) @db.Uuid
+  cycleId          String   @db.Uuid
+  // BUDGET_SUBMISSION | APPROPRIATION (NeedsFundingRecordKindEnum)
+  kind             String
+  // YYYY-MM-DD: the submission date, or the date of the appropriation
+  recordedOn       String
+  amountNgn        Decimal? @db.Decimal(18, 2)
+  // A cycle document (acknowledgement, appropriated schedule)
+  documentId       String?  @db.Uuid
+  approvedListId   String?  @db.Uuid
+  fileName         String?
+  sha256           String?
+  note             String?  @db.Text
+  summaryJson      Json     @default("{}")
+  recordedByUserId String   @db.Uuid
+  recordedByName   String
+  createdAt        DateTime @default(now())
+
+  cycle NeedsCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId, kind])
+  @@map("needs_funding_records")
 }
 
 // D-N.8: the costing standards of a tenant, versioned. A version a cycle or a needs assessment

@@ -1,6 +1,6 @@
 import { BrandLogo, shortOrganisationName } from "./BrandLogo";
 import { ChangeProjectDialog } from "./projects/ChangeProjectDialog";
-import { useGuardedAction, useGuardedNavigate } from "../lib/navigationGuard";
+import { useGuardedAction } from "../lib/navigationGuard";
 import React, { useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -8,7 +8,6 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
-  Plus,
   X,
 } from "lucide-react";
 import type { ProjectSummaryDto } from "../api/types";
@@ -33,6 +32,7 @@ import {
   type NavItem,
 } from "../navigation/navItems";
 import { useNeedsTaskCountQuery } from "../queries/needs/useDecisionQueries";
+import { NewProjectControl } from "./needs/integration/NewProjectControl";
 
 interface AppShellProps {
   selectedProject: ProjectSummaryDto | null;
@@ -48,7 +48,8 @@ const FOCUSABLE =
  * navigation config under two small headers: "Platform" on top (home, Needs assessment, Contractors,
  * Settings), then "Project" (the selected project's code and year with "Change project", then its
  * pages), with the user menu at the bottom. Collapsed, the headers become thin dividers. The header
- * shows the project code and the page name, and "New project" for project creators. Below `lg` the
+ * shows the project code and the page name, and "New project" (`NewProjectControl`: a menu in needs
+ * pipeline workspaces, else the link for project creators). Below `lg` the
  * sidebar is an off-canvas drawer opened from the header.
  */
 export function AppShell({
@@ -57,8 +58,7 @@ export function AppShell({
   children,
 }: AppShellProps) {
   const location = useLocation();
-  const { hasAnyPermission, hasPermission } = useAuth();
-  const navigate = useGuardedNavigate();
+  const { hasAnyPermission } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -71,8 +71,6 @@ export function AppShell({
       ? selectedProject
       : null;
   const pageName = pageNameFor(loc, hasAnyPermission);
-  // Same gate and target as the home page's "New project" (PortfolioProjectsTable); not on that page itself.
-  const canCreateProject = hasPermission("projects:create") && !loc.isNewProject;
 
   // Close the drawer when a link in it navigates.
   useEffect(() => {
@@ -164,18 +162,8 @@ export function AppShell({
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
-            {canCreateProject && (
-              <button
-                type="button"
-                onClick={() => navigate("/app/projects/new")}
-                aria-label="New project"
-                title="New project"
-                className="inline-flex h-[34px] items-center gap-1.5 rounded-xl bg-white px-2 sm:px-3 text-xs font-semibold text-brand-navy shadow-sm transition hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-navy"
-              >
-                <Plus className="w-4 h-4 shrink-0" aria-hidden="true" />
-                <span className="hidden sm:inline">New project</span>
-              </button>
-            )}
+            {/* Needs pipeline wave 4 (C4): a menu in pipeline workspaces, else the plain link. */}
+            {!loc.isNewProject && <NewProjectControl />}
             <Notifications projectId={selectedProject?.id} />
             {headerActions}
           </div>

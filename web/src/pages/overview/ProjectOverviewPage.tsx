@@ -26,6 +26,7 @@ import { ProjectAlertChips } from "../../components/alerts/ProjectAlertChips";
 import { CloseoutReportPrompt } from "../../components/closure/CloseoutReport";
 import { ProjectSitesCard } from "../../components/sites/ProjectSitesCard";
 import { ApprovedListLinkCard } from "../../components/approvedLists/ApprovedListLinkCard";
+import { ProjectOriginCard } from "../../components/needs/integration/ProjectOriginCard";
 import { ProjectContractorFlagCard } from "../../components/contractorFlags/ProjectContractorFlagCard";
 import { useProjectOverviewQuery } from "../../queries/projects/useProjectsQueries";
 import { useOverviewChartsQuery } from "../../queries/projects/useOverviewChartsQuery";
@@ -210,6 +211,9 @@ export function ProjectOverviewPage({ project, evidenceLogs }: ProjectOverviewPa
           )}
         </div>
       ) : null}
+
+      {/* Needs pipeline wave 4 (C5): where the project came from (proposed project, amounts, rank). */}
+      <ProjectOriginCard projectId={project.id} />
 
       {/* Client demo updates E3 (wave 3): the approved list row and the budget-mismatch red flag. */}
       <ApprovedListLinkCard projectId={project.id} />

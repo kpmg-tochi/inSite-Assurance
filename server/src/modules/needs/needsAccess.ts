@@ -38,6 +38,9 @@ function ownedByOrganizationTreeCycleWhere(organizationId: string): Prisma.Needs
  * Grants cycle once a BEAP is submitted. Returns the extra branch, or null while nothing adds one.
  */
 export function beapReviewerCycleBranch(user: WebJwtPayload): Prisma.NeedsCycleWhereInput | null {
+  // Wave 4 (review fix): UBEC's BEAP steps need an organisation above the State's SUBEB
+  // (`gateForSubmission`), and those organisations already see the SUBEB's cycles through the
+  // organisation tree; a branch here would only let other SUBEBs read another State's cycle.
   void user;
   return null;
 }

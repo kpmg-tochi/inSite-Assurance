@@ -66,6 +66,11 @@ type Db = Tx | typeof prisma;
 const S = APPROVED_LIST_SHEETS;
 const ADVISORY_KEY = (tenantId: string) => `approved-lists:${tenantId}`;
 
+/** Needs pipeline wave 4 (D-N.12): the funding gates write approved lists under the same per-tenant lock. */
+export async function lockApprovedLists(tx: Tx, tenantId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${ADVISORY_KEY(tenantId)}))`;
+}
+
 const EXISTING_ROW_SELECT = {
   id: true,
   rowRef: true,
@@ -155,6 +160,15 @@ function rowChanged(existing: ExistingRow, row: ParsedApprovedListRow): boolean 
 }
 
 /** The list a file replaces: same tenant, year, kind and State (DI: none). No unique key: the oldest wins. */
+/** The list was written by the needs pipeline's funding gate (ledger APPROVED_LIST_IMPORTED with source NEEDS_FUNDING). */
+async function writtenByFundingGate(db: Db, tenantId: string, listId: string): Promise<boolean> {
+  const entry = await db.auditLog.findFirst({
+    where: { tenantId, action: 'APPROVED_LIST_IMPORTED', AND: [{ payload: { path: ['listId'], equals: listId } }, { payload: { path: ['source'], equals: 'NEEDS_FUNDING' } }] },
+    select: { id: true },
+  });
+  return Boolean(entry);
+}
+
 async function findExistingList(db: Db, tenantId: string, header: ParsedApprovedListHeader) {
   if (header.interventionYear === null || !header.kind) return null;
   if (header.kind === 'MG_BEAP' && !header.stateCode) return null;
@@ -326,6 +340,17 @@ async function analyse(db: Db, webUser: WebJwtPayload, buffer: Buffer, fileName:
       return { row, unlinked };
     });
 
+  // Needs pipeline wave 4 (review fix): a list the funding gate wrote (appropriated schedule, approved
+  // BEAP) links funded projects to their rows; an upload must not replace it.
+  if (existingList && (await writtenByFundingGate(db, tenantId, existingList.id))) {
+    removalIssues.push({
+      sheet: S.list,
+      row: null,
+      column: null,
+      code: 'APPROVED_LIST_FROM_FUNDING_GATE',
+      message: `${existingList.title} was written by the needs pipeline's funding gate (appropriation or BEAP approval): an upload cannot replace it.`,
+    });
+  }
   const issues = [...parsed.issues, ...removalIssues, ...plan.flatMap((p) => p.preview.issues)];
   const warnings = [...parsed.warnings, ...plan.flatMap((p) => p.preview.warnings)];
   const preview: ApprovedListImportPreviewDto = {

@@ -307,6 +307,55 @@ Normal seed with migration `20261230090000_needs_w3_committee` applied. The seed
 | WT-N3C-18 | `es@` | Server errors (409 `NEEDS_QUORUM_NOT_MET`, `NEEDS_CONFLICT_NOT_DECLARED`, `NEEDS_MEMBER_RECUSED`) show the server's message with the proposal references. |
 | WT-N3C-19 | any | At 375 px: no horizontal page scroll; tables scroll in their card; dialogs fit; the progress bar does not animate with reduced motion. |
 
+## 6j. Needs pipeline wave 4 (2026-11-27)
+
+Seed with the normal profile; logins `@ubec.test`, `Password123!`. The DI and MG walks need a cycle at Approval: run `routes.needs.scenarios.test.ts` steps by hand, or wait for wave 5's seeded cycles (N9).
+
+### Approvals, out-of-cycle, project integration (Track C)
+
+| Ref | Login | Check |
+| :--- | :--- | :--- |
+| WT-N4-01 | `procurement@` | DI cycle with a finalised ranking → Approvals: the builder lists every Approval proposal by rank; below-line rows are fixed as excluded ("Below the funding line"); excluding an above-line row without a reason keeps Submit disabled. |
+| WT-N4-02 | `procurement@` | Submit the portfolio → status "In review", count and total, distribution by Zone / State / LGA (footnote when a proposal spans LGAs), step 1 waiting. |
+| WT-N4-03 | `dpp@` | Return without notes → disabled; with notes → "Returned for revision"; as `procurement@` the builder comes back with the earlier choices and the notes. |
+| WT-N4-04 | `dpp@` | After the resubmission, approve the management review adding one exclusion with a reason → the item reads "Excluded" with the reason; step 2 is current. |
+| WT-N4-05 | `es@` | Last step: Approve stays disabled until a memo is uploaded or chosen; after approval: "Approved", memo opens, proposals move to Funding (excluded one: "Not funded, carried forward"). |
+| WT-N4-06 | submitter holding the step | Approving one's own submission → toast with the SAME_PERSON_APPROVAL message. |
+| WT-N4-07 | `kano.procurement@` | Matching Grants cycle: the tab says "State approval" with the SUBEB steps (management review, Executive Chairman endorsement). |
+| WT-N4-08 | `procurement@` | Header New project → menu with both items; "New proposed project" opens the needs assessment page with the upload dialog on the open cycle; the URL loses `upload=1`. |
+| WT-N4-09 | user whose organisation has no open cycle | "New proposed project" disabled with the explanation. |
+| WT-N4-10 | `admin@insite.ng` (no pipeline programme) | Plain "New project" link to `/app/projects/new`. |
+| WT-N4-11 | `procurement@` | Out-of-cycle project → dialog (State only for Matching Grants) → request page with the "Outside annual cycle" chip; Submit disabled until the authorising document is uploaded. |
+| WT-N4-12 | `procurement@` | Upload a needs assessment on the request → check shows summary, issues and flags; save shows "Version 1" with Open. |
+| WT-N4-13 | `es@` | Approve the submitted request → the page links the draft project; the request is listed on the cycle's Approvals tab. |
+| WT-N4-14 | `procurement@` | Withdraw a draft request with a reason → "Withdrawn"; edit, submit and withdraw hidden. |
+| WT-N4-15 | `dpp@` | Portfolio → Pipeline: proposals at Approval / Funding and drafts not live; programme, year and State filters; a row opens the proposal; the project link opens setup. |
+| WT-N4-16 | `dpp@` | Converted project Overview → Origin card (reference linked, amounts, rank, versions); a LEGACY project shows one line "Before the needs pipeline". |
+| WT-N4-17 | `dpp@` | Converted project → BoQ & work phases → Facilities tab: rows by facility and site, shortfall, criticality, justification, unit % complete; `?tab=facilities` survives a reload; no tab without a breakdown. |
+| WT-N4-18 | `dpp@` | Converted project → Documents → read-only "Needs assessment" group; each file opens. |
+| WT-N4-19 | `admin@` | Out-of-cycle projects show the "Outside annual cycle" chip on Portfolio and Dashboard rows; the register export (xlsx) has the "Origin" column. |
+| WT-N4-20 | a user with `projects:create` without `tenant:manage_settings`; `admin@` | "Import projects" hidden for the first, shown for the admin. |
+| WT-N4-21 | `admin@` | Activate a draft created through `/app/projects/new` of a pipeline programme → toast "This project has no origin …" (409 PROJECT_ORIGIN_REQUIRED). |
+
+### Funding, BEAP, procurement plan (Track D)
+
+| Ref | Login | Check |
+| :--- | :--- | :--- |
+| WT-N4-40 | `finance@` | DI Funding tab → Record budget submission with an acknowledgement → listed; Open shows the file; also on Cycle documents. |
+| WT-N4-41 | `finance@` | Download the template → fill 2 rows (one at the approved amount, one lower), leave one proposal out → Import → Funded 1, Partly funded 1, Not funded 1 with the carried-forward list; Confirm disabled until the appropriation date is entered. |
+| WT-N4-42 | `finance@` | Confirm → the result lists the draft projects with working setup links; the tab shows the appropriation record; Approved lists has the schedule. |
+| WT-N4-43 | person who approved the portfolio (with `needs:record_funding`) | Import → amber reason (SAME_PERSON_FUNDING); Confirm disabled. |
+| WT-N4-44 | `finance@` | A file with an unknown reference → that row "Refused" with its issue; Confirm disabled. |
+| WT-N4-45 | `procurement@` | DI Procurement plan → select 2 drafts → Assign to a lot → new lot "Renovation of Public Schools" → codes LOT n BATCH 1/2; rows lose their checkboxes; upload the plan → listed. |
+| WT-N4-46 | `kano.dpp@` | MG cycle → Procurement plan → "Lots come from the BEAP". |
+| WT-N4-47 | `kano.dpp@` | MG BEAP: items listed; unticking one asks for a reason; Submit disabled with the missing list until lot, method, dates and narrative are filled; Save draft; reload keeps the values. |
+| WT-N4-48 | `kano.dpp@` | Submit → "In review"; the editor closes; the steps show the current step. |
+| WT-N4-49 | `dpp@` | BEAP tab shows the review panel (no editing): comment on one item, request removal on another, Save review → Return with notes → "Returned". |
+| WT-N4-50 | `kano.dpp@` | After the return: notes and per-item comments shown → "Upload a revised needs assessment" on an item → version and amount update → Resubmit. |
+| WT-N4-51 | `dpp@`, `es@` | Approve both steps ("Approve and create projects") → items show Lot · Batch and draft project links. |
+| WT-N4-52 | `kano.dpp@` | Approved BEAP without evidence → the A5 warning → Record counterpart evidence (amount, file) → recorded-by shown; warning gone. |
+| WT-N4-53 | `es@` while the review step is current | Read-only items with the reason under the steps. |
+
 ## 7. Known open items
 
 | Ref | Item |

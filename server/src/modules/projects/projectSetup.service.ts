@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
+import { assertActivationOrigin } from '../needs/funding/activationGate';
 import { getProjectSites, saveProjectSites } from '../sites/sites.service';
-import { getNeedsAssessmentImportState } from '../needsAssessment/needsAssessment.service';
+import { getNeedsAssessmentImportState } from './needsAssessmentImportState';
 import {
   ActivateProjectResponse,
   ActivationIssue,
@@ -1513,6 +1514,8 @@ export async function activateProject(projectId: string, webUser: WebJwtPayload)
         project.status === 'ACTIVE' ? 'PROJECT_ALREADY_ACTIVE' : 'PROJECT_ARCHIVED'
       );
     }
+    // Needs pipeline wave 4 (D-N.13, A5): origin and counterpart evidence, before the setup checks.
+    await assertActivationOrigin(tx, projectId);
 
     // Re-validate everything: the composed schema for the row, plus the per-section checks.
     // Redesign R6a: each issue names its section (`stepId`) and the wizard step that shows it.

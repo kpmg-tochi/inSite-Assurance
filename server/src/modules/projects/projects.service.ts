@@ -23,6 +23,8 @@ import {
   addDays,
   isOngoingProject,
   FundingSourceCodeEnum,
+  ProjectOriginEnum,
+  type ProjectOrigin,
   zoneOfState,
   statesOfZone,
 } from '@insite/shared';
@@ -150,6 +152,7 @@ export function serializeRegisterFields(project: {
   fundingSourceCode: string | null;
   batchNumber: number | null;
   lot?: { number: number } | null;
+  origin: string | null;
   _count: { boqItems: number };
 }): ProjectRegisterFields {
   const fundingCode = FundingSourceCodeEnum.safeParse(project.fundingSourceCode);
@@ -168,6 +171,7 @@ export function serializeRegisterFields(project: {
     fundingSourceCode: fundingCode.success ? fundingCode.data : null,
     lotNumber: project.lot?.number ?? null,
     batchNumber: project.batchNumber,
+    origin: ProjectOriginEnum.safeParse(project.origin).success ? (project.origin as ProjectOrigin) : null,
   };
 }
 

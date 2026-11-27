@@ -12,6 +12,7 @@ import { ProjectAlertKeyEnum } from './projectAlert.schema';
 import { FundingSourceCodeEnum } from './projectRegister.schema';
 import { NigeriaZoneCodeEnum } from '../data/nigeriaAdminAreas';
 import { ProjectSiteSummaryDtoSchema } from './site.schema';
+import { ProjectOriginEnum } from './needsPipeline.schema';
 
 /**
  * Phase 11: the delivery-model fields every project list row carries (directory and portfolio
@@ -53,6 +54,12 @@ export const ProjectRegisterFieldsSchema = z.object({
   fundingSourceCode: FundingSourceCodeEnum.nullable(),
   lotNumber: z.number().int().nullable(),
   batchNumber: z.number().int().nullable(),
+  /**
+   * Needs pipeline wave 4 (D-N.13): where the project came from; null = no origin (a draft of a
+   * programme that runs the needs pipeline cannot be activated). OUT_OF_CYCLE shows the "Outside
+   * annual cycle" chip.
+   */
+  origin: ProjectOriginEnum.nullable(),
 });
 export type ProjectRegisterFields = z.infer<typeof ProjectRegisterFieldsSchema>;
 

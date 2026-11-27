@@ -9,6 +9,7 @@ import {
   ApprovedListColumnKey,
   ApprovedListIssue,
   ApprovedListKind,
+  type AppropriatedScheduleColumn,
   findLgaByName,
   findStateByName,
   INTERVENTION_YEAR_MAX,
@@ -114,8 +115,11 @@ export interface ApprovedListHeaderInput {
   approvedOn?: string | null;
 }
 
+/** A Rows sheet column: the approved list's, or the appropriated schedule's "Proposal reference" (needs pipeline wave 4). */
+type WorkbookColumnKey = AppropriatedScheduleColumn['key'];
+
 /** One Rows sheet row as written (the demo pack and tests). Schools and LGAs as text ("a; b"). */
-export type ApprovedListRowInput = Partial<Record<ApprovedListColumnKey, string | number | null>>;
+export type ApprovedListRowInput = Partial<Record<WorkbookColumnKey, string | number | null>>;
 
 export interface ApprovedListWorkbookData {
   generatedAt: Date;
@@ -126,9 +130,17 @@ export interface ApprovedListWorkbookData {
   /** Pre-filled header and rows (the demo pack, tests); empty for the template. */
   header?: ApprovedListHeaderInput;
   rows?: ApprovedListRowInput[];
+  /**
+   * Needs pipeline wave 4 (D-N.12): the appropriated schedule is this workbook with its own Rows
+   * columns (`APPROPRIATED_SCHEDULE_COLUMNS`), title, introduction and steps. Default: the approved list's.
+   */
+  columns?: readonly AppropriatedScheduleColumn[];
+  title?: string;
+  intro?: string;
+  steps?: string[];
 }
 
-const COLUMN_STYLE: Record<ApprovedListColumnKey, BodyColumn & { width: number }> = {
+const COLUMN_STYLE: Record<WorkbookColumnKey, BodyColumn & { width: number }> = {
   rowRef: { width: 18 },
   projectTitle: { width: 44, wrap: true },
   schools: { width: 34, wrap: true },
@@ -138,6 +150,7 @@ const COLUMN_STYLE: Record<ApprovedListColumnKey, BodyColumn & { width: number }
   costEstimate: { width: 20, numFmt: MONEY_FMT, align: 'right' },
   lotTitle: { width: 36, wrap: true },
   projectRef: { width: 22 },
+  proposalRef: { width: 22 },
 };
 
 const LIST_FIELD_NOTES: Record<keyof typeof L, string> = {
@@ -151,7 +164,8 @@ const LIST_FIELD_NOTES: Record<keyof typeof L, string> = {
 
 export async function buildApprovedListWorkbook(data: ApprovedListWorkbookData): Promise<Buffer> {
   const brand = data.brandName;
-  const title = `${brand ? `${brand} · ` : ''}Approved list upload`;
+  const title = `${brand ? `${brand} · ` : ''}${data.title ?? 'Approved list upload'}`;
+  const cols = data.columns ?? APPROVED_LIST_COLUMNS;
   const states = data.states ?? NIGERIA_STATES.map((s) => s.name);
   const kindLabels = Object.values(APPROVED_LIST_KIND_TEMPLATE_LABELS);
   const wb = new ExcelJS.Workbook();
@@ -167,12 +181,13 @@ export async function buildApprovedListWorkbook(data: ApprovedListWorkbookData):
     ins,
     2,
     title,
-    'One approved list per file: the Approved Projects & Implementation Schedule (Direct Intervention) or one State\'s Approved BEAP (Matching Grants). Upload it from the Needs assessment page; you will see what changes before anything is saved.'
+    data.intro ??
+      'One approved list per file: the Approved Projects & Implementation Schedule (Direct Intervention) or one State\'s Approved BEAP (Matching Grants). Upload it from the Needs assessment page; you will see what changes before anything is saved.'
   );
   metaRow(ins, 4, 'Version', APPROVED_LIST_TEMPLATE_VERSION);
   metaRow(ins, 5, 'Generated', data.generatedAt.toISOString().slice(0, 10));
   sectionRow(ins, 7, 'How to fill it in');
-  const steps = [
+  const steps = data.steps ?? [
     `${S.list}: the intervention year, the kind of list, the State (BEAP only), who approved it and when. Keep the labels in column A; type or pick the values in column B.`,
     `${S.rows}: one row per approved project. Keep the title rows and the green header row; do not rename the sheets or the headers.`,
     'Uploading replaces the list with the same intervention year, kind and State: rows are matched by their row ref, so a row you keep keeps its linked projects; rows not in the file are removed and their projects unlinked.',
@@ -183,7 +198,7 @@ export async function buildApprovedListWorkbook(data: ApprovedListWorkbookData):
   stepRows(ins, 8, steps);
   const colRow = 8 + steps.length + 1;
   sectionRow(ins, colRow, `Columns of the ${S.rows} sheet`);
-  APPROVED_LIST_COLUMNS.forEach((c, i) => {
+  cols.forEach((c, i) => {
     const r = colRow + 1 + i;
     const a = ins.getCell(`A${r}`);
     a.value = c.header;
@@ -261,7 +276,6 @@ export async function buildApprovedListWorkbook(data: ApprovedListWorkbookData):
 
   // Rows
   const ws = wb.addWorksheet(S.rows, { properties: { tabColor: { argb: UBEC_SHEET_COLOR.primary } } });
-  const cols = APPROVED_LIST_COLUMNS;
   titleBand(ws, cols.length, `${title} · ${S.rows}`, 'One row per approved project. Bold headers on the Instructions sheet are required.');
   headerRow(
     ws,
@@ -275,7 +289,7 @@ export async function buildApprovedListWorkbook(data: ApprovedListWorkbookData):
     cols.map((c) => COLUMN_STYLE[c.key]),
     last
   );
-  const letter = (key: ApprovedListColumnKey) => String.fromCharCode(65 + cols.findIndex((c) => c.key === key));
+  const letter = (key: WorkbookColumnKey) => String.fromCharCode(65 + cols.findIndex((c) => c.key === key));
   for (let r = FR; r <= last; r++) {
     ws.getCell(`${letter('state')}${r}`).dataValidation = listValidation(ref('B', states.length), 'Choose a State from the list.');
     ws.getCell(`${letter('costEstimate')}${r}`).dataValidation = decimalValidation(0, 'Enter the amount in naira as a number.');

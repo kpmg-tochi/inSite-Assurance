@@ -13,8 +13,9 @@ import { StatStrip, type Stat } from "./StatStrip";
 import { PortfolioMap } from "./PortfolioMap";
 import { PortfolioProjectsTable, type ProjectTableFilter } from "./PortfolioProjectsTable";
 import { PortfolioPaymentsTab } from "./PortfolioPaymentsTab";
+import { PipelineTab } from "../../components/needs/integration/PipelineTab";
 
-type HomeTab = "overview" | "kpis" | "visits" | "payments";
+type HomeTab = "overview" | "kpis" | "visits" | "payments" | "pipeline";
 
 /**
  * The workspace home (UBEC rebrand). "portfolio" is the programme admins' Portfolio
@@ -23,7 +24,8 @@ type HomeTab = "overview" | "kpis" | "visits" | "payments";
  * into a project), a KPIs tab (`kpis:view`), a Monitoring visits tab (the monitoring planner,
  * `visits:view`; URL value `?tab=visits`) and a
  * Payments tab (client demo updates G.2: every payment in the period across the visible projects,
- * `payments:view`).
+ * `payments:view`) and a Pipeline tab (needs pipeline wave 4: proposed projects at approval or
+ * funding and drafts not yet live, `needs:view`).
  */
 export function WorkspaceHomePage({ variant, onOpenProject }: { variant: "portfolio" | "dashboard"; onOpenProject: (projectId: string) => void }) {
   const { hasPermission } = useAuth();
@@ -34,6 +36,8 @@ export function WorkspaceHomePage({ variant, onOpenProject }: { variant: "portfo
         ...(hasPermission("kpis:view") ? [{ id: "kpis" as const, label: "KPIs" }] : []),
         ...(hasPermission("visits:view") ? [{ id: "visits" as const, label: "Monitoring visits" }] : []),
         ...(hasPermission("payments:view") ? [{ id: "payments" as const, label: "Payments" }] : []),
+        // Needs pipeline wave 4 (C5): proposed projects at approval or funding, and drafts not yet live.
+        ...(hasPermission("needs:view") ? [{ id: "pipeline" as const, label: "Pipeline" }] : []),
       ] satisfies { id: HomeTab; label: string }[],
     [hasPermission]
   );
@@ -48,6 +52,7 @@ export function WorkspaceHomePage({ variant, onOpenProject }: { variant: "portfo
         {tab === "kpis" && <ProgrammeKpisPage onOpenProject={onOpenProject} />}
         {tab === "visits" && <VisitPlannerPage embedded />}
         {tab === "payments" && <PortfolioPaymentsTab onOpenProject={onOpenProject} />}
+        {tab === "pipeline" && <PipelineTab />}
       </TabPanel>
     </div>
   );

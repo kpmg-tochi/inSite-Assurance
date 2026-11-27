@@ -122,7 +122,8 @@ describe('Phase 1 Multi-Tenant SaaS & Normalized RBAC', () => {
     const viewer = makeWebUser({ userId: 'viewer-1', tenantId: 't', permissions: ['projects:view_all_tenant'] });
     assert.deepEqual(buildProjectVisibilityWhere(viewer).OR, [{ status: { in: ['ACTIVE'] } }]);
     assert.deepEqual(buildProjectVisibilityWhere(viewer, undefined, { statuses: ['DRAFT'] }).OR, [
-      { status: 'DRAFT', createdByUserId: 'viewer-1' },
+      // Needs pipeline wave 4: a draft converted from a proposal follows the visibility rule like a live project.
+      { status: 'DRAFT', OR: [{ createdByUserId: 'viewer-1' }, { needsProposalId: { not: null } }] },
     ]);
     const creator = makeWebUser({ userId: 'c-1', tenantId: 't', permissions: ['projects:view_all_tenant', 'projects:create'] });
     assert.deepEqual(buildProjectVisibilityWhere(creator, undefined, { statuses: ['ACTIVE', 'DRAFT'] }).OR, [

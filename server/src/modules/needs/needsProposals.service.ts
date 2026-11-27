@@ -189,7 +189,12 @@ async function proposalHistory(tenantId: string, proposalId: string): Promise<Ne
     where: {
       tenantId,
       projectId: null,
-      OR: [{ payload: { path: ['proposalId'], equals: proposalId } }, { payload: { path: ['carriedFromId'], equals: proposalId } }],
+      // Wave 4: submission-level entries (portfolio, BEAP, approvals, funding) name every proposal in `proposalIds`.
+      OR: [
+        { payload: { path: ['proposalId'], equals: proposalId } },
+        { payload: { path: ['carriedFromId'], equals: proposalId } },
+        { payload: { path: ['proposalIds'], array_contains: [proposalId] } },
+      ],
     },
     orderBy: { seq: 'desc' },
     take: 200,

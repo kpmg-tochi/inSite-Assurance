@@ -49,6 +49,8 @@ import {
 } from '@insite/shared';
 import { needsFixture, needsFixtureBase64, type NeedsFixtureName } from './fixtures/needs/needsFixtures';
 import { stepDI09, stepMG05 } from './helpers/needsScenarioSteps.n5';
+import { stepDI10, stepMG06, stepOOC01 } from './helpers/needsScenarioSteps.n6';
+import { stepDI11, stepDI12, stepMG07, stepMG08, stepMG09, stepMG10 } from './helpers/needsScenarioSteps.n7';
 import { buildFixtureFile } from './fixtures/needs/generateNeedsFixtures';
 import { FIXTURE_SPECS, FIXTURE_STANDARD, stdRate, type FixtureLine, type NeedsFixtureSpec } from './fixtures/needs/needsFixtureSpecs';
 
@@ -409,10 +411,31 @@ describe('Needs pipeline scenario: Direct Intervention (2027 cycle)', () => {
   it('DI-09 committee (es@ chair, dpp@, finance@, procurement@): declarations, procurement@ recused from its uploads, scores, one divergence flagged, ranking, line, override with reason, finalised; Prioritised Project Portfolio generated', async () => {
     await stepDI09({ app, prisma, web, ids, tenantId });
   });
-  it('DI-10 procurement@ submits the portfolio; dpp@ management review; es@ approves with one exclusion and the memo', todo(4));
-  it('DI-11 finance@ records the budget submission and imports the appropriated schedule; the funded proposal converts; the excluded one is "Not funded, carried forward"', todo(4));
-  it("DI-12 the draft project has the proposal's sites, units from breakdown rows, BoQ lines and funded budget, origin NEEDS_PIPELINE, an approved-list row; procurement@ assigns a lot; a draft with origin none cannot be activated", todo(4));
-  it('DI-13 opening the 2028 cycle offers the carried-forward proposal; carried, it starts at Validation with its versions linked', todo(4));
+  it('DI-10 procurement@ submits the portfolio; dpp@ management review; es@ approves with one exclusion and the memo', async () => {
+    await stepDI10({ app, prisma, web, ids, tenantId });
+  });
+  it('DI-11 finance@ records the budget submission and imports the appropriated schedule; the funded proposal converts; the excluded one is "Not funded, carried forward"', async () => {
+    await stepDI11({ app, prisma, web, ids, tenantId });
+  });
+  it("DI-12 the draft project has the proposal's sites, units from breakdown rows, BoQ lines and funded budget, origin NEEDS_PIPELINE, an approved-list row; procurement@ assigns a lot; a draft with origin none cannot be activated", async () => {
+    await stepDI12({ app, prisma, web, ids, tenantId });
+  });
+  it('DI-13 opening the 2028 cycle offers the carried-forward proposal; carried, it starts at Validation with its versions linked', async () => {
+    const dpp = await web('dpp@ubec.test');
+    // 2027-DI-002 was excluded at approval (DI-10): not funded, carried forward.
+    const excluded = await prisma.needsProposal.findUniqueOrThrow({ where: { id: ids.di2 }, include: { currentVersion: true } });
+    assert.equal(excluded.status, 'NOT_SELECTED');
+    const offered = await request(app).get(`${N}/cycles/carry-forward`).query({ projectTypeId: ids.di, interventionYear: 2028 }).set(dpp);
+    assert.equal(offered.status, 200, JSON.stringify(offered.body));
+    assert.deepEqual((offered.body.data as Array<{ reference: string; statusLabel: string }>).map((c) => [c.reference, c.statusLabel]), [['2027-DI-002', 'Not funded, carried forward']]);
+
+    const res = await request(app).post(`${N}/cycles`).set(dpp).send({ projectTypeId: ids.di, interventionYear: 2028, carryForwardProposalIds: [ids.di2] });
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    const carried = await prisma.needsProposal.findFirstOrThrow({ where: { cycleId: res.body.data.id }, include: { versions: true } });
+    assert.deepEqual([carried.reference, carried.stage, carried.status, carried.carriedFromId], ['2028-DI-001', 'VALIDATION', 'IN_PROGRESS', ids.di2]);
+    assert.deepEqual(carried.versions.map((v) => [v.number, v.source, v.sha256]), [[1, 'CARRY_FORWARD', excluded.currentVersion!.sha256]]);
+    assert.equal((await prisma.needsProposal.findUniqueOrThrow({ where: { id: ids.di2 } })).statusReason, 'Carried forward to 2028-DI-001');
+  });
 });
 
 describe('Needs pipeline scenario: Matching Grants (Kano, 2027 cycle)', () => {
@@ -528,11 +551,121 @@ describe('Needs pipeline scenario: Matching Grants (Kano, 2027 cycle)', () => {
   it('MG-05 SUBEB committee (kano.admin@ chair, three members with the umbrella role SUBEB_COMMITTEE_MEMBER; kano.dpp@ and kano.procurement@ recused) scores and finalises', async () => {
     await stepMG05({ app, prisma, web, ids, tenantId });
   });
-  it('MG-06 SUBEB management review and kano.admin@ endorsement', todo(4));
-  it('MG-07 BEAP built (lot, batch, procurement method per proposal; counterpart declared) and submitted', todo(4));
-  it('MG-08 dpp@ reviews, comments on one proposal and returns; SUBEB revises (new version) and resubmits', todo(4));
-  it('MG-09 es@ approves (Executive Management); proposals convert, owner Kano SUBEB, lot and batch from the BEAP', todo(4));
-  it('MG-10 activation refused until counterpart evidence is recorded; then allowed', todo(4));
-  it('OOC-01 out-of-cycle request (emergency, authorising document) approved by es@; converts with origin OUT_OF_CYCLE', todo(4));
+  it('MG-06 SUBEB management review and kano.admin@ endorsement', async () => {
+    await stepMG06({ app, prisma, web, ids, tenantId });
+  });
+  it('MG-07 BEAP built (lot, batch, procurement method per proposal; counterpart declared) and submitted', async () => {
+    await stepMG07({ app, prisma, web, ids, tenantId });
+  });
+  it('MG-08 dpp@ reviews, comments on one proposal and returns; SUBEB revises (new version) and resubmits', async () => {
+    await stepMG08({ app, prisma, web, ids, tenantId });
+  });
+  it('MG-09 es@ approves (Executive Management); proposals convert, owner Kano SUBEB, lot and batch from the BEAP', async () => {
+    await stepMG09({ app, prisma, web, ids, tenantId });
+    // Wave 4 decision 17: a converted draft follows the project visibility rule, so the SUBEB that owns
+    // it sees it (the SUBEB Administrator holds no projects:create); Lagos does not.
+    const kano = await request(app).get(`/api/v1/projects/${ids.mgProject}/needs-origin`).set(await web('kano.admin@ubec.test'));
+    assert.equal(kano.status, 200, JSON.stringify(kano.body));
+    assert.equal(kano.body.data.origin, 'NEEDS_PIPELINE');
+    const listed = await request(app).get('/api/v1/projects/drafts').set(await web('kano.admin@ubec.test'));
+    assert.ok((listed.body.data as Array<{ id: string }>).some((d) => d.id === ids.mgProject), JSON.stringify(listed.body));
+    assert.equal((await request(app).get(`/api/v1/projects/${ids.mgProject}/needs-origin`).set(await web('lagos.admin@ubec.test'))).status, 403, 'outside the Kano tree, as for live projects');
+  });
+  it('MG-10 activation refused until counterpart evidence is recorded; then allowed', async () => {
+    await stepMG10({ app, prisma, web, ids, tenantId });
+  });
+  it('OOC-01 out-of-cycle request (emergency, authorising document) approved by es@; converts with origin OUT_OF_CYCLE', async () => {
+    await stepOOC01({ app, prisma, web, ids, tenantId });
+  });
   it('FIELD-01 a verification visit submitted from the field app fills the validation record and corrects a site\'s coordinates', todo(5));
+});
+
+/**
+ * Wave 4 review fixes (`needs_pipeline/wave4_approval_funding_conversion.md` section 5.6), on the end
+ * state of both suites (DI 2027 appropriated, Kano BEAP approved, an out-of-cycle request converted).
+ */
+describe('Needs pipeline wave 4: review fixes', () => {
+  it('R1 an out-of-cycle request for a year without a cycle makes a CLOSED container; opening that year adopts it with the request', async () => {
+    const res = await request(app)
+      .post(`${N}/out-of-cycle`)
+      .set(await web('procurement@ubec.test'))
+      .send({ projectTypeId: ids.di, interventionYear: 2029, title: 'Storm damage repairs, LGEA Primary School Bida', reason: 'EMERGENCY', reasonDetails: 'Roof blown off in the June storm; pupils taught outside.', requestedAmountNgn: 12_000_000 });
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    const container = await prisma.needsCycle.findUniqueOrThrow({ where: { id: res.body.data.cycleId } });
+    assert.deepEqual([container.status, container.openedAt], ['CLOSED', null]);
+    const opened = await request(app).post(`${N}/cycles`).set(await web('dpp@ubec.test')).send({ projectTypeId: ids.di, interventionYear: 2029 });
+    assert.equal(opened.status, 201, JSON.stringify(opened.body));
+    assert.equal(opened.body.data.id, container.id, 'the container is adopted, not duplicated');
+    const after = await prisma.needsCycle.findUniqueOrThrow({ where: { id: container.id } });
+    assert.equal(after.status, 'OPEN');
+    assert.ok(after.openedAt);
+    assert.equal(await prisma.needsApprovalStep.count({ where: { cycleId: container.id, chainType: 'OUT_OF_CYCLE', version: 1 } }), 1, 'steps not copied twice');
+    assert.equal((await prisma.needsProposal.findUniqueOrThrow({ where: { id: res.body.data.proposalId } })).cycleId, container.id);
+    // A cycle that was really opened is still refused.
+    const again = await request(app).post(`${N}/cycles`).set(await web('dpp@ubec.test')).send({ projectTypeId: ids.di, interventionYear: 2029 });
+    assert.equal(again.status, 409, JSON.stringify(again.body));
+    assert.equal(again.body.error.code, 'NEEDS_CYCLE_EXISTS');
+  });
+
+  it('R2 after the Kano cycle closes, the SUBEB can still file counterpart evidence (A5), but no other BEAP document', async () => {
+    const dpp = await web('kano.dpp@ubec.test');
+    const closed = await request(app).post(`${N}/cycles/${ids.mgCycle}/close`).set(dpp).send({ reason: 'BEAP approved; cycle closed.' });
+    assert.equal(closed.status, 200, JSON.stringify(closed.body));
+    const pdf = Buffer.from(`%PDF-1.4\n% Counterpart release ${crypto.randomUUID()}\n%%EOF\n`);
+    const presign = await request(app).post(`${N}/cycles/${ids.mgCycle}/beap/documents/presign`).set(dpp).send({ fileName: 'Counterpart release.pdf', mimeType: 'application/pdf', byteSize: pdf.length });
+    assert.equal(presign.status, 200, JSON.stringify(presign.body));
+    const target = new URL(presign.body.data.uploadUrl);
+    assert.equal((await request(app).put(target.pathname + target.search).set('Content-Type', 'application/pdf').send(pdf)).status, 200);
+    const narrative = await request(app).post(`${N}/cycles/${ids.mgCycle}/beap/documents`).set(dpp).send({ objectKey: presign.body.data.objectKey, kind: 'BEAP', title: 'Late narrative' });
+    assert.equal(narrative.status, 409, JSON.stringify(narrative.body));
+    assert.equal(narrative.body.error.code, 'NEEDS_CYCLE_NOT_OPEN');
+    const evidence = await request(app).post(`${N}/cycles/${ids.mgCycle}/beap/documents`).set(dpp).send({ objectKey: presign.body.data.objectKey, kind: 'COUNTERPART_EVIDENCE', title: 'Counterpart release (second tranche)' });
+    assert.equal(evidence.status, 201, JSON.stringify(evidence.body));
+    const recorded = await request(app).put(`${N}/cycles/${ids.mgCycle}/beap/counterpart`).set(dpp).send({ counterpartDeclaredNgn: 25_000_000, counterpartEvidenceDocumentId: evidence.body.data.id });
+    assert.equal(recorded.status, 200, JSON.stringify(recorded.body));
+    // Another SUBEB still cannot file on Kano's cycle.
+    const lagos = await request(app).post(`${N}/cycles/${ids.mgCycle}/beap/documents/presign`).set(await web('lagos.admin@ubec.test')).send({ fileName: 'x.pdf', mimeType: 'application/pdf', byteSize: 10 });
+    assert.ok([403, 404].includes(lagos.status), JSON.stringify(lagos.body));
+  });
+
+  it("R3 another State's SUBEB never takes UBEC's step on a State cycle, even holding the permission", async () => {
+    const { gateForSubmission } = await import('../modules/needs/submissions/submissions.service');
+    const kano = await prisma.needsCycle.findUniqueOrThrow({ where: { id: ids.mgCycle } });
+    const lagosAdmin = await prisma.user.findUniqueOrThrow({ where: { email: 'lagos.admin@ubec.test' }, include: { role: true } });
+    const dpp = await prisma.user.findUniqueOrThrow({ where: { email: 'dpp@ubec.test' }, include: { role: true } });
+    const asUser = (u: typeof lagosAdmin) => ({
+      tokenType: 'WEB_USER' as const,
+      userId: u.id,
+      email: u.email,
+      fullName: u.fullName,
+      tenantId: u.tenantId!,
+      isPlatformSuperAdmin: false,
+      roleId: u.roleId,
+      roleCode: u.role.code,
+      roleName: u.role.name,
+      permissions: ['needs:view', 'needs:review_beap'],
+      organizationId: u.organizationId!,
+      mustChangePassword: false,
+    });
+    const steps = await prisma.needsApprovalStep.findMany({ where: { cycleId: kano.id, chainType: 'BEAP', version: 1 }, orderBy: { stepOrder: 'asc' } });
+    const inReview = { status: 'IN_REVIEW', kind: 'BEAP', cycleId: kano.id, chainVersion: 1, currentStepOrder: steps[0].stepOrder, submittedByUserId: null, actions: [] };
+    const lagosGate = await gateForSubmission(prisma, asUser(lagosAdmin), inReview, kano, steps);
+    assert.deepEqual([lagosGate.allowed, lagosGate.status, lagosGate.code], [false, 403, 'NOT_STEP_ORGANIZATION']);
+    const ubecGate = await gateForSubmission(prisma, asUser(dpp), inReview, kano, steps);
+    assert.equal(ubecGate.allowed, true, ubecGate.reason ?? '');
+  });
+
+  it('R4 the approved list the appropriation wrote cannot be replaced by an upload', async () => {
+    const { buildApprovedListWorkbook } = await import('../modules/approvedLists/approvedListWorkbook');
+    const file = await buildApprovedListWorkbook({
+      generatedAt: new Date(),
+      brandName: 'UBEC',
+      header: { interventionYear: 2027, kind: 'DI_SCHEDULE', approvedBy: 'Executive Secretary, UBEC', approvedOn: '2026-12-20' },
+      rows: [{ rowRef: 'DI/2027/X/001', projectTitle: 'Hand-typed row', state: 'Niger', costEstimate: 10_000_000 }],
+    });
+    const res = await request(app).post('/api/v1/approved-lists/import/preview').set(await web('admin@ubec.test')).send({ fileBase64: file.toString('base64'), fileName: 'manual.xlsx' });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.ok((res.body.data.issues as Array<{ code: string }>).some((i) => i.code === 'APPROVED_LIST_FROM_FUNDING_GATE'), JSON.stringify(res.body.data.issues));
+    assert.equal(res.body.data.canConfirm, false);
+  });
 });
