@@ -13,6 +13,7 @@
  *    frozen rubric so each recusal kind leaves a scorable proposal). The suites continue in order.
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { clearSeededNeedsPipeline } from './helpers/needsSeedReset';
 import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
@@ -127,6 +128,7 @@ const ctx = (): NeedsScenarioContext => ({ app, prisma, web, ids, tenantId });
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
+  await clearSeededNeedsPipeline(prisma);
   const { createApp } = await import('../app');
   app = createApp();
   tenantId = (await prisma.tenant.findUniqueOrThrow({ where: { slug: 'programme-authority' } })).id;

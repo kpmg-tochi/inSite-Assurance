@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { z } from "zod";
 import { Plus } from "lucide-react";
-import { FORM_CODE_REGEX, FORM_GUIDANCE_MAX, SaveFormSectionRequestSchema, type FormField, type FormSectionDto } from "@insite/shared";
+import {
+  FORM_CODE_REGEX,
+  FORM_GUIDANCE_MAX,
+  NEEDS_VERIFICATION_RESERVED_SECTION_CODES,
+  SaveFormSectionRequestSchema,
+  type FormField,
+  type FormSectionDto,
+} from "@insite/shared";
 import { FieldError, fieldA11y, invalidClass, useZodForm } from "../../lib/forms";
 import { useAuth } from "../../lib/auth-context";
 import { useFormLibraryQuery } from "../../queries/forms/useFormQueries";
@@ -13,7 +20,9 @@ import { FieldsEditorModal, VersionsModal } from "./FormEditorModals";
 /**
  * Redesign R3: fixed sections ("Health & safety"), reusable across visit form templates. A section a
  * built form used is never edited: saving creates a new version. A section listed by a live template
- * cannot be archived.
+ * cannot be archived. Needs pipeline wave 5 (N8): the two reserved sections build the needs field
+ * verification form; they can be edited (questions added) but not archived, and visit form templates
+ * do not offer them.
  */
 
 /** The section's own inputs (code, title, description); the fields are checked by the editor modal. */
@@ -62,6 +71,9 @@ export function FormSectionsCard() {
         <div>
           <p className="text-xs font-bold text-slate-900">{s.title}</p>
           <p className="text-[11px] text-slate-500 font-mono">{s.code}</p>
+          {NEEDS_VERIFICATION_RESERVED_SECTION_CODES.includes(s.code) && (
+            <p className="mt-0.5 text-[11px] text-slate-600">Used by the needs field verification form</p>
+          )}
         </div>
       ),
     },
@@ -100,7 +112,7 @@ export function FormSectionsCard() {
           <TableActionButton onClick={() => setVersions(s)}>Versions</TableActionButton>
           <TableActionButton
             variant={s.isArchived ? "default" : "danger"}
-            disabled={archive.isPending || (!s.isArchived && s.usedByTemplateCodes.length > 0)}
+            disabled={archive.isPending || (!s.isArchived && (s.usedByTemplateCodes.length > 0 || NEEDS_VERIFICATION_RESERVED_SECTION_CODES.includes(s.code)))}
             onClick={() => archive.mutate({ code: s.code, archived: !s.isArchived })}
           >
             {s.isArchived ? "Restore" : "Archive"}

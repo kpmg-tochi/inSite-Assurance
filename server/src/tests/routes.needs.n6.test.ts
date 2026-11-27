@@ -11,6 +11,7 @@
  *    they need exists.
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { clearSeededNeedsPipeline } from './helpers/needsSeedReset';
 import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
@@ -188,6 +189,7 @@ async function proposalAtApproval(cycleId: string, seq: number, year: number, op
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
+  await clearSeededNeedsPipeline(prisma);
   const { createApp } = await import('../app');
   app = createApp();
   tenantId = (await prisma.tenant.findUniqueOrThrow({ where: { slug: 'programme-authority' } })).id;

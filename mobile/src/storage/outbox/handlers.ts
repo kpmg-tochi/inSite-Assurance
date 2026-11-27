@@ -15,6 +15,7 @@ import {
   registerOutboxHandler,
 } from './outboxProcessor';
 import { registerVisitHandlers } from './visitHandlers';
+import { registerNeedsVerificationHandlers, sendVerificationCapture } from './needsVerificationHandlers';
 
 /**
  * One handler per outbox kind. Handlers are idempotent: every request carries a client UUID, so
@@ -62,6 +63,8 @@ export function registerOutboxHandlers(): void {
     const c = await getCapture(row.entityId);
     if (!c) throw new LocalPermanentError('Capture record not found on this device.');
     if (c.uploadStatus === 'REGISTERED') return;
+    // Needs pipeline wave 5: a verification's capture goes to the verification endpoints.
+    if (c.verificationId) return sendVerificationCapture(c);
 
     let objectKey = c.objectKey;
     if (c.uploadStatus !== 'UPLOADED' || !objectKey) {
@@ -149,4 +152,5 @@ export function registerOutboxHandlers(): void {
   });
 
   registerVisitHandlers();
+  registerNeedsVerificationHandlers();
 }

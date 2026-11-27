@@ -11,6 +11,7 @@
  *   archived components; another tenant sees none of UBEC's standards.
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { clearSeededNeedsPipeline } from './helpers/needsSeedReset';
 import { makeTestDeviceKey } from './helpers/fieldAuth';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -129,6 +130,7 @@ const pdf = (text: string) => Buffer.from(`%PDF-1.4\n% ${text}\n%%EOF\n`);
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
+  await clearSeededNeedsPipeline(prisma);
   costing = await import('../modules/standards/costingStandards.service');
   const { createApp } = await import('../app');
   app = createApp();

@@ -16,6 +16,8 @@ import { useNeedsProposalsQuery } from "../../../queries/needs/useNeedsQueries";
 import { EmptyPanel, cardCls, locationText, money, plural } from "../needsUi";
 import { BeapEditor, beapEditorRows } from "./BeapEditor";
 import { BeapReviewPanel } from "./BeapReviewPanel";
+import { useCycleVerificationsQuery } from "../../../queries/needs/useVerificationQueries";
+import { BeapItemVerification } from "../verification/BeapItemVerification";
 import { CounterpartDialog } from "./CounterpartDialog";
 import {
   ActionHistory,
@@ -98,7 +100,7 @@ export function BeapWorkspace({ cycle }: { cycle: NeedsCycleDto }) {
           {beap.canAct && beap.status === "IN_REVIEW" ? (
             <BeapReviewPanel key={`${beap.id}:${beap.currentStepOrder ?? "done"}`} cycle={cycle} beap={beap} />
           ) : (
-            <BeapItemsTable beap={beap} />
+            <BeapItemsTable beap={beap} cycleId={cycle.id} />
           )}
           <CounterpartCard cycle={cycle} beap={beap} canRecord={canPrepare} onRecord={() => setCounterpartOpen(true)} />
         </>
@@ -163,8 +165,11 @@ function ReturnedNotice({ beap, canRevise }: { beap: NeedsSubmissionDto; canRevi
   );
 }
 
-function BeapItemsTable({ beap }: { beap: NeedsSubmissionDto }) {
+function BeapItemsTable({ beap, cycleId }: { beap: NeedsSubmissionDto; cycleId: string }) {
   const approved = beap.status === "APPROVED";
+  // Wave 5 (N8): the items' BEAP site visits (UBEC reviewers assign them while the BEAP is in review).
+  const verifications = useCycleVerificationsQuery(cycleId).data ?? [];
+  const showVisits = beap.status === "IN_REVIEW" || verifications.some((v) => v.purpose === "BEAP_REVIEW");
   const rows = [...beap.items].sort((a, b) => Number(b.included) - Number(a.included) || (a.lotNumber ?? 0) - (b.lotNumber ?? 0) || (a.batchNumber ?? 0) - (b.batchNumber ?? 0));
   const columns: TableColumnDef<NeedsSubmissionItemDto>[] = [
     {
@@ -231,6 +236,20 @@ function BeapItemsTable({ beap }: { beap: NeedsSubmissionDto }) {
           <span className="text-slate-400">–</span>
         ),
     },
+    ...(showVisits
+      ? [
+          {
+            id: "visit",
+            header: "Site visit",
+            cell: (i: NeedsSubmissionItemDto) =>
+              i.included ? (
+                <BeapItemVerification item={i} verifications={verifications} beapInReview={beap.status === "IN_REVIEW"} inCell />
+              ) : (
+                <span className="text-slate-400">–</span>
+              ),
+          } satisfies TableColumnDef<NeedsSubmissionItemDto>,
+        ]
+      : []),
     ...(approved
       ? [
           {

@@ -146,6 +146,43 @@ export const DEFAULT_FORM_LIBRARY: DefaultFormLibrary = {
         { key: 'voice-note', label: 'Voice note', type: 'VOICE_NOTE', required: false },
       ],
     },
+    // Needs pipeline wave 5 (N8): the field verification form of a proposed project (reserved codes,
+    // `NEEDS_VERIFICATION_SECTION_CODES`; visit templates do not use them). The site section is asked
+    // once per school site, the facility section once per facilities breakdown row. Acceptance reads
+    // the fixed keys (`NEEDS_VERIFICATION_FIELD_KEYS`); the condition option keys map to
+    // `ExistingConditionEnum` (`NEEDS_VERIFICATION_CONDITION_BY_OPTION`).
+    {
+      code: 'NEEDS_VERIFICATION_SITE',
+      title: 'Site verification',
+      description: 'Asked once per school site of the proposed project. Record the location standing at the school.',
+      fields: [
+        yesNo('school-found', 'The school is at this site', { rules: [comment(NO)] }),
+        photos('site-photos', 'Photos of the school (entrance and compound)', 2),
+        { key: 'site-notes', label: 'Notes on the site', type: 'LONG_TEXT', required: false },
+      ],
+    },
+    {
+      code: 'NEEDS_VERIFICATION_FACILITY',
+      title: 'Facility verification',
+      description: 'Asked once per facilities breakdown row: what exists at the school today.',
+      fields: [
+        { key: 'existing-quantity', label: 'Existing quantity counted', type: 'NUMBER', min: 0 },
+        {
+          key: 'existing-condition',
+          label: 'Condition of what exists',
+          type: 'SINGLE_CHOICE',
+          options: [
+            { key: 'functional', label: 'Functional' },
+            { key: 'partly-functional', label: 'Partly functional' },
+            { key: 'dilapidated', label: 'Dilapidated' },
+            { key: 'non-functional', label: 'Non-functional' },
+            { key: 'absent', label: 'Absent' },
+          ],
+        },
+        yesNo('matches-assessment', 'Matches the needs assessment', { rules: [comment(NO)] }),
+        photos('facility-photo', 'Photo of the facility (or of where it should be)', 1),
+      ],
+    },
   ],
 
   archetypeSubForms: {

@@ -49,6 +49,14 @@ export const DEMO_FIELD_ACCOUNTS: readonly DemoFieldAccount[] = [
     organization: 'Independent M&E Consultants',
     initials: 'EO',
   },
+  // Needs pipeline wave 5: field verification of proposed projects (Kano Matching Grants).
+  {
+    email: 'kano.dpp@ubec.test',
+    name: 'Kabiru Sule',
+    roleTitle: 'SUBEB Director, Physical Planning (Kano)',
+    organization: 'Kano SUBEB',
+    initials: 'KS',
+  },
 ];
 
 /** Screen-reader label of a quick-login button. */

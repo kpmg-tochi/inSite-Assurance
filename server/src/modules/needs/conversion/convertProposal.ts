@@ -8,6 +8,7 @@ import { replaceProjectSitesInTx } from '../../sites/sites.service';
 import { actorName, webActor } from '../needsAccess';
 import { parsedOf } from '../needsSupport';
 import { lockCycle } from '../needsVersions';
+import { overlayCurrentSiteCoordinates } from '../verifications/siteCorrections';
 import { needsToScopeImport } from './needsToScopeImport';
 
 /**
@@ -66,7 +67,9 @@ export async function convertProposalToProject(tx: Tx, proposal: { id: string },
   if (!['IN_PROGRESS', 'DRAFT', 'RETURNED'].includes(p.status)) {
     throw new AppError(`${p.reference} is closed and cannot be funded.`, 409, 'NEEDS_PROPOSAL_CLOSED');
   }
-  const parsed = parsedOf(p.currentVersion?.parsedJson);
+  // Wave 5 (N8): sites keep the coordinates field verifications corrected (the current site rows).
+  const fileParse = parsedOf(p.currentVersion?.parsedJson);
+  const parsed = fileParse ? await overlayCurrentSiteCoordinates(tx, p.id, fileParse) : null;
   // Wave 4 (D-N.14): an out-of-cycle request may come without a needs assessment: a bare draft.
   const bare = p.route === 'OUT_OF_CYCLE' && !p.currentVersion;
   if (!bare && (!p.currentVersion || !parsed)) throw new AppError(`${p.reference} has no needs assessment version.`, 422, 'NEEDS_CONVERSION_INVALID');

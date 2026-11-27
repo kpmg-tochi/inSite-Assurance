@@ -3,7 +3,8 @@
  * after every write; screens subscribe (or use `useVisitData`) and re-read from SQLite. No data is
  * carried in the event: SQLite is the single source the screens read.
  */
-export type VisitDataTopic = 'visits' | 'forms' | 'fieldPacks' | 'drafts' | 'siteLog' | 'packs' | 'captures';
+/** `verifications`: needs pipeline wave 5 (verification rows, their forms and drafts). */
+export type VisitDataTopic = 'visits' | 'forms' | 'fieldPacks' | 'drafts' | 'siteLog' | 'packs' | 'captures' | 'verifications';
 
 type Listener = (topic: VisitDataTopic) => void;
 const listeners = new Set<Listener>();

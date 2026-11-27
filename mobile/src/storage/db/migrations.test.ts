@@ -235,7 +235,8 @@ describe('SQLite migrations', () => {
     assert.equal((db.prepare('SELECT COUNT(*) AS n FROM captures').get() as { n: number }).n, 1);
     assert.equal((db.prepare('SELECT COUNT(*) AS n FROM incidents').get() as { n: number }).n, 1);
     assert.equal((db.prepare('SELECT COUNT(*) AS n FROM visit_drafts').get() as { n: number }).n, 1);
-    // "Clear local data" still finds every table it empties.
+    // "Clear local data" still finds every table it empties (on the latest schema).
+    migrate(db);
     for (const t of DATA_TABLES) db.exec(`DELETE FROM ${t}`);
   });
 
@@ -246,12 +247,56 @@ describe('SQLite migrations', () => {
       `INSERT INTO captures (id, project_id, media_type, mime_type, local_path, byte_size, sha256, location_available, captured_at, created_at)
        VALUES ('c-old', 'p1', 'SITE_PHOTO', 'image/jpeg', 'file:///c.jpg', 10, 'ab', 1, '2026-11-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z')`
     ).run();
-    assert.equal(migrate(db), LATEST_SCHEMA_VERSION);
-    assert.equal(LATEST_SCHEMA_VERSION, 11);
+    assert.equal(migrate(db, 11), 11);
     const cols = columns(db, 'captures');
     for (const c of ['heading_degrees', 'heading_reference', 'heading_accuracy_level']) assert.ok(cols.includes(c), c);
     const old = db.prepare('SELECT heading_degrees, heading_reference FROM captures WHERE id = ?').get('c-old') as Record<string, unknown>;
     assert.equal(old.heading_degrees, null);
     assert.equal(old.heading_reference, null);
+  });
+
+  it('v12 adds the needs verification tables and captures.verification_id; earlier rows stay', () => {
+    const db = new DatabaseSync(':memory:');
+    assert.equal(migrate(db, 11), 11);
+    db.prepare(
+      `INSERT INTO captures (id, project_id, media_type, mime_type, local_path, byte_size, sha256, location_available, captured_at, created_at)
+       VALUES ('c-old', 'p1', 'SITE_PHOTO', 'image/jpeg', 'file:///c.jpg', 10, 'ab', 1, '2026-11-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z')`
+    ).run();
+    db.prepare(
+      `INSERT INTO outbox (id, project_id, kind, entity_id, next_attempt_at, created_at, updated_at)
+       VALUES ('o1', 'p1', 'CAPTURE', 'c-old', '2026-11-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z')`
+    ).run();
+    assert.equal(migrate(db), LATEST_SCHEMA_VERSION);
+    assert.equal(LATEST_SCHEMA_VERSION, 12);
+    for (const t of ['needs_verifications', 'needs_verification_forms', 'needs_verification_drafts']) {
+      assert.ok(columns(db, t).length > 0, `missing table ${t}`);
+      assert.ok(DATA_TABLES.includes(t), `${t} is not cleared by "clear local data"`);
+    }
+    assert.ok(columns(db, 'captures').includes('verification_id'));
+    const old = db.prepare('SELECT verification_id FROM captures WHERE id = ?').get('c-old') as Record<string, unknown>;
+    assert.equal(old.verification_id, null);
+    assert.equal((db.prepare('SELECT COUNT(*) AS n FROM outbox').get() as { n: number }).n, 1);
+  });
+
+  it('v12: one open draft per verification; refused and sent drafts may stay beside it', () => {
+    const db = new DatabaseSync(':memory:');
+    migrate(db);
+    const insertDraft = db.prepare(
+      `INSERT INTO needs_verification_drafts (id, verification_id, status, form_hash, draft_json, created_at, updated_at)
+       VALUES (?, 'nv1', ?, 'h', '{}', '2026-11-27T00:00:00.000Z', '2026-11-27T00:00:00.000Z')`
+    );
+    insertDraft.run('d1', 'REFUSED');
+    insertDraft.run('d2', 'SENT');
+    insertDraft.run('d3', 'DRAFT');
+    assert.throws(() => insertDraft.run('d4', 'QUEUED'), /UNIQUE/);
+    db.prepare(`UPDATE needs_verification_drafts SET status = 'SENT' WHERE id = 'd3'`).run();
+    insertDraft.run('d5', 'QUEUED');
+    db.prepare(
+      `INSERT INTO needs_verification_forms (verification_id, form_hash, json, downloaded_at) VALUES ('nv1', 'h', '{}', '2026-11-27T00:00:00.000Z')`
+    ).run();
+    assert.throws(
+      () => db.prepare(`INSERT INTO needs_verification_forms (verification_id, form_hash, json, downloaded_at) VALUES ('nv1', 'h', '{}', '2026-11-27T00:00:00.000Z')`).run(),
+      /UNIQUE|PRIMARY/
+    );
   });
 });

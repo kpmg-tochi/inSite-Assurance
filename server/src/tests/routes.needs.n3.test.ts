@@ -5,6 +5,7 @@
  * State, MG files in Kano, year 2027). The steps of each suite continue from the one before.
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { clearSeededNeedsPipeline } from './helpers/needsSeedReset';
 import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
@@ -29,6 +30,8 @@ type PrismaClientType = typeof import('../config/prisma')['prisma'];
 
 let app: Express;
 let prisma: PrismaClientType;
+/** The seed's pipeline ledger entries end here (wave 5): tenant-wide counts read after it. */
+let ledgerFloor = BigInt(0);
 
 const PASSWORD = 'Password123!';
 const tokens: Record<string, string> = {};
@@ -90,6 +93,7 @@ const proposalByRef = (reference: string) => prisma.needsProposal.findFirstOrThr
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
+  ({ ledgerFloor } = await clearSeededNeedsPipeline(prisma));
   const { createApp } = await import('../app');
   app = createApp();
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { slug: 'programme-authority' } });
@@ -184,7 +188,7 @@ describe('needs pipeline N3: options and opening cycles', () => {
     assert.equal(steps.filter((s) => s.chainType === 'BEAP').length, 0);
     assert.equal((await prisma.costingStandardVersion.findFirstOrThrow({ where: { tenantId, version: 1 } })).isLocked, true);
 
-    const entry = await prisma.auditLog.findFirstOrThrow({ where: { tenantId, action: 'NEEDS_CYCLE_OPENED' } });
+    const entry = await prisma.auditLog.findFirstOrThrow({ where: { tenantId, seq: { gt: ledgerFloor }, action: 'NEEDS_CYCLE_OPENED' } });
     assert.equal(entry.projectId, null);
     assert.equal((entry.payload as Record<string, unknown>).cycleId, cycle.id);
 
@@ -246,7 +250,7 @@ describe('needs pipeline N3: visibility and the write rule', () => {
     assert.equal(cycle.indicativeCeilingNgn, 450_000_000);
     assert.equal(cycle.deadlines.find((d) => d.key === 'stage:COSTING')!.date, '2026-10-20');
     assert.equal(cycle.deadlines.find((d) => d.key === 'stage:VALIDATION')!.date, '2026-08-15', 'earlier overrides stay');
-    assert.equal(await prisma.auditLog.count({ where: { tenantId, action: 'NEEDS_CYCLE_UPDATED' } }), 1);
+    assert.equal(await prisma.auditLog.count({ where: { tenantId, seq: { gt: ledgerFloor }, action: 'NEEDS_CYCLE_UPDATED' } }), 1);
     const bad = await request(app).patch(`${N}/cycles/${ids.diCycle}`).set(await web(DPP)).send({ deadlines: [{ key: 'nope', date: '2026-10-20' }] });
     assert.equal(bad.status, 422);
   });
@@ -298,7 +302,7 @@ describe('needs pipeline N3: upload', () => {
     assert.match(v1.objectKey, new RegExp(`^tenants/${tenantId}/needs/cycles/${ids.diCycle}/versions/`));
     assert.equal(await prisma.needsProposalSite.count({ where: { proposalId: p1.id } }), 2);
     assert.equal(await prisma.needsFacilityBreakdownRow.count({ where: { proposalId: p1.id } }), v1.breakdownRowCount);
-    const created = await prisma.auditLog.findMany({ where: { tenantId, action: 'NEEDS_PROPOSAL_CREATED', projectId: null } });
+    const created = await prisma.auditLog.findMany({ where: { tenantId, seq: { gt: ledgerFloor }, action: 'NEEDS_PROPOSAL_CREATED', projectId: null } });
     assert.equal(created.length, 2);
     const payload = created.find((e) => (e.payload as Record<string, unknown>).reference === '2027-DI-001')!.payload as Record<string, unknown>;
     assert.equal(payload.cycleId, ids.diCycle);
@@ -430,7 +434,7 @@ describe('needs pipeline N3: upload', () => {
     assert.equal(p1.currentVersionId, versions[1].id);
     assert.ok(versions[1].boqLineCount > 0);
     assert.equal(await prisma.needsFacilityBreakdownRow.count({ where: { proposalId: ids.di1 } }), versions[1].breakdownRowCount);
-    assert.equal(await prisma.auditLog.count({ where: { tenantId, action: 'NEEDS_VERSION_ADDED' } }), 1);
+    assert.equal(await prisma.auditLog.count({ where: { tenantId, seq: { gt: ledgerFloor }, action: 'NEEDS_VERSION_ADDED' } }), 1);
 
     // essential-gap (2027-DI-002) corrected by a file that covers every essential group.
     const batch1 = needsBatchFixtures()[0];
@@ -444,7 +448,7 @@ describe('needs pipeline N3: upload', () => {
     assert.equal(flag.resolution, 'CORRECTED');
     assert.equal(flag.resolvedByName, 'System (needs)');
     assert.equal(flag.raisedOnVersionNumber, 1);
-    assert.equal(await prisma.auditLog.count({ where: { tenantId, action: 'NEEDS_FLAG_RESOLVED' } }), 1);
+    assert.equal(await prisma.auditLog.count({ where: { tenantId, seq: { gt: ledgerFloor }, action: 'NEEDS_FLAG_RESOLVED' } }), 1);
   });
 
   it('a new version of a proposal of another cycle is refused on that file (preview) and never written (confirm)', async () => {
@@ -566,7 +570,7 @@ describe('needs pipeline N3: proposals, documents and templates', () => {
     assert.equal(foreign.body.error.code, 'INVALID_OBJECT_KEY');
     const otherProposal = await request(app).post(`${N}/cycles/${ids.diCycle}/documents`).set(await web(DPP)).send({ objectKey: diKey, kind: 'OTHER', title: 'Wrong cover', proposalIds: [ids.mg1] });
     assert.equal(otherProposal.status, 404);
-    assert.equal(await prisma.auditLog.count({ where: { tenantId, action: 'NEEDS_DOCUMENT_ADDED' } }), 2);
+    assert.equal(await prisma.auditLog.count({ where: { tenantId, seq: { gt: ledgerFloor }, action: 'NEEDS_DOCUMENT_ADDED' } }), 2);
   });
 
   it('proposal documents: a drawing on 2027-DI-001 (key under its cycle), listed and linked', async () => {
@@ -658,6 +662,6 @@ describe('needs pipeline N3: carry-forward and closing', () => {
     const upload = await preview(PROCUREMENT, ids.cycle2028, [file('essential-gap')]);
     assert.equal(upload.status, 409);
     assert.equal(upload.body.error.code, 'NEEDS_CYCLE_NOT_OPEN');
-    assert.equal(await prisma.auditLog.count({ where: { tenantId, action: 'NEEDS_CYCLE_CLOSED' } }), 1);
+    assert.equal(await prisma.auditLog.count({ where: { tenantId, seq: { gt: ledgerFloor }, action: 'NEEDS_CYCLE_CLOSED' } }), 1);
   });
 });

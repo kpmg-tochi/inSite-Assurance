@@ -342,7 +342,8 @@ export interface DraftCheck {
   recheckResults: Array<{ recheckId: string; resolved: boolean }>;
 }
 
-function gapMessage(code: string, unitLabel: string | null, field: VisitFormSnapshotField | undefined, factStatus: PhotoStatus | null): string {
+/** The phone wording of a photo gap (shared with the needs verification form, wave 5). */
+export function photoGapMessage(code: string, unitLabel: string | null, field: VisitFormSnapshotField | undefined, factStatus: PhotoStatus | null): string {
   switch (code) {
     case 'PHOTO_MISSING':
       return `Take at least ${field?.photo?.minCount ?? 1} photo${(field?.photo?.minCount ?? 1) === 1 ? '' : 's'}`;
@@ -391,7 +392,7 @@ export function checkDraft(snapshot: VisitFormSnapshot, draft: Pick<VisitDraft, 
       screenKey: ref?.screenKey ?? REVIEW_SCREEN_KEY,
       unitId: g.unitId,
       code: g.code,
-      message: gapMessage(g.code, unitLabel(g.path, g.unitId), ref?.field, status),
+      message: photoGapMessage(g.code, unitLabel(g.path, g.unitId), ref?.field, status),
       label: ref?.field.label ?? g.path,
     });
   }

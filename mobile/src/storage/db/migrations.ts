@@ -404,6 +404,59 @@ ALTER TABLE captures ADD COLUMN heading_reference TEXT;
 ALTER TABLE captures ADD COLUMN heading_accuracy_level INTEGER;
 `,
   },
+  {
+    // Needs pipeline wave 5 (N8): field verification of a proposed project (no project, no field
+    // session: access by assignment). Additive.
+    // - needs_verifications: the account feed (`GET /needs-verifications/mine`), one row per
+    //   verification (id = server id). `dto_json` is the feed item as received; `local_state_json`
+    //   holds the phone's overlays (queued submission, removed from the feed while a draft kept it).
+    // - needs_verification_forms: frozen forms by (verification id, form hash).
+    // - needs_verification_drafts: id = clientSubmissionId; answers by `n:site:` / `n:row:` path, one
+    //   location per site, notes. At most one open draft (DRAFT or QUEUED) per verification. Ids
+    //   only: captures are clientCaptureIds.
+    // - captures.verification_id: a photo or voice note of a verification (its project_id holds the
+    //   verification's outbox scope `needs-verification:<id>`); the CAPTURE handler then uploads it
+    //   through the verification capture endpoints.
+    version: 12,
+    sql: `
+CREATE TABLE IF NOT EXISTS needs_verifications (
+  id TEXT PRIMARY KEY NOT NULL,
+  due_date TEXT NOT NULL,
+  status TEXT NOT NULL,
+  form_hash TEXT NOT NULL,
+  dto_json TEXT NOT NULL,
+  local_state_json TEXT NOT NULL DEFAULT '{}',
+  synced_at TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS needs_verifications_due ON needs_verifications (due_date);
+
+CREATE TABLE IF NOT EXISTS needs_verification_forms (
+  verification_id TEXT NOT NULL,
+  form_hash TEXT NOT NULL,
+  json TEXT NOT NULL,
+  downloaded_at TEXT NOT NULL,
+  PRIMARY KEY (verification_id, form_hash)
+);
+
+CREATE TABLE IF NOT EXISTS needs_verification_drafts (
+  id TEXT PRIMARY KEY NOT NULL,
+  verification_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'DRAFT',
+  form_hash TEXT NOT NULL,
+  draft_json TEXT NOT NULL,
+  request_json TEXT,
+  server_id TEXT,
+  last_error TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS needs_verification_drafts_verification ON needs_verification_drafts (verification_id, status);
+CREATE UNIQUE INDEX IF NOT EXISTS needs_verification_drafts_one_open ON needs_verification_drafts (verification_id) WHERE status IN ('DRAFT', 'QUEUED');
+
+ALTER TABLE captures ADD COLUMN verification_id TEXT;
+`,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
@@ -421,6 +474,10 @@ export const DATA_TABLES = [
   'visit_drafts',
   'site_log_entries',
   'visit_sync_meta',
+  // Needs pipeline wave 5 (v12)
+  'needs_verifications',
+  'needs_verification_forms',
+  'needs_verification_drafts',
 ];
 
 /** Migrations still to run for a database at `currentVersion`. */

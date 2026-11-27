@@ -315,6 +315,12 @@ enum AuditActionType {
   NEEDS_SUBMISSION_UPDATED
   NEEDS_COUNTERPART_RECORDED
   NEEDS_LOTS_ASSIGNED
+  // Needs pipeline wave 5 (N8)
+  NEEDS_VERIFICATION_ASSIGNED
+  NEEDS_VERIFICATION_CANCELLED
+  NEEDS_VERIFICATION_SUBMITTED
+  NEEDS_VERIFICATION_REVIEWED
+  NEEDS_SITE_COORDINATES_CORRECTED
 }
 
 // Phase 11: which organisation an approval step actor must belong to (ANY = Phase 7 behaviour).
@@ -467,6 +473,7 @@ model Tenant {
   needsProposals            NeedsProposal[]
   costingStandardVersions   CostingStandardVersion[]
   designStandardDocuments   DesignStandardDocument[] // Needs pipeline wave 2 (N2)
+  needsVerifications        NeedsVerification[] // Needs pipeline wave 5 (N8)
   // Phase 13
   documentTypes             DocumentType[]
   // Redesign R2a
@@ -2915,6 +2922,7 @@ model NeedsCycle {
   approvalSteps          NeedsApprovalStep[]
   approvalActions        NeedsApprovalAction[]
   fundingRecords         NeedsFundingRecord[]
+  verifications          NeedsVerification[]
 
   @@unique([tenantId, projectTypeId, interventionYear, scopeKey])
   @@index([tenantId, interventionYear])
@@ -3015,6 +3023,7 @@ model NeedsProposal {
   decisionItems     NeedsStageDecisionItem[]
   scoreSheets       NeedsScoreSheet[]
   submissionItems   NeedsSubmissionItem[]
+  verifications     NeedsVerification[]
 
   @@unique([tenantId, reference])
   @@unique([cycleId, sequence])
@@ -3054,6 +3063,7 @@ model NeedsAssessmentVersion {
   currentOf              NeedsProposal?          @relation("NeedsProposalCurrentVersion")
   costingStandardVersion CostingStandardVersion? @relation(fields: [costingStandardVersionId], references: [id], onDelete: Restrict)
   validationRecords      NeedsValidationRecord[]
+  verifications          NeedsVerification[]
 
   @@unique([proposalId, number])
   @@index([costingStandardVersionId])
@@ -3416,6 +3426,124 @@ model NeedsFundingRecord {
   @@map("needs_funding_records")
 }
 
+// Needs pipeline wave 5 (N8): a field verification visit to the sites of one proposed project, done
+// from the field app by the assigned officer (access by assignment, not by project session). The form
+// is frozen when it is assigned (JSON + SHA-256 of its canonical form, built from the reserved form
+// library sections NEEDS_VERIFICATION_SITE and NEEDS_VERIFICATION_FACILITY). Statuses
+// NeedsVerificationStatusEnum: ASSIGNED, SUBMITTED, ACCEPTED, RETURNED, CANCELLED.
+model NeedsVerification {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @db.Uuid
+  cycleId          String    @db.Uuid
+  proposalId       String    @db.Uuid
+  // The needs assessment version current when it was assigned (its sites and breakdown are in the form).
+  versionId        String    @db.Uuid
+  // NeedsVerificationPurposeEnum: VALIDATION | BEAP_REVIEW
+  purpose          String
+  status           String    @default("ASSIGNED")
+  officerUserId    String    @db.Uuid
+  officerName      String
+  assignedByUserId String    @db.Uuid
+  assignedByName   String
+  assignedAt       DateTime  @default(now())
+  dueDate          DateTime  @db.Date
+  instructions     String?   @db.Text
+  siteNumbers      Int[]     @default([])
+  // NeedsVerificationForm (shared), frozen at assignment; formHash = SHA-256 of its canonical JSON.
+  formJson         Json
+  formHash         String
+  cancelledAt      DateTime?
+  cancelledByName  String?
+  cancelReason     String?   @db.Text
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  tenant      Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cycle       NeedsCycle                    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  proposal    NeedsProposal                 @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  version     NeedsAssessmentVersion        @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  submissions NeedsVerificationSubmission[]
+  captures    NeedsVerificationCapture[]
+
+  @@index([tenantId, officerUserId, status])
+  @@index([proposalId, status])
+  @@index([cycleId])
+  @@map("needs_verifications")
+}
+
+// One submission of a verification from the phone, idempotent on the client's UUID. A RETURNED
+// submission lets the officer submit again (a new row); at most one is SUBMITTED or ACCEPTED.
+// Statuses: SUBMITTED, ACCEPTED, RETURNED.
+model NeedsVerificationSubmission {
+  id                  String    @id @default(uuid()) @db.Uuid
+  verificationId      String    @db.Uuid
+  clientSubmissionId  String    @unique @db.Uuid
+  status              String    @default("SUBMITTED")
+  formHash            String
+  // VisitFormAnswer[] against the frozen form (answer paths n:site:<n>/<key>, n:row:<rowId>/<key>)
+  answersJson         Json
+  // NeedsVerificationSiteLocation[]: where the officer stood at each site
+  siteLocationsJson   Json      @default("[]")
+  notes               String?   @db.Text
+  submittedByUserId   String    @db.Uuid
+  submittedByName     String
+  submittedAtDevice   DateTime
+  submittedAt         DateTime  @default(now())
+  reviewedByUserId    String?   @db.Uuid
+  reviewedByName      String?
+  reviewedAt          DateTime?
+  reviewReason        String?   @db.Text
+  // Acceptance: NeedsSiteCoordinateCorrection[] applied to the proposal's sites
+  siteCorrectionsJson Json?
+  // Acceptance: the PHOTO proposal documents filed from its photos (validation evidence)
+  evidenceDocumentIds String[]  @default([]) @db.Uuid
+
+  verification NeedsVerification          @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+  captures     NeedsVerificationCapture[]
+
+  @@index([verificationId, status])
+  @@map("needs_verification_submissions")
+}
+
+// A photo or voice note taken on a verification. Registered (idempotent on clientCaptureId) before the
+// submission that uses it; the submission links it to its answer path.
+model NeedsVerificationCapture {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @db.Uuid
+  verificationId    String   @db.Uuid
+  submissionId      String?  @db.Uuid
+  clientCaptureId   String   @unique @db.Uuid
+  userId            String   @db.Uuid
+  // PHOTO | AUDIO
+  kind              String
+  objectKey         String
+  mimeType          String
+  byteSize          Int
+  clientSha256      String
+  serverSha256      String?
+  latitude          Float?
+  longitude         Float?
+  accuracyMeters    Float?
+  altitudeMeters    Float?
+  headingDegrees    Float?
+  isMockLocation    Boolean  @default(false)
+  caption           String?
+  signature         String?
+  // Device signature over canonicalCaptureString (verification id in place of the project id):
+  // true valid, false invalid, null not checked (unsigned, or no device key: a web sign-in).
+  signatureVerified Boolean?
+  answerPath        String?
+  capturedAtDevice  DateTime
+  registeredAt      DateTime @default(now())
+
+  verification NeedsVerification            @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+  submission   NeedsVerificationSubmission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+
+  @@index([verificationId])
+  @@index([submissionId])
+  @@map("needs_verification_captures")
+}
+
 // D-N.8: the costing standards of a tenant, versioned. A version a cycle or a needs assessment
 // version refers to is locked: saving makes the next version.
 model CostingStandardVersion {
@@ -3470,4 +3598,3 @@ model DesignStandardDocument {
   @@index([tenantId, kind])
   @@map("design_standard_documents")
 }
-

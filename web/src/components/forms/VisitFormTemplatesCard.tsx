@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 import {
   FORM_CODE_REGEX,
   FORM_MAX_TEMPLATE_BLOCKS,
+  NEEDS_VERIFICATION_RESERVED_SECTION_CODES,
   SaveVisitFormTemplateRequestSchema,
   VISIT_KIND_META,
   VisitKindEnum,
@@ -139,7 +140,7 @@ export function VisitFormTemplatesCard() {
       {editing && (
         <TemplateEditor
           initial={editing}
-          sectionOptions={sections.filter((s) => !s.isArchived).map((s) => ({ value: s.code, label: `${s.title} (${s.code})` }))}
+          sectionOptions={sections.filter((s) => !s.isArchived && !NEEDS_VERIFICATION_RESERVED_SECTION_CODES.includes(s.code)).map((s) => ({ value: s.code, label: `${s.title} (${s.code})` }))}
           titleOf={titleOf}
           usageCount={(q.data?.templates ?? []).find((t) => t.code === editing.existingCode)?.usageCount ?? 0}
           pending={save.isPending}

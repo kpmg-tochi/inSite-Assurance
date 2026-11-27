@@ -17,6 +17,7 @@ import {
 } from '../storage/visitStore';
 import { listPendingTranscripts, refreshCaptureServerCopies } from '../storage/captureStore';
 import { emitVisitDataChanged } from '../storage/visitEvents';
+import { syncNeedsVerifications } from './needsVerificationSync';
 import { projectToday, syncWindow } from '../utils/visitCalendar';
 import type { StoredVisit } from '../utils/visitModel';
 
@@ -26,6 +27,8 @@ import type { StoredVisit } from '../utils/visitModel';
  * today − 30 … today + 14, stores it, downloads every form in it the phone does not have (by
  * snapshot id + hash), refreshes each project's Ad hoc field pack (hourly, or on a forced sync) and
  * picks up voice-note transcripts. One run at a time; a trigger during a run schedules one more.
+ * Needs pipeline wave 5: every run then downloads the account's field verifications and their forms
+ * (`needsVerificationSync.ts`; its failures never fail the visit sync).
  */
 
 export interface VisitSyncSnapshot {
@@ -150,6 +153,9 @@ async function runOnce(force: boolean): Promise<void> {
     emitVisitDataChanged('forms');
   } catch (error) {
     publish({ lastError: (error as Error)?.message ?? 'Could not refresh monitoring visits.' });
+  }
+  try {
+    await syncNeedsVerifications();
   } finally {
     publish({ isSyncing: false });
   }

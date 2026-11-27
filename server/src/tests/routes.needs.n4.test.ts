@@ -10,6 +10,7 @@
  * rows are written directly (Track B owns the committee routes).
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { clearSeededNeedsPipeline } from './helpers/needsSeedReset';
 import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
@@ -36,6 +37,8 @@ type Outbox = typeof import('../integrations/messaging')['consoleOutbox'];
 
 let app: Express;
 let prisma: PrismaClientType;
+/** The seed's pipeline ledger entries end here (wave 5): tenant-wide counts read after it. */
+let ledgerFloor = BigInt(0);
 let outbox: Outbox;
 let jobs: typeof import('../jobs');
 let storage: typeof import('../integrations/storage.service')['storageService'];
@@ -144,6 +147,7 @@ async function readXlsxColumn(objectKey: string, column: number): Promise<string
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
+  ({ ledgerFloor } = await clearSeededNeedsPipeline(prisma));
   ({ consoleOutbox: outbox } = await import('../integrations/messaging'));
   ({ storageService: storage } = await import('../integrations/storage.service'));
   ({ clearAuthCache } = await import('../middleware/auth.middleware'));
@@ -287,7 +291,7 @@ describe('needs N4 A1: submit, return, resubmit, withdraw (all or nothing)', () 
     assert.deepEqual(items.map((i) => [i.reference, i.code]), [['2027-DI-004', 'NEEDS_MINIMUM_FIELDS_MISSING']]);
     assert.match(items[0].message, /Facilities breakdown|breakdown/i);
     assert.equal((await proposal('p1')).status, 'DRAFT');
-    assert.equal(await prisma.auditLog.count({ where: { tenantId, action: 'NEEDS_PROPOSAL_SUBMITTED' } }), 0);
+    assert.equal(await prisma.auditLog.count({ where: { tenantId, seq: { gt: ledgerFloor }, action: 'NEEDS_PROPOSAL_SUBMITTED' } }), 0);
   });
 
   it('only the stage actor of the owning organisation acts: another organisation 404, a role without the step 403 or 409 NEEDS_STAGE_ACTION_NOT_ALLOWED', async () => {
@@ -725,7 +729,7 @@ describe('needs N4 A1: separation-of-duties overrides (Kano)', () => {
     assert.equal(res.body.data.resolved, false);
     const details = res.body.data.details as SeparationOverrideDetails;
     assert.deepEqual([details.action, details.violation, details.stage, details.usedAt], ['COST', 'SAME_PERSON_COSTING', 'COSTING', null]);
-    assert.equal(await prisma.auditLog.count({ where: { tenantId, action: 'NEEDS_SEPARATION_OVERRIDE_REQUESTED' } }), 1);
+    assert.equal(await prisma.auditLog.count({ where: { tenantId, seq: { gt: ledgerFloor }, action: 'NEEDS_SEPARATION_OVERRIDE_REQUESTED' } }), 1);
     res = await ask(KANO_DPP, { proposalId: ids.mg1, action: 'COST', reason: 'Asking a second time, same reason.' });
     assert.equal(res.status, 409);
     assert.equal(res.body.error.code, 'NEEDS_OVERRIDE_PENDING');
@@ -773,7 +777,7 @@ describe('needs N4 A1: separation-of-duties overrides (Kano)', () => {
     const flag = await prisma.needsProposalFlag.findUniqueOrThrow({ where: { id: flagId } });
     assert.equal(flag.resolution, 'AUTHORISED');
     assert.ok((flag.detailsJson as unknown as SeparationOverrideDetails).usedAt);
-    const entries = await prisma.auditLog.findMany({ where: { tenantId, action: 'NEEDS_SEPARATION_OVERRIDDEN' }, orderBy: { seq: 'asc' } });
+    const entries = await prisma.auditLog.findMany({ where: { tenantId, seq: { gt: ledgerFloor }, action: 'NEEDS_SEPARATION_OVERRIDDEN' }, orderBy: { seq: 'asc' } });
     assert.deepEqual(entries.map((e) => (e.payload as { step: string }).step), ['Uploaded the costed version', 'Signed off the costing']);
   });
 

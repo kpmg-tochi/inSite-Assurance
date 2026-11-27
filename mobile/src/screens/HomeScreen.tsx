@@ -12,12 +12,14 @@ import { PrimaryButton } from '../components/inputs/Buttons';
 import { VisitCalendar, type CalendarMode } from '../components/visit/VisitCalendar';
 import { VisitRow } from '../components/visit/VisitRow';
 import { ProjectCard } from '../components/visit/ProjectCard';
+import { VerificationRow } from '../components/needsVerification/VerificationRow';
 import { SectionCard } from '../components/visit/VisitUi';
 import { useProfile } from '../context/ProfileContext';
 import { useOutboxStatus, useVisitData, useVisitSyncStatus } from '../hooks/useVisitData';
 import { useAccountNotificationsQuery } from '../queries/notifications/useNotificationQueries';
 import { loadBaselinePacks } from '../storage/baselineStore';
 import { getCachedWindow, listVisits } from '../storage/visitStore';
+import { listNeedsVerifications } from '../storage/needsVerificationStore';
 import { outboxCountsByProject } from '../storage/outbox/outboxStore';
 import { fetchVisitRange } from '../services/visitSync';
 import { requestPushPermissionInContext } from '../services/pushNotificationService';
@@ -36,6 +38,14 @@ import {
   type VisitView,
 } from '../utils/visitCalendar';
 import { personaCopy } from '../utils/personaCopy';
+import {
+  dayListCountText,
+  dayListTitle,
+  groupVerificationsByDay,
+  mergeVerificationDots,
+  verificationsNeedingAttention,
+  verificationView,
+} from '../utils/needsVerification';
 import { showDefectsShortcut } from '../utils/defects';
 import { formatDay, formatTime, greeting } from '../utils/visitText';
 import { formatMobileErrorMessage } from '../utils/errorFormatter';
@@ -43,11 +53,21 @@ import type { StoredVisit } from '../utils/visitModel';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+function deviceZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
 /**
  * Redesign R5b: Home for every field role (D-R5.2, D-R5.7). Calendar (week ⇄ month), the selected
  * day's visits with their responses, and the account's projects; one ACTIVE project opens fully.
  * Everything is read from SQLite (visits, packs); pull to refresh re-lists projects, prepares each
  * and forces a visit download (`refreshAll`).
+ * Needs pipeline wave 5: field verifications of proposed projects show in the calendar and the day
+ * list on their due date (an account with verifications but no project still sees Home).
  */
 export function HomeScreen() {
   const navigation = useNavigation<Nav>();
@@ -61,11 +81,11 @@ export function HomeScreen() {
 
   const { data, loading, reload } = useVisitData(
     async () => {
-      const [packs, visits, storedWindow] = await Promise.all([loadBaselinePacks(projectIds), listVisits(), getCachedWindow()]);
-      return { packs, visits, storedWindow };
+      const [packs, visits, storedWindow, verifications] = await Promise.all([loadBaselinePacks(projectIds), listVisits(), getCachedWindow(), listNeedsVerifications()]);
+      return { packs, visits, storedWindow, verifications };
     },
     [projectKey],
-    ['visits', 'packs', 'drafts']
+    ['visits', 'packs', 'drafts', 'verifications']
   );
 
   const [counts, setCounts] = useState<Map<string, { pending: number; dead: number }>>(new Map());
@@ -85,8 +105,12 @@ export function HomeScreen() {
   const storedById = useMemo(() => new Map((data?.visits ?? []).map((v) => [v.id, v] as const)), [data]);
   const views = useMemo<VisitView[]>(() => (data?.visits ?? []).map((v) => visitView(v, todayFor(v.projectId))), [data, todayFor]);
   const byDay = useMemo(() => groupVisitsByDay(views), [views]);
-  const dots = useMemo(() => dotsByDay(views), [views]);
   const attention = useMemo(() => visitsNeedingAttention(views), [views]);
+  // Needs pipeline wave 5: verifications are not on a project, so "today" is the phone's.
+  const verificationViews = useMemo(() => (data?.verifications ?? []).map((v) => verificationView(v, projectToday(deviceZone()))), [data]);
+  const verificationsByDay = useMemo(() => groupVerificationsByDay(verificationViews), [verificationViews]);
+  const verificationAttention = useMemo(() => verificationsNeedingAttention(verificationViews), [verificationViews]);
+  const dots = useMemo(() => mergeVerificationDots(dotsByDay(views), verificationViews), [views, verificationViews]);
 
   const [selected, setSelected] = useState<string | null>(null);
   const selectedDate = selected ?? homeToday;
@@ -161,9 +185,12 @@ export function HomeScreen() {
     navigation.navigate('Project', { projectId });
   };
   const openVisit = (visitId: string) => navigation.navigate('Visit', { visitId });
+  const openVerification = (verificationId: string) => navigation.navigate('NeedsVerification', { verificationId });
   const respond = (v: StoredVisit, action: VisitResponseAction) => navigation.navigate('VisitRespond', { visitId: v.id, action });
 
   const dayVisits = byDay.get(selectedDate) ?? [];
+  const dayVerifications = verificationsByDay.get(selectedDate) ?? [];
+  const hasVerifications = verificationViews.length > 0;
   const cards = projects.map((p) => {
     const pack = packs.get(p.projectId) ?? null;
     return {
@@ -245,7 +272,7 @@ export function HomeScreen() {
         >
           {loading && !data ? (
             <InSiteLoader size="md" label="Loading your monitoring visits..." />
-          ) : projects.length === 0 ? (
+          ) : projects.length === 0 && !hasVerifications ? (
             <EmptyStateCard
               title="No projects assigned"
               description="Ask your administrator to assign you to a project, then pull down to refresh."
@@ -269,6 +296,21 @@ export function HomeScreen() {
                 </TouchableOpacity>
               )}
 
+              {verificationAttention.length > 0 && (
+                <TouchableOpacity
+                  style={styles.attention}
+                  onPress={() => (verificationAttention.length === 1 ? openVerification(verificationAttention[0].id) : setSelected(verificationAttention[0].date))}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${verificationAttention.length} site verification${verificationAttention.length === 1 ? '' : 's'} overdue or returned. Show the first.`}
+                >
+                  <Feather name="map-pin" size={16} color="#B91C1C" />
+                  <Text style={styles.attentionText}>
+                    {verificationAttention.length} site verification{verificationAttention.length === 1 ? '' : 's'} overdue or returned to you. Oldest: {verificationAttention[0].label}, due{' '}
+                    {formatDay(verificationAttention[0].date)}.
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               <VisitCalendar
                 today={homeToday}
                 selectedDate={selectedDate}
@@ -281,10 +323,10 @@ export function HomeScreen() {
               />
 
               <SectionCard
-                title={selectedDate === homeToday ? "Today's monitoring visits" : `Monitoring visits, ${formatDay(selectedDate, true)}`}
+                title={dayListTitle(selectedDate, homeToday, dayVerifications.length > 0)}
                 subtitle={[
                   selectedDate === homeToday ? formatDay(selectedDate) : null,
-                  dayVisits.length > 0 ? `${dayVisits.length} monitoring visit${dayVisits.length === 1 ? '' : 's'}` : copy.noVisitsOnDay,
+                  dayListCountText(dayVisits.length, dayVerifications.length, copy.noVisitsOnDay),
                 ]
                   .filter(Boolean)
                   .join(' · ')}
@@ -305,6 +347,9 @@ export function HomeScreen() {
                     />
                   );
                 })}
+                {dayVerifications.map((view) => (
+                  <VerificationRow key={view.id} view={view} onOpen={() => openVerification(view.id)} />
+                ))}
               </SectionCard>
 
               {canUnscheduled && (
@@ -315,9 +360,11 @@ export function HomeScreen() {
                 />
               )}
 
-              <Text style={styles.sectionTitle} accessibilityRole="header">
-                {singleProjectId && projects.length === 1 ? 'My project' : copy.myProjectsTitle}
-              </Text>
+              {projects.length > 0 && (
+                <Text style={styles.sectionTitle} accessibilityRole="header">
+                  {singleProjectId && projects.length === 1 ? 'My project' : copy.myProjectsTitle}
+                </Text>
+              )}
               {orderedCards.map(({ project, pack, model }) => (
                 <ProjectCard
                   key={project.projectId}

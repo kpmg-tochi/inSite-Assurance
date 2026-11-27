@@ -113,3 +113,29 @@ describe('Outbox grouping', () => {
     assert.deepEqual(groups[0].counts, { waiting: 0, failed: 0, held: 1 });
   });
 });
+
+describe('Outbox: needs verification submissions (wave 5)', () => {
+  it('is labelled, refused drafts can be deleted, failed ones retried', () => {
+    const v = item({ kind: 'NEEDS_VERIFICATION_SUBMISSION', projectId: 'needs-verification:nv1', mediaType: null });
+    assert.equal(outboxItemLabel(v), 'Site verification');
+    assert.equal(OUTBOX_KIND_LABELS.NEEDS_VERIFICATION_SUBMISSION, 'Site verification');
+    const refused = { ...v, status: 'DEAD' as const, draftStatus: 'REFUSED' as const };
+    assert.equal(outboxItemState(refused, new Map()), 'REFUSED');
+    assert.deepEqual(outboxItemActions(refused), { retry: false, resendHeld: false, remove: 'DELETE_REFUSED_VERIFICATION' });
+    const failed = { ...v, status: 'DEAD' as const, draftStatus: 'QUEUED' as const };
+    assert.equal(outboxItemState(failed, new Map()), 'FAILED');
+    assert.deepEqual(outboxItemActions(failed), { retry: true, resendHeld: false, remove: null });
+    assert.equal(outboxItemState({ ...v, dependsOn: ['cap'] }, new Map([['cap', 'PENDING']])), 'WAITING_FOR_OTHERS');
+  });
+
+  it('a verification\'s rows form their own group, named when known', () => {
+    const rows = [
+      item({ id: 'a', projectId: 'needs-verification:nv1', kind: 'CAPTURE' }),
+      item({ id: 'b', projectId: 'needs-verification:nv1', kind: 'NEEDS_VERIFICATION_SUBMISSION', dependsOn: ['a'] }),
+      item({ id: 'c', projectId: 'needs-verification:nv2', kind: 'CAPTURE' }),
+    ];
+    const groups = groupOutboxItems(rows, (id) => (id === 'needs-verification:nv1' ? 'Site verification · 2027-DI-004' : null));
+    assert.deepEqual(groups.map((g) => g.projectName), ['Site verification · 2027-DI-004', 'Site verification']);
+    assert.equal(groups[0].rows.length, 2);
+  });
+});

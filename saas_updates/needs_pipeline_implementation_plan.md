@@ -1,6 +1,6 @@
 # Needs Pipeline: from identified need to funded project (N0–N9)
 
-Status: **wave 1 (N0 + N1) and wave 2 (N2 + N3) built 2026-11-26; wave 3 (N4 + N5 + N7a) and wave 4 (N6 + N7b–e) built 2026-11-27; wave 5 not started.** Written 2026-11-26, the day before the Minister of Education demo (2026-11-27). Wave 1 was executed on the owner's instruction that day on the section 3 assumptions (section 16.1 had no answers yet): fold the demo answers into 16.1 before wave 2 starts. Contract names: section 17.
+Status: **done.** Wave 1 (N0 + N1) and wave 2 (N2 + N3) built 2026-11-26; wave 3 (N4 + N5 + N7a), wave 4 (N6 + N7b–e) and wave 5 (N8 + N9) built 2026-11-27. Owed: the web click-through, the device run, the demo rehearsal and the wave 2–5 migrations on the demo database. Written 2026-11-26, the day before the Minister of Education demo (2026-11-27). Wave 1 was executed on the owner's instruction that day on the section 3 assumptions (section 16.1 had no answers yet): fold the demo answers into 16.1 before wave 2 starts. Contract names: section 17.
 
 ## 1. Goal
 
@@ -322,13 +322,13 @@ Gate = typecheck, lint, web build, server unit + route tests, mobile tests, seed
 - [x] **Full gate** _(wave 4, section 15)_
 
 ### N8: Field app verification
-- [ ] Section 10; physical checks added to `physical_testing_checklist.md`
+- [x] Section 10; physical checks added to `physical_testing_checklist.md`. _Wave 5 (server, mobile, web track); owed PT-N8-01 … -10, WT-N5-01 … -14_
 
 ### N9: Seed, demo, docs
-- [ ] Seed: one DI cycle (2027) with ~12 proposals across every stage and status (incl. a duplicate, an essential-facility gap, a rate variance, a returned one, a below-line one), committee with scores and one divergence; one MG cycle (Kano) with a BEAP in UBEC review; one out-of-cycle request; the overlay's projects get origin `NEEDS_PIPELINE` with proposals for their history
-- [ ] Demo pack: template v2 files (single and a batch of five, one with errors)
-- [ ] Demo script, `CLAUDE.md`, `configuration_reference.md`, `web_testing_checklist.md`
-- [ ] **Full gate**
+- [x] Seed: one DI cycle (2027) with ~12 proposals across every stage and status (incl. a duplicate, an essential-facility gap, a rate variance, a returned one, a below-line one), committee with scores and one divergence; one MG cycle (Kano) with a BEAP in UBEC review; one out-of-cycle request; the overlay's projects get origin `NEEDS_PIPELINE` with proposals for their history
+- [x] Demo pack: template v2 files (single and a batch of five, one with errors). _Wave 5 (M4: files 15 (2024), 16, 17, 18)_
+- [x] Demo script, `CLAUDE.md`, `configuration_reference.md`, `web_testing_checklist.md`. _Wave 5 (Track B); rehearsal owed_
+- [x] **Full gate** _(wave 5, section 15)_
 
 Parallel work (CLAUDE.md step 4): after N1 is built, server (services, routes, tests), web and docs run as separate agents per slice; Prisma, migrations and seed stay in the main thread.
 
@@ -361,7 +361,7 @@ Parallel work (CLAUDE.md step 4): after N1 is built, server (services, routes, t
 | Wave 2 (N2 + N3), 2026-11-27 (run 2, after the review fixes) | ✓ | 0 errors (52 warnings) | ✓ | **329/329** | **514/514 pass, 19 todo** of 533 | 169/169 | normal ✓, overlay ✓ (scratch `insite_needs_w1`); schema diff empty |
 | Wave 3 (N4 + N5 + N7a), 2026-11-27 (run 2, after the review fixes) | ✓ | 0 errors (52 warnings) | ✓ | **329/329** | **593/593 pass, 11 todo** of 604 | 169/169 | normal ✓, overlay ✓ (scratch `insite_needs_w1`); schema diff empty |
 | Wave 4 (N6 + N7b–e), 2026-11-27 (end of wave, after M2–M5 and the review fixes; the M1 gate before the deletion is in the wave file) | ✓ | 0 errors (52 warnings) | ✓ | **329/329** | **653/653 pass, 1 todo** of 654 (only FIELD-01 left `todo`) | 169/169 | normal ✓, overlay ✓ (scratch `insite_needs_w1`, migration `20261231090000_needs_w4_funding`); schema diff empty |
-| N9 | | | | | | | |
+| Wave 5 (N8 + N9), 2026-11-27 (end of wave, after the review fixes; gate 1 in the wave file) | ✓ | 0 errors (52 warnings) | ✓ | **329/329** | **679/679 pass, 0 todo** (FIELD-01 green: the scenarios file has no `todo`) | **205/205** | normal ✓, overlay ✓ (scratch `insite_needs_w1`, migrations `20270101090000_needs_w5_verification`, `20270101090001_needs_w5_capture_signature`); schema diff empty |
 
 ## 16. Found during implementation
 
@@ -407,6 +407,10 @@ Decisions, deviations and the review are in `needs_pipeline/wave4_approval_fundi
 - **Activation gate** applies to drafts whose type snapshot runs the pipeline; the seed marks its projects LEGACY. Wave 5's seeded cycles should give the overlay's projects origin NEEDS_PIPELINE with proposals (N9) instead.
 - **Resolved after the wave (owner, 2026-11-27):** a BEAP revision above the approved amount is refused; the SUBEB Administrator holds `projects:edit_baseline`, `projects:activate`, `scope:edit`, `contractors:view_register` (`SUBEB_ADMIN_PROJECT_GRANTS`, seed-tailored) to complete and activate its converted drafts.
 - **Demo:** the D1 flow and its demo pack file are gone; wave 5 rewrites the demo script and pack. The wave 2–4 migrations are owed on `insite_assurance`.
+
+### 16.6 Wave 5 (2026-11-27)
+
+Decisions, deviations and the review are in `needs_pipeline/wave5_field_seed_docs.md` section 5. The owner's answers to the clarification round (5.1): the verification form is two reserved form library sections frozen on each verification (no new `VisitKind`); acceptance corrects the sites, files the photos and pre-fills the site verification (method FIELD_APP), the validator still decides; a web track was added; kano.dpp@ gets a mobile role. The normal seed now holds the 2027 cycles and every PRG project's converted proposal: needs tests that open their own cycles call `clearSeededNeedsPipeline` first. Follow-ups: an override path for a review refused by separation, the BEAP_REVIEW success path end to end, the demo PDFs printing "PRG-110", `procurement@` in the web Switch user cast. Owed: web click-through (6g–6k), device run (4.13), demo rehearsal, the wave 2–5 migrations on `insite_assurance`.
 
 ### 16.3 Wave 1 (2026-11-26)
 

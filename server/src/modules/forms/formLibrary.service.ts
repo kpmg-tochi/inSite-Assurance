@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import {
   CustomiseFacilitySubFormRequest,
+  DEFAULT_FORM_LIBRARY,
   FacilityArchetype,
   FacilityEffectiveSubForm,
   FacilitySubFormDto,
@@ -9,6 +10,10 @@ import {
   FormFieldType,
   FormLibraryDto,
   FormSectionDto,
+  NEEDS_VERIFICATION_CONDITION_BY_OPTION,
+  NEEDS_VERIFICATION_FIELD_KEYS,
+  NEEDS_VERIFICATION_RESERVED_SECTION_CODES,
+  NEEDS_VERIFICATION_SECTION_CODES,
   SaveFacilitySubFormRequest,
   SaveFormSectionRequest,
   SaveVisitFormTemplateRequest,
@@ -68,7 +73,29 @@ async function arrayUsage(db: Db, column: 'sectionIds' | 'subFormIds', ids: stri
   return new Map(rows.map((r) => [r.id, Number(r.n)]));
 }
 
-export const sectionUsage = (db: Db, ids: string[]) => arrayUsage(db, 'sectionIds', ids);
+/**
+ * Needs pipeline wave 5 (N8): a field verification's frozen form names the section versions it was
+ * built from (`formJson.sources.sections`), which count as uses: such a version is never edited in place.
+ */
+async function needsVerificationSectionUsage(db: Db, tenantId: string, ids: string[]): Promise<Map<string, number>> {
+  if (ids.length === 0) return new Map();
+  // The tenant filter comes before the JSON is expanded (only this tenant's verifications are read).
+  const rows = await db.$queryRaw<Array<{ id: string; n: number }>>(
+    Prisma.sql`SELECT sec->>'id' AS id, count(*)::int AS n
+               FROM (SELECT "formJson" FROM needs_verifications WHERE "tenantId" = ${tenantId}::uuid) v,
+                    jsonb_array_elements(v."formJson"->'sources'->'sections') AS sec
+               WHERE sec->>'id' = ANY(${ids}::text[])
+               GROUP BY 1`
+  );
+  return new Map(rows.map((r) => [r.id, Number(r.n)]));
+}
+
+export async function sectionUsage(db: Db, tenantId: string, ids: string[]): Promise<Map<string, number>> {
+  const snapshots = await arrayUsage(db, 'sectionIds', ids);
+  const verifications = await needsVerificationSectionUsage(db, tenantId, ids);
+  for (const [id, n] of verifications) snapshots.set(id, (snapshots.get(id) ?? 0) + n);
+  return snapshots;
+}
 export const subFormUsage = (db: Db, ids: string[]) => arrayUsage(db, 'subFormIds', ids);
 
 async function templateUsage(db: Db, ids: string[]): Promise<Map<string, number>> {
@@ -215,7 +242,7 @@ export async function getFormLibrary(tenantId: string): Promise<FormLibraryDto> 
     (a, b) => visitKindOrder(a.visitKind) - visitKindOrder(b.visitKind) || a.code.localeCompare(b.code)
   );
   const [sUsage, fUsage, tUsage] = await Promise.all([
-    sectionUsage(prisma, sections.map((s) => s.id)),
+    sectionUsage(prisma, tenantId, sections.map((s) => s.id)),
     subFormUsage(prisma, subForms.map((s) => s.id)),
     templateUsage(prisma, templates.map((t) => t.id)),
   ]);
@@ -257,7 +284,7 @@ function visitKindOrder(kind: string): number {
 export async function listSectionVersions(tenantId: string, code: string): Promise<FormSectionDto[]> {
   const rows = await prisma.formSection.findMany({ where: { tenantId, code }, orderBy: { version: 'desc' } });
   if (rows.length === 0) throw new AppError('Form section not found', 404, 'FORM_SECTION_NOT_FOUND');
-  const usage = await sectionUsage(prisma, rows.map((r) => r.id));
+  const usage = await sectionUsage(prisma, tenantId, rows.map((r) => r.id));
   const templates = [...latestBy(await prisma.visitFormTemplate.findMany({ where: { tenantId } }), (t) => t.code).values()];
   const usedBy = templatesBySection(templates).get(code) ?? [];
   return rows.map((r) => serializeSection(r, rows[0].version, usage.get(r.id) ?? 0, usedBy));
@@ -322,6 +349,47 @@ const modeText = (mode: SaveMode, version: number, previous?: number) =>
       ? `edited version ${version} (not used yet)`
       : `version ${version}`;
 
+// ---------------------------------------------------------------------------
+// Reserved sections (needs pipeline wave 5, N8; review fix: enforced here, not only on the web)
+// ---------------------------------------------------------------------------
+
+/** The fixed keys of each reserved section: acceptance and the review read them. */
+const RESERVED_SECTION_FIXED_KEYS: Record<string, string[]> = {
+  [NEEDS_VERIFICATION_SECTION_CODES.SITE]: [NEEDS_VERIFICATION_FIELD_KEYS.schoolFound],
+  [NEEDS_VERIFICATION_SECTION_CODES.FACILITY]: [
+    NEEDS_VERIFICATION_FIELD_KEYS.existingQuantity,
+    NEEDS_VERIFICATION_FIELD_KEYS.existingCondition,
+    NEEDS_VERIFICATION_FIELD_KEYS.matchesAssessment,
+  ],
+};
+
+export const isReservedSectionCode = (code: string) => NEEDS_VERIFICATION_RESERVED_SECTION_CODES.includes(code);
+
+/**
+ * A reserved section keeps its fixed keys with their default types (labels, guidance, rules and extra
+ * fields may change); the condition question keeps exactly the option keys acceptance maps
+ * (`NEEDS_VERIFICATION_CONDITION_BY_OPTION`; labels may change). Else 422 FORM_SECTION_RESERVED_KEYS.
+ */
+function assertReservedSectionFields(code: string, fields: FormField[]): void {
+  const fixed = RESERVED_SECTION_FIXED_KEYS[code];
+  if (!fixed) return;
+  const defaults = DEFAULT_FORM_LIBRARY.sections.find((s) => s.code === code)?.fields ?? [];
+  const refuse = (message: string, key: string) => new AppError(message, 422, 'FORM_SECTION_RESERVED_KEYS', { sectionCode: code, key });
+  for (const key of fixed) {
+    const field = fields.find((f) => f.key === key);
+    const expected = defaults.find((f) => f.key === key)?.type;
+    if (!field) throw refuse(`The field verification form needs its field "${key}": it cannot be removed.`, key);
+    if (expected && field.type !== expected) throw refuse(`The field "${key}" of the field verification form must stay a ${expected} field.`, key);
+    if (key === NEEDS_VERIFICATION_FIELD_KEYS.existingCondition) {
+      const want = Object.keys(NEEDS_VERIFICATION_CONDITION_BY_OPTION).sort();
+      const have = field.options.map((o) => o.key).sort();
+      if (have.length !== want.length || have.some((k, i) => k !== want[i])) {
+        throw refuse(`The condition question keeps its options ${want.join(', ')} (labels may change).`, key);
+      }
+    }
+  }
+}
+
 export async function saveFormSection(webUser: WebJwtPayload, input: SaveFormSectionRequest, existingCode: string | null): Promise<FormSectionDto> {
   const tenantId = webUser.tenantId;
   await ensureFormLibrary(prisma, tenantId);
@@ -334,6 +402,7 @@ export async function saveFormSection(webUser: WebJwtPayload, input: SaveFormSec
     if (!existingCode && latest) throw new AppError(`A section with code "${code}" already exists`, 409, 'FORM_SECTION_EXISTS');
     if (existingCode && !latest) throw new AppError('Form section not found', 404, 'FORM_SECTION_NOT_FOUND');
     assertFields(input.fields, 'SECTION', keyTypesOf(versions));
+    assertReservedSectionFields(code, input.fields);
     const data = {
       title: input.title,
       description: input.description,
@@ -345,7 +414,7 @@ export async function saveFormSection(webUser: WebJwtPayload, input: SaveFormSec
     if (!latest) {
       saved = await tx.formSection.create({ data: { tenantId, code, version: 1, ...data } });
       mode = 'created';
-    } else if (((await sectionUsage(tx, [latest.id])).get(latest.id) ?? 0) === 0) {
+    } else if (((await sectionUsage(tx, tenantId, [latest.id])).get(latest.id) ?? 0) === 0) {
       saved = await tx.formSection.update({ where: { id: latest.id }, data });
       mode = 'edited';
     } else {
@@ -367,6 +436,9 @@ export async function setFormSectionArchived(webUser: WebJwtPayload, code: strin
   const tenantId = webUser.tenantId;
   await prisma.$transaction(async (tx) => {
     await lockFormLibrary(tx, tenantId);
+    if (archived && isReservedSectionCode(code)) {
+      throw new AppError(`Section ${code} is the field verification form of the needs pipeline: it cannot be archived.`, 409, 'FORM_SECTION_RESERVED', { sectionCode: code });
+    }
     if (archived) {
       const templates = [...latestBy(await tx.visitFormTemplate.findMany({ where: { tenantId } }), (t) => t.code).values()];
       const usedBy = templatesBySection(templates).get(code) ?? [];
@@ -545,6 +617,10 @@ export async function saveVisitFormTemplate(webUser: WebJwtPayload, input: SaveV
       throw new AppError('A template keeps its monitoring visit kind; create a new template for another kind', 422, 'TEMPLATE_KIND_LOCKED');
     }
     const codes = input.blocks.flatMap((b) => (b.type === 'SECTION' ? [b.sectionCode] : []));
+    const reserved = codes.filter(isReservedSectionCode);
+    if (reserved.length > 0) {
+      throw new AppError(`Section(s) ${reserved.join(', ')} belong to the field verification form and cannot be used in a monitoring form template.`, 422, 'FORM_SECTION_RESERVED', { sectionCodes: reserved });
+    }
     const sections = await tx.formSection.findMany({ where: { tenantId, code: { in: codes } }, select: { code: true, version: true, isArchived: true } });
     const live = latestBy(sections, (s) => s.code);
     const missing = codes.filter((c) => !live.get(c) || live.get(c)!.isArchived);

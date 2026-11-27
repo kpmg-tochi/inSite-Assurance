@@ -1,5 +1,6 @@
 import { dependencyState, type OutboxKind, type OutboxStatus } from '../storage/outbox/outboxPolicy';
 import type { VisitDraftStatus } from './visitModel';
+import { verificationIdOfScope } from './needsVerification';
 
 /**
  * Redesign R5e: the Outbox screen's model (pure, Node-tested). One row per open outbox row (not
@@ -20,7 +21,7 @@ export interface OutboxItem {
   dependsOn: string[];
   /** CAPTURE: the capture's media type (photo or voice note); null otherwise or when not on the phone. */
   mediaType: string | null;
-  /** VISIT_SUBMISSION: the draft's status; null otherwise or when not on the phone. */
+  /** VISIT_SUBMISSION and NEEDS_VERIFICATION_SUBMISSION: the draft's status; null otherwise or when not on the phone. */
   draftStatus: VisitDraftStatus | null;
   /** VISIT_RESPONSE: the visit the response is for (local key). */
   visitId: string | null;
@@ -35,6 +36,7 @@ export const OUTBOX_KIND_LABELS: Record<OutboxKind, string> = {
   CAPTURE: 'Photo',
   DEFECT_ACTION: 'Defect update',
   INCIDENT: 'Incident',
+  NEEDS_VERIFICATION_SUBMISSION: 'Site verification',
 };
 
 export function outboxItemLabel(item: Pick<OutboxItem, 'kind' | 'mediaType'>): string {
@@ -68,7 +70,7 @@ export const OUTBOX_STATE_TEXT: Record<OutboxItemState, string> = {
 /** `statusById`: every open row's status (rows missing from it were sent and purged). */
 export function outboxItemState(item: OutboxItem, statusById: Map<string, OutboxStatus>): OutboxItemState {
   if (item.status === 'HELD') return 'HELD';
-  if (item.status === 'DEAD') return item.kind === 'VISIT_SUBMISSION' && item.draftStatus === 'REFUSED' ? 'REFUSED' : 'FAILED';
+  if (item.status === 'DEAD') return (item.kind === 'VISIT_SUBMISSION' || item.kind === 'NEEDS_VERIFICATION_SUBMISSION') && item.draftStatus === 'REFUSED' ? 'REFUSED' : 'FAILED';
   if (item.dependsOn.length > 0 && dependencyState(item.dependsOn, statusById) !== 'READY') return 'WAITING_FOR_OTHERS';
   return item.attempts > 0 ? 'RETRYING' : 'WAITING';
 }
@@ -85,6 +87,7 @@ export function outboxItemState(item: OutboxItem, statusById: Map<string, Outbox
  */
 export type OutboxRemoveAction =
   | 'DELETE_REFUSED_REPORT'
+  | 'DELETE_REFUSED_VERIFICATION'
   | 'DISCARD_RESPONSE'
   | 'DISCARD_DEFECT_UPDATE'
   | 'DISCARD_INCIDENT'
@@ -111,6 +114,11 @@ export function outboxItemActions(item: OutboxItem): OutboxItemActions {
       return item.draftStatus === 'REFUSED'
         ? { retry: false, resendHeld: false, remove: 'DELETE_REFUSED_REPORT' }
         : { retry: true, resendHeld: false, remove: null };
+    case 'NEEDS_VERIFICATION_SUBMISSION':
+      // Needs pipeline wave 5: the same rule as a visit report (copy it from the verification screen).
+      return item.draftStatus === 'REFUSED'
+        ? { retry: false, resendHeld: false, remove: 'DELETE_REFUSED_VERIFICATION' }
+        : { retry: true, resendHeld: false, remove: null };
     case 'VISIT_RESPONSE':
       return { retry: true, resendHeld: false, remove: item.visitId ? 'DISCARD_RESPONSE' : null };
     case 'DEFECT_ACTION':
@@ -128,6 +136,11 @@ export const OUTBOX_REMOVE_TEXT: Record<OutboxRemoveAction, { button: string; ti
     button: 'Delete monitoring report',
     title: 'Delete this monitoring report?',
     message: 'The server refused it, so it can never be sent. It is removed from this phone.',
+  },
+  DELETE_REFUSED_VERIFICATION: {
+    button: 'Delete site verification',
+    title: 'Delete this site verification?',
+    message: 'The server refused it, so it can never be sent as it is. Your answers are removed from this phone.',
   },
   DISCARD_RESPONSE: {
     button: 'Remove',
@@ -168,9 +181,13 @@ export interface OutboxProjectGroup {
   counts: { waiting: number; failed: number; held: number };
 }
 
+/** The group name of rows that are not a project's: a verification's (needs pipeline wave 5), else unknown. */
+export const VERIFICATION_GROUP_FALLBACK = 'Site verification';
+
 /**
  * Rows grouped per project (projects by name, the account's projects first), and inside a project:
- * refused and failed first, then held, then waiting, oldest first.
+ * refused and failed first, then held, then waiting, oldest first. A verification's rows (scope
+ * `needs-verification:<id>`) form their own group; `projectName` may name it.
  */
 export function groupOutboxItems(items: OutboxItem[], projectName: (projectId: string) => string | null): OutboxProjectGroup[] {
   const statusById = new Map<string, OutboxStatus>(items.map((i) => [i.id, i.status]));
@@ -179,7 +196,7 @@ export function groupOutboxItems(items: OutboxItem[], projectName: (projectId: s
     const state = outboxItemState(item, statusById);
     let g = groups.get(item.projectId);
     if (!g) {
-      g = { projectId: item.projectId, projectName: projectName(item.projectId) ?? 'Project no longer on this phone', rows: [], counts: { waiting: 0, failed: 0, held: 0 } };
+      g = { projectId: item.projectId, projectName: projectName(item.projectId) ?? (verificationIdOfScope(item.projectId) ? VERIFICATION_GROUP_FALLBACK : 'Project no longer on this phone'), rows: [], counts: { waiting: 0, failed: 0, held: 0 } };
       groups.set(item.projectId, g);
     }
     g.rows.push({ item, label: outboxItemLabel(item), state, stateText: OUTBOX_STATE_TEXT[state], actions: outboxItemActions(item) });

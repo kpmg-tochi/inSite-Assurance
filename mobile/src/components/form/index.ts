@@ -12,3 +12,4 @@ export { VoiceNoteInput } from './VoiceNoteInput';
 export { YesNoInput } from './YesNoInput';
 export { FORM_COLORS, formStyles } from './formStyles';
 export { requestFormScreen, takeRequestedFormScreen } from './formNavigation';
+export { FormBlockedView, FormHeader, FormSectionBody, FormSectionNav, FormSectionsSheet, IssueGroupsCard, formScreenStyles, type FormSectionHandlers } from './FormSections';

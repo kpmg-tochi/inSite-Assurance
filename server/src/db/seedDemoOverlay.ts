@@ -65,6 +65,8 @@ import { createProjectDraft, saveProjectSetupStep } from "../modules/projects/pr
 import { deriveLineDatesFromSprints } from "../modules/scope/scope.service";
 import { refreshScheduleBadge } from "../modules/schedule/schedule.service";
 import { seedAlerts } from "./seedAlerts";
+import { clearConvertedHistory, seedConvertedHistory } from "./seedNeedsPipeline";
+import { needsOpenYear } from "./needsSeedSpecs";
 import { KANO_SUBEB_NAME, ME_CONSULTANTS_NAME, PROGRAMME_TENANT_SLUG, UBEC_ORG_NAME } from "./seedPhase11";
 import { heldKickoff, payloadFor } from "./seedPhase13";
 import { approvedFinalEvaluation } from "./seedPhase15";
@@ -187,6 +189,21 @@ import {
  * Roles: `approved_lists:view` for the System Administrator, Executive Secretary, Director, Physical
  * Planning and SUBEB Executive Chairman; wave 4: `approved_lists:manage` (upload) for the System
  * Administrator and the Director, Physical Planning.
+ *
+ * Needs pipeline (wave 5, M3; `seedNeedsPipeline.ts` header for the open cycles, which the overlay
+ * keeps as the normal seed leaves them): the normal seed's history (converted proposals for PRG-*) is
+ * removed and written again from the overlay's projects, so each one's proposal names its final title,
+ * State, sites, units and budget:
+ *
+ * | #  | Origin | Proposal |
+ * | -- | ------ | -------- |
+ * | 1–10, 12, 14–18 | NEEDS_PIPELINE | CONVERTED at Funding in the CLOSED cycle of its year: Direct Intervention 2025 or 2026 (national, UBEC HQ), Matching Grants 2025 or 2026 per State (owned by the State's SUBEB, with its approved BEAP and counterpart evidence); one version (template v2 built from the project's sites, units and BoQ), approved = funded = the budget |
+ * | 11 | OUT_OF_CYCLE | An approved out-of-cycle request in the open Direct Intervention cycle (carry-over of an appropriated project, the Executive Secretary's approval filed): a draft of the open year cannot come from the annual cycle before its appropriation |
+ * | 13 | REGISTER_IMPORT | None: imported from the register |
+ *
+ * The proposal ready to be appropriated live is the normal seed's: Y-DI-001 (Dawakin Tofa, the demo
+ * project), with Y-DI-002 and -003, at Funding in the open Direct Intervention cycle (demo pack file
+ * "16 Appropriated schedule.xlsx").
  */
 
 const TZ = "Africa/Lagos";
@@ -3063,6 +3080,15 @@ export async function seedDemoOverlay(): Promise<void> {
   // ---- Part 3 (wave 3): approved lists and links, Demo 2's contractor flagged ----------------------
   const lists = await approvedLists(ctx, idByStory);
   const flag = await flagDemo2Contractor(ctx, idByStory);
+
+  // ---- Needs pipeline wave 5 (M3): where each project came from -----------------------------------
+  // The normal seed's history matched the PRG projects before they were re-coded, relocated and
+  // re-dated: it is written again from the overlay's projects (closed cycles of their years).
+  await clearConvertedHistory(tenantId);
+  const history = await seedConvertedHistory(tenantId, [...idByStory.values()], { today, openYear: needsOpenYear(today) });
+  console.log(
+    `   • Demo overlay needs pipeline: ${history.proposals} converted proposal(s) in ${history.cycles} closed cycle(s), ${history.outOfCycle} approved out-of-cycle request(s) (#11); #13 imported from the register.`
+  );
 
   // Badges, alerts and KPI trends from the overlaid data (as seedAlerts and seedPhase16 do).
   for (const id of idByStory.values()) {

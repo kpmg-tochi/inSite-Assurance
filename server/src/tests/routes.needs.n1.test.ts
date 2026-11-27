@@ -9,6 +9,7 @@
  *   the cycle; `Project.origin` and the one-to-one with a proposed project.
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { clearSeededNeedsPipeline } from './helpers/needsSeedReset';
 import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Express } from 'express';
@@ -70,6 +71,7 @@ async function kickoff(code: string): Promise<ProjectKickoffDto> {
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
+  await clearSeededNeedsPipeline(prisma);
   kickoffService = await import('../modules/contracts/kickoff.service');
   const { createApp } = await import('../app');
   app = createApp();

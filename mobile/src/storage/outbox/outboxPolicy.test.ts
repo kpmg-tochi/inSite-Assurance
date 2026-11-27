@@ -20,6 +20,13 @@ import {
   VISIT_ALREADY_SUBMITTED_MESSAGE,
   VISIT_CHANGED_RESPONSE_MESSAGE,
   UNSCHEDULED_FORM_STALE_MESSAGE,
+  needsVerificationSubmissionDependsOn,
+  isVerificationRefusal,
+  verificationRefusalMessage,
+  NEEDS_VERIFICATION_REFUSED_CODES,
+  NEEDS_VERIFICATION_FORM_STALE_MESSAGE,
+  NEEDS_VERIFICATION_NOT_OPEN_MESSAGE,
+  NEEDS_VERIFICATION_NOT_ASSIGNED_MESSAGE,
   type OutboxKind,
   type OutboxRow,
   type OutboxStatus,
@@ -228,5 +235,46 @@ describe('Redesign R5 (D-R5.9): visit-app kinds', () => {
       'That date is outside the move window. Propose the date to the manager instead.',
       'the server explains the window'
     );
+  });
+});
+
+describe('needs pipeline wave 5: verification submissions', () => {
+  const open = new Map<string, string>([['CAPTURE:c1', 'row-c1'], ['CAPTURE:c2', 'row-c2']]);
+  const lookup = (kind: OutboxKind, id: string) => open.get(`${kind}:${id}`) ?? null;
+
+  it('waits for the unsent captures its answers name; sent ones are not waited for', () => {
+    assert.deepEqual(needsVerificationSubmissionDependsOn({ captureIds: ['c1', 'c2', 'c3', 'c1'] }, lookup), ['row-c1', 'row-c2']);
+    assert.deepEqual(needsVerificationSubmissionDependsOn({ captureIds: [] }, lookup), []);
+    const status = new Map<string, OutboxStatus>([['row-c1', 'DONE'], ['row-c2', 'PENDING']]);
+    assert.equal(dependencyState(['row-c1', 'row-c2'], status), 'WAITING');
+    status.set('row-c2', 'DEAD');
+    assert.equal(dependencyState(['row-c1', 'row-c2'], status), 'BLOCKED');
+  });
+
+  it('a capture still being registered is retried; stale form, not open and invalid are refusals', () => {
+    assert.equal(classifyFailure({ kind: 'http', status: 409, code: 'CAPTURES_NOT_REGISTERED' }), 'RETRY');
+    assert.equal(isVerificationRefusal({ kind: 'http', status: 409, code: 'CAPTURES_NOT_REGISTERED' }), false);
+    for (const code of ['NEEDS_VERIFICATION_FORM_STALE', 'NEEDS_VERIFICATION_NOT_OPEN']) {
+      assert.equal(classifyFailure({ kind: 'http', status: 409, code }), 'PERMANENT', code);
+      assert.equal(isVerificationRefusal({ kind: 'http', status: 409, code }), true, code);
+    }
+    assert.equal(classifyFailure({ kind: 'http', status: 422, code: 'NEEDS_VERIFICATION_INVALID' }), 'PERMANENT');
+    assert.equal(isVerificationRefusal({ kind: 'http', status: 422, code: 'NEEDS_VERIFICATION_INVALID' }), true);
+    assert.deepEqual([...NEEDS_VERIFICATION_REFUSED_CODES].sort(), ['NEEDS_VERIFICATION_FORM_STALE', 'NEEDS_VERIFICATION_INVALID', 'NEEDS_VERIFICATION_NOT_OPEN']);
+  });
+
+  it('404 (not the officer any more) is a refusal; offline, auth and server errors are not', () => {
+    assert.equal(isVerificationRefusal({ kind: 'http', status: 404, code: 'NOT_FOUND' }), true);
+    assert.equal(isVerificationRefusal({ kind: 'network' }), false);
+    assert.equal(isVerificationRefusal({ kind: 'auth', status: 401 }), false);
+    assert.equal(isVerificationRefusal({ kind: 'http', status: 503 }), false);
+  });
+
+  it('refusals carry fixed messages; the server text explains an invalid submission', () => {
+    assert.equal(verificationRefusalMessage({ kind: 'http', status: 409, code: 'NEEDS_VERIFICATION_FORM_STALE', message: 'raw' }), NEEDS_VERIFICATION_FORM_STALE_MESSAGE);
+    assert.equal(verificationRefusalMessage({ kind: 'http', status: 409, code: 'NEEDS_VERIFICATION_NOT_OPEN', message: 'raw' }), NEEDS_VERIFICATION_NOT_OPEN_MESSAGE);
+    assert.equal(verificationRefusalMessage({ kind: 'http', status: 404, code: 'NOT_FOUND', message: 'raw' }), NEEDS_VERIFICATION_NOT_ASSIGNED_MESSAGE);
+    assert.equal(verificationRefusalMessage({ kind: 'http', status: 422, code: 'NEEDS_VERIFICATION_INVALID', message: 'Site 2 has no location' }), 'Site 2 has no location');
+    assert.equal(failureMessage({ code: 'NEEDS_VERIFICATION_FORM_STALE', message: 'raw' }, 'NEEDS_VERIFICATION_SUBMISSION'), NEEDS_VERIFICATION_FORM_STALE_MESSAGE);
   });
 });

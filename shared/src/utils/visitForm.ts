@@ -466,6 +466,11 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/** Canonical JSON (keys sorted, undefined dropped) of any value; needs pipeline wave 5 hashes its form with it. */
+export function canonicalJsonString(value: unknown): string {
+  return canonicalJson(value);
+}
+
 /**
  * The snapshot as a canonical JSON string: keys sorted, `builtAt` removed. Shared has no SHA-256, so
  * each side hashes this string (server `hashVisitFormSnapshot`, phone its crypto helper).

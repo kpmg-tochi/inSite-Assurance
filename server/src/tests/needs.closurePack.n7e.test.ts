@@ -5,6 +5,7 @@
  * run with a recording `add` / `skip` (the closure pack's own) so the entries can be checked.
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { clearSeededNeedsPipeline } from './helpers/needsSeedReset';
 import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { NEEDS_TEMPLATE_VERSION, normaliseSchoolName, type ParsedNeedsAssessment } from '@insite/shared';
@@ -40,6 +41,7 @@ async function webUser(email: string): Promise<WebJwtPayload> {
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
+  await clearSeededNeedsPipeline(prisma);
   tenantId = (await prisma.tenant.findUniqueOrThrow({ where: { slug: 'programme-authority' } })).id;
 });
 

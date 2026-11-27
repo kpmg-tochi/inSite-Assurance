@@ -6,6 +6,7 @@
  * cannot be mapped is refused without writing anything. No gate calls it yet (wave 4).
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { clearSeededNeedsPipeline } from './helpers/needsSeedReset';
 import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { NEEDS_TEMPLATE_VERSION, lineAmount, normaliseSchoolName, type ParsedNeedsAssessment } from '@insite/shared';
@@ -117,6 +118,7 @@ const convert = (proposalId: string, options: Omit<Parameters<Convert>[2], 'by'>
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
+  await clearSeededNeedsPipeline(prisma);
   ({ convertProposalToProject } = await import('../modules/needs/conversion/convertProposal'));
   tenantId = (await prisma.tenant.findUniqueOrThrow({ where: { slug: 'programme-authority' } })).id;
   ids.DI = (await prisma.projectType.findFirstOrThrow({ where: { tenantId, code: 'CENTRAL' } })).id;

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, type ScrollViewInstance } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View, type ScrollViewInstance } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatProjectCode, VISIT_KIND_META, type VisitFormAnswerInput, type VisitFormSnapshotField } from '@insite/shared';
 import type { RootStackScreenProps } from '../../navigation/types';
@@ -30,12 +29,21 @@ import { acquireFix } from '../../services/locationService';
 import { SiteEvidenceCameraModal, type SiteEvidenceBatchSubmission } from '../../components/camera';
 import type { VoiceRecordingResult } from '../../components/audio';
 import { InfoCallout } from '../../components/common';
-import { FormFieldCard, FORM_COLORS, formStyles, SiteLogPhotoPicker, takeRequestedFormScreen } from '../../components/form';
+import {
+  FormBlockedView,
+  FormHeader,
+  FormSectionBody,
+  FormSectionNav,
+  FormSectionsSheet,
+  formScreenStyles as styles,
+  formStyles,
+  SiteLogPhotoPicker,
+  takeRequestedFormScreen,
+} from '../../components/form';
 import { useDraftEditor } from '../../components/form/useDraftEditor';
 import {
   addAnswerCapture,
   answerCaptureIds,
-  answerFor,
   captureUnitForSlot,
   checkDraft,
   formProgress,
@@ -49,8 +57,6 @@ import { entriesForVisitDay, pickablePhotosForField, type SiteLogRecord } from '
 import {
   firstScreenWithIssues,
   formAccess,
-  progressText,
-  screenStatusText,
   sentPhotosOfDay,
   timeInZone,
   visitDayFor,
@@ -360,39 +366,16 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
   const kindLabel = data ? VISIT_KIND_META[data.visit.visit.visitKind].label : 'Monitoring visit';
   const progress = data && check ? formProgress(data.form.snapshot, check) : null;
   const header = (
-    <LinearGradient colors={['#00715D', '#005A4A', '#122F2A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
-      <TouchableOpacity onPress={() => void back()} accessibilityRole="button" accessibilityLabel="Back to the monitoring visit">
-        <Text style={styles.closeText}>‹ Back</Text>
-      </TouchableOpacity>
-      <Text style={styles.title} accessibilityRole="header">
-        {kindLabel}
-        {data ? ` · ${formatProjectCode(data.visit.visit.projectCode)}` : ''}
-      </Text>
-      {data && screen ? (
-        <Text style={styles.subtitle}>
-          Section {screenIndex + 1} of {screens.length} · {screen.title}
-        </Text>
-      ) : null}
-      {progress ? (
-        <>
-          <View
-            style={styles.progressTrack}
-            accessible
-            accessibilityRole="progressbar"
-            accessibilityLabel={progressText(progress.done, progress.total)}
-            accessibilityValue={{ min: 0, max: progress.total, now: progress.done }}
-          >
-            <View style={[styles.progressFill, { width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }]} />
-          </View>
-          <View style={styles.headerRow}>
-            <Text style={styles.subtitle}>{progressText(progress.done, progress.total)}</Text>
-            <TouchableOpacity onPress={() => setShowSections(true)} accessibilityRole="button" accessibilityLabel="Show all sections">
-              <Text style={styles.headerLink}>All sections</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      ) : null}
-    </LinearGradient>
+    <FormHeader
+      title={`${kindLabel}${data ? ` · ${formatProjectCode(data.visit.visit.projectCode)}` : ''}`}
+      subtitle={data && screen ? `Section ${screenIndex + 1} of ${screens.length} · ${screen.title}` : null}
+      backLabel="‹ Back"
+      backA11yLabel="Back to the monitoring visit"
+      onBack={() => void back()}
+      topInset={insets.top}
+      progress={progress}
+      onShowSections={() => setShowSections(true)}
+    />
   );
 
   if (phase.kind === 'LOADING') {
@@ -411,19 +394,13 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
       <View style={styles.container}>
         <StatusBar style="light" />
         {header}
-        <View style={styles.body}>
-          <InfoCallout variant="warning" title={title} description={message} />
-          <TouchableOpacity style={[formStyles.secondaryButton, { marginTop: 12, alignSelf: 'flex-start' }]} onPress={() => void load()} accessibilityRole="button">
-            <Text style={formStyles.secondaryButtonText}>Try again</Text>
-          </TouchableOpacity>
-        </View>
+        <FormBlockedView title={title} message={message} onRetry={() => void load()} />
       </View>
     );
   }
 
   const block = data.form.snapshot.blocks[screen.index];
   const sectionIssues = check.byScreen.get(screen.key);
-  const isLast = screenIndex === screens.length - 1;
 
   return (
     <View style={styles.container}>
@@ -465,102 +442,42 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
           </View>
         )}
 
-        <Text style={styles.sectionTitle} accessibilityRole="header">
-          {screen.title}
-        </Text>
-        {screen.description ? <Text style={[formStyles.meta, { marginBottom: 8 }]}>{screen.description}</Text> : null}
-        {screen.kind === 'FACILITY' && screen.units.length > 0 ? (
-          <Text style={[formStyles.meta, { marginBottom: 8 }]}>
-            Units: {screen.units.map((u) => (u.plannedQuantity !== null ? `${u.label} (${u.plannedQuantity}${u.quantityUnit ? ` ${u.quantityUnit}` : ''})` : u.label)).join(', ')}
-          </Text>
-        ) : null}
-        {screen.isEmpty && <InfoCallout variant="neutral" title="Nothing to answer" description="This facility has no questions on this monitoring visit." />}
-
-        {block.fields.map((field) => (
-          <FormFieldCard
-            key={field.path}
-            field={field}
-            block={block}
-            answer={answerFor(draft.answers, field.path)}
-            issues={sectionIssues}
-            facts={editor.facts}
-            captures={editor.captures}
-            readOnly={readOnly}
-            timeZone={data.timeZone}
-            onValue={onValue}
-            onComment={onComment}
-            onTakePhoto={onTakePhoto}
-            onRetakePhoto={onRetakePhoto}
-            onRemoveCapture={onRemoveCapture}
-            onPickFromSiteLog={readOnly ? undefined : (f, slot) => void openPicker(f, slot)}
-            onVoiceRecorded={(f, r) => void onVoiceRecorded(f, r)}
-          />
-        ))}
-
-        {!readOnly && (
-          <Text style={[formStyles.meta, sectionIssues?.length ? { color: FORM_COLORS.error } : { color: FORM_COLORS.ok }]} accessibilityLiveRegion="polite">
-            {sectionIssues?.length ? `${sectionIssues.length} thing${sectionIssues.length === 1 ? '' : 's'} to fix in this section` : 'This section is complete'}
-          </Text>
-        )}
+        <FormSectionBody
+          screen={screen}
+          block={block}
+          answers={draft.answers}
+          issues={sectionIssues}
+          facts={editor.facts}
+          captures={editor.captures}
+          readOnly={readOnly}
+          timeZone={data.timeZone}
+          handlers={{
+            onValue,
+            onComment,
+            onTakePhoto,
+            onRetakePhoto,
+            onRemoveCapture,
+            onPickFromSiteLog: (f, slot) => void openPicker(f, slot),
+            onVoiceRecorded: (f, r) => void onVoiceRecorded(f, r),
+          }}
+        />
         {editor.saveError ? <Text style={formStyles.error}>Not saved: {editor.saveError}</Text> : null}
         {error ? <Text style={formStyles.error}>{error}</Text> : null}
 
-        <View style={[formStyles.row, { marginTop: 16 }]}>
-          {screenIndex > 0 && (
-            <TouchableOpacity style={formStyles.secondaryButton} onPress={() => goTo(screenIndex - 1)} accessibilityRole="button" accessibilityLabel="Previous section">
-              <Text style={formStyles.secondaryButtonText}>Previous</Text>
-            </TouchableOpacity>
-          )}
-          {!isLast ? (
-            <TouchableOpacity style={formStyles.primaryButton} onPress={() => goTo(screenIndex + 1)} accessibilityRole="button" accessibilityLabel="Next section">
-              <Text style={formStyles.primaryButtonText}>Next section</Text>
-            </TouchableOpacity>
-          ) : !readOnly ? (
-            <TouchableOpacity style={formStyles.primaryButton} onPress={() => void toReview()} accessibilityRole="button">
-              <Text style={formStyles.primaryButtonText}>Review and submit</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-        {!readOnly && <Text style={[formStyles.meta, { marginTop: 12 }]}>Saved on this phone as you go.</Text>}
+        <FormSectionNav screenIndex={screenIndex} count={screens.length} readOnly={readOnly} onGo={goTo} onReview={() => void toReview()} />
       </ScrollView>
 
-      <Modal visible={showSections} transparent animationType="fade" onRequestClose={() => setShowSections(false)}>
-        <View style={styles.backdrop}>
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]} accessibilityViewIsModal>
-            <Text style={styles.sectionTitle} accessibilityRole="header">
-              Sections
-            </Text>
-            <ScrollView style={{ maxHeight: 420 }}>
-              {screens.map((s, i) => {
-                const status = screenStatusText(check, s.key);
-                return (
-                  <TouchableOpacity
-                    key={s.key}
-                    style={[styles.sectionRow, i === screenIndex && styles.sectionRowOn]}
-                    onPress={() => goTo(i)}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: i === screenIndex }}
-                    accessibilityLabel={`Section ${i + 1}, ${s.title}, ${status}`}
-                  >
-                    <Text style={formStyles.label}>
-                      {i + 1}. {s.title}
-                    </Text>
-                    <Text style={[formStyles.meta, { color: status === 'Complete' ? FORM_COLORS.ok : FORM_COLORS.error }]}>{status}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-              {!readOnly && (
-                <TouchableOpacity style={styles.sectionRow} onPress={() => void toReview()} accessibilityRole="button">
-                  <Text style={formStyles.label}>Review and submit</Text>
-                </TouchableOpacity>
-              )}
-            </ScrollView>
-            <TouchableOpacity onPress={() => setShowSections(false)} accessibilityRole="button">
-              <Text style={formStyles.link}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <FormSectionsSheet
+        visible={showSections}
+        screens={screens}
+        check={check}
+        screenIndex={screenIndex}
+        readOnly={readOnly}
+        bottomInset={insets.bottom}
+        onGo={goTo}
+        onReview={() => void toReview()}
+        onClose={() => setShowSections(false)}
+      />
 
       <SiteEvidenceCameraModal visible={Boolean(camera)} title={camera?.title ?? 'Monitoring visit photo'} onSubmit={(b) => void onPhotos(b)} onClose={() => setCamera(null)} />
       <SiteLogPhotoPicker
@@ -580,21 +497,3 @@ export default function VisitFormScreen({ route, navigation }: RootStackScreenPr
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: FORM_COLORS.page },
-  header: { paddingHorizontal: 20, paddingBottom: 18 },
-  closeText: { fontSize: 13, color: '#B5DDD3', fontWeight: '700', marginBottom: 8, paddingVertical: 4 },
-  title: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 },
-  subtitle: { fontSize: 12, color: '#D7EEE8', marginTop: 4 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerLink: { fontSize: 12, color: '#FFFFFF', fontWeight: '800', marginTop: 4, paddingVertical: 4, textDecorationLine: 'underline' },
-  progressTrack: { height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.25)', marginTop: 10, overflow: 'hidden' },
-  progressFill: { height: 6, backgroundColor: '#FFFFFF' },
-  body: { padding: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '800', color: FORM_COLORS.text, marginBottom: 6 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.45)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
-  sectionRow: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
-  sectionRowOn: { backgroundColor: '#EEF7F4' },
-});

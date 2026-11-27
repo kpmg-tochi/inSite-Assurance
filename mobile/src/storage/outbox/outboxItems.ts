@@ -6,6 +6,7 @@ import type { VisitDraftStatus } from '../../utils/visitModel';
 import { deleteDraft, discardFailedResponse } from '../visitStore';
 import { discardIncident } from '../incidentStore';
 import { removeHeldCapture, resendHeldCapture } from '../heldItems';
+import { deleteVerificationDraft, verificationDraftStatuses } from '../needsVerificationStore';
 
 /**
  * Redesign R5e: the Outbox screen's reads and its removals. What may be removed is decided by the
@@ -38,6 +39,9 @@ export async function listOutboxItems(): Promise<OutboxItem[]> {
     );
     for (const d of found) draftStatuses.set(d.id, d.status as VisitDraftStatus);
   }
+  // Needs pipeline wave 5: verification drafts have the same statuses.
+  const verificationDraftIds = rows.filter((r) => r.kind === 'NEEDS_VERIFICATION_SUBMISSION').map((r) => r.entityId);
+  for (const [id, status] of await verificationDraftStatuses(verificationDraftIds)) draftStatuses.set(id, status);
   return rows.map((r) => ({
     id: r.id,
     projectId: r.projectId,
@@ -49,7 +53,7 @@ export async function listOutboxItems(): Promise<OutboxItem[]> {
     createdAt: r.createdAt,
     dependsOn: r.dependsOn,
     mediaType: r.kind === 'CAPTURE' ? mediaTypes.get(r.entityId) ?? null : null,
-    draftStatus: r.kind === 'VISIT_SUBMISSION' ? draftStatuses.get(r.entityId) ?? null : null,
+    draftStatus: r.kind === 'VISIT_SUBMISSION' || r.kind === 'NEEDS_VERIFICATION_SUBMISSION' ? draftStatuses.get(r.entityId) ?? null : null,
     visitId: r.kind === 'VISIT_RESPONSE' && typeof r.payload.visitId === 'string' ? r.payload.visitId : null,
   }));
 }
@@ -60,6 +64,9 @@ export async function removeOutboxItem(item: OutboxItem): Promise<void> {
   switch (action) {
     case 'DELETE_REFUSED_REPORT':
       await deleteDraft(item.entityId);
+      break;
+    case 'DELETE_REFUSED_VERIFICATION':
+      await deleteVerificationDraft(item.entityId);
       break;
     case 'DISCARD_RESPONSE':
       if (item.visitId) await discardFailedResponse(item.visitId, item.entityId);

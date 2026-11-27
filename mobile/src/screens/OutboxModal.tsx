@@ -8,6 +8,8 @@ import { EmptyStateCard, GradientHeaderLayout, InfoCallout, InSiteLoader, Pill, 
 import { IconButton } from '../components/inputs/Buttons';
 import { OutlineButton, SectionCard, visitUiStyles } from '../components/visit/VisitUi';
 import { useActiveBranding, useProfile } from '../context/ProfileContext';
+import { listNeedsVerifications } from '../storage/needsVerificationStore';
+import { verificationLabel, verificationScope } from '../utils/needsVerification';
 import { useOutboxStatus, useVisitData } from '../hooks/useVisitData';
 import { listOutboxItems, removeOutboxItem, resendHeldItem } from '../storage/outbox/outboxItems';
 import { retryOutboxItem, runOutbox } from '../storage/outbox/outboxProcessor';
@@ -47,13 +49,22 @@ export const OutboxModal: React.FC = () => {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data: items, loading, error, reload } = useVisitData(listOutboxItems, [], ['drafts', 'visits', 'siteLog', 'captures']);
+  const { data: items, loading, error, reload } = useVisitData(listOutboxItems, [], ['drafts', 'visits', 'siteLog', 'captures', 'verifications']);
+  // Needs pipeline wave 5: a verification's rows are grouped under its label.
+  const { data: verifications } = useVisitData(listNeedsVerifications, [], ['verifications']);
   // The list follows the outbox as it sends.
   useEffect(() => {
     reload();
   }, [status.pendingCount, status.deadCount, status.isSyncing, reload]);
 
-  const names = useMemo(() => new Map(projects.map((p) => [p.projectId, `${formatProjectCode(p.projectCodePrefix)} · ${p.projectName}`])), [projects]);
+  const names = useMemo(
+    () =>
+      new Map([
+        ...projects.map((p) => [p.projectId, `${formatProjectCode(p.projectCodePrefix)} · ${p.projectName}`] as [string, string]),
+        ...(verifications ?? []).map((v) => [verificationScope(v.id), verificationLabel(v.dto)] as [string, string]),
+      ]),
+    [projects, verifications]
+  );
   const groups = useMemo(() => groupOutboxItems(items ?? [], (id) => names.get(id) ?? null), [items, names]);
   const total = items?.length ?? 0;
 

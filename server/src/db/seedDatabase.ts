@@ -144,6 +144,10 @@ async function runSeed(): Promise<void> {
   // Needs pipeline (N1): children before parents. Deleted first, as cycles point at project types,
   // organisations and costing standards, and committee members and approval actions at users.
   // Projects lose their proposal link by the foreign key (SET NULL).
+  // Wave 5 (N8): field verifications (captures and submissions first).
+  await prisma.needsVerificationCapture.deleteMany();
+  await prisma.needsVerificationSubmission.deleteMany();
+  await prisma.needsVerification.deleteMany();
   await prisma.needsApprovalAction.deleteMany();
   await prisma.needsApprovalStep.deleteMany();
   await prisma.needsFundingRecord.deleteMany();

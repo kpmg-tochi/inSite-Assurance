@@ -22,7 +22,11 @@ export type OutboxKind =
   /** An Ad hoc visit built on the phone (entity = clientVisitId). */
   | 'UNSCHEDULED_VISIT'
   /** A site log photo, voice note or note (entity = clientEntryId); waits for its capture. */
-  | 'SITE_LOG_ENTRY';
+  | 'SITE_LOG_ENTRY'
+  // Needs pipeline wave 5 (N8): field verification of a proposed project (row project id = the
+  // verification's scope `needs-verification:<id>`, never a project).
+  /** A verification submission (entity = clientSubmissionId = draft id); waits for its captures. */
+  | 'NEEDS_VERIFICATION_SUBMISSION';
 
 /**
  * Redesign R5e (D-R5.10): kinds of the old app (workday reports, chat, Phase 14 inspections). Their
@@ -93,10 +97,20 @@ export const VISIT_ALREADY_SUBMITTED_MESSAGE =
 export const UNSCHEDULED_FORM_STALE_MESSAGE =
   'The Ad hoc form on this phone no longer matches the project forms, so the Ad hoc monitoring visit was not created. Refresh, then start the Ad hoc monitoring visit again.';
 
+/** Needs pipeline wave 5: fixed messages for a verification submission the server refused for good. */
+export const NEEDS_VERIFICATION_FORM_STALE_MESSAGE =
+  'The site verification form changed after it was downloaded, so it was not sent. Your answers are kept on this phone: open the site verification to move them onto the new form and submit again.';
+export const NEEDS_VERIFICATION_NOT_OPEN_MESSAGE =
+  'This site verification is no longer open (it was cancelled or already submitted), so it was not sent. It stays on this phone until you delete it.';
+export const NEEDS_VERIFICATION_NOT_ASSIGNED_MESSAGE =
+  'This site verification is no longer assigned to you, so it was not sent. It stays on this phone until you delete it.';
+
 /** Server codes with a fixed message for the person, shown instead of the raw server text. */
 const PERMANENT_CODE_MESSAGES: Record<string, string> = {
   FORM_SNAPSHOT_STALE: FORM_SNAPSHOT_STALE_MESSAGE,
   VISIT_ALREADY_SUBMITTED: VISIT_ALREADY_SUBMITTED_MESSAGE,
+  NEEDS_VERIFICATION_FORM_STALE: NEEDS_VERIFICATION_FORM_STALE_MESSAGE,
+  NEEDS_VERIFICATION_NOT_OPEN: NEEDS_VERIFICATION_NOT_OPEN_MESSAGE,
 };
 
 /**
@@ -121,6 +135,26 @@ export function failureMessage(error: ClassifiableError & { message?: string }, 
  * sent as it is. The draft is marked REFUSED and kept on the phone (D-R5.19, D-R5.20).
  */
 export const SUBMISSION_REFUSED_CODES: readonly string[] = ['FORM_SNAPSHOT_STALE', 'VISIT_ALREADY_SUBMITTED'];
+
+/**
+ * Needs pipeline wave 5: codes that mean a verification submission can never be sent as it is. The
+ * draft is marked REFUSED and kept on the phone (copy it onto the current form, or delete it). A 404
+ * (not the officer any more) is refused too: `isVerificationRefusal`.
+ */
+export const NEEDS_VERIFICATION_REFUSED_CODES: readonly string[] = ['NEEDS_VERIFICATION_FORM_STALE', 'NEEDS_VERIFICATION_NOT_OPEN', 'NEEDS_VERIFICATION_INVALID'];
+
+/** Whether a failed verification submission is a permanent refusal that marks the draft REFUSED. */
+export function isVerificationRefusal(error: ClassifiableError): boolean {
+  if (error.kind !== 'http') return false;
+  if (error.code && NEEDS_VERIFICATION_REFUSED_CODES.includes(error.code)) return true;
+  return error.status === 404;
+}
+
+/** The message stored on a refused verification draft (404 has its own wording). */
+export function verificationRefusalMessage(error: ClassifiableError & { message?: string }): string {
+  if (error.status === 404 && !(error.code && NEEDS_VERIFICATION_REFUSED_CODES.includes(error.code))) return NEEDS_VERIFICATION_NOT_ASSIGNED_MESSAGE;
+  return failureMessage(error, 'NEEDS_VERIFICATION_SUBMISSION');
+}
 
 export function classifyFailure(error: ClassifiableError): FailureClass {
   if (error.kind === 'auth') return 'AUTH_PAUSE';
@@ -253,4 +287,13 @@ export function visitSubmissionDependsOn(
     ...openRows(lookup, 'CAPTURE', params.captureIds),
     ...openRows(lookup, 'SITE_LOG_ENTRY', params.siteLogEntryIds),
   ];
+}
+
+/**
+ * Needs pipeline wave 5: a verification submission waits for every photo and voice note its answers
+ * name (each a CAPTURE row sent through the verification capture endpoints). Rows already sent are
+ * not waited for.
+ */
+export function needsVerificationSubmissionDependsOn(params: { captureIds: string[] }, lookup: OpenRowLookup): string[] {
+  return openRows(lookup, 'CAPTURE', params.captureIds);
 }

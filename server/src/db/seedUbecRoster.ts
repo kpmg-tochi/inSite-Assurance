@@ -287,6 +287,15 @@ export const NEEDS_PIPELINE_PEOPLE: Array<{ email: string; fullName: string; rol
   { email: KANO_COMMITTEE_EMAILS[2], fullName: "Yakubu Danjuma", roleCode: UBEC_ROLE.SUBEB_COMMITTEE, organization: "KANO_SUBEB", phoneNumber: "+234 803 555 0211" },
 ];
 
+/**
+ * Needs pipeline wave 5 (N8, owner decision): Matching Grants field verification is done by the SUBEB
+ * Director, Physical Planning, so kano.dpp@ also signs in on the field app. Its main role stays web only
+ * (the pipeline's grants); the separate mobile role (`User.mobileRoleId`, read by `effectiveMobileRole`)
+ * is the SUBEB M&E Officer role (surface BOTH). It opens no project on the phone: mobile project
+ * visibility follows the main role, which holds no project permission; verifications come by assignment.
+ */
+export const MOBILE_ROLE_BY_EMAIL: Record<string, string> = { [KANO_DPP_EMAIL]: UBEC_ROLE.SUBEB_ME };
+
 /** Creates the pipeline logins (password as the other seeded users). Runs once the organisations exist. */
 export async function seedNeedsPipelinePeople(
   db: Db,
@@ -294,6 +303,8 @@ export async function seedNeedsPipelinePeople(
 ): Promise<void> {
   for (const person of NEEDS_PIPELINE_PEOPLE) {
     const role = await db.role.findUniqueOrThrow({ where: { tenantId_code: { tenantId: p.tenantId, code: person.roleCode } } });
+    const mobileCode = MOBILE_ROLE_BY_EMAIL[person.email];
+    const mobileRole = mobileCode ? await db.role.findUniqueOrThrow({ where: { tenantId_code: { tenantId: p.tenantId, code: mobileCode } } }) : null;
     await db.user.create({
       data: {
         tenantId: p.tenantId,
@@ -301,6 +312,7 @@ export async function seedNeedsPipelinePeople(
         fullName: person.fullName,
         passwordHash: p.passwordHash,
         roleId: role.id,
+        mobileRoleId: mobileRole?.id ?? null,
         organizationId: person.organization === "UBEC" ? p.ubecOrganizationId : p.kanoSubebOrganizationId,
         phoneNumber: person.phoneNumber,
       },

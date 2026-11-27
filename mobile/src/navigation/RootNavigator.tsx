@@ -24,6 +24,9 @@ import { ProjectScreen } from "../screens/ProjectScreen";
 import { VisitScreen } from "../screens/VisitScreen";
 import VisitFormScreen from "../screens/visit/VisitFormScreen";
 import VisitReviewScreen from "../screens/visit/VisitReviewScreen";
+import { NeedsVerificationScreen } from "../screens/needsVerification/NeedsVerificationScreen";
+import NeedsVerificationFormScreen from "../screens/needsVerification/NeedsVerificationFormScreen";
+import NeedsVerificationReviewScreen from "../screens/needsVerification/NeedsVerificationReviewScreen";
 import { SiteLogScreen } from "../screens/SiteLogScreen";
 import DefectsScreen from "../screens/DefectsScreen";
 
@@ -81,6 +84,9 @@ export const RootNavigator: React.FC = () => {
         <Stack.Screen name="Visit" component={VisitScreen} />
         <Stack.Screen name="VisitForm" component={VisitFormScreen} />
         <Stack.Screen name="VisitReview" component={VisitReviewScreen} />
+        <Stack.Screen name="NeedsVerification" component={NeedsVerificationScreen} />
+        <Stack.Screen name="NeedsVerificationForm" component={NeedsVerificationFormScreen} />
+        <Stack.Screen name="NeedsVerificationReview" component={NeedsVerificationReviewScreen} />
         <Stack.Screen name="SiteLog" component={SiteLogScreen} />
         <Stack.Screen name="Defects" component={DefectsScreen} />
 

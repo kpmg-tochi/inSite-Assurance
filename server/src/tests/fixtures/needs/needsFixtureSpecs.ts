@@ -6,8 +6,8 @@ import {
   type ExistingCondition,
   type FacilityCriticality,
   type InterventionAction,
-  type SchoolLevel,
 } from '@insite/shared';
+import type { NeedsFileLine, NeedsFileRow, NeedsFileSite, NeedsFileSpec } from '../../../modules/needs/workbook/fillNeedsWorkbook';
 
 /**
  * Needs pipeline wave 2 (Track A): the content of every needs assessment fixture, as a person would
@@ -29,66 +29,11 @@ export const FIXTURE_STANDARD = CostingStandardSchema.parse(DEFAULT_COSTING_STAN
 export const DI_PROGRAMME = 'Direct Intervention';
 export const MG_PROGRAMME = 'Matching Grants';
 
-export interface FixtureSite {
-  siteNumber: number;
-  schoolName: string;
-  schoolLevel: SchoolLevel;
-  lgaCode: string;
-  address: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  enrolment: number | null;
-}
-
-export interface FixtureRow {
-  unitId: string;
-  siteNumber: number;
-  /** A facility code (written as its catalogue name) or any text (written as is). */
-  facility: string;
-  /** An action code (written as its label) or any text. */
-  action: InterventionAction | string;
-  existingQuantity: number | null;
-  condition: ExistingCondition;
-  requiredQuantity: number;
-  proposedQuantity: number | null;
-  unit: string;
-  preliminaryCostNgn: number | null;
-  justification: string;
-  priority: FacilityCriticality;
-  evidence: string | null;
-}
-
-export interface FixtureLine {
-  wbsCode: string;
-  unitId: string;
-  itemCode: string | null;
-  description: string;
-  unit: string;
-  quantity: number;
-  rate: number;
-}
-
-export interface NeedsFixtureSpec {
-  name: string;
-  programme: 'DI' | 'MG';
-  /** Parses without issues against the seeded context. */
-  valid: boolean;
-  project: {
-    title: string;
-    interventionYear: number;
-    /** State code; written as the State name. */
-    stateCode: string;
-    justification: string;
-    assumptions: string | null;
-    beneficiaries: string | null;
-    estimatedDurationMonths: number | null;
-  };
-  sites: FixtureSite[];
-  rows: FixtureRow[];
-  lines: FixtureLine[];
-  supervisionMonitoringPct: number;
-  contingencyPct: number;
-}
+// The spec types live with the filler (wave 5 moved them out of the tests); the fixture names stay.
+export type FixtureSite = NeedsFileSite;
+export type FixtureRow = NeedsFileRow;
+export type FixtureLine = NeedsFileLine;
+export type NeedsFixtureSpec = NeedsFileSpec;
 
 /** The standard's rate for an item in the State's zone (base rate × zone factor). */
 export function stdRate(itemCode: string, stateCode: string): number {

@@ -15,6 +15,7 @@ import { applyFlagFindings, computeFlagFindings } from './needsFlags.service';
 import { costingStandardById, distinctLgas, lockCostingStandardVersion, parsedOf, versionAmounts, type LoadedCostingStandard } from './needsSupport';
 import type { CycleRow } from './needsAccess';
 import { compareVersions, reopenAfterChange, reopenSentence, type Reopen } from './decisions/versionChange';
+import { overlayCurrentSiteCoordinates, reapplyAcceptedSiteCorrectionsInTx } from './verifications/siteCorrections';
 
 /**
  * Needs pipeline wave 2 (B5, B6, B9): writing proposals and versions, always inside the caller's
@@ -114,6 +115,8 @@ export async function replaceCurrentTables(tx: Tx, proposalId: string, parsed: P
       })),
     });
   }
+  // Wave 5 (N8): accepted field corrections survive a new version that still carries the old point.
+  await reapplyAcceptedSiteCorrectionsInTx(tx, proposalId);
 }
 
 export interface VersionFile {
@@ -238,7 +241,9 @@ export async function writeVersionInTx(
       proposalId: params.proposal.id,
       isLegacyTemplate: params.isLegacyTemplate,
     },
-    params.parsed
+    // Wave 5 review fix: the flags read the coordinates the site rows ended up with (accepted field
+    // corrections re-applied by replaceCurrentTables), not the file's uncorrected points.
+    await overlayCurrentSiteCoordinates(tx, params.proposal.id, params.parsed)
   );
   const flags = await applyFlagFindings(tx, {
     tenantId: params.tenantId,

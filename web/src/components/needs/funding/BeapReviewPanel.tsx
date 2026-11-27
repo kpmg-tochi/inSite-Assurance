@@ -16,6 +16,8 @@ import { ModalShell } from "../../common/ModalShell";
 import { dangerButton, primaryButton } from "../../contracts/contractUi";
 import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../../lib/forms";
 import { useBeapActionMutation, useReviewBeapItemsMutation } from "../../../mutations/needs/useFundingMutations";
+import { useCycleVerificationsQuery } from "../../../queries/needs/useVerificationQueries";
+import { BeapItemVerification } from "../verification/BeapItemVerification";
 import { cardCls, inputCls, labelCls, locationText, money, plural } from "../needsUi";
 import { ProposalLink, onLastStep, plannedText } from "./fundingUi";
 
@@ -25,6 +27,7 @@ import { ProposalLink, onLastStep, plannedText } from "./fundingUi";
  * included item: accept, comment or request removal (a comment is required unless accepted); then
  * approve the step, or return the BEAP to the SUBEB with notes. Approving the last step converts the
  * included proposed projects into draft projects owned by the SUBEB, lots and batches from the BEAP.
+ * Wave 5 (N8): per item, a site visit from the field app (assign, review) with `needs:review_beap`.
  */
 
 const ReviewFormSchema = z
@@ -46,6 +49,7 @@ const ReviewFormSchema = z
 
 export function BeapReviewPanel({ cycle, beap }: { cycle: NeedsCycleDto; beap: NeedsSubmissionDto }) {
   const review = useReviewBeapItemsMutation(cycle.id);
+  const verifications = useCycleVerificationsQuery(cycle.id).data ?? [];
   const [decision, setDecision] = useState<NeedsApprovalDecision | null>(null);
   const items = beap.items.filter((i) => i.included);
   const excluded = beap.items.filter((i) => !i.included);
@@ -129,6 +133,7 @@ export function BeapReviewPanel({ cycle, beap }: { cycle: NeedsCycleDto; beap: N
                     <FieldError form={form} name={`items.${n}.comment`} />
                   </div>
                 )}
+                <BeapItemVerification item={i} verifications={verifications} beapInReview={beap.status === "IN_REVIEW"} />
               </li>
             );
           })}

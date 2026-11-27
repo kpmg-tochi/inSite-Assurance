@@ -241,7 +241,9 @@ describe('demo wave 3: linking a project to its row (E3)', () => {
   });
 
   it('refuses the link to users who cannot edit project settings', async () => {
-    const res = await request(app).put(`/api/v1/projects/${ids.pKano}/approved-list-row`).set(await as(KANO)).send({ rowId: ids.rFree });
+    // Needs pipeline wave 4 follow-up (owner): the SUBEB Administrator now holds projects:edit_baseline
+    // (it completes its converted drafts), so the M&E officer stands for a user without it.
+    const res = await request(app).put(`/api/v1/projects/${ids.pKano}/approved-list-row`).set(await as(ME)).send({ rowId: ids.rFree });
     assert.equal(res.status, 403);
   });
 });

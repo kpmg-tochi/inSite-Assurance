@@ -178,6 +178,22 @@ export async function recordValidation(user: WebJwtPayload, proposalId: string, 
       if (input.outcome === 'ADVANCE' && config.requireSiteVerification && !input.siteVerification) {
         throw new AppError('Record the site verification before validating', 422, 'NEEDS_SITE_VERIFICATION_REQUIRED');
       }
+      // Wave 5 (N8): a field app verification names an ACCEPTED VALIDATION verification of this proposal.
+      if (input.siteVerification?.method === 'FIELD_APP') {
+        const accepted = input.siteVerification.verificationId
+          ? await tx.needsVerification.findFirst({
+              where: { id: input.siteVerification.verificationId, proposalId: proposal.id, purpose: 'VALIDATION', status: 'ACCEPTED' },
+              select: { versionId: true },
+            })
+          : null;
+        if (!accepted) {
+          throw new AppError('A field app site verification must name an accepted field verification of this proposed project', 422, 'NEEDS_VERIFICATION_NOT_ACCEPTED');
+        }
+        // Review fix (wave 5): it must have been made on the version being validated.
+        if (accepted.versionId !== proposal.currentVersionId) {
+          throw new AppError('This field verification was made on an earlier version: assign a new one', 422, 'NEEDS_VERIFICATION_STALE_VERSION');
+        }
+      }
       const evidenceIds = input.siteVerification?.evidenceDocumentIds ?? [];
       if (evidenceIds.length) {
         const docs = await tx.needsProposalDocument.findMany({ where: { proposalId: proposal.id }, select: { id: true, kind: true, supersedesId: true } });
@@ -234,7 +250,7 @@ export async function recordValidation(user: WebJwtPayload, proposalId: string, 
           recordId: record.id,
           versionNumber: record.version.number,
           outcome: input.outcome,
-          siteVerification: input.siteVerification ? { method: input.siteVerification.method, verifiedOn: input.siteVerification.verifiedOn } : null,
+          siteVerification: input.siteVerification ? { method: input.siteVerification.method, verifiedOn: input.siteVerification.verifiedOn, verificationId: input.siteVerification.verificationId ?? null } : null,
           flagIds: resolutions.map((r) => r.flag.id),
         },
       });

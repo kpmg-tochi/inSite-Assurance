@@ -87,7 +87,7 @@ describe('Redesign R3b: form library provisioning', () => {
     const res = await request(app).post('/api/v1/rbac/tenants').set(await web(ADMIN)).send({ name: 'R3 Forms Tenant', slug: 'r3-forms' });
     assert.equal(res.status, 201, JSON.stringify(res.body));
     const tenantId = res.body.data.id as string;
-    assert.equal(await prisma.formSection.count({ where: { tenantId } }), 10);
+    assert.equal(await prisma.formSection.count({ where: { tenantId } }), 12);
     assert.equal(await prisma.facilitySubForm.count({ where: { tenantId } }), 4);
     assert.equal(await prisma.visitFormTemplate.count({ where: { tenantId } }), 7);
     await prisma.visitFormTemplate.deleteMany({ where: { tenantId } });

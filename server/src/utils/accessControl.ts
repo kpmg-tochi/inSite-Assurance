@@ -261,3 +261,23 @@ export function projectIdForFieldWrite(req: Request): string {
   }
   return fieldAgent.projectId;
 }
+
+/**
+ * Needs pipeline wave 5 (N8): access to a field verification is by assignment, not by project or
+ * field session (there is no project yet). The caller (a provisioned mobile account or a web user)
+ * must be the verification's officer in the same tenant; anything else, including a missing row, is
+ * 404 NEEDS_VERIFICATION_NOT_FOUND so the phone cannot probe other officers' work. A mobile account
+ * that has lost its mobile role is refused with 403 NO_MOBILE_ACCESS.
+ */
+export function assertVerificationOfficer<T extends { tenantId: string; officerUserId: string }>(
+  principal: { userId: string; tenantId: string; tokenType: string; mobileRoleId?: string | null },
+  verification: T | null | undefined
+): T {
+  if (principal.tokenType === 'MOBILE_USER' && !principal.mobileRoleId) {
+    throw new AppError('Your account does not have mobile access. Ask your administrator to give you a mobile role.', 403, 'NO_MOBILE_ACCESS');
+  }
+  if (!verification || verification.tenantId !== principal.tenantId || verification.officerUserId !== principal.userId) {
+    throw new AppError('Field verification not found', 404, 'NEEDS_VERIFICATION_NOT_FOUND');
+  }
+  return verification;
+}

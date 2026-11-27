@@ -3,21 +3,27 @@
  * seeded UBEC tenant with the seeded logins (`saas_updates/demo_pack/README.md`). Dates are relative to
  * the day the test runs.
  *
- * 1. admin@ creates the Direct Intervention draft, imports the demo needs assessment (preview +
- *    confirm), saves the setup sections (contractor typed as a new organisation, team, Resident
+ * 0. From need to project (needs pipeline wave 5, M5): procurement@ uploads the demo pack's needs
+ *    assessments into the open Direct Intervention cycle (one refused with row errors); finance@ imports
+ *    the demo pack's appropriated schedule for the three proposals the seed left at Funding (preview +
+ *    confirm): each becomes a draft with origin NEEDS_PIPELINE and its sites, units and BoQ from the needs
+ *    assessment; procurement@ puts the demo project (Y-DI-001, Dawakin Tofa) in a new lot.
+ * 1. admin@ sets the work phases on that converted draft and places its units in them (nothing else is
+ *    typed again: sites, units and lines came from the needs assessment).
+ * 2. admin@ saves the setup sections (contractor typed as a new organisation, team, Resident
  *    Supervisor as visit officer), files the contract documents and activates.
- * 2. Kick-off today: briefing pack, notice with a short-notice reason, held with quorum, minutes
+ * 3. Kick-off today: briefing pack, notice with a short-notice reason, held with quorum, minutes
  *    signed by the owner and the M&E officer; mobilisation documents filed and signed.
- * 3. The proposed mobilisation check is moved to today by me.officer@, published to the Resident
+ * 4. The proposed mobilisation check is moved to today by me.officer@, published to the Resident
  *    Supervisor, who confirms, checks in and submits "Contractor on site: Yes" on the phone;
  *    me.officer@ approves it and the contractor-on-site milestone is done.
- * 4. me.officer@ plans an Ad hoc visit for independent.me@ (Toilet picked); on the phone, "PPE worn by
+ * 5. me.officer@ plans an Ad hoc visit for independent.me@ (Toilet picked); on the phone, "PPE worn by
  *    all workers" = No (photo) raises a finding when me.officer@ approves; the next routine visit,
  *    once published, re-checks it.
- * 5. Completion and closure on the live project: completion notice, final evaluation visit (re-check
+ * 6. Completion and closure on the live project: completion notice, final evaluation visit (re-check
  *    resolved), CoC (two signatures + the beneficiary's paper copy), handover recorded by one user and
  *    reviewed by another (SAME_PERSON_REVIEW), liability period, then what closing needs.
- * 6. The seeded twins: PRG-104 (CoC and handover to finish) and PRG-106 (liability period over:
+ * 7. The seeded twins: PRG-104 (CoC and handover to finish) and PRG-106 (liability period over:
  *    close, closeout report, archive, closure pack).
  */
 import { resetTestDatabase } from './helpers/testDb';
@@ -36,7 +42,9 @@ import {
   type VisitFormSnapshot,
   zonedCalendarDate,
 } from '@insite/shared';
-import { DEMO_LINES, DEMO_PROJECT, DEMO_UNITS, demoDates, demoDocumentContext, demoWorkbookData } from '../scripts/demoProject';
+import { DEMO_LINES, DEMO_PROJECT, DEMO_UNITS, demoDates, demoDocumentContext } from '../scripts/demoProject';
+import { buildDemoAppropriatedSchedule, buildDemoNeedsUploads } from '../scripts/demoNeeds';
+import { diReference, DI_FUNDING_SEQUENCES, needsOpenYear } from '../db/needsSeedSpecs';
 
 type PrismaClientType = typeof import('../config/prisma')['prisma'];
 
@@ -330,63 +338,128 @@ after(async () => {
 });
 
 describe('UBEC demo: Direct Intervention, live', () => {
-  it('1. the administrator creates the draft and imports the needs assessment', async () => {
-    const created = await request(app).post('/api/v1/projects').set(await web(ADMIN)).send({
-      name: DEMO_PROJECT.name,
-      codePrefix: DEMO_PROJECT.code,
-      stateLocation: DEMO_PROJECT.stateLocation,
-      totalBudgetNgn: DEMO_PROJECT.budgetNgn,
-      projectTypeId: ids.central,
-      regionId: ids.kano,
-    });
-    assert.equal(created.status, 201, JSON.stringify(created.body));
-    ids.project = created.body.data.projectId;
-    // Needs pipeline wave 4 (D-N.13): a project of a pipeline programme goes live only with an origin. This
-    // walk predates the pipeline (wave 5 rewrites the demo through it), so the draft is marked LEGACY.
-    await prisma.project.update({ where: { id: ids.project }, data: { origin: 'LEGACY' } });
+  it('0. from need to project: the needs assessments upload into the open cycle; finance@ imports the appropriated schedule; the converted drafts carry the needs assessment; procurement@ assigns a lot', async () => {
+    const N = '/api/v1/needs';
+    const year = needsOpenYear(today);
+    const cycle = await prisma.needsCycle.findFirstOrThrow({ where: { tenantId: ids.tenant, projectTypeId: ids.central, interventionYear: year, status: 'OPEN' } });
+    ids.diCycle = cycle.id;
 
-    const { buildScopeWorkbook } = await import('../modules/scope/workbook/scopeWorkbook');
-    const file = (await buildScopeWorkbook(demoWorkbookData(today))).toString('base64');
-    const preview = await request(app).post(url('/scope/import/preview')).set(await web(ADMIN)).send({ fileBase64: file, fileName: 'Dawakin Tofa needs assessment.xlsx' });
+    // The demo pack's needs assessments: one file and a batch of five (the fourth refused with row errors).
+    const uploads = await buildDemoNeedsUploads(today);
+    const files = uploads.map((u) => ({ fileName: u.fileName, fileBase64: u.buffer.toString('base64'), proposalId: null }));
+    const preview = await request(app).post(`${N}/cycles/${cycle.id}/uploads/preview`).set(await web('procurement@ubec.test')).send({ files });
     assert.equal(preview.status, 200, JSON.stringify(preview.body));
-    const p = preview.body.data;
-    assert.deepEqual(p.issues, []);
-    assert.equal(p.canConfirm, true);
-    assert.equal(p.totals.unitCount, DEMO_UNITS.length);
-    assert.equal(p.totals.lineCount, DEMO_LINES.length);
-    assert.equal(p.totals.amountNgn, 44_275_000);
-    const fills = (p.projectChanges as Array<{ field: string; action: string }>).filter((c) => c.action === 'FILL').map((c) => c.field).sort();
-    assert.deepEqual(fills, ['geofence', 'lgaLocation', 'school', 'siteAddress', 'strategicJustification', 'assumptions', 'interventionYear', 'fundingSource'].sort());
+    const confirmed = await request(app)
+      .post(`${N}/cycles/${cycle.id}/uploads/confirm`)
+      .set(await web('procurement@ubec.test'))
+      .send({ files: files.map((f, i) => ({ ...f, sha256: (preview.body.data.files as Array<{ sha256: string }>)[i].sha256 })) });
+    assert.equal(confirmed.status, 201, JSON.stringify(confirmed.body));
+    const results = confirmed.body.data.files as Array<{ outcome: string; issues: Array<{ row: number | null; column: string | null }> }>;
+    assert.deepEqual(results.map((r) => r.outcome), uploads.map((u) => (u.spec.valid ? 'CREATED' : 'REFUSED')));
+    const refused = results.find((r) => r.outcome === 'REFUSED')!;
+    assert.ok(refused.issues.some((i) => i.row !== null && i.column !== null), JSON.stringify(refused.issues));
+    const created = await prisma.needsProposal.findMany({ where: { cycleId: cycle.id, title: { in: uploads.filter((u) => u.spec.valid).map((u) => u.spec.project.title) } }, include: { flags: true } });
+    assert.equal(created.length, 5);
+    assert.deepEqual(created.flatMap((p) => p.flags.filter((fl) => fl.kind === 'DUPLICATE')), [], 'the pack files duplicate no seeded proposal');
 
-    const confirm = await request(app).post(url('/scope/import/confirm')).set(await web(ADMIN)).send({ fileBase64: file, sha256: p.sha256 });
-    assert.equal(confirm.status, 200, JSON.stringify(confirm.body));
-    const scope = await request(app).get(url('/scope')).set(await web(ADMIN));
-    assert.equal(scope.body.data.sprints.length, 2);
-    assert.equal(scope.body.data.sprints[0].startDate, dates.sprints[0].startDate);
-    assert.equal(scope.body.data.units.length, 3);
+    // Funding: the three proposals the approved portfolio left at Funding wait for the appropriation.
+    const references = DI_FUNDING_SEQUENCES.map((n) => diReference(year, n));
+    const funding = await request(app).get(`${N}/cycles/${cycle.id}/funding`).set(await web('finance@ubec.test'));
+    assert.equal(funding.status, 200, JSON.stringify(funding.body));
+    assert.deepEqual((funding.body.data.awaiting as Array<{ reference: string }>).map((a) => a.reference), references);
+
+    const schedule = await buildDemoAppropriatedSchedule(today);
+    const body = { fileName: `Appropriated schedule ${year}.xlsx`, fileBase64: schedule.buffer.toString('base64') };
+    const previewed = await request(app).post(`${N}/cycles/${cycle.id}/funding/appropriation/preview`).set(await web('finance@ubec.test')).send(body);
+    assert.equal(previewed.status, 200, JSON.stringify(previewed.body));
+    assert.equal(previewed.body.data.canConfirm, true, JSON.stringify(previewed.body.data));
+    assert.deepEqual(previewed.body.data.notFunded, []);
+    const result = await request(app)
+      .post(`${N}/cycles/${cycle.id}/funding/appropriation/confirm`)
+      .set(await web('finance@ubec.test'))
+      .send({ ...body, sha256: crypto.createHash('sha256').update(schedule.buffer).digest('hex'), appropriatedOn: today });
+    assert.equal(result.status, 201, JSON.stringify(result.body));
+    const converted = result.body.data.converted as Array<{ reference: string; projectId: string }>;
+    assert.deepEqual(converted.map((c) => c.reference), references);
+    for (const row of schedule.rows) {
+      const p = await prisma.needsProposal.findFirstOrThrow({ where: { tenantId: ids.tenant, reference: row.reference }, include: { project: true } });
+      assert.equal(p.status, 'CONVERTED');
+      assert.equal(p.project?.origin, 'NEEDS_PIPELINE');
+      assert.equal(Number(p.fundedAmountNgn), row.appropriatedNgn);
+      assert.equal(Number(p.project?.totalBudgetNgn), row.appropriatedNgn);
+    }
+
+    // The demo project: sites, units and BoQ from the needs assessment, nothing typed again.
+    ids.project = converted[0].projectId;
+    const draft = await prisma.project.findUniqueOrThrow({ where: { id: ids.project }, include: { sites: { orderBy: { siteNumber: 'asc' } }, facilityUnits: { include: { facility: true } }, boqItems: true } });
+    assert.equal(draft.status, 'DRAFT');
+    assert.equal(draft.codePrefix, references[0], 'the reference is the code until a lot is assigned');
+    assert.equal(draft.name, DEMO_PROJECT.name);
+    assert.deepEqual(draft.sites.map((st) => [st.siteNumber, st.schoolName]), [[1, 'Government Primary School, Dawakin Tofa'], [2, 'LGEA Primary School, Kwa'], [3, 'Government Junior Secondary School, Tofa']]);
+    assert.deepEqual(draft.facilityUnits.map((u) => [u.code, u.facility.code]).sort(), DEMO_UNITS.map((u) => [u.code, u.facilityCode]).sort());
+    assert.equal(draft.boqItems.length, DEMO_LINES.length);
+    assert.equal(draft.boqItems.reduce((sum, l) => sum + Number(l.budgetedCostNgn), 0), 44_275_000);
+
+    // Procurement plan: procurement@ opens a lot for it (LOT n BATCH 1).
+    const plan = await request(app)
+      .post(`${N}/cycles/${cycle.id}/procurement-plan/lots`)
+      .set(await web('procurement@ubec.test'))
+      .send({ items: [{ projectId: ids.project, lotChoice: { newLotTitle: DEMO_PROJECT.lotTitle } }] });
+    assert.equal(plan.status, 200, JSON.stringify(plan.body));
+    const planned = (plan.body.data.rows as Array<{ projectId: string; lotNumber: number | null; batchNumber: number | null; projectCode: string }>).find((r) => r.projectId === ids.project)!;
+    assert.equal(planned.batchNumber, 1);
+    assert.equal(planned.projectCode, `LOT ${planned.lotNumber} BATCH 1`);
+    const coded = await prisma.project.findUniqueOrThrow({ where: { id: ids.project } });
+    assert.equal(coded.codePrefix, `${year}-LOT-${planned.lotNumber}-BATCH-1`);
+  });
+
+  it('1. the work phases are set on the converted draft and its units placed in them', async () => {
+    const h = await web(ADMIN);
+    const saved = await request(app)
+      .put(url('/scope/sprints'))
+      .set(h)
+      .send({ sprints: dates.sprints.map((sp) => ({ name: sp.name, startDate: sp.startDate, endDate: sp.endDate, deliverables: sp.deliverables })) });
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+    type Scope = { sprints: Array<{ id: string; number: number; startDate: string }>; units: Array<{ id: string; code: string; startSprintId: string | null; endSprintId: string | null }> };
+    let scope = (await request(app).get(url('/scope')).set(h)).body.data as Scope;
+    assert.equal(scope.sprints.length, 2);
+    assert.equal(scope.sprints[0].startDate, dates.sprints[0].startDate);
+    const sprintId = (n: number) => scope.sprints.find((sp) => sp.number === n)!.id;
+    for (const u of DEMO_UNITS) {
+      const unit = scope.units.find((x) => x.code === u.code)!;
+      const res = await request(app).patch(url(`/scope/units/${unit.id}`)).set(h).send({ startSprintId: sprintId(u.startSprint!), endSprintId: sprintId(u.endSprint!) });
+      assert.equal(res.status, 200, JSON.stringify(res.body));
+    }
+    scope = (await request(app).get(url('/scope')).set(h)).body.data as Scope;
+    assert.equal(scope.units.length, 3);
+    assert.ok(scope.units.every((u) => u.startSprintId && u.endSprintId));
   });
 
   it('2. setup: contractor (new organisation), contract, team, the Resident Supervisor as visit officer; contract documents; activation', async () => {
     const h = await web(ADMIN);
     let dto = (await request(app).get(url('/setup')).set(h)).body.data;
-    assert.equal(dto.site.geofence?.mode, 'RADIAL', JSON.stringify(dto.site));
-    assert.equal(dto.basics.lgaLocation, DEMO_PROJECT.lga);
+    // The converted draft keeps its code (the lot), its funded budget and its sites; the project's own
+    // boundary is drawn on the first school when the conversion left none.
+    const beneficiaries = dto.parties.beneficiaries as Array<{ id?: string; name: string }>;
     const bodies: Record<string, unknown> = {
-      basics: { name: DEMO_PROJECT.name, codePrefix: DEMO_PROJECT.code, stateLocation: DEMO_PROJECT.stateLocation, lgaLocation: DEMO_PROJECT.lga, totalBudgetNgn: DEMO_PROJECT.budgetNgn, projectTypeId: ids.central, regionId: ids.kano },
+      basics: { name: DEMO_PROJECT.name, codePrefix: dto.basics.codePrefix, stateLocation: DEMO_PROJECT.stateLocation, lgaLocation: DEMO_PROJECT.lga, totalBudgetNgn: dto.basics.totalBudgetNgn, projectTypeId: ids.central, regionId: ids.kano },
       parties: {
         owningOrganizationId: dto.parties.owningOrganization?.id ?? null,
         monitorOrganization: { id: ids.meOrg },
         lenderOrganization: dto.parties.lenderOrganization ? { id: dto.parties.lenderOrganization.id } : null,
-        beneficiaries: (dto.parties.beneficiaries as Array<{ id: string; name: string }>).map((b) => ({
-          id: b.id,
+        beneficiaries: (beneficiaries.length ? beneficiaries : [{ name: DEMO_PROJECT.school }]).map((b, i) => ({
+          ...(b.id ? { id: b.id } : {}),
           name: b.name,
           beneficiaryType: 'SCHOOL',
           contactName: DEMO_PROJECT.headTeacher,
-          isPrimary: true,
+          isPrimary: i === 0,
         })),
       },
-      // The import drew a radial boundary of the workspace default radius on the workbook's GPS point.
-      site: { geofence: dto.site.geofence, geofenceToleranceMeters: null, timezone: 'Africa/Lagos' },
+      site: {
+        geofence: dto.site.geofence ?? { mode: 'RADIAL', siteLabel: DEMO_PROJECT.school, center: SITE, radiusMeters: 150 },
+        geofenceToleranceMeters: null,
+        timezone: 'Africa/Lagos',
+      },
       // Client demo updates C2 (wave 2): the sites section saves the list as it is (empty for a one-site project).
       sites: {
         sites: ((dto.sites?.sites ?? []) as Array<Record<string, unknown>>).map((s) => ({

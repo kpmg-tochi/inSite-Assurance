@@ -38,6 +38,11 @@ export interface CaptureRecord {
   localDeletedAt: string | null;
   /** Original clientCaptureId when this re-submits a capture from an ended session. */
   resubmittedFrom: string | null;
+  /**
+   * Needs pipeline wave 5: the verification this photo or voice note belongs to (`projectId` then
+   * holds the verification's outbox scope); the CAPTURE handler sends it to the verification endpoints.
+   */
+  verificationId: string | null;
 }
 
 type Row = {
@@ -67,6 +72,7 @@ type Row = {
   registered_at: string | null;
   local_deleted_at: string | null;
   resubmitted_from: string | null;
+  verification_id?: string | null;
 };
 
 function map(r: Row): CaptureRecord {
@@ -107,6 +113,7 @@ function map(r: Row): CaptureRecord {
     registeredAt: r.registered_at,
     localDeletedAt: r.local_deleted_at,
     resubmittedFrom: r.resubmitted_from ?? null,
+    verificationId: r.verification_id ?? null,
   };
 }
 
@@ -130,6 +137,11 @@ export interface NewCaptureInput {
   /** UBEC IRL: the compass heading at the shutter, or null/absent when there was none. */
   heading?: HeadingReading | null;
   capturedAt: string;
+  /**
+   * Needs pipeline wave 5: a verification's capture. Pass `projectId: verificationScope(id)`; the
+   * device signature names the verification id where a project capture names its project.
+   */
+  verificationId?: string | null;
 }
 
 export async function saveCapture(input: NewCaptureInput): Promise<CaptureRecord> {
@@ -150,7 +162,7 @@ export async function saveCapture(input: NewCaptureInput): Promise<CaptureRecord
   const signature = await signWithDeviceKey(
     canonicalCaptureString({
       clientCaptureId: id,
-      projectId: input.projectId,
+      projectId: input.verificationId ?? input.projectId,
       mediaType: input.mediaType,
       sha256,
       byteSize,
@@ -169,8 +181,8 @@ export async function saveCapture(input: NewCaptureInput): Promise<CaptureRecord
       `INSERT INTO captures (id, project_id, media_type, mime_type, local_path, byte_size,
          sha256, duration_seconds, caption, latitude, longitude, accuracy_meters, altitude_meters,
          is_mocked, location_available, captured_at, signature, upload_status, created_at,
-         heading_degrees, heading_reference, heading_accuracy_level)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'LOCAL', ?, ?, ?, ?)`,
+         heading_degrees, heading_reference, heading_accuracy_level, verification_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'LOCAL', ?, ?, ?, ?, ?)`,
       [
         id,
         input.projectId,
@@ -193,6 +205,7 @@ export async function saveCapture(input: NewCaptureInput): Promise<CaptureRecord
         input.heading?.degrees ?? null,
         input.heading?.reference ?? null,
         input.heading?.accuracyLevel ?? null,
+        input.verificationId ?? null,
       ]
     );
     await enqueue(db, { projectId: input.projectId, kind: 'CAPTURE', entityId: id });

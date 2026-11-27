@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
-import { AlertTriangle, CheckCircle2, FilePlus2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FilePlus2, Smartphone } from "lucide-react";
 import {
   FLAG_RESOLUTIONS_BY_KIND,
   NEEDS_OPEN_PROPOSAL_STATUSES,
@@ -16,6 +16,7 @@ import {
   type ProposalFlagResolution,
   type SiteVerificationMethod,
   type StageOutcome,
+  type SiteVerification,
 } from "@insite/shared";
 import { CustomSelect } from "../../common/CustomSelect";
 import { FieldError, SubmitButton, fieldA11y, invalidClass, useZodForm } from "../../../lib/forms";
@@ -25,6 +26,9 @@ import { getProposalDocumentLink } from "../../../api/needsPipeline";
 import { useNeedsProposalsQuery } from "../../../queries/needs/useNeedsQueries";
 import { useOpenNeedsFileMutation } from "../../../mutations/needs/useNeedsMutations";
 import { useRecordValidationMutation } from "../../../mutations/needs/useDecisionMutations";
+import { useProposalVerificationsQuery } from "../../../queries/needs/useVerificationQueries";
+import { FieldVerificationCard } from "../verification/FieldVerificationCard";
+import { VerificationReviewDrawer } from "../verification/VerificationReviewDrawer";
 import { NeedsDocumentDialog } from "../NeedsDocumentDialog";
 import { EmptyPanel, cardCls, inputCls, labelCls, stageLabel, todayInTenant } from "../needsUi";
 import { outcomeLabel, separationCodeOf, SEPARATION_ACTION_FOR_CODE } from "./decisionUi";
@@ -37,6 +41,8 @@ import { AskOverrideDialog, overrideFlagsOf } from "./SeparationOverride";
  * the open validation flags with their facts, and the form to record one on the current version
  * (`POST /proposals/:id/validation`). The record is the validator's finding; the stage decision then
  * moves the proposal (an ADVANCE decision needs an ADVANCE record on the current version).
+ * Wave 5 (N8): the Field verification card (assign, cancel, review), and "Use the field verification"
+ * fills the site verification from an accepted VALIDATION verification (method FIELD_APP).
  */
 
 const VALIDATION_FLAG_KINDS = new Set(["DUPLICATE", "ESSENTIAL_FACILITY_GAP"]);
@@ -44,7 +50,7 @@ const EVIDENCE_KINDS: readonly ProposalDocumentKind[] = ["SITE_VERIFICATION_EVID
 
 const METHOD_LABELS: Record<SiteVerificationMethod, string> = {
   WEB_EVIDENCE: "Evidence uploaded on the web",
-  FIELD_APP: "Visit with the field app",
+  FIELD_APP: "Field app visit",
 };
 
 const RECORD_OUTCOMES = ["ADVANCE", "RETURN", "NOT_VALIDATED"] as const;
@@ -65,6 +71,7 @@ function buildFormSchema(requireSite: boolean) {
       officerName: z.string(),
       siteNotes: z.string().max(4000, "At most 4,000 characters"),
       evidenceDocumentIds: z.array(z.string()),
+      verificationId: z.string().nullable(),
       resolutions: z.array(z.object({ flagId: z.string(), resolution: z.string(), reason: z.string(), mergeIntoProposalId: z.string() })),
     })
     .superRefine((v, ctx) => {
@@ -74,6 +81,7 @@ function buildFormSchema(requireSite: boolean) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(v.verifiedOn)) issue(["verifiedOn"], "Choose the date of the verification");
         else if (v.verifiedOn > todayInTenant()) issue(["verifiedOn"], "The verification cannot be in the future");
         if (v.officerName.trim().length < 2) issue(["officerName"], "Enter the name of the officer who verified the site");
+        if (v.method === "FIELD_APP" && !v.verificationId) issue(["method"], "Use an accepted field verification, or choose evidence uploaded on the web");
       }
       v.resolutions.forEach((r, i) => {
         if (!r.resolution) {
@@ -130,6 +138,8 @@ export function ProposalValidationTab({
           )}
         </section>
 
+        <FieldVerificationCard proposal={proposal} writable={writable} />
+
         <section className={cardCls} aria-labelledby="validation-flags">
           <h3 id="validation-flags" className="text-sm font-bold text-slate-900">
             Possible duplicates and essential facilities
@@ -175,6 +185,7 @@ export function ProposalValidationTab({
 
 function RecordView({ proposal }: { proposal: NeedsProposalDetailDto }) {
   const record = proposal.validation!;
+  const [openVerification, setOpenVerification] = useState<string | null>(null);
   const openFile = useOpenNeedsFileMutation();
   const docName = new Map(proposal.documents.map((d) => [d.id, d.title]));
   const flagLabel = new Map(proposal.flags.map((f) => [f.id, f.label]));
@@ -206,6 +217,11 @@ function RecordView({ proposal }: { proposal: NeedsProposalDetailDto }) {
         {site ? (
           <dd className="text-slate-800">
             {METHOD_LABELS[site.method]} on {formatDateShort(site.verifiedOn)} by {site.officerName}
+            {site.verificationId && (
+              <button type="button" className="ml-1 font-semibold text-brand-primary hover:underline" onClick={() => setOpenVerification(site.verificationId)}>
+                Open the field verification
+              </button>
+            )}
             {site.notes && <span className="block whitespace-pre-line text-slate-600">{site.notes}</span>}
             {site.evidenceDocumentIds.length > 0 && (
               <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
@@ -242,6 +258,7 @@ function RecordView({ proposal }: { proposal: NeedsProposalDetailDto }) {
           </dd>
         </div>
       )}
+      {openVerification && <VerificationReviewDrawer verificationId={openVerification} onClose={() => setOpenVerification(null)} />}
     </dl>
   );
 }
@@ -263,6 +280,15 @@ function RecordForm({
   const requireSite = cycle?.config.requireSiteVerification ?? true;
   const schema = useMemo(() => buildFormSchema(requireSite), [requireSite]);
   const save = useRecordValidationMutation(proposal.cycleId, proposal.id);
+  const verificationsQuery = useProposalVerificationsQuery(proposal.id);
+  // The newest accepted VALIDATION verification gives the pre-filled site verification.
+  const accepted = useMemo(
+    () =>
+      [...(verificationsQuery.data ?? [])]
+        .filter((v) => v.purpose === "VALIDATION" && v.status === "ACCEPTED" && v.siteVerificationDraft)
+        .sort((a, b) => (b.submission?.reviewedAt ?? b.assignedAt).localeCompare(a.submission?.reviewedAt ?? a.assignedAt))[0] ?? null,
+    [verificationsQuery.data]
+  );
   const [uploading, setUploading] = useState(false);
   const [asking, setAsking] = useState<NeedsSeparationErrorCode | null>(null);
   const [requestError, setRequestError] = useState<string | null>(null);
@@ -285,12 +311,36 @@ function RecordForm({
       officerName: user?.fullName ?? "",
       siteNotes: "",
       evidenceDocumentIds: [],
+      verificationId: null,
       resolutions: openFlags.map((f) => ({ flagId: f.id, resolution: "", reason: "", mergeIntoProposalId: "" })),
     },
   });
   const outcome = form.watch("outcome");
   const withSite = form.watch("withSite");
   const method = form.watch("method");
+  const verificationId = form.watch("verificationId");
+
+  const touchOpts = { shouldValidate: true, shouldDirty: true, shouldTouch: true } as const;
+  /** Fills the site verification from the accepted field verification (notes stay editable). */
+  const applyFieldVerification = () => {
+    const d: SiteVerification | null = accepted?.siteVerificationDraft ?? null;
+    if (!accepted || !d) return;
+    form.setValue("withSite", true, touchOpts);
+    form.setValue("method", "FIELD_APP", touchOpts);
+    form.setValue("verificationId", accepted.id, touchOpts);
+    form.setValue("verifiedOn", d.verifiedOn, touchOpts);
+    form.setValue("officerName", d.officerName, touchOpts);
+    form.setValue("siteNotes", d.notes ?? "", touchOpts);
+    form.setValue("evidenceDocumentIds", [...new Set([...form.getValues("evidenceDocumentIds"), ...d.evidenceDocumentIds])], touchOpts);
+  };
+  const chooseMethod = (m: SiteVerificationMethod) => {
+    if (m === "FIELD_APP") {
+      applyFieldVerification();
+      return;
+    }
+    form.setValue("method", m, touchOpts);
+    form.setValue("verificationId", null, touchOpts);
+  };
   const evidence = form.watch("evidenceDocumentIds");
   const resolutions = form.watch("resolutions");
 
@@ -318,7 +368,14 @@ function RecordForm({
       outcome: v.outcome,
       deskNotes: v.deskNotes,
       siteVerification: v.withSite
-        ? { method: v.method, verifiedOn: v.verifiedOn, officerName: v.officerName.trim(), notes: v.siteNotes.trim() || null, evidenceDocumentIds: v.evidenceDocumentIds }
+        ? {
+            method: v.method,
+            verifiedOn: v.verifiedOn,
+            officerName: v.officerName.trim(),
+            notes: v.siteNotes.trim() || null,
+            evidenceDocumentIds: v.evidenceDocumentIds,
+            verificationId: v.method === "FIELD_APP" ? v.verificationId : null,
+          }
         : null,
       flagResolutions: v.resolutions
         .filter((r) => r.resolution)
@@ -389,6 +446,21 @@ function RecordForm({
           The sites were verified {requireSite && <span className="text-[11px] text-slate-500">(required by this programme to validate)</span>}
         </label>
         <FieldError form={form} name="withSite" />
+        {accepted && !(withSite && method === "FIELD_APP" && verificationId === accepted.id) && (
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+            <span className="flex items-center gap-1.5">
+              <Smartphone className="h-3.5 w-3.5" aria-hidden="true" />
+              Field verification by {accepted.officer.name} accepted
+              {accepted.submission?.reviewedAt ? ` on ${formatDateShort(accepted.submission.reviewedAt)}` : ""}.
+            </span>
+            <button type="button" className="font-semibold text-brand-primary hover:underline" onClick={applyFieldVerification}>
+              Use the field verification
+            </button>
+          </div>
+        )}
+        {withSite && method === "FIELD_APP" && verificationId && (
+          <p className="mt-2 text-[11px] text-slate-600">Filled from the accepted field verification: the date, the officer and the photos come from the field app. Add notes if needed.</p>
+        )}
         {withSite && (
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
@@ -396,10 +468,13 @@ function RecordForm({
               <CustomSelect
                 ariaLabel="How the sites were verified"
                 value={method}
-                onChange={(v) => form.setValue("method", v as SiteVerificationMethod, { shouldValidate: true, shouldDirty: true })}
-                options={SiteVerificationMethodEnum.options.map((m) => ({ value: m, label: METHOD_LABELS[m] }))}
+                onChange={(v) => chooseMethod(v as SiteVerificationMethod)}
+                options={SiteVerificationMethodEnum.options
+                  .filter((m) => m !== "FIELD_APP" || accepted || method === "FIELD_APP")
+                  .map((m) => ({ value: m, label: METHOD_LABELS[m] }))}
                 size="sm"
               />
+              <FieldError form={form} name="method" />
             </div>
             <div>
               <label className={labelCls} htmlFor="validation-date">

@@ -1052,6 +1052,12 @@ export const AuditActionTypeEnum = z.enum([
   'NEEDS_SUBMISSION_UPDATED',
   'NEEDS_COUNTERPART_RECORDED',
   'NEEDS_LOTS_ASSIGNED',
+  // Needs pipeline wave 5 (N8): field verification assigned, cancelled, submitted from the phone, accepted or returned; site coordinates corrected from it
+  'NEEDS_VERIFICATION_ASSIGNED',
+  'NEEDS_VERIFICATION_CANCELLED',
+  'NEEDS_VERIFICATION_SUBMITTED',
+  'NEEDS_VERIFICATION_REVIEWED',
+  'NEEDS_SITE_COORDINATES_CORRECTED',
 ]);
 export type AuditActionType = z.infer<typeof AuditActionTypeEnum>;
 

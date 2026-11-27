@@ -6,11 +6,11 @@ describe('demo quick login (client demo, demo builds only)', () => {
   it('lists the overlay field cast, mobile-capable logins only, in demo order', () => {
     assert.deepEqual(
       DEMO_FIELD_ACCOUNTS.map((a) => a.email),
-      ['resident.supervisor@ubec.test', 'me.officer@ubec.test', 'lagos.me@ubec.test', 'independent.me@ubec.test']
+      ['resident.supervisor@ubec.test', 'me.officer@ubec.test', 'lagos.me@ubec.test', 'independent.me@ubec.test', 'kano.dpp@ubec.test']
     );
     assert.deepEqual(
       DEMO_FIELD_ACCOUNTS.map((a) => a.roleTitle),
-      ['Resident Supervisor', 'M&E Officer', 'M&E Officer (SUBEB)', 'Independent M&E (COREN-certified firm)']
+      ['Resident Supervisor', 'M&E Officer', 'M&E Officer (SUBEB)', 'Independent M&E (COREN-certified firm)', 'SUBEB Director, Physical Planning (Kano)']
     );
   });
 

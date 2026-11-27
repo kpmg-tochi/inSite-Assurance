@@ -774,14 +774,24 @@ export const NeedsProposalActionEnum = z.enum([
 ]);
 export type NeedsProposalAction = z.infer<typeof NeedsProposalActionEnum>;
 
-/** Site verification inside a validation record. Wave 3 settles the fields. */
-export const SiteVerificationSchema = z.object({
-  method: SiteVerificationMethodEnum,
-  verifiedOn: IsoDate,
-  officerName: z.string().trim().min(2).max(160),
-  notes: z.string().trim().max(4000).nullable().default(null),
-  evidenceDocumentIds: z.array(Uuid).max(50).default([]),
-});
+/**
+ * Site verification inside a validation record. Wave 3 settles the fields. Wave 5 (N8): method
+ * FIELD_APP names the ACCEPTED field verification of this proposal it comes from (`verificationId`,
+ * required for FIELD_APP; 422 NEEDS_VERIFICATION_NOT_ACCEPTED otherwise); WEB_EVIDENCE leaves it null.
+ */
+export const SiteVerificationSchema = z
+  .object({
+    method: SiteVerificationMethodEnum,
+    verifiedOn: IsoDate,
+    officerName: z.string().trim().min(2).max(160),
+    notes: z.string().trim().max(4000).nullable().default(null),
+    evidenceDocumentIds: z.array(Uuid).max(50).default([]),
+    verificationId: Uuid.nullable().default(null),
+  })
+  .refine((v) => v.method !== 'FIELD_APP' || v.verificationId !== null, {
+    message: 'A field app verification names the accepted verification',
+    path: ['verificationId'],
+  });
 export type SiteVerification = z.infer<typeof SiteVerificationSchema>;
 
 export const NeedsValidationRecordDtoSchema = z.object({

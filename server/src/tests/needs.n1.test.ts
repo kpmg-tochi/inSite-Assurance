@@ -918,10 +918,11 @@ describe('Needs pipeline N1: the shared enums and the database enums agree', () 
     assert.deepEqual(sorted(Object.values(DbProjectOrigin)), sorted(ProjectOriginEnum.options));
   });
 
-  it('the 23 pipeline audit actions and the new permission category are there', () => {
+  it('the pipeline audit actions and the new permission category are there', () => {
     const pipeline = AuditActionTypeEnum.options.filter((a) => a.startsWith('NEEDS_') && a !== 'NEEDS_ASSESSMENT_UPLOADED' && a !== 'NEEDS_ASSESSMENT_DELETED' && a !== 'NEEDS_DOCUMENT_ADDED' && a !== 'NEEDS_SEPARATION_OVERRIDE_REQUESTED' && a !== 'NEEDS_RANKING_OVERRIDDEN');
-    // Wave 4 added NEEDS_SUBMISSION_UPDATED, NEEDS_COUNTERPART_RECORDED, NEEDS_LOTS_ASSIGNED.
-    assert.equal(pipeline.length, 24);
+    // Wave 4 added NEEDS_SUBMISSION_UPDATED, NEEDS_COUNTERPART_RECORDED, NEEDS_LOTS_ASSIGNED; wave 5 the four
+    // NEEDS_VERIFICATION_* actions and NEEDS_SITE_COORDINATES_CORRECTED.
+    assert.equal(pipeline.length, 29);
     for (const action of [...pipeline, 'COSTING_STANDARD_SAVED', 'PROJECT_CREATED_FROM_PROPOSAL'] as const) {
       assert.ok((Object.values(DbAuditActionType) as string[]).includes(action), action);
     }

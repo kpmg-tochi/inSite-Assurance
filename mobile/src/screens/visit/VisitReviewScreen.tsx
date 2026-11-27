@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { formatProjectCode, VISIT_KIND_META, VISIT_OVERALL_FINDING_LABELS, VisitOverallFindingEnum, type VisitOverallFinding } from '@insite/shared';
 import type { RootStackScreenProps } from '../../navigation/types';
@@ -15,7 +14,7 @@ import { acquireFix } from '../../services/locationService';
 import { readHeading } from '../../services/headingService';
 import { geotagFromFix } from '../../utils/headingReadings';
 import { InfoCallout } from '../../components/common';
-import { ChoiceChips, FORM_COLORS, formStyles, requestFormScreen } from '../../components/form';
+import { ChoiceChips, FORM_COLORS, FormHeader, formStyles, IssueGroupsCard, requestFormScreen } from '../../components/form';
 import { useDraftEditor } from '../../components/form/useDraftEditor';
 import { checkDraft, formScreens, REVIEW_SCREEN_KEY, suggestedOverallFinding } from '../../utils/visitForm';
 import { attachableEntries, attachEntry, detachEntry, entryDay, type SiteLogRecord } from '../../utils/siteLog';
@@ -136,23 +135,14 @@ export default function VisitReviewScreen({ route, navigation }: RootStackScreen
   };
 
   const header = (
-    <LinearGradient colors={['#00715D', '#005A4A', '#122F2A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.header, { paddingTop: Math.max(insets.top + 8, 20) }]}>
-      <TouchableOpacity
-        onPress={() => void saver.flush().catch(() => undefined).then(() => navigation.goBack())}
-        accessibilityRole="button"
-        accessibilityLabel="Back to the form"
-      >
-        <Text style={styles.closeText}>‹ Back to the form</Text>
-      </TouchableOpacity>
-      <Text style={styles.title} accessibilityRole="header">
-        Review and submit
-      </Text>
-      {data ? (
-        <Text style={styles.subtitle}>
-          {VISIT_KIND_META[data.visit.visit.visitKind].label} · {formatProjectCode(data.visit.visit.projectCode)} · {formatDay(data.visit.visit.plannedDate)}
-        </Text>
-      ) : null}
-    </LinearGradient>
+    <FormHeader
+      title="Review and submit"
+      subtitle={data ? `${VISIT_KIND_META[data.visit.visit.visitKind].label} · ${formatProjectCode(data.visit.visit.projectCode)} · ${formatDay(data.visit.visit.plannedDate)}` : null}
+      backLabel="‹ Back to the form"
+      backA11yLabel="Back to the form"
+      onBack={() => void saver.flush().catch(() => undefined).then(() => navigation.goBack())}
+      topInset={insets.top}
+    />
   );
 
   if (phase.kind !== 'READY' || !data || !draft || !check) {
@@ -188,32 +178,7 @@ export default function VisitReviewScreen({ route, navigation }: RootStackScreen
         )}
 
         {/* What blocks submit */}
-        {!readOnly && groups.length > 0 && (
-          <View style={formStyles.card}>
-            <Text style={formStyles.label} accessibilityRole="header">
-              To fix before you submit
-            </Text>
-            {groups.map((g) => (
-              <View key={g.screenKey} style={{ marginTop: 10 }}>
-                {g.screenIndex !== null ? (
-                  <TouchableOpacity onPress={() => void toSection(g.screenKey)} accessibilityRole="link" accessibilityLabel={`Go to section ${g.screenIndex + 1}, ${g.title}, ${g.issues.length} to fix`}>
-                    <Text style={styles.groupTitle}>
-                      Section {g.screenIndex + 1}: {g.title} ›
-                    </Text>
-                  </TouchableOpacity>
-                ) : (
-                  <Text style={styles.groupTitle}>{g.title} (below)</Text>
-                )}
-                {g.issues.map((i, n) => (
-                  <Text key={`${i.path}-${i.code}-${i.unitId ?? ''}-${n}`} style={formStyles.error}>
-                    • {i.label === i.path ? i.message : `${i.label}: ${i.message}`}
-                  </Text>
-                ))}
-              </View>
-            ))}
-          </View>
-        )}
-        {!readOnly && groups.length === 0 && <Text style={[formStyles.okNote, { marginBottom: 10 }]}>✓ Every section is complete.</Text>}
+        {!readOnly && <IssueGroupsCard groups={groups} onGo={(key) => void toSection(key)} />}
 
         {/* Findings */}
         <View style={formStyles.card}>
@@ -332,12 +297,7 @@ export default function VisitReviewScreen({ route, navigation }: RootStackScreen
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: FORM_COLORS.page },
-  header: { paddingHorizontal: 20, paddingBottom: 20 },
-  closeText: { fontSize: 13, color: '#B5DDD3', fontWeight: '700', marginBottom: 8, paddingVertical: 4 },
-  title: { fontSize: 18, fontWeight: '800', color: '#FFFFFF', letterSpacing: -0.3 },
-  subtitle: { fontSize: 12, color: '#D7EEE8', marginTop: 4 },
   body: { padding: 16 },
-  groupTitle: { fontSize: 13, fontWeight: '800', color: FORM_COLORS.brand, paddingVertical: 4 },
   entry: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#E2E8F0', marginTop: 8 },
   entryOn: { backgroundColor: '#EEF7F4' },
   check: { fontSize: 20, color: FORM_COLORS.brand, width: 24 },

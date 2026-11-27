@@ -79,6 +79,9 @@ export * from './schemas/costingStandard.schema';
 export * from './schemas/needsStandards.schema';
 export * from './data/defaultCostingStandard';
 export * from './data/needsPipelineDefaults';
+// Needs pipeline wave 5 (N8): field verification from the phone
+export * from './schemas/needsVerification.schema';
+export * from './utils/needsVerificationForm';
 export * from './utils/needsStages';
 export * from './utils/needsSeparation';
 export * from './utils/needsScoring';

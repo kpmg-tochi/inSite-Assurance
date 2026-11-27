@@ -127,8 +127,8 @@ const unitIdsOf = (s: VisitFormSnapshot) => facilityBlocks(s).flatMap((b) => b.u
 // ---------------------------------------------------------------------------
 
 describe('Redesign R3: default form library', () => {
-  it('has 10 sections, 4 archetype sub-forms and a template for every visit kind', () => {
-    assert.equal(DEFAULT_FORM_LIBRARY.sections.length, 10);
+  it('has 12 sections (two reserved for the needs field verification), 4 archetype sub-forms and a template for every visit kind', () => {
+    assert.equal(DEFAULT_FORM_LIBRARY.sections.length, 12);
     assert.equal(Object.keys(DEFAULT_FORM_LIBRARY.archetypeSubForms).length, 4);
     assert.equal(DEFAULT_FORM_LIBRARY.templates.length, 7);
     for (const kind of VisitKindEnum.options) {

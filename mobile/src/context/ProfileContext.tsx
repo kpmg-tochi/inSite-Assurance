@@ -35,6 +35,7 @@ import { getInitials } from '../utils/userUtils';
 import type { PushIdentity } from '../services/pushNotificationService';
 import { setVisitSyncProjects, syncVisits } from '../services/visitSync';
 import { clearVisitCache } from '../storage/visitStore';
+import { clearNeedsVerificationCache } from '../storage/needsVerificationStore';
 
 /**
  * The device's account and projects (Phase 5; provisioned accounts only since R1d). The one way in
@@ -283,6 +284,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
     clearSessionEnded();
     await deleteBaselinePacks(projectIds).catch(() => undefined);
     await clearVisitCache().catch(() => undefined);
+    await clearNeedsVerificationCache().catch(() => undefined);
   }, [update]);
 
   const resetAll = useCallback(async () => {

@@ -144,7 +144,9 @@ export async function mobileRequest<T>(
   };
 
   // The project the request is about decides which scope a refusal ends.
-  const targetProjectId = projectIdFromPath(path) ?? getActiveProjectId();
+  // Needs pipeline wave 5: verification routes are about no project (access by assignment), so a
+  // refusal there never ends the last opened project's scope.
+  const targetProjectId = projectIdFromPath(path) ?? (path.startsWith('/needs-verifications') ? null : getActiveProjectId());
   let token: string | null = null;
   let requestScope: SessionScope = 'account';
   if (typeof auth === 'string') {

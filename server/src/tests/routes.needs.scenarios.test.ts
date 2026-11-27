@@ -32,6 +32,7 @@
  *   NEEDS_SEPARATION_OVERRIDDEN entries; the flag stays AUTHORISED with `usedAt`).
  */
 import { resetTestDatabase } from './helpers/testDb';
+import { clearSeededNeedsPipeline } from './helpers/needsSeedReset';
 import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'crypto';
@@ -51,12 +52,12 @@ import { needsFixture, needsFixtureBase64, type NeedsFixtureName } from './fixtu
 import { stepDI09, stepMG05 } from './helpers/needsScenarioSteps.n5';
 import { stepDI10, stepMG06, stepOOC01 } from './helpers/needsScenarioSteps.n6';
 import { stepDI11, stepDI12, stepMG07, stepMG08, stepMG09, stepMG10 } from './helpers/needsScenarioSteps.n7';
+import { stepFIELD01 } from './helpers/needsScenarioSteps.n8';
 import { buildFixtureFile } from './fixtures/needs/generateNeedsFixtures';
 import { FIXTURE_SPECS, FIXTURE_STANDARD, stdRate, type FixtureLine, type NeedsFixtureSpec } from './fixtures/needs/needsFixtureSpecs';
 
 type PrismaClientType = typeof import('../config/prisma')['prisma'];
 
-const todo = (wave: number) => ({ todo: `wave ${wave}` });
 
 let app: Express;
 let prisma: PrismaClientType;
@@ -142,6 +143,7 @@ const parsedCosting = (json: unknown) => ParsedNeedsAssessmentSchema.parse(json)
 before(async () => {
   await resetTestDatabase();
   ({ prisma } = await import('../config/prisma'));
+  await clearSeededNeedsPipeline(prisma);
   const { createApp } = await import('../app');
   app = createApp();
   tenantId = (await prisma.tenant.findUniqueOrThrow({ where: { slug: 'programme-authority' } })).id;
@@ -209,7 +211,7 @@ describe('Needs pipeline scenario: Direct Intervention (2027 cycle)', () => {
     ]);
     // The possible duplicate goes too, so the validator can resolve it.
     assert.equal((await action('procurement@ubec.test', ids.diCycle, 'SUBMIT', [p3.id])).status, 200);
-    assert.equal(await prisma.auditLog.count({ where: { tenantId, action: 'NEEDS_PROPOSAL_SUBMITTED' } }), 3);
+    assert.equal(await prisma.auditLog.count({ where: { tenantId, action: 'NEEDS_PROPOSAL_SUBMITTED', payload: { path: ['cycleId'], equals: ids.diCycle } } }), 3);
     const tasks = (await request(app).get(`${N}/tasks`).set(await web('me.officer@ubec.test'))).body.data as Array<{ reference: string; actionLabel: string }>;
     assert.deepEqual(tasks.map((t) => [t.reference, t.actionLabel]).sort(), [
       ['2027-DI-001', 'Validate'],
@@ -584,7 +586,9 @@ describe('Needs pipeline scenario: Matching Grants (Kano, 2027 cycle)', () => {
   it('OOC-01 out-of-cycle request (emergency, authorising document) approved by es@; converts with origin OUT_OF_CYCLE', async () => {
     await stepOOC01({ app, prisma, web, ids, tenantId });
   });
-  it('FIELD-01 a verification visit submitted from the field app fills the validation record and corrects a site\'s coordinates', todo(5));
+  it('FIELD-01 a verification visit submitted from the field app fills the validation record and corrects a site\'s coordinates', async () => {
+    await stepFIELD01({ app, prisma, web, ids, tenantId });
+  });
 });
 
 /**

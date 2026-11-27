@@ -19,6 +19,13 @@ export type RootStackParamList = {
   /** One section per screen inside this route (R5c). */
   VisitForm: { visitId: string };
   VisitReview: { visitId: string };
+  /**
+   * Needs pipeline wave 5: a field verification of a proposed project (no project: access by
+   * assignment). The screen (sites, locations, state), its form (one section per screen) and review.
+   */
+  NeedsVerification: { verificationId: string };
+  NeedsVerificationForm: { verificationId: string };
+  NeedsVerificationReview: { verificationId: string };
   SiteLog: { projectId: string };
   /** Phase 10: defect tickets after handover. Falls back to the last opened project. */
   Defects: { projectId?: string } | undefined;
